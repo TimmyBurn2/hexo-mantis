@@ -12,31 +12,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from mantis.config.loader import load_config
 from mantis.config.schema import RunConfig, SCHEMA_VERSION
-
-
-def _eval_block() -> dict:
-    return {
-        "random_model_sims": 96, "max_plies": 128, "random_floor_games": 0, "worker_device": "cuda",
-        "round_timeout_sec": 3600.0, "worker_kill_grace_sec": 10.0,
-        "ply_cap_adjudication": None, "strength_floor": None,
-        "gate": {
-            "stride": 1, "screen_games": 80, "confirm_games": 128, "promotion_winrate": 0.55,
-            "screen_confirm_lo": 0.44, "deploy_sims": 150, "opening_book": "book_v1_s20260625_p4",
-            "bootstrap_resamples": 1000, "min_distinct_per_pair": 10, "seed_base": 20260625, "sequential": None,
-        },
-    }
-
-
-#: The complete `train:` payload, DERIVED from a MINTED config rather than restated: eleven
-#: files carried a hand-written copy, so a new `train.*` key cost eleven edits.
-_MINTED_TRAIN: dict = load_config(
-    Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").train.model_dump()
-
-
-def _train_block(**over: object) -> dict:
-    return dict(_MINTED_TRAIN, **over)
+from _schema_blocks import eval_block, inference_block, monitor_block, train_block
 
 
 def _selfplay_block(*, n_simulations: int = 50) -> dict:
@@ -52,36 +29,6 @@ def _selfplay_block(*, n_simulations: int = 50) -> dict:
         "playout_cap": {"fast_sims": 50, "fast_prob": 0.0, "standard_sims": 0,
                         "full_search_prob": 0.0, "n_sims_quick": 0, "n_sims_full": 0,
                         "temperature_threshold_compound_moves": 0, "temp_min": 0.5},
-    }
-
-
-def _inference_block() -> dict:
-    return {
-        "inference_batch_size": 64, "inference_max_wait_ms": 10,
-        # A REQUIRED block, at the template's non-binding-by-construction value: nothing here
-        # exercises a split, and the real configs are pinned by test_fused_graph_caps_authority.
-        "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
-    }
-
-
-def _monitor_block() -> dict:
-    return {
-        # The ARMING cadence, schema-only and required.
-        "gate_interval": 1000,
-        "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
-        "alert_loss_increase_window": 3, "axis_warn": 0.45, "axis_alert": 0.50,
-        "heartbeat_deadline_train_step_sec": 1800.0,
-        "heartbeat_deadline_inference_dispatch_sec": 1800.0,
-        "heartbeat_deadline_selfplay_drain_sec": 1800.0,
-        "heartbeat_deadline_eval_round_sec": 1800.0,
-        "heartbeat_poll_interval_sec": 5.0, "heartbeat_file_interval_sec": 15.0,
-        "heartbeat_close_out_deadline_sec": 14400.0, "heartbeat_fire_effect_timeout_sec": 30.0,
-        "supervisor_stale_after_sec": 900.0, "supervisor_poll_interval_sec": 30.0,
-        "supervisor_kill_grace_sec": 30.0, "supervisor_max_relaunches": 5,
-        "actor_lag_threshold_steps": 100, "actor_lag_abort_enabled": False,
-        "drain": {"final_eval_drain_timeout_sec": 900.0, "eval_final_drain_safety_factor": 3.0,
-                 "eval_final_drain_hard_cap_sec": 14400.0, "terminal_eval_hard_cap_sec": 14400.0},
-        "disk_guard": {"interval_sec": 60.0, "warn_gb": 10.0, "fail_gb": 5.0},
     }
 
 
@@ -102,12 +49,12 @@ def _payload(
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
         "model": {"gnn": {"hidden": 128, "num_layers": 4}, "aux_soft_policy": None},
         "deploy": {"search": {"kind": search_kind}},
-        "eval": _eval_block(),
-        "train": _train_block(**(train_over or {})),
+        "eval": eval_block(),
+        "train": train_block(**(train_over or {})),
         "selfplay": {**_selfplay_block(n_simulations=n_simulations), "search": {"kind": search_kind},
                      **(selfplay_over or {})},
-        "inference": _inference_block(),
-        "monitor": _monitor_block(),
+        "inference": inference_block(),
+        "monitor": monitor_block(),
     }
 
 

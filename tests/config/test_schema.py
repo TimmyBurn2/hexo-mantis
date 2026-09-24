@@ -31,79 +31,9 @@ from mantis.config.schema import (
 from mantis.eval.rounds import EVAL_CONCURRENCY_ROW
 from mantis.model import ARCH_KIND_ROW
 from mantis.train.warmstart import WARM_START_ROW
+from _schema_blocks import eval_block, inference_block, monitor_block, selfplay_block, train_block
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-
-def _valid_eval_block() -> dict:
-    return {
-        "random_model_sims": 96, "max_plies": 128, "random_floor_games": 0, "worker_device": "cuda",
-        "round_timeout_sec": 3600.0, "worker_kill_grace_sec": 10.0,
-        "ply_cap_adjudication": None, "strength_floor": None,
-        "gate": {
-            "stride": 1, "screen_games": 80, "confirm_games": 128, "promotion_winrate": 0.55,
-            "screen_confirm_lo": 0.44, "deploy_sims": 150, "opening_book": "book_v1_s20260625_p4",
-            "bootstrap_resamples": 1000, "min_distinct_per_pair": 10, "seed_base": 20260625, "sequential": None,
-        },
-    }
-
-
-#: The complete `train:` payload, DERIVED from a MINTED config rather than restated: eleven files
-#: carried a hand-written copy, so a new `train.*` key cost eleven edits. The resolved block was
-#: measured byte-identical to the census it replaces.
-_MINTED_TRAIN: dict = load_config(REPO_ROOT / "configs" / "dev_example.yaml").train.model_dump()
-
-
-def _valid_train_block() -> dict:
-    return dict(_MINTED_TRAIN)
-
-
-def _valid_selfplay_block() -> dict:
-    return {
-        "search": {"kind": "puct"}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
-        "c_visit": 50.0,
-        "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_explore_moves": 10, "search_stats_every": 8,
-        "results_queue_cap": 10_000, "random_opening_plies": 0,
-        "log_investigation_metrics": True,
-        "mcts": {"n_simulations": 50, "c_puct": 1.5, "fpu_reduction": 0.25,
-                 "quiescence_enabled": True, "quiescence_blend_2": 0.3,
-                 "dirichlet_alpha": 0.3, "dirichlet_epsilon": 0.25, "dirichlet_enabled": True},
-        "playout_cap": {"fast_sims": 50, "fast_prob": 0.0, "standard_sims": 0,
-                        "full_search_prob": 0.0, "n_sims_quick": 0, "n_sims_full": 0,
-                        "temperature_threshold_compound_moves": 0, "temp_min": 0.5},
-    }
-
-
-def _valid_inference_block() -> dict:
-    return {
-        "inference_batch_size": 64, "inference_max_wait_ms": 10,
-        # `inference.fused_graph_caps` is a REQUIRED block, and the pair here is the template's
-        # NON-BINDING-BY-CONSTRUCTION value, so nothing in this file exercises a split.
-        "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
-    }
-
-
-def _valid_monitor_block() -> dict:
-    return {
-        # R242 (ADJ-D12): the ARMING cadence, schema-only and required.
-        "gate_interval": 1000,
-        "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
-        "alert_loss_increase_window": 3, "axis_warn": 0.45, "axis_alert": 0.50,
-        "heartbeat_deadline_train_step_sec": 1800.0,
-        "heartbeat_deadline_inference_dispatch_sec": 1800.0,
-        "heartbeat_deadline_selfplay_drain_sec": 1800.0,
-        "heartbeat_deadline_eval_round_sec": 1800.0,
-        "heartbeat_poll_interval_sec": 5.0, "heartbeat_file_interval_sec": 15.0,
-        "heartbeat_close_out_deadline_sec": 14400.0, "heartbeat_fire_effect_timeout_sec": 30.0,
-        "supervisor_stale_after_sec": 900.0, "supervisor_poll_interval_sec": 30.0,
-        "supervisor_kill_grace_sec": 30.0, "supervisor_max_relaunches": 5,
-        "actor_lag_threshold_steps": 100, "actor_lag_abort_enabled": False,
-        "drain": {
-            "final_eval_drain_timeout_sec": 900.0, "eval_final_drain_safety_factor": 3.0,
-            "eval_final_drain_hard_cap_sec": 14400.0, "terminal_eval_hard_cap_sec": 14400.0,
-        },
-        "disk_guard": {"interval_sec": 60.0, "warn_gb": 10.0, "fail_gb": 5.0},
-    }
-
 
 def _valid_payload() -> dict:
     return {
@@ -115,12 +45,12 @@ def _valid_payload() -> dict:
         "run_id": "unit_test",
         "seed": 1,
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
-        "eval": _valid_eval_block(),
-        "train": _valid_train_block(),
+        "eval": eval_block(),
+        "train": train_block(),
         "deploy": {"search": {"kind": "puct"}},
-        "selfplay": _valid_selfplay_block(),
-        "inference": _valid_inference_block(),
-        "monitor": _valid_monitor_block(),
+        "selfplay": selfplay_block(),
+        "inference": inference_block(),
+        "monitor": monitor_block(),
     }
 
 

@@ -22,6 +22,7 @@ from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
 from mantis.config.resolve import resolve_monitor_config
 from mantis.config.schema import RunConfig, SCHEMA_VERSION, TrainConfig, MonitorSchemaConfig
 from _monitor_config import monitor_config
+from _schema_blocks import eval_block, inference_block, monitor_block, selfplay_block, train_block
 
 _REPO = Path(__file__).resolve().parents[2]
 _CONFIGS = ("dev_example.yaml", "run6.yaml", "smoke_preflight_armed.yaml")
@@ -31,89 +32,6 @@ _NEW_KEYS = (
     ("monitor", "actor_lag_threshold_steps"),
     ("monitor", "actor_lag_abort_enabled"),
 )
-
-
-def _eval_block() -> dict:
-    return {
-        "random_model_sims": 96, "max_plies": 128, "random_floor_games": 0, "worker_device": "cuda",
-        "round_timeout_sec": 3600.0, "worker_kill_grace_sec": 10.0,
-        "ply_cap_adjudication": None, "strength_floor": None,
-        "gate": {
-            "stride": 1, "screen_games": 80, "confirm_games": 128,
-            "promotion_winrate": 0.55, "screen_confirm_lo": 0.44, "deploy_sims": 150,
-            "opening_book": "book_v1_s20260625_p4", "bootstrap_resamples": 1000,
-            "min_distinct_per_pair": 10, "seed_base": 20260625, "sequential": None,
-        },
-    }
-
-
-#: WPMINT Phase K-A stage 0 — the complete `train:` payload, DERIVED from a MINTED config
-#: instead of restated. Eleven test files carried a hand-written copy of this block, so every
-#: new `train.*` key cost eleven edits and gave eleven chances to disagree with the schema;
-#: derived, they cost none. `dev_example.yaml` is the base because its RESOLVED train block
-#: was measured BYTE-IDENTICAL to the census this replaces, which is what makes the swap
-#: zero-behavior-change rather than a re-baselining.
-_MINTED_TRAIN: dict = load_config(_REPO / "configs" / "dev_example.yaml").train.model_dump()
-
-
-def _train_block(**over: object) -> dict:
-    return dict(_MINTED_TRAIN, **over)
-
-
-def _selfplay_block() -> dict:
-    return {
-        "search": {"kind": "puct"}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
-        "c_visit": 50.0, "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16,
-        "gumbel_explore_moves": 10, "search_stats_every": 8, "results_queue_cap": 10_000,
-        "random_opening_plies": 0,
-        "log_investigation_metrics": True,
-        "mcts": {"n_simulations": 50, "c_puct": 1.5, "fpu_reduction": 0.25,
-                 "quiescence_enabled": True, "quiescence_blend_2": 0.3,
-                 "dirichlet_alpha": 0.3, "dirichlet_epsilon": 0.25,
-                 "dirichlet_enabled": True},
-        "playout_cap": {"fast_sims": 50, "fast_prob": 0.0, "standard_sims": 0,
-                        "full_search_prob": 0.0, "n_sims_quick": 0, "n_sims_full": 0,
-                        "temperature_threshold_compound_moves": 0, "temp_min": 0.5},
-    }
-
-
-def _inference_block() -> dict:
-    return {
-        "inference_batch_size": 64, "inference_max_wait_ms": 10,
-        # F-816-10: `inference.fused_graph_caps` is a REQUIRED block. The pair here is
-        # the template's NON-BINDING-BY-CONSTRUCTION value, so nothing in this file
-        # exercises a split; the R119 `null` placeholder is pinned by
-        # tests/config/test_fused_graph_caps_authority.py against the real configs.
-        "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
-    }
-
-
-def _monitor_block(**over: object) -> dict:
-    base = {
-        # R242 (ADJ-D12): the ARMING cadence, schema-only and required.
-        "gate_interval": 1000,
-        "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5,
-        "alert_grad_norm_max": 10.0, "alert_loss_increase_window": 3,
-        "axis_warn": 0.45, "axis_alert": 0.50,
-        "heartbeat_deadline_train_step_sec": 1800.0,
-        "heartbeat_deadline_inference_dispatch_sec": 1800.0,
-        "heartbeat_deadline_selfplay_drain_sec": 1800.0,
-        "heartbeat_deadline_eval_round_sec": 1800.0,
-        "heartbeat_poll_interval_sec": 5.0, "heartbeat_file_interval_sec": 15.0,
-        "heartbeat_close_out_deadline_sec": 14400.0,
-        "heartbeat_fire_effect_timeout_sec": 30.0,
-        "supervisor_stale_after_sec": 900.0, "supervisor_poll_interval_sec": 30.0,
-        "supervisor_kill_grace_sec": 30.0, "supervisor_max_relaunches": 5,
-        "drain": {"final_eval_drain_timeout_sec": 900.0,
-                  "eval_final_drain_safety_factor": 3.0,
-                  "eval_final_drain_hard_cap_sec": 14400.0,
-                  "terminal_eval_hard_cap_sec": 14400.0},
-        "disk_guard": {"interval_sec": 60.0, "warn_gb": 10.0, "fail_gb": 5.0},
-        "actor_lag_threshold_steps": 100,   # K2 — minted inert value (DESIGN §5)
-        "actor_lag_abort_enabled": False,   # K3 — the config arms it (run5, not this WP)
-    }
-    base.update(over)
-    return base
 
 
 def _payload(*, train_over: dict | None = None, monitor_over: dict | None = None) -> dict:
@@ -126,10 +44,10 @@ def _payload(*, train_over: dict | None = None, monitor_over: dict | None = None
         "allocator_posture": None,
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
         "model": {"gnn": {"hidden": 128, "num_layers": 4}, "aux_soft_policy": None},
-        "eval": _eval_block(), "train": _train_block(**(train_over or {})),
+        "eval": eval_block(), "train": train_block(**(train_over or {})),
         "deploy": {"search": {"kind": "puct"}},
-        "selfplay": _selfplay_block(), "inference": _inference_block(),
-        "monitor": _monitor_block(**(monitor_over or {})),
+        "selfplay": selfplay_block(), "inference": inference_block(),
+        "monitor": monitor_block(**(monitor_over or {})),
     }
 
 
@@ -193,7 +111,7 @@ def test_resolver_returns_the_configured_cadence() -> None:
 
 def test_resolve_monitor_config_copies_the_lag_fields() -> None:
     section = MonitorSchemaConfig.model_validate(
-        _monitor_block(actor_lag_threshold_steps=77, actor_lag_abort_enabled=True))
+        monitor_block(actor_lag_threshold_steps=77, actor_lag_abort_enabled=True))
     resolved = resolve_monitor_config(section)
     assert resolved.actor_lag_threshold_steps == 77
     assert resolved.actor_lag_abort_enabled is True

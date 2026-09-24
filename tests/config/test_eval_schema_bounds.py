@@ -20,8 +20,8 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from mantis.config.loader import load_config
 from mantis.config.schema import SCHEMA_VERSION, RunConfig, _EVAL_TIMEOUT_CEILING_SEC
+from _schema_blocks import inference_block, monitor_block, selfplay_block, train_block
 
 
 def _gate(**overrides: Any) -> dict:
@@ -32,64 +32,6 @@ def _gate(**overrides: Any) -> dict:
     )
     base.update(overrides)
     return base
-
-
-#: The complete `train:` payload, DERIVED from a MINTED config rather than restated — eleven
-#: hand-written copies meant a new `train.*` key cost eleven edits.
-_MINTED_TRAIN: dict = load_config(
-    Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").train.model_dump()
-
-
-def _train_block() -> dict:
-    return dict(_MINTED_TRAIN)
-
-
-def _selfplay_block() -> dict:
-    return {
-        "search": {"kind": "puct"}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
-        "c_visit": 50.0,
-        "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_explore_moves": 10, "search_stats_every": 8,
-        "results_queue_cap": 10_000, "random_opening_plies": 0,
-        "log_investigation_metrics": True,
-        "mcts": {"n_simulations": 50, "c_puct": 1.5, "fpu_reduction": 0.25,
-                 "quiescence_enabled": True, "quiescence_blend_2": 0.3,
-                 "dirichlet_alpha": 0.3, "dirichlet_epsilon": 0.25, "dirichlet_enabled": True},
-        "playout_cap": {"fast_sims": 50, "fast_prob": 0.0, "standard_sims": 0,
-                        "full_search_prob": 0.0, "n_sims_quick": 0, "n_sims_full": 0,
-                        "temperature_threshold_compound_moves": 0, "temp_min": 0.5},
-    }
-
-
-def _inference_block() -> dict:
-    return {
-        "inference_batch_size": 64, "inference_max_wait_ms": 10,
-        # A REQUIRED block; this pair is the NON-BINDING-BY-CONSTRUCTION template value.
-        "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
-    }
-
-
-def _monitor_block() -> dict:
-    return {
-        # the ARMING cadence, schema-only and required
-        "gate_interval": 1000,
-        "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
-        "alert_loss_increase_window": 3,
-        "axis_warn": 0.45, "axis_alert": 0.50,
-        "heartbeat_deadline_train_step_sec": 1800.0,
-        "heartbeat_deadline_inference_dispatch_sec": 1800.0,
-        "heartbeat_deadline_selfplay_drain_sec": 1800.0,
-        "heartbeat_deadline_eval_round_sec": 1800.0,
-        "heartbeat_poll_interval_sec": 5.0, "heartbeat_file_interval_sec": 15.0,
-        "heartbeat_close_out_deadline_sec": 14400.0, "heartbeat_fire_effect_timeout_sec": 30.0,
-        "supervisor_stale_after_sec": 900.0, "supervisor_poll_interval_sec": 30.0,
-        "supervisor_kill_grace_sec": 30.0, "supervisor_max_relaunches": 5,
-        "actor_lag_threshold_steps": 100, "actor_lag_abort_enabled": False,
-        "drain": {
-            "final_eval_drain_timeout_sec": 900.0, "eval_final_drain_safety_factor": 3.0,
-            "eval_final_drain_hard_cap_sec": 14400.0, "terminal_eval_hard_cap_sec": 14400.0,
-        },
-        "disk_guard": {"interval_sec": 60.0, "warn_gb": 10.0, "fail_gb": 5.0},
-    }
 
 
 def _payload(**eval_overrides: Any) -> dict:
@@ -109,11 +51,11 @@ def _payload(**eval_overrides: Any) -> dict:
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
         "model": {"gnn": {"hidden": 128, "num_layers": 4}, "aux_soft_policy": None},
         "eval": eval_block,
-        "train": _train_block(),
+        "train": train_block(),
         "deploy": {"search": {"kind": "puct"}},
-        "selfplay": _selfplay_block(),
-        "inference": _inference_block(),
-        "monitor": _monitor_block(),
+        "selfplay": selfplay_block(),
+        "inference": inference_block(),
+        "monitor": monitor_block(),
     }
 
 
