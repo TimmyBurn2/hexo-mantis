@@ -1,5 +1,5 @@
 {
- "_method": "REAL run_stats_loop driven for one iteration on the graph arm against the drain-parity suite's stub pool: the runner, replay buffer, recent buffer and recorder are recording stubs, `time` is a scripted clock, PoolInstrumentation is REAL. Re-captured from the current drain before the dense arm was deleted; every arm-independent field was verified equal to the old-side dense capture it replaces, and `events` carries only the tracked game_complete/system_stats types.",
+ "_method": "REAL run_stats_loop driven for one iteration on the graph arm against the drain-parity suite's stub pool: the runner, replay buffer and recorder are recording stubs, `time` is a scripted clock, PoolInstrumentation is REAL. Re-captured from the current drain before the dense arm was deleted; every arm-independent field was verified equal to the old-side dense capture it replaces, and `events` carries only the tracked game_complete/system_stats types.",
  "_constants": {
   "effective_sims_per_move": 111,
   "last_pos_generated_before": 100,
@@ -461,7 +461,6 @@
      }
     }
    ],
-   "recent_buffer_calls": [],
    "recorder_calls": [
     {
      "moves": [
@@ -1100,7 +1099,6 @@
      }
     }
    ],
-   "recent_buffer_calls": [],
    "recorder_calls": [
     {
      "moves": [
@@ -1612,7 +1610,6 @@
     "drain_game_results"
    ],
    "buffer_calls": [],
-   "recent_buffer_calls": [],
    "recorder_calls": [
     {
      "moves": [

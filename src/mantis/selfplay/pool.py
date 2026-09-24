@@ -197,13 +197,6 @@ class WorkerPool:
             recorder if recorder is not None else NullRecorder()
         )
 
-        # Optional recent buffer for recency-weighted sampling. Set by the training loop
-        # after construction; None = disabled.
-        self.recent_buffer: Any | None = None
-
-        self._board_size = resolved.board_size   # canvas geometry
-        self._trunk_size = resolved.trunk_size   # per-cluster NN-input geometry
-
         self._log_investigation_metrics = hp.log_investigation_metrics
         self._instrumentation = PoolInstrumentation(
             log_investigation_metrics=hp.log_investigation_metrics,

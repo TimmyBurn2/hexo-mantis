@@ -57,14 +57,6 @@ class RecordingBuffer:
         return 900 + self.next_game_id_calls
 
 
-class RecordingRecentBuffer:
-    def __init__(self) -> None:
-        self.calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
-
-    def push(self, *args: Any, **kwargs: Any) -> None:
-        self.calls.append((args, dict(kwargs)))
-
-
 class RecordingRecorder:
     def __init__(self) -> None:
         self.records: list[dict[str, Any]] = []
@@ -140,8 +132,7 @@ class ScriptedPool:
     three DV-4/§c.5 injection seams)."""
 
 
-def _build_pool(golden, graph_rows, *, clock, recent_buffer=True, sink=None,
-                heartbeat=None) -> ScriptedPool:
+def _build_pool(golden, graph_rows, *, clock, sink=None, heartbeat=None) -> ScriptedPool:
     consts = golden["_constants"]
     pool = ScriptedPool()
     pool._stop_event = OneShotStop()
@@ -154,7 +145,6 @@ def _build_pool(golden, graph_rows, *, clock, recent_buffer=True, sink=None,
     pool.graph_rows_pushed = 0
     pool.alpha_full_rows = 0
     pool.alpha_full_rows_emitted = 0
-    pool.recent_buffer = RecordingRecentBuffer() if recent_buffer else None
     pool._last_drain_time = clock[0]
     pool._last_pos_generated = consts["last_pos_generated_before"]
     pool._effective_sims_per_move = consts["effective_sims_per_move"]
@@ -176,9 +166,9 @@ def _build_pool(golden, graph_rows, *, clock, recent_buffer=True, sink=None,
 @pytest.fixture
 def run_drain(monkeypatch, drain_goldens, graph_rows_input):
     """Factory → (pool, scripted_clock) after ONE `run_stats_loop` iteration."""
-    def run(*, clock=CLOCK_CROSSED, recent_buffer=True, graph_n=3, sink=None, heartbeat=None):
+    def run(*, clock=CLOCK_CROSSED, graph_n=3, sink=None, heartbeat=None):
         pool = _build_pool(drain_goldens, graph_rows_input[:graph_n], clock=clock,
-                           recent_buffer=recent_buffer, sink=sink, heartbeat=heartbeat)
+                           sink=sink, heartbeat=heartbeat)
         scripted = ScriptedTime(clock)
         monkeypatch.setattr(pool_drain, "time", scripted)
         pool_drain.run_stats_loop(pool)
@@ -196,14 +186,6 @@ def _assert_array(actual: Any, expected: np.ndarray, label: str) -> None:
     assert actual.dtype == expected.dtype, f"{label}: dtype {actual.dtype} != {expected.dtype}"
     assert actual.shape == expected.shape, f"{label}: shape {actual.shape} != {expected.shape}"
     assert np.array_equal(actual, expected), f"{label}: bytes differ from the captured push"
-
-
-def _assert_graph_push_bytes(pool: ScriptedPool, graph_pushed: dict[str, np.ndarray]) -> None:
-    """Every pushed row's two arrays are byte-identical to the capture."""
-    assert len(pool.replay_buffer.graph_calls) == 3
-    for i, (args, _kwargs) in enumerate(pool.replay_buffer.graph_calls):
-        _assert_array(args[0], graph_pushed[f"push_graph_position_{i}_arg0"], f"row{i}.arg0")
-        _assert_array(args[1], graph_pushed[f"push_graph_position_{i}_arg1"], f"row{i}.arg1")
 
 
 def test_graph_drain_push_rows(run_drain, drain_goldens, graph_pushed, graph_rows_input):
@@ -331,18 +313,6 @@ def test_counters_mirror_runner(run_drain, drain_goldens, variant):
     assert pool.graph_rows_pushed == counters["graph_rows_pushed"]
     assert list(pool._game_lengths) == counters["_game_lengths"] == [6, 12, 125, 15, 8, 5]
     assert pool._avg_game_length == counters["_avg_game_length"] == 28.5
-
-
-def test_graph_drain_leaves_the_recent_buffer_alone(run_drain, drain_goldens, graph_pushed):
-    """Graph recency flows in-engine, so the drain pushes nothing to a Python recent buffer, and a
-    pool with none leaves the replay push byte-identical and raises nothing."""
-    pool, _ = run_drain()
-    assert pool.recent_buffer.calls == _variant(drain_goldens, "graph")["recent_buffer_calls"] == []
-    _assert_graph_push_bytes(pool, graph_pushed)
-
-    absent, _ = run_drain(recent_buffer=False)
-    assert absent.recent_buffer is None
-    _assert_graph_push_bytes(absent, graph_pushed)
 
 
 def test_system_stats_cadence(run_drain, drain_goldens):

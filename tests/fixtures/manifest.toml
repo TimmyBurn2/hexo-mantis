@@ -161,8 +161,9 @@ added_by = "WP-SP"
 # Re-pinned 2026-09-14: R353(d) added the per-move arms as the row's ninth field.
 [[required]]
 path = "selfplay/drain/drain_goldens.json"
-# Re-pinned 2026-09-24: R368(d) re-captured the graph variants and deleted the dense ones.
-sha256 = "8e72d59d122b29c3d82d815f2c60fd338fce2c72545ecb79b51d80d9a8fa037f"
+# Re-pinned 2026-09-24: R368(d) re-captured the graph variants and deleted the dense ones and
+# the unread recent-buffer rows.
+sha256 = "329b3647b2287cace647ae9f11a0e86f2421fbfb856c10146fc2617569a9ee15"
 added_by = "WP-SP"
 
 [[required]]
@@ -182,8 +183,8 @@ path = "selfplay/pool/runner_config_goldens.json"
 # Re-cut again by R351(c): `search.kind` split into `selfplay.search.kind` (what the wire reads)
 # and `deploy.search.kind`; the capture carries both, the self-play one still `gumbel` in `full_config`.
 # Re-pinned 2026-09-16: R355(d)'s `search_stats_every` is a REQUIRED leaf the ctor kwargs carry.
-# Re-pinned 2026-09-24: the pool's dense-arm rows (`_is_graph`, feat/chain/pol lengths) deleted.
-sha256 = "6e09c8b719a06810a4e26815d07bba34cd778cf542933cf300c53a7b5e3ad8f4"
+# Re-pinned 2026-09-24: the unread `pool_derived` block deleted with the dense-arm pool attributes.
+sha256 = "29b8624c1e40e5b5ffee5338aed08e34c7c3e4ceb6afaa5c49145d4c54cb4aff"
 added_by = "WP-SP"
 
 [[required]]

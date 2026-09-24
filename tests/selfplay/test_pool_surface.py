@@ -23,7 +23,7 @@ SELFPLAY_SRC = Path(__file__).resolve().parents[2] / "src" / "mantis" / "selfpla
 
 # Every member the committed trainer reads, with the kind it uses it as. A missing row here is a
 # runtime break at first integration.
-FROZEN_ATTRS = ("games_completed", "draws", "n_workers", "recent_buffer", "encoding_spec")
+FROZEN_ATTRS = ("games_completed", "draws", "n_workers", "encoding_spec")
 FROZEN_PROPERTIES = (
     "recent_move_histories", "avg_game_length", "search_kind", "x_winrate", "o_winrate",
     # The THIRD outcome share, a property because the denominator belongs to the pool:

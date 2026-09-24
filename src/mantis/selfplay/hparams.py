@@ -57,9 +57,8 @@ def is_graph_representation(spec: Any) -> bool:
 def resolve_pool_encoding(
     config: dict[str, Any], arch: Any | None = None
 ) -> ResolvedPoolEncoding:
-    """Resolve every encoding-derived value the pool needs: ``board_size`` is canvas geometry and
-    ``trunk_size`` the per-cluster NN-input window that all buffer and reshape dims use. Only the
-    arch cross-check reads the canvas value, so a mis-paired arch loud-fails before any runner."""
+    """Resolve the pool's encoding, refusing an arch whose canvas ``board_size`` disagrees with it.
+    Raises: MissingEncodingError, EncodingDeclarationConflictError; ValueError on that mismatch."""
     registry_spec: EncodingSpec = resolve_from_config(config)
     spec = registry_spec
     if arch is not None:
