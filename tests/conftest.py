@@ -9,6 +9,7 @@ import random
 from pathlib import Path
 
 import pytest
+from _drivable import FakeClock
 
 PYTEST_SEED = int(os.environ.get("PYTEST_SEED", "20260716"))
 _HAVE_NUMPY = importlib.util.find_spec("numpy") is not None
@@ -55,6 +56,11 @@ def _restore_signal_dispositions():
     yield
     for sig, handler in saved.items():
         signal.signal(sig, handler)
+
+
+@pytest.fixture
+def fake_clock() -> FakeClock:
+    return FakeClock()
 
 
 @pytest.fixture

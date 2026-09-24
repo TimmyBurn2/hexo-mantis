@@ -4,7 +4,6 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from _drivable import FakeClock
 
 
 class SpyEventSink:
@@ -48,11 +47,6 @@ class CallSpy:
 @pytest.fixture
 def spy_sink() -> SpyEventSink:
     return SpyEventSink()
-
-
-@pytest.fixture
-def fake_clock() -> FakeClock:
-    return FakeClock()
 
 
 @pytest.fixture

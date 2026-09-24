@@ -19,7 +19,6 @@ from mantis.config.schema import ARCH_SCOPED_KEYS
 from mantis.encoding import lookup
 from mantis.model import GnnArch, arch_from_spec_and_config, build_net
 from _spy import SpyEventSink
-from _drivable import FakeClock
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 TRAIN_FIXTURES = FIXTURES / "train"
@@ -33,11 +32,6 @@ KILLED_PREFIXES = ("cluster_pool.", "global_encoder.", "gpool_bias_branch.")
 @pytest.fixture
 def spy_sink() -> SpyEventSink:
     return SpyEventSink()
-
-
-@pytest.fixture
-def fake_clock() -> FakeClock:
-    return FakeClock()
 
 
 def make_tiny_arch() -> GnnArch:
