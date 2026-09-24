@@ -19,26 +19,28 @@ from typing import Any, Mapping
 import pytest
 
 from mantis.config import load_config
+from mantis.config.census import production_configs
 from mantis.encoding import all_specs
 from mantis.encoding.resolvers import MissingEncodingError
 from mantis.selfplay import hparams as hparams_mod
 from mantis.selfplay.hparams import resolve_pool_encoding
 
 _REPO = Path(__file__).resolve().parents[2]
+_PRODUCTION = production_configs(_REPO)
 
 
-def _run5_dump() -> dict[str, Any]:
-    """The real production config, through the real loader — no hand-built stand-in.
-    R64 posture: the oracle resolves what run5 resolves."""
-    return load_config(_REPO / "configs" / "run6.yaml").model_dump()
+def _dump(config: Path) -> dict[str, Any]:
+    """A real production config via the real loader; the census is the discovery authority."""
+    return load_config(config).model_dump()
 
 
 # the seam TD-4 named
 
 
-def test_pool_resolves_encoding_from_a_real_run_config_dump() -> None:
+@pytest.mark.parametrize("config", _PRODUCTION, ids=lambda p: p.name)
+def test_pool_resolves_encoding_from_a_real_run_config_dump(config: Path) -> None:
     """THE TD-4 oracle: the pool resolves a REAL run-config dump's encoding."""
-    resolved = resolve_pool_encoding(_run5_dump(), arch=None)
+    resolved = resolve_pool_encoding(_dump(config), arch=None)
     # Against the REGISTRY, not a literal: the identity moved from `gnn_axis_v1` to
     # `gnn_axis_r8` at run6's mint, and this row's claim is that the pool resolves a REAL
     # registered encoding — the row below is the one that says WHICH.
@@ -48,16 +50,18 @@ def test_pool_resolves_encoding_from_a_real_run_config_dump() -> None:
     assert resolved.trunk_size > 0
 
 
-def test_pool_resolution_agrees_with_the_config_identity_key() -> None:
+@pytest.mark.parametrize("config", _PRODUCTION, ids=lambda p: p.name)
+def test_pool_resolution_agrees_with_the_config_identity_key(config: Path) -> None:
     """One authority: what the pool resolves IS what the operator declared. A bridge that
     guessed — or that defaulted — would pass the test above and fail this one."""
-    dump = _run5_dump()
+    dump = _dump(config)
     assert resolve_pool_encoding(dump, arch=None).encoding_name == dump["identity"]["encoding"]
 
 
-def test_pool_still_refuses_a_config_that_declares_no_encoding() -> None:
+@pytest.mark.parametrize("config", _PRODUCTION, ids=lambda p: p.name)
+def test_pool_still_refuses_a_config_that_declares_no_encoding(config: Path) -> None:
     """LAW-11 survives the widening: strip the declaration and the pool dies, loudly."""
-    dump = _run5_dump()
+    dump = _dump(config)
     dump.pop("identity")
     with pytest.raises(MissingEncodingError):
         resolve_pool_encoding(dump, arch=None)
@@ -82,15 +86,16 @@ def _flat_only_resolve(cfg: Mapping[str, Any] | None) -> Any:
     return lookup(section) if isinstance(section, str) else lookup(section["version"])
 
 
+@pytest.mark.parametrize("config", _PRODUCTION, ids=lambda p: p.name)
 def test_mutation_reintroducing_the_defect_reds_the_td4_oracle(
-    monkeypatch: pytest.MonkeyPatch,
+    config: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Flip-set: re-pointing the pool's resolver at the flat-only implementation must make
     the TD-4 oracle fail with the census'd error — the same `MissingEncodingError`, on the
     same input. An oracle that stayed green under this mutation would be pinning nothing."""
     monkeypatch.setattr(hparams_mod, "resolve_from_config", _flat_only_resolve)
     with pytest.raises(MissingEncodingError, match="no 'encoding' key"):
-        resolve_pool_encoding(_run5_dump(), arch=None)
+        resolve_pool_encoding(_dump(config), arch=None)
 
 
 def test_mutation_leaves_the_flat_shape_untouched(monkeypatch: pytest.MonkeyPatch) -> None:
