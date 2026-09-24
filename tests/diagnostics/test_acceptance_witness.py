@@ -116,7 +116,7 @@ def _readout(seed: int) -> dict:
             build_candidate_player(engine, 2, spec=spec, leaf_batch_size=1, c_visit=50.0,
                                    c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16,
                                    gumbel_seed=seed),
-            resolve_bot("random", depth=None, opponent_sims=2)(seed=7),
+            resolve_bot("random", opponent_sims=2)(seed=7),
             openings,
             regime_key=witness_regime(encoding_name=_ENCODING, model_sims=2,
                                       opening_book="book_v1_s20260625_p4"),

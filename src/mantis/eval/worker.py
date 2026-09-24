@@ -332,7 +332,7 @@ def _play_floor_probe(
     `FLOOR_PROBE_VARIANT` so the sets cannot pool. Returns arena `GameRecord`s, whose
     `terminal` field the floor's decisiveness bar reads.
     """
-    bot_factory = resolve_bot("random", depth=None, opponent_sims=spec.random_model_sims)
+    bot_factory = resolve_bot("random", opponent_sims=spec.random_model_sims)
     opponent = bot_factory(seed=spec.seed_base)
     candidate = build_candidate_player(
         candidate_engine, spec.random_model_sims, spec=encoding_spec,
@@ -486,7 +486,7 @@ def _play_rung_block(
     games: _RoundGameRecords,
 ) -> list[dict[str, Any]]:
     bot_factory = resolve_bot(
-        rung_job.bot, depth=rung_job.depth,
+        rung_job.bot,
         opponent_sims=(rung_job.opponent_sims if rung_job.bot == "strix"
                        else _model_sims_for_kind(spec, rung_job.bot)),
         variant=rung_job.variant,
@@ -510,7 +510,7 @@ def _play_rung_block(
     regime_key = RegimeKey(
         bot=rung_job.bot, variant=rung_job.variant, model_sims=_model_sims_for_kind(spec, rung_job.bot),
         # A model opponent's own sims are part of the instrument's identity (a strix rung at 128
-        # and at 256 are two rungs); a bot with none (sealbot's depth rides `variant`) is unchanged.
+        # and at 256 are two rungs); a bot with none is unchanged.
         opponent_spec=(f"{rung_job.bot}:{rung_job.variant}"
                        + ("" if rung_job.opponent_sims is None else f"@{rung_job.opponent_sims}")),
         opening_book=rung_job.opening_book,
@@ -536,7 +536,7 @@ def _play_random_floor(
 ) -> list[dict[str, Any]]:
     if spec.random_floor_games <= 0:
         return []
-    bot_factory = resolve_bot("random", depth=None, opponent_sims=spec.random_model_sims)
+    bot_factory = resolve_bot("random", opponent_sims=spec.random_model_sims)
     opponent = bot_factory(seed=spec.seed_base)
     # The random floor plays at the resolved random_model_sims, not gate.deploy_sims.
     candidate = build_candidate_player(

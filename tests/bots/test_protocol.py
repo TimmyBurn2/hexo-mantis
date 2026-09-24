@@ -55,7 +55,7 @@ def test_random_bot_satisfies_bot_protocol():
 
 
 def test_resolver_resolves_random_locally():
-    factory = resolve_bot("random", depth=None, opponent_sims=None)
+    factory = resolve_bot("random", opponent_sims=None)
     bot = factory()
     assert isinstance(bot, BotProtocol)
     board = _FakeBoard([(0, 0), (1, 1)])
@@ -77,7 +77,7 @@ def test_external_kinds_carry_a_reason_that_names_no_env_key(kind, monkeypatch):
     # Resolves where `make vendor` plus the build have run; either outcome is legal, and
     # neither may consult an env channel.
     try:
-        factory = resolve_bot(kind, depth=None, opponent_sims=128)
+        factory = resolve_bot(kind, opponent_sims=128)
     except RungUnresolvable as exc:
         assert exc.rung == kind
         assert exc.reason.strip() != "", "a skip with an empty reason is a silent skip"
@@ -105,7 +105,7 @@ def test_no_host_path_tokens_in_bots_sources():
 
 def test_unknown_bot_kind_raises_valueerror():
     with pytest.raises(ValueError) as exc:
-        resolve_bot("mystery_bot", depth=None, opponent_sims=None)
+        resolve_bot("mystery_bot", opponent_sims=None)
     msg = str(exc.value)
     for kind in _KNOWN_KINDS:
         assert kind in msg, f"ValueError should name the known kind set, missing {kind!r}"

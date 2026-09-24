@@ -299,7 +299,7 @@ def run_witness(config_path: Path, arms: Sequence[ArmSpec], *, games: int,
                                        search_kind=resolve_deploy_search_kind(cfg),
                                        gumbel_m=cfg.selfplay.gumbel_m,
                                        gumbel_seed=cfg.seed),
-                resolve_bot("random", depth=None, opponent_sims=sims)(
+                resolve_bot("random", opponent_sims=sims)(
                     seed=cfg.eval.gate.seed_base),
                 paired_openings(cfg.eval.gate.opening_book, n_pairs=max(games // 2, 1),
                                 seed=cfg.eval.gate.seed_base),

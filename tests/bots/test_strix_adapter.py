@@ -136,7 +136,7 @@ def test_the_resolver_names_the_missing_step_or_resolves() -> None:
     from mantis.bots.resolve import resolve_bot
 
     try:
-        factory = resolve_bot("strix", depth=None, opponent_sims=8)
+        factory = resolve_bot("strix", opponent_sims=8)
     except RungUnresolvable as exc:
         assert any(m in exc.reason for m in (VENDOR_ABSENT_MARKER, CHECKPOINT_ABSENT_MARKER,
                                             "vendor_build_strix", SHA_MISMATCH_MARKER)), exc.reason
@@ -157,7 +157,7 @@ def test_the_live_driver_plays_twenty_legal_games_end_to_end() -> None:
     available, why = strix_availability()
     if not available:
         pytest.skip(f"LOUD SKIP — strix is not vendored here: {why}")
-    factory = resolve_bot("strix", depth=None, opponent_sims=8)
+    factory = resolve_bot("strix", opponent_sims=8)
     strix = factory()
     random_bot = RandomBot(seed=1)
     terminals: list[str] = []

@@ -36,8 +36,8 @@ def test_a_strix_cell_composes_the_rung_at_the_pinned_checkpoint(frontier, base,
     spec = frontier.cell_spec(cell, base_spec, cell_dir=tmp_path, config=config)
     assert len(spec.rung_jobs) == 1
     job = spec.rung_jobs[0]
-    assert (job.bot, job.variant, job.depth, job.opponent_sims, job.games, job.deploy_matched) == (
-        "strix", "checkpoint_00237000", None, 128, 288, True)
+    assert (job.bot, job.variant, job.opponent_sims, job.games, job.deploy_matched) == (
+        "strix", "checkpoint_00237000", 128, 288, True)
     assert job.opening_book == config.eval.gate.opening_book
     assert spec.strix_model_sims == 512 and spec.search_kind == "puct"
     assert spec.rung_concurrency == 8, "the strix rung's games in flight are the cell's concurrency"

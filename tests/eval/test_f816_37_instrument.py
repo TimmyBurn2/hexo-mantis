@@ -59,7 +59,7 @@ def _round_spec(tmp_path: Path) -> RoundSpec:
         round_index=0, round_id="f816_37_instrument", step=7, candidate_snapshot=str(candidate),
         best_snapshot=str(best), best_step=None, encoding=_ENC, worker_device="cpu",
         gate=gate,
-        rung_jobs=[RungJob(name="random_rung", bot="random", variant="raw", depth=None,
+        rung_jobs=[RungJob(name="random_rung", bot="random", variant="raw",
                            opponent_sims=None, opening_book=_BOOK, deploy_matched=True,
                            games=0,
                            bootstrap_resamples=10, bootstrap_ci_level=0.95, bootstrap_seed=1)],

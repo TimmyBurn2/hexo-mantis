@@ -15,7 +15,7 @@ BotFactory = Callable[..., Any]
 _KNOWN_KINDS: tuple[str, ...] = ("random", "strix")
 
 
-def resolve_bot(kind: str, *, depth: int | None, opponent_sims: int | None,
+def resolve_bot(kind: str, *, opponent_sims: int | None,
                 variant: str = _strix_mod.PIN_NAME) -> BotFactory:
     """Resolve `kind` to a `BotFactory`, or raise.
 

@@ -59,7 +59,7 @@ def test_strix_rung_model_sims_route_through_resolve_eval_model_sims(monkeypatch
     monkeypatch.setattr(nsims_mod, "resolve_eval_model_sims", spy)
 
     with pytest.raises(_RoutingReached):
-        resolve_bot("strix", depth=None, opponent_sims=128)
+        resolve_bot("strix", opponent_sims=128)
 
     assert calls == [("strix", 128)], (
         f"resolve_bot('strix', …) must route model_sims through resolve_eval_model_sims "
@@ -84,7 +84,7 @@ def test_random_floor_routes_through_resolver(monkeypatch) -> None:
         return real(opponent, cfg_value)
 
     monkeypatch.setattr(nsims_mod, "resolve_eval_model_sims", spy)
-    resolve_bot("random", depth=None, opponent_sims=96)
+    resolve_bot("random", opponent_sims=96)
     assert ("random", 96) in calls, (
         "resolve_bot('random', ...) must route through resolve_eval_model_sims too — "
         "eval.random_model_sims must have a live EXERCISED consumer"
@@ -114,7 +114,7 @@ def test_every_bot_kind_routes_its_sims_through_the_resolver_after_the_rewrite(
 
     monkeypatch.setattr(nsims_mod, "resolve_eval_model_sims", spy)
     try:
-        resolve_bot(kind, depth=None, opponent_sims=128)
+        resolve_bot(kind, opponent_sims=128)
     except RungUnresolvable:
         pass  # strix's refusal is expected without a vendor tree; the routing already happened.
 

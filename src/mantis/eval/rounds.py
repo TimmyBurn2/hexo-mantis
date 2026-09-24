@@ -97,7 +97,6 @@ class RungJob:
     name: str
     bot: str
     variant: str
-    depth: int | None
     opponent_sims: int | None
     opening_book: str
     deploy_matched: bool

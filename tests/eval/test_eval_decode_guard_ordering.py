@@ -55,7 +55,7 @@ def _spec(tmp_path: Path, enc_name: str) -> RoundSpec:
     )
     rung_jobs = [
         RungJob(
-            name="random_rung", bot="random", variant="raw", depth=None,
+            name="random_rung", bot="random", variant="raw",
             opponent_sims=None, opening_book=_BOOK, deploy_matched=True, games=0,
             bootstrap_resamples=10, bootstrap_ci_level=0.95, bootstrap_seed=1,
         )

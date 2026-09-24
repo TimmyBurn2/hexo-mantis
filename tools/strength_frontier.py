@@ -163,7 +163,7 @@ def _strix_rung(config: Any, games: int, strix_sims: int, *, solver: bool = True
         raise FrontierCellError("a strix cell names strix_radius or strix_solver false, not both (no such variant)")
     variant = stem + (f"{_strix.RADIUS_SUFFIX}{int(radius)}" if radius is not None
                       else "" if solver else _strix.NET_ONLY_SUFFIX)
-    return RungJob(name=STRIX, bot=STRIX, variant=variant, depth=None, opponent_sims=strix_sims,
+    return RungJob(name=STRIX, bot=STRIX, variant=variant, opponent_sims=strix_sims,
                    opening_book=config.eval.gate.opening_book, deploy_matched=True, games=games,
                    bootstrap_resamples=_RUNG_BOOTSTRAP_RESAMPLES, bootstrap_ci_level=_CI_LEVEL,
                    bootstrap_seed=_BOOTSTRAP_SEED)
