@@ -620,7 +620,7 @@ class StepCoordinator:
             return False
         sink = self._sink if self._sink is not None else NullEventSink()
 
-        payload = self._emit_training_step(cfg, loss_info, sink)
+        payload = self._emit_training_step(loss_info, sink)
         emit_training_step_alerts(payload, self.monitor_cfg, self._loss_window, sink=sink)
         keep = max(2 * int(self.monitor_cfg.alert_loss_increase_window) + 2, 8)
         del self._loss_window[:-keep]
@@ -721,9 +721,7 @@ class StepCoordinator:
         )
         return self._fire_hard_abort("ply_cap_attractor", message)
 
-    def _emit_training_step(
-        self, cfg: StepCoordinatorConfig, loss_info: dict[str, float], sink: Any
-    ) -> dict[str, Any]:
+    def _emit_training_step(self, loss_info: dict[str, float], sink: Any) -> dict[str, Any]:
         """Build and emit the `training_step` event through the injected sink and return its
         payload (the WARN rules read it). Stays `log_interval`-gated: it is narration."""
         payload = emit_training_step_event(self._train_step, loss_info, sink)

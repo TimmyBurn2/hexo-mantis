@@ -646,7 +646,6 @@ class Trainer:
         cls,
         checkpoint_path: str | Path,
         *,
-        checkpoint_dir: str | Path | None = None,
         device: torch.device | None = None,
         fallback_config: dict[str, Any] | None = None,
         config_overrides: dict[str, Any] | None = None,
