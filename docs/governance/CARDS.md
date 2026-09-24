@@ -510,7 +510,7 @@ Both were found by running the gate set rather than by reading it, and both are 
   instrumentation oracle, so deleting it means re-basing six oracles on the graph variant and
   re-pinning the fixture); the F1 defer path (`declared_keys`/`declared_lr` no production caller
   passes, B-14 — its flat `RESUME_CHECKPOINT_OWNED_KEYS` is a golden-pinned contract row);
-  `get_temperature` (re-export only), `collate_graph_batch(device=None)`, the two segment softmaxes,
+  `get_temperature` (DELETED with selfplay/utils.py, R368 W3), `collate_graph_batch(device=None)`, the two segment softmaxes,
   the double `torch.load` (B-15). Every measure may fall and may never rise; the floors are the
   record of progress.
 
