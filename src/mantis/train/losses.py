@@ -1,5 +1,5 @@
-"""Shared loss computation for the Trainer + pretrain: the ragged policy CE, the binned value loss
-and the chain head; the trainer sums `policy_loss + value_loss` (`trainer/core.py`)."""
+"""Shared loss computation for the Trainer + pretrain: the ragged policy CE and the binned value
+loss; the trainer sums `policy_loss + value_loss` (`trainer/core.py`)."""
 from __future__ import annotations
 
 import math
@@ -205,48 +205,6 @@ def soft_policy_target(
         soft_explicit = sharpened * (explicit_mass / segment_sum(sharpened, seg, b).clamp_min(1e-30))[seg]
         prior32 = prior_probs.detach().to(torch.float32).reshape(-1)
         return soft_explicit + sparse_tail(prior32, explicit_mask, tail_mass, legal_offsets)
-
-
-def compute_chain_loss(
-    chain_pred: torch.Tensor,
-    chain_target: torch.Tensor,
-    legal_mask: torch.Tensor | None = None,
-    huber_delta: float = 1.0,
-) -> torch.Tensor:
-    """Smooth-L1 (Huber) loss on 6 chain-length planes. `chain_pred`/`chain_target` are
-    (B, 6, H, W); `legal_mask` is an optional float mask broadcastable to that shape, and `None`
-    means every cell contributes. Targets live in [0,1]."""
-    if legal_mask is None:
-        return torch.nn.functional.smooth_l1_loss(
-            chain_pred.float(), chain_target.float(), beta=huber_delta, reduction="mean",
-        )
-    per_cell = torch.nn.functional.smooth_l1_loss(
-        chain_pred.float(), chain_target.float(), beta=huber_delta, reduction="none",
-    )
-    mask = legal_mask.float()
-    if mask.dim() == per_cell.dim() - 1:
-        mask = mask.unsqueeze(1)
-    mask_b = mask.expand_as(per_cell)
-    return (per_cell * mask_b).sum() / mask_b.sum().clamp_min(1.0)
-
-
-def chain_target_fire_rate(
-    chain_target: torch.Tensor, legal_mask: torch.Tensor | None = None
-) -> float:
-    """Fraction of batch rows whose `chain_planes` target carries signal — the fire-rate the
-    in-run self-report publishes (LAW-18). With `legal_mask`, a row fires iff it has a nonzero
-    target on a legal cell."""
-    b = int(chain_target.shape[0])
-    if b == 0:
-        return 0.0
-    t = chain_target.float()
-    if legal_mask is not None:
-        m = legal_mask.float()
-        if m.dim() == t.dim() - 1:
-            m = m.unsqueeze(1)
-        t = t * m.expand_as(t)
-    active = t.reshape(b, -1).abs().amax(dim=1) > 0
-    return active.float().mean().item()
 
 
 def backward_accumulate(loss: torch.Tensor, scaler: GradScaler, fp16: bool) -> None:
