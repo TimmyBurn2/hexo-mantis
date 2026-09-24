@@ -1032,9 +1032,8 @@ fn test_last_search_stats_bounds_after_sims() {
 
 #[test]
 fn omitted_prior_mass_is_the_tail_the_cap_dropped() {
-    // The cap's own `topk_truncated` flag says only that SOMETHING was dropped, which at
-    // radius 8 is true on essentially every ply — measured 3009 of 3010 expansions on a driven
-    // game — so it carries no information. This pins the summed PRIOR of what was thrown away.
+    // Truncation says only that SOMETHING was dropped; this pins the summed PRIOR of what was
+    // thrown away.
     use super::backup::pick_topk_children;
     use fxhash::FxHashSet;
     use mantis_core::board::HALF;
@@ -1063,10 +1062,6 @@ fn omitted_prior_mass_is_the_tail_the_cap_dropped() {
 
     let pick = pick_topk_children(&cells, 0, 0, &policy, BOARD_SIZE as i32, HALF, CAP);
 
-    assert!(
-        pick.truncated,
-        "the fixture must exceed the cap for this to measure anything"
-    );
     assert_eq!(pick.children.len(), CAP);
     let expected = 8.0 * p;
     println!(
@@ -1136,7 +1131,6 @@ fn an_untruncated_expansion_records_no_omitted_mass() {
     tree.record_omitted_prior(pick.dropped_prior_mass);
     let (mass_micros, omitted_expansions, total_expansions) = tree.take_omitted_prior();
 
-    assert!(!pick.truncated);
     assert_eq!(
         total_expansions, 1,
         "an untruncated expansion must still be counted"
@@ -1190,7 +1184,6 @@ fn test_topk_truncates_at_the_supplied_cap() {
 
     let pick = pick_topk_children(&cells, 0, 0, &policy, BOARD_SIZE as i32, HALF, CAP);
     let chosen = pick.children;
-    assert!(pick.truncated, "600 > CAP must report truncation");
     assert_eq!(
         chosen.len(),
         CAP,
@@ -1252,7 +1245,6 @@ fn test_topk_tie_break_by_flat_idx() {
 
     let pick = pick_topk_children(&cells, 0, 0, &uniform_high, BOARD_SIZE as i32, HALF, CAP);
     let chosen = pick.children;
-    assert!(pick.truncated);
     assert_eq!(chosen.len(), CAP);
 
     let chosen_flats: std::collections::HashSet<usize> = chosen
@@ -1274,7 +1266,7 @@ fn test_topk_fast_path_keeps_all_when_under_cap() {
     use fxhash::FxHashSet;
     use mantis_core::board::HALF;
 
-    // 50 cells with K=192 takes the fast path: every cell appears and `sort_used` is false.
+    // 50 cells under the cap: every cell appears.
     let mut cells: FxHashSet<(i32, i32)> = FxHashSet::default();
     'outer: for q in -3..=4 {
         for r in -3..=4 {
@@ -1298,8 +1290,7 @@ fn test_topk_fast_path_keeps_all_when_under_cap() {
         HALF,
         MAX_CHILDREN_PER_NODE,
     );
-    let (chosen, sort_used) = (pick.children, pick.truncated);
-    assert!(!sort_used, "fast path expected when n_legal <= K");
+    let chosen = pick.children;
     assert_eq!(chosen.len(), 50);
 
     let chosen_set: std::collections::HashSet<(i32, i32)> =

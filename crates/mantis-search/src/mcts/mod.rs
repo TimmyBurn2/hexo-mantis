@@ -22,10 +22,8 @@ pub mod policy;
 mod selection;
 pub mod seq_halving;
 
-pub use backup::{
-    omitted_prior_stats, pool_overflow_count, take_omitted_prior_stats, take_pool_overflow_count,
-    OmittedPriorStats,
-};
+pub(crate) use backup::OmittedPriorStats;
+pub use backup::{pool_overflow_count, take_pool_overflow_count};
 pub use completed_q::QSigma;
 pub use gumbel_mctx::MctxRootState;
 pub use kind::SearchKind;
@@ -72,8 +70,6 @@ pub struct MCTSTree {
     /// sqrt(explored_policy_mass)`, where the mass is the prior summed over visited children.
     /// 0.0 disables it (classical fixed FPU, Q=0 for unvisited).
     pub(crate) fpu_reduction: f32,
-    pub selection_overlap_count: u32,
-    pub max_depth_observed: u32,
     /// Pending leaves carry the fully-replayed leaf `Board` itself, captured at `select_one_leaf`
     /// exit, eliminating the per-leaf `root_board.clone() + N × apply_move` re-walk.
     pub(crate) pending: Vec<(u32, Board)>,
@@ -95,13 +91,9 @@ pub struct MCTSTree {
     /// Cumulative count of quiescence overrides/blends since `new_game()`, over all four branches.
     /// Atomic rather than `Cell`, because the bridge wraps the tree in a Send+Sync handle.
     pub quiescence_fire_count: AtomicU64,
-    /// THIS SEARCH's omitted-prior counters, `(mass_micros, expansions_that_omitted,
-    /// total_expansions)`.
-    ///
-    /// PER-SEARCH deliberately: the same quantities live in process-wide statics for the run-wide
-    /// aggregate, so a caller bracketing ONE search used to have any concurrent search land inside
-    /// its bracket. `AtomicU64` because the bridge's Send+Sync handle makes a `Cell` unusable.
-    pub omitted_prior: OmittedPriorStats,
+    /// THIS SEARCH's omitted-prior counters, per-search so a bracket around one search admits
+    /// no other. `AtomicU64` because the bridge's Send+Sync handle makes a `Cell` unusable.
+    pub(crate) omitted_prior: OmittedPriorStats,
     /// Which search this tree runs. Set once per worker (`configure_search`), never
     /// per search.
     pub(crate) kind: SearchKind,
@@ -139,8 +131,6 @@ impl MCTSTree {
             c_puct,
             virtual_loss,
             fpu_reduction,
-            selection_overlap_count: 0,
-            max_depth_observed: 0,
             depth_accum: 0,
             sim_count: 0,
             pending: Vec::new(),
@@ -168,8 +158,6 @@ impl MCTSTree {
         self.pool[0].moves_remaining = mr;
         self.next_free = 1;
         self.pending.clear();
-        self.selection_overlap_count = 0;
-        self.max_depth_observed = 0;
         self.depth_accum = 0;
         self.sim_count = 0;
         self.quiescence_fire_count.store(0, Ordering::Relaxed);
@@ -263,9 +251,8 @@ impl MCTSTree {
     }
 
     /// Read-and-reset THIS tree's omitted-prior counters — the per-search measurement bracket.
-    /// The process-wide totals are NOT reset by it: those are the run-wide aggregate the bridge
-    /// publishes, and a per-search read must not silently zero a run's telemetry.
-    pub fn take_omitted_prior(&self) -> (u64, u64, u64) {
+    #[cfg(test)]
+    pub(crate) fn take_omitted_prior(&self) -> (u64, u64, u64) {
         self.omitted_prior.take()
     }
 

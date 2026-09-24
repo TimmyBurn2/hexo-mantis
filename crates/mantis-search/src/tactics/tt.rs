@@ -25,18 +25,6 @@ use super::{MATE, WIN_THRESHOLD};
 /// Key: (zobrist u128, side-to-move as i8, moves_remaining u8).
 pub type TtKey = (u128, i8, u8);
 
-/// α-β bound flag (standard TT semantics). A proven LOSS is stored `Exact`; the
-/// non-proof ordering/bound entries carry `Lower`/`Upper`.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Bound {
-    /// Exact node value (PV node, or a game-theoretic proof).
-    Exact,
-    /// Fail-high: `score` is a LOWER bound on the true value (β-cutoff).
-    Lower,
-    /// Fail-low: `score` is an UPPER bound on the true value.
-    Upper,
-}
-
 /// Bucket count (power of two so the index is a mask). Proof-LOSS entries are
 /// SPARSE (one write per distinct proven loss, not per node), so this comfortably
 /// holds every proof a within-budget search produces without eviction.
@@ -90,10 +78,6 @@ struct Slot {
     key: TtKey,
     /// int16 mate-distance-encoded score (node-relative; see `encode_score`).
     score: i16,
-    /// EXACT/LOWER/UPPER flag. Stored now; READ by the PVS bound cutoffs
-    /// (pruning only, never a verdict).
-    #[allow(dead_code)]
-    bound: Bound,
     /// Best move for ordering (the move that produced `score`); `None` = no hint.
     best: Option<(i32, i32)>,
     /// `depth_left` at store time — the depth-preferred replacement key.
@@ -109,7 +93,6 @@ impl Slot {
     const EMPTY: Slot = Slot {
         key: (0, 0, 0),
         score: 0,
-        bound: Bound::Exact,
         best: None,
         depth: 0,
         gen: 0,
@@ -200,7 +183,6 @@ impl ProofTt {
         self.put(Slot {
             key,
             score: encode_score(score, ply),
-            bound: Bound::Exact,
             best: None,
             depth: depth.clamp(i16::MIN as i32, i16::MAX as i32) as i16,
             gen: self.generation,
@@ -209,7 +191,7 @@ impl ProofTt {
         });
     }
 
-    /// Store a NON-PROOF ordering/bound entry (best move + α-β bound). NEVER
+    /// Store a NON-PROOF ordering entry (best move + its bound score). NEVER
     /// trusted as a verdict — only `get_best_move` reads it.
     #[inline]
     pub fn store_bound(
@@ -217,14 +199,12 @@ impl ProofTt {
         key: TtKey,
         score: i32,
         ply: i32,
-        bound: Bound,
         best: Option<(i32, i32)>,
         depth: i32,
     ) {
         self.put(Slot {
             key,
             score: encode_score(score, ply),
-            bound,
             best,
             depth: depth.clamp(i16::MIN as i32, i16::MAX as i32) as i16,
             gen: self.generation,
@@ -371,7 +351,7 @@ mod tests {
         // get_loss_proof — only its best move is exposed (for ordering).
         let mut tt = ProofTt::new();
         let key = (42u128, -1i8, 1u8);
-        tt.store_bound(key, loss_score(3), 0, Bound::Upper, Some((2, 5)), 8);
+        tt.store_bound(key, loss_score(3), 0, Some((2, 5)), 8);
         assert_eq!(
             tt.get_loss_proof(key, 0),
             None,
@@ -449,22 +429,8 @@ mod tests {
         assert_eq!(ProofTt::index(proof), ProofTt::index(bound_a));
         tt.store_loss_proof(proof, loss_score(2), 0, /*depth*/ 5);
         // two deep non-proof bounds churn the bucket; the proof must remain.
-        tt.store_bound(
-            bound_a,
-            100,
-            0,
-            Bound::Lower,
-            Some((1, 1)),
-            /*depth*/ 40,
-        );
-        tt.store_bound(
-            bound_b,
-            100,
-            0,
-            Bound::Lower,
-            Some((2, 2)),
-            /*depth*/ 40,
-        );
+        tt.store_bound(bound_a, 100, 0, Some((1, 1)), /*depth*/ 40);
+        tt.store_bound(bound_b, 100, 0, Some((2, 2)), /*depth*/ 40);
         assert_eq!(
             tt.get_loss_proof(proof, 0),
             Some(loss_score(2)),

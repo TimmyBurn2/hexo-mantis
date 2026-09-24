@@ -76,7 +76,7 @@ impl MctxRootState {
     /// schedule with — a driver-side counter would disagree the first time a simulation reached
     /// no child.
     #[must_use]
-    pub fn simulation_index(&self, tree: &MCTSTree) -> usize {
+    fn simulation_index(&self, tree: &MCTSTree) -> usize {
         let n = tree.pool[0].n_children as usize;
         (0..n)
             .map(|j| tree.pool[self.first_child as usize + j].n_visits as usize)

@@ -180,9 +180,6 @@ impl MCTSTree {
 
             let node = &self.pool[cur as usize];
             if node.is_terminal || !node.is_expanded() {
-                if depth > self.max_depth_observed {
-                    self.max_depth_observed = depth;
-                }
                 return Ok((cur, depth));
             }
 
@@ -319,7 +316,6 @@ impl MCTSTree {
 
             if pending_ids.contains(&leaf_idx) {
                 self.undo_virtual_loss(leaf_idx);
-                self.selection_overlap_count += 1;
                 while let Some(diff) = diffs.pop() {
                     board.undo_move(diff);
                 }
@@ -421,7 +417,6 @@ impl MCTSTree {
 
             if pending_ids.contains(&leaf_idx) {
                 self.undo_virtual_loss(leaf_idx);
-                self.selection_overlap_count += 1;
                 while let Some(diff) = diffs.pop() {
                     board.undo_move(diff);
                 }

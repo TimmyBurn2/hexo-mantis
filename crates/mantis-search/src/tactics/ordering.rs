@@ -3,33 +3,21 @@
 //! The threat-guided narrow candidate set keeps branching ~4-15 so deep FORCING mates are
 //! reachable cheaply, over the in-engine `winning_moves`/`threat_moves` primitives so each call
 //! is one pass over the legal set. Best-first order: TT move, immediate wins, threat moves and
-//! responses, the net-policy prior (inert by default), killers, history; a static-eval tie-break
-//! is deferred. Ordering only ACCELERATES — the threat enumeration still searches a 0-prior
-//! refuter, and this is the THREAT-ONLY set, omitting the quiet moves that start most mates.
+//! responses, killers, history; a static-eval tie-break is deferred. Ordering only ACCELERATES —
+//! it never drops a candidate — and this is the THREAT-ONLY set, omitting the quiet moves that
+//! start most mates.
 
 use fxhash::{FxHashMap, FxHashSet};
 
 use mantis_core::board::{Board, Player};
 
-/// Learned move-ordering prior; a higher prior means the move is tried earlier.
-///
-/// ORDERING ONLY, NEVER A PROOF: a prior enters only through `order_moves`, a strict permutation
-/// of the generated set, so it can neither add nor drop a candidate nor change a verdict.
-pub(crate) trait PolicyPrior {
-    /// Ordering prior for `mv` (higher ⇒ searched earlier). Ordering hint ONLY.
-    fn prior(&self, mv: (i32, i32)) -> f32;
-}
-
-/// Per-search move-ordering state: killers per ply, a history table, and an optional policy
-/// prior. ORDERING ONLY — reordering changes neither the candidate SET nor any verdict.
+/// Per-search move-ordering state: killers per ply and a history table. ORDERING ONLY —
+/// reordering changes neither the candidate SET nor any verdict.
 pub(crate) struct OrderingState {
     /// Two killer moves per ply (moves that caused a β / WIN cutoff at that ply).
     killers: Vec<[Option<(i32, i32)>; 2]>,
     /// History bonus per move — accumulates `depth²` on each cutoff.
     history: FxHashMap<(i32, i32), i32>,
-    /// Learned net-policy prior — INERT (`None`) BY DEFAULT; `prove` always uses `new()`, which
-    /// is what keeps "the proof core reads the net nowhere" true.
-    policy: Option<Box<dyn PolicyPrior>>,
 }
 
 impl OrderingState {
@@ -37,17 +25,6 @@ impl OrderingState {
         OrderingState {
             killers: Vec::new(),
             history: FxHashMap::default(),
-            policy: None,
-        }
-    }
-
-    /// Build with a net-policy prior wired into ordering; the proof core stays net-free.
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub(crate) fn with_policy(policy: Box<dyn PolicyPrior>) -> Self {
-        OrderingState {
-            killers: Vec::new(),
-            history: FxHashMap::default(),
-            policy: Some(policy),
         }
     }
 
@@ -76,8 +53,8 @@ impl OrderingState {
 }
 
 /// Best-first PERMUTATION of an already-generated candidate set: TT best move, the two killers,
-/// then quiet moves by (history bonus + net-policy prior), ties keeping `candidates`' order. It
-/// never adds or drops a move, so every proof conclusion is invariant to it.
+/// then quiet moves by history bonus, ties keeping `candidates`' order. It never adds or drops a
+/// move, so every proof conclusion is invariant to it.
 #[allow(clippy::unnecessary_sort_by)] // key(b).cmp(key(a)) is a descending stable sort (VERBATIM)
 pub(crate) fn order_moves(
     moves: &mut [(i32, i32)],
@@ -97,13 +74,7 @@ pub(crate) fn order_moves(
         } else {
             0
         };
-        let hist = state.history.get(m).copied().unwrap_or(0) as i64;
-        // Net-policy prior, added to history: it reorders quiet moves and cannot cross a tier.
-        let pol = match &state.policy {
-            Some(p) => (p.prior(*m).clamp(-1.0, 1.0) * 1_000_000.0) as i64,
-            None => 0,
-        };
-        (tier, hist.saturating_add(pol))
+        (tier, state.history.get(m).copied().unwrap_or(0) as i64)
     };
     // Stable descending sort — equal-key moves keep `candidates()` order.
     moves.sort_by(|a, b| key(b).cmp(&key(a)));
@@ -240,55 +211,6 @@ mod tests {
         assert_eq!(
             moves, original,
             "no ordering signal must leave the order unchanged"
-        );
-    }
-
-    #[test]
-    fn net_policy_reorders_quiet_tier_but_never_above_tt_or_killers() {
-        // A prior orders the QUIET tier only: never above the TT move or a killer, never
-        // adding or dropping a move, and non-vacuously (the quiet order differs from `None`).
-        struct PreferHighQ;
-        impl PolicyPrior for PreferHighQ {
-            fn prior(&self, mv: (i32, i32)) -> f32 {
-                mv.0 as f32 / 10.0 // higher q ⇒ earlier
-            }
-        }
-        let original = vec![(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0)];
-        let mut state = OrderingState::with_policy(Box::new(PreferHighQ));
-        state.record_cutoff(0, (5, 0), 6); // (5,0) is a killer at ply 0
-
-        let mut moves = original.clone();
-        order_moves(&mut moves, Some((1, 0)), 0, &state);
-        assert_eq!(
-            moves[0],
-            (1, 0),
-            "TT move must lead regardless of the policy prior"
-        );
-        assert_eq!(
-            moves[1],
-            (5, 0),
-            "killer must precede the quiet tier regardless of policy"
-        );
-        // The remaining quiet moves are ordered by the prior (higher q first).
-        assert_eq!(
-            &moves[2..],
-            &[(4, 0), (3, 0), (2, 0), (0, 0)],
-            "quiet tier must follow the net-policy prior"
-        );
-        assert_eq!(
-            sorted(moves.clone()),
-            sorted(original.clone()),
-            "policy ordering must stay a permutation"
-        );
-
-        // Non-vacuity: with no policy the quiet tier keeps candidates() order.
-        let mut plain = original.clone();
-        let mut nostate = OrderingState::new();
-        nostate.record_cutoff(0, (5, 0), 6);
-        order_moves(&mut plain, Some((1, 0)), 0, &nostate);
-        assert_ne!(
-            plain, moves,
-            "policy must actually change the quiet ordering (else vacuous)"
         );
     }
 }

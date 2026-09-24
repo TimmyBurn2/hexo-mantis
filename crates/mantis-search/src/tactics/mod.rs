@@ -7,8 +7,8 @@
 //! SOUNDNESS INVARIANT: the net value head is NEVER read inside the search — a proof is only a
 //! terminal backup or a stone-count shortcut, never a heuristic eval, and `eval.rs` orders moves
 //! while reporting UNKNOWN. The `#[cfg(test)]` fuzz cross-checks every LOSS against an
-//! independent exhaustive `brute_solve`. The static eval, the TT, net-policy ordering and the
-//! quiet-move alpha-beta body are deferred; the proof core is threat-based.
+//! independent exhaustive `brute_solve`. The quiet-move alpha-beta body is deferred; the proof
+//! core is threat-based.
 
 pub mod eval;
 pub mod ordering;
@@ -58,8 +58,9 @@ pub(crate) fn outcome_of(score: i32) -> Outcome {
 
 impl Outcome {
     /// Flip WIN<->LOSS; UNKNOWN stays UNKNOWN (negamax for HTTT compound turns).
+    #[cfg(test)]
     #[inline]
-    pub fn negate(self) -> Self {
+    pub(crate) fn negate(self) -> Self {
         match self {
             Outcome::Win => Outcome::Loss,
             Outcome::Loss => Outcome::Win,

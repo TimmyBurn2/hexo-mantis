@@ -12,7 +12,7 @@ use mantis_core::board::Board;
 
 use super::eval::heuristic_leaf;
 use super::ordering::{candidates, order_moves, OrderingState};
-use super::tt::{Bound, ProofTt};
+use super::tt::ProofTt;
 use super::{outcome_of, Budget, Outcome, TacticalConfig, MATE, NEG_INF, POS_INF, WIN_THRESHOLD};
 
 /// A scored node value: a proven mate is `±(MATE - ply)` (magnitude >= `WIN_THRESHOLD`), a
@@ -228,14 +228,7 @@ pub(crate) fn solve(
     if best >= WIN_THRESHOLD {
         // ORDERING hint only (is_proof=false; never returned as a verdict — a WIN
         // is always reconstructed). The winning move ordered first next visit.
-        tt.store_bound(
-            key,
-            best,
-            ply,
-            Bound::Lower,
-            best_line.first().copied(),
-            depth_left,
-        );
+        tt.store_bound(key, best, ply, best_line.first().copied(), depth_left);
         return Scored {
             score: best,
             line: best_line,
@@ -244,14 +237,7 @@ pub(crate) fn solve(
     // β-cutoff with a non-win `best`: a fail-high BOUND, so the LOSS-proof logic below must NOT
     // run. It is strictly above `-WIN_THRESHOLD`, so it cannot be misread as a proven LOSS.
     if cutoff {
-        tt.store_bound(
-            key,
-            best,
-            ply,
-            Bound::Lower,
-            best_line.first().copied(),
-            depth_left,
-        );
+        tt.store_bound(key, best, ply, best_line.first().copied(), depth_left);
         return Scored {
             score: best,
             line: best_line,
@@ -2039,137 +2025,5 @@ mod tests {
             "ID WIN PV must realize a real 6, got {:?}",
             r.line
         );
-    }
-
-    /// Drive the scored core with an OPTIONAL `PolicyPrior` wired into ordering.
-    fn run_scored_pol(
-        b: &Board,
-        cfg: &TacticalConfig,
-        depth: i32,
-        budget: u64,
-        policy: Option<Box<dyn super::super::ordering::PolicyPrior>>,
-    ) -> (Outcome, Vec<(i32, i32)>) {
-        let mut board = b.clone();
-        let mut bud = Budget::new(budget);
-        let mut tt = super::super::tt::ProofTt::new();
-        let mut ordering = match policy {
-            Some(p) => super::OrderingState::with_policy(p),
-            None => super::OrderingState::new(),
-        };
-        let s = super::solve(
-            &mut board,
-            depth,
-            0,
-            NEG_INF,
-            POS_INF,
-            &mut bud,
-            cfg,
-            &mut tt,
-            &mut ordering,
-        );
-        (outcome_of(s.score), s.line)
-    }
-
-    #[test]
-    fn verdict_invariant_to_net_policy_ordering() {
-        // The CRITICAL property: net policy in candidate ORDERING must NEVER change a verdict.
-        // An ADVERSARIAL prior maximally permutes the order; verdict and PV must be invariant.
-        use super::super::ordering::PolicyPrior;
-        struct Adversarial;
-        impl PolicyPrior for Adversarial {
-            fn prior(&self, mv: (i32, i32)) -> f32 {
-                // splitmix-style hash of the coords -> a scattered value in [-1, 1].
-                let mut z = (mv.0 as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15)
-                    ^ (mv.1 as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-                z ^= z >> 31;
-                ((z & 0xFFFF) as f32) / 32768.0 - 1.0
-            }
-        }
-        let cfg = |cand_cap, neighbor_dist| TacticalConfig {
-            cand_cap,
-            window_half: None,
-            neighbor_dist,
-        };
-        let imm: Vec<((i32, i32), Cell)> = (0..5).map(|q| ((q, 0), Cell::P1)).collect();
-        let two: Vec<((i32, i32), Cell)> = (0..4).map(|q| ((q, 0), Cell::P1)).collect();
-        let mut quiet = Board::new();
-        for &(q, r) in &[(0, 0), (3, 3), (3, 4), (0, 1), (1, 0)] {
-            quiet.apply_move(q, r).unwrap();
-        }
-        type Case = (Board, TacticalConfig, i32, u64, &'static str);
-        let cases: Vec<Case> = vec![
-            (
-                static_board(&imm, Player::One, 2),
-                cfg(40, None),
-                12,
-                50_000,
-                "immediate-win",
-            ),
-            (
-                static_board(&two, Player::One, 2),
-                cfg(40, None),
-                12,
-                200_000,
-                "2-stone-win",
-            ),
-            (quiet, cfg(40, None), 12, 40_000, "quiet-unknown"),
-            (build_fork(), cfg(40, None), 12, 300_000, "fork-loss"),
-            (
-                compact_double_threat(0, 0, false),
-                cfg(40, None),
-                12,
-                200_000,
-                "compact-loss",
-            ),
-            (
-                compact_double_threat(-3, 4, false),
-                cfg(40, None),
-                12,
-                200_000,
-                "compact-loss-b",
-            ),
-            (
-                fork_with_p1_counter(),
-                cfg(1, Some(2)),
-                20,
-                400_000,
-                "trunc-verify-win",
-            ),
-            (
-                compact_double_threat(0, 0, false),
-                cfg(1, Some(2)),
-                12,
-                1_000_000,
-                "trunc-verify-loss",
-            ),
-            (
-                compact_double_threat(0, 0, false),
-                cfg(1, None),
-                12,
-                400_000,
-                "trunc-noverify-unknown",
-            ),
-        ];
-        for (b, c, depth, budget, name) in cases {
-            let (base, base_line) = run_scored_pol(&b, &c, depth, budget, None);
-            let (perm, perm_line) =
-                run_scored_pol(&b, &c, depth, budget, Some(Box::new(Adversarial)));
-            assert_eq!(
-                base, perm,
-                "net-policy ordering CHANGED the verdict ({name}): {base:?} -> {perm:?}"
-            );
-            // A WIN PV must still realize a real win under the reordered search.
-            if perm == WIN {
-                let mut bd = b.clone();
-                for &(q, r) in perm_line.iter().take(2) {
-                    bd.apply_move(q, r).unwrap();
-                }
-                assert!(
-                    bd.check_win(),
-                    "policy-reordered WIN PV must realize a real 6 ({name})"
-                );
-            }
-            let _ = &base_line;
-        }
     }
 }

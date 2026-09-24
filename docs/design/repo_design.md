@@ -890,7 +890,8 @@ that lands as an amendment in the commit that moves them, rather than as drift.
    bracketed measurement around one search admitted every other search in the process — a
    wrong number rather than a flaky one, and the conformance suite held a serialising mutex
    to work around it. The counters now live on `MCTSTree`. AMENDED (SLIM-FIX, R368(d)): the
-   bridge no longer exports the process-wide totals — no Python reader ever consumed them.
+   bridge no longer exports the process-wide totals — no Python reader ever consumed them —
+   and mantis-search's statics that fed them are deleted, so the per-search set is the only one.
 
 ---
 

@@ -9,15 +9,10 @@ use fxhash::FxHashSet;
 use mantis_core::board::{min_hitting_stones, Board};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// One expansion's Top-K pick: the children, whether the cap truncated, and the PRIOR MASS the
-/// truncation dropped. The mass is RETURNED rather than recorded into a static, so its
-/// measurement window has one owner instead of every search in the process.
+/// One expansion's Top-K pick: the children and the PRIOR MASS the cap dropped. The mass is
+/// RETURNED rather than recorded into a static, so its measurement window has one owner.
 pub(crate) struct TopKPick {
     pub children: Vec<((i32, i32), f32)>,
-    /// Read by the pickers' own oracles only: a truncation of zero-prior children costs nothing
-    /// and this bool cannot say so, so production asks the counters.
-    #[allow(dead_code)]
-    pub truncated: bool,
     pub dropped_prior_mass: f32,
 }
 
@@ -36,49 +31,12 @@ pub fn pool_overflow_count() -> u64 {
     POOL_OVERFLOW_COUNT.load(Ordering::Relaxed)
 }
 
-/// The OMITTED PRIOR MASS the Top-K cap has dropped, and how many expansions dropped any, in
-/// fixed point (x 1e6) because there is no atomic f32 and a cross-thread float sum would not be
-/// reproducible. MASS AND NOT A COUNT: `topk_truncated` is true on essentially every ply at
-/// radius 8 (measured: the legal set exceeds 192 on 98% of plies even under clustered play), so
-/// what decides whether the cap costs anything is how much PRIOR the dropped moves held.
-pub static OMITTED_PRIOR_MASS_MICROS: AtomicU64 = AtomicU64::new(0);
-pub static OMITTED_PRIOR_EXPANSIONS: AtomicU64 = AtomicU64::new(0);
-pub static TOTAL_EXPANSIONS: AtomicU64 = AtomicU64::new(0);
-
-/// `(omitted_mass_micros, expansions_that_omitted, total_expansions)`, read without reset.
-pub fn omitted_prior_stats() -> (u64, u64, u64) {
-    (
-        OMITTED_PRIOR_MASS_MICROS.load(Ordering::Relaxed),
-        OMITTED_PRIOR_EXPANSIONS.load(Ordering::Relaxed),
-        TOTAL_EXPANSIONS.load(Ordering::Relaxed),
-    )
-}
-
-/// Read-and-reset all three, for a bracketed measurement window.
-pub fn take_omitted_prior_stats() -> (u64, u64, u64) {
-    (
-        OMITTED_PRIOR_MASS_MICROS.swap(0, Ordering::Relaxed),
-        OMITTED_PRIOR_EXPANSIONS.swap(0, Ordering::Relaxed),
-        TOTAL_EXPANSIONS.swap(0, Ordering::Relaxed),
-    )
-}
-
-/// Fixed-point encoding of a prior mass, shared by the per-tree and process-wide counters.
+/// Fixed-point (x 1e6) prior mass: there is no atomic f32 and a cross-thread float sum would
+/// not be reproducible.
 #[inline]
 #[must_use]
 pub(crate) fn mass_micros(mass: f32) -> u64 {
     (f64::from(mass) * 1e6) as u64
-}
-
-/// Accumulate one expansion's dropped prior into the PROCESS-WIDE totals, called only from
-/// `MCTSTree::record_omitted_prior` so an expansion cannot be in one set and missed in the other.
-#[inline]
-fn record_omitted_prior_global(dropped_mass: f32) {
-    TOTAL_EXPANSIONS.fetch_add(1, Ordering::Relaxed);
-    if dropped_mass > 0.0 {
-        OMITTED_PRIOR_EXPANSIONS.fetch_add(1, Ordering::Relaxed);
-        OMITTED_PRIOR_MASS_MICROS.fetch_add(mass_micros(dropped_mass), Ordering::Relaxed);
-    }
 }
 
 /// Pick up to `MAX_CHILDREN_PER_NODE` children for a leaf expansion, returning `chosen` and
@@ -147,7 +105,6 @@ pub(crate) fn pick_topk_children(
 
     TopKPick {
         children: chosen,
-        truncated: n_legal > cap,
         dropped_prior_mass,
     }
 }
@@ -194,14 +151,15 @@ pub(crate) fn pick_topk_children_ls(
         .collect();
     TopKPick {
         children: chosen,
-        truncated: n_legal > cap,
         dropped_prior_mass,
     }
 }
 
-/// The per-search omitted-prior counters, one set per `MCTSTree`, in the statics' fixed point.
+/// The per-search OMITTED PRIOR MASS the Top-K cap dropped, how many expansions dropped any, and
+/// the expansion total. MASS AND NOT A COUNT: what decides whether the cap costs anything is how
+/// much PRIOR the dropped moves held.
 #[derive(Debug, Default)]
-pub struct OmittedPriorStats {
+pub(crate) struct OmittedPriorStats {
     mass_micros: AtomicU64,
     omitting_expansions: AtomicU64,
     total_expansions: AtomicU64,
@@ -210,7 +168,7 @@ pub struct OmittedPriorStats {
 impl OmittedPriorStats {
     /// `(omitted_mass_micros, expansions_that_omitted, total_expansions)`, without reset.
     #[must_use]
-    pub fn read(&self) -> (u64, u64, u64) {
+    pub(crate) fn read(&self) -> (u64, u64, u64) {
         (
             self.mass_micros.load(Ordering::Relaxed),
             self.omitting_expansions.load(Ordering::Relaxed),
@@ -219,7 +177,8 @@ impl OmittedPriorStats {
     }
 
     /// Read-and-reset all three — the measurement bracket.
-    pub fn take(&self) -> (u64, u64, u64) {
+    #[cfg(test)]
+    pub(crate) fn take(&self) -> (u64, u64, u64) {
         (
             self.mass_micros.swap(0, Ordering::Relaxed),
             self.omitting_expansions.swap(0, Ordering::Relaxed),
@@ -228,7 +187,7 @@ impl OmittedPriorStats {
     }
 
     /// Zero all three, for a lifecycle boundary that is not a measurement.
-    pub fn reset(&self) {
+    pub(crate) fn reset(&self) {
         self.mass_micros.store(0, Ordering::Relaxed);
         self.omitting_expansions.store(0, Ordering::Relaxed);
         self.total_expansions.store(0, Ordering::Relaxed);
@@ -245,10 +204,9 @@ impl OmittedPriorStats {
 }
 
 impl MCTSTree {
-    /// Count one expansion's dropped prior into both this search's counters and the totals.
+    /// Count one expansion's dropped prior into this search's counters.
     pub(crate) fn record_omitted_prior(&self, dropped_mass: f32) {
         self.omitted_prior.record(dropped_mass);
-        record_omitted_prior_global(dropped_mass);
     }
 
     /// Quiescence value override at a non-terminal leaf on the two-stone-turn unit: an own open
@@ -607,7 +565,6 @@ mod ls_prior_tests {
 
         let pick = pick_topk_children_ls(&legal, 0, 0, &ls, 19, 9, MAX_CHILDREN_PER_NODE);
         let chosen = pick.children;
-        assert!(!pick.truncated);
         assert_eq!(chosen.len(), 3);
         // sorted by prior desc: (28,0)=0.5 (overflow), (1,0)=0.3, (0,0)=0.2 (dense)
         assert_eq!(
