@@ -34,6 +34,7 @@ no section in the register (their text lives in an operator addendum that is not
 repository), **R33** is superseded in full by R37, and **R267** is a documented GAP whose text is
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
+ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
 
 ### R368 — SLIM-FIX (standing: the SLIM-SCOUT census accepted as the work list, every PENDING-PROBE row re-probed on a torch host before it lands; PROTECTION BINDS THE INVARIANT, NOT THE FILE — LAWS.md's eleven invariants held by their implementing symbols and pinning tests, other code in the same file changes under the normal legs, a card never protects code, a freeze is a manifest row, a reding test or gate or a ruling naming the file; CORRECTNESS FIRST — the census's defects and gate holes land before any slimming, each proven by a planted break, the test-count floor raised to the base's collected count; R367(a) ORDERED on the census — grid/dense residue, the phantom protocol members, run-named symbols and duplicated helpers go, the dense drain oracle re-based on graph goldens; DECIDED DELETIONS — wpa_positions.json, the unread value_probes, RULINGS_ACTIVE.md, CARDS' closed rows, configs/run6–8, the sealbot adapter, the old corpus pipeline, the S-PREFUSE harness; STATE rewritten to current facts; ONE COMMENT RULE with one sanctioned pass over cites and narrative runs; schema keys, minted rows, the CI workflow and hot-path refactors OUT of this phase; RUN10 SAFETY — 69e1532 is run10's validated base and nothing moves its resolved config, stamp format or numerics before run10 STARTs; SEAM-2 recorded, its implementation after run10 STARTs; the queue disposed)
 Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
@@ -4787,6 +4788,16 @@ adapter, its vendor build script, patch and pin. The witness was spent with run6
 strix is the series ruler (R366). A reading against sealbot_d5 is restorable from git history
 (`69e15329`), never from the tree.
 Ordered by: R368(e), appended 2026-09-23 by its landing session
+
+### ANNOTATION under the Coverage note (A1) — ITS CLOSING PAIR IS ONE HIGH, AND "FOUR ENTRIES" NAMES FIVE
+Corrects: the closing "323 entries over 322 numbers" and the count in "Four entries record an absence";
+nothing in the note's gaps (R227, R228), its absence entries or its ANNEX sentence
+Fact: the numbers are R23–R345 less R227 and R228; the entries are those numbers plus R279(g)-ANNEX.
+The stated pair is one high on both sides. Derive both at point of use, never carry them:
+`grep -oE '^### R[0-9]+' docs/governance/RULINGS.md | tr -d '#R ' | awk '$1>=23 && $1<=345' | wc -l`
+counts the entries, and the same with `sort -u` before `wc -l` counts the numbers. The absence sentence
+names R24, R29, R32, R33 and R267 under "Four".
+Ordered by: R368(a) (the census's defect 47), appended 2026-09-25 by the SLIM-FIX W6 register leg
 
 ### ANNOTATION under LAW-10 (in laws.md) — GRID-ERA
 Corrects: LAW-10's applicability, not its criterion structure
