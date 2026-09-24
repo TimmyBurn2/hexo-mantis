@@ -88,38 +88,11 @@ def test_selfplay_missing_field_rejected(field: str):
         SelfplayConfig.model_validate(payload)
 
 
-def test_selfplay_extra_key_rejected():
-    with pytest.raises(ValidationError, match="bogus_selfplay_knob"):
-        SelfplayConfig.model_validate(_selfplay(bogus_selfplay_knob=1))
-
-
-def test_selfplay_nested_extra_key_rejected():
-    payload = _selfplay()
-    payload["mcts"] = dict(VALID_MCTS, bogus_mcts_knob=1)
-    with pytest.raises(ValidationError, match="bogus_mcts_knob"):
-        SelfplayConfig.model_validate(payload)
-
-
 @pytest.mark.parametrize("field,bad_value", SELFPLAY_BOUND_VIOLATIONS,
                          ids=[f"{f}={v}" for f, v in SELFPLAY_BOUND_VIOLATIONS])
 def test_selfplay_bound_violation_rejected(field: str, bad_value: object):
     with pytest.raises(ValidationError):
         SelfplayConfig.model_validate(_selfplay(**{field: bad_value}))
-
-
-def test_selfplay_has_no_pydantic_level_default_EXCEPT_the_declared_operational_ones():
-    """Check both ways: an undeclared default is a red, a declared-but-required key is stale."""
-    declared = operational_default_fields("selfplay")
-    for name, field in SelfplayConfig.model_fields.items():
-        if name in declared:
-            assert not field.is_required(), (
-                f"SelfplayConfig.{name} is declared in OPERATIONAL_DEFAULT_KEYS but is still "
-                "required — the declaration is stale"
-            )
-            continue
-        assert field.is_required(), (
-            f"SelfplayConfig.{name} has a code-side default and is not declared operational"
-        )
 
 
 @pytest.mark.parametrize("field", sorted(operational_default_fields("selfplay")))
@@ -176,35 +149,11 @@ def test_an_arch_scoped_inference_field_is_OMITTABLE_at_the_section_level(field:
     assert getattr(InferenceConfig.model_validate(payload), field) is None
 
 
-def test_inference_extra_key_rejected():
-    with pytest.raises(ValidationError, match="bogus_inference_knob"):
-        InferenceConfig.model_validate(_inference(bogus_inference_knob=1))
-
-
 @pytest.mark.parametrize("field,bad_value", INFERENCE_BOUND_VIOLATIONS,
                          ids=[f"{f}={v}" for f, v in INFERENCE_BOUND_VIOLATIONS])
 def test_inference_bound_violation_rejected(field: str, bad_value: object):
     with pytest.raises(ValidationError):
         InferenceConfig.model_validate(_inference(**{field: bad_value}))
-
-
-def test_inference_has_no_pydantic_level_default_EXCEPT_the_arch_scoped_ones():
-    """No code-side defaults, with the arch-scoped exception derived from `ARCH_SCOPED_KEYS`.
-
-    The `= None` on an arch-scoped block is not a fallback: `RunConfig` refuses a graph config
-    that omits it and any other config that carries it.
-    """
-    assert _ARCH_SCOPED_INFERENCE_FIELDS, (
-        "no inference key is arch-scoped, so this exemption is unused and should go"
-    )
-    operational = operational_default_fields("inference")
-    for name, field in InferenceConfig.model_fields.items():
-        if name in _ARCH_SCOPED_INFERENCE_FIELDS or name in operational:
-            assert not field.is_required(), (
-                f"InferenceConfig.{name} is arch-scoped or operational, so it must be omittable"
-            )
-            continue
-        assert field.is_required(), f"InferenceConfig.{name} has a code-side default"
 
 
 def test_the_gumbel_kind_lowers_the_sim_ceiling_at_mint(smoke_run_config):

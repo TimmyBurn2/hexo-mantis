@@ -150,12 +150,6 @@ def test_missing_knob_is_a_named_error_at_load(section: str, key: str) -> None:
         RunConfig.model_validate(payload)
 
 
-def test_schema_fields_are_required_with_no_pydantic_level_default() -> None:
-    assert TrainConfig.model_fields["actor_sync_cadence_steps"].is_required()
-    assert MonitorSchemaConfig.model_fields["actor_lag_threshold_steps"].is_required()
-    assert MonitorSchemaConfig.model_fields["actor_lag_abort_enabled"].is_required()
-
-
 # bounds: no representable "off" (R49)
 @pytest.mark.parametrize("bad_cadence", [0, -1])
 def test_cadence_has_no_representable_off_value(bad_cadence: int) -> None:

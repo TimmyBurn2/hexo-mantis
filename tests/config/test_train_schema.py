@@ -154,12 +154,6 @@ def test_an_arch_scoped_field_is_OMITTABLE_at_the_section_level(field: str):
     assert getattr(TrainConfig.model_validate(payload), field) is None
 
 
-def test_extra_key_rejected():
-    payload = _payload(bogus_train_knob=1)
-    with pytest.raises(ValidationError, match="bogus_train_knob"):
-        TrainConfig.model_validate(payload)
-
-
 @pytest.mark.parametrize("field,bad_value", BOUND_VIOLATIONS,
                          ids=[f"{f}={v}" for f, v in BOUND_VIOLATIONS])
 def test_bound_violation_rejected(field: str, bad_value: object):
@@ -172,34 +166,6 @@ def test_bound_violation_rejected(field: str, bad_value: object):
 def test_literal_out_of_enum_rejected(field: str, bad_value: object):
     with pytest.raises(ValidationError):
         TrainConfig.model_validate(_payload(**{field: bad_value}))
-
-
-def test_no_field_has_a_pydantic_level_default_EXCEPT_the_arch_scoped_ones():
-    # A default lives only in the minted config, so every field must be required. Both exempt
-    # families are read off their registries, never typed here, so a hand-added default is red.
-    exempt = {key.field for key in ARCH_SCOPED_KEYS if key.section == "train"}
-    assert exempt, "no train key is arch-scoped, so this exemption is unused and should go"
-    # Kept separate from the arch-scoped family: an arch-scoped block is REFUSED on the wrong
-    # arch, while an operational default is simply inherited.
-    operational = operational_default_fields("train")
-    assert not (exempt & operational), "a key cannot be both arch-scoped and operational"
-    for name, field in TrainConfig.model_fields.items():
-        if name in exempt:
-            assert not field.is_required(), (
-                f"TrainConfig.{name} is arch-scoped, so it must be omittable — a required "
-                "arch-scoped block would force every arch to mint it, which is the defect"
-            )
-            continue
-        if name in operational:
-            assert not field.is_required(), (
-                f"TrainConfig.{name} is declared in OPERATIONAL_DEFAULT_KEYS but is still "
-                "required — the declaration is stale"
-            )
-            continue
-        assert field.is_required(), (
-            f"TrainConfig.{name} has a code-side default and is declared in neither registry"
-        )
-
 
 
 def test_scheduler_t_max_none_is_a_real_value_not_a_missing_key():

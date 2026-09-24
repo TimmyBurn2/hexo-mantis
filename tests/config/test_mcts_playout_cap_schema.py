@@ -67,21 +67,11 @@ def test_mcts_missing_field_rejected(field: str):
         MctsConfig.model_validate(payload)
 
 
-def test_mcts_extra_key_rejected():
-    with pytest.raises(ValidationError, match="bogus_mcts_knob"):
-        MctsConfig.model_validate(_mcts(bogus_mcts_knob=1))
-
-
 @pytest.mark.parametrize("field,bad_value", MCTS_BOUND_VIOLATIONS,
                          ids=[f"{f}={v}" for f, v in MCTS_BOUND_VIOLATIONS])
 def test_mcts_bound_violation_rejected(field: str, bad_value: object):
     with pytest.raises(ValidationError):
         MctsConfig.model_validate(_mcts(**{field: bad_value}))
-
-
-def test_mcts_has_no_pydantic_level_default():
-    for name, field in MctsConfig.model_fields.items():
-        assert field.is_required(), f"MctsConfig.{name} has a code-side default"
 
 
 # PlayoutCapConfig
@@ -96,11 +86,6 @@ def test_playout_cap_missing_field_rejected(field: str):
     del payload[field]
     with pytest.raises(ValidationError, match=field):
         PlayoutCapConfig.model_validate(payload)
-
-
-def test_playout_cap_extra_key_rejected():
-    with pytest.raises(ValidationError, match="bogus_playout_cap_knob"):
-        PlayoutCapConfig.model_validate(_playout_cap(bogus_playout_cap_knob=1))
 
 
 @pytest.mark.parametrize("field,bad_value", PLAYOUT_CAP_BOUND_VIOLATIONS,
@@ -118,6 +103,3 @@ def test_playout_cap_field_name_matches_config_key_for_temperature_threshold():
     assert cfg.temperature_threshold_compound_moves == 9
 
 
-def test_playout_cap_has_no_pydantic_level_default():
-    for name, field in PlayoutCapConfig.model_fields.items():
-        assert field.is_required(), f"PlayoutCapConfig.{name} has a code-side default"

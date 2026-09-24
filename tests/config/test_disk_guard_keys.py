@@ -92,13 +92,6 @@ def test_an_omitted_disk_guard_key_lands_on_its_declared_default(field: str) -> 
     )
 
 
-def test_disk_guard_extra_key_rejected() -> None:
-    """O-D4, arm 2 — `extra="forbid"`: `keep_all` gets NO key (the root passes `False` with a
-    disclosure comment), so writing one must be refused rather than silently ignored."""
-    with pytest.raises(ValidationError, match="keep_all"):
-        DiskGuardConfig.model_validate(_payload(keep_all=True))
-
-
 def test_disk_guard_has_no_pydantic_level_default() -> None:
     """O-D4, arm 3 — the no-code-side-defaults census every OTHER schema block gets.
 

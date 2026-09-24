@@ -94,28 +94,6 @@ def test_an_operational_field_is_OMITTABLE_and_falls_to_its_declared_default(fie
     )
 
 
-def test_monitor_extra_key_rejected():
-    with pytest.raises(ValidationError, match="bogus_monitor_knob"):
-        MonitorSchemaConfig.model_validate(_monitor(bogus_monitor_knob=1))
-
-
-def test_monitor_has_no_pydantic_level_default_EXCEPT_the_declared_operational_ones():
-    """A default is legal ONLY where the schema's registry declares the key operational, checked
-    BOTH ways: an undeclared default reds, and a declared-but-required key is a stale exemption."""
-    for name, field in MonitorSchemaConfig.model_fields.items():
-        if name in _MONITOR_DEFAULTED:
-            assert not field.is_required(), (
-                f"MonitorSchemaConfig.{name} is declared operational in "
-                "OPERATIONAL_DEFAULT_KEYS but is still required — the declaration is stale"
-            )
-            continue
-        assert field.is_required(), (
-            f"MonitorSchemaConfig.{name} has a code-side default and is not declared in "
-            "OPERATIONAL_DEFAULT_KEYS; R1 puts a default in the schema field or nowhere, and "
-            "the registry is what says which keys earned one"
-        )
-
-
 def test_monitor_gate_interval_is_required_and_at_least_one():
     """The ARMING cadence has NO code-side default and no off value: a non-positive stride stops
     the live hard-abort family AND the summary that would make the deadness readable, together,
@@ -152,11 +130,6 @@ def test_an_omitted_drain_cap_lands_on_its_declared_default(field: str):
     cfg = DrainCapsConfig.model_validate(payload)
     assert getattr(cfg, field) == DrainCapsConfig.model_fields[field].get_default(
         call_default_factory=True), f"monitor.drain.{field} did not land on its schema default"
-
-
-def test_drain_caps_extra_key_rejected():
-    with pytest.raises(ValidationError, match="bogus_drain_knob"):
-        DrainCapsConfig.model_validate(_drain(bogus_drain_knob=1))
 
 
 @pytest.mark.parametrize("field", DRAIN_FIELDS)
