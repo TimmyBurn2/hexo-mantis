@@ -30,7 +30,7 @@ pyo3::create_exception!(
 type RootChildInfo = ((i32, i32), u32, f32, u32, f32);
 
 /// Single-threaded PUCT MCTS tree exposed to Python: `new_game(board)`, then per simulation
-/// `select_leaves(n)` followed by `expand_and_backup(policies, values)`, then `get_policy()`.
+/// `select_leaves(n)` followed by `expand_and_backup(policies, values)`, then a policy read.
 #[pyclass(name = "MCTSTree", module = "mantis._engine", unsendable)]
 pub struct PyMCTSTree {
     inner: MCTSTree,
@@ -328,23 +328,6 @@ impl PyMCTSTree {
                 .expand_and_backup_ls_at(&ls_vec, &values, &centers, trunk_sz)
         });
         Ok(())
-    }
-
-    /// The visit-count policy at the root, as a list of length `board_size * board_size + 1`.
-    /// `temperature` 0 is argmax; `board_size` defaults to the size from the last `new_game`.
-    #[pyo3(signature = (temperature = 1.0, board_size = None))]
-    pub fn get_policy<'py>(
-        &self,
-        py: Python<'py>,
-        temperature: f32,
-        board_size: Option<usize>,
-    ) -> Bound<'py, PyArray1<f32>> {
-        let bs = board_size.unwrap_or(self.board_size);
-        // The inner API takes `n_actions` (= policy_stride): the bs×bs window plus pass.
-        let n_actions = bs * bs + 1;
-        self.inner
-            .get_policy(temperature, n_actions)
-            .into_pyarray(py)
     }
 
     /// Total visit count at the root (= number of simulations run).

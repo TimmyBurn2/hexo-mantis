@@ -1,6 +1,6 @@
-// >300 justify (R8): the dense and legal-set extractors, root Dirichlet and their in-src
+// >300 justify (R8): the improved-policy and legal-set extractors, root Dirichlet and their in-src
 // tests are one unit, sharing `completed_q` and one setup helper.
-//! Policy extraction for MCTSTree: temperature policy, Gumbel completed-Q improved policy,
+//! Policy extraction for MCTSTree: Gumbel completed-Q improved policy, legal-set export,
 //! root children info, root Dirichlet noise, top-visits selection.
 
 use super::{completed_q, MCTSTree, QSigma};
@@ -8,51 +8,6 @@ use crate::legal_set::LegalSetPolicy;
 use fxhash::FxHashMap;
 
 impl MCTSTree {
-    /// Temperature-applied visit policy over `n_actions`, the caller's own encoding stride.
-    pub fn get_policy(&self, temperature: f32, n_actions: usize) -> Vec<f32> {
-        let mut policy = vec![0.0f32; n_actions];
-
-        let root = &self.pool[0];
-        if !root.is_expanded() {
-            return policy;
-        }
-
-        let first = root.first_child as usize;
-        let n_ch = root.n_children as usize;
-
-        if temperature == 0.0 {
-            if let Some(best) = (first..first + n_ch).max_by_key(|&i| self.pool[i].n_visits) {
-                let val = self.pool[best].action_idx;
-                let q = (val >> 16) as i32 - 32768;
-                let r = (val & 0xFFFF) as i32 - 32768;
-                let action = self.root_board.window_flat_idx(q, r);
-
-                if action < n_actions {
-                    policy[action] = 1.0;
-                }
-            }
-        } else {
-            let visits: Vec<f32> = (first..first + n_ch)
-                .map(|i| (self.pool[i].n_visits as f32).powf(1.0 / temperature))
-                .collect();
-            let total: f32 = visits.iter().sum();
-            if total > 0.0 {
-                for (j, &v) in visits.iter().enumerate() {
-                    let val = self.pool[first + j].action_idx;
-                    let q = (val >> 16) as i32 - 32768;
-                    let r = (val & 0xFFFF) as i32 - 32768;
-                    let action = self.root_board.window_flat_idx(q, r);
-
-                    if action < n_actions {
-                        policy[action] = v / total;
-                    }
-                }
-            }
-        }
-
-        policy
-    }
-
     /// Improved policy targets from Gumbel completed Q-values (Danihelka et al., ICLR 2022
     /// §4, Appendix D Eq. 33). The softmax is sparse: only `child_data` entries are non-zero
     /// before exp, so its passes iterate that rather than a full-width vector.
@@ -402,59 +357,6 @@ mod tests {
         c_scale: 1.0,
         rescale: true,
     };
-
-    #[test]
-    fn test_get_policy_proportional_to_visits() {
-        let (mut tree, child_a, child_b) = setup_two_child_tree(1.5);
-        tree.pool[0].n_visits = 10;
-        tree.pool[child_a as usize].n_visits = 7;
-        tree.pool[child_b as usize].n_visits = 3;
-
-        let policy = tree.get_policy(1.0, BOARD_SIZE * BOARD_SIZE + 1);
-        let pa = policy[180];
-        let pb = policy[181];
-        assert!((pa - 0.7).abs() < 1e-5, "action 0 should get 70%: {pa}");
-        assert!((pb - 0.3).abs() < 1e-5, "action 1 should get 30%: {pb}");
-        assert!((pa + pb - 1.0).abs() < 1e-5);
-    }
-
-    #[test]
-    fn test_get_policy_argmax_temperature_zero() {
-        let (mut tree, child_a, child_b) = setup_two_child_tree(1.5);
-        tree.pool[0].n_visits = 10;
-        tree.pool[child_a as usize].n_visits = 7;
-        tree.pool[child_b as usize].n_visits = 3;
-
-        let policy = tree.get_policy(0.0, BOARD_SIZE * BOARD_SIZE + 1);
-        assert_eq!(policy[180], 1.0);
-        assert_eq!(policy[181], 0.0);
-    }
-
-    #[test]
-    fn test_policy_sums_to_one_after_search() {
-        let mut tree = MCTSTree::new(1.5);
-        let board = Board::new();
-        tree.new_game(board);
-
-        let n_sims = 10;
-        let uniform = vec![1.0 / (BOARD_SIZE * BOARD_SIZE + 1) as f32; BOARD_SIZE * BOARD_SIZE + 1];
-        for _ in 0..n_sims {
-            let leaves = tree
-                .select_leaves(1)
-                .expect("select_leaves: no desync in this fixture");
-            let n = leaves.len();
-            let policies: Vec<Vec<f32>> = (0..n).map(|_| uniform.clone()).collect();
-            let values = vec![0.0f32; n];
-            tree.expand_and_backup(&policies, &values);
-        }
-
-        let policy = tree.get_policy(1.0, BOARD_SIZE * BOARD_SIZE + 1);
-        let sum: f32 = policy.iter().sum();
-        assert!(
-            (sum - 1.0).abs() < 1e-4,
-            "policy should sum to 1.0, got {sum}"
-        );
-    }
 
     #[test]
     fn test_dirichlet_ignored_before_root_expanded() {

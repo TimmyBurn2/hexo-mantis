@@ -1,6 +1,6 @@
 """MCTSTree + InferenceBatcher round-trip.
 
-MCTSTree: ctor-compose, new_game -> select_leaves -> get_policy / get_improved_policy, and
+MCTSTree: ctor-compose, new_game -> select_leaves -> get_improved_policy, and
 forced_root_child get/set. InferenceBatcher: the compat surface is present AND exercised over
 the graph queue — a method that only exists would pass a presence check while raising on every
 call, so each is driven for real.
@@ -45,8 +45,6 @@ def test_mctstree_ctor_compose_and_policy_round_trip():
     policies = [[1.0 / 362] * 362 for _ in leaves]
     values = [0.0] * len(leaves)
     tree.expand_and_backup(policies, values)
-    pol = np.asarray(tree.get_policy(1.0))
-    assert pol.ndim == 1 and pol.size >= 1
     improved = np.asarray(tree.get_improved_policy())
     assert improved.ndim == 1 and improved.size >= 1
 
