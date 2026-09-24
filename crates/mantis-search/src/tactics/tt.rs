@@ -140,7 +140,7 @@ impl ProofTt {
     /// with ONE switch — the solver owning its table. That switch is a PERF DECISION, banked as
     /// one: the per-call construction is an 8 MiB alloc-and-fill ahead of a node budget in the
     /// tens of thousands, which wants a pre-registered gain bracket and an IQR-gated bench.
-    #[inline]
+    #[cfg(test)]
     pub fn new_generation(&mut self) {
         self.generation = self.generation.wrapping_add(1);
     }

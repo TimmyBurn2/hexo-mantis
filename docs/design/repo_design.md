@@ -79,7 +79,7 @@ Rust:
 mantis-core      → (nothing in-workspace)
 mantis-graph     → (nothing; dep-free, wasm32-clean)
 mantis-encoding  → core, graph          # pins graph consts into registry validation
-mantis-search    → core, encoding      # LegalSetPolicy + gumbel live HERE, not in selfplay
+mantis-search    → core                # LegalSetPolicy + gumbel HERE; encoding dev-dep only (SLIM-FIX)
 mantis-selfplay  → core, encoding, graph, search
 mantis-bridge    → all of the above    # the ONLY crate that knows pyo3 exists
 ```

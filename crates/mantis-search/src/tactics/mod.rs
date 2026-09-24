@@ -11,9 +11,9 @@
 //! core is threat-based.
 
 pub mod eval;
-pub mod ordering;
-pub mod search;
-pub mod tt;
+pub(crate) mod ordering;
+pub(crate) mod search;
+pub(crate) mod tt;
 
 use mantis_core::board::Board;
 

@@ -1,9 +1,9 @@
 //! mantis-search: MCTS (PUCT or Gumbel — one closed `SearchKind`), completed-Q,
 //! tactics solver.
 //!
-//! Depends on `mantis-core` (board, geometry, rules, Ply) and `mantis-encoding`
-//! only (repo DAG). The MCTS takes `n_actions` as a caller parameter and the
-//! Board carries plain geometry, so no encoding/spec resolution happens here.
+//! Depends on `mantis-core` only (repo DAG; `mantis-encoding` is a test dependency). The MCTS
+//! takes `n_actions` as a caller parameter and the Board carries plain geometry, so no
+//! encoding/spec resolution happens here.
 
 // The ported doc comments use markdown list-continuation lines that clippy's
 // `doc_lazy_continuation` (a rendering nicety) flags; suppressed crate-wide to
