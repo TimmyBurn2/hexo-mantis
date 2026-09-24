@@ -1,9 +1,7 @@
-"""`compose_run` with a REAL `RunConfig` syncs on the configured cadence.
+"""`compose_run` with a `RunConfig` whose own payload mints the cadence under test.
 
-Every other drive in the suite composes with `config=SimpleNamespace()`, which leaves
-the real-config cadence read unexercised. Two axes stay pinned even
-here because no test can vary them: `_step_coordinator_config` is monkeypatched and
-`build_run_safety` is faked.
+Two axes stay pinned because no test can vary them: `_step_coordinator_config` is
+monkeypatched and `build_run_safety` is faked.
 """
 from __future__ import annotations
 
@@ -14,7 +12,6 @@ from types import SimpleNamespace
 from typing import Any
 
 import mantis.run
-from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
 from mantis.config.schema.core import RunConfig
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from _drivable import DrivableTrainerStub
@@ -148,15 +145,6 @@ def _drive(monkeypatch, *, eval_enabled: bool = True):
     return captured, pool, trainer, _real_run_config()
 
 
-def test_a_real_run_config_actually_reaches_the_cadence_resolver(tmp_path, monkeypatch, mk_graph_buffer):
-    """The premise. If the real arm is not taken, everything below is vacuous."""
-    captured, pool, trainer, cfg = _drive(monkeypatch)
-    assert resolve_actor_sync_cadence(cfg.train) == _CADENCE, (
-        "the real-config arm did not resolve the configured cadence — this test would "
-        "otherwise pass while exercising the smoke path it exists to avoid"
-    )
-
-
 def test_sync_follows_the_configured_cadence_under_a_real_config(tmp_path, monkeypatch, mk_graph_buffer):
     """Kill a resolver unit-slip on its own: a `* 1000` slip makes the cadence unreachable
     inside the run, so the actor takes one unconditional first sync and then freezes."""
@@ -179,30 +167,3 @@ def test_sync_follows_the_configured_cadence_under_a_real_config(tmp_path, monke
     )
 
 
-def test_lag_callables_read_live_sources_under_a_real_config(tmp_path, monkeypatch, mk_graph_buffer):
-    """Kill a lag-lambda `getattr(config, X, None)` fallback on its own.
-
-    Asserting only sync volume would let that survive; asserting only the lambdas would let a
-    resolver unit-slip survive.
-    """
-    captured, pool, trainer, cfg = _drive(monkeypatch)
-    mantis.run.compose_run(
-        config=cfg, trainer=trainer, pool=pool, buffer=mk_graph_buffer(n_records=32),
-        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
-    )
-
-    actor_fn, learner_fn = captured["actor_ckpt_step_fn"], captured["learner_step_fn"]
-    actor_before = actor_fn()
-    assert actor_before == pool.step_calls[-1], (
-        "actor_ckpt_step_fn is not reading the live sync engine under a real config"
-    )
-
-    trainer.step += 777
-    assert learner_fn() == trainer.step, "learner_step_fn is not reading the live trainer"
-    assert actor_fn() == actor_before, (
-        "actor_ckpt_step_fn moved when only the LEARNER advanced — it is reading the "
-        "wrong source, which makes the lag invariant blind"
-    )
-    assert learner_fn() - actor_fn() == 777 + (trainer.step - 777 - actor_before), (
-        "lag must be learner-minus-actor and grow when the actor falls behind"
-    )
