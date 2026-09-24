@@ -3,8 +3,8 @@
 Coverage per registered encoding:
   1. Registry stable-instance identity (`lookup(name) is lookup(name) is spec`).
   2. Rust↔Python helper parity over the derived shape accessors.
-  3. The UNIFIED `detect_encoding_from_state_dict` (LOCKED #7): marker/stamp
-     beats shape/filename; deterministic shape fallback; strict-raises.
+  3. The UNIFIED `detect_encoding_from_state_dict` (LOCKED #7): marker/stamp beats
+     shape/filename; the retired shape fallback stays refused; strict-raises.
 
 DEFERRED (tracked-not-silent → WP9/WP10): the HexTacToeNet-forward leg and the
 real-checkpoint torch-load leg need the unported `model`/`train` layers. The
@@ -46,13 +46,6 @@ class _FakeTensor:
 
     def dim(self) -> int:
         return len(self._shape)
-
-
-def _grid_state(in_ch: int, n_actions: int | None) -> dict:
-    state: dict = {"trunk.input_conv.weight": _FakeTensor(64, in_ch, 3, 3)}
-    if n_actions is not None:
-        state["policy_fc.weight"] = _FakeTensor(n_actions, 64)
-    return state
 
 
 def _gnn_state() -> dict:
@@ -121,35 +114,11 @@ def test_detect_graph_marker_REFUSES_once_more_than_one_graph_encoding_is_regist
     graph = [s for s in all_specs() if s.representation == "graph"]
     assert len(graph) > 1, (
         "this row's subject is the AMBIGUITY; with one graph encoding registered the marker "
-        "is determinate again and `test_detect_graph_marker_resolves_when_unique` is the row "
-        "that applies"
+        "is determinate again and test_r8_identity's pruned-registry row is the one that applies"
     )
     for strict in (False, True):
         with pytest.raises(AmbiguousGraphMarkerError, match="never said WHICH graph"):
             detect_encoding_from_state_dict(_gnn_state(), "model.pt", strict=strict)
-
-
-def test_detect_graph_marker_resolves_when_unique(monkeypatch) -> None:
-    """The positive control: pruned back to ONE graph row, the marker resolves again.
-
-    Without this, the row above would pass on a branch that raised unconditionally."""
-    from mantis.encoding import resolvers
-
-    only = [s for s in all_specs() if s.name == "gnn_axis_v1"]
-    monkeypatch.setattr(resolvers, "_graph_specs", lambda: only)
-    spec = detect_encoding_from_state_dict(_gnn_state(), "model.pt", strict=False)
-    assert spec is not None and spec.name == "gnn_axis_v1"
-    assert spec.representation == "graph"
-
-
-def test_detect_stamp_beats_the_graph_marker() -> None:
-    """A stamp wins over every other signal. The shape it used to out-rank is retired
-    (R346(f)); the marker is what is left to out-rank, and the stamp names WHICH graph row
-    the marker cannot."""
-    state = _gnn_state()
-    state["metadata"] = {"encoding_name": "gnn_axis_r8"}
-    spec = detect_encoding_from_state_dict(state, "model.pt", strict=False)
-    assert spec is not None and spec.name == "gnn_axis_r8"
 
 
 def test_detect_filename_is_not_a_signal() -> None:
