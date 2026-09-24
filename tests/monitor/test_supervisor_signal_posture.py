@@ -393,9 +393,15 @@ def test_a_stop_with_no_child_yet_exits_without_touching_a_null_handle(tmp_path)
     assert "AttributeError" not in out.stderr, out.stderr
 
 
+def _reset_stop_dispositions() -> None:
+    # preexec_fn: the probe starts from SIG_DFL because an inherited SIG_IGN survives exec and
+    # would fail the disposition asserts for a reason no import caused.
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+
+
 def test_the_stop_handlers_are_installed_by_main_and_never_at_import(tmp_path) -> None:
-    """Handlers are installed by `main`, never at import: a module-scope `signal.signal` arms
-    every importer, pytest included. Checked statically and by a subprocess import."""
+    """Handlers are installed by `main`, never at import (static + subprocess import probe)."""
     from mantis.monitor import supervise
 
     source = Path(supervise.__file__).read_text(encoding="utf-8")
@@ -420,7 +426,8 @@ def test_the_stop_handlers_are_installed_by_main_and_never_at_import(tmp_path) -
         encoding="utf-8",
     )
     out = subprocess.run([sys.executable, str(probe)], cwd=os.getcwd(), capture_output=True,
-                         text=True, timeout=_DEADLINE_SEC)
+                         text=True, timeout=_DEADLINE_SEC,
+                         preexec_fn=_reset_stop_dispositions)
     assert out.returncode == 0, out.stderr
 
 
