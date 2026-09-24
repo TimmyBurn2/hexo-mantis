@@ -11,6 +11,7 @@ tests/config/test_train_policy_value_target_consistency.py's full-RunConfig shap
 """
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 
 import pytest
@@ -22,7 +23,22 @@ from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
 from mantis.config.resolve import resolve_monitor_config
 from mantis.config.schema import RunConfig, SCHEMA_VERSION, TrainConfig, MonitorSchemaConfig
 from _monitor_config import monitor_config
-from _schema_blocks import eval_block, inference_block, monitor_block, selfplay_block, train_block
+
+
+def _schema_blocks():
+    """Spec-load the sibling helper by path (by-path loaders lack this dir on sys.path)."""
+    spec = importlib.util.spec_from_file_location(
+        "_schema_blocks", Path(__file__).resolve().parent / "_schema_blocks.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_sb = _schema_blocks()
+eval_block, inference_block = _sb.eval_block, _sb.inference_block
+monitor_block, selfplay_block, train_block = _sb.monitor_block, _sb.selfplay_block, _sb.train_block
 
 _REPO = Path(__file__).resolve().parents[2]
 _CONFIGS = ("dev_example.yaml", "run6.yaml", "smoke_preflight_armed.yaml")
