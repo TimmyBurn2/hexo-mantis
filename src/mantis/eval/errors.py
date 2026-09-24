@@ -1,15 +1,7 @@
-"""mantis.eval error taxonomy (design §a.3 errors.py) — one import surface.
-
-Re-exports `MixedRegimeError`/`BookError`/`RungUnresolvable` alongside the eval-owned
-errors so a consumer never needs to know which sub-package originally raised.
-"""
+"""mantis.eval error taxonomy: the eval-owned errors and the ONE broken-round reason."""
 from __future__ import annotations
 
 from enum import StrEnum
-
-from mantis.arena.books import BookError
-from mantis.arena.regime import MixedRegimeError
-from mantis.bots.protocol import RungUnresolvable
 
 
 class EvalBrokenReason(StrEnum):
@@ -47,10 +39,6 @@ class EvalBrokenReason(StrEnum):
     ABANDONED = "abandoned"
 
 
-class EvalBrokenError(RuntimeError):
-    """An eval round could not complete cleanly (join timeout / crash / garbage result)."""
-
-
 class EvalDecodeUnsupportedError(RuntimeError):
     """The round's declared encoding requires a decode this eval path does not implement.
 
@@ -65,12 +53,4 @@ class ResultContractError(RuntimeError):
     """The worker's sidecar result JSON does not satisfy the result-contract shape."""
 
 
-__all__ = [
-    "BookError",
-    "EvalBrokenError",
-    "EvalBrokenReason",
-    "EvalDecodeUnsupportedError",
-    "MixedRegimeError",
-    "ResultContractError",
-    "RungUnresolvable",
-]
+__all__ = ["EvalBrokenReason", "EvalDecodeUnsupportedError", "ResultContractError"]
