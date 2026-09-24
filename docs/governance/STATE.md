@@ -618,7 +618,7 @@ trainer calls one method, the kinds table and the `model.gnn` parser once in `ma
 `sha256_file` everywhere, `deploy_state` read by the anchor, the analyzer and the WARM START (an EMA-on parent's
 `net_hash` is over the shadow, as the frontier mints it; run10's parent is EMA-off, hash unchanged), the EMA view
 carries its arch; F2 `596f9f91` — `tests/_drivable.py` `DrivableTrainerStub` replaces 14 private copies (three real
-subclasses stay), `tests/train/_coordinator_pool.py` shared, `gnn_widths_block` at every arch-to-block site, one
+subclasses stay), the coordinator pool double shared (since folded into `tests/_drivable.py`), `gnn_widths_block` at every arch-to-block site, one
 `TrainHParams` builder; F6 `548343f6` — `_width_drift` written once; F3 `7b33b38e` — the leg's over-long docstrings
 trimmed (668 → 335 at the longest), nine restating comments gone, the stale cites and docstrings reworded.
 **REVIEW-2** (a second fresh agent on the fix leg, `19e8351d..7b33b38e`): all ten of REVIEW-1's must-fixes verified
