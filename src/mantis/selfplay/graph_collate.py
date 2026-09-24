@@ -21,14 +21,6 @@ from typing import Any
 
 import numpy as np
 
-from mantis._engine import HEX_AXES as _ENGINE_HEX_AXES
-
-# The 3 win axes in axial coords — READ from the engine, not mirrored: the check-14 geometry
-# recompute runs in Rust against the same table, so a copy here could disagree.
-WIN_AXES: tuple[tuple[int, int], ...] = tuple(
-    (int(dq), int(dr)) for dq, dr in _ENGINE_HEX_AXES
-)
-
 # Contract-fixed schema widths; callers pass spec.* dims from the registry.
 _OFF_WINDOW_SLOT = -1
 _BUILDER_IMPL_NATIVE = 1
@@ -775,7 +767,6 @@ def stone_mask_from_batch(batch: GraphBatch) -> Any:
 
 
 __all__ = [
-    "WIN_AXES",
     "AugRoundTripMismatch",
     "BatchCountMismatch",
     "DtypeMismatch",

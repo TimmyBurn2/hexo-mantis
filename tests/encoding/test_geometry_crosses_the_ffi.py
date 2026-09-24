@@ -14,7 +14,7 @@ axis table and the win length, which the GRAPH builder reads.
 
 WHAT IS PINNED HERE, and why each row is not the others:
 
-- the two Python axis modules and the engine are one ordered table;
+- the Python axis table and the engine are one ordered table;
 - the win length is the engine's on both Python copies;
 - the ORDER itself is pinned to literals, because agreement alone stays green if every copy
   moves together — and every frozen fixture and every trained net was built against THIS
@@ -23,14 +23,12 @@ WHAT IS PINNED HERE, and why each row is not the others:
 from __future__ import annotations
 
 import mantis._engine as engine
-from mantis.selfplay.graph_collate import WIN_AXES
 from mantis.selfplay.instrumentation import _HEX_AXES as _INSTR_HEX_AXES
 from mantis.selfplay.instrumentation import _WIN_LENGTH as _INSTR_WIN_LENGTH
 
 
 def test_every_python_axis_table_is_the_engines() -> None:
     engine_axes = tuple((int(dq), int(dr)) for dq, dr in engine.HEX_AXES)
-    assert WIN_AXES == engine_axes, "selfplay.graph_collate (edge one-hot order)"
     assert tuple(_INSTR_HEX_AXES) == engine_axes, "selfplay.instrumentation (line scan)"
 
 
