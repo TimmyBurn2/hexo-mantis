@@ -10,7 +10,9 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
 - origin/dev = 69e1532 at W0 entry (no moved commits; no rebase).
 - Wave: **W2** (Rust). The W1 exit sweep on cadcc367 was VOIDED by an environmental /tmp tmpfs per-user quota
   (3a: `OSError: [Errno 122] Disk quota exceeded`, from worktrees + cargo targets on tmpfs; 2a/2b/4/5 were green);
-  it re-runs on cadcc367 from an on-disk worktree `.wt/gates` (`.wt/` is in .git/info/exclude). Worktrees live
+  the re-run on cadcc367 from an on-disk worktree `.wt/gates` (`.wt/` is in .git/info/exclude) is ALL GREEN, 19 gates
+  (2a 2017 s, 3a 359 s, 3b 2358 s) — W1 EXITED; run10 resolved MATCH at cadcc367. A usage-limit stop interrupted the
+  search agent (uncommitted work in `.wt/w2-search`); it resumes from that diff. Worktrees live
   under `.wt/` from now on. W2: bridge/core/encoding/graph and selfplay groups integrated; the search group running.
 
 ## W0 — entry
