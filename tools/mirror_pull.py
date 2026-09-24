@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from mantis.diagnostics.mirror_receipts import CHECKPOINTS_SUBDIR, GAMES_SUBDIR
-from mantis.monitor.game_record import index_filename
+from mantis.monitor.game_record import closed_shard_rows
 from mantis.train.bundle import BundleError, complete_bundles
 from mantis.train.bundle_receipts import (
     CHECKPOINT_NAME_RE,
@@ -124,20 +124,8 @@ def receipt_checkpoints(mirror: Path, *, cycle: int, mirror_id: str) -> list[str
 
 def closed_shards(record_dir: Path, run_id: str) -> list[tuple[Path, int]]:
     """`(shard path, bytes at close)` for every row of the mirrored index."""
-    index = record_dir / index_filename(run_id)
-    if not index.is_file():
-        return []
-    rows: list[tuple[Path, int]] = []
-    for line in index.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        try:
-            row = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if row.get("record") == "shard_closed" and row.get("shard"):
-            rows.append((record_dir / str(row["shard"]), int(row.get("bytes", -1))))
-    return rows
+    return [(record_dir / str(row["shard"]), int(row.get("bytes", -1)))
+            for row in closed_shard_rows(record_dir, run_id)]
 
 
 def receipt_shards(mirror: Path, run_id: str, *, cycle: int, mirror_id: str) -> list[str]:

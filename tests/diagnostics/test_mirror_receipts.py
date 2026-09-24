@@ -130,3 +130,13 @@ def test_a_clean_completion_with_no_bundle_is_proven_on_its_checkpoint(
     reading = D.require_mirror_receipts(tmp_path, "synth")
     assert reading["verdict"] == U.MIRRORED_VERDICT and "bundle" not in reading
     assert reading["checkpoint"]["name"] == ckpt.name
+
+
+def test_the_first_closed_shard_is_read_without_parsing_a_later_rows_bytes(tmp_path: Path) -> None:
+    """Killer: an index reader that parses `bytes` eagerly raises on the last row."""
+    rows = [{"record": "shard_opened", "shard": "games_synth_seg0000_z.jsonl"},
+            {"record": "shard_closed", "shard": "games_synth_seg0001_a.jsonl", "bytes": 7},
+            {"record": "shard_closed", "shard": "games_synth_seg0002_b.jsonl", "bytes": "bad"}]
+    (tmp_path / "games_synth_index.jsonl").write_text(
+        "\n".join(["", "{not json"] + [json.dumps(r) for r in rows]) + "\n", encoding="utf-8")
+    assert D.first_closed_shard(tmp_path, "synth") == tmp_path / "games_synth_seg0001_a.jsonl"

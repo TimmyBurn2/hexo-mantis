@@ -61,6 +61,22 @@ def index_filename(run_id: str) -> str:
     return f"games_{run_id}_index.jsonl"
 
 
+def closed_shard_rows(record_dir: Path, run_id: str) -> Iterator[dict[str, Any]]:
+    """The run index's `shard_closed` rows, lazily and in order. Raises: OSError (unreadable)."""
+    index = record_dir / index_filename(run_id)
+    if not index.is_file():
+        return
+    for line in index.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if row.get("record") == "shard_closed" and row.get("shard"):
+            yield row
+
+
 def _utc_hour(when: float | None = None) -> str:
     moment = datetime.now(tz=UTC) if when is None else datetime.fromtimestamp(when, tz=UTC)
     return moment.strftime("%Y%m%d%H")

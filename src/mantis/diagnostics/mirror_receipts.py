@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from mantis.monitor.game_record import index_filename
+from mantis.monitor.game_record import closed_shard_rows
 from mantis.train.bundle import complete_bundles
 from mantis.train.bundle_receipts import (
     bundle_member_paths,
@@ -29,23 +29,9 @@ class MirrorReceiptsMissingError(RuntimeError):
 
 
 def first_closed_shard(record_dir: str | Path, run_id: str) -> Path | None:
-    """The run's FIRST closed shard, read off its index; `None` before one closes.
-
-    Raises:
-        OSError: the index exists but could not be read.
-    """
-    index = Path(record_dir) / index_filename(run_id)
-    if not index.is_file():
-        return None
-    for line in index.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        try:
-            row = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if row.get("record") == "shard_closed" and row.get("shard"):
-            return Path(record_dir) / str(row["shard"])
+    """The run's FIRST closed shard off its index; `None` before one closes. Raises: OSError."""
+    for row in closed_shard_rows(Path(record_dir), run_id):
+        return Path(record_dir) / str(row["shard"])
     return None
 
 
