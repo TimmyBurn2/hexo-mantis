@@ -16,17 +16,6 @@ def test_unknown_opponent_and_none_value_raise_pre_existing_green(opponent: str)
         resolve_eval_model_sims(opponent, None)
 
 
-def test_unknown_opponent_still_raises_after_extension() -> None:
-    with pytest.raises(ValueError):
-        resolve_eval_model_sims("nnue", 96)
-
-
-def test_none_value_still_raises_for_every_known_opponent() -> None:
-    for opponent in ("random", "strix"):
-        with pytest.raises(ValueError):
-            resolve_eval_model_sims(opponent, None)
-
-
 # `resolve_bot` is fed the ALREADY-RESOLVED config value as `opponent_sims` (a real int; None
 # is reserved for "this rung has no sims dimension at all") and must route it through
 # `resolve_eval_model_sims(kind, opponent_sims)` for every kind — the resolver call itself is
@@ -67,33 +56,9 @@ def test_strix_rung_model_sims_route_through_resolve_eval_model_sims(monkeypatch
     )
 
 
-def test_random_floor_routes_through_resolver(monkeypatch) -> None:
-    """`resolve_bot("random", ...)` must route through the resolver too.
-
-    RandomBot has no model_sims of its own, but the resolver is the ONE authority named
-    opponent -> sims, and the routing call is what makes `eval.random_model_sims` a live
-    consumer even though the resulting int changes nothing about uniform-legal-move play."""
-    import mantis.config.resolve.nsims as nsims_mod
-    from mantis.bots.resolve import resolve_bot
-
-    calls: list[tuple[str, int | None]] = []
-    real = nsims_mod.resolve_eval_model_sims
-
-    def spy(opponent: str, cfg_value: int | None) -> int:
-        calls.append((opponent, cfg_value))
-        return real(opponent, cfg_value)
-
-    monkeypatch.setattr(nsims_mod, "resolve_eval_model_sims", spy)
-    resolve_bot("random", opponent_sims=96)
-    assert ("random", 96) in calls, (
-        "resolve_bot('random', ...) must route through resolve_eval_model_sims too — "
-        "eval.random_model_sims must have a live EXERCISED consumer"
-    )
-
-
 # The routing must survive the resolver rewrite: this row asserts routing PER KIND while being
 # agnostic about whether a kind resolves or raises, so it holds both in CI (no vendor tree,
-# strix raises) and on a box with the extension built. The three rows above are HEAD's pins.
+# strix raises) and on a box with the extension built. The rows above are HEAD's pins.
 # THE TRAP: `eval.{kraken,strix}_model_sims` have exactly ONE live consumer each, reached only
 # through this call, so hoisting a refusal above the routing would falsify two consumer-registry
 # citations while the LAW-08 bijection test stayed green. A single aggregated "the spy was
