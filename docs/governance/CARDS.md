@@ -133,8 +133,10 @@ Both were found by running the gate set rather than by reading it, and both are 
   (a name that lies about its file) in four test modules; 32 test functions carrying a `runN` token in 16
   files; ≈ 800 `run5`/`run6` identifier tokens across `src`/`tests`/`tools`; the analyzer tests' (under `tests/tools/`)
   synthetic `"run9"` run ids; `crates/mantis-selfplay/tests/dirichlet_inert_on_gumbel.rs`'s run9 message;
-  `tests/config/test_every_key_has_consumer.py`'s at_max_pairs note; three more `hashlib.sha256(path.read_bytes())`
-  sites beside the one `sha256_file` (`bots/strix.py`, `diagnostics/fusion_calibrate.py`, `encoding/__init__.py`);
+  `tests/config/test_every_key_has_consumer.py`'s at_max_pairs note; the file-sha256 copies beside the one
+  `sha256_file` (DONE, R368 W3: every src/ and tools/ file hash reads `mantis.util.hashing.sha256_file`, kept
+  apart only `tools/audit_bootstrap_corpus.py` (mantis-free by design) and `tools/ci_gates/preflight_mint_parent.py::_sha256`
+  (gate code, protected));
   the 21 remaining private `_Pool`/`_Buffer` fakes of the composition tests (the trainer stub is one since
   F2; the pool stub is one for the coordinator tests only); the nine full-config literal dicts whose
   `model` line the fix leg left (each is a complete config a schema test owns); F5.6 above. Applied ON

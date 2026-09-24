@@ -17,7 +17,6 @@ registry.
 """
 from __future__ import annotations
 
-import hashlib
 import logging
 import pathlib
 
@@ -28,6 +27,7 @@ from mantis.encoding.registry import (
     all_specs,
     lookup,
 )
+from mantis.util.hashing import sha256_file
 
 _LOG = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ def _registry_sha_handshake(
             _REGISTRY_TOML_REL,
         )
         return
-    disk = hashlib.sha256(path.read_bytes()).digest()
+    disk = bytes.fromhex(sha256_file(path))
     if disk != engine.registry_sha():
         raise EncodingRegistryError(
             f"registry.toml on disk ({path}) drifted from the compiled "

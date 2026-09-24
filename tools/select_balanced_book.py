@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import sys
 from collections import defaultdict
@@ -13,6 +12,7 @@ from typing import Any
 
 from mantis.arena.books import Opening, book_openings
 from mantis.monitor.game_record import read_shard
+from mantis.util.hashing import sha256_file
 
 SEAT_WINS = ("p1", "p2")
 CHANNEL = "promotion"
@@ -301,7 +301,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(book_payload(kept, provenance=provenance), sort_keys=True, separators=(",", ":")), encoding="utf-8")
-    sha = hashlib.sha256(out.read_bytes()).hexdigest()
+    sha = sha256_file(out)
     if args.report:
         write_report(Path(args.report), assessed, summary)
     print(f"games read {len(records)} (torn lines {torn}, unmatched {skipped['unmatched']}, other channel {skipped['other_channel']})")

@@ -27,9 +27,9 @@ from mantis.data.bootstrap_encode import (
     CorpusEncodeError,
     encode_corpus,
     encode_game,
-    sha256_of,
 )
 from mantis.encoding import resolvers
+from mantis.util.hashing import sha256_file
 
 _REPO = Path(__file__).resolve().parents[2]
 _ENC = "gnn_axis_v1"
@@ -176,7 +176,7 @@ def _dataset(tmp_path: Path, records: list[dict], *, shape: str = "B",
     rec_path.write_text(
         "".join(json.dumps(r) + "\n" for r in records), encoding="utf-8"
     )
-    sha = sha256_of(rec_path)
+    sha = sha256_file(rec_path)
     if corrupt_sha:
         sha = "0" * 64
     manifest = ({"file": "games.jsonl", "sha256": sha}
@@ -273,7 +273,7 @@ def test_the_provenance_sidecar_makes_the_artifact_checkable(tmp_path: Path) -> 
     prov = encode_corpus(d, out, encoding=_ENC, capacity=512, visit_capacity=8)
     sidecar = out.with_name(out.name + ".provenance.json")
     assert json.loads(sidecar.read_text(encoding="utf-8")) == prov
-    assert prov["artifact_sha256"] == sha256_of(out)
+    assert prov["artifact_sha256"] == sha256_file(out)
     assert prov["source_sha256"] == prov["source_sha256_declared"]
     assert prov["encoding"] == _ENC
     assert prov["registry_sha"] == registry_sha_hex(), (

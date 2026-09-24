@@ -1,4 +1,4 @@
-"""File hashing — the one `sha256_file` the bundle, the receipts and the puller share."""
+"""File hashing — the tree's one file sha256, streamed so a checkpoint is never held whole."""
 from __future__ import annotations
 
 import hashlib

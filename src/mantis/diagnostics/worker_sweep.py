@@ -30,7 +30,6 @@ nothing. Naming an input a mode does not read is itself a refusal.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import logging
 import os
@@ -77,6 +76,7 @@ from mantis.util.device import (
     cuda_device_used_bytes,
     reset_cuda_peak_counters,
 )
+from mantis.util.hashing import sha256_file
 
 TOOL = "mantis.diagnostics.worker_sweep"
 _LOG = logging.getLogger(__name__)
@@ -1071,11 +1071,9 @@ def select_knee(rows: list[dict[str, Any]], *, knee_pct: float, metric: str) -> 
 
 
 def _sha256(path: Path | str) -> str | None:
-    """The config's REAL SHA-256. `git hash-object` returns git's blob hash — SHA-1 over
-    `blob <len>\0<content>` — which under a field named `config_sha256` makes a later `sha256sum`
-    look like a changed config."""
+    """The config file's sha256 (not git's SHA-1 blob hash), or None when it cannot be read."""
     try:
-        return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+        return sha256_file(path)
     except OSError:
         return None
 

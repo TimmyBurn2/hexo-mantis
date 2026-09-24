@@ -41,6 +41,7 @@ from mantis.config.resolve.allocator_posture import (
     read_live_allocator_conf as _live_alloc_conf,
 )
 from mantis.model.amp import amp_dtype_for
+from mantis.util.hashing import sha256_file
 
 _TOOL = "mantis.diagnostics.fusion_calibrate"
 _KEY = "inference.fused_graph_caps"
@@ -404,12 +405,6 @@ def _recommend(
     }
 
 
-def _sha256(path: Path) -> str:
-    import hashlib
-
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def _git_head() -> str | None:
     try:
         out = subprocess.run(
@@ -443,7 +438,7 @@ def _provenance(config_path: Path, spec: Any, arch: Any) -> dict[str, Any]:
         "pytorch_cuda_alloc_conf": _alloc_conf.raw,
         "pytorch_alloc_conf_source_var": _alloc_conf.source_var,
         "config_path": str(config_path),
-        "config_sha256": _sha256(config_path),
+        "config_sha256": sha256_file(config_path),
         "encoding_spec": spec.name,
         "encoding_registry_sha": getattr(spec, "registry_sha", None),
         "arch": repr(arch),

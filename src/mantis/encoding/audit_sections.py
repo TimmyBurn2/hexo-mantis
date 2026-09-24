@@ -14,7 +14,6 @@ Section emitters, in canonical order:
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import warnings
 from pathlib import Path
@@ -33,6 +32,7 @@ from mantis.encoding.audit import (
 )
 from mantis.encoding.registry import _load as _load_registry
 from mantis.encoding.resolvers import detect_encoding_from_state_dict
+from mantis.util.hashing import sha256_file
 from mantis.util.yaml_io import DuplicateKeyError, parse_config_yaml
 
 # Deliberately-unstamped dead checkpoint directories: §2 skips them as info, not error.
@@ -218,17 +218,6 @@ def _infer_corpus_from_filename(name: str) -> str:
     return "?"
 
 
-def _sha256_of_file(p: Path, chunk: int = 1 << 20) -> str:
-    h = hashlib.sha256()
-    with p.open("rb") as fh:
-        while True:
-            buf = fh.read(chunk)
-            if not buf:
-                break
-            h.update(buf)
-    return h.hexdigest()
-
-
 def _section_corpora(
     report: AuditReport,
     corpora_dir: Path,
@@ -270,7 +259,7 @@ def _section_corpora(
                 sidecar_enc = declared
                 expected_sha = meta.get("sha256")
                 if isinstance(expected_sha, str):
-                    actual_sha = _sha256_of_file(p)
+                    actual_sha = sha256_file(p)
                     if actual_sha == expected_sha:
                         sha_status = "OK"
                     else:
@@ -282,7 +271,7 @@ def _section_corpora(
                         )
                 else:
                     sha_status = "no-sha-in-sidecar"
-                    actual_sha = _sha256_of_file(p)
+                    actual_sha = sha256_file(p)
                     report.add_finding("warn", "§3", f"{rel}: sidecar lacks sha256 field")
                 if declared not in registered:
                     report.add_finding(
@@ -295,7 +284,7 @@ def _section_corpora(
                 declared = "PARSE-ERR"
                 sha_status = "?"
         else:
-            actual_sha = _sha256_of_file(p)
+            actual_sha = sha256_file(p)
             report.add_finding("warn", "§3", f"{rel}: no sidecar (.metadata.json)")
 
         out_entries.append(

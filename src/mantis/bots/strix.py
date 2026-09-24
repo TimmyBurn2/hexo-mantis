@@ -4,7 +4,6 @@ fixed external reference, played by `tools/strix_driver.py` in the vendored tree
 read at contact: every reply's legal set is compared with the board's and counted (R257)."""
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import subprocess
@@ -15,6 +14,7 @@ from typing import Any, Protocol
 
 import mantis
 from mantis.bots.protocol import RungUnresolvable
+from mantis.util.hashing import sha256_file
 
 PIN_NAME = "hexo-strix"
 #: Path segments below the vendor root, kept as segments so no path-shaped literal lives here.
@@ -174,7 +174,7 @@ def verify_checkpoint_sha(path: Path, expected: str) -> str:
 
     Raises:
         RungUnresolvable: the bytes on disk are not the pinned checkpoint."""
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    digest = sha256_file(path)
     if digest != expected:
         raise RungUnresolvable(
             rung="strix",

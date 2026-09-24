@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import importlib.util
 import json
 import os
@@ -15,6 +14,8 @@ from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from mantis.util.hashing import sha256_file
 
 EQUAL_WORK = "equal_work"
 AS_SHIPPED = "as_shipped"
@@ -131,10 +132,6 @@ def compose_cell(checkpoint: Path, *, unit: str, step: int, games: int, concurre
     return {**cell, "strix_radius": RADIUS_UNITS[unit]} if unit in RADIUS_UNITS else cell
 
 
-def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def _strix_pin() -> dict[str, Any]:
     from mantis.bots.strix import _pin
 
@@ -153,7 +150,7 @@ def sidecar_record(checkpoint: Path, *, unit: str, trigger: str, record: Mapping
     cell = dict(record.get("cell") or {})
     return {
         "schema_version": SIDECAR_SCHEMA_VERSION,
-        "run_id": run_id, "checkpoint": checkpoint.name, "checkpoint_sha256": _sha256(checkpoint),
+        "run_id": run_id, "checkpoint": checkpoint.name, "checkpoint_sha256": sha256_file(checkpoint),
         "step": cell.get("step"), "net_hash": candidate.get("net_hash"),
         "unit": unit, "ours": {"search_kind": "puct", "sims": ours},
         "strix": {**dict(strix_pin), "sims": theirs, "solver": "off" if unit in SOLVER_OFF_UNITS else "on",

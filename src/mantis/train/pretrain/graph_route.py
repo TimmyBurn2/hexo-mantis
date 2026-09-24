@@ -14,7 +14,6 @@ is a REFUSAL, not a fallback.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import math
@@ -31,6 +30,7 @@ from mantis.model import arch_from_spec_and_config, build_net
 from mantis.train.coordinator.dispatch import run_declared_train_step
 from mantis.train.emit import NullEventSink
 from mantis.train.trainer.core import Trainer
+from mantis.util.hashing import sha256_file
 
 _LOG = logging.getLogger(__name__)
 
@@ -89,11 +89,7 @@ def _assert_launch_pin(ring_path: Path, *, encoding: str) -> None:
     pin = resolve_corpus_sha_pin(_lookup_encoding(encoding))
     if pin is None:
         return
-    digest = hashlib.sha256()
-    with ring_path.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(1 << 20), b""):
-            digest.update(chunk)
-    actual = digest.hexdigest()
+    actual = sha256_file(ring_path)
     if actual != pin:
         raise GraphPretrainError(
             f"{ring_path}: sha256 {actual[:12]}… is not the launch-pinned corpus for "

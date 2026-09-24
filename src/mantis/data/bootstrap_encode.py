@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from mantis.encoding import assert_not_heldout_sha
+from mantis.util.hashing import sha256_file
 
 #: The runner's terminal-reason code for a normal decided/drawn end. `2` is the ply-cap branch,
 #: which a completed human game never takes.
@@ -39,20 +40,9 @@ _TERMINAL_DECIDED = 0
 _PLY_CAP_VALUE = 0.0
 _DRAW_REWARD = 0.0
 
-_HASH_CHUNK = 1 << 20
-
 
 class CorpusEncodeError(ValueError):
     """A corpus record cannot be encoded. Names the record and what was wrong."""
-
-
-def sha256_of(path: Path) -> str:
-    """Streaming sha256 of a file, for the manifest handshake."""
-    h = hashlib.sha256()
-    with path.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(_HASH_CHUNK), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 def _require_record(rec: Any, idx: int) -> tuple[str, int, list[tuple[int, int]]]:
@@ -286,7 +276,7 @@ def encode_corpus(
     from mantis._engine import Board, HexgBuffer  # noqa: PLC0415 — extension
 
     record_path, declared_sha = _manifest_pin(dataset_dir)
-    actual_sha = sha256_of(record_path)
+    actual_sha = sha256_file(record_path)
     if actual_sha != declared_sha:
         raise CorpusEncodeError(
             f"{record_path}: sha256 {actual_sha} != the manifest's {declared_sha}. This is "
@@ -347,7 +337,7 @@ def encode_corpus(
     provenance: dict[str, Any] = {
         "schema_version": 1,
         "artifact": out_path.name,
-        "artifact_sha256": sha256_of(out_path),
+        "artifact_sha256": sha256_file(out_path),
         "encoding": encoding,
         "registry_sha": registry_sha_hex(),
         "source_record_file": record_path.name,

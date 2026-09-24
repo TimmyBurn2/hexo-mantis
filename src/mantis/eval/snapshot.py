@@ -15,13 +15,13 @@ the ONE checkpoint loader (`mantis.train.checkpoints`) stays the only checkpoint
 from __future__ import annotations
 
 import dataclasses
-import hashlib
 from pathlib import Path
 from typing import Any
 
 import torch
 
 from mantis.model import ARCH_KINDS, build_net
+from mantis.util.hashing import sha256_file
 
 #: THE ONE arch-kind vocabulary, imported (R330(e)). This module carried its own two-row copy,
 #: which is why `GnnNetV2` could be trained and checkpointed but never snapshotted for the eval
@@ -76,11 +76,7 @@ def write_model_snapshot(model: torch.nn.Module, path: str | Path) -> str:
     torch.save(payload, tmp)
     tmp.replace(target)
 
-    sha = hashlib.sha256()
-    with open(target, "rb") as handle:
-        for chunk in iter(lambda: handle.read(1 << 20), b""):
-            sha.update(chunk)
-    return sha.hexdigest()
+    return sha256_file(target)
 
 
 def load_model_snapshot(path: str | Path, device: str = "cpu") -> torch.nn.Module:
