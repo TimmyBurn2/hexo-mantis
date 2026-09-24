@@ -112,7 +112,9 @@ class _Trainer(DrivableTrainerStub):
 
     def __init__(self, on_step=None) -> None:
         super().__init__(on_step=on_step)
-        self.checkpoint_dir = Path(tempfile.mkdtemp(prefix="mantis-root-lifecycle-"))
+        # Owned TemporaryDirectory: GC teardown, so no /tmp/mantis-root-lifecycle-* leaks.
+        self._ckpt_tmp = tempfile.TemporaryDirectory(prefix="mantis-root-lifecycle-")
+        self.checkpoint_dir = Path(self._ckpt_tmp.name)
 
     def save_checkpoint(self, loss_info) -> Path:
         self.saves.append(loss_info)

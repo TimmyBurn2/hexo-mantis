@@ -134,8 +134,9 @@ class _Trainer:
         self.saves = 0
         # A REAL directory, because R343(c) made the O3 arm write a resume sidecar beside the
         # checkpoint it saves. A fake `checkpoint_dir` would have made the O3 row assert a
-        # clean stop while the leg that makes the stop RESUMABLE went unexercised.
-        self.checkpoint_dir = Path(tempfile.mkdtemp(prefix="mantis-abort-exit-"))
+        # clean stop while the resumable leg went unexercised. Owned TemporaryDirectory.
+        self._ckpt_tmp = tempfile.TemporaryDirectory(prefix="mantis-abort-exit-")
+        self.checkpoint_dir = Path(self._ckpt_tmp.name)
 
     # WPTS/TD-1 re-point (R90a): the dead `train_step` fake is gone — the double
     # conforms to the DECLARED seam (typed entry points + `device`).
