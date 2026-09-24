@@ -255,6 +255,5 @@ def test_only_the_gate_block_carries_the_row(
         assert conc is None and not has_factory, (
             f"{phase} carries the concurrency row; only the gate block may. The floor probe is "
             "a LAW-07 gate input and the random floor its posture — both stay serial and "
-            "deterministic by ruling, not by omission (the rung block carries its OWN row, "
-            "`eval.rung_concurrency`, pinned in test_eval_rung_concurrency_row.py)."
+            "deterministic by ruling, not by omission."
         )

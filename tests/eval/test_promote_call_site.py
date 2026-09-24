@@ -42,13 +42,10 @@ def test_no_new_actor_weight_proxy_reads() -> None:
     argument, a local variable) is NOT a proxy read — it is the shipped
     `EvalPipelineLike` protocol's required keyword parameter name (DESIGN §c.3: satisfy
     it EXACTLY), and is permitted (O-G)."""
-    # RED-at-assertion anchor: without this, the census below would pass VACUOUSLY today —
-    # mantis/eval already exists as a one-line skeleton (no promote.py yet), so an empty
-    # census would find zero offenders for the wrong reason. Requiring promote.py to exist
-    # makes this test fail today exactly like its two siblings above (R8/no-tautology law).
+    # The census is vacuous unless the one exempted file exists, so its existence is asserted first.
     assert (_SRC / "eval" / "promote.py").is_file(), (
         "mantis/eval/promote.py must exist — the census this test performs is meaningless "
-        "(vacuously true) while the one file allowed to read these fields does not exist yet"
+        "(vacuously true) while the one file allowed to read these fields does not"
     )
     offenders: list[str] = []
     for pkg in ("eval", "arena"):

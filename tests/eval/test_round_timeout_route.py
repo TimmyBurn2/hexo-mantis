@@ -6,8 +6,8 @@ at the 2026-08-27 re-sit every in-run round ended this way and the operator was 
 would not exit. `_drain_escalate`'s genuine join timeout keeps the name, and the two must stay
 distinguishable.
 
-The frozen `test_eval_broken_reason_routes.py` pins reason→phase for the routes it enumerates and
-is OUT OF SCOPE of the grant, so the new member's phase is pinned here instead — an unpinned
+`test_eval_broken_reason_routes.py` pins reason→phase for the routes it enumerates, so
+the new member's phase is pinned here instead — an unpinned
 phase is a second axis nobody reads, which is the defect that file was written against.
 """
 from __future__ import annotations

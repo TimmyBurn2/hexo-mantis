@@ -2,12 +2,10 @@
 event producer lands here; the floor itself is a cutover re-baseline item, NOT this WP's job —
 PREREG P-2 bench posture n/a).
 
-Events (§c.4, verbatim):
+Events (§c.4):
   * `eval_round_started`  {round_id, step, scheduled: {rung: n}, gate_scheduled: bool, ts}
-  * `eval_round_complete` {round_id, step, wall_sec, games_total, promoted, wr_sealbot}
+  * `eval_round_complete` {round_id, step, wall_sec, games_total, promoted}
   * `eval_round_skipped_busy` {step, in_flight_round_id}
-
-RED-at-import: `mantis.eval.pipeline` does not exist yet.
 
 ORACLE-CHOSEN SEAM: rather than driving a full `build_eval_pipeline` round (subprocess spawn,
 real nets/engine — that integration lives in test_round_end_to_end.py / test_pipeline_isolation

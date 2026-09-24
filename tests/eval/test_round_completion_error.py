@@ -30,7 +30,6 @@ from mantis.model import GnnArch, build_net
 _GSPEC = lookup("gnn_axis_v1")
 
 
-# The harness is duplicated per suite by house convention rather than shared through a conftest.
 def _tiny_model():
     import torch
 

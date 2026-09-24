@@ -1,6 +1,6 @@
 """⊕ WP11-A — A3 regime_key discipline + LAW-04 dedupe + low-power guard (mantis.eval.aggregate).
 
-RED-at-import until IMPL writes `mantis.eval.aggregate`. Game records are plain dicts
+Game records are plain dicts
 carrying `p1`, `p2`, `winner` ("p1"|"p2"|"draw"), `regime_key` (the canonical `str` form
 `RegimeKey.canonical()` produces — this suite never imports `mantis.arena.regime` so it
 stays decoupled from the arena package; it treats `regime_key` as an opaque string tag,

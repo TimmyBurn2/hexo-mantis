@@ -34,7 +34,6 @@ from mantis.eval.promote import DeployTagHooks
 _ROUND_ID = "r000001_1000"
 
 
-# fixtures, self-contained (R5 bars importing another test module)
 def _eval_cfg() -> EvalConfig:
     gate = GateConfig(
         stride=1, screen_games=80, confirm_games=128, promotion_winrate=0.55,

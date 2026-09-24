@@ -2,8 +2,8 @@
 # typed reason, its own phase, one emitted event agreeing with the routed result, and a
 # traceback where an exception was in flight — driven over ONE harness. The fake-process /
 # fake-context / spy-sink rig plus the route driver is the majority of the file and every
-# row needs all of it; R5 bars cross-test imports, so a split forks that rig into two copies
-# which drift while both stay green.
+# row needs all of it; a split forks that rig into two copies which drift while both stay
+# green.
 """Every eval-failure route produces its OWN typed reason, and the stream says which.
 
 The defect: every broken round used to route a bare `str` reason that nothing in `src/` read,
@@ -16,8 +16,7 @@ M-O31 derive the event's `reason` from a second local. Each row names the one it
 witness to.
 
 REAL: the shipped `EvalPipeline`, its `_finalize_round` / `_read_worker_result` /
-`_broken_result` / `_success_result` chain, real emission and a real round-result mapping. FAKE: the worker SUBPROCESS (an injected fake `multiprocessing` context,
-the house rig kept as a private copy) and, on two routes, a monkeypatched raise — spawning real
+`_broken_result` / `_success_result` chain, real emission and a real round-result mapping. FAKE: the worker SUBPROCESS (an injected fake `multiprocessing` context) and, on two routes, a monkeypatched raise — spawning real
 subprocesses would trade determinism for nothing, since the subject is the reason assembly.
 """
 from __future__ import annotations

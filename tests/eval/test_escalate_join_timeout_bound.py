@@ -1,6 +1,5 @@
 # >300 justify (R8): ONE finding — the `_bounded_join_timeout` layer-2 guard driven on both
-# paths that reach it — and over half the file is the self-contained fixture copy the eval-suite
-# house convention requires, including the fake process that reproduces CPython's join(inf).
+# paths that reach it, over a fake process that reproduces CPython's join(inf).
 """Layer 2 of the non-finite `worker_kill_grace_sec` fix: `_bounded_join_timeout`.
 
 A pre-fix `worker_kill_grace_sec=float("inf")` reached `_escalate_and_finalize` from the poller's
@@ -37,7 +36,6 @@ from mantis.model import GnnArch, build_net
 _GSPEC = lookup("gnn_axis_v1")
 
 
-# Fixtures are a private copy rather than a shared conftest — the eval-suite house convention.
 def _tiny_model():
     import torch
 
@@ -127,7 +125,7 @@ class FakeClock:
 
 
 class _RealisticFakeProcess:
-    """Unlike the frozen suites' no-op `_FakeProcess`, this one reproduces the real
+    """Unlike the other suites' no-op `_FakeProcess`, this one reproduces the real
     `multiprocessing.Process` behaviour under test: `.join(timeout)` raises `OverflowError` for a
     non-finite timeout. Every timeout it is called with is recorded in `join_calls`, so a test
     can assert the value that reached `.join()` was bounded BEFORE the call rather than that no

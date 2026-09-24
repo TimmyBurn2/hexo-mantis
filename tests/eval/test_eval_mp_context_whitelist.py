@@ -5,7 +5,7 @@ child inherits poisoned; and `_worker_entry` arms `PR_SET_PDEATHSIG`, which the 
 the death of the thread that CREATED the child — under `'forkserver'` that thread belongs to the
 forkserver process, so the arming would track the wrong process and fire early or never.
 
-THE REFUSAL KEYS OFF THE NAME STRING, never the context object: frozen eval suites monkeypatch
+THE REFUSAL KEYS OFF THE NAME STRING, never the context object: the eval suites monkeypatch
 `multiprocessing.get_context`, so a check that inspected the returned context would red them all.
 """
 from __future__ import annotations
