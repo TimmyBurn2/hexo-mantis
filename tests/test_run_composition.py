@@ -5,8 +5,8 @@ Sits at the tests/ TOP LEVEL, mirroring a module deliberately ABOVE both `mantis
 never-started-pool `on_drained` closure, and the `train -> eval` lazy-import ban.
 
 >300 justify (R8): the monitor-config producer test, the drivable fakes and the re-validation
-pins are folded in here rather than given their own files — same subject, and the bar on
-cross-test imports means each new file would fork another copy of the same fakes.
+pins are folded in here rather than given their own files — same subject, and a split would
+fork another copy of the same fakes.
 """
 from __future__ import annotations
 

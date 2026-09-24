@@ -1,7 +1,6 @@
 # >300 justify (R8): the three oracles are one claim — "a composition that fails partway leaks
-# nothing and says WHERE" — driven through ONE real composed boot. Cross-test imports are barred
-# and the sibling lifecycle file is BYTE-FROZEN, so splitting these would fork the drivable
-# pool/trainer harness a second time instead of once.
+# nothing and says WHERE" — driven through ONE real composed boot; splitting these would fork
+# the drivable pool/trainer harness a second time instead of once.
 """The teardown ladder's own boundary conditions — the seams BEFORE the coordinator, where the
 ladder did not reach.
 

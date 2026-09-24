@@ -1,7 +1,7 @@
 # >300 justify (R8): every oracle below shares ONE real composed drive — real
 # `build_run_safety`, `JsonlEventSink`, `HeartbeatWatchdog`, `DiskGuard` and signal handlers —
-# and cross-test imports are barred, so splitting them would fork a second drivable harness AND
-# a second real-subsystem boot per file.
+# so splitting them would fork a second drivable harness AND a second real-subsystem boot per
+# file.
 """LAW-16 at the composition root.
 
 What this file exists to stop, measured and not inferred: signals were UNARMED in every composed
