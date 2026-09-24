@@ -166,3 +166,12 @@ Each note names the ruling that authorised it; none of them re-opens its row.
   `src/mantis/run.py` passes `sink=_DeferredSink()` to `init_trainer` and to the one production
   `WorkerPool` (the note's "both pool constructions" are those two), and `compose_run` binds each
   before `pool.start()`. Nothing in the row is re-opened.
+- **F-04 — THE MIN PIN IS ABSENT, per R368(a) (2026-09-25); the finding stands.** PMA-as-tested losing
+  to K-cluster min/max, scoped by R27, is untouched. The row's closing pointers resolve to nothing: the
+  tree holds no `aggregate_cluster_values_min` (a git grep over the code finds zero hits), no pinning
+  test for it, and no `value_pool = "min"` row; both rows of `crates/mantis-encoding/src/registry.toml`
+  are `is_multi_window = false` with `value_pool = "none"`. The function and its pin
+  (`min_value_aggregation_pin.rs`) landed at `2db8e0f7`; they and the registry's two min rows left with
+  the grid path at `3dd20b49`. No test pins the min/max asymmetry today, and the graph encodings aggregate no clusters,
+  so the "flagged defect preserved" has no live subject. A multi-window min-vs-learned-pooling question
+  re-starts from `3dd20b49^`, under LAW-02.
