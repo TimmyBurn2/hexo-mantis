@@ -59,18 +59,6 @@ class GraphRouteBufferLike(Protocol):
 
 
 @runtime_checkable
-class RecentBufferLike(Protocol):
-    """Completed against the concrete recorder: `size` and `save_to_path` both existed on it and
-    neither was declared."""
-
-    size: int
-
-    def push(self, *args: Any, **kwargs: Any) -> None: ...
-    def sample(self, *args: Any, **kwargs: Any) -> Any: ...
-    def save_to_path(self, path: str) -> int: ...
-
-
-@runtime_checkable
 class DrawRateAbortLike(Protocol):
     """The RESOLVED draw-rate abort terms as this seam layer sees them — a local Protocol,
     because this file describes the shapes it consumes rather than importing the concretes.

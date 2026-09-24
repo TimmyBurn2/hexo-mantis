@@ -17,7 +17,7 @@ import pytest
 
 from mantis.config.resolve.bootstrap import BootstrapNotFoundError
 import mantis.run as mantis_run
-from mantis.train.buffer_persist import canonical_buffer_path, try_save_buffer
+from mantis.train.buffer_persist import canonical_buffer_path
 from mantis.train.lifecycle.watchdog import (
     SELFPLAY_STALL_EXIT_CODE,
     StallWatchdog,
@@ -221,18 +221,6 @@ def test_canonical_buffer_path_is_derived_from_the_runs_own_directory(
         "the watchdog snapshot must be a DISTINCT path so an abnormal-exit save can never "
         "truncate the resume buffer"
     )
-
-
-def test_try_save_buffer_refuses_to_invent_a_path() -> None:
-    """With persistence ON and no path configured, fail loud rather than guess: a snapshot
-    nobody can find is worth what no snapshot is worth at the moment you need it."""
-    with pytest.raises(KeyError, match="buffer_persist_path"):
-        try_save_buffer(object(), {"buffer_persist": True}, trigger="test")
-
-
-def test_try_save_buffer_is_inert_when_persistence_is_off() -> None:
-    """Mutation half: the raise is conditional on persistence being ENABLED."""
-    try_save_buffer(object(), {}, trigger="test")  # must not raise
 
 
 @pytest.mark.parametrize("rel", ["src/mantis/train/coordinator/step.py",

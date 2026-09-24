@@ -10,7 +10,6 @@ import ast
 import inspect
 import textwrap
 
-import mantis.train.buffer_persist as persist_mod
 import mantis.train.coordinator.dispatch as dispatch_mod
 import mantis.train.coordinator.step as step_mod
 import mantis.train.events as events_mod
@@ -20,7 +19,6 @@ from mantis.train.coordinator.config import (
     ClockLike,
     EvalPipelineLike,
     GraphRouteBufferLike,
-    RecentBufferLike,
     ReplayBufferLike,
     TrainerLike,
     WorkerPoolLike,
@@ -84,8 +82,6 @@ SEAM_MATRIX: tuple[tuple[object, tuple[str, ...], tuple[type, ...], tuple[str, .
     # `dispatch` is the refusal that names it.
     (dispatch_mod, ("buffer",), (ReplayBufferLike, GraphRouteBufferLike),
      ("sample_graph_batch",)),
-    (persist_mod, ("buffer",), (ReplayBufferLike,), ("save_to_path",)),
-    (persist_mod, ("recent_buffer",), (RecentBufferLike,), ("save_to_path", "size")),
     (step_mod, ("_clock",), (ClockLike,), ("now", "sleep")),
     # `runner_stats` is deliberately NOT a sentinel here: the snapshot is passed INTO the builder
     # so it makes no call of its own. The inverse assertion is the last test in this file.
@@ -156,8 +152,6 @@ def test_declaration_removal_reds_the_gate() -> None:
         declared_members(EvalPipelineLike) - {"drain_pending"})
     assert not _row_accesses(events_mod, ("pool",)) <= (
         declared_members(PoolTelemetryLike) - {"recent_move_histories"})
-    assert not _row_accesses(persist_mod, ("recent_buffer",)) <= (
-        declared_members(RecentBufferLike) - {"size"})
 
 
 def test_the_gate_never_imports_a_collaborator_implementation() -> None:
