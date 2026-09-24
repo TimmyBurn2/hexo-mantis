@@ -26,6 +26,7 @@ import pytest
 import torch
 
 import _microbatch_harness as H
+from mantis.config.census import production_configs
 from mantis.config.loader import load_config, parse_config_yaml
 from mantis.config.resolve.microbatch import MicrobatchCapsSpec
 from mantis.config.schema import RunConfig
@@ -35,15 +36,14 @@ from mantis.train.ema import MissingEmaConfigError, resolve_ema_config
 from mantis.train.trainer.core import Trainer
 
 _REPO = Path(__file__).resolve().parents[2]
-_CONFIGS = sorted((_REPO / "configs").glob("*.yaml"))
+_CONFIGS = production_configs(_REPO)
 
 
 def test_there_are_configs_to_check() -> None:
-    """Vacuity guard — an empty glob would make every row below pass on nothing."""
+    """Vacuity guard — a census gone near-empty would make every row below pass on nothing."""
     assert len(_CONFIGS) >= 3, (
-        f"only {len(_CONFIGS)} config(s) found — R346(f) left run6, the armed smoke profile "
-        "and dev_example, so three is the floor and an empty glob is still the defect this "
-        "row exists for"
+        f"only {len(_CONFIGS)} production config(s) in the census — the sweep below would "
+        "be measuring almost nothing"
     )
 
 

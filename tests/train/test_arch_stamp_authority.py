@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 import torch
 
+from mantis.config.census import production_configs
 from mantis.config.loader import load_config
 from mantis.encoding import lookup
 from mantis.model import GnnArch, GnnArchV2, RepresentationMismatch, build_net
@@ -30,17 +31,19 @@ from mantis.train.checkpoints import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CONFIGS = REPO_ROOT / "configs"
 _TINY_GRAPH = dict(hidden=8, num_layers=1, policy_hidden=8, value_hidden=8)
 
 
 def _graph_config_dump() -> dict:
-    for path in sorted(CONFIGS.glob("*.yaml")):
+    for path in production_configs(REPO_ROOT):
         cfg = load_config(path)
         if cfg.identity.representation == "graph":
             dump = cfg.model_dump()
             # The tiny net's own widths (v35): the writer refuses a config claiming another shape.
             dump["model"]["gnn"] = {"hidden": _TINY_GRAPH["hidden"], "num_layers": _TINY_GRAPH["num_layers"]}
+            # The envelope's net is a plain GnnArch: no arch_kind claim, no soft-policy head.
+            dump["identity"]["arch_kind"] = None
+            dump["model"]["aux_soft_policy"] = None
             return dump
     raise AssertionError("no shipped graph config")
 
