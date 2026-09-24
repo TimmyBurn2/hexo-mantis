@@ -8,11 +8,6 @@ half, so this is a seam being filled rather than a seam being cut.
 IT LIVES UNDER `monitor/` AND IMPORTS NO `selfplay`. The Protocol is structural, so
 satisfying it needs no import, and the DAG edge stays absent in both directions: the pool is
 handed an instance by the composition root and never reaches for this module.
-
-`latest_replay_path()` returns `None` and that is not an oversight — this recorder writes a
-sharded record STORE, not one replay file per game, so there is no "latest replay path" for
-it to name. Returning the newest shard would answer a different question than the one the
-method asks.
 """
 from __future__ import annotations
 
@@ -79,10 +74,6 @@ class GameRecorder:
             move_arms=move_arms,
             search_stats=search_stats,
         ))
-
-    def latest_replay_path(self) -> Path | None:
-        """`None`: this recorder writes a record store, not per-game replay files."""
-        return None
 
     def stop(self) -> None:
         """Close the open shard and index it (`WorkerPool.stop` calls this)."""

@@ -168,7 +168,7 @@ _COORD_PATTERNS: tuple[re.Pattern, ...] = (
 # Rule 8 — canonical-define lines are the source of truth; skip them.
 _CANONICAL_DEFINE_RE = re.compile(
     r"^\s*(?:pub\s+(?:const\s+)?|const\s+|static\s+)?"
-    r"(BOARD_SIZE|NUM_CELLS|BUFFER_CHANNELS|N_ACTIONS|MARGIN_M|HISTORY_LEN"
+    r"(BOARD_SIZE|NUM_CELLS|BUFFER_CHANNELS|N_ACTIONS|MARGIN_M"
     r"|N_PLANES|N_CHAIN_PLANES|BOARD_H|BOARD_W|TOTAL_CELLS"
     r"|BOARD_H_V6W25|BOARD_W_V6W25|N_CELLS_V6W25|N_PLANES_V6W25"
     r"|N_ACTIONS_V6W25|STATE_STRIDE_V6W25|CHAIN_STRIDE_V6W25"
@@ -391,7 +391,6 @@ def _is_the_owning_file(path: Path, line: str) -> bool:
 _CANONICAL_OWNERS: dict[str, tuple[str, ...]] = {
     "NODE_FEAT_DIM": ("lib",), "EDGE_FEAT_DIM": ("lib",), "WIN_AXES": ("lib",),
     "WIN_LENGTH": ("moves",), "BOARD_SIZE": ("core",), "TOTAL_CELLS": ("core",),
-    "HISTORY_LEN": ("constants",),
     "DEFAULT_LEGAL_MOVE_RADIUS": ("moves",), "DEFAULT_CLUSTER_THRESHOLD": ("moves",),
     "N_CHAIN_PLANES": ("sym", "game_state"),
     "OPP_STONE_PLANE": ("mod",), "MOVES_REMAINING_PLANE": ("mod",), "PLY_PARITY_PLANE": ("mod",),

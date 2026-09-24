@@ -5,10 +5,6 @@ Geometry, plane-layout and action-space values are NOT here: the registry at
 ``mantis.encoding.lookup(name)`` or ``mantis_encoding::lookup``.
 """
 
-# AlphaZero history length (current + 7 prior timesteps), the single definition:
-# `env.game_state` imports this, and what it bounds is the `move_history` deque depth.
-HISTORY_LEN: int = 8
-
 # Depth of the per-worker rolling draw-outcome window the self-play pool keeps, one append
 # per completed game.
 #
