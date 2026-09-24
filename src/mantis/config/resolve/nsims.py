@@ -1,11 +1,9 @@
-"""Eval opponent model_sims resolver: the per-opponent value is a required config row the
-resolver READS (the frozen {random:96, sealbot:128} default dict is dead); an unknown opponent
-or a None value is a ValueError, never a fallback."""
+"""Eval opponent model_sims resolver: an unknown opponent or a None value raises, never falls back."""
 from __future__ import annotations
 
 # The known eval opponents (name authority; NOT a value default — the values live in the config).
 # (design §a.4) — semantics unchanged: the config value always wins, None still raises.
-_KNOWN_OPPONENTS = ("random", "sealbot", "strix")
+_KNOWN_OPPONENTS = ("random", "strix")
 
 
 def resolve_eval_model_sims(opponent: str, cfg_value: int | None) -> int:

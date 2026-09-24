@@ -1,9 +1,4 @@
-"""O2 — eval model_sims decision-equivalence (resolve/nsims.resolve_eval_model_sims).
-
-REBUILD: the code-side {random:96, sealbot:128} default dict DIES; the per-opponent value
-is a required schema field the resolver READS. Config value always wins; unknown opponent
-raises; None raises (Δ-REBUILD — frozen fell to the code default).
-"""
+"""`resolve_eval_model_sims`: the config value wins; an unknown opponent or a None value raises."""
 import pytest
 
 from mantis.config.resolve.nsims import resolve_eval_model_sims
@@ -13,8 +8,9 @@ def test_random_reads_config_value():
     assert resolve_eval_model_sims("random", 96) == 96
 
 
-def test_sealbot_reads_config_value():
-    assert resolve_eval_model_sims("sealbot", 128) == 128
+def test_the_retired_sealbot_opponent_is_unknown():
+    with pytest.raises(ValueError, match="unknown eval opponent 'sealbot'"):
+        resolve_eval_model_sims("sealbot", 128)
 
 
 def test_config_value_always_wins():
