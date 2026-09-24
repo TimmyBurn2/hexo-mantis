@@ -60,6 +60,7 @@ from mantis.diagnostics.eval_child_memory import (
     RC_REFUSED,
     InsufficientRoundsError,
     classify,
+    fmt_gib,
 )
 from mantis.eval.child_memory import make_probe
 from mantis.model.identity import net_param_hash
@@ -77,7 +78,6 @@ from mantis.util.device import (
 
 TOOL = "mantis.diagnostics.worker_sweep"
 MARKER = "MANTIS_WORKER_SWEEP"
-GIB = 1024 ** 3
 
 #: Rung verdicts beyond the two `classify` returns. REFUSED keeps `eval_child_memory`'s meaning
 #: exactly — not a verdict, a statement that no verdict is available.
@@ -1185,10 +1185,6 @@ def rc_for(report: dict[str, Any]) -> int:
     return 1 if decisive else RC_REFUSED
 
 
-def _gib(value: Any) -> str:
-    return "unmeasured" if value is None else f"{value / GIB:.4f} GiB"
-
-
 def render(report: dict[str, Any], out: Any) -> None:
     """The human screen. Every figure beside its sampling limit and its producing run."""
     prov = report["provenance"]
@@ -1205,7 +1201,7 @@ def render(report: dict[str, Any], out: Any) -> None:
     print(f"config: {prov['config_name']} sha256={prov['config_sha256']} "
           f"commit={prov['git_commit']} dirty={prov['git_dirty']}", file=out)
     print(f"regime: device={prov['device']} torch={prov['torch_version']} "
-          f"gpu={prov['gpu_name']} card_total={_gib(prov.get('card_total_bytes'))} "
+          f"gpu={prov['gpu_name']} card_total={fmt_gib(prov.get('card_total_bytes'))} "
           f"posture={prov['declared_allocator_posture']!r} "
           f"live_alloc_conf={prov['live_allocator_conf']!r} "
           f"(from {prov['live_allocator_conf_source_var']})", file=out)
@@ -1223,7 +1219,7 @@ def render(report: dict[str, Any], out: Any) -> None:
     for row in report["rungs"]:
         print(f"  n_workers={row['n_workers']:>3}  {row['verdict']:<18} "
               f"moves/min={row['moves_per_min']:>10.3f}  games/min={row['games_per_min']:>8.3f}  "
-              f"peak={_gib(row['rung_peak_bytes'])}", file=out)
+              f"peak={fmt_gib(row['rung_peak_bytes'])}", file=out)
         print(f"      sample: rounds_measured={row['rounds_measured']} "
               f"rounds_unmeasured={row['rounds_unmeasured']} wall_sec={row['wall_sec']:.1f} "
               f"— that count and that wall time are the limit, not a bound "
@@ -1236,7 +1232,7 @@ def render(report: dict[str, Any], out: Any) -> None:
                   f"point estimate alone", file=out)
         if row["governing_sink_counts"]:
             print(f"      sinks: governed by {row['governing_sink_counts']} · "
-                  f"max disagreement {_gib(row['max_sink_disagreement_bytes'])} — where the two "
+                  f"max disagreement {fmt_gib(row['max_sink_disagreement_bytes'])} — where the two "
                   f"instruments disagree the larger governs AND the disagreement is a finding",
                   file=out)
         if row["sink_verdicts"]:
@@ -1256,9 +1252,9 @@ def render(report: dict[str, Any], out: Any) -> None:
             tag = "warmup" if reading["warmup"] else "      "
             print(f"        r{reading['index']} {tag} moves={reading['moves']:>7} "
                   f"games={reading['games']:>4} "
-                  f"card={_gib(reading['sampled_peak_bytes'])} "
-                  f"alloc={_gib(reading['allocator_peak_bytes'])} "
-                  f"governing={_gib(reading['governing_peak_bytes'])} "
+                  f"card={fmt_gib(reading['sampled_peak_bytes'])} "
+                  f"alloc={fmt_gib(reading['allocator_peak_bytes'])} "
+                  f"governing={fmt_gib(reading['governing_peak_bytes'])} "
                   f"card_samples={reading['card_samples']}{flag}", file=out)
         if row["refusal"]:
             print(f"      REFUSAL/NOTE: {row['refusal']}", file=out)

@@ -167,7 +167,8 @@ def classify(peaks: list[float] | list[int], *, plateau_rounds: int, band_pct: f
     return PLATEAU
 
 
-def _fmt_gib(value: int | float | None) -> str:
+def fmt_gib(value: int | float | None) -> str:
+    """Bytes as `N.NNNN GiB`, or `unmeasured` when there is no reading."""
     return "unmeasured" if value is None else f"{value / GIB:.4f} GiB"
 
 
@@ -190,8 +191,8 @@ def _render(rounds: list[RoundReading], *, plateau_rounds: int, band_pct: float,
         flag = "" if reading.available and reading.peak_bytes is not None else "  [unmeasured]"
         print(
             f"  {reading.round_id:>24}  step={reading.step}  "
-            f"peak_allocated={_fmt_gib(reading.peak_bytes)}  "
-            f"peak_reserved={_fmt_gib(reading.reserved_peak_bytes)}  "
+            f"peak_allocated={fmt_gib(reading.peak_bytes)}  "
+            f"peak_reserved={fmt_gib(reading.reserved_peak_bytes)}  "
             f"phases={len(reading.phases)}  wall_sec="
             f"{'n/a' if reading.wall_sec is None else format(reading.wall_sec, '.1f')}{flag}",
             file=out,
@@ -199,7 +200,7 @@ def _render(rounds: list[RoundReading], *, plateau_rounds: int, band_pct: float,
     if measured:
         largest = max(r.peak_bytes or 0 for r in measured)
         print(
-            f"largest measured round peak: {_fmt_gib(largest)} over {len(measured)} measured "
+            f"largest measured round peak: {fmt_gib(largest)} over {len(measured)} measured "
             f"round(s) — the sampling limit is that count and that wall time, not a bound",
             file=out,
         )
@@ -258,6 +259,7 @@ __all__ = [
     "NoRoundsFoundError",
     "RoundReading",
     "classify",
+    "fmt_gib",
     "main",
     "read_rounds_from_events",
     "read_rounds_from_markers",
