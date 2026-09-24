@@ -19,6 +19,6 @@
 #
 # Node is a TYPE-CHECKING dependency only: nothing in `src/`, `crates/` or the runtime touches
 # it, so this pin carries none of the perf-attestation weight the Rust channel does (a Rust
-# bump invalidates all 28 bench floors; a node bump invalidates nothing).
+# bump invalidates every floor in tools/bench_floors.toml; a node bump invalidates nothing).
 [tools]
 node = "26.7.0"
