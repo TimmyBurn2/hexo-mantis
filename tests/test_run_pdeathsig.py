@@ -32,6 +32,7 @@ import pytest
 from mantis.monitor.heartbeat import PARENT_DEATH_PPID_ENV
 from mantis.train.lifecycle.signals import (
     PARENT_VANISHED_EXIT_CODE,
+    _ppid_of,
     arm_parent_death_if_supervised,
 )
 
@@ -146,19 +147,6 @@ def _await_marker(marker, deadline_sec: float = _DEADLINE_SEC) -> tuple[int, boo
 def _kill_parent_and_wait(parent: subprocess.Popen[bytes]) -> None:
     parent.send_signal(signal.SIGKILL)   # the parent gets NO chance to clean up
     parent.wait(timeout=_DEADLINE_SEC)
-
-
-def _ppid_of_pid(pid: int) -> int | None:
-    """The parent of `pid` from `/proc`, used only to REAP an intermediate wrapper that, by the
-    residual a row is measuring, nothing else will take down."""
-    try:
-        with open(f"/proc/{pid}/status", encoding="utf-8") as fh:
-            for line in fh:
-                if line.startswith("PPid:"):
-                    return int(line.split()[1])
-    except (OSError, ValueError, IndexError):
-        return None
-    return None
 
 
 def _reap(parent: subprocess.Popen[bytes], *pids: int | None) -> None:
@@ -304,7 +292,7 @@ def test_a_stamp_three_levels_up_does_not_arm(tmp_path) -> None:
     finally:
         # The middle wrapper is reaped EXPLICITLY: it is the process the residual leaves
         # standing, so nothing else in this file will take it down.
-        _reap(parent, gc_pid, _ppid_of_pid(gc_pid) if gc_pid is not None else None)
+        _reap(parent, gc_pid, _ppid_of(gc_pid) if gc_pid is not None else None)
 
 
 @_LINUX_ONLY
