@@ -24,38 +24,16 @@ from pathlib import Path
 
 import pytest
 
+from _proc_harness import alive as _alive
 from mantis.monitor.heartbeat import PARENT_DEATH_ARM_EXEC_MODULE, PARENT_DEATH_PPID_ENV
 from mantis.monitor.supervise import spawn_child
+from mantis.train.lifecycle.signals import _ppid_of
 
 _LINUX = sys.platform.startswith("linux")
 _DEADLINE_SEC = 30.0
 _LINUX_ONLY = pytest.mark.skipif(
     not _LINUX, reason="PR_SET_PDEATHSIG and /proc ancestry are Linux-specific here"
 )
-
-
-def _alive(pid: int | None) -> bool:
-    """True iff `pid` is a live, non-zombie process: a zombie read as dead passes a row wrongly."""
-    if pid is None:
-        return False
-    try:
-        with open(f"/proc/{pid}/stat", encoding="utf-8") as fh:
-            return fh.read().rsplit(")", 1)[-1].split()[0] != "Z"
-    except (FileNotFoundError, ProcessLookupError, IndexError):
-        return False
-
-
-def _ppid_of(pid: int | None) -> int | None:
-    if pid is None:
-        return None
-    try:
-        with open(f"/proc/{pid}/status", encoding="utf-8") as fh:
-            for line in fh:
-                if line.startswith("PPid:"):
-                    return int(line.split()[1])
-    except (OSError, ValueError, IndexError):
-        return None
-    return None
 
 
 def _write_wrapper(tmp_path: Path) -> Path:

@@ -16,13 +16,15 @@ from __future__ import annotations
 
 import ast
 import contextlib
-import json
 import os
 import signal
 import subprocess
 import sys
 import time
 from pathlib import Path
+
+from _proc_harness import alive as _alive
+from _proc_harness import supervisor_events as _events
 
 #: These drives override every threshold on the command line, so the required `--config` takes a
 #: committed file for the load alone rather than minting one per drive.
@@ -101,21 +103,6 @@ def _await_line(log: Path, needle: str, deadline_sec: float = _DEADLINE_SEC) -> 
     raise AssertionError(f"{needle!r} never appeared in the child log; got:\n{got}")
 
 
-def _events(err: Path) -> list[dict]:
-    """The supervisor's own stream: one JSON line per action."""
-    if not err.exists():
-        return []
-    rows = []
-    for line in err.read_text(encoding="utf-8", errors="replace").splitlines():
-        line = line.strip()
-        if line.startswith("{"):
-            try:
-                rows.append(json.loads(line))
-            except ValueError:
-                continue
-    return rows
-
-
 def _names(err: Path) -> list[str]:
     return [str(row.get("event")) for row in _events(err)]
 
@@ -143,14 +130,6 @@ def _child_pid(log: Path) -> int | None:
         if line.startswith("READY "):
             return int(line.split()[1])
     return None
-
-
-def _alive(pid: int) -> bool:
-    try:
-        with open(f"/proc/{pid}/stat", encoding="utf-8") as fh:
-            return fh.read().rsplit(")", 1)[-1].split()[0] != "Z"
-    except (FileNotFoundError, ProcessLookupError, IndexError):
-        return False
 
 
 @_LINUX_ONLY

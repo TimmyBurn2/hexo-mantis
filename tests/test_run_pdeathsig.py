@@ -30,6 +30,7 @@ from typing import Any
 import pytest
 
 from mantis.monitor.heartbeat import PARENT_DEATH_PPID_ENV
+from _proc_harness import alive as _alive
 from mantis.train.lifecycle.signals import (
     PARENT_VANISHED_EXIT_CODE,
     _ppid_of,
@@ -43,17 +44,6 @@ _STAMP = {"config_sha256": "stub", "tree_sha": "stub", "preflight_utc": "stub"}
 _LINUX_ONLY = pytest.mark.skipif(
     not _LINUX, reason="PR_SET_PDEATHSIG is a Linux prctl; there is no equivalent here"
 )
-
-
-def _alive(pid: int) -> bool:
-    """True iff `pid` names a live, non-zombie process. Counting a zombie as alive fails a row
-    for the wrong reason; counting one as dead PASSES a row for the wrong reason, which is
-    worse."""
-    try:
-        with open(f"/proc/{pid}/stat", encoding="utf-8") as fh:
-            return fh.read().rsplit(")", 1)[-1].split()[0] != "Z"
-    except (FileNotFoundError, ProcessLookupError, IndexError):
-        return False
 
 
 def _reason_log(marker):

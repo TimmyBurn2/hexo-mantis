@@ -29,6 +29,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from _proc_harness import supervisor_events as _events
 from mantis.monitor.supervise import RELAUNCH_BUDGET_EXIT_CODE
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -127,20 +128,6 @@ def _spawn_supervisor(tmp_path: Path, child: Path, err: Path, *,
     argv += ["--", sys.executable, str(child)]
     handle = err.open("wb")
     return subprocess.Popen(argv, cwd=os.getcwd(), stderr=handle, start_new_session=True)
-
-
-def _events(err: Path) -> list[dict]:
-    if not err.exists():
-        return []
-    rows = []
-    for line in err.read_text(encoding="utf-8", errors="replace").splitlines():
-        line = line.strip()
-        if line.startswith("{"):
-            try:
-                rows.append(json.loads(line))
-            except ValueError:
-                continue
-    return rows
 
 
 def _await_child_ready(proc, log: Path, err: Path) -> None:
