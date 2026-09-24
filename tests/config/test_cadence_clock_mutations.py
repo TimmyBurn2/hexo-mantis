@@ -24,22 +24,7 @@ from mantis.config.armed_aborts import (
 )
 from mantis.config.loader import load_config
 from mantis.config.schema import RunConfig
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-RUN5 = REPO_ROOT / "configs" / "run6.yaml"
-
-
-@pytest.fixture(scope="module")
-def run5() -> RunConfig:
-    return load_config(RUN5)
-
-
-def _revalidated(config: RunConfig, section: str, key: str, value: object) -> RunConfig:
-    """`dump -> mutate ONE key -> model_validate`, the loader's own final step, so every
-    cross-field validator re-runs and every mutation below is one a run could be launched from."""
-    raw = config.model_dump()
-    raw[section][key] = value
-    return RunConfig.model_validate(raw)
+from test_armed_abort_cadence import RUN5, _revalidated
 
 
 def _required_manifest() -> tuple[ArmedAbort, ...]:
