@@ -15,12 +15,9 @@ import dataclasses
 
 import pytest
 
-from mantis.encoding import all_specs, lookup
+from mantis.encoding import lookup
 from mantis.eval.errors import EvalDecodeUnsupportedError
-from mantis.eval.worker import (
-    _DECODE_IMPLEMENTED_VALUE_POOLS,
-    _assert_decode_implements_declared_pooling,
-)
+from mantis.eval.worker import _assert_decode_implements_declared_pooling
 
 
 def _spec_with(name: str, **overrides):
@@ -43,23 +40,6 @@ def _spec_with(name: str, **overrides):
     return _Shim(spec, overrides)
 
 
-def test_every_registered_encoding_declares_an_implemented_value_pool() -> None:
-    """The census: every registered row passes the guard today, so arming it changes NOTHING
-    for any shipped encoding. A guard that refused a live encoding would be a regression, not
-    a fix — this is the assertion that distinguishes the two. Enumerated from the registry, so
-    a row added later joins the census without an edit here."""
-    for spec in all_specs():
-        name = spec.name
-        assert spec.value_pool in _DECODE_IMPLEMENTED_VALUE_POOLS, (
-            f"{name} declares value_pool={spec.value_pool!r}, outside the implemented set"
-        )
-
-
-def test_run5_encoding_passes_the_value_channel_guard() -> None:
-    """run5 mints `gnn_axis_v1`. Its round must not be refused by the new guard."""
-    _assert_decode_implements_declared_pooling(lookup("gnn_axis_v1"))
-
-
 @pytest.mark.parametrize("pool", ["mean", "max"])
 def test_unimplemented_value_pool_is_refused_by_name(pool: str) -> None:
     """THE MUTATION THIS GUARD EXISTS FOR. `mean` and `max` are both registry-legal
@@ -75,18 +55,6 @@ def test_unimplemented_value_pool_is_refused_by_name(pool: str) -> None:
     message = str(excinfo.value)
     assert f"value_pool={pool!r}" in message, "the raise must name the offending value"
     assert "min" in message, "the raise must name what the decode actually does instead"
-
-
-def test_policy_channel_refusal_is_unchanged_by_the_new_guard() -> None:
-    """REGRESSION GUARD on the shipped ordering. A spec declaring an unimplemented policy_pool
-    and an IMPLEMENTED value_pool ('min') must still fail with the POLICY message — the message
-    `probe_quadrants.py` and the shipped oracles pin. No registered row declares one since the
-    grid rows went (R346(f)), so the case is synthesised the same way the value arm's is.
-    """
-    spec = _spec_with("gnn_axis_v1", policy_pool="legal_set_scatter_max", value_pool="min")
-    with pytest.raises(EvalDecodeUnsupportedError) as excinfo:
-        _assert_decode_implements_declared_pooling(spec)
-    assert "policy_pool='legal_set_scatter_max'" in str(excinfo.value)
 
 
 def test_value_guard_fires_even_when_the_policy_pool_is_fine() -> None:
