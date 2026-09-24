@@ -44,6 +44,14 @@ def _six_for_p1() -> list[list[int]]:
     return moves
 
 
+def test_the_axes_and_win_length_are_the_engines_own(hexlogic):
+    """No hex fact is transcribed: the constants are the bridge's exports, value and order."""
+    from mantis import _engine
+
+    assert hexlogic.HEX_AXES == tuple((int(dq), int(dr)) for dq, dr in _engine.HEX_AXES)
+    assert hexlogic.WIN_LENGTH == _engine.WIN_LENGTH
+
+
 def test_the_six_in_a_row_is_found_through_the_completing_stone(hexlogic):
     moves = _six_for_p1()
     line = hexlogic.win_line(moves)

@@ -1,10 +1,13 @@
 """The hex facts the viewer derives from a move list: the owner of a ply and the winning line."""
 from __future__ import annotations
 
-#: The three line axes in axial coordinates, `mantis_core::board::state::HEX_AXES`.
-HEX_AXES: tuple[tuple[int, int], ...] = ((1, 0), (0, 1), (1, -1))
-#: Stones in a row that win, `mantis_core::board::moves::WIN_LENGTH`.
-WIN_LENGTH = 6
+from mantis._engine import HEX_AXES as _ENGINE_HEX_AXES
+from mantis._engine import WIN_LENGTH as _ENGINE_WIN_LENGTH
+
+#: The three line axes in axial coordinates, read from the engine's own export.
+HEX_AXES: tuple[tuple[int, int], ...] = tuple((int(dq), int(dr)) for dq, dr in _ENGINE_HEX_AXES)
+#: Stones in a row that win, the engine's own constant.
+WIN_LENGTH: int = int(_ENGINE_WIN_LENGTH)
 
 
 def owner(ply: int) -> int:
@@ -13,7 +16,7 @@ def owner(ply: int) -> int:
 
 
 def win_line(moves: list[list[int]]) -> list[list[int]] | None:
-    """The whole run of >= WIN_LENGTH stones through the LAST (completing) stone on one axis, or None."""
+    """The whole run of >= WIN_LENGTH stones through the LAST (completing) stone on one axis, or None; the scan stays local because `Board.find_winning_line` falls back to any stone's line, which would mask exactly the disagreement this function exists to catch."""
     if not moves:
         return None
     last = len(moves) - 1
