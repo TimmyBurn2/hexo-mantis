@@ -191,7 +191,7 @@ class StrixBackend:
         self.sims = int(sims)
         self.net_hash = str(pin["checkpoint_sha256"])
         self.name = f"{self.backend}:{self.net_hash[:8]}"
-        self._bot = StrixBot(transport=self._transport, sims=self.sims, name=self.name)
+        self._bot = StrixBot(transport=self._transport, name=self.name)
         self.search = {"kind": "gumbel", "sims": self.sims, "preset": preset, "m_actions": DEFAULT_M_ACTIONS,
                        "solver": str(reply.get("forcing_solver")), "acting": str(reply.get("acting")),
                        "torch": str(reply.get("torch")), "device": str(reply.get("device")),

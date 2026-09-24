@@ -9,7 +9,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 _SEP = "|"
-_N_FIELDS = 7
 
 
 class MixedRegimeError(ValueError):
@@ -21,7 +20,7 @@ class RegimeKey:
     """`(bot, variant, model_sims, opponent_spec, opening_book, deploy_matched, encoding)`.
 
     Equality/hash consider EVERY field (the dataclass default); `canonical()` is a
-    stable, round-trippable `|`-joined string form used as the wire/record tag.
+    stable `|`-joined string form used as the wire/record tag.
     """
 
     bot: str
@@ -43,20 +42,6 @@ class RegimeKey:
                     f"RegimeKey field contains the canonical separator {_SEP!r}: {part!r}"
                 )
         return _SEP.join(parts)
-
-    @classmethod
-    def from_canonical(cls, canonical: str) -> RegimeKey:
-        parts = canonical.split(_SEP)
-        if len(parts) != _N_FIELDS:
-            raise ValueError(
-                f"malformed RegimeKey canonical form (expected {_N_FIELDS} fields): {canonical!r}"
-            )
-        bot, variant, model_sims, opponent_spec, opening_book, deploy_matched, encoding = parts
-        return cls(
-            bot=bot, variant=variant, model_sims=int(model_sims),
-            opponent_spec=opponent_spec, opening_book=opening_book,
-            deploy_matched=(deploy_matched == "1"), encoding=encoding,
-        )
 
 
 __all__ = ["MixedRegimeError", "RegimeKey"]

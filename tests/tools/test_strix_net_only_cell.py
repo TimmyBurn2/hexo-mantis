@@ -58,8 +58,8 @@ def test_the_net_only_variant_is_a_distinct_instrument_by_name() -> None:
         def close(self) -> None:
             pass
 
-    on = StrixBot(transport=_T(), sims=256, name=f"strix_{_STEM}_s256")
-    off = StrixBot(transport=_T(), sims=256, name=f"strix_{_STEM}_s256_nosolver")
+    on = StrixBot(transport=_T(), name=f"strix_{_STEM}_s256")
+    off = StrixBot(transport=_T(), name=f"strix_{_STEM}_s256_nosolver")
     assert isinstance(off, BotProtocol) and on.name != off.name
 
 

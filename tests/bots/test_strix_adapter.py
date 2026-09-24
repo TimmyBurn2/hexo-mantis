@@ -52,7 +52,7 @@ def _board_after(moves: list[tuple[int, int]]) -> Any:
 
 
 def test_the_adapter_satisfies_the_bot_protocol() -> None:
-    bot = StrixBot(transport=_FakeTransport((1, 0)), sims=8, name="strix_test")
+    bot = StrixBot(transport=_FakeTransport((1, 0)), name="strix_test")
     assert isinstance(bot, BotProtocol) and bot.name() == "strix_test"
 
 
@@ -60,7 +60,7 @@ def test_the_request_carries_stones_side_to_move_and_placements_left() -> None:
     board = _board_after([(0, 0), (1, 0), (0, 1)])  # p1's single, then p2's two: p1 to move, 2 left
     legal = [tuple(m) for m in board.legal_moves()]
     transport = _FakeTransport(legal[0], legal=legal)
-    bot = StrixBot(transport=transport, sims=8, name="s")
+    bot = StrixBot(transport=transport, name="s")
     bot.new_game()
     assert bot.select_move(board) == legal[0]
     req = transport.requests[-1]
@@ -74,7 +74,7 @@ def test_the_request_carries_stones_side_to_move_and_placements_left() -> None:
 def test_the_opening_single_is_the_origin_and_consults_no_driver() -> None:
     """hexo_rs seats p1 at (0, 0) by rule; every opening cell is the same position up to translation."""
     transport = _FakeTransport((5, 5))
-    bot = StrixBot(transport=transport, sims=8, name="s")
+    bot = StrixBot(transport=transport, name="s")
     assert bot.select_move(Board.with_encoding_name(_ENCODING)) == (0, 0)
     assert transport.requests == [] and bot.moves == 1
 
@@ -82,7 +82,7 @@ def test_the_opening_single_is_the_origin_and_consults_no_driver() -> None:
 def test_the_drivers_own_sims_count_rides_the_reply_into_last_sims() -> None:
     """LADDER-1's budget witness reads `last_sims`; the opening single, which consults no driver, reads None."""
     board = _board_after([(0, 0), (1, 0), (0, 1)])
-    bot = StrixBot(transport=_FakeTransport((2, 0), legal=board.legal_moves()), sims=8, name="strix_test")
+    bot = StrixBot(transport=_FakeTransport((2, 0), legal=board.legal_moves()), name="strix_test")
     assert bot.last_sims is None
     bot.select_move(board)
     assert bot.last_sims == 8
@@ -94,7 +94,7 @@ def test_a_fence_disagreement_is_a_counted_finding_and_the_move_is_still_returne
     board = _board_after([(0, 0), (1, 0), (0, 1)])
     legal = [tuple(m) for m in board.legal_moves()]
     transport = _FakeTransport(legal[1], legal=legal, legal_delta=legal[0])
-    bot = StrixBot(transport=transport, sims=8, name="s")
+    bot = StrixBot(transport=transport, name="s")
     assert bot.select_move(board) == legal[1]
     assert bot.fence_disagreements == 1
     assert bot.findings and str(legal[0]) in bot.findings[0]
@@ -105,7 +105,7 @@ def test_an_out_of_fence_reply_is_returned_unchanged_for_the_arena_to_forfeit() 
     board = _board_after([(0, 0), (1, 0), (0, 1)])
     legal = [tuple(m) for m in board.legal_moves()]
     transport = _FakeTransport((40, 40), legal=legal)
-    bot = StrixBot(transport=transport, sims=8, name="s")
+    bot = StrixBot(transport=transport, name="s")
     assert bot.select_move(board) == (40, 40)
     assert not board.is_legal(40, 40)
     assert bot.out_of_fence == 1 and any("out of" in f for f in bot.findings)
@@ -116,7 +116,7 @@ def test_a_driver_error_line_is_a_named_exception_not_a_silent_move() -> None:
         def ask(self, request: dict[str, Any]) -> dict[str, Any]:
             return {"error": "RuntimeError: boom"}
 
-    bot = StrixBot(transport=_Broken((0, 0)), sims=8, name="s")
+    bot = StrixBot(transport=_Broken((0, 0)), name="s")
     with pytest.raises(RuntimeError, match="boom"):
         bot.select_move(_board_after([(0, 0), (1, 0), (0, 1)]))
 

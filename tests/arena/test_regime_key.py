@@ -3,9 +3,11 @@
 RED-at-import until IMPL writes `mantis.arena.regime`. Every eval game record carries a
 canonical RegimeKey = (bot, variant, model_sims, opponent_spec, opening_book,
 deploy_matched, encoding); the aggregator (tests/eval/test_aggregate_regime.py) raises on
-a mixed set of these keys. This suite pins construction + canonical round-trip only.
+a mixed set of these keys. This suite pins construction + the canonical form only.
 """
 from __future__ import annotations
+
+import pytest
 
 from mantis.arena.regime import RegimeKey
 
@@ -24,13 +26,10 @@ def _key(**overrides) -> RegimeKey:
     return RegimeKey(**base)
 
 
-def test_canonical_roundtrip():
-    key = _key()
-    canonical = key.canonical()
-    assert isinstance(canonical, str)
-    restored = RegimeKey.from_canonical(canonical)
-    assert restored == key
-    assert restored.canonical() == canonical
+def test_canonical_is_the_field_tuple_joined_in_order():
+    assert _key().canonical() == "sealbot|d5|150|sealbot:depth=5|book_v1_s20260625_p4|1|gnn_axis_v1"
+    with pytest.raises(ValueError, match="separator"):
+        _key(variant="d|5").canonical()
 
 
 def test_any_field_change_changes_key():

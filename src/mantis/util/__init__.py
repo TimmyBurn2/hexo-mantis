@@ -12,6 +12,6 @@ only that one example moved.)
 
 Callers should always use the fully-qualified submodule path:
     from mantis.util.constants import HISTORY_LEN
-    from mantis.util.coordinates import axial_to_flat
+    from mantis.util.coordinates import axial_distance
     from mantis.util.device import best_device   # explicit torch-consumers only
 """

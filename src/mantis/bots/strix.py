@@ -89,11 +89,8 @@ class DriverTransport:
 class StrixBot:
     """`BotProtocol` over a strix transport; the position is rebuilt from the board on every call."""
 
-    def __init__(self, *, transport: Transport, sims: int, name: str,
-                 m_actions: int = DEFAULT_M_ACTIONS) -> None:
+    def __init__(self, *, transport: Transport, name: str) -> None:
         self._transport = transport
-        self._sims = int(sims)
-        self._m_actions = int(m_actions)
         self._name = name
         self.moves = 0
         self.seconds = 0.0
@@ -272,7 +269,7 @@ def resolve_strix(*, opponent_sims: int | None, variant: str) -> Any:
         if "error" in reply:
             transport.close()
             raise RungUnresolvable(rung="strix", reason=f"strix driver failed to load: {reply['error']}")
-        return StrixBot(transport=transport, sims=sims, name=name)
+        return StrixBot(transport=transport, name=name)
 
     return _factory
 
