@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from mantis.bots.strix import NET_ONLY_SUFFIX, RADIUS_SUFFIX, RungUnresolvable, load_request, variant_radius, variant_solver
-from test_strix_net_only_cell import _load
+from _toolpath import load_module_by_path
 
 _REPO = Path(__file__).resolve().parents[2]
 _STEM = "checkpoint_00237000"
@@ -16,12 +16,12 @@ _STEM = "checkpoint_00237000"
 
 @pytest.fixture(scope="module")
 def follower():
-    return _load("strix_follower_ruler_r6", "tools/strix_follower.py")
+    return load_module_by_path("strix_follower_ruler_r6", _REPO / "tools/strix_follower.py")
 
 
 @pytest.fixture(scope="module")
 def frontier():
-    return _load("strength_frontier_ruler_r6", "tools/strength_frontier.py")
+    return load_module_by_path("strength_frontier_ruler_r6", _REPO / "tools/strength_frontier.py")
 
 
 def test_the_radius_variant_carries_placement_radius_and_every_other_line_is_unchanged() -> None:
