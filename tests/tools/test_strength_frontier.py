@@ -1,7 +1,6 @@
-"""`tools/strength_frontier.py` cells may name their OWN `opening_book` and `seed_base` (BOOK_V2's replays); a cell that names neither plays the config's."""
+"""tools/strength_frontier.py cell composition: one module for the one tool's three families."""
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
 
 import pytest
@@ -12,8 +11,7 @@ _REPO = Path(__file__).resolve().parents[2]
 
 @pytest.fixture(scope="module")
 def frontier():
-    path = _REPO / "tools" / "strength_frontier.py"
-    return load_module_by_path("strength_frontier_book_under_test", path)
+    return load_module_by_path("strength_frontier_under_test", _REPO / "tools" / "strength_frontier.py")
 
 
 @pytest.fixture(scope="module")
@@ -27,6 +25,14 @@ def base(frontier, tmp_path_factory):
 def _self_cell(**over):
     cell = {"label": "anchor_self_r1", "candidate": "ck.ckpt", "opponent": "ck.ckpt",
             "search_kind": "puct", "sims": 256, "games": 1024, "concurrency": 8}
+    cell.update(over)
+    return cell
+
+
+def _cell(**over):
+    cell = {"label": "c", "candidate": "bc_full", "opponent": "strix", "strix_sims": 128,
+            "search_kind": "gumbel", "sims": 128,
+            "games": 4}
     cell.update(over)
     return cell
 
@@ -60,11 +66,47 @@ def test_a_strix_rung_cell_book_row_replaces_the_gates_book(frontier, base, tmp_
 
 
 def test_a_cell_without_an_opponent_is_refused_by_name(frontier, base, tmp_path) -> None:
-    """R362(c): the old default opponent (`sealbot_d5`) went with the sealbot rung; a cell that
-    names none is refused rather than silently played against anything."""
-    import pytest
-
+    """A cell naming no opponent is refused; the sealbot default went with its rung."""
     config, base_spec = base
     cell = {"label": "no_opp", "candidate": "ck.ckpt", "search_kind": "puct", "sims": 256, "games": 4}
     with pytest.raises(frontier.FrontierCellError, match="names its opponent"):
+        frontier.cell_spec(cell, base_spec, cell_dir=tmp_path, config=config)
+
+
+def test_a_cell_without_sigma_rows_plays_the_config_sigma(frontier, base, tmp_path) -> None:
+    config, base_spec = base
+    spec = frontier.cell_spec(_cell(), base_spec, cell_dir=tmp_path, config=config)
+    assert (spec.c_visit, spec.c_scale, spec.q_rescale) == (
+        config.selfplay.c_visit, config.selfplay.c_scale, config.selfplay.q_rescale)
+
+
+@pytest.mark.parametrize("c_scale,rescale", [(0.1, True), (1.0, False)])
+def test_a_cell_sigma_row_replaces_the_config_sigma(frontier, base, tmp_path, c_scale, rescale) -> None:
+    config, base_spec = base
+    cell = _cell(c_scale=c_scale, q_rescale=rescale)
+    spec = frontier.cell_spec(cell, base_spec, cell_dir=tmp_path, config=config)
+    assert spec.c_visit == config.selfplay.c_visit
+    assert (spec.c_scale, spec.q_rescale) == (c_scale, rescale)
+
+
+def test_a_strix_cell_composes_the_rung_at_the_pinned_checkpoint(frontier, base, tmp_path) -> None:
+    config, base_spec = base
+    cell = {"label": "strix_A", "candidate": "bc_full", "search_kind": "puct", "sims": 512,
+            "opponent": "strix", "strix_sims": 128, "games": 288, "concurrency": 8}
+    spec = frontier.cell_spec(cell, base_spec, cell_dir=tmp_path, config=config)
+    assert len(spec.rung_jobs) == 1
+    job = spec.rung_jobs[0]
+    assert (job.bot, job.variant, job.opponent_sims, job.games, job.deploy_matched) == (
+        "strix", "checkpoint_00237000", 128, 288, True)
+    assert job.opening_book == config.eval.gate.opening_book
+    assert spec.strix_model_sims == 512 and spec.search_kind == "puct"
+    assert spec.rung_concurrency == 8, "the strix rung's games in flight are the cell's concurrency"
+    assert frontier.cell_channel(cell) == "external"
+
+
+def test_a_strix_cell_without_strix_sims_is_refused(frontier, base, tmp_path) -> None:
+    config, base_spec = base
+    cell = {"label": "x", "candidate": "bc_full", "search_kind": "puct", "sims": 256,
+            "opponent": "strix", "games": 4}
+    with pytest.raises(frontier.FrontierCellError, match="strix_sims"):
         frontier.cell_spec(cell, base_spec, cell_dir=tmp_path, config=config)
