@@ -37,6 +37,7 @@ from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
 from _graph_drive import GRAPH_FULL_CONFIG, filled_hexg
+from _drivable import DrivableTrainerStub
 from _spy import SpyEventSink
 from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
@@ -122,24 +123,6 @@ class _Pool:
         return None
 
 
-class _Trainer:
-    def __init__(self) -> None:
-        self.step = 0
-        self.model = object()
-        self.device = "cpu"
-
-    def train_step_from_tensors(self, *args: Any, **kwargs: Any) -> dict[str, float]:
-        self.step += 1
-        return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
-                "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
-                "opp_reply_loss": 0.0, "loss_total": 1.0}
-
-    def train_step_from_graph_batch(self, **kwargs: Any) -> dict[str, float]:
-        return self.train_step_from_tensors()
-
-    def save_checkpoint(self, loss_info: Any) -> None:
-        return None
-
 
 class _Buffer:
     def __init__(self) -> None:
@@ -178,7 +161,7 @@ def _drive(*snapshots: RunnerStats) -> list[dict]:
     pool = _Pool(snapshots[0])
     sink = SpyEventSink()
     coord = StepCoordinator(
-        trainer=_Trainer(), buffer=_Buffer(),
+        trainer=DrivableTrainerStub(), buffer=_Buffer(),
         pool=pool, eval_pipeline=None, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=ShutdownState(), eval_model=object(), config=config,

@@ -22,6 +22,7 @@ from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
+from _drivable import DrivableTrainerStub
 
 
 # Constants derived from the minted config — no hand-restated knobs.
@@ -86,28 +87,6 @@ class _CountingPool:
         return None
 
 
-class _FakeTrainer:
-    def __init__(self) -> None:
-        self.step = 0
-        self.model = object()
-        self.device = "cpu"
-
-    def _loss(self) -> dict[str, float]:
-        return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
-                "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
-                "opp_reply_loss": 0.0, "loss_total": 1.0}
-
-    def train_step_from_tensors(self, *args: Any, **kwargs: Any) -> dict[str, float]:
-        self.step += 1
-        return self._loss()
-
-    def train_step_from_graph_batch(self, **kwargs: Any) -> dict[str, float]:
-        self.step += 1
-        return self._loss()
-
-    def save_checkpoint(self, loss_info) -> None:
-        return None
-
 
 class _FakeBuffer:
     def __init__(self) -> None:
@@ -152,7 +131,7 @@ class _FakeEvalPipeline:
 
 def _make_coordinator(*, pool=None, config=None):
     pool = pool or _CountingPool()
-    trainer = _FakeTrainer()
+    trainer = DrivableTrainerStub()
     buffer = _FakeBuffer()
     sink = SpyEventSink()
     coord = StepCoordinator(
