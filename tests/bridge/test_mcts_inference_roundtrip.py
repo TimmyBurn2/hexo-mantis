@@ -62,9 +62,7 @@ def test_mctstree_forced_root_child_round_trip():
     tree.new_game(board)
     leaves = tree.select_leaves(1)
     tree.expand_and_backup([[1.0 / 362] * 362 for _ in leaves], [0.0] * len(leaves))
-    first = tree.root_children_info()[0][1] if hasattr(tree, "root_children_info") else None
-    if first is None:
-        first = tree.get_root_children_info()[0][1]
+    first = tree.get_root_children_info()[0][1]
     tree.forced_root_child = first
     assert tree.forced_root_child == first
     tree.forced_root_child = None
