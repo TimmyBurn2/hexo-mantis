@@ -13,8 +13,8 @@ import math
 import time
 
 import pytest
+from _drivable import FakeClock
 from _pipeline_harness import (
-    FakeClock,
     bounded,
     eval_config,
     fake_mp,

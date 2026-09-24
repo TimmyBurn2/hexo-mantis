@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from _drivable import FakeClock
 
 
 class SpyEventSink:
@@ -17,21 +18,6 @@ class SpyEventSink:
 
     def named(self, name: str) -> list[dict[str, Any]]:
         return [e for e in self.events if e.get("event") == name]
-
-
-class FakeClock:
-    """Controllable monotonic clock. `clock()` returns the current fake time `t`; the
-    injected registry/watchdog read ONLY this, so a real wall-clock jump changes nothing."""
-
-    def __init__(self, t: float = 0.0) -> None:
-        self.t = t
-
-    def __call__(self) -> float:
-        return self.t
-
-    def advance(self, dt: float) -> float:
-        self.t += dt
-        return self.t
 
 
 class ExitSpy:

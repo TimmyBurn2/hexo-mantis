@@ -10,18 +10,7 @@ from __future__ import annotations
 import inspect
 
 from mantis.eval.pipeline import DrainCaps, drain_budget_sec, drain_or_kill
-
-
-class FakeClock:
-    def __init__(self, t: float = 0.0) -> None:
-        self.t = t
-
-    def __call__(self) -> float:
-        return self.t
-
-    def advance(self, dt: float) -> float:
-        self.t += dt
-        return self.t
+from _drivable import FakeClock
 
 
 class FakeHangingProcess:

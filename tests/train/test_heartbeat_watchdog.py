@@ -25,6 +25,7 @@ from mantis.monitor.heartbeat import (
 )
 from mantis.monitor.supervise import LivenessTracker
 from mantis.train.lifecycle.heartbeat_watchdog import HeartbeatWatchdog
+from _drivable import FakeClock
 
 
 def _wait_until(pred, timeout: float) -> bool:
@@ -48,20 +49,9 @@ def _make_wd(*, registry, deadlines, sink, clock, exit_fn, save_snapshot, hb_fil
     )
 
 
-class _Clock:
-    def __init__(self) -> None:
-        self.t = 0.0
-
-    def __call__(self) -> float:
-        return self.t
-
-    def advance(self, dt: float) -> None:
-        self.t += dt
-
-
 def test_no_fire_below_deadline_fire_at_first_poll_past_deadline(tmp_path, spy_sink):
     """No fire at age D−ε; fire at the first poll where age ≥ D, naming the stale source, exit 42."""
-    clock = _Clock()
+    clock = FakeClock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
     wd = _make_wd(registry=reg, deadlines=dict(_ALL), sink=spy_sink, clock=clock,
@@ -80,7 +70,7 @@ def test_no_fire_below_deadline_fire_at_first_poll_past_deadline(tmp_path, spy_s
 def test_per_source_deadlines_are_independent(tmp_path, spy_sink):
     """A short deadline on one source fires while the others stay silent, and the fire names the
     short-deadline source only."""
-    clock = _Clock()
+    clock = FakeClock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
     deadlines = {"train_step": 100.0, "inference_dispatch": 0.5, "selfplay_drain": 100.0,
@@ -98,7 +88,7 @@ def test_arm_log_emitted_even_when_a_deadline_disables_a_source(tmp_path, spy_si
     """A source with deadline ≤ 0 is disabled from firing, but the arm-log STILL names it. The
     clock stops short of the positive deadlines, then crosses them to prove the OTHER sources are
     armed: asserting zero fires past every deadline would force a GLOBAL staleness disable."""
-    clock = _Clock()
+    clock = FakeClock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
     deadlines = {"train_step": 0.0, "inference_dispatch": 100.0, "selfplay_drain": 100.0,
@@ -129,7 +119,7 @@ def test_missing_deadline_for_a_registry_source_is_a_loud_wiring_error(tmp_path,
     """A registry source with NO entry in `deadlines` must raise at CONSTRUCTION: reading it as an
     implicit 0.0 would silently blind the watchdog to a whole pipeline stage, and the supervisor
     too, since the thread keeps mirroring a fresh `seq`."""
-    clock = _Clock()
+    clock = FakeClock()
     reg = HeartbeatRegistry(clock=clock)
     with pytest.raises(ValueError) as ei:
         _make_wd(registry=reg, deadlines={"train_step": 1.0}, sink=spy_sink, clock=clock,
@@ -142,7 +132,7 @@ def test_disarm_staleness_stops_stall_fire_but_persist_and_file_stay_live(tmp_pa
     """After `disarm_staleness()` per-source staleness never fires, but persist-fatal still works
     and `seq` keeps advancing. The disarm SWAPS the per-source deadlines for one bounded close-out
     budget, so this drives far past the per-source deadline while staying inside that budget."""
-    clock = _Clock()
+    clock = FakeClock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
     counter = {"n": 0}
@@ -171,7 +161,7 @@ def test_close_out_overrun_fires_after_the_teardown_budget(tmp_path, spy_sink):
     """A teardown that overruns the close-out budget STILL fires 42. Switching staleness off
     permanently while the file mirror kept advancing `seq` made a close-out wedge invisible to
     BOTH levels for an unbounded window."""
-    clock = _Clock()
+    clock = FakeClock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
     wd = HeartbeatWatchdog(
@@ -199,7 +189,7 @@ def test_close_out_deadline_zero_keeps_the_old_unbounded_behaviour(tmp_path, spy
     """`close_out_deadline_sec <= 0` is the documented off switch for the teardown budget: an
     operator who genuinely wants an unbounded close-out must say so explicitly, and it is never
     the default."""
-    clock = _Clock()
+    clock = FakeClock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
     wd = HeartbeatWatchdog(
@@ -221,7 +211,7 @@ def test_checkpoint_source_live_attribute_increment_fires_43(tmp_path, spy_sink,
     43. LAW-14 requires the checkpoint source fatal via the watchdog, not just the sink."""
     import mantis.train.checkpoints as checkpoints
 
-    clock = _Clock()
+    clock = FakeClock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
     wd = _make_wd(registry=reg, deadlines=dict(_ALL), sink=spy_sink, clock=clock,
@@ -243,7 +233,7 @@ def test_frozen_int_binding_mutant_is_rejected(tmp_path, spy_sink, monkeypatch):
     frozen-int mutant does NOT fire, so the implementation must read the module ATTRIBUTE live."""
     import mantis.train.checkpoints as checkpoints
 
-    clock = _Clock()
+    clock = FakeClock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
     frozen = checkpoints.persist_errors_total          # the footgun: value bound at construction
@@ -372,7 +362,7 @@ def test_undeclared_never_beaten_source_warns_instead_of_firing(tmp_path, spy_si
     """An UNDECLARED source that has never beaten must NOT age into a 42; it gets a loud
     `heartbeat_source_unwired` instead. One omitted `heartbeat=` kwarg made a healthy run fire 42
     and the supervisor relaunch into the same missing wiring until the budget was gone."""
-    clock = _Clock()
+    clock = FakeClock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
     wd = HeartbeatWatchdog(
@@ -413,7 +403,7 @@ def test_declared_source_that_never_beats_still_fires(tmp_path, spy_sink):
     """The carve-out is narrow: a source the root DECLARED as wired is watched from arm time, so a
     stage that dies before its very FIRST beat is still caught. Bites an over-broad "never beaten
     ⇒ never fire" rule that would silently drop wedge coverage."""
-    clock = _Clock()
+    clock = FakeClock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
     wd = HeartbeatWatchdog(
@@ -431,12 +421,12 @@ def test_declared_source_that_never_beats_still_fires(tmp_path, spy_sink):
 def test_wired_sources_rejects_an_unknown_source_name(tmp_path, spy_sink):
     """A typo'd declaration must fail LOUD at construction, never silently widen or narrow what is
     watched."""
-    reg = HeartbeatRegistry(clock=_Clock())
+    reg = HeartbeatRegistry(clock=FakeClock())
     with pytest.raises(ValueError) as ei:
         HeartbeatWatchdog(
             registry=reg, deadlines=dict(_ALL), sink=spy_sink, counters_fn=lambda: 0,
             heartbeat_file=tmp_path / "hb.json", file_interval_sec=0.0, poll_interval_sec=0.1,
-            clock=_Clock(), save_snapshot=lambda: None, exit_fn=lambda code: None,
+            clock=FakeClock(), save_snapshot=lambda: None, exit_fn=lambda code: None,
             wired_sources=["train_step", "typo_source"],
         )
     assert "typo_source" in str(ei.value)
@@ -445,7 +435,7 @@ def test_wired_sources_rejects_an_unknown_source_name(tmp_path, spy_sink):
 def test_hung_snapshot_still_exits_within_a_bounded_time(tmp_path, spy_sink):
     """A `save_snapshot` that NEVER returns must not suppress `exit_fn`: `best_effort` catches
     exceptions, not hangs, so each optional effect runs on its own thread under a hard budget."""
-    clock = _Clock()
+    clock = FakeClock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
     release = threading.Event()
@@ -479,7 +469,7 @@ def test_fire_complete_publishes_the_best_effort_counters(tmp_path, spy_sink):
     """The fire's outcome reaches the ONE channel: a snapshot that FAILS is recorded in
     `heartbeat_watchdog_fire_complete` with the counter registry, not only in a stderr WARN
     moments before `os._exit`."""
-    clock = _Clock()
+    clock = FakeClock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
 

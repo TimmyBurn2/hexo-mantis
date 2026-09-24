@@ -21,8 +21,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from _drivable import FakeClock
 from _pipeline_harness import (
-    FakeClock,
     FakeCtx,
     bounded,
     eval_config,

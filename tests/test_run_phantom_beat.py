@@ -11,14 +11,7 @@ import pytest
 
 from mantis.monitor.heartbeat import HEARTBEAT_SOURCES, HeartbeatRegistry
 from mantis.run import _DeferredHeartbeat, _assert_pool_producers_live
-
-
-class _Clock:
-    def __init__(self) -> None:
-        self.t = 0.0
-
-    def __call__(self) -> float:
-        return self.t
+from _drivable import FakeClock
 
 
 # Direct injection: the composition root passes the registry's `beat` itself, and the producer
@@ -29,7 +22,7 @@ def test_producer_live_beat_drops_age(source: str) -> None:
 
     MUTATION: disconnect the heartbeat fn (`heartbeat=None`) — the guard skips, no beat, the
     age stays."""
-    clock = _Clock()
+    clock = FakeClock()
     reg = HeartbeatRegistry(clock=clock)
     reg.arm()
     clock.t = 10.0
@@ -60,7 +53,7 @@ def test_phantom_wired_deferred_heartbeat_forwards_beat(source: str) -> None:
     """The bound `_DeferredHeartbeat` forwards the pool's beats to the registry.
 
     MUTATION: revert to `heartbeat=None` — the guard skips and the age stays."""
-    clock = _Clock()
+    clock = FakeClock()
     reg = HeartbeatRegistry(clock=clock)
     reg.arm()
     clock.t = 10.0
@@ -100,7 +93,7 @@ def test_deferred_heartbeat_pre_bind_is_inert() -> None:
 
 def test_deferred_heartbeat_bind_makes_it_live() -> None:
     """`bind()` swaps the no-op for the real `registry.beat` and sets the `bound` flag."""
-    clock = _Clock()
+    clock = FakeClock()
     reg = HeartbeatRegistry(clock=clock)
     reg.arm()
     clock.t = 5.0

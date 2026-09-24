@@ -203,3 +203,17 @@ def await_signal(state: Any) -> None:
     deadline = time.monotonic() + 5.0
     while time.monotonic() < deadline and state.stop_count < 1:
         time.sleep(0.005)
+
+
+class FakeClock:
+    """A controllable monotonic clock: calling it returns the fake time `t`."""
+
+    def __init__(self, t: float = 0.0) -> None:
+        self.t = t
+
+    def __call__(self) -> float:
+        return self.t
+
+    def advance(self, dt: float) -> float:
+        self.t += dt
+        return self.t

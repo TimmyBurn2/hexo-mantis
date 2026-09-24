@@ -19,6 +19,7 @@ from mantis.config.schema import ARCH_SCOPED_KEYS
 from mantis.encoding import lookup
 from mantis.model import GnnArch, arch_from_spec_and_config, build_net
 from _spy import SpyEventSink
+from _drivable import FakeClock
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 TRAIN_FIXTURES = FIXTURES / "train"
@@ -27,16 +28,6 @@ ANCHOR_KEYS_FILE = FIXTURES / "value_probes" / "statedict_keys" / "gnn_axis_v1.t
 # The ONE registered representation since R346(f) deleted the grid path.
 GRAPH_ENCODING = "gnn_axis_v1"
 KILLED_PREFIXES = ("cluster_pool.", "global_encoder.", "gpool_bias_branch.")
-
-
-class FakeClock:
-    """Controllable monotonic clock: calling it returns the current fake time `t`."""
-
-    def __init__(self, t: float = 0.0) -> None:
-        self.t = t
-
-    def __call__(self) -> float:
-        return self.t
 
 
 @pytest.fixture

@@ -19,6 +19,7 @@ from mantis.monitor.heartbeat import (
 )
 from mantis.monitor.supervise import LivenessTracker, Supervisor
 from mantis.train.lifecycle.watchdog import SELFPLAY_STALL_EXIT_CODE
+from _drivable import FakeClock
 
 
 class FakeChild:
@@ -34,21 +35,10 @@ class FakeChild:
         return self._seq[0]
 
 
-class _Clock:
-    def __init__(self) -> None:
-        self.t = 0.0
-
-    def __call__(self) -> float:
-        return self.t
-
-    def advance(self, dt: float) -> None:
-        self.t += dt
-
-
 def _make_supervisor(children, *, hb_file, stale_after=10.0, poll=1.0, grace=1.0,
                      max_relaunches=5):
     """Wire a Supervisor over a scripted spawn sequence with a fake clock advanced by sleep."""
-    clock = _Clock()
+    clock = FakeClock()
     spawns: list = []
     kills: list[tuple[int, int]] = []
     seq = list(children)

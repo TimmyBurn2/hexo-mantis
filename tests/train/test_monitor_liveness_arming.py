@@ -43,17 +43,15 @@ from mantis.train.lifecycle.heartbeat_watchdog import (
     MonitorSample,
 )
 from _spy import SpyEventSink
+from _drivable import FakeClock
 
 _PRODUCTION = "configs/run6.yaml"
-
 
 
 def _disk_row() -> ArmedAbort:
     rows = [r for r in MANIFEST if r.name == DISK_SPACE_ABORT_RULE]
     assert len(rows) == 1, "the disk row must appear exactly once in the manifest"
     return rows[0]
-
-
 
 
 def test_the_disk_row_carries_the_live_producer_mechanism_and_the_exported_probe_name() -> None:
@@ -138,8 +136,6 @@ def test_the_live_audit_DIVERGES_from_the_config_audit_when_the_producer_is_dead
     assert DISK_SPACE_ABORT_RULE in [r.name for r in live.disarmed]
 
 
-
-
 def _guard(tmp_path: Path, sink: SpyEventSink, *, interval: float = 0.01) -> DiskGuard:
     return DiskGuard(watch_path=tmp_path, interval_sec=interval, warn_gb=0.0, fail_gb=0.0,
                      keep_all=True, sink=sink)
@@ -215,17 +211,7 @@ def test_every_committed_production_config_still_passes_the_live_audit_with_a_li
         assert not live.disarmed, f"{rel} newly reports {[r.name for r in live.disarmed]}"
 
 
-
-
-class _Clock:
-    def __init__(self) -> None:
-        self.t = 1000.0
-
-    def __call__(self) -> float:
-        return self.t
-
-
-def _watchdog(tmp_path: Path, sink: SpyEventSink, clock: _Clock,
+def _watchdog(tmp_path: Path, sink: SpyEventSink, clock: FakeClock,
               sample_fn: Any, exits: list[int]) -> HeartbeatWatchdog:
     """A REAL `HeartbeatRegistry` on the same fake clock, one source, deadline `0.0`. Not a stub,
     because the staleness branch runs on every poll beside the liveness check; `0.0` is the
@@ -245,7 +231,7 @@ def test_a_monitor_that_does_not_exist_yet_is_SILENT_not_stalled(
 ) -> None:
     """The composition root starts the watchdog BEFORE it builds the guard, so `None` is a
     real state. Treating it as a stall would make every run report one at boot."""
-    sink, clock, exits = SpyEventSink(), _Clock(), []
+    sink, clock, exits = SpyEventSink(), FakeClock(1000.0), []
     wd = _watchdog(tmp_path, sink, clock, lambda: None, exits)
     for _ in range(5):
         clock.t += 100.0
@@ -257,7 +243,7 @@ def test_a_monitor_that_does_not_exist_yet_is_SILENT_not_stalled(
 def test_a_LIVE_monitor_logs_its_own_reading_in_run_and_never_stalls(tmp_path: Path) -> None:
     """LAW-18: a lever under test logs its reading on a HEALTHY run too, or no observer can
     tell a live reading from a frozen one."""
-    sink, clock, exits = SpyEventSink(), _Clock(), []
+    sink, clock, exits = SpyEventSink(), FakeClock(1000.0), []
     checks = [0]
 
     def sample() -> MonitorSample:
@@ -278,7 +264,7 @@ def test_a_LIVE_monitor_logs_its_own_reading_in_run_and_never_stalls(tmp_path: P
 def test_a_FROZEN_counter_stalls_after_its_own_intervals_and_the_event_is_LATCHED(
     tmp_path: Path,
 ) -> None:
-    sink, clock, exits = SpyEventSink(), _Clock(), []
+    sink, clock, exits = SpyEventSink(), FakeClock(1000.0), []
     frozen = MonitorSample(checks_total=7, errors_total=3, interval_sec=60.0)
     wd = _watchdog(tmp_path, sink, clock, lambda: frozen, exits)
 
@@ -303,7 +289,7 @@ def test_a_FROZEN_counter_stalls_after_its_own_intervals_and_the_event_is_LATCHE
 
 def test_a_RECOVERED_monitor_says_so_and_can_stall_again(tmp_path: Path) -> None:
     """Without the recovery arm the latch would silence a second, real outage."""
-    sink, clock, exits = SpyEventSink(), _Clock(), []
+    sink, clock, exits = SpyEventSink(), FakeClock(1000.0), []
     state = {"checks": 7}
 
     def sample() -> MonitorSample:
@@ -330,7 +316,7 @@ def test_a_stalled_monitor_NEVER_EXITS_THE_PROCESS(tmp_path: Path) -> None:
     watchdog's own code is 42 — the TRANSIENT class the supervisor RELAUNCHES on — so a disk
     guard raising every tick that could reach `exit_fn` would stall-abort and be relaunched into
     the same broken state: a crash loop into a filling volume."""
-    sink, clock, exits = SpyEventSink(), _Clock(), []
+    sink, clock, exits = SpyEventSink(), FakeClock(1000.0), []
     frozen = MonitorSample(checks_total=1, errors_total=999, interval_sec=1.0)
     wd = _watchdog(tmp_path, sink, clock, lambda: frozen, exits)
     for _ in range(20):
@@ -343,21 +329,19 @@ def test_a_stalled_monitor_NEVER_EXITS_THE_PROCESS(tmp_path: Path) -> None:
 def test_the_liveness_wiring_is_named_at_ARM_TIME_in_both_directions(tmp_path: Path) -> None:
     """An unwired monitor is a gap somebody must be able to see, exactly as an unwired
     heartbeat source is."""
-    sink, clock, exits = SpyEventSink(), _Clock(), []
+    sink, clock, exits = SpyEventSink(), FakeClock(1000.0), []
     _watchdog(tmp_path, sink, clock, lambda: None, exits).arm()
     assert sink.named("heartbeat_watchdog_armed")[0]["monitor_liveness"] == ["disk_guard"]
 
     bare_sink = SpyEventSink()
     HeartbeatWatchdog(
-        registry=HeartbeatRegistry(sources=("train_step",), clock=_Clock()),
+        registry=HeartbeatRegistry(sources=("train_step",), clock=FakeClock(1000.0)),
         deadlines={"train_step": 0.0}, sink=bare_sink, counters_fn=lambda: 0,
         heartbeat_file=tmp_path / "hb2.json", file_interval_sec=1.0, poll_interval_sec=0.1,
-        clock=_Clock(), save_snapshot=lambda: None, exit_fn=exits.append,
+        clock=FakeClock(1000.0), save_snapshot=lambda: None, exit_fn=exits.append,
     ).arm()
     armed = bare_sink.named("heartbeat_watchdog_armed")[0]
     assert armed["monitor_liveness"] == "monitor_liveness_unwired"
-
-
 
 
 def _compose_run_ast() -> Any:
@@ -438,8 +422,6 @@ def test_THE_VACUITY_CONTROL_the_census_fires_on_a_stripped_function() -> None:
     assert not _calls_named(stripped, "_emit_live_arming_audit")
 
 
-
-
 def test_THE_LIVE_AUDIT_EMITS_WHERE_THE_SINK_IS_STILL_OPEN_ON_BOTH_PATHS() -> None:
     """A REGRESSION ROW for a defect this leg introduced and the gate set caught.
 
@@ -494,7 +476,7 @@ def test_THE_LIVENESS_SAMPLE_IS_SILENT_DURING_CLOSE_OUT_because_it_is_self_fatal
     an argument about WHEN the reading is interesting that ignored WHO takes it. The watchdog's
     thread emits through the sink it polices, so an emit after `sink.close()` is a counted
     failed write and `counters_fn` answers a non-zero count with `os._exit(43)`."""
-    sink, clock, exits = SpyEventSink(), _Clock(), []
+    sink, clock, exits = SpyEventSink(), FakeClock(1000.0), []
     live = MonitorSample(checks_total=1, errors_total=0, interval_sec=60.0)
     wd = _watchdog(tmp_path, sink, clock, lambda: live, exits)
 
