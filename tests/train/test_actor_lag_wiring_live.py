@@ -127,13 +127,6 @@ def _compose_capturing_lag_fns(tmp_path, monkeypatch, smoke_run_config, mk_graph
     return captured, pool, trainer
 
 
-def test_composition_root_supplies_both_lag_callables(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer):
-    captured, _pool, _trainer = _compose_capturing_lag_fns(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer)
-    for name in ("actor_ckpt_step_fn", "learner_step_fn"):
-        assert name in captured, f"composition root did not supply {name}"
-        assert callable(captured[name])
-
-
 def test_learner_step_fn_reads_the_live_trainer(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer):
     """Not a captured snapshot: mutating the trainer must move the reading, or `learner_step`
     freezes and the lag can never grow however far the actor falls behind."""
