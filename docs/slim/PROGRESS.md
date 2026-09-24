@@ -32,10 +32,31 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   `install_signal_handlers._stop` handler and SIG_IGN around root/train tests, but GIL starvation makes that
   timeline unreliable and the exact C-level, timing-dependent setter is unidentified. Every later wave's exit
   sweep and W8's gates.exit will show this one red until the operator rules on it.
-  W4 state: the sealbot vendor leg (w4-sealbot @ e4c22699) and the tools-dups leg (w4-toolsdup @
-  37eb5f04, 6 commits) are implemented on their branches, NOT yet integrated; the gate-14 measure leg and the
-  gate-16 widening leg are next; then REVIEW-W4, exit gates, PROGRESS. The remaining waves are handed off:
-  `docs/slim/HANDOFF.md` + `docs/slim/handoff/W4_ADDENDUM.md`.
+  W4 EXITED. 10 implementation commits 47dd9a05..51eddda5 (net −410): the sealbot vendor side
+  (60755d15, R368(e), eval_instrument v3, meta_ci target set updated); TOOLS-2-07 (71903a8d, the seven
+  by-path loaders → mantis.util.loadpkg); TOOLS-2-10 (44678400, run_shard_paths the one shard
+  enumeration + producer test); TOOLS-2-08 (a9528a77, AMENDED-with-ground: the constants read the
+  engine exports and are pinned value-and-order, the win-line scan STAYS LOCAL — the engine's
+  find_winning_line has a sorted-stones fallback that would mask the completing-stone contract
+  (LAW-03), confirmed independently by REVIEW-W4 in the Rust); TOOLS-2-09 (e87e3686, board.js the
+  one renderer, parity-harnessed); TOOLS-2-15 (6adbeebf); TOOLS-1-01 (622893b6); gate 14's two new
+  gated measures (5fc33aa1, defect 23: ruling_cite_lines 1210 = comments+docstrings+rust-docs+
+  text-format cites with bare R10-and-up, textfile_comment_excess_lines 466, both self-tested and
+  producer-tested, the old ungated counter retired, CLAUDE.md names them); gate 16 tree-wide zero
+  (51eddda5, 203 sites fixed with explicit utf-8, os.open skipped by mechanism).
+  REVIEW-W4 filed (docs/audits/REVIEW_W4_2026-09-24.md, e6215240): 0 must-fix, 0 should-fix, 5 notes
+  (all recorded: the TOOLS-2-08 amendment above; one reclaimable cite line in the gate's own
+  docstring — W7/W8; CARD-STYLE-BACKLOG's stale measure figure — W6; a brief slip; PROGRESS
+  staleness — this entry). The ci_gates surface was exactly the five authorized files. Collected
+  5035 = floor; all seven comment measures at floor; run10 MATCH. The known-red passed REVIEW-W4's own full default tier and one of
+  the dispatcher's — flaky as recorded; the operator's row stands. W5's addendum is committed
+  (docs/slim/handoff/W5_ADDENDUM.md, b0e959c3). Exit sweep `make gates` at e6215240 in .wt/gates:
+  ALL GREEN except 3a's single failure = the KNOWN-RED flake (it passed REVIEW-W4's own full tier
+  half an hour earlier at the same commit; 2a 1145 s; 3b 34 passed/4 skipped in 3397 s; 3c
+  collected 5035 = floor; 7/8/9/11/12/13/14/15/16/17 green; pyright 248 files 0 errors); the
+  post-review docs commits (b0e959c3 + this one) re-checked with gates 10/13/14/15/17 green.
+  NEXT: W5 per its addendum (the 2026-09-24 dispatcher-session scout inventory is folded into it);
+  then W6, W7, W8 per HANDOFF.md.
 
 ## W0 — entry
 
@@ -151,4 +172,22 @@ Integrated (commit subjects carry the row IDs):
 
 ## Ledger (row → done / refuted-at-contact / halted)
 
-(filled per wave)
+### W4 (tools + the gate-learning orders)
+
+- DONE: TOOLS-2-07 (71903a8d), TOOLS-2-08 AMENDED-with-ground (a9528a77 — constants deduped, scan
+  kept; see REVIEW-W4 finding 1), TOOLS-2-09 (e87e3686), TOOLS-2-10 (44678400), TOOLS-2-15
+  (6adbeebf), TOOLS-1-01 (622893b6), the sealbot vendor side incl. eval_instrument v3 (60755d15),
+  defect 23 / R368(g)'s two gate-14 measures (5fc33aa1), gate 16 tree-wide zero (51eddda5),
+  TOOLS-1-12 riding the named comment_lint edit (the _excess cap parameter).
+- DONE in an earlier wave, recorded: TOOLS-2-12 (W3 84a4eef0), L-STYLE-03 (W4's gate-16 widening).
+- KEEP by ruling: TOOLS-1-14 and TOOLS-1-15 (R368(k) — the workflow is the operator's switch);
+  TOOLS-1-13 (jscpd 0 clones, divergent semantics); TOOLS-2-01 (the R247 certify stage of a live
+  pipeline), TOOLS-2-02 `proofs` (falsified.md F-53's named instrument; netread/spread stay),
+  TOOLS-2-04 (fixture provenance).
+- Still C, grounds: TOOLS-1-02..06, 08, 09, 10, 11, 16 (R368(b): "The same holds for …
+  tools/ci_gates/**" — no ruling names those edits; config_templates is the brief's do-not-edit);
+  TOOLS-1-NEW-2 RESOLVED by R368(b) itself (record-only); TOOLS-2-03 (pre-R362 record rendering,
+  operator's call); TOOLS-2-13/-14/-16/-17 (PZ homes: the checkpoints loader + build_net,
+  pipeline/aggregate, the PZ-4 minter, a contract-doc cite — the swa site died with W3).
+- Residue for later waves: REVIEW-W4 N2 (one reclaimable ruling_cite_lines floor line, W7/W8),
+  N3 (CARD-STYLE-BACKLOG's stale measure figure, W6).

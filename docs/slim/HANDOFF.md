@@ -44,51 +44,59 @@ You are continuing a long, gated refactor. READ IN THIS ORDER before touching an
    A red you cannot attribute to the wave: record it in PROGRESS, do not fix it.
 6. Update `docs/slim/PROGRESS.md` (wave, rows done/refuted/still-C with grounds, exit facts) and commit it.
 
-## What is left
-- **W3 close.** Every W3 implementation leg is INTEGRATED (incl. the sha256 leg). Left: REVIEW-W3 (a fresh read-only
-  agent over `8b75f984..HEAD`, src rows; see PROGRESS W3 for what was done/kept), its fixes, `make gates` at the tip.
-- **W4 TOOLS** (LEDGER legs L15–L19 + every TOOLS lane-C row re-laned under R368(b)):
-  - the sealbot VENDOR side (R368(e)): `tools/vendor_build_sealbot.sh`, `vendor/patches/sealbot.patch`, the sealbot
-    row in `vendor/pins.toml`, the Makefile `vendor.sealbot` target (tests/test_meta_ci.py pins the target set —
-    update it), `tests/tools/test_vendor_build_sealbot.py`, `tests/tools/test_vendor_pins_sealbot.py`, the
-    `make vendor.sealbot` line in CLAUDE.md, the sealbot-build prose in docs/contracts/eval_instrument.md;
-  - gate 14 learns to MEASURE the two classes R368(g) names — bare `R\d{2,3}` ruling cites (incl. in docstrings) and
-    narrative comment runs — defect 23 (`tools/ci_gates/comment_lint.py::_RULING` misses bare cites and never reads
-    docstrings); baseline the new measures into `comment_length_floor.txt` at their measured values (down-only);
-  - gate 16 widens to ZERO across the tree (R368(g)): `tools/ci_gates/encoding_io_gate.py` currently enforces tools/
-    and tests/ module scope; fix the remaining sites, then widen the rule;
-  - TOOLS-1-14/-15 KEEP (R368(k)); TOOLS-1 NEW-2 by R368(b).
-- **W5 TESTS + FIXTURES** (L20–L34 + the TESTS lane-C rows re-laned; the PENDING-PROBE test rows were re-probed
-  green — `docs/slim/REPROBE.md`, TESTS-5-06 amended):
-  - R368(e) fixture deletions: `tests/fixtures/graph_parity/wpa_positions.json` + its manifest rows (the re-pin is
-    granted; the manifest row names the sha and the commit the file lived in, 69e15329); the unread
-    `tests/fixtures/value_probes/*` files + their CHANGELOG + manifest rows. `tests/test_fixtures_manifest.py` must
-    stay green; generators of LIVE goldens stay;
-  - the hoists (AQ-CARD-FAKES, AQ-LIFECYCLE: a card/citation protects a file's existence and assertion, not its
-    helpers); AQ-BF16 (merge the `deterministic_algorithms` / `_graph_step` twins WITH a planted fp16 swap reding
-    before and after); AQ-P2 (print set-equality of the two CONSUMER_REGISTRY dicts, then retire
-    tests/config/test_regime_parity_p2.py's copy — its row in docs/contracts/run_config_schema.md moves in the same
-    commit); AQ-POOL-HPARAMS (delete `tests/selfplay/test_pool_hparams_arms.py`'s killed-knob duplicate and its
-    recording proxy; the survivor is test_pool_hparams.py's killed-and-relocated test — R38 is already annotated);
-    L-SEAM-05/-06; the ~13 `train_step_from_tensors` test stubs; the defect-28 residue (the flat `glob("*.yaml")`
-    at 7 sites listed in PROGRESS W1); REVIEW-W1 notes 9/10/11; the `/tmp/mantis-*` dirs tests leak (mkdtemp without
-    cleanup: mantis-abort-exit-*, mantis-root-lifecycle-*, mantis-atomic-*);
-  - LAST in W5: the dense drain oracle re-base (R368(d)): capture graph drain goldens (after W1), point the
-    drain-parity suite at them, prove a PLANTED drain defect reds them, then delete `pool_push.push_dense`, the
-    dense arm in `pool_drain.run_stats_loop` (CORE-2-23), `pool._is_graph` and the dense PoolDims fields.
-- **W6 DOCS + CONFIGS** (L35–L38): STATE.md rewritten to current facts (R368(f): each dropped paragraph class names
-  where it lives — a ruling, a measurement record or a commit); CARDS.md closed rows removed; delete
-  `docs/governance/archive/RULINGS_ACTIVE.md` (annotations already landed); delete configs/run6.yaml, run7.yaml,
-  run8.yaml (tests binding them re-point to the census `mantis.config.census.production_configs`); stale text
-  01_DEFECTS 40–51; CLAUDE.md's comment bullet becomes R368(g)'s one rule; repo_design §3 (GnnArchV2 has no base
-  class); remove the "28 bench floors" counts (AQ-FLOORS28: derive at point of use). Gate 10's DISSOLVED_PATHS takes
-  deleted paths a scanned doc still cites.
-- **W7 STYLE PASS**: R368(g)'s two classes only (ruling/card/finding cites and narrative runs), ONE package per
-  commit, the floor lowered in the same commit; carve-out markers stay.
-- **W8 CLOSE**: the AFTER figure (00_MAP §1's command, per top dir and per slice); one exit paragraph in STATE.md;
-  `git rm -r docs/slim` then `test ! -e docs/slim`; the FULL gate set incl. the slow tier (`make gates.exit`,
-  ≈ 2 h); then STOP at READY-TO-MERGE: do NOT fast-forward or push dev — the operator (or the original session)
-  does ENACTS 4 after reading the exit report.
+## What is left (from the 2026-09-24 close-out)
+
+W0–W4 are EXITED (PROGRESS carries each wave's exit facts and per-row ledger; W4's is the current
+shape of the tree). The remaining waves:
+- **W5 TESTS + FIXTURES** — per `docs/slim/handoff/W5_ADDENDUM.md` (committed b0e959c3; the wave's
+  verified inventory is folded into it). Leg order: R368(e) fixture deletions first (the re-pin
+  mechanics are written out), dead-test deletes (L27/L28) before hoists, the AQ-* hoists, residue,
+  and the DRAIN RE-BASE LAST. REVIEW-W5 over the whole range, exit gates, PROGRESS.
+- **W6 DOCS + CONFIGS** (L35–L38): STATE.md rewritten to current facts (R368(f): each dropped
+  paragraph class names where it lives); CARDS.md closed rows removed; delete
+  `docs/governance/archive/RULINGS_ACTIVE.md`; delete configs/run6.yaml, run7.yaml, run8.yaml
+  (tests binding them re-point to the census `mantis.config.census.production_configs`);
+  stale text 01_DEFECTS 40–51; CLAUDE.md's comment bullet becomes R368(g)'s one rule;
+  repo_design §3 (GnnArchV2 has no base class); remove the "28 bench floors" counts
+  (AQ-FLOORS28: derive at point of use); CARD-STYLE-BACKLOG's measure list refreshed (REVIEW-W4
+  note 3). Gate 10's DISSOLVED_PATHS takes deleted paths a scanned doc still cites.
+- **W7 STYLE PASS**: R368(g)'s two classes only (ruling/card/finding cites and narrative runs),
+  ONE package per commit, the floor lowered in the same commit — the two measures are GATED since
+  W4 (`ruling_cite_lines`, `textfile_comment_excess_lines`; integrate.sh folds them automatically).
+  Carve-out markers stay. REVIEW-W7 note 2's one reclaimable gate-docstring line lands here.
+- **W8 CLOSE**: the AFTER figure (00_MAP §1's command, per top dir and per slice); one exit
+  paragraph in STATE.md; `git rm -r docs/slim` then `test ! -e docs/slim`; the FULL gate set incl.
+  the slow tier (`make gates.exit`, ≈ 2 h); then STOP at READY-TO-MERGE: do NOT fast-forward or
+  push dev — the operator (or the original session) does ENACTS 4 after reading the exit report.
+
+### Session notes for the next dispatcher (learned 2026-09-24, W3/W4)
+- **The KNOWN-RED** (`tests/monitor/test_supervisor_signal_posture.py::
+  test_the_stop_handlers_are_installed_by_main_and_never_at_import`): reds in FULL default-tier
+  runs roughly half the time on this host (it failed W3's and W4's sweeps, passed REVIEW-W4's run
+  and two others, all at the same commits); standalone it always passes. Full account + mechanism
+  in PROGRESS W3's exit: the pytest process's SIGINT disposition is transiently SIG_IGN (C-level,
+  not the Python signal module) when the test spawns its probe child, and CPython preserves an
+  inherited SIG_IGN across exec. NOT the wave's (red at the W3 base). Recorded, not fixed — every
+  exit sweep's 3a must be read as "green except possibly this one row", and W8's gates.exit claim
+  needs the operator's ruling on it.
+- Subagents: `reviewer` (read-only reviews — dispatch each wave's REVIEW there, never review your
+  own wave), `worker` (implementation legs in their own worktrees), `scout` (read-only
+  inventories). Worktrees under `.wt/<name>` with `git worktree add -b <branch> .wt/<name> HEAD`
+  + their own `uv sync`; NEVER /tmp (RAM quota). Gate sweeps in a worktree: `uv sync` once, then
+  `make gates` (it self-gates with UV_NO_SYNC=1).
+- Floors: `integrate.sh <sha>...` cherry-picks worker branches onto the main branch AND folds
+  test_count_floor + comment floors into each commit. Commits made DIRECTLY on the main branch
+  (review fixes, dispatcher legs) must fold manually in the same commit (measure, write floor,
+  `--amend`). All seven comment measures are gated now; a docstring edit to a scoped file can
+  grow `docstring_excess_lines` — compact before committing.
+- Gate 14's cite measure counts BARE R-tokens from R10 up (one-digit stays out so gate 15's R8
+  headers never fight it) in comments, docstrings, Rust docs AND tools/ text-format comments; do
+  not add new cites in code comments (use words), and remember CLAUDE.md is unmeasured.
+- `.wt/gates` is the standing sweep worktree (detached); `git -C .wt/gates checkout --detach <tip>`
+  (name the SHA — its HEAD is detached, `HEAD` there resolves to itself) + `uv sync` + `make gates`.
+- The venvs are Python 3.13.14 (uv's only local interpreter); CI's floor is 3.11 — fine.
+- Never push, never touch dev, never edit configs/*.yaml values; a HALT is a success: record it in
+  PROGRESS and stop that row.
 
 ## Hard HALTs (a halt is a success: record it in PROGRESS and stop that row)
 torch or the engine absent; a planted break that stays green; an edit to a protected symbol or its pinning test beyond
