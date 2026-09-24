@@ -81,6 +81,31 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R368 (SLIM-FIX; 2026-09-23)
+
+- **CARD-RUST-HOTLOOP-EXPECTS — CARDED: the `unwrap()`/`expect()` sites on hot loops, classified by R368(g)'s
+  correctness pass and left as they are, because a named-error rewrite there is a hot-path change that needs
+  LAW-09's one-change-one-bench.** `mantis-core` `Board::check_win` (a cell lookup `apply_move` has just set);
+  `mantis-selfplay` `queues/graph.rs` (13 lock/condvar-poison expects on the per-batch inference path, plus the
+  infallible `position()` in `submit_graphs_and_wait`); `runner/search_drive.rs` `infer_and_expand_graph`'s
+  `win_length`/`graph_radius` expects (the fix is hoisting both into the worker's inference context at start)
+  and `select_move`'s guarded fallback `choose().unwrap()`. `mantis-search` has none left.
+- **CARD-POISON-STANCE — OWED: one stance on a poisoned `Mutex` in the self-play runner.** Nine production
+  `lock().expect(..)` sites (`runner/finalize.rs` ×2, `runner/mod.rs` latch / fatal read / `stop` / the two drain
+  faces, `runner/spawn.rs`, `search_drive.rs`'s latch store) panic on a poisoned lock. `stop()` runs from `Drop`
+  and cannot return a `Result`, and a latch must not itself fail. The measured recommendation (the W2 selfplay
+  leg): latch, stop, finalize and spawn take `PoisonError::into_inner` (the panic that poisoned the lock is
+  already counted by `worker_panics` and halts the run); the drain faces return a named error the bridge raises.
+- **CARD-SEARCH-HOT-DUP — CARDED (R368(h)): the MCTS hot-path duplicates the census found (S-A-RUST-1-13, -14:
+  shared selection/expansion helpers; -15: the `action_idx` decode re-typed inline).** Each lands only
+  monomorphic (a shared fn, no kind flag), with LAW-09's bench and `search_kind_conformance.rs` as witness.
+- **CARD-SCHEMA-KEY-RETIREMENT — CARDED (R368(h)): retiring a schema key and its minted rows (first:
+  `train.value_target`, S-A-CORE-2-14).** A retirement needs a loader witness over every mirrored parent
+  stamp before the key leaves the schema; not before run10 STARTs (R368(i)).
+- **CARD-SEAM-2 — HELD (R368(j)): the seam for a kind that brings its own head, objective and config rows.**
+  L-SEAM-01..04 fold into it; the design packet follows the SLIM-FIX phase; the implementation merges only
+  after run10 STARTs.
+
 ## Opened by R367 (DESIGN STANDARD + REVIEW GATE; SIZE CONDITIONAL WITHDRAWN; PRICE LAW; 2026-09-21)
 
 - **CARD-NET-EXPAND — run11's build: a FUNCTION-PRESERVING width/depth expansion of the trunk behind the
