@@ -34,28 +34,7 @@ def _git_env() -> dict[str, str]:
 
 def _run_gate(tree: Path, added: dict[str, bytes]) -> subprocess.CompletedProcess:
     """Build base-commit + one commit ADDing `added`, then run the gate over that range."""
-    env = _git_env()
-    tree.mkdir(parents=True, exist_ok=True)
-
-    def git(*args: str) -> None:
-        subprocess.run(["git", *args], cwd=tree, env=env, check=True, capture_output=True)
-
-    git("init", "-q", "-b", "main")
-    (tree / "base.txt").write_text("base\n", encoding="utf-8")
-    git("add", "-A")
-    git("commit", "-qm", "base")
-
-    for rel, blob in added.items():
-        target = tree / rel
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(blob)
-    git("add", "-A")
-    git("commit", "-qm", "under test")
-
-    return subprocess.run(
-        [sys.executable, str(SCRIPT), "--base", "HEAD~1"],
-        cwd=tree, env=env, capture_output=True, text=True, check=False,
-    )
+    return _gate(tree, _repo_with(tree, [{"base.txt": b"base\n"}, added]), "--base", "HEAD~1")
 
 
 def test_fixture_at_the_ceiling_passes(tmp_path):
@@ -103,25 +82,15 @@ def test_artifact_dirs_rejected_at_any_size(tmp_path):
 def _run_gate_rename(tree: Path, old_rel: str, new_rel: str, blob: bytes) -> subprocess.CompletedProcess:
     """Base commit CONTAINS old_rel; the commit under test `git mv`s it to new_rel — an
     R-status entry, the exact shape the old `status == "A"` guard let through."""
-    env = _git_env()
-    tree.mkdir(parents=True, exist_ok=True)
+    env = _repo_with(tree, [{old_rel: blob}])
 
     def git(*args: str) -> None:
         subprocess.run(["git", *args], cwd=tree, env=env, check=True, capture_output=True)
 
-    git("init", "-q", "-b", "main")
-    target = tree / old_rel
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(blob)
-    git("add", "-A")
-    git("commit", "-qm", "base")
     (tree / new_rel).parent.mkdir(parents=True, exist_ok=True)
     git("mv", old_rel, new_rel)
     git("commit", "-qm", "rename under test")
-    return subprocess.run(
-        [sys.executable, str(SCRIPT), "--base", "HEAD~1"],
-        cwd=tree, env=env, capture_output=True, text=True, check=False,
-    )
+    return _gate(tree, env, "--base", "HEAD~1")
 
 
 def test_a_rename_carrying_a_jsonl_out_of_fixtures_is_rejected(tmp_path):
