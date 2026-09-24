@@ -1,4 +1,5 @@
-// The hex board renderer, forked from tools/viewer/html.py: a scene in, SVG out; it knows nothing about engines.
+// The hex board renderer: a scene in, SVG out; it knows nothing about engines. analyzer/html.py
+// and viewer/html.py both read this file at render time and inline it — there is no other copy.
 window.HexBoard=(function(){
 'use strict';
 const SQ3=Math.sqrt(3),X=(q,r)=>SQ3*(q+r/2),Y=(q,r)=>1.5*r;
@@ -9,7 +10,7 @@ function pixelToHex(x,y){const qf=SQ3/3*x-y/3,rf=2/3*y,sf=-qf-rf;let q=Math.roun
 function hexPts(cx,cy){const p=[];for(let i=0;i<6;i++){const a=Math.PI/180*(60*i-30);p.push((cx+Math.cos(a)).toFixed(3)+','+(cy+Math.sin(a)).toFixed(3));}return p.join(' ');}
 const poly=(cls,c,style)=>`<polygon class="${cls}"${style?` style="${style}"`:''} points="${hexPts(X(c[0],c[1]),Y(c[0],c[1]))}"/>`;
 const text=(cls,c,t,dy)=>`<text class="${cls}" x="${X(c[0],c[1]).toFixed(3)}" y="${(Y(c[0],c[1])+(dy||0)).toFixed(3)}">${t}</text>`;
-// scene: {moves, ply, window:[[q,r]], winLine:[[q,r]]|null, overlay:[{c,fill,alpha,label}], tactics:{cells,fours}|null, marks:[{c,label,active}]}
+// scene: {moves, ply, window:[[q,r]], winLine:[[q,r]]|null, overlay:[{c,fill,alpha,label}], tactics:{cells,fours}|null, marks:[{c,label,active}], fast:[bool per ply]|null}
 function draw(svg,sc){
   const st=sc.moves.slice(0,sc.ply),cells=[...sc.moves,...sc.window];if(!cells.length)cells.push([0,0]);
   const xs=cells.map(c=>X(c[0],c[1])),ys=cells.map(c=>Y(c[0],c[1])),pad=2;
@@ -22,7 +23,7 @@ function draw(svg,sc){
   for(const o of sc.overlay){if(played.has(key(o.c)))continue;out.push(poly('heat',o.c,`fill:var(${o.fill});fill-opacity:${o.alpha}`));out.push(text('heatnum',o.c,o.label));}
   if(sc.tactics){for(const c of sc.tactics.cells)out.push(poly('tacwin',c));for(const four of sc.tactics.fours)for(const c of four)out.push(poly('tacfour',c));}
   if(sc.winLine)for(const c of sc.winLine)out.push(poly('wincell',c));
-  st.forEach((c,i)=>{const o=owner(i)?'p2':'p1';out.push(`<circle class="stone ${o}" cx="${X(c[0],c[1]).toFixed(3)}" cy="${Y(c[0],c[1]).toFixed(3)}" r="0.78"/>`);out.push(text('num '+o,c,i));});
+  st.forEach((c,i)=>{const o=owner(i)?'p2':'p1',fast=(sc.fast&&sc.fast[i])?' fast':'';out.push(`<circle class="stone ${o}${fast}" cx="${X(c[0],c[1]).toFixed(3)}" cy="${Y(c[0],c[1]).toFixed(3)}" r="0.78"/>`);out.push(text('num '+o,c,i));});
   for(let i=Math.max(0,sc.ply-2);i<sc.ply;i++){const c=sc.moves[i];out.push(`<circle class="last" cx="${X(c[0],c[1]).toFixed(3)}" cy="${Y(c[0],c[1]).toFixed(3)}" r="0.9"/>`);}
   for(const m of sc.marks){if(m.active)out.push(`<circle class="argmax" cx="${X(m.c[0],m.c[1]).toFixed(3)}" cy="${Y(m.c[0],m.c[1]).toFixed(3)}" r="0.62"/>`);else out.push(text('mark',m.c,m.label,0.55));}
   svg.innerHTML=out.join('');

@@ -3,9 +3,13 @@ from __future__ import annotations
 
 import html as _html
 import json
+from pathlib import Path
 from typing import Any
 
 from .reader import RunData
+
+#: The ONE board renderer, read and inlined at render time exactly as analyzer/html.py does.
+_BOARD_JS = Path(__file__).resolve().parents[1] / "analyzer" / "web" / "board.js"
 
 #: The self-play channel writes no per-position search stats (GAME-RECORD-1); the page states it.
 SELFPLAY_STATS_GAP = ("no per-position search stats on this channel — GAME-RECORD-1 records "
@@ -42,7 +46,7 @@ def render(runs: list[RunData], title: str) -> str:
             + "<script>window.MANTIS_INDEX=" + json.dumps(index, separators=(",", ":"))
             + ";window.MANTIS_RUNS=" + json.dumps(meta, separators=(",", ":"))
             + ";window.MANTIS_STATS_GAP=" + json.dumps(SELFPLAY_STATS_GAP) + ";</script>\n"
-            + "<script>" + _SCRIPT + "</script>\n</body></html>\n")
+            + "<script>" + _BOARD_JS.read_text(encoding="utf-8") + "\n" + _SCRIPT + "</script>\n</body></html>\n")
 
 
 _HEAD = """<!doctype html>
@@ -113,8 +117,7 @@ _SCRIPT = r"""
 const IDX=window.MANTIS_INDEX,RUNS=window.MANTIS_RUNS,SH={},PENDING={};
 window.MANTIS_SHARD=function(run,shard,games){SH[run+'/'+shard]=games;const k=run+'/'+shard;(PENDING[k]||[]).forEach(f=>f(games));delete PENDING[k];};
 const $=id=>document.getElementById(id);
-const owner=p=>(((p+1)/2|0)%2);
-const AX=[[1,0],[0,1],[1,-1]];
+const owner=HexBoard.owner;
 let view=[],shown=0,cur=null,curRow=null,ply=0,timer=null,heat=false,atPly=null,atHeat=false;
 function opts(sel,vals){vals.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;sel.appendChild(o);});}
 opts($('f-run'),Object.keys(RUNS));opts($('f-ch'),[...new Set(IDX.map(r=>r.ch))].filter(Boolean).sort());opts($('f-term'),[...new Set(IDX.map(r=>r.term))].filter(Boolean).sort());
@@ -130,23 +133,19 @@ function open(i){curRow=view[i];document.querySelectorAll('#rows tr.sel').forEac
 $('info').textContent='loading '+curRow.id+'…';loadShard(curRow.run,curRow.shard,g=>{cur=g[curRow.id];if(!cur){$('info').textContent='game '+curRow.id+' is not in its shard file';return;}ply=(atPly==null)?cur.m.length:Math.max(0,Math.min(cur.m.length,atPly));heat=!!atHeat&&!!cur.s;atPly=null;atHeat=false;$('b-heat').hidden=!cur.s;draw();});}
 function link(){if(!curRow)return;const u=new URL(location.href);u.searchParams.set('g',curRow.run+'/'+curRow.id);u.searchParams.set('ply',ply);if(heat)u.searchParams.set('heat','1');else u.searchParams.delete('heat');history.replaceState(null,'',u);}
 function stepTo(k){if(!cur)return;ply=Math.max(0,Math.min(cur.m.length,k));draw();}
-function hexPts(cx,cy){let p=[];for(let i=0;i<6;i++){const a=Math.PI/180*(60*i-30);p.push((cx+Math.cos(a)).toFixed(3)+','+(cy+Math.sin(a)).toFixed(3));}return p.join(' ');}
-const X=(q,r)=>Math.sqrt(3)*(q+r/2),Y=(q,r)=>1.5*r;
-function draw(){const m=cur.m,n=m.length,st=m.slice(0,ply);const r=curRow;
+function draw(){const m=cur.m,n=m.length;const r=curRow;
 $('info').innerHTML='<b>'+r.run+'</b> · '+r.ch+(r.rung?' · '+r.rung:'')+(r.phase?' · '+r.phase:'')+' · result <b>'+r.res+'</b> · '+r.term+' · '+n+' plies · step '+(r.step??'—')+(r.kind?' ('+r.kind+')':'')+(r.w!=null?' · worker '+r.w:'')+' · <span style="font-size:11px">'+r.id+'</span>'+(cur.s?'':'<br><span class="gap">'+window.MANTIS_STATS_GAP+'</span>');
 $('ply').textContent='ply '+ply+' / '+n+(ply>0?' · stone '+(ply-1)+': '+armLabel(ply-1):'');
-let cells=m.slice();let hs=null;if(heat&&cur.s){hs=cur.s.find(e=>e.ply===ply)||null;if(hs)hs.visits.forEach(v=>cells.push([v[0],v[1]]));}
-if(!cells.length)cells=[[0,0]];
-let xs=cells.map(c=>X(c[0],c[1])),ys=cells.map(c=>Y(c[0],c[1]));const pad=2;const x0=Math.min(...xs)-pad,x1=Math.max(...xs)+pad,y0=Math.min(...ys)-pad,y1=Math.max(...ys)+pad;const w=x1-x0,h=y1-y0,S=Math.max(w,h);
-const svg=$('board');svg.setAttribute('viewBox',(x0-(S-w)/2)+' '+(y0-(S-h)/2)+' '+S+' '+S);
-let out=[];const qmin=Math.floor(Math.min(...cells.map(c=>c[0])))-2,qmax=Math.ceil(Math.max(...cells.map(c=>c[0])))+2,rmin=Math.floor(Math.min(...cells.map(c=>c[1])))-2,rmax=Math.ceil(Math.max(...cells.map(c=>c[1])))+2;
-for(let q=qmin;q<=qmax;q++)for(let rr=rmin;rr<=rmax;rr++){const x=X(q,rr),y=Y(q,rr);if(x<x0-1||x>x1+1||y<y0-1||y>y1+1)continue;out.push('<polygon class="cell" points="'+hexPts(x,y)+'"/>');}
-if(hs){const mx=Math.max(...hs.visits.map(v=>v[2]),1);hs.visits.forEach(v=>{const x=X(v[0],v[1]),y=Y(v[0],v[1]),a=(0.12+0.78*v[2]/mx).toFixed(2);out.push('<polygon class="heat" style="fill:var(--heat);fill-opacity:'+a+'" points="'+hexPts(x,y)+'"/><text class="heatnum" x="'+x.toFixed(3)+'" y="'+y.toFixed(3)+'">'+v[2]+'</text>');});
-$('heatinfo').textContent='root before ply '+ply+' by '+hs.by+': value '+(+hs.root_value).toFixed(3)+', '+hs.visits.length+' visited children';}else{$('heatinfo').textContent=heat&&cur.s?'no root recorded before ply '+ply:'';}
-if(ply===n&&cur.win){cur.win.forEach(c=>{out.push('<polygon class="wincell" points="'+hexPts(X(c[0],c[1]),Y(c[0],c[1]))+'"/>');});}
-st.forEach((c,i)=>{const x=X(c[0],c[1]),y=Y(c[0],c[1]),o=owner(i)?'p2':'p1',fast=(cur.a&&cur.a[i]==='q')?' fast':'';out.push('<circle class="stone '+o+fast+'" cx="'+x.toFixed(3)+'" cy="'+y.toFixed(3)+'" r="0.78"/><text class="num '+o+'" x="'+x.toFixed(3)+'" y="'+y.toFixed(3)+'">'+i+'</text>');});
-for(let i=Math.max(0,ply-2);i<ply;i++){const c=m[i];out.push('<circle class="last" cx="'+X(c[0],c[1]).toFixed(3)+'" cy="'+Y(c[0],c[1]).toFixed(3)+'" r="0.9"/>');}
-svg.innerHTML=out.join('');link();}
+let hs=null;if(heat&&cur.s){hs=cur.s.find(e=>e.ply===ply)||null;}
+const seen=hs?hs.visits:[],mx=Math.max(...seen.map(v=>v[2]),1);
+// Heat visits ride in `window` so they shape the frame; the win/hot classes they earn are inert here — the viewer's CSS reads neither.
+HexBoard.draw($('board'),{moves:m,ply:ply,window:seen.map(v=>[v[0],v[1]]),
+  winLine:(ply===n&&cur.win)?cur.win:null,
+  overlay:seen.map(v=>({c:[v[0],v[1]],fill:'--heat',alpha:(0.12+0.78*v[2]/mx).toFixed(2),label:v[2]})),
+  tactics:null, marks:[],
+  fast:cur.a?Array.from(cur.a,ch=>ch==='q'):null});
+if(hs){$('heatinfo').textContent='root before ply '+ply+' by '+hs.by+': value '+(+hs.root_value).toFixed(3)+', '+hs.visits.length+' visited children';}else{$('heatinfo').textContent=heat&&cur.s?'no root recorded before ply '+ply:'';}
+link();}
 function armLabel(i){if(cur.a){const c=cur.a[i];if(c==='o')return 'opening (random ply, no search)';if(c==='f')return 'full @ '+(cur.sims.f??'?')+' sims';if(c==='q')return 'fast @ '+(cur.sims.q??'?')+' sims';}
 if(curRow.cand!=null&&curRow.sims!=null){if((owner(i)===0)===(curRow.cand===1))return 'candidate @ '+curRow.sims+' sims (deploy head)';return 'opponent'+(curRow.rung?' '+curRow.rung:(curRow.ch==='promotion'?' (anchor @ '+curRow.sims+' sims)':''));}
 return 'arm not recorded (a record from before R353(d))';}
