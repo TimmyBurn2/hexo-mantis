@@ -172,7 +172,7 @@ and with the coordinator field deleted there is no collision left to disambiguat
 | resolved-config emit: 7-knob payload, death-of-merge census, and no `train`/`selfplay`/`monitor` leaf threaded into it | tests/config/test_resolved_config_emit.py |
 | one-key diff; mint output validates; header stamped; unknown delta key exits 2; diff exit 0 on an exactly-claimed diff, exit 1 otherwise | tests/config/test_mint_and_diff.py |
 | lying-header `--from-header` self-check + mutation self-test | tests/config/test_config_diff_from_header.py |
-| regime parity per LAW knob (sims, amp, encoding) and the radius knob's ABSENCE from every production config | tests/config/test_regime_parity.py |
+| regime parity per LAW knob (sims, amp, encoding) | tests/config/test_regime_parity.py |
 | every-key-has-consumer bijection (the count derived from the walker, never stated), the walker's descent into an OPTIONAL block, and a mutation self-test | tests/config/test_every_key_has_consumer.py |
 | the radius field is removed everywhere: no schedule on the schema, no resolver module, no symbol in either `__all__` | tests/config/test_radius_removed.py |
 | `train` section bounds and required-field census | tests/config/test_train_schema.py |
