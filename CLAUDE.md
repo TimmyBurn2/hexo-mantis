@@ -216,13 +216,17 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
     leaf-count must equal the live one. Every check is derived from `RunConfig` itself, never a
     transcribed key list; the "deliberately absent" section is checked in REVERSE.
 14. Curated lint/type gate (tools/ci_gates/lint_gate.sh; `make lint`) — the pyproject ruff
-    select + pyright (basic, src+tools) held at ZERO, plus the R346(f) COMMENT RATCHET
-    (tools/ci_gates/comment_lint.py against tools/ci_gates/comment_length_floor.txt). A rule is
+    select + pyright (basic, src+tools) held at ZERO, plus the R368(g) COMMENT RATCHET
+    (tools/ci_gates/comment_lint.py against tools/ci_gates/comment_length_floor.txt): the five
+    run/banner/docstring measures plus `ruling_cite_lines` (ruling/law/finding/card tokens over
+    comments, docstrings, Rust docs and text-format comments; bare cites are R10-and-up so gate
+    15's required `R8` header token never fights it) and `textfile_comment_excess_lines` (the
+    `#` runs in tools/ text formats, the Makefile and the workflow files). A rule is
     adopted only with a named in-repo defect class AND a clean baseline (R98); exclusions are
     enumerated with grounds in pyproject.toml; the trigger self-tests every run. The ratchet is
-    a DIRECTION, not a cap: over-long comment runs, banner lines and multi-line docstrings may
+    a DIRECTION, not a cap: its measures may
     fall and may never rise, and the floor itself may only be lowered — because a hard 2-line
-    cap would either red on the invariants R346(f) explicitly permits or need an exemption list
+    cap would either red on the invariants R368(g) explicitly permits or need an exemption list
     nobody maintains. The comment lint runs FIRST so a pyright refusal (rc 2, a host condition)
     cannot take the comment measures down with it.
 15. R8 justification headers (tools/ci_gates/r8_header_gate.py) — every `.py`/`.rs` file over

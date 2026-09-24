@@ -9,6 +9,7 @@ here rather than print a green over an empty scan.
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 
@@ -162,10 +163,11 @@ def test_a_complete_floor_parses_and_comments_in_it_are_ignored():
     got = GATE.parse_floor(
         "# grounds\ncomment_excess_lines 3\nbanner_comment_lines 1  # trailing\n"
         "docstring_excess_lines 2\nprivate_docstring_excess_lines 1\nrust_doc_excess_lines 4\n"
-        "ruling_cite_comment_lines 9\n")
+        "ruling_cite_lines 9\ntextfile_comment_excess_lines 6\n")
     assert got == {"comment_excess_lines": 3, "banner_comment_lines": 1,
                    "docstring_excess_lines": 2, "private_docstring_excess_lines": 1,
-                   "rust_doc_excess_lines": 4, "ruling_cite_comment_lines": 9}
+                   "rust_doc_excess_lines": 4, "ruling_cite_lines": 9,
+                   "textfile_comment_excess_lines": 6}
 
 
 def test_a_reference_floor_that_predates_a_gated_measure_parses_leniently_and_ratchets_the_rest():
@@ -236,8 +238,10 @@ def test_rust_doc_excess_counts_lines_beyond_the_first_of_each_doc_run(src: str,
 
 def test_the_two_new_measures_are_gated_and_in_the_committed_floor():
     assert "private_docstring_excess_lines" in GATE.GATED and "rust_doc_excess_lines" in GATE.GATED
+    assert "ruling_cite_lines" in GATE.GATED and "textfile_comment_excess_lines" in GATE.GATED
     floor = GATE.parse_floor(FLOOR_PATH.read_text(encoding="utf-8"))
     assert floor["private_docstring_excess_lines"] >= 0 and floor["rust_doc_excess_lines"] >= 0
+    assert floor["ruling_cite_lines"] > 0 and floor["textfile_comment_excess_lines"] > 0
 
 
 def test_planting_a_private_docstring_and_a_rust_doc_run_moves_the_new_measures():
@@ -247,3 +251,36 @@ def test_planting_a_private_docstring_and_a_rust_doc_run_moves_the_new_measures(
     rs = "/// a\nfn f() {}\n"
     assert GATE.measure_source("a.rs", rs).rust_doc_excess_lines == 0
     assert GATE.measure_source("a.rs", "/// a\n/// b\n" + rs[6:]).rust_doc_excess_lines == 1
+
+
+def test_a_bare_ruling_cite_in_a_docstring_moves_ruling_cite_lines():
+    """The docstring half of the cite measure: a neutered scanner would not move."""
+    plain = 'def f():\n    """no cites here"""\n'
+    cited = 'def f():\n    """grounded by R123 with no clause letter"""\n'
+    assert GATE.measure_source("a.py", plain).ruling_cite_lines == 0
+    assert GATE.measure_source("a.py", cited).ruling_cite_lines == 1
+    assert GATE.measure_source("a.py", 'x = 1  # R8 stays out\n').ruling_cite_lines == 0
+    assert GATE.measure_source("a.py", 'x = 1  # R45 counts\n').ruling_cite_lines == 1
+
+
+def test_a_hash_run_in_a_scoped_textfile_moves_textfile_comment_excess_lines():
+    """The text-format half: three # lines are excess, and its cites count in the cite measure."""
+    quiet = "# a\n# b\nx = 1\n"
+    loud = "# a\n# b\n# c\n# cites R99\nx = 1\n"
+    assert GATE.measure_source("tools/gate_x.sh", quiet).textfile_comment_excess_lines == 0
+    m = GATE.measure_source("tools/gate_x.sh", loud)
+    assert m.textfile_comment_excess_lines == 2 and m.ruling_cite_lines == 1
+    assert GATE.measure_source("tests/fixtures/x.toml", loud).textfile_comment_excess_lines == 0
+
+
+def test_the_tree_measures_its_two_new_measures_on_real_files(tmp_path):
+    """End to end over a scratch git tree: both classes in tracked files must move the totals."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.py").write_text('def f():\n    """cites R123"""\n', encoding="utf-8")
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "tools" / "x.sh").write_text("# a\n# b\n# c\n", encoding="utf-8")
+    subprocess.run(["git", "add", "src/a.py", "tools/x.sh"], cwd=tmp_path, check=True)
+    total, _seen = GATE.measure_tree(tmp_path)
+    assert total.ruling_cite_lines == 1, "a tracked docstring cite was not counted"
+    assert total.textfile_comment_excess_lines == 1, "a tracked # run was not counted"

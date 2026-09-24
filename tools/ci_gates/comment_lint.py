@@ -6,10 +6,8 @@
 """Comment-length lint: the measures may fall and may never rise.
 
 The comment rule is a ratchet, not a cap: a block longer than two lines is allowed when it states
-a non-obvious invariant, so a hard cap would red on legitimate text or need an exemption list.
-What is enforced is direction — the measures may not exceed the committed floor, which may only fall.
-
-MEASURES, all over tracked ``.py``/``.rs`` under ``src/``, ``tools/``, ``crates/``, ``tests/``:
+a non-obvious invariant. What is enforced is direction — the floor may only fall.
+MEASURES, over tracked files in the four code scopes (``src/``, ``tools/``, ``crates/``, ``tests/``):
 
   * ``comment_excess_lines``   lines beyond two in every run of own-line comments.
   * ``banner_comment_lines``   comment lines carrying a rule of eight or more repeated
@@ -17,9 +15,10 @@ MEASURES, all over tracked ``.py``/``.rs`` under ``src/``, ``tools/``, ``crates/
   * ``docstring_excess_lines`` lines beyond the first in every module/class/function docstring.
   * ``private_docstring_excess_lines`` the same over PRIVATE symbols (`_name`, or nested in a def).
   * ``rust_doc_excess_lines`` lines beyond the first in every ``///``/``//!`` run (Rust's docstrings).
-
-``ruling_cite_comment_lines`` is measured and PRINTED but never gated: the R8 justification headers
-gate 15 requires carry the token ``R8``, so gating that count would set two gates against each other.
+  * ``ruling_cite_lines``     lines carrying a ruling/law/finding/card token over comments,
+    docstrings, Rust docs and text-format comments; bare cites are R10-and-up so gate 15's ``R8`` stays out.
+  * ``textfile_comment_excess_lines`` lines beyond two in own-line ``#`` runs over ``tools/``
+    text formats, ``Makefile`` and ``.github/workflows/*.yml``; ``tests/``'s fixture registers stay out.
 
 Raises:
     SystemExit: rc 1 on a violation or a failed self-test, rc 2 on a usage or input refusal.
@@ -41,25 +40,28 @@ SCOPES = ("src/", "tools/", "crates/", "tests/")
 FLOOR_FILE = "tools/ci_gates/comment_length_floor.txt"
 MAIN_BRANCH = "dev"
 GATED = ("comment_excess_lines", "banner_comment_lines", "docstring_excess_lines",
-         "private_docstring_excess_lines", "rust_doc_excess_lines")
+         "private_docstring_excess_lines", "rust_doc_excess_lines", "ruling_cite_lines",
+         "textfile_comment_excess_lines")
 
 _BANNER = re.compile(r"([─-╿=#*~_+.<>-])\1{7,}")
 _RULING = re.compile(
-    r"\b(?:R\d{1,3}\([a-z]\)|LAW-\d\d|F-\d{2,3}|F-816-\d+|ADJ-[A-Z0-9-]+|RQ-\d+"
+    r"\b(?:R\d{1,3}\([a-z]\)|R\d{2,3}|LAW-\d\d|F-\d{2,3}|F-816-\d+|ADJ-[A-Z0-9-]+|RQ-\d+"
     r"|AUDIT-\d|WP[A-Z0-9]{2,}|CARD-[A-Z0-9-]+)"
 )
+_TEXT_SUFFIXES = (".sh", ".yml", ".yaml", ".toml", ".txt")
 
 
 @dataclass(frozen=True)
 class Measures:
-    """The six counts this lint derives from a tree."""
+    """The counts this lint derives from a tree."""
 
     comment_excess_lines: int = 0
     banner_comment_lines: int = 0
     docstring_excess_lines: int = 0
     private_docstring_excess_lines: int = 0
     rust_doc_excess_lines: int = 0
-    ruling_cite_comment_lines: int = 0
+    ruling_cite_lines: int = 0
+    textfile_comment_excess_lines: int = 0
 
     def __add__(self, other: Measures) -> Measures:
         return Measures(*(getattr(self, f) + getattr(other, f) for f in _FIELDS))
@@ -67,7 +69,8 @@ class Measures:
 
 _FIELDS = (
     "comment_excess_lines", "banner_comment_lines", "docstring_excess_lines",
-    "private_docstring_excess_lines", "rust_doc_excess_lines", "ruling_cite_comment_lines",
+    "private_docstring_excess_lines", "rust_doc_excess_lines", "ruling_cite_lines",
+    "textfile_comment_excess_lines",
 )
 
 
@@ -150,15 +153,46 @@ def _own_line(lines: list[str], row: int, col: int) -> bool:
     return lines[row - 1][:col].strip() == ""
 
 
-def _excess(flags: list[bool]) -> int:
+def _excess(flags: list[bool], cap: int = CAP) -> int:
     total, run = 0, 0
     for f in [*flags, False]:
         if f:
             run += 1
         else:
-            total += max(0, run - CAP)
+            total += max(0, run - cap)
             run = 0
     return total
+
+
+def _docstring_texts(src: str) -> list[str]:
+    # every head-docstring value, module and defs alike
+    try:
+        tree = ast.parse(src)
+    except (SyntaxError, ValueError):
+        return []
+    out: list[str] = []
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        if isinstance(body, list) and body and isinstance(body[0], ast.Expr) \
+                and isinstance(body[0].value, ast.Constant) \
+                and isinstance(body[0].value.value, str):
+            out.append(body[0].value.value)
+    return out
+
+
+def _own_line_hash_runs(lines: list[str]) -> list[list[str]]:
+    # maximal runs of consecutive own-line `#` comments
+    runs: list[list[str]] = []
+    run: list[str] = []
+    for ln in lines:
+        if ln.lstrip().startswith("#"):
+            run.append(ln)
+        elif run:
+            runs.append(run)
+            run = []
+    if run:
+        runs.append(run)
+    return runs
 
 
 def measure_source(rel: str, src: str) -> Measures:
@@ -166,6 +200,11 @@ def measure_source(rel: str, src: str) -> Measures:
     lines = src.split("\n")
     flags = [False] * (len(lines) + 1)
     texts: list[str] = []
+    if textfile_in_scope(rel):
+        runs = _own_line_hash_runs(lines)
+        excess = sum(max(0, len(run) - CAP) for run in runs)
+        cites = sum(1 for run in runs for ln in run if _RULING.search(ln))
+        return Measures(0, 0, 0, 0, 0, cites, excess)
     if rel.endswith(".py"):
         try:
             for tok in tokenize.generate_tokens(io.StringIO(src).readline):
@@ -187,7 +226,9 @@ def measure_source(rel: str, src: str) -> Measures:
     cites = sum(1 for t in texts for ln in t.split("\n") if _RULING.search(ln))
     docs, private_docs = _docstring_excess(src) if rel.endswith(".py") else (0, 0)
     rust_docs = 0 if rel.endswith(".py") else _rust_doc_excess(src, lines)
-    return Measures(_excess(flags), banner, docs, private_docs, rust_docs, cites)
+    if rel.endswith(".py"):
+        cites += sum(1 for d in _docstring_texts(src) for ln in d.split("\n") if _RULING.search(ln))
+    return Measures(_excess(flags), banner, docs, private_docs, rust_docs, cites, 0)
 
 
 def _head_docstring_excess(node: ast.AST) -> int:
@@ -235,14 +276,7 @@ def _rust_doc_excess(src: str, lines: list[str]) -> int:
         if text.startswith(("///", "//!")) and not text.startswith("////") \
                 and _own_line(lines, start, col):
             flags[start - 1] = True
-    total = run = 0
-    for f in [*flags, False]:
-        if f:
-            run += 1
-        else:
-            total += max(0, run - 1)
-            run = 0
-    return total
+    return _excess(flags, 1)
 
 
 def in_scope(rel: str) -> bool:
@@ -250,24 +284,34 @@ def in_scope(rel: str) -> bool:
     return rel.endswith((".py", ".rs")) and rel.startswith(SCOPES)
 
 
+def textfile_in_scope(rel: str) -> bool:
+    """True when a path is a text-format file the narrative-run measure covers."""
+    if rel.startswith("tools/"):
+        return rel.endswith(_TEXT_SUFFIXES)
+    return rel == "Makefile" or (rel.startswith(".github/workflows/")
+                                 and rel.endswith((".yml", ".yaml")))
+
+
 def measure_tree(root: Path) -> tuple[Measures, int]:
-    """Measure every tracked, in-scope file. Returns the totals and the file count."""
+    """Measure every tracked, in-scope file. Returns the totals and the code-file count."""
     listed = subprocess.run(
         ["git", "ls-files", "-z"], cwd=root, capture_output=True, check=True)
-    total, seen = Measures(), 0
+    total, seen, text_seen = Measures(), 0, 0
     for rel in listed.stdout.decode("utf-8").split("\0"):
-        if not in_scope(rel):
+        if not in_scope(rel) and not textfile_in_scope(rel):
             continue
         path = root / rel
         if not path.is_file():
             continue
         total = total + measure_source(rel, path.read_text(encoding="utf-8"))
-        seen += 1
+        seen += 1 if in_scope(rel) else 0
+        text_seen += 1 if textfile_in_scope(rel) else 0
     return total, seen
 
 
 def parse_floor(text: str, *, strict: bool = True) -> dict[str, int]:
-    """Parse a floor file; ValueError on a malformed record, or on an incomplete one when `strict`."""
+    """Parse a floor file; ValueError on a malformed record, or an incomplete one when `strict`.
+    Lenient mode (an older ref floor) skips retired keys so the ratchet stays armed."""
     out: dict[str, int] = {}
     for raw in text.split("\n"):
         line = raw.split("#", 1)[0].strip()
@@ -275,7 +319,9 @@ def parse_floor(text: str, *, strict: bool = True) -> dict[str, int]:
             continue
         parts = line.split()
         if len(parts) != 2 or parts[0] not in _FIELDS:
-            raise ValueError(f"not a `<measure> <count>` record: {raw!r}")
+            if strict:
+                raise ValueError(f"not a `<measure> <count>` record: {raw!r}")
+            continue
         out[parts[0]] = int(parts[1])
     missing = [f for f in GATED if f not in out]
     if missing and strict:
@@ -355,6 +401,18 @@ def self_test() -> int:
         bad.append("a two-line block was counted as excess")
     if not in_scope("src/mantis/run.py") or in_scope("docs/x.py") or in_scope("src/a.md"):
         bad.append("scope predicate is wrong")
+    cites = measure_source(
+        "a.py", 'def f():\n    """Cites R123 bare and R8.\n\n    LAW-02 here.\n    """\n# R45 bare, not R8\n')
+    if cites.ruling_cite_lines != 3:
+        bad.append(f"ruling cites (docstring + bare two-digit): got {cites.ruling_cite_lines}, want 3")
+    sh = measure_source("tools/a.sh", "# a\n# b\n# c\n# cites R99\n\nx=1\n# lone\n")
+    if sh.textfile_comment_excess_lines != 2 or sh.ruling_cite_lines != 1:
+        bad.append(
+            f"textfile arm: got excess {sh.textfile_comment_excess_lines}/cites {sh.ruling_cite_lines}, want 2/1")
+    if not textfile_in_scope("tools/ci_gates/run_all.sh") or textfile_in_scope("tests/fixtures/x.toml") \
+            or not textfile_in_scope("Makefile") or not textfile_in_scope(".github/workflows/ci.yml") \
+            or textfile_in_scope("tools/ci_gates/comment_lint.py"):
+        bad.append("textfile scope predicate is wrong")
 
     flat = dict.fromkeys(_FIELDS, 10)
     for label, now, tree, ref, want in (
@@ -455,8 +513,6 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"comment_lint: {seen} file(s) — " + "  ".join(
         f"{n}={measured[n]}/{tree_floor[n]}" for n in GATED))
-    print(f"comment_lint: ruling-cite comment lines {measured['ruling_cite_comment_lines']} "
-          "(measured, not gated)")
     rc, msgs = verdict(measured, tree_floor, ref_floor, ref or "<bootstrap>")
     for line in msgs:
         print(f"comment_lint: {line}", file=sys.stderr if rc else sys.stdout)
