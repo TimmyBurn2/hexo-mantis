@@ -4,14 +4,10 @@ AlphaZero-style self-play bot for Hex Tac Toe — hex grid, 6-in-a-row to win, c
 2-stone turns, unbounded board. Rust engine (cargo workspace) + Python training/eval
 (uv, src-layout), PyO3 bridge.
 
-**STATUS: the port has landed; the first full run has not.** The engine, the training
+**STATUS: the port has landed and has trained production runs.** The engine, the training
 loop, the self-play runner and the eval ladder are all here and tested — `python -m
-mantis.run` starts a real run against a minted config. What remains is the run itself: the
-run6 identity is being minted and no production training run has completed.
-
-<!-- AUDIT-1 F-52: this said "pre-migration skeleton … the game/training code is not here
-     yet" over a tree with a live launcher, a five-crate Rust workspace and a four-figure
-     test count. It had been wrong for many work packages. -->
+mantis.run` starts a real run against a minted config. Multiple production runs have run and
+stopped; `docs/governance/STATE.md` records where the current run stands.
 
 ## Quickstart
 
