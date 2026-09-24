@@ -17,6 +17,7 @@ from mantis.eval import worker
 from mantis.eval.rounds import GateSpec, RoundSpec, RungJob
 from mantis.eval.snapshot import write_model_snapshot
 from mantis.model import GnnArch, build_net
+from mantis.selfplay.hparams import is_graph_representation
 from mantis.selfplay.inference_local import LocalInferenceEngine
 
 # The repo's one opening book and the probe's parameter set verbatim, so every recorded sha is
@@ -121,7 +122,7 @@ def _recorded_bindings(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, bool]
     class _RecordingEngine(LocalInferenceEngine):
         def __init__(self, *args, **kwargs) -> None:
             super().__init__(*args, **kwargs)
-            bound.append((self.encoding_spec.name, self._is_graph))
+            bound.append((self.encoding_spec.name, is_graph_representation(self.encoding_spec)))
 
     monkeypatch.setattr(worker, "LocalInferenceEngine", _RecordingEngine)
     return bound
