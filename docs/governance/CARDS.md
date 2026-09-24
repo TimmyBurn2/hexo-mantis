@@ -102,6 +102,9 @@ Both were found by running the gate set rather than by reading it, and both are 
 - **CARD-SCHEMA-KEY-RETIREMENT — CARDED (R368(h)): retiring a schema key and its minted rows (first:
   `train.value_target`, S-A-CORE-2-14).** A retirement needs a loader witness over every mirrored parent
   stamp before the key leaves the schema; not before run10 STARTs (R368(i)).
+- **CARD-CLUSTER-THRESHOLD-RESIDUE — CARDED: `Board.cluster_threshold` is write-only since the cluster BFS
+  went (R368 W2).** Plumbed from the registry (bridge `board.rs`, selfplay `game.rs`) into `BoardGeometry` and
+  the golden-replay fixture's geometry, read by nothing; removal touches `BoardGeometry` and that fixture's field.
 - **CARD-SEAM-2 — HELD (R368(j)): the seam for a kind that brings its own head, objective and config rows.**
   L-SEAM-01..04 fold into it; the design packet follows the SLIM-FIX phase; the implementation merges only
   after run10 STARTs.

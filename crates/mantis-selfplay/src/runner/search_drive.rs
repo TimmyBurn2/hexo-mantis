@@ -701,7 +701,7 @@ fn select_move(
         return None;
     }
 
-    // Gated on ply RELATIVE to game start. `gumbel_explore_moves` is the whole switch: the
+    // Gated on the absolute ply. `gumbel_explore_moves` is the whole switch: the
     // action selection is the Sequential-Halving winner and the exploration comes from the
     // Gumbel draw, so "no visit sampling" is `gumbel_explore_moves: 0`.
     let use_gumbel_winner = gumbel_state.is_some()

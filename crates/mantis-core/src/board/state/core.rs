@@ -149,8 +149,7 @@ pub struct Board {
     /// Per-board legal-move radius override; `legal_moves_set()` rebuilds by hex-ball
     /// expansion at this radius. Default `moves::DEFAULT_LEGAL_MOVE_RADIUS` (5).
     pub(crate) legal_move_radius: i32,
-    /// Per-board cluster connectivity threshold: two stones share a cluster iff their
-    /// `hex_distance` is <= this. Default 5 (v6 wire format); wide-window corpora use 8.
+    /// Registry-carried cluster threshold; no reader since the cluster BFS was deleted (carded).
     pub(crate) cluster_threshold: i32,
     /// Per-board window side length (the graph trunk size). Default `BOARD_SIZE`.
     pub(crate) cluster_window_size: usize,

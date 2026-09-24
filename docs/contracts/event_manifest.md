@@ -2,7 +2,7 @@
 
 - version: v4
 - owner: `mantis.monitor` (`manifest.py` + `producer_manifest.yaml`)
-- status: v3 — first filled by the run-safety subsystem port (WP13-A); the eval-pipeline rows
+- status: v4 — first filled by the run-safety subsystem port (WP13-A); the eval-pipeline rows
   (`eval_round` heartbeat, `eval_round_wall`/`eval_broken`) landed at WP11-A. R362(c)
   (2026-09-19) DELETED the sealbot rung and its consumers: the `sealbot_wr_warn` row, the
   `sealbot_wr_gate_skipped` / `sealbot_wr_series_restarted` / `eval_channel_health` /
@@ -399,7 +399,7 @@ or a row no builder publishes, reds. The sink adds `ts`.
 - Every event is one JSON object per line; the event NAME travels under the `"event"` key;
   `ts` (wall clock) is stamped by the sink iff the producer did not supply one.
 - The first line of every segment is `run_segment_started` carrying
-  `{run_id, segment, pid, created_utc, contract: "event-manifest-v3"}` (`mantis.monitor.sink.EVENT_CONTRACT`).
+  `{run_id, segment, pid, created_utc, contract}`, the contract being `mantis.monitor.sink.EVENT_CONTRACT`.
 - Log identity: one segment file per process start
   (`events_<run_id>_seg<NNNN>.jsonl`) — a JSONL file NEVER spans two run segments
   (§11 rotation-on-resume). The segment is claimed ATOMICALLY (`O_CREAT|O_EXCL` over
