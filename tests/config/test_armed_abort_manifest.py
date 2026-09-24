@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import dataclasses
 import importlib.util
-import tokenize
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -34,6 +33,7 @@ from mantis.config.armed_aborts import (
 from mantis.config.census import production_configs
 from mantis.config.loader import discover_configs, load_config
 from mantis.config.schema import RunConfig
+from _code_text import code_text
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
@@ -64,24 +64,6 @@ def _dotted(obj, path: str):
     for part in path.split("."):
         obj = getattr(obj, part)
     return obj
-
-
-def _code_text(path: Path) -> str:
-    """Source with COMMENT / STRING / f-string-literal tokens removed.
-
-    A census over raw text would flag the module's own prose, which is the false positive that
-    teaches people to word documents around a gate.
-    """
-    # FSTRING_MIDDLE exists only on 3.12+ (on the 3.11 floor f-strings tokenize as STRING), so
-    # an unconditional attribute read is an AttributeError on the pinned CI interpreter.
-    skip = {tokenize.COMMENT, tokenize.STRING}
-    _fstring_middle = getattr(tokenize, "FSTRING_MIDDLE", None)
-    if _fstring_middle is not None:
-        skip.add(_fstring_middle)
-    with path.open("rb") as handle:
-        return "\n".join(
-            tok.string for tok in tokenize.tokenize(handle.readline) if tok.type not in skip
-        )
 
 
 def _required(manifest=MANIFEST):
@@ -282,7 +264,7 @@ def test_the_manifest_module_makes_no_filesystem_call() -> None:
     """The layer boundary, pinned where it can rot: `parents[3]` resolves to the repo root ONLY
     because this install is editable, so every `Path`, `read_text` and repo-root resolution
     must live in the tool while the data stays in the package."""
-    code = _code_text(MANIFEST_MODULE)
+    code = code_text(MANIFEST_MODULE)
     for token in ("__file__", "pathlib", "Path(", "read_text", "open(", "os.path",
                   "glob(", "rglob(", "iterdir", "exists("):
         assert token not in code, (

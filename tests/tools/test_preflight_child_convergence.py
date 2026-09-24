@@ -13,12 +13,12 @@ import json
 import os
 import subprocess
 import sys
-import tokenize
 from pathlib import Path
 
 import pytest
 
 from mantis.config.loader import config_identity_sha256, load_config
+from _code_text import code_text
 
 pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("local_puller")]
 
@@ -47,17 +47,6 @@ def preflight_child(tmp_path_factory, preflight_budget_sec, preflight_harness_ce
         env={**os.environ, "XDG_STATE_HOME": str(state_home)},
     )
     return proc, out_dir
-
-
-def _code_text(path: Path) -> str:
-    """Return source with COMMENT / STRING / f-string-literal tokens removed.
-
-    FSTRING_MIDDLE is 3.12+ (PEP 701); on the 3.11 floor f-strings lex as STRING.
-    """
-    skip = {tokenize.COMMENT, tokenize.STRING, getattr(tokenize, "FSTRING_MIDDLE", -1)}
-    with path.open("rb") as handle:
-        return "\n".join(tok.string for tok in tokenize.tokenize(handle.readline)
-                         if tok.type not in skip)
 
 
 def _child_events(out_dir: Path) -> list[dict]:
@@ -140,7 +129,7 @@ def test_the_tool_no_longer_builds_a_single_collaborator_for_itself() -> None:
     Killer: leave one construction behind "just for the preflight" — a tool that builds even
     one collaborator differently preflights a run nobody will launch.
     """
-    source = _code_text(_TOOL)
+    source = code_text(_TOOL)
     for token in ("init_trainer", "WorkerPool", "HexgBuffer", "ReplayBuffer",
                   "build_run_safety", "StepCoordinatorConfig"):
         assert token not in source, (

@@ -13,9 +13,9 @@ is bound on the tool module as the same object.
 from __future__ import annotations
 
 import ast
-import tokenize
 from pathlib import Path
 from _toolpath import load_module_by_path
+from _code_text import code_text
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
@@ -27,21 +27,9 @@ BANNED_TOKENS = ("monkeypatch", "unittest.mock", "SimpleNamespace", "MagicMock",
                  "mock.patch", "setattr(", "pytest")
 
 
-def _code_text(path: Path) -> str:
-    """Return the source with comment, string and f-string-literal tokens removed.
-
-    `FSTRING_MIDDLE` is 3.12+; on the 3.11 floor f-strings lex as STRING.
-    """
-    skip = {tokenize.COMMENT, tokenize.STRING, getattr(tokenize, "FSTRING_MIDDLE", -1)}
-    with path.open("rb") as handle:
-        return "\n".join(
-            tok.string for tok in tokenize.tokenize(handle.readline) if tok.type not in skip
-        )
-
-
 PARENT_SOURCE = PARENT_PATH.read_text(encoding="utf-8")
 PARENT_TREE = ast.parse(PARENT_SOURCE)
-PARENT_CODE = _code_text(PARENT_PATH)
+PARENT_CODE = code_text(PARENT_PATH)
 
 
 def test_the_parent_half_carries_no_banned_test_vocabulary() -> None:
