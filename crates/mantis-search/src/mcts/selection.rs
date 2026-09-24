@@ -40,10 +40,7 @@ impl std::fmt::Display for SelectionDesync {
 
 impl std::error::Error for SelectionDesync {}
 
-/// Single-pass argmax over `[first..first+n_ch)` by PUCT score, computing each child's score
-/// exactly once — the prior `.max_by()` closures re-evaluated both operands for every
-/// comparator pair. Tie-break follows `partial_cmp(...).unwrap_or(Equal)`, so a NaN score never
-/// displaces the running best.
+/// A forced root-child index the root does not own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ForcedChildOutOfRange {
     /// The index that was offered.
@@ -95,8 +92,8 @@ impl From<SelectionDesync> for ForcedSelectionError {
     }
 }
 
-// `parent_n.sqrt()` is loop-invariant across all children of one node, so the sqrtf is
-// evaluated once per descent level rather than K times.
+/// Single-pass argmax over `[first..first+n_ch)` by PUCT score, each child scored once and
+/// `parent_n.sqrt()` once per level; a NaN score never displaces the running best.
 #[inline]
 fn pick_best_puct(
     tree: &MCTSTree,

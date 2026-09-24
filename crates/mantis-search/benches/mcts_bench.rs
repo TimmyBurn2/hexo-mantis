@@ -25,8 +25,8 @@ use mantis_core::board::Board;
 use mantis_core::BoardGeometry;
 use mantis_search::{LegalSetPolicy, MCTSTree};
 
-/// `gnn_axis_v1`'s geometry (`registry.toml:160-190`): radius 6, trunk 19, hence
-/// `policy_logit_count` 362 and a flat index ≥ 361 is exactly "off-window".
+/// `gnn_axis_v1`'s geometry (crates/mantis-encoding/src/registry.toml): radius 6, trunk 19,
+/// hence `policy_logit_count` 362 and a flat index ≥ 361 is exactly "off-window".
 const TRUNK_SZ: i32 = 19;
 const POLICY_STRIDE: usize = 362;
 const OFF_WINDOW_FLAT: usize = 361;
@@ -48,7 +48,9 @@ fn dispersed_board(n_stones: usize) -> Board {
             .wrapping_mul(6_364_136_223_846_793_005)
             .wrapping_add(1_442_695_040_888_963_407);
         let (q, r) = legal[(state >> 33) as usize % legal.len()];
-        board.apply_move(q, r).expect("the walk picked a legal move");
+        board
+            .apply_move(q, r)
+            .expect("the walk picked a legal move");
     }
     board
 }
@@ -99,7 +101,7 @@ fn bench_expand_leaf(c: &mut Criterion) {
             let mut tree = MCTSTree::new(1.5);
             tree.new_game(board.clone());
             tree.select_leaves(1)
-        .expect("select_leaves: no desync in this fixture");
+                .expect("select_leaves: no desync in this fixture");
             tree
         };
         group.bench_with_input(BenchmarkId::new("dense", n_legal), &n_legal, |b, _| {

@@ -18,7 +18,6 @@
 //! `is_proof` above any non-proof entry, so a heuristic bound can never evict a proof from the
 //! depth-preferred slot. The byte-level `#[repr(C)]` packing is deferred to the perf box; the
 //! algorithmic wins are all present.
-//! fields; the algorithmic wins are all present.
 
 use super::{MATE, WIN_THRESHOLD};
 
