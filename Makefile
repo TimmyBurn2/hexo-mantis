@@ -26,8 +26,8 @@ test.integration:
 lint:
 	bash tools/ci_gates/lint_gate.sh --self-test
 
-# CI gate 2b. `--all-targets` is the load-bearing flag: without it the seven non-smoke
-# `[[bench]]` targets are compiled by NO local command, so the 28 floors in
+# CI gate 2b. `--all-targets` is the load-bearing flag: without it the non-smoke
+# `[[bench]]` targets are compiled by NO local command, so the floors in
 # tools/bench_floors.toml stand behind code nothing builds (AUDIT-1 F-09).
 lint.rust:
 	cargo clippy --workspace --all-targets --locked -- -D clippy::all
