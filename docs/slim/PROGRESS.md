@@ -12,7 +12,9 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   loop); exit sweep `make gates` on 3db6ab5a ALL GREEN, 19 gates (2a 1068 s, 3a 356 s, 3b 3005 s); the post-review
   text commits on 8b75f984 re-checked (gates 10/13/14/15/17, workspace build 0 warnings); run10 resolved MATCH at
   3db6ab5a. W1 EXITED earlier (cadcc367, 19 gates green after a quota-voided first run). W3: the three package
-  groups INTEGRATED (collected 5147 → 5039); the sha256 consolidation + W3 residue agent running in `.wt/w3-sha`.
+  groups AND the sha256 + residue leg INTEGRATED (collected 5147 → 5041; run10 MATCH at the tip).
+  NEXT STEP: REVIEW-W3 (fresh read-only agent over 8b75f984..HEAD, src rows only), its fixes, then `make gates` in
+  `.wt/gates` at the tip, then W4. The remaining waves are handed off: `docs/slim/HANDOFF.md`.
 
 ## W0 — entry
 
@@ -112,6 +114,15 @@ Integrated (commit subjects carry the row IDs):
   gone + a new import-side-effect witness, tests/test_import_side_effects.py). Still C: CORE-2-13 (the nsims resolver
   is a contract-cited seam member; its sealbot name goes with the residue agent), CORE-2-16 resolver modules,
   CORE-2-23 (the dense drain arm is the drain-parity oracle's driven path → W5 with the drain re-base).
+- sha256 leg: AQ-SHA DONE (L-DUP-11, CORE-1-20/21, CORE-3-14 sha half, TOOLS-2-12a/b, defect 51) — every file sha256
+  in src/ and tools/ reads `mantis.util.hashing.sha256_file` (streamed; digests identical; witness
+  tests/util/test_hashing.py against every manifest-pinned sha). Kept apart with grounds: tools/ci_gates'
+  preflight_mint_parent `_sha256` (tools/ci_gates/** needs a ruling naming it), audit_bootstrap_corpus (mantis-free by
+  design), registry_gate.sh (independent oracle), books.py (hashes the bytes it parses), checkpoint_state_sha256
+  (a net-param hash, PZ-1). W3 residue DONE: GameRecorder.latest_replay_path, util.constants.HISTORY_LEN, run.py's
+  three grid IfExps + test_the_grid_arm_is_the_serial_width (S-A-TESTS-6-11 run.py half), grid prose, the sealbot
+  opponent name in nsims (CORE-2-13's resolver stays C). Card candidate: arena/match.py::_trajectory_hash ≡
+  eval/aggregate.py::_traj_key (PZ-1).
 - broad-except: fixed eval/child_memory make_probe, worker_sweep CLI refusals now log tracebacks, train stamp
   resolver + parent-death arm + disk_guard loop, selfplay spearman read; the rest classified as top-level handlers,
   record-and-surface contracts, PZ-1 dump-on-fire guards or re-raises (agent reports). Card candidates: the

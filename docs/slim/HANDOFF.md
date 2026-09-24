@@ -45,8 +45,8 @@ You are continuing a long, gated refactor. READ IN THIS ORDER before touching an
 6. Update `docs/slim/PROGRESS.md` (wave, rows done/refuted/still-C with grounds, exit facts) and commit it.
 
 ## What is left
-- **W3 close.** The sha256 consolidation + W3 residue leg (branch `w3-sha`, worktree `.wt/w3-sha`) may already be
-  integrated — check `git log` and PROGRESS. Then: REVIEW-W3 (fresh agent), fixes, `make gates` at the tip, PROGRESS.
+- **W3 close.** Every W3 implementation leg is INTEGRATED (incl. the sha256 leg). Left: REVIEW-W3 (a fresh read-only
+  agent over `8b75f984..HEAD`, src rows; see PROGRESS W3 for what was done/kept), its fixes, `make gates` at the tip.
 - **W4 TOOLS** (LEDGER legs L15–L19 + every TOOLS lane-C row re-laned under R368(b)):
   - the sealbot VENDOR side (R368(e)): `tools/vendor_build_sealbot.sh`, `vendor/patches/sealbot.patch`, the sealbot
     row in `vendor/pins.toml`, the Makefile `vendor.sealbot` target (tests/test_meta_ci.py pins the target set —
