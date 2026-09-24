@@ -40,13 +40,6 @@ _DOMAIN_DOCS = (
 #: The two tags `safe_dump` cannot invert (list of TUPLES out, list of lists back).
 _UNRENDERABLE_DOCS = ("!!omap [{a: 1}]", "!!pairs [{a: 1}]")
 
-#: A byte-frozen snapshot under a FROZEN manifest — a record, not a mintable config.
-_BASELINE_KNOWN_BAD = {
-    ("run6.yaml", "train.draw_rate_abort"),
-    ("smoke_preflight_armed.yaml", "train.draw_rate_abort"),
-    ("smoke_preflight_armed.yaml", "eval.ladder.rungs"),
-}
-
 
 def _run_mint(*argv: str) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, str(MINT), "--template", "dev", *argv],

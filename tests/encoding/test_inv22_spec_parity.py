@@ -2,13 +2,12 @@
 
 Pins:
   1. `mantis.encoding.EncodingSpec is _engine.RegistrySpec` — alias byte-identity
-     (no parallel Python @dataclass mirror).
+     (no parallel Python @dataclass mirror; an alias makes read-parity a tautology).
   2. Every registered encoding exposes the 19 schema fields + 6 derived accessors
      as Python attributes (not method calls), values mirroring the Rust spec.
-  3. Consumer-side: import via `mantis.encoding`, construct via `from_registry`,
-     field reads identical to a direct `_engine.RegistrySpec.from_registry` read.
 
-The registered-name set is DERIVED from `all_specs()` (no hardcoded tuple).
+The registered-name set is DERIVED from `all_specs()` and reconciled with the compiled
+binding in test_registered_names_absence.py (no hardcoded tuple here).
 """
 from __future__ import annotations
 
@@ -53,12 +52,6 @@ _REQUIRED_DERIVED: tuple[str, ...] = (
 )
 
 
-def test_registered_set_is_nonempty_and_derived() -> None:
-    assert _REGISTERED_NAMES, "all_specs() must expose at least one encoding"
-    # Byte-parity with the compiled binding.
-    assert _REGISTERED_NAMES == tuple(sorted(s.name for s in _engine.all_specs()))
-
-
 def test_inv22_encoding_spec_is_engine_registry_spec_alias() -> None:
     assert EncodingSpec is _engine.RegistrySpec, (
         f"mantis.encoding.EncodingSpec must be the _engine.RegistrySpec type "
@@ -83,16 +76,3 @@ def test_inv22_required_attribute_surface(name: str) -> None:
         )
 
 
-@pytest.mark.parametrize("name", _REGISTERED_NAMES)
-def test_inv22_alias_read_equals_direct_read(name: str) -> None:
-    direct = _engine.RegistrySpec.from_registry(name)
-    via_alias = EncodingSpec.from_registry(name)
-    for field in _REQUIRED_FIELDS + _REQUIRED_DERIVED:
-        d_val = getattr(direct, field)
-        a_val = getattr(via_alias, field)
-        if isinstance(d_val, list):
-            d_val = tuple(d_val)
-            a_val = tuple(a_val)
-        assert d_val == a_val, (
-            f"{name}.{field}: alias-read {a_val!r} != direct-read {d_val!r}"
-        )
