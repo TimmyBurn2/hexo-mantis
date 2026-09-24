@@ -102,7 +102,7 @@ def arm_parent_death_signal(sig: int = signal.SIGKILL) -> bool:
     handler reads it as "finish the step and save", so it flipped `running=False` and PARKED
     (%CPU decaying 408 to 133 over two minutes, still alive). Correct here because the path's
     premise is that the parent is ALREADY DEAD — pipes closed, nobody to `wait()`, no route for
-    a result. Returns True iff armed; best-effort and NEVER fatal.
+    a result. Returns True iff armed; an absent libc or prctl returns False, never raises.
     """
     if not sys.platform.startswith("linux"):
         return False
@@ -120,7 +120,7 @@ def arm_parent_death_signal(sig: int = signal.SIGKILL) -> bool:
         if libc.prctl(_PR_SET_PDEATHSIG, int(sig), 0, 0, 0) != 0:
             _LOG.debug("arm_parent_death_signal: prctl failed errno=%d", ctypes.get_errno())
             return False
-    except Exception:  # noqa: BLE001 — see the docstring: never fatal, never re-raised
+    except (OSError, AttributeError):  # no loadable libc, or a libc without prctl
         _LOG.debug("arm_parent_death_signal: prctl unavailable", exc_info=True)
         return False
     # THE RACE, closed: if the parent died between our fork and the prctl above, the death

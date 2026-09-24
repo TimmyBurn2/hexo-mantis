@@ -26,7 +26,7 @@ from torch.amp.grad_scaler import GradScaler
 
 from mantis.config.resolve.aux_soft_policy import resolve_aux_soft_policy
 from mantis.config.schema.core import SOFT_POLICY_ARCH_KINDS
-from mantis.encoding import resolve_from_config
+from mantis.encoding import EncodingRegistryError, resolve_from_config
 from mantis.model import (
     ModelArch,
     amp_dtype_for,
@@ -584,9 +584,10 @@ class Trainer:
         return self.model if self.ema_model is None else self.ema_model.module
 
     def _resolve_encoding_name(self) -> str | None:
+        """The stamp's encoding name, or `None` (the save then refuses to stamp) on a registry error."""
         try:
             return _resolve_spec(dict(self.config)).name
-        except Exception as exc:  # noqa: BLE001 — surfaced, but a resolvable config is required
+        except EncodingRegistryError as exc:
             _LOG.error("checkpoint_encoding_resolve_failed error=%s", exc)
             return None
 

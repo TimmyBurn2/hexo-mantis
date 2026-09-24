@@ -118,3 +118,29 @@ def test_a_legacy_envelope_whose_embedded_row_contradicts_its_stamp_is_refused(t
     config["identity"]["arch_kind"] = "GnnArchV2"
     with pytest.raises(CheckpointStampError, match="identity.arch_kind='GnnArchV2'"):
         load_legacy_weights(_legacy_envelope(tmp_path, config))
+
+
+def test_the_trainer_stamp_resolver_swallows_ONLY_a_registry_error(tmp_path, monkeypatch):
+    """Only a registry error means "cannot stamp"; any other error surfaces, not relabelled."""
+    import _microbatch_harness as H
+
+    from mantis.encoding.resolvers import MissingEncodingError
+    from mantis.train.trainer import core
+
+    arch = H.tiny_graph_arch()
+    trainer = core.Trainer(build_net(arch), H.graph_config(), arch=arch,
+                           checkpoint_dir=tmp_path / "ckpt", train_hparams=H.graph_hparams())
+    assert trainer._resolve_encoding_name() == "gnn_axis_v1"
+
+    def _missing(_cfg):
+        raise MissingEncodingError("planted")
+
+    monkeypatch.setattr(core, "_resolve_spec", _missing)
+    assert trainer._resolve_encoding_name() is None
+
+    def _defect(_cfg):
+        raise TypeError("planted defect")
+
+    monkeypatch.setattr(core, "_resolve_spec", _defect)
+    with pytest.raises(TypeError, match="planted defect"):
+        trainer._resolve_encoding_name()

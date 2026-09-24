@@ -252,3 +252,35 @@ def test_buffer_persist_error_increments_counter_and_aborts(tmp_path, tiny_net, 
         )
     assert checkpoints.persist_errors_total == before + 1  # counted (never except: pass)
     assert list(tmp_path.glob("*.ckpt")) == []
+
+
+@pytest.mark.parametrize("exc", [OSError("no libc"), AttributeError("no prctl")])
+def test_parent_death_arm_is_False_when_prctl_is_unavailable(monkeypatch, exc):
+    """The best-effort arm swallows exactly the absent-libc/absent-prctl family and reports False."""
+    import ctypes
+
+    import mantis.train.lifecycle.signals as signals_mod
+
+    monkeypatch.setattr(signals_mod.sys, "platform", "linux")
+
+    def _raise(*_a, **_k):
+        raise exc
+
+    monkeypatch.setattr(ctypes, "CDLL", _raise)
+    assert signals_mod.arm_parent_death_signal() is False
+
+
+def test_parent_death_arm_does_not_swallow_a_defect(monkeypatch):
+    """Anything outside that family is a defect in the arm itself and surfaces by name."""
+    import ctypes
+
+    import mantis.train.lifecycle.signals as signals_mod
+
+    monkeypatch.setattr(signals_mod.sys, "platform", "linux")
+
+    def _raise(*_a, **_k):
+        raise TypeError("planted")
+
+    monkeypatch.setattr(ctypes, "CDLL", _raise)
+    with pytest.raises(TypeError, match="planted"):
+        signals_mod.arm_parent_death_signal()

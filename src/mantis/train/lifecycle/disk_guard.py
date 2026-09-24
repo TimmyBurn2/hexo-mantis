@@ -118,7 +118,7 @@ class DiskGuard:
                 # The counter and the event are the two channels a monitor can read: a bare log
                 # warning was silent, and the guard still reported as armed.
                 self._errors_total += 1
-                _LOG.warning("disk_guard_error: %s", exc)
+                _LOG.exception("disk_guard_error")
                 self._sink.emit({
                     "event": "disk_guard_error",
                     "error_class": type(exc).__name__,
