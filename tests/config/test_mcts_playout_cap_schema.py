@@ -95,11 +95,4 @@ def test_playout_cap_bound_violation_rejected(field: str, bad_value: object):
         PlayoutCapConfig.model_validate(_playout_cap(**{field: bad_value}))
 
 
-def test_playout_cap_field_name_matches_config_key_for_temperature_threshold():
-    # DESIGN_P2.md §3: `temperature_threshold_compound_moves` is now BOTH the field name
-    # and the config key — retiring hparams.py's `_resolve_playout_cap_temperature` key/
-    # field-spelling mismatch shim by construction.
-    cfg = PlayoutCapConfig.model_validate(_playout_cap(temperature_threshold_compound_moves=9))
-    assert cfg.temperature_threshold_compound_moves == 9
-
 

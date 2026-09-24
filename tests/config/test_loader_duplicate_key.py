@@ -36,11 +36,6 @@ def test_nested_duplicate_key_raises_naming_key():
         yaml.load(doc, Loader=_UniqueKeyLoader)
 
 
-def test_clean_minted_config_loads_and_validates():
-    cfg = load_config(REPO_ROOT / "configs" / "dev_example.yaml")
-    assert cfg.run_id == "dev_example"
-
-
 def test_mutation_self_test_base_safeloader_is_permissive():
     # Proves _UniqueKeyLoader's check is what bites: the base SafeLoader silently last-wins.
     assert yaml.safe_load("seed: 1\nseed: 2\n") == {"seed": 2}

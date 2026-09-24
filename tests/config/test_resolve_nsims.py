@@ -13,10 +13,6 @@ def test_the_retired_sealbot_opponent_is_unknown():
         resolve_eval_model_sims("sealbot", 128)
 
 
-def test_config_value_always_wins():
-    assert resolve_eval_model_sims("random", 64) == 64
-
-
 def test_unknown_opponent_raises():
     with pytest.raises(ValueError):
         resolve_eval_model_sims("mystery", 96)

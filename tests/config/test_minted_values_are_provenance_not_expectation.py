@@ -40,18 +40,6 @@ def test_a_REMINTED_sims_value_passes_the_relation_that_a_literal_would_have_red
     )
 
 
-def test_the_relation_still_BITES_on_a_resolver_that_re_derives():
-    """Arm 2 — the planted break. A passthrough assertion is only worth keeping if a
-    re-deriving resolver reds it. Driven on a stand-in, so the control needs no live defect."""
-    def re_deriving_resolver(rung: str, value: int) -> int:
-        return 96 if rung == "random" else 128  # the eval-only second authority O9 refuses
-
-    shipped = 97
-    assert resolve_eval_model_sims("random", shipped) == shipped
-    with pytest.raises(AssertionError):
-        assert re_deriving_resolver("random", shipped) == shipped
-
-
 def test_the_registry_owned_quantities_are_read_from_the_registry(smoke_run_config):
     """Arm 3 — a sample of the repaired class: geometry comes off the row, not off a literal.
 

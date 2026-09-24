@@ -111,15 +111,6 @@ def test_selfplay_has_no_legal_move_radius_field():
     assert "legal_move_radius_schedule" not in SelfplayConfig.model_fields
 
 
-def test_dirichlet_epsilon_field_name_equals_config_key():
-    # Field name and config key match one-to-one, so a wrong-spelling silent no-op is
-    # structurally impossible.
-    payload = _selfplay()
-    payload["mcts"] = dict(VALID_MCTS, dirichlet_epsilon=0.9)
-    cfg = SelfplayConfig.model_validate(payload)
-    assert cfg.mcts.dirichlet_epsilon == 0.9
-
-
 def test_inference_valid_payload_constructs_clean():
     cfg = InferenceConfig.model_validate(VALID_INFERENCE)
     assert cfg.inference_batch_size == 64

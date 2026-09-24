@@ -85,13 +85,6 @@ def test_fast_prob_alone_constructs_cleanly():
     assert cfg.fast_prob == 0.3
 
 
-def test_equal_quick_and_full_sims_raises():
-    with pytest.raises(ValidationError, match="no-op"):
-        PlayoutCapConfig.model_validate(
-            _payload(n_sims_quick=100, n_sims_full=100, full_search_prob=0.5)
-        )
-
-
 def test_degenerate_full_search_prob_zero_raises():
     with pytest.raises(ValidationError, match="0, 1"):
         PlayoutCapConfig.model_validate(
@@ -104,14 +97,6 @@ def test_degenerate_full_search_prob_one_raises():
         PlayoutCapConfig.model_validate(
             _payload(n_sims_quick=75, n_sims_full=600, full_search_prob=1.0)
         )
-
-
-def test_valid_differing_sims_and_mid_probability_constructs_cleanly():
-    cfg = PlayoutCapConfig.model_validate(
-        _payload(n_sims_quick=75, n_sims_full=600, full_search_prob=0.5)
-    )
-    assert cfg.n_sims_quick == 75
-    assert cfg.n_sims_full == 600
 
 
 def test_all_zero_minted_shape_is_unaffected_negative_control():

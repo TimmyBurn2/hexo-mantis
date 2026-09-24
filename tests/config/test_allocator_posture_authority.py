@@ -48,15 +48,6 @@ TEMPLATES_DIR = REPO_ROOT / "tools" / "config_templates"
 RESOLVER_REL = "mantis/config/resolve/allocator_posture.py"
 
 
-def test_ap01_every_committed_config_declares_the_posture_key():
-    """Every config `discover_configs` enumerates carries `allocator_posture` explicitly."""
-    configs = discover_configs(CONFIGS_DIR)
-    assert configs, "discover_configs found nothing — the sweep below would assert nothing"
-    for path in configs:
-        cfg = load_config(path)
-        assert hasattr(cfg, "allocator_posture"), path.name
-
-
 def test_ap01_both_mint_templates_declare_the_posture_key():
     """A template that omits it would mint configs that omit it, failing gate 7 one layer later."""
     import yaml

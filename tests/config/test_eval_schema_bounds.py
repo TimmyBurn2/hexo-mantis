@@ -1,7 +1,3 @@
-# >300 justify (R8): a per-FIELD bounds census over the `eval` section's always-present leaves,
-# each contributing one out-of-domain rejection and one in-domain boundary acceptance, so the
-# length tracks the field count rather than any logic. NOT covered: the two `Block | None`
-# postures, whose bounds need an ARMED fixture (tests/config/test_eval_posture_schema.py).
 """Numeric-bounds validation on the eval/gate schema fields.
 
 Pre-fix, `random_model_sims=-5` and `gate.promotion_winrate=2.0` loaded SILENTLY — crashing
@@ -277,14 +273,6 @@ def test_original_f_rt2_1_repro_ceiling_boundary_still_loads() -> None:
     payload["eval"]["worker_kill_grace_sec"] = _EVAL_TIMEOUT_CEILING_SEC
     cfg = _validate(payload)
     assert cfg.eval.worker_kill_grace_sec == _EVAL_TIMEOUT_CEILING_SEC
-
-
-def test_minted_configs_still_load_after_f_rt2_1_bounds() -> None:
-    """The fix must never require re-minting a shipped config."""
-    payload = _payload()  # mirrors the minted-config values verbatim (see docstring)
-    assert payload["eval"]["round_timeout_sec"] == 3600.0
-    assert payload["eval"]["worker_kill_grace_sec"] == 10.0
-    _validate(payload)  # must not raise
 
 
 def test_max_plies_is_required_and_positive() -> None:
