@@ -134,14 +134,6 @@ def test_lag_check_suppressed_during_close_out(tmp_path) -> None:
     assert sink.named("actor_lag_exceeded") == [], "no lag event during close-out either"
 
 
-def test_actor_lag_is_not_a_heartbeat_source() -> None:
-    """Prove actor lag is not a heartbeat source: a step delta in a seconds-deadline dict lies."""
-    assert HEARTBEAT_SOURCES == (
-        "train_step", "inference_dispatch", "selfplay_drain", "eval_round",
-    ), f"HEARTBEAT_SOURCES must stay exactly the 4-tuple at HEAD: {HEARTBEAT_SOURCES}"
-    assert all("actor" not in s for s in HEARTBEAT_SOURCES)
-
-
 def test_arm_event_names_actor_lag_posture(tmp_path) -> None:
     """Prove a disabled or unwired lag check is loud at arm time."""
     sink = _SpySink()

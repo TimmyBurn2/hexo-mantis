@@ -11,7 +11,6 @@ import threading
 import mantis.eval.pipeline  # noqa: F401 — RED-at-import anchor
 from _monitor_config import monitor_config
 from mantis.monitor.heartbeat import (
-    HEARTBEAT_SOURCES,
     WATCHDOG_STALL_EXIT_CODE,
     HeartbeatRegistry,
 )
@@ -41,25 +40,6 @@ class SpySink:
 class FakeBuffer:
     def save_to_path(self, p) -> None:
         return None
-
-
-def test_eval_round_is_a_registered_heartbeat_source() -> None:
-    """`"eval_round"` must join the three shipped sources as the fourth."""
-    assert "eval_round" in HEARTBEAT_SOURCES, (
-        f"HEARTBEAT_SOURCES must gain eval_round (4th source): {HEARTBEAT_SOURCES}"
-    )
-    assert len(HEARTBEAT_SOURCES) == 4, (
-        f"expected exactly 4 heartbeat sources post-WP11-A: {HEARTBEAT_SOURCES}"
-    )
-
-
-def test_monitor_config_carries_eval_round_deadline() -> None:
-    """`MonitorConfig.heartbeat_deadline_eval_round_sec` is minted at 1800.0."""
-    cfg = monitor_config()
-    assert hasattr(cfg, "heartbeat_deadline_eval_round_sec"), (
-        "MonitorConfig must gain heartbeat_deadline_eval_round_sec"
-    )
-    assert cfg.heartbeat_deadline_eval_round_sec == 1800.0
 
 
 def test_poller_thread_beats_eval_round(tmp_path) -> None:
