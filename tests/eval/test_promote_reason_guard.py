@@ -62,7 +62,7 @@ class _RecordingHooks:
 def _result(**fields: Any) -> _RecordingResult:
     """Build a round-result mapping; `eval_broken_reason` is never defaulted in, because its
     absence is the subject of two arms."""
-    base = {"step": 7, "round_id": "r000001_7", "wr_sealbot": 0.6}
+    base = {"step": 7, "round_id": "r000001_7"}
     base.update(fields)
     return _RecordingResult(base)
 

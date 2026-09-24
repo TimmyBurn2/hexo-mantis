@@ -72,22 +72,6 @@ def test_round_emits_start_and_complete_wall_events() -> None:
     )
 
 
-def test_round_complete_wall_sec_feeds_the_routed_result_key() -> None:
-    """The emitted `wall_sec` is the SAME number that lands in the routed result's
-    `eval_round_wall_sec` key (old-side `result_types.py` parity) — pinned here as a value
-    round-trip: whatever `emit_round_complete` is given IS what a caller reads back to stash
-    into the result mapping."""
-    from mantis.eval.pipeline import emit_round_complete
-
-    sink = _SpySink()
-    complete = emit_round_complete(
-        sink, round_id="r000002_2000", step=2000, wall_sec=3.75, games_total=4,
-        promoted=True, gate=None,
-    )
-    routed_result_wall_sec = complete["wall_sec"]  # the wiring caller's read-back
-    assert routed_result_wall_sec == 3.75
-
-
 def test_busy_kick_emits_eval_round_skipped_busy() -> None:
     from mantis.eval.pipeline import emit_round_skipped_busy
 

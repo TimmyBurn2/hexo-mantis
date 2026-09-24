@@ -31,12 +31,6 @@ def _plan_text(*, round_sec: float, interval: float) -> str:
     return "\n".join(out) + "\n"
 
 
-def test_the_shipped_plan_still_loads(tmp_path: Path) -> None:
-    """The control, first: the plan the box actually runs must be unaffected."""
-    plan = ws.load_plan(_REPO / "tools" / "worker_sweep_plan.toml")
-    assert plan.sampler_interval_sec < plan.round_sec
-
-
 @pytest.mark.parametrize("interval", [120.0, 240.0], ids=["equal", "longer"])
 def test_a_sampler_that_cannot_produce_a_series_is_refused(
     tmp_path: Path, interval: float

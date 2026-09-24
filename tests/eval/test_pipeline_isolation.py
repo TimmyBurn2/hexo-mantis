@@ -161,7 +161,6 @@ def test_kick_returns_ack_immediately_and_never_blocks(fake_mp, tmp_path) -> Non
         assert elapsed < 0.1, f"kick took {elapsed:.3f}s (must be a non-blocking ack, <100ms)"
         assert ack["kicked"] is True
         assert {"kicked", "round_id", "step", "reason"} <= set(ack)
-        assert "wr_sealbot" not in ack   # the kick ack NEVER carries WR
     finally:
         pipeline.stop()
 

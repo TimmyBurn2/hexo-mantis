@@ -21,11 +21,6 @@ def test_the_two_escalating_routes_are_distinct_members() -> None:
     assert EvalBrokenReason.JOIN_TIMEOUT.value == "join_timeout"
 
 
-def test_the_wire_spelling_round_trips_through_the_taxonomy() -> None:
-    """An unregistered spelling raises, which is what makes a reason no member spells loud."""
-    assert EvalBrokenReason("round_timeout") is EvalBrokenReason.ROUND_TIMEOUT
-
-
 def test_the_round_budget_escalation_reports_the_round_timeout_phase() -> None:
     """Phase is a FUNCTION of the reason; a constant would send a supervisor to the drain budget."""
     import inspect

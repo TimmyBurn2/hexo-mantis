@@ -5,7 +5,7 @@
 # The baseline it replaced, at b2e72de4, was 11711 / 1276 / 32405.
 comment_excess_lines 3148
 banner_comment_lines 0
-docstring_excess_lines 12041
+docstring_excess_lines 12038
 # 2026-09-17 (R355 step 12, C-15/C-16): two measures added at their measured values — the private-
 # docstring and Rust-doc halves of the judgment backlog (CARD-STYLE-BACKLOG). Down-only, like the rest.
 private_docstring_excess_lines 1353

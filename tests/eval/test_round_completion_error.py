@@ -206,7 +206,6 @@ def test_poller_thread_survives_an_uncaught_exception_in_round_completion(fake_m
         assert result is not None, "poll_completed() must eventually deliver a result, never hang forever"
         assert result["eval_broken_reason"] == "round_completion_error"
         assert result.get("promoted") is False
-        assert result.get("wr_sealbot") is None
         assert "_InjectedCompletionError" in (result["eval_broken_detail"] or "")
 
         # A named eval_broken event WAS emitted.

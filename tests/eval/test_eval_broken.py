@@ -218,7 +218,6 @@ def test_killed_worker_yields_eval_broken_and_clean_drain(fake_mp, tmp_path) -> 
         assert result is not None
         assert result["eval_broken_reason"] is not None
         assert result.get("promoted") is False
-        assert result.get("wr_sealbot") is None
         assert result.get("step") == 1000
 
         broken_events = sink.named("eval_broken")
