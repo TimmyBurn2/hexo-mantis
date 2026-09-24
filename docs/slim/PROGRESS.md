@@ -8,7 +8,7 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
 - Host: the operator's desktop (not a Claude environment; `CLAUDE_CODE_ENVIRONMENT_NAME` unset). AMD Ryzen 7
   3700X, 16 threads, 46 GiB, flags `avx2` only (no `avx512_bf16`, no `amx`). torch 2.11.0+cpu, `mantis._engine` OK.
 - origin/dev = 69e1532 at W0 entry (no moved commits; no rebase).
-- Wave: **W4** (tools). W3 EXITED. REVIEW-W3 filed (`docs/audits/REVIEW_W3_2026-09-24.md`, 0 must-fix beyond a
+- Wave: **W5** (tests + fixtures) IN FLIGHT — see `## W5` below. W4 EXITED: W3 EXITED. REVIEW-W3 filed (`docs/audits/REVIEW_W3_2026-09-24.md`, 0 must-fix beyond a
   ruff red in the handoff helper, 2 should-fix, 4 notes, every row group HELD, run10 MATCH re-verified); its fixes:
   ec0ac144 (ruff), cb4a5dd1 (`_is_graph` flag), bf22b4c3 (sweep docstring), plus 09fa8e6b — the exit sweep caught
   `tests/eval/test_graph_round_encoding.py`'s recorder pinning the deleted `_is_graph`; re-pointed to the
@@ -57,6 +57,19 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   post-review docs commits (b0e959c3 + this one) re-checked with gates 10/13/14/15/17 green.
   NEXT: W5 per its addendum (the 2026-09-24 dispatcher-session scout inventory is folded into it);
   then W6, W7, W8 per HANDOFF.md.
+
+## W5 — tests + fixtures (IN FLIGHT; resume here)
+
+- Range starts at 9839becd. 74 commits integrated by the first W5 dispatcher (usage-limit stop) through
+  9d520676; the second dispatcher resumed 2026-09-24: w5-residue integrated (876f8353 four flat globs →
+  census, e5d236dc the fused-cap helper off dev_example, d3419b30 conftest cite) — collected 4906 → 4902
+  (the census drops the two exempt configs from four parametrizations). Integrated branches' worktrees and
+  branches removed (w5-root/-eval/-model/-cfgfin/-cfgtools/-selfplay/-train-a/-train-b/-residue,
+  /tmp/base_check).
+- In flight: w5-fakes (AQ-CARD-FAKES hoist; 26 files were left uncommitted mid-leg; rebased onto d3419b30,
+  finisher model opus); w5-drain (leg 8, the dense drain oracle re-base + src deletion; opus); a read-only
+  inventory of L20–L34 (sonnet) to name the remaining rows.
+- Models per leg so far (second dispatcher): fakes finisher opus, drain re-base opus, inventory scout sonnet.
 
 ## W0 — entry
 
