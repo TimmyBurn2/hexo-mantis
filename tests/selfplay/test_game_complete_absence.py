@@ -75,7 +75,7 @@ def test_the_captured_drain_golden_no_longer_freezes_either_fabrication() -> Non
         (repo / "tests" / "fixtures" / "selfplay" / "drain" / "drain_goldens.json")
         .read_text(encoding="utf-8")
     )
-    events = [e for e in golden["variants"]["dense_5s_crossed"]["events"]
+    events = [e for e in golden["variants"]["graph"]["events"]
               if e["event"] == "game_complete"]
     assert events[5]["winner"] is None, "winner_code 3 is captured as a measured draw again"
     assert events[3]["colony_extension_stone_count"] is None

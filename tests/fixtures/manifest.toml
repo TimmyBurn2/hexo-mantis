@@ -171,8 +171,8 @@ added_by = "WP-SP"
 # Re-pinned 2026-09-14: R353(d) added the per-move arms as the row's ninth field.
 [[required]]
 path = "selfplay/drain/drain_goldens.json"
-# Re-pinned 2026-09-16: R355(d) added a sampled game's search stats as the row's tenth field.
-sha256 = "798c655441f26b14bee60e8855a4dda11485b051bd459b925c5ccea88b358dee"
+# Re-pinned 2026-09-24: R368(d) re-captured the graph variants from the current drain.
+sha256 = "d00bfb65cb7d8adafe71781579036b5c431ef860ad8570a53491a3b178165de4"
 added_by = "WP-SP"
 
 [[required]]

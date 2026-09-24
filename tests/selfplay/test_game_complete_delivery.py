@@ -71,9 +71,6 @@ class _ScriptedRunner:
         self.draws = 0
         self.positions_generated = positions_generated
 
-    def collect_data(self):
-        return []
-
     def collect_graph_data(self):
         return []
 
@@ -95,7 +92,7 @@ def _make_scripted_pool(games, sink):
     `game_complete` events."""
     pool = type("ScriptedPool", (), {})()
     pool._stop_event = _OneShotStop()
-    pool._is_graph = False
+    pool._is_graph = True
     pool._runner = _ScriptedRunner(games)
     pool.replay_buffer = _ScriptedBuffer()
     pool._lock = threading.Lock()
@@ -104,10 +101,6 @@ def _make_scripted_pool(games, sink):
     pool.graph_rows_pushed = 0
     pool.alpha_full_rows = 0
     pool.alpha_full_rows_emitted = 0
-    pool._feat_len = 0
-    pool._chain_len = 0
-    pool._trunk_size = 7
-    pool.recent_buffer = None
     pool._last_drain_time = 1000.0
     pool._last_pos_generated = 0
     pool._effective_sims_per_move = 50
@@ -195,8 +188,7 @@ def test_on2b_n_games_yield_n_delivered_game_complete_events(monkeypatch) -> Non
     pool = _make_scripted_pool(_make_games(n), sink)
 
     monkeypatch.setattr(pool_drain, "time", _ScriptedTime([1000.0, 1002.0, 1006.5]))
-    # The test is about EVENT DELIVERY, not buffer pushes, so the push arms are no-ops.
-    monkeypatch.setattr(pool_drain, "push_dense", lambda pool, collected: None)
+    # The test is about EVENT DELIVERY, not buffer pushes, so the push is a no-op.
     monkeypatch.setattr(pool_drain, "push_graph", lambda pool, collected: None)
 
     pool_drain.run_stats_loop(pool)

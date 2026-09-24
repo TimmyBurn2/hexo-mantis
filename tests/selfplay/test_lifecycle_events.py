@@ -103,17 +103,15 @@ def test_workers_spawned_emits_on_pool_start() -> None:
 def _make_drain_pool(games, sink):
     pool = type("P", (), {})()
     pool._stop_event = type("S", (), {"_n": 0, "is_set": lambda self: self._n > 0 or (setattr(self, "_n", self._n + 1) or False)})()
-    pool._is_graph = False
+    pool._is_graph = True
     pool._runner = type("R", (), {
         "games_completed": len(games), "x_wins": 0, "o_wins": 0, "draws": 0,
         "positions_generated": 100,
-        "collect_data": lambda self: [],
         "collect_graph_data": lambda self: [],
         "drain_game_results": lambda self: list(games),
     })()
     pool.replay_buffer = type("B", (), {
         "size": 0, "capacity": 100_000,
-        "push_many": lambda self, *a, **k: None,
         "push_graph_position": lambda self, *a, **k: None,
     })()
     pool._lock = threading.Lock()
@@ -122,10 +120,6 @@ def _make_drain_pool(games, sink):
     pool.graph_rows_pushed = 0
     pool.alpha_full_rows = 0
     pool.alpha_full_rows_emitted = 0
-    pool._feat_len = 0
-    pool._chain_len = 0
-    pool._trunk_size = 7
-    pool.recent_buffer = None
     pool._last_drain_time = 1000.0
     pool._last_pos_generated = 0
     pool._effective_sims_per_move = 50
@@ -155,7 +149,6 @@ def test_game_loop_entered_emits_once(monkeypatch) -> None:
     monkeypatch.setattr(pool_drain, "time", type("T", (), {
         "monotonic": lambda self: 1000.0, "sleep": lambda self, s: None,
     })())
-    monkeypatch.setattr(pool_drain, "push_dense", lambda p, c: None)
     monkeypatch.setattr(pool_drain, "push_graph", lambda p, c: None)
 
     pool_drain.run_stats_loop(pool)
@@ -171,7 +164,6 @@ def test_first_record_drained_emits_on_first_non_empty_drain(monkeypatch) -> Non
     monkeypatch.setattr(pool_drain, "time", type("T", (), {
         "monotonic": lambda self: 1000.0, "sleep": lambda self, s: None,
     })())
-    monkeypatch.setattr(pool_drain, "push_dense", lambda p, c: None)
     monkeypatch.setattr(pool_drain, "push_graph", lambda p, c: None)
 
     pool_drain.run_stats_loop(pool)
@@ -180,7 +172,7 @@ def test_first_record_drained_emits_on_first_non_empty_drain(monkeypatch) -> Non
     assert len(events) == 1, (
         f"first_record_drained must emit once on the first non-empty drain; got {len(events)}"
     )
-    assert events[0]["representation"] == "dense"
+    assert events[0]["representation"] == "graph"
 
 
 # first_inference_enqueued + first_inference_served (InferenceServer._run_graph_loop)

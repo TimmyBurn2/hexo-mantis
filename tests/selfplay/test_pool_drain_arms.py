@@ -30,10 +30,15 @@ class _Buffer:
     def __init__(self) -> None:
         self.size = 1234
         self.capacity = 5678
-        self.dense_calls: list[tuple] = []
+        self.graph_calls: list[tuple] = []
+        self.next_game_id_calls = 0
 
-    def push_dense_many(self, *args: Any, **kwargs: Any) -> None:
-        self.dense_calls.append((args, kwargs))
+    def push_graph_position(self, *args: Any, **kwargs: Any) -> None:
+        self.graph_calls.append((args, kwargs))
+
+    def next_game_id(self) -> int:
+        self.next_game_id_calls += 1
+        return 900 + self.next_game_id_calls
 
 
 class _Recorder:
@@ -63,8 +68,8 @@ class _Runner:
             setattr(self, key, value)
         self.positions_generated = positions_generated
 
-    def collect_data(self):
-        return self._rows
+    def collect_graph_data(self):
+        return list(self._rows)
 
     def drain_game_results(self):
         return list(self._games)
@@ -118,7 +123,7 @@ def _build_pool(golden, rows, *, sink, iterations: int, clock) -> _Pool:
     consts = golden["_constants"]
     pool = _Pool()
     pool._stop_event = _NShotStop(iterations)
-    pool._is_graph = False
+    pool._is_graph = True
     pool._runner = _Runner(rows, _games_from_golden(golden),
                            consts["runner_counters"],
                            consts["runner_positions_generated"])
@@ -129,9 +134,6 @@ def _build_pool(golden, rows, *, sink, iterations: int, clock) -> _Pool:
     pool.graph_rows_pushed = 0
     pool.alpha_full_rows = 0
     pool.alpha_full_rows_emitted = 0
-    pool._feat_len = consts["feat_len"]
-    pool._chain_len = consts["chain_len"]
-    pool._trunk_size = consts["trunk_size"]
     pool.recent_buffer = None
     pool._last_drain_time = clock[0]
     pool._last_pos_generated = consts["last_pos_generated_before"]
@@ -153,11 +155,10 @@ def _build_pool(golden, rows, *, sink, iterations: int, clock) -> _Pool:
 
 
 @pytest.fixture
-def run_drain(monkeypatch, drain_goldens, collect_data_input):
+def run_drain(monkeypatch, drain_goldens, graph_rows_input):
     """Factory → the stub pool after `iterations` completed drain loops."""
-    def run(*, sink, iterations=1, clock=CLOCK_TWO_ITERATIONS, dense_n=4) -> _Pool:
-        rows = tuple(a[:dense_n] for a in collect_data_input)
-        pool = _build_pool(drain_goldens, rows, sink=sink, iterations=iterations,
+    def run(*, sink, iterations=1, clock=CLOCK_TWO_ITERATIONS) -> _Pool:
+        pool = _build_pool(drain_goldens, graph_rows_input, sink=sink, iterations=iterations,
                            clock=clock)
         monkeypatch.setattr(pool_drain, "time", _Clock(clock))
         pool_drain.run_stats_loop(pool)
@@ -196,8 +197,8 @@ def test_drain_with_no_sink(run_drain) -> None:
     byte-parity suite never does — completes and does all its real work."""
     pool = run_drain(sink=None, iterations=1)
 
-    assert len(pool.replay_buffer.dense_calls) == 1
-    assert pool.positions_pushed == 4
+    assert len(pool.replay_buffer.graph_calls) == 3
+    assert pool.positions_pushed == 3
     assert pool.games_completed == 6
     assert len(pool._recorder.records) == 6, (
         "dropping events must not drop the recorder — they are separate seams"
@@ -211,7 +212,8 @@ def test_no_sink_and_recording_sink_agree_on_everything_else(run_drain) -> None:
     with_sink = run_drain(sink=_Sink(), iterations=1)
     without = run_drain(sink=None, iterations=1)
 
-    for attr in ("positions_pushed", "self_play_positions_pushed", "games_completed",
+    for attr in ("positions_pushed", "self_play_positions_pushed", "graph_rows_pushed",
+                 "games_completed",
                  "x_wins", "o_wins", "draws", "_total_sims", "_sims_per_sec",
                  "_avg_game_length"):
         assert getattr(with_sink, attr) == getattr(without, attr), attr
@@ -223,7 +225,7 @@ def test_terminal_reason_counts_drops_unknown_codes(run_drain, drain_goldens) ->
     `terminal_reason_counts()` reports four keys totalling 5. OLD TRUTH, pinned on purpose: it
     reads exactly like a bug, and this row makes the eventual "fix" visible instead of silent."""
     pool = run_drain(sink=_Sink(), iterations=1)
-    expected = drain_goldens["variants"]["dense_5s_crossed"]["instrumentation_after"][
+    expected = drain_goldens["variants"]["graph"]["instrumentation_after"][
         "terminal_reason_counts"]
 
     counts = pool.terminal_reason_counts()
