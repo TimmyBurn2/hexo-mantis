@@ -16,19 +16,15 @@ from mantis.selfplay.hparams import is_graph_representation
 
 
 class LocalInferenceEngine:
-    """Wrap a grid or graph net and handle the full inference pipeline.
-
-    Dense (grid): build (K, C, trunk, trunk) tensors, run one forward, map per-cluster policy
-    outputs to one global vector per board, min-pool the values. Graph: reuse the production
-    graph seam end to end rather than re-implementing the encoding.
+    """Wrap a graph net and serve it through the production graph seam end to end.
 
     `encoding_spec`, `fused_graph_caps` and `inference_batching` are REQUIRED and keyword-only.
     This class hand-builds its `InferenceServer` config from a dict literal with no `RunConfig`,
     so a default here would be a value nobody minted on the one path with nothing to mint it
     from. Measured: at the single-stream deploy head (supply 8 against a collector threshold of
-    32) the collector's own deadline is 1.76 of the eval path's 5.30 ms/sim, 33 %. GRID callers
-    pass `None` EXPLICITLY. `max_in_flight` is the most graphs the caller can have in flight, and
-    the collector's saturation threshold derives from it.
+    32) the collector's own deadline is 1.76 of the eval path's 5.30 ms/sim, 33 %.
+    `max_in_flight` is the most graphs the caller can have in flight, and the collector's
+    saturation threshold derives from it.
 
     Raises:
         ValueError: a graph engine was constructed with `inference_batching=None`.
@@ -100,8 +96,8 @@ class LocalInferenceEngine:
             self._graph_server.start()
 
     def close(self) -> None:
-        """Stop the graph `InferenceServer` thread; a no-op for a dense engine. Idempotent, and
-        also invoked best-effort from `__del__`."""
+        """Stop the graph `InferenceServer` thread. Idempotent, and also invoked best-effort from
+        `__del__`."""
         if self._graph_server is not None:
             self._graph_server.stop()
             self._graph_server.join(timeout=5.0)

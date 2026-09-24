@@ -82,49 +82,49 @@ def resolve_pool_encoding(
 
 @dataclass(frozen=True, kw_only=True)
 class SelfPlayHParams:
-    """Every ctor-time self-play knob, resolved once; `kw_only` so REQUIRED `fast_sims` fits."""
+    """Every ctor-time self-play knob, resolved once; every field required and keyword-only."""
 
     # selfplay ns
-    n_workers: int = 1
-    leaf_batch_size: int = 8
-    max_moves_per_game: int = 128
+    n_workers: int
+    leaf_batch_size: int
+    max_moves_per_game: int
     #: `selfplay.search.kind`, REQUIRED with no default: it selects the root mechanism, the interior
     #: selector AND the exported target's semantics, so a default would boot an undeclared regime.
     search_kind: str
-    c_visit: float = 50.0
-    c_scale: float = 1.0
+    c_visit: float
+    c_scale: float
     #: `selfplay.q_rescale`, REQUIRED with no default: the σ's rescale switch (F-50).
     q_rescale: bool
     #: `selfplay.search_stats_every`, REQUIRED with no default: 1-in-N games record their roots.
     search_stats_every: int
-    gumbel_m: int = 16
-    gumbel_explore_moves: int = 10
-    results_queue_cap: int = 10_000
-    random_opening_plies: int = 0
+    gumbel_m: int
+    gumbel_explore_moves: int
+    results_queue_cap: int
+    random_opening_plies: int
     # mcts ns
-    n_simulations: int = 50
-    c_puct: float = 1.5
-    fpu_reduction: float = 0.25
-    quiescence_enabled: bool = True
-    quiescence_blend_2: float = 0.3
-    dirichlet_alpha: float = 0.3
-    dirichlet_epsilon: float = 0.25       # field name == schema key (mcts.dirichlet_epsilon)
-    dirichlet_enabled: bool = True
-    # playout_cap ns — fast_sims REQUIRED (no default; missing key = ValueError)
+    n_simulations: int
+    c_puct: float
+    fpu_reduction: float
+    quiescence_enabled: bool
+    quiescence_blend_2: float
+    dirichlet_alpha: float
+    dirichlet_epsilon: float  # field name == schema key (mcts.dirichlet_epsilon)
+    dirichlet_enabled: bool
+    # playout_cap ns
     fast_sims: int
-    fast_prob: float = 0.0
-    standard_sims: int = 0
-    full_search_prob: float = 0.0
-    n_sims_quick: int = 0
-    n_sims_full: int = 0
+    fast_prob: float
+    standard_sims: int
+    full_search_prob: float
+    n_sims_quick: int
+    n_sims_full: int
     # The runner ctor kwarg spelling differs from the schema field name.
-    temp_threshold_compound_moves: int = 0
-    temp_min: float = 0.5                 # field name == config key
+    temp_threshold_compound_moves: int
+    temp_min: float  # field name == config key
     # training ns
-    draw_value: float = -0.5
-    ply_cap_value: float = -0.5
+    draw_value: float
+    ply_cap_value: float
     # monitoring / instrumentation ns
-    log_investigation_metrics: bool = True
+    log_investigation_metrics: bool
 
     @property
     def effective_sims_per_move(self) -> int:
@@ -194,11 +194,10 @@ class SelfPlayHParams:
 
 @dataclass(frozen=True)
 class InferenceHParams:
-    """Every ctor-time inference-server knob (same R1-exception as `SelfPlayHParams`)."""
+    """Every ctor-time inference-server knob, resolved once."""
 
-    inference_batch_size: int = 64
-    inference_max_wait_ms: int = 10
-    # diagnostics ns
+    inference_batch_size: int
+    inference_max_wait_ms: int
 
     @classmethod
     def from_config(cls, config: dict[str, Any]) -> InferenceHParams:
