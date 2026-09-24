@@ -9,9 +9,9 @@ The gate is half the fix, which is why the negative rows are as many as the posi
 arm would end every unattended burn whose launching shell exits — and would arm the PYTEST
 PROCESS itself through the five in-process `main()` calls in `tests/test_run_launcher.py`.
 
-Harness shape, re-created locally because R5 bars cross-test imports: real script FILES rather
-than nested `-c` strings (which once produced an `IndentationError` that looked identical to the
-defect), an `_alive()` that treats a zombie as dead, and every child bounded by its own sleep.
+Harness shape: real script FILES rather than nested `-c` strings (which once produced an
+`IndentationError` that looked identical to the defect), an `_alive()` that treats a zombie as
+dead, and every child bounded by its own sleep.
 
 >300 justify (R8): ONE claim whose evidence is irreducibly PAIRED — every arming row is evidence
 only because a matching non-arming row on the SAME harness survives the same kill, so a split

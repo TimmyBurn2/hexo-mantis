@@ -2,8 +2,8 @@
 # supervisor-distinguishable from a clean run and a MID-RUN one deliberately is not — over one
 # seam running from `drain.run_terminal_eval` through a set-once latch to `mantis.run.main`'s
 # rc. Measuring it needs the whole ladder in one place: drivable collaborators, the `main()`
-# driver, a rigged volume and a real `EvalPipeline`. R5 bars cross-test imports, so a split
-# forks that harness into copies that drift while both stay green.
+# driver, a rigged volume and a real `EvalPipeline`, so a split forks that harness into
+# copies that drift while both stay green.
 """The terminal round's reason reaches the process exit code, and a mid-run one still does not.
 
 At HEAD `drain.close_out` computed the terminal round's result, routed it, then threw the

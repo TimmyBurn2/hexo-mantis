@@ -15,7 +15,7 @@ asserts who has AUTHORITY over the value, that one what values are EXPRESSIBLE.
 
 >300 justify (R8): three oracles over ONE manifest row, read through its three surfaces. The "not
 caught by" column is only checkable while they sit together, and splitting would fork the row
-lookup and the config load (R5 bars cross-test imports).
+lookup and the config load.
 """
 from __future__ import annotations
 

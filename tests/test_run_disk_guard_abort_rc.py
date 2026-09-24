@@ -1,7 +1,7 @@
 # >300 justify (R8): the seven rows are ONE claim — a fired disk guard is
 # supervisor-distinguishable from a clean run — over ONE harness that every end-to-end row needs.
-# R5 bars cross-test imports, so a split forks that harness, and it would also fork the drive's
-# one safety property: the guard delivers a REAL SIGTERM here.
+# A split forks that harness, and it would also fork the drive's one safety property: the guard
+# delivers a REAL SIGTERM here.
 """The disk-guard abort's process rc, DRIVEN.
 
 The finding, measured before the fix: `DiskGuard.check_once` SIGTERMs its own pid below

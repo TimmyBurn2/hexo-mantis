@@ -1,8 +1,7 @@
 # >300 justify (R8): O-A1..O-A5 are ONE census family making ONE claim — that exactly one
-# composition path exists — and they share the instrument that makes it checkable. R5 bars
-# cross-test imports, so a split forks that helper set, and two instruments drift apart while
-# both stay green. The src-side census (O-A2) and the child-side census (O-A4) are twins and
-# have to be readable side by side.
+# composition path exists — and they share the instrument that makes it checkable, so a split
+# forks that helper set and two instruments drift apart while both stay green. The src-side
+# census (O-A2) and the child-side census (O-A4) are twins and have to be readable side by side.
 """THE ONE COMPOSITION AUTHORITY — oracles O-A1..O-A5.
 
 What this file exists to stop: two boot paths. `python -m mantis.run` used to validate a config
