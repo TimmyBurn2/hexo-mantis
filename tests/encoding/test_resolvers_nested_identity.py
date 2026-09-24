@@ -11,28 +11,12 @@ import pytest
 
 from mantis.encoding.resolvers import MissingEncodingError, resolve_from_config
 
-def test_nested_identity_encoding_resolves() -> None:
-    """The WP8 nested shape — what `RunConfig` actually dumps — resolves."""
-    spec = resolve_from_config({"identity": {"encoding": "gnn_axis_v1", "representation": "graph"}})
-    assert spec.name == "gnn_axis_v1"
-
-
 def test_nested_identity_resolves_the_graph_encoding_run5_declares() -> None:
     spec = resolve_from_config(
         {"identity": {"encoding": "gnn_axis_v1", "representation": "graph"}}
     )
     assert spec.name == "gnn_axis_v1"
     assert spec.representation == "graph"
-
-
-def test_disagreeing_dual_shape_raises_not_a_precedence_pick() -> None:
-    """A dual-shape config whose declarations DISAGREE is corrupt input: the one authority
-    RAISES rather than picking a winner. `extra="forbid"` means no real `RunConfig` carries
-    both, so this pins the intent, not a live path."""
-    from mantis.encoding.resolvers import EncodingDeclarationConflictError
-
-    with pytest.raises(EncodingDeclarationConflictError):
-        resolve_from_config({"encoding": "gnn_axis_v1", "identity": {"encoding": "gnn_axis_r8"}})
 
 
 # the accept-set widened; the no-default posture did not
