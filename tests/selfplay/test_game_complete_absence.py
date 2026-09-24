@@ -9,8 +9,6 @@ from __future__ import annotations
 import threading
 from typing import Any
 
-import pytest
-
 from mantis._engine import DEFAULT_CLUSTER_THRESHOLD
 from mantis.selfplay.instrumentation import PoolInstrumentation
 
