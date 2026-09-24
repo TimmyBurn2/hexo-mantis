@@ -47,27 +47,27 @@ def _graph_engine() -> LocalInferenceEngine:
 
 
 # I-02 — graph branch
-def test_graph_infer_batch_no_attributeerror_and_correct_shape() -> None:
+def test_graph_infer_batch_ls_correct_shape() -> None:
     engine = _graph_engine()
     try:
-        policies, values = engine.infer_batch([Board()])
-        assert len(policies) == 1
-        assert len(values) == 1
+        policies, overflow, values, centers = engine.infer_batch_ls([Board()])
+        assert len(policies) == len(overflow) == len(values) == len(centers) == 1
         assert len(policies[0]) == _GRAPH_SPEC.policy_logit_count
         assert all(np.isfinite(policies[0]))
         assert np.isfinite(values[0])
-        # Whole-board encoding at ply 0: no off-window drop, so the dense half alone is
+        # Whole-board encoding at ply 0: nothing is off-window, so the dense half alone is
         # already a distribution.
+        assert overflow[0] == []
         assert abs(sum(policies[0]) - 1.0) < 1e-3
     finally:
         engine.close()
 
 
-def test_graph_infer_batch_produces_a_legal_argmax_move() -> None:
+def test_graph_infer_batch_ls_produces_a_legal_argmax_move() -> None:
     engine = _graph_engine()
     try:
         board = Board()
-        policies, _values = engine.infer_batch([board])
+        policies, _overflow, _values, _centers = engine.infer_batch_ls([board])
         best_idx = int(np.argmax(policies[0]))
         legal_flat = {board.to_flat(q, r) for q, r in board.legal_moves()}
         assert best_idx in legal_flat
@@ -75,10 +75,10 @@ def test_graph_infer_batch_produces_a_legal_argmax_move() -> None:
         engine.close()
 
 
-def test_graph_infer_batch_empty_boards_no_op() -> None:
+def test_graph_infer_batch_ls_empty_boards_no_op() -> None:
     engine = _graph_engine()
     try:
-        assert engine.infer_batch([]) == ([], [])
+        assert engine.infer_batch_ls([]) == ([], [], [], [])
     finally:
         engine.close()
 
@@ -87,7 +87,7 @@ def test_graph_engine_close_stops_server_thread_and_is_idempotent() -> None:
     engine = _graph_engine()
     assert engine._graph_server is not None
     server_thread = engine._graph_server
-    engine.infer_batch([Board()])  # warm the thread up first
+    engine.infer_batch_ls([Board()])  # warm the thread up first
     engine.close()
     assert engine._graph_server is None
     assert engine._graph_batcher is None

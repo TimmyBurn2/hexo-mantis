@@ -21,6 +21,8 @@ import pytest
 from mantis._engine import Board
 from mantis.arena.deploy_head import DeployHeadPlayer
 
+from _dense_expand import dense_expand
+
 #: `selfplay.c_visit` / `selfplay.c_scale` as the committed configs mint them. STATED here
 #: rather than imported so this file does not silently re-anchor when the keys are re-minted
 #: — these are the head's inputs, not its subject.
@@ -38,7 +40,7 @@ def _uniform_infer(_board):
 
 def _head(kind: str, **over):
     kwargs = dict(
-        infer_fn=_uniform_infer,
+        expand_fn=dense_expand(_uniform_infer),
         n_sims=8,
         leaf_batch_size=1,
         c_visit=_C_VISIT,
@@ -158,7 +160,7 @@ def test_the_budget_is_leaves_and_the_root_is_one_of_them():
             _calls.append(1)
             return _uniform_infer(board)
 
-        player = _head(kind, infer_fn=counting, n_sims=12, leaf_batch_size=1)
+        player = _head(kind, expand_fn=dense_expand(counting), n_sims=12, leaf_batch_size=1)
         player.new_game()
         player.select_move(_board())
         assert len(calls) == 12, (

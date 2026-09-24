@@ -295,8 +295,7 @@ class EvalPipeline:
         self._caps = caps
         self._encoding = encoding
         #: The graph forward's memory bound, resolved ONCE in the PARENT. Required with no
-        #: default: the eval child is a SECOND allocator no in-process bound can see. `None`
-        #: is the GRID arm.
+        #: default: the eval child is a SECOND allocator no in-process bound can see.
         self._fused_graph_caps = fused_graph_caps
         #: The deploy head's MCTS leaf-batch width. NOT defaulted: a default would be a search
         #: regime nobody minted standing in for the one the net was trained under.

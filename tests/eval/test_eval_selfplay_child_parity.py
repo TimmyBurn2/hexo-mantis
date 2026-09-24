@@ -494,20 +494,10 @@ def test_expand_ls_graph_refuses_a_dense_half_of_the_wrong_stride(graph_engine) 
         )
 
 
-@pytest.mark.parametrize("case", ["neither", "both"])
-def test_deploy_head_takes_exactly_one_collaborator(case) -> None:
-    """`DeployHeadPlayer` takes EXACTLY one of `infer_fn=` (dense) or `expand_fn=` (graph).
-    Neither and both are named `ValueError`s — no default arm and no silent pick, which is the
-    whole reason a second player class was rejected."""
-    def _infer(_leaf):
-        raise AssertionError("the guard must fire before any inference")
-
-    def _expand_fn(_tree, _leaves):
-        raise AssertionError("the guard must fire before any expand")
-
-    kwargs = {} if case == "neither" else {"infer_fn": _infer, "expand_fn": _expand_fn}
-    with pytest.raises(ValueError):
-        DeployHeadPlayer(n_sims=1, **kwargs, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0)
+def test_deploy_head_requires_its_expand_collaborator() -> None:
+    """`expand_fn=` has no default: a head without its decode+expand collaborator is a TypeError."""
+    with pytest.raises(TypeError, match="expand_fn"):
+        DeployHeadPlayer(n_sims=1, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0)  # type: ignore[call-arg]
 
 
 def test_build_candidate_player_closed_match_refuses_an_unknown_representation() -> None:
@@ -533,24 +523,6 @@ def test_build_candidate_player_closed_match_refuses_an_unknown_representation()
             worker.build_candidate_player(engine, 2, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0)
     finally:
         engine.close()
-
-
-def test_infer_ls_is_the_same_refusal_predicate_as_infer_batch_ls(graph_engine) -> None:
-    """ONE predicate with TWO entry points, asserted as a delegation rather than duplicated:
-    `infer_ls` is a one-line delegation to `infer_batch_ls`, so a future edit cannot give the
-    single-board door a different (or absent) guard."""
-    engine, _spec = graph_engine
-    calls = []
-
-    def _recording(boards):
-        calls.append(list(boards))
-        return ([[0.0]], [[]], [0.0], [(0, 0)])
-
-    engine.infer_batch_ls = _recording
-    board = _board(_positions(_load(_P1_FIXTURE))[0])
-    result = engine.infer_ls(board)
-    assert calls == [[board]], "infer_ls did not delegate to infer_batch_ls"
-    assert result == ([0.0], [], 0.0, (0, 0)), "infer_ls did not project the batch result"
 
 
 def test_no_drop_pooling_encoding_is_still_refused() -> None:

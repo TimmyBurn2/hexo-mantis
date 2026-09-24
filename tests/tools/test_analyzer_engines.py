@@ -49,7 +49,7 @@ def test_the_card_states_the_stamps_facts_and_the_seed(engines, mantis_engine):
 def test_the_raw_read_is_the_nets_value_and_the_decoded_priors(engines, mantis_engine):
     board = _board(mantis_engine, [(0, 0), (1, 0), (0, 1)])
     raw = mantis_engine.raw_read(board)
-    _dense, _overflow, net_value, _centre = mantis_engine.engine.infer_ls(board.clone())
+    _dense, _overflow, (net_value,), _centre = mantis_engine.engine.infer_batch_ls([board.clone()])
     assert raw.value == pytest.approx(net_value, abs=1e-6)
     assert len(raw.children) == len(board.legal_moves()) and isinstance(raw.children[0], engines.Child)
     assert sum(c.prior for c in raw.children) == pytest.approx(1.0, abs=1e-4)

@@ -40,7 +40,6 @@ from mantis.eval.floor_gate import evaluate_strength_floor, probe_measurements
 from mantis.eval.worker import build_candidate_player
 from mantis.model import arch_from_spec_and_config, build_net
 from mantis.model.identity import net_param_hash
-from mantis.selfplay.hparams import is_graph_representation
 from mantis.selfplay.inference_local import LocalInferenceEngine
 from mantis.train.checkpoints import deploy_state, load_checkpoint
 from mantis.util.determinism import seed_everything
@@ -234,13 +233,10 @@ def _arm_engine(arm: ArmSpec, *, cfg: Any, dump: dict[str, Any], spec: Any,
     net = seeded_net(arch_from_spec_and_config(spec, dump), seed=cfg.seed)
     if arm.checkpoint is not None:
         net.load_state_dict(deploy_state(load_checkpoint(arm.checkpoint, declared_encoding=spec.name))[0])
-    # GRID passes `None` for both EXPLICITLY — this route has no fused graph forward to bound
-    # and builds no graph collector — which is the engine's stated contract, not a fallback.
-    graph = is_graph_representation(spec)
     return LocalInferenceEngine(
         net.to(device).eval(), device, encoding_spec=spec,
-        fused_graph_caps=resolve_fused_graph_caps(dump) if graph else None,
-        inference_batching=resolve_inference_batching(dump) if graph else None,
+        fused_graph_caps=resolve_fused_graph_caps(dump),
+        inference_batching=resolve_inference_batching(dump),
         max_in_flight=cfg.selfplay.leaf_batch_size,
         # The declared autocast dtype, resolved by `amp_dtype_for`; this site names no dtype.
         # 1-in-1 sampling: this driver is where the class fired, and the dump rides only when the

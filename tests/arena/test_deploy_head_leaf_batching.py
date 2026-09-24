@@ -34,14 +34,6 @@ def _counting_expand_fn(calls: list[int]):
     return _expand
 
 
-def _counting_infer_fn(calls: list[int]):
-    """The grid arm's per-leaf collaborator; one entry per LEAF, comparable to the round-trips."""
-    def _infer(_board):
-        calls.append(1)
-        return [0.0] * _POLICY_LEN, 0.0
-    return _infer
-
-
 def _play_one_move(*, n_sims: int, leaf_batch_size: int) -> list[int]:
     """One `select_move` on the GRAPH arm; returns the per-call batch widths."""
     calls: list[int] = []
@@ -101,34 +93,18 @@ def test_k_equals_one_is_byte_for_byte_the_old_loop() -> None:
     assert calls == [1] * 7, f"k=1 must request one leaf per call, 7 times; got {calls}"
 
 
-def test_the_grid_arm_batches_too_and_is_not_left_behind() -> None:
-    """The grid arm batches too — asserted separately because it reaches the net through a
-    PER-LEAF `infer_fn`, so a one-arm fix would pass every graph-arm row."""
-    calls: list[int] = []
-    player = DeployHeadPlayer(
-        infer_fn=_counting_infer_fn(calls), n_sims=12, leaf_batch_size=4, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0,
-    )
-    player.new_game()
-    player.select_move(Board.with_encoding_name(_ENCODING))
-    assert sum(calls) == 12, (
-        f"the grid arm must still evaluate every one of the 12 budgeted leaves; got {sum(calls)}. "
-        f"The per-leaf infer_fn count is the node budget on this arm, and it is the same 12 the "
-        f"graph arm spends — the arms differ in transport, never in how much they search."
-    )
-
-
 # the knob: required, validated, and SHARED with self-play
 @pytest.mark.parametrize("bad", [0, -1])
 def test_a_batch_width_below_one_is_REFUSED_not_clamped(bad: int) -> None:
     """A silent clamp to 1 would restore the exact defect this row exists to close."""
     with pytest.raises(ValueError, match="leaf_batch_size"):
-        DeployHeadPlayer(infer_fn=_counting_infer_fn([]), n_sims=4, leaf_batch_size=bad, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0)
+        DeployHeadPlayer(expand_fn=_counting_expand_fn([]), n_sims=4, leaf_batch_size=bad, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0)
 
 
 def test_leaf_batch_size_has_NO_DEFAULT_and_must_be_stated() -> None:
     """A default here would be a search regime nobody minted: omitting it is a TypeError."""
     with pytest.raises(TypeError, match="leaf_batch_size"):
-        DeployHeadPlayer(infer_fn=_counting_infer_fn([]), n_sims=4, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0)  # type: ignore[call-arg]
+        DeployHeadPlayer(expand_fn=_counting_expand_fn([]), n_sims=4, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0)  # type: ignore[call-arg]
 
 
 def test_deploy_and_selfplay_read_THE_SAME_CONFIG_KEY() -> None:

@@ -79,7 +79,7 @@ every edit, the search lands seconds later — and the page shows the search as 
    (`quiescence_fire_count` 1), 64 sims +0.3429 (3 fires). And under `puct` `root_raw_value()`
    is 0.0 at every budget (the kind keeps no raw values). The raw tier therefore reads the NET
    through a `MCTSTree(quiescence_enabled=False)` driven by the worker's own expand collaborator
-   — measured −0.2987, equal to `engine.infer_ls` — and the searched tier is stated to INCLUDE the
+   — measured −0.2987, equal to `engine.infer_batch_ls` — and the searched tier is stated to INCLUDE the
    deploy head's quiescence override, with the fire count printed as its own instrument.
 2. **Terminal positions.** `select_move` RAISES on a won board (no root children, every kind
    and budget); strix's MCTS refuses too. The analyzer checks for a win BEFORE any engine call.
@@ -226,8 +226,8 @@ deploy_sims (= eval.gate.deploy_sims), params, device, threads`.
 
 **Two trees per engine.** (i) THE RAW TREE, cached: `MCTSTree(quiescence_enabled=False)` +
 `configure_search(kind, c_visit, c_scale, q_rescale)` once; per read `new_game(board)` →
-`select_leaves(1)` → the worker's expand collaborator (`_graph_expand_fn(engine, spec)` for
-graph; `expand_and_backup` on `engine.infer` for grid) → `root_value()` is the NET's value and
+`select_leaves(1)` → the worker's expand collaborator (`_graph_expand_fn(engine, spec)`)
+→ `root_value()` is the NET's value and
 `get_root_children_info()`'s priors are the decoded policy (31 ms measured). (ii) THE SEARCH: a
 FRESH `DeployHeadPlayer` per request via `build_candidate_player(engine, sims, …)` with the
 run's `c_visit, c_scale, q_rescale, leaf_batch_size, gumbel_m` and `gumbel_seed =
@@ -465,7 +465,7 @@ file under the cap (gate 15).
   gap; a stamp missing a needed key is refused by the key's name; the composition on a stamped
   checkpoint MINTED in `tmp_path` by `save_checkpoint` with a tiny `GnnArchV2` (as
   `tests/train/test_arch_stamp_authority.py` does — no fixture file) runs `sims=0` and `sims=8`
-  and the record has every field of §2.4; `raw.value` equals `engine.infer_ls`'s value on the
+  and the record has every field of §2.4; `raw.value` equals `engine.infer_batch_ls`'s value on the
   same board; a second identical gumbel request repeats its `search.argmax`.
 - `test_analyzer_analysis.py`: the PERSPECTIVE pin (a WIN1 position for the mover → searched
   root ≥ 0.9 at sims ≥ 8, the mechanism named in the test: root quiescence); `raw` and `search`

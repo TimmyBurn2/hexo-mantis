@@ -106,12 +106,9 @@ _Q6_TABLE: list[tuple[str, list[tuple[str, str]], tuple[int, int, int]]] = [
      [("pool_drain.py", "run_stats_loop"),
       ("pool_push.py", "push_dense"),
       ("pool_push.py", "push_graph")], (3, 1, 2)),
-    # DOWN-RATCHET: the four `for`s were the K-cluster dense decode, and `infer_batch` now
-    # delegates to `_infer_batch_graph`, whose own row below is unchanged.
-    ("LocalInferenceEngine.infer_batch",
-     [("inference_local.py", "LocalInferenceEngine.infer_batch")], (0, 0, 0)),
-    ("LocalInferenceEngine._infer_batch_graph",
-     [("inference_local.py", "LocalInferenceEngine._infer_batch_graph")], (0, 0, 3)),
+    # The eval deploy head's one decode door: five per-board comprehensions, no per-item loop.
+    ("LocalInferenceEngine.infer_batch_ls",
+     [("inference_local.py", "LocalInferenceEngine.infer_batch_ls")], (0, 0, 5)),
 ]
 
 
@@ -157,7 +154,7 @@ def test_j01_census_covers_every_frozen_row() -> None:
             assert _find_function(trees[module], qual) is not None, (
                 f"{label}: {module}:{qual} not found"
             )
-    assert len(_Q6_TABLE) >= 10, (
+    assert len(_Q6_TABLE) >= 9, (
         "the frozen §Q6 table has lost rows. AUDIT-1 F-49: this read `== 10` against a\n"
         "literal in this same module, which could only notice someone editing that\n"
         "literal. What it is FOR is that a deleted hot-path function makes its\n"

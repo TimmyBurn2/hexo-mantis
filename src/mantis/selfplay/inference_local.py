@@ -118,72 +118,15 @@ class LocalInferenceEngine:
             pass
 
     @torch.inference_mode()
-    def infer(self, board: Board) -> tuple[list[float], float]:
-        """Single-board convenience wrapper around `infer_batch`."""
-        policies, values = self.infer_batch([board])
-        return policies[0], values[0]
-
-    @torch.inference_mode()
-    def infer_batch(self, boards: list[Board]) -> tuple[list[list[float]], list[float]]:
-        """Run inference on a list of boards.
-
-        Returns:
-            policies: global policy vectors (length `spec.policy_logit_count` each).
-            values:   min-pooled scalar values, or the dist65-decoded value on the graph leg.
-        """
-        if not boards:
-            return [], []
-
-        return self._infer_batch_graph(boards)
-
-    def _infer_batch_graph(
-        self, boards: list[Board]
-    ) -> tuple[list[list[float]], list[float]]:
-        """Graph-representation leg of `infer_batch`, reusing the production graph seam. The
-        dense half of each legal-set policy is returned and the coord-keyed overflow is DROPPED,
-        which is the dense single-window branch's own contract.
-
-        NO PRODUCTION CONSUMER REACHES THIS METHOD: the eval deploy head refuses a graph encoding
-        and the eval worker's graph arm goes through `infer_batch_ls`. Retained because the
-        census pins it and its drop contract is what `infer_batch_ls` is defined against.
-        """
-        positions = [
-            (list(board.get_stones()), int(board.current_player), int(board.moves_remaining))
-            for board in boards
-        ]
-        batcher = self._graph_batcher
-        if batcher is None:
-            # Set on every graph __init__; None only for a dense engine or after close().
-            raise RuntimeError(
-                "LocalInferenceEngine._infer_batch_graph: graph batcher is gone — the "
-                "engine was closed (or constructed dense) before this inference call."
-            )
-        results = batcher.submit_graphs_and_wait(positions)
-        policies = [dense for dense, _overflow, _value in results]
-        values = [float(value) for _dense, _overflow, value in results]
-        return policies, values
-
-    @torch.inference_mode()
-    def infer_ls(self, board: Board) -> tuple[
-        list[float], list[tuple[tuple[int, int], float]], float, tuple[int, int]
-    ]:
-        """Single-board door onto `infer_batch_ls`: ONE delegation, so the refusal cannot drift."""
-        dense, overflow, values, centers = self.infer_batch_ls([board])
-        return dense[0], overflow[0], values[0], centers[0]
-
-    @torch.inference_mode()
     def infer_batch_ls(self, boards: list[Board]) -> tuple[
         list[list[float]],
         list[list[tuple[tuple[int, int], float]]],
         list[float],
         list[tuple[int, int]],
     ]:
-        """The NO-DROP graph decode: BOTH halves of what the shared producer returns.
-
-        `_infer_batch_graph` keeps only the dense half and throws the `overflow` away — measured
-        at 53.2% of legal moves at run5's geometry. This keeps both and returns the BUILDER's
-        window centre, because the consumer must read priors in the frame their slots were baked
-        in and `Board` does not expose that centre to Python.
+        """The NO-DROP graph decode: BOTH halves of what the shared producer returns, plus the
+        BUILDER's window centre, because the consumer must read priors in the frame their slots
+        were baked in and `Board` does not expose that centre to Python.
 
         Returns:
             dense:    the in-window half per board (length `spec.policy_logit_count`).

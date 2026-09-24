@@ -7,7 +7,9 @@ import random
 import pytest
 
 from mantis._engine import Board
-from mantis.arena.deploy_head import DeployHeadPlayer, InferFn
+from mantis.arena.deploy_head import DeployHeadPlayer
+
+from _dense_expand import InferStub, dense_expand
 
 _STRIDE = 362
 
@@ -25,7 +27,7 @@ def _mid_game_board(n_stones: int, seed: int) -> Board:
     return board
 
 
-def _peaked_infer(calls: list[int]) -> InferFn:
+def _peaked_infer(calls: list[int]) -> InferStub:
     """The red team's peaked net: a distance-decay prior and a position-dependent value."""
     def _infer(board: Board) -> tuple[list[float], float]:
         calls.append(1)
@@ -53,7 +55,7 @@ def _peaked_infer(calls: list[int]) -> InferFn:
 def test_every_kind_spends_exactly_its_budget(kind: str, n_sims: int) -> None:
     calls: list[int] = []
     player = DeployHeadPlayer(
-        infer_fn=_peaked_infer(calls), n_sims=n_sims, leaf_batch_size=8, c_visit=50.0,
+        expand_fn=dense_expand(_peaked_infer(calls)), n_sims=n_sims, leaf_batch_size=8, c_visit=50.0,
         c_scale=1.0, q_rescale=True, search_kind=kind, gumbel_m=16, gumbel_seed=7,
     )
     player.new_game()
@@ -67,7 +69,7 @@ def test_the_gumbel_head_spends_its_budget_on_a_second_board_too() -> None:
     """A second position, because the defect's rate depended on the board's transpositions."""
     calls: list[int] = []
     player = DeployHeadPlayer(
-        infer_fn=_peaked_infer(calls), n_sims=256, leaf_batch_size=1, c_visit=50.0,
+        expand_fn=dense_expand(_peaked_infer(calls)), n_sims=256, leaf_batch_size=1, c_visit=50.0,
         c_scale=1.0, q_rescale=False, search_kind="gumbel", gumbel_m=16, gumbel_seed=11,
     )
     player.new_game()
@@ -80,7 +82,7 @@ def test_the_head_reports_the_leaves_it_spent_as_its_own_counter(kind: str) -> N
     """LADDER-1's budget witness reads `last_sims`, the head's count, never the caller's tally of infer calls."""
     calls: list[int] = []
     player = DeployHeadPlayer(
-        infer_fn=_peaked_infer(calls), n_sims=96, leaf_batch_size=8, c_visit=50.0,
+        expand_fn=dense_expand(_peaked_infer(calls)), n_sims=96, leaf_batch_size=8, c_visit=50.0,
         c_scale=1.0, q_rescale=True, search_kind=kind, gumbel_m=16, gumbel_seed=7,
     )
     player.new_game()

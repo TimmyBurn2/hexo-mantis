@@ -19,10 +19,7 @@ from mantis.util.device import release_cuda_cache
 #: `get_root_children_info()` row shape: (coord, pool_idx, prior, visits, q).
 ChildInfo = tuple[tuple[int, int], int, float, int, float]
 
-InferFn = Callable[[Any], tuple[list[float], float]]
-
-#: The graph collaborator runs the whole decode+expand itself: `InferFn`'s `(policy, value)`
-#: return cannot carry the four producer outputs the no-drop graph expand needs.
+#: The collaborator runs the whole decode + no-drop expand for a batch of leaves itself.
 ExpandFn = Callable[[MCTSTree, list[Any]], None]
 
 #: Odd 64-bit multipliers, so distinct (game, move) pairs cannot collide inside one round.
@@ -34,20 +31,15 @@ _SEED_MASK = (1 << 64) - 1
 class DeployHeadPlayer:
     """The deploy-matched candidate head: the run's own search over an `MCTSTree`.
 
-    EXACTLY ONE of `infer_fn=` (grid: leaf -> `(policy, value)`, then dense `expand_and_backup`)
-    or `expand_fn=` (graph: the collaborator owns the decode and the no-drop expand) is supplied.
-
     Raises:
-        ValueError: neither or both of `infer_fn`/`expand_fn`; `leaf_batch_size < 1`;
-            `gumbel_m < 1`; `search_kind` is not a kind the engine implements (raised by
-            `MCTSTree.configure_search` on the first `new_game`).
+        ValueError: `leaf_batch_size < 1`; `gumbel_m < 1`; `search_kind` is not a kind the
+            engine implements (raised by `MCTSTree.configure_search` on the first `new_game`).
     """
 
     def __init__(
         self,
         *,
-        infer_fn: InferFn | None = None,
-        expand_fn: ExpandFn | None = None,
+        expand_fn: ExpandFn,
         n_sims: int,
         leaf_batch_size: int,
         c_visit: float,
@@ -57,13 +49,6 @@ class DeployHeadPlayer:
         gumbel_m: int,
         gumbel_seed: int,
     ) -> None:
-        if (infer_fn is None) == (expand_fn is None):
-            supplied = "both" if infer_fn is not None else "neither"
-            raise ValueError(
-                f"DeployHeadPlayer takes EXACTLY ONE of infer_fn= (grid) or expand_fn= "
-                f"(graph); {supplied} was supplied. There is no default arm — picking one "
-                f"here would decide the decode contract silently."
-            )
         # `c_visit`, `c_scale`, `q_rescale`, `leaf_batch_size` and `gumbel_m` are REQUIRED schema
         # keys, never defaulted: a default equal to today's minted value is still a second authority.
         if int(leaf_batch_size) < 1:
@@ -79,7 +64,6 @@ class DeployHeadPlayer:
                 f"reason — a bar that considered a different number of root actions than the "
                 f"run did is not deploy-matched."
             )
-        self._infer_fn = infer_fn
         self._expand_fn = expand_fn
         self._n_sims = int(n_sims)
         self._leaf_batch_size = int(leaf_batch_size)
@@ -121,19 +105,6 @@ class DeployHeadPlayer:
         tree.configure_search(self._search_kind, self._c_visit, self._c_scale, self._q_rescale)
         return tree
 
-    def _evaluate(self, tree: MCTSTree, leaves: list[Any]) -> None:
-        if self._expand_fn is not None:
-            self._expand_fn(tree, leaves)
-            return
-        assert self._infer_fn is not None  # ctor guarantees exactly one arm
-        policies: list[list[float]] = []
-        values: list[float] = []
-        for leaf in leaves:
-            policy, value = self._infer_fn(leaf)
-            policies.append(policy)
-            values.append(value)
-        tree.expand_and_backup(policies, values)
-
     def _move_seed(self) -> int:
         return (
             self._gumbel_seed
@@ -164,7 +135,7 @@ class DeployHeadPlayer:
     def _search(self, tree: MCTSTree) -> tuple[int, int]:
         root_leaves = tree.select_leaves(1)
         if root_leaves:
-            self._evaluate(tree, root_leaves)
+            self._expand_fn(tree, root_leaves)
         sims_done = len(root_leaves)
 
         if self._search_kind == "gumbel":
@@ -192,7 +163,7 @@ class DeployHeadPlayer:
             leaves = tree.select_leaves(current_batch)
             if not leaves:
                 break
-            self._evaluate(tree, leaves)
+            self._expand_fn(tree, leaves)
             sims_done += len(leaves)
         top = tree.get_top_visits(1)
         return (top[0][0] if top else None), sims_done
@@ -212,9 +183,9 @@ class DeployHeadPlayer:
             leaves = tree.select_leaves_forced([child])
             if not leaves:
                 break
-            self._evaluate(tree, leaves)
+            self._expand_fn(tree, leaves)
             spent += len(leaves)
         return tree.gumbel_root_best_move(), sims_done + spent
 
 
-__all__ = ["ChildInfo", "DeployHeadPlayer", "ExpandFn", "InferFn"]
+__all__ = ["ChildInfo", "DeployHeadPlayer", "ExpandFn"]

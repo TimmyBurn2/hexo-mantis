@@ -51,14 +51,12 @@ from mantis.selfplay.inference_local import LocalInferenceEngine
 #: Confirm-phase opening seed offset, so the confirm block draws a DIFFERENT book slice.
 _CONFIRM_SEED_OFFSET = 7919
 
-#: Policy-pool values the eval decode ENTRANCE actually implements: the grid arm's dense
-#: `infer_batch` scatter-MAXes and DROPS off-window cells, the graph arm drops nothing. A
+#: Policy-pool values the eval decode ENTRANCE accepts; the graph decode drops nothing. A
 #: CLOSED SET, so a registry row declaring `scatter_mean` is refused, not silently max-pooled.
 _DECODE_IMPLEMENTED_POLICY_POOLS = frozenset({"none", "scatter_max"})
 
-#: Value-pool values the eval decode ENTRANCE implements, on the same CLOSED-SET discipline:
-#: `value_pool` has NO Python consumer (the grid arm hardcodes `.min()`, the graph arm pools
-#: nothing), so a row declaring `"mean"` would otherwise be silently min-pooled.
+#: Value-pool values the eval decode ENTRANCE accepts, on the same CLOSED-SET discipline:
+#: `value_pool` has NO Python consumer (the graph decode pools nothing).
 _DECODE_IMPLEMENTED_VALUE_POOLS = frozenset({"none", "min"})
 
 
@@ -76,12 +74,9 @@ def _assert_policy_pool_implemented(spec: EncodingSpec) -> None:
         return
     raise EvalDecodeUnsupportedError(
         f"encoding {spec.name!r} declares policy_pool={spec.policy_pool!r}, which this eval "
-        f"worker's decode entrance does not implement: on the GRID arm DeployHeadPlayer "
-        f"reaches the net through LocalInferenceEngine.infer_batch, whose dense arm "
-        f"scatter-maxes and DROPS off-window cells. The grid no-drop decode "
-        f"(infer_batch_per_cluster + the Rust expand_and_backup_ls) exists but is not wired "
-        f"to the deploy head (ADJ-WP12R-4). Refusing to report an eval result pooled "
-        f"differently from the encoding's own declaration."
+        f"worker's decode entrance does not implement: the graph decode (infer_batch_ls) "
+        f"pools nothing. Implemented: {sorted(_DECODE_IMPLEMENTED_POLICY_POOLS)}. Refusing to "
+        f"report an eval result pooled differently from the encoding's own declaration."
     )
 
 
@@ -91,9 +86,7 @@ def _assert_value_pool_implemented(spec: EncodingSpec) -> None:
     raise EvalDecodeUnsupportedError(
         f"encoding {spec.name!r} declares value_pool={spec.value_pool!r}, which this eval "
         f"worker's decode entrance does not implement: nothing in the Python decode READS "
-        f"the field. The grid arm hardcodes a min-reduction over cluster windows "
-        f"(LocalInferenceEngine.infer_batch: 'v = float(board_values.min())') and the graph "
-        f"arm performs no reduction at all. Implemented: "
+        f"the field, and the graph decode performs no reduction at all. Implemented: "
         f"{sorted(_DECODE_IMPLEMENTED_VALUE_POOLS)}. Refusing to report an eval result whose "
         f"value channel was pooled differently from the encoding's own declaration "
         f"(ADJ-WP12R-6)."
@@ -250,9 +243,9 @@ def _model_sims_for_kind(spec: RoundSpec, kind: str) -> int:
 
 
 def _graph_expand_fn(engine: LocalInferenceEngine, spec: EncodingSpec):
-    """Decode and expand one graph leaf through `expand_and_backup_ls_at` — the same producer,
-    expand and frame self-play uses, with the builder's window centre threaded from the producer
-    so the bridge's leaf/policy alignment cross-check is possible."""
+    """Decode and expand one graph leaf batch through `expand_and_backup_ls_graph` — the same
+    producer, expand and frame self-play uses, with the builder's window centre threaded from the
+    producer so the bridge's leaf/policy alignment cross-check is possible."""
     def _expand(tree, leaves) -> None:
         dense, overflow, values, centers = engine.infer_batch_ls(leaves)
         tree.expand_and_backup_ls_graph(
@@ -278,18 +271,11 @@ def build_candidate_player(
                                 c_visit=c_visit, c_scale=c_scale, q_rescale=q_rescale,
                                 search_kind=search_kind, gumbel_m=gumbel_m,
                                 gumbel_seed=gumbel_seed)
-    if spec.representation == "grid":
-        return DeployHeadPlayer(infer_fn=engine.infer, n_sims=n_sims,
-                                c_visit=c_visit, c_scale=c_scale, q_rescale=q_rescale,
-                                leaf_batch_size=leaf_batch_size,
-                                search_kind=search_kind, gumbel_m=gumbel_m,
-                                gumbel_seed=gumbel_seed)
     raise EvalDecodeUnsupportedError(
         f"encoding {spec.name!r} declares representation={spec.representation!r}, which "
-        f"this eval worker's decode entrance does not implement. The implemented arms are "
-        f"'grid' (infer_batch) and 'graph' (infer_batch_ls). Refusing to fall through to "
-        f"either arm — a decode chosen by fallthrough is the defect this match exists to "
-        f"prevent."
+        f"this eval worker's decode entrance does not implement. The implemented arm is "
+        f"'graph' (infer_batch_ls). Refusing to fall through to it — a decode chosen by "
+        f"fallthrough is the defect this match exists to prevent."
     )
 
 

@@ -157,7 +157,7 @@ class RoundSpec:
     strength_floor: StrengthFloorSpec | None
     #: The graph inference forward's memory bound: the eval worker is a SECOND allocator on the
     #: same card that no in-process bound can see, and its engine builds a server from a
-    #: hand-made dict with no `RunConfig`. `None` is the GRID arm and must round-trip as `None`.
+    #: hand-made dict with no `RunConfig`. `None` must round-trip as `None`.
     fused_graph_caps: FusedGraphCapsSpec | None
     #: The EVAL leaf-graph build's width, derived in the parent because the child has no
     #: `RunConfig`. `1` is the serial path and the exact-parity control.
@@ -180,7 +180,7 @@ class RoundSpec:
     gumbel_m: int
     #: The graph collector's batching geometry, resolved in the parent. These two knobs were
     #: LITERALS in the child's hand-made server dict, and a literal wrong for the route cost 33%
-    #: of the eval path's ms/sim in the collector's own deadline. `None` is the GRID arm.
+    #: of the eval path's ms/sim in the collector's own deadline.
     inference_batching: InferenceBatchingSpec | None
     #: The allocator REGIME the caps were fitted under, as the config's minted token: a posture
     #: is a property of the PROCESS's environment, so the parent's assertion says nothing about
