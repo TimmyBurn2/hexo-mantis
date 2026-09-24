@@ -66,7 +66,8 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   - `.wt/w6-cards`, **sonnet**: legs 3+4 (RULINGS_ACTIVE.md retired, CARDS closed rows and drift).
   - `.wt/w6-mech`, **sonnet**: leg 5 minus the register annotations (CLAUDE.md, toolchain files,
     repo_design §3, Cargo profile, SHAKEDOWN7G, .gitattributes, analyzer_design, README).
-- Queued: leg 6, the STATE rewrite plus the falsified.md and RULINGS.md annotations (**opus**), then
+  - `.wt/w6-reg`, **opus**: the falsified.md F-43/F-04 and RULINGS.md defect-47 annotations.
+- Queued: leg 6, the STATE rewrite (**opus**), then
   REVIEW-W6 (**opus**).
 
 ## W5 — tests + fixtures (EXITED 2026-09-25)
