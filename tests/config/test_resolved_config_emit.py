@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from mantis.config.census import production_configs
 from mantis.config.emit import ResolvedConfig, ResolvedKnob, resolve_config
 from mantis.config.loader import load_config
 
@@ -25,29 +26,35 @@ _SIX_SCHEMA_LEAVES = {
     "eval.random_model_sims",
 }
 
+#: Every production config — these rows hold for any member, never one named config.
+_CENSUS = production_configs(REPO_ROOT)
+_CENSUS_IDS = [path.name for path in _CENSUS]
 
-def _run5() -> ResolvedConfig:
-    return resolve_config(load_config(REPO_ROOT / "configs" / "run6.yaml"))
+
+def _resolved(path: Path) -> ResolvedConfig:
+    return resolve_config(load_config(path))
 
 
 # O6 emit
-def test_payload_event_and_seven_knob_key_set():
-    payload = _run5().to_event_payload()
+@pytest.mark.parametrize("path", _CENSUS, ids=_CENSUS_IDS)
+def test_payload_event_and_seven_knob_key_set(path):
+    payload = _resolved(path).to_event_payload()
     assert payload["event"] == "resolved_config"
     assert set(payload["knobs"]) == _SIX_SCHEMA_LEAVES | {"amp_dtype"}
 
 
-def test_payload_pins_production_values():
+@pytest.mark.parametrize("path", _CENSUS, ids=_CENSUS_IDS)
+def test_payload_pins_production_values(path):
     """The EMIT carries the config's own values — a transport assertion, not a mint assertion.
 
-    AUDIT-1 F-49: `== 96` / `== 128` were typed here, a third copy of run5's minted sims with
-    no provenance line. What this test is for is that `to_event_payload` does not transform or
-    drop a value on the way out, so it compares the payload to the LOADED CONFIG. The one
-    provenance pin for 96/128 with its grounds is
-    `tests/config/test_eval_config_remint.py::test_run3_parity_values_pinned`.
+    AUDIT-1 F-49: `== 96` / `== 128` were typed here, a third copy of one config's minted sims
+    with no provenance line. What this test is for is that `to_event_payload` does not transform
+    or drop a value on the way out, so it compares the payload to the LOADED CONFIG — every
+    production config, not one named file. The one provenance pin for a specific minted value's
+    grounds is `tests/config/test_eval_config_remint.py::test_run3_parity_values_pinned`.
     """
-    cfg = load_config(REPO_ROOT / "configs" / "run6.yaml")
-    knobs = _run5().to_event_payload()["knobs"]
+    cfg = load_config(path)
+    knobs = _resolved(path).to_event_payload()["knobs"]
     assert knobs["schema_version"]["value"] == cfg.schema_version
     assert knobs["identity.encoding"]["value"] == cfg.identity.encoding
     assert knobs["identity.representation"]["value"] == cfg.identity.representation
@@ -55,34 +62,39 @@ def test_payload_pins_production_values():
     assert knobs["amp_dtype"]["value"] == "bf16"
 
 
-def test_schema_leaves_are_file_source_amp_is_derived():
-    rc = _run5()
+@pytest.mark.parametrize("path", _CENSUS, ids=_CENSUS_IDS)
+def test_schema_leaves_are_file_source_amp_is_derived(path):
+    rc = _resolved(path)
     for leaf in _SIX_SCHEMA_LEAVES:
         assert rc.provenance(leaf).source == "file"
     assert rc.provenance("amp_dtype").source == "derived"
 
 
-def test_encoding_source_remap_variant_to_file():
+@pytest.mark.parametrize("path", _CENSUS, ids=_CENSUS_IDS)
+def test_encoding_source_remap_variant_to_file(path):
     # NIT-2: the encoding resolver returns source="variant"; emit remaps variant->file.
-    assert _run5().provenance("identity.encoding").source == "file"
+    assert _resolved(path).provenance("identity.encoding").source == "file"
 
 
-def test_one_knob_mutation_reflected_in_payload():
-    cfg = load_config(REPO_ROOT / "configs" / "run6.yaml")
+@pytest.mark.parametrize("path", _CENSUS, ids=_CENSUS_IDS)
+def test_one_knob_mutation_reflected_in_payload(path):
+    cfg = load_config(path)
     mutated = cfg.model_copy(update={"seed": cfg.seed + 1})
     assert resolve_config(mutated).to_event_payload()["knobs"]["seed"]["value"] == cfg.seed + 1
 
 
-def test_payload_has_no_merge_provenance_or_checkpoint_source():
-    knobs = _run5().to_event_payload()["knobs"]
+@pytest.mark.parametrize("path", _CENSUS, ids=_CENSUS_IDS)
+def test_payload_has_no_merge_provenance_or_checkpoint_source(path):
+    knobs = _resolved(path).to_event_payload()["knobs"]
     for rec in knobs.values():
         assert set(rec) == {"value", "source"}
         assert rec["source"] != "checkpoint"
 
 
-def test_provenance_unknown_knob_raises():
+@pytest.mark.parametrize("path", _CENSUS, ids=_CENSUS_IDS)
+def test_provenance_unknown_knob_raises(path):
     with pytest.raises(KeyError):
-        _run5().provenance("no_such_knob")
+        _resolved(path).provenance("no_such_knob")
 
 
 def test_resolved_knob_shape():
