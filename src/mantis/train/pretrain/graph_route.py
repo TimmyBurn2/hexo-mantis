@@ -1,7 +1,3 @@
-# >300 justify (R8): the ring's provenance handshake, the step budget it feeds, the dense-arm
-# refusal and the loop those three constrain are ONE reroute over ONE artifact. Split them and a
-# caller can reach the loop with a ring whose provenance was checked somewhere else, which is
-# the class the sidecar handshake exists to close.
 """BC pretrain on the GRAPH arch — a REROUTE through the declared train-step seam.
 
 Graph-ifying `BootstrapTrainer` would build a SECOND graph training path beside the one that
@@ -150,49 +146,6 @@ def resolve_step_budget(
     return total
 
 
-#: Why each of these has no subject on the graph route. Data, not prose, so the refusal message
-#: and the oracle read the SAME set.
-DENSE_ARM_FLAGS: dict[str, str] = {
-    "--filters": "a CNN trunk width; the graph arch reads `gnn_hidden` in the config",
-    "--res-blocks": "a CNN trunk depth; the graph arch reads `gnn_num_layers` in the config",
-    "--resume": "the dense arm's `BootstrapTrainer` resume; this route builds a fresh net",
-    "--lr-peak": "a cosine-restart peak for the dense `--resume` path",
-    "--eta-min": "read as `pretrain_eta_min` by `BootstrapTrainer`; the graph step takes its "
-                 "schedule from the trainer the config builds",
-    "--freeze-trunk-entry": "freezes `trunk.input_conv`/`trunk.input_gn`, CNN modules",
-    "--unfreeze-blocks": "selects `trunk.tower` block indices, CNN modules",
-    "--inference-out": "the dense arm's bare-weights export path",
-    "--label-smoothing": "a `BootstrapTrainer.train_epoch` term; the graph loss reads its "
-                         "terms from the config",
-}
-
-
-def refuse_dense_arm_flags(supplied: dict[str, Any]) -> None:
-    """Refuse any dense-arm CLI flag that the graph route would silently ignore.
-
-    A flag that reads as though it set a width, a schedule or a freeze and in fact sets NOTHING
-    is a shadow flag. `supplied` maps flag name -> parsed value, where `None` or `False` is
-    "not supplied".
-
-    Raises:
-        GraphPretrainError: any supplied flag has no subject on the graph route.
-    """
-    unknown = set(supplied) - set(DENSE_ARM_FLAGS)
-    if unknown:
-        raise GraphPretrainError(
-            f"refuse_dense_arm_flags called with {sorted(unknown)}, which are not in "
-            "DENSE_ARM_FLAGS. The set is the authority; add the flag and its reason there."
-        )
-    named = [n for n, v in supplied.items() if v is not None and v is not False]
-    if named:
-        reasons = "; ".join(f"{n} is {DENSE_ARM_FLAGS[n]}" for n in sorted(named))
-        raise GraphPretrainError(
-            f"the graph BC route does not read {', '.join(sorted(named))} — {reasons}. "
-            "Refused rather than ignored: a flag that silently sets nothing is worse than no "
-            "flag at all."
-        )
-
-
 def refuse_policy_warm_up(full_config: dict[str, Any]) -> None:
     """A BC pretrain runs only with the value warm-up OFF: it would skip N steps of the one loss BC exists for.
 
@@ -211,7 +164,7 @@ def refuse_policy_warm_up(full_config: dict[str, Any]) -> None:
 def run_graph_pretrain(
     *, spec: Any, full_config: dict[str, Any], train_section: Any, ring_path: Path,
     checkpoint_dir: Path, device: Any, steps: int | None, epochs: int,
-    dense_arm_flags: dict[str, Any], monitor: Any | None = None,
+    monitor: Any | None = None,
 ) -> Path:
     """Run a BC pretrain on the graph arch and return the written checkpoint's path.
 
@@ -228,8 +181,6 @@ def run_graph_pretrain(
         device: the torch device.
         steps: explicit step budget, or None to derive from `epochs`.
         epochs: nominal passes, used only when `steps` is None.
-        dense_arm_flags: the CLI's dense-arm flag values. REQUIRED and undefaulted — a caller
-            that omits it would silently skip the refusal.
         monitor: a `heldout.HeldOutMonitor`, or None. `None` DEFAULTS here and nowhere else,
             because the budget alone is still a valid bound; what a caller cannot do is ask for
             a stopping rule and silently get none.
@@ -238,11 +189,9 @@ def run_graph_pretrain(
         The path of the checkpoint written by `Trainer.save_checkpoint`.
 
     Raises:
-        GraphPretrainError: a dense-arm flag was supplied, the config mints a policy warm-up, the
-            ring or its budget refuses, or the held-out estimator's measured noise exceeds the
-            monitor's `min_delta`.
+        GraphPretrainError: the config mints a policy warm-up, the ring or its budget refuses,
+            or the held-out estimator's measured noise exceeds the monitor's `min_delta`.
     """
-    refuse_dense_arm_flags(dense_arm_flags)
     refuse_policy_warm_up(full_config)
     buf, prov = load_ring(ring_path, encoding=spec.name)
     knobs = resolve_coordinator_knobs(train_section)

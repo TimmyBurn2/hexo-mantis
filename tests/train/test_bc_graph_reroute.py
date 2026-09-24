@@ -26,8 +26,6 @@ from mantis.train.pretrain.graph_route import (
     GraphPretrainError,
     load_ring,
     read_ring_provenance,
-    DENSE_ARM_FLAGS,
-    refuse_dense_arm_flags,
     resolve_step_budget,
     run_graph_pretrain,
 )
@@ -245,7 +243,7 @@ def test_the_graph_arm_trains_THROUGH_the_declared_seam(tmp_path: Path, monkeypa
 
     out = run_graph_pretrain(
         spec=_Spec(), full_config=_NO_WARM_UP, train_section=object(), ring_path=ring,
-        checkpoint_dir=tmp_path, device=None, steps=3, epochs=1, dense_arm_flags={},
+        checkpoint_dir=tmp_path, device=None, steps=3, epochs=1,
     )
     assert out == tmp_path / "ckpt.pt"
     assert len(calls) == 3, "one seam call per step"
@@ -290,7 +288,7 @@ def test_the_BC_route_passes_zero_recency_and_it_is_STRUCTURAL(tmp_path: Path, m
                         lambda _t, _b, _s, **kw: seen.append(kw["recency_weight"]) or {"loss": 0.0})
     run_graph_pretrain(
         spec=_Spec(), full_config=_NO_WARM_UP, train_section=object(), ring_path=ring,
-        checkpoint_dir=tmp_path, device=None, steps=2, epochs=1, dense_arm_flags={},
+        checkpoint_dir=tmp_path, device=None, steps=2, epochs=1,
     )
     assert seen == [0.0, 0.0]
 
@@ -402,35 +400,21 @@ def test_no_shipped_config_names_the_pretrain_route() -> None:
             assert token not in text, f"{cfg.name} names {token}"
 
 
-@pytest.mark.parametrize("flag", sorted(DENSE_ARM_FLAGS))
-def test_EVERY_dense_arm_flag_is_refused_not_ignored(flag: str) -> None:
-    """Driven over the SET: a flag added without a refusal, or without a reason, fails here."""
-    with pytest.raises(GraphPretrainError, match="does not read"):
-        refuse_dense_arm_flags({flag: 1.0})
-    assert DENSE_ARM_FLAGS[flag].strip(), f"{flag} carries no reason"
+#: The dense arm's flags: a width, a schedule or a freeze the graph route has no subject for.
+_RETIRED_DENSE_FLAGS = ("--filters", "--res-blocks", "--resume", "--lr-peak", "--eta-min",
+                        "--freeze-trunk-entry", "--unfreeze-blocks", "--inference-out",
+                        "--label-smoothing")
 
 
-def test_store_true_flags_read_False_as_NOT_supplied() -> None:
-    """`store_true` flags read `False` as NOT supplied — otherwise every graph pretrain is
-    refused."""
-    refuse_dense_arm_flags({"--freeze-trunk-entry": False, "--filters": None})
+@pytest.mark.parametrize("flag", _RETIRED_DENSE_FLAGS)
+def test_EVERY_dense_arm_flag_is_refused_not_ignored(flag: str, capsys) -> None:
+    """A flag that reads as though it set something and sets NOTHING exits 2 naming itself."""
+    from mantis.train.pretrain.cli import _build_arg_parser
 
-
-def test_a_flag_outside_the_declared_set_is_itself_an_error() -> None:
-    """The set is the authority — an undeclared flag would otherwise get a silent pass."""
-    with pytest.raises(GraphPretrainError, match="not in DENSE_ARM_FLAGS"):
-        refuse_dense_arm_flags({"--not-a-flag": 1})
-
-
-def test_the_cli_hands_over_every_declared_dense_arm_flag() -> None:
-    """The other half: a declared flag the CLI never passes is refused in theory only."""
-    src = (_REPO / "src/mantis/train/pretrain/cli.py").read_text(encoding="utf-8")
-    for flag in DENSE_ARM_FLAGS:
-        assert f'"{flag}": args.' in src, f"the CLI never hands {flag} to the refusal"
-
-
-def test_no_dense_arm_flags_is_the_clean_case() -> None:
-    refuse_dense_arm_flags({f: None for f in DENSE_ARM_FLAGS})
+    with pytest.raises(SystemExit) as exc:
+        _build_arg_parser().parse_args(["--config", "x", "--encoding", "gnn_axis_v1", flag, "1"])
+    assert exc.value.code == 2
+    assert flag in capsys.readouterr().err
 
 
 def test_the_graph_arch_is_built_from_the_NESTED_config(tmp_path: Path, monkeypatch) -> None:
@@ -468,13 +452,6 @@ def test_the_graph_arch_is_built_from_the_NESTED_config(tmp_path: Path, monkeypa
                         lambda *_a, **_k: {"loss": 0.0})
     run_graph_pretrain(
         spec=_Spec(), full_config=nested, train_section=object(), ring_path=ring,
-        checkpoint_dir=tmp_path, device=None, steps=1, epochs=1, dense_arm_flags={},
+        checkpoint_dir=tmp_path, device=None, steps=1, epochs=1,
     )
     assert seen == [nested]
-
-
-def test_the_flag_refusal_is_REQUIRED_and_undefaulted() -> None:
-    """A caller that could omit `dense_arm_flags` would silently skip the refusal."""
-    import inspect
-    sig = inspect.signature(run_graph_pretrain)
-    assert sig.parameters["dense_arm_flags"].default is inspect.Parameter.empty

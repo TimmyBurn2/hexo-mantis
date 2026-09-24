@@ -1,7 +1,7 @@
 """Pretrain encoding resolution never defaults.
 
-Two arms: a checkpoint config with no encoding, and a CLI invocation passing neither
-`--encoding` nor `--resume`. Both must raise rather than silently pretrain a dense model.
+Two arms: a checkpoint config with no encoding, and a CLI invocation passing no
+`--encoding`. Both must raise rather than silently pretrain a dense model.
 
 The checkpoint arm is pinned on `resolve_from_config` itself — the one resolver any veneer
 has to call.
@@ -80,22 +80,21 @@ def test_conflicting_dual_shape_is_corrupt_input_and_raises():
 
 
 def _args(**kw) -> argparse.Namespace:
-    return argparse.Namespace(encoding=kw.get("encoding"), resume=kw.get("resume"))
+    return argparse.Namespace(encoding=kw.get("encoding"))
 
 
-def test_pretrain_cli_without_encoding_or_resume_raises_the_class_error():
+def test_pretrain_cli_without_encoding_raises_the_class_error():
     """The convention is named by ERROR CLASS, so the CLI raises that class, not `SystemExit`."""
     with pytest.raises(MissingEncodingError, match="no encoding specified"):
         _resolve_encoding_name(_args())
 
 
-def test_pretrain_cli_error_names_both_ways_out():
+def test_pretrain_cli_error_names_the_way_out():
     """The message must tell the operator how to proceed, not just that it failed."""
     with pytest.raises(MissingEncodingError) as exc:
         _resolve_encoding_name(_args())
     msg = str(exc.value)
     assert "--encoding" in msg
-    assert "--resume" in msg
 
 
 def test_pretrain_cli_boundary_converts_the_class_error_to_a_clean_message():
