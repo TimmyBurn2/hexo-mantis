@@ -19,8 +19,6 @@ from mantis.train.emit import emit_via
 
 _LOG = logging.getLogger(__name__)
 
-# Wall-clock seconds with NO new self-play game after which the run fails fast.
-DEFAULT_SELFPLAY_STALL_TIMEOUT_SEC: float = 1800.0
 # Distinct non-zero exit code so a launch/restart wrapper can key on a watchdog abort.
 SELFPLAY_STALL_EXIT_CODE: int = 42
 

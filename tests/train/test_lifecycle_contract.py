@@ -20,7 +20,6 @@ from mantis.train.emit import EventSink, NullEventSink  # noqa: F401 — the inj
 from mantis.train.lifecycle.disk_guard import DiskGuard
 from mantis.train.lifecycle.signals import ShutdownState, install_signal_handlers
 from mantis.train.lifecycle.watchdog import (
-    DEFAULT_SELFPLAY_STALL_TIMEOUT_SEC,  # noqa: F401 — pinned default (context law: 1800.0)
     SELFPLAY_STALL_EXIT_CODE,
     StallWatchdog,
     watchdog_snapshot_path,
@@ -113,7 +112,7 @@ def test_loop_saves_final_checkpoint_on_shutdown():
     assert spy.saved, "loop must call trainer.save_checkpoint on shutdown_save before returning"
 
 
-def _watchdog(spy_sink, fake_clock, *, timeout=DEFAULT_SELFPLAY_STALL_TIMEOUT_SEC):
+def _watchdog(spy_sink, fake_clock, *, timeout=1800.0):
     exits: list = []
     snaps: list = []
     wd = StallWatchdog(
