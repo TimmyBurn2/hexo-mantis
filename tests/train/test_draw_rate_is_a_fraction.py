@@ -12,6 +12,7 @@ from typing import Any
 
 from mantis.selfplay.pool_hooks import RunnerStats
 from mantis.train.events import emit_iteration_complete_event
+from _spy import SpyEventSink
 
 
 def _rstats() -> RunnerStats:
@@ -21,14 +22,6 @@ def _rstats() -> RunnerStats:
         model_version=0, mcts_quiescence_fires=0, mcts_mean_depth=5.0,
         mcts_mean_root_concentration=0.1, pcr_full_moves=0, pcr_quick_moves=0, gumbel_round_leaves=0, gumbel_rounds=0,
     )
-
-
-class _Sink:
-    def __init__(self) -> None:
-        self.events: list[dict] = []
-
-    def emit(self, event: Any) -> None:
-        self.events.append(dict(event))
 
 
 class _StraddlingPool:
@@ -70,7 +63,7 @@ class _Buffer:
 
 
 def _emit(*, completed_now: int, games_played_snapshot: int) -> dict:
-    sink = _Sink()
+    sink = SpyEventSink()
     emit_iteration_complete_event(
         7, games_played_snapshot, 0, _StraddlingPool(completed_now=completed_now),
         _Buffer(), lambda: 10.0, lambda: 5.0, {}, _rstats(), sink, search_levers={},

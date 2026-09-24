@@ -25,17 +25,7 @@ from mantis.monitor.heartbeat import (
 )
 from _monitor_config import monitor_config
 from mantis.train.subsystems import build_run_safety
-
-
-class _SpySink:
-    def __init__(self) -> None:
-        self.events: list[dict] = []
-
-    def emit(self, event) -> None:
-        self.events.append(dict(event))
-
-    def named(self, name: str) -> list[dict]:
-        return [e for e in self.events if e.get("event") == name]
+from _spy import SpyEventSink
 
 
 def _registry():
@@ -52,7 +42,7 @@ def _watchdog(tmp_path, *, spec, sink=None, exit_codes=None):
     """
     return HeartbeatWatchdog(
         registry=_registry(), deadlines={"train_step": 0.0},
-        sink=sink if sink is not None else _SpySink(),
+        sink=sink if sink is not None else SpyEventSink(),
         counters_fn=lambda: 0, heartbeat_file=tmp_path / "hb.json",
         file_interval_sec=0.0, poll_interval_sec=0.0, clock=lambda: 0.0,
         save_snapshot=lambda: None,
@@ -70,7 +60,7 @@ def _spec(*, learner, actor, threshold, armed):
 
 
 def test_rigged_lag_over_threshold_fires_named_escalation_when_armed(tmp_path) -> None:
-    sink, codes = _SpySink(), []
+    sink, codes = SpyEventSink(), []
     wd = _watchdog(tmp_path, sink=sink, exit_codes=codes,
                    spec=_spec(learner=lambda: 1000, actor=lambda: 100,
                               threshold=500, armed=True))
@@ -93,7 +83,7 @@ def test_rigged_lag_over_threshold_fires_named_escalation_when_armed(tmp_path) -
 
 
 def test_rigged_lag_over_threshold_disarmed_emits_event_and_never_aborts(tmp_path) -> None:
-    sink, codes = _SpySink(), []
+    sink, codes = SpyEventSink(), []
     actor = {"v": 100}
     wd = _watchdog(tmp_path, sink=sink, exit_codes=codes,
                    spec=_spec(learner=lambda: 1000, actor=lambda: actor["v"],
@@ -123,7 +113,7 @@ def test_rigged_lag_over_threshold_disarmed_emits_event_and_never_aborts(tmp_pat
 
 def test_lag_check_suppressed_during_close_out(tmp_path) -> None:
     """Prove the lag check is suppressed during close-out, when both counters freeze."""
-    sink, codes = _SpySink(), []
+    sink, codes = SpyEventSink(), []
     wd = _watchdog(tmp_path, sink=sink, exit_codes=codes,
                    spec=_spec(learner=lambda: 1000, actor=lambda: 0,
                               threshold=10, armed=True))
@@ -136,7 +126,7 @@ def test_lag_check_suppressed_during_close_out(tmp_path) -> None:
 
 def test_arm_event_names_actor_lag_posture(tmp_path) -> None:
     """Prove a disabled or unwired lag check is loud at arm time."""
-    sink = _SpySink()
+    sink = SpyEventSink()
     wd = _watchdog(tmp_path, sink=sink,
                    spec=_spec(learner=lambda: 0, actor=lambda: 0,
                               threshold=500, armed=True))
@@ -144,7 +134,7 @@ def test_arm_event_names_actor_lag_posture(tmp_path) -> None:
     armed = sink.named("heartbeat_watchdog_armed")
     assert armed and armed[-1].get("actor_lag") == {"armed": True, "threshold_steps": 500}
 
-    sink2 = _SpySink()
+    sink2 = SpyEventSink()
     wd2 = _watchdog(tmp_path, sink=sink2,
                     spec=_spec(learner=lambda: 0, actor=lambda: 0,
                                threshold=500, armed=False))
@@ -152,7 +142,7 @@ def test_arm_event_names_actor_lag_posture(tmp_path) -> None:
     assert sink2.named("heartbeat_watchdog_armed")[-1].get("actor_lag") == {
         "armed": False, "threshold_steps": 500}
 
-    sink3 = _SpySink()
+    sink3 = SpyEventSink()
     wd3 = _watchdog(tmp_path, sink=sink3, spec=None)
     wd3.arm()
     assert sink3.named("heartbeat_watchdog_armed")[-1].get("actor_lag") == "absent", (
@@ -218,7 +208,7 @@ def test_build_run_safety_actor_lag_inputs_have_no_defaults(
 
 
 def test_negative_lag_reports_wiring_bug_event_once(tmp_path) -> None:
-    sink, codes = _SpySink(), []
+    sink, codes = SpyEventSink(), []
     wd = _watchdog(tmp_path, sink=sink, exit_codes=codes,
                    spec=_spec(learner=lambda: 10, actor=lambda: 50,
                               threshold=5, armed=True))

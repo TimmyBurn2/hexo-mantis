@@ -24,6 +24,7 @@ from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
+from _spy import SpyEventSink
 
 
 class FakeTrainer:
@@ -93,17 +94,6 @@ class BeatSpy:
         self.beats.append(source)
 
 
-class SpySink:
-    def __init__(self) -> None:
-        self.events: list[dict] = []
-
-    def emit(self, event) -> None:
-        self.events.append(dict(event))
-
-    def named(self, name: str) -> list[dict]:
-        return [e for e in self.events if e.get("event") == name]
-
-
 def _make_config(**overrides) -> StepCoordinatorConfig:
     """DERIVED from the production builder, never a hand-written kwarg census: restating every
     field made ten test files agree with `StepCoordinatorConfig` by maintenance rather than
@@ -127,7 +117,7 @@ def _make_coordinator(*, pool=None, config=None, eval_pipeline=None, heartbeat=N
     trainer.step = trainer_step  # a resumed trainer: the coordinator reads it at construction
     buffer = GraphSampleBuffer()
     shutdown = ShutdownState()
-    sink = SpySink()
+    sink = SpyEventSink()
     coord = StepCoordinator(
         trainer=trainer, buffer=buffer,
         pool=pool, eval_pipeline=eval_pipeline, subsystems=SimpleNamespace(gpu_monitor=None),

@@ -20,6 +20,7 @@ from mantis.train.coordinator import drain
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
+from _spy import SpyEventSink
 
 
 class FakeTrainer:
@@ -40,17 +41,6 @@ class FakeTrainer:
 
     def save_checkpoint(self, loss_info) -> None:
         return None
-
-
-class SpySink:
-    def __init__(self) -> None:
-        self.events: list[dict] = []
-
-    def emit(self, event) -> None:
-        self.events.append(dict(event))
-
-    def named(self, name: str) -> list[dict]:
-        return [e for e in self.events if e.get("event") == name]
 
 
 class ThreadIdentSpyEvalPipeline:
@@ -101,7 +91,7 @@ def _make_coordinator(*, eval_pipeline=None, config=None):
     trainer = FakeTrainer()
     buffer = GraphSampleBuffer()
     shutdown = ShutdownState()
-    sink = SpySink()
+    sink = SpyEventSink()
     coord = StepCoordinator(
         trainer=trainer, buffer=buffer,
         pool=pool, eval_pipeline=eval_pipeline, subsystems=SimpleNamespace(gpu_monitor=None),

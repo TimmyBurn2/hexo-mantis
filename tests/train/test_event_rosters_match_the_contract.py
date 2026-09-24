@@ -12,6 +12,7 @@ from mantis.monitor.sink import EVENT_CONTRACT
 from mantis.selfplay.pool_hooks import RunnerStats
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.events import emit_iteration_complete_event, emit_training_step_event
+from _spy import SpyEventSink
 
 _DOC = Path(__file__).resolve().parents[2] / "docs" / "contracts" / "event_manifest.md"
 _ROSTER = re.compile(r"^- `(?P<event>\w+)` \([^)]*\): (?P<keys>.+)$")
@@ -29,22 +30,14 @@ def _doc_rosters() -> dict[str, set[str]]:
     return rosters
 
 
-class _Sink:
-    def __init__(self) -> None:
-        self.events: list[dict[str, Any]] = []
-
-    def emit(self, event: Any) -> None:
-        self.events.append(dict(event))
-
-
 def _training_step() -> dict[str, Any]:
     return emit_training_step_event(
         0, {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1, "lr": 1e-3,
-            "policy_entropy": 2.0, "policy_entropy_selfplay": 2.0}, _Sink())
+            "policy_entropy": 2.0, "policy_entropy_selfplay": 2.0}, SpyEventSink())
 
 
 def _iteration_complete() -> dict[str, Any]:
-    sink = _Sink()
+    sink = SpyEventSink()
     rstats = RunnerStats(
         games_completed=1, positions_generated=4, x_wins=1, o_wins=0, draws=0, model_version=0,
         mcts_quiescence_fires=0, mcts_mean_depth=1.0, mcts_mean_root_concentration=0.5,
@@ -58,7 +51,7 @@ def _iteration_complete() -> dict[str, Any]:
 
 
 def _monitor_gates() -> dict[str, Any]:
-    sink = _Sink()
+    sink = SpyEventSink()
     coord = SimpleNamespace(_train_step=1, _gate_stats={}, _policy_loss_reference=None,
                             _policy_loss_window_means=[], _ply_cap_rate=None,
                             _watchdog_counters=lambda: None)

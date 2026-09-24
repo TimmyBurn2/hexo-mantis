@@ -42,6 +42,7 @@ from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.heartbeat_watchdog import HeartbeatWatchdog
 from mantis.train.lifecycle.signals import ShutdownState
 from mantis.train.loop import run_training_loop
+from _spy import SpyEventSink
 
 
 #: The declared terminus for the leg-3 drives.
@@ -105,17 +106,6 @@ class _Trainer:
         return _SAVED_PATH
 
 
-class _Sink:
-    def __init__(self) -> None:
-        self.events: list[dict] = []
-
-    def emit(self, event) -> None:
-        self.events.append(dict(event))
-
-    def named(self, name: str) -> list[dict]:
-        return [e for e in self.events if e["event"] == name]
-
-
 def _config(**overrides) -> StepCoordinatorConfig:
     """DERIVED from the production builder — this file's deltas only. `None` is the EXPLICIT
     disarmed draw-rate posture; neither the builder nor this factory gives it a default (R1)."""
@@ -132,7 +122,7 @@ def _harness(*, trainer: _Trainer, config: StepCoordinatorConfig, pool: Drivable
              shutdown: ShutdownState | None = None) -> SimpleNamespace:
     pool = pool if pool is not None else DrivablePoolStub()
     shutdown = shutdown if shutdown is not None else ShutdownState()
-    sink = _Sink()
+    sink = SpyEventSink()
     coord = StepCoordinator(
         trainer=trainer, buffer=GraphSampleBuffer(),
         pool=pool, eval_pipeline=None, subsystems=SimpleNamespace(gpu_monitor=None),
@@ -301,7 +291,7 @@ def test_the_loop_guard_latches_leg_two_out_after_a_clean_stop_save() -> None:
     shutdown = ShutdownState()
     trainer = _Trainer(step=_CEILING)
     coord = _CoordinatorPublishingTheLatch(trainer=trainer, shutdown=shutdown)
-    sink = _Sink()
+    sink = SpyEventSink()
 
     run_training_loop(trainer=trainer, shutdown_state=shutdown, coordinator=coord, sink=sink,
                       max_steps=_LOOP_MAX_STEPS)
@@ -325,7 +315,7 @@ def test_a_coordinator_publishing_no_latch_makes_the_loop_raise() -> None:
 
     with pytest.raises(TypeError) as exc_info:
         run_training_loop(trainer=trainer, shutdown_state=shutdown, coordinator=coord,
-                          sink=_Sink(), max_steps=_LOOP_MAX_STEPS)
+                          sink=SpyEventSink(), max_steps=_LOOP_MAX_STEPS)
 
     assert "final_save_done" in str(exc_info.value), (
         "the refusal must NAME the member that is missing, or the next reader cannot tell a "

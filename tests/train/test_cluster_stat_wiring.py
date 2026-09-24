@@ -14,6 +14,7 @@ from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
+from _spy import SpyEventSink
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -69,17 +70,6 @@ class _EvalPipeline:
         return None
 
 
-class _SpySink:
-    def __init__(self) -> None:
-        self.events: list[dict] = []
-
-    def emit(self, event) -> None:
-        self.events.append(dict(event))
-
-    def named(self, name: str) -> list[dict]:
-        return [e for e in self.events if e.get("event") == name]
-
-
 def _coordinator(full_config: dict[str, Any]):
     cfg = dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
@@ -87,7 +77,7 @@ def _coordinator(full_config: dict[str, Any]):
                                  knobs=DEV_KNOBS),
         eval_interval=1, log_interval=1000, gate_interval=1000, min_buf_size=10,
     )
-    sink = _SpySink()
+    sink = SpyEventSink()
     coord = StepCoordinator(
         trainer=_Trainer(), buffer=GraphSampleBuffer(),
         pool=DrivablePoolStub(games=5, search_kind="puct", rstats=_ClusterCarryingStats()), eval_pipeline=_EvalPipeline(),
@@ -100,7 +90,7 @@ def _coordinator(full_config: dict[str, Any]):
     return coord, cfg, sink
 
 
-def _one_iteration_complete(sink: _SpySink) -> dict[str, Any]:
+def _one_iteration_complete(sink: SpyEventSink) -> dict[str, Any]:
     events = sink.named("iteration_complete")
     assert len(events) == 1, f"expected exactly one iteration_complete, got {len(events)}"
     return events[0]

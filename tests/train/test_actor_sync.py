@@ -12,6 +12,7 @@ from __future__ import annotations
 import pytest
 
 from mantis.train.actor_sync import ActorSync
+from _spy import SpyEventSink
 
 _EVENT_KEYS = {
     "event", "step", "actor_ckpt_step", "lag_steps_pre_sync",
@@ -45,17 +46,6 @@ class _SyncTargetSpy:
         self.step_calls.append(int(step))
 
 
-class _SpySink:
-    def __init__(self) -> None:
-        self.events: list[dict] = []
-
-    def emit(self, event) -> None:
-        self.events.append(dict(event))
-
-    def named(self, name: str) -> list[dict]:
-        return [e for e in self.events if e.get("event") == name]
-
-
 def _engine(*, target, learner, cadence_steps, sink=None, state_dict=None):
     sd = state_dict if state_dict is not None else {"w": 0}
     return ActorSync(
@@ -63,7 +53,7 @@ def _engine(*, target, learner, cadence_steps, sink=None, state_dict=None):
         state_dict_fn=lambda: sd,
         step_fn=lambda: int(learner.step),
         cadence_steps=cadence_steps,
-        sink=sink if sink is not None else _SpySink(),
+        sink=sink if sink is not None else SpyEventSink(),
         run_id="oracle_u1",
     )
 
@@ -153,7 +143,7 @@ def test_sync_pushes_state_dict_and_step_together() -> None:
 def test_actor_sync_event_carries_lever_fire_rate_fields() -> None:
     """LAW-18: the cadence is a lever under test — every sync emits an `actor_sync`
     event with exactly the DESIGN §5 payload keys, `sync_count` monotonic."""
-    sink = _SpySink()
+    sink = SpyEventSink()
     target = _SyncTargetSpy()
     learner = _Learner(step=0)
     engine = _engine(target=target, learner=learner, cadence_steps=1, sink=sink)

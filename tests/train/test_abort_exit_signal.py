@@ -39,6 +39,7 @@ from mantis.train.resume_state import sidecar_path_for
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
+from _spy import SpyEventSink
 
 
 RULE = "draw_rate_collapse"
@@ -74,17 +75,6 @@ class _Trainer:
         return path
 
 
-class _Sink:
-    def __init__(self) -> None:
-        self.events: list[dict] = []
-
-    def emit(self, event) -> None:
-        self.events.append(dict(event))
-
-    def named(self, name: str) -> list[dict]:
-        return [e for e in self.events if e.get("event") == name]
-
-
 def _config(**overrides) -> StepCoordinatorConfig:
     """DERIVED from the production builder — this file's deltas only. `None` is the EXPLICIT
     disarmed draw-rate posture; neither the builder nor this factory gives it a default."""
@@ -107,7 +97,7 @@ class _Buffer(GraphSampleBuffer):
 
 def _coordinator(*, pool=None, config=None, shutdown=None):
     pool = pool or DrivablePoolStub()
-    trainer, buffer, sink = _Trainer(), _Buffer(), _Sink()
+    trainer, buffer, sink = _Trainer(), _Buffer(), SpyEventSink()
     shutdown = shutdown if shutdown is not None else ShutdownState()
     coord = StepCoordinator(
         trainer=trainer, buffer=buffer,

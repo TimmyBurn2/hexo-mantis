@@ -34,6 +34,7 @@ from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
+from _spy import SpyEventSink
 
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -67,17 +68,6 @@ class _Trainer:
         return None
 
 
-class _Sink:
-    def __init__(self) -> None:
-        self.events: list[dict] = []
-
-    def emit(self, event) -> None:
-        self.events.append(dict(event))
-
-    def named(self, name: str) -> list[dict]:
-        return [e for e in self.events if e.get("event") == name]
-
-
 def _config(**overrides) -> StepCoordinatorConfig:
     """DERIVED from the production builder. Unlike the sibling harnesses this one does NOT
     mirror `gate_interval` onto `log_interval`: every drive states BOTH knobs, because stating
@@ -93,7 +83,7 @@ def _config(**overrides) -> StepCoordinatorConfig:
 
 def _coordinator(*, config: StepCoordinatorConfig, pool: DrivablePoolStub | None = None):
     pool = pool or DrivablePoolStub()
-    trainer, buffer, sink = _Trainer(), GraphSampleBuffer(), _Sink()
+    trainer, buffer, sink = _Trainer(), GraphSampleBuffer(), SpyEventSink()
     shutdown = ShutdownState()
     coord = StepCoordinator(
         trainer=trainer, buffer=buffer,

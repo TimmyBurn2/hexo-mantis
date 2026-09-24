@@ -16,6 +16,7 @@ from mantis.monitor.heartbeat import (
 )
 from mantis.train.lifecycle.heartbeat_watchdog import HeartbeatWatchdog
 from mantis.train.subsystems import build_run_safety
+from _spy import SpyEventSink
 
 
 class _ExitSpy:
@@ -24,17 +25,6 @@ class _ExitSpy:
 
     def __call__(self, code: int) -> None:
         self.codes.append(int(code))
-
-
-class SpySink:
-    def __init__(self) -> None:
-        self.events: list[dict] = []
-
-    def emit(self, event) -> None:
-        self.events.append(dict(event))
-
-    def named(self, name: str) -> list[dict]:
-        return [e for e in self.events if e.get("event") == name]
 
 
 class FakeBuffer:
@@ -73,7 +63,7 @@ def test_poller_thread_beats_eval_round(tmp_path) -> None:
 
 def test_build_run_safety_arms_eval_round_deadline(tmp_path) -> None:
     """Arming with `eval_round` wired must construct cleanly and name the source in the arm event."""
-    sink = SpySink()
+    sink = SpyEventSink()
     run_safety = build_run_safety(
         log_dir=tmp_path, run_id="test-run", buffer=FakeBuffer(),
         buffer_persist_path=tmp_path / "replay.bin",
@@ -101,7 +91,7 @@ def test_build_run_safety_arms_eval_round_deadline(tmp_path) -> None:
 def test_stale_eval_poller_fires_42_under_fake_clock(tmp_path) -> None:
     """A wedged `eval_round` poller fires the shared stall exit code, like the three shipped
     sources, under a FAKE clock."""
-    sink = SpySink()
+    sink = SpyEventSink()
     exit_spy = _ExitSpy()
     fake_time = {"t": 0.0}
 
@@ -133,7 +123,7 @@ def test_stale_eval_poller_fires_42_under_fake_clock(tmp_path) -> None:
 def test_headless_launch_without_pipeline_is_unwired_loud_not_fatal(tmp_path) -> None:
     """A known, deadlined but never-beaten source is reported unwired, never aborted: killing a
     healthy pipeline-less run is the worse failure."""
-    sink = SpySink()
+    sink = SpyEventSink()
     exit_spy = _ExitSpy()
     fake_time = {"t": 0.0}
 

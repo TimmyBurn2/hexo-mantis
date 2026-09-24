@@ -11,6 +11,7 @@ from mantis import _engine
 from mantis.diagnostics import ring_audit as A
 from mantis.selfplay.pool_hooks import RunnerStats
 from mantis.train.events import emit_iteration_complete_event
+from _spy import SpyEventSink
 
 _ENCODING = "gnn_axis_r8"
 N_SYMS = 12
@@ -67,14 +68,6 @@ def test_an_empty_board_row_is_skipped_and_counted_beside_the_bins() -> None:
     assert skipped > 0 and sum(bins) + skipped == n
 
 
-class _Sink:
-    def __init__(self) -> None:
-        self.events: list[dict[str, Any]] = []
-
-    def emit(self, event: Any) -> None:
-        self.events.append(dict(event))
-
-
 class _Pool:
     sims_per_sec = None
     avg_game_length = None
@@ -91,7 +84,7 @@ def _rstats(positions: int) -> RunnerStats:
 
 
 def _iteration_complete(buffer: Any, rstats: Any = None) -> dict[str, Any]:
-    sink = _Sink()
+    sink = SpyEventSink()
     emit_iteration_complete_event(
         train_step=0, games_played=0, last_iter_games=0, pool=_Pool(), buffer=buffer,
         games_per_hour_fn=lambda: None,
