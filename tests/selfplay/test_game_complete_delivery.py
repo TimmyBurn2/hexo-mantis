@@ -92,7 +92,6 @@ def _make_scripted_pool(games, sink):
     `game_complete` events."""
     pool = type("ScriptedPool", (), {})()
     pool._stop_event = _OneShotStop()
-    pool._is_graph = True
     pool._runner = _ScriptedRunner(games)
     pool.replay_buffer = _ScriptedBuffer()
     pool._lock = threading.Lock()

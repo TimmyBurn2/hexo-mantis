@@ -103,12 +103,8 @@
     "fpu_reduction": 0.4,
     "quiescence_enabled": false,
     "quiescence_blend_2": 0.55,
-    "_is_graph": true,
     "_board_size": 19,
     "_trunk_size": 19,
-    "_feat_len": 0,
-    "_chain_len": 0,
-    "_pol_len": 362,
     "_log_investigation_metrics": false,
     "encoding_spec_name": "gnn_axis_r8"
    }
@@ -205,12 +201,8 @@
     "fpu_reduction": 0.25,
     "quiescence_enabled": true,
     "quiescence_blend_2": 0.3,
-    "_is_graph": true,
     "_board_size": 19,
     "_trunk_size": 19,
-    "_feat_len": 0,
-    "_chain_len": 0,
-    "_pol_len": 362,
     "_log_investigation_metrics": true,
     "encoding_spec_name": "gnn_axis_v1"
    }

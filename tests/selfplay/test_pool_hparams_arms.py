@@ -9,12 +9,7 @@ import pytest
 
 from mantis.config.resolve.search import MissingSearchKindError
 from mantis.selfplay.pool import WorkerPool
-from mantis.selfplay.hparams import (
-    PoolDims,
-    SelfPlayHParams,
-    build_runner_config,
-    resolve_pool_encoding,
-)
+from mantis.selfplay.hparams import SelfPlayHParams
 from test_pool_hparams import record_runner_config_factory
 
 BASE_SELFPLAY: dict[str, Any] = {
@@ -175,23 +170,6 @@ def test_search_kind_property_reads_live_config() -> None:
 
     hp = SelfPlayHParams.from_config(cfg(search={"kind": "gumbel"}))
     assert hp.search_kind == "gumbel", "the frozen ctor-time snapshot still records the kind"
-
-
-
-# the derived dense dims, and the FFI agreement
-@pytest.mark.parametrize(
-    "encoding,expected",
-    [("gnn_axis_v1", PoolDims(0, 0, 362)),
-     ("gnn_axis_r8", PoolDims(0, 0, 362))],
-)
-def test_pool_dims_derivation_golden(assemble, encoding: str, expected: PoolDims) -> None:
-    """The derived dims stay ZERO on a graph encoding with the policy length off the spec; a
-    non-zero feat_len would mean a dense geometry no wire carries is being re-derived."""
-    config = cfg(encoding=encoding, playout_cap={"fast_sims": 100})
-    hp = SelfPlayHParams.from_config(config)
-    enc = resolve_pool_encoding(config, arch=None)
-    _, dims = build_runner_config(hp, spec_dims=enc, encoding_name=enc.encoding_name)
-    assert dims == expected
 
 
 def test_hparams_round_trip_is_json_stable() -> None:

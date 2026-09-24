@@ -507,10 +507,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   The 104 parenthetical ruling cites in comments and 152 in docstrings were REVIEWED and kept:
   each attaches a ruling or law to the fact it grounds (a pool size, a refused default, a fatal
   latch), which is the provenance class R346(f) carves out — a strip would delete where a number
-  came from. Also on contact, never as a pass: the dense push arm (`push_dense`, B-15 — dead in
-  production since R346(f), but the golden-pinned drain-parity suite uses the dense variant as its
-  instrumentation oracle, so deleting it means re-basing six oracles on the graph variant and
-  re-pinning the fixture); the F1 defer path (`declared_keys`/`declared_lr` no production caller
+  came from. Also on contact, never as a pass: the dense push arm (`push_dense`, DELETED
+  with the drain oracle's re-base on graph goldens, R368 W5); the F1 defer path (`declared_keys`/`declared_lr` no production caller
   passes, B-14 — its flat `RESUME_CHECKPOINT_OWNED_KEYS` is a golden-pinned contract row);
   `get_temperature` (DELETED with selfplay/utils.py, R368 W3), `collate_graph_batch(device=None)`, the two segment softmaxes,
   the double `torch.load` (B-15). Every measure may fall and may never rise; the floors are the

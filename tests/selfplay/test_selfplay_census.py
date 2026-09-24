@@ -101,10 +101,10 @@ _Q6_TABLE: list[tuple[str, list[tuple[str, str]], tuple[int, int, int]]] = [
       ("inference_server.py", "InferenceServer._retire")], (2, 1, 0)),
     ("InferenceServer.load_state_dict_safe",
      [("inference_server.py", "InferenceServer.load_state_dict_safe")], (0, 0, 0)),
-    ("run_stats_loop + pool_push arms (old _run_stats_loop, §a.2 split)",
+    # DOWN-RATCHET `(3, 1, 2)` -> `(2, 1, 2)`: the dense push and its recency loop are deleted.
+    ("run_stats_loop + push_graph (old _run_stats_loop, §a.2 split)",
      [("pool_drain.py", "run_stats_loop"),
-      ("pool_push.py", "push_dense"),
-      ("pool_push.py", "push_graph")], (3, 1, 2)),
+      ("pool_push.py", "push_graph")], (2, 1, 2)),
     # The eval deploy head's one decode door: five per-board comprehensions, no per-item loop.
     ("LocalInferenceEngine.infer_batch_ls",
      [("inference_local.py", "LocalInferenceEngine.infer_batch_ls")], (0, 0, 5)),

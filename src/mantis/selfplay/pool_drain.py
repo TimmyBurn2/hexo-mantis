@@ -16,7 +16,7 @@ import uuid
 from typing import Any
 
 from mantis.selfplay.instrumentation import _compute_stride5_metrics
-from mantis.selfplay.pool_push import push_dense, push_graph
+from mantis.selfplay.pool_push import push_graph
 
 _LOG = logging.getLogger(__name__)
 
@@ -52,14 +52,8 @@ def run_stats_loop(pool: Any) -> None:
         pool._sink.emit({"event": "game_loop_entered"})
     _first_record_drained = False
     while not pool._stop_event.is_set():
-        # ONE hoisted branch: a graph spec has only policy and value heads, so it drains
-        # through `collect_graph_data()`; every grid encoding takes the dense bulk-push arm.
-        if pool._is_graph:
-            collected_rows = pool._runner.collect_graph_data()
-            push_graph(pool, collected_rows)
-        else:
-            collected_rows = pool._runner.collect_data()
-            push_dense(pool, collected_rows)
+        collected_rows = pool._runner.collect_graph_data()
+        push_graph(pool, collected_rows)
 
         with pool._lock:
             pool.games_completed = int(pool._runner.games_completed)
@@ -78,7 +72,7 @@ def run_stats_loop(pool: Any) -> None:
             if pool._sink is not None:
                 pool._sink.emit({
                     "event": "first_record_drained",
-                    "representation": "graph" if pool._is_graph else "dense",
+                    "representation": "graph",
                 })
 
         # Bill one search per MOVE, not per GAME: billing per game undercounts by roughly the

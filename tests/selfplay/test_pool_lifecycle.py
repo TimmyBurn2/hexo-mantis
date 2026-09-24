@@ -258,10 +258,7 @@ def test_graph_pool_takes_the_graph_arm() -> None:
     pool = graph_pool()
     runner, _ = _stub_collaborators(pool)
 
-    assert pool._is_graph is True
     assert pool.replay_buffer.kind is BufferKind.GRAPH
-    assert (pool._feat_len, pool._chain_len) == (0, 0)
-    assert pool._pol_len > 0
 
     pool.start()
     time.sleep(0.25)

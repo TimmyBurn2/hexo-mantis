@@ -170,7 +170,6 @@ def _build_pool(golden, graph_rows, *, clock, recent_buffer=True, sink=None,
     consts = golden["_constants"]
     pool = ScriptedPool()
     pool._stop_event = OneShotStop()
-    pool._is_graph = True
     pool._runner = ScriptedRunner(graph_rows, _games_from_golden(golden),
                                   consts["runner_counters"], consts["runner_positions_generated"])
     pool.replay_buffer = RecordingBuffer()

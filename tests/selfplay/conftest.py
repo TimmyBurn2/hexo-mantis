@@ -57,7 +57,7 @@ def collate_expectations() -> dict[str, Any]:
 
 @pytest.fixture(scope="session")
 def drain_goldens() -> dict[str, Any]:
-    """The scripted drain/push golden, 5 variants."""
+    """The scripted drain/push golden, its graph variants."""
     return json.loads((DRAIN_DIR / "drain_goldens.json").read_text(encoding="utf-8"))
 
 
@@ -131,24 +131,6 @@ def wire_geometry(_payload_bank: dict[str, dict[str, np.ndarray]]) -> dict[str, 
         f"({spec.edge_feat_dim}): {arrays['edge_attr'].size} floats over {n_edges} edges"
     )
     return geometry_kwargs(COLLATE_FIXTURE_ENCODING)
-
-
-@pytest.fixture(scope="session")
-def collect_data_input() -> tuple[np.ndarray, ...]:
-    """The scripted `collect_data()` 10-tuple the capture fed the old drain loop.
-
-    Order is the old return order: feats, chain, pols, vals, plies, own, wl, ifs, pidx, vv.
-    Row 1 is the ply-capped row (vv=0); row 2 is the quick-search row (ifs=0).
-    """
-    z = _load_npz(DRAIN_DIR / "collect_data_input.npz")
-    return tuple(z[k] for k in
-                 ("feats", "chain", "pols", "vals", "plies", "own", "wl", "ifs", "pidx", "vv"))
-
-
-@pytest.fixture(scope="session")
-def dense_pushed() -> dict[str, np.ndarray]:
-    """Captured `push_many` positional/keyword arrays + the 4 recent-buffer pushes."""
-    return _load_npz(DRAIN_DIR / "dense_pushed.npz")
 
 
 @pytest.fixture(scope="session")

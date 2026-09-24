@@ -209,27 +209,22 @@ class InferenceHParams:
         )
 
 
-@dataclass(frozen=True)
-class PoolDims:
-    """Dense NN-input and buffer dims from the resolved encoding; both 0 on a graph spec."""
-
-    feat_len: int
-    chain_len: int
-    pol_len: int
-
-
 def build_runner_config(
     hp: SelfPlayHParams,
     *,
     spec_dims: ResolvedPoolEncoding,
     encoding_name: str,
-) -> tuple[SelfPlayRunnerConfig, PoolDims]:
-    """Assemble the Rust `SelfPlayRunnerConfig` and the dense pool dims. `feature_len`/
-    `policy_len` are NOT passed: both are spec-derived Rust-side and the committed ctor rejects
-    them, as it has no field for the two KILLed knobs either."""
+) -> SelfPlayRunnerConfig:
+    """Assemble the Rust `SelfPlayRunnerConfig`. `feature_len`/`policy_len` are NOT passed: both
+    are spec-derived Rust-side and the committed ctor rejects them, as it has no field for the two
+    KILLed knobs either.
+
+    Raises:
+        RepresentationMismatch: the resolved spec is not a graph encoding.
+        ValueError: the Rust config refuses a knob, including an unknown search kind.
+    """
     spec = spec_dims.registry_spec
     is_graph_representation(spec)
-    dims = PoolDims(0, 0, int(spec.policy_logit_count))
 
     cfg = SelfPlayRunnerConfig(
         n_workers=hp.n_workers,
@@ -265,12 +260,11 @@ def build_runner_config(
     )
     # The Rust setter REFUSES an unknown search kind, so a typo is a boot error, not a PUCT search.
     cfg.search_kind = hp.search_kind
-    return cfg, dims
+    return cfg
 
 
 __all__ = [
     "InferenceHParams",
-    "PoolDims",
     "ResolvedPoolEncoding",
     "SelfPlayHParams",
     "build_runner_config",

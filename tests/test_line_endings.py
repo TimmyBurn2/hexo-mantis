@@ -112,7 +112,7 @@ def test_gitattributes_marks_every_byte_significant_path() -> None:
     derived from the manifest so a fixture the globs miss fails here rather than inheriting."""
     paths = byte_significant_paths()
     # A FLOOR against a broken derivation, not a tally: it moves DOWN only when rows are deleted.
-    assert len(paths) >= 41, (
+    assert len(paths) >= 39, (
         f"census collapsed to {len(paths)} paths: the derivation is broken and this pin "
         "would be vacuous"
     )

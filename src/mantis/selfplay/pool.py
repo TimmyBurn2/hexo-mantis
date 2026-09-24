@@ -118,9 +118,8 @@ class WorkerPool:
         resolved = resolve_pool_encoding(config, arch=arch)
         spec = resolved.registry_spec
         self.encoding_spec = spec
-        # Gates the drain branch between the dense bulk-push path and the graph
-        # per-row path. Closed match on the spec's representation — no dense default.
-        self._is_graph: bool = is_graph_representation(spec)
+        # Refuses a non-graph spec here, before any knob validation.
+        is_graph_representation(spec)
 
         hp = SelfPlayHParams.from_config(config, n_workers)
         self.n_workers = hp.n_workers
@@ -131,12 +130,11 @@ class WorkerPool:
         self.quiescence_blend_2 = hp.quiescence_blend_2
         self._effective_sims_per_move = hp.effective_sims_per_move
 
-        # The pool takes a RAW engine buffer and wraps it: the facade resolves the kind from
-        # the SAME spec the drain dispatches on and cross-checks the handle, so a graph buffer
-        # under a grid encoding dies here rather than producing corrupt training data.
+        # The facade resolves the kind from the spec and cross-checks the raw handle, so a
+        # mismatched buffer dies here rather than producing corrupt training data.
         self.replay_buffer = ReplayFacade(spec, replay_buffer)
 
-        sp_config, dims = build_runner_config(
+        sp_config = build_runner_config(
             hp,
             spec_dims=resolved,
             encoding_name=resolved.encoding_name,
@@ -205,9 +203,6 @@ class WorkerPool:
 
         self._board_size = resolved.board_size   # canvas geometry
         self._trunk_size = resolved.trunk_size   # per-cluster NN-input geometry
-        self._feat_len = dims.feat_len
-        self._chain_len = dims.chain_len
-        self._pol_len = dims.pol_len
 
         self._log_investigation_metrics = hp.log_investigation_metrics
         self._instrumentation = PoolInstrumentation(

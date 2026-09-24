@@ -123,7 +123,6 @@ def _build_pool(golden, rows, *, sink, iterations: int, clock) -> _Pool:
     consts = golden["_constants"]
     pool = _Pool()
     pool._stop_event = _NShotStop(iterations)
-    pool._is_graph = True
     pool._runner = _Runner(rows, _games_from_golden(golden),
                            consts["runner_counters"],
                            consts["runner_positions_generated"])

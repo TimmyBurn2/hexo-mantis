@@ -152,16 +152,6 @@ sha256 = "47e92ca46336f544d256194f0c029d74ce8621c0b42290a7cdeee51fec49efc9"
 added_by = "WP-SP"
 
 [[required]]
-path = "selfplay/drain/collect_data_input.npz"
-sha256 = "3b8ae72fcf7f47035de7ac0669ac122e88021ff13af3b101d381255d290ccbc2"
-added_by = "WP-SP"
-
-[[required]]
-path = "selfplay/drain/dense_pushed.npz"
-sha256 = "56f37e3f3e92cde24849d43cf11909296f4054d1044897abca753d09e08b22c7"
-added_by = "WP-SP"
-
-[[required]]
 path = "selfplay/drain/graph_pushed.npz"
 sha256 = "659d5a9550373c590787110246eddd443351aa19af7f0492b7d954f27ac27f78"
 added_by = "WP-SP"
@@ -171,8 +161,8 @@ added_by = "WP-SP"
 # Re-pinned 2026-09-14: R353(d) added the per-move arms as the row's ninth field.
 [[required]]
 path = "selfplay/drain/drain_goldens.json"
-# Re-pinned 2026-09-24: R368(d) re-captured the graph variants from the current drain.
-sha256 = "d00bfb65cb7d8adafe71781579036b5c431ef860ad8570a53491a3b178165de4"
+# Re-pinned 2026-09-24: R368(d) re-captured the graph variants and deleted the dense ones.
+sha256 = "8e72d59d122b29c3d82d815f2c60fd338fce2c72545ecb79b51d80d9a8fa037f"
 added_by = "WP-SP"
 
 [[required]]
@@ -192,7 +182,8 @@ path = "selfplay/pool/runner_config_goldens.json"
 # Re-cut again by R351(c): `search.kind` split into `selfplay.search.kind` (what the wire reads)
 # and `deploy.search.kind`; the capture carries both, the self-play one still `gumbel` in `full_config`.
 # Re-pinned 2026-09-16: R355(d)'s `search_stats_every` is a REQUIRED leaf the ctor kwargs carry.
-sha256 = "9bf6a8fdfb3d0be723fb36c8268df158ff00f53f84690edb00efdd2a162da27f"
+# Re-pinned 2026-09-24: the pool's dense-arm rows (`_is_graph`, feat/chain/pol lengths) deleted.
+sha256 = "6e09c8b719a06810a4e26815d07bba34cd778cf542933cf300c53a7b5e3ad8f4"
 added_by = "WP-SP"
 
 [[required]]

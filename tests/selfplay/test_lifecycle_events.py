@@ -103,7 +103,6 @@ def test_workers_spawned_emits_on_pool_start() -> None:
 def _make_drain_pool(games, sink):
     pool = type("P", (), {})()
     pool._stop_event = type("S", (), {"_n": 0, "is_set": lambda self: self._n > 0 or (setattr(self, "_n", self._n + 1) or False)})()
-    pool._is_graph = True
     pool._runner = type("R", (), {
         "games_completed": len(games), "x_wins": 0, "o_wins": 0, "draws": 0,
         "positions_generated": 100,

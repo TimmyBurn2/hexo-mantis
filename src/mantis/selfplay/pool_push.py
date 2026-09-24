@@ -1,12 +1,10 @@
-"""Feed the replay buffer: the two push arms and the buffer-composition read.
+"""Feed the replay buffer: the graph push and the buffer-composition read.
 
 Free functions taking the pool instance; `pool.py` imports this module and never the reverse.
 """
 from __future__ import annotations
 
 from typing import Any
-
-import numpy as np
 
 from mantis.util.constants import is_alpha_full
 
@@ -82,53 +80,6 @@ def push_graph(pool: Any, rows: list[tuple[Any, ...]]) -> None:
         pool.alpha_full_rows += alpha_full
 
 
-def push_dense(pool: Any, collected: tuple[np.ndarray, ...]) -> None:
-    """Push one drained dense batch through one bulk buffer call, then the recency mirror.
-
-    `collected` is the runner's 10-tuple in its own return order. The recent buffer still takes a
-    per-row push because its lock semantics are Python-side, off the supply critical path.
-    """
-    _in_ch = pool._feat_len // (pool._trunk_size * pool._trunk_size)
-    (
-        feats_np, chain_np, pols_np, vals_np, plies_np,
-        own_np, wl_np, ifs_np, pidx_np, vv_np,
-    ) = collected
-    n = len(vals_np)
-    if n > 0:
-        feats_f16 = feats_np.astype(np.float16).reshape(
-            n, _in_ch, pool._trunk_size, pool._trunk_size,
-        )
-        chain_f16 = chain_np.astype(np.float16).reshape(
-            n, 6, pool._trunk_size, pool._trunk_size,
-        )
-        # Per-row compound-move count; clamp into u16 range.
-        game_lengths = np.minimum(
-            (plies_np.astype(np.int64) + 1) // 2, 65535,
-        ).astype(np.uint16)
-        pool.replay_buffer.push_dense_many(
-            feats_f16, chain_f16, pols_np, vals_np, own_np, wl_np,
-            game_lengths, ifs_np, pidx_np,   # per-row 0-based ply index
-            value_target_valid=vv_np,        # per-row value-supervision mask
-        )
-
-        if pool.recent_buffer is not None:
-            for i in range(n):
-                pool.recent_buffer.push(
-                    feats_f16[i],
-                    chain_planes=chain_f16[i],
-                    policy=pols_np[i],
-                    outcome=float(vals_np[i]),
-                    ownership=own_np[i],
-                    winning_line=wl_np[i],
-                    is_full_search=bool(ifs_np[i]),
-                    value_target_valid=bool(vv_np[i]),
-                )
-
-        with pool._lock:
-            pool.positions_pushed += n
-            pool.self_play_positions_pushed += n
-
-
 def buffer_composition(pool: Any) -> dict[str, float]:
     """Return a composition snapshot of the live replay buffer.
 
@@ -167,5 +118,4 @@ def buffer_composition(pool: Any) -> dict[str, float]:
     }
 
 
-__all__ = ["ALPHA_FULL_ROW_EVENT_CAP", "buffer_composition",
-           "push_dense", "push_graph"]
+__all__ = ["ALPHA_FULL_ROW_EVENT_CAP", "buffer_composition", "push_graph"]
