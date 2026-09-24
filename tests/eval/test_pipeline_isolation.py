@@ -15,14 +15,13 @@ from __future__ import annotations
 
 import ast
 import json
-import multiprocessing
 import time
 from pathlib import Path
 from typing import Any
 
 import pytest
 import torch
-from _pipeline_harness import FakeCtx, eval_config, pipeline_kwargs, tiny_model
+from _pipeline_harness import eval_config, fake_mp, pipeline_kwargs, tiny_model
 
 from mantis.encoding import lookup, normalize_encoding_name
 from mantis.eval.pipeline import build_eval_pipeline
@@ -43,19 +42,6 @@ def _pipeline_kwargs(tmp_path: Path, **overrides: Any) -> dict:
     return pipeline_kwargs(
         tmp_path, eval_cfg=_eval_cfg(), drain_caps_sec=5.0, **overrides
     )
-
-
-@pytest.fixture()
-def fake_mp(monkeypatch):
-    requested: dict = {}
-    ctx = FakeCtx()
-
-    def _fake_get_context(name: str | None = None):
-        requested["name"] = name
-        return ctx
-
-    monkeypatch.setattr(multiprocessing, "get_context", _fake_get_context)
-    return requested, ctx
 
 
 def test_kick_returns_ack_immediately_and_never_blocks(fake_mp, tmp_path) -> None:
@@ -103,14 +89,13 @@ def test_pipeline_retains_no_module_after_kick(fake_mp, tmp_path) -> None:
 
 
 def test_worker_spawned_with_spawn_context(fake_mp, tmp_path) -> None:
-    requested, ctx = fake_mp
     pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path), leaf_batch_size=1)
     try:
         pipeline.run_evaluation(tiny_model(), 1000, None, full_config={}, best_model_step=None)
-        assert requested.get("name") == "spawn"
-        assert ctx.process_calls, "no subprocess was ever requested via the spawn context"
+        assert fake_mp.requested_name == "spawn"
+        assert fake_mp.process_calls, "no subprocess was ever requested via the spawn context"
         # The parent never resolves the encoding; the child's `lookup` on this spec is its validator.
-        spec_path = Path(ctx.process_calls[0]["args"][0])
+        spec_path = Path(fake_mp.process_calls[0]["args"][0])
         carried = RoundSpec.from_dict(json.loads(spec_path.read_text(encoding="utf-8")))
         assert carried.encoding == "gnn_axis_v1"
         assert lookup(normalize_encoding_name(carried.encoding)).representation == "graph"

@@ -232,6 +232,9 @@ class FakeCtx:
     def __init__(self) -> None:
         self.last_process: FakeProcess | None = None
         self.process_calls: list[dict] = []
+        #: the `name` `multiprocessing.get_context` was called with, for a suite asserting
+        #: WHICH context string reached it (the check keys off the name, not the object).
+        self.requested_name: str | None = None
 
     def Process(self, *, target=None, args=(), kwargs=None, daemon=None) -> FakeProcess:
         proc = FakeProcess(target=target, args=args, kwargs=kwargs, daemon=daemon)
@@ -243,7 +246,12 @@ class FakeCtx:
 @pytest.fixture()
 def fake_mp(monkeypatch: pytest.MonkeyPatch) -> FakeCtx:
     ctx = FakeCtx()
-    monkeypatch.setattr(multiprocessing, "get_context", lambda name=None: ctx)
+
+    def _get_context(name: str | None = None) -> FakeCtx:
+        ctx.requested_name = name
+        return ctx
+
+    monkeypatch.setattr(multiprocessing, "get_context", _get_context)
     return ctx
 
 
