@@ -27,10 +27,6 @@ _PLAN = Path(__file__).resolve().parents[2] / "tools" / "worker_sweep_plan.toml"
 _MIB = 1024 ** 2
 
 
-@pytest.fixture()
-def plan() -> ws.SweepPlan:
-    return ws.load_plan(_PLAN)
-
 
 def _func(name: str) -> ast.FunctionDef:
     tree = ast.parse(_MODULE.read_text(encoding="utf-8"))

@@ -26,10 +26,6 @@ from mantis.diagnostics import worker_sweep as ws
 _PLAN = Path(__file__).resolve().parents[2] / "tools" / "worker_sweep_plan.toml"
 
 
-@pytest.fixture()
-def plan() -> ws.SweepPlan:
-    return ws.load_plan(_PLAN)
-
 
 class _Stats:
     def __init__(self, games: int, moves: int) -> None:

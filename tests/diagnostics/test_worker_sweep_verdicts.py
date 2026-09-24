@@ -1,9 +1,4 @@
 """Pin rung verdicts, the OOM extension-stop, the ladder walk, and the unmeasured rounds.
-
->300 justify (R8): an OOM row is simultaneously about a rung (it fails) and about the ladder (only
-the EXTENSION stops), so splitting by "verdict" and "walk" would put each half of every clause in
-a different file. A verdict comes from a STATED stopping rule on a SERIES, REFUSED is never a
-verdict, and an unmeasurable round is listed rather than dropped.
 """
 from __future__ import annotations
 
@@ -19,10 +14,6 @@ from mantis.diagnostics import worker_sweep as ws
 _PLAN = Path(__file__).resolve().parents[2] / "tools" / "worker_sweep_plan.toml"
 _MIB = 1024 ** 2
 
-
-@pytest.fixture()
-def plan() -> ws.SweepPlan:
-    return ws.load_plan(_PLAN)
 
 
 def _round(index: int, *, peak_mib: float | None, warmup: bool = False,
