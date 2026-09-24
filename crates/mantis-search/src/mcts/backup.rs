@@ -524,34 +524,8 @@ impl MCTSTree {
         }
     }
 
-    /// Legal-set counterpart of `expand_and_backup`, caching the ragged policy in the TT.
-    pub fn expand_and_backup_ls(&mut self, policies: &[LegalSetPolicy], values: &[f32]) {
-        let pending: Vec<(u32, Board)> = std::mem::take(&mut self.pending);
-        let n = pending.len().min(policies.len()).min(values.len());
-        // `pending` is already `mem::take`n, so any leaf past `n` is DROPPED carrying the
-        // virtual loss `select_one_leaf` added. Returning it degrades the BATCH, not the TREE.
-        for (leaf_idx, _board) in &pending[n..] {
-            self.undo_virtual_loss(*leaf_idx);
-        }
-        for i in 0..n {
-            let (leaf_idx, board) = &pending[i];
-            let ls = &policies[i];
-            let value = values[i];
-
-            self.transposition_table.insert(
-                board.zobrist_hash,
-                super::node::TTEntry {
-                    policy: CachedPolicy::Ls(std::sync::Arc::new(ls.clone())),
-                    value,
-                },
-            );
-
-            self.expand_and_backup_single_ls(*leaf_idx, board, ls, value);
-        }
-    }
-
-    /// Frame-explicit `expand_and_backup_ls` for the graph seam: `centers[i]` is the builder's
-    /// centre that `policies[i]` baked against, and must line up with `self.pending` order.
+    /// Legal-set counterpart of `expand_and_backup`, caching the ragged policy in the TT:
+    /// `centers[i]` is the builder's centre that `policies[i]` baked against, in `pending` order.
     pub fn expand_and_backup_ls_at(
         &mut self,
         policies: &[LegalSetPolicy],

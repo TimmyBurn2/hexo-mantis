@@ -87,7 +87,7 @@ fn compact_board() -> Board {
 /// Drive a negative-mixture prior through `expand` at sims=1, where the zero-visit prior
 /// fallback passes negatives through; assert the export is Σ==1 with a negative entry, then
 /// that the record refuses.
-fn drive_negative_prior_chain(use_at: bool) {
+fn drive_negative_prior_chain() {
     let board = compact_board();
     let legal = board.legal_moves();
     assert!(
@@ -116,12 +116,8 @@ fn drive_negative_prior_chain(use_at: bool) {
         .select_leaves(1)
         .expect("select_leaves: no desync in this fixture");
     assert_eq!(leaves.len(), 1);
-    if use_at {
-        let centers = vec![board.window_center()];
-        tree.expand_and_backup_ls_at(&[prior], &[0.0f32], &centers, TRUNK);
-    } else {
-        tree.expand_and_backup_ls(&[prior], &[0.0f32]);
-    }
+    let centers = vec![board.window_center()];
+    tree.expand_and_backup_ls_at(&[prior], &[0.0f32], &centers, TRUNK);
     assert!(tree.pool[0].is_expanded(), "root must expand");
 
     let ls = tree.get_policy_ls(1.0, NA); // zero-visit → prior fallback
@@ -149,12 +145,7 @@ fn drive_negative_prior_chain(use_at: bool) {
 
 #[test]
 fn negative_prior_chain_through_expand_and_backup_ls_at_refuses_at_record() {
-    drive_negative_prior_chain(true);
-}
-
-#[test]
-fn negative_prior_chain_through_expand_and_backup_ls_refuses_at_record() {
-    drive_negative_prior_chain(false);
+    drive_negative_prior_chain();
 }
 
 #[test]

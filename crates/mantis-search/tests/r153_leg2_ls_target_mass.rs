@@ -1,20 +1,14 @@
-// R8 >300 justify: the measurement harness (frozen semantics) and the flipped assertion arm
-// live in ONE file so the regression oracle and the prereg'd measurement cannot drift apart.
 //! Dropped target mass through each encoding's PRODUCTION expand.
 //!
 //! A permanent regression oracle: every sampled row must satisfy `dropped_mass <= 1e-6` and
-//! the degenerate count must be 0, on both production-expand encodings. The prereg and
-//! measurement artifacts are committed verbatim under `docs/design/measurements/`.
+//! the degenerate count must be 0, on both encodings through the production
+//! `expand_and_backup_ls_at`. The prereg and measurement artifacts are committed verbatim under
+//! `docs/design/archive/measurements/`.
 //!
 //! A measurement clears an encoding ONLY when driven through that encoding's production
 //! expand: under the DENSE expand off-window cells get `sort_prior = 0.0` and are truncated
 //! by the per-node child cap, so a zero there is structural rather than a clearance. Instrument
 //! abort 4, the off-window-child guard, is what keeps that distinction honest forever.
-//!
-//! | encoding | expand |
-//! |---|---|
-//! | `gnn_axis_v1` | `expand_and_backup_ls_at` (production) |
-//! | `gnn_axis_r8` | `expand_and_backup_ls` (unframed) |
 
 use mantis_core::board::{Board, BoardGeometry};
 use mantis_encoding::lookup_or_panic;
@@ -24,14 +18,6 @@ const N_SIMS: usize = 50; // run5 selfplay.mcts.n_simulations (target generation
 const LEAF_BATCH: usize = 8;
 const TEMPERATURE: f32 = 1.0;
 const TOL: f64 = 1e-6;
-
-#[derive(Clone, Copy)]
-enum Expand {
-    /// Frame-explicit: legal-set expand against the BUILDER's window centre.
-    LsAt,
-    /// Unframed: legal-set expand that reads the prior in the Board's own window frame.
-    Ls,
-}
 
 struct Row {
     ply: u32,
@@ -77,7 +63,7 @@ fn no_drop_uniform(board: &Board, n_actions: usize) -> LegalSetPolicy {
     ls
 }
 
-fn run_search(tree: &mut MCTSTree, n_actions: usize, trunk_sz: i32, mode: Expand) {
+fn run_search(tree: &mut MCTSTree, n_actions: usize, trunk_sz: i32) {
     let mut done = 0;
     while done < N_SIMS {
         let take = LEAF_BATCH.min(N_SIMS - done);
@@ -92,21 +78,16 @@ fn run_search(tree: &mut MCTSTree, n_actions: usize, trunk_sz: i32, mode: Expand
             .map(|b| no_drop_uniform(b, n_actions))
             .collect();
         let values = vec![0.0_f32; boards.len()];
-        match mode {
-            Expand::LsAt => {
-                let centers: Vec<(i32, i32)> = boards.iter().map(|b| b.window_center()).collect();
-                tree.expand_and_backup_ls_at(&policies, &values, &centers, trunk_sz);
-            }
-            Expand::Ls => tree.expand_and_backup_ls(&policies, &values),
-        }
+        let centers: Vec<(i32, i32)> = boards.iter().map(|b| b.window_center()).collect();
+        tree.expand_and_backup_ls_at(&policies, &values, &centers, trunk_sz);
         done += boards.len();
     }
 }
 
-fn measure(board: &Board, n_actions: usize, trunk_sz: i32, mode: Expand, ply: u32) -> Option<Row> {
+fn measure(board: &Board, n_actions: usize, trunk_sz: i32, ply: u32) -> Option<Row> {
     let mut tree = MCTSTree::new(1.5);
     tree.new_game(board.clone());
-    run_search(&mut tree, n_actions, trunk_sz, mode);
+    run_search(&mut tree, n_actions, trunk_sz);
 
     let root = &tree.pool[0];
     if !root.is_expanded() {
@@ -147,8 +128,8 @@ fn measure(board: &Board, n_actions: usize, trunk_sz: i32, mode: Expand, ply: u3
     })
 }
 
-/// Same generators as leg 1, so the position sets are comparable row for row.
-fn game_rows(enc: &str, seed: u64, max_plies: u32, mode: Expand) -> Vec<Row> {
+/// A seeded random-legal game: the position set does not depend on the search.
+fn game_rows(enc: &str, seed: u64, max_plies: u32) -> Vec<Row> {
     let (geom, n_actions, trunk) = geometry_for(enc);
     let mut board = Board::with_geometry(geom);
     let mut rows = Vec::new();
@@ -158,7 +139,7 @@ fn game_rows(enc: &str, seed: u64, max_plies: u32, mode: Expand) -> Vec<Row> {
         if legal.is_empty() {
             break;
         }
-        if let Some(row) = measure(&board, n_actions, trunk, mode, ply) {
+        if let Some(row) = measure(&board, n_actions, trunk, ply) {
             rows.push(row);
         }
         state = state
@@ -172,7 +153,7 @@ fn game_rows(enc: &str, seed: u64, max_plies: u32, mode: Expand) -> Vec<Row> {
     rows
 }
 
-fn dispersed_rows(enc: &str, max_plies: u32, mode: Expand) -> Vec<Row> {
+fn dispersed_rows(enc: &str, max_plies: u32) -> Vec<Row> {
     let (geom, n_actions, trunk) = geometry_for(enc);
     let mut board = Board::with_geometry(geom);
     let mut rows = Vec::new();
@@ -181,7 +162,7 @@ fn dispersed_rows(enc: &str, max_plies: u32, mode: Expand) -> Vec<Row> {
         if legal.is_empty() {
             break;
         }
-        if let Some(row) = measure(&board, n_actions, trunk, mode, ply) {
+        if let Some(row) = measure(&board, n_actions, trunk, ply) {
             rows.push(row);
         }
         let (cq, cr) = board.window_center();
@@ -240,12 +221,12 @@ fn report(label: &str, rows: &[Row]) {
     }
 }
 
-fn collect(enc: &str, mode: Expand) -> Vec<Row> {
+fn collect(enc: &str) -> Vec<Row> {
     let mut rows = Vec::new();
     for seed in [20_260_731_u64, 8_675_309, 42] {
-        rows.extend(game_rows(enc, seed, 128, mode));
+        rows.extend(game_rows(enc, seed, 128));
     }
-    rows.extend(dispersed_rows(enc, 96, mode));
+    rows.extend(dispersed_rows(enc, 96));
     rows
 }
 
@@ -256,8 +237,8 @@ fn assert_no_dropped_mass(label: &str, rows: &[Row]) {
         assert!(
             r.dropped_mass <= TOL,
             "{label}: ply {} (n_legal {}, n_children {}) drops {:.6} target mass \
-             (> {TOL}) — the no-drop export law (records.rs:468-479, R34/R153) is \
-             violated on the production path",
+             (> {TOL}) — the no-drop export law (R34/R153) is violated on the production \
+             path",
             r.ply,
             r.n_legal,
             r.n_children,
@@ -273,56 +254,44 @@ fn assert_no_dropped_mass(label: &str, rows: &[Row]) {
 }
 
 #[test]
-fn r153_leg2_run5_exposure_through_production_expand() {
-    // PRIMARY: run5's encoding, its production expand. This decides run5 exposure.
-    let rows = collect("gnn_axis_v1", Expand::LsAt);
-    report("gnn_axis_v1 / expand_and_backup_ls_at [PRODUCTION]", &rows);
+fn r153_leg2_no_target_mass_dropped_through_production_expand() {
+    for enc in ["gnn_axis_v1", "gnn_axis_r8"] {
+        let rows = collect(enc);
+        report(
+            &format!("{enc} / expand_and_backup_ls_at [PRODUCTION]"),
+            &rows,
+        );
 
-    let affected = rows.iter().filter(|r| r.dropped_mass > TOL).count();
-    let max_legal = rows.iter().map(|r| r.n_legal).max().unwrap_or(0);
-    let with_offwindow = rows.iter().filter(|r| r.offwindow_children > 0).count();
+        let max_legal = rows.iter().map(|r| r.n_legal).max().unwrap_or(0);
+        let with_offwindow = rows.iter().filter(|r| r.offwindow_children > 0).count();
 
-    // PREREG abort 1 — the tail must be reached.
-    assert!(
-        max_legal > 361,
-        "gnn_axis_v1: sample never reached >361 legal (max {max_legal})"
-    );
+        // PREREG abort 1 — the tail must be reached.
+        assert!(
+            max_legal > 361,
+            "{enc}: sample never reached >361 legal (max {max_legal})"
+        );
 
-    // PREREG abort 4 — THE ONE THAT MATTERS. A zero reached because the tree still holds no
-    // off-window child would be a false clear.
-    assert!(
-        with_offwindow > 0,
-        "ABORT 4: no position produced an off-window CHILD, so a zero here would be \
-         structural, exactly like leg 1. The no-drop overflow is not reaching the expand — \
-         fix the instrument; do NOT report this as REFUTED."
-    );
+        // PREREG abort 4 — THE ONE THAT MATTERS. A zero reached because the tree still holds no
+        // off-window child would be a false clear.
+        assert!(
+            with_offwindow > 0,
+            "{enc} ABORT 4: no position produced an off-window CHILD, so a zero here would be \
+             structural, exactly like the dense expand's. The no-drop overflow is not reaching \
+             the expand — fix the instrument; do NOT report this as REFUTED."
+        );
 
-    // PREREG abort 3 — determinism.
-    let repeat = game_rows("gnn_axis_v1", 20_260_731, 64, Expand::LsAt);
-    let again = game_rows("gnn_axis_v1", 20_260_731, 64, Expand::LsAt);
-    let a: Vec<f64> = repeat.iter().map(|r| r.dropped_mass).collect();
-    let b: Vec<f64> = again.iter().map(|r| r.dropped_mass).collect();
-    assert_eq!(
-        a, b,
-        "gnn_axis_v1: instrument not deterministic at a fixed seed"
-    );
+        // PREREG abort 3 — determinism.
+        let a: Vec<f64> = game_rows(enc, 20_260_731, 64)
+            .iter()
+            .map(|r| r.dropped_mass)
+            .collect();
+        let b: Vec<f64> = game_rows(enc, 20_260_731, 64)
+            .iter()
+            .map(|r| r.dropped_mass)
+            .collect();
+        assert_eq!(a, b, "{enc}: instrument not deterministic at a fixed seed");
 
-    // SECONDARY: the wider-radius graph row through the UNFRAMED ls expand. Reported; it
-    // does not decide run5.
-    let ls_rows = collect("gnn_axis_r8", Expand::Ls);
-    report("gnn_axis_r8 / expand_and_backup_ls", &ls_rows);
-
-    // Flipped report arms — the permanent regression assertions.
-    assert_no_dropped_mass("gnn_axis_v1 / LsAt", &rows);
-    assert_no_dropped_mass("gnn_axis_r8 / Ls", &ls_rows);
-
-    println!(
-        "\n=== R153 LEG 2 VERDICT INPUTS (gnn_axis_v1, PRODUCTION path) ===\n\
-         \x20 positions: {}\n\x20 affected (dropped_mass > {TOL}): {affected}\n\
-         \x20 positions with off-window children: {with_offwindow}\n\
-         \x20 max n_legal: {max_legal}\n\
-         \x20 -> RUN5 EXPOSURE {}",
-        rows.len(),
-        if affected > 0 { "CONFIRMED" } else { "REFUTED" }
-    );
+        // Flipped report arm — the permanent regression assertion.
+        assert_no_dropped_mass(enc, &rows);
+    }
 }

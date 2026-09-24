@@ -173,8 +173,7 @@ fn s1a_t1_export_sums_to_unity_with_offwindow_mass_carried() {
     let total: f64 = export_mass(&ls);
     assert!(
         (total - 1.0).abs() <= TOL,
-        "get_policy_ls T=1 must export FULL visit mass (authority records.rs:468-479, \
-         R34/R153): got {total} (dropped {})",
+        "get_policy_ls T=1 must export FULL visit mass (R34/R153): got {total} (dropped {})",
         1.0 - total
     );
     // Full-set carry: EVERY visited child's coord exports nonzero mass.
