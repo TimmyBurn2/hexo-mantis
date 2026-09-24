@@ -21,18 +21,28 @@ Fakes: NONE — static censuses over the shipped source, plus one identity read 
 from __future__ import annotations
 
 import ast
-import sys
-import tokenize
 from pathlib import Path
 
-# RED-at-import anchor: `build_run_collaborators` / `launch_run` do not exist yet.
 from mantis.run import build_run_collaborators, compose_run, launch_run  # noqa: F401
+from _ast_census import (
+    body_without_docstring,
+    call_sites,
+    called_name,
+    code_text,
+    enclosing_defs,
+    func_def,
+    production_sources,
+    rel,
+    root_name,
+)
 
 _REPO = Path(__file__).resolve().parents[1]
 _SRC = _REPO / "src" / "mantis"
 _TOOLS = _REPO / "tools"
 _RUN_PY = _SRC / "run.py"
 _TOOL_PY = _TOOLS / "ci_gates" / "preflight_mint.py"
+#: The census roots this file walks; the allowlist mutation row passes its own planted pair.
+_ROOTS = (_SRC, _TOOLS)
 
 #: The two production callers, and the ONLY two (DESIGN §1.1). Sites are
 #: `<repo-relative path>::<enclosing def>`.
@@ -63,97 +73,14 @@ _SANCTIONED_POOL_SITES = {
 }
 
 
-def _production_sources() -> list[Path]:
-    """Every shipped `.py` under `src/` and `tools/`. `tests/` is deliberately OUT: a test may
-    compose freely — the one-authority law is about what SHIPS."""
-    return sorted([*(_SRC.rglob("*.py")), *(_TOOLS.rglob("*.py"))])
-
-
-def _rel(path: Path) -> str:
-    return str(path.relative_to(_REPO))
-
-
-def _code_text(path: Path) -> str:
-    """Source with COMMENT / STRING / f-string-literal tokens removed, including the 3.11-floor
-    guard: FSTRING_MIDDLE is 3.12+, and on 3.11 f-strings lex as STRING."""
-    skip = {tokenize.COMMENT, tokenize.STRING, getattr(tokenize, "FSTRING_MIDDLE", -1)}
-    with path.open("rb") as handle:
-        return "\n".join(tok.string for tok in tokenize.tokenize(handle.readline)
-                         if tok.type not in skip)
-
-
-def _enclosing_defs(tree: ast.AST) -> dict[ast.AST, str]:
-    """Map every node to the name of the nearest enclosing `def`, so a census can report
-    WHERE a call sits rather than only that it exists."""
-    owner: dict[ast.AST, str] = {}
-
-    def walk(node: ast.AST, name: str) -> None:
-        for child in ast.iter_child_nodes(node):
-            child_name = child.name if isinstance(
-                child, ast.FunctionDef | ast.AsyncFunctionDef) else name
-            owner[child] = child_name
-            walk(child, child_name)
-
-    walk(tree, "<module>")
-    return owner
-
-
-def _called_name(node: ast.Call) -> str | None:
-    func = node.func
-    if isinstance(func, ast.Name):
-        return func.id
-    if isinstance(func, ast.Attribute):
-        return func.attr
-    return None
-
-
-def _call_sites(symbol: str) -> set[str]:
-    sites: set[str] = set()
-    for path in _production_sources():
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        owner = _enclosing_defs(tree)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and _called_name(node) == symbol:
-                sites.add(f"{_rel(path)}::{owner.get(node, '<module>')}")
-    return sites
-
-
 def _definition_sites(symbol: str) -> set[str]:
     sites: set[str] = set()
-    for path in _production_sources():
+    for path in production_sources(_SRC, _TOOLS):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name == symbol:
-                sites.add(_rel(path))
+                sites.add(rel(path, _REPO))
     return sites
-
-
-def _func(tree: ast.AST, name: str) -> ast.FunctionDef:
-    for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef) and node.name == name:
-            return node
-    raise AssertionError(f"no `def {name}` found — the one-authority shape is not in place")
-
-
-def _body_without_docstring(fn: ast.FunctionDef) -> list[ast.stmt]:
-    body = list(fn.body)
-    if (body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant)
-            and isinstance(body[0].value.value, str)):
-        return body[1:]
-    return body
-
-
-def _root_name(node: ast.AST) -> str | None:
-    """The base `Name` of an attribute/subscript/call chain: `config.train.device` -> `config`."""
-    while True:
-        if isinstance(node, ast.Name):
-            return node.id
-        if isinstance(node, ast.Attribute | ast.Subscript):
-            node = node.value
-        elif isinstance(node, ast.Call):
-            node = node.func
-        else:
-            return None
 
 
 def test_the_tree_holds_exactly_one_composer_and_exactly_one_collaborator_builder() -> None:
@@ -176,13 +103,13 @@ def test_the_only_production_composition_call_sites_are_the_launcher_and_the_pre
     """O-A1, call-site half. MUTATION THAT REDS IT: any new production caller of the builder or
     composer — each is a boot path that can drift from run5's, so adding one is a design
     decision that edits this set."""
-    assert _call_sites("compose_run") == _SANCTIONED_SITES, (
+    assert call_sites("compose_run", roots=_ROOTS, repo=_REPO) == _SANCTIONED_SITES, (
         "compose_run may be called from exactly two production sites (DESIGN §1.1) — "
-        f"got {sorted(_call_sites('compose_run'))}"
+        f"got {sorted(call_sites('compose_run', roots=_ROOTS, repo=_REPO))}"
     )
-    assert _call_sites("build_run_collaborators") == _SANCTIONED_SITES, (
+    assert call_sites("build_run_collaborators", roots=_ROOTS, repo=_REPO) == _SANCTIONED_SITES, (
         "the builder has the same two callers and no others — a third would be a third "
-        f"boot posture; got {sorted(_call_sites('build_run_collaborators'))}"
+        f"boot posture; got {sorted(call_sites('build_run_collaborators', roots=_ROOTS, repo=_REPO))}"
     )
 
 
@@ -194,19 +121,19 @@ def test_no_second_composer_exists_under_any_name() -> None:
     building the run-safety triple and constructing the coordinator, so those three call sites
     ARE the composer whatever it is named."""
     for symbol in ("run_training_loop", "build_run_safety", "StepCoordinator"):
-        assert _call_sites(symbol) == {"src/mantis/run.py::compose_run"}, (
+        assert call_sites(symbol, roots=_ROOTS, repo=_REPO) == {"src/mantis/run.py::compose_run"}, (
             f"{symbol} is one of composition's irreducible steps: a second caller is a "
-            f"second composer under another name; got {sorted(_call_sites(symbol))}"
+            f"second composer under another name; got {sorted(call_sites(symbol, roots=_ROOTS, repo=_REPO))}"
         )
-    assert _call_sites("init_trainer") == {"src/mantis/run.py::build_run_collaborators"}, (
+    assert call_sites("init_trainer", roots=_ROOTS, repo=_REPO) == {"src/mantis/run.py::build_run_collaborators"}, (
         "init_trainer must be constructed in the composition root's builder and nowhere "
         "else — a tool that builds its own is the D-1 inversion; got "
-        f"{sorted(_call_sites('init_trainer'))}"
+        f"{sorted(call_sites('init_trainer'))}"
     )
-    assert _call_sites("WorkerPool") == _SANCTIONED_POOL_SITES, (
+    assert call_sites("WorkerPool", roots=_ROOTS, repo=_REPO) == _SANCTIONED_POOL_SITES, (
         "WorkerPool may be constructed on the composition root's builder and at the ONE "
         "filed non-boot site (see `_SANCTIONED_POOL_SITES`); got "
-        f"{sorted(_call_sites('WorkerPool'))}"
+        f"{sorted(call_sites('WorkerPool'))}"
     )
 
 
@@ -217,7 +144,7 @@ def test_the_preflight_child_binds_its_composer_from_mantis_run_itself() -> None
     import is function-local (the tool must import without torch), so the `ImportFrom` node IS
     the binding."""
     tool_tree = ast.parse(_TOOL_PY.read_text(encoding="utf-8"))
-    boot = _func(tool_tree, "_boot_main")
+    boot = func_def(tool_tree, "_boot_main", where=str(_TOOL_PY))
     imports = [node for node in ast.walk(boot) if isinstance(node, ast.ImportFrom)]
     bound = {alias.name: node.module for node in imports for alias in node.names}
     for symbol in ("build_run_collaborators", "compose_run"):
@@ -236,7 +163,7 @@ def test_launch_run_is_exactly_build_then_compose_with_nothing_in_between() -> N
     a third step flips the statement count; a different config to the composer flips the
     `ast.Name` equality. Both are invisible on a green tier, hence a structural instrument."""
     tree = ast.parse(_RUN_PY.read_text(encoding="utf-8"))
-    body = _body_without_docstring(_func(tree, "launch_run"))
+    body = body_without_docstring(func_def(tree, "launch_run", where=str(_RUN_PY)))
     assert len(body) == 2, (
         "launch_run is the pass-through, and only the pass-through: one build, one compose. "
         f"Found {len(body)} statements: {[type(s).__name__ for s in body]}"
@@ -246,9 +173,9 @@ def test_launch_run_is_exactly_build_then_compose_with_nothing_in_between() -> N
         "statement 1 must BIND the builder's result (a bare call would throw the "
         "collaborators away)"
     )
-    assert _called_name(build_stmt.value) == "build_run_collaborators"
+    assert called_name(build_stmt.value) == "build_run_collaborators"
     assert isinstance(return_stmt, ast.Return) and isinstance(return_stmt.value, ast.Call)
-    assert _called_name(return_stmt.value) == "compose_run"
+    assert called_name(return_stmt.value) == "compose_run"
 
     build_kwargs = {kw.arg: kw.value for kw in build_stmt.value.keywords}
     compose_kwargs = {kw.arg: kw.value for kw in return_stmt.value.keywords}
@@ -289,11 +216,11 @@ def test_the_builder_calls_the_real_trainer_and_pool_constructors_and_binds_them
     bind each result. Token presence survives a stand-in mutation (measured); a bound CALL does
     not. Equal-or-stronger is claimed for the PAIR with the behavioural drives."""
     tree = ast.parse(_RUN_PY.read_text(encoding="utf-8"))
-    builder = _func(tree, "build_run_collaborators")
+    builder = func_def(tree, "build_run_collaborators", where=str(_RUN_PY))
     bound: dict[str, str] = {}
     for node in ast.walk(builder):
         if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
-            name = _called_name(node.value)
+            name = called_name(node.value)
             if name and isinstance(node.targets[0], ast.Name):
                 bound[name] = node.targets[0].id
     for constructor in ("init_trainer", "WorkerPool", "_select_buffer"):
@@ -310,8 +237,8 @@ def test_the_buffer_selector_routes_the_declared_representation_to_a_real_engine
     the THIRD arm — an absent or unknown representation RAISES rather than falling through to
     the one buffer left."""
     tree = ast.parse(_RUN_PY.read_text(encoding="utf-8"))
-    selector = _func(tree, "_select_buffer")
-    called = {_called_name(node) for node in ast.walk(selector) if isinstance(node, ast.Call)}
+    selector = func_def(tree, "_select_buffer", where=str(_RUN_PY))
+    called = {called_name(node) for node in ast.walk(selector) if isinstance(node, ast.Call)}
     assert "HexgBuffer" in called, (
         f"_select_buffer must construct HexgBuffer on its own arm; got {sorted(called)}"
     )
@@ -336,14 +263,14 @@ def test_the_composition_root_contains_no_stand_in_for_a_production_object() -> 
     Scanned over CODE with comment/string tokens removed, because a raw-text census flags the
     module's prose. The `SimpleNamespace` carve-out is ENUMERATED: HEAD's root already
     constructs two, so the bound is a COUNT of CONSTRUCTIONS and a third must be argued."""
-    code = _code_text(_RUN_PY)
+    code = code_text(_RUN_PY)
     for token in ("MagicMock", "unittest.mock", "mock.patch", "monkeypatch", "setattr("):
         assert token not in code, (
             f"src/mantis/run.py contains {token!r}: the composition root must contain no "
             "stand-in for a production object (O-2's posture, R64)"
         )
     constructions = [node for node in ast.walk(ast.parse(_RUN_PY.read_text(encoding="utf-8")))
-                     if isinstance(node, ast.Call) and _called_name(node) == "SimpleNamespace"]
+                     if isinstance(node, ast.Call) and called_name(node) == "SimpleNamespace"]
     assert len(constructions) <= 2, (
         "only the two DISCLOSED SimpleNamespace constructions may exist in the root (the "
         f"anchor seed and the coordinator `subsystems=` stand-in); found {len(constructions)}"
@@ -358,9 +285,9 @@ def test_the_preflight_child_boots_through_one_builder_and_one_composer_only() -
     tree = ast.parse(_TOOL_PY.read_text(encoding="utf-8"))
     builder_calls = [node for node in ast.walk(tree)
                      if isinstance(node, ast.Call)
-                     and _called_name(node) == "build_run_collaborators"]
+                     and called_name(node) == "build_run_collaborators"]
     compose_calls = [node for node in ast.walk(tree)
-                     if isinstance(node, ast.Call) and _called_name(node) == "compose_run"]
+                     if isinstance(node, ast.Call) and called_name(node) == "compose_run"]
     assert len(builder_calls) == 1, f"exactly one builder call in the tool; got {len(builder_calls)}"
     assert len(compose_calls) == 1, f"exactly one compose call in the tool; got {len(compose_calls)}"
 
@@ -378,8 +305,8 @@ def test_the_preflight_child_boots_through_one_builder_and_one_composer_only() -
         f"`run_id=`: the CONFIG governs both (R120/R123); got {sorted(compose_kwargs)}"
     )
 
-    boot = _func(tree, "_boot_main")
-    body = _body_without_docstring(boot)
+    boot = func_def(tree, "_boot_main", where=str(_TOOL_PY))
+    body = body_without_docstring(boot)
     build_index = next(i for i, stmt in enumerate(body)
                        if any(node is builder_calls[0] for node in ast.walk(stmt)))
     compose_index = next(i for i, stmt in enumerate(body)
@@ -428,19 +355,19 @@ def test_no_or_fallback_or_dict_get_stands_behind_a_config_fact_at_the_root() ->
     tree = ast.parse(_RUN_PY.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or):
-            root = _root_name(node.values[0])
+            root = root_name(node.values[0])
             assert root not in ("config", "cfg"), (
                 "an `or` whose left operand is a config read is a code-side default for a "
                 f"config fact (R1): {ast.dump(node)[:160]}"
             )
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
                 and node.func.attr == "get":
-            root = _root_name(node.func.value)
+            root = root_name(node.func.value)
             assert root not in ("config", "cfg"), (
                 "a `.get(...)` on a config-derived object smuggles the default the schema "
                 f"is supposed to own (R1/LAW-11): {ast.dump(node)[:160]}"
             )
-    composer = _func(tree, "compose_run")
+    composer = func_def(tree, "compose_run", where=str(_RUN_PY))
     reads_run_id = any(
         isinstance(node, ast.Attribute) and node.attr == "run_id"
         and isinstance(node.value, ast.Name) and node.value.id == "config"
@@ -467,15 +394,11 @@ def test_the_pool_allowlist_BITES_on_a_third_construction_site(tmp_path) -> None
         encoding="utf-8",
     )
     (tmp_path / "tools").mkdir()
-    module = sys.modules[__name__]
-    saved = (module._SRC, module._TOOLS, module._REPO)
-    module._SRC = tmp_path / "src" / "mantis"
-    module._TOOLS = tmp_path / "tools"
-    module._REPO = tmp_path
-    try:
-        offenders = _call_sites("WorkerPool") - _SANCTIONED_POOL_SITES
-    finally:
-        module._SRC, module._TOOLS, module._REPO = saved
+    offenders = call_sites(
+        "WorkerPool",
+        roots=(tmp_path / "src" / "mantis", tmp_path / "tools"),
+        repo=tmp_path,
+    ) - _SANCTIONED_POOL_SITES
     assert offenders == {"src/mantis/somewhere/new_booter.py::boot"}, (
         f"a planted third WorkerPool construction site was not rejected: {sorted(offenders)}"
     )

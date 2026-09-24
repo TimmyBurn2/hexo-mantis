@@ -14,7 +14,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from mantis.run import compose_run, launch_run  # noqa: F401  (the live objects, RED anchor)
+from mantis.run import compose_run, launch_run  # noqa: F401  (the live objects under census)
+from _ast_census import call_sites, called_name, production_sources, rel
 
 _REPO = Path(__file__).resolve().parents[1]
 _SRC = _REPO / "src"
@@ -33,38 +34,6 @@ _BOOT_SYMBOLS = frozenset({"build_run_collaborators", "compose_run", "launch_run
 
 #: Call shapes that can import by STRING and so evade an `Import`/`ImportFrom` census.
 _DYNAMIC_IMPORTERS = frozenset({"import_module", "__import__", "find_spec", "load_module"})
-
-
-def _production_sources() -> list[Path]:
-    """Every shipped `.py` under `src/` and `tools/`; `tests/` is out, the law is about SHIPS."""
-    return sorted([*_SRC.rglob("*.py"), *_TOOLS.rglob("*.py")])
-
-
-def _rel(path: Path) -> str:
-    return str(path.relative_to(_REPO))
-
-
-def _enclosing_defs(tree: ast.AST) -> dict[ast.AST, str]:
-    owner: dict[ast.AST, str] = {}
-
-    def walk(node: ast.AST, name: str) -> None:
-        for child in ast.iter_child_nodes(node):
-            child_name = child.name if isinstance(
-                child, ast.FunctionDef | ast.AsyncFunctionDef) else name
-            owner[child] = child_name
-            walk(child, child_name)
-
-    walk(tree, "<module>")
-    return owner
-
-
-def _called_name(node: ast.Call) -> str | None:
-    func = node.func
-    if isinstance(func, ast.Name):
-        return func.id
-    if isinstance(func, ast.Attribute):
-        return func.attr
-    return None
 
 
 def _own_package(path: Path) -> str | None:
@@ -111,22 +80,11 @@ def _binds_the_run_module(tree: ast.AST, path: Path) -> list[str]:
                 for alias in node.names:
                     if alias.name == "run":
                         reasons.append("from mantis import run")
-        elif isinstance(node, ast.Call) and _called_name(node) in _DYNAMIC_IMPORTERS:
+        elif isinstance(node, ast.Call) and called_name(node) in _DYNAMIC_IMPORTERS:
             for argument in [*node.args, *[kw.value for kw in node.keywords]]:
                 if isinstance(argument, ast.Constant) and argument.value == _RUN_MODULE:
-                    reasons.append(f"{_called_name(node)}({_RUN_MODULE!r})")
+                    reasons.append(f"{called_name(node)}({_RUN_MODULE!r})")
     return reasons
-
-
-def _call_sites(symbol: str) -> set[str]:
-    sites: set[str] = set()
-    for path in _production_sources():
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        owner = _enclosing_defs(tree)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and _called_name(node) == symbol:
-                sites.add(f"{_rel(path)}::{owner.get(node, '<module>')}")
-    return sites
 
 
 def test_no_shipped_module_but_the_preflight_child_imports_the_composition_root() -> None:
@@ -135,8 +93,8 @@ def test_no_shipped_module_but_the_preflight_child_imports_the_composition_root(
     Alias-proof by construction: any second boot path must NAME the module first, whatever it
     calls the symbols afterwards, and the relative and dynamic import shapes are covered too."""
     importers = {
-        _rel(path): reasons
-        for path in _production_sources()
+        rel(path, _REPO): reasons
+        for path in production_sources(_SRC, _TOOLS)
         if (reasons := _binds_the_run_module(
             ast.parse(path.read_text(encoding="utf-8")), path))
     }
@@ -164,10 +122,10 @@ def test_the_source_only_node_claim_is_still_the_one_this_census_produces_for() 
 def test_launch_run_has_exactly_one_production_call_site() -> None:
     """`launch_run` has exactly one production call site. Name-keyed, so an aliased
     `launch_run as _go` walks past it — the alias-proof property is the import census above."""
-    assert _call_sites("launch_run") == _LAUNCH_SITES, (
+    assert call_sites("launch_run", roots=(_SRC, _TOOLS), repo=_REPO) == _LAUNCH_SITES, (
         "`launch_run` is called by `main` and by nothing else — the preflight child calls "
         "the two functions BENEATH it (build + compose) so its two sanctioned instruments "
-        f"can sit between them; got {sorted(_call_sites('launch_run'))}"
+        f"can sit between them; got {sorted(call_sites('launch_run', roots=(_SRC, _TOOLS), repo=_REPO))}"
     )
 
 

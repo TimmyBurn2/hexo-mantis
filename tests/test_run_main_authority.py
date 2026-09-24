@@ -13,6 +13,7 @@ import ast
 from pathlib import Path
 
 from mantis.run import launch_run, main  # noqa: F401  (the live objects the census is about)
+from _ast_census import called_name, func_def, root_name
 
 _REPO = Path(__file__).resolve().parents[1]
 _RUN_PY = _REPO / "src" / "mantis" / "run.py"
@@ -31,35 +32,6 @@ _CONFIG_ROOTS = ("config", "cfg")
 
 def _tree() -> ast.Module:
     return ast.parse(_RUN_PY.read_text(encoding="utf-8"))
-
-
-def _func(tree: ast.AST, name: str) -> ast.FunctionDef:
-    for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef) and node.name == name:
-            return node
-    raise AssertionError(f"no `def {name}` found in src/mantis/run.py")
-
-
-def _called_name(node: ast.Call) -> str | None:
-    func = node.func
-    if isinstance(func, ast.Name):
-        return func.id
-    if isinstance(func, ast.Attribute):
-        return func.attr
-    return None
-
-
-def _root_name(node: ast.AST) -> str | None:
-    """The base `Name` of an attribute/subscript/call chain: `config.train.device` -> `config`."""
-    while True:
-        if isinstance(node, ast.Name):
-            return node.id
-        if isinstance(node, ast.Attribute | ast.Subscript):
-            node = node.value
-        elif isinstance(node, ast.Call):
-            node = node.func
-        else:
-            return None
 
 
 def _binding_targets(fn: ast.FunctionDef) -> list[tuple[ast.AST, ast.stmt]]:
@@ -97,7 +69,7 @@ def _binding_targets(fn: ast.FunctionDef) -> list[tuple[ast.AST, ast.stmt]]:
 
 def _launch_call(fn: ast.FunctionDef) -> ast.Call:
     calls = [node for node in ast.walk(fn)
-             if isinstance(node, ast.Call) and _called_name(node) == _LAUNCHER]
+             if isinstance(node, ast.Call) and called_name(node) == _LAUNCHER]
     assert len(calls) == 1, (
         f"`main` must call {_LAUNCHER}() exactly once — a second launch in the entry point is "
         f"a second boot with the first one's rc thrown away; found {len(calls)}"
@@ -135,11 +107,11 @@ def test_main_hands_the_launcher_the_loaders_own_result_and_nothing_else() -> No
 
     MUTATION THAT REDS IT: `config=_adjust(load_config(args.config))`, or a local that is
     loaded, touched, then launched — both keep every other census green."""
-    fn = _func(_tree(), "main")
+    fn = func_def(_tree(), "main", where=str(_RUN_PY))
     node, name, binding = _config_binding(fn)
 
     value = node if binding is None else getattr(binding, "value", None)
-    assert isinstance(value, ast.Call) and _called_name(value) == _LOADER, (
+    assert isinstance(value, ast.Call) and called_name(value) == _LOADER, (
         f"`main` must launch what `{_LOADER}()` returned, with nothing between the load and "
         f"the launch (R126: the device — and every other config fact — is the CONFIG's, and "
         f"the entry point may not re-decide it); got {ast.dump(value)[:160]}"
@@ -149,7 +121,7 @@ def test_main_hands_the_launcher_the_loaders_own_result_and_nothing_else() -> No
         uses = [n for n in ast.walk(fn) if isinstance(n, ast.Name) and n.id == name]
         stamp_reads = [
             call for call in ast.walk(fn)
-            if isinstance(call, ast.Call) and _called_name(call) == _STAMP_READER
+            if isinstance(call, ast.Call) and called_name(call) == _STAMP_READER
             and call.args and isinstance(call.args[0], ast.Name) and call.args[0].id == name
         ]
         assert len(stamp_reads) == 1, (
@@ -169,12 +141,12 @@ def test_nothing_in_main_assigns_onto_the_config_it_launches_with() -> None:
 
     MUTATION THAT REDS IT: `config.train.device = os.environ.get("MANTIS_DEVICE", …)` between
     the load and the launch — every other oracle in the tree stays green."""
-    fn = _func(_tree(), "main")
+    fn = func_def(_tree(), "main", where=str(_RUN_PY))
     _, name, binding = _config_binding(fn)
     banned = {*_CONFIG_ROOTS, *([name] if name else [])}
 
     for target, stmt in _binding_targets(fn):
-        root = _root_name(target)
+        root = root_name(target)
         if root not in banned:
             continue
         assert stmt is binding and isinstance(target, ast.Name), (
@@ -190,7 +162,7 @@ def _parsed_args_name(fn: ast.FunctionDef) -> tuple[str, ast.stmt]:
     """The local `main` binds `parse_args(...)` to, and the statement that binds it."""
     parsed = [(target, stmt) for target, stmt in _binding_targets(fn)
               if isinstance(stmt, ast.Assign) and isinstance(stmt.value, ast.Call)
-              and _called_name(stmt.value) == "parse_args"]
+              and called_name(stmt.value) == "parse_args"]
     assert len(parsed) == 1 and isinstance(parsed[0][0], ast.Name), (
         "`main` must bind `parse_args(...)` exactly once, to a plain name; found "
         f"{len(parsed)} bindings"
@@ -216,11 +188,11 @@ def test_main_reads_both_run_inputs_off_the_arguments_it_parsed() -> None:
     MUTATION THAT REDS IT: `os.environ.get("MANTIS_CONFIG", args.config)` inside
     `load_config(...)`, or an env-defaulted `out_dir=`. The instrument is SHAPE, not spelling,
     so any wrapper fails it whatever it is named."""
-    fn = _func(_tree(), "main")
+    fn = func_def(_tree(), "main", where=str(_RUN_PY))
     args_name, _ = _parsed_args_name(fn)
 
     loads = [node for node in ast.walk(fn)
-             if isinstance(node, ast.Call) and _called_name(node) == _LOADER]
+             if isinstance(node, ast.Call) and called_name(node) == _LOADER]
     assert len(loads) == 1, (
         f"`main` must call {_LOADER}() exactly once; found {len(loads)} — two loads is two "
         "configs and the launcher only ever sees one of them"
@@ -252,11 +224,11 @@ def test_main_does_not_re_point_the_arguments_it_parsed() -> None:
 
     MUTATION THAT REDS IT: `args.config = os.environ.get("MANTIS_CONFIG", args.config)` after
     `parse_args` — argparse's own required-flag census reads the PARSER and sees nothing."""
-    fn = _func(_tree(), "main")
+    fn = func_def(_tree(), "main", where=str(_RUN_PY))
     args_name, parse_stmt = _parsed_args_name(fn)
 
     for target, stmt in _binding_targets(fn):
-        if _root_name(target) != args_name:
+        if root_name(target) != args_name:
             continue
         assert stmt is parse_stmt, (
             f"nothing may write to `{args_name}` after argparse produced it: re-pointing "
@@ -267,10 +239,10 @@ def test_main_does_not_re_point_the_arguments_it_parsed() -> None:
 
 def test_main_hands_the_stamp_reader_the_parsed_inherit_flag() -> None:
     """R360(c): the twin's run config reaches the trap as `inherit_from=args.<flag>`, off argparse."""
-    fn = _func(_tree(), "main")
+    fn = func_def(_tree(), "main", where=str(_RUN_PY))
     args_name, _ = _parsed_args_name(fn)
     reads = [node for node in ast.walk(fn)
-             if isinstance(node, ast.Call) and _called_name(node) == _STAMP_READER]
+             if isinstance(node, ast.Call) and called_name(node) == _STAMP_READER]
     assert len(reads) == 1
     inherit = {kw.arg: kw.value for kw in reads[0].keywords}.get("inherit_from")
     assert inherit is not None, f"`{_STAMP_READER}(inherit_from=...)` must be passed by keyword"
