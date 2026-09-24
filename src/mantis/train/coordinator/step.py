@@ -926,8 +926,7 @@ class StepCoordinator:
         # `train.batch_size`, minted at 256. This was a dict lookup whose two levels both miss
         # on the production path, so the batch size was unconditionally a literal fallback.
         batch_size = cfg.batch_size
-        # The DECLARED dispatcher routes off the resolved representation to the trainer's typed
-        # entry points (`train_step_from_graph_batch` / `train_step_from_tensors`).
+        # The DECLARED dispatcher routes off the resolved representation, never the buffer's class.
         return run_declared_train_step(
             self.trainer, self.buffer, self._step_spec(),
             batch_size=batch_size, augment=cfg.augment,

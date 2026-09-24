@@ -20,7 +20,6 @@ from mantis.train.coordinator.config import (
     ClockLike,
     EvalPipelineLike,
     GraphRouteBufferLike,
-    GridRouteBufferLike,
     RecentBufferLike,
     ReplayBufferLike,
     TrainerLike,
@@ -83,7 +82,7 @@ SEAM_MATRIX: tuple[tuple[object, tuple[str, ...], tuple[type, ...], tuple[str, .
      ("resize", "save_to_path", "size")),
     # The graph arm flows recency in-engine, so the only `recent_buffer` access left in
     # `dispatch` is the refusal that names it.
-    (dispatch_mod, ("buffer",), (ReplayBufferLike, GraphRouteBufferLike, GridRouteBufferLike),
+    (dispatch_mod, ("buffer",), (ReplayBufferLike, GraphRouteBufferLike),
      ("sample_graph_batch",)),
     (persist_mod, ("buffer",), (ReplayBufferLike,), ("save_to_path",)),
     (persist_mod, ("recent_buffer",), (RecentBufferLike,), ("save_to_path", "size")),

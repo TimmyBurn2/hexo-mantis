@@ -128,12 +128,31 @@ def test_the_retired_seam_members_stay_retired():
     rather than slide back in as an export."""
     import mantis.train.coordinator as pkg
 
-    for name in ("TracemallocLike", "RealTracemalloc", "GpuMonitorLike"):
+    for name in ("TracemallocLike", "RealTracemalloc", "GpuMonitorLike", "GridRouteBufferLike"):
         assert not hasattr(config_mod, name), (
             f"{name} is back in the seam layer. It is a Protocol/concrete pair with no "
             "injection point; if the deferred perf probe has landed, wire it — do not re-export it"
         )
         assert name not in getattr(pkg, "__all__", ()), f"{name} is back in the facade's __all__"
+    assert "train_step_from_tensors" not in vars(config_mod.TrainerLike), (
+        "TrainerLike declares the deleted grid entry point again; no trainer defines it"
+    )
+
+
+def test_the_production_trainer_IS_a_TrainerLike(tmp_path: Path) -> None:
+    """A member the real Trainer lacks makes the runtime_checkable seam reject the one trainer it types."""
+    import _microbatch_harness as H
+
+    from mantis.model.build import build_net
+    from mantis.train.trainer.core import Trainer
+
+    arch = H.tiny_graph_arch()
+    trainer = Trainer(build_net(arch), H.graph_config(), arch=arch,
+                      checkpoint_dir=tmp_path / "ckpt", train_hparams=H.graph_hparams())
+    assert isinstance(trainer, config_mod.TrainerLike), (
+        "TrainerLike declares a member the production Trainer does not define: "
+        f"{sorted(n for n in vars(config_mod.TrainerLike) if not n.startswith('_') and not hasattr(trainer, n))}"
+    )
 
 
 def test_the_census_is_not_satisfiable_by_an_empty_module(tmp_path: Path):

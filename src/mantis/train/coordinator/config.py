@@ -28,7 +28,6 @@ class TrainerLike(Protocol):
     #: undeclared write is the same hidden coupling as an undeclared read.
     bundle_publisher: Any
 
-    def train_step_from_tensors(self, *args: Any, **kwargs: Any) -> dict[str, float]: ...
     def train_step_from_graph_batch(self, **kwargs: Any) -> dict[str, float]: ...
     #: The FORWARD-ONLY sibling, declared here because `dispatch.py` reaches it through the same
     #: holder.
@@ -54,19 +53,9 @@ class ReplayBufferLike(Protocol):
 
 @runtime_checkable
 class GraphRouteBufferLike(Protocol):
-    """The graph route-key, deliberately ONE member and deliberately NOT folded into
-    `ReplayBufferLike`: each engine buffer carries exactly one sampler, and the OTHER route's
-    absence is the `RepresentationRouteError` mismatch signal that a shared protocol claiming
-    both members would erase."""
+    """The graph route-key, ONE member, kept out of `ReplayBufferLike`: the sampler is the route."""
 
     def sample_graph_batch(self, batch_size: int, *, augment: bool, recent_frac: float) -> Any: ...
-
-
-@runtime_checkable
-class GridRouteBufferLike(Protocol):
-    """The grid route-key — `GraphRouteBufferLike`'s dense twin; same grounds, same fence."""
-
-    def sample_batch_with_pos(self, n: int, augment: bool) -> Any: ...
 
 
 @runtime_checkable

@@ -1,12 +1,11 @@
-# Exceeds the 300-line soft cap (R8): the declared route and both of its arms are ONE unit. The
-# route decision, the graph arm and the grid arm have to be read together to see the property they
-# exist for — that a graph-only input reaches the graph arm ALONE, as a provider, so it is never
-# even evaluated on the grid route.
+# Exceeds the 300-line soft cap (R8): the declared route, the graph arm's batch build and its
+# dump-on-fire are ONE unit — the collate contract failure and the dump that records it must sit
+# beside the build that raised it.
 """The DECLARED training-step dispatcher: a replay buffer to ONE gradient update.
 
 Dispatch is keyed on the RESOLVED `EncodingSpec.representation` — the operator's declaration,
 resolved by THE one authority — never on the buffer's runtime class. A closed match: graph routes
-to `train_step_from_graph_batch`, grid to `train_step_from_tensors`, and anything else RAISES.
+to `train_step_from_graph_batch`, and anything else RAISES.
 
 The sampling POLICY arrives from `StepCoordinatorConfig` and does NOT live on the trainer, which
 would be a second authority beside `cfg.batch_size`. A declaration↔object mismatch is a NAMED
@@ -111,14 +110,8 @@ def run_declared_train_step(
     """One straight self-play gradient update through the typed route for ``spec``.
 
     ``caps_provider``, ``sample_threads_provider`` and ``fast_policy_weight_provider`` are ZERO-ARG
-    CALLABLES handed to the GRAPH arm ALONE: `_grid_step` does not take them, so a grid run
-    structurally cannot read those keys. Python evaluates every argument before the call, so
-    passing a resolved VALUE would read `full_config["train"]` / `["selfplay"]` on both
-    representations, and four FROZEN grid coordinators carry neither section.
-
-    All three are REQUIRED and undefaulted: a default would be a code-side default for a
-    config-derived value, and a caller that forgot one would silently get an uncapped step, a
-    thread budget nobody derived, or a weight read through a seam that must not carry it.
+    CALLABLES, read only once the route is known to be graph. All three are REQUIRED and
+    undefaulted: a default would be a code-side default for a config-derived value.
     """
     representation = getattr(spec, "representation", None)
     if representation == "graph":
