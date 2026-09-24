@@ -126,7 +126,7 @@ def _iteration_complete(pool: Any, *, gph: Any, sph: Any) -> dict[str, Any]:
 
     emit_iteration_complete_event(
         train_step=0, games_played=0, last_iter_games=0, pool=pool,
-        buffer=_Buffer(), config={}, mcts_config={}, capacity=1024,
+        buffer=_Buffer(),
         games_per_hour_fn=lambda: gph, steps_per_hour_fn=(lambda: sph) if sph is not None else None,
         target_integrity={}, rstats=_Rstats(), sink=_Sink(), search_levers={},
     )

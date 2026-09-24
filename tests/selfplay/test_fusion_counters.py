@@ -298,7 +298,7 @@ class _RStats:
 def _emit(pool: Any) -> dict[str, Any]:
     sink = _ListSink()
     emit_iteration_complete_event(
-        11, 10, 4, pool, _Buffer(), {}, {}, 64,
+        11, 10, 4, pool, _Buffer(),
         lambda: 0.0, None, {}, _RStats(), sink, search_levers={},
     )
     assert len(sink.events) == 1

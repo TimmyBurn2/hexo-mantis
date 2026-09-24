@@ -32,7 +32,7 @@ def _iteration_complete(rstats: Any) -> dict[str, Any]:
 
     emit_iteration_complete_event(
         train_step=0, games_played=0, last_iter_games=0, pool=_Pool(),
-        buffer=_Buffer(), config={}, mcts_config={}, capacity=1024,
+        buffer=_Buffer(),
         games_per_hour_fn=lambda: None, steps_per_hour_fn=None,
         target_integrity={}, rstats=rstats, sink=_Sink(), search_levers={},
     )

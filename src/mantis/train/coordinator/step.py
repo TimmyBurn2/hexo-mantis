@@ -625,11 +625,7 @@ class StepCoordinator:
         keep = max(2 * int(self.monitor_cfg.alert_loss_increase_window) + 2, 8)
         del self._loss_window[:-keep]
 
-        axis = emit_axis_distribution(
-            self._train_step, self.pool, self.monitor_cfg,
-            getattr(self.subsystems, "axis_baseline", None) or {},
-            getattr(self.subsystems, "tb_writer", None), sink,
-        )
+        axis = emit_axis_distribution(self._train_step, self.pool, self.monitor_cfg, sink)
         return axis is not None
 
     def _run_heldout_gap(self, loss_info: dict[str, float]) -> bool:
@@ -745,8 +741,7 @@ class StepCoordinator:
         rstats_report, search_levers, rstats = self._target_integrity_report()
         emit_iteration_complete_event(
             self._train_step, self._games_played, self._last_iter_games,
-            self.pool, self.buffer, self.full_config, self.full_config.get("mcts", {}),
-            cfg.capacity, self._games_per_hour, self._steps_per_hour,
+            self.pool, self.buffer, self._games_per_hour, self._steps_per_hour,
             rstats_report, rstats, sink, search_levers=search_levers,
         )
         self._last_iter_games = self._games_played

@@ -94,7 +94,7 @@ def _iteration_complete(buffer: Any, rstats: Any = None) -> dict[str, Any]:
     sink = _Sink()
     emit_iteration_complete_event(
         train_step=0, games_played=0, last_iter_games=0, pool=_Pool(), buffer=buffer,
-        config={}, mcts_config={}, capacity=1024, games_per_hour_fn=lambda: None,
+        games_per_hour_fn=lambda: None,
         steps_per_hour_fn=None, target_integrity={}, rstats=rstats if rstats is not None else _rstats(90),
         sink=sink, search_levers={},
     )

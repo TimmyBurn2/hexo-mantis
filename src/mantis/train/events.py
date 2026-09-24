@@ -50,11 +50,6 @@ class PoolTelemetryLike(Protocol):
 
     def runner_stats(self) -> Any: ...  # RunnerStats — Any keeps the no-`train → selfplay` edge
 
-# The old early-game-probe threshold, inlined. The PROBE itself is deferred — a probe is never
-# a run-gate, since the value-spread canary stayed green through a 33% to 5% WR collapse — and
-# re-entry needs a re-validation, not a wiring commit. Only the numeric gate is needed here to
-# preserve the warn-log behaviour for a duck-typed probe a caller may still inject.
-EARLY_GAME_ENTROPY_WARN_THRESHOLD: float = 4.5
 
 #: The `trainer_step` key R347(a)'s per-row tail mass alpha travels under. One spelling
 #: authority for the key.
@@ -117,8 +112,6 @@ def emit_axis_distribution(
     train_step: int,
     pool: PoolTelemetryLike,
     monitor_cfg: Any,
-    baseline: dict[str, float],
-    tb_writer: Any,
     sink: EventSink,
 ) -> float | None:
     """Compute and emit selfplay axis-distribution metrics through the injected sink.
@@ -168,20 +161,6 @@ def emit_axis_distribution(
         "axis_alert_threshold": axis_alert,
     })
 
-    if tb_writer is not None:
-        tb_metrics: dict[str, float] = {
-            "axis_dist/axis_q": axis_q,
-            "axis_dist/axis_r": axis_r,
-            "axis_dist/axis_s": axis_s,
-        }
-        for label in ("axis_q", "axis_r", "axis_s"):
-            if label in baseline:
-                tb_metrics[f"axis_dist_delta/{label}"] = metrics[label] - baseline[label]
-        try:
-            tb_writer.log_step(train_step, tb_metrics)
-        except Exception as _tb_err:  # noqa: BLE001
-            _LOG.warning("axis_distribution_tb_failed: step=%d error=%s", train_step, _tb_err)
-
     return axis_q
 
 
@@ -198,9 +177,6 @@ def emit_training_step_event(
     train_step: int,
     loss_info: dict[str, float],
     sink: EventSink,
-    early_game_probe: Any | None = None,
-    trainer_model: Any | None = None,
-    solver_deltas: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build and emit the `training_step` event and RETURN its payload.
 
@@ -211,20 +187,6 @@ def emit_training_step_event(
     policy_entropy = measured(loss_info, "policy_entropy")
     grad_norm = measured(loss_info, "grad_norm")
     lr = measured(loss_info, "lr")
-
-    probe_metrics: dict[str, Any] = {}
-    if early_game_probe is not None and trainer_model is not None:
-        try:
-            probe_metrics = early_game_probe.compute(trainer_model)
-            if probe_metrics["early_game_entropy_mean"] > EARLY_GAME_ENTROPY_WARN_THRESHOLD:
-                _LOG.warning(
-                    "early_game_entropy_high: step=%d entropy_mean=%.4f (>= %.2f)",
-                    train_step, probe_metrics["early_game_entropy_mean"],
-                    EARLY_GAME_ENTROPY_WARN_THRESHOLD,
-                )
-        except Exception as _egp_err:  # noqa: BLE001
-            _LOG.warning("early_game_probe_failed: step=%d error=%s", train_step, _egp_err)
-            probe_metrics = {}
 
     training_step_event: dict[str, Any] = {
         "event": "training_step",
@@ -238,10 +200,6 @@ def emit_training_step_event(
         "lr": lr,
         "grad_norm": grad_norm,
     }
-    if probe_metrics:
-        training_step_event.update(probe_metrics)
-    if solver_deltas:
-        training_step_event.update(solver_deltas)
     emit_via(sink, training_step_event)
     return training_step_event
 
@@ -275,9 +233,6 @@ def emit_iteration_complete_event(
     last_iter_games: int,
     pool: PoolTelemetryLike,
     buffer: Any,
-    config: dict[str, Any],
-    mcts_config: dict[str, Any],
-    capacity: int,
     games_per_hour_fn: Any,
     steps_per_hour_fn: Any | None,
     target_integrity: Mapping[str, Any],

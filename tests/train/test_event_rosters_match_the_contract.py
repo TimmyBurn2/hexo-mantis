@@ -52,7 +52,7 @@ def _iteration_complete() -> dict[str, Any]:
     pool = SimpleNamespace(search_kind="gumbel", avg_game_length=4.0, x_winrate=1.0,
                            o_winrate=0.0, draw_rate=0.0, sims_per_sec=None, batch_fill_pct=0.0)
     emit_iteration_complete_event(
-        1, 1, 0, pool, SimpleNamespace(size=4, capacity=8), {}, {}, 8, lambda: None, None, {},
+        1, 1, 0, pool, SimpleNamespace(size=4, capacity=8), lambda: None, None, {},
         rstats, sink, search_levers={})
     return sink.events[0]
 

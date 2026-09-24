@@ -420,16 +420,11 @@ def test_the_target_integrity_parameter_has_no_default() -> None:
         "counters leave the stream with every test still green"
     )
     # THE KEYWORD-ONLY HALF IS BANKED, not silently dropped: it held on the retired WRAPPER and
-    # does not hold on the live builder, whose eight call sites each pass fourteen positionals —
-    # precisely the hazard the clause named, and a signature change rather than an assertion.
-    solver = inspect.signature(emit_training_step_event).parameters["solver_deltas"]
-    assert solver.default is None, (
-        "premise (the CONTRAST this row is defined against): `solver_deltas` — which lives on "
-        "`emit_training_step_event`, the OTHER half of the R210 split — is still the "
-        "defaulted, uncalled parameter; Phase O leaves it byte-untouched and queues it "
-        f"(`Q-O-SOLVERDELTAS`) rather than tidying it inside a taxonomy commit. Got "
-        f"{solver.default!r}; if this moved, the queue row was taken and this premise must "
-        "be re-pointed, never deleted"
+    # does not hold on the live builder, whose call sites pass their arguments positionally.
+    # The CONTRAST row, re-pointed: the defaulted, uncalled `solver_deltas` is DELETED, not tidied.
+    assert "solver_deltas" not in inspect.signature(emit_training_step_event).parameters, (
+        "`solver_deltas` is back on `emit_training_step_event`: a defaulted parameter no caller "
+        "passes is the shape that let eight fire-rate counters silently never reach the stream"
     )
 
 
