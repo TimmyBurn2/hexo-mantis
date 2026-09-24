@@ -103,8 +103,6 @@ def test_stale_eval_poller_fires_42_under_fake_clock(tmp_path) -> None:
     sources, under a FAKE clock."""
     sink = SpySink()
     exit_spy = _ExitSpy()
-    registry = HeartbeatRegistry(sources=("train_step", "inference_dispatch",
-                                          "selfplay_drain", "eval_round"))
     fake_time = {"t": 0.0}
 
     def _clock() -> float:

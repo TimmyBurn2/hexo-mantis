@@ -24,7 +24,6 @@ from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
 from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
-from mantis.selfplay.pool_hooks import runner_stats
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
 

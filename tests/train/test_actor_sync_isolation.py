@@ -15,7 +15,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import mantis.train.actor_sync  # noqa: F401 — RED-at-import anchor (module does not exist yet)
 from mantis.eval.promote import DeployTagHooks
 
 _REPO = Path(__file__).resolve().parents[2]

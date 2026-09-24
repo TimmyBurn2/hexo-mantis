@@ -20,8 +20,6 @@ from __future__ import annotations
 
 import inspect
 
-import torch
-
 
 
 def test_the_graph_bc_route_delegates_its_autocast_to_the_trainer() -> None:

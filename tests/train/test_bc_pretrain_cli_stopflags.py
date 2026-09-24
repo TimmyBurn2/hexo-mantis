@@ -8,7 +8,6 @@ and refuses a ring whose `split_part` is not `heldout`.
 """
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest

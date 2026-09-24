@@ -10,8 +10,6 @@ on noise (the run stops before it learns).
 """
 from __future__ import annotations
 
-import math
-
 import pytest
 
 from mantis.train.pretrain.heldout import HeldOutError, HeldOutMonitor, PatienceStop

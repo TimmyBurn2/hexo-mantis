@@ -19,7 +19,6 @@ from typing import Any
 
 import pytest
 
-import mantis.eval.pipeline  # noqa: F401 — RED-at-import anchor
 from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps

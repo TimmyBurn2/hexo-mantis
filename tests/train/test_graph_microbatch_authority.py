@@ -23,30 +23,21 @@ from __future__ import annotations
 
 import ast
 import collections
-import hashlib
-import json
-import platform
-import sys
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
 
 import numpy as np
 import pytest
-import torch
 import yaml
 
 import _microbatch_harness as H
 from _monitor_config import monitor_config
 from mantis.config.census import exempt_config_paths, production_configs
 from mantis.config.loader import discover_configs, load_config
-from mantis.config.resolve.arch_scope import ArchScopedKeyOutsideItsArchError
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
-from mantis.encoding import lookup
 from mantis.selfplay.graph_wire_split import plan_microbatches
 from mantis.train.coordinator.dispatch import run_declared_train_step
 from mantis.train.coordinator.step import StepCoordinator
-from mantis.train.trainer.core import Trainer
 
 _REPO = Path(__file__).resolve().parents[2]
 _SRC = _REPO / "src" / "mantis"

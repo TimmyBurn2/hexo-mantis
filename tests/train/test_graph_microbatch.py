@@ -18,7 +18,6 @@ fakes the caps, the split, the normalisation or the resolver.
 """
 from __future__ import annotations
 
-import inspect
 import math
 from types import SimpleNamespace
 from typing import Any
@@ -34,8 +33,6 @@ from mantis.config.resolve.microbatch import (
     MissingMicrobatchCapsError,
     resolve_microbatch_caps,
 )
-from mantis.encoding import lookup
-from mantis.model import build_net
 from mantis.model.dist65 import binned_value_loss
 from mantis.selfplay.graph_collate import collate_graph_batch, graph_wire_from_rust
 from mantis.selfplay.graph_wire_split import (
@@ -45,11 +42,9 @@ from mantis.selfplay.graph_wire_split import (
     slice_graph_wire,
     slice_targets,
 )
-from mantis.train.coordinator import dispatch as dispatch_mod
 from mantis.train.coordinator.dispatch import run_declared_train_step
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.losses import graph_loss_denominators, ragged_policy_ce
-from mantis.train.trainer.core import Trainer
 _TRAINLESS_GRAPH = {"identity": {"encoding": H.GRAPH_ENCODING, "representation": "graph"}}
 
 
