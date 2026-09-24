@@ -52,7 +52,7 @@ def _spec(*, learner, actor, threshold=100, armed=False):
 def _read(sink: JsonlEventSink, name: str) -> list[dict]:
     """Decode the REAL segment file the sink wrote and filter by event name — this file IS the
     preflight's observation transport, so an emission that never reaches it is invisible."""
-    lines = [ln for ln in sink.path.read_text().splitlines() if ln.strip()]
+    lines = [ln for ln in sink.path.read_text(encoding="utf-8").splitlines() if ln.strip()]
     return [e for e in (json.loads(ln) for ln in lines) if e.get("event") == name]
 
 

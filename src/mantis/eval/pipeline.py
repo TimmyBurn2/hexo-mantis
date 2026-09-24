@@ -533,7 +533,7 @@ class EvalPipeline:
         # nothing, the relaunch restores the same round id) must not promote THIS round (A-3).
         _remove_partial_gate({"spec": spec})
         spec_path = self._work_dir / f"{spec.round_id}_spec.json"
-        spec_path.write_text(json.dumps(spec.to_dict()))
+        spec_path.write_text(json.dumps(spec.to_dict()), encoding="utf-8")
         ctx = multiprocessing.get_context(self._mp_ctx_name)
         # typeshed's BaseContext omits Process (it lives on the concrete contexts); every real
         # context returned by get_context has it.
@@ -671,7 +671,7 @@ class EvalPipeline:
         try:
             if not result_path.is_file():
                 raise FileNotFoundError(str(result_path))
-            raw = json.loads(result_path.read_text())
+            raw = json.loads(result_path.read_text(encoding="utf-8"))
             validate_worker_result(raw)
         except FileNotFoundError:
             return self._broken_result(inflight, reason=EvalBrokenReason.RESULT_MISSING,

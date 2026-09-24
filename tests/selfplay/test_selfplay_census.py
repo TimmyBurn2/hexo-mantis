@@ -112,7 +112,7 @@ _Q6_TABLE: list[tuple[str, list[tuple[str, str]], tuple[int, int, int]]] = [
 
 
 def _trees() -> dict[str, ast.Module]:
-    return {p.name: ast.parse(p.read_text()) for p in _SELFPLAY.glob("*.py")}
+    return {p.name: ast.parse(p.read_text(encoding="utf-8")) for p in _SELFPLAY.glob("*.py")}
 
 
 @pytest.mark.parametrize(
@@ -170,7 +170,7 @@ _SEGMENT_SOFTMAX_SRC = _SELFPLAY / "graph_collate.py"
 def _doctored_func(inject: str) -> ast.AST:
     """Return the `segment_softmax` node from a copy of graph_collate.py whose body has had
     one line injected right after the signature."""
-    src_lines = _SEGMENT_SOFTMAX_SRC.read_text().splitlines()
+    src_lines = _SEGMENT_SOFTMAX_SRC.read_text(encoding="utf-8").splitlines()
     tree = ast.parse("\n".join(src_lines))
     func = _find_function(tree, "segment_softmax")
     assert func is not None
@@ -219,7 +219,7 @@ _RE_DENSE_DEFAULT = re.compile(
 def _dense_default_hits(root: Path) -> list[str]:
     hits: list[str] = []
     for path in sorted(root.glob("*.py")):
-        for i, line in enumerate(path.read_text().splitlines(), start=1):
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             if _RE_DENSE_DEFAULT.search(line):
                 hits.append(f"{path.name}:{i}: {line.strip()}")
     return hits
@@ -236,7 +236,7 @@ def test_j02_census_bites_planted_dense_default(tmp_path: Path) -> None:
     """J-02 (LAW-07) — a planted grid-default line makes the census fire."""
     (tmp_path / "planted.py").write_text(
         'def f(cfg):\n    return cfg.get("representation", "grid")\n'
-    )
+    , encoding="utf-8")
     assert _dense_default_hits(tmp_path), "census must bite a planted grid-default token"
 
 
@@ -266,7 +266,7 @@ _RE_V8_WORD = re.compile(r"\bv8\b")
 def _killed_hits(root: Path) -> list[str]:
     hits: list[str] = []
     for path in sorted(root.glob("*.py")):
-        for i, line in enumerate(path.read_text().splitlines(), start=1):
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             for tok in _KILLED_TOKENS:
                 if tok in line:
                     hits.append(f"{path.name}:{i}: killed token {tok!r}: {line.strip()}")
@@ -284,7 +284,7 @@ def test_j03_no_killed_tokens() -> None:
 
 def test_j03_census_bites_planted_killed_token(tmp_path: Path) -> None:
     """J-03 (LAW-07) — a planted killed-knob reference makes the census fire."""
-    (tmp_path / "planted.py").write_text('LEGAL = cfg["legal_move_radius_jitter"]\n')
+    (tmp_path / "planted.py").write_text('LEGAL = cfg["legal_move_radius_jitter"]\n', encoding="utf-8")
     assert _killed_hits(tmp_path), "census must bite a planted killed token"
 
 
@@ -292,7 +292,7 @@ def _swallow_sites(root: Path) -> list[str]:
     """`except …: pass` handlers whose body is exactly `pass` (any number of pass stmts)."""
     sites: list[str] = []
     for path in sorted(root.glob("*.py")):
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.ExceptHandler):
                 if node.body and all(isinstance(s, ast.Pass) for s in node.body):
@@ -322,7 +322,7 @@ def test_j04_swallow_census_is_the_single_del_site() -> None:
     assert file_name == "inference_local.py", (
         f"the swallow must live in inference_local.py, not {file_name}"
     )
-    tree = ast.parse((_SELFPLAY / "inference_local.py").read_text())
+    tree = ast.parse((_SELFPLAY / "inference_local.py").read_text(encoding="utf-8"))
     assert _enclosing_function_name(tree, int(lineno)) == "__del__", (
         "the sanctioned swallow must be inside __del__ (the GC-time best-effort site)"
     )
@@ -332,7 +332,7 @@ def test_j04_census_bites_planted_swallow(tmp_path: Path) -> None:
     """J-04 (LAW-07) — a planted `except: pass` makes the census fire."""
     (tmp_path / "planted.py").write_text(
         "def f():\n    try:\n        g()\n    except Exception:\n        pass\n"
-    )
+    , encoding="utf-8")
     assert len(_swallow_sites(tmp_path)) == 1, "census must bite a planted swallow"
 
 
@@ -365,7 +365,7 @@ _FROZEN_GAME_COMPLETE_KEYS = frozenset({
 def _game_complete_dict_keys() -> set[str]:
     """The string keys of the `game_complete` payload dict literal in pool_drain.py, read off the
     SOURCE so a key change in the emitter bites without running the drain loop."""
-    tree = ast.parse((_SELFPLAY / "pool_drain.py").read_text())
+    tree = ast.parse((_SELFPLAY / "pool_drain.py").read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.Dict):
             keys = [k.value for k in node.keys
@@ -390,7 +390,7 @@ def test_j05_game_complete_golden_key_set_frozen() -> None:
     """J-05 (capture arm) — the captured old-side events carry the frozen key set MINUS the uuid
     `game_id`, which the golden excludes. Binds the schema to the capture as well as to the
     source, so the two cannot drift apart silently."""
-    golden = json.loads((_FIXTURES / "drain" / "drain_goldens.json").read_text())
+    golden = json.loads((_FIXTURES / "drain" / "drain_goldens.json").read_text(encoding="utf-8"))
     expected = set(_FROZEN_GAME_COMPLETE_KEYS) - {"game_id"}
     seen = 0
     for variant in golden["variants"].values():

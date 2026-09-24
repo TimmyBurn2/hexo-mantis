@@ -21,7 +21,7 @@ REQUIRED_PROVENANCE = ("interpreter", "numpy", "rustc", "cpu_model")
 
 
 def _load() -> dict:
-    return tomllib.loads(FLOORS_PATH.read_text())
+    return tomllib.loads(FLOORS_PATH.read_text(encoding="utf-8"))
 
 
 def test_floors_file_exists_and_parses() -> None:

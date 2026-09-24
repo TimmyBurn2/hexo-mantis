@@ -62,7 +62,7 @@ def _synthetic_tree(tmp_path: Path, *, body: str) -> Path:
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "probe_module.py").write_text(
         f"def f(declared):\n    {body}\n    return spec\n"
-    )
+    , encoding="utf-8")
     return tmp_path
 
 
@@ -239,7 +239,7 @@ def _load_corpus() -> list[dict]:
     import tomllib
 
     path = REPO_ROOT / "tests" / "fixtures" / "silent_encoding_evasions.toml"
-    return tomllib.loads(path.read_text())["case"]
+    return tomllib.loads(path.read_text(encoding="utf-8"))["case"]
 
 
 CORPUS = _load_corpus()
@@ -251,7 +251,7 @@ def test_the_evasion_corpus_is_the_one_review_impl_built():
     import tomllib
 
     path = REPO_ROOT / "tests" / "fixtures" / "silent_encoding_evasions.toml"
-    meta = tomllib.loads(path.read_text())["meta"]
+    meta = tomllib.loads(path.read_text(encoding="utf-8"))["meta"]
     assert meta["candidates_tried"] == 31
     assert len(CORPUS) >= 31, f"corpus shrank to {len(CORPUS)} cases"
     assert {c["expect"] for c in CORPUS} <= {"fires", "quiet", "gap"}

@@ -112,7 +112,7 @@ def _scan(text: str) -> set[str]:
 def test_no_merge_machinery_in_config_package():
     offenders = {}
     for py in _CONFIG_PKG.rglob("*.py"):
-        found = _scan(py.read_text())
+        found = _scan(py.read_text(encoding="utf-8"))
         if found:
             offenders[str(py)] = found
     assert not offenders, f"deleted merge machinery resurrected: {offenders}"

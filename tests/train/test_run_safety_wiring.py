@@ -158,7 +158,7 @@ _CONSUMER_SOURCES = (
 
 def test_every_monitor_config_field_has_a_live_consumer() -> None:
     """Every `MonitorConfig` field has a live consumer — a dead knob cannot ship."""
-    blob = "".join(p.read_text() for p in _CONSUMER_SOURCES if p.exists())
+    blob = "".join(p.read_text(encoding="utf-8") for p in _CONSUMER_SOURCES if p.exists())
     orphans = [f.name for f in dataclasses.fields(MonitorConfig) if f.name not in blob]
     assert orphans == [], f"MonitorConfig fields with no live consumer (dead knobs): {orphans}"
 
@@ -189,7 +189,7 @@ def test_no_top_level_eval_import_under_train_or_monitor() -> None:
     violations: list[str] = []
     for root in (_SRC / "train", _SRC / "monitor"):
         for path in sorted(root.rglob("*.py")):
-            tree = ast.parse(path.read_text(), filename=str(path))
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
             for target in _top_level_imports(tree):
                 if target == "mantis.eval" or target.startswith("mantis.eval."):
                     violations.append(f"{path.relative_to(_SRC)} -> {target}")
@@ -246,7 +246,7 @@ def test_every_declared_heartbeat_source_has_a_live_emitter() -> None:
     }
     assert set(emitters) == set(HEARTBEAT_SOURCES), "the emitter map must cover every source"
     for source, path in emitters.items():
-        body = path.read_text()
+        body = path.read_text(encoding="utf-8")
         assert f'"{source}"' in body, f"{path.name} must carry the quoted literal {source!r}"
 
 

@@ -22,7 +22,7 @@ def _pkg_sources() -> list[Path]:
 
 def test_registered_names_tuple_is_absent_from_source() -> None:
     offenders = [
-        p.name for p in _pkg_sources() if "_REGISTERED_NAMES" in p.read_text()
+        p.name for p in _pkg_sources() if "_REGISTERED_NAMES" in p.read_text(encoding="utf-8")
     ]
     assert not offenders, (
         f"the killed `_REGISTERED_NAMES` tuple reappeared in {offenders}; the "
@@ -49,7 +49,7 @@ def test_filename_first_detector_is_gone() -> None:
     """The filename-beats-shape order is killed: no `_filename_match` dispatch
     helper survives in the shim (compat delegates to the unified detector)."""
     offenders = [
-        p.name for p in _pkg_sources() if "_filename_match" in p.read_text()
+        p.name for p in _pkg_sources() if "_filename_match" in p.read_text(encoding="utf-8")
     ]
     assert not offenders, (
         f"the killed filename-first `_filename_match` helper reappeared in "

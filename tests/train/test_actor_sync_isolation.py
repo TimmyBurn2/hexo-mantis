@@ -95,7 +95,7 @@ def test_no_sync_call_site_under_eval_or_arena() -> None:
 def test_s2_census_would_notice_an_eval_side_call_site(tmp_path) -> None:
     bad = tmp_path / "eval" / "sneaky.py"
     bad.parent.mkdir()
-    bad.write_text("def f(t):\n    t.update_checkpoint_step(3)\n")
+    bad.write_text("def f(t):\n    t.update_checkpoint_step(3)\n", encoding="utf-8")
     assert _files_calling_sync(tmp_path / "eval") == {bad: {"update_checkpoint_step"}}
 
 

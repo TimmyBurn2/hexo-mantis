@@ -102,7 +102,7 @@ def _interval_read_census() -> collections.Counter:
     planted inside one function must move a COUNT rather than vanish into a dedupe."""
     counts: collections.Counter = collections.Counter()
     for path in sorted((_SRC / "mantis").rglob("*.py")):
-        src = path.read_text()
+        src = path.read_text(encoding="utf-8")
         tree = ast.parse(src)
         fns = [n for n in ast.walk(tree)
                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
@@ -115,7 +115,7 @@ def _interval_read_census() -> collections.Counter:
 
 
 def _core_functions(name: str) -> list[Any]:
-    tree = ast.parse(_CORE.read_text())
+    tree = ast.parse(_CORE.read_text(encoding="utf-8"))
     return [n for n in ast.walk(tree)
             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == name]
 

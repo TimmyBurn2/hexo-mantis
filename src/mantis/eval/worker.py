@@ -742,12 +742,12 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
 
 def worker_main(spec_path: str | Path, result_path: str | Path) -> None:
     """The spawn-ctx `Process` target. Writes the result ATOMICALLY (tmp + os.replace)."""
-    spec = RoundSpec.from_dict(json.loads(Path(spec_path).read_text()))
+    spec = RoundSpec.from_dict(json.loads(Path(spec_path).read_text(encoding="utf-8")))
     result = run_round(spec)
     target = Path(result_path)
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_suffix(target.suffix + ".tmp")
-    tmp.write_text(json.dumps(result))
+    tmp.write_text(json.dumps(result), encoding="utf-8")
     tmp.replace(target)
 
 

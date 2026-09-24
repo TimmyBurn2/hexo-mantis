@@ -36,13 +36,13 @@ _BOOK_V1_ID = "book_v1_s20260625_p4"
 def _write_manifest(tmp_path: Path, *, book_id: str, openings: list, sha_override: str | None = None):
     book_file = tmp_path / f"{book_id}.json"
     payload = {"openings": openings}
-    book_file.write_text(json.dumps(payload))
+    book_file.write_text(json.dumps(payload), encoding="utf-8")
     real_sha = hashlib.sha256(book_file.read_bytes()).hexdigest()
     sha = sha_override if sha_override is not None else real_sha
     manifest = tmp_path / "manifest.toml"
     manifest.write_text(
         f'[books."{book_id}"]\nfile = "{book_file.name}"\nsha256 = "{sha}"\n'
-    )
+    , encoding="utf-8")
     return tmp_path
 
 

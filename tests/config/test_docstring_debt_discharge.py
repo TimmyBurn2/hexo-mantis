@@ -23,7 +23,7 @@ HPARAMS_PY = REPO_ROOT / "src" / "mantis" / "selfplay" / "hparams.py"
 
 
 def test_core_py_no_longer_asserts_training_knobs_are_not_config_keys():
-    text = CORE_PY.read_text()
+    text = CORE_PY.read_text(encoding="utf-8")
     assert "NOT WP8 config keys" not in text, (
         "core.py still asserts the pre-SC-A1 R-TRAINCONFIG-SCHEMA posture — SC-A1 makes "
         "training knobs first-class TrainConfig schema fields; this docstring is now false"
@@ -37,7 +37,7 @@ def test_core_py_no_longer_asserts_training_knobs_are_not_config_keys():
 
 
 def test_hparams_py_r1_exception_header_is_gone():
-    text = HPARAMS_PY.read_text()
+    text = HPARAMS_PY.read_text(encoding="utf-8")
     assert "Tracked R1-exception" not in text, (
         "hparams.py still carries the R-SELFPLAYCONFIG-SCHEMA R1-exception header — SC-A2 "
         "discharges this debt (SelfPlayHParams/InferenceHParams now read a validated "

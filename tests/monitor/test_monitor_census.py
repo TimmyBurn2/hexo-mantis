@@ -55,7 +55,7 @@ def _swallow_sites(root: Path) -> list[str]:
     """`except …: pass` handlers whose body is exactly pass (the J-04 pattern)."""
     sites: list[str] = []
     for path in sorted(root.rglob("*.py")):
-        tree = ast.parse(path.read_text(), filename=str(path))
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.ExceptHandler) and node.body \
                     and all(isinstance(s, ast.Pass) for s in node.body):
@@ -67,7 +67,7 @@ def _grep(root: Path, token: str, patterns: tuple[str, ...] = ("*.py",)) -> list
     hits: list[str] = []
     paths = sorted({p for pattern in patterns for p in root.rglob(pattern)})
     for path in paths:
-        for i, line in enumerate(path.read_text().splitlines(), start=1):
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             if token in line:
                 hits.append(f"{path.relative_to(root)}:{i}: {line.strip()}")
     return hits
@@ -101,7 +101,7 @@ def test_no_torch_import_token_in_monitor_sources() -> None:
     in-function import would use to evade the subprocess walk."""
     offenders: list[str] = []
     for path in sorted(_MONITOR.rglob("*.py")):
-        tree = ast.parse(path.read_text(), filename=str(path))
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import) and any(a.name.split(".")[0] == "torch"
                                                     for a in node.names):
@@ -117,7 +117,7 @@ def test_monitor_mantis_imports_are_within_the_allowed_set() -> None:
     hard edge into the headless core bites."""
     violations: list[str] = []
     for path in sorted(_MONITOR.rglob("*.py")):
-        tree = ast.parse(path.read_text(), filename=str(path))
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for target in _top_level_imports(tree):
             if target.startswith("mantis.") and not any(
                 target == pkg or target.startswith(pkg + ".")
@@ -133,7 +133,7 @@ def test_train_to_monitor_import_sites_are_exactly_the_pinned_set() -> None:
     `tests/train/test_train_import_dag.py`'s FORBIDDEN set, polices that edge."""
     sites: set[str] = set()
     for path in sorted(_TRAIN.rglob("*.py")):
-        tree = ast.parse(path.read_text(), filename=str(path))
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for target in _top_level_imports(tree):
             if target == "mantis.monitor" or target.startswith("mantis.monitor."):
                 sites.add(str(path.relative_to(_TRAIN.parent)))
@@ -156,7 +156,7 @@ def test_swallow_census_bites_planted_swallow(tmp_path: Path) -> None:
     vacuous."""
     (tmp_path / "planted.py").write_text(
         "def f():\n    try:\n        g()\n    except Exception:\n        pass\n"
-    )
+    , encoding="utf-8")
     assert len(_swallow_sites(tmp_path)) == 1, "census must bite a planted except-pass"
 
 
@@ -174,5 +174,5 @@ def test_draw_target_fraction_absent_from_monitor_and_coordinator_gates() -> Non
 
 def test_draw_target_fraction_ban_bites_planted_reference(tmp_path: Path) -> None:
     """A planted `draw_target_fraction` read is detected."""
-    (tmp_path / "planted.py").write_text('x = pool_stats["draw_target_fraction"]\n')
+    (tmp_path / "planted.py").write_text('x = pool_stats["draw_target_fraction"]\n', encoding="utf-8")
     assert _grep(tmp_path, "draw_target_fraction"), "census must bite a planted phantom reference"

@@ -35,7 +35,7 @@ PAIR_TOL = 1e-6
 
 
 def _positions(name: str):
-    d = json.loads((FIXDIR / name).read_text())
+    d = json.loads((FIXDIR / name).read_text(encoding="utf-8"))
     assert d["schema"] == 1 and d["encoding"] == "gnn_axis_v1"
     for i in range(int(d["n_positions"])):
         k = f"p{i}_"
@@ -100,7 +100,7 @@ def test_policy_target_round_trips_the_full_ragged_target() -> None:
 
 
 def test_policy_target_round_trips_the_dispersed_fixture() -> None:
-    d = json.loads((FIXDIR / "target_parity_dispersed_v1.json").read_text())
+    d = json.loads((FIXDIR / "target_parity_dispersed_v1.json").read_text(encoding="utf-8"))
     # Band preconditions (flip-set rows 1-2 as amended at T-2, mirrored on this side of
     # the FFI): p0 in the 193-235 n_legal band; p2 in the >=5000-legal regime.
     assert 193 <= int(d["p0_n_legal"]) <= 235, "p0 left the 193-235 band"

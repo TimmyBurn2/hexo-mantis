@@ -67,7 +67,7 @@ _FIXTURE_BYTE_BUDGET = 131072
 
 
 def _load(path: Path) -> dict:
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _positions(fx: dict) -> list[dict]:
@@ -397,7 +397,7 @@ def test_there_is_exactly_one_child_cap_authority() -> None:
     hits = []
     for package in ("eval", "arena", "bots"):
         for path in sorted((root / "src" / "mantis" / package).rglob("*.py")):
-            for lineno, line in enumerate(path.read_text().splitlines(), 1):
+            for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
                 if named.search(line) or bare.search(line):
                     hits.append(f"{path.relative_to(root)}:{lineno}: {line.strip()}")
     assert not hits, "a second child-cap authority appeared in Python:\n" + "\n".join(hits)
@@ -408,7 +408,7 @@ def test_there_is_exactly_one_child_cap_authority() -> None:
     definitions = [
         str(path.relative_to(root))
         for path in sorted((root / "crates").rglob("*.rs"))
-        for line in path.read_text().splitlines()
+        for line in path.read_text(encoding="utf-8").splitlines()
         if line.startswith("pub const MAX_CHILDREN_PER_NODE")
     ]
     assert definitions == ["crates/mantis-search/src/mcts/mod.rs"], definitions

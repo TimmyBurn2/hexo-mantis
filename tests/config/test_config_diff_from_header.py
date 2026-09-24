@@ -29,7 +29,7 @@ def _from_header(config: Path) -> subprocess.CompletedProcess:
 def _write(path: Path, *, template: str, claimed: list[str], body_overrides: dict) -> Path:
     """Write a config with an explicit header (claimed deltas) + a body derived from the
     named template with body_overrides applied. Lets a test make header and body disagree."""
-    data = yaml.safe_load((TEMPLATE_DIR / f"{template}.yaml").read_text())
+    data = yaml.safe_load((TEMPLATE_DIR / f"{template}.yaml").read_text(encoding="utf-8"))
     for dotted, value in body_overrides.items():
         node = data
         parts = dotted.split(".")
@@ -38,7 +38,7 @@ def _write(path: Path, *, template: str, claimed: list[str], body_overrides: dic
         node[parts[-1]] = value
     header = ["# minted-by: tools/mint_config.py", f"# template: {template}"]
     header += [f"# delta: {k}: x -> y" for k in claimed]
-    path.write_text("\n".join(header) + "\n" + yaml.safe_dump(data, sort_keys=False))
+    path.write_text("\n".join(header) + "\n" + yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     return path
 
 
@@ -89,8 +89,8 @@ def test_missing_template_exits_2(tmp_path):
         body_overrides={"run_id": "liar"},
     )
     # rewrite the template line to name a template that does not exist
-    text = out.read_text().replace("# template: dev", "# template: nonexistent_template")
-    out.write_text(text)
+    text = out.read_text(encoding="utf-8").replace("# template: dev", "# template: nonexistent_template")
+    out.write_text(text, encoding="utf-8")
     assert _from_header(out).returncode == 2
 
 
@@ -98,8 +98,8 @@ def test_unparseable_header_exits_2(tmp_path):
     # a config with no "# template:" line -> the header is unparseable
     out = tmp_path / "c.yaml"
     assert _mint(out, "run_id=x").returncode == 0
-    body = "\n".join(l for l in out.read_text().splitlines() if not l.startswith("# template:"))
-    out.write_text(body)
+    body = "\n".join(l for l in out.read_text(encoding="utf-8").splitlines() if not l.startswith("# template:"))
+    out.write_text(body, encoding="utf-8")
     assert _from_header(out).returncode == 2
 
 
@@ -128,10 +128,10 @@ def test_every_committed_config_header_is_truthful():
 
 def test_committed_config_body_lie_would_be_caught(tmp_path):
     # A real mutation (not tautological): flip a run5 body key NOT listed in its header -> exit 1.
-    src = (REPO_ROOT / "configs" / "run6.yaml").read_text()
+    src = (REPO_ROOT / "configs" / "run6.yaml").read_text(encoding="utf-8")
     assert "random_model_sims: 96" in src  # not in run5's header (only run_id + seed are)
     lie = tmp_path / "run5_lie.yaml"
-    lie.write_text(src.replace("random_model_sims: 96", "random_model_sims: 64"))
+    lie.write_text(src.replace("random_model_sims: 96", "random_model_sims: 64"), encoding="utf-8")
     res = _from_header(lie)
     assert res.returncode == 1
     assert "random_model_sims" in res.stdout
@@ -140,13 +140,13 @@ def test_committed_config_body_lie_would_be_caught(tmp_path):
 def test_mutation_self_test_bites(tmp_path):
     out = tmp_path / "c.yaml"
     assert _mint(out, "run_id=honest").returncode == 0
-    original = out.read_text()
+    original = out.read_text(encoding="utf-8")
     assert _from_header(out).returncode == 0
     # hand-edit an UNLISTED key in the body -> the check must bite
     tampered = original.replace("seed: 20260716", "seed: 424242")
     assert tampered != original
-    out.write_text(tampered)
+    out.write_text(tampered, encoding="utf-8")
     assert _from_header(out).returncode == 1
     # revert -> clean again
-    out.write_text(original)
+    out.write_text(original, encoding="utf-8")
     assert _from_header(out).returncode == 0

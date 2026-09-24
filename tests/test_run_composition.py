@@ -102,7 +102,7 @@ def test_no_train_module_imports_eval_even_lazily() -> None:
     forward-held regression guard rather than an oracle for unbuilt behaviour."""
     violations: list[str] = []
     for path in _train_sources():
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         if "mantis.eval" in text or "from mantis import eval" in text:
             violations.append(str(path.relative_to(_SRC)))
     assert violations == [], f"train/** must never reference mantis.eval: {violations}"

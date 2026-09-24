@@ -42,7 +42,7 @@ def detect_cpu_budget() -> int:
         pass
     # cgroup v2: /sys/fs/cgroup/cpu.max  ("max <period>" or "<quota> <period>")
     try:
-        with open("/sys/fs/cgroup/cpu.max") as f:
+        with open("/sys/fs/cgroup/cpu.max", encoding="utf-8") as f:
             parts = f.read().strip().split()
         if parts and parts[0] != "max":
             q, p = int(parts[0]), int(parts[1])
@@ -52,9 +52,9 @@ def detect_cpu_budget() -> int:
         pass
     # cgroup v1: /sys/fs/cgroup/cpu/cpu.cfs_{quota,period}_us
     try:
-        with open("/sys/fs/cgroup/cpu/cpu.cfs_quota_us") as f:
+        with open("/sys/fs/cgroup/cpu/cpu.cfs_quota_us", encoding="utf-8") as f:
             q = int(f.read().strip())
-        with open("/sys/fs/cgroup/cpu/cpu.cfs_period_us") as f:
+        with open("/sys/fs/cgroup/cpu/cpu.cfs_period_us", encoding="utf-8") as f:
             p = int(f.read().strip())
         if q > 0 and p > 0:
             candidates.append(max(1, math.ceil(q / p)))

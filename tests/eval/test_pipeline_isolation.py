@@ -239,7 +239,7 @@ def test_parent_side_eval_modules_have_no_inference_surface() -> None:
     for path in files:
         if path.name == "worker.py":
             continue
-        tree = ast.parse(path.read_text(), filename=str(path))
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.Attribute) and node.attr in ("cuda", "autocast"):
                 banned.append(f"{path.name}:{node.lineno} .{node.attr}")
@@ -253,7 +253,7 @@ def test_parent_side_eval_modules_have_no_inference_surface() -> None:
 
     for name in _TORCH_FREE_EVAL_MODULES:
         path = _SRC_EVAL / name
-        tree = ast.parse(path.read_text(), filename=str(path))
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         torch_imports = [
             node
             for node in ast.walk(tree)
@@ -266,7 +266,7 @@ def test_parent_side_eval_modules_have_no_inference_surface() -> None:
 
 
 def test_every_join_is_timeout_bounded() -> None:
-    source = (_SRC_EVAL / "pipeline.py").read_text()
+    source = (_SRC_EVAL / "pipeline.py").read_text(encoding="utf-8")
     tree = ast.parse(source, filename="pipeline.py")
     bare_joins: list[int] = []
     for node in ast.walk(tree):

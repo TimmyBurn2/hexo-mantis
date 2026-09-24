@@ -24,7 +24,7 @@ _BIN_WIDTH = 2.0 / 64.0  # 0.03125
 
 
 def _golden() -> dict:
-    return json.loads(_GOLDEN.read_text())
+    return json.loads(_GOLDEN.read_text(encoding="utf-8"))
 
 
 def test_constants_pinned() -> None:

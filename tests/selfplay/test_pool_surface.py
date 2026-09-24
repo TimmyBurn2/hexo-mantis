@@ -256,7 +256,7 @@ def test_graph_pool_buffer_composition_is_nan_and_that_is_parity(device) -> None
 
 def _top_level_imports(path: Path) -> set[str]:
     """Module names imported at MODULE level (deferred imports inside functions are the author's business; the DAG is about what importing the package pulls in)."""
-    tree = ast.parse(path.read_text(), filename=str(path))
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     names: set[str] = set()
     for node in tree.body:
         if isinstance(node, ast.Import):
@@ -291,7 +291,7 @@ def test_no_selfplay_to_eval_train_or_bots_edge_anywhere() -> None:
     """H-12 (explicit-forbid arm) — PASS iff the three forbidden roots appear in NO import statement, at module level or otherwise, anywhere under `src/mantis/selfplay`."""
     offenders: dict[str, set[str]] = {}
     for path in sorted(SELFPLAY_SRC.glob("*.py")):
-        tree = ast.parse(path.read_text(), filename=str(path))
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         bad = set()
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -309,7 +309,7 @@ def test_no_selfplay_to_eval_train_or_bots_edge_anywhere() -> None:
 def test_the_dag_check_would_notice_a_forbidden_import(tmp_path) -> None:
     """H-12 (mutation self-test) — PASS iff the checker's own logic flags a module that DOES import from the eval side."""
     doctored = tmp_path / "doctored.py"
-    doctored.write_text("from mantis.eval.pipeline import Something\nimport mantis.train\n")
+    doctored.write_text("from mantis.eval.pipeline import Something\nimport mantis.train\n", encoding="utf-8")
     names = _top_level_imports(doctored)
     flagged = {n for n in names
                if ".".join(n.split(".")[:2]) not in ALLOWED_MANTIS_ROOTS}

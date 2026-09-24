@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""CI gate 16: no encoding-less text I/O where it can break a run.
+"""CI gate 16: no encoding-less text I/O anywhere in the tree.
 
 `open()`, `read_text()` and `write_text()` default to the platform codepage, so a non-ASCII UTF-8
-file raises UnicodeDecodeError off a UTF-8 locale — invisible on Linux CI. ZERO under `tools/`, and
-ZERO at MODULE SCOPE under `tests/`, where a failure is collection-fatal for the whole tier; other
-`tests/` sites and all of `src/` are deliberately out of scope. Safe: binary mode, `encoding=` by
-keyword or position, a forwarded `**kwargs`, or `# encoding-gate: ok -- <why>` whose reason text is
-MANDATORY. Any `.open()` counts, since the receiver's type is not statically decidable.
+file raises UnicodeDecodeError off a UTF-8 locale — invisible on Linux CI. ZERO over every
+tracked `.py` file, module scope and function scope alike. Safe: binary mode, `encoding=` by
+keyword or position, a forwarded `**kwargs`, `os.open` (an fd call whose second argument is
+flags, not mode, and which takes no encoding), or `# encoding-gate: ok -- <why>` whose reason
+text is MANDATORY. Any `.open()` counts, since the receiver's type is not statically decidable.
 """
 from __future__ import annotations
 
 import ast
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -48,16 +49,15 @@ EXEMPT: tuple[tuple[str, str, str], ...] = (
     (
         "tests/tools/test_preflight_mint.py",
         "TOOL_SOURCE = TOOL_PATH.read_text()",
-        "byte-frozen oracle (tests/tools/conftest.py:3,15 -- 'editing it is an R43 event'). "
-        "The read targets tools/ci_gates/preflight_mint.py, which is currently cp1252-decodable, "
-        "so it does not fail today; it is one non-ASCII byte away from collection-fatal. "
+        "byte-frozen oracle over tools/ci_gates/preflight_mint.py, which is currently "
+        "cp1252-decodable, so it does not fail today; it is one non-ASCII byte away from red. "
         "Fix belongs to whoever lifts the freeze.",
     ),
 )
 
-#: Non-vacuity floors, set below the measured counts (tools/ 13, tests/ 254) with headroom for
-#: deletions but high enough that a broken glob or a wrong REPO_ROOT cannot pass silently.
-MIN_FILES = {"tools": 10, "tests": 200}
+#: Non-vacuity floor over the whole tracked tree: high enough that a broken glob or a wrong
+#: REPO_ROOT cannot pass silently, with headroom for deletions.
+MIN_FILES = {"tree": 700}
 
 
 def _call_key(node: ast.Call) -> tuple[str, bool] | None:
@@ -112,16 +112,10 @@ def is_unsafe(node: ast.Call) -> bool:
     return not has_encoding(node, key)
 
 
-def _module_scope_lines(tree: ast.Module) -> set[int]:
-    """Return the line numbers nested inside a def or class, i.e. not import-time."""
-    nested: set[int] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            for sub in ast.walk(node):
-                lineno = getattr(sub, "lineno", None)
-                if lineno is not None:
-                    nested.add(lineno)
-    return nested
+def _is_os_open(node: ast.Call) -> bool:
+    """`os.open` takes flags, not mode, and no encoding — flagging it would demand a TypeError."""
+    return (isinstance(node.func, ast.Attribute) and node.func.attr == "open"
+            and isinstance(node.func.value, ast.Name) and node.func.value.id == "os")
 
 
 def _justified(lines: list[str], lineno: int) -> bool:
@@ -137,47 +131,46 @@ def _justified(lines: list[str], lineno: int) -> bool:
 
 
 def scan() -> tuple[list[str], dict[str, int], set[int]]:
-    """Return the violations, the files scanned per root, and the matched exemption indices."""
+    """Return the violations, the files scanned, and the matched exemption indices."""
     violations: list[str] = []
     scanned = {root: 0 for root in MIN_FILES}
     matched_exempt: set[int] = set()
 
-    for root, module_scope_only in (("tools", False), ("tests", True)):
-        base = REPO_ROOT / root
-        if not base.is_dir():
+    listed = subprocess.run(
+        ["git", "ls-files", "-z", "--", "*.py"], cwd=REPO_ROOT, capture_output=True, check=True)
+    for raw in listed.stdout.decode("utf-8").split("\0"):
+        if not raw:
             continue
-        for path in sorted(base.rglob("*.py")):
-            scanned[root] += 1
-            rel = str(path.relative_to(REPO_ROOT)).replace("\\", "/")
-            source = path.read_text(encoding="utf-8", errors="replace")
-            try:
-                tree = ast.parse(source)
-            except SyntaxError as exc:
-                violations.append(f"{rel}: unparseable ({exc})")
-                continue
-            lines = source.splitlines()
-            nested = _module_scope_lines(tree)
+        path = REPO_ROOT / raw
+        rel = raw.replace("\\", "/")
+        scanned["tree"] += 1
+        source = path.read_text(encoding="utf-8", errors="replace")
+        try:
+            tree = ast.parse(source)
+        except SyntaxError as exc:
+            violations.append(f"{rel}: unparseable ({exc})")
+            continue
+        lines = source.splitlines()
 
-            for node in ast.walk(tree):
-                if not isinstance(node, ast.Call) or not is_unsafe(node):
-                    continue
-                if module_scope_only and node.lineno in nested:
-                    continue  # function-scope in tests/: registered backlog, not a violation
-                if _justified(lines, node.lineno):
-                    continue
-                text = lines[node.lineno - 1].strip()
-                exempt_i = next(
-                    (k for k, (p, snippet, _r) in enumerate(EXEMPT) if p == rel and snippet in text),
-                    None,
-                )
-                if exempt_i is not None:
-                    matched_exempt.add(exempt_i)
-                    continue
-                where = "module scope" if module_scope_only else "tools/"
-                violations.append(
-                    f"{rel}:{node.lineno}: encoding-less {_call_name(node)}() at {where}\n"
-                    f"    {text}"
-                )
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not is_unsafe(node):
+                continue
+            if _is_os_open(node):
+                continue
+            if _justified(lines, node.lineno):
+                continue
+            text = lines[node.lineno - 1].strip()
+            exempt_i = next(
+                (k for k, (p, snippet, _r) in enumerate(EXEMPT) if p == rel and snippet in text),
+                None,
+            )
+            if exempt_i is not None:
+                matched_exempt.add(exempt_i)
+                continue
+            violations.append(
+                f"{rel}:{node.lineno}: encoding-less {_call_name(node)}()\n"
+                f"    {text}"
+            )
 
     return violations, scanned, matched_exempt
 
@@ -189,7 +182,7 @@ def main() -> int:
     for root, floor in MIN_FILES.items():
         if scanned[root] < floor:
             print(
-                f"gate 16 FAIL -- scanned only {scanned[root]} file(s) under {root}/ "
+                f"gate 16 FAIL -- scanned only {scanned[root]} tracked .py file(s) {root}-wide "
                 f"(floor {floor}). A gate that scans nothing finds nothing; refusing to "
                 "report green."
             )
@@ -207,8 +200,8 @@ def main() -> int:
         print("\ngate 16 FAIL -- encoding-less text I/O (S-19; breaks on any non-UTF-8 locale):\n")
         print("\n".join(violations))
         print(
-            "\nPass `encoding=\"utf-8\"` explicitly. Every one of this repo's 639 tracked text "
-            "files is UTF-8, so utf-8 is always the right answer here.\n"
+            "\nPass `encoding=\"utf-8\"` explicitly. Every tracked text file in this repo is UTF-8,\n"
+            "so utf-8 is always the right answer here.\n"
             "If the call is genuinely not file text I/O (zipfile, a mock, a custom .open), say so "
             "in place:\n"
             '    # encoding-gate: ok -- <why>\n'
@@ -220,8 +213,8 @@ def main() -> int:
     if rc == 0:
         total = sum(scanned.values())
         print(
-            f"gate 16: no encoding-less text I/O in tools/, none at module scope in tests/ "
-            f"({total} files; {len(EXEMPT)} registered exemption(s))"
+            f"gate 16: no encoding-less text I/O anywhere in the tree "
+            f"({total} tracked .py files; {len(EXEMPT)} registered exemption(s))"
         )
     return rc
 

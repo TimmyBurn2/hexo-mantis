@@ -40,7 +40,7 @@ _INERT_SIMS = 1
 
 def _positions() -> list[dict]:
     """Re-nest the committed dispersed fixture from its flat form."""
-    fx = json.loads(_FIXTURE.read_text())
+    fx = json.loads(_FIXTURE.read_text(encoding="utf-8"))
     out = []
     for i in range(fx["n_positions"]):
         prefix = f"p{i}_"

@@ -116,7 +116,7 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
 - **Python.** Type hints on all new/changed code. Public APIs carry a docstring, and every
   catchable exception is named in a `Raises:` section. Imports at top of file — lazy-loading
   an optional dep is the ONE exception. Text-mode IO always passes `encoding=` (gate 16
-  enforces tools/ and tests/ module scope; the RULE is the whole tree).
+  enforces ZERO across the tree).
   Catch specific exceptions; bare `except Exception:` only in a top-level handler, which
   logs through `logger.exception` and does NOT repeat the exception in the message.
 - **Comments (R316(e), operator direction).** Comments only where needed; public APIs carry
@@ -239,10 +239,9 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
     counts too and is reworded, never exempted.
 16. Encoding-less text I/O (tools/ci_gates/encoding_io_gate.py) — `open`/`read_text`/
     `write_text` without `encoding=` default to the platform codepage, so they raise
-    UnicodeDecodeError on any non-UTF-8 locale. ZERO in tools/ (these are the gates
-    themselves); ZERO at MODULE scope in tests/ (a module-scope failure is collection-fatal
-    and takes down the whole tier). Binary mode is correctly exempt; exemptions are
-    self-expiring. Function-scope tests/ sites are a registered backlog, not a rule.
+    UnicodeDecodeError on any non-UTF-8 locale. ZERO over every tracked `.py` file, module
+    scope and function scope alike (R368(g)); `os.open` is skipped by mechanism (flags, not
+    mode, no encoding). Binary mode is correctly exempt; exemptions are self-expiring.
 17. Rule-7 host content (tools/ci_gates/rule7_gate.py) — box specifics live in the migration
     workspace, never here. Absolute home paths, ssh invocation/config, `user@host`, IPv4,
     detached-run and provider names, over files added/modified vs `--base` (plus `--full-tree`).

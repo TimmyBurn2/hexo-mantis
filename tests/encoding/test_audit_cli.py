@@ -85,7 +85,7 @@ def test_cli_missing_dir_returns_warn(tmp_path) -> None:
 def test_cli_error_returns_two_via_bad_variant(tmp_path) -> None:
     ck, co, va, root = _empty_dirs(tmp_path)
     # A variant yaml whose top-level is not a mapping → §4 error.
-    (va / "broken.yaml").write_text("- a\n- b\n")
+    (va / "broken.yaml").write_text("- a\n- b\n", encoding="utf-8")
     rc = main([
         "audit",
         "--checkpoints-dir", str(ck),
@@ -101,7 +101,7 @@ def test_cli_error_returns_two_via_bad_variant(tmp_path) -> None:
 
 def test_hardcodes_only_clean_tree_is_zero(tmp_path) -> None:
     (tmp_path / "src").mkdir()
-    (tmp_path / "src" / "clean.py").write_text("x = 'no bare geometry here'\n")
+    (tmp_path / "src" / "clean.py").write_text("x = 'no bare geometry here'\n", encoding="utf-8")
     rc = main(["audit", "--hardcodes-only", "--repo-root", str(tmp_path)])
     assert rc == 0
 
@@ -109,7 +109,7 @@ def test_hardcodes_only_clean_tree_is_zero(tmp_path) -> None:
 def test_hardcodes_only_flags_a_bare_literal(tmp_path) -> None:
     src = tmp_path / "src"
     src.mkdir()
-    (src / "hot.py").write_text("board_dim = 19\n")  # bare geometry literal
+    (src / "hot.py").write_text("board_dim = 19\n", encoding="utf-8")  # bare geometry literal
     # Non-strict → warn.
     assert main(["audit", "--hardcodes-only", "--repo-root", str(tmp_path)]) == 1
     # Strict → error.

@@ -56,7 +56,7 @@ def find_arch_sniffs(root: Path) -> list[str]:
     """Return a list of `file:line: reason` violations for arch-off-module sniffs."""
     violations: list[str] = []
     for path in _py_files(root):
-        for i, line in enumerate(path.read_text().splitlines(), start=1):
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             here = f"{path}:{i}"
             if _RE_ISINSTANCE.search(line):
                 violations.append(f"{here}: isinstance on a net class")
@@ -76,7 +76,7 @@ def _has_model_representation_def(root: Path) -> bool:
     return any(
         re.search(r"^\s*def\s+model_representation\b", line, re.M)
         for path in _py_files(root)
-        for line in [path.read_text()]
+        for line in [path.read_text(encoding="utf-8")]
     )
 
 
@@ -114,14 +114,14 @@ def test_model_representation_symbol_is_deleted_repo_wide() -> None:
 def test_census_bites_planted_sniff(tmp_path: Path) -> None:
     """A planted type-name sniff must make the census FAIL."""
     planted = tmp_path / "mut.py"
-    planted.write_text('def f(m):\n    return type(m).__name__ == "GnnNet"\n')
+    planted.write_text('def f(m):\n    return type(m).__name__ == "GnnNet"\n', encoding="utf-8")
     assert find_arch_sniffs(tmp_path), "census must bite the planted type-name sniff"
 
 
 def test_census_bites_planted_attr_and_isinstance(tmp_path: Path) -> None:
-    (tmp_path / "a.py").write_text('def f(net):\n    return net.filters\n')
-    (tmp_path / "b.py").write_text('def g(m):\n    return isinstance(m, GnnNet)\n')
-    (tmp_path / "c.py").write_text('def h(cfg):\n    return cfg.get("representation", "grid")\n')
+    (tmp_path / "a.py").write_text('def f(net):\n    return net.filters\n', encoding="utf-8")
+    (tmp_path / "b.py").write_text('def g(m):\n    return isinstance(m, GnnNet)\n', encoding="utf-8")
+    (tmp_path / "c.py").write_text('def h(cfg):\n    return cfg.get("representation", "grid")\n', encoding="utf-8")
     viols = find_arch_sniffs(tmp_path)
     assert len(viols) >= 3, viols
 

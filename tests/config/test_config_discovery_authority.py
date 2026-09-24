@@ -41,11 +41,11 @@ def _loadable(path: Path) -> bool:
 def planted(tmp_path: Path) -> Path:
     """Plant every name in `_NAMES` under one `configs/` directory as a real config."""
     configs = tmp_path / "configs"
-    body = RUN5.read_text()
+    body = RUN5.read_text(encoding="utf-8")
     for name in _NAMES:
         target = configs / name
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(body)
+        target.write_text(body, encoding="utf-8")
     return configs
 
 
@@ -102,7 +102,7 @@ def test_a_symlinked_DIRECTORY_is_enumerated_because_rglob_will_not_walk_it(tmp_
     configs.mkdir()
     outside = tmp_path / "outside"
     outside.mkdir()
-    (outside / "hidden_cfg.yaml").write_text(RUN5.read_text())
+    (outside / "hidden_cfg.yaml").write_text(RUN5.read_text(encoding="utf-8"), encoding="utf-8")
     (configs / "link").symlink_to(outside)
 
     assert "link/hidden_cfg.yaml" not in {
@@ -124,7 +124,7 @@ def test_the_loader_accepts_a_config_at_ANY_shape(tmp_path) -> None:
 
     for name in ("run6.txt", "run6.YAML", "run6", "run6.yaml.bak", "run6.yamlx", ".yaml"):
         path = tmp_path / name
-        path.write_text(RUN5.read_text())
+        path.write_text(RUN5.read_text(encoding="utf-8"), encoding="utf-8")
         assert load_config(path).run_id == "run6", f"{name} must load — R75 declined the refusal"
 
     for dead in ("CONFIG_SUFFIXES", "ConfigSuffixError", "is_config_path"):
@@ -155,7 +155,7 @@ def test_a_config_SHAPED_but_BROKEN_path_stays_INSIDE_the_answer_set(tmp_path) -
     configs.mkdir()
     (configs / "broken.yaml").symlink_to(tmp_path / "nowhere.yaml")
     (configs / "broken.txt").symlink_to(tmp_path / "nowhere.txt")
-    (configs / "real.yaml").write_text(RUN5.read_text())
+    (configs / "real.yaml").write_text(RUN5.read_text(encoding="utf-8"), encoding="utf-8")
 
     found = {path.name for path in discover_configs(configs)}
     assert found == {"broken.yaml", "broken.txt", "real.yaml"}, (

@@ -34,14 +34,14 @@ def test_no_recipe_hard_codes_uv_where_the_makefile_defines_UV():
     assert not literal, f"recipe lines hard-code `uv` instead of `$(UV)`: {literal}"
 
 def test_integration_tier_reachable_from_make():
-    text = (REPO_ROOT / "Makefile").read_text()
+    text = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
     m = re.search(r"^test\.integration:\n((?:\t.*\n)+)", text, flags=re.MULTILINE)
     assert m, "test.integration target missing"
     assert "-m integration" in m.group(1)
 
 
 def test_ci_yaml_pins_tiers_and_gate_scripts():
-    text = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text()
+    text = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     for needle in (
         'pytest -m "not integration and not slow"',
         "pytest -m integration",
@@ -66,7 +66,7 @@ def test_ci_yaml_pins_tiers_and_gate_scripts():
 def _ci_run_commands() -> list[str]:
     """Every `run:` body in ci.yml. Parsed, not grepped: a substring search cannot tell a
     command that EXECUTES a script from a step name or a `with:` value naming its path."""
-    spec = yaml.safe_load((REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text())
+    spec = yaml.safe_load((REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
     return [
         step["run"]
         for job in spec.get("jobs", {}).values()
@@ -149,7 +149,7 @@ def test_lint_and_type_gate_is_blocking_and_self_tested():
 def test_gate_01_script_actually_fresh_clones_and_syncs():
     """Gate 1 must CLONE: `ci.yml` previously inlined a sync of the existing checkout, which
     cannot prove that a fresh clone builds."""
-    text = (REPO_ROOT / "tools" / "ci_gates" / "gate_01_fresh_sync.sh").read_text()
+    text = (REPO_ROOT / "tools" / "ci_gates" / "gate_01_fresh_sync.sh").read_text(encoding="utf-8")
     assert "git clone" in text, "gate 1 must clone; syncing the checkout proves nothing"
     assert "uv sync --locked" in text, "gate 1 must build the extension from the lockfile"
     # The call form, not the bare word: a substring check for "hello()" would flag the

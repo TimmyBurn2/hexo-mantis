@@ -37,7 +37,7 @@ def test_shipped_manifest_every_row_resolves() -> None:
 
 def _write_manifest(path: Path, rows: list[str]) -> Path:
     body = "version: 1\nchannel: jsonl_event_sink\ngates:\n" + "".join(rows)
-    path.write_text(body)
+    path.write_text(body, encoding="utf-8")
     return path
 
 
@@ -100,7 +100,7 @@ def test_pending_seam_row_requires_a_wp_name(tmp_path: Path) -> None:
 def test_empty_manifest_is_a_failure(tmp_path: Path) -> None:
     """O-01 — an empty manifest (no gate rows) is a FAIL, not a vacuous pass (R4: a gate surface with zero producers is a phantom-armed abort chain waiting to happen)."""
     path = tmp_path / "empty.yaml"
-    path.write_text("version: 1\nchannel: jsonl_event_sink\ngates: []\n")
+    path.write_text("version: 1\nchannel: jsonl_event_sink\ngates: []\n", encoding="utf-8")
     with pytest.raises(ManifestError):
         verify_manifest(path, _REPO_ROOT)
 

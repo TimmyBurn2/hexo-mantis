@@ -92,20 +92,21 @@ def test_known_limitation_any_dot_open_is_flagged_regardless_of_receiver() -> No
     """Record the deliberate over-approximation: any `.open` is flagged whatever the receiver.
 
     Measured: in the gated scope every receiver is Path-like, so this costs zero false
-    positives; the one counter-example, `os.open` in `src/`, is out of scope. Proving a
-    receiver is a `Path` is not statically decidable and would buy precision with false
-    negatives.
+    positives. `os.open` is the one exemption and is skipped at scan level by `_is_os_open` —
+    an fd call whose second argument is flags — while `is_unsafe` keeps flagging it, so a
+    future receiver named like it stays visible.
     """
     assert GATE.is_unsafe(_first_call("os.open(path, flags)")) is True
     assert GATE.is_unsafe(_first_call("zipfile.ZipFile(z).open(name)")) is True
+    assert GATE._is_os_open(_first_call("os.open(path, flags)")) is True
+    assert GATE._is_os_open(_first_call("p.open(path)")) is False
 
 
 def test_gate_is_green_on_the_committed_tree() -> None:
     """Prove the gate is green on the committed tree: a gate is adopted only over a clean baseline."""
     violations, scanned, _matched = GATE.scan()
     assert not violations, "gate 16 baseline is dirty:\n" + "\n".join(violations)
-    assert scanned["tools"] >= GATE.MIN_FILES["tools"]
-    assert scanned["tests"] >= GATE.MIN_FILES["tests"]
+    assert scanned["tree"] >= GATE.MIN_FILES["tree"]
 
 
 def test_every_registered_exemption_still_matches() -> None:

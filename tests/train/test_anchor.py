@@ -74,7 +74,7 @@ def test_save_best_model_atomic_provenance_sidecar(tmp_path: Path) -> None:
     assert wrapped["step"] == 750 and wrapped["promoted"] is True
     assert wrapped["metadata"]["encoding_name"] == _ENC
     sidecar = path.with_name(path.name + ".provenance.json")
-    assert sidecar.exists() and '"step": 750' in sidecar.read_text()
+    assert sidecar.exists() and '"step": 750' in sidecar.read_text(encoding="utf-8")
 
 
 def test_a_promoted_anchor_carries_the_DECLARED_arch_kind(tmp_path: Path) -> None:

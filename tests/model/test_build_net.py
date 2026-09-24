@@ -25,7 +25,7 @@ _KEYS_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "value_probes" / 
 
 
 def _golden_keys(name: str) -> set[str]:
-    return set((_KEYS_DIR / f"{name}.txt").read_text().split())
+    return set((_KEYS_DIR / f"{name}.txt").read_text(encoding="utf-8").split())
 
 
 def _keyset(net) -> set[str]:

@@ -99,7 +99,7 @@ class _SyncTarget:
 
 
 def _read(sink: JsonlEventSink, name: str) -> list[dict]:
-    lines = [ln for ln in sink.path.read_text().splitlines() if ln.strip()]
+    lines = [ln for ln in sink.path.read_text(encoding="utf-8").splitlines() if ln.strip()]
     return [event for event in (json.loads(ln) for ln in lines)
             if event.get("event") == name]
 
@@ -262,7 +262,7 @@ def _row_m10(tmp_path):
             continue
         rel, text = entry.source_pin
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
-        (root / rel).write_text((REPO_ROOT / rel).read_text().replace(text, "# deleted\n"))
+        (root / rel).write_text((REPO_ROOT / rel).read_text(encoding="utf-8").replace(text, "# deleted\n"), encoding="utf-8")
     row["pin_root"] = root
     return row
 
@@ -708,7 +708,7 @@ def test_an_audit_report_can_never_read_as_a_green_for_the_dynamic_assertions(
     assert len(reports) == 1, (
         f"the evidence report is written ALWAYS, in a finally (§9.1); found {reports}"
     )
-    report = json.loads(reports[0].read_text())
+    report = json.loads(reports[0].read_text(encoding="utf-8"))
     assert report["schema"] == "preflight-mint-v1" and report["mode"] == "audit"
     assert report["child"] is None, "mode AUDIT spawns no child (§9.1)"
     for name in ("a_sync", "b_lag"):

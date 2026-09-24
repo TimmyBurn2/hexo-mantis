@@ -46,7 +46,7 @@ def main() -> None:
         for ply in PLIES:
             tau = reference_tau(ply, thr, tmin)
             rows.append(f"{ply},{thr},{tmin:.4f},{tau:.10f}")
-    out.write_text("\n".join(rows) + "\n")
+    out.write_text("\n".join(rows) + "\n", encoding="utf-8")
     print(f"wrote {len(rows) - 1} rows -> {out}")
 
 

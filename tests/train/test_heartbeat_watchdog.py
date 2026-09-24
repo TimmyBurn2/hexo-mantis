@@ -277,7 +277,7 @@ def test_livelock_fires_within_envelope_while_main_thread_wedged(tmp_path, spy_s
     snap_path = tmp_path / "buffer.bin.watchdog"
 
     def _snapshot() -> None:
-        snap_path.write_text("snap")
+        snap_path.write_text("snap", encoding="utf-8")
 
     exit_fn = _TimedExit()
     reg = HeartbeatRegistry()            # real time.monotonic clock

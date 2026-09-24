@@ -113,7 +113,7 @@ def _source_without_comments_or_strings(path: Path) -> str:
     substring. Blanking in place keeps the file's shape, so a pin genuinely IN THE CODE is still a
     substring while one retained only in a comment or docstring is not.
     """
-    lines = path.read_text().splitlines(keepends=True)
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
     blank = {tokenize.COMMENT, tokenize.STRING, getattr(tokenize, "FSTRING_MIDDLE", -1)}
     with path.open("rb") as handle:
         for tok in tokenize.tokenize(handle.readline):
@@ -346,7 +346,7 @@ def test_the_required_row_keeps_a_source_pin_bound_to_the_construction_site(tmp_
     )
 
     pinned_file = REPO_ROOT / rel
-    assert text in pinned_file.read_text(), f"the pin {text!r} must be present in {rel}"
+    assert text in pinned_file.read_text(encoding="utf-8"), f"the pin {text!r} must be present in {rel}"
     assert text in _source_without_comments_or_strings(pinned_file), (
         "the pinned text must live in CODE, not in a comment or a docstring. "
         "`verify_source_pins` is a whole-file substring scan, so a pin retained as a comment "
@@ -365,7 +365,7 @@ def test_the_required_row_keeps_a_source_pin_bound_to_the_construction_site(tmp_
     only_this_row = (row,)
     tampered = tmp_path / "tampered"
     (tampered / rel).parent.mkdir(parents=True)
-    (tampered / rel).write_text(pinned_file.read_text().replace(text, "# threading deleted\n"))
+    (tampered / rel).write_text(pinned_file.read_text(encoding="utf-8").replace(text, "# threading deleted\n"), encoding="utf-8")
     assert [broken.name for broken in TOOL.verify_source_pins(
         only_this_row, repo_root=tampered)] == [row.name], (
         f"deleting the threading from {rel} must report exactly {row.name!r} broken — this "

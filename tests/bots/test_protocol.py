@@ -90,7 +90,7 @@ def test_external_kinds_carry_a_reason_that_names_no_env_key(kind, monkeypatch):
 
 def test_no_host_path_tokens_in_bots_sources():
     for path in _SRC.rglob("*.py"):
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         assert "/home/" not in text, f"{path} carries a host-specific /home/ path literal"
         tree = ast.parse(text, filename=str(path))
         for node in ast.walk(tree):

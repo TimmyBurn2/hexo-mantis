@@ -223,7 +223,7 @@ def _drive(route: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Driv
             proc.alive, proc.exitcode = False, 0    # clean exit, no sidecar written
         elif route == "result_invalid":
             proc.alive, proc.exitcode = False, 0
-            result_path.write_text(json.dumps({"step": 1000}))   # contract keys missing
+            result_path.write_text(json.dumps({"step": 1000}), encoding="utf-8")   # contract keys missing
         elif route == "abandoned":
             proc.alive = True                       # a live round a resumable stop abandons
         else:  # round_completion_error

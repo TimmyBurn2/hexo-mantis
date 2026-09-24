@@ -171,12 +171,12 @@ def test_the_pinned_row_source_pin_is_tamper_evident(tmp_path) -> None:
 
     row = pinned[0]
     rel, text = row.source_pin
-    original = (REPO_ROOT / rel).read_text()
+    original = (REPO_ROOT / rel).read_text(encoding="utf-8")
     assert text in original, f"the pin {text!r} must exist in {rel} at HEAD"
 
     tampered_root = tmp_path / "tampered"
     (tampered_root / rel).parent.mkdir(parents=True)
-    (tampered_root / rel).write_text(original.replace(text, "# pinned literal deleted\n"))
+    (tampered_root / rel).write_text(original.replace(text, "# pinned literal deleted\n"), encoding="utf-8")
     assert [broken.name for broken in TOOL.verify_source_pins(
         (row,), repo_root=tampered_root)] == [row.name], (
         f"deleting the pinned text from {rel} must report exactly the {row.name!r} row as "
@@ -233,7 +233,7 @@ def test_the_manifest_is_not_vacuous() -> None:
     )
     for shipped in _deferred():
         rel, text = shipped.source_pin
-        assert (REPO_ROOT / rel).is_file() and text in (REPO_ROOT / rel).read_text(), (
+        assert (REPO_ROOT / rel).is_file() and text in (REPO_ROOT / rel).read_text(encoding="utf-8"), (
             f"deferred row {shipped.name!r} pins {rel!r}/{text!r}, which does not resolve in "
             "the real tree — a deferred row that is not tamper-evident rots into the status quo"
         )

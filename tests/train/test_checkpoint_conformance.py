@@ -369,11 +369,11 @@ def test_every_load_surface_uses_weights_only_true(tmp_path, tiny_net, optim_sca
         load_checkpoint(path)
     # (ii) source census — checkpoints (Slice 1) always; anchor (Slice 3) when present.
     import importlib.util
-    src = Path(checkpoints.__file__).read_text()
+    src = Path(checkpoints.__file__).read_text(encoding="utf-8")
     assert "weights_only=False" not in src
     anchor_spec = importlib.util.find_spec("mantis.train.anchor")
     if anchor_spec is not None and anchor_spec.origin:
-        assert "weights_only=False" not in Path(anchor_spec.origin).read_text()
+        assert "weights_only=False" not in Path(anchor_spec.origin).read_text(encoding="utf-8")
 
 
 def test_launch_config_wins_except_frozen_keys():

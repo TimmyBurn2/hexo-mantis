@@ -103,7 +103,7 @@ def test_loader_raises_on_sha_drift(tmp_path) -> None:
 
     drifted = tmp_path / "one_byte_added.json"
     drifted.write_bytes(bp.NULLDIST_PATH.read_bytes() + b" ")
-    assert json.loads(drifted.read_text()) == control, (
+    assert json.loads(drifted.read_text(encoding="utf-8")) == control, (
         "the mutation must stay semantically identical, or it is not the weak case"
     )
     with pytest.raises(bp.NullDistArtifactError) as caught:

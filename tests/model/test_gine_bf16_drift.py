@@ -232,7 +232,7 @@ def test_every_gating_row_still_asserts_its_registered_threshold() -> None:
     """
     import ast
 
-    source = Path(__file__).read_text()
+    source = Path(__file__).read_text(encoding="utf-8")
     tree = ast.parse(source)
     census: dict[str, set[float]] = {}
     for node in tree.body:

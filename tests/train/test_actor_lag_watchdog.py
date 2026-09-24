@@ -194,7 +194,7 @@ def test_build_run_safety_wires_actor_lag_from_monitor_config(tmp_path, monkeypa
         f"callables and threshold must be LIVE end to end; got {codes}"
     )
     lines = [json.loads(l) for l in
-             run_safety.sink.path.read_text().splitlines() if l.strip()]
+             run_safety.sink.path.read_text(encoding="utf-8").splitlines() if l.strip()]
     fired = [e for e in lines if e.get("event") == "heartbeat_watchdog_fired"]
     assert fired and fired[0]["reason"] == "actor_lag_exceeded"
     assert fired[0]["learner_step"] == 300 and fired[0]["actor_ckpt_step"] == 123

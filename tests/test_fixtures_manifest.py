@@ -67,13 +67,13 @@ def test_checker_raises_on_ghost_fixture(tmp_path):
         'path = "ghost.bin"\n'
         f'sha256 = "{"0" * 64}"\n'
         'added_by = "wp0-selftest"\n'
-    )
+    , encoding="utf-8")
     with pytest.raises(FixtureManifestError, match="ghost.bin"):
         check_manifest(manifest, tmp_path)
 
 
 def test_checker_raises_on_unknown_key(tmp_path):
     manifest = tmp_path / "manifest.toml"
-    manifest.write_text("schema = 1\nrequired = []\nsurprise = true\n")
+    manifest.write_text("schema = 1\nrequired = []\nsurprise = true\n", encoding="utf-8")
     with pytest.raises(FixtureManifestError, match="surprise"):
         check_manifest(manifest, tmp_path)

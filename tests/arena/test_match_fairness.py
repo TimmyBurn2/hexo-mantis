@@ -78,7 +78,7 @@ def test_argmax_only_no_temperature_token_in_arena_or_eval():
         if not pkg_dir.exists():
             continue
         for path in pkg_dir.rglob("*.py"):
-            text = path.read_text()
+            text = path.read_text(encoding="utf-8")
             assert "temperature" not in text.lower(), (
                 f"{path} carries a 'temperature' token — no eval/arena surface may have one "
                 "(dispatch item 7: not schema-representable for eval)"

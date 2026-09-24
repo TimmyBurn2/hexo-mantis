@@ -418,7 +418,7 @@ def test_the_real_boot_terminates_where_the_docstring_says(tmp_path) -> None:
     )
     reports = sorted(out_dir.glob("preflight_*.json"))
     assert len(reports) == 1, f"the evidence report is written ALWAYS (§9.1); found {reports}"
-    report = json.loads(reports[0].read_text())
+    report = json.loads(reports[0].read_text(encoding="utf-8"))
     assert report["failure"] == "PreflightTimeoutError"
     assert report["child"]["timed_out"] is True
     tail = report["child"]["stderr_tail"]
@@ -439,7 +439,7 @@ def test_the_real_boot_terminates_where_the_docstring_says(tmp_path) -> None:
     # tool's say-so.
     segments = sorted((out_dir / "logs").glob("events_*.jsonl"))
     assert segments, f"a booted run writes its own segment; found {list(out_dir.rglob('*'))}"
-    events = {json.loads(line)["event"] for line in segments[0].read_text().splitlines() if line}
+    events = {json.loads(line)["event"] for line in segments[0].read_text(encoding="utf-8").splitlines() if line}
     assert {"run_segment_started", "heartbeat_watchdog_armed",
             "selfplay_stall_watchdog_armed"} <= events, (
         f"the boot must reach an ARMED training loop, not just construct objects; saw {events}"
@@ -472,7 +472,7 @@ def test_an_UNCALIBRATED_twin_is_refused_by_the_ARMING_AUDIT_before_it_can_boot(
     )
     reports = sorted(out_dir.glob("preflight_*.json"))
     assert len(reports) == 1, f"the evidence report is written ALWAYS (§9.1); found {reports}"
-    report = json.loads(reports[0].read_text())
+    report = json.loads(reports[0].read_text(encoding="utf-8"))
     assert report["child"] is None, (
         "rc 30 is decided BEFORE the child is spawned; a child block here means the audit "
         "stopped running first, which is the ordering the cheap failure depends on")
@@ -495,7 +495,7 @@ def test_the_real_boot_still_reaches_an_ARMED_loop_on_a_CALIBRATED_config(tmp_pa
     )
     reports = sorted(out_dir.glob("preflight_*.json"))
     assert len(reports) == 1, f"the evidence report is written ALWAYS (§9.1); found {reports}"
-    report = json.loads(reports[0].read_text())
+    report = json.loads(reports[0].read_text(encoding="utf-8"))
     assert report["failure"] == "PreflightTimeoutError"
     assert report["child"]["timed_out"] is True
     assert "UncalibratedFusedGraphCapsError" not in report["child"]["stderr_tail"], (
@@ -506,7 +506,7 @@ def test_the_real_boot_still_reaches_an_ARMED_loop_on_a_CALIBRATED_config(tmp_pa
     # tool's say-so.
     segments = sorted((out_dir / "logs").glob("events_*.jsonl"))
     assert segments, f"a booted run writes its own segment; found {list(out_dir.rglob('*'))}"
-    events = {json.loads(line)["event"] for line in segments[0].read_text().splitlines() if line}
+    events = {json.loads(line)["event"] for line in segments[0].read_text(encoding="utf-8").splitlines() if line}
     assert {"run_segment_started", "heartbeat_watchdog_armed",
             "selfplay_stall_watchdog_armed"} <= events, (
         f"the boot must reach an ARMED training loop, not just construct objects; saw {events}"
@@ -544,7 +544,7 @@ def test_booting_run5_on_a_non_CUDA_box_fails_LOUD_in_init_trainer(tmp_path) -> 
         f"PreflightCudaBuildError. got {result.returncode}\n"
         f"{(result.stdout + result.stderr)[-3000:]}"
     )
-    report = json.loads(sorted(out_dir.glob("preflight_*.json"))[0].read_text())
+    report = json.loads(sorted(out_dir.glob("preflight_*.json"))[0].read_text(encoding="utf-8"))
     assert report["failure"] == "PreflightCudaBuildError" and report["verdict"] == "fail"
     assert report.get("child") is None, (
         "the halt lands BEFORE `_run_child`: a child block here means a boot was attempted on "
@@ -613,9 +613,9 @@ def test_the_source_pin_scan_runs_inside_the_live_audit_path(tmp_path) -> None:
     assert pinned, "no pinned row means this test has no subject"
     rel, text = pinned[0].source_pin
     target = root / rel
-    original = target.read_text()
+    original = target.read_text(encoding="utf-8")
     assert text in original, f"the pin {text!r} must be present before it is deleted"
-    target.write_text(original.replace(text, "# Phase D deleted the pinned literal\n"))
+    target.write_text(original.replace(text, "# Phase D deleted the pinned literal\n"), encoding="utf-8")
 
     result = _mini_audit(root)
     output = result.stdout + result.stderr
@@ -637,7 +637,7 @@ def test_the_report_publishes_the_pins_the_scan_ACTUALLY_covered(tmp_path) -> No
     assert result.returncode == 0, (result.stdout + result.stderr)[-3000:]
     reports = sorted((tmp_path / "out").glob("preflight_*.json"))
     assert len(reports) == 1
-    manifest = json.loads(reports[0].read_text())["manifest"]
+    manifest = json.loads(reports[0].read_text(encoding="utf-8"))["manifest"]
     assert manifest["source_pins_ok"] is True
     assert manifest["source_pins_scanned"] == [
         row.name for row in MANIFEST if row.source_pin is not None
@@ -654,9 +654,9 @@ def test_a_config_nobody_declared_is_production_and_AUDITED(tmp_path) -> None:
     root = _mini_tree(tmp_path)
     rel = f"{_F1_PLANT_STEM}.yaml"
     plant = root / "configs" / rel
-    plant.write_text(RUN5.read_text().replace("terminal_eval_enabled: true",
-                                              "terminal_eval_enabled: false"))
-    assert "terminal_eval_enabled: false" in plant.read_text(), (
+    plant.write_text(RUN5.read_text(encoding="utf-8").replace("terminal_eval_enabled: true",
+                                              "terminal_eval_enabled: false"), encoding="utf-8")
+    assert "terminal_eval_enabled: false" in plant.read_text(encoding="utf-8"), (
         "the planted config must really be disarmed, or this test is vacuous"
     )
     assert root / "configs" / rel in census.production_configs(root)
@@ -707,10 +707,10 @@ def test_naming_a_config_ADDS_scrutiny_and_never_replaces_the_production_set(tmp
     production config is still audited when a different config is named."""
     root = _mini_tree(tmp_path)
     production = _a_production_config(root)
-    production.write_text(production.read_text().replace("terminal_eval_enabled: true",
-                                                         "terminal_eval_enabled: false"))
+    production.write_text(production.read_text(encoding="utf-8").replace("terminal_eval_enabled: true",
+                                                         "terminal_eval_enabled: false"), encoding="utf-8")
     healthy = tmp_path / "healthy.yaml"
-    healthy.write_text(RUN5.read_text())
+    healthy.write_text(RUN5.read_text(encoding="utf-8"), encoding="utf-8")
 
     bare = _mini_audit(root)
     assert bare.returncode == 30, (
@@ -730,7 +730,7 @@ def test_naming_a_config_ADDS_scrutiny_and_never_replaces_the_production_set(tmp
 
 def test_both_modes_compute_the_audit_scope_from_the_same_function() -> None:
     """Both modes compute the audit scope from one function, so they cannot drift apart again."""
-    source = TOOL_PATH.read_text()
+    source = TOOL_PATH.read_text(encoding="utf-8")
     assert source.count("_audit_paths(") == 3, (
         "exactly one definition and exactly two call sites (one per mode); a third caller or "
         "a second derivation is how the asymmetry comes back"
@@ -783,14 +783,14 @@ def test_an_interval_that_outruns_the_run_REDS_the_real_gate(tmp_path) -> None:
     boundaries fall past the end of the run is armed in the config and unread in the run."""
     root = _mini_tree(tmp_path)
     production = _a_production_config(root)
-    original = production.read_text()
+    original = production.read_text(encoding="utf-8")
     assert original.count("gate_interval: 1000\n") == 1, (
         "the rig rewrites exactly one key; if run5's gate_interval spelling moved, this "
         "perturbation is no longer the one the defect needs"
     )
     production.write_text(original.replace("gate_interval: 1000\n",
-                                           "gate_interval: 1000000000\n"))
-    assert "draw_rate_abort" in production.read_text(), (
+                                           "gate_interval: 1000000000\n"), encoding="utf-8")
+    assert "draw_rate_abort" in production.read_text(encoding="utf-8"), (
         "the draw-rate row must still be ARMED, or this test is about the arming audit"
     )
 
@@ -819,7 +819,7 @@ def test_the_green_audit_PUBLISHES_the_cadence_it_computed(tmp_path) -> None:
     result = _run_tool("--audit-only", "--out-dir", str(tmp_path / "cadence"))
     assert result.returncode == 0, (result.stdout + result.stderr)[-3000:]
     report = json.loads(
-        sorted((tmp_path / "cadence").glob("preflight_*.json"))[0].read_text())["manifest"]
+        sorted((tmp_path / "cadence").glob("preflight_*.json"))[0].read_text(encoding="utf-8"))["manifest"]
     assert report["cadence_fraction"] == EARLIEST_FIRE_FRACTION
     judged = {row["name"] for row in report["cadence"]}
     armed_required = {row.name for row in MANIFEST if row.status is Status.REQUIRED}
@@ -881,8 +881,8 @@ def test_the_TOOLS_OWN_fraction_is_the_one_the_audit_compares(monkeypatch, tmp_p
     # (250000) and inside a 1.0 bound (1000000). Written OUTSIDE configs/ so the declaration
     # partition is untouched and the only variable is the fraction.
     between = tmp_path / "between_the_bounds.yaml"
-    between.write_text(RUN5.read_text().replace("gate_interval: 1000\n",
-                                                "gate_interval: 100000\n"))
+    between.write_text(RUN5.read_text(encoding="utf-8").replace("gate_interval: 1000\n",
+                                                "gate_interval: 100000\n"), encoding="utf-8")
     with pytest.raises(TOOL.PreflightArmingAuditError):
         TOOL._audit_manifest_and_configs([between])
 
@@ -1066,7 +1066,7 @@ def test_the_report_publishes_the_RESOLVED_coordinator_config(tmp_path) -> None:
 
     _run_tool("--audit-only", "--config", "configs/run6.yaml",
               "--out-dir", str(tmp_path / "coord"))
-    report = json.loads(sorted((tmp_path / "coord").glob("preflight_*.json"))[0].read_text())
+    report = json.loads(sorted((tmp_path / "coord").glob("preflight_*.json"))[0].read_text(encoding="utf-8"))
     block = report["coordinator"]
     assert block is not None, (
         "the resolved coordinator config must be IN the evidence artifact — R78's rider, and "
@@ -1092,7 +1092,7 @@ def test_the_report_publishes_the_RESOLVED_coordinator_config(tmp_path) -> None:
     _run_tool("--audit-only", "--config", "configs/smoke_preflight_armed.yaml",
               "--out-dir", str(tmp_path / "smoke"))
     other = json.loads(
-        sorted((tmp_path / "smoke").glob("preflight_*.json"))[0].read_text())["coordinator"]
+        sorted((tmp_path / "smoke").glob("preflight_*.json"))[0].read_text(encoding="utf-8"))["coordinator"]
     smoke_stop = int(load_config(REPO_ROOT / "configs" / "smoke_preflight_armed.yaml")
                      .train.max_train_steps)
     assert other["stop_step"] == smoke_stop != block["stop_step"], (
@@ -1103,7 +1103,7 @@ def test_the_report_publishes_the_RESOLVED_coordinator_config(tmp_path) -> None:
     _run_tool("--audit-only", "--config", "configs/dev_example.yaml",
               "--out-dir", str(tmp_path / "disarmed"))
     disarmed = json.loads(
-        sorted((tmp_path / "disarmed").glob("preflight_*.json"))[0].read_text())["coordinator"]
+        sorted((tmp_path / "disarmed").glob("preflight_*.json"))[0].read_text(encoding="utf-8"))["coordinator"]
     assert disarmed["draw_rate_abort"] is None, (
         "a DISARMED config must publish an explicit `null`, not an omitted key: absence would "
         "be indistinguishable from a block the tool forgot to fill"
@@ -1116,7 +1116,7 @@ def test_the_report_publishes_the_audits_own_deferred_and_required_rows(
     """The report publishes the audit's OWN deferred and required rows, read from the audit's
     result rather than re-derived from `MANIFEST`, so the two cannot disagree."""
     _run_tool("--audit-only", "--out-dir", str(tmp_path / "rows"))
-    report = json.loads(sorted((tmp_path / "rows").glob("preflight_*.json"))[0].read_text())
+    report = json.loads(sorted((tmp_path / "rows").glob("preflight_*.json"))[0].read_text(encoding="utf-8"))
     manifest = report["manifest"]
     shipped_deferred = [row.name for row in MANIFEST if row.status.value == "deferred"]
     assert [row["name"] for row in manifest["deferred"]] == shipped_deferred, (
@@ -1226,7 +1226,7 @@ def test_an_unwritable_out_dir_is_rc_41_and_never_a_silent_return(tmp_path) -> N
     """An unwritable `--out-dir` is rc 41 and never a silent return; the rig makes it an
     existing regular file, so `mkdir` raises a real `OSError` rather than a permission trick."""
     blocker = tmp_path / "not_a_directory"
-    blocker.write_text("this path is a file, so mkdir on it fails\n")
+    blocker.write_text("this path is a file, so mkdir on it fails\n", encoding="utf-8")
     result = _run_tool("--audit-only", "--out-dir", str(blocker))
     output = result.stdout + result.stderr
     assert result.returncode == 41, (
@@ -1341,7 +1341,7 @@ def _real_syncs(tmp_path: Path, tag: str, steps, *, cadence: int = 1) -> list[di
     for step in steps:
         learner["v"] = step
         sync.maybe_sync(step)
-    events = [json.loads(line) for line in sink.path.read_text().splitlines() if line.strip()]
+    events = [json.loads(line) for line in sink.path.read_text(encoding="utf-8").splitlines() if line.strip()]
     syncs = [event for event in events if event.get("event") == "actor_sync"]
     for event in syncs:
         event["ts"] = _STEP_SEC * float(event["step"])
@@ -1487,7 +1487,7 @@ def test_a_burst_that_stopped_short_is_its_own_named_outcome(tmp_path) -> None:
 def _plant(log_dir: Path, name: str, events) -> Path:
     log_dir.mkdir(parents=True, exist_ok=True)
     path = log_dir / name
-    path.write_text("".join(json.dumps(event) + "\n" for event in events))
+    path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
     return path
 
 
@@ -1569,7 +1569,7 @@ def test_the_second_lag_sample_costs_a_full_file_interval_of_WALL_CLOCK(tmp_path
     for tick in range(0, 5):
         clock["t"] = tick * poll_interval
         watchdog.poll_once()
-        samples = [json.loads(line) for line in sink.path.read_text().splitlines()
+        samples = [json.loads(line) for line in sink.path.read_text(encoding="utf-8").splitlines()
                    if line.strip()]
         count = len([s for s in samples if s.get("event") == "actor_lag_sample"])
         while len(emitted) < count:
@@ -1620,9 +1620,9 @@ def _plant_disarmed(root: Path, rel: str) -> Path:
     """A really-disarmed copy of run5 at `configs/<rel>` inside a mini tree."""
     target = root / "configs" / rel
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(RUN5.read_text().replace("terminal_eval_enabled: true",
-                                               "terminal_eval_enabled: false"))
-    assert "terminal_eval_enabled: false" in target.read_text(), (
+    target.write_text(RUN5.read_text(encoding="utf-8").replace("terminal_eval_enabled: true",
+                                               "terminal_eval_enabled: false"), encoding="utf-8")
+    assert "terminal_eval_enabled: false" in target.read_text(encoding="utf-8"), (
         "the planted config must really be disarmed, or this row is vacuous"
     )
     return target
@@ -1785,7 +1785,7 @@ def test_there_is_NO_excluded_class_left_under_configs(monkeypatch, tmp_path) ->
     planted = [_plant_disarmed(root, rel)
                for rel in ("run6.yml", "prod/run6.yaml", "run6.conf", "run6.txt")]
     notes = root / "configs" / "NOTES.md"
-    notes.write_text("not a config\n")
+    notes.write_text("not a config\n", encoding="utf-8")
     planted.append(notes)
 
     monkeypatch.setattr(TOOL, "REPO_ROOT", root)
@@ -1836,7 +1836,7 @@ def test_a_config_SHAPED_but_BROKEN_path_is_a_LOUD_gate_7_failure_and_not_silenc
     else:
         hidden = tmp_path / "hidden_subtree"
         hidden.mkdir()
-        (hidden / "run6.yaml").write_text(RUN5.read_text())
+        (hidden / "run6.yaml").write_text(RUN5.read_text(encoding="utf-8"), encoding="utf-8")
         broken.symlink_to(hidden)
 
     result = _run_tool(cwd=root, tool=root / "tools" / "ci_gates" / "validate_configs.py")
@@ -1856,7 +1856,7 @@ def test_a_REAL_directory_is_skipped_UNIFORMLY_and_never_by_its_name(tmp_path, m
     `configs/prod/` are the same path type and get the same answer."""
     root = _mini_tree(tmp_path)
     (root / "configs" / "adir.yaml").mkdir()
-    (root / "configs" / "adir.yaml" / "inner.yaml").write_text(RUN5.read_text())
+    (root / "configs" / "adir.yaml" / "inner.yaml").write_text(RUN5.read_text(encoding="utf-8"), encoding="utf-8")
     monkeypatch.setattr(TOOL, "REPO_ROOT", root)
 
     discovered = census.discovered_config_paths(root)
@@ -1892,7 +1892,7 @@ def test_one_config_reached_two_ways_is_audited_ONCE_and_not_twice(tmp_path, mon
     real = tmp_path / "elsewhere"
     real.mkdir()
     target = real / "run6.yaml"
-    target.write_text((root / "configs" / "run6.yaml").read_text())
+    target.write_text((root / "configs" / "run6.yaml").read_text(encoding="utf-8"), encoding="utf-8")
     (root / "configs" / "run6.yaml").unlink()
     (root / "configs" / "run6.yaml").symlink_to(target)
 
@@ -1929,7 +1929,7 @@ def test_the_probe_sweep_survives_a_SYMLINK_and_never_takes_the_suite_with_it(tm
 
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
-    (elsewhere / "keep_me.txt").write_text("the symlink target must NOT be removed\n")
+    (elsewhere / "keep_me.txt").write_text("the symlink target must NOT be removed\n", encoding="utf-8")
     link = tmp_path / "probe_symlink"
     link.symlink_to(elsewhere)
     directory = tmp_path / "probe_dir"
@@ -2150,7 +2150,7 @@ def test_a_real_PREFLIGHT_report_never_claims_a_boot_ITS_OWN_child_block_denies(
     assert result.returncode == 11, (result.stdout + result.stderr)[-2000:]
     reports = sorted(out.glob("preflight_*.json"))
     assert len(reports) == 1, f"the evidence report is written ALWAYS; found {reports}"
-    report = json.loads(reports[0].read_text())
+    report = json.loads(reports[0].read_text(encoding="utf-8"))
     assert report["mode"] == "preflight"
     assert report["child"] is None, (
         "the rig is only a witness if this run really did stop before `_run_child`; got "
@@ -2179,7 +2179,7 @@ def test_a_BOOTED_preflight_reports_a_boot_and_names_its_childs_own_rc(tmp_path)
     # The child's rc is read off the report and never restated here: a run that spawned a child
     # must not carry the NOT_BOOTED disclaimer, whatever the child then did.
     assert result.returncode == 40, (result.stdout + result.stderr)[-3000:]
-    report = json.loads(sorted(out.glob("preflight_*.json"))[0].read_text())
+    report = json.loads(sorted(out.glob("preflight_*.json"))[0].read_text(encoding="utf-8"))
     assert report["child"] is not None and report["child"]["timed_out"] is True
     for name in ("a_sync", "b_lag"):
         reason = report["assertions"][name]["reason"]
@@ -2250,8 +2250,8 @@ def test_naming_a_DISARMED_config_is_AUDITED_and_never_ignored(tmp_path) -> None
         f"{bare.returncode}\n{(bare.stdout + bare.stderr)[-2000:]}"
     )
     candidate = tmp_path / "candidate.yaml"
-    candidate.write_text(RUN5.read_text().replace("terminal_eval_enabled: true",
-                                                  "terminal_eval_enabled: false"))
+    candidate.write_text(RUN5.read_text(encoding="utf-8").replace("terminal_eval_enabled: true",
+                                                  "terminal_eval_enabled: false"), encoding="utf-8")
     named = _mini_audit(root, "--config", str(candidate))
     output = named.stdout + named.stderr
     assert named.returncode == 30, (
@@ -2309,7 +2309,7 @@ def test_an_inversion_on_a_NON_SAMPLING_poll_is_caught_only_by_b5as_negatives_co
     for index, now in enumerate(times):
         cursor["i"], clock["t"] = index, float(now)
         watchdog.poll_once()
-        events = [json.loads(line) for line in sink.path.read_text().splitlines()
+        events = [json.loads(line) for line in sink.path.read_text(encoding="utf-8").splitlines()
                   if line.strip()]
         for event in events[seen:]:
             if event.get("event") == "actor_lag_sample":
@@ -2474,7 +2474,7 @@ def test_both_arms_of_the_config_path_resolver_are_live(monkeypatch, tmp_path) -
     so the rows are driven from a cwd that is not the repo."""
     monkeypatch.chdir(tmp_path)
     local = tmp_path / "local.yaml"
-    local.write_text(RUN5.read_text())
+    local.write_text(RUN5.read_text(encoding="utf-8"), encoding="utf-8")
     assert TOOL._resolve_config_path("local.yaml") == local.resolve(), (
         "the cwd-relative arm: a config beside the operator, which REPO_ROOT cannot find"
     )
@@ -2514,7 +2514,7 @@ def test_git_is_believed_ONLY_when_it_BOTH_answered_AND_named_a_toplevel(
     bindir.mkdir()
     shim = bindir / "git"
     shim.write_text(f"#!{sys.executable}\nimport sys\n"
-                    f"sys.stdout.write({stdout!r})\nraise SystemExit({rc})\n")
+                    f"sys.stdout.write({stdout!r})\nraise SystemExit({rc})\n", encoding="utf-8")
     shim.chmod(0o755)
     monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setattr(TOOL, "REPO_ROOT", root.resolve())
@@ -2834,7 +2834,7 @@ def test_the_tier_disclaimer_is_RE_DERIVED_at_write_time_and_never_the_predictio
         "`_tier_block` must not compose the disclaimer — the run has not happened yet"
     )
     TOOL._write_report(tmp_path, report)
-    written = json.loads(next(iter(tmp_path.glob("preflight_*.json"))).read_text())
+    written = json.loads(next(iter(tmp_path.glob("preflight_*.json"))).read_text(encoding="utf-8"))
     assert written["tier"]["does_not_prove"] != stale
     assert written["tier"]["does_not_prove"].startswith(f"tier={TOOL.TIER_FULL} ")
     assert TOOL.TIER_NOT_PROVEN[TOOL.TIER_FULL] in written["tier"]["does_not_prove"]
@@ -2865,7 +2865,7 @@ def test_a_refused_burst_publishes_tier_none_and_owes_BOTH_tiers(tmp_path) -> No
     result = _run_tool("--config", "configs/run6.yaml", "--burst-steps", str(_N - 1),
                        "--out-dir", str(out_dir), "--timeout-sec", "60", "--receipt-wait-sec", "0")
     assert result.returncode == 11, (result.stdout + result.stderr)[-2000:]
-    report = json.loads(next(iter(out_dir.glob("preflight_*.json"))).read_text())
+    report = json.loads(next(iter(out_dir.glob("preflight_*.json"))).read_text(encoding="utf-8"))
     assert report["child"] is None and report["override"] is None
     assert report["tier"]["tier"] == TOOL.TIER_NONE
     assert report["tier"]["burst_steps"] is None and report["tier"]["floors"] is None
@@ -2890,7 +2890,7 @@ def test_the_real_preflight_publishes_the_tier_it_RAN_and_what_it_does_NOT_prove
     # The TIER ARITHMETIC does not move with the outcome: the tier block is published on every
     # terminating preflight, and a run that proved LESS must still say what it did not prove.
     assert result.returncode == 40, (result.stdout + result.stderr)[-3000:]
-    report = json.loads(next(iter(out_dir.glob("preflight_*.json"))).read_text())
+    report = json.loads(next(iter(out_dir.glob("preflight_*.json"))).read_text(encoding="utf-8"))
     block = report["tier"]
     assert block["tier"] == TOOL.TIER_FULL and block["burst_steps"] == _RUN5_BURST
     assert all(row["cleared"] for row in block["floors"])

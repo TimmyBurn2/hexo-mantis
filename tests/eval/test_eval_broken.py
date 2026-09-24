@@ -285,7 +285,7 @@ def test_garbage_sidecar_json_is_eval_broken_not_a_crash(fake_mp, tmp_path) -> N
         ack = pipeline.run_evaluation(_tiny_model(), 1000, None, full_config={}, best_model_step=None)
         result_path = _result_path_from_ctx(fake_mp)
         result_path.parent.mkdir(parents=True, exist_ok=True)
-        result_path.write_text("{not valid json::: ")
+        result_path.write_text("{not valid json::: ", encoding="utf-8")
 
         proc = fake_mp.last_process
         proc.alive = False

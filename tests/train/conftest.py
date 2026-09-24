@@ -288,14 +288,14 @@ def mk_optim():
 
 @pytest.fixture(scope="session")
 def resume_goldens() -> dict[str, Any]:
-    return json.loads((TRAIN_FIXTURES / "resume_goldens.json").read_text())
+    return json.loads((TRAIN_FIXTURES / "resume_goldens.json").read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="session")
 def legacy_shapes() -> dict[str, Any]:
-    return json.loads((TRAIN_FIXTURES / "legacy_payload_shapes.json").read_text())
+    return json.loads((TRAIN_FIXTURES / "legacy_payload_shapes.json").read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="session")
 def anchor_key_set() -> set[str]:
-    return set(ANCHOR_KEYS_FILE.read_text().split())
+    return set(ANCHOR_KEYS_FILE.read_text(encoding="utf-8").split())

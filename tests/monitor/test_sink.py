@@ -24,7 +24,7 @@ from mantis.monitor.sink import JsonlEventSink
 
 
 def _read_lines(path: Path) -> list[dict]:
-    return [json.loads(ln) for ln in path.read_text().splitlines() if ln.strip()]
+    return [json.loads(ln) for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
 
 
 def test_first_line_is_run_segment_started(tmp_path: Path) -> None:

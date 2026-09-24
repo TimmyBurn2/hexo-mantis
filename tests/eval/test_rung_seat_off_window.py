@@ -81,7 +81,7 @@ def graph_engine():
 
 def _position(index: int) -> dict:
     """Re-nest the FLAT fixture (`p0_*`, `p1_*`, ...); a missing key raises, never defaults."""
-    fx = json.loads(_FIXTURE.read_text())
+    fx = json.loads(_FIXTURE.read_text(encoding="utf-8"))
     prefix = f"p{index}_"
     return {k[len(prefix):]: v for k, v in fx.items() if k.startswith(prefix)}
 

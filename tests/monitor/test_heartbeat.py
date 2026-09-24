@@ -122,7 +122,7 @@ def test_read_torn_file_is_none(tmp_path: Path) -> None:
     """A torn/garbage file reads as None, never an exception — the supervisor treats that as
     no-progress, which only ever errs toward a relaunch."""
     path = tmp_path / "heartbeat.json"
-    path.write_text("{ this is not valid json")
+    path.write_text("{ this is not valid json", encoding="utf-8")
     assert read_heartbeat_file(path) is None
 
 
@@ -175,7 +175,7 @@ def test_read_heartbeat_file_never_raises_on_hostile_content(tmp_path: Path, nam
     Every hostile file must yield either `None` (no progress observable, the safe side) or a
     WELL-FORMED state with finite, non-negative, in-range counters. Nothing may propagate."""
     path = tmp_path / "hb.json"
-    path.write_text(_HOSTILE_FILES[name])
+    path.write_text(_HOSTILE_FILES[name], encoding="utf-8")
     state = read_heartbeat_file(path)          # must not raise, whatever the content
     if state is not None:
         assert isinstance(state.seq, int) and state.seq >= 0
@@ -190,7 +190,7 @@ def test_read_heartbeat_file_rejects_non_finite_counters(tmp_path: Path) -> None
     for body in ('{"seq": Infinity, "pid": 1}', '{"seq": 1e400, "pid": 1}',
                  '{"seq": 1, "pid": Infinity}'):
         path = tmp_path / "hb.json"
-        path.write_text(body)
+        path.write_text(body, encoding="utf-8")
         assert read_heartbeat_file(path) is None, body
 
 

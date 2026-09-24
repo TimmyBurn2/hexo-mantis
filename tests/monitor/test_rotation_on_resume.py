@@ -29,7 +29,7 @@ def _seg_index(path: Path) -> int:
 
 
 def _first_event(path: Path) -> str:
-    for ln in path.read_text().splitlines():
+    for ln in path.read_text(encoding="utf-8").splitlines():
         if ln.strip():
             return json.loads(ln)["event"]
     raise AssertionError(f"{path} has no lines")
@@ -85,7 +85,7 @@ def test_distinct_run_ids_do_not_share_segments(tmp_path: Path) -> None:
 
 
 def _headers(path: Path) -> list[dict]:
-    return [json.loads(ln) for ln in path.read_text().splitlines()
+    return [json.loads(ln) for ln in path.read_text(encoding="utf-8").splitlines()
             if ln.strip() and json.loads(ln).get("event") == "run_segment_started"]
 
 

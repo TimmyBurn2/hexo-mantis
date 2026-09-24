@@ -52,7 +52,7 @@ def test_armed_smoke_config_completes_a_bounded_burst_through_the_real_preflight
 
     reports = sorted(tmp_path.glob("preflight_*.json"))
     assert reports, f"no report written:\n{tail}"
-    report = json.loads(reports[-1].read_text())
+    report = json.loads(reports[-1].read_text(encoding="utf-8"))
 
     assert report["verdict"] == "pass" and report["rc"] == 0
     assert report["config"]["run_id"] == "smoke_preflight_armed"

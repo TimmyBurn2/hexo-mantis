@@ -41,7 +41,7 @@ def _run_gate(tree: Path, added: dict[str, bytes]) -> subprocess.CompletedProces
         subprocess.run(["git", *args], cwd=tree, env=env, check=True, capture_output=True)
 
     git("init", "-q", "-b", "main")
-    (tree / "base.txt").write_text("base\n")
+    (tree / "base.txt").write_text("base\n", encoding="utf-8")
     git("add", "-A")
     git("commit", "-qm", "base")
 

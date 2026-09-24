@@ -50,7 +50,7 @@ def test_train_has_no_top_level_eval_monitor_arena_import():
     assert train_files, f"no train/ modules found under {TRAIN_ROOT}"
     violations: list[str] = []
     for path in train_files:
-        tree = ast.parse(path.read_text(), filename=str(path))
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for target in _top_level_imports(tree):
             hit = _forbidden_hit(target)
             if hit is not None:

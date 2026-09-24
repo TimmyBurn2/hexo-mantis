@@ -25,13 +25,13 @@ _INFERENCE_PY = _REPO / "src" / "mantis" / "selfplay" / "inference_local.py"
 
 
 def _run5() -> dict[str, Any]:
-    return yaml.safe_load(_RUN5.read_text())
+    return yaml.safe_load(_RUN5.read_text(encoding="utf-8"))
 
 
 def _pyo3_mctstree_defaults() -> dict[str, Any]:
     """Parse `#[pyo3(signature = (...))]` on `PyMCTSTree::new` — the defaults
     `DeployHeadPlayer.new_game` gets by calling `MCTSTree()` with no arguments."""
-    source = _MCTS_RS.read_text()
+    source = _MCTS_RS.read_text(encoding="utf-8")
     match = re.search(
         r"#\[pyo3\(signature = \((c_puct[^)]*)\)\)\]", source, re.DOTALL
     )

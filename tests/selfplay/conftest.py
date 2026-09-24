@@ -52,31 +52,31 @@ def _load_npz(path: Path) -> dict[str, np.ndarray]:
 @pytest.fixture(scope="session")
 def collate_expectations() -> dict[str, Any]:
     """Payload + collate metadata and the ADV expectation table."""
-    return json.loads((COLLATE_DIR / "collate_expectations.json").read_text())
+    return json.loads((COLLATE_DIR / "collate_expectations.json").read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="session")
 def drain_goldens() -> dict[str, Any]:
     """The scripted drain/push golden, 5 variants."""
-    return json.loads((DRAIN_DIR / "drain_goldens.json").read_text())
+    return json.loads((DRAIN_DIR / "drain_goldens.json").read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="session")
 def encoding_resolve_golden() -> dict[str, Any]:
     """`_resolve_encoding_for_pool` outcome per registered encoding."""
-    return json.loads((POOL_DIR / "encoding_resolve.json").read_text())
+    return json.loads((POOL_DIR / "encoding_resolve.json").read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="session")
 def runner_config_goldens() -> dict[str, Any]:
     """The SelfPlayRunnerConfig ctor-kwarg/attr golden."""
-    return json.loads((POOL_DIR / "runner_config_goldens.json").read_text())
+    return json.loads((POOL_DIR / "runner_config_goldens.json").read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="session")
 def pure_function_battery() -> dict[str, Any]:
     """22 move histories × the instrumentation pure functions."""
-    return json.loads((INSTR_DIR / "pure_function_battery.json").read_text())
+    return json.loads((INSTR_DIR / "pure_function_battery.json").read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="session")

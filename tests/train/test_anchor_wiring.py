@@ -93,7 +93,7 @@ def test_composition_root_actually_threads_the_anchor_into_the_loop():
     not need — the AST census below reads exactly the keyword this test is about, and the
     live end-to-end path is covered by the launcher's own boot oracle.
     """
-    tree = ast.parse((REPO_ROOT / "src" / "mantis" / "run.py").read_text())
+    tree = ast.parse((REPO_ROOT / "src" / "mantis" / "run.py").read_text(encoding="utf-8"))
     calls = [
         n for n in ast.walk(tree)
         if isinstance(n, ast.Call)

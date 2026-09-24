@@ -35,7 +35,7 @@ def test_mint_output_validates(tmp_path):
 def test_mint_stamps_template_and_delta_header(tmp_path):
     out, proc = _mint(tmp_path, "minted.yaml", "run_id=mint_check")
     assert proc.returncode == 0, proc.stderr
-    head = out.read_text().splitlines()[:3]
+    head = out.read_text(encoding="utf-8").splitlines()[:3]
     assert head[0] == "# minted-by: tools/mint_config.py"
     assert head[1] == "# template: dev"
     assert head[2] == "# delta: run_id: template_dev -> mint_check"
@@ -95,12 +95,12 @@ def test_mint_refuses_to_overwrite_WITHOUT_force_and_obeys_it_WITH_it(tmp_path):
     """
     out, first = _mint(tmp_path, "minted.yaml", "run_id=first")
     assert first.returncode == 0, first.stderr
-    body = out.read_text()
+    body = out.read_text(encoding="utf-8")
 
     _, refused = _mint(tmp_path, "minted.yaml", "run_id=second")
     assert refused.returncode == 2, (refused.stdout + refused.stderr)[-2000:]
     assert "refusing to overwrite" in refused.stderr
-    assert out.read_text() == body, "refused, and the existing file must be untouched"
+    assert out.read_text(encoding="utf-8") == body, "refused, and the existing file must be untouched"
 
     argv = [str(MINT), "--template", "dev", "--out", str(out), "--set", "run_id=second",
             "--force"]

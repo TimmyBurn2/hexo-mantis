@@ -17,9 +17,9 @@ def _run(target: Path) -> subprocess.CompletedProcess:
 def _make_pkg(root: Path, files: dict[str, str]) -> Path:
     pkg = root / "pkg"
     pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+    (pkg / "__init__.py").write_text("", encoding="utf-8")
     for name, body in files.items():
-        (pkg / name).write_text(body)
+        (pkg / name).write_text(body, encoding="utf-8")
     return pkg
 
 

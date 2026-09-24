@@ -146,7 +146,7 @@ def test_on2a_production_pool_construction_does_not_pass_sink_none() -> None:
     `sink=None`, which is what dropped every `game_complete` and `system_stats` event the
     drain loop emits. Only `sink=` is inspected; the `heartbeat=` keyword is another oracle's
     subject."""
-    source = _RUN_PY.read_text()
+    source = _RUN_PY.read_text(encoding="utf-8")
     tree = ast.parse(source)
 
     worker_pool_calls = []

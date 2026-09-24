@@ -59,7 +59,7 @@ def test_a_dirty_same_run_id_out_dir_is_refused_before_the_boot(tmp_path):
     pinned by wall-clock shape: rc 15 in far less time than a torch boot could take."""
     out = tmp_path / "reused"
     (out / "logs").mkdir(parents=True)
-    (out / "logs" / f"events_{SMOKE_RUN_ID}_seg0000.jsonl").write_text('{"event":"x"}\n')
+    (out / "logs" / f"events_{SMOKE_RUN_ID}_seg0000.jsonl").write_text('{"event":"x"}\n', encoding="utf-8")
     res = _run_tool("--config", str(SMOKE_CONFIG), "--burst-steps", "16",
                     "--out-dir", str(out), "--timeout-sec", "60", "--receipt-wait-sec", "0")
     assert res.returncode == 15, res.stdout + res.stderr
@@ -80,7 +80,7 @@ def test_a_foreign_run_ids_litter_does_not_trip_the_refusal(tmp_path, preflight_
     are in the conftest beside the constant."""
     out = tmp_path / "littered"
     (out / "logs").mkdir(parents=True)
-    (out / "logs" / "events_some_other_run_seg0000.jsonl").write_text('{"event":"x"}\n')
+    (out / "logs" / "events_some_other_run_seg0000.jsonl").write_text('{"event":"x"}\n', encoding="utf-8")
     res = _run_tool("--config", str(SMOKE_CONFIG), "--burst-steps", "16",
                     "--out-dir", str(out), "--timeout-sec", str(preflight_budget_sec),
                     "--receipt-wait-sec", "120")
@@ -99,7 +99,7 @@ def test_child_streams_spool_in_full_beside_the_report(tool, tmp_path):
     on a config its own loader refuses (fast, deterministic): the spool files must exist,
     carry the FULL streams, and each tail must be exactly the spool's last 4000 chars."""
     bad_config = tmp_path / "not_a_config.yaml"
-    bad_config.write_text("this is: [not, a, run, config\n")
+    bad_config.write_text("this is: [not, a, run, config\n", encoding="utf-8")
     out = tmp_path / "out"
     out.mkdir()
     args = SimpleNamespace(config=str(bad_config), burst_steps=16,

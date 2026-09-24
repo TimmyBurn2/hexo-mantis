@@ -86,7 +86,7 @@ def test_the_child_boots_green_with_no_device_flag_on_the_argv(
     )
     reports = sorted(out_dir.glob("preflight_*.json"))
     assert reports, f"no evidence report written:\n{tail}"
-    report = json.loads(reports[-1].read_text())
+    report = json.loads(reports[-1].read_text(encoding="utf-8"))
     assert report["verdict"] == "pass" and report["child"]["rc"] == 0
     stamp = Path(report["preflight_stamp"])
     assert stamp.is_relative_to(tmp_path_factory.getbasetemp()), (

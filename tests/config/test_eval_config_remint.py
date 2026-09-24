@@ -142,7 +142,7 @@ def test_configs_have_no_unminted_manual_edits_signature() -> None:
     for path in _config_paths():
         if path.parent == _TEMPLATES_DIR:
             continue  # templates are hand-authored sources, not minted outputs
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         assert "minted-by: tools/mint_config.py" in text, (
             f"{path.name}: missing the mint-provenance header stamp"
         )
