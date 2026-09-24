@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 
 import mantis.run
+from mantis.config.resolve.monitor import resolve_monitor_config
 from mantis.monitor.heartbeat import HEARTBEAT_SOURCES
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.subsystems import build_run_safety
@@ -217,7 +218,7 @@ def test_the_REAL_build_run_safety_carries_the_declared_arming_into_ActorLagSpec
         monitor={"actor_lag_threshold_steps": _STOP_STEP - 1,
                  "actor_lag_abort_enabled": armed},
     )
-    monitor_cfg = mantis.run._resolve_monitor_cfg(cfg)
+    monitor_cfg = resolve_monitor_config(cfg.monitor)
     assert monitor_cfg.actor_lag_abort_enabled is armed, (
         "harness precondition: the resolver must already carry the declared arming (that "
         "arrow is pinned above; if THIS fails, the failure is upstream of the subject)"

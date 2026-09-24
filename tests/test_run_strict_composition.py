@@ -28,7 +28,9 @@ from mantis.config.resolve.composition import (  # RED-at-import anchor: module 
     UnvalidatedConfigError,
     require_run_config,
 )
+from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
 from mantis.config.resolve.disk_guard import resolve_disk_guard
+from mantis.config.resolve.monitor import resolve_monitor_config
 from mantis.config.resolve.run_length import (  # RED-at-import anchor: module absent at HEAD
     resolve_max_train_steps,
 )
@@ -527,8 +529,8 @@ def test_every_minted_config_resolves_through_every_composition_seam(name: str):
     """
     cfg = load_config(_CONFIGS_DIR / name)
 
-    assert mantis.run._resolve_actor_sync_cadence_steps(cfg) == cfg.train.actor_sync_cadence_steps
-    resolved = mantis.run._resolve_monitor_cfg(cfg)
+    assert resolve_actor_sync_cadence(cfg.train) == cfg.train.actor_sync_cadence_steps
+    resolved = resolve_monitor_config(cfg.monitor)
     assert resolved.actor_lag_threshold_steps == cfg.monitor.actor_lag_threshold_steps
     assert resolved.actor_lag_abort_enabled is cfg.monitor.actor_lag_abort_enabled
     assert resolve_max_train_steps(cfg.train) == cfg.train.max_train_steps

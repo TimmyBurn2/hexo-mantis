@@ -73,12 +73,15 @@ from mantis.config.schema import RunConfig
 from mantis.eval.errors import EvalBrokenReason
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks
-from mantis.monitor.config import MonitorConfig
 from mantis.monitor.game_recorder import GameRecorder
 from mantis.monitor.logging_setup import configure_logging
 from mantis.selfplay.pool import WorkerPool
 from mantis.train.actor_sync import ActorSync
-from mantis.train.anchor import canonical_anchor_path
+from mantis.train.anchor import (
+    _guarded_load_state_dict,
+    canonical_anchor_path,
+    save_best_model_atomic,
+)
 from mantis.train.buffer_persist import canonical_buffer_path
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.dispatch import RepresentationRouteError
@@ -233,24 +236,6 @@ def _stop_pool_if_start_attempted(pool: Any, *, start_attempted: bool) -> Callab
         if start_attempted:
             pool.stop()
     return _stop
-
-
-def _resolve_monitor_cfg(config: RunConfig) -> MonitorConfig:
-    """Read the monitor section through its ONE resolver, requiring it to be present.
-
-    The retired absent-section arm returned a bare `MonitorConfig()`, which carries
-    `actor_lag_abort_enabled=False` and so silently disarmed a hard abort the config arms.
-    """
-    return resolve_monitor_config(config.monitor)
-
-
-def _resolve_actor_sync_cadence_steps(config: RunConfig) -> int:
-    """Read `train.actor_sync_cadence_steps` through its ONE resolver, requiring the section.
-
-    The retired smoke arm substituted cadence 1 for any config without a train section — a
-    test-only value on a production axis.
-    """
-    return resolve_actor_sync_cadence(config.train)
 
 
 def _derived_visit_capacity(config: Any) -> int:
@@ -575,8 +560,8 @@ def compose_run(
     # `watch_path` and its poll thread swallows its own errors, so a checkpoint dir that does
     # not exist yet buys a guard that runs, logs and publishes NOTHING.
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    with _seam("_resolve_monitor_cfg"):
-        monitor_cfg = _resolve_monitor_cfg(config)
+    with _seam("resolve_monitor_config"):
+        monitor_cfg = resolve_monitor_config(config.monitor)
     run_id = config.run_id
 
     wired_sources: list[str] = list(_BASE_WIRED_SOURCES)
@@ -685,7 +670,7 @@ def compose_run(
                 target=pool,
                 state_dict_fn=trainer.actor_state_dict,
                 step_fn=lambda: int(trainer.step),
-                cadence_steps=_resolve_actor_sync_cadence_steps(config),
+                cadence_steps=resolve_actor_sync_cadence(config.train),
                 sink=run_safety.sink,
                 run_id=run_id,
             )
@@ -782,7 +767,8 @@ def compose_run(
                         anchor_state=resolved_anchor,
                         best_model_path=canonical_anchor_path(checkpoint_dir), run_id=run_id,
                         encoding=config.identity.encoding,
-                        save_anchor=_lazy_save_anchor, guarded_load=_lazy_guarded_load,
+                        save_anchor=save_best_model_atomic,
+                        guarded_load=_guarded_load_state_dict,
                     ),
                     sink=run_safety.sink, heartbeat=run_safety.heartbeat,
                 )
@@ -980,18 +966,6 @@ def launch_run(
                        buffer=collaborators.buffer, log_dir=collaborators.log_dir,
                        checkpoint_dir=collaborators.checkpoint_dir,
                        resume_state=collaborators.resume_state)
-
-
-def _lazy_save_anchor(*args: Any, **kwargs: Any) -> None:
-    from mantis.train.anchor import save_best_model_atomic
-
-    save_best_model_atomic(*args, **kwargs)
-
-
-def _lazy_guarded_load(model: Any, state_dict: Any) -> None:
-    from mantis.train.anchor import _guarded_load_state_dict
-
-    _guarded_load_state_dict(model, state_dict)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

@@ -31,7 +31,7 @@ class DeployTagHooks:
     run_id: str
     encoding: str
     save_anchor: Callable[..., None]        # injected train.anchor.save_best_model_atomic
-    guarded_load: Callable[[Any, dict], None]  # injected train.anchor._guarded_load_state_dict
+    guarded_load: Callable[[Any, dict], object]  # injected train.anchor._guarded_load_state_dict
 
 
 def apply_gate_decision(hooks: DeployTagHooks, result: Mapping[str, Any]) -> int | None:

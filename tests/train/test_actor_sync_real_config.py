@@ -1,7 +1,7 @@
 """`compose_run` with a REAL `RunConfig` syncs on the configured cadence.
 
 Every other drive in the suite composes with `config=SimpleNamespace()`, which leaves
-`_resolve_actor_sync_cadence_steps`'s real-config arm unexercised. Two axes stay pinned even
+the real-config cadence read unexercised. Two axes stay pinned even
 here because no test can vary them: `_step_coordinator_config` is monkeypatched and
 `build_run_safety` is faked.
 """
@@ -14,6 +14,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import mantis.run
+from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
 from mantis.config.schema.core import RunConfig
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from _drivable import DrivableTrainerStub
@@ -150,7 +151,7 @@ def _drive(monkeypatch, *, eval_enabled: bool = True):
 def test_a_real_run_config_actually_reaches_the_cadence_resolver(tmp_path, monkeypatch, mk_graph_buffer):
     """The premise. If the real arm is not taken, everything below is vacuous."""
     captured, pool, trainer, cfg = _drive(monkeypatch)
-    assert mantis.run._resolve_actor_sync_cadence_steps(cfg) == _CADENCE, (
+    assert resolve_actor_sync_cadence(cfg.train) == _CADENCE, (
         "the real-config arm did not resolve the configured cadence — this test would "
         "otherwise pass while exercising the smoke path it exists to avoid"
     )
