@@ -66,7 +66,6 @@ def seeded_libs() -> list[str]:
 # loader, with per-test deltas re-validated — so a test cannot construct a config the loader
 # would reject. Imports are lazy to keep this conftest scaffold-independent.
 CONFIGS_DIR = Path(__file__).resolve().parents[1] / "configs"
-MINTED_CONFIGS = ("dev_example.yaml", "run6.yaml", "smoke_preflight_armed.yaml")
 
 
 def _deep_merge(base: dict, over: dict) -> dict:
@@ -83,7 +82,7 @@ def _deep_merge(base: dict, over: dict) -> dict:
 def make_run_config_from_minted(name: str = "dev_example.yaml", **section_overrides):
     """Build a real RunConfig from a minted config through the one loader.
 
-    `name` is any of `MINTED_CONFIGS`; overrides are per-section dicts and are re-validated, so
+    `name` is a minted config under `configs/`; overrides are per-section dicts and are re-validated, so
     every cross-field validator runs on the result.
     """
     from mantis.config.loader import load_config
