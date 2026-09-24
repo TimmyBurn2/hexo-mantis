@@ -163,7 +163,7 @@ def _read_ring_during_samples(ring: object, n_samples: int) -> _RingToucher:
 
 
 def test_the_concurrent_reader_actually_OVERLAPS_the_sample_window() -> None:
-    """Prove reads land while sampling is in flight, so the refusal guard above is exercised."""
+    """Prove a concurrent reader is never refused and its reads land while sampling is in flight."""
     ring = _mk_ring()
     toucher = _read_ring_during_samples(ring, n_samples=12)
     assert toucher.error is None, (
@@ -174,7 +174,7 @@ def test_the_concurrent_reader_actually_OVERLAPS_the_sample_window() -> None:
     )
     assert toucher.reads > _MIN_OBSERVER_TICKS, (
         f"only {toucher.reads} ring reads landed across 12 samples — too few to have "
-        "overlapped the sample windows, so the refusal guard above is not being exercised"
+        "overlapped the sample windows, so the refusal assertion above is not being exercised"
     )
 
 

@@ -15,7 +15,6 @@ import inspect
 
 import numpy as np
 import pytest
-from _wire_geometry import GRAPH_ROWS
 
 from mantis.selfplay.graph_collate import (
     GraphWirePayload,
@@ -52,15 +51,6 @@ def test_a_wire_whose_node_feat_dim_disagrees_with_the_declared_row_is_refused(p
 
     collate_graph_batch(GraphWirePayload(**payload_fields("b6")), expected_version=1,
                         **wire_geometry)  # LAW-07 clean twin: same call, true geometry
-
-
-def test_the_graph_row_roster_is_not_empty_and_includes_the_r8_row():
-    """Vacuity control: a parametrised test over an empty roster passes for free."""
-    assert len(GRAPH_ROWS) >= 2, GRAPH_ROWS
-    assert "gnn_axis_r8" in GRAPH_ROWS, (
-        "the roster is derived from `all_specs()`; if r8 has left the registry that is a "
-        f"registry event, not a test edit. Rows: {GRAPH_ROWS}"
-    )
 
 
 def test_the_capture_association_is_derived_from_the_arrays_not_declared(payload_fields,

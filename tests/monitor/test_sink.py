@@ -7,8 +7,6 @@ Covers:
   * emit stamps a `ts` iff absent, and PRESERVES a producer-supplied `ts` (behaviour parity
     with the old `emit_event` `{"ts": time.time(), **payload}` later-key-wins funnel);
   * a missing `"event"` key is a loud ValueError (producer bug, not a persistence failure);
-  * a write/serialize failure ⇒ `persist_errors_total += 1`, NO raise (LAW-14 — the
-    watchdog delivers run-fatality by observing the counter, from ANY thread);
   * O-24: N writer threads × M events → exactly N×M (+1 header) well-formed JSON lines,
     no torn/interleaved lines (single `write` under the instance lock, line-buffered).
 """

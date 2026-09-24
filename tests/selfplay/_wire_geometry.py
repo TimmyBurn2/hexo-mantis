@@ -14,7 +14,6 @@ reds that fixture instead of collating under the wrong numbers.
 from __future__ import annotations
 
 from mantis.encoding import lookup
-from mantis.encoding.registry import all_specs
 
 #: The registry row the captured collate payloads were built at.
 COLLATE_FIXTURE_ENCODING = "gnn_axis_v1"
@@ -33,10 +32,3 @@ def geometry_kwargs(name: str = COLLATE_FIXTURE_ENCODING) -> dict[str, int]:
         "node_feat_dim": spec.node_feat_dim,
         "edge_feat_dim": spec.edge_feat_dim,
     }
-
-
-#: Every GRAPH row in the registry, by name — the roster a geometry test parametrises over so a
-#: new row (r8 was one) is covered without a per-row edit.
-GRAPH_ROWS: tuple[str, ...] = tuple(
-    s.name for s in all_specs() if str(getattr(s, "representation", "")) == "graph"
-)

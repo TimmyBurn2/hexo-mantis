@@ -10,7 +10,7 @@ that must RAISE is asserted on BOTH sides with a byte-equal message, and
 `test_the_vectorized_check_still_fires` corrupts real captured wire and demands the error.
 
 Edge cases covered: `None` cells, an empty `sel` for a graph with legal nodes but no matching
-cell, a graph with ZERO legal nodes, and the length guard.
+cell, and the length guard.
 """
 from __future__ import annotations
 
