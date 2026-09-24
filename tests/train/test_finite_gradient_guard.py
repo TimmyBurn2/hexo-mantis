@@ -22,22 +22,6 @@ import torch
 import _microbatch_harness as H  # the shared graph-step harness
 
 
-def _graph_step(trainer: Any, buffer: Any) -> dict[str, float]:
-    """Take one real graph training step through the production dispatch."""
-    from mantis.config.resolve.microbatch import MicrobatchCapsSpec
-    from mantis.train.coordinator.dispatch import _graph_step as production_graph_step
-
-    wire, _targets = buffer.sample_graph_batch(4, augment=False, recent_frac=0.0)
-    max_edges, max_nodes = H.non_binding_caps(wire)
-    return production_graph_step(
-        trainer, buffer, H.GSPEC,
-        batch_size=4, augment=False, recency_weight=0.0,
-        caps_provider=lambda: MicrobatchCapsSpec(max_edges=max_edges, max_nodes=max_nodes),
-        sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0,
-    )
-
-
 def _poison_one_gradient(model: torch.nn.Module) -> Any:
     """Make one parameter's gradient non-finite while every loss stays finite.
 
@@ -64,7 +48,7 @@ def test_a_nonfinite_gradient_from_a_finite_loss_never_reaches_the_optimizer(
         before = H.param_vector(trainer.model).clone()
         step_before = trainer.step
 
-        result = _graph_step(trainer, buffer)
+        result = H.graph_step(trainer, buffer)
 
         after = H.param_vector(trainer.model)
         assert torch.isfinite(after).all(), (
@@ -92,7 +76,7 @@ def test_the_skipped_step_is_named_counted_and_on_the_event_stream(tmp_path: Pat
     trainer = H.tiny_graph_trainer(tmp_path, sink=sink)
     handle = _poison_one_gradient(trainer.model)
     try:
-        _graph_step(trainer, H.uniform_graph_buffer())
+        H.graph_step(trainer, H.uniform_graph_buffer())
     finally:
         handle.remove()
 
@@ -122,7 +106,7 @@ def test_an_all_skipped_microbatch_set_advances_no_clock(
     trainer = H.tiny_graph_trainer(tmp_path, sink=H.SpySink())
     buffer = H.uniform_graph_buffer()
 
-    _graph_step(trainer, buffer)  # build the momentum
+    H.graph_step(trainer, buffer)  # build the momentum
     before = H.param_vector(trainer.model).clone()
     step_before = trainer.step
     lr_before = trainer.optimizer.param_groups[0]["lr"]
@@ -137,7 +121,7 @@ def test_an_all_skipped_microbatch_set_advances_no_clock(
 
     monkeypatch.setattr(core, "ragged_policy_ce_and_entropies", _nan_ce)
 
-    result = _graph_step(trainer, buffer)
+    result = H.graph_step(trainer, buffer)
 
     assert trainer.step == step_before, "`self.step` advanced with no contributing microbatch"
     assert _optimizer_clock(trainer.optimizer) == clock_before, (
@@ -166,7 +150,7 @@ def test_a_healthy_step_steps_advances_the_clock_and_counts_nothing(tmp_path: Pa
     before = H.param_vector(trainer.model).clone()
     step_before = trainer.step
 
-    result = _graph_step(trainer, buffer)
+    result = H.graph_step(trainer, buffer)
 
     assert trainer.step == step_before + 1, "a healthy step did not advance `self.step`"
     assert _optimizer_clock(trainer.optimizer), "the optimizer never stepped"
@@ -189,7 +173,7 @@ def test_the_loss_info_contract_stays_seven_keys_on_a_skipped_step(tmp_path: Pat
     trainer = H.tiny_graph_trainer(tmp_path, sink=H.SpySink())
     handle = _poison_one_gradient(trainer.model)
     try:
-        result = _graph_step(trainer, H.uniform_graph_buffer())
+        result = H.graph_step(trainer, H.uniform_graph_buffer())
     finally:
         handle.remove()
     assert set(result) == {"loss", "policy_loss", "value_loss", "grad_norm", "lr", "policy_entropy", "policy_entropy_selfplay"}

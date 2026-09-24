@@ -106,6 +106,23 @@ def non_binding_caps(wire: Any) -> tuple[int, int]:
     return int(ec.sum()) + 1, int(nc.sum()) + 1
 
 
+def graph_step(trainer: Any, buffer: Any) -> dict[str, float]:
+    """One real graph training step through the PRODUCTION dispatch: `dispatch._graph_step`
+    is what the coordinator calls, so a guard driven here sits on the path that runs."""
+    from mantis.config.resolve.microbatch import MicrobatchCapsSpec
+    from mantis.train.coordinator.dispatch import _graph_step as production_graph_step
+
+    wire, _targets = buffer.sample_graph_batch(4, augment=False, recent_frac=0.0)
+    max_edges, max_nodes = non_binding_caps(wire)
+    return production_graph_step(
+        trainer, buffer, GSPEC,
+        batch_size=4, augment=False, recency_weight=0.0,
+        caps_provider=lambda: MicrobatchCapsSpec(max_edges=max_edges, max_nodes=max_nodes),
+        sample_threads_provider=lambda: 1,
+        fast_policy_weight_provider=lambda: 0.0,
+    )
+
+
 def tiny_graph_arch() -> GnnArch:
     return GnnArch(in_dim=GSPEC.node_feat_dim, edge_dim=GSPEC.edge_feat_dim, hidden=16,
                    num_layers=1, policy_hidden=16, value_hidden=16)

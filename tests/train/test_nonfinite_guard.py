@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import Any
 
 import pytest
 import torch
@@ -22,23 +21,6 @@ from _monitor_config import monitor_config
 from mantis.monitor.rules import check_grad_norm_spike, check_nonfinite_loss
 
 import _microbatch_harness as H  # the shared graph-step harness (rootdir-relative)
-
-
-def _graph_step(trainer: Any, buffer: Any) -> dict[str, float]:
-    """One real graph training step through the PRODUCTION dispatch: `dispatch._graph_step` is
-    what the coordinator calls, so driving it keeps the guard on the path that actually runs."""
-    from mantis.config.resolve.microbatch import MicrobatchCapsSpec
-    from mantis.train.coordinator.dispatch import _graph_step as production_graph_step
-
-    wire, _targets = buffer.sample_graph_batch(4, augment=False, recent_frac=0.0)
-    max_edges, max_nodes = H.non_binding_caps(wire)
-    return production_graph_step(
-        trainer, buffer, H.GSPEC,
-        batch_size=4, augment=False, recency_weight=0.0,
-        caps_provider=lambda: MicrobatchCapsSpec(max_edges=max_edges, max_nodes=max_nodes),
-        sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0,
-    )
 
 
 def test_a_nonfinite_microbatch_loss_is_skipped_and_counted(
@@ -60,7 +42,7 @@ def test_a_nonfinite_microbatch_loss_is_skipped_and_counted(
 
     monkeypatch.setattr(core, "ragged_policy_ce_and_entropies", _nan_ce)
 
-    _graph_step(trainer, buffer)
+    H.graph_step(trainer, buffer)
 
     assert trainer.nonfinite_loss_microbatches > 0, (
         "the non-finite microbatch was NOT counted — the skip is silent, and a run dropping "
@@ -84,7 +66,7 @@ def test_a_healthy_step_counts_nothing_and_does_move_the_weights(tmp_path: Path)
     buffer = H.uniform_graph_buffer()
     before = H.param_vector(trainer.model).clone()
 
-    result = _graph_step(trainer, buffer)
+    result = H.graph_step(trainer, buffer)
 
     assert trainer.nonfinite_loss_microbatches == 0, "counted a NaN that never happened"
     assert trainer.nonfinite_grad_steps == 0
@@ -98,7 +80,7 @@ def test_the_loss_info_contract_stays_seven_keys(tmp_path: Path) -> None:
     """The counters ride the EVENT, not the return: `loss_info` is a contract the coordinator's
     gates and checkpoint metadata pin."""
     trainer = H.tiny_graph_trainer(tmp_path, sink=H.SpySink())
-    result = _graph_step(trainer, H.uniform_graph_buffer())
+    result = H.graph_step(trainer, H.uniform_graph_buffer())
     assert set(result) == {"loss", "policy_loss", "value_loss", "grad_norm", "lr", "policy_entropy", "policy_entropy_selfplay"}
 
 
@@ -106,7 +88,7 @@ def test_the_counters_reach_the_event_stream(tmp_path: Path) -> None:
     """LAW-18: a counter nothing can read in-run is not an instrument."""
     sink = H.SpySink()
     trainer = H.tiny_graph_trainer(tmp_path, sink=sink)
-    _graph_step(trainer, H.uniform_graph_buffer())
+    H.graph_step(trainer, H.uniform_graph_buffer())
     steps = [e for e in sink.events if e.get("event") == "trainer_step"]
     assert steps, "no trainer_step event emitted"
     assert "nonfinite_loss_microbatches" in steps[-1]
