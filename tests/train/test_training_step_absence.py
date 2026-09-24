@@ -21,12 +21,8 @@ import math
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pytest
-import torch
 
-from mantis.encoding import lookup
-from mantis.model import arch_from_spec_and_config, build_net
 from _monitor_config import monitor_config
 from mantis.monitor.rules import emit_training_step_alerts
 from mantis.train.events import emit_training_step_event

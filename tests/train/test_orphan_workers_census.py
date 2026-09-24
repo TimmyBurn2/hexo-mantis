@@ -16,7 +16,6 @@ from __future__ import annotations
 import multiprocessing
 import os
 import signal
-import sys
 import time
 
 import pytest
@@ -90,8 +89,6 @@ def test_unregister_removes_child_from_registry():
 def test_second_signal_kills_registered_child(restore_signals, monkeypatch):
     """ORACLE — second SIGINT calls force_teardown_all then os._exit(1); the registered
     child is dead before the process exits."""
-    from mantis.train.lifecycle import signals as sig_mod
-
     state = ShutdownState()
     install_signal_handlers(state)
     handler = signal.getsignal(signal.SIGINT)
