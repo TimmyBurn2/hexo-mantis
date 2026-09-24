@@ -57,13 +57,13 @@ def segment_filename(run_id: str, segment: int) -> str:
     return f"events_{run_id}_seg{segment:04d}.jsonl"
 
 
-def next_segment_index(log_dir: Path, run_id: str) -> int:
+def next_segment_index(log_dir: Path, run_id: str, pattern: re.Pattern[str] = _SEGMENT_RE) -> int:
     """Return the run's next segment index — segments are per-``run_id``, so one run's
-    resumes never bump another's counter."""
+    resumes never bump another's counter. `pattern` names the file family scanned."""
     highest = 0
     if log_dir.is_dir():
         for entry in log_dir.iterdir():
-            match = _SEGMENT_RE.match(entry.name)
+            match = pattern.match(entry.name)
             if match is not None and match.group("run") == run_id:
                 highest = max(highest, int(match.group("seg")))
     return highest + 1

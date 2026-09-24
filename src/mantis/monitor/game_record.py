@@ -25,7 +25,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from mantis.monitor.sink import validate_run_id
+from mantis.monitor.sink import next_segment_index, validate_run_id
 
 _LOG = logging.getLogger(__name__)
 
@@ -61,17 +61,6 @@ def index_filename(run_id: str) -> str:
     return f"games_{run_id}_index.jsonl"
 
 
-def next_segment_index(record_dir: Path, run_id: str) -> int:
-    """`max(segment index for run_id) + 1`, or 1; segments are per-`run_id`."""
-    highest = 0
-    if record_dir.is_dir():
-        for entry in record_dir.iterdir():
-            match = _SHARD_RE.match(entry.name)
-            if match is not None and match.group("run") == run_id:
-                highest = max(highest, int(match.group("seg")))
-    return highest + 1
-
-
 def _utc_hour(when: float | None = None) -> str:
     moment = datetime.now(tz=UTC) if when is None else datetime.fromtimestamp(when, tz=UTC)
     return moment.strftime("%Y%m%d%H")
@@ -105,7 +94,9 @@ class GameRecordWriter:
         child's segment."""
         last_exc: OSError | None = None
         for _ in range(_MAX_SHARD_CLAIM_RETRIES):
-            claim = next_segment_index(self._dir, self._run_id) if segment is None else segment
+            claim = segment
+            if claim is None:
+                claim = next_segment_index(self._dir, self._run_id, _SHARD_RE)
             path = self._dir / shard_filename(self._run_id, claim, hour)
             try:
                 fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
