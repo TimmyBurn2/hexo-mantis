@@ -27,10 +27,6 @@ def receipt_path_for(artifact: str | Path) -> Path:
     return target.with_name(target.name + RECEIPT_SUFFIX)
 
 
-def is_receipt(path: str | Path) -> bool:
-    return str(path).endswith(RECEIPT_SUFFIX)
-
-
 def write_receipt(artifact: str | Path, *, mirrored_sha256: str, mirrored_bytes: int,
                   cycle: int, mirror_id: str) -> Path:
     """Write `artifact`'s receipt beside it from the OFF-BOX copy's hash and size; return its path.
@@ -107,5 +103,5 @@ def verify_receipt(artifact: str | Path) -> dict[str, Any]:
 
 __all__ = [
     "MIRRORED_VERDICT", "MirrorReceiptError", "RECEIPT_SCHEMA_VERSION", "RECEIPT_SUFFIX",
-    "is_receipt", "read_receipt", "receipt_path_for", "verify_receipt", "write_receipt",
+    "read_receipt", "receipt_path_for", "verify_receipt", "write_receipt",
 ]

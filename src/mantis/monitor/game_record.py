@@ -233,11 +233,6 @@ def iter_run_games(record_dir: Path | str, run_id: str) -> Iterator[dict[str, An
         yield from records
 
 
-#: Self-play's Rust terminal codes, already mapped by `pool_drain`. Repeated here as the record's
-#: declared vocabulary, so a record on disk cannot change meaning when a producer's mapping does.
-TERMINATIONS = ("six_in_a_row", "colony", "ply_cap", "other_draw", "unknown")
-
-
 def _axial(moves: Any) -> list[list[int]]:
     """`[(q, r), ...]` -> `[[q, r], ...]`, one entry per PLY rather than per turn, which is the
     flat sequence the corpus pipeline's `moves` already uses."""
