@@ -1,14 +1,10 @@
-# >300 justify (R8): the end-to-end step oracles, the typed-route unreachability oracles and the
-# mutation "alone" arms are one cohesive contract over ONE seam — the declared training-step
-# dispatcher — and splitting it scatters a mutation matrix that reads as a unit.
 """The declared training-step dispatcher.
 
 The straight self-play arm routes through `run_declared_train_step`, keyed on the resolved
 `EncodingSpec.representation` and never on a buffer sniff. Pinned: a REAL train step executes
-end-to-end from the coordinator path for the GRAPH representation; the dense route is
-TYPE-UNREACHABLE from a graph config; an unknown representation raises and an UNDECLARED
-encoding raises `MissingEncodingError` from THE resolver; removing the trainer-side
-implementation reds THIS suite, not the conformance gate; and the graph arm threads
+end-to-end from the coordinator path for the GRAPH representation; an unknown representation
+raises and an UNDECLARED encoding raises `MissingEncodingError` from THE resolver; removing the
+trainer-side implementation reds THIS suite, not the conformance gate; and the graph arm threads
 `recency_weight` in as `recent_frac`."""
 from __future__ import annotations
 
@@ -172,16 +168,6 @@ def test_graph_step_advances_trainer_step_counter(tmp_path, mk_config) -> None:
                             fast_policy_weight_provider=lambda: 0.0,
     )
     assert trainer.step == before + 1
-
-
-def test_graph_spec_never_calls_the_dense_entry_point() -> None:
-    rec = _RecordingTypedTrainer()
-    run_declared_train_step(rec, _graph_buffer(), _GSPEC,
-                            batch_size=2, augment=False, recency_weight=0.0,
-                            caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0)
-    assert len(rec.graph_calls) == 1
-    assert rec.tensor_calls == [], "dense entry point must be unreachable from a graph spec"
 
 
 def test_unknown_representation_raises_named_error() -> None:

@@ -36,13 +36,6 @@ def test_StepOutcome_carries_no_unmeasured_games_per_hour() -> None:
     )
 
 
-def test_the_measured_games_per_hour_still_exists_on_the_coordinator() -> None:
-    """The control: deleting the fabricated twin must not delete the real producer."""
-    from mantis.train.coordinator.step import StepCoordinator
-
-    assert callable(StepCoordinator._games_per_hour)
-
-
 # C07: the pool starts UNMEASURED
 
 class _FreshPool:

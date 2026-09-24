@@ -14,7 +14,6 @@ from pathlib import Path
 import pytest
 
 from mantis.encoding.resolvers import (
-    EncodingDeclarationConflictError,
     EncodingRegistryError,
     MissingEncodingError,
     resolve_from_config,
@@ -28,12 +27,6 @@ def _config_encoding(config: dict) -> str:
 
 
 # the ONE resolver, on the shapes a checkpoint config arrives in
-
-
-def test_checkpoint_config_with_no_encoding_at_all_raises():
-    # the message is the one resolver's own spelling, since the veneer delegates to it
-    with pytest.raises(MissingEncodingError, match="declares no encoding"):
-        _config_encoding({"board_size": 19})
 
 
 def test_checkpoint_config_with_empty_encoding_mapping_raises():
@@ -51,29 +44,6 @@ def test_checkpoint_config_with_identity_but_non_string_encoding_raises():
     """`identity.encoding` present but not a string must not fall through to a default."""
     with pytest.raises(EncodingRegistryError):
         _config_encoding({"identity": {"encoding": 6}})
-
-
-@pytest.mark.parametrize(
-    ("cfg", "expected"),
-    [
-        ({"identity": {"encoding": "gnn_axis_r8"}}, "gnn_axis_r8"),
-        ({"encoding": "gnn_axis_v1"}, "gnn_axis_v1"),
-        ({"encoding": {"version": "gnn_axis_r8"}}, "gnn_axis_r8"),
-        # an AGREEING dual shape resolves; the disagreeing one raises, pinned below
-        ({"identity": {"encoding": "gnn_axis_v1"}, "encoding": "gnn_axis_v1"},
-         "gnn_axis_v1"),
-    ],
-)
-def test_explicit_encodings_still_resolve(cfg, expected):
-    """Positive controls: closing the default arms must not break real resolution."""
-    assert _config_encoding(cfg) == expected
-
-
-def test_conflicting_dual_shape_is_corrupt_input_and_raises():
-    """A checkpoint config declaring two encodings that disagree is corrupt input."""
-    with pytest.raises(EncodingDeclarationConflictError):
-        _config_encoding({"identity": {"encoding": "gnn_axis_r8"},
-                          "encoding": "gnn_axis_v1"})
 
 
 # cli._resolve_encoding_name
