@@ -25,6 +25,7 @@ import torch
 
 from mantis.model import RepresentationMismatch, build_net
 from mantis.model.identity import state_dict_param_hash
+from mantis.train.bundle import atomic_write
 
 _LOG = logging.getLogger(__name__)
 
@@ -124,13 +125,10 @@ def save_best_model_atomic(
 def _write_provenance_sidecar(
     path: Path, *, step: int, run_id: str | None, encoding: str | None,
 ) -> None:
-    """Write ``<path>.provenance.json`` (atomic) so a promoted anchor's identity is greppable
-    without loading torch."""
+    """Write ``<path>.provenance.json`` atomically (greppable without torch). Raises: OSError."""
     prov = {"step": step, "run_id": run_id, "encoding": encoding, "promoted": True}
-    sidecar = path.with_name(path.name + ".provenance.json")
-    tmp = sidecar.with_suffix(sidecar.suffix + ".tmp")
-    tmp.write_text(json.dumps(prov, indent=2))
-    tmp.replace(sidecar)
+    payload = json.dumps(prov, indent=2).encode("utf-8")
+    atomic_write(path.with_name(path.name + ".provenance.json"), lambda handle: handle.write(payload))
 
 
 # `state_dict_sha256` USED TO LIVE HERE — canonicalised keys plus raw bytes, no shape and no
