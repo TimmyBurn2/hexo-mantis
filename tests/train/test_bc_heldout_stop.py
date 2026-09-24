@@ -127,22 +127,3 @@ def test_measure_noise_reports_the_SPREAD_of_repeated_readings(monkeypatch) -> N
     readings = iter([0.50, 0.53, 0.51])
     monkeypatch.setattr(m, "evaluate", lambda trainer: next(readings))
     assert m.measure_noise(object(), repeats=3) == pytest.approx(0.03)
-
-
-def test_pb8_the_train_ring_hazard_is_DEFENDED_where_the_ring_is_CHOSEN() -> None:
-    """A POINTER to where the train-ring hazard is actually defended.
-
-    A monitor handed the training ring reports a loss that falls forever and every row above still
-    passes, because they are properties of the monitor and not of WHICH ring it holds. The defence
-    lives where the ring is CHOSEN: the encoder's partition, asserted disjoint and exhaustive in
-    `tests/data/test_bootstrap_split_and_truncation.py`, and the CLI's `split_part` guard, driven
-    by `tests/train/test_bc_pretrain_cli_stopflags.py`.
-    """
-    m = _monitor()
-    assert m.ring is not None
-    import inspect
-
-    from mantis.train.pretrain import cli
-    assert "split_part" in inspect.getsource(cli.pretrain), (
-        "the CLI's held-out ring guard has gone; PB-8 is undefended and this pointer is a lie"
-    )
