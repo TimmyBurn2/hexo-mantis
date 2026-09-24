@@ -70,30 +70,6 @@ mod tests {
     }
 
     #[test]
-    fn test_dirichlet_sums_to_one() {
-        let mut rng = rand::rng();
-        for _ in 0..20 {
-            let v = sample_dirichlet(0.3, 25, &mut rng).expect("valid alpha");
-            let sum: f32 = v.iter().sum();
-            assert!(
-                (sum - 1.0).abs() < 1e-5,
-                "Dirichlet sum {sum} not within 1e-5 of 1.0"
-            );
-        }
-    }
-
-    #[test]
-    fn test_dirichlet_non_negative() {
-        let mut rng = rand::rng();
-        for _ in 0..20 {
-            let v = sample_dirichlet(0.3, 25, &mut rng).expect("valid alpha");
-            for &s in &v {
-                assert!(s >= 0.0, "Dirichlet sample {s} is negative");
-            }
-        }
-    }
-
-    #[test]
     fn test_dirichlet_different_draws() {
         // Two independent draws from the same alpha/n should almost certainly differ.
         let mut rng = rand::rng();

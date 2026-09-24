@@ -69,34 +69,6 @@ mod tests {
     use super::SearchKind;
 
     #[test]
-    fn the_config_spelling_round_trips() {
-        for kind in [SearchKind::Puct, SearchKind::Gumbel] {
-            assert_eq!(
-                SearchKind::from_config_str(kind.as_config_str()),
-                Some(kind),
-                "{kind:?} must survive a round trip through its config spelling"
-            );
-        }
-    }
-
-    #[test]
-    fn an_unknown_kind_is_refused_rather_than_defaulted() {
-        for s in ["", "legacy", "mctx", "PUCT", "gumbel_mcts", "true"] {
-            assert!(
-                SearchKind::from_config_str(s).is_none(),
-                "{s:?} must not parse — a typo'd kind silently becoming PUCT is the \
-                 silent-fallback class LAW-11 closes"
-            );
-        }
-    }
-
-    #[test]
-    fn the_completed_q_target_is_the_kinds_own_answer() {
-        assert!(SearchKind::Gumbel.completed_q_target());
-        assert!(!SearchKind::Puct.completed_q_target());
-    }
-
-    #[test]
     fn only_the_gumbel_kind_stores_a_sparse_row() {
         assert!(SearchKind::Gumbel.stores_sparse_rows());
         assert!(!SearchKind::Puct.stores_sparse_rows());

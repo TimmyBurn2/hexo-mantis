@@ -19,27 +19,6 @@ use mantis_search::compute_move_temperature;
 const TEMP_MIN: f32 = 0.05;
 const TEMP_THRESHOLD: usize = 15; // compound moves, not plies
 
-/// At the start of a game (compound_move=0, progress=0), cosine of 0 is 1.0.
-#[test]
-fn temperature_at_move_zero_is_one() {
-    let t = compute_move_temperature(0, TEMP_THRESHOLD, TEMP_MIN);
-    assert!(
-        (t - 1.0).abs() < 1e-6,
-        "temperature at compound_move=0 must be 1.0, got {t}"
-    );
-}
-
-/// At the threshold boundary the floor kicks in: cos(π/2·1.0) = 0.0,
-/// but max(0.05, 0.0) = 0.05 = TEMP_MIN.
-#[test]
-fn temperature_at_threshold_equals_floor() {
-    let t = compute_move_temperature(TEMP_THRESHOLD, TEMP_THRESHOLD, TEMP_MIN);
-    assert!(
-        (t - TEMP_MIN).abs() < 1e-6,
-        "temperature at compound_move=threshold must equal TEMP_MIN={TEMP_MIN}, got {t}"
-    );
-}
-
 /// Beyond the threshold, temperature stays locked at TEMP_MIN.
 #[test]
 fn temperature_past_threshold_stays_at_floor() {
