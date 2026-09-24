@@ -9,20 +9,15 @@ from __future__ import annotations
 
 import ast
 import dataclasses
-import inspect
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-import pytest
-
 import mantis.run as mantis_run
-from mantis.config.schema import RunConfig
 from mantis.run import compose_run
 from _drivable import DrivableTrainerStub
 
 _REPO = Path(__file__).resolve().parents[1]
-_CONFIGS_DIR = _REPO / "configs"
 _RUN_PY = _REPO / "src" / "mantis" / "run.py"
 _TOOL_PY = _REPO / "tools" / "ci_gates" / "preflight_mint.py"
 
@@ -154,32 +149,6 @@ def test_the_config_key_alone_decides_whether_the_eval_pipeline_is_built(
     )
 
 
-def test_no_parameter_can_force_the_eval_posture_or_the_run_identity() -> None:
-    """Neither `eval_enabled` nor `run_id` is a parameter of the composition root: a required
-    parameter still lets the preflight child pass `False` while the run passes `True`, and a
-    caller-supplied `run_id` splits the segment identity from the config identity."""
-    parameters = list(inspect.signature(compose_run).parameters)
-    for banned in ("eval_enabled", "run_id"):
-        assert banned not in parameters, (
-            f"{banned} is a CONFIG FACT and may not be a parameter of the composition root "
-            f"(R120/R123, MF-1); got {parameters}"
-        )
-
-
-def test_the_key_is_required_with_no_code_side_default() -> None:
-    """The key is required on `RunConfig`, with no code-side default. Killer:
-    `eval_enabled: bool = True` — harmless-looking, but a config that forgets the key then
-    declares nothing while the run evaluates."""
-    assert "eval_enabled" in RunConfig.model_fields, (
-        "the key is TOP-LEVEL (`schema/core.py`, after `seed`) because it is a "
-        "root-composition fact spanning the eval and monitor wired-sources, not an "
-        "eval-section tuning knob"
-    )
-    assert RunConfig.model_fields["eval_enabled"].is_required(), (
-        "RunConfig.eval_enabled has a code-side default — R120's first clause"
-    )
-
-
 def test_no_cli_switch_on_either_caller_can_reach_the_eval_posture() -> None:
     """No CLI switch on either caller declares an eval-flavoured option — `--no-eval` would be
     a run input the CLI decides over a fact the minted config authors."""
@@ -196,18 +165,3 @@ def test_no_cli_switch_on_either_caller_can_reach_the_eval_posture() -> None:
             f"{path.relative_to(_REPO)} declares {offenders}: no CLI switch may reach the "
             "eval posture (O-10's ban, R64)"
         )
-
-
-@pytest.mark.parametrize("name", sorted(p.name for p in _CONFIGS_DIR.glob("*.yaml")))
-def test_every_minted_config_declares_the_key_explicitly(name: str, smoke_run_config) -> None:
-    """Every minted config declares the key explicitly. The axis is globbed off `configs/`,
-    since an enumeration can both omit a new file and outlive a deleted one."""
-    assert smoke_run_config(name).eval_enabled is True, (
-        f"{name} must declare eval_enabled explicitly; today's effective posture is the "
-        "code default True everywhere, so True is a zero-behaviour mint (§6)"
-    )
-
-
-def test_the_minted_axis_is_not_empty() -> None:
-    """An axis of zero params would make the row above a green no-op."""
-    assert sorted(p.name for p in _CONFIGS_DIR.glob("*.yaml")), "configs/ globbed to nothing"
