@@ -16,7 +16,7 @@ from mantis.encoding.resolvers import (
     AmbiguousGraphMarkerError,
     detect_encoding_from_state_dict,
 )
-from mantis.encoding._probes import GNN_GRAPH_MARKER_KEY
+from mantis.encoding.resolvers import GNN_GRAPH_MARKER_KEY
 
 R8 = "gnn_axis_r8"
 V1 = "gnn_axis_v1"

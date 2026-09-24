@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any
 
 from mantis._engine import RegistrySpec as EncodingSpec
-from mantis.encoding._probes import GNN_GRAPH_MARKER_KEY as _GNN_GRAPH_MARKER_KEY
 from mantis.encoding.registry import (
     EncodingRegistryError,
     all_specs,
@@ -23,6 +22,9 @@ from mantis.encoding.registry import (
 from mantis.encoding.registry import (
     _load as _load_registry,
 )
+
+#: The graph state-dict marker: the GNN representation trunk's first Linear.
+GNN_GRAPH_MARKER_KEY: str = "representation.input_proj.weight"
 
 
 class EncodingDeclarationConflictError(EncodingRegistryError):
@@ -325,7 +327,7 @@ def detect_encoding_from_state_dict(
             return lookup(stamped)
 
     # 2. MARKER — resolve by marker BEFORE any shape probe, so it beats shape and filename.
-    if _GNN_GRAPH_MARKER_KEY in state:
+    if GNN_GRAPH_MARKER_KEY in state:
         graph = _graph_specs()
         if len(graph) != 1:
             raise AmbiguousGraphMarkerError(

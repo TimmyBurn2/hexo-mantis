@@ -4,6 +4,7 @@
 - owner: crate mantis-encoding + mantis.encoding
 - status: v1 — ported in WP3; Filesystem/torch/npz audit sections + Python CLI + sha handshake ported in WP7
 - WP7: `_engine.{all_specs,registry_sha,registry_sha_hex}` bindings + the import-time registry-sha handshake landed; FS/torch/npz audit sections + the `python -m mantis.encoding audit` CLI port over the WP3 Rust backend (§1/§6). No schema/version change (v1 semantics unchanged).
+- R368 (SLIM-FIX): `_probes.py` folds into `resolvers.py` (the graph marker key) and the anchor-path table is deleted. No schema/version change.
 
 ## Summary
 TOML schema + validator invariants + audit backend exit codes (0/1/2).
@@ -27,10 +28,9 @@ is named by ≥ 1 config or ≥ 1 anchor artifact.
   so a stale extension cannot serve a stale registry).
 - Python side (`mantis.encoding`): `audit.py` + `audit_sections.py` are THE encoding audit —
   registry census (§1), the filesystem/torch/npz sections, and the cross-table sha
-  reconciliation (§6); severity maps to exit codes 0 = info, 1 = warn, 2 = error. `_probes.py`
-  holds their probe helpers; `resolvers.py` is THE one encoding-resolution authority
-  (agreement-or-raise on dual-shape configs, R104) AND the one artifact-pin authority
-  (corpus / anchor / held-out); `__main__.py` is the `python -m mantis.encoding audit` CLI.
+  reconciliation (§6); severity maps to exit codes 0 = info, 1 = warn, 2 = error. `resolvers.py`
+  is THE one encoding-resolution authority (agreement-or-raise on dual-shape configs, R104),
+  the unified state-dict detector AND the one artifact-pin authority (corpus / held-out); `__main__.py` is the `python -m mantis.encoding audit` CLI.
 
 **TWO RUST SECOND-AUTHORITIES WERE DELETED HERE (AUDIT-1 F-36 / F-45, R332).** `manifests.rs`
 + `manifests.toml` carried corpus/anchor/held-out pins beside the resolver dicts that actually
