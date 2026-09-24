@@ -30,9 +30,10 @@
 # verified". Keeping them diffable is load-bearing for review; keeping them unconverted is
 # load-bearing for correctness.
 
-# Every fixture is pinned by sha256 in tests/fixtures/manifest.toml (65 rows) or read
-# byte-wise by a Rust golden test (e.g. crates/mantis-search/src/mcts/golden_tests.rs:267
-# include_str!s search_golden/completed_q/golden_bits.txt).
+# Every fixture is pinned by sha256 in tests/fixtures/manifest.toml (row count: `grep -c
+# '^\[\[required\]\]' tests/fixtures/manifest.toml`) or read byte-wise by a Rust golden test
+# (e.g. crates/mantis-search/src/mcts/golden_tests.rs::GOLDEN_BITS include_str!s
+# search_golden/completed_q/golden_bits.txt).
 tests/fixtures/**                         -text
 
 # registry.toml is include_str!'d at crates/mantis-encoding/src/registry/mod.rs:25 and its
@@ -42,10 +43,9 @@ tests/fixtures/**                         -text
 # which would be mangled together on such a box, so they would agree with each other while
 # silently disagreeing with Linux. Nothing else would notice.
 crates/mantis-encoding/src/registry.toml  -text
-crates/mantis-encoding/src/manifests.toml -text
 
 # ── Functional requirements ────────────────────────────────────────────────────────────────
-# All five carry `#!/usr/bin/env bash`; a CRLF shebang yields `bad interpreter: ... ^M`.
-# Redundant under the eol=lf default, stated anyway so the requirement survives a change to
-# that default.
+# Every `*.sh` file (census: `git ls-files '*.sh'`) carries `#!/usr/bin/env bash`; a CRLF
+# shebang yields `bad interpreter: ... ^M`. Redundant under the eol=lf default, stated anyway
+# so the requirement survives a change to that default.
 *.sh                                      text eol=lf
