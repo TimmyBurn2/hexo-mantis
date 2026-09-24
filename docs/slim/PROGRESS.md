@@ -79,6 +79,17 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   L-SEAM-NEW-2/-NEW-3, L-STYLE-NEW-2: descriptions lived in a removed scratchpad). Policy rows L-STYLE-04
   (subprocess text=True encoding) and L-STYLE-10 (function-scope imports) are NOT W5 legs: tree-wide, touch src and
   tools/ci_gates (R368(b)) — carried to the HANDOFF as still-C.
+- LANDED (second dispatcher, model per leg): 905cf259 AQ-CARD-FAKES finished (opus; the cut-off 26-file diff
+  completed, not discarded: equivalence argued per family, 273 = 273 node ids over the touched files, two planted
+  run.py breaks red; −1419); drain follow-up (opus) 85cb2e9f L-DUP-22, fd6b28fc TESTS-5-03 residual, 0f7787f2 dense
+  residue (recent_buffer/_board_size/_trunk_size, pool_derived goldens), TESTS-5-17 REFUTED (planted row drop reds
+  only j01); residue2 (sonnet) 4300b691 note 11 config half (census-parametrized, +21 rows), 41e4271f atomic.rs
+  TempDir guard, 2f002d9d L-DUP-04 (dispatcher authorized widening from_stones' gate to any(test, feature)),
+  TESTS-1-14 REFUTED (6c28c1c9 already drives pretrain; plant reds 6); misc (sonnet) 0ae15928 TESTS-5-05+6-10a,
+  5ee831ef L-SEAM-05, 108279cc L-SEAM-06 (subsumer the GRAVES row; flatten plant reds), 7eca14b3 L-DUP-15 residual,
+  3b752fed L-DUP-28 residual (2 of 4 pairs; `_model_samples` is the R43/R310 frozen pair → C; the receipt pair
+  differs by a default arg → KEEP); TESTS-6-06 REFUTED (sealbot gone; the strix env-key row has no subsumer).
+  Collected 4918.
 - Assigned: w5-residue2 (sonnet: run6-bound _run5 → census, atomic.rs tempdir guard, L-DUP-04 fwm_board, TESTS-1-14);
   w5-misc (sonnet: TESTS-5-05, 6-10a, L-SEAM-05/-06, TESTS-6-06, L-DUP-15/-28 residuals); drain agent follow-up
   (opus: L-DUP-22, TESTS-5-03/-17 residuals, dense residue recent_buffer/_trunk_size/_board_size); after fakes lands:
