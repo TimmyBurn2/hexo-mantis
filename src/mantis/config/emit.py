@@ -49,11 +49,6 @@ def write_resolved_config(config: RunConfig, out_dir: str | Path) -> Path:
     return path
 
 
-# Resolver vocab -> emit vocab: a declared config value is a "file" source, but the encoding
-# resolver reports "variant"/"checkpoint".
-_SOURCE_REMAP = {"variant": "file", "default": "file", "cli": "cli", "checkpoint": "checkpoint"}
-
-
 @dataclass(frozen=True)
 class ResolvedKnob:
     """One resolved knob: its value + which source it came from ("file" | "cli" | "derived")."""
@@ -91,14 +86,13 @@ def resolve_config(cfg: RunConfig) -> ResolvedConfig:
     """Build a ResolvedConfig from a validated RunConfig.
 
     Schema leaves tag as "file"; ``amp_dtype`` is the one derived knob. The encoding routes
-    through `reconcile_encoding`, whose "variant" source remaps to "file".
+    through `reconcile_encoding`, which refuses an absent declaration.
     """
-    enc = reconcile_encoding(cfg.identity.encoding, None)
     knobs: dict[str, ResolvedKnob] = {
         "schema_version": ResolvedKnob(cfg.schema_version, "file"),
         "run_id": ResolvedKnob(cfg.run_id, "file"),
         "seed": ResolvedKnob(cfg.seed, "file"),
-        "identity.encoding": ResolvedKnob(enc.name, _SOURCE_REMAP[enc.source]),
+        "identity.encoding": ResolvedKnob(reconcile_encoding(cfg.identity.encoding), "file"),
         "identity.representation": ResolvedKnob(cfg.identity.representation, "file"),
         "eval.random_model_sims": ResolvedKnob(cfg.eval.random_model_sims, "file"),
         "amp_dtype": ResolvedKnob(

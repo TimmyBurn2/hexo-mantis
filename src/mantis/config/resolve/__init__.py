@@ -38,15 +38,7 @@ from mantis.config.resolve.draw_rate import (
     DrawRateAbortSpec,
     resolve_draw_rate_abort,
 )
-from mantis.config.resolve.encoding import (
-    UNSPECIFIED,
-    AbsentEncodingError,
-    EncodingConflictError,
-    EncodingResolution,
-    normalize_declared,
-    normalize_stamp,
-    reconcile_encoding,
-)
+from mantis.config.resolve.encoding import AbsentEncodingError, reconcile_encoding
 from mantis.config.resolve.eval_posture import (
     PlyCapAdjudicationSpec,
     StrengthFloorSpec,
@@ -94,7 +86,6 @@ __all__ = [
     "MissingSearchKindError",
     "resolve_deploy_search_kind",
     "resolve_selfplay_search_kind",
-    "UNSPECIFIED",
     "AbsentEncodingError",
     "AllocatorPosture",
     "AllocatorPostureMismatchError",
@@ -102,8 +93,6 @@ __all__ = [
     "BootstrapNotFoundError",
     "DrainCapsSpec",
     "DrawRateAbortSpec",
-    "EncodingConflictError",
-    "EncodingResolution",
     "FusedGraphCapsSpec",
     "InferenceBatchingSpec",
     "MissingAllocatorPostureError",
@@ -122,8 +111,6 @@ __all__ = [
     "UncalibratedAllocatorPostureError",
     "UncalibratedFusedGraphCapsError",
     "UnvalidatedConfigError",
-    "normalize_declared",
-    "normalize_stamp",
     "assert_allocator_posture",
     "assert_posture_token",
     "reconcile_encoding",

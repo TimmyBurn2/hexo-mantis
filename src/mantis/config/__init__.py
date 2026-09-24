@@ -13,7 +13,6 @@ from mantis.config.loader import (
 from mantis.config.resolve import (
     AbsentEncodingError,
     BootstrapNotFoundError,
-    EncodingConflictError,
     reconcile_encoding,
     resolve_amp_dtype,
     resolve_bootstrap,
@@ -34,7 +33,6 @@ __all__ = [
     "AbsentEncodingError",
     "BootstrapNotFoundError",
     "DuplicateKeyError",
-    "EncodingConflictError",
     "EvalConfig",
     "IdentityConfig",
     "ResolvedConfig",
