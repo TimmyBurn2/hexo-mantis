@@ -142,7 +142,7 @@ CONSUMER_REGISTRY = {
     # value, verified BY MUTATION rather than by grep, which cannot tell a reader from a `pop`.
     "train.eval_interval":
         "resolve_coordinator_knobs -> _step_coordinator_config -> step.py _maybe_kick_eval"
-        " round boundary (+ promotion_capable_rounds)",
+        " round boundary",
     "train.log_interval":
         "resolve_coordinator_knobs -> _step_coordinator_config -> step.py _run_log_interval"
         " boundary (payload events + WARN rules + both hard-abort gates + monitor_gates)",

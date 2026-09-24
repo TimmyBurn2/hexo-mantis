@@ -158,16 +158,6 @@ class RealClock:
 # reader at all.
 
 
-def promotion_capable_rounds(stop_step: int | None, eval_interval: int, best_stride: int) -> list[int]:
-    """Return the round indices in a bounded run that are promotion-capable. Surfaced at launch
-    so a near-empty decision cadence is LOUD, not silent."""
-    if stop_step is None or eval_interval <= 0:
-        return []
-    n_rounds = stop_step // eval_interval
-    stride = max(int(best_stride), 1)
-    return [r for r in range(1, n_rounds + 1) if r % stride == 0]
-
-
 def pooled_draw_rate(counts: tuple[int, int], *, N_pool_min: int) -> float | None:
     """Return the draw-rate abort's gated statistic: the POOLED COUNT-WEIGHTED rate
     `draws / completed` over the UNION of the pool's per-worker windows.
