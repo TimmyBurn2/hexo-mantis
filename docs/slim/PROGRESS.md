@@ -8,7 +8,7 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
 - Host: the operator's desktop (not a Claude environment; `CLAUDE_CODE_ENVIRONMENT_NAME` unset). AMD Ryzen 7
   3700X, 16 threads, 46 GiB, flags `avx2` only (no `avx512_bf16`, no `amx`). torch 2.11.0+cpu, `mantis._engine` OK.
 - origin/dev = 69e1532 at W0 entry (no moved commits; no rebase).
-- Wave: **W6** (docs + configs) NEXT — work order `docs/slim/handoff/W6_ADDENDUM.md`. W5 EXITED (see `## W5`). W4 EXITED: W3 EXITED. REVIEW-W3 filed (`docs/audits/REVIEW_W3_2026-09-24.md`, 0 must-fix beyond a
+- Wave: **W6** (docs + configs) IN PROGRESS (see `## W6`) — work order `docs/slim/handoff/W6_ADDENDUM.md`. W5 EXITED (see `## W5`). W4 EXITED: W3 EXITED. REVIEW-W3 filed (`docs/audits/REVIEW_W3_2026-09-24.md`, 0 must-fix beyond a
   ruff red in the handoff helper, 2 should-fix, 4 notes, every row group HELD, run10 MATCH re-verified); its fixes:
   ec0ac144 (ruff), cb4a5dd1 (`_is_graph` flag), bf22b4c3 (sweep docstring), plus 09fa8e6b — the exit sweep caught
   `tests/eval/test_graph_round_encoding.py`'s recorder pinning the deleted `_is_graph`; re-pointed to the
@@ -57,6 +57,17 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   post-review docs commits (b0e959c3 + this one) re-checked with gates 10/13/14/15/17 green.
   NEXT: W5 per its addendum (the 2026-09-24 dispatcher-session scout inventory is folded into it);
   then W6, W7, W8 per HANDOFF.md.
+
+## W6 — docs + configs (IN PROGRESS, dispatcher session 2026-09-25)
+
+- Entry at 4e8c663a: collected 4927 = floor, comment_lint GREEN at floor, run10 MATCH, tree clean.
+- Legs launched in parallel, each in its own worktree (branch = worktree name):
+  - `.wt/w6-configs`, **opus**: addendum legs 1+2 (by-name readers onto the census, run6–8 deleted).
+  - `.wt/w6-cards`, **sonnet**: legs 3+4 (RULINGS_ACTIVE.md retired, CARDS closed rows and drift).
+  - `.wt/w6-mech`, **sonnet**: leg 5 minus the register annotations (CLAUDE.md, toolchain files,
+    repo_design §3, Cargo profile, SHAKEDOWN7G, .gitattributes, analyzer_design, README).
+- Queued: leg 6, the STATE rewrite plus the falsified.md and RULINGS.md annotations (**opus**), then
+  REVIEW-W6 (**opus**).
 
 ## W5 — tests + fixtures (EXITED 2026-09-25)
 
