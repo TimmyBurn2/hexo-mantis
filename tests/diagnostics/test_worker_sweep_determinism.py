@@ -164,11 +164,6 @@ def test_a_drive_with_NO_HASH_refuses_the_gate_it_has_nothing_to_check() -> None
     assert control["verdict"] == ws.REFUSED
 
 
-def test_the_bands_constant_is_SUPERSEDED_but_still_pinned_for_history() -> None:
-    """Superseded as a gate, but the value stays on record."""
-    assert ws.RULED_DETERMINISM_BAND_PCT == 1.0
-
-
 def test_the_knee_rule_takes_no_noise_scalar_and_refuses_a_rung_that_cannot_state_its_own() -> None:
     """The carried-noise assumption was measured FALSE, so each rung states its own rel-SE: no
     scalar left to pass, no default to fall to, and a rung without one is refused by name."""

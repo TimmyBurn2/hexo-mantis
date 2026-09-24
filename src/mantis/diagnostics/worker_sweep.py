@@ -111,10 +111,6 @@ RULED_KNEE_PCT = 95.0
 #: is shorter than a game (measured, 22 moves and ZERO games at 2 workers over 20 s).
 PREREG_METRIC = "moves_per_min"
 
-#: The determinism control's FORMER band, superseded and kept only because old reports cite it:
-#: 1% held engine-side at 0.5821%, then a live box measured 3.9258%. It gates nothing now.
-RULED_DETERMINISM_BAND_PCT = 1.0
-
 #: The band's UPPER bound: at `band_pct = 500` every rung PLATEAUs and the memory gate is off.
 MAX_BAND_PCT = 5.0
 #: A window of one round makes PLATEAU mean "the final round did not exceed the max of all before
