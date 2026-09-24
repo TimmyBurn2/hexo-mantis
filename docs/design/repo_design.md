@@ -296,8 +296,9 @@ ADDED (v7 → v8). `docs/contracts/run_config_schema.md` is the version authorit
 - maturin builds `crates/mantis-bridge` as `mantis._engine` (underscore-private, re-
   exported by the package); `uv sync` builds it; abi3 (py311) for release wheels.
 - Workspace release profile: `panic = "unwind"` — Rust panics cross the FFI boundary as
-  `PanicException`, never a process abort. lto=fat, codegen-units=1, strip=symbols; a
-  `profiling` profile keeps debug symbols.
+  `PanicException`, never a process abort. lto=fat, codegen-units=1, strip=symbols. SLIM-FIX
+  S-A-DOCS-4-11: the committed `profiling` profile (inherits release, keeps debug symbols) is
+  DELETED — nothing in the tree built it.
 - No `target-cpu=native` in committed config; `make build.native` sets it via env for
   local perf work. Built artifacts are portable by default.
 - `mantis-graph` is dep-free and wasm32-clean; `make check.wasm` (cargo check
@@ -429,7 +430,9 @@ ADDED (v7 → v8). `docs/contracts/run_config_schema.md` is the version authorit
 - amp policy: graph path = bf16 (law, pinned in code and by a regime-parity test).
 - Profile first (flamegraph / py-spy; DHAT for allocation-rate hunting — allocation
   churn in hot loops is the first suspect; capacity-reserve fixes beat clever
-  algorithms). Profiling builds: release + debug symbols (`profiling` profile).
+  algorithms). Profiling builds: release + debug symbols via `CARGO_PROFILE_RELEASE_DEBUG=true`
+  over the release profile (SLIM-FIX S-A-DOCS-4-11: the dedicated `profiling` profile §7 named
+  is deleted, unbuilt by any command).
 - One optimization = pre-registered hotspot list + expected gain bracket + abort
   threshold, one change = one commit = one IQR-gated bench, parity oracles re-run after
   every hot-path change. Measure end-to-end steps/hr, not just the microbench. A
