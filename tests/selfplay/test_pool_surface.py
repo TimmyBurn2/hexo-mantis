@@ -8,6 +8,7 @@ where it appears as an `AttributeError` minutes into training.
 from __future__ import annotations
 
 import ast
+import math
 from pathlib import Path
 
 import pytest
@@ -165,6 +166,20 @@ def test_pool_does_not_keep_a_second_handle_on_the_raw_buffer(device) -> None:
     assert holders == [], (
         f"the raw buffer is reachable off the pool at {holders} — the push path could "
         "bypass the facade and the mislabel guard would be dead code"
+    )
+
+
+def test_graph_pool_buffer_composition_is_nan_and_that_is_parity(device) -> None:
+    """A graph pool reports `draw_target_fraction` as NaN, never a fabricated number."""
+    pool = graph_pool(device=device, capacity=32, n_simulations=50, fast_sims=40)
+    pool.config["train"] = {"draw_reward": -0.5, "ply_cap_value": -0.7}
+
+    composition = pool.buffer_composition()
+    assert math.isnan(composition["draw_target_fraction"])
+    assert composition["buffer_size"] == 0
+    assert composition["corpus_fraction"] == 1.0
+    assert not hasattr(pool.replay_buffer.raw, "outcome_in_range_count"), (
+        "the graph buffer must not gain the getter; that would create a metric with no old-side twin"
     )
 
 

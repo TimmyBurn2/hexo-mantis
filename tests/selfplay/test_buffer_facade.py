@@ -18,6 +18,7 @@ from mantis.encoding import lookup
 from mantis.model import RepresentationMismatch
 from mantis.selfplay.buffers import BufferKind, ReplayFacade
 
+_DRAW_BAND = (-0.75, -0.45)
 _GRAPH_SPEC = lookup("gnn_axis_v1")
 
 
@@ -142,3 +143,11 @@ def test_passthrough_surface_forwards() -> None:
         ("save_to_path", ("buffer.hexg",)),
         ("load_from_path", ("buffer.hexg",)),
     ]
+
+
+def test_graph_arm_missing_getter_propagates() -> None:
+    """The graph buffer has no `outcome_in_range_count`, so the facade lets the AttributeError out."""
+    facade = ReplayFacade(_GRAPH_SPEC, HexgBuffer(capacity=8, encoding="gnn_axis_v1", visit_capacity=128))
+    assert not hasattr(facade.raw, "outcome_in_range_count")
+    with pytest.raises(AttributeError):
+        facade.outcome_in_range_count(*_DRAW_BAND)
