@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -77,6 +78,7 @@ from mantis.util.device import (
 )
 
 TOOL = "mantis.diagnostics.worker_sweep"
+_LOG = logging.getLogger(__name__)
 MARKER = "MANTIS_WORKER_SWEEP"
 
 #: Rung verdicts beyond the two `classify` returns. REFUSED keeps `eval_child_memory`'s meaning
@@ -1429,6 +1431,7 @@ def main(argv: list[str] | None = None) -> int:
             print("REFUSED: interrupted; no control was completed", file=sys.stderr)
             return RC_REFUSED
         except Exception as exc:  # noqa: BLE001 — ONE refusal path, and rc 1 is not it
+            _LOG.exception("determinism control refused")
             print(f"REFUSED: {exc!r}", file=sys.stderr)
             return RC_REFUSED
         if args.out is not None:
@@ -1491,6 +1494,7 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:  # noqa: BLE001 — ONE refusal path, and rc 1 is not it
         # An escaping exception exits rc 1, which this tool reserves for "no rung PASSED". A
         # malformed input must never present as a measured memory result.
+        _LOG.exception("sweep refused")
         print(f"REFUSED: {exc!r}", file=sys.stderr)
         return RC_REFUSED
 

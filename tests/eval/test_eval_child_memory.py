@@ -10,13 +10,16 @@ from __future__ import annotations
 
 import ast
 import json
+import sys
 from pathlib import Path
 
 import pytest
 
+import mantis.util.device
 from mantis.eval.child_memory import (
     MARKER,
     DeviceMemoryProbe,
+    make_probe,
     parse_marker_lines,
 )
 
@@ -235,3 +238,17 @@ def test_cm05_the_gate_block_is_skipped_whole_when_there_is_no_anchor():
     )
     assert isinstance(first.body[0], ast.Return)
     assert worker._play_gate_block is not None
+
+
+def test_an_unimportable_torch_reads_as_no_counters(monkeypatch):
+    monkeypatch.setitem(sys.modules, "mantis.util.device", None)
+    assert make_probe("cuda:0", round_id="r0").payload()["available"] is False
+
+
+def test_a_counter_probe_that_fails_for_another_reason_is_not_relabelled_no_counters(monkeypatch):
+    def _broken(_device: str) -> bool:
+        raise RuntimeError("driver fault")
+
+    monkeypatch.setattr(mantis.util.device, "cuda_counters_available", _broken)
+    with pytest.raises(RuntimeError, match="driver fault"):
+        make_probe("cuda:0", round_id="r0")

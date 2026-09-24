@@ -95,6 +95,21 @@ def test_a_cuda_config_with_a_null_posture_refuses_before_any_pool_is_built(
         ws.run_sweep(config_path=_null_posture_twin(tmp_path), plan_path=_PLAN, out=sink)
 
 
+@pytest.mark.parametrize("argv", [[], ["--determinism-control", "2"]])
+def test_a_refused_run_logs_its_traceback_not_only_a_repr(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, argv: list[str],
+) -> None:
+    def explode(*_a: Any, **_k: Any) -> Any:
+        raise RuntimeError("planted sweep fault")
+
+    monkeypatch.setattr(ws, "run_sweep", explode)
+    monkeypatch.setattr(ws, "run_determinism_control", explode)
+    rc = ws.main(["--config", "configs/run10.yaml", "--plan", str(_PLAN), *argv])
+    assert rc == ws.RC_REFUSED
+    logged = [r for r in caplog.records if r.name == ws.__name__ and r.exc_info is not None]
+    assert logged and logged[0].exc_info[1].args == ("planted sweep fault",)
+
+
 def test_the_null_posture_refusal_reaches_the_exit_code_as_a_named_refusal(
     monkeypatch: pytest.MonkeyPatch, capsys, tmp_path: Path,
 ) -> None:

@@ -58,7 +58,7 @@ def make_probe(device: str, *, round_id: str, out: Any = None) -> DeviceMemoryPr
         from mantis.util.device import cuda_counters_available
 
         available = cuda_counters_available(device)
-    except Exception:  # noqa: BLE001 — an unimportable torch is "no counters", not fatal
+    except ImportError:  # an unimportable torch is "no counters"; anything else is a defect
         available = False
     if available:
         read_fn = torch_cuda_reader(device)
