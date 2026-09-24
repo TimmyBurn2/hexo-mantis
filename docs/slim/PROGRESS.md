@@ -70,6 +70,19 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   finisher model opus); w5-drain (leg 8, the dense drain oracle re-base + src deletion; opus); a read-only
   inventory of L20–L34 (sonnet) to name the remaining rows.
 - Models per leg so far (second dispatcher): fakes finisher opus, drain re-base opus, inventory scout sonnet.
+- LANDED leg 8 (drain re-base, opus): 15912645 (suite on graph goldens re-captured from current code; no generator
+  existed — scratch capture, arm-independent fields asserted equal to the dense oracle first) + a670e1dc (push_dense,
+  the dense arm, _is_graph, PoolDims, _feat/_chain/_pol_len gone; dense goldens + collect_data_input.npz deleted;
+  line-endings floor 41 → 39). Planted drain defects (row drop; per-row game id) RED before and after the deletion.
+  push_dense_many never existed in Rust. run10 MATCH. Collected 4899.
+- Inventory (sonnet scout): ~128 rows DONE, 11 in flight, 20 UNDONE + 4 unverifiable Δ0 NEW rows (TESTS-3-NEW-2,
+  L-SEAM-NEW-2/-NEW-3, L-STYLE-NEW-2: descriptions lived in a removed scratchpad). Policy rows L-STYLE-04
+  (subprocess text=True encoding) and L-STYLE-10 (function-scope imports) are NOT W5 legs: tree-wide, touch src and
+  tools/ci_gates (R368(b)) — carried to the HANDOFF as still-C.
+- Assigned: w5-residue2 (sonnet: run6-bound _run5 → census, atomic.rs tempdir guard, L-DUP-04 fwm_board, TESTS-1-14);
+  w5-misc (sonnet: TESTS-5-05, 6-10a, L-SEAM-05/-06, TESTS-6-06, L-DUP-15/-28 residuals); drain agent follow-up
+  (opus: L-DUP-22, TESTS-5-03/-17 residuals, dense residue recent_buffer/_trunk_size/_board_size); after fakes lands:
+  train hoists TESTS-1-05/-06, L-DUP-25, L-DUP-26 residual.
 
 ## W0 — entry
 
