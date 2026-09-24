@@ -139,9 +139,7 @@ def graph_hparams(**over: Any) -> TrainHParams:
     base: dict[str, Any] = dict(
         lr=1e-3, weight_decay=1e-4, grad_clip=1.0, lr_schedule="cosine",
         total_steps=1_000_000, scheduler_t_max=None, eta_min=5e-4,
-        checkpoint_interval=0, value_target="pure_outcome_z",
-        policy_target="raw_visit_distribution", draw_reward=-0.5, ply_cap_value=-0.5,
-        policy_loss_warmup_steps=0, aux_soft_policy=None,
+        checkpoint_interval=0, policy_loss_warmup_steps=0, aux_soft_policy=None,
     )
     base.update(over)
     return TrainHParams(**base)

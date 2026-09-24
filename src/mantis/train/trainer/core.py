@@ -87,10 +87,6 @@ class TrainHParams:
     scheduler_t_max: int | None
     eta_min: float
     checkpoint_interval: int
-    value_target: str
-    policy_target: str
-    draw_reward: float
-    ply_cap_value: float
     #: `train.policy_loss_weight_schedule.warmup_steps` (R350(b)(iii)); 0 is OFF.
     policy_loss_warmup_steps: int
     #: `model.aux_soft_policy` (R366(b)) as `(temperature, weight)`; `None` is the explicit OFF.
@@ -248,7 +244,6 @@ class Trainer:
         # Keys the resume F1 defer preserved (empty on a fresh run).
         self.f1_deferred_keys: frozenset[str] = frozenset()
         self.loaded_from_full_checkpoint = False
-        self.ckpt_had_value_fc2_bins = False
 
     @staticmethod
     def _derive_arch(config: Any) -> ModelArch:

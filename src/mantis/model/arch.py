@@ -16,8 +16,6 @@ from typing import Any, Literal
 
 from mantis.config.resolve.gnn_widths import MissingGnnWidthsError, resolve_gnn_widths
 
-Representation = Literal["graph"]
-
 
 class RepresentationMismatch(ValueError):
     """`spec.representation` is unknown or absent, or incompatible with the requested model
