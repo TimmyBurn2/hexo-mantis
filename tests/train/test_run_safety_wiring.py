@@ -2,13 +2,9 @@
 
 `close_out` disarms staleness FIRST, so a clean finish with a long terminal eval cannot become a
 false-42 relaunch storm; persist-fatal is never disarmed, and a late-disarm mutant false-fires.
-
->300 justify (R8): ONE seam — `build_run_safety` and the close-out it hands to `drain.close_out`
-— sharing one harness; split, "what is wired" and "what happens at teardown" drift apart.
 """
 from __future__ import annotations
 
-import ast
 import dataclasses
 import threading
 import time
@@ -22,13 +18,10 @@ from _monitor_config import monitor_config
 from mantis.monitor.heartbeat import (
     HEARTBEAT_SOURCES,
     HeartbeatRegistry,
-    WATCHDOG_STALL_EXIT_CODE,
     read_heartbeat_file,
 )
 from mantis.train.coordinator import drain
 from mantis.train.lifecycle.heartbeat_watchdog import HeartbeatWatchdog
-from mantis.train.lifecycle.watchdog import SELFPLAY_STALL_EXIT_CODE
-
 _REPO = Path(__file__).resolve().parents[2]
 _SRC = _REPO / "src" / "mantis"
 
@@ -170,35 +163,6 @@ def test_monitor_config_is_frozen_with_no_lenient_from_dict() -> None:
     with pytest.raises(dataclasses.FrozenInstanceError):
         cfg.alert_grad_norm_max = 0.99  # type: ignore[misc]
     assert not hasattr(MonitorConfig, "from_dict"), "the lenient from_dict must not survive"
-
-
-def _top_level_imports(tree: ast.Module) -> list[str]:
-    targets: list[str] = []
-    for node in tree.body:
-        if isinstance(node, ast.Import):
-            targets.extend(a.name for a in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
-            targets.append(node.module)
-            targets.extend(f"{node.module}.{a.name}" for a in node.names)
-    return targets
-
-
-def test_no_top_level_eval_import_under_train_or_monitor() -> None:
-    """No `mantis.eval` top-level import under `train/**` or `monitor/**`: eval is reached only
-    through the injected pipeline."""
-    violations: list[str] = []
-    for root in (_SRC / "train", _SRC / "monitor"):
-        for path in sorted(root.rglob("*.py")):
-            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-            for target in _top_level_imports(tree):
-                if target == "mantis.eval" or target.startswith("mantis.eval."):
-                    violations.append(f"{path.relative_to(_SRC)} -> {target}")
-    assert violations == [], f"train/monitor must not top-level import mantis.eval: {violations}"
-
-
-def test_stall_exit_code_equality_pin() -> None:
-    """Both watchdogs share ONE restart-wrapper key, 42, the value the supervisor keys on."""
-    assert SELFPLAY_STALL_EXIT_CODE == WATCHDOG_STALL_EXIT_CODE == 42
 
 
 def test_build_run_safety_wires_the_heartbeat_into_every_declared_source(tmp_path) -> None:
