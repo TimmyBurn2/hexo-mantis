@@ -14,15 +14,14 @@ PER-DEVICE ENVELOPE CALIBRATION IS REJECTED as a treadmill.
 """
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import json
-import os
 from dataclasses import dataclass
 from pathlib import Path
 
 import torch
 
+from _determinism import deterministic_algorithms  # re-export: bp.deterministic_algorithms is the PZ nulldist file's pinned entry
 from mantis.model.arch import GnnArch
 from mantis.model.dist65 import binned_value_loss
 from mantis.model.gnn import GnnNet
@@ -57,28 +56,6 @@ def load_nulldist(path: Path = NULLDIST_PATH) -> dict:
             f"pinned R181 artifact sha256 drift: {digest} != {NULLDIST_SHA256}"
         )
     return json.loads(raw.decode())
-
-
-@contextlib.contextmanager
-def deterministic_algorithms():
-    """TEST SCOPE ONLY. Enable `torch.use_deterministic_algorithms(True)` for the block, then
-    restore the ambient setting exactly — it is process-global, so leaking it would silently
-    change the numerics of every sibling test. PRODUCTION KEEPS ITS KERNELS: nothing in
-    `src/mantis/` calls this. `CUBLAS_WORKSPACE_CONFIG` is set if absent and restored."""
-    was_enabled = torch.are_deterministic_algorithms_enabled()
-    had_cublas = "CUBLAS_WORKSPACE_CONFIG" in os.environ
-    old_cublas = os.environ.get("CUBLAS_WORKSPACE_CONFIG")
-    if not had_cublas:
-        os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
-    try:
-        torch.use_deterministic_algorithms(True)
-        yield
-    finally:
-        torch.use_deterministic_algorithms(was_enabled)
-        if had_cublas:
-            os.environ["CUBLAS_WORKSPACE_CONFIG"] = old_cublas
-        else:
-            os.environ.pop("CUBLAS_WORKSPACE_CONFIG", None)
 
 
 def cuda_pairs(doc: dict, side: str, stat: str) -> dict[str, list[float]]:

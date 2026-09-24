@@ -6,14 +6,13 @@ the SINK. Nothing here fakes the caps, the split, or the normalisation.
 """
 from __future__ import annotations
 
-import contextlib
-import os
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import torch
 
+from _determinism import deterministic_algorithms  # re-export: H.deterministic_algorithms stays the microbatch suites' entry
 from mantis._engine import HexgBuffer
 from mantis.encoding import lookup
 from mantis.model import GnnArch, GnnArchV2SoftPolicy, build_net, gnn_widths_block
@@ -22,29 +21,6 @@ from mantis.train.trainer.core import Trainer, TrainHParams
 GRAPH_ENCODING = "gnn_axis_v1"
 GSPEC = lookup(GRAPH_ENCODING)
 SEED = 20260803
-
-
-@contextlib.contextmanager
-def deterministic_algorithms():
-    """Enable deterministic algorithms for the block, restoring the ambient setting exactly.
-
-    TEST SCOPE ONLY — nothing in `src/mantis/` calls this, and every leg that uses it says so
-    in its own name, so no reader concludes a production run is deterministic.
-    """
-    was_enabled = torch.are_deterministic_algorithms_enabled()
-    had_cublas = "CUBLAS_WORKSPACE_CONFIG" in os.environ
-    old_cublas = os.environ.get("CUBLAS_WORKSPACE_CONFIG")
-    if not had_cublas:
-        os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
-    try:
-        torch.use_deterministic_algorithms(True)
-        yield
-    finally:
-        torch.use_deterministic_algorithms(was_enabled)
-        if had_cublas:
-            os.environ["CUBLAS_WORKSPACE_CONFIG"] = old_cublas
-        else:
-            os.environ.pop("CUBLAS_WORKSPACE_CONFIG", None)
 
 
 def uniform_graph_buffer(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
