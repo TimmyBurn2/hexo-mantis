@@ -28,34 +28,11 @@ from mantis.model.identity import state_dict_param_hash
 
 _LOG = logging.getLogger(__name__)
 
-# Repo-relative bootstrap candidates tried (in order) when no usable best_model.pt exists — an
-# EXPLICIT default list (no host-coupled / personal path; R1). A launch may override it.
-_BOOTSTRAP_ANCHOR_CANDIDATES: tuple[str, ...] = (
-    "checkpoints/bootstrap_model_v6.pt",
-    "checkpoints/bootstrap_model_v7full.pt",
-)
-
-# State-dict key roots a legitimate SUBSET/min-max baseline anchor may lack. EVERYTHING ELSE is
-# a CORE tensor (trunk / policy / value) that MUST land on load.
-_OPTIONAL_HEAD_PREFIXES: tuple[str, ...] = (
-    "opp_reply_conv.",    # aux opponent-reply head
-    "opp_reply_fc.",
-    "value_var.",         # value-uncertainty head
-    "ownership_head.",    # ownership head
-    "threat_head.",       # threat head
-    "chain_head.",        # Q13 chain-length head (the surviving aux target)
-    "ply_index_head.",    # ply-index head
-    "input_channel_index",  # input-channel selector buffer (present only when input_channels set)
-)
-
-
 class AnchorLoadError(RuntimeError):
     """A from-disk anchor failed the (B) corruption guard: a required CORE tensor did not land,
     or the state dict carried keys the declared arch does not accept."""
 
 
-# State-dict key roots a legitimate SUBSET/min-max baseline anchor may lack. EVERYTHING ELSE is
-# a CORE tensor (trunk / policy / value) that MUST land on load.
 CANONICAL_ANCHOR_FILENAME = "best_model.pt"
 
 
@@ -236,11 +213,8 @@ def _quarantine_corrupt(path: Path) -> Path:
 def _guarded_load_state_dict(
     model: torch.nn.Module, state: dict[str, Any]
 ) -> list[str]:
-    """(B) corruption guard — load `state` with `strict=False` PLUS explicit validation, since
-    `build_net(arch)` emits a SUPERSET of a min/max baseline anchor's keys and `strict=True`
-    would reject a legitimate SUBSET. Unexpected keys must be empty, missing keys must all be
-    known-optional aux heads, and every CORE tensor must land; a missing core tensor RAISES
-    rather than silently loading a random head. Returns the optional-only missing keys."""
+    """(B) corruption guard: every tensor the declared arch builds must land and nothing else may,
+    so a missing tensor RAISES rather than silently loading a random head. Returns `[]`."""
     result = model.load_state_dict(state, strict=False)
     unexpected = list(result.unexpected_keys)
     if unexpected:
@@ -251,14 +225,12 @@ def _guarded_load_state_dict(
             "unexpected key is corruption / an arch mismatch, not a subset baseline)."
         )
     missing = list(result.missing_keys)
-    core_missing = [k for k in missing if not k.startswith(_OPTIONAL_HEAD_PREFIXES)]
-    if core_missing:
+    if missing:
         raise AnchorLoadError(
-            f"anchor state_dict is missing REQUIRED core tensor(s) {core_missing[:5]} "
+            f"anchor state_dict is missing REQUIRED core tensor(s) {missing[:5]} "
             "(trunk / policy / value) — a checkpoint missing a required core tensor MUST NOT "
             "silently load a random head (the old E1-C1 / F-12 hazard the eval loader's "
-            "landing-guard existed to kill). Only these aux-head prefixes may be absent from a "
-            f"legitimate min/max baseline anchor: {_OPTIONAL_HEAD_PREFIXES}."
+            "landing-guard existed to kill)."
         )
     return missing
 
@@ -352,7 +324,7 @@ def load_best_model_resilient(
     """Try best_model.pt, then its .bak, then bootstrap candidates; returns
     `(model, source_path, step, representation)` or None if all fail. On corruption of
     ``best_model.pt`` the file is quarantined and the next candidate is tried."""
-    candidates = bootstrap_candidates if bootstrap_candidates is not None else _BOOTSTRAP_ANCHOR_CANDIDATES
+    candidates = bootstrap_candidates or ()
 
     # 1. Live anchor.
     if best_model_path.exists():
@@ -503,7 +475,7 @@ def resolve_anchor(
     )
     _LOG.warning(
         "anchor_fresh_init_no_bootstrap tried=%s (no anchor or bootstrap available — initialising "
-        "best_model.pt from current trainer.model).", list(bootstrap_candidates or _BOOTSTRAP_ANCHOR_CANDIDATES),
+        "best_model.pt from current trainer.model).", list(bootstrap_candidates or ()),
     )
     best_model = build_net(trainer.arch).to(resolved_device)
     best_model.load_state_dict(trainer.inference_state_dict())

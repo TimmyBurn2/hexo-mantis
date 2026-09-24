@@ -25,7 +25,6 @@ from mantis.train.anchor import (
 _ANCHOR_SRC = Path(anchor_mod.__file__).read_text(encoding="utf-8")
 _ENC = "gnn_axis_v1"
 _CPU = torch.device("cpu")
-_OPTIONAL_PREFIXES = anchor_mod._OPTIONAL_HEAD_PREFIXES
 
 
 def _full_net() -> torch.nn.Module:
@@ -288,19 +287,12 @@ def test_anchor_state_carries_declared_representation(tmp_path: Path) -> None:
     assert state.representation == "graph"  # the discriminant, read off the arch
 
 
-def _core_and_optional_keys() -> "tuple[list[str], list[str]]":
-    sd = _full_net().state_dict()
-    optional = [k for k in sd if k.startswith(_OPTIONAL_PREFIXES)]
-    core = [k for k in sd if not k.startswith(_OPTIONAL_PREFIXES)]
-    return core, optional
-
-
 def test_B_missing_core_key_raises_not_silent_random_head(tmp_path: Path) -> None:
     """A checkpoint missing a REQUIRED CORE tensor RAISES, never a silent random-head load.
-    The optional-subset twin is gone: those prefixes name dense aux heads a graph net lacks."""
+    Every tensor the declared arch builds is core: no graph net carries an optional aux head."""
     full = _full_net().state_dict()
     core_key = "policy_head.mlp.0.weight"
-    assert core_key in full and not core_key.startswith(_OPTIONAL_PREFIXES)
+    assert core_key in full
     corrupt = {k: v for k, v in full.items() if k != core_key}
     path = tmp_path / "core_missing_anchor.pt"
     torch.save(corrupt, path)
