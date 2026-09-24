@@ -1,4 +1,4 @@
-"""B-11 (R355(e)): ONE resolver of the LAW-08 consumer strings for both registry files."""
+"""B-11 (R355(e)): ONE resolver of the LAW-08 consumer strings for the consumer registry."""
 from __future__ import annotations
 
 import ast

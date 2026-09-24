@@ -6,8 +6,8 @@ the suite expectation is DERIVED from the shipped config, never a hardcoded regi
 (O11). O12 (radius schedule) is RETIRED (WPSC Phase 2 SC-A2 forced-fallout: DESIGN_P2.md §5
 removes `selfplay.legal_move_radius_schedule`/`RadiusStage` from the schema entirely — the
 encoding registry alone is the radius authority, so there is no regime-parity knob left to
-compare here). `tests/config/test_regime_parity_p2.py` (a later chunk's oracle) owns the
-O12-replacement assertion.
+compare here). The radius fields' absence from the schema is pinned by
+tests/config/test_radius_removed.py.
 """
 from pathlib import Path
 

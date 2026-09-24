@@ -123,7 +123,7 @@ what keeps the package's internal import graph a DAG (CI gate 9) — `core` impo
 | two configs differ exactly where claimed | tools/config_diff.py `--expect` |
 | a committed config's stamped header cannot lie about its delta | tools/config_diff.py `--from-header` |
 | every committed config schema-validates (empty set = gate failure) | CI gate 7 (tools/ci_gates/validate_configs.py) |
-| every schema leaf key has a live consumer (a bijection over every walked leaf, LAW-08; the count is derived by the test, not stated here), in two independently-maintained copies | tests/config/test_every_key_has_consumer.py + tests/config/test_every_key_has_consumer_p2.py |
+| every schema leaf key has a live consumer (a bijection over every walked leaf, LAW-08; the count is derived by the test, not stated here) | tests/config/test_every_key_has_consumer.py |
 | every `required` armed-abort row is armed in every production config | CI gate 12 (tools/ci_gates/preflight_mint.py `--audit-only`) |
 
 ## Cross-field rules (the invariants no single field can carry)
@@ -169,11 +169,11 @@ and with the coordinator field deleted there is no collision left to disambiguat
 | eval `model_sims` resolver + unknown-opponent / `None` raise | tests/config/test_resolve_nsims.py |
 | amp dtype token pinned to bf16 + the DAG no-torch guard | tests/config/test_resolve_amp.py |
 | bootstrap path resolver | tests/config/test_resolve_bootstrap.py |
-| resolved-config emit: 7-knob payload, death-of-merge census, and no `train`/`selfplay`/`monitor` leaf threaded into it | tests/config/test_resolved_config_emit.py, tests/config/test_resolved_config_emit_p2.py |
+| resolved-config emit: 7-knob payload, death-of-merge census, and no `train`/`selfplay`/`monitor` leaf threaded into it | tests/config/test_resolved_config_emit.py |
 | one-key diff; mint output validates; header stamped; unknown delta key exits 2; diff exit 0 on an exactly-claimed diff, exit 1 otherwise | tests/config/test_mint_and_diff.py |
 | lying-header `--from-header` self-check + mutation self-test | tests/config/test_config_diff_from_header.py |
-| regime parity per LAW knob (sims, amp, encoding) and the radius knob's ABSENCE from every production config | tests/config/test_regime_parity.py, tests/config/test_regime_parity_p2.py |
-| every-key-has-consumer bijection (the count derived from the walker, never stated), the walker's descent into an OPTIONAL block, and a mutation self-test in both copies | tests/config/test_every_key_has_consumer.py, tests/config/test_every_key_has_consumer_p2.py |
+| regime parity per LAW knob (sims, amp, encoding) and the radius knob's ABSENCE from every production config | tests/config/test_regime_parity.py |
+| every-key-has-consumer bijection (the count derived from the walker, never stated), the walker's descent into an OPTIONAL block, and a mutation self-test | tests/config/test_every_key_has_consumer.py |
 | the radius field is removed everywhere: no schedule on the schema, no resolver module, no symbol in either `__all__` | tests/config/test_radius_removed.py |
 | `train` section bounds and required-field census | tests/config/test_train_schema.py |
 | `policy_target`/`selfplay.search.kind` cross-section consistency | tests/config/test_train_policy_value_target_consistency.py |

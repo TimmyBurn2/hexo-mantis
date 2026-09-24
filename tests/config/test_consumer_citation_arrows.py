@@ -146,8 +146,8 @@ def _arrow_violations(registry: dict[str, str]) -> list[str]:
 
 
 def test_no_citation_sends_a_value_into_a_separate_process_that_cannot_see_it():
-    """The class fix. Both registry copies, one rule, derived from the tree."""
-    for name in ("test_every_key_has_consumer.py", "test_every_key_has_consumer_p2.py"):
+    """The class fix. The registry, one rule, derived from the tree."""
+    for name in ("test_every_key_has_consumer.py",):
         violations = _arrow_violations(_load_registry(name))
         assert not violations, (
             f"{name}: a consumer citation names a symbol that its cited ENTRY-POINT file never "
@@ -158,7 +158,7 @@ def test_no_citation_sends_a_value_into_a_separate_process_that_cannot_see_it():
 
 def test_every_cited_path_resolves_to_exactly_one_file():
     """The checker's own precondition, asserted rather than assumed."""
-    for name in ("test_every_key_has_consumer.py", "test_every_key_has_consumer_p2.py"):
+    for name in ("test_every_key_has_consumer.py",):
         unresolvable = _unresolvable_citations(_load_registry(name))
         assert not unresolvable, (
             f"{name}: a consumer citation names a path the tree cannot resolve uniquely, so the "
@@ -237,7 +237,7 @@ def test_the_check_does_not_fire_on_in_process_multi_hop_arrows():
 def test_exactly_the_expected_cited_files_are_process_entry_points():
     """Derived, not asserted: the rule's REACH is measured at HEAD rather than transcribed."""
     cited: dict[str, bool] = {}
-    for name in ("test_every_key_has_consumer.py", "test_every_key_has_consumer_p2.py"):
+    for name in ("test_every_key_has_consumer.py",):
         for citation in _load_registry(name).values():
             for rel in _FILE_RE.findall(citation):
                 path = _resolve_cited_file(rel)

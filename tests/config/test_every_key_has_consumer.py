@@ -8,9 +8,6 @@ file held one of five hand-mirrored copies that walked to three different answer
 """
 from pydantic import BaseModel
 
-import importlib.util
-from pathlib import Path
-
 from _consumer_resolver import defined_names, unresolved_tokens
 from mantis.config.schema import RunConfig, leaf_paths
 
@@ -424,18 +421,3 @@ def test_the_resolver_bites_on_a_dead_symbol() -> None:
     assert unresolved_tokens("SelfPlayHParams.from_config and torch.device", defined) == []
 
 
-def test_the_second_registry_copy_names_the_same_leaf_set() -> None:
-    """Loads the p2 sibling by path (collection untouched); Raises: AssertionError on key-set drift."""
-    spec = importlib.util.spec_from_file_location(
-        "consumer_registry_p2_probe",
-        Path(__file__).resolve().parent / "test_every_key_has_consumer_p2.py",
-    )
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    assert set(module.CONSUMER_REGISTRY) == set(CONSUMER_REGISTRY), (
-        "the two CONSUMER_REGISTRY copies disagree on their leaf sets — retiring one would "
-        "silently drop the other's rows: "
-        f"only-in-p2={sorted(set(module.CONSUMER_REGISTRY) - set(CONSUMER_REGISTRY))}, "
-        f"only-here={sorted(set(CONSUMER_REGISTRY) - set(module.CONSUMER_REGISTRY))}"
-    )
