@@ -19,7 +19,7 @@ def test_the_makefile_dispatches_exactly_the_declared_target_set():
         # `gates` is the everyday set; `gates.exit` adds the slow tier both pytest tiers deselect; `dashboard`/`viewer`
         # render a record (R333(d)/R352(g)); `analyzer` serves ANALYZER-1 on loopback; `vendor.strix` builds strix's venv.
         "gates", "gates.exit", "dashboard", "viewer", "analyzer",
-        "bench", "bench.baseline", "check.wasm", "vendor", "vendor.sealbot", "vendor.strix",
+        "bench", "bench.baseline", "check.wasm", "vendor", "vendor.strix",
         "clean",
     }
 

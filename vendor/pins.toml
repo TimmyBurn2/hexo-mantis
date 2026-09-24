@@ -9,28 +9,6 @@
 # vendor must skip loudly and name `make vendor`.
 [pins]
 
-[pins.sealbot]
-# R139/R145: a pin is a COMMIT SHA, never a branch name. `branch` and `as_of` below are
-# DATA — tools/vendor_fetch.sh reads only `url`, `sha` and `patch`, so the
-# (AUDIT-1 F-52: this cited `(:17, :24)`; both had moved. A line number in a comment is a
-# transcribed position — the FACT is which KEYS the fetcher reads, and
-# tests/tools/test_vendor_pins_sealbot.py is what holds it.)
-# checkout is sha-driven and a branch name can never become the thing that is fetched.
-# That rider is satisfied structurally rather than by convention, and
-# tests/tools/test_vendor_pins_sealbot.py is what makes it falsifiable.
-#
-# Verified upstream at WP12-R Phase A IMPL execution (2026-08-02):
-#   git ls-remote <url>  ->  refs/heads/master = c94749c21c16c3b072fff6da49762dd5f92f3986
-# (raw output in the phase's IMPL notes; a different sha means upstream moved and R145 must
-# be re-ruled, never silently re-pinned.)
-#
-# LICENCE: none at this sha (R175c) — local eval only; no SealBot code/artifact ships.
-url    = "https://github.com/ramora0/SealBot.git"
-sha    = "c94749c21c16c3b072fff6da49762dd5f92f3986"
-branch = "master"
-as_of  = "2026-03-31"
-patch  = "vendor/patches/sealbot.patch"
-
 [pins.hexo-strix]
 # RUNG-2 (R352(e)): the strix rung. The PIN is the repo at the commit below; the RUNG is the
 # operator's checkpoint, which the tree does not carry (no weights in it, no releases) and R7

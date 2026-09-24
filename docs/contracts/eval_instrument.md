@@ -1,6 +1,6 @@
 # Contract: eval instrument
 
-- version: v2
+- version: v3
 - owner: mantis.arena
 - status: LIVE. <!-- AUDIT-1 F-52: this read "SKELETON — contract text lands with the
   subsystem port" over a filled contract, beside a shipped eval subsystem. The label is
@@ -21,6 +21,8 @@ WR gate): the round is the strength-floor probe, the gate block and the random f
 EXTERNAL scale is the strix cell (`tools/strength_frontier.py`, `tools/strix_follower.py`). The
 rung machinery (`RoundSpec.rung_jobs`, `worker._play_rung_block`) survives for that cell alone.
 v2: the sealbot adapter, its fixed-depth receipt and its refusal classes are DELETED (R368(e)).
+v3: the sealbot vendor side — build script, patch, pin, `vendor.sealbot` target and both pin
+tests — is DELETED (R368(e)).
 
 The run5 decision document carried that run's choices and is DELETED with its config
 (R346(f)): a decision document whose subject config is not in the tree
@@ -74,20 +76,12 @@ and are folded in here, because a reader of any ladder reading needs them:
   not a receipt. The as-shipped cell reads at block ends only (`--once --unit as_shipped`,
   `<ckpt>.strix512.json`). The 256/256 reading of a run's parent, taken once, is both the bridge
   from the as-shipped series and that run's baseline.
-- **Vendoring, and the ONE build command.** External engines are pinned by commit sha in
-  `vendor/pins.toml` and fetched by `make vendor`, which CLONES and does not build. The build
-  is a separate, manual step and it must use mantis's OWN interpreter or the extension's ABI
-  will not match the process that imports it:
-
-  ```
-  uv run --with pybind11 --with setuptools python setup.py build_ext --inplace
-  ```
-
-  run inside `vendor/external/sealbot/current/`. `--with` is ephemeral: a vendor build
-  dependency never becomes a mantis dependency.
-  The tracked patch's THIRD hunk (2026-09-14, CARD-SEALBOT-GIL-SERIAL) wraps the engine's search
-  alone in `py::gil_scoped_release`, so a cell's `concurrency` overlaps the bar's searches as
-  well as the candidate's; it changes no move, score or depth receipt.
+- **Vendoring.** External engines are pinned by commit sha in `vendor/pins.toml` and fetched
+  by `make vendor`, which CLONES and does not build. The one build step is the strix rung's
+  venv: `make vendor.strix` (`tools/vendor_build_strix.sh`) syncs strix's OWN venv inside
+  the fetched tree — its torch is the CPU wheel and its `hexo_rs` engine builds by maturin,
+  apart from the mantis environment — and refuses before building on a missing tree or a
+  drifted sha.
 - **Books** are versioned, sha-pinned and paired: `mantis.arena.books` verifies the sha256 at
   load and raises on mismatch, and every opening is played exactly twice with the colours
   swapped, so a colour advantage cancels within the pair rather than across the sample.
@@ -128,7 +122,7 @@ row says so and names what does run.
 | the head answers outside the encoding window at both seats | `tests/eval/test_eval_selfplay_child_parity.py`, `tests/eval/test_rung_seat_off_window.py` | yes |
 | an unimplemented declared pooling is REFUSED, never a fallthrough | `tests/eval/test_value_pool_guard.py`, `tests/eval/test_eval_decode_guard_ordering.py`, `tests/eval/test_graph_round_encoding.py` | yes |
 | eff_n is trajectory-hash-distinct; the low-power guard is per pair; an empty sample degenerates rather than raising | `tests/eval/test_aggregate_regime.py` | yes |
-| a pin is a commit sha, and the declared patch is tracked | `tests/tools/test_vendor_pins_sealbot.py` | yes |
+| a pin is a commit sha | `tests/tools/test_vendor_pins_strix.py` | yes |
 | the refusal reasons name exactly their own missing step, and no environment key | `tests/bots/test_strix_adapter.py`, `tests/bots/test_protocol.py` | yes |
 | the gate's rule fields ride `eval_round_complete.gate`, `null` when no gate ran; the A-3 partial carries them on a broken route | `tests/eval/test_gate_fields_ride_the_round_complete_row.py` | yes |
 | a strength-floor refusal is a third thing on the routed mapping and the stream | `tests/eval/test_strength_floor_verdict_on_the_routed_mapping.py` | yes |

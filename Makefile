@@ -1,4 +1,4 @@
-.PHONY: build build.cuda build.native test test.integration lint lint.rust gates gates.exit dashboard viewer analyzer bench bench.baseline check.wasm vendor vendor.sealbot vendor.strix clean
+.PHONY: build build.cuda build.native test test.integration lint lint.rust gates gates.exit dashboard viewer analyzer bench bench.baseline check.wasm vendor vendor.strix clean
 
 UV ?= uv
 
@@ -73,9 +73,6 @@ check.wasm:
 
 vendor:
 	bash tools/vendor_fetch.sh
-
-vendor.sealbot:
-	bash tools/vendor_build_sealbot.sh
 
 # The strix rung's venv (RUNG-2): CPU torch + hexo_rs inside the fetched pin; the checkpoint is placed by hand.
 vendor.strix:

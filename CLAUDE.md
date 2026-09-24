@@ -163,9 +163,9 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
   This sets WHEN gates run, never WHAT they check.
 - `make bench` / `make bench.baseline` — criterion smoke bench (baseline saves locally).
 - `make check.wasm` — mantis-graph must stay wasm32-clean.
-- `make vendor` — fetch vendor pins. `make vendor.sealbot` — build the fetched sealbot
-  extension (verifies the pinned sha and the applied patch first; `vendor/external/` is
-  gitignored, so this is PER-CHECKOUT state every clone and the box must re-run).
+- `make vendor` — fetch vendor pins; `make vendor.strix` — build the strix rung's venv inside
+  the fetched pin. `vendor/external/` is gitignored, so vendor state is PER-CHECKOUT: every
+  clone and the box must re-run both.
   `make clean` — cargo clean + dist removal.
 - Entry points are `python -m mantis.*` or console scripts — no loose script files.
 - Python floor is 3.11 (CI pins 3.11; local interpreters may be newer).
