@@ -29,13 +29,6 @@ TOOL = _tool()
 _CONFIG_PATH = REPO_ROOT / "configs" / "run6.yaml"
 
 
-@pytest.fixture
-def state_home(monkeypatch, tmp_path) -> Path:
-    home = tmp_path / "state"
-    monkeypatch.setenv("XDG_STATE_HOME", str(home))
-    return home
-
-
 def _report(**halts) -> dict:
     report = TOOL._new_report("preflight")
     report["override"] = {"booted_config_sha256": "booted-sha"}

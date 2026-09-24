@@ -4,19 +4,14 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
-from typing import Any
 
 import pytest
 
 from mantis.bots.strix import NET_ONLY_SUFFIX, RADIUS_SUFFIX, RungUnresolvable, load_request, variant_radius, variant_solver
-from _toolpath import load_module_by_path
+from test_strix_net_only_cell import _load
 
 _REPO = Path(__file__).resolve().parents[2]
 _STEM = "checkpoint_00237000"
-
-
-def _load(name: str, rel: str) -> Any:
-    return load_module_by_path(name, _REPO / rel)
 
 
 @pytest.fixture(scope="module")

@@ -119,6 +119,14 @@ def mk_graph_buffer():
 
 
 @pytest.fixture
+def state_home(monkeypatch, tmp_path) -> Path:
+    """Redirect XDG_STATE_HOME to a tmp dir and return it — the preflight stamp store root."""
+    home = tmp_path / "state"
+    monkeypatch.setenv("XDG_STATE_HOME", str(home))
+    return home
+
+
+@pytest.fixture
 def preflight_stamped(monkeypatch, tmp_path):
     """Redirect the R348(c) stamp store to a tmp home; the stamp carries R349(b)'s verdict."""
     from mantis.config.loader import load_config

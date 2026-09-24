@@ -32,13 +32,6 @@ _HALTS = {"workspace": {"verdict": "MIRRORED", "run_dir": "/x", "bundle": {"step
           "cuda_build": {"verdict": "not_run"}}
 
 
-@pytest.fixture
-def state_home(monkeypatch, tmp_path) -> Path:
-    home = tmp_path / "state"
-    monkeypatch.setenv("XDG_STATE_HOME", str(home))
-    return home
-
-
 def _write(tmp_path: Path, **over: Any):
     config = load_config(_CONFIG)
     kwargs: dict[str, Any] = dict(config=config, config_path=_CONFIG, tree_root=_REPO,
