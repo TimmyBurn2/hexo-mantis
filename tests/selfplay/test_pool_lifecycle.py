@@ -16,53 +16,12 @@ import numpy as np
 import pytest
 import torch
 
-from mantis._engine import HexgBuffer
-from mantis.encoding import lookup
-from mantis.model import GnnArch, build_net
+from _pool_harness import graph_pool
 from mantis.selfplay import pool as pool_mod
 from mantis.selfplay.buffers import BufferKind
 from mantis.selfplay.pool import WorkerPool
 
 _INTEGRATION_TIMEOUT_S = 60.0
-
-
-def _cfg(encoding: str, **over: Any) -> dict[str, Any]:
-    # `selfplay`/`inference`/`train` are nested schema-shaped sections; `over` layers onto
-    # `selfplay`.
-    selfplay: dict[str, Any] = {
-        "search": {"kind": "puct"}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
-        "c_visit": 50.0,
-        "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_explore_moves": 10, "search_stats_every": 8,
-        "results_queue_cap": 10_000, "random_opening_plies": 0,
-        "log_investigation_metrics": True,
-        "mcts": {"n_simulations": 8, "c_puct": 1.5, "fpu_reduction": 0.25,
-                 "quiescence_enabled": True, "quiescence_blend_2": 0.3,
-                 "dirichlet_alpha": 0.3, "dirichlet_epsilon": 0.25, "dirichlet_enabled": True},
-        "playout_cap": {"fast_sims": 8, "fast_prob": 0.0, "standard_sims": 0,
-                        "full_search_prob": 0.0, "n_sims_quick": 0, "n_sims_full": 0,
-                        "temperature_threshold_compound_moves": 0, "temp_min": 0.5},
-    }
-    selfplay.update(over)
-    inference = {
-        "inference_batch_size": 4, "inference_max_wait_ms": 10,
-        "edge_geometry_check": "inline", "compile_trunk": False,
-        # The graph arm resolves the fused-forward memory bound at construction; NON-BINDING
-        # BY CONSTRUCTION here, since this fixture is about wiring and nothing asserts the M.
-        "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
-    }
-    train = {"draw_reward": -0.5, "ply_cap_value": -0.5}
-    return {"encoding": encoding, "deploy": {"search": {"kind": "puct"}}, "selfplay": selfplay,
-            "inference": inference, "train": train}
-
-
-def _graph_pool(**kw: Any) -> WorkerPool:
-    spec = lookup("gnn_axis_v1")
-    arch = GnnArch(in_dim=spec.node_feat_dim, edge_dim=spec.edge_feat_dim,
-                   hidden=16, num_layers=1)
-    return WorkerPool(
-        build_net(arch), _cfg("gnn_axis_v1"), torch.device("cpu"),
-        HexgBuffer(capacity=256, encoding="gnn_axis_v1", visit_capacity=128), arch=arch, **kw,
-    )
 
 
 class _StubRunner:
@@ -156,7 +115,7 @@ def test_producer_death_is_re_raised_with_its_cause(monkeypatch) -> None:
     """A drain-loop exception leaves the pool flagged and the next `check_producer_health()`
     raises with the original as its `__cause__`. The feeder is the only thing writing training
     data: if it dies quietly, loss and eval numbers stay plausible for hours."""
-    pool = _graph_pool()
+    pool = graph_pool()
     boom = ZeroDivisionError("scripted drain failure")
 
     def _explode(_pool):
@@ -175,7 +134,7 @@ def test_producer_death_is_re_raised_with_its_cause(monkeypatch) -> None:
 
 def test_healthy_and_cleanly_stopped_pools_do_not_raise(monkeypatch) -> None:
     """`check_producer_health()` is silent on a fresh pool and after a clean `stop()`."""
-    pool = _graph_pool()
+    pool = graph_pool()
     pool.check_producer_health()
 
     monkeypatch.setattr(pool_mod, "run_stats_loop", lambda _pool: None)
@@ -187,7 +146,7 @@ def test_healthy_and_cleanly_stopped_pools_do_not_raise(monkeypatch) -> None:
 def test_stats_loop_guard_does_not_let_the_thread_die_silently(monkeypatch, caplog) -> None:
     """The guard LOGS at error level and records the exception: two independent traces of a
     daemon thread that would otherwise unwind unobserved."""
-    pool = _graph_pool()
+    pool = graph_pool()
 
     def _explode(_pool):
         raise RuntimeError("scripted")
@@ -205,7 +164,7 @@ def test_stats_loop_guard_does_not_let_the_thread_die_silently(monkeypatch, capl
 def test_start_is_idempotent_while_running() -> None:
     """A second `start()` on a running pool is a no-op; two feeder threads on one Rust queue
     would double-count pushes and interleave two `system_stats` cadences."""
-    pool = _graph_pool()
+    pool = graph_pool()
     runner, server = _stub_collaborators(pool)
 
     pool.start()
@@ -226,7 +185,7 @@ def test_stop_joins_both_threads_and_stops_the_recorder() -> None:
     timeout, joins and clears the feeder thread, and stops the recorder. An unbounded join turns
     a wedged inference thread into a hung shutdown with no final checkpoint."""
     recorder = _StubRecorder()
-    pool = _graph_pool(recorder=recorder)
+    pool = graph_pool(recorder=recorder)
     runner, server = _stub_collaborators(pool)
 
     pool.start()
@@ -242,7 +201,7 @@ def test_stop_joins_both_threads_and_stops_the_recorder() -> None:
 def test_stopped_feeder_thread_actually_exits() -> None:
     """The feeder thread is no longer alive after `stop()`; asserting the `join` call alone
     would pass on a loop that ignores its stop event."""
-    pool = _graph_pool()
+    pool = graph_pool()
     _stub_collaborators(pool)
 
     pool.start()
@@ -255,7 +214,7 @@ def test_stopped_feeder_thread_actually_exits() -> None:
 def test_sync_inference_weights_forwards_to_the_server() -> None:
     """A promoted state_dict reaches the server's safe swap by identity: a pool that drops the
     call keeps serving OLD weights while promotion logs say otherwise."""
-    pool = _graph_pool()
+    pool = graph_pool()
     _, server = _stub_collaborators(pool)
     state = {"layer.weight": torch.zeros(1)}
     pool.sync_inference_weights(state)
@@ -267,11 +226,11 @@ def test_recorder_seam_forwards_and_defaults_to_inert() -> None:
     """An injected recorder receives `set_step`; the DEFAULT recorder is inert, because the
     concrete recorder does not exist in this tree."""
     recorder = _StubRecorder()
-    pool = _graph_pool(recorder=recorder)
+    pool = graph_pool(recorder=recorder)
     pool.update_checkpoint_step(42)
     assert recorder.steps == [42]
 
-    _graph_pool().update_checkpoint_step(7)
+    graph_pool().update_checkpoint_step(7)
 
 
 @pytest.mark.parametrize(
@@ -287,7 +246,7 @@ def test_recorder_seam_forwards_and_defaults_to_inert() -> None:
 )
 def test_batch_fill_pct_math(forward_count, total_requests, batch_size, expected) -> None:
     """Batch occupancy reproduces the frozen arithmetic across its four edge cases."""
-    pool = _graph_pool()
+    pool = graph_pool()
     pool._inference_server = _StubServer(forward_count=forward_count,
                                          total_requests=total_requests,
                                          batch_size=batch_size)
@@ -296,7 +255,7 @@ def test_batch_fill_pct_math(forward_count, total_requests, batch_size, expected
 
 def test_graph_pool_takes_the_graph_arm() -> None:
     """A graph pool calls `collect_graph_data` and never `collect_data`: different formats."""
-    pool = _graph_pool()
+    pool = graph_pool()
     runner, _ = _stub_collaborators(pool)
 
     assert pool._is_graph is True
@@ -318,7 +277,7 @@ def test_graph_pool_takes_the_graph_arm() -> None:
 def test_worker_pool_produces_positions_threaded_smoke() -> None:
     """A real pool with a real Rust runner produces positions and drains them into the buffer —
     the only row that proves the assembled thing runs."""
-    pool = _graph_pool()
+    pool = graph_pool()
     pool.start()
     try:
         deadline = time.monotonic() + _INTEGRATION_TIMEOUT_S
@@ -337,7 +296,7 @@ def test_worker_pool_produces_positions_threaded_smoke() -> None:
 @pytest.mark.integration
 def test_graph_pool_smoke_drains_without_producer_death() -> None:
     """The graph drain arm runs against the real runner without killing the feeder."""
-    pool = _graph_pool()
+    pool = graph_pool()
     pool.start()
     try:
         deadline = time.monotonic() + _INTEGRATION_TIMEOUT_S / 4
@@ -352,6 +311,6 @@ def test_graph_pool_smoke_drains_without_producer_death() -> None:
 def test_pool_threads_are_not_leaked_by_construction() -> None:
     """Constructing a pool starts no thread: the inference server is a `Thread` subclass."""
     before = threading.active_count()
-    pool = _graph_pool()
+    pool = graph_pool()
     assert threading.active_count() == before, "construction must not start a thread"
     assert pool._stats_thread is None

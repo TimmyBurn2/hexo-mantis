@@ -13,29 +13,20 @@ reds that fixture instead of collating under the wrong numbers.
 """
 from __future__ import annotations
 
-from typing import Any
-
+from mantis.encoding import lookup
 from mantis.encoding.registry import all_specs
 
 #: The registry row the captured collate payloads were built at.
 COLLATE_FIXTURE_ENCODING = "gnn_axis_v1"
 
 
-def spec_for(name: str) -> Any:
-    """The registry spec by name — the ONE authority for a row's geometry.
+def geometry_kwargs(name: str = COLLATE_FIXTURE_ENCODING) -> dict[str, int]:
+    """The four kwargs `collate_graph_batch` requires, for one registry row.
 
     Raises:
-        LookupError: no registry row carries that name.
+        EncodingRegistryError: no registry row carries that name.
     """
-    for spec in all_specs():
-        if spec.name == name:
-            return spec
-    raise LookupError(f"registry has no row {name!r}; rows: {[s.name for s in all_specs()]}")
-
-
-def geometry_kwargs(name: str = COLLATE_FIXTURE_ENCODING) -> dict[str, int]:
-    """The four kwargs `collate_graph_batch` requires, for one registry row."""
-    spec = spec_for(name)
+    spec = lookup(name)
     return {
         "trunk_size": spec.trunk_size,
         "win_length": spec.win_length,

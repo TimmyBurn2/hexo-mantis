@@ -13,13 +13,13 @@ from typing import Any
 
 import numpy as np
 import pytest
-from _wire_geometry import COLLATE_FIXTURE_ENCODING, geometry_kwargs, spec_for
+from _wire_geometry import COLLATE_FIXTURE_ENCODING, geometry_kwargs
+from mantis.encoding import lookup
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "selfplay"
 COLLATE_DIR = FIXTURES / "collate"
 DRAIN_DIR = FIXTURES / "drain"
 POOL_DIR = FIXTURES / "pool"
-INSTR_DIR = FIXTURES / "instrumentation"
 
 # The 13 wire arrays + 3 scalars of the graph payload, in the old capture's field order.
 PAYLOAD_ARRAY_FIELDS: tuple[str, ...] = (
@@ -74,12 +74,6 @@ def runner_config_goldens() -> dict[str, Any]:
 
 
 @pytest.fixture(scope="session")
-def pure_function_battery() -> dict[str, Any]:
-    """22 move histories × the instrumentation pure functions."""
-    return json.loads((INSTR_DIR / "pure_function_battery.json").read_text(encoding="utf-8"))
-
-
-@pytest.fixture(scope="session")
 def _payload_bank() -> dict[str, dict[str, np.ndarray]]:
     return {name: _load_npz(path) for name, path in _PAYLOAD_NPZ.items()}
 
@@ -124,7 +118,7 @@ def wire_geometry(_payload_bank: dict[str, dict[str, np.ndarray]]) -> dict[str, 
     `edge_attr` arrays must divide by the row's dims, so a re-capture at a row with different
     dims fails here rather than collating under the wrong geometry.
     """
-    spec = spec_for(COLLATE_FIXTURE_ENCODING)
+    spec = lookup(COLLATE_FIXTURE_ENCODING)
     arrays = _payload_bank["b6"]
     n_nodes = arrays["node_coords"].size // 2
     n_edges = arrays["edge_index"].size // 2

@@ -1,6 +1,3 @@
-# >300 justify (R8): ONE claim — the lever logs its own fire rate in-run, all the way to the
-# sink — whose producer half and arrival half must not live in different files, because a
-# test-visible-only counter passes every producer row ever written.
 """The fusion counters, driven over the real wire from producer to sink.
 
 Distributions, not means: for a MEMORY bound the tail IS the question — a mean fused E of 400 k
@@ -15,9 +12,9 @@ import pytest
 import torch
 
 import _fused_graph_harness as H
+from _fused_graph_harness import TelemetryPool, emit_iteration
 from mantis.selfplay.inference_server import InferenceServer
-from mantis.selfplay.pool_hooks import batch_fill_pct, inference_batch_timing
-from mantis.train.events import emit_iteration_complete_event
+from mantis.selfplay.pool_hooks import batch_fill_pct
 
 #: Equal per-graph edge counts, so an edges cap at `k` graphs' worth gives a known M.
 _EIGHT = [3, 3, 3, 3, 3, 3, 3, 3]
@@ -221,7 +218,7 @@ def test_fg4_09_forward_count_stays_one_per_pop_under_a_split(monkeypatch) -> No
         "`batch_fill_pct`'s denominator, not a GPU-forward count (design §4.4)")
     assert f["fusion_parts"] == 4, "the drive must actually have split"
     assert server.total_requests == 8
-    assert batch_fill_pct(_TelemetryPool(server)) == pytest.approx(8 / 64 * 100.0), (
+    assert batch_fill_pct(TelemetryPool(server)) == pytest.approx(8 / 64 * 100.0), (
         "batch_fill_pct moved — the occupancy metric now reads the split instead of the pop")
     occ = server.batch_timing_snapshot()["occupancy"]
     assert occ["count"] == 1 and occ["total"] == 8, (
@@ -249,58 +246,6 @@ def test_fg4_09_collate_is_recorded_once_per_part_not_once_per_pop(monkeypatch) 
         "the wait is measured at the POP; only the collate follows the split")
 
 
-class _ListSink:
-    def __init__(self) -> None:
-        self.events: list[dict[str, Any]] = []
-
-    def emit(self, event) -> None:
-        self.events.append(dict(event))
-
-
-class _TelemetryPool:
-    """Narrow telemetry surface over a REAL server, through the REAL `pool_hooks`."""
-
-    search_kind = "gumbel"
-    avg_game_length = 12.0
-    x_winrate = 0.5
-    o_winrate = 0.4
-    draw_rate = 0.1
-    draws = 1
-    sims_per_sec = 100.0
-    recent_move_histories: list[list[tuple[int, int]]] = []
-
-    def __init__(self, server: InferenceServer) -> None:
-        self._inference_server = server
-
-    @property
-    def batch_fill_pct(self) -> float:
-        return batch_fill_pct(self)
-
-    @property
-    def inference_batch_timing(self) -> dict[str, Any]:
-        return inference_batch_timing(self)
-
-
-class _Buffer:
-    size = 7
-    capacity = 64
-
-
-class _RStats:
-    mcts_mean_depth = 3.0
-    mcts_mean_root_concentration = 0.1
-
-
-def _emit(pool: Any) -> dict[str, Any]:
-    sink = _ListSink()
-    emit_iteration_complete_event(
-        11, 10, 4, pool, _Buffer(),
-        lambda: 0.0, None, {}, _RStats(), sink, search_levers={},
-    )
-    assert len(sink.events) == 1
-    return sink.events[0]
-
-
 def test_fg4_04_the_fusion_block_reaches_the_sink_on_iteration_complete(monkeypatch) -> None:
     """The block travels server -> hook -> builder -> sink whole, matching the snapshot —
     a test-visible-only counter satisfies every producer row above and reaches nobody."""
@@ -310,7 +255,7 @@ def test_fg4_04_the_fusion_block_reaches_the_sink_on_iteration_complete(monkeypa
         monkeypatch, payload, max_fused_edges=2 * int(ec[0]), max_fused_nodes=10 ** 9)
     assert batcher.failures == [], f"the drive failed: {batcher.failures}"
 
-    payload_event = _emit(_TelemetryPool(server))
+    payload_event = emit_iteration(TelemetryPool(server))
     block = payload_event["inference_batching"]
     assert block is not None
     assert "fusion" in block, (

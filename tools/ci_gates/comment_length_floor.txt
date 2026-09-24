@@ -3,16 +3,16 @@
 # takes a measure below its floor lowers the floor in the same commit; gate 14 says so.
 # Set by CLEANUP WAVE 2's tree-wide comment pass, measured on the tree it landed on.
 # The baseline it replaced, at b2e72de4, was 11711 / 1276 / 32405.
-comment_excess_lines 3166
+comment_excess_lines 3164
 banner_comment_lines 0
-docstring_excess_lines 12146
+docstring_excess_lines 12144
 # 2026-09-17 (R355 step 12, C-15/C-16): two measures added at their measured values — the private-
 # docstring and Rust-doc halves of the judgment backlog (CARD-STYLE-BACKLOG). Down-only, like the rest.
-private_docstring_excess_lines 1367
+private_docstring_excess_lines 1363
 rust_doc_excess_lines 2486
 # 2026-09-24 (R368(g), W4): two measures added at their measured values — the ruling-cite
 # class (bare R-tokens and docstrings now included) and the narrative runs in the text-format
 # files the .py/.rs scopes never saw. Down-only, like the rest. The narrower ungated
 # ruling_cite_comment_lines counter is retired with the same edit.
-ruling_cite_lines 1206
+ruling_cite_lines 1205
 textfile_comment_excess_lines 466

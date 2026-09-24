@@ -15,7 +15,7 @@ suite (tests/arena/test_books.py) landing in lockstep.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from _arena_stubs import Opening
 from pathlib import Path
 
 from mantis._engine import Board
@@ -24,12 +24,6 @@ from mantis.arena.regime import RegimeKey
 
 _REPO = Path(__file__).resolve().parents[2]
 _ENCODING = "gnn_axis_v1"
-
-
-@dataclass(frozen=True)
-class _Opening:
-    opening_id: str
-    moves: list
 
 
 class _FixedMoveBot:
@@ -65,10 +59,10 @@ def _regime_key(*, deploy_matched: bool) -> RegimeKey:
     )
 
 
-def _openings() -> list[_Opening]:
+def _openings() -> list[Opening]:
     return [
-        _Opening(opening_id="op0", moves=[(0, 0), (1, 1), (0, 1), (1, 0)]),
-        _Opening(opening_id="op1", moves=[(2, 2), (3, 3), (2, 3), (3, 2)]),
+        Opening(opening_id="op0", moves=[(0, 0), (1, 1), (0, 1), (1, 0)]),
+        Opening(opening_id="op1", moves=[(2, 2), (3, 3), (2, 3), (3, 2)]),
     ]
 
 
@@ -129,12 +123,12 @@ def test_trajectory_hash_is_move_order_sensitive_and_deterministic():
     opponent = _FixedMoveBot([(7, 7), (8, 8)])
     regime_key = _regime_key(deploy_matched=True)
     records_a = play_paired_match(
-        candidate, opponent, [_Opening(opening_id="op0", moves=[(0, 0), (1, 1), (0, 1), (1, 0)])],
+        candidate, opponent, [Opening(opening_id="op0", moves=[(0, 0), (1, 1), (0, 1), (1, 0)])],
         regime_key=regime_key, board_factory=_board_factory, max_plies=DEFAULT_MAX_PLIES, record_sink=None,
     )
     records_b = play_paired_match(
         _FixedMoveBot([(5, 5), (6, 6)]), _FixedMoveBot([(7, 7), (8, 8)]),
-        [_Opening(opening_id="op0", moves=[(0, 0), (1, 1), (0, 1), (1, 0)])],
+        [Opening(opening_id="op0", moves=[(0, 0), (1, 1), (0, 1), (1, 0)])],
         regime_key=regime_key, board_factory=_board_factory, max_plies=DEFAULT_MAX_PLIES, record_sink=None,
     )
     assert [r.trajectory_hash for r in records_a] == [r.trajectory_hash for r in records_b], (
@@ -142,7 +136,7 @@ def test_trajectory_hash_is_move_order_sensitive_and_deterministic():
     )
     records_diff_opening = play_paired_match(
         _FixedMoveBot([(5, 5), (6, 6)]), _FixedMoveBot([(7, 7), (8, 8)]),
-        [_Opening(opening_id="op1", moves=[(2, 2), (3, 3), (2, 3), (3, 2)])],
+        [Opening(opening_id="op1", moves=[(2, 2), (3, 3), (2, 3), (3, 2)])],
         regime_key=regime_key, board_factory=_board_factory, max_plies=DEFAULT_MAX_PLIES, record_sink=None,
     )
     hashes_a = {r.trajectory_hash for r in records_a}

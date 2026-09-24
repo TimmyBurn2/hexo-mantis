@@ -42,7 +42,7 @@ def _history(case: dict[str, Any]) -> list[tuple[int, int]]:
 
 
 @pytest.mark.parametrize("label", _CASES)
-def test_pure_function_goldens(pure_function_battery, label):
+def test_pure_function_goldens(label):
     """G-16 — PASS iff all four pure metric functions (plus `_split_players`, the ply→player
     rule they all share) reproduce the captured scalars EXACTLY for this history, at both
     cluster thresholds and all three winner codes.
@@ -51,7 +51,7 @@ def test_pure_function_goldens(pure_function_battery, label):
     stride-5 / colony / connectivity investigation panels: a drifted metric does not crash
     anything, it just makes every downstream judgement about board structure wrong, silently.
     """
-    case = pure_function_battery["cases"][label]
+    case = _BATTERY["cases"][label]
     history = _history(case)
 
     # ply → player: even plies are p1, odd are p2 (compound-turn aware) — pinned directly
@@ -72,8 +72,8 @@ def test_pure_function_goldens(pure_function_battery, label):
     assert int(count) == case["colony_extension"]["count"], f"{label}: colony count"
     assert int(total) == case["colony_extension"]["total"], f"{label}: colony total"
 
-    for cluster_threshold in pure_function_battery["cluster_thresholds"]:
-        for winner_code in pure_function_battery["winner_codes"]:
+    for cluster_threshold in _BATTERY["cluster_thresholds"]:
+        for winner_code in _BATTERY["winner_codes"]:
             key = f"ct{cluster_threshold}_wc{winner_code}"
 
             longest_line, fraction = _compute_longest_line(history, cluster_threshold,
@@ -91,18 +91,18 @@ def test_pure_function_goldens(pure_function_battery, label):
             )
 
 
-def test_battery_covers_the_captured_shape(pure_function_battery):
+def test_battery_covers_the_captured_shape():
     """G-16 (coverage arm) — PASS iff the battery still has its 22 histories scored at both
     thresholds and all three winner codes. FAIL = the fixture was trimmed, which would let
     G-16 pass while covering less than the capture did."""
-    assert len(pure_function_battery["cases"]) == 22
-    assert pure_function_battery["cluster_thresholds"] == [5, 19]
-    assert pure_function_battery["winner_codes"] == [0, 1, 2]
-    assert pure_function_battery["seed"] == CAPTURE_SEED == 20260723
+    assert len(_BATTERY["cases"]) == 22
+    assert _BATTERY["cluster_thresholds"] == [5, 19]
+    assert _BATTERY["winner_codes"] == [0, 1, 2]
+    assert _BATTERY["seed"] == CAPTURE_SEED == 20260723
 
     # The six-in-a-row vector must still cap its longest line at 6 (old cap-at-6 rule).
-    six = pure_function_battery["cases"]["six_in_a_row_p1"]
-    seven = pure_function_battery["cases"]["seven_collinear_p1"]
+    six = _BATTERY["cases"]["six_in_a_row_p1"]
+    seven = _BATTERY["cases"]["seven_collinear_p1"]
     assert six["longest_line"]["ct5_wc1"]["longest_line"] == 6
     assert seven["longest_line"]["ct5_wc1"]["longest_line"] == 6, (
         "the 7-collinear case must still cap at 6 — the captured cap-at-6 rule"

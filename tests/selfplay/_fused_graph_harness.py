@@ -1,3 +1,5 @@
+# >300 justify (R8): one rig — the three graph-inference suites share these fakes, and a copy
+# per suite is exactly the drift the module exists to prevent.
 """Shared rig for the memory-bounded graph-inference-fusion oracles.
 
 Imports only surfaces LIVE at HEAD, so the rig cannot mask an import regression the suites
@@ -13,6 +15,7 @@ differ between the split and un-split drives for a CORRECT implementation.
 """
 from __future__ import annotations
 
+import time
 from typing import Any
 
 import numpy as np
@@ -21,6 +24,8 @@ import torch
 from mantis.encoding import lookup
 from mantis.selfplay.graph_collate import GraphBatch, GraphWirePayload
 from mantis.selfplay.inference_server import InferenceServer
+from mantis.selfplay.pool_hooks import batch_fill_pct, inference_batch_timing
+from mantis.train.events import emit_iteration_complete_event
 
 GRAPH_SPEC = lookup("gnn_axis_v1")
 SEED = 20260817
@@ -250,3 +255,174 @@ def drive_one_pop(
     batcher.server = server
     server.run()
     return server, batcher, model
+
+
+def server_cfg(**over: Any) -> dict[str, Any]:
+    # `from_config` reads `config["inference"]` and requires an explicit `encoding` key. The
+    # graph arm resolves the fused-forward memory bound at construction, so every site built
+    # from this base needs it; the pair is non-binding by construction, so nothing splits on it.
+    base = {
+        "inference_batch_size": 8, "inference_max_wait_ms": 20.0,
+        "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
+    }
+    base.update(over)
+    return {"inference": base, "encoding": "gnn_axis_v1"}
+
+
+def wire_for(n_graphs: int = 2, nodes_per_graph: int = 3, legal_per_graph: int = 2
+             ) -> GraphWirePayload:
+    """A REAL `GraphWirePayload` whose CSR offsets match `hand_built_batch`'s shape; the loop
+    reads those offsets before any collate runs, so only they have to be real."""
+    nodes = n_graphs * nodes_per_graph
+    return GraphWirePayload(
+        contract_version=1, builder_impl=1, n_graphs=n_graphs,
+        node_feat=np.zeros(nodes * 11, dtype=np.float32),
+        node_coords=np.zeros(nodes * 2, dtype=np.int64),
+        edge_index=np.zeros(0, dtype=np.int64),
+        edge_attr=np.zeros(0, dtype=np.float32),
+        node_offsets=np.arange(0, nodes + 1, nodes_per_graph, dtype=np.int64),
+        edge_offsets=np.zeros(n_graphs + 1, dtype=np.int64),
+        legal_offsets=np.arange(0, n_graphs * legal_per_graph + 1, legal_per_graph,
+                                dtype=np.int64),
+        legal_node_gather=np.zeros(n_graphs * legal_per_graph, dtype=np.int64),
+        policy_dst_slot=np.zeros(n_graphs * legal_per_graph, dtype=np.int64),
+        n_nodes_checksum=np.full(n_graphs, nodes_per_graph, dtype=np.int64),
+        n_stones=np.ones(n_graphs, dtype=np.int64),
+        window_center=np.zeros(n_graphs * 2, dtype=np.int64),
+        current_player=np.ones(n_graphs, dtype=np.int64),
+    )
+
+
+def hand_built_batch(n_graphs: int = 2, nodes_per_graph: int = 3) -> GraphBatch:
+    """A minimal VALID collated batch, without a live Rust queue."""
+    n = n_graphs * nodes_per_graph
+    node_offsets = torch.arange(0, n + 1, nodes_per_graph, dtype=torch.int64)
+    legal_offsets = torch.arange(0, 2 * n_graphs + 1, 2, dtype=torch.int64)
+    return GraphBatch(
+        x=torch.zeros(n, 11, dtype=torch.float32),
+        edge_index=torch.zeros((2, 0), dtype=torch.int64),
+        edge_attr=torch.zeros((0, 5), dtype=torch.float32),
+        legal_offsets=legal_offsets,
+        # The legal rows are 1 and 2 of each graph, ascending across the fuse; all zeros
+        # would pass only because the stub nets read `.numel()`.
+        legal_node_gather=torch.tensor(
+            [g * nodes_per_graph + k for g in range(n_graphs) for k in (1, 2)],
+            dtype=torch.int64,
+        ),
+        node_offsets=node_offsets,
+        n_stones=torch.ones(n_graphs, dtype=torch.int64),
+        n_graphs=n_graphs,
+        device="cpu",
+    )
+
+
+class FiniteGraphNet(torch.nn.Module):
+    """Stub graph net: finite per-legal-node logits + per-graph values, recording every call
+    and able to poison its first logit with NaN."""
+
+    def __init__(self, *, nonfinite: bool = False) -> None:
+        super().__init__()
+        self.dummy = torch.nn.Parameter(torch.zeros(1))
+        self.nonfinite = nonfinite
+        self.calls: list[tuple[int, ...]] = []
+
+    def forward_batch(self, x, edge_index, edge_attr, legal_index, stone_mask, node_offsets):
+        self.calls.append(tuple(x.shape))
+        n_legal = int(legal_index.numel())  # rows, not a dense mask
+        b = int(node_offsets.shape[0]) - 1
+        logits = torch.zeros(n_legal, dtype=torch.float32)
+        value = torch.zeros(b, 1, dtype=torch.float32)
+        if self.nonfinite:
+            logits[0] = float("nan")
+        return logits, value, torch.zeros(b, 65, dtype=torch.float32)
+
+
+class CountingGraphBatcher:
+    """Drives `_run_graph_loop` over scripted per-pop request counts, sleeping `wait_s` inside
+    every pop so the measured collector wait has a known lower bound."""
+
+    def __init__(self, wire: Any, counts: list[int], wait_s: float = 0.0) -> None:
+        self._wire = wire
+        self._counts = list(counts)
+        self._wait_s = wait_s
+        self.server: InferenceServer | None = None
+        self.results: list[tuple] = []
+        self.failures: list[tuple[list[int], str]] = []
+        self.closed = 0
+        self.model_version = 0
+
+    def next_graph_batch(self, batch_size: int, max_wait_ms: float):
+        if self._wait_s:
+            time.sleep(self._wait_s)
+        if not self._counts:
+            assert self.server is not None
+            self.server._stop_event.set()
+            return [], None
+        return list(range(1, self._counts.pop(0) + 1)), self._wire
+
+    def submit_graph_inference_results(self, ids, probs, offsets, values) -> None:
+        self.results.append((list(ids), probs, offsets, values))
+
+    def submit_graph_inference_failure(self, ids, error_msg: str) -> None:
+        self.failures.append((list(ids), error_msg))
+
+    def bump_model_version(self) -> int:
+        self.model_version += 1
+        return self.model_version
+
+    def close(self) -> None:
+        self.closed += 1
+
+
+class ListSink:
+    def __init__(self) -> None:
+        self.events: list[dict[str, Any]] = []
+
+    def emit(self, event) -> None:
+        self.events.append(dict(event))
+
+
+class TelemetryPool:
+    """The narrow `PoolTelemetryLike` surface over a REAL inference server, driving the REAL
+    `pool_hooks` rather than a restatement of them."""
+
+    search_kind = "gumbel"  # suppresses the PUCT-only cluster block
+    avg_game_length = 12.0
+    x_winrate = 0.5
+    o_winrate = 0.4
+    draw_rate = 0.1  # the third outcome share.
+    draws = 1
+    sims_per_sec = 100.0
+    recent_move_histories: list[list[tuple[int, int]]] = []
+
+    def __init__(self, server: InferenceServer) -> None:
+        self._inference_server = server
+
+    @property
+    def batch_fill_pct(self) -> float:
+        return batch_fill_pct(self)
+
+    @property
+    def inference_batch_timing(self) -> dict[str, Any]:
+        return inference_batch_timing(self)
+
+
+class Buffer:
+    size = 7
+    capacity = 64
+
+
+class RStats:
+    mcts_mean_depth = 3.0
+    mcts_mean_root_concentration = 0.1
+
+
+def emit_iteration(pool: Any) -> dict[str, Any]:
+    """One `iteration_complete` for `pool` through the real builder; the event is returned."""
+    sink = ListSink()
+    emit_iteration_complete_event(
+        11, 10, 4, pool, Buffer(),
+        lambda: 0.0, None, {}, RStats(), sink, search_levers={},
+    )
+    assert len(sink.events) == 1
+    return sink.events[0]

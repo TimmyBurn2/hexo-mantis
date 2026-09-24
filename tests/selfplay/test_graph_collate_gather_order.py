@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from _wire_geometry import geometry_kwargs
 
-from mantis.encoding import lookup
 from mantis.selfplay.graph_collate import (
     GatherNotStrictlyIncreasing,
     GraphContractError,
@@ -17,15 +17,11 @@ from mantis.selfplay.graph_collate import (
     collate_graph_batch,
 )
 
-_ENC = "gnn_axis_v1"
-
 
 def _collate(fields: dict, **kw):
-    spec = lookup(_ENC)
     return collate_graph_batch(
-        GraphWirePayload(**fields), expected_version=1, trunk_size=spec.trunk_size,
-        win_length=spec.win_length, node_feat_dim=spec.node_feat_dim,
-        edge_feat_dim=spec.edge_feat_dim, device="cpu", **kw,
+        GraphWirePayload(**fields), expected_version=1, device="cpu",
+        **geometry_kwargs(), **kw,
     )
 
 

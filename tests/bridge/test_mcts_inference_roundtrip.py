@@ -71,6 +71,24 @@ def test_mctstree_forced_root_child_round_trip():
     assert tree.forced_root_child is None
 
 
+def _serve_one_uniform_batch(ib, batch_size: int = 8, max_wait_ms: int = 50) -> bool:
+    """Pop one graph batch and submit uniform per-segment probs; False on an empty pop."""
+    ids, wire = ib.next_graph_batch(batch_size, max_wait_ms)
+    ids = list(ids)
+    if not ids:
+        return False
+    offsets = np.asarray(wire.legal_offsets, dtype=np.int64)
+    total = int(offsets[-1])
+    probs = np.zeros((total,), dtype=np.float32)
+    for i in range(len(offsets) - 1):
+        s, e = int(offsets[i]), int(offsets[i + 1])
+        if e > s:
+            probs[s:e] = 1.0 / (e - s)  # per-graph segmented softmax -> sum 1.0
+    vals = np.zeros((len(ids),), dtype=np.float32)
+    ib.submit_graph_inference_results(ids, probs, offsets, vals)
+    return True
+
+
 def test_mctstree_expand_and_backup_ls_graph_round_trip():
     """The graph legal-set expand door, executed rather than only named.
 
@@ -82,23 +100,9 @@ def test_mctstree_expand_and_backup_ls_graph_round_trip():
     ib = _engine.InferenceBatcher(encoding_spec=spec)
 
     def consumer():
-        rounds = 0
-        while rounds < 500:
-            rounds += 1
-            ids, wire = ib.next_graph_batch(8, 50)
-            ids = list(ids)
-            if not ids:
-                continue
-            offsets = np.asarray(wire.legal_offsets, dtype=np.int64)
-            total = int(offsets[-1])
-            probs = np.zeros((total,), dtype=np.float32)
-            for i in range(len(offsets) - 1):
-                s, e = int(offsets[i]), int(offsets[i + 1])
-                if e > s:
-                    probs[s:e] = 1.0 / (e - s)
-            vals = np.zeros((len(ids),), dtype=np.float32)
-            ib.submit_graph_inference_results(ids, probs, offsets, vals)
-            return
+        for _ in range(500):
+            if _serve_one_uniform_batch(ib):
+                return
 
     board = _engine.Board.with_encoding_name("gnn_axis_v1")
     board.apply_move(0, 0)
@@ -178,19 +182,7 @@ def test_inference_batcher_graph_mock_round_trip():
     rounds = 0
     while ib.completed_graph_games() < n_games and rounds < 500:
         rounds += 1
-        ids, wire = ib.next_graph_batch(8, 50)
-        ids = list(ids)
-        if not ids:
-            continue
-        offsets = np.asarray(wire.legal_offsets, dtype=np.int64)
-        total = int(offsets[-1])
-        probs = np.zeros((total,), dtype=np.float32)
-        for i in range(len(offsets) - 1):
-            s, e = int(offsets[i]), int(offsets[i + 1])
-            if e > s:
-                probs[s:e] = 1.0 / (e - s)  # per-graph segmented softmax -> sum 1.0
-        vals = np.zeros((len(ids),), dtype=np.float32)
-        ib.submit_graph_inference_results(ids, probs, offsets, vals)
+        _serve_one_uniform_batch(ib)
     assert ib.completed_graph_games() == n_games, f"graph mock games stalled after {rounds} rounds"
     ib.check_graph_request([(0, 0, 1), (1, 0, -1)], 1, 100)  # structural guard, no raise
     ib.close()
@@ -202,23 +194,9 @@ def test_inference_batcher_submit_graphs_and_wait():
     ib = _engine.InferenceBatcher(encoding_spec=spec)
 
     def consumer():
-        rounds = 0
-        while rounds < 500:
-            rounds += 1
-            ids, wire = ib.next_graph_batch(8, 50)
-            ids = list(ids)
-            if not ids:
-                continue
-            offsets = np.asarray(wire.legal_offsets, dtype=np.int64)
-            total = int(offsets[-1])
-            probs = np.zeros((total,), dtype=np.float32)
-            for i in range(len(offsets) - 1):
-                s, e = int(offsets[i]), int(offsets[i + 1])
-                if e > s:
-                    probs[s:e] = 1.0 / (e - s)
-            vals = np.zeros((len(ids),), dtype=np.float32)
-            ib.submit_graph_inference_results(ids, probs, offsets, vals)
-            return
+        for _ in range(500):
+            if _serve_one_uniform_batch(ib):
+                return
 
     t = threading.Thread(target=consumer, daemon=True)
     t.start()

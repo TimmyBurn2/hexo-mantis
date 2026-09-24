@@ -6,7 +6,7 @@ arm could assert aggregate equivalence at best, and no CUDA arm is run here.
 from __future__ import annotations
 
 import threading
-from dataclasses import dataclass
+from _arena_stubs import Opening
 
 import pytest
 
@@ -15,12 +15,6 @@ from mantis.arena.match import DEFAULT_MAX_PLIES, play_paired_match
 from mantis.arena.regime import RegimeKey
 
 _ENCODING = "gnn_axis_v1"
-
-
-@dataclass(frozen=True)
-class _Opening:
-    opening_id: str
-    moves: list
 
 
 class _DeterministicBot:
@@ -56,9 +50,9 @@ def _regime_key() -> RegimeKey:
     )
 
 
-def _openings(n: int = 6) -> list[_Opening]:
+def _openings(n: int = 6) -> list[Opening]:
     """Build `n` distinct four-ply openings derived from the engine's own legal set."""
-    openings: list[_Opening] = []
+    openings: list[Opening] = []
     for i in range(n):
         board = _board_factory()
         moves: list[tuple[int, int]] = []
@@ -67,7 +61,7 @@ def _openings(n: int = 6) -> list[_Opening]:
             move = legal[(i * 7 + ply * 3) % len(legal)]
             board.apply_move(*move)
             moves.append(move)
-        openings.append(_Opening(opening_id=f"op{i}", moves=moves))
+        openings.append(Opening(opening_id=f"op{i}", moves=moves))
     return openings
 
 

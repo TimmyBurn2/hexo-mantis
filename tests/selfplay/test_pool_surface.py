@@ -9,16 +9,13 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
-from typing import Any
 
 import pytest
 import torch
 
+from _pool_harness import graph_pool
 from mantis._engine import HexgBuffer
-from mantis.encoding import lookup
-from mantis.model import GnnArch, build_net
 from mantis.selfplay.buffers import BufferKind, ReplayFacade
-from mantis.selfplay.pool import WorkerPool
 from mantis.selfplay.pool_hooks import ActorSyncTarget, InferenceStats, RunnerStats
 from mantis.train.coordinator.config import WorkerPoolLike
 
@@ -74,55 +71,14 @@ ALLOWED_MANTIS_ROOTS = {
 FORBIDDEN_MANTIS_ROOTS = {"mantis.eval", "mantis.train", "mantis.bots"}
 
 
-def _cfg(encoding: str, **over: Any) -> dict[str, Any]:
-    # `selfplay`/`inference`/`train` are nested schema-shaped sections, so the `from_config`
-    # readers no longer take a flat dict with a top-level-namespace fallback. `over` still layers
-    # onto `selfplay`.
-    selfplay: dict[str, Any] = {
-        "search": {"kind": "puct"}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
-        "c_visit": 50.0,
-        "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_explore_moves": 10, "search_stats_every": 8,
-        "results_queue_cap": 10_000, "random_opening_plies": 0,
-        "log_investigation_metrics": True,
-        "mcts": {"n_simulations": 50, "c_puct": 1.5, "fpu_reduction": 0.25,
-                 "quiescence_enabled": True, "quiescence_blend_2": 0.3,
-                 "dirichlet_alpha": 0.3, "dirichlet_epsilon": 0.25, "dirichlet_enabled": True},
-        "playout_cap": {"fast_sims": 40, "fast_prob": 0.0, "standard_sims": 0,
-                        "full_search_prob": 0.0, "n_sims_quick": 0, "n_sims_full": 0,
-                        "temperature_threshold_compound_moves": 0, "temp_min": 0.5},
-    }
-    selfplay.update(over)
-    inference = {
-        "inference_batch_size": 4,
-        "inference_max_wait_ms": 10,
-        "edge_geometry_check": "inline", "compile_trunk": False,
-        # The graph arm resolves the fused-forward memory bound at construction. NON-BINDING BY
-        # CONSTRUCTION here: this fixture is about wiring, and a cap that bound would exercise a
-        # split with nothing asserting the M.
-        "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
-    }
-    train = {"draw_reward": -0.5, "ply_cap_value": -0.5}
-    return {"encoding": encoding, "deploy": {"search": {"kind": "puct"}}, "selfplay": selfplay,
-            "inference": inference, "train": train}
-
-
 @pytest.fixture(scope="module")
 def device() -> torch.device:
     return torch.device("cpu")
 
 
-def _graph_pool(device: torch.device, buffer: Any = None, **cfg_over: Any) -> WorkerPool:
-    spec = lookup("gnn_axis_v1")
-    arch = GnnArch(in_dim=spec.node_feat_dim, edge_dim=spec.edge_feat_dim,
-                   hidden=16, num_layers=1)
-    raw = buffer if buffer is not None else HexgBuffer(capacity=32, visit_capacity=128,
-                                                       encoding="gnn_axis_v1")
-    return WorkerPool(build_net(arch), _cfg("gnn_axis_v1", **cfg_over), device, raw, arch=arch)
-
-
 def test_pool_presents_every_frozen_member(device) -> None:
     """H-01 — PASS iff every member the committed trainer reads exists on the pool with the right kind: plain attributes as attributes, properties as properties on the CLASS (so they are computed, not snapshotted at construction), and methods as callables."""
-    pool = _graph_pool(device)
+    pool = graph_pool(device=device, capacity=32, n_simulations=50, fast_sims=40)
 
     for name in FROZEN_ATTRS:
         assert hasattr(pool, name), f"missing attribute {name!r}"
@@ -140,7 +96,7 @@ def test_pool_presents_every_frozen_member(device) -> None:
 
 def test_pool_satisfies_both_runtime_protocols(device) -> None:
     """H-01 (Protocol arm) — PASS iff the pool satisfies the trainer's committed `WorkerPoolLike` AND this package's `ActorSyncTarget` (WP-UNFREEZE, R49)."""
-    pool = _graph_pool(device)
+    pool = graph_pool(device=device, capacity=32, n_simulations=50, fast_sims=40)
     assert isinstance(pool, WorkerPoolLike)
     assert isinstance(pool, ActorSyncTarget)
 
@@ -150,7 +106,7 @@ def test_snapshot_dataclass_field_sets_are_frozen(device) -> None:
     assert set(RunnerStats.__dataclass_fields__) == RUNNER_STATS_FIELDS
     assert set(InferenceStats.__dataclass_fields__) == INFERENCE_STATS_FIELDS
 
-    pool = _graph_pool(device)
+    pool = graph_pool(device=device, capacity=32, n_simulations=50, fast_sims=40)
     rstats = pool.runner_stats()
     assert isinstance(rstats, RunnerStats)
     # The trainer's regime-gated block reads these two by name.
@@ -173,7 +129,7 @@ def test_snapshot_dataclass_field_sets_are_frozen(device) -> None:
 
 def test_winrates_are_computed_from_the_right_counters(device) -> None:
     """H-01 (winrate arm) — PASS iff `x_winrate == x_wins / games_completed` and `o_winrate == o_wins / games_completed`, with both 0.0 at zero games."""
-    pool = _graph_pool(device)
+    pool = graph_pool(device=device, capacity=32, n_simulations=50, fast_sims=40)
     assert pool.x_winrate == 0.0 and pool.o_winrate == 0.0, "zero games ⇒ 0.0, not NaN"
 
     pool.games_completed = 10
@@ -185,24 +141,25 @@ def test_winrates_are_computed_from_the_right_counters(device) -> None:
 
 def test_no_op_recorder_default_accepts_a_step(device) -> None:
     """H-01 (default-seam arm) — PASS iff a pool built without a recorder accepts `update_checkpoint_step` silently."""
-    pool = _graph_pool(device)
+    pool = graph_pool(device=device, capacity=32, n_simulations=50, fast_sims=40)
     pool.update_checkpoint_step(17)  # must not raise on the no-op recorder
 
 
 def test_pool_replay_buffer_is_the_facade(device) -> None:
     """E-07 — PASS iff `pool.replay_buffer` IS a `ReplayFacade` wrapping the exact raw buffer handed to the constructor, with the kind resolved from the pool's own spec."""
     graph_raw = HexgBuffer(capacity=32, encoding="gnn_axis_v1", visit_capacity=128)
-    graph_pool = _graph_pool(device, buffer=graph_raw)
-    assert isinstance(graph_pool.replay_buffer, ReplayFacade)
-    assert graph_pool.replay_buffer.raw is graph_raw, (
+    wrapped = graph_pool(device=device, buffer=graph_raw, capacity=32,
+                          n_simulations=50, fast_sims=40)
+    assert isinstance(wrapped.replay_buffer, ReplayFacade)
+    assert wrapped.replay_buffer.raw is graph_raw, (
         "the facade must wrap the ctor's buffer, not a copy")
-    assert graph_pool.replay_buffer.kind is BufferKind.GRAPH
+    assert wrapped.replay_buffer.kind is BufferKind.GRAPH
 
 
 def test_pool_does_not_keep_a_second_handle_on_the_raw_buffer(device) -> None:
     """E-07 (bypass arm) — PASS iff no pool attribute other than the facade holds the raw buffer."""
     raw = HexgBuffer(capacity=32, encoding="gnn_axis_v1", visit_capacity=128)
-    pool = _graph_pool(device, buffer=raw)
+    pool = graph_pool(device=device, buffer=raw, capacity=32, n_simulations=50, fast_sims=40)
 
     holders = [name for name, value in vars(pool).items() if value is raw]
     assert holders == [], (

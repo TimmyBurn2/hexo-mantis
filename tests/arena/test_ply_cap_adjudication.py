@@ -9,7 +9,7 @@ to player 1 and then alternates in PAIRS, so a bot-scripted line splits between 
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from _arena_stubs import Opening
 
 import pytest
 
@@ -42,12 +42,6 @@ _PLANTED = [
 #: The same position continued to a genuine win on the last permitted ply — the shape that is
 #: indistinguishable from a cap without the `terminal` field.
 _WIN_ON_CAP = [*_PLANTED, (10, 4), (5, 0)]
-
-
-@dataclass(frozen=True)
-class _Opening:
-    opening_id: str
-    moves: list
 
 
 class _FirstLegalBot:
@@ -91,7 +85,7 @@ def _regime_key() -> RegimeKey:
 def _play(moves: list, *, max_plies: int, adjudicator):
     return play_paired_match(
         _FirstLegalBot(), _FirstLegalBot(),
-        [_Opening(opening_id="planted", moves=list(moves))],
+        [Opening(opening_id="planted", moves=list(moves))],
         regime_key=_regime_key(), board_factory=_board_factory, record_sink=None,
         max_plies=max_plies, adjudicator=adjudicator,
     )
