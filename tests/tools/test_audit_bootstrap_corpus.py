@@ -15,11 +15,11 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
+from _toolpath import load_module_by_path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL_PATH = REPO_ROOT / "tools" / "audit_bootstrap_corpus.py"
@@ -31,12 +31,7 @@ def _load_tool():
     R5/LAW-17 ban `sys.path` mutation and `tools/` is not an importable package, so the tool
     is spec-loaded from its file exactly as the other `tests/tools/` oracles do it.
     """
-    spec = importlib.util.spec_from_file_location("_audit_bootstrap_corpus", TOOL_PATH)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_module_by_path("_audit_bootstrap_corpus", TOOL_PATH)
 
 
 TOOL = _load_tool()

@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import ast
 import importlib.util
-import sys
 from pathlib import Path
 
 import pytest
+from _toolpath import load_module_by_path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GATE_PATH = REPO_ROOT / "tools" / "ci_gates" / "encoding_io_gate.py"
@@ -19,12 +19,7 @@ GATE_PATH = REPO_ROOT / "tools" / "ci_gates" / "encoding_io_gate.py"
 
 def _load_gate():
     """Load the gate module by path, since `tools/` is not importable and `sys.path` may not move."""
-    spec = importlib.util.spec_from_file_location("_encoding_io_gate", GATE_PATH)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_module_by_path("_encoding_io_gate", GATE_PATH)
 
 
 GATE = _load_gate()

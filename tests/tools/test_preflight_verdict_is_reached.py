@@ -12,12 +12,12 @@ is now written BEFORE the wait.
 """
 from __future__ import annotations
 
-import importlib.util
 import json
 from pathlib import Path
 from typing import Any
 
 import pytest
+from _toolpath import load_module_by_path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
@@ -25,11 +25,7 @@ TOOL_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
 
 def _load_tool() -> Any:
     """Load the tool by absolute path; `tools/` is not an importable package."""
-    spec = importlib.util.spec_from_file_location("_pfm_verdict_probe", TOOL_PATH)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return load_module_by_path("_pfm_verdict_probe", TOOL_PATH)
 
 
 TOOL = _load_tool()

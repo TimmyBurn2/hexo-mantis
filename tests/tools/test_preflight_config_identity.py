@@ -11,10 +11,10 @@ itself is pinned to ONE authority (`mantis.config.loader.config_identity_sha256`
 """
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
 
 import pytest
+from _toolpath import load_module_by_path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GATE_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
@@ -22,11 +22,7 @@ GATE_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
 
 @pytest.fixture(scope="module")
 def tool():
-    spec = importlib.util.spec_from_file_location("preflight_mint_identity_test", GATE_PATH)
-    assert spec and spec.loader
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+    return load_module_by_path("preflight_mint_identity_test", GATE_PATH)
 
 
 def test_matching_identity_is_a_match(tool):

@@ -13,12 +13,12 @@ the tree-wide twin, plus gate 3c's missing third arm: `tree_floor <= collected`.
 """
 from __future__ import annotations
 
-import importlib.util
 import os
 import subprocess
 from pathlib import Path
 
 import pytest
+from _toolpath import load_module_by_path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL_PATH = REPO_ROOT / "tools" / "ci_gates" / "tier_census.py"
@@ -27,11 +27,7 @@ GATE = REPO_ROOT / "tools" / "ci_gates" / "test_count_gate.sh"
 
 
 def _load() -> object:
-    spec = importlib.util.spec_from_file_location("_tier_census_probe", TOOL_PATH)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return load_module_by_path("_tier_census_probe", TOOL_PATH)
 
 
 TOOL = _load()

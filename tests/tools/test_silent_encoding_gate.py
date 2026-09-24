@@ -1,6 +1,3 @@
-# >300 justify (R8): ONE gate's producer suite over ONE loaded module object plus ONE corpus
-# fixture; a split forks the loader and the `_fires` helper into two copies that drift apart
-# while both stay green, which is this gate's own defect class.
 """Producer test + mutation self-test for CI gate 11.
 
 No gate input without a producer test: a grep gate that cannot be shown to BITE is decoration.
@@ -9,21 +6,17 @@ the real tree, so the suite is order-independent and leaves nothing behind.
 """
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
 
 import pytest
+from _toolpath import load_module_by_path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GATE_PATH = REPO_ROOT / "tools" / "ci_gates" / "silent_encoding_gate.py"
 
 
 def _load_gate():
-    spec = importlib.util.spec_from_file_location("silent_encoding_gate", GATE_PATH)
-    mod = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(mod)
-    return mod
+    return load_module_by_path("silent_encoding_gate", GATE_PATH)
 
 
 GATE = _load_gate()

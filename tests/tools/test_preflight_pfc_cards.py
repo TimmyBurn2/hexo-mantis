@@ -6,7 +6,6 @@ ORACLE-OUTDIR-CLEANUP) are QUEUED, not tested here — see wp/WPCLEAN/ADJUDICATI
 """
 from __future__ import annotations
 
-import importlib.util
 import json
 import subprocess
 import sys
@@ -14,6 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from _toolpath import load_module_by_path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
@@ -23,11 +23,7 @@ SMOKE_RUN_ID = "smoke_preflight_armed"
 
 @pytest.fixture(scope="module")
 def tool():
-    spec = importlib.util.spec_from_file_location("preflight_mint_pfc_test", TOOL_PATH)
-    assert spec and spec.loader
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+    return load_module_by_path("preflight_mint_pfc_test", TOOL_PATH)
 
 
 @pytest.fixture(autouse=True)

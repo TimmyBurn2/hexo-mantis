@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import importlib.util
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +12,7 @@ from mantis.encoding import lookup
 from mantis.model import GnnArchV2, build_net, gnn_widths_block
 from mantis.model.identity import net_param_hash
 from mantis.train.checkpoints import save_checkpoint
+from _toolpath import load_module_by_path
 
 _REPO = Path(__file__).resolve().parents[2]
 _ENC = "gnn_axis_v1"
@@ -20,12 +20,7 @@ _TINY = dict(hidden=8, num_layers=1, policy_hidden=8, value_hidden=8)
 
 
 def _minimal_config() -> dict[str, Any]:
-    path = _REPO / "tests" / "train" / "_warmstart_config.py"
-    spec = importlib.util.spec_from_file_location("_warmstart_config_for_ladder", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
+    module = load_module_by_path("_warmstart_config_for_ladder", _REPO / "tests" / "train" / "_warmstart_config.py")
     return module.minimal_config()
 
 

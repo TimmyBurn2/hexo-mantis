@@ -4,11 +4,11 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
+from _toolpath import load_module_by_path
 
 _REPO = Path(__file__).resolve().parents[2]
 _RUN = "runx"
@@ -17,12 +17,7 @@ _RUN = "runx"
 @pytest.fixture(scope="module")
 def follower_mod():
     path = _REPO / "tools" / "strix_follower.py"
-    spec = importlib.util.spec_from_file_location("strix_follower_under_test", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_module_by_path("strix_follower_under_test", path)
 
 
 def _run_dir(tmp_path: Path) -> Path:
@@ -231,12 +226,7 @@ def test_the_equal_work_cell_composes_through_the_frontier_as_the_256_256_rung(f
     """The unit the sidecar names is the RoundSpec the child plays: ours 256, strix 256, 288 games, 8 in flight."""
     from mantis.config.loader import load_config
 
-    path = _REPO / "tools" / "strength_frontier.py"
-    spec = importlib.util.spec_from_file_location("strength_frontier_for_follower", path)
-    assert spec is not None and spec.loader is not None
-    frontier = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = frontier
-    spec.loader.exec_module(frontier)
+    frontier = load_module_by_path("strength_frontier_for_follower", _REPO / "tools" / "strength_frontier.py")
     config = load_config(str(_REPO / "configs" / "run8.yaml"))
     base = frontier.base_round_spec(config, work_dir=tmp_path / "w")
     cell = follower_mod.compose_cell(Path("/x/run8_00015000_deadbeef.ckpt"), unit="equal_work",

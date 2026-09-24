@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -11,18 +10,14 @@ import pytest
 
 from mantis.bots.protocol import BotProtocol
 from mantis.bots.strix import NET_ONLY_SUFFIX, StrixBot, load_request
+from _toolpath import load_module_by_path
 
 _REPO = Path(__file__).resolve().parents[2]
 _STEM = "checkpoint_00237000"
 
 
 def _load(name: str, rel: str) -> Any:
-    spec = importlib.util.spec_from_file_location(name, _REPO / rel)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_module_by_path(name, _REPO / rel)
 
 
 @pytest.fixture(scope="module")

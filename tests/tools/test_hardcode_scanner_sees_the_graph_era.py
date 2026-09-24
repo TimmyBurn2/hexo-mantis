@@ -10,16 +10,13 @@ scanned the day it lands.
 """
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
 
 import pytest
+from _toolpath import load_module_by_path
 
 _REPO = Path(__file__).resolve().parents[2]
-_SPEC = importlib.util.spec_from_file_location("hardcode_scan", _REPO / "tools" / "hardcode_scan.py")
-assert _SPEC is not None and _SPEC.loader is not None
-H = importlib.util.module_from_spec(_SPEC)
-_SPEC.loader.exec_module(H)
+H = load_module_by_path("hardcode_scan", _REPO / "tools" / "hardcode_scan.py")
 
 
 def test_the_target_set_is_derived_from_the_live_registry() -> None:

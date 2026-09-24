@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import sys
 from pathlib import Path
 
 import pytest
@@ -12,6 +11,7 @@ import torch
 from mantis.config.loader import load_config
 from mantis.encoding import lookup
 from mantis.model import arch_from_spec_and_config, build_net
+from _toolpath import load_module_by_path
 
 _REPO = Path(__file__).resolve().parents[2]
 _CONFIG = _REPO / "configs" / "run8.yaml"
@@ -22,12 +22,7 @@ _GAME = ["(-2,2)", "(1,2)", "(3,1)", "(-2,1)", "(-2,0)", "(-2,-2)", "(-2,-1)", "
 @pytest.fixture(scope="module")
 def bench():
     path = _REPO / "tools" / "bench_server.py"
-    spec = importlib.util.spec_from_file_location("bench_server_under_test", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_module_by_path("bench_server_under_test", path)
 
 
 def _events(tmp_path: Path, games: list[list[str]]) -> Path:

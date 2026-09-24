@@ -10,6 +10,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
+from _toolpath import load_module_by_path
 
 _REPO = Path(__file__).resolve().parents[2]
 _BOOKS_DIR = _REPO / "src" / "mantis" / "arena" / "books"
@@ -21,12 +22,7 @@ _POOL_ARGS = ["--seed", "20260915", "--plies", "4", "--n", "512", "--exclude-boo
 
 @pytest.fixture(scope="module")
 def minter():
-    spec = importlib.util.spec_from_file_location("mint_opening_book_under_test", _MINTER)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_module_by_path("mint_opening_book_under_test", _MINTER)
 
 
 def _moves_of(payload: dict) -> list[list[list[int]]]:

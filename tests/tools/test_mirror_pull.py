@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import sys
 from pathlib import Path
 
 import pytest
@@ -12,18 +11,14 @@ import pytest
 from mantis.diagnostics import mirror_receipts as D
 from mantis.train import bundle_receipts as R
 from mantis.util import mirror_receipts as U
+from _toolpath import load_module_by_path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 _TOOL = REPO_ROOT / "tools" / "mirror_pull.py"
 
 
 def _tool():
-    spec = importlib.util.spec_from_file_location("mirror_pull", _TOOL)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_module_by_path("mirror_pull", _TOOL)
 
 
 TOOL = _tool()

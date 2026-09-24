@@ -6,14 +6,13 @@ and the health badge is never green while an input is unread."""
 from __future__ import annotations
 
 import importlib
-import importlib.util
 import json
 import os
 import re
-import sys
 from pathlib import Path
 
 import pytest
+from _toolpath import load_module_by_path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 _SHIM = REPO_ROOT / "tools" / "run_dashboard.py"
@@ -36,12 +35,7 @@ def tier3(dashboard):
 
 @pytest.fixture(scope="module")
 def shim():
-    spec = importlib.util.spec_from_file_location("run_dashboard", _SHIM)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_module_by_path("run_dashboard", _SHIM)
 
 
 def _write(tmp_path: Path, rows: list[dict], name: str = "events.jsonl") -> Path:

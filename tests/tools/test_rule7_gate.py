@@ -13,10 +13,10 @@ through `rule7_gate.scan_text`, the SAME function the gate's own scan and self-t
 from __future__ import annotations
 
 import importlib.util
-import sys
 from pathlib import Path
 
 import pytest
+from _toolpath import load_module_by_path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GATE_PATH = REPO_ROOT / "tools" / "ci_gates" / "rule7_gate.py"
@@ -24,12 +24,7 @@ GATE_PATH = REPO_ROOT / "tools" / "ci_gates" / "rule7_gate.py"
 
 def _load_gate():
     """Load the gate by PATH (R5/LAW-17 ban `sys.path` mutation; `tools/` is not a package)."""
-    spec = importlib.util.spec_from_file_location("_rule7_gate", GATE_PATH)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_module_by_path("_rule7_gate", GATE_PATH)
 
 
 GATE = _load_gate()

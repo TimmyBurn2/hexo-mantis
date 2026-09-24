@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import importlib
-import importlib.util
 import json
 import re
 from pathlib import Path
 
 import pytest
+
+from _toolpath import load_module_by_path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 _SHIM = REPO_ROOT / "tools" / "game_viewer.py"
@@ -192,10 +193,7 @@ def test_the_page_states_the_self_play_stats_gap_rather_than_drawing_an_empty_he
 
 
 def test_the_cli_writes_the_page_and_one_data_file_per_shard(tmp_path):
-    spec = importlib.util.spec_from_file_location("game_viewer", _SHIM)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = load_module_by_path("game_viewer", _SHIM)
     d = _games_dir(tmp_path)
     out = tmp_path / "viewer"
     rc = module.main(["--run", f"t={d}", "--out", str(out), "--title", "t"])

@@ -3,11 +3,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
+from _toolpath import load_module_by_path
 
 _REPO = Path(__file__).resolve().parents[2]
 _NET = "a9a46c55bd1ceadb38145fef6527254d77d37900aebea4332def55ca75f56bfc"
@@ -19,12 +19,7 @@ _OPENING = {"book": "book_v1_s20260625_p4", "index": 0, "opening_id": "0", "rela
 @pytest.fixture(scope="module")
 def bot_mod(ladder):
     path = _REPO / "tools" / "ladder_bot.py"
-    spec = importlib.util.spec_from_file_location("ladder_bot_under_test", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_module_by_path("ladder_bot_under_test", path)
 
 
 @pytest.mark.parametrize("text, want", [

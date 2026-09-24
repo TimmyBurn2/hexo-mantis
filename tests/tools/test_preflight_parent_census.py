@@ -13,9 +13,9 @@ is bound on the tool module as the same object.
 from __future__ import annotations
 
 import ast
-import importlib.util
 import tokenize
 from pathlib import Path
+from _toolpath import load_module_by_path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
@@ -100,11 +100,7 @@ def test_the_parent_half_defines_no_manifest_global() -> None:
 
 
 def _load_tool():
-    spec = importlib.util.spec_from_file_location("preflight_mint_census", TOOL_PATH)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return load_module_by_path("preflight_mint_census", TOOL_PATH)
 
 
 def _sibling_top_level_names() -> list[str]:
@@ -132,11 +128,7 @@ def test_two_trees_in_one_process_each_get_their_own_sibling(tmp_path) -> None:
     scratch.mkdir(parents=True)
     shutil.copy2(TOOL_PATH, scratch / "preflight_mint.py")
     shutil.copy2(PARENT_PATH, scratch / "preflight_mint_parent.py")
-    spec = importlib.util.spec_from_file_location("preflight_mint_census_copy",
-                                                  scratch / "preflight_mint.py")
-    assert spec is not None and spec.loader is not None
-    copy = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(copy)
+    copy = load_module_by_path("preflight_mint_census_copy", scratch / "preflight_mint.py")
     assert copy._parent_half.__file__ == str(scratch / "preflight_mint_parent.py"), (
         "the copied tool must load the COPIED sibling, never the real tree's cached one"
     )

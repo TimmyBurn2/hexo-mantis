@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import create_model
+from _toolpath import load_module_by_path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GATE_PATH = REPO_ROOT / "tools" / "ci_gates" / "contract_doc_gate.py"
@@ -31,11 +32,7 @@ def _run(doc: Path) -> subprocess.CompletedProcess:
 
 @pytest.fixture
 def gate_module():
-    spec = importlib.util.spec_from_file_location("contract_doc_gate", GATE_PATH)
-    assert spec and spec.loader
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+    return load_module_by_path("contract_doc_gate", GATE_PATH)
 
 
 @pytest.fixture

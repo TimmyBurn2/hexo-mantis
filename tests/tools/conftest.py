@@ -4,7 +4,6 @@ from __future__ import annotations
 import importlib.util
 import json
 import shutil
-import sys
 import threading
 from collections.abc import Iterator
 from pathlib import Path
@@ -12,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from mantis.util.loadpkg import load_tools_package
+from _toolpath import load_module_by_path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 #: The probe paths from the out-dir and symlink oracles, kept as literals rather than imported
@@ -78,13 +78,7 @@ def _preflight_probe_path_is_not_left_in_the_tree():
 
 
 def _load_puller():
-    spec = importlib.util.spec_from_file_location("_conftest_mirror_pull",
-                                                  REPO_ROOT / "tools" / "mirror_pull.py")
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_module_by_path("_conftest_mirror_pull", REPO_ROOT / "tools" / "mirror_pull.py")
 
 
 def _run_dirs_under(base: Path) -> list[tuple[Path, str]]:

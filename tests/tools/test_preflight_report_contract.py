@@ -1,21 +1,17 @@
 """The preflight_report contract's rc band is DERIVED from `RESERVED_CODES`, never transcribed (C-5)."""
 from __future__ import annotations
 
-import importlib.util
 import re
 from pathlib import Path
+from _toolpath import load_module_by_path
 
 _REPO = Path(__file__).resolve().parents[2]
 _DOC = _REPO / "docs" / "contracts" / "preflight_report.md"
 
 
 def _parent_module():
-    spec = importlib.util.spec_from_file_location(
+    return load_module_by_path(
         "preflight_mint_parent", _REPO / "tools" / "ci_gates" / "preflight_mint_parent.py")
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def test_the_doc_states_the_derived_band_and_no_stale_one() -> None:
