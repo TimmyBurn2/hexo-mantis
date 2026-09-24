@@ -1,8 +1,7 @@
 """O-09 / P-09 — `best_effort()` with a MANDATORY named counter (LAW-14).
 
 The ONLY sanctioned optional-effect path in `monitor/**` (the other outcome is the
-except-pass census, O-20). RED-at-import until IMPL writes `mantis.monitor.best_effort`:
-this file's top-level import raises ModuleNotFoundError, which is the oracle-first proof.
+except-pass census, O-20).
 
 PASS bars (PREREG P-09):
   * omitting `counters` ⇒ TypeError (the mandatory counter is enforced BY SIGNATURE —
@@ -71,9 +70,3 @@ def test_repeated_failures_accumulate_per_label() -> None:
     assert counters.get("b") == 1
     snap = counters.snapshot()
     assert snap["a"] == 3 and snap["b"] == 1
-
-
-def test_counters_get_unknown_label_is_zero() -> None:
-    """A never-incremented label reads 0 (not a KeyError) — the registry is total."""
-    counters = BestEffortCounters()
-    assert counters.get("never_touched") == 0

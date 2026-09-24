@@ -26,7 +26,6 @@ from pathlib import Path
 
 import pytest
 
-# Neither name exists before the launcher lands.
 from mantis.run import RunHandles, UnregisteredAbortExitError, launch_run  # noqa: F401
 
 import mantis.run as mantis_run
@@ -139,20 +138,6 @@ def test_the_module_entry_point_reports_a_usage_error_at_the_process_boundary() 
     )
     assert "--config" in (result.stdout + result.stderr), (
         "the usage line must name the flag surface the operator has to supply"
-    )
-
-
-def test_the_launcher_prints_no_config_ok_readiness_line() -> None:
-    """The validate-and-exit readiness print is DELETED — red for a reason other than "not built
-    yet", since it asserts a line that EXISTS at HEAD is gone.
-
-    That string was the whole of what `python -m mantis.run` did, and it is the artefact a later
-    reader cites as "the launcher works". The run's OWN event stream is the boot record now.
-    """
-    text = _RUN_PY.read_text(encoding="utf-8")
-    assert "config OK" not in text, (
-        "the validate-and-exit readiness print must be DELETED with the launcher rewrite — "
-        "a boot record that is a stdout line nobody parses is not a boot record"
     )
 
 

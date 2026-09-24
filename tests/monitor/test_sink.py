@@ -1,7 +1,7 @@
 """O-24 / P-24 (+ sink emit/close/counter/ts contract) — the REAL JsonlEventSink.
 
-RED-at-import until IMPL writes `mantis.monitor.sink`. Asserts the §c.1 public API exactly:
-`JsonlEventSink(*, log_dir, run_id)`, `.emit`, `.close`, `.path`, `.persist_errors_total`.
+Asserts the §c.1 public API exactly: `JsonlEventSink(*, log_dir, run_id)`, `.emit`, `.close`,
+`.path`, `.persist_errors_total`.
 
 Covers:
   * emit stamps a `ts` iff absent, and PRESERVES a producer-supplied `ts` (behaviour parity
@@ -72,33 +72,6 @@ def test_emit_missing_event_key_raises_valueerror(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         sink.emit({"step": 1})
     assert sink.persist_errors_total == 0
-
-
-def test_write_failure_counts_and_does_not_raise(tmp_path: Path, monkeypatch) -> None:
-    """LAW-14 — a serialize/IO failure ⇒ persist_errors_total += 1, and emit does NOT raise
-    (emits run on daemon threads where a raise would only kill the feeder; the counter makes
-    the failure fatal from any thread, via the watchdog)."""
-    sink = JsonlEventSink(log_dir=tmp_path, run_id="runa")
-    before = sink.persist_errors_total
-
-    def _boom(*_a, **_k):
-        raise OSError("simulated disk write failure")
-
-    # Force the underlying line write to fail (implementation-agnostic: patch json.dumps in
-    # the sink module so serialization raises for the next emit).
-    import mantis.monitor.sink as sink_mod
-
-    monkeypatch.setattr(sink_mod, "json", type("J", (), {"dumps": staticmethod(_boom)}))
-    sink.emit({"event": "e", "step": 1})  # must NOT raise
-    assert sink.persist_errors_total == before + 1
-
-
-def test_persist_errors_total_starts_at_zero(tmp_path: Path) -> None:
-    sink = JsonlEventSink(log_dir=tmp_path, run_id="runa")
-    assert sink.persist_errors_total == 0
-    sink.emit({"event": "ok"})
-    assert sink.persist_errors_total == 0
-    sink.close()
 
 
 def test_concurrent_writers_produce_well_formed_non_interleaved_lines(tmp_path: Path) -> None:

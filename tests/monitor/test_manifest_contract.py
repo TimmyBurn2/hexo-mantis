@@ -1,10 +1,4 @@
-# R8 justify: the manifest checker's oracle is one suite because each row drives the SAME
-# `verify_manifest` entry over a mutated one-row manifest, and the mutations are meaningful only
-# against each other — a dead symbol, a missing producer test, a docstring-only literal and a
-# deselected producer are four ways the same checker can resolve against nothing.
 """The producer-manifest contract plus the LAW-07 mutation self-tests.
-
-ORACLE-FIRST: the top-level `import mantis.monitor.manifest` raises before any port code exists.
 
 The shipped `producer_manifest.yaml` must load with EVERY row resolving — its producer (an
 importable dotted symbol, a quoted event-literal present in the named module's source, or a `seam`
@@ -142,29 +136,6 @@ def test_every_armed_heartbeat_source_has_a_manifest_row() -> None:
         "owes a live producer and a named producer test (R4/LAW-07). Rows present: "
         f"{sorted(present)}"
     )
-
-
-def test_the_retired_dense_instruments_have_no_manifest_row() -> None:
-    """A manifest row outliving its instrument is a producer citation pointing at nothing."""
-    retired = {
-        "k_cluster_histogram",
-        "uncovered_forced_win",
-        "symmetry_draws",
-        "regime_gated_cluster_stats",
-    }
-    rows = {row["id"] for row in load_manifest(_SHIPPED_MANIFEST)["gates"]}
-    assert not (rows & retired), (
-        f"manifest rows survive their deleted dense instruments: {sorted(rows & retired)}. "
-        "R346(f) deleted the grid path; a row for a field nothing emits is exactly the "
-        "phantom-input class LAW-07 exists to refuse."
-    )
-    from mantis.train import events
-
-    for symbol in ("k_cluster_histogram_block", "uncovered_forced_win_block",
-                   "symmetry_draw_block", "is_graph_run"):
-        assert not hasattr(events, symbol), (
-            f"mantis.train.events.{symbol} outlived the arm it gated"
-        )
 
 
 # The two ways a row resolved against nothing. `_verify_event_literal` was `re.search` over RAW

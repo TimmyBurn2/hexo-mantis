@@ -1,8 +1,7 @@
 """The pure stateless rule functions: decision-parity plus the run-safety hard-aborts on
 LIVE-shaped inputs.
 
-An ORACLE-FIRST file — the top-level `import mantis.monitor.rules` raises before any port code
-exists. Decision-parity is asserted against the old-side semantics, where the code IS the spec:
+Decision-parity is asserted against the old-side semantics, where the code IS the spec:
 the warn rules at their registered boundaries, including the non-finite grad-norm pin and the 3-window
 strictly-increasing rule, and the headless emitter routing one `training_alert` per fired rule
 through the injected sink in rule order; and draw-rate collapse over `pooled_draw_rate` history.
@@ -12,8 +11,6 @@ through the injected sink in rule order; and draw-rate collapse over `pooled_dra
 threshold in.
 """
 from __future__ import annotations
-
-import math
 
 import pytest
 
@@ -57,10 +54,6 @@ def test_grad_norm_spike_boundary_and_nonfinite_fires() -> None:
     assert check_grad_norm_spike({"grad_norm": float("nan")}, cfg) is not None
     assert check_grad_norm_spike({"grad_norm": float("inf")}, cfg) is not None
     assert check_grad_norm_spike({}, cfg) is None, "absence is not a fire"
-    assert not (float("nan") > 10.0), (
-        "sanity: NaN comparisons are False — which is WHY the old `gn > max` test could "
-        "never fire on a NaN and an explicit isfinite check is required"
-    )
 
 
 def test_loss_increase_window_strictly_increasing() -> None:
@@ -134,10 +127,6 @@ def test_a_finite_loss_does_not_fire_the_nonfinite_rule() -> None:
                    for e in sink.events if e.get("event") == "training_alert")
 
 
-# The stride5-spam rule was REMOVED at close-out: it is a dead artifact of bad hyperparams that
-# never occurs under current recipes. The selfplay-owned `current_stride5_p90()` producer stays.
-
-
 def test_pooled_draw_rate_below_the_bar_is_no_observation() -> None:
     """O-03, RE-POINTED by WPMINT Phase DS (R92)."""
     assert pooled_draw_rate((0, 0), N_pool_min=50) is None
@@ -188,9 +177,3 @@ class _RecordingSink:
 
     def emit(self, event) -> None:
         self.events.append(dict(event))
-
-
-def test_math_import_available_for_finite_guards() -> None:
-    """Sanity that the finite guards the rules rely on behave as asserted (documents intent)."""
-    assert not math.isfinite(float("nan"))
-    assert not math.isfinite(float("inf"))

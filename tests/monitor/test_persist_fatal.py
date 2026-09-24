@@ -1,11 +1,6 @@
 """⊕ O-07 / P-07 — persist-fatal: a killed sink write ⇒ counter++ ⇒ the INDEPENDENT
 watchdog observes the counter and aborts with code 43 (LAW-14; pays the WP6 debt).
 
-RED-at-import until IMPL writes `mantis.monitor.sink` AND
-`mantis.train.lifecycle.heartbeat_watchdog`. ORACLE-FIRST (⊕): both top-level imports raise
-ModuleNotFoundError before any port code exists. Torch-free: `heartbeat_watchdog` imports
-`mantis.monitor.heartbeat` only.
-
 PASS bars (PREREG P-07): one failed emit ⇒ `persist_errors_total` +1 exactly; the watchdog
 fires on the next poll after observation; exit code 43; a `.watchdog` snapshot is attempted
 (best_effort — counted if it fails). A swallowed persistence failure is the exact bug this
