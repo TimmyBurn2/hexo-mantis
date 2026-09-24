@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 
+from _drain_harness import ScriptedTime, games_from_golden
 from mantis._engine import DEFAULT_CLUSTER_THRESHOLD
 from mantis.selfplay import pool_drain
 from mantis.selfplay.instrumentation import PoolInstrumentation
@@ -87,21 +88,6 @@ class _NShotStop:
         return self.calls > self.n
 
 
-class _Clock:
-    def __init__(self, sequence) -> None:
-        self.sequence = list(sequence)
-        self.i = 0
-        self.sleeps: list[float] = []
-
-    def monotonic(self) -> float:
-        value = self.sequence[min(self.i, len(self.sequence) - 1)]
-        self.i += 1
-        return value
-
-    def sleep(self, seconds: float) -> None:
-        self.sleeps.append(seconds)
-
-
 class _Pool:
     """The drain body's read surface, plus the real methods bound to it: binding the REAL
     `WorkerPool` methods to a stub carrying only their inputs makes the numbers below come out
@@ -111,19 +97,11 @@ class _Pool:
     buffer_composition = WorkerPool.buffer_composition
 
 
-def _games_from_golden(golden: dict[str, Any]) -> list[tuple]:
-    games = []
-    for row in golden["_constants"]["games_batch"]:
-        plies, winner_code, moves, *rest = row
-        games.append((plies, winner_code, [tuple(m) for m in moves], *rest))
-    return games
-
-
 def _build_pool(golden, rows, *, sink, iterations: int, clock) -> _Pool:
     consts = golden["_constants"]
     pool = _Pool()
     pool._stop_event = _NShotStop(iterations)
-    pool._runner = _Runner(rows, _games_from_golden(golden),
+    pool._runner = _Runner(rows, games_from_golden(golden),
                            consts["runner_counters"],
                            consts["runner_positions_generated"])
     pool.replay_buffer = _Buffer()
@@ -159,7 +137,7 @@ def run_drain(monkeypatch, drain_goldens, graph_rows_input):
     def run(*, sink, iterations=1, clock=CLOCK_TWO_ITERATIONS) -> _Pool:
         pool = _build_pool(drain_goldens, graph_rows_input, sink=sink, iterations=iterations,
                            clock=clock)
-        monkeypatch.setattr(pool_drain, "time", _Clock(clock))
+        monkeypatch.setattr(pool_drain, "time", ScriptedTime(clock))
         pool_drain.run_stats_loop(pool)
         return pool
 

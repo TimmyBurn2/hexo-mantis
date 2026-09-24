@@ -18,6 +18,7 @@ from collections import deque
 from pathlib import Path
 from typing import Any
 
+from _drain_harness import ScriptedTime
 from mantis._engine import DEFAULT_CLUSTER_THRESHOLD
 from mantis.selfplay import pool_drain
 from mantis.selfplay.instrumentation import PoolInstrumentation
@@ -45,21 +46,6 @@ class _OneShotStop:
             self._n += 1
             return False
         return True
-
-
-class _ScriptedTime:
-    def __init__(self, sequence) -> None:
-        self.sequence = list(sequence)
-        self.i = 0
-        self.sleeps: list[float] = []
-
-    def monotonic(self) -> float:
-        value = self.sequence[min(self.i, len(self.sequence) - 1)]
-        self.i += 1
-        return value
-
-    def sleep(self, seconds: float) -> None:
-        self.sleeps.append(seconds)
 
 
 class _ScriptedRunner:
@@ -186,7 +172,7 @@ def test_on2b_n_games_yield_n_delivered_game_complete_events(monkeypatch) -> Non
     sink = _RecordingSink()
     pool = _make_scripted_pool(_make_games(n), sink)
 
-    monkeypatch.setattr(pool_drain, "time", _ScriptedTime([1000.0, 1002.0, 1006.5]))
+    monkeypatch.setattr(pool_drain, "time", ScriptedTime([1000.0, 1002.0, 1006.5]))
     # The test is about EVENT DELIVERY, not buffer pushes, so the push is a no-op.
     monkeypatch.setattr(pool_drain, "push_graph", lambda pool, collected: None)
 

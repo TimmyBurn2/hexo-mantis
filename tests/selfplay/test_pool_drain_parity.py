@@ -19,6 +19,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+from _drain_harness import ScriptedTime, games_from_golden
 from mantis._engine import DEFAULT_CLUSTER_THRESHOLD
 from mantis.selfplay import pool_drain
 from mantis.selfplay.instrumentation import PoolInstrumentation
@@ -134,35 +135,9 @@ class OneShotStop:
         return self.n > 1
 
 
-class ScriptedTime:
-    """Stands in for the `time` module inside `pool_drain` (capture harness, verbatim)."""
-
-    def __init__(self, sequence) -> None:
-        self.sequence = list(sequence)
-        self.i = 0
-        self.sleeps: list[float] = []
-
-    def monotonic(self) -> float:
-        value = self.sequence[min(self.i, len(self.sequence) - 1)]
-        self.i += 1
-        return value
-
-    def sleep(self, seconds: float) -> None:
-        self.sleeps.append(seconds)
-
-
 class ScriptedPool:
     """Exactly the attribute surface the drain body reads (capture `PoolStub`, plus the
     three DV-4/§c.5 injection seams)."""
-
-
-def _games_from_golden(golden: dict[str, Any]) -> list[tuple]:
-    """The scripted `drain_game_results()` 10-tuples (moves back to tuple-of-tuples)."""
-    games = []
-    for row in golden["_constants"]["games_batch"]:
-        plies, winner_code, moves, *rest = row
-        games.append((plies, winner_code, [tuple(m) for m in moves], *rest))
-    return games
 
 
 def _build_pool(golden, graph_rows, *, clock, recent_buffer=True, sink=None,
@@ -170,7 +145,7 @@ def _build_pool(golden, graph_rows, *, clock, recent_buffer=True, sink=None,
     consts = golden["_constants"]
     pool = ScriptedPool()
     pool._stop_event = OneShotStop()
-    pool._runner = ScriptedRunner(graph_rows, _games_from_golden(golden),
+    pool._runner = ScriptedRunner(graph_rows, games_from_golden(golden),
                                   consts["runner_counters"], consts["runner_positions_generated"])
     pool.replay_buffer = RecordingBuffer()
     pool._lock = threading.Lock()
