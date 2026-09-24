@@ -13,19 +13,10 @@ from pathlib import Path
 
 import pytest
 from _toolpath import load_module_by_path
+from _dashboard_rows import ladder_state, write_events
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 _SHIM = REPO_ROOT / "tools" / "run_dashboard.py"
-
-
-@pytest.fixture(scope="module")
-def html(dashboard):
-    return importlib.import_module("dashboard.html")
-
-
-@pytest.fixture(scope="module")
-def reader(dashboard):
-    return importlib.import_module("dashboard.reader")
 
 
 @pytest.fixture(scope="module")
@@ -38,19 +29,13 @@ def shim():
     return load_module_by_path("run_dashboard", _SHIM)
 
 
-def _write(tmp_path: Path, rows: list[dict], name: str = "events.jsonl") -> Path:
-    path = tmp_path / name
-    path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
-    return path
-
-
 def _page(html, reader, tmp_path: Path, rows: list[dict], ladder: dict | None = None,
           record_dir: Path | None = None) -> str:
     ladder_path = None
     if ladder is not None:
         ladder_path = tmp_path / "eval_ladder_state.json"
         ladder_path.write_text(json.dumps(ladder), encoding="utf-8")
-    return html.render(reader.load_record(_write(tmp_path, rows), ladder_path, record_dir), "t")
+    return html.render(reader.load_record(write_events(tmp_path, rows), ladder_path, record_dir), "t")
 
 
 def _round(idx: int, wr, games_total=56, promoted=None, lo=None, hi=None) -> dict:
@@ -58,12 +43,6 @@ def _round(idx: int, wr, games_total=56, promoted=None, lo=None, hi=None) -> dic
             "step": idx * 1000, "wall_sec": 600.0, "games_total": games_total,
             "promoted": promoted, "wr_sealbot": wr, "wr_sealbot_ci_lower": lo,
             "wr_sealbot_ci_upper": hi, "ts": 1000.0 + idx}
-
-
-def _ladder(history: list[tuple[int, int, float]]) -> dict:
-    return {"sealbot_d5": {"name": "sealbot_d5", "status": "active", "consec": 0,
-                           "history": [{"round_idx": i, "games": g, "wr": wr, "ci_lo": None}
-                                       for i, g, wr in history]}}
 
 
 BOOT = [{"event": "run_boot_identity", "run_id": "x", "config_sha256": "abc", "ts": 1.0}]
@@ -117,7 +96,7 @@ def test_a_real_series_IS_drawn_and_carries_its_own_min_max_last(html, reader, t
 
 def test_a_broken_round_renders_the_hollow_marker_and_the_legend_entry(html, reader, tmp_path):
     rows = [_round(1, 0.2), _round(2, None, games_total=None, promoted=False), _round(3, 0.25)]
-    page = _page(html, reader, tmp_path, rows, _ladder([(1, 32, 0.2), (3, 32, 0.25)]))
+    page = _page(html, reader, tmp_path, rows, ladder_state([(1, 32, 0.2), (3, 32, 0.25)]))
     assert 'class="marker broken"' in page
     assert "broken round" in page and "games_total: null" in page
     assert page.count('class="marker broken"') == 1
@@ -125,7 +104,7 @@ def test_a_broken_round_renders_the_hollow_marker_and_the_legend_entry(html, rea
 
 def test_promotion_markers_are_drawn_and_no_decision_is_not_a_false(html, reader, tmp_path):
     rows = [_round(1, 0.2), _round(2, 0.3, promoted=True), _round(3, 0.1, promoted=False)]
-    page = _page(html, reader, tmp_path, rows, _ladder([(1, 32, 0.2), (2, 32, 0.3), (3, 32, 0.1)]))
+    page = _page(html, reader, tmp_path, rows, ladder_state([(1, 32, 0.2), (2, 32, 0.3), (3, 32, 0.1)]))
     assert page.count('class="marker promoted"') == 1
     assert page.count('class="marker rejected"') == 1
 
@@ -195,7 +174,7 @@ def test_the_firings_input_is_unmeasured_without_a_record_dir(html, reader, tmp_
 
 
 def test_the_page_carries_no_absolute_home_path(html, reader, tmp_path):
-    events = _write(tmp_path, BOOT)
+    events = write_events(tmp_path, BOOT)
     page = html.render(reader.load_record(events), "t")
     assert str(tmp_path) not in page
     assert events.name in page
@@ -215,7 +194,7 @@ def test_a_record_without_game_complete_renders_quality_gaps_and_an_unmeasured_b
 
 def test_the_hero_strength_cell_carries_wr_games_wilson_and_elo(html, reader, tmp_path):
     rows = [_round(1, 0.1875, lo=0.0625, hi=0.34375)]
-    page = _page(html, reader, tmp_path, rows, _ladder([(1, 32, 0.1875)]))
+    page = _page(html, reader, tmp_path, rows, ladder_state([(1, 32, 0.1875)]))
     values = _hero_values(page)
     assert values[0].startswith("18.75"), values[0]
     assert "32 games" in page and "8.9" in page and "35.3" in page, "the Wilson bounds"
@@ -226,7 +205,7 @@ def test_the_hero_strength_cell_carries_wr_games_wilson_and_elo(html, reader, tm
 def test_the_strength_panel_carries_the_sealbot_tt_finding(html, reader, tmp_path):
     """R353(b): the panel's note names the A/B's finding (ratio 1.00), not a bare PROVISIONAL; with rounds and without."""
     for rows in (BOOT, [_round(1, 0.5)]):
-        page = _page(html, reader, tmp_path, rows, _ladder([(1, 32, 0.5)]))
+        page = _page(html, reader, tmp_path, rows, ladder_state([(1, 32, 0.5)]))
         panel = re.search(r'<section class="panel tier2" id="ladder">(.*?)</section>', page, re.S)
         assert panel is not None
         note = re.search(r'<p class="note">(.*?)</p>', panel.group(1), re.S)
@@ -239,7 +218,7 @@ def test_the_strength_panel_carries_the_sealbot_tt_finding(html, reader, tmp_pat
 def test_the_hero_trend_cell_names_the_rounds_in_its_window(html, reader, tmp_path):
     rows = [_round(i, wr) for i, wr in enumerate([0.2, 0.25, 0.3, 0.35, 0.4], start=1)]
     page = _page(html, reader, tmp_path, rows,
-                 _ladder([(i, 32, wr) for i, wr in enumerate([0.2, 0.25, 0.3, 0.35, 0.4], 1)]))
+                 ladder_state([(i, 32, wr) for i, wr in enumerate([0.2, 0.25, 0.3, 0.35, 0.4], 1)]))
     assert "5 rounds in window" in page
     assert "Elo / 1k steps" in page
 
@@ -268,7 +247,7 @@ def test_every_tier_one_number_survives_with_the_script_stripped(html, reader, t
          "grad_norm": 2.0, "lr": 1e-3, "ts": 2.0 + i} for i in range(1, 4)] + [
         {"event": "iteration_complete", "step": 3, "games_total": 9, "games_per_hour": 1200.0,
          "steps_per_hour": 1100.0, "ts": 6.0}]
-    page = _page(html, reader, tmp_path, rows, _ladder([(1, 32, 0.2)]))
+    page = _page(html, reader, tmp_path, rows, ladder_state([(1, 32, 0.2)]))
     values = _hero_values(page)
     assert len(values) == 7 and all(v.strip() for v in values)
     stripped = re.sub(r"<script>.*?</script>", "", page, flags=re.S)
@@ -286,9 +265,9 @@ def test_the_grad_norm_rule_is_a_stated_gap_when_the_threshold_is_not_in_the_rec
 
 
 def test_the_cli_shim_keeps_the_frozen_flags_and_writes_the_file(shim, tmp_path):
-    events = _write(tmp_path, BOOT)
+    events = write_events(tmp_path, BOOT)
     ladder = tmp_path / "eval_ladder_state.json"
-    ladder.write_text(json.dumps(_ladder([])), encoding="utf-8")
+    ladder.write_text(json.dumps(ladder_state([])), encoding="utf-8")
     out = tmp_path / "out.html"
     rc = shim.main(["--events", str(events), "--ladder-state", str(ladder), "--record-dir",
                     str(tmp_path), "--out", str(out), "--title", "run x"])

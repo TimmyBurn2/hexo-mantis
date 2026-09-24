@@ -138,6 +138,22 @@ def dashboard():
 
 
 @pytest.fixture(scope="session")
+def reader(dashboard):
+    """The `dashboard.reader` submodule every dashboard-facing test module reads through."""
+    return importlib.import_module("dashboard.reader")
+
+
+@pytest.fixture(scope="session")
+def html(dashboard):
+    return importlib.import_module("dashboard.html")
+
+
+@pytest.fixture(scope="session")
+def external(dashboard):
+    return importlib.import_module("dashboard.external")
+
+
+@pytest.fixture(scope="session")
 def viewer():
     """The `tools/viewer` package (VIEWER-1), with its submodules importable as `viewer.<name>`."""
     return load_tools_package("dashboard")

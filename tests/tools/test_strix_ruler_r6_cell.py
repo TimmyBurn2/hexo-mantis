@@ -29,13 +29,6 @@ def frontier():
     return _load("strength_frontier_ruler_r6", "tools/strength_frontier.py")
 
 
-@pytest.fixture(scope="module")
-def external(dashboard):
-    import importlib
-
-    return importlib.import_module("dashboard.external")
-
-
 def test_the_radius_variant_carries_placement_radius_and_every_other_line_is_unchanged() -> None:
     """Only `<stem>:r<N>` puts the key on the wire; the rung on record and the net-only line stay byte-identical."""
     r6 = load_request("/ck.pt", sims=256, variant=_STEM + RADIUS_SUFFIX + "6", stem=_STEM)

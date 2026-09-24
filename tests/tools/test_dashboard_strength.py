@@ -7,16 +7,12 @@ import json
 from pathlib import Path
 
 import pytest
+from _dashboard_rows import ladder_state
 
 
 @pytest.fixture(scope="module")
 def strength(dashboard):
     return importlib.import_module("dashboard.strength")
-
-
-@pytest.fixture(scope="module")
-def reader(dashboard):
-    return importlib.import_module("dashboard.reader")
 
 
 def _round(idx: int, wr, games_total=56, promoted=None, lo=None, hi=None) -> dict:
@@ -36,16 +32,10 @@ def _record(reader, tmp_path: Path, rows: list[dict], ladder: dict | None = None
     return reader.load_record(events, ladder_path)
 
 
-def _ladder(history: list[tuple[int, int, float]]) -> dict:
-    return {"sealbot_d5": {"name": "sealbot_d5", "status": "active", "consec": 0,
-                           "history": [{"round_idx": i, "games": g, "wr": wr, "ci_lo": None}
-                                       for i, g, wr in history]}}
-
-
 def test_ladder_rows_join_the_round_events_by_round_index(strength, reader, tmp_path):
     rec = _record(reader, tmp_path,
                   [_round(1, 0.1875, lo=0.0625, hi=0.34375), _round(2, 0.25, promoted=True)],
-                  _ladder([(1, 32, 0.1875), (2, 32, 0.25)]))
+                  ladder_state([(1, 32, 0.1875), (2, 32, 0.25)]))
     series = strength.rung_series(rec)
     assert list(series) == ["sealbot_d5"]
     first, second = series["sealbot_d5"]
@@ -67,7 +57,7 @@ def test_without_a_ladder_the_primary_rung_is_read_from_the_round_events_alone(
 def test_a_broken_round_is_a_broken_point_at_its_step_not_a_zero(strength, reader, tmp_path):
     rec = _record(reader, tmp_path,
                   [_round(1, 0.2), _round(2, None, games_total=None, promoted=False)],
-                  _ladder([(1, 32, 0.2)]))
+                  ladder_state([(1, 32, 0.2)]))
     points = strength.rung_series(rec)["sealbot_d5"]
     assert [p.step for p in points] == [1000, 2000]
     assert points[1].broken and points[1].wr is None
@@ -87,7 +77,7 @@ def test_the_trend_is_the_ols_elo_slope_per_thousand_steps_over_completed_rounds
         strength, reader, tmp_path):
     rounds = [_round(i, wr) for i, wr in enumerate([0.2, 0.25, 0.3, 0.35, 0.4], start=1)]
     rounds.append(_round(6, None, games_total=None))
-    rec = _record(reader, tmp_path, rounds, _ladder([(i, 32, wr) for i, wr in
+    rec = _record(reader, tmp_path, rounds, ladder_state([(i, 32, wr) for i, wr in
                                                      enumerate([0.2, 0.25, 0.3, 0.35, 0.4], 1)]))
     fit = strength.trend(strength.rung_series(rec)["sealbot_d5"])
     assert fit is not None and fit.n == 5, "the broken round cannot be fitted and is excluded"
@@ -96,7 +86,7 @@ def test_the_trend_is_the_ols_elo_slope_per_thousand_steps_over_completed_rounds
 
 def test_a_zero_win_rate_round_enters_the_trend_as_a_finite_deficit(strength, reader, tmp_path):
     rounds = [_round(i, wr) for i, wr in enumerate([0.0, 0.1, 0.2, 0.0], start=1)]
-    rec = _record(reader, tmp_path, rounds, _ladder([(1, 32, 0.0), (2, 32, 0.1),
+    rec = _record(reader, tmp_path, rounds, ladder_state([(1, 32, 0.0), (2, 32, 0.1),
                                                      (3, 32, 0.2), (4, 32, 0.0)]))
     fit = strength.trend(strength.rung_series(rec)["sealbot_d5"])
     assert fit is not None and fit.n == 4

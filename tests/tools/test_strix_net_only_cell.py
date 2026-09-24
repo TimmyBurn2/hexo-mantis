@@ -30,13 +30,6 @@ def frontier():
     return _load("strength_frontier_net_only", "tools/strength_frontier.py")
 
 
-@pytest.fixture(scope="module")
-def external(dashboard):
-    import importlib
-
-    return importlib.import_module("dashboard.external")
-
-
 def test_the_load_request_carries_the_solver_switch_and_the_default_is_on() -> None:
     """Nothing on record changes: the pinned variant loads with the solver ON, as every reading was made."""
     on = load_request("/ck.pt", sims=256, variant=_STEM, stem=_STEM)

@@ -10,23 +10,8 @@ import pytest
 
 
 @pytest.fixture(scope="module")
-def external(dashboard):
-    return importlib.import_module("dashboard.external")
-
-
-@pytest.fixture(scope="module")
 def throughput(dashboard):
     return importlib.import_module("dashboard.throughput")
-
-
-@pytest.fixture(scope="module")
-def html(dashboard):
-    return importlib.import_module("dashboard.html")
-
-
-@pytest.fixture(scope="module")
-def reader(dashboard):
-    return importlib.import_module("dashboard.reader")
 
 
 def _sidecar(step: int, wr: float, *, unit: str = "equal_work", ours: int = 256, strix: int = 256,

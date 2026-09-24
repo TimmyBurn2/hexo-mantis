@@ -14,11 +14,6 @@ def health(dashboard):
     return importlib.import_module("dashboard.health")
 
 
-@pytest.fixture(scope="module")
-def reader(dashboard):
-    return importlib.import_module("dashboard.reader")
-
-
 def _record(reader, tmp_path: Path, rows: list[dict], record_dir: Path | None = None):
     events = tmp_path / "events.jsonl"
     events.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
