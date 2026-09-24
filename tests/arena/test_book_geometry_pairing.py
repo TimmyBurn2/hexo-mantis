@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from mantis.config.census import production_configs
+from mantis.config.census import discovered_config_paths
 from mantis.encoding import lookup
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -79,7 +79,7 @@ def _books_named_by(config: dict) -> set[str]:
 
 
 def _config_files() -> list[Path]:
-    files = list(production_configs(_REPO))
+    files = [_REPO / rel for rel in discovered_config_paths(_REPO)]
     assert files, "no configs found — a pairing check with nothing to check is a phantom gate"
     return files
 

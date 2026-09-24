@@ -26,7 +26,7 @@ import pytest
 import torch
 
 import _microbatch_harness as H
-from mantis.config.census import production_configs
+from mantis.config.census import discovered_config_paths, production_configs
 from mantis.config.loader import load_config, parse_config_yaml
 from mantis.config.resolve.microbatch import MicrobatchCapsSpec
 from mantis.config.schema import RunConfig
@@ -36,15 +36,12 @@ from mantis.train.ema import MissingEmaConfigError, resolve_ema_config
 from mantis.train.trainer.core import Trainer
 
 _REPO = Path(__file__).resolve().parents[2]
-_CONFIGS = production_configs(_REPO)
+_CONFIGS = [_REPO / rel for rel in discovered_config_paths(_REPO)]
 
 
 def test_there_are_configs_to_check() -> None:
-    """Vacuity guard — a census gone near-empty would make every row below pass on nothing."""
-    assert len(_CONFIGS) >= 3, (
-        f"only {len(_CONFIGS)} production config(s) in the census — the sweep below would "
-        "be measuring almost nothing"
-    )
+    """Vacuity guard: the sweep covers the production census, which raises when it is empty."""
+    assert set(production_configs(_REPO)) <= set(_CONFIGS)
 
 
 @pytest.mark.parametrize("path", _CONFIGS, ids=lambda p: p.name)

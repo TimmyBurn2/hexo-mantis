@@ -19,7 +19,7 @@ from typing import Any
 
 import pytest
 
-from mantis.config.census import production_configs
+from mantis.config.census import discovered_config_paths
 from mantis.encoding import resolvers
 from mantis.train.pretrain import graph_route
 from mantis.train.pretrain.graph_route import (
@@ -395,7 +395,7 @@ def test_only_the_pretrain_cli_reaches_the_graph_route() -> None:
 def test_no_shipped_config_names_the_pretrain_route() -> None:
     """Asserted on the MODULE PATHS a config must name, not the substring "pretrain", which
     legitimately appears in `mixing.pretrained_buffer_path`."""
-    for cfg in production_configs(_REPO):
+    for cfg in (_REPO / rel for rel in discovered_config_paths(_REPO)):
         text = cfg.read_text(encoding="utf-8")
         for token in ("graph_route", "mantis.train.pretrain", "train/pretrain"):
             assert token not in text, f"{cfg.name} names {token}"
