@@ -15,17 +15,20 @@ import torch
 from mantis.eval.snapshot import load_model_snapshot, write_model_snapshot
 import pytest
 
-from mantis.model import ARCH_KINDS, GnnArch, GnnArchV2, GnnArchV2SoftPolicy, build_net
+from mantis.model import ARCH_KINDS, GnnArch, build_net
 
 #: The payload contract: exactly what `load_model_snapshot` consumes, nothing else.
 _EXPECTED_KEYS = {"state_dict", "arch"}
 
+#: R330(e): the snapshot speaks the ONE arch-kind vocabulary — every ARCH_KINDS class shares
+#: this field set by design, so one kwargs dict, not a per-class row.
+_TINY_KWARGS = dict(in_dim=11, edge_dim=5, hidden=8, num_layers=1, policy_hidden=8,
+                     value_hidden=8)
+
 
 def _net():
-    arch = GnnArch(in_dim=11, edge_dim=5, hidden=8, num_layers=1, policy_hidden=8,
-                   value_hidden=8)
+    arch = GnnArch(**_TINY_KWARGS)
     net = build_net(arch)
-    net.arch = arch
     net.eval()
     return net
 
@@ -82,27 +85,15 @@ def test_roundtrip_still_rebuilds_the_identical_net(tmp_path: Path) -> None:
         assert torch.equal(got[key], want[key]), f"weight {key} changed across roundtrip"
 
 
-# R330(e): the snapshot speaks the ONE arch-kind vocabulary
-_TINY = {
-    GnnArch: dict(in_dim=11, edge_dim=5, hidden=8, num_layers=1, policy_hidden=8, value_hidden=8),
-    GnnArchV2: dict(in_dim=11, edge_dim=5, hidden=8, num_layers=1, policy_hidden=8,
-                    value_hidden=8),
-    GnnArchV2SoftPolicy: dict(in_dim=11, edge_dim=5, hidden=8, num_layers=1, policy_hidden=8,
-                              value_hidden=8),
-}
-
-
 @pytest.mark.parametrize("kind", sorted(ARCH_KINDS))
 def test_every_arch_kind_in_the_vocabulary_round_trips_through_the_snapshot(tmp_path, kind):
     """AUDIT-1 F-16, closed at R330(e): this module carried a private two-row type table, so a
     `GnnArchV2` net could be trained and checkpointed but never snapshotted for the eval child —
-    `write_model_snapshot` raised `unsupported arch type`. The table is now `ARCH_KINDS` itself,
-    and this row walks the whole vocabulary so a fourth kind cannot lag the same way."""
+    `write_model_snapshot` raised `unsupported arch type`. The table is now `ARCH_KINDS` itself;
+    a class whose field set differs from `_TINY_KWARGS` reds here with a TypeError."""
     cls = ARCH_KINDS[kind]
-    assert cls in _TINY, f"add tiny widths for {kind} — the vocabulary grew"
-    arch = cls(**_TINY[cls])
+    arch = cls(**_TINY_KWARGS)
     net = build_net(arch)
-    net.arch = arch
     path = tmp_path / f"{kind}.pt"
     write_model_snapshot(net, path)
     back = load_model_snapshot(path)
