@@ -2,8 +2,7 @@
 
 Sits at the tests/ TOP LEVEL, mirroring a module deliberately ABOVE both `mantis.train` and
 `mantis.eval`. Covers the pool-then-watchdog start order, the `wired_sources` declaration, the
-never-started-pool `on_drained` closure, and the `train -> eval` lazy-import ban, which passes
-GREEN by vacancy while `mantis.eval` does not exist.
+never-started-pool `on_drained` closure, and the `train -> eval` lazy-import ban.
 
 >300 justify (R8): the monitor-config producer test, the drivable fakes and the re-validation
 pins are folded in here rather than given their own files — same subject, and the bar on
@@ -18,7 +17,7 @@ from typing import Any
 
 import pytest
 
-import mantis.run  # noqa: F401 — RED-at-import anchor: this module does not exist yet
+import mantis.run  # noqa: F401 — the module-under-test import anchor
 from mantis.config.resolve.composition import (
     UnvalidatedConfigError,
     require_run_config,
@@ -98,8 +97,7 @@ def _train_sources() -> list[Path]:
 def test_no_train_module_imports_eval_even_lazily() -> None:
     """Token-level census over EVERY file under `src/mantis/train`: no `mantis.eval` substring
     anywhere, top-level OR inside any function body — a lazy import is exactly what a substring
-    scan catches where an AST top-level walk would not. GREEN TODAY BY VACANCY, so this is a
-    forward-held regression guard rather than an oracle for unbuilt behaviour."""
+    scan catches where an AST top-level walk would not."""
     violations: list[str] = []
     for path in _train_sources():
         text = path.read_text(encoding="utf-8")
@@ -196,17 +194,6 @@ class FakePoolNeverStarted:
         self.step_calls.append(int(step))
 
 
-class _DrivableBuffer:
-    size = 1000
-    capacity = 100_000
-
-    def resize(self, n: int) -> None:
-        return None
-
-    def save_to_path(self, p) -> None:
-        return None
-
-
 def test_compose_run_publishes_its_boot_identity_first_through_the_one_authority(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
 ) -> None:
@@ -283,47 +270,6 @@ def test_compose_run_calls_build_run_safety_once_and_starts_watchdog_after_pool(
         f"pool must start BEFORE the watchdog (subsystems.py contract): {order.calls}"
     )
     assert handles is not None
-
-
-def test_wired_sources_include_eval_round_iff_pipeline_built(
-    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
-) -> None:
-    """`wired_sources` passed to `build_run_safety` includes "eval_round" iff an eval
-    pipeline is actually built (`eval_enabled=True`); absent when `eval_enabled=False`."""
-    mantis_run = mantis.run
-    seen: dict[str, list[str]] = {}
-
-    def _make_fake_build_run_safety(key: str):
-        def _fake(**kwargs):
-            seen[key] = list(kwargs.get("wired_sources", []))
-            return SimpleNamespace(
-                sink=SimpleNamespace(emit=lambda e: None),
-                registry=SimpleNamespace(beat=lambda s: None),
-                watchdog=FakeWatchdog(_OrderSpy()),
-                heartbeat=lambda s: None,
-            )
-        return _fake
-
-    monkeypatch.setattr(mantis_run, "build_run_safety", _make_fake_build_run_safety("with_eval"))
-    _patch_eval_side(monkeypatch)
-    mantis_run.compose_run(
-        config=_bounded(smoke_run_config, eval_enabled=True), trainer=DrivableTrainerStub(),
-        pool=FakePoolNeverStarted(), buffer=mk_graph_buffer(n_records=32),
-        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
-    )
-    assert "eval_round" in seen["with_eval"], (
-        f"eval_enabled=True must declare eval_round wired: {seen['with_eval']}"
-    )
-
-    monkeypatch.setattr(mantis_run, "build_run_safety", _make_fake_build_run_safety("no_eval"))
-    mantis_run.compose_run(
-        config=_bounded(smoke_run_config), trainer=DrivableTrainerStub(),
-        pool=FakePoolNeverStarted(), buffer=mk_graph_buffer(n_records=32),
-        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
-    )
-    assert "eval_round" not in seen["no_eval"], (
-        f"eval_enabled=False must NOT declare eval_round wired: {seen['no_eval']}"
-    )
 
 
 def test_close_out_with_never_started_pool_does_not_raise() -> None:

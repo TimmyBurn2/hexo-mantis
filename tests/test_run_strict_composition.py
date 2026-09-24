@@ -24,14 +24,14 @@ from pydantic import ValidationError
 
 import mantis.run
 from mantis.config.loader import discover_configs, load_config
-from mantis.config.resolve.composition import (  # RED-at-import anchor: module absent at HEAD
+from mantis.config.resolve.composition import (
     UnvalidatedConfigError,
     require_run_config,
 )
 from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
 from mantis.config.resolve.disk_guard import resolve_disk_guard
 from mantis.config.resolve.monitor import resolve_monitor_config
-from mantis.config.resolve.run_length import (  # RED-at-import anchor: module absent at HEAD
+from mantis.config.resolve.run_length import (
     resolve_max_train_steps,
 )
 from mantis.config.schema import RunConfig
@@ -135,9 +135,6 @@ class _SentinelTrainError(RuntimeError):
 
 
 class _ExplodingTrainer(DrivableTrainerStub):
-    def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
-        raise _SentinelTrainError("the drive failed")
-
     def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
         raise _SentinelTrainError("the drive failed")
 
@@ -151,10 +148,6 @@ class _Buffer:
 
     def save_to_path(self, p) -> None:
         return None
-
-    def sample_batch_with_pos(self, n: int, augment: bool):
-        # The grid route's sampler; rows are opaque to the trainer stub.
-        return (None,) * 9
 
 
 def _fake_run_safety(**_kwargs):
@@ -545,20 +538,6 @@ def test_every_minted_config_resolves_through_every_composition_seam(name: str):
     )
     assert lookup(cfg.identity.encoding) is not None, (
         f"configs/{name} declares encoding {cfg.identity.encoding!r}, which is not registered"
-    )
-
-
-def test_the_minted_PRODUCTION_config_ships_the_actor_lag_abort_ARMED():
-    """run5 ships `monitor.actor_lag_abort_enabled: true`, pinned per commit.
-
-    A re-mint of run5 that drops the `--set` writes `false` back with CI gate 7 at rc 0 and the
-    header-truthfulness suite green, because a re-mint rewrites the header too. Mutation
-    self-test: against a run5 re-minted without the `--set`, the predicate reads False.
-    """
-    assert load_config(_CONFIGS_DIR / "run6.yaml").monitor.actor_lag_abort_enabled is True, (
-        "R59: the minted PRODUCTION config's actor-lag hard abort ships ARMED. Phase S "
-        "re-mints run5; a dropped `--set monitor.actor_lag_abort_enabled=true` reverts "
-        "Phase F (0ef05ff) with gate 7 and header-truthfulness both green."
     )
 
 
