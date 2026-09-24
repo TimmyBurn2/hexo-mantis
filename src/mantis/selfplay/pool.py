@@ -386,7 +386,7 @@ class WorkerPool:
             run_stats_loop(self)
         except Exception as exc:  # noqa: BLE001 — sole-producer watchdog
             self._producer_exc = exc
-            _LOG.error("selfplay_producer_died", exc_info=True)
+            _LOG.exception("selfplay_producer_died")
 
     def start(self) -> None:
         """Start the inference server, the Rust runner and the feeder thread.

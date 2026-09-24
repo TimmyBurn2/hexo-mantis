@@ -374,10 +374,9 @@ class PoolInstrumentation:
                 rho_val, p_val = spearmanr(ranges, is_draw)
                 rho = float(rho_val) if rho_val == rho_val else None
                 _ = p_val
-            # scipy is an UNDECLARED optional dependency, so this ONE derived field degrades to None
-            # rather than failing a whole telemetry read. Absent scipy raises ImportError and a
-            # degenerate input raises inside spearmanr; NO other statement lives inside the try.
-            except Exception:  # noqa: BLE001
+            # Absent scipy (ImportError) or an input spearmanr refuses (ValueError) degrades this ONE
+            # derived field to None rather than failing a whole telemetry read.
+            except (ImportError, ValueError):
                 rho = None
         return {
             "n": n,

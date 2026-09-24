@@ -271,8 +271,8 @@ class _PopRetirer(threading.Thread):
                 return
             try:
                 self._server._retire_or_fail(pop)
-            except Exception as exc:  # noqa: BLE001 — a dead retirer would block the loop's slots
-                _LOG.exception("inference_retire_thread_error error=%s", exc)
+            except Exception:  # noqa: BLE001 — a dead retirer would block the loop's slots
+                _LOG.exception("inference_retire_thread_error")
             finally:
                 self.slots.release()
 
@@ -718,8 +718,8 @@ class InferenceServer(threading.Thread):
                     except Exception as exc:  # noqa: BLE001 — reported to Rust waiters
                         retirer.slots.release()
                         self._fail_pop(request_ids, exc)
-                except Exception as exc:  # noqa: BLE001 — loop keeps serving next batch
-                    _LOG.exception("inference_server_graph_loop_error error=%s", exc)
+                except Exception:  # noqa: BLE001 — loop keeps serving next batch
+                    _LOG.exception("inference_server_graph_loop_error")
                     if self._stop_event.is_set():
                         break
         finally:
