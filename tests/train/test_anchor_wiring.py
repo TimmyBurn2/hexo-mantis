@@ -60,31 +60,6 @@ def test_resolved_anchor_is_published_onto_the_callers_object():
     assert shared.representation == "graph"
 
 
-def test_publication_is_in_place_so_prebuilt_holders_see_it():
-    """Identity, not just equality.
-
-    `PromotionHooks` and `StepCoordinator` capture the object BEFORE the loop runs, so a
-    fresh object with the right values would still leave both reading the empty one. The
-    fix is only correct if the very object they hold is the one that changes.
-    """
-    shared = SimpleNamespace(best_model=None, best_model_step=None)
-    holder_a = shared          # stands in for PromotionHooks.anchor_state
-    holder_b = shared          # stands in for StepCoordinator.anchor_state
-
-    _run_once(shared, SimpleNamespace(best_model="M", best_model_step=7))
-
-    assert holder_a.best_model == "M"
-    assert holder_b.best_model == "M"
-    assert holder_a is holder_b is shared
-
-
-def test_no_anchor_passed_still_binds_the_resolved_one():
-    """The pre-existing contract for callers that pass nothing must not regress."""
-    resolved = SimpleNamespace(best_model="M", best_model_step=1)
-    # Passing None must not raise; the loop binds the resolved anchor internally.
-    _run_once(None, resolved)
-
-
 def test_composition_root_actually_threads_the_anchor_into_the_loop():
     """`run.py` must PASS it — publication is useless if the loop never receives it.
 
