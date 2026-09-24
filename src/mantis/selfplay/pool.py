@@ -47,7 +47,6 @@ from mantis.selfplay.pool_hooks import (
     inference_batch_timing as _inference_batch_timing,
 )
 from mantis.selfplay.pool_hooks import inference_stats as _inference_stats
-from mantis.selfplay.pool_hooks import latest_replay_path as _latest_replay_path
 from mantis.selfplay.pool_hooks import runner_stats as _runner_stats
 from mantis.selfplay.pool_hooks import (
     sync_inference_weights as _sync_inference_weights,
@@ -341,10 +340,6 @@ class WorkerPool:
     def update_checkpoint_step(self, step: int) -> None:
         """Forward the current training step to the game recorder."""
         _update_checkpoint_step(self, step)
-
-    def latest_replay_path(self) -> Path | None:
-        """Most recent recorded self-play replay file, or `None` under the default."""
-        return _latest_replay_path(self)
 
     # lifecycle
     def check_producer_health(self) -> None:

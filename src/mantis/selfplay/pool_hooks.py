@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 # Injection Protocols — every one has an explicit no-op default at the pool ctor.
@@ -53,8 +52,6 @@ class RecorderLike(Protocol):
         search_stats: list[Any] | None,
     ) -> None: ...
 
-    def latest_replay_path(self) -> Path | None: ...
-
     def stop(self) -> None: ...
 
 
@@ -91,9 +88,6 @@ class NullRecorder:
         move_arms: list[tuple[int, bool]],
         search_stats: list[Any] | None,
     ) -> None:
-        return None
-
-    def latest_replay_path(self) -> Path | None:
         return None
 
     def stop(self) -> None:
@@ -216,11 +210,6 @@ def update_checkpoint_step(pool: Any, step: int) -> None:
     pool._recorder.set_step(step)
 
 
-def latest_replay_path(pool: Any) -> Path | None:
-    """Most recent recorded self-play replay file, or `None` under the default `NullRecorder`."""
-    return pool._recorder.latest_replay_path()
-
-
 __all__ = [
     "EventSink",
     "HeartbeatFn",
@@ -232,7 +221,6 @@ __all__ = [
     "batch_fill_pct",
     "inference_batch_timing",
     "inference_stats",
-    "latest_replay_path",
     "runner_stats",
     "sync_inference_weights",
     "update_checkpoint_step",

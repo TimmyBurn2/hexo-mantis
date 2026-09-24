@@ -143,7 +143,6 @@ def _make_drain_pool(games, sink):
     pool._recorder = type("NR", (), {
         "set_step": lambda self, s: None,
         "maybe_record": lambda self, **k: None,
-        "latest_replay_path": lambda self: None,
         "stop": lambda self: None,
     })()
     return pool

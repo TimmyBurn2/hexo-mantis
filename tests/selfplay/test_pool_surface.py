@@ -65,7 +65,7 @@ FROZEN_PROPERTIES = (
 FROZEN_METHODS = (
     "runner_stats", "inference_stats", "check_producer_health", "stop", "start",
     "buffer_composition", "pooled_draw_counts", "current_stride5_p90",
-    "update_checkpoint_step", "sync_inference_weights", "latest_replay_path",
+    "update_checkpoint_step", "sync_inference_weights",
     "model_version_summary", "terminal_reason_counts",
 )
 
@@ -211,10 +211,9 @@ def test_winrates_are_computed_from_the_right_counters(device) -> None:
     assert pool.o_winrate == 0.2
 
 
-def test_no_op_recorder_default_reports_no_replay(device) -> None:
-    """H-01 (default-seam arm) — PASS iff a pool built without a recorder answers `latest_replay_path() is None` and accepts `update_checkpoint_step` silently."""
+def test_no_op_recorder_default_accepts_a_step(device) -> None:
+    """H-01 (default-seam arm) — PASS iff a pool built without a recorder accepts `update_checkpoint_step` silently."""
     pool = _graph_pool(device)
-    assert pool.latest_replay_path() is None
     pool.update_checkpoint_step(17)  # must not raise on the no-op recorder
 
 

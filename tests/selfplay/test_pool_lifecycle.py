@@ -130,19 +130,15 @@ class _StubServer:
 
 
 class _StubRecorder:
-    def __init__(self, path: Any = None) -> None:
+    def __init__(self) -> None:
         self.steps: list[int] = []
         self.stopped = 0
-        self._path = path
 
     def set_step(self, step: int) -> None:
         self.steps.append(step)
 
     def maybe_record(self, **kwargs: Any) -> None:
         return None
-
-    def latest_replay_path(self):
-        return self._path
 
     def stop(self) -> None:
         self.stopped += 1
@@ -270,15 +266,12 @@ def test_sync_inference_weights_forwards_to_the_server() -> None:
 def test_recorder_seam_forwards_and_defaults_to_inert() -> None:
     """An injected recorder receives `set_step`; the DEFAULT recorder is inert, because the
     concrete recorder does not exist in this tree."""
-    recorder = _StubRecorder(path="replays/games_0001.jsonl")
+    recorder = _StubRecorder()
     pool = _graph_pool(recorder=recorder)
     pool.update_checkpoint_step(42)
     assert recorder.steps == [42]
-    assert pool.latest_replay_path() == "replays/games_0001.jsonl"
 
-    default_pool = _graph_pool()
-    default_pool.update_checkpoint_step(7)
-    assert default_pool.latest_replay_path() is None
+    _graph_pool().update_checkpoint_step(7)
 
 
 @pytest.mark.parametrize(

@@ -130,7 +130,6 @@ def _make_scripted_pool(games, sink):
     pool._recorder = type("NullRec", (), {
         "set_step": lambda self, step: None,
         "maybe_record": lambda self, **kw: None,
-        "latest_replay_path": lambda self: None,
         "stop": lambda self: None,
     })()
     return pool

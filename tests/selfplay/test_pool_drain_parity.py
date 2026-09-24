@@ -104,9 +104,6 @@ class RecordingRecorder:
     def set_step(self, step: int) -> None:
         self.steps.append(step)
 
-    def latest_replay_path(self):
-        return None
-
     def stop(self) -> None:
         self.stopped += 1
 
