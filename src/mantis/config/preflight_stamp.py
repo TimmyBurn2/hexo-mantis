@@ -134,12 +134,13 @@ def read_stamp(config_sha256: str) -> dict[str, Any]:
     return stamp
 
 
-def _flat_leaves(doc: dict[str, Any], prefix: str = "") -> dict[str, Any]:
+def flat_leaves(doc: dict[str, Any], prefix: str = "") -> dict[str, Any]:
+    """A nested config dump's leaves keyed by dotted path."""
     out: dict[str, Any] = {}
     for key, value in doc.items():
         path = f"{prefix}.{key}" if prefix else key
         if isinstance(value, dict):
-            out.update(_flat_leaves(value, path))
+            out.update(flat_leaves(value, path))
         else:
             out[path] = value
     return out
@@ -151,8 +152,8 @@ def _inherit_preflight_stamp(
     """R360(c): write and return `twin`'s stamp from its run's VESTED one, differing in `run_id` alone."""
     parent = load_config(parent_config_path)
     parent_stamp = require_preflight_stamp(parent, tree_root=tree_root)
-    parent_leaves = _flat_leaves(parent.model_dump())
-    twin_leaves = _flat_leaves(twin.model_dump())
+    parent_leaves = flat_leaves(parent.model_dump())
+    twin_leaves = flat_leaves(twin.model_dump())
     differing = sorted(
         key for key in parent_leaves.keys() | twin_leaves.keys()
         if parent_leaves.get(key) != twin_leaves.get(key)

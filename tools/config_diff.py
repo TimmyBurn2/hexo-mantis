@@ -21,18 +21,9 @@ import yaml
 from pydantic import ValidationError
 
 from mantis.config.loader import load_config
+from mantis.config.preflight_stamp import flat_leaves
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "config_templates"
-
-
-def _flatten(node: object, prefix: str = "") -> dict[str, object]:
-    if isinstance(node, dict):
-        out: dict[str, object] = {}
-        for k, v in node.items():
-            key = f"{prefix}.{k}" if prefix else str(k)
-            out.update(_flatten(v, key))
-        return out
-    return {prefix: node}
 
 
 def _diff_keys(flat_a: dict[str, object], flat_b: dict[str, object]) -> set[str]:
@@ -88,8 +79,8 @@ def _run_from_header(config_path: str) -> int:
         print(f"missing template: {template_path}", file=sys.stderr)
         return 2
     try:
-        flat_cfg = _flatten(load_config(path).model_dump())
-        flat_tmpl = _flatten(load_config(template_path).model_dump())
+        flat_cfg = flat_leaves(load_config(path).model_dump())
+        flat_tmpl = flat_leaves(load_config(template_path).model_dump())
     except (ValidationError, yaml.YAMLError, OSError, TypeError) as exc:
         print(f"load/validation error: {exc}", file=sys.stderr)
         return 2
@@ -108,8 +99,8 @@ def _run_from_header(config_path: str) -> int:
 
 def _run_expect(config_a: str, config_b: str, expect: list[str]) -> int:
     try:
-        flat_a = _flatten(load_config(config_a).model_dump())
-        flat_b = _flatten(load_config(config_b).model_dump())
+        flat_a = flat_leaves(load_config(config_a).model_dump())
+        flat_b = flat_leaves(load_config(config_b).model_dump())
     except (ValidationError, yaml.YAMLError, OSError, TypeError) as exc:
         print(f"load/validation error: {exc}", file=sys.stderr)
         return 2

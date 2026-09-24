@@ -34,7 +34,7 @@ from mantis.config.armed_aborts import (
     audit_arming,
 )
 from mantis.config.loader import config_identity_sha256, discover_configs, load_config
-from mantis.config.preflight_stamp import write_stamp
+from mantis.config.preflight_stamp import flat_leaves, write_stamp
 from mantis.monitor.sink import JsonlEventSink
 from mantis.train.actor_sync import ActorSync
 from mantis.train.lifecycle.heartbeat_watchdog import ActorLagSpec, HeartbeatWatchdog
@@ -104,16 +104,7 @@ FORCED_TWIN_LEAVES: frozenset[str] = frozenset({
 
 def _flat_leaves(config) -> dict[str, object]:
     """A validated config's leaves as dotted paths — the same shape gate 13's walker uses."""
-    def walk(node, prefix: str) -> dict[str, object]:
-        out: dict[str, object] = {}
-        for key, value in node.items():
-            path = f"{prefix}{key}"
-            if isinstance(value, dict):
-                out.update(walk(value, f"{path}."))
-            else:
-                out[path] = value
-        return out
-    return walk(config.model_dump(), "")
+    return flat_leaves(config.model_dump())
 
 
 def _mint_run5_cpu_bootable_twin(out_dir: Path) -> Path:
