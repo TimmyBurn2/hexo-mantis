@@ -2,9 +2,10 @@
 `resolve_eval_model_sims` before it resolves or refuses."""
 from __future__ import annotations
 
+import mantis.config.resolve.nsims as nsims_mod
 import pytest
-
 from mantis.bots.protocol import RungUnresolvable
+from mantis.bots.resolve import resolve_bot
 from mantis.config.resolve.nsims import resolve_eval_model_sims
 
 
@@ -36,9 +37,6 @@ def test_strix_rung_model_sims_route_through_resolve_eval_model_sims(monkeypatch
     the ordering. Observing it through `pytest.raises(RungUnresolvable)` instead was an accident
     of the rung being unresolvable: measured `1 failed` with a built vendor tree and `1 passed`
     without, so CI had never once observed the ordering the row is named for."""
-    import mantis.config.resolve.nsims as nsims_mod
-    from mantis.bots.resolve import resolve_bot
-
     calls: list[tuple[str, int | None]] = []
 
     def spy(opponent: str, cfg_value: int | None) -> int:
@@ -67,9 +65,6 @@ def test_strix_rung_model_sims_route_through_resolve_eval_model_sims(monkeypatch
 def test_every_bot_kind_routes_its_sims_through_the_resolver_after_the_rewrite(
     monkeypatch, kind: str
 ) -> None:
-    import mantis.config.resolve.nsims as nsims_mod
-    from mantis.bots.resolve import resolve_bot
-
     calls: list[tuple[str, int | None]] = []
     real = nsims_mod.resolve_eval_model_sims
 

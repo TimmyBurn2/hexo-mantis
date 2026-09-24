@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from mantis.eval.aggregate import (  # noqa: F401 — RED-at-import anchor: mantis.eval does not exist yet
+from mantis.eval.aggregate import (
     aggregate_gate,
     gate_promotion_decision,
     should_escalate,
@@ -64,8 +64,6 @@ def _gate_cfg(**overrides):
     ],
 )
 def test_gate_truth_table_matches_run3(wr_confirm, ci_lo_boot, low_power, expected) -> None:
-    from mantis.eval.aggregate import gate_promotion_decision
-
     assert gate_promotion_decision(wr_confirm, ci_lo_boot, low_power, 0.55) is expected
 
 
@@ -78,8 +76,6 @@ def test_gate_truth_table_matches_run3(wr_confirm, ci_lo_boot, low_power, expect
     ],
 )
 def test_gate_truth_table_boundary_cases(wr_confirm, ci_lo_boot, low_power, expected) -> None:
-    from mantis.eval.aggregate import gate_promotion_decision
-
     assert gate_promotion_decision(wr_confirm, ci_lo_boot, low_power, 0.55) is expected
 
 
@@ -108,8 +104,6 @@ def test_aggregate_gate_calls_the_pure_decision_function_not_a_reimplementation(
 
 
 def test_wr_confirm_is_pooled_draw_aware_from_raw_records() -> None:
-    from mantis.eval.aggregate import aggregate_gate
-
     # draw-aware WR = (24+15)/80 = 0.4875
     screen = _records(80, wins=24, draws=30, losses=26, tag="s")
     # draw-aware WR = (55+20)/128 = 0.5859375
@@ -136,8 +130,6 @@ def test_wr_confirm_is_pooled_draw_aware_from_raw_records() -> None:
 
 
 def test_bootstrap_and_low_power_guard_consume_the_pooled_set() -> None:
-    from mantis.eval.aggregate import aggregate_gate
-
     cfg = _gate_cfg(min_distinct_per_pair=10)
 
     # 3 distinct sequences filling 80 games: screen alone is under the threshold of 10, so a
@@ -191,8 +183,6 @@ def test_bootstrap_and_low_power_guard_consume_the_pooled_set() -> None:
     [(0.30, False), (0.43, False), (0.44, True), (0.50, True), (0.99, True)],
 )
 def test_screen_escalates_iff_wr_screen_at_least_screen_confirm_lo(wr_screen, expected_escalate) -> None:
-    from mantis.eval.aggregate import should_escalate
-
     assert should_escalate(wr_screen, screen_confirm_lo=0.44) is expected_escalate
 
 

@@ -20,7 +20,7 @@ integration suites' job, not duplicated here.
 """
 from __future__ import annotations
 
-from mantis.eval.pipeline import (  # noqa: F401 — RED-at-import anchor: mantis.eval does not exist yet
+from mantis.eval.pipeline import (
     emit_round_complete,
     emit_round_skipped_busy,
     emit_round_started,
@@ -39,8 +39,6 @@ class _SpySink:
 
 
 def test_round_emits_start_and_complete_wall_events() -> None:
-    from mantis.eval.pipeline import emit_round_complete, emit_round_started
-
     sink = _SpySink()
     started = emit_round_started(
         sink, round_id="r000001_1000", step=1000, gate_scheduled=True, ts=1234.5,
@@ -71,8 +69,6 @@ def test_round_emits_start_and_complete_wall_events() -> None:
 
 
 def test_busy_kick_emits_eval_round_skipped_busy() -> None:
-    from mantis.eval.pipeline import emit_round_skipped_busy
-
     sink = _SpySink()
     ack = emit_round_skipped_busy(sink, step=1000, in_flight_round_id="r000001_900")
     assert ack["step"] == 1000
