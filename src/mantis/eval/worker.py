@@ -27,7 +27,12 @@ from mantis.bots.protocol import RungUnresolvable
 from mantis.bots.resolve import resolve_bot
 from mantis.config.resolve.allocator_posture import assert_posture_token
 from mantis.encoding import EncodingSpec, lookup, normalize_encoding_name
-from mantis.eval.aggregate import aggregate_gate, aggregate_rung, aggregate_sequential_gate
+from mantis.eval.aggregate import (
+    aggregate_gate,
+    aggregate_rung,
+    aggregate_sequential_gate,
+    should_escalate,
+)
 from mantis.eval.child_memory import make_probe
 from mantis.eval.errors import EvalDecodeUnsupportedError
 from mantis.eval.floor_gate import FLOOR_PROBE_VARIANT, evaluate_strength_floor
@@ -447,7 +452,7 @@ def _play_gate_block(
         screen_agg = [_agg_record(r) for r in screen_records]
 
         wr_screen = _draw_aware_wr(screen_agg)
-        escalate = wr_screen is not None and wr_screen >= spec.gate.screen_confirm_lo
+        escalate = wr_screen is not None and should_escalate(wr_screen, spec.gate.screen_confirm_lo)
         confirm_agg: list[dict[str, Any]] = []
         if escalate:
             confirm_openings = round_openings(
