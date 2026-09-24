@@ -87,33 +87,6 @@ def _round_spec(
     )
 
 
-def _openings_at(enc_name: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Drive the round from openings derived at `enc_name`'s own geometry.
-
-    The repo's only book is minted at radius 6 and 292 of its 512 openings (57.03%, measured) need
-    `legal_move_radius >= 6` to replay, so a narrower encoding would start from unreachable
-    positions; deriving them also drops a dependency on which one `seed_base` selected.
-    """
-    from mantis._engine import Board
-    from mantis.arena.books import Opening
-
-    def _derived(book_id: str, *, n_pairs: int, seed_base: int, round_index: int,
-                 **_kw) -> list[Opening]:
-        openings: list[Opening] = []
-        for i in range(max(int(n_pairs), 1)):
-            board = Board.with_encoding_name(enc_name)
-            moves: list[tuple[int, int]] = []
-            for ply in range(4):
-                legal = sorted(board.legal_moves())
-                move = legal[(seed_base + round_index + i * 7 + ply * 3) % len(legal)]
-                board.apply_move(*move)
-                moves.append(move)
-            openings.append(Opening(opening_id=f"{book_id}-derived-{i}", moves=moves))
-        return openings
-
-    monkeypatch.setattr(worker, "round_openings", _derived)
-
-
 def _recorded_bindings(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, bool]]:
     """Record `(spec.name, is_graph)` in construction order for every engine the round builds,
     through a real subclass so what is recorded is what production bound."""
