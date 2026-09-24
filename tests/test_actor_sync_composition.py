@@ -10,82 +10,12 @@ step sees fresh games.
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any
 
 import mantis.run
 import mantis.train.actor_sync  # noqa: F401 — import anchor
-from _drivable import DrivableTrainerStub
+from _drivable import DrivablePoolStub, DrivableTrainerStub
 
 _STOP_STEP = 5
-
-
-class _RunnerStats:
-    mcts_mean_depth = 5.0
-    mcts_mean_root_concentration = 0.1
-    cluster_value_std_mean = 0.0
-    cluster_policy_disagreement_mean = 0.0
-    cluster_variance_sample_count = 0
-
-
-class _SyncRecordingPool:
-    """Pool double with the sync recorders; `games_completed` yields one fresh game per read,
-    so every step runs one burst."""
-
-    def __init__(self) -> None:
-        self._games = 0
-        self.search_kind = "gumbel"
-        self.avg_game_length = 20.0
-        self.x_winrate = 0.5
-        self.o_winrate = 0.45
-        self.draw_rate = 0.05  # the third outcome share
-        self.draws = 1
-        self.sims_per_sec = 100.0
-        self.batch_fill_pct = 0.9
-        self.recent_move_histories: list = []
-        self.started = False
-        self.stopped = False
-        self.sync_payloads: list = []
-        self.step_calls: list[int] = []
-
-    @property
-    def games_completed(self) -> int:
-        self._games += 1
-        return self._games
-
-    def start(self) -> None:
-        self.started = True
-
-    def stop(self) -> None:
-        self.stopped = True
-
-    def check_producer_health(self) -> None:
-        return None
-
-    def pooled_draw_counts(self) -> tuple[int, int]:
-        return (0, 0)
-
-    def current_stride5_p90(self) -> int:
-        return 1
-
-    def runner_stats(self) -> Any:
-        return _RunnerStats()
-
-    def sync_inference_weights(self, state_dict) -> None:
-        self.sync_payloads.append(state_dict)
-
-    def update_checkpoint_step(self, step: int) -> None:
-        self.step_calls.append(int(step))
-
-
-class _Buffer:
-    size = 1000
-    capacity = 100_000
-
-    def resize(self, n: int) -> None:
-        return None
-
-    def save_to_path(self, p) -> None:
-        return None
 
 
 def test_compose_run_syncs_actor_on_cadence_without_eval(
@@ -94,7 +24,7 @@ def test_compose_run_syncs_actor_on_cadence_without_eval(
     """The dependency-absence proof: with no eval pipeline in the process at all, the pool
     still records cadence-consistent weight pushes and the actor's recorded step ends inside
     the cadence bound of the learner's."""
-    pool = _SyncRecordingPool()
+    pool = DrivablePoolStub(game_per_read=True)
     trainer = DrivableTrainerStub()
 
     def _fake_build_run_safety(**kwargs):

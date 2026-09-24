@@ -33,8 +33,7 @@ from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
-from _wiring_fakes import RunnerStats, fake_run_safety
-from _drivable import DrivableTrainerStub
+from _drivable import DrivablePoolStub, DrivableTrainerStub, fake_run_safety
 
 _CONFIGS = Path(__file__).resolve().parents[2] / "configs"
 _DEV = load_config(_CONFIGS / "dev_example.yaml")
@@ -74,46 +73,6 @@ _SCHEMA_TO_FIELD = {
     "replay_capacity_schedule": "buffer_schedule",
 }
 _KNOB_KEYS = tuple(_DISTINGUISHABLE)
-
-
-class _Pool:
-    def __init__(self) -> None:
-        self.games_completed = 0
-        self.search_kind = "gumbel"
-        self.avg_game_length = 20.0
-        self.x_winrate = 0.5
-        self.o_winrate = 0.45
-        self.draw_rate = 0.05  # the third outcome share.
-        self.draws = 1
-        self.sims_per_sec = 100.0
-        self.batch_fill_pct = 0.9
-        self.recent_move_histories: list = []
-
-    def start(self) -> None: ...
-    def stop(self) -> None: ...
-    def check_producer_health(self) -> None: ...
-    def pooled_draw_counts(self) -> tuple[int, int]: return (0, 0)
-    def current_stride5_p90(self) -> int: return 1
-    def runner_stats(self) -> Any: return RunnerStats()
-    def sync_inference_weights(self, state_dict) -> None: ...
-    def update_checkpoint_step(self, step: int) -> None: ...
-
-
-class _ComposePool(_Pool):
-    """`compose_run`'s drive needs `games_completed` to ADVANCE so the burst runs."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self._games = 0
-
-    @property                                        # type: ignore[override]
-    def games_completed(self) -> int:
-        self._games += 1
-        return self._games
-
-    @games_completed.setter
-    def games_completed(self, value: int) -> None:
-        self._games = int(value)
 
 
 def _real_graph_ring(n_records: int = 8, capacity: int = 64):
@@ -202,7 +161,7 @@ def _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config, mk_gra
         eval_enabled=False, run_id="knob_wiring",
     )
     handles = mantis.run.compose_run(
-        config=config, trainer=DrivableTrainerStub(), pool=_ComposePool(),
+        config=config, trainer=DrivableTrainerStub(), pool=DrivablePoolStub(game_per_read=True),
         # 32 records: above every distinguishable warmup floor (`min_buf_size: 29`), so no
         # mutated drive can wedge in warmup against a too-small real buffer.
         buffer=mk_graph_buffer(n_records=32),
@@ -322,7 +281,7 @@ def _coordinator(*, trainer=None, eval_pipeline=None, **knob_over):
                                  knobs=_KNOBS),
         **settings,
     )
-    pool, buffer, sink = _Pool(), _Buffer(), _Sink()
+    pool, buffer, sink = DrivablePoolStub(), _Buffer(), _Sink()
     coord = StepCoordinator(
         trainer=trainer or DrivableTrainerStub(), buffer=buffer,
         pool=pool, eval_pipeline=eval_pipeline,

@@ -2,7 +2,7 @@
 # place, both training-step tails converge on it, and the write it triggers rides the ONE
 # stamped writer. Splitting them would separate the mutation arms from the dense convergence
 # they are converged WITH, and would fork the graph harness into copies that drift while both
-# stay green; the bar on cross-test imports is why the harness is local rather than shared.
+# stay green.
 """ORACLE — the periodic checkpoint seam.
 
 `train.checkpoint_interval` had exactly one reader in `src/`, inside the dense step tail, while
@@ -30,6 +30,7 @@ import pytest
 import torch
 
 from _monitor_config import monitor_config
+from _drivable import DrivablePoolStub
 from _graph_drive import filled_hexg
 from mantis.config.loader import load_config
 from mantis.config.resolve.microbatch import MicrobatchCapsSpec
@@ -341,37 +342,6 @@ def _coord_cfg(**over: Any) -> StepCoordinatorConfig:
     return StepCoordinatorConfig(**base)
 
 
-class _RunnerStats:
-    """Minimal `RunnerStats` surface for `emit_iteration_complete_event`."""
-    mcts_mean_depth = 5.0
-    mcts_mean_root_concentration = 0.1
-    cluster_value_std_mean = 0.0
-    cluster_policy_disagreement_mean = 0.0
-    cluster_variance_sample_count = 0
-
-
-class _Pool:
-    """Minimal WorkerPoolLike stand-in for driving step() past O4/O5 (not the subject). Carries
-    the full telemetry surface because `iteration_complete` emits per burst rather than only at
-    `log_interval` boundaries."""
-
-    def __init__(self, games_completed: int = 3) -> None:
-        self.games_completed = games_completed
-        self.n_workers = 1
-        self.search_kind = "gumbel"
-        self.avg_game_length = 20.0
-        self.x_winrate = 0.5
-        self.o_winrate = 0.45
-        self.draw_rate = 0.05  # F-816-2: the third outcome share.
-        self.draws = 1
-        self.sims_per_sec = 100.0
-        self.batch_fill_pct = 0.9
-        self.recent_move_histories: list = []
-
-    def runner_stats(self) -> Any:
-        return _RunnerStats()
-
-
 def test_terminus_holds_two_artefacts_and_leg_three_stays_exactly_once(
         tmp_path, mk_config, full_train_hparams, spy_sink) -> None:
     """`stop_step % interval == 0` is run5's real terminus at the recommended N: the burst writes
@@ -386,7 +356,7 @@ def test_terminus_holds_two_artefacts_and_leg_three_stays_exactly_once(
     coord = StepCoordinator(
         monitor_cfg=monitor_config(),
         trainer=trainer, buffer=filled_hexg(),
-        pool=_Pool(), eval_pipeline=None, subsystems=None, anchor_state=None,
+        pool=DrivablePoolStub(games=3), eval_pipeline=None, subsystems=None, anchor_state=None,
         shutdown=ShutdownState(), eval_model=None, config=_coord_cfg(),
         full_config=full_config, sink=spy_sink,
     )

@@ -15,14 +15,14 @@ from typing import Any
 from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
-from _graph_drive import GRAPH_FULL_CONFIG, filled_hexg
+from _graph_drive import GRAPH_FULL_CONFIG, GraphSampleBuffer
 from _spy import SpyEventSink
 from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
-from _drivable import DrivableTrainerStub
+from _drivable import DrivablePoolStub, DrivableTrainerStub, RunnerStats
 
 
 # Constants derived from the minted config — no hand-restated knobs.
@@ -46,66 +46,16 @@ def _make_config(**overrides) -> StepCoordinatorConfig:
     )
 
 
-class _RunnerStats:
-    mcts_mean_depth = 5.0
-    mcts_mean_root_concentration = 0.1
-    cluster_value_std_mean = 0.0
-    cluster_policy_disagreement_mean = 0.0
-    cluster_variance_sample_count = 0
-
-
-class _CountingPool:
+class _CountingPool(DrivablePoolStub):
     """A pool fake whose `runner_stats` call counter is the collapse oracle's instrument."""
 
     def __init__(self) -> None:
-        self.games_completed = 0
-        self.search_kind = "gumbel"
-        self.avg_game_length = 20.0
-        self.x_winrate = 0.5
-        self.o_winrate = 0.45
-        self.draw_rate = 0.05  # the third outcome share
-        self.draws = 1
-        self.sims_per_sec = 100.0
-        self.batch_fill_pct = 0.9
-        self.recent_move_histories: list = []
+        super().__init__()
         self.runner_stats_calls = 0
-
-    def check_producer_health(self) -> None:
-        return None
-
-    def pooled_draw_counts(self) -> tuple[int, int]:
-        return (0, 0)
-
-    def current_stride5_p90(self) -> int:
-        return 1
 
     def runner_stats(self) -> Any:
         self.runner_stats_calls += 1
-        return _RunnerStats()
-
-    def update_checkpoint_step(self, step: int) -> None:
-        return None
-
-
-
-class _FakeBuffer:
-    def __init__(self) -> None:
-        self.size = 1000
-        self.capacity = 100_000
-        self._hexg = filled_hexg()
-
-    def resize(self, n: int) -> None:
-        self.capacity = n
-
-    def save_to_path(self, p) -> None:
-        return None
-
-    def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
-                           n_threads: int = 1):
-        # Delegated to a real `HexgBuffer`: the dispatcher collates the wire for real, so a
-        # hand-built payload would be a second wire format for the collate to disagree with.
-        return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
-                                             n_threads=n_threads)
+        return RunnerStats()
 
 
 class _FakeEvalPipeline:
@@ -128,11 +78,10 @@ class _FakeEvalPipeline:
         return None
 
 
-
 def _make_coordinator(*, pool=None, config=None):
     pool = pool or _CountingPool()
     trainer = DrivableTrainerStub()
-    buffer = _FakeBuffer()
+    buffer = GraphSampleBuffer()
     sink = SpyEventSink()
     coord = StepCoordinator(
         trainer=trainer, buffer=buffer,

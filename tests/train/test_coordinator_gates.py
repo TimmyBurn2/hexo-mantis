@@ -5,12 +5,10 @@ consumer that once sat at the async result seam left with the rung, R362(c); a c
 is routed to promotion by `drain._route_eval_result`). Also covered: draw-rate gate wiring on the
 LIVE producer, the emission wiring, and the `train_step` heartbeat beats.
 
->300 justify: one coordinator seam, one set of fakes shared by every gate row; splitting the file
-would duplicate the harness and let the two halves drift apart.
+>300 justify: one coordinator seam, one harness shared by every gate row; splitting the file
+would duplicate that harness and let the two halves drift apart.
 """
 from __future__ import annotations
-
-from mantis._engine import HexgBuffer
 
 import dataclasses
 
@@ -23,35 +21,15 @@ from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec
+from _drivable import DrivablePoolStub
+from _graph_drive import GRAPH_FULL_CONFIG, GraphSampleBuffer
 from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
 
-def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    """A real graph ring the coordinator stubs sample through."""
-    hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
-    for i in range(n_records):
-        stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
-        hb.push_graph_position(stones, [(2, 0, 0.6), (1, 1, 0.4)], 1, 30, 2 + i, True,
-                               1.0 if i % 2 == 0 else -1.0, True, 10 + i)
-    return hb
 
-
-
-        # The `WorkerPoolLike` surface serves RAW COUNTS `(draws, completed)` and takes no
-        # evidence bar — the bar is applied at the abort decision.
-_GRAPH_FULL_CONFIG: dict = {
-    "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
-    "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
-              "fast_policy_weight": 0.0},
-    "selfplay": {"n_workers": 1},
-}
-
-
-        # DELEGATED to a real `HexgBuffer` rather than faked: the dispatcher collates the wire
-        # for real, so a hand-built payload would be a second wire format to disagree with.
 _DRAIN_CAPS = resolve_drain_caps(
     load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").monitor)
 #: WPMINT Phase K-B: the builder's fourth config-authored parameter, from the same minted
@@ -62,50 +40,6 @@ _KNOBS = resolve_coordinator_knobs(
 #: the ARMING cadence, from the same minted config.
 _GATE_INTERVAL = load_config(
     Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").monitor.gate_interval
-
-
-# fakes
-class _RunnerStats:
-    mcts_mean_depth = 5.0
-    mcts_mean_root_concentration = 0.1
-    cluster_value_std_mean = 0.0
-    cluster_policy_disagreement_mean = 0.0
-    cluster_variance_sample_count = 0
-
-
-class FakePool:
-    def __init__(self, *, stride5=1, draw_counts=(0, 0)) -> None:
-        self.games_completed = 0
-        self.search_kind = "gumbel"                 # → iteration_complete cluster stats are None
-        self.avg_game_length = 20.0
-        self.x_winrate = 0.5
-        self.o_winrate = 0.45
-        self.draw_rate = 0.05  # F-816-2: the third outcome share.
-        self.draws = 1
-        self.sims_per_sec = 100.0
-        self.batch_fill_pct = 0.9
-        self.recent_move_histories: list = []   # empty → emit_axis_distribution returns early
-        self._stride5 = stride5
-        self._draw_counts = (int(draw_counts[0]), int(draw_counts[1]))
-        self.counts_calls = 0
-
-    def check_producer_health(self) -> None:
-        return None
-
-    def pooled_draw_counts(self) -> tuple[int, int]:
-        # step()'s non-blocking poll at the top of every iteration. This fixture never has a
-        # completed round ready — the invariant pinned here is entirely about the KICK ack.
-        self.counts_calls += 1
-        return self._draw_counts
-
-    def current_stride5_p90(self) -> int:
-        return self._stride5
-
-    def runner_stats(self) -> Any:
-        return _RunnerStats()
-
-    def update_checkpoint_step(self, step: int) -> None:
-        return None
 
 
 class FakeTrainer:
@@ -133,27 +67,6 @@ class FakeTrainer:
 
     def save_checkpoint(self, loss_info) -> None:
         return None
-
-
-class FakeBuffer:
-    def __init__(self, size: int = 1000, capacity: int = 100_000) -> None:
-        self.size = size
-        self.capacity = capacity
-        self._hexg = _filled_hexg()
-
-    def resize(self, n: int) -> None:
-        self.capacity = n
-
-    def save_to_path(self, p) -> None:
-        return None
-
-    def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
-                           n_threads: int = 1):
-        # The graph route's sampler. DELEGATED to a real `HexgBuffer` rather than faked: the
-        # dispatcher collates the wire for real before the trainer stub ever sees it, so a
-        # hand-built payload would be a second wire format for the collate to disagree with.
-        return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
-                                             n_threads=n_threads)
 
 
 class FakeEvalPipeline:
@@ -225,10 +138,10 @@ def _make_config(**overrides) -> StepCoordinatorConfig:
 
 def _make_coordinator(*, pool=None, config=None, eval_pipeline=None, heartbeat=None,
                       monitor_cfg=None, trainer_step: int = 0):
-    pool = pool or FakePool()
+    pool = pool or DrivablePoolStub()
     trainer = FakeTrainer()
     trainer.step = trainer_step  # a resumed trainer: the coordinator reads it at construction
-    buffer = FakeBuffer()
+    buffer = GraphSampleBuffer()
     shutdown = ShutdownState()
     sink = SpySink()
     coord = StepCoordinator(
@@ -239,7 +152,7 @@ def _make_coordinator(*, pool=None, config=None, eval_pipeline=None, heartbeat=N
         # WPTS/TD-1: the straight arm resolves its route from the DECLARED identity — these
         # unit drives declare the grid identity FakeBuffer's sampler serves.
         config=config or _make_config(),
-        full_config=_GRAPH_FULL_CONFIG,
+        full_config=GRAPH_FULL_CONFIG,
         sink=sink, heartbeat=heartbeat, monitor_cfg=monitor_cfg or monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, trainer=trainer, buffer=buffer,
@@ -367,7 +280,7 @@ def test_draw_rate_gate_fires_on_live_producer() -> None:
     """The `draw_rate_collapse` producer test, keyed on the LIVE pooled rate and never on a NaN
     draw-target phantom: a sustained 0.9 pooled rate over sufficient evidence, past min_step,
     fires. Grad-norm is quiet, so the fire is draw-rate."""
-    pool = FakePool(draw_counts=(90, 100))
+    pool = DrivablePoolStub(draw_counts=(90, 100))
     cfg = _make_config(draw_rate_abort=DrawRateAbortSpec(threshold=0.4, min_step=0,
                                                         N_pool_min=10, consec=3))
     h = _make_coordinator(pool=pool, config=cfg)
@@ -382,7 +295,7 @@ def test_draw_rate_gate_fires_on_live_producer() -> None:
 def test_a_resume_restores_the_draw_rate_window_so_the_third_observation_fires() -> None:
     """B-7 (R355(e)): the resume emptied the abort windows (run7's draw-rate abort moved 25k -> 26k)."""
     spec = DrawRateAbortSpec(threshold=0.4, min_step=0, N_pool_min=10, consec=3)
-    before = _make_coordinator(pool=FakePool(draw_counts=(90, 100)),
+    before = _make_coordinator(pool=DrivablePoolStub(draw_counts=(90, 100)),
                                config=_make_config(draw_rate_abort=spec))
     for _ in range(2):
         before.pool.games_completed += 5
@@ -390,14 +303,14 @@ def test_a_resume_restores_the_draw_rate_window_so_the_third_observation_fires()
     assert before.shutdown.running is True and len(before.coord._draw_rate_history) == 2
     carried = before.coord.guard_state()
 
-    resumed = _make_coordinator(pool=FakePool(draw_counts=(90, 100)),
+    resumed = _make_coordinator(pool=DrivablePoolStub(draw_counts=(90, 100)),
                                 config=_make_config(draw_rate_abort=spec))
     resumed.coord.restore_guard_state(carried)
     resumed.pool.games_completed += 5
     resumed.coord.step()
     assert resumed.shutdown.running is False, "the third observation, first after the resume, fires"
 
-    fresh = _make_coordinator(pool=FakePool(draw_counts=(90, 100)),
+    fresh = _make_coordinator(pool=DrivablePoolStub(draw_counts=(90, 100)),
                               config=_make_config(draw_rate_abort=spec))
     fresh.pool.games_completed += 5
     fresh.coord.step()
@@ -425,7 +338,7 @@ def test_guard_state_round_trips_through_json_and_tolerates_an_empty_one() -> No
 def test_draw_rate_gate_default_off_does_not_fire() -> None:
     """On the EXPLICITLY disarmed posture a high draw rate NEVER fires. Bites a gate that ships
     hot against the config the operator actually wrote."""
-    pool = FakePool(draw_counts=(99, 100))
+    pool = DrivablePoolStub(draw_counts=(99, 100))
     cfg = _make_config()  # draw_rate_abort is None — EXPLICITLY off
     h = _make_coordinator(pool=pool, config=cfg)
     _drive_until_stopped(h, cap=6)
@@ -533,7 +446,7 @@ def test_gate_sampling_cadence_follows_gate_interval_not_the_burst() -> None:
     iteration: with `gate_interval=5`, burst 4 and a sustained 0.9 draw rate it collects its
     3rd sample at step 15 and fires THERE, where a once-per-burst implementation could not have
     fired yet. The subject used to be `log_interval`, and that identity was the defect."""
-    pool = FakePool(draw_counts=(90, 100))
+    pool = DrivablePoolStub(draw_counts=(90, 100))
     cfg = _make_config(log_interval=5, gate_interval=5, max_train_burst=4,
                        training_steps_per_game=4.0,
                        draw_rate_abort=DrawRateAbortSpec(threshold=0.4, min_step=0,

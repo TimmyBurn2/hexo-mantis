@@ -20,8 +20,8 @@ from mantis.selfplay.instrumentation import PoolInstrumentation
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
 from mantis.util.constants import PLY_CAP_RING_GAMES
-from _coordinator_pool import CoordinatorPoolStub
-from _graph_drive import GRAPH_FULL_CONFIG, filled_hexg
+from _drivable import DrivablePoolStub
+from _graph_drive import GRAPH_FULL_CONFIG, GraphSampleBuffer
 from _spy import SpyEventSink
 
 _CONFIG = Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml"
@@ -105,24 +105,6 @@ class _Trainer:
         return None
 
 
-class _Buffer:
-    def __init__(self) -> None:
-        self.size = 1000
-        self.capacity = 100_000
-        self._hexg = filled_hexg()
-
-    def resize(self, n: int) -> None:
-        self.capacity = n
-
-    def save_to_path(self, p) -> None: ...
-
-    def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
-                           n_threads: int = 1):
-        return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
-                                             n_threads=n_threads)
-
-
-
 def _harness(flags: list[int], spec: PlyCapAbortSpec | None, *, gate_interval: int = 4):
     cfg = load_config(_CONFIG)
     base = _step_coordinator_config(
@@ -134,9 +116,9 @@ def _harness(flags: list[int], spec: PlyCapAbortSpec | None, *, gate_interval: i
                                  training_steps_per_game=1.0, hard_gn_threshold=1e9)
     shutdown = ShutdownState()
     sink = SpyEventSink()
-    pool = CoordinatorPoolStub(flags)
+    pool = DrivablePoolStub(flags=flags)
     coord = StepCoordinator(
-        trainer=_Trainer(), buffer=_Buffer(),
+        trainer=_Trainer(), buffer=GraphSampleBuffer(),
         pool=pool, eval_pipeline=None, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=shutdown, eval_model=object(), config=config,

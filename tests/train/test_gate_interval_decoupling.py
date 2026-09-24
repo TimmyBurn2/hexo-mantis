@@ -1,6 +1,6 @@
 # >300 justify (R8). ONE claim — "arming rides monitor.gate_interval and narration rides
-# train.log_interval, and neither decides the other" — asserted from many angles over ONE set
-# of fakes and ONE builder-derived config factory. The pins are evidence only BECAUSE they
+# train.log_interval, and neither decides the other" — asserted from many angles over ONE
+# harness and ONE builder-derived config factory. The pins are evidence only BECAUSE they
 # share that factory: a second file would need its own harness copy, which would then be a
 # second authority on what a drive at "gate_interval=4, log_interval=5" even is.
 """ORACLE — the ARMING cadence is `monitor.gate_interval`, not `train.log_interval`.
@@ -14,8 +14,6 @@ value moved; what landed is the CAPABILITY to state them apart, and each pin bel
 mutation that reds it.
 """
 from __future__ import annotations
-
-from mantis._engine import HexgBuffer
 
 import dataclasses
 import inspect
@@ -31,32 +29,13 @@ from mantis.config.loader import discover_configs, load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec
+from _drivable import DrivablePoolStub
+from _graph_drive import GRAPH_FULL_CONFIG, GraphSampleBuffer
 from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
-
-def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    """A real graph ring the coordinator stubs sample through."""
-    hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
-    for i in range(n_records):
-        stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
-        hb.push_graph_position(stones, [(2, 0, 0.6), (1, 1, 0.4)], 1, 30, 2 + i, True,
-                               1.0 if i % 2 == 0 else -1.0, True, 10 + i)
-    return hb
-
-
-
-#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches on
-#: plus the two sections the route's resolvers read. The caps are the template's NON-BINDING
-#: pair — nothing here exercises a split.
-_GRAPH_FULL_CONFIG: dict = {
-    "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
-    "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
-              "fast_policy_weight": 0.0},
-    "selfplay": {"n_workers": 1},
-}
 
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -69,44 +48,6 @@ _GATE_INTERVAL = _DEV_CONFIG.monitor.gate_interval
 #: run5's own minted narration cadence, named rather than invented: the defect is about what
 #: happens BEFORE this many training steps.
 _RUN5_LOG_INTERVAL = 1000
-
-
-class _RunnerStats:
-    mcts_mean_depth = 5.0
-    mcts_mean_root_concentration = 0.1
-    cluster_value_std_mean = 0.0
-    cluster_policy_disagreement_mean = 0.0
-    cluster_variance_sample_count = 0
-
-
-class _Pool:
-    def __init__(self, *, draw_counts: tuple[int, int] = (0, 0)) -> None:
-        self.games_completed = 0
-        self.search_kind = "gumbel"
-        self.avg_game_length = 20.0
-        self.x_winrate = 0.5
-        self.o_winrate = 0.45
-        self.draw_rate = 0.05  # F-816-2: the third outcome share.
-        self.draws = 1
-        self.sims_per_sec = 100.0
-        self.batch_fill_pct = 0.9
-        self.recent_move_histories: list = []
-        self._draw_counts = (int(draw_counts[0]), int(draw_counts[1]))
-
-    def check_producer_health(self) -> None:
-        return None
-
-    def pooled_draw_counts(self) -> tuple[int, int]:
-        return self._draw_counts
-
-    def current_stride5_p90(self) -> int:
-        return 1
-
-    def runner_stats(self) -> Any:
-        return _RunnerStats()
-
-    def update_checkpoint_step(self, step: int) -> None:
-        return None
 
 
 class _Trainer:
@@ -130,26 +71,6 @@ class _Trainer:
 
     def save_checkpoint(self, loss_info) -> None:
         return None
-
-
-class _Buffer:
-    def __init__(self) -> None:
-        self.size = 1000
-        self.capacity = 100_000
-        self._hexg = _filled_hexg()
-
-    def resize(self, n: int) -> None:
-        self.capacity = n
-
-    def save_to_path(self, p) -> None:
-        return None
-
-    def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
-                           n_threads: int = 1):
-        # DELEGATED to a real `HexgBuffer` rather than faked: the dispatcher collates the wire
-        # for real, so a hand-built payload would be a second wire format to disagree with.
-        return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
-                                             n_threads=n_threads)
 
 
 class _Sink:
@@ -176,16 +97,16 @@ def _config(**overrides) -> StepCoordinatorConfig:
     )
 
 
-def _coordinator(*, config: StepCoordinatorConfig, pool: _Pool | None = None):
-    pool = pool or _Pool()
-    trainer, buffer, sink = _Trainer(), _Buffer(), _Sink()
+def _coordinator(*, config: StepCoordinatorConfig, pool: DrivablePoolStub | None = None):
+    pool = pool or DrivablePoolStub()
+    trainer, buffer, sink = _Trainer(), GraphSampleBuffer(), _Sink()
     shutdown = ShutdownState()
     coord = StepCoordinator(
         trainer=trainer, buffer=buffer,
         pool=pool, eval_pipeline=None, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=shutdown, eval_model=object(), config=config,
-        full_config=_GRAPH_FULL_CONFIG,
+        full_config=GRAPH_FULL_CONFIG,
         sink=sink, monitor_cfg=monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, trainer=trainer, sink=sink,
@@ -246,7 +167,7 @@ def test_p2_the_draw_rate_abort_fires_on_exactly_the_nth_gate_interval_observati
     asserted, not merely the fire, because a gate firing at the wrong cadence satisfies a
     fire-only assertion. The terms are chosen here, so this pin is no second authority over the
     operator's pre-registered values."""
-    pool = _Pool(draw_counts=(90, 100))
+    pool = DrivablePoolStub(draw_counts=(90, 100))
     cfg = _config(log_interval=_RUN5_LOG_INTERVAL, gate_interval=2,
                   draw_rate_abort=DrawRateAbortSpec(threshold=0.4, min_step=0,
                                                     N_pool_min=10, consec=3))
@@ -398,7 +319,7 @@ def test_p8_a_fire_on_a_non_final_burst_iteration_survives_into_the_step_outcome
     not a live failure. Killer, measured: a plain assignment reds only this test's last
     assertion.
     """
-    pool = _Pool(draw_counts=(90, 100))
+    pool = DrivablePoolStub(draw_counts=(90, 100))
     cfg = _config(log_interval=_RUN5_LOG_INTERVAL, gate_interval=2,
                   draw_rate_abort=DrawRateAbortSpec(threshold=0.4, min_step=0,
                                                     N_pool_min=10, consec=3))
@@ -465,7 +386,7 @@ def test_p9_the_gate_boundary_gates_and_emits_with_no_loss_info_at_all() -> None
     assert _checks(h) == 2
 
 
-class _BlackoutPool(_Pool):
+class _BlackoutPool(DrivablePoolStub):
     """A pool whose `pooled_draw_counts` is SCRIPTED per call, one call per gate boundary.
     `(0, 0)` is below any `N_pool_min`, so the rate is `None` = NO OBSERVATION and `_sample`
     skip-counts it — the production shape of an early-run evidence blackout."""

@@ -4,9 +4,9 @@ Sits at the tests/ TOP LEVEL, mirroring a module deliberately ABOVE both `mantis
 `mantis.eval`. Covers the pool-then-watchdog start order, the `wired_sources` declaration, the
 never-started-pool `on_drained` closure, and the `train -> eval` lazy-import ban.
 
->300 justify (R8): the monitor-config producer test, the drivable fakes and the re-validation
-pins are folded in here rather than given their own files — same subject, and a split would
-fork another copy of the same fakes.
+>300 justify (R8): the monitor-config producer test, the order spies and the re-validation
+pins are folded in here rather than given their own files — one subject, one composition root,
+and a split would fork the order spy rig the start-order rows drive.
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from mantis.config.resolve.composition import (
 from mantis.config.schema import RunConfig
 from _monitor_config import monitor_config
 from mantis.train.coordinator.config import StepCoordinatorConfig
-from _drivable import DrivableTrainerStub
+from _drivable import DrivablePoolStub, DrivableTrainerStub
 
 _REPO = Path(__file__).resolve().parents[1]
 _SRC = _REPO / "src" / "mantis"
@@ -128,72 +128,6 @@ class FakeWatchdog:
         self._order.calls.append("watchdog.start")
 
 
-class _RunnerStats:
-    mcts_mean_depth = 5.0
-    mcts_mean_root_concentration = 0.1
-    cluster_value_std_mean = 0.0
-    cluster_policy_disagreement_mean = 0.0
-    cluster_variance_sample_count = 0
-
-
-class FakePoolNeverStarted:
-    """Models the real hazard: `WorkerPool.stop()` joins the inference server, and
-    `Thread.join` on a never-started thread raises `RuntimeError`, so only a caller that GUARDS
-    on "was start() ever called" may call `.stop()` safely. Also DRIVABLE, because every
-    compose_run call here runs a real burst: `games_completed` yields one fresh game per read,
-    so each `step()` runs exactly one burst."""
-
-    def __init__(self, order: _OrderSpy | None = None) -> None:
-        self._order = order
-        self._started = False
-        self._games = 0
-        self.search_kind = "gumbel"
-        self.avg_game_length = 20.0
-        self.x_winrate = 0.5
-        self.o_winrate = 0.45
-        self.draw_rate = 0.05  # F-816-2: the third outcome share.
-        self.draws = 1
-        self.sims_per_sec = 100.0
-        self.batch_fill_pct = 0.9
-        self.recent_move_histories: list = []
-        self.sync_payloads: list = []
-        self.step_calls: list[int] = []
-
-    @property
-    def games_completed(self) -> int:
-        self._games += 1
-        return self._games
-
-    def start(self) -> None:
-        self._started = True
-        if self._order is not None:
-            self._order.calls.append("pool.start")
-
-    def stop(self) -> None:
-        if not self._started:
-            raise RuntimeError("cannot join thread before it is started")
-        if self._order is not None:
-            self._order.calls.append("pool.stop")
-
-    def check_producer_health(self) -> None:
-        return None
-
-    def pooled_draw_counts(self) -> tuple[int, int]:
-        return (0, 0)
-
-    def current_stride5_p90(self) -> int:
-        return 1
-
-    def runner_stats(self) -> Any:
-        return _RunnerStats()
-
-    def sync_inference_weights(self, state_dict) -> None:
-        self.sync_payloads.append(state_dict)
-
-    def update_checkpoint_step(self, step: int) -> None:
-        self.step_calls.append(int(step))
-
-
 def test_compose_run_publishes_its_boot_identity_first_through_the_one_authority(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
 ) -> None:
@@ -205,7 +139,7 @@ def test_compose_run_publishes_its_boot_identity_first_through_the_one_authority
 
     mantis_run = mantis.run
     order = _OrderSpy()
-    pool = FakePoolNeverStarted(order)
+    pool = DrivablePoolStub(game_per_read=True, observer=order.calls.append)
     watchdog = FakeWatchdog(order)
     emitted: list[dict] = []
 
@@ -243,7 +177,7 @@ def test_compose_run_calls_build_run_safety_once_and_starts_watchdog_after_pool(
     place to enforce; `build_run_safety` must be called exactly once."""
     mantis_run = mantis.run
     order = _OrderSpy()
-    pool = FakePoolNeverStarted(order)
+    pool = DrivablePoolStub(game_per_read=True, observer=order.calls.append)
     watchdog = FakeWatchdog(order)
     build_calls = {"n": 0}
 
@@ -280,7 +214,7 @@ def test_close_out_with_never_started_pool_does_not_raise() -> None:
     report a silent worker leak. Mutation arm: an UNGUARDED closure DOES raise here, which is
     what proves the fake models the real hazard rather than a tautology."""
     mantis_run = mantis.run
-    pool = FakePoolNeverStarted()  # never call .start()
+    pool = DrivablePoolStub(game_per_read=True)  # never call .start()
 
     guarded = mantis_run._stop_pool_if_start_attempted(pool, start_attempted=False)
     guarded()  # must NOT raise
@@ -310,7 +244,7 @@ def test_sink_and_heartbeat_are_threaded_to_pipeline_and_coordinator(
 
     mantis_run.compose_run(
         config=_bounded(smoke_run_config, eval_enabled=True), trainer=DrivableTrainerStub(),
-        pool=FakePoolNeverStarted(), buffer=mk_graph_buffer(n_records=32),
+        pool=DrivablePoolStub(game_per_read=True), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
     assert captured.get("sink") is sink, "the eval pipeline must receive the SAME sink"
@@ -341,7 +275,7 @@ def test_trainer_deferred_sink_is_bound_to_run_safety_sink(
 
     mantis_run.compose_run(
         config=_bounded(smoke_run_config), trainer=trainer,
-        pool=FakePoolNeverStarted(), buffer=mk_graph_buffer(n_records=32),
+        pool=DrivablePoolStub(game_per_read=True), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
     assert trainer._sink._inner is sink, (
@@ -428,7 +362,7 @@ def test_compose_run_resolves_monitor_cfg_from_a_real_config_monitor_section(
     monkeypatch.setattr(mantis_run, "build_run_safety", _fake_build_run_safety)
     cfg = _bounded(smoke_run_config, alert_entropy_min=2.75)
     mantis_run.compose_run(
-        config=cfg, trainer=DrivableTrainerStub(), pool=FakePoolNeverStarted(),
+        config=cfg, trainer=DrivableTrainerStub(), pool=DrivablePoolStub(game_per_read=True),
         buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
@@ -472,7 +406,7 @@ def test_compose_run_refuses_a_model_copy_the_LOADER_would_reject(
         )
 
     monkeypatch.setattr(mantis.run, "build_run_safety", _must_not_be_called)
-    trainer, pool = DrivableTrainerStub(), FakePoolNeverStarted()
+    trainer, pool = DrivableTrainerStub(), DrivablePoolStub(game_per_read=True)
 
     with pytest.raises(UnvalidatedConfigError, match="must be < train.max_train_steps"):
         mantis.run.compose_run(
@@ -549,7 +483,7 @@ def test_the_launch_pin_reaches_the_anchor_resolver_from_the_warm_start_row(
     config = RunConfig.model_validate(base)
     assert config.identity.warm_start is not None
     mantis.run.compose_run(
-        config=config, trainer=DrivableTrainerStub(), pool=FakePoolNeverStarted(_OrderSpy()),
+        config=config, trainer=DrivableTrainerStub(), pool=DrivablePoolStub(game_per_read=True, observer=_OrderSpy().calls.append),
         buffer=mk_graph_buffer(n_records=32), log_dir=str(tmp_path),
         checkpoint_dir=str(tmp_path / "ckpt"),
     )
@@ -569,7 +503,7 @@ def test_no_warm_start_row_means_NO_LAUNCH_PIN(
     config = _bounded(smoke_run_config, eval_enabled=True)
     assert config.identity.warm_start is None, "the minted smoke config already carries a row"
     mantis.run.compose_run(
-        config=config, trainer=DrivableTrainerStub(), pool=FakePoolNeverStarted(_OrderSpy()),
+        config=config, trainer=DrivableTrainerStub(), pool=DrivablePoolStub(game_per_read=True, observer=_OrderSpy().calls.append),
         buffer=mk_graph_buffer(n_records=32), log_dir=str(tmp_path),
         checkpoint_dir=str(tmp_path / "ckpt"),
     )

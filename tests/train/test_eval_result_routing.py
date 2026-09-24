@@ -3,50 +3,27 @@
 A non-blocking `poll_completed()` at the TOP of every `step()` iteration, routed through
 `drain._route_eval_result` to the promotion seam, all on the MAIN thread — `step()` never blocks
 on eval and never consumes the kick ACK as a result.
-
->300 justify: one seam driven against the real `StepCoordinator` and `drain.py` through one
-shared fake-pool/fake-trainer/fake-pipeline harness its seven call sites would duplicate.
 """
 from __future__ import annotations
-
-from mantis._engine import HexgBuffer
 
 import dataclasses
 import threading
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
 
 import pytest
 
 from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
+from _drivable import DrivablePoolStub
+from _graph_drive import GRAPH_FULL_CONFIG, GraphSampleBuffer
 from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
 from mantis.train.coordinator import drain
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
-
-def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    """A real graph ring the coordinator stubs sample through, built per file."""
-    hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
-    for i in range(n_records):
-        stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
-        hb.push_graph_position(stones, [(2, 0, 0.6), (1, 1, 0.4)], 1, 30, 2 + i, True,
-                               1.0 if i % 2 == 0 else -1.0, True, 10 + i)
-    return hb
-
-
-
-#: What a `StepCoordinator` reads on the graph route; the caps are the NON-BINDING template pair.
-_GRAPH_FULL_CONFIG: dict = {
-    "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
-    "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
-              "fast_policy_weight": 0.0},
-    "selfplay": {"n_workers": 1},
-}
 
 
 #: The four drain caps are `monitor.drain.*`, read from a MINTED config and never restated.
@@ -70,50 +47,6 @@ def _mirrored(settings: dict) -> dict:
     return settings
 
 
-class _RunnerStats:
-    mcts_mean_depth = 5.0
-    mcts_mean_root_concentration = 0.1
-    cluster_value_std_mean = 0.0
-    cluster_policy_disagreement_mean = 0.0
-    cluster_variance_sample_count = 0
-
-
-class FakePool:
-    def __init__(self) -> None:
-        self.games_completed = 0
-        self.search_kind = "gumbel"
-        self.avg_game_length = 20.0
-        self.x_winrate = 0.5
-        self.o_winrate = 0.45
-        self.draw_rate = 0.05  # the third outcome share
-        self.draws = 1
-        self.sims_per_sec = 100.0
-        self.batch_fill_pct = 0.9
-        self.recent_move_histories: list = []
-        # sync-call spy surface: the routing suites assert a gate decision reaches the pool
-        # with ZERO sync-shaped calls.
-        self.sync_calls: list = []
-        self.checkpoint_step_calls: list[int] = []
-
-    def check_producer_health(self) -> None:
-        return None
-
-    def pooled_draw_counts(self) -> tuple[int, int]:
-        return (0, 0)
-
-    def current_stride5_p90(self) -> int:
-        return 1
-
-    def runner_stats(self) -> Any:
-        return _RunnerStats()
-
-    def sync_inference_weights(self, state_dict) -> None:
-        self.sync_calls.append(state_dict)
-
-    def update_checkpoint_step(self, step: int) -> None:
-        self.checkpoint_step_calls.append(int(step))
-
-
 class FakeTrainer:
     def __init__(self) -> None:
         self.step = 0
@@ -132,26 +65,6 @@ class FakeTrainer:
 
     def save_checkpoint(self, loss_info) -> None:
         return None
-
-
-class FakeBuffer:
-    def __init__(self, size: int = 1000, capacity: int = 100_000) -> None:
-        self.size = size
-        self.capacity = capacity
-        self._hexg = _filled_hexg()
-
-    def resize(self, n: int) -> None:
-        self.capacity = n
-
-    def save_to_path(self, p) -> None:
-        return None
-
-    def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
-                           n_threads: int = 1):
-        # DELEGATED to a real `HexgBuffer`: the dispatcher collates the wire for real, so a
-        # hand-built payload would be a second wire format for the collate to disagree with.
-        return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
-                                             n_threads=n_threads)
 
 
 class SpySink:
@@ -209,9 +122,9 @@ def _make_config(**overrides) -> StepCoordinatorConfig:
 
 
 def _make_coordinator(*, eval_pipeline=None, config=None):
-    pool = FakePool()
+    pool = DrivablePoolStub()
     trainer = FakeTrainer()
-    buffer = FakeBuffer()
+    buffer = GraphSampleBuffer()
     shutdown = ShutdownState()
     sink = SpySink()
     coord = StepCoordinator(
@@ -219,7 +132,7 @@ def _make_coordinator(*, eval_pipeline=None, config=None):
         pool=pool, eval_pipeline=eval_pipeline, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=shutdown, eval_model=object(),
-        config=config or _make_config(), full_config=_GRAPH_FULL_CONFIG,
+        config=config or _make_config(), full_config=GRAPH_FULL_CONFIG,
         sink=sink, monitor_cfg=monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, trainer=trainer, buffer=buffer,
@@ -292,7 +205,7 @@ def test_promoted_result_advances_deploy_tag_midrun_without_touching_pool() -> N
     assert pipe.apply_gate_calls[0]["result"]["step"] == 7, (
         "the applier must receive the promoted round's step (the deploy-tag step)"
     )
-    assert h.pool.sync_calls == [] and h.pool.checkpoint_step_calls == [], (
+    assert h.pool.sync_payloads == [] and h.pool.step_calls == [], (
         "a mid-run gate decision must never reach the pool's sync surface (R49)"
     )
 
@@ -311,7 +224,7 @@ def test_terminal_route_applies_identically_to_midrun() -> None:
     assert pipe.apply_gate_calls[0]["result"]["step"] == 9, (
         "the terminal route must hand the applier the same single-signature call shape"
     )
-    assert h.pool.sync_calls == [] and h.pool.checkpoint_step_calls == [], (
+    assert h.pool.sync_payloads == [] and h.pool.step_calls == [], (
         "a terminal gate decision must never reach the pool's sync surface (R49)"
     )
 
@@ -331,7 +244,7 @@ def test_flush_before_pool_stop_before_terminal_order() -> None:
         heartbeat_watchdog=watchdog, eval_pipeline=pipe,
         config=SimpleNamespace(terminal_eval_enabled=True),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
-        _train_step=1000, _sink=None, eval_model=object(), full_config=_GRAPH_FULL_CONFIG,
+        _train_step=1000, _sink=None, eval_model=object(), full_config=GRAPH_FULL_CONFIG,
         record_terminal_eval_reason=lambda reason: None,
     )
     drain.close_out(coord, on_drained=lambda: order.append("on_drained"))
@@ -349,7 +262,7 @@ def test_an_absent_terminal_eval_enabled_raises_instead_of_inheriting_true() -> 
         eval_pipeline=SimpleNamespace(run_evaluation=lambda *a, **k: None),
         config=SimpleNamespace(),  # no terminal_eval_enabled — the shape a required field makes
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
-        _train_step=1000, _sink=None, eval_model=object(), full_config=_GRAPH_FULL_CONFIG,
+        _train_step=1000, _sink=None, eval_model=object(), full_config=GRAPH_FULL_CONFIG,
     )
     with pytest.raises(AttributeError, match="terminal_eval_enabled"):
         drain.run_terminal_eval(coord)

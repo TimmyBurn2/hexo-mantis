@@ -15,13 +15,12 @@ only wrapped to record, and `DiskGuard` is the REAL class subclassed to record k
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pytest
 
 import mantis.run as mantis_run
 from mantis.config.resolve.disk_guard import resolve_disk_guard
-from _drivable import DrivableTrainerStub
+from _drivable import DrivablePoolStub, DrivableTrainerStub
 from _root_recorders import bounded, install_recorders
 
 
@@ -33,68 +32,12 @@ class _EvalPipelineWall(RuntimeError):
     """Module-private, same reason, at the other seam."""
 
 
-class _Pool:
-    """Drivable stand-in for `WorkerPool` at the injected seam."""
-
-    search_kind = "gumbel"
-    avg_game_length = 20.0
-    x_winrate = 0.5
-    o_winrate = 0.45
-    draw_rate = 0.05  # the third outcome share.
-    draws = 1
-    sims_per_sec = 100.0
-    batch_fill_pct = 0.9
-
-    class _RunnerStats:
-        mcts_mean_depth = 5.0
-        mcts_mean_root_concentration = 0.1
-        cluster_value_std_mean = 0.0
-        cluster_policy_disagreement_mean = 0.0
-        cluster_variance_sample_count = 0
-
-    def __init__(self) -> None:
-        self.started = False
-        self.stopped = False
-        self._games = 0
-        self.recent_move_histories: list = []
-        self.sync_payloads: list = []
-
-    @property
-    def games_completed(self) -> int:
-        self._games += 1
-        return self._games
-
-    def start(self) -> None:
-        self.started = True
-
-    def stop(self) -> None:
-        self.stopped = True
-
-    def check_producer_health(self) -> None:
-        return None
-
-    def pooled_draw_counts(self) -> tuple[int, int]:
-        return (0, 0)
-
-    def current_stride5_p90(self) -> int:
-        return 1
-
-    def runner_stats(self) -> Any:
-        return self._RunnerStats()
-
-    def sync_inference_weights(self, state_dict) -> None:
-        self.sync_payloads.append(state_dict)
-
-    def update_checkpoint_step(self, step: int) -> None:
-        return None
-
-
-class _PartiallyStartingPool(_Pool):
+class _PartiallyStartingPool(DrivablePoolStub):
     """The partial-start subject: `start()` brings a resource UP and then raises — `WorkerPool`'s
     real shape, where the inference server is live before the runner is asked to start."""
 
     def __init__(self) -> None:
-        super().__init__()
+        super().__init__(game_per_read=True)
         self.resource_live = False
 
     def start(self) -> None:
@@ -161,7 +104,7 @@ def test_an_eval_pipeline_wall_names_its_seam_and_closes_the_sink(
         raise _EvalPipelineWall("the eval pipeline refused this composition")
 
     monkeypatch.setattr(mantis_run, "build_eval_pipeline", _raising_eval_pipeline)
-    pool = _Pool()
+    pool = DrivablePoolStub(game_per_read=True)
 
     with pytest.raises(_EvalPipelineWall) as wall:
         mantis_run.compose_run(
@@ -207,7 +150,7 @@ def test_the_disk_guard_receives_exactly_what_its_resolver_resolved(
     )
 
     mantis_run.compose_run(
-        config=config, trainer=DrivableTrainerStub(), pool=_Pool(),
+        config=config, trainer=DrivableTrainerStub(), pool=DrivablePoolStub(game_per_read=True),
         buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
     )

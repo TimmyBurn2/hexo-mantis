@@ -15,6 +15,7 @@ import pytest
 import torch
 
 from _monitor_config import monitor_config
+from _drivable import DrivablePoolStub
 from _graph_drive import filled_hexg
 from mantis.encoding import lookup
 from mantis.encoding.resolvers import MissingEncodingError
@@ -58,36 +59,6 @@ def _tiny_graph_trainer(tmp_path, mk_config) -> Trainer:
                    checkpoint_dir=tmp_path / "ckpt", device=torch.device("cpu"))
 
 
-class _RunnerStats:
-    """Minimal `RunnerStats` surface for `emit_iteration_complete_event`."""
-    mcts_mean_depth = 5.0
-    mcts_mean_root_concentration = 0.1
-    cluster_value_std_mean = 0.0
-    cluster_policy_disagreement_mean = 0.0
-    cluster_variance_sample_count = 0
-
-
-class _Pool:
-    """Minimal WorkerPoolLike stand-in for driving step() past the warmup gates. It carries the
-    telemetry surface `iteration_complete` reads, since that event emits per burst."""
-
-    def __init__(self, games_completed: int = 3) -> None:
-        self.games_completed = games_completed
-        self.n_workers = 1
-        self.search_kind = "gumbel"
-        self.avg_game_length = 20.0
-        self.x_winrate = 0.5
-        self.o_winrate = 0.45
-        self.draw_rate = 0.05  # the third outcome share.
-        self.draws = 1
-        self.sims_per_sec = 100.0
-        self.batch_fill_pct = 0.9
-        self.recent_move_histories: list = []
-
-    def runner_stats(self) -> Any:
-        return _RunnerStats()
-
-
 #: A REQUIRED zero-arg `caps_provider` the GRAPH arm alone invokes. A default was refused: it
 #: would be a code-side default for a config-derived value, and a caller that forgot it would
 #: silently get an UNCAPPED step. These caps are far past anything the fixtures can build, so
@@ -123,7 +94,7 @@ class _RecordingTypedTrainer:
 def _coordinator(trainer, buffer, full_config, cfg=None, **over) -> StepCoordinator:
     return StepCoordinator(
         monitor_cfg=monitor_config(),
-        trainer=trainer, buffer=buffer, pool=over.pop("pool", _Pool()),
+        trainer=trainer, buffer=buffer, pool=over.pop("pool", DrivablePoolStub(games=3)),
         eval_pipeline=None, subsystems=None, anchor_state=None, shutdown=ShutdownState(),
         eval_model=None, config=cfg or _coord_cfg(), full_config=full_config,
         **over,

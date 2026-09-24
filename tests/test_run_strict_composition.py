@@ -5,8 +5,9 @@ the actor-lag hard abort a shipped config arms, and five sibling arms substitute
 cadence, a `None` eval section, the literal encoding `"unknown"` and an empty `full_config`.
 One gate replaces all six.
 
->300 justify (R8): the pool/buffer fakes, the AST census and the behavioural drives share one
-harness; split, the fakes would be copied and the census would read a tree it does not drive.
+>300 justify (R8): the AST census, the behavioural drives and the frozen-schema loader
+share one subject and one drive rig (the shared fakes live in `_drivable`); split, the census
+would read a tree it does not drive and the drive's bounded-config deltas would fork.
 """
 from __future__ import annotations
 
@@ -38,7 +39,7 @@ from mantis.config.schema import RunConfig
 from mantis.encoding import lookup
 from _monitor_config import monitor_config
 from mantis.train.coordinator.config import StepCoordinatorConfig
-from _drivable import DrivableTrainerStub
+from _drivable import BufferStub, DrivablePoolStub, DrivableTrainerStub, fake_run_safety
 
 _REPO = Path(__file__).resolve().parents[1]
 _CONFIGS_DIR = _REPO / "configs"
@@ -72,64 +73,6 @@ def _frozen_payload():
 _payload = _frozen_payload()
 
 
-class _RunnerStats:
-    mcts_mean_depth = 5.0
-    mcts_mean_root_concentration = 0.1
-    cluster_value_std_mean = 0.0
-    cluster_policy_disagreement_mean = 0.0
-    cluster_variance_sample_count = 0
-
-
-class _Pool:
-    """The routing-harness pool surface + the ActorSyncTarget recorders. `games_completed`
-    yields one fresh game per read so every `step()` runs exactly one burst."""
-
-    def __init__(self) -> None:
-        self._games = 0
-        self.search_kind = "gumbel"
-        self.avg_game_length = 20.0
-        self.x_winrate = 0.5
-        self.o_winrate = 0.45
-        self.draw_rate = 0.05  # the third outcome share.
-        self.draws = 1
-        self.sims_per_sec = 100.0
-        self.batch_fill_pct = 0.9
-        self.recent_move_histories: list = []
-        self.started = False
-        self.stopped = False
-        self.sync_payloads: list = []
-        self.step_calls: list[int] = []
-
-    @property
-    def games_completed(self) -> int:
-        self._games += 1
-        return self._games
-
-    def start(self) -> None:
-        self.started = True
-
-    def stop(self) -> None:
-        self.stopped = True
-
-    def check_producer_health(self) -> None:
-        return None
-
-    def pooled_draw_counts(self) -> tuple[int, int]:
-        return (0, 0)
-
-    def current_stride5_p90(self) -> int:
-        return 1
-
-    def runner_stats(self) -> Any:
-        return _RunnerStats()
-
-    def sync_inference_weights(self, state_dict) -> None:
-        self.sync_payloads.append(state_dict)
-
-    def update_checkpoint_step(self, step: int) -> None:
-        self.step_calls.append(int(step))
-
-
 class _SentinelTrainError(RuntimeError):
     """Module-private on purpose: O-S5 must not be able to pass on an unrelated exception."""
 
@@ -137,26 +80,6 @@ class _SentinelTrainError(RuntimeError):
 class _ExplodingTrainer(DrivableTrainerStub):
     def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
         raise _SentinelTrainError("the drive failed")
-
-
-class _Buffer:
-    size = 1000
-    capacity = 100_000
-
-    def resize(self, n: int) -> None:
-        return None
-
-    def save_to_path(self, p) -> None:
-        return None
-
-
-def _fake_run_safety(**_kwargs):
-    return SimpleNamespace(
-        sink=SimpleNamespace(emit=lambda e: None),
-        registry=SimpleNamespace(beat=lambda s: None),
-        watchdog=SimpleNamespace(start=lambda: None, disarm_staleness=lambda: None),
-        heartbeat=lambda s: None,
-    )
 
 
 #: The UNPATCHED production builder, captured at import so the patch below can delegate to it
@@ -248,7 +171,7 @@ def test_an_unvalidated_config_is_ONE_named_error_before_any_subsystem_exists(
 
     with pytest.raises(UnvalidatedConfigError, match="schema-validated"):
         mantis.run.compose_run(
-            config=subject, trainer=DrivableTrainerStub(), pool=_Pool(), buffer=_Buffer(),
+            config=subject, trainer=DrivableTrainerStub(), pool=DrivablePoolStub(game_per_read=True), buffer=BufferStub(),
             log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
         )
 
@@ -287,7 +210,7 @@ def test_compose_run_rejects_a_monitor_cfg_KEYWORD_at_call_time(tmp_path, smoke_
     reached the watchdog with `armed=False`."""
     with pytest.raises(TypeError, match="monitor_cfg"):
         mantis.run.compose_run(
-            config=smoke_run_config(), trainer=DrivableTrainerStub(), pool=_Pool(), buffer=_Buffer(),
+            config=smoke_run_config(), trainer=DrivableTrainerStub(), pool=DrivablePoolStub(game_per_read=True), buffer=BufferStub(),
             log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
             # `eval_enabled=` is GONE from this call deliberately: CPython names the FIRST
             # unexpected keyword, so a second dead kwarg would break `match="monitor_cfg"`.
@@ -424,7 +347,7 @@ def test_the_composed_encoding_is_the_declared_and_REGISTERED_one(
             apply_gate_decision=lambda *a, **k: None, stop=lambda: None,
         )
 
-    monkeypatch.setattr(mantis.run, "build_run_safety", _fake_run_safety)
+    monkeypatch.setattr(mantis.run, "build_run_safety", fake_run_safety)
     monkeypatch.setattr(mantis.run, "build_eval_pipeline", _spy_build_eval_pipeline)
     monkeypatch.setattr(mantis.run, "_step_coordinator_config", _no_terminal_eval_config)
     # An eval pipeline makes `run_training_loop` seed the anchor from `trainer.model`, reading
@@ -436,7 +359,7 @@ def test_the_composed_encoding_is_the_declared_and_REGISTERED_one(
     )
 
     mantis.run.compose_run(
-        config=cfg, trainer=DrivableTrainerStub(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
+        config=cfg, trainer=DrivableTrainerStub(), pool=DrivablePoolStub(game_per_read=True), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
 
@@ -463,10 +386,10 @@ def test_full_config_carries_the_real_config_not_an_empty_dict(
     measurable — which is why this needs an oracle rather than a bug report.
     """
     cfg = _bounded(factory=smoke_run_config)
-    monkeypatch.setattr(mantis.run, "build_run_safety", _fake_run_safety)
+    monkeypatch.setattr(mantis.run, "build_run_safety", fake_run_safety)
 
     handles = mantis.run.compose_run(
-        config=cfg, trainer=DrivableTrainerStub(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
+        config=cfg, trainer=DrivableTrainerStub(), pool=DrivablePoolStub(game_per_read=True), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
 
@@ -553,8 +476,8 @@ def test_a_bounded_real_config_drive_syncs_every_step_on_the_declared_representa
     `eval_interval=1000`), which have no config authority.
     """
     cfg = _bounded(name, factory=smoke_run_config)
-    pool, trainer = _Pool(), DrivableTrainerStub()
-    monkeypatch.setattr(mantis.run, "build_run_safety", _fake_run_safety)
+    pool, trainer = DrivablePoolStub(game_per_read=True), DrivableTrainerStub()
+    monkeypatch.setattr(mantis.run, "build_run_safety", fake_run_safety)
 
     handles = mantis.run.compose_run(
         config=cfg, trainer=trainer, pool=pool,
@@ -586,11 +509,11 @@ def test_the_run_length_ceiling_is_ABSOLUTE_not_per_process(
     Superficially indistinguishable from the frozen actor, hence pinned by name.
     """
     cfg = _bounded(factory=smoke_run_config, steps=5)
-    pool, trainer = _Pool(), DrivableTrainerStub(step=7)
-    monkeypatch.setattr(mantis.run, "build_run_safety", _fake_run_safety)
+    pool, trainer = DrivablePoolStub(game_per_read=True), DrivableTrainerStub(step=7)
+    monkeypatch.setattr(mantis.run, "build_run_safety", fake_run_safety)
 
     handles = mantis.run.compose_run(
-        config=cfg, trainer=trainer, pool=pool, buffer=_Buffer(),
+        config=cfg, trainer=trainer, pool=pool, buffer=BufferStub(),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
 
@@ -614,8 +537,8 @@ def test_a_drive_failure_propagates_and_close_out_still_ran(
     the buffer save and the guarded pool stop — vanish on the failure path.
     """
     cfg = _bounded(factory=smoke_run_config)
-    pool = _Pool()
-    monkeypatch.setattr(mantis.run, "build_run_safety", _fake_run_safety)
+    pool = DrivablePoolStub(game_per_read=True)
+    monkeypatch.setattr(mantis.run, "build_run_safety", fake_run_safety)
 
     with pytest.raises(_SentinelTrainError):
         mantis.run.compose_run(

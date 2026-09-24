@@ -138,7 +138,10 @@ Both were found by running the gate set rather than by reading it, and both are 
   apart only `tools/audit_bootstrap_corpus.py` (mantis-free by design) and `tools/ci_gates/preflight_mint_parent.py::_sha256`
   (gate code, protected));
   the 21 remaining private `_Pool`/`_Buffer` fakes of the composition tests (the trainer stub is one since
-  F2; the pool stub is one for the coordinator tests only); the nine full-config literal dicts whose
+  F2; the pool stub is one for the coordinator tests only) (DONE, R368 W5: the root composition, train
+  wiring and config wiring pools are `tests/_drivable.py::DrivablePoolStub`, their buffers
+  `tests/train/_graph_drive.py::GraphSampleBuffer` or `_drivable.BufferStub`; OPEN: the draw-rate
+  files' pools (PZ-1) and those of augment_sym_counter, quiescence_fires_producer and rates_are_measured); the nine full-config literal dicts whose
   `model` line the fix leg left (each is a complete config a schema test owns); F5.6 above. Applied ON
   CONTACT (R316(e)'s rule for comments, extended by R367(a)) — a leg that touches one of these files fixes
   what it touches; no tree-wide pass is ordered.

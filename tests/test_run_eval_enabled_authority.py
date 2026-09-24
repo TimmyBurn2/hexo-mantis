@@ -11,70 +11,16 @@ import ast
 import dataclasses
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
 
 import mantis.run as mantis_run
 from mantis.run import compose_run
-from _drivable import DrivableTrainerStub
+from _drivable import DrivablePoolStub, DrivableTrainerStub
 
 _REPO = Path(__file__).resolve().parents[1]
 _RUN_PY = _REPO / "src" / "mantis" / "run.py"
 _TOOL_PY = _REPO / "tools" / "ci_gates" / "preflight_mint.py"
 
 _DRIVE_STEPS = 3
-
-
-class _Pool:
-    search_kind = "gumbel"
-    avg_game_length = 20.0
-    x_winrate = 0.5
-    o_winrate = 0.45
-    draw_rate = 0.05  # the third outcome share
-    draws = 1
-    sims_per_sec = 100.0
-    batch_fill_pct = 0.9
-
-    class _RunnerStats:
-        mcts_mean_depth = 5.0
-        mcts_mean_root_concentration = 0.1
-        cluster_value_std_mean = 0.0
-        cluster_policy_disagreement_mean = 0.0
-        cluster_variance_sample_count = 0
-
-    def __init__(self) -> None:
-        self._games = 0
-        self._started = False
-        self.recent_move_histories: list = []
-
-    @property
-    def games_completed(self) -> int:
-        self._games += 1
-        return self._games
-
-    def start(self) -> None:
-        self._started = True
-
-    def stop(self) -> None:
-        if not self._started:
-            raise RuntimeError("cannot join thread before it is started")
-
-    def check_producer_health(self) -> None:
-        return None
-
-    def pooled_draw_counts(self) -> tuple[int, int]:
-        return (0, 0)
-
-    def current_stride5_p90(self) -> int:
-        return 1
-
-    def runner_stats(self) -> Any:
-        return self._RunnerStats()
-
-    def sync_inference_weights(self, state_dict) -> None:
-        return None
-
-    def update_checkpoint_step(self, step: int) -> None:
-        return None
 
 
 def _drive(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request, *,
@@ -115,7 +61,7 @@ def _drive(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request, *,
         monitor={"actor_lag_threshold_steps": _DRIVE_STEPS - 1},
     )
     handles = compose_run(
-        config=config, trainer=DrivableTrainerStub(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
+        config=config, trainer=DrivableTrainerStub(), pool=DrivablePoolStub(game_per_read=True), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
     )
     request.addfinalizer(handles.run_safety.sink.close)

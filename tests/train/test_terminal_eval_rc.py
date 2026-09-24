@@ -51,7 +51,7 @@ from mantis.encoding import lookup
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks
 from mantis.model import GnnArch, build_net
-from _graph_drive import GRAPH_FULL_CONFIG, filled_hexg
+from _graph_drive import GRAPH_FULL_CONFIG, GraphSampleBuffer
 from _spy import SpyEventSink
 from _monitor_config import monitor_config
 from mantis.monitor.heartbeat import DRAW_RATE_COLLAPSE_EXIT_CODE
@@ -60,7 +60,7 @@ from mantis.train.coordinator import drain
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.disk_guard import DiskGuard
 from mantis.train.lifecycle.signals import ShutdownState
-from _drivable import DrivableTrainerStub
+from _drivable import DrivablePoolStub, DrivableTrainerStub
 
 _REPO = Path(__file__).resolve().parents[2]
 _SRC = _REPO / "src" / "mantis"
@@ -103,62 +103,6 @@ def _mirrored(settings: dict) -> dict:
     return settings
 
 
-class _RunnerStats:
-    mcts_mean_depth = 5.0
-    mcts_mean_root_concentration = 0.1
-    cluster_value_std_mean = 0.0
-    cluster_policy_disagreement_mean = 0.0
-    cluster_variance_sample_count = 0
-
-
-class _Pool:
-    search_kind = "gumbel"
-    avg_game_length = 20.0
-    x_winrate = 0.5
-    o_winrate = 0.45
-    draw_rate = 0.05  # F-816-2: the third outcome share.
-    draws = 1
-    sims_per_sec = 100.0
-    batch_fill_pct = 0.9
-
-    def __init__(self, *, draw_counts: tuple[int, int] = (0, 0)) -> None:
-        self.started = False
-        self._games = 0
-        self.recent_move_histories: list = []
-        self.sync_calls: list = []
-        self.draw_counts = draw_counts
-
-    @property
-    def games_completed(self) -> int:
-        self._games += 1
-        return self._games
-
-    def start(self) -> None:
-        self.started = True
-
-    def stop(self) -> None:
-        if not self.started:
-            raise RuntimeError("cannot join thread before it is started")
-
-    def check_producer_health(self) -> None:
-        return None
-
-    def pooled_draw_counts(self) -> tuple[int, int]:
-        return self.draw_counts
-
-    def current_stride5_p90(self) -> int:
-        return 1
-
-    def runner_stats(self) -> Any:
-        return _RunnerStats()
-
-    def sync_inference_weights(self, state_dict: Any) -> None:
-        self.sync_calls.append(state_dict)
-
-    def update_checkpoint_step(self, step: int) -> None:
-        return None
-
-
 class _Trainer(DrivableTrainerStub):
     """The shared stub carrying a REAL declared arch + net: `resolve_anchor` builds the anchor from `trainer.arch`, so a bare object cannot stand in once a pipeline is composed."""
 
@@ -172,27 +116,6 @@ class _Trainer(DrivableTrainerStub):
 
     def actor_state_dict(self) -> dict:
         return self.model.state_dict()
-
-
-class _Buffer:
-    def __init__(self) -> None:
-        self.size = 1000
-        self.capacity = 100_000
-        self._hexg = filled_hexg()
-
-    def resize(self, n: int) -> None:
-        self.capacity = n
-
-    def save_to_path(self, path: Any) -> None:
-        return None
-
-    def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
-                           n_threads: int = 1):
-        # The graph route's sampler, DELEGATED to a real `HexgBuffer`: the dispatcher collates
-        # the wire for real, so a hand-built payload would be a second wire format.
-        return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
-                                             n_threads=n_threads)
-
 
 
 def _broken_round(reason: str, *, round_id: str = "r000001_3_terminal", step: int = 3) -> dict:
@@ -256,10 +179,10 @@ def _make_coordinator(*, eval_pipeline: Any, sink: SpyEventSink,
         **_mirrored({"eval_interval": 10**9, "log_interval": 1, "min_buf_size": 10,
                      **(config_overrides or {})}),
     )
-    pool = _Pool()
+    pool = DrivablePoolStub(game_per_read=True)
     shutdown = ShutdownState()
     coord = StepCoordinator(
-        trainer=_Trainer(), buffer=_Buffer(),
+        trainer=_Trainer(), buffer=GraphSampleBuffer(),
         pool=pool, eval_pipeline=eval_pipeline, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=shutdown, eval_model=_tiny_model(), config=config,
@@ -354,7 +277,7 @@ def _drive_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest
                                    1, 30, 2 + i, True, 1.0 if i % 2 == 0 else -1.0, True, 10 + i)
     collaborators = RunCollaborators(
         trainer=_Trainer(on_step=_await_fire if wait_for_fire else None),
-        pool=_Pool(draw_counts=draw_counts), buffer=buffer,
+        pool=DrivablePoolStub(game_per_read=True, draw_counts=draw_counts), buffer=buffer,
         log_dir=out_dir / "logs", checkpoint_dir=out_dir / "checkpoints",
     )
     monkeypatch.setattr(mantis_run, "build_run_collaborators", lambda **_kw: collaborators)

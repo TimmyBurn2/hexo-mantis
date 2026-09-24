@@ -10,68 +10,12 @@ import dataclasses
 import inspect
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
 
 import mantis.run
 from mantis.train.coordinator.config import StepCoordinatorConfig
-from _drivable import DrivableTrainerStub
+from _drivable import DrivablePoolStub, DrivableTrainerStub, fake_run_safety
 
 _STOP_STEP = 4
-
-
-class _RunnerStats:
-    mcts_mean_depth = 5.0
-    mcts_mean_root_concentration = 0.1
-    cluster_value_std_mean = 0.0
-    cluster_policy_disagreement_mean = 0.0
-    cluster_variance_sample_count = 0
-
-
-class _SyncRecordingPool:
-    def __init__(self) -> None:
-        self._games = 0
-        self.search_kind = "gumbel"
-        self.avg_game_length = 20.0
-        self.x_winrate = 0.5
-        self.o_winrate = 0.45
-        self.draw_rate = 0.05  # the third outcome share.
-        self.draws = 1
-        self.sims_per_sec = 100.0
-        self.batch_fill_pct = 0.9
-        self.recent_move_histories: list = []
-        self.sync_payloads: list = []
-        self.step_calls: list[int] = []
-
-    @property
-    def games_completed(self) -> int:
-        self._games += 1
-        return self._games
-
-    def start(self) -> None: ...
-    def stop(self) -> None: ...
-    def check_producer_health(self) -> None: ...
-    def pooled_draw_counts(self) -> tuple[int, int]:
-        return (0, 0)
-
-    def current_stride5_p90(self) -> int:
-        return 1
-
-    def runner_stats(self) -> Any:
-        return _RunnerStats()
-
-    def sync_inference_weights(self, state_dict) -> None:
-        self.sync_payloads.append(state_dict)
-
-    def update_checkpoint_step(self, step: int) -> None:
-        self.step_calls.append(int(step))
-
-
-class _Buffer:
-    size = 1000
-    capacity = 100_000
-
-    def resize(self, n: int) -> None: ...
-    def save_to_path(self, p) -> None: ...
 
 
 #: Captured at import so the patch below can delegate without re-entering itself.
@@ -89,20 +33,11 @@ def _bounded_config(**kwargs) -> StepCoordinatorConfig:
                                log_interval=1, stop_step=_STOP_STEP)
 
 
-def _fake_run_safety(**_kwargs):
-    return SimpleNamespace(
-        sink=SimpleNamespace(emit=lambda e: None),
-        registry=SimpleNamespace(beat=lambda s: None),
-        watchdog=SimpleNamespace(start=lambda: None, disarm_staleness=lambda: None),
-        heartbeat=lambda s: None,
-    )
-
-
 def _install_harness(monkeypatch):
     """Replace the three collaborators this test is not about; the sync path stays real."""
     import mantis.train.anchor as _anchor
 
-    monkeypatch.setattr(mantis.run, "build_run_safety", _fake_run_safety)
+    monkeypatch.setattr(mantis.run, "build_run_safety", fake_run_safety)
     monkeypatch.setattr(mantis.run, "_step_coordinator_config", _bounded_config)
     monkeypatch.setattr(
         _anchor, "resolve_anchor",
@@ -117,7 +52,7 @@ def test_actor_syncs_with_eval_enabled_the_posture_a_real_run_uses(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
 ):
     """THE production-posture pin: sync observed by consequence rather than syntax."""
-    pool, trainer = _SyncRecordingPool(), DrivableTrainerStub()
+    pool, trainer = DrivablePoolStub(game_per_read=True), DrivableTrainerStub()
     _install_harness(monkeypatch)
 
     handles = mantis.run.compose_run(
@@ -152,7 +87,7 @@ def test_sync_volume_does_not_depend_on_whether_the_deploy_side_exists(
     """Both postures must sync. A difference between them IS the coupling R49 forbids."""
     results = {}
     for label, eval_enabled in (("no_eval", False), ("with_eval", True)):
-        pool, trainer = _SyncRecordingPool(), DrivableTrainerStub()
+        pool, trainer = DrivablePoolStub(game_per_read=True), DrivableTrainerStub()
         _install_harness(monkeypatch)
         mantis.run.compose_run(
             # The loop variable is a CONFIG delta, so one config is built per posture

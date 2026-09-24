@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import dataclasses
 from types import SimpleNamespace
-from typing import Any
 
 import pytest
 
@@ -18,61 +17,9 @@ from mantis.config.resolve.monitor import resolve_monitor_config
 from mantis.monitor.heartbeat import HEARTBEAT_SOURCES
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.subsystems import build_run_safety
-from _drivable import DrivableTrainerStub
+from _drivable import DrivablePoolStub, DrivableTrainerStub
 
 _STOP_STEP = 3
-
-
-class _RunnerStats:
-    mcts_mean_depth = 5.0
-    mcts_mean_root_concentration = 0.1
-    cluster_value_std_mean = 0.0
-    cluster_policy_disagreement_mean = 0.0
-    cluster_variance_sample_count = 0
-
-
-class _Pool:
-    def __init__(self) -> None:
-        self._games = 0
-        self.search_kind = "gumbel"
-        self.avg_game_length = 20.0
-        self.x_winrate = 0.5
-        self.o_winrate = 0.45
-        self.draw_rate = 0.05  # the third outcome share.
-        self.draws = 1
-        self.sims_per_sec = 100.0
-        self.batch_fill_pct = 0.9
-        self.recent_move_histories: list = []
-        self.step_calls: list[int] = []
-
-    @property
-    def games_completed(self) -> int:
-        self._games += 1
-        return self._games
-
-    def start(self) -> None: ...
-    def stop(self) -> None: ...
-    def check_producer_health(self) -> None: ...
-    def pooled_draw_counts(self) -> tuple[int, int]:
-        return (0, 0)
-
-    def current_stride5_p90(self) -> int:
-        return 1
-
-    def runner_stats(self) -> Any:
-        return _RunnerStats()
-
-    def sync_inference_weights(self, state_dict) -> None: ...
-    def update_checkpoint_step(self, step: int) -> None:
-        self.step_calls.append(int(step))
-
-
-class _Buffer:
-    size = 1000
-    capacity = 100_000
-
-    def resize(self, n: int) -> None: ...
-    def save_to_path(self, p) -> None: ...
 
 
 #: The UNPATCHED production builder, captured at import so the patch below can delegate to it
@@ -96,7 +43,7 @@ def _compose_capturing_lag_fns(tmp_path, monkeypatch, smoke_run_config, mk_graph
     validator spans `cadence < threshold < max_train_steps`, so `_STOP_STEP` must stay >= 3.
     """
     captured: dict = {}
-    pool, trainer = _Pool(), DrivableTrainerStub()
+    pool, trainer = DrivablePoolStub(game_per_read=True), DrivableTrainerStub()
     monitor_overrides: dict = {"actor_lag_threshold_steps": _STOP_STEP - 1}
     if abort_enabled is not None:
         monitor_overrides["actor_lag_abort_enabled"] = abort_enabled

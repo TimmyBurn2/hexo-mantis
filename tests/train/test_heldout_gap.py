@@ -21,8 +21,7 @@ from mantis.train.coordinator import StepCoordinator
 from mantis.train.heldout import HeldoutSlice, HeldoutSliceError
 from mantis.util.hashing import sha256_file
 from mantis.train.lifecycle.signals import ShutdownState
-from _coordinator_pool import CoordinatorPoolStub
-from _drivable import DrivableTrainerStub
+from _drivable import DrivablePoolStub, DrivableTrainerStub
 from _graph_drive import GRAPH_FULL_CONFIG
 from _spy import SpyEventSink
 
@@ -120,7 +119,6 @@ class _Trainer(DrivableTrainerStub):
         return {"loss": 3.0, "policy_loss": 2.5, "value_loss": 0.6}
 
 
-
 def test_the_coordinator_reads_the_slice_at_its_own_cadence_and_reports_the_gap(tmp_path: Path) -> None:
     """Producer test: `heldout_gap` lands at every `interval` boundary with the train mean since the last read."""
     path = tmp_path / "held.ring.bin"
@@ -136,7 +134,7 @@ def test_the_coordinator_reads_the_slice_at_its_own_cadence_and_reports_the_gap(
     buffer = SimpleNamespace(size=100, capacity=1000, resize=lambda n: None, save_to_path=lambda p: None,
                              sample_graph_batch=opened.buffer.sample_graph_batch)
     coord = StepCoordinator(
-        trainer=_Trainer(), buffer=buffer, pool=CoordinatorPoolStub(search_kind="puct"),
+        trainer=_Trainer(), buffer=buffer, pool=DrivablePoolStub(search_kind="puct"),
         eval_pipeline=None, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None), shutdown=ShutdownState(),
         eval_model=object(), config=config,

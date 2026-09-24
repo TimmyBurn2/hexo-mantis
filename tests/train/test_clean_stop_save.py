@@ -21,8 +21,6 @@ counter — the subject is control flow), the pool/buffer collaborators, and the
 """
 from __future__ import annotations
 
-from mantis._engine import HexgBuffer
-
 import dataclasses
 from datetime import datetime
 from pathlib import Path
@@ -36,6 +34,8 @@ from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec
+from _drivable import DrivablePoolStub
+from _graph_drive import GRAPH_FULL_CONFIG, GraphSampleBuffer
 from _monitor_config import monitor_config
 from mantis.monitor.heartbeat import HEARTBEAT_SOURCES, PERSIST_FATAL_EXIT_CODE, HeartbeatRegistry
 from mantis.run import _step_coordinator_config, launch_run
@@ -45,26 +45,6 @@ from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.heartbeat_watchdog import HeartbeatWatchdog
 from mantis.train.lifecycle.signals import ShutdownState
 from mantis.train.loop import run_training_loop
-
-def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    """A real graph ring the coordinator stubs sample through."""
-    hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
-    for i in range(n_records):
-        stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
-        hb.push_graph_position(stones, [(2, 0, 0.6), (1, 1, 0.4)], 1, 30, 2 + i, True,
-                               1.0 if i % 2 == 0 else -1.0, True, 10 + i)
-    return hb
-
-
-
-#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches on
-#: plus the two sections the route's own resolvers read. The caps are the NON-BINDING pair.
-_GRAPH_FULL_CONFIG: dict = {
-    "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
-    "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
-              "fast_policy_weight": 0.0},
-    "selfplay": {"n_workers": 1},
-}
 
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -114,41 +94,6 @@ _MINTED_BOUND = 200
 _OC7_BOUND = 50
 
 
-class _Pool:
-    """A pool whose draw counts are the only thing the draw-rate gate reads off it."""
-
-    def __init__(self, *, draws: int = 0, completed: int = 0) -> None:
-        self.games_completed = 0
-        self.search_kind = "gumbel"
-        self.avg_game_length = 20.0
-        self.x_winrate = 0.5
-        self.o_winrate = 0.45
-        self.draw_rate = 0.05  # F-816-2: the third outcome share.
-        self.draws = draws
-        self.sims_per_sec = 100.0
-        self.batch_fill_pct = 0.9
-        self.recent_move_histories: list = []
-        self._counts = (int(draws), int(completed))
-
-    def check_producer_health(self) -> None:
-        return None
-
-    def pooled_draw_counts(self) -> tuple[int, int]:
-        return self._counts
-
-    def current_stride5_p90(self) -> int:
-        return 1
-
-    def runner_stats(self) -> Any:
-        return SimpleNamespace(mcts_mean_depth=5.0, mcts_mean_root_concentration=0.1,
-                               cluster_value_std_mean=0.0,
-                               cluster_policy_disagreement_mean=0.0,
-                               cluster_variance_sample_count=0)
-
-    def update_checkpoint_step(self, step: int) -> None:
-        return None
-
-
 class _Trainer:
     """The instrument. `attempts` and `saves` are DISTINCT on purpose: a rigged failure must show
     that the leg REACHED the writer (`attempts == 1`) and that no artefact resulted (`saves == 0`).
@@ -183,26 +128,6 @@ class _Trainer:
         return _SAVED_PATH
 
 
-class _Buffer:
-    def __init__(self) -> None:
-        self.size = 1000
-        self.capacity = 100_000
-        self._hexg = _filled_hexg()
-
-    def resize(self, n: int) -> None:
-        self.capacity = n
-
-    def save_to_path(self, p) -> None:
-        return None
-
-    def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
-                           n_threads: int = 1):
-        # DELEGATED to a real `HexgBuffer` rather than faked: the dispatcher collates the wire for
-        # real before the trainer stub sees it, so a hand-built payload would be a second format.
-        return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
-                                             n_threads=n_threads)
-
-
 class _Sink:
     def __init__(self) -> None:
         self.events: list[dict] = []
@@ -226,18 +151,18 @@ def _config(**overrides) -> StepCoordinatorConfig:
     )
 
 
-def _harness(*, trainer: _Trainer, config: StepCoordinatorConfig, pool: _Pool | None = None,
+def _harness(*, trainer: _Trainer, config: StepCoordinatorConfig, pool: DrivablePoolStub | None = None,
              shutdown: ShutdownState | None = None) -> SimpleNamespace:
-    pool = pool if pool is not None else _Pool()
+    pool = pool if pool is not None else DrivablePoolStub()
     shutdown = shutdown if shutdown is not None else ShutdownState()
     sink = _Sink()
     coord = StepCoordinator(
-        trainer=trainer, buffer=_Buffer(),
+        trainer=trainer, buffer=GraphSampleBuffer(),
         pool=pool, eval_pipeline=None, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=shutdown, eval_model=object(),
         config=config,
-        full_config=_GRAPH_FULL_CONFIG,
+        full_config=GRAPH_FULL_CONFIG,
         sink=sink, heartbeat=None, monitor_cfg=monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, trainer=trainer, shutdown=shutdown, sink=sink)
@@ -542,7 +467,7 @@ def test_an_in_loop_hard_abort_below_the_ceiling_writes_no_product_checkpoint() 
     """
     spec = DrawRateAbortSpec(threshold=0.25, min_step=0, N_pool_min=50, consec=3)
     trainer = _Trainer(step=0)
-    h = _harness(trainer=trainer, pool=_Pool(draws=900, completed=1000),
+    h = _harness(trainer=trainer, pool=DrivablePoolStub(draw_counts=(900, 1000)),
                  config=_config(stop_step=_ABORT_CEILING, draw_rate_abort=spec, policy_loss_trough_abort=None, ply_cap_abort=None, log_interval=1))
     for _ in range(12):
         if not h.shutdown.running:

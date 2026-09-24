@@ -20,7 +20,8 @@ from mantis.monitor.rules import check_policy_loss_trough
 from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
-from _graph_drive import GRAPH_FULL_CONFIG, filled_hexg
+from _drivable import DrivablePoolStub
+from _graph_drive import GRAPH_FULL_CONFIG, GraphSampleBuffer
 from _spy import SpyEventSink
 
 _CONFIG = Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml"
@@ -60,42 +61,6 @@ def test_the_resolver_returns_none_on_the_explicit_off_and_the_spec_otherwise() 
     assert resolve_policy_loss_trough_abort(armed) == PolicyLossTroughAbortSpec(0.2, 3, 5000)
 
 
-class _RunnerStats:
-    mcts_mean_depth = 5.0
-    mcts_mean_root_concentration = 0.1
-    cluster_value_std_mean = 0.0
-    cluster_policy_disagreement_mean = 0.0
-    cluster_variance_sample_count = 0
-
-
-class _Pool:
-    def __init__(self) -> None:
-        self.games_completed = 0
-        self.n_workers = 1
-        self.search_kind = "gumbel"
-        self.avg_game_length = 20.0
-        self.x_winrate = 0.5
-        self.o_winrate = 0.45
-        self.draw_rate = 0.05
-        self.draws = 1
-        self.sims_per_sec = 100.0
-        self.batch_fill_pct = 0.9
-        self.recent_move_histories: list = []
-
-    def start(self) -> None: ...
-    def stop(self) -> None: ...
-    def check_producer_health(self) -> None: ...
-    def buffer_composition(self) -> dict[str, Any]:
-        return {}
-    def pooled_draw_counts(self) -> tuple[int, int]:
-        return (0, 0)
-    def current_stride5_p90(self) -> int:
-        return 1
-    def runner_stats(self) -> Any:
-        return _RunnerStats()
-    def update_checkpoint_step(self, step: int) -> None: ...
-
-
 class _Trainer:
     """Its policy loss is a SCRIPT over the step counter."""
 
@@ -115,24 +80,6 @@ class _Trainer:
         return None
 
 
-class _Buffer:
-    def __init__(self) -> None:
-        self.size = 1000
-        self.capacity = 100_000
-        self._hexg = filled_hexg()
-
-    def resize(self, n: int) -> None:
-        self.capacity = n
-
-    def save_to_path(self, p) -> None: ...
-
-    def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
-                           n_threads: int = 1):
-        return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
-                                             n_threads=n_threads)
-
-
-
 def _harness(script, spec: PolicyLossTroughAbortSpec | None, *, gate_interval: int = 2):
     cfg = load_config(_CONFIG)
     base = _step_coordinator_config(
@@ -144,9 +91,9 @@ def _harness(script, spec: PolicyLossTroughAbortSpec | None, *, gate_interval: i
                                  training_steps_per_game=1.0, hard_gn_threshold=1e9)
     shutdown = ShutdownState()
     sink = SpyEventSink()
-    pool = _Pool()
+    pool = DrivablePoolStub()
     coord = StepCoordinator(
-        trainer=_Trainer(script), buffer=_Buffer(),
+        trainer=_Trainer(script), buffer=GraphSampleBuffer(),
         pool=pool, eval_pipeline=None, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=shutdown, eval_model=object(), config=config,

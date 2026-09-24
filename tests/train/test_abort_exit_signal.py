@@ -19,8 +19,6 @@ the one it must not, and they share this file's StepCoordinator harness.
 """
 from __future__ import annotations
 
-from mantis._engine import HexgBuffer
-
 import ast
 import dataclasses
 import hashlib
@@ -28,7 +26,6 @@ import json
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
 
 import pytest
 from mantis.config.armed_aborts import MANIFEST, ArmedAbort, Mechanism, Status, exit_code_for_abort
@@ -36,6 +33,8 @@ from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec
+from _drivable import DrivablePoolStub
+from _graph_drive import GRAPH_FULL_CONFIG, GraphSampleBuffer
 from _monitor_config import monitor_config
 from mantis.monitor.heartbeat import DRAW_RATE_COLLAPSE_EXIT_CODE
 from mantis.run import _step_coordinator_config
@@ -43,28 +42,6 @@ from mantis.train.resume_state import sidecar_path_for
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
-
-def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    """A real graph ring the coordinator stubs sample through."""
-    hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
-    for i in range(n_records):
-        stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
-        hb.push_graph_position(stones, [(2, 0, 0.6), (1, 1, 0.4)], 1, 30, 2 + i, True,
-                               1.0 if i % 2 == 0 else -1.0, True, 10 + i)
-    return hb
-
-
-
-#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches
-#: on plus the two sections the route's own resolvers read (`train.microbatch_caps` and
-#: `train.fast_policy_weight` for the step, `selfplay.n_workers` for the ring rebuild's
-#: width). The caps are the template's NON-BINDING pair — nothing here exercises a split.
-_GRAPH_FULL_CONFIG: dict = {
-    "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
-    "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
-              "fast_policy_weight": 0.0},
-    "selfplay": {"n_workers": 1},
-}
 
 
 RULE = "draw_rate_collapse"
@@ -89,41 +66,6 @@ def _mirrored(settings: dict) -> dict:
     `train.log_interval`."""
     settings.setdefault("gate_interval", settings["log_interval"])
     return settings
-
-
-class _Pool:
-    """A pool whose draw counts are the ONLY thing the card's gate reads off it."""
-
-    def __init__(self, *, draws: int = 0, completed: int = 0) -> None:
-        self.games_completed = 0
-        self.search_kind = "gumbel"
-        self.avg_game_length = 20.0
-        self.x_winrate = 0.5
-        self.o_winrate = 0.45
-        self.draw_rate = 0.05  # F-816-2: the third outcome share.
-        self.draws = draws
-        self.sims_per_sec = 100.0
-        self.batch_fill_pct = 0.9
-        self.recent_move_histories: list = []
-        self._counts = (int(draws), int(completed))
-
-    def check_producer_health(self) -> None:
-        return None
-
-    def pooled_draw_counts(self) -> tuple[int, int]:
-        return self._counts
-
-    def current_stride5_p90(self) -> int:
-        return 1
-
-    def runner_stats(self) -> Any:
-        return SimpleNamespace(mcts_mean_depth=5.0, mcts_mean_root_concentration=0.1,
-                               cluster_value_std_mean=0.0,
-                               cluster_policy_disagreement_mean=0.0,
-                               cluster_variance_sample_count=0)
-
-    def update_checkpoint_step(self, step: int) -> None:
-        return None
 
 
 class _Trainer:
@@ -156,29 +98,6 @@ class _Trainer:
         return path
 
 
-class _Buffer:
-    def __init__(self) -> None:
-        self.size = 1000
-        self.capacity = 100_000
-        self._hexg = _filled_hexg()
-
-    def resize(self, n: int) -> None:
-        self.capacity = n
-
-    def save_to_path(self, p) -> None:
-        # Writes REAL bytes: the resume sidecar hashes this file, so a no-op here would make
-        # the hash a hash of nothing and the identity witness vacuous.
-        Path(p).write_bytes(b"fake-ring" * 8)
-
-    def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
-                           n_threads: int = 1):
-        # The graph route's sampler. DELEGATED to a real `HexgBuffer` rather than faked: the
-        # dispatcher collates the wire for real before the trainer stub ever sees it, so a
-        # hand-built payload would be a second wire format for the collate to disagree with.
-        return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
-                                             n_threads=n_threads)
-
-
 class _Sink:
     def __init__(self) -> None:
         self.events: list[dict] = []
@@ -202,8 +121,16 @@ def _config(**overrides) -> StepCoordinatorConfig:
     )
 
 
+class _Buffer(GraphSampleBuffer):
+    """The shared double whose `save_to_path` writes REAL bytes: the resume sidecar hashes this
+    file, so a no-op would make the hash a hash of nothing and the identity witness vacuous."""
+
+    def save_to_path(self, p) -> None:
+        Path(p).write_bytes(b"fake-ring" * 8)
+
+
 def _coordinator(*, pool=None, config=None, shutdown=None):
-    pool = pool or _Pool()
+    pool = pool or DrivablePoolStub()
     trainer, buffer, sink = _Trainer(), _Buffer(), _Sink()
     shutdown = shutdown if shutdown is not None else ShutdownState()
     coord = StepCoordinator(
@@ -211,7 +138,7 @@ def _coordinator(*, pool=None, config=None, shutdown=None):
         pool=pool, eval_pipeline=None, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=shutdown, eval_model=object(),
-        config=config or _config(), full_config=_GRAPH_FULL_CONFIG,
+        config=config or _config(), full_config=GRAPH_FULL_CONFIG,
         sink=sink, heartbeat=None, monitor_cfg=monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, trainer=trainer, buffer=buffer,
@@ -240,7 +167,7 @@ def test_the_armed_gate_fires_through_the_same_contract_and_names_the_rule() -> 
     a 0.25 bar, so the assertion covers the chain a real run takes from `_check_draw_rate` through
     the rule to `ShutdownState`."""
     spec = DrawRateAbortSpec(threshold=0.25, min_step=0, N_pool_min=50, consec=3)
-    h = _coordinator(pool=_Pool(draws=900, completed=1000),
+    h = _coordinator(pool=DrivablePoolStub(draw_counts=(900, 1000)),
                      config=_config(draw_rate_abort=spec, policy_loss_trough_abort=None, ply_cap_abort=None, log_interval=1))
     for _ in range(12):
         if not h.shutdown.running:

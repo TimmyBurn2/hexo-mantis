@@ -29,7 +29,7 @@ import mantis.run as mantis_run
 from mantis.config.emit import resolve_config
 from mantis.monitor.manifest import verify_manifest
 from mantis.monitor.manifest import DEFAULT_MANIFEST_PATH
-from _drivable import DrivableTrainerStub
+from _drivable import DrivablePoolStub, DrivableTrainerStub
 from _root_recorders import DRIVE_STEPS, bounded, install_recorders
 
 _REPO = Path(__file__).resolve().parents[1]
@@ -43,68 +43,6 @@ _RESOLVED_CONFIG_PRODUCER_TEST = (
     "tests/test_run_root_lifecycle.py::"
     "test_the_composed_boot_publishes_its_resolved_config_once_after_the_identity_witness"
 )
-
-
-class _Pool:
-    """Drivable stand-in for `WorkerPool` at the injected seam; `start`/`stop` are recorded
-    because the teardown ladder's contract is "pool stopped IFF started"."""
-
-    search_kind = "gumbel"
-    avg_game_length = 20.0
-    x_winrate = 0.5
-    o_winrate = 0.45
-    draw_rate = 0.05  # the third outcome share.
-    draws = 1
-    sims_per_sec = 100.0
-    batch_fill_pct = 0.9
-
-    class _RunnerStats:
-        mcts_mean_depth = 5.0
-        mcts_mean_root_concentration = 0.1
-        cluster_value_std_mean = 0.0
-        cluster_policy_disagreement_mean = 0.0
-        cluster_variance_sample_count = 0
-
-    def __init__(self, on_start=None) -> None:
-        self.started = False
-        self.stopped = False
-        self._games = 0
-        self._on_start = on_start
-        self.recent_move_histories: list = []
-        self.sync_payloads: list = []
-
-    @property
-    def games_completed(self) -> int:
-        self._games += 1
-        return self._games
-
-    def start(self) -> None:
-        self.started = True
-        if self._on_start is not None:
-            self._on_start()
-
-    def stop(self) -> None:
-        if not self.started:
-            raise RuntimeError("cannot join thread before it is started")
-        self.stopped = True
-
-    def check_producer_health(self) -> None:
-        return None
-
-    def pooled_draw_counts(self) -> tuple[int, int]:
-        return (0, 0)
-
-    def current_stride5_p90(self) -> int:
-        return 1
-
-    def runner_stats(self) -> Any:
-        return self._RunnerStats()
-
-    def sync_inference_weights(self, state_dict) -> None:
-        self.sync_payloads.append(state_dict)
-
-    def update_checkpoint_step(self, step: int) -> None:
-        return None
 
 
 class _Trainer(DrivableTrainerStub):
@@ -187,7 +125,7 @@ def test_the_installed_handlers_are_bound_to_the_state_the_loop_actually_polls(
 
     handles = mantis_run.compose_run(
         config=bounded(smoke_run_config), trainer=_Trainer(on_step=_capture),
-        pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
+        pool=DrivablePoolStub(game_per_read=True), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
     )
     assert captured, "the drive never reached a step — nothing was observed"
@@ -218,7 +156,7 @@ def test_a_signal_mid_run_saves_then_exits(
 
     trainer.on_step = _signal_at_first_step
     handles = mantis_run.compose_run(
-        config=bounded(smoke_run_config), trainer=trainer, pool=_Pool(),
+        config=bounded(smoke_run_config), trainer=trainer, pool=DrivablePoolStub(game_per_read=True),
         buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
     )
@@ -246,7 +184,7 @@ def test_a_second_signal_force_exits(
     monkeypatch.setattr(os, "_exit", lambda code=0: (_ for _ in ()).throw(SystemExit(code)))
     install_recorders(monkeypatch, request)
     mantis_run.compose_run(
-        config=bounded(smoke_run_config), trainer=_Trainer(), pool=_Pool(),
+        config=bounded(smoke_run_config), trainer=_Trainer(), pool=DrivablePoolStub(game_per_read=True),
         buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
     )
@@ -266,7 +204,7 @@ def test_the_watchdog_and_the_disk_guard_are_both_armed_at_boot(
     rec = install_recorders(monkeypatch, request)
     handles = mantis_run.compose_run(
         config=bounded(smoke_run_config), trainer=_Trainer(on_step=lambda _s: _sleep_a_beat()),
-        pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
+        pool=DrivablePoolStub(game_per_read=True), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
     )
     names = [event.get("event") for event in _events(handles.run_safety)]
@@ -306,7 +244,7 @@ def test_a_signal_delivered_during_composition_completes_the_boot_then_saves(
         handler = _installed(signal.SIGTERM)
         handler(signal.SIGTERM, None)
 
-    pool = _Pool(on_start=_signal_during_pool_start)
+    pool = DrivablePoolStub(game_per_read=True, on_start=_signal_during_pool_start)
     handles = mantis_run.compose_run(
         config=bounded(smoke_run_config), trainer=trainer, pool=pool,
         buffer=mk_graph_buffer(n_records=32),
@@ -344,7 +282,7 @@ def test_a_failure_at_the_coordinator_seam_tears_everything_down_and_re_raises(
         raise _CoordinatorSeamFailure("the coordinator seam refused this composition")
 
     monkeypatch.setattr(mantis_run, "StepCoordinator", _raising_coordinator)
-    pool = _Pool()
+    pool = DrivablePoolStub(game_per_read=True)
     with pytest.raises(_CoordinatorSeamFailure):
         mantis_run.compose_run(
             config=bounded(smoke_run_config), trainer=_Trainer(), pool=pool,
@@ -372,7 +310,7 @@ def test_the_composed_boot_publishes_its_resolved_config_once_after_the_identity
     install_recorders(monkeypatch, request)
     config = bounded(smoke_run_config)
     handles = mantis_run.compose_run(
-        config=config, trainer=_Trainer(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
+        config=config, trainer=_Trainer(), pool=DrivablePoolStub(game_per_read=True), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
     )
     events = _events(handles.run_safety)

@@ -31,13 +31,12 @@ from __future__ import annotations
 import dataclasses
 import inspect
 from types import SimpleNamespace
-from typing import Any
 
 from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
-from _graph_drive import GRAPH_FULL_CONFIG, filled_hexg
-from _drivable import DrivableTrainerStub
+from _graph_drive import GRAPH_FULL_CONFIG, GraphSampleBuffer
+from _drivable import DrivablePoolStub, DrivableTrainerStub
 from _spy import SpyEventSink
 from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
@@ -78,73 +77,6 @@ def _stats(*, positions: int, export_offwindow: int, seam: int, defects: int) ->
     )
 
 
-class _Pool:
-    """A pool whose `runner_stats()` answer the drive sets EXPLICITLY before each step. No
-    internal call counter decides which snapshot is returned, so the oracle measures the payload
-    rather than the reader's call pattern."""
-
-    search_kind = "gumbel"
-    avg_game_length = 20.0
-    x_winrate = 0.5
-    o_winrate = 0.45
-    draw_rate = 0.05  # the third outcome share.
-    draws = 1
-    sims_per_sec = 100.0
-    batch_fill_pct = 0.9
-
-    def __init__(self, stats: RunnerStats) -> None:
-        self._games = 0
-        self.recent_move_histories: list = []
-        self.current = stats
-
-    @property
-    def games_completed(self) -> int:
-        # A step only runs when new games have arrived, so a CONSTANT game count would drive
-        # exactly one boundary and silently degrade every two-emit row into a one-emit row.
-        self._games += 1
-        return self._games
-
-    def check_producer_health(self) -> None:
-        return None
-
-    def pooled_draw_counts(self) -> tuple[int, int]:
-        return (0, 0)
-
-    def current_stride5_p90(self) -> int:
-        return 1
-
-    def runner_stats(self) -> RunnerStats:
-        return self.current
-
-    def sync_inference_weights(self, state_dict: Any) -> None:
-        return None
-
-    def update_checkpoint_step(self, step: int) -> None:
-        return None
-
-
-
-class _Buffer:
-    def __init__(self) -> None:
-        self.size = 1000
-        self.capacity = 100_000
-        self._hexg = filled_hexg()
-
-    def resize(self, n: int) -> None:
-        self.capacity = n
-
-    def save_to_path(self, path: Any) -> None:
-        return None
-
-    def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
-                           n_threads: int = 1):
-        # The graph route's sampler, DELEGATED to a real `HexgBuffer`: the dispatcher collates
-        # the wire for real, so a hand-built payload would be a second wire format.
-        return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
-                                             n_threads=n_threads)
-
-
-
 def _drive(*snapshots: RunnerStats) -> list[dict]:
     """Drive a REAL `StepCoordinator` once per snapshot at `log_interval=1` and return the
     `iteration_complete` payloads, one per step, in order. The production cadence is the SAME
@@ -158,10 +90,10 @@ def _drive(*snapshots: RunnerStats) -> list[dict]:
         **{"eval_interval": 10**9, "log_interval": 1, "gate_interval": 1,
            "min_buf_size": 10},
     )
-    pool = _Pool(snapshots[0])
+    pool = DrivablePoolStub(game_per_read=True, rstats=snapshots[0])
     sink = SpyEventSink()
     coord = StepCoordinator(
-        trainer=DrivableTrainerStub(), buffer=_Buffer(),
+        trainer=DrivableTrainerStub(), buffer=GraphSampleBuffer(),
         pool=pool, eval_pipeline=None, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=ShutdownState(), eval_model=object(), config=config,
@@ -169,7 +101,7 @@ def _drive(*snapshots: RunnerStats) -> list[dict]:
         sink=sink, monitor_cfg=monitor_config(),
     )
     for snapshot in snapshots:
-        pool.current = snapshot
+        pool.rstats = snapshot
         coord.step()
     payloads = sink.named("iteration_complete")
     assert len(payloads) == len(snapshots), (

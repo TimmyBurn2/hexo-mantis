@@ -24,8 +24,7 @@ import mantis.run
 from mantis.config.resolve.drain import DrainCapsSpec, resolve_drain_caps
 from mantis.eval.pipeline import drain_budget_sec
 from mantis.train.coordinator.config import StepCoordinatorConfig
-from _drivable import DrivableTrainerStub
-from _wiring_fakes import RunnerStats, fake_run_safety
+from _drivable import DrivablePoolStub, DrivableTrainerStub, fake_run_safety
 
 #: One distinguishable value per key. None is a shipped value (900/3/14400/14400), and the
 #: safety factor divides nothing else here, so a stale or defaulted number cannot match.
@@ -41,49 +40,6 @@ _DRAIN_KEYS = tuple(_DISTINGUISHABLE)
 #: The drive is bounded so it terminates; the three step-clock knobs move together because the
 #: reachability validator spans them.
 _DRIVE_STEPS = 4
-
-
-class _Pool:
-    def __init__(self) -> None:
-        self._games = 0
-        self.search_kind = "gumbel"
-        self.avg_game_length = 20.0
-        self.x_winrate = 0.5
-        self.o_winrate = 0.45
-        self.draw_rate = 0.05
-        self.draws = 1
-        self.sims_per_sec = 100.0
-        self.batch_fill_pct = 0.9
-        self.recent_move_histories: list = []
-
-    @property
-    def games_completed(self) -> int:
-        self._games += 1
-        return self._games
-
-    def start(self) -> None: ...
-    def stop(self) -> None: ...
-    def check_producer_health(self) -> None: ...
-
-    def pooled_draw_counts(self) -> tuple[int, int]:
-        return (0, 0)
-
-    def current_stride5_p90(self) -> int:
-        return 1
-
-    def runner_stats(self):
-        return RunnerStats()
-
-    def sync_inference_weights(self, state_dict) -> None: ...
-    def update_checkpoint_step(self, step: int) -> None: ...
-
-
-class _Buffer:
-    size = 1000
-    capacity = 100_000
-
-    def resize(self, n: int) -> None: ...
-    def save_to_path(self, p) -> None: ...
 
 
 def _composed_caps(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, **drain_over):
@@ -124,7 +80,7 @@ def _composed_caps(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, **d
         allocator_posture="default",
     )
     mantis.run.compose_run(
-        config=config, trainer=DrivableTrainerStub(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
+        config=config, trainer=DrivableTrainerStub(), pool=DrivablePoolStub(game_per_read=True), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
     )
     assert "coordinator_cfg_caps" in captured, "the drive never reached build_eval_pipeline"
