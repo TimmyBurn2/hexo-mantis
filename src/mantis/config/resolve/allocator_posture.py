@@ -93,18 +93,6 @@ class AllocatorPostureSpec:
     def required_conf(self) -> dict[str, str]:
         return dict(_REQUIRED_CONF[self.posture])
 
-    def required_env(self) -> dict[str, str]:
-        """The environment this posture REQUIRES, as a mapping a launcher can splat.
-
-        Renders from `_REQUIRED_CONF` alongside `launch_hint`, so the two cannot drift. The
-        CUDA-named variable is the one written, because c10 reads it FIRST. DEFAULT renders as
-        the EMPTY STRING and not an absent key, since a launcher splatting this over an
-        inherited environment must be able to OVERRIDE an inherited posture.
-        """
-        conf = _REQUIRED_CONF[self.posture]
-        rendered = ",".join(f"{k}:{v}" for k, v in sorted(conf.items()))
-        return {ALLOC_CONF_VARS[0]: rendered}
-
     @property
     def launch_hint(self) -> str:
         """How to launch under this posture, in the shape an operator can paste."""

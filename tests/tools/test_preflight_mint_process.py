@@ -543,8 +543,9 @@ def test_booting_run5_on_a_non_CUDA_box_fails_LOUD_in_init_trainer(tmp_path) -> 
     )
     from mantis.config.resolve.allocator_posture import resolve_allocator_posture
 
-    full_config = load_config(RUN5).model_dump()
-    env = {**os.environ, **resolve_allocator_posture(full_config).required_env()}
+    conf = resolve_allocator_posture(load_config(RUN5).model_dump()).required_conf
+    rendered = ",".join(f"{k}:{v}" for k, v in sorted(conf.items()))
+    env = {**os.environ, "PYTORCH_CUDA_ALLOC_CONF": rendered}
     result = _run_tool("--config", str(RUN5), "--burst-steps", str(_RUN5_BURST),
                        "--out-dir", str(out_dir), "--timeout-sec", "45", "--receipt-wait-sec", "0", env=env)
     assert result.returncode == 17, (
