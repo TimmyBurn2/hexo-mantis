@@ -8,12 +8,11 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
 - Host: the operator's desktop (not a Claude environment; `CLAUDE_CODE_ENVIRONMENT_NAME` unset). AMD Ryzen 7
   3700X, 16 threads, 46 GiB, flags `avx2` only (no `avx512_bf16`, no `amx`). torch 2.11.0+cpu, `mantis._engine` OK.
 - origin/dev = 69e1532 at W0 entry (no moved commits; no rebase).
-- Wave: **W2** (Rust). The W1 exit sweep on cadcc367 was VOIDED by an environmental /tmp tmpfs per-user quota
-  (3a: `OSError: [Errno 122] Disk quota exceeded`, from worktrees + cargo targets on tmpfs; 2a/2b/4/5 were green);
-  the re-run on cadcc367 from an on-disk worktree `.wt/gates` (`.wt/` is in .git/info/exclude) is ALL GREEN, 19 gates
-  (2a 2017 s, 3a 359 s, 3b 2358 s) — W1 EXITED; run10 resolved MATCH at cadcc367. A usage-limit stop interrupted the
-  search agent (uncommitted work in `.wt/w2-search`); it resumes from that diff. Worktrees live
-  under `.wt/` from now on. W2: bridge/core/encoding/graph and selfplay groups integrated; the search group running.
+- Wave: **W3** (Python src). W2 EXITED: REVIEW-W2 filed (`docs/audits/REVIEW_W2_2026-09-24.md`, 0 must-fix, one
+  loop); exit sweep `make gates` on 3db6ab5a ALL GREEN, 19 gates (2a 1068 s, 3a 356 s, 3b 3005 s); the post-review
+  text commits on 8b75f984 re-checked (gates 10/13/14/15/17, workspace build 0 warnings); run10 resolved MATCH at
+  3db6ab5a. W1 EXITED earlier (cadcc367, 19 gates green after a quota-voided first run). W3: three agents in
+  `.wt/w3-{train,selfplay,eval}` branched from 8b75f984; the sha256 consolidation follows them.
 
 ## W0 — entry
 
