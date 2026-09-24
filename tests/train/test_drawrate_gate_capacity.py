@@ -10,15 +10,12 @@ all; a trim on the SKIP path; `>=` -> `>` on the rule's length gate.
 from __future__ import annotations
 
 import dataclasses
-from pathlib import Path
 from types import SimpleNamespace
 
 from mantis.config.armed_aborts import Cadence
-from mantis.config.loader import load_config
-from mantis.config.resolve.coordinator import resolve_coordinator_knobs
-from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec
 from _monitor_config import monitor_config
+from _graph_drive import DEV_DRAIN_CAPS, DEV_GATE_INTERVAL, DEV_KNOBS
 from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
@@ -65,17 +62,11 @@ class _SpySink:
         self.events.append(event)
 
 
-_CONFIG_PATH = Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml"
-_DRAIN_CAPS = resolve_drain_caps(load_config(_CONFIG_PATH).monitor)
-_KNOBS = resolve_coordinator_knobs(load_config(_CONFIG_PATH).train)
-_GATE_INTERVAL = load_config(_CONFIG_PATH).monitor.gate_interval
-
-
 def _coordinator(*, spec, pool):
     config = dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=spec, policy_loss_trough_abort=None, ply_cap_abort=None,
-                                 drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
-                                 knobs=_KNOBS),
+                                 drain_caps=DEV_DRAIN_CAPS, gate_interval=DEV_GATE_INTERVAL,
+                                 knobs=DEV_KNOBS),
         log_interval=1, gate_interval=1, eval_interval=1, min_buf_size=1,
         terminal_eval_enabled=False,
     )

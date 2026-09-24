@@ -8,14 +8,10 @@ mcts/cluster block become one atomic read instead of two that could straddle a g
 from __future__ import annotations
 
 import dataclasses
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from mantis.config.loader import load_config
-from mantis.config.resolve.coordinator import resolve_coordinator_knobs
-from mantis.config.resolve.drain import resolve_drain_caps
-from _graph_drive import GRAPH_FULL_CONFIG, GraphSampleBuffer
+from _graph_drive import DEV_DRAIN_CAPS, DEV_GATE_INTERVAL, DEV_KNOBS, GRAPH_FULL_CONFIG, GraphSampleBuffer
 from _spy import SpyEventSink
 from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
@@ -25,14 +21,6 @@ from mantis.train.lifecycle.signals import ShutdownState
 from _drivable import DrivablePoolStub, DrivableTrainerStub, RunnerStats
 
 
-# Constants derived from the minted config — no hand-restated knobs.
-_CONFIG = load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml")
-_DRAIN_CAPS = resolve_drain_caps(_CONFIG.monitor)
-_KNOBS = resolve_coordinator_knobs(_CONFIG.train)
-#: The ARMING cadence, from the same minted config.
-_GATE_INTERVAL = _CONFIG.monitor.gate_interval
-
-
 def _make_config(**overrides) -> StepCoordinatorConfig:
     """Build a coordinator config whose `gate_interval` mirrors `log_interval` unless a drive
     names it — the shipped posture, since every committed config mints the two equal."""
@@ -40,8 +28,8 @@ def _make_config(**overrides) -> StepCoordinatorConfig:
     settings.setdefault("gate_interval", settings["log_interval"])
     return dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
-                                 drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
-                                 knobs=_KNOBS),
+                                 drain_caps=DEV_DRAIN_CAPS, gate_interval=DEV_GATE_INTERVAL,
+                                 knobs=DEV_KNOBS),
         **settings,
     )
 

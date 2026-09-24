@@ -1,10 +1,21 @@
-"""The graph coordinator-drive rig: one ring builder, one sampling buffer double and one
-non-binding drive declaration for every tests/train harness that fakes a replay buffer."""
+"""The graph coordinator-drive rig: one ring builder, one sampling buffer double, one
+non-binding drive declaration and the minted builder inputs for every tests/train harness that
+drives a `StepCoordinator`."""
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from mantis._engine import HexgBuffer
+from mantis.config.loader import load_config
+from mantis.config.resolve.coordinator import resolve_coordinator_knobs
+from mantis.config.resolve.drain import resolve_drain_caps
+
+_DEV = load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml")
+#: The builder's config-authored inputs, read off the minted dev config and never restated.
+DEV_DRAIN_CAPS = resolve_drain_caps(_DEV.monitor)
+DEV_KNOBS = resolve_coordinator_knobs(_DEV.train)
+DEV_GATE_INTERVAL = _DEV.monitor.gate_interval
 
 
 def filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
@@ -45,3 +56,9 @@ GRAPH_FULL_CONFIG: dict = {
               "fast_policy_weight": 0.0},
     "selfplay": {"n_workers": 1},
 }
+
+
+def mirrored(settings: dict) -> dict:
+    """Mirror `gate_interval` onto `log_interval` unless the drive names it, as every minted config does."""
+    settings.setdefault("gate_interval", settings["log_interval"])
+    return settings

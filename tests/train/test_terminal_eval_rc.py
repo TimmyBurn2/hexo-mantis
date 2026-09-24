@@ -44,14 +44,12 @@ from mantis.config.armed_aborts import (
     exit_code_for_abort,
 )
 from mantis.config.loader import load_config
-from mantis.config.resolve.coordinator import resolve_coordinator_knobs
-from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.schema import EvalConfig, GateConfig, RunConfig
 from mantis.encoding import lookup
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks
 from mantis.model import GnnArch, build_net
-from _graph_drive import GRAPH_FULL_CONFIG, GraphSampleBuffer
+from _graph_drive import DEV_DRAIN_CAPS, DEV_GATE_INTERVAL, DEV_KNOBS, GRAPH_FULL_CONFIG, GraphSampleBuffer, mirrored
 from _spy import SpyEventSink
 from _monitor_config import monitor_config
 from mantis.monitor.heartbeat import DRAW_RATE_COLLAPSE_EXIT_CODE
@@ -86,21 +84,6 @@ _CRITICAL_GB = 1.0
 #: A guard cadence short enough to fire inside a sub-second burst; which side of the
 #: thresholds a drive lands on is decided by the rigged `shutil.disk_usage`.
 _DRIVE_GUARD = {"interval_sec": 0.02, "warn_gb": 4.0, "fail_gb": 2.0}
-
-_DEV_CONFIG = load_config(_CONFIGS / "dev_example.yaml")
-_DRAIN_CAPS = resolve_drain_caps(_DEV_CONFIG.monitor)
-_KNOBS = resolve_coordinator_knobs(_DEV_CONFIG.train)
-#: The builder's fifth config-authored parameter, `monitor.gate_interval` — the ARMING
-#: cadence. Harnesses that set `log_interval` mirror it onto `gate_interval`, the shipped
-#: posture: every committed config mints the two equal.
-_GATE_INTERVAL = _DEV_CONFIG.monitor.gate_interval
-
-
-def _mirrored(settings: dict) -> dict:
-    """The GATE cadence mirrors the NARRATION cadence unless a drive names it — the shipped
-    posture, so a drive that moves only `log_interval` keeps its pre-split cadence."""
-    settings.setdefault("gate_interval", settings["log_interval"])
-    return settings
 
 
 class _Trainer(DrivableTrainerStub):
@@ -174,10 +157,10 @@ def _make_coordinator(*, eval_pipeline: Any, sink: SpyEventSink,
     `SimpleNamespace` silently answering `None`."""
     config = dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
-                                 drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
-                                 knobs=_KNOBS),
-        **_mirrored({"eval_interval": 10**9, "log_interval": 1, "min_buf_size": 10,
-                     **(config_overrides or {})}),
+                                 drain_caps=DEV_DRAIN_CAPS, gate_interval=DEV_GATE_INTERVAL,
+                                 knobs=DEV_KNOBS),
+        **mirrored({"eval_interval": 10**9, "log_interval": 1, "min_buf_size": 10,
+                    **(config_overrides or {})}),
     )
     pool = DrivablePoolStub(game_per_read=True)
     shutdown = ShutdownState()

@@ -1,14 +1,5 @@
-# The coordinator fakes below (trainer / eval-pipeline / sink) exist to drive
-# the REAL `_emit_iteration_complete`, the only way to pin the caller half of this seam.
-"""The WIRING the payload pins cannot see.
-
-`tests/train/test_cluster_stat_absence.py` asserts on the emitted payload, so a mutation in the
-builder reds there; it stops one level short at both ends of the seam. The CALLER:
-`StepCoordinator._emit_iteration_complete` hands the builder the config `is_graph_run` reads, and
-passing `{}` degrades absence into `cluster_variance_sample_count: 0` shipping in every
-`iteration_complete` of a graph run, for an instrument that does not exist on that arm. The TYPE
-AUTHORITY: the `_engine.pyi` stub is the only thing pyright reads for the FFI getters, so a
-stub still declaring one type-checks a consumer that fails at runtime.
+"""The retired cluster-variance fields stay retired: no `cluster_*` key reaches a real
+coordinator's `iteration_complete`, and the `_engine.pyi` stub declares no cluster-mean getter.
 """
 from __future__ import annotations
 
@@ -17,11 +8,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from mantis.config.loader import load_config
-from mantis.config.resolve.coordinator import resolve_coordinator_knobs
-from mantis.config.resolve.drain import resolve_drain_caps
 from _drivable import DrivablePoolStub, RunnerStats
-from _graph_drive import GraphSampleBuffer
+from _graph_drive import DEV_DRAIN_CAPS, DEV_GATE_INTERVAL, DEV_KNOBS, GraphSampleBuffer
 from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.step import StepCoordinator
@@ -34,12 +22,8 @@ CLUSTER_KEYS = ("cluster_value_std_mean", "cluster_policy_disagreement_mean",
                 "cluster_variance_sample_count")
 CLUSTER_MEANS = CLUSTER_KEYS[:2]
 
-# Minted-config-derived knobs: no hand-restated numbers.
-_CONFIG = load_config(REPO_ROOT / "configs" / "dev_example.yaml")
 GRAPH_CONFIG: dict[str, Any] = {"identity": {"encoding": "gnn_axis_v1",
                                              "representation": "graph"}}
-GRID_CONFIG: dict[str, Any] = {"identity": {"encoding": "v6_live2_ls",
-                                            "representation": "grid"}}
 
 
 class _ClusterCarryingStats(RunnerStats):
@@ -99,9 +83,8 @@ class _SpySink:
 def _coordinator(full_config: dict[str, Any]):
     cfg = dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
-                                 drain_caps=resolve_drain_caps(_CONFIG.monitor),
-                                 gate_interval=_CONFIG.monitor.gate_interval,
-                                 knobs=resolve_coordinator_knobs(_CONFIG.train)),
+                                 drain_caps=DEV_DRAIN_CAPS, gate_interval=DEV_GATE_INTERVAL,
+                                 knobs=DEV_KNOBS),
         eval_interval=1, log_interval=1000, gate_interval=1000, min_buf_size=10,
     )
     sink = _SpySink()
@@ -124,10 +107,8 @@ def _one_iteration_complete(sink: _SpySink) -> dict[str, Any]:
 
 
 def test_a_real_coordinator_emits_no_cluster_key_on_a_graph_run() -> None:
-    """Absence asserted on the event stream a PRODUCTION `StepCoordinator` produces, driven
-    through `_emit_iteration_complete` — the one site that hands the builder its `config`.
-    FALSIFYING MUTATION: pass `{}` there; `is_graph_run` reads non-graph, the graph arm is never
-    taken, and `cluster_variance_sample_count: 0` reaches the ONE channel with no producer."""
+    """Absence on the event stream a real `StepCoordinator` emits from a snapshot that still carries
+    the fields. Planted break: any `cluster_*` entry in `emit_iteration_complete_event`'s payload reds."""
     coord, cfg, sink = _coordinator(GRAPH_CONFIG)
     coord._emit_iteration_complete(cfg)
     payload = _one_iteration_complete(sink)

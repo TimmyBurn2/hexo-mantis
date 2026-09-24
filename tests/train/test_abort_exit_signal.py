@@ -29,12 +29,9 @@ from types import SimpleNamespace
 
 import pytest
 from mantis.config.armed_aborts import MANIFEST, ArmedAbort, Mechanism, Status, exit_code_for_abort
-from mantis.config.loader import load_config
-from mantis.config.resolve.coordinator import resolve_coordinator_knobs
-from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec
 from _drivable import DrivablePoolStub
-from _graph_drive import GRAPH_FULL_CONFIG, GraphSampleBuffer
+from _graph_drive import DEV_DRAIN_CAPS, DEV_GATE_INTERVAL, DEV_KNOBS, GRAPH_FULL_CONFIG, GraphSampleBuffer, mirrored
 from _monitor_config import monitor_config
 from mantis.monitor.heartbeat import DRAW_RATE_COLLAPSE_EXIT_CODE
 from mantis.run import _step_coordinator_config
@@ -45,27 +42,6 @@ from mantis.train.lifecycle.signals import ShutdownState
 
 
 RULE = "draw_rate_collapse"
-
-#: WPMINT Phase K-A stage 0: the four drain caps are `monitor.drain.*` (R93/DR-11) — read
-#: from a MINTED config, never restated here.
-_DRAIN_CAPS = resolve_drain_caps(
-    load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").monitor)
-#: WPMINT Phase K-B: the builder's fourth config-authored parameter, from the same minted
-#: config — the 19 coordinator knobs are `train.*` keys now, not builder literals.
-_KNOBS = resolve_coordinator_knobs(
-    load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").train)
-#: The builder's FIFTH config-authored parameter — `monitor.gate_interval`, the ARMING cadence.
-#: Harnesses that set `log_interval` MIRROR it onto `gate_interval`, which is the shipped posture.
-_GATE_INTERVAL = load_config(
-    Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").monitor.gate_interval
-
-
-def _mirrored(settings: dict) -> dict:
-    """Mirror the GATE cadence onto the NARRATION cadence unless a drive names it. That mirroring
-    is the SHIPPED posture: every committed config mints `monitor.gate_interval` equal to its own
-    `train.log_interval`."""
-    settings.setdefault("gate_interval", settings["log_interval"])
-    return settings
 
 
 class _Trainer:
@@ -114,10 +90,10 @@ def _config(**overrides) -> StepCoordinatorConfig:
     disarmed draw-rate posture; neither the builder nor this factory gives it a default."""
     return dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
-                                 drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
-                                 knobs=_KNOBS),
-        **_mirrored({"eval_interval": 0, "log_interval": 1, "min_buf_size": 10,
-                     **overrides}),
+                                 drain_caps=DEV_DRAIN_CAPS, gate_interval=DEV_GATE_INTERVAL,
+                                 knobs=DEV_KNOBS),
+        **mirrored({"eval_interval": 0, "log_interval": 1, "min_buf_size": 10,
+                    **overrides}),
     )
 
 

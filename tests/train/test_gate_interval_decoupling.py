@@ -26,11 +26,9 @@ import yaml
 from pydantic import ValidationError
 
 from mantis.config.loader import discover_configs, load_config
-from mantis.config.resolve.coordinator import resolve_coordinator_knobs
-from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec
 from _drivable import DrivablePoolStub
-from _graph_drive import GRAPH_FULL_CONFIG, GraphSampleBuffer
+from _graph_drive import DEV_DRAIN_CAPS, DEV_GATE_INTERVAL, DEV_KNOBS, GRAPH_FULL_CONFIG, GraphSampleBuffer
 from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.config import StepCoordinatorConfig
@@ -40,10 +38,6 @@ from mantis.train.lifecycle.signals import ShutdownState
 
 _REPO = Path(__file__).resolve().parents[2]
 _DEV_CONFIG_PATH = _REPO / "configs" / "dev_example.yaml"
-_DEV_CONFIG = load_config(_DEV_CONFIG_PATH)
-_DRAIN_CAPS = resolve_drain_caps(_DEV_CONFIG.monitor)
-_KNOBS = resolve_coordinator_knobs(_DEV_CONFIG.train)
-_GATE_INTERVAL = _DEV_CONFIG.monitor.gate_interval
 
 #: run5's own minted narration cadence, named rather than invented: the defect is about what
 #: happens BEFORE this many training steps.
@@ -90,8 +84,8 @@ def _config(**overrides) -> StepCoordinatorConfig:
     them apart is the whole subject."""
     return dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
-                                 drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
-                                 knobs=_KNOBS),
+                                 drain_caps=DEV_DRAIN_CAPS, gate_interval=DEV_GATE_INTERVAL,
+                                 knobs=DEV_KNOBS),
         **{"eval_interval": 10**9, "min_buf_size": 10, "max_train_burst": 4,
            "training_steps_per_game": 4.0, "hard_gn_threshold": 1e9, **overrides},
     )
@@ -255,7 +249,7 @@ def test_p6_a_config_missing_monitor_gate_interval_fails_to_load(tmp_path) -> No
     against a real minted config through the real loader. Killer: give the schema field any
     default, or fall back to `log_interval`."""
     payload = yaml.safe_load(_DEV_CONFIG_PATH.read_text(encoding="utf-8"))
-    assert payload["monitor"].pop("gate_interval") == _GATE_INTERVAL, (
+    assert payload["monitor"].pop("gate_interval") == DEV_GATE_INTERVAL, (
         "the minted config must carry the key for its removal to mean anything"
     )
     target = tmp_path / "no_gate_interval.yaml"

@@ -32,10 +32,7 @@ import dataclasses
 import inspect
 from types import SimpleNamespace
 
-from mantis.config.loader import load_config
-from mantis.config.resolve.coordinator import resolve_coordinator_knobs
-from mantis.config.resolve.drain import resolve_drain_caps
-from _graph_drive import GRAPH_FULL_CONFIG, GraphSampleBuffer
+from _graph_drive import DEV_DRAIN_CAPS, DEV_GATE_INTERVAL, DEV_KNOBS, GRAPH_FULL_CONFIG, GraphSampleBuffer
 from _drivable import DrivablePoolStub, DrivableTrainerStub
 from _spy import SpyEventSink
 from _monitor_config import monitor_config
@@ -44,15 +41,7 @@ from mantis.selfplay.pool_hooks import RunnerStats
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.events import emit_iteration_complete_event, emit_training_step_event
 from mantis.train.lifecycle.signals import ShutdownState
-from pathlib import Path
 
-_REPO = Path(__file__).resolve().parents[2]
-_DEV_CONFIG = load_config(_REPO / "configs" / "dev_example.yaml")
-_DRAIN_CAPS = resolve_drain_caps(_DEV_CONFIG.monitor)
-_KNOBS = resolve_coordinator_knobs(_DEV_CONFIG.train)
-#: Harnesses that set `log_interval` MIRROR it onto `gate_interval` — the shipped posture, since
-#: every committed config mints the two equal.
-_GATE_INTERVAL = _DEV_CONFIG.monitor.gate_interval
 
 #: The counters carried in the `target_integrity` block plus the denominator the rate is taken
 #: over. Transcribed rather than derived from the payload under test: an oracle that read its
@@ -84,8 +73,8 @@ def _drive(*snapshots: RunnerStats) -> list[dict]:
     assert snapshots, "a drive with no snapshot measures nothing"
     config = dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
-                                 drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
-                                 knobs=_KNOBS),
+                                 drain_caps=DEV_DRAIN_CAPS, gate_interval=DEV_GATE_INTERVAL,
+                                 knobs=DEV_KNOBS),
         # Gate cadence mirrors narration cadence, the shipped posture.
         **{"eval_interval": 10**9, "log_interval": 1, "gate_interval": 1,
            "min_buf_size": 10},

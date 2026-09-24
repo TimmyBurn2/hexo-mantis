@@ -30,12 +30,9 @@ from typing import Any
 import pytest
 import torch
 
-from mantis.config.loader import load_config
-from mantis.config.resolve.coordinator import resolve_coordinator_knobs
-from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec
 from _drivable import DrivablePoolStub
-from _graph_drive import GRAPH_FULL_CONFIG, GraphSampleBuffer
+from _graph_drive import DEV_DRAIN_CAPS, DEV_GATE_INTERVAL, DEV_KNOBS, GRAPH_FULL_CONFIG, GraphSampleBuffer, mirrored
 from _monitor_config import monitor_config
 from mantis.monitor.heartbeat import HEARTBEAT_SOURCES, PERSIST_FATAL_EXIT_CODE, HeartbeatRegistry
 from mantis.run import _step_coordinator_config, launch_run
@@ -46,26 +43,6 @@ from mantis.train.lifecycle.heartbeat_watchdog import HeartbeatWatchdog
 from mantis.train.lifecycle.signals import ShutdownState
 from mantis.train.loop import run_training_loop
 
-
-_REPO = Path(__file__).resolve().parents[2]
-_MINTED = load_config(_REPO / "configs" / "dev_example.yaml")
-
-#: The coordinator's non-leg knobs come from a MINTED config through the production resolvers,
-#: never from literals here (R1).
-_DRAIN_CAPS = resolve_drain_caps(_MINTED.monitor)
-_KNOBS = resolve_coordinator_knobs(_MINTED.train)
-#: The ARMING cadence, from the same minted config. Harnesses that set `log_interval` MIRROR it
-#: onto `gate_interval`, which is the shipped posture — every committed config mints them equal.
-_GATE_INTERVAL = _MINTED.monitor.gate_interval
-
-
-def _mirrored(settings: dict) -> dict:
-    """Mirror the GATE cadence onto the NARRATION cadence unless a drive names it.
-
-    That mirroring is the SHIPPED posture: every committed config mints `monitor.gate_interval`
-    equal to its own `train.log_interval`."""
-    settings.setdefault("gate_interval", settings["log_interval"])
-    return settings
 
 #: The declared terminus for the leg-3 drives.
 _CEILING = 5
@@ -144,10 +121,10 @@ def _config(**overrides) -> StepCoordinatorConfig:
     disarmed draw-rate posture; neither the builder nor this factory gives it a default (R1)."""
     return dataclasses.replace(
         _step_coordinator_config(stop_step=_CEILING, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
-                                 drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
-                                 knobs=_KNOBS),
-        **_mirrored({"eval_interval": 0, "log_interval": 1, "min_buf_size": 10,
-                     **overrides}),
+                                 drain_caps=DEV_DRAIN_CAPS, gate_interval=DEV_GATE_INTERVAL,
+                                 knobs=DEV_KNOBS),
+        **mirrored({"eval_interval": 0, "log_interval": 1, "min_buf_size": 10,
+                    **overrides}),
     )
 
 
