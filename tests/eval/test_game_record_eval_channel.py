@@ -11,7 +11,7 @@ from pathlib import Path
 
 import torch
 
-from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
+from _fused_caps import CAPS
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from _pipeline_harness import seeded_net
 
@@ -49,8 +49,7 @@ def _round_spec(tmp_path: Path, target: GameRecordTarget | None) -> RoundSpec:
         progress_path=str(tmp_path / "progress.txt"),
         game_record=target,
         ply_cap_adjudication=None, strength_floor=None,
-        fused_graph_caps=FusedGraphCapsSpec(max_fused_edges=57149441,
-                                            max_fused_nodes=1785921),
+        fused_graph_caps=CAPS,
         inference_batching=InferenceBatchingSpec(inference_batch_size=64,
                                                  inference_max_wait_ms=10),
     )

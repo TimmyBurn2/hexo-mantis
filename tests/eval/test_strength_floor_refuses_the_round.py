@@ -22,7 +22,7 @@ from mantis.arena.match import GameRecord
 from mantis.arena.regime import RegimeKey
 from mantis.config.resolve.eval_posture import StrengthFloorSpec
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
-from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
+from _fused_caps import CAPS
 from mantis.encoding import lookup
 from mantis.eval import worker
 from mantis.eval.floor_gate import FLOOR_PROBE_VARIANT
@@ -76,8 +76,7 @@ def _round_spec(tmp_path: Path, floor: StrengthFloorSpec | None) -> RoundSpec:
         progress_path=str(tmp_path / "progress.txt"),
         game_record=None,
         ply_cap_adjudication=None, strength_floor=floor,
-        fused_graph_caps=FusedGraphCapsSpec(max_fused_edges=57149441,
-                                            max_fused_nodes=1785921),
+        fused_graph_caps=CAPS,
         inference_batching=InferenceBatchingSpec(
             inference_batch_size=64, inference_max_wait_ms=10
         ),

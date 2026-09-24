@@ -17,7 +17,7 @@ import pytest
 import torch
 
 from mantis._engine import Board
-from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
+from _fused_caps import CAPS
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.config.schema import EvalConfig, GateConfig
 from mantis.encoding import lookup
@@ -30,7 +30,6 @@ GSPEC = lookup("gnn_axis_v1")
 #: `LocalInferenceEngine` hand-builds its `InferenceServer` config with no `RunConfig`, so
 #: the fused-forward memory bound is a REQUIRED keyword threaded as a spec; the pair is the
 #: template's NON-BINDING-BY-CONSTRUCTION one, so no round built on it splits.
-CAPS = FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921)
 
 
 def tiny_model() -> torch.nn.Module:

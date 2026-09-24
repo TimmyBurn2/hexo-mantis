@@ -27,6 +27,7 @@ import time
 import pytest
 import torch
 
+from _fused_caps import CAPS_DICT
 from mantis._engine import InferenceBatcher
 from mantis.encoding import lookup
 from mantis.model import GnnArch, build_net
@@ -75,7 +76,7 @@ def test_gnn_inference_seam_end_to_end_smoke() -> None:
             # F-816-10: the graph arm resolves the fused-forward memory bound at
             # construction. Non-binding by construction here, so this end-to-end smoke
             # exercises the M == 1 path production takes when the caps do not bind.
-            "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
+            "fused_graph_caps": CAPS_DICT,
         }, "train": {"amp_dtype": "bf16"}},
         batcher=batcher, encoding_spec=_SPEC,
     )

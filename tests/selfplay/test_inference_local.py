@@ -12,11 +12,12 @@ from __future__ import annotations
 import numpy as np
 import torch
 
+from _fused_caps import CAPS as _CAPS
+from _fused_caps import CAPS as _CAPS
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis._engine import Board
 from mantis.encoding import lookup
 from mantis.model import GnnArch, build_net
-from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.selfplay.inference_local import LocalInferenceEngine
 _GRAPH_SPEC = lookup("gnn_axis_v1")
 _CPU = torch.device("cpu")
@@ -24,7 +25,6 @@ _CPU = torch.device("cpu")
 #: hand-builds its `InferenceServer` config with no `RunConfig`, so the bound is
 #: THREADED from a parent resolver and never hardcoded at the site. The engine below
 #: gets a NON-BINDING pair (nothing here splits).
-_CAPS = FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921)
 
 
 def _graph_engine() -> LocalInferenceEngine:

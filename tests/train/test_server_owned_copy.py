@@ -11,6 +11,7 @@ from mantis._engine import HexgBuffer
 from mantis.config.loader import load_config
 from mantis.config.schema import RunConfig
 from mantis.encoding import lookup
+from _fused_caps import CAPS_DICT
 from mantis.eval.snapshot import load_model_snapshot, write_model_snapshot
 from mantis.model import GnnArch, build_net, net_param_hash, state_dict_param_hash
 from mantis.selfplay.pool import WorkerPool, served_copy
@@ -34,7 +35,7 @@ def _pool_cfg() -> dict[str, Any]:
                         "n_sims_quick": 0, "n_sims_full": 0, "temperature_threshold_compound_moves": 0, "temp_min": 0.5},
     }
     inference = {"inference_batch_size": 4, "inference_max_wait_ms": 10, "edge_geometry_check": "inline",
-                 "compile_trunk": False, "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921}}
+                 "compile_trunk": False, "fused_graph_caps": CAPS_DICT}
     return {"encoding": _ENCODING, "deploy": {"search": {"kind": "puct"}}, "selfplay": selfplay,
             "inference": inference, "train": {"draw_reward": -0.5, "ply_cap_value": -0.5}}
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from _fused_caps import CAPS_DICT
 from mantis.config.schema import (
     ARCH_SCOPED_KEYS,
     InferenceConfig,
@@ -43,7 +44,7 @@ VALID_INFERENCE: dict = {
     "inference_batch_size": 64, "inference_max_wait_ms": 10,
     # A non-binding-by-construction pair: no split is exercised here, and the `null`
     # placeholder is pinned against the real configs in test_fused_graph_caps_authority.py.
-    "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
+    "fused_graph_caps": CAPS_DICT,
 }
 
 SELFPLAY_FIELDS = sorted(VALID_SELFPLAY)

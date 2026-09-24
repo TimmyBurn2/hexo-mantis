@@ -5,6 +5,7 @@ from typing import Any
 
 import torch
 
+from _fused_caps import CAPS_DICT
 from mantis._engine import HexgBuffer
 from mantis.encoding import lookup
 from mantis.model import GnnArch, build_net
@@ -36,7 +37,7 @@ def pool_cfg(
         "edge_geometry_check": "inline", "compile_trunk": False,
         # The graph arm resolves the fused-forward memory bound at construction; NON-BINDING
         # BY CONSTRUCTION here, since these suites are about wiring and nothing asserts the M.
-        "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
+        "fused_graph_caps": CAPS_DICT,
     }
     train = {"draw_reward": -0.5, "ply_cap_value": -0.5}
     return {"encoding": encoding, "deploy": {"search": {"kind": "puct"}}, "selfplay": selfplay,

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from _fused_caps import CAPS_DICT
 from mantis.config.schema import ARCH_SCOPED_KEYS
 from mantis.config.loader import load_config
 from mantis.encoding import lookup
@@ -92,8 +93,8 @@ def _inference_block() -> dict:
     return _drop_foreign_arch_keys("inference", {
         "inference_batch_size": 64, "inference_max_wait_ms": 10,
         # `fused_graph_caps` is ARCH-SCOPED, so the helper above strips it when it does not
-        # belong to `_REPRESENTATION`. Left in the literal so the strip is visible here.
-        "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
+        # belong to `_REPRESENTATION`. Left in the block so the strip is visible here.
+        "fused_graph_caps": CAPS_DICT,
     })
 
 

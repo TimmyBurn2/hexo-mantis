@@ -21,6 +21,7 @@ from typing import Any
 import numpy as np
 import torch
 
+from _fused_caps import CAPS_DICT
 from mantis.encoding import lookup
 from mantis.selfplay.graph_collate import GraphBatch, GraphWirePayload
 from mantis.selfplay.inference_server import InferenceServer
@@ -263,7 +264,7 @@ def server_cfg(**over: Any) -> dict[str, Any]:
     # from this base needs it; the pair is non-binding by construction, so nothing splits on it.
     base = {
         "inference_batch_size": 8, "inference_max_wait_ms": 20.0,
-        "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
+        "fused_graph_caps": CAPS_DICT,
     }
     base.update(over)
     return {"inference": base, "encoding": "gnn_axis_v1"}

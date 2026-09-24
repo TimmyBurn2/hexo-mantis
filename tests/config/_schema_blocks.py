@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from _fused_caps import CAPS_DICT
 from mantis.config.loader import load_config
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -49,7 +50,7 @@ def inference_block() -> dict:
         # `inference.fused_graph_caps` is a REQUIRED block, and the pair here is the
         # template's NON-BINDING-BY-CONSTRUCTION value, so nothing exercises a split; the
         # real configs are pinned by tests/config/test_fused_graph_caps_authority.py.
-        "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
+        "fused_graph_caps": CAPS_DICT,
     }
 
 

@@ -20,6 +20,7 @@ from typing import Any
 import pytest
 import torch
 
+from _fused_caps import CAPS_DICT
 from mantis.config.loader import load_config
 from mantis.config.schema import ARCH_SCOPED_KEYS
 from mantis.encoding import EncodingRegistryError, all_specs
@@ -670,7 +671,7 @@ def test_reads_full_v1_envelope_via_field_map(tmp_path, full_graph_net, full_gra
             "inference_batch_size": 64, "inference_max_wait_ms": 10,
             # ARCH-SCOPED to graph and this envelope IS a graph one, so it is REQUIRED here; the
             # pair is the template's non-binding value.
-            "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
+            "fused_graph_caps": CAPS_DICT,
         },
         "monitor": {
             # R242 (ADJ-D12): the ARMING cadence, schema-only and required.

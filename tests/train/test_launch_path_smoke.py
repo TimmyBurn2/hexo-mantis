@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 import torch
 
+from _fused_caps import CAPS_DICT
 from mantis.config.loader import load_config
 from mantis.config.resolve.microbatch import MicrobatchCapsSpec
 from mantis.config.schema import ARCH_SCOPED_KEYS
@@ -96,8 +97,8 @@ def _inference_block():
     return _drop_foreign_arch_keys("inference", {
         "inference_batch_size": 64, "inference_max_wait_ms": 10,
         # `fused_graph_caps` is ARCH-SCOPED to graph (R322(d)) and this is a GRID config, so it
-        # is stripped by the helper above. Left in the literal so the strip is visible here.
-        "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
+        # is stripped by the helper above. Left in the block so the strip is visible here.
+        "fused_graph_caps": CAPS_DICT,
     })
 
 

@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 import torch
 
+from _fused_caps import CAPS_DICT
 from mantis._engine import HexgBuffer
 from mantis.encoding import lookup
 from mantis.model import GnnArch, build_net
@@ -37,7 +38,7 @@ def _cfg() -> dict[str, Any]:
     inference = {
         "inference_batch_size": 4, "inference_max_wait_ms": 10,
         "edge_geometry_check": "inline", "compile_trunk": False,
-        "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
+        "fused_graph_caps": CAPS_DICT,
     }
     return {"encoding": _ENCODING, "deploy": {"search": {"kind": "puct"}}, "selfplay": selfplay,
             "inference": inference, "train": {"draw_reward": -0.5, "ply_cap_value": -0.5}}

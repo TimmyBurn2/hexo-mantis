@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 import torch
 
+from _fused_caps import CAPS_DICT
 from mantis.config.loader import load_config
 from mantis.config.schema import ARCH_SCOPED_KEYS
 from mantis.encoding import lookup
@@ -147,7 +148,7 @@ def _make_inference_block(**over: Any) -> dict[str, Any]:
     base = {
         "inference_batch_size": 64, "inference_max_wait_ms": 10,
         # A non-binding-by-construction pair: no split is exercised here.
-        "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
+        "fused_graph_caps": CAPS_DICT,
     }
     base.update(over)
     return base

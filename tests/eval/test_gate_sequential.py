@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from _fused_caps import CAPS
 from mantis.eval.sequential import (
     SD_FLOOR,
     SequentialGateSpec,
@@ -160,7 +161,6 @@ def _net(seed: int):
 
 
 def _round_spec(tmp_path, sequential: dict | None):
-    from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
     from mantis.config.resolve.inference_batching import InferenceBatchingSpec
     from mantis.eval.rounds import GateSpec, RoundSpec
     from mantis.eval.snapshot import write_model_snapshot
@@ -182,7 +182,7 @@ def _round_spec(tmp_path, sequential: dict | None):
         random_model_sims=2, seed_base=_SEED, round_timeout_sec=600.0,
         result_path=str(tmp_path / "result.json"), progress_path=str(tmp_path / "progress.txt"),
         game_record=None, ply_cap_adjudication=None, strength_floor=None,
-        fused_graph_caps=FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921),
+        fused_graph_caps=CAPS,
         inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10),
     )
 

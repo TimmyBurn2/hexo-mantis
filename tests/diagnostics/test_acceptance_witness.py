@@ -11,10 +11,12 @@ from pathlib import Path
 import pytest
 import torch
 
+from _fused_caps import CAPS
 from mantis._engine import Board
 from mantis.arena.books import Opening
 from mantis.bots.resolve import resolve_bot
 from mantis.config.resolve.eval_posture import StrengthFloorSpec
+from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.diagnostics.acceptance_witness import (
     ArmSpec,
     WitnessArmError,
@@ -27,8 +29,6 @@ from mantis.diagnostics.acceptance_witness import (
 )
 from mantis.encoding import lookup
 from mantis.eval.worker import build_candidate_player
-from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
-from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.model import GnnArch, build_net
 from mantis.model.identity import net_param_hash
 from mantis.selfplay.inference_local import LocalInferenceEngine
@@ -102,8 +102,7 @@ def _readout(seed: int) -> dict:
     device = torch.device("cpu")
     engine = LocalInferenceEngine(
         seeded_net(_tiny_arch(), seed=seed).to(device).eval(), device, encoding_spec=spec,
-        fused_graph_caps=FusedGraphCapsSpec(max_fused_edges=57149441,
-                                           max_fused_nodes=1785921),
+        fused_graph_caps=CAPS,
         inference_batching=InferenceBatchingSpec(inference_batch_size=64,
                                                 inference_max_wait_ms=10),
         max_in_flight=8, )

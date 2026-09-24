@@ -18,6 +18,7 @@ from typing import Any
 import pytest
 import torch
 
+from _fused_caps import CAPS
 from mantis.encoding import lookup
 from mantis.model import build_net, select_arch
 from mantis.model.identity import net_param_hash
@@ -216,7 +217,7 @@ def test_a_cpu_smoke_plays_one_legal_game_from_the_warm_started_net(tmp_path: Pa
     from mantis.arena.match import _play_one_game
     from mantis.arena.deploy_head import DeployHeadPlayer
     from mantis._engine import Board
-    from mantis.config.resolve import FusedGraphCapsSpec, InferenceBatchingSpec
+    from mantis.config.resolve import InferenceBatchingSpec
     from mantis.eval.worker import _graph_expand_fn
     from mantis.selfplay.inference_local import LocalInferenceEngine
 
@@ -229,7 +230,7 @@ def test_a_cpu_smoke_plays_one_legal_game_from_the_warm_started_net(tmp_path: Pa
     spec = _spec()
     engine = LocalInferenceEngine(
         net, torch.device("cpu"), encoding_spec=spec,
-        fused_graph_caps=FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921),
+        fused_graph_caps=CAPS,
         inference_batching=InferenceBatchingSpec(inference_batch_size=8, inference_max_wait_ms=10),
         max_in_flight=4, )
     try:
