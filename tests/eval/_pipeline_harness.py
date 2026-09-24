@@ -1,0 +1,185 @@
+"""The eval suites' shared fake-subprocess rig: tiny net, config builders, fake process tree.
+
+Every member drives the REAL `build_eval_pipeline` against a fake `multiprocessing` context;
+the knobs a suite exists to set (round timeout, kill grace, drain caps, run id) stay at each
+caller's site as overrides, never baked into a second copy of the rig.
+"""
+from __future__ import annotations
+
+import math
+import multiprocessing
+import threading
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
+
+import pytest
+import torch
+
+from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
+from mantis.config.resolve.inference_batching import InferenceBatchingSpec
+from mantis.config.schema import EvalConfig, GateConfig
+from mantis.eval.pipeline import DrainCaps
+from mantis.eval.promote import DeployTagHooks
+from mantis.encoding import lookup
+from mantis.model import GnnArch, build_net
+
+GSPEC = lookup("gnn_axis_v1")
+
+
+def tiny_model() -> torch.nn.Module:
+    arch = GnnArch(in_dim=int(GSPEC.node_feat_dim), edge_dim=int(GSPEC.edge_feat_dim),
+                   hidden=8, num_layers=1, policy_hidden=8, value_hidden=8)
+    net = build_net(arch)
+    net.arch = arch
+    return net
+
+
+def eval_config(**overrides: Any) -> EvalConfig:
+    gate = GateConfig(
+        stride=1, screen_games=80, confirm_games=128, promotion_winrate=0.55,
+        screen_confirm_lo=0.44, deploy_sims=150, opening_book="book_v1_s20260625_p4",
+        bootstrap_resamples=1000, min_distinct_per_pair=10, seed_base=20260625, sequential=None,
+    )
+    defaults = dict(
+        random_model_sims=96, max_plies=128, random_floor_games=4, worker_device="cpu",
+        round_timeout_sec=5.0, worker_kill_grace_sec=0.2, gate=gate,
+        ply_cap_adjudication=None, strength_floor=None,
+    )
+    defaults.update(overrides)
+    return EvalConfig(**defaults)
+
+
+def promotion_hooks(tmp_path: Path, *, run_id: str = "oracle_test_run") -> DeployTagHooks:
+    return DeployTagHooks(
+        anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
+        best_model_path=tmp_path / "best_model.pt",
+        run_id=run_id,
+        encoding="gnn_axis_v1",
+        save_anchor=lambda *a, **k: None,
+        guarded_load=lambda *a, **k: None,
+    )
+
+
+def pipeline_kwargs(
+    tmp_path: Path,
+    *,
+    eval_cfg: EvalConfig | None = None,
+    run_id: str = "oracle_test_run",
+    drain_caps_sec: float = 2.0,
+    **overrides: Any,
+) -> dict:
+    spool_dir = tmp_path / "spool"
+    spool_dir.mkdir(parents=True, exist_ok=True)
+    kwargs = dict(
+        eval_cfg=eval_cfg if eval_cfg is not None else eval_config(),
+        coordinator_cfg_caps=DrainCaps(
+            final_eval_drain_timeout_sec=drain_caps_sec,
+            eval_final_drain_safety_factor=1.0,
+            eval_final_drain_hard_cap_sec=drain_caps_sec,
+            terminal_eval_hard_cap_sec=drain_caps_sec,
+        ),
+        encoding="gnn_axis_v1",
+        max_plies=128,
+        c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16,
+        run_id=run_id,
+        spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
+        promotion=promotion_hooks(tmp_path, run_id=run_id),
+        fused_graph_caps=FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921),
+        inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10),
+    )
+    kwargs.update(overrides)
+    return kwargs
+
+
+class FakeClock:
+    def __init__(self, t: float = 0.0) -> None:
+        self.t = t
+
+    def __call__(self) -> float:
+        return self.t
+
+    def advance(self, dt: float) -> None:
+        self.t += dt
+
+
+class FakeProcess:
+    """A spawn-context child stand-in whose `alive`/`exitcode` the test drives directly.
+
+    `join()` reproduces the real `multiprocessing.Process` behaviour on a non-finite timeout
+    (an `OverflowError`) and records every timeout it was called with, so a suite can assert
+    the value that reached `.join()` was bounded BEFORE the call.
+    """
+
+    def __init__(self, *, target=None, args=(), kwargs=None, daemon=None) -> None:
+        self._target = target
+        self.args = args
+        self.kwargs = kwargs or {}
+        self.daemon = daemon
+        self.pid = 4242
+        self.alive = False
+        self.exitcode: int | None = None
+        self.terminated = False
+        self.killed = False
+        self.join_calls: list[float | None] = []
+
+    def start(self) -> None:
+        self.alive = True
+
+    def is_alive(self) -> bool:
+        return self.alive
+
+    def join(self, timeout: float | None = None) -> None:
+        self.join_calls.append(timeout)
+        if timeout is not None and not math.isfinite(timeout):
+            raise OverflowError("cannot convert float infinity to integer")
+
+    def terminate(self) -> None:
+        self.terminated = True
+        self.alive = False
+        if self.exitcode is None:
+            self.exitcode = -15
+
+    def kill(self) -> None:
+        self.killed = True
+        self.alive = False
+        if self.exitcode is None:
+            self.exitcode = -9
+
+
+class FakeCtx:
+    def __init__(self) -> None:
+        self.last_process: FakeProcess | None = None
+        self.process_calls: list[dict] = []
+
+    def Process(self, *, target=None, args=(), kwargs=None, daemon=None) -> FakeProcess:
+        proc = FakeProcess(target=target, args=args, kwargs=kwargs, daemon=daemon)
+        self.process_calls.append({"target": target, "args": args, "kwargs": kwargs})
+        self.last_process = proc
+        return proc
+
+
+@pytest.fixture()
+def fake_mp(monkeypatch: pytest.MonkeyPatch) -> FakeCtx:
+    ctx = FakeCtx()
+    monkeypatch.setattr(multiprocessing, "get_context", lambda name=None: ctx)
+    return ctx
+
+
+def bounded(fn, *, timeout: float):
+    """Test-level hard watchdog: the call must never hang even if the fix under test regresses."""
+    box: dict[str, Any] = {}
+
+    def _run() -> None:
+        box["value"] = fn()
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    t.join(timeout)
+    if t.is_alive():
+        pytest.fail(f"operation exceeded the {timeout}s test-level hard bound (must never hang)")
+    return box.get("value")
+
+
+class _InjectedCompletionError(RuntimeError):
+    """A stand-in for any uncaught exception deep inside the round-completion path."""

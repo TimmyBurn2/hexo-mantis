@@ -20,17 +20,13 @@ from typing import Any
 
 import pytest
 import torch
+from _pipeline_harness import eval_config, promotion_hooks
 
-from mantis.config.schema import (
-    EvalConfig,
-    GateConfig,
-    PlyCapAdjudicationConfig,
-)
+from mantis.config.schema import EvalConfig, PlyCapAdjudicationConfig
 from mantis.config.loader import load_config
 from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.config.resolve.inference_batching import resolve_inference_batching
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
-from mantis.eval.promote import DeployTagHooks
 from mantis.encoding import lookup
 from mantis.model import GnnArch, build_net
 
@@ -59,32 +55,13 @@ def _tiny_model(*, weight_seed: int) -> torch.nn.Module:
 
 
 def _eval_cfg(*, adjudicate: bool = False) -> EvalConfig:
-    gate = GateConfig(
-        stride=1, screen_games=80, confirm_games=128, promotion_winrate=0.55,
-        screen_confirm_lo=0.44, deploy_sims=150, opening_book="book_v1_s20260625_p4",
-        bootstrap_resamples=1000, min_distinct_per_pair=10, seed_base=20260625, sequential=None,
-    )
-    return EvalConfig(
-        random_model_sims=4, max_plies=128, random_floor_games=2, worker_device="cpu",
-        round_timeout_sec=600.0, worker_kill_grace_sec=5.0, gate=gate,
+    return eval_config(
+        random_model_sims=4, random_floor_games=2, round_timeout_sec=600.0,
+        worker_kill_grace_sec=5.0,
         ply_cap_adjudication=(
             PlyCapAdjudicationConfig(criterion="longest_run_margin", min_margin=1)
             if adjudicate else None
         ),
-        strength_floor=None,
-    )
-
-
-def _promotion_hooks(tmp_path: Path) -> DeployTagHooks:
-    from types import SimpleNamespace
-
-    return DeployTagHooks(
-        anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
-        best_model_path=tmp_path / "best_model.pt",
-        run_id="oracle_e2e_run",
-        encoding=_ENC,
-        save_anchor=lambda *a, **k: None,
-        guarded_load=lambda *a, **k: None,
     )
 
 
@@ -103,7 +80,7 @@ def _build_pipeline(tmp_path: Path, *, adjudicate: bool = False):
         encoding=_ENC,
         run_id="oracle_e2e_run",
         spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
-        promotion=_promotion_hooks(tmp_path),
+        promotion=promotion_hooks(tmp_path, run_id="oracle_e2e_run"),
         # Both graph specs are REQUIRED since the grid arm's `None` was deleted; the fused bound
         # is the smoke's own minted caps as a spec, since the tiny oracle net is not its arch.
         fused_graph_caps=FusedGraphCapsSpec(**_SMOKE["inference"]["fused_graph_caps"]),

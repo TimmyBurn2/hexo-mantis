@@ -1,9 +1,3 @@
-# >300 justify (R8). The eval-failure routes are ONE claim — each route yields its OWN
-# typed reason, its own phase, one emitted event agreeing with the routed result, and a
-# traceback where an exception was in flight — driven over ONE harness. The fake-process /
-# fake-context / spy-sink rig plus the route driver is the majority of the file and every
-# row needs all of it; a split forks that rig into two copies which drift while both stay
-# green.
 """Every eval-failure route produces its OWN typed reason, and the stream says which.
 
 The defect: every broken round used to route a bare `str` reason that nothing in `src/` read,
@@ -25,21 +19,19 @@ import json
 import logging
 import multiprocessing
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from _pipeline_harness import (
+    FakeCtx,
+    _InjectedCompletionError,
+    eval_config,
+    pipeline_kwargs,
+    tiny_model,
+)
 
-from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
-from mantis.config.resolve.inference_batching import InferenceBatchingSpec
-from mantis.config.schema import EvalConfig, GateConfig
 from mantis.eval.errors import EvalBrokenReason
-from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
-from mantis.eval.promote import DeployTagHooks
-from mantis.encoding import lookup
-from mantis.model import GnnArch, build_net
-
-_GSPEC = lookup("gnn_axis_v1")
+from mantis.eval.pipeline import build_eval_pipeline
 
 #: The routes, each with the member it must produce and the phase that member forces.
 #: Stated here rather than derived from the enum under test, which any consistent renaming
@@ -64,27 +56,6 @@ _ROUTE_PHASE = {
 }
 _ROUTES = tuple(_ROUTE_REASON)
 
-def _tiny_model():
-    arch = GnnArch(in_dim=int(_GSPEC.node_feat_dim), edge_dim=int(_GSPEC.edge_feat_dim),
-                   hidden=8, num_layers=1, policy_hidden=8, value_hidden=8)
-    net = build_net(arch)
-    net.arch = arch
-    return net
-
-
-def _eval_cfg() -> EvalConfig:
-    gate = GateConfig(
-        stride=1, screen_games=80, confirm_games=128, promotion_winrate=0.55,
-        screen_confirm_lo=0.44, deploy_sims=150, opening_book="book_v1_s20260625_p4",
-        bootstrap_resamples=1000, min_distinct_per_pair=10, seed_base=20260625, sequential=None,
-    )
-    return EvalConfig(
-        random_model_sims=96, max_plies=128, random_floor_games=4, worker_device="cpu",
-        round_timeout_sec=5.0, worker_kill_grace_sec=0.2, gate=gate,
-        ply_cap_adjudication=None, strength_floor=None,
-    )
-
-
 class _SpySink:
     def __init__(self) -> None:
         self.events: list[dict] = []
@@ -96,59 +67,6 @@ class _SpySink:
         # `event` is subscripted, not `.get`-ed: a payload without it is a producer defect
         # and must be loud here rather than silently filtered out of every assertion.
         return [e for e in self.events if e["event"] == name]
-
-
-class _FakeProcess:
-    """A spawn-context child stand-in. `terminate()`/`kill()` set the POSIX-signed exit code the
-    real `multiprocessing.Process` would report; the drive sets `exitcode` directly for the
-    routes whose subject is the exit code itself."""
-
-    def __init__(self, *, target=None, args=(), kwargs=None, daemon=None) -> None:
-        self._target = target
-        self.args = args
-        self.kwargs = kwargs
-        self.daemon = daemon
-        self.pid = 4242
-        self.alive = False
-        self.exitcode: int | None = None
-        self.terminated = False
-        self.killed = False
-
-    def start(self) -> None:
-        self.alive = True
-
-    def is_alive(self) -> bool:
-        return self.alive
-
-    def join(self, timeout: float | None = None) -> None:
-        return None
-
-    def terminate(self) -> None:
-        self.terminated = True
-        self.alive = False
-        if self.exitcode is None:
-            self.exitcode = -15
-
-    def kill(self) -> None:
-        self.killed = True
-        self.alive = False
-        if self.exitcode is None:
-            self.exitcode = -9
-
-
-class _FakeCtx:
-    def __init__(self) -> None:
-        self.last_process: _FakeProcess | None = None
-
-    def Process(self, *, target=None, args=(), kwargs=None, daemon=None) -> _FakeProcess:
-        proc = _FakeProcess(target=target, args=args, kwargs=kwargs, daemon=daemon)
-        self.last_process = proc
-        return proc
-
-
-class _InjectedCompletionError(RuntimeError):
-    """Stands in for the real uncaught exception RED-TEAM's F1 reproduced deep inside
-    `_success_result` — any exception class must reach the same catch-all."""
 
 
 class _Drive:
@@ -180,32 +98,13 @@ def _drive(route: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Driv
     and emitted. Every branch reproduces a real production condition; none reaches into the
     reason assembly itself."""
     assert route in _ROUTE_REASON, f"unknown route {route!r}"
-    ctx = _FakeCtx()
+    ctx = FakeCtx()
     monkeypatch.setattr(multiprocessing, "get_context", lambda name=None: ctx)
     sink = _SpySink()
-    spool_dir = tmp_path / "spool"
-    spool_dir.mkdir(parents=True, exist_ok=True)
-    pipeline = build_eval_pipeline(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16,
-        max_plies=128, eval_cfg=_eval_cfg(),
-        coordinator_cfg_caps=DrainCaps(
-            final_eval_drain_timeout_sec=2.0, eval_final_drain_safety_factor=1.0,
-            eval_final_drain_hard_cap_sec=2.0, terminal_eval_hard_cap_sec=2.0,
-        ),
-        encoding="gnn_axis_v1", run_id="oracle_test_run", spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
-        fused_graph_caps=FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921),
-        inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10),
-        promotion=DeployTagHooks(
-            anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
-            best_model_path=tmp_path / "best_model.pt", run_id="oracle_test_run",
-            encoding="gnn_axis_v1", save_anchor=lambda *a, **k: None,
-            guarded_load=lambda *a, **k: None,
-        ),
-        sink=sink,
-    )
+    pipeline = build_eval_pipeline(**pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
     try:
         _quiesce_poller(pipeline)
-        ack = pipeline.run_evaluation(_tiny_model(), 1000, None, full_config={},
+        ack = pipeline.run_evaluation(tiny_model(), 1000, None, full_config={},
                                       best_model_step=None)
         assert ack["kicked"] is True, "premise: the round was kicked"
         proc = ctx.last_process

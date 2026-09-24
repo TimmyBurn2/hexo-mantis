@@ -11,81 +11,19 @@ No real OS subprocess is spawned: a fake process whose exit looks clean plus a m
 """
 from __future__ import annotations
 
-import multiprocessing
-import threading
 import time
-from pathlib import Path
 from typing import Any
 
 import pytest
+from _pipeline_harness import (
+    _InjectedCompletionError,
+    bounded,
+    fake_mp,
+    pipeline_kwargs,
+    tiny_model,
+)
 
-from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
-from mantis.config.resolve.inference_batching import InferenceBatchingSpec
-from mantis.config.schema import EvalConfig, GateConfig
-from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
-from mantis.eval.promote import DeployTagHooks
-from mantis.encoding import lookup
-from mantis.model import GnnArch, build_net
-
-_GSPEC = lookup("gnn_axis_v1")
-
-
-def _tiny_model():
-    import torch
-
-    arch = GnnArch(in_dim=int(_GSPEC.node_feat_dim), edge_dim=int(_GSPEC.edge_feat_dim),
-                   hidden=8, num_layers=1, policy_hidden=8, value_hidden=8)
-    net = build_net(arch)
-    net.arch = arch
-    return net
-
-
-def _eval_cfg(**overrides: Any) -> EvalConfig:
-    gate = GateConfig(
-        stride=1, screen_games=80, confirm_games=128, promotion_winrate=0.55,
-        screen_confirm_lo=0.44, deploy_sims=150, opening_book="book_v1_s20260625_p4",
-        bootstrap_resamples=1000, min_distinct_per_pair=10, seed_base=20260625, sequential=None,
-    )
-    defaults = dict(
-        random_model_sims=96, max_plies=128, random_floor_games=4, worker_device="cpu",
-        round_timeout_sec=5.0, worker_kill_grace_sec=0.2, gate=gate,
-        ply_cap_adjudication=None, strength_floor=None,
-    )
-    defaults.update(overrides)
-    return EvalConfig(**defaults)
-
-
-def _promotion_hooks(tmp_path: Path) -> DeployTagHooks:
-    from types import SimpleNamespace
-
-    return DeployTagHooks(
-        anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
-        best_model_path=tmp_path / "best_model.pt",
-        run_id="oracle_test_run",
-        encoding="gnn_axis_v1",
-        save_anchor=lambda *a, **k: None,
-        guarded_load=lambda *a, **k: None,
-    )
-
-
-def _pipeline_kwargs(tmp_path: Path, *, eval_cfg: "EvalConfig | None" = None, **overrides: Any) -> dict:
-    spool_dir = tmp_path / "spool"
-    spool_dir.mkdir(exist_ok=True)
-    kwargs = dict(
-        eval_cfg=eval_cfg if eval_cfg is not None else _eval_cfg(),
-        coordinator_cfg_caps=DrainCaps(
-            final_eval_drain_timeout_sec=2.0, eval_final_drain_safety_factor=1.0,
-            eval_final_drain_hard_cap_sec=2.0, terminal_eval_hard_cap_sec=2.0,
-        ),
-        encoding="gnn_axis_v1",
-        max_plies=128,
-        c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, run_id="oracle_test_run", spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
-        promotion=_promotion_hooks(tmp_path),
-        fused_graph_caps=FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921),
-        inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10),
-    )
-    kwargs.update(overrides)
-    return kwargs
+from mantis.eval.pipeline import build_eval_pipeline
 
 
 class _SpySink:
@@ -99,77 +37,6 @@ class _SpySink:
         return [e for e in self.events if e.get("event") == name]
 
 
-class _FakeProcess:
-    def __init__(self, *, target=None, args=(), kwargs=None, daemon=None) -> None:
-        self._target = target
-        self.args = args
-        self.kwargs = kwargs or {}
-        self.daemon = daemon
-        self.pid = 4242
-        self.alive = False
-        self.exitcode: "int | None" = None
-        self.terminated = False
-        self.killed = False
-
-    def start(self) -> None:
-        self.alive = True
-
-    def is_alive(self) -> bool:
-        return self.alive
-
-    def join(self, timeout: "float | None" = None) -> None:
-        return None
-
-    def terminate(self) -> None:
-        self.terminated = True
-        self.alive = False
-        if self.exitcode is None:
-            self.exitcode = -15
-
-    def kill(self) -> None:
-        self.killed = True
-        self.alive = False
-        if self.exitcode is None:
-            self.exitcode = -9
-
-
-class _FakeCtx:
-    def __init__(self) -> None:
-        self.last_process: "_FakeProcess | None" = None
-
-    def Process(self, *, target=None, args=(), kwargs=None, daemon=None) -> _FakeProcess:
-        proc = _FakeProcess(target=target, args=args, kwargs=kwargs, daemon=daemon)
-        self.last_process = proc
-        return proc
-
-
-@pytest.fixture()
-def fake_mp(monkeypatch):
-    ctx = _FakeCtx()
-    monkeypatch.setattr(multiprocessing, "get_context", lambda name=None: ctx)
-    return ctx
-
-
-def _bounded(fn, *, timeout: float):
-    """Test-level hard watchdog: this test must never hang even if the fix under test regresses."""
-    box: dict[str, Any] = {}
-
-    def _run() -> None:
-        box["value"] = fn()
-
-    t = threading.Thread(target=_run, daemon=True)
-    t.start()
-    t.join(timeout)
-    if t.is_alive():
-        pytest.fail(f"operation exceeded the {timeout}s test-level hard bound (must never hang)")
-    return box.get("value")
-
-
-class _InjectedCompletionError(RuntimeError):
-    """A stand-in for the real `KeyError` reproduced deep inside the completion path: any
-    exception class must be handled alike."""
-
-
 def _inject_completion_crash(pipeline) -> None:
     def _boom(inflight, *, exit_code, wall_sec):
         raise _InjectedCompletionError("simulated round-completion crash (RED-TEAM F1 shape)")
@@ -179,9 +46,9 @@ def _inject_completion_crash(pipeline) -> None:
 
 def test_poller_thread_survives_an_uncaught_exception_in_round_completion(fake_mp, tmp_path) -> None:
     sink = _SpySink()
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
+    pipeline = build_eval_pipeline(**pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
     try:
-        ack = pipeline.run_evaluation(_tiny_model(), 1000, None, full_config={}, best_model_step=None)
+        ack = pipeline.run_evaluation(tiny_model(), 1000, None, full_config={}, best_model_step=None)
         assert ack["kicked"] is True
         _inject_completion_crash(pipeline)
 
@@ -199,7 +66,7 @@ def test_poller_thread_survives_an_uncaught_exception_in_round_completion(fake_m
                 time.sleep(0.01)
             return None
 
-        result = _bounded(_wait_for_result, timeout=6.0)
+        result = bounded(_wait_for_result, timeout=6.0)
 
         # A routed result WAS delivered: never a silent hang or dropped round.
         assert result is not None, "poll_completed() must eventually deliver a result, never hang forever"
@@ -226,16 +93,16 @@ def test_poller_thread_survives_an_uncaught_exception_in_round_completion(fake_m
 # `drain_pending()` is the synchronous teardown join point, a second route to the same crash.
 def test_drain_pending_survives_an_uncaught_exception_in_round_completion(fake_mp, tmp_path) -> None:
     sink = _SpySink()
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
+    pipeline = build_eval_pipeline(**pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
     try:
-        pipeline.run_evaluation(_tiny_model(), 1000, None, full_config={}, best_model_step=None)
+        pipeline.run_evaluation(tiny_model(), 1000, None, full_config={}, best_model_step=None)
         _inject_completion_crash(pipeline)
 
         proc = fake_mp.last_process
         proc.alive = False
         proc.exitcode = 0
 
-        result = _bounded(lambda: pipeline.drain_pending(), timeout=5.0)
+        result = bounded(lambda: pipeline.drain_pending(), timeout=5.0)
 
         assert result is not None
         assert result["eval_broken_reason"] is not None
@@ -252,15 +119,15 @@ def test_drain_pending_survives_an_uncaught_exception_in_round_completion(fake_m
 def test_round_completion_error_never_silent_never_dropped(fake_mp, tmp_path) -> None:
     """A routed result WITH no event, or an event WITH no routed result, are each rejected."""
     sink = _SpySink()
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
+    pipeline = build_eval_pipeline(**pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
     try:
-        pipeline.run_evaluation(_tiny_model(), 1000, None, full_config={}, best_model_step=None)
+        pipeline.run_evaluation(tiny_model(), 1000, None, full_config={}, best_model_step=None)
         _inject_completion_crash(pipeline)
         proc = fake_mp.last_process
         proc.alive = False
         proc.exitcode = 0
 
-        result = _bounded(lambda: pipeline.drain_pending(), timeout=5.0)
+        result = bounded(lambda: pipeline.drain_pending(), timeout=5.0)
         got_routed_result = result is not None and result.get("promoted") is False
         got_event = bool(sink.named("eval_broken"))
         assert got_routed_result, "a round-completion crash must still route a result with promoted=False"

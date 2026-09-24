@@ -9,11 +9,6 @@ battery's `encoding=`/`fsync` half; the seam row pins the two `.tmp` derivations
 No cross-process "SIGKILL mid-write" row exists: there is no deterministic scheduling point
 between `write_text` and `replace`, so the rows drive the `is_alive()` guard from both sides and
 the real-instrument half is a box check after a supervisor kill.
-
->300 justify (R8): ONE fix — the parent removes the litter its dead worker left — at three sites
-sharing ONE guard and ONE tmp-name derivation. Each removal row is safe only because a matching
-row proves the same code spares a live writer's tmp; splitting by site would separate them and
-duplicate `_FakeProc` three ways.
 """
 from __future__ import annotations
 
@@ -24,32 +19,19 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from _pipeline_harness import eval_config, pipeline_kwargs
 
-from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
-from mantis.config.resolve.inference_batching import InferenceBatchingSpec
-from mantis.config.schema import EvalConfig, GateConfig
-from mantis.eval.pipeline import DrainCaps, EvalPipeline, build_eval_pipeline
-from mantis.eval.promote import DeployTagHooks
+from mantis.eval.pipeline import EvalPipeline, build_eval_pipeline
+from mantis.config.schema import EvalConfig
 
 _ROUND_ID = "r000001_1000"
 
 
-def _eval_cfg() -> EvalConfig:
-    gate = GateConfig(
-        stride=1, screen_games=80, confirm_games=128, promotion_winrate=0.55,
-        screen_confirm_lo=0.44, deploy_sims=150, opening_book="book_v1_s20260625_p4",
-        bootstrap_resamples=1000, min_distinct_per_pair=10, seed_base=20260625, sequential=None,
-    )
-    return EvalConfig(
-        random_model_sims=96, max_plies=128, random_floor_games=4, worker_device="cpu",
-        round_timeout_sec=5.0, worker_kill_grace_sec=0.1, gate=gate,
-        ply_cap_adjudication=None, strength_floor=None,
-    )
-
-
-#: The run id these fixtures build under, and the ONE place it is spelled: the work dir is
-#: `<out-dir>/spool.work/<run_id>`, derived here rather than hardcoded at each assertion site.
 _RUN_ID = "q3_tmp_litter"
+
+
+def _eval_cfg() -> EvalConfig:
+    return eval_config(worker_kill_grace_sec=0.1)
 
 
 def _work_dir(tmp_path: Path) -> Path:
@@ -57,32 +39,9 @@ def _work_dir(tmp_path: Path) -> Path:
 
 
 def _pipeline_kwargs(tmp_path: Path, **overrides: Any) -> dict:
-    spool_dir = tmp_path / "spool"
-    spool_dir.mkdir(exist_ok=True)
-    kwargs: dict[str, Any] = dict(
-        eval_cfg=_eval_cfg(),
-        coordinator_cfg_caps=DrainCaps(
-            final_eval_drain_timeout_sec=5.0, eval_final_drain_safety_factor=1.0,
-            eval_final_drain_hard_cap_sec=5.0, terminal_eval_hard_cap_sec=5.0,
-        ),
-        encoding="gnn_axis_v1",
-        max_plies=128,
-        c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16,
-        run_id=_RUN_ID,
-        spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
-        promotion=DeployTagHooks(
-            anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
-            best_model_path=tmp_path / "best_model.pt",
-            run_id=_RUN_ID,
-            encoding="gnn_axis_v1",
-            save_anchor=lambda *a, **k: None,
-            guarded_load=lambda *a, **k: None,
-        ),
-        fused_graph_caps=FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921),
-        inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10),
+    return pipeline_kwargs(
+        tmp_path, eval_cfg=_eval_cfg(), run_id=_RUN_ID, drain_caps_sec=5.0, **overrides
     )
-    kwargs.update(overrides)
-    return kwargs
 
 
 class _FakeProc:
