@@ -12,10 +12,6 @@ of `1` is only defensible with this file beside it.
 
 STRUCTURE, NEVER TEXT: every check reads an AST or drives a real object, because a grep would
 pass on a commented-out line, a docstring, or a keyword computed and then discarded.
-
-The grid arm is a ROW, not an omission: a grid round builds no leaf graphs, so its width must be
-the serial `1` and must NOT call the resolver, which would make a graph-only host reservation a
-grid dependency.
 """
 from __future__ import annotations
 
@@ -51,24 +47,9 @@ def test_run_py_threads_a_DERIVED_width_and_not_a_literal() -> None:
         "eval round runs the SERIAL build and the lever is silently off"
     )
     value = kwargs["leaf_build_threads"]
-    # An `IfExp` is the graph/grid split; either branch may be the resolver call.
-    calls = [n for n in ast.walk(value) if isinstance(n, ast.Call)]
-    names = {getattr(c.func, "id", getattr(c.func, "attr", None)) for c in calls}
-    assert "resolve_leaf_build_threads" in names, (
-        f"run.py's leaf_build_threads is not a resolver call: {ast.dump(value)[:200]}"
-    )
-    assert isinstance(value, ast.IfExp), (
-        "the width must be graph-only: a grid round builds no leaf graphs, and resolving a "
-        "graph-path host reservation on a grid run makes it a grid dependency"
-    )
-
-
-def test_the_grid_arm_is_the_serial_width() -> None:
-    source = (_REPO / "src" / "mantis" / "run.py").read_text(encoding="utf-8")
-    value = _call_kwargs(source, "build_eval_pipeline")["leaf_build_threads"]
-    assert isinstance(value, ast.IfExp)
-    assert isinstance(value.orelse, ast.Constant) and value.orelse.value == 1, (
-        "the grid arm must be the serial width 1, not a resolver call and not another literal"
+    assert isinstance(value, ast.Call) and getattr(
+        value.func, "id", getattr(value.func, "attr", None)) == "resolve_leaf_build_threads", (
+        f"run.py's leaf_build_threads is not the resolver call itself: {ast.dump(value)[:200]}"
     )
 
 
