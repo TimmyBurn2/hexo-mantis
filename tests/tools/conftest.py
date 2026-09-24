@@ -137,21 +137,16 @@ def local_puller(tmp_path_factory) -> Iterator[Path]:
         thread.join(timeout=30)
 
 
-def load_dashboard_package():
-    """The `tools/dashboard` package, by path."""
-    return load_tools_package("dashboard")
-
-
 @pytest.fixture(scope="session")
 def dashboard():
     """The `tools/dashboard` package, with its submodules importable as `dashboard.<name>`."""
-    return load_dashboard_package()
+    return load_tools_package("dashboard")
 
 
 @pytest.fixture(scope="session")
 def viewer():
     """The `tools/viewer` package (VIEWER-1), with its submodules importable as `viewer.<name>`."""
-    return load_tools_package("viewer")
+    return load_tools_package("dashboard")
 
 
 @pytest.fixture(scope="session")
