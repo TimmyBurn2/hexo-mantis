@@ -582,7 +582,7 @@ MANIFEST: tuple[ArmedAbort, ...] = (
             "the run's own targets), and consec later windows each at least delta_nats above "
             "it, at or before max_step, halt cooperatively (exit 49) — run6's trough rose "
             "2.28 -> 2.86 nats over 12k steps with nobody watching. DEFERRED, not REQUIRED: "
-            "configs/run6.yaml is a finished run's record and mints null truthfully; run7's "
+            "a production config minted before this row mints null truthfully; the next "
             "mint proposes {delta_nats: 0.2, consec: 3, max_step: 5000} and flips this row to "
             "REQUIRED as a one-field data edit. The cadence is an UPPER bound: at gate_interval "
             "1000 the earliest fire is boundary 4 = step 4000 <= 5000."
@@ -596,8 +596,8 @@ MANIFEST: tuple[ArmedAbort, ...] = (
         cadence_paths=("train.ply_cap_abort.min_step",),
         status=Status.DEFERRED,
         exit_code=PLY_CAP_ATTRACTOR_EXIT_CODE,
-        owner=("configs/run6.yaml — a finished run's record that mints null truthfully; the row "
-               "flips REQUIRED (one field) when that file leaves the config census"),
+        owner=("any production config minted before this row, which mints null truthfully; the "
+               "row flips REQUIRED (one field) when no such file is left in the config census"),
         source_pin=(
             "src/mantis/run.py",
             "ply_cap_abort=resolve_ply_cap_abort(config.train)",
@@ -614,7 +614,7 @@ MANIFEST: tuple[ArmedAbort, ...] = (
             "600-game window first exceeded 0.5 at game 2229 (+3.4 h, train step ~2170), and "
             "min_step 3000 is ~2.6 h at run6's 1160 steps/h. DEFERRED, not REQUIRED, for the "
             "trough row's reason: "
-            "configs/run6.yaml is a finished run's record and mints null truthfully. The "
+            "a production config minted before this row mints null truthfully. The "
             "cadence is the train-step clock: the earliest fire is min_step itself."
         ),
     ),

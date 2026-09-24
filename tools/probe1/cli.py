@@ -131,7 +131,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(fn=cmd_netread)
     p = sub.add_parser("gap", help="reading 3: every net on its own ring and on the next checkpoint's ring")
     p.add_argument("--checkpoints", type=Path, required=True)
-    p.add_argument("--run-id", default="run8")
+    p.add_argument("--run-id", required=True, help="the checkpoints' filename prefix")
     p.add_argument("--batches", type=int, default=12)
     p.add_argument("--batch-size", type=int, default=256)
     p.add_argument("--out", type=Path, required=True)

@@ -481,7 +481,7 @@ class EvalPipeline:
             game_record=GameRecordTarget(record_dir=str(self._game_record_dir),
                                         run_id=self._run_id),
             # The two early-strength postures, resolved through their ONE read path and
-            # carried to the child (`run6.yaml` arms the floor; the ply-cap posture is `null`).
+            # carried to the child (either may be armed or `null` per config).
             ply_cap_adjudication=resolve_ply_cap_adjudication(cfg),
             strength_floor=resolve_strength_floor(cfg),
             # Resolved once in the parent: the child has no `RunConfig` and builds its graph

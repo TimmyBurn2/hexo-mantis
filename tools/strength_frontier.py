@@ -78,7 +78,7 @@ def _snapshot_from_checkpoint(path: Path, out: Path) -> dict[str, Any]:
 
 
 def _snapshot_bc_tp(config: Any, out: Path) -> dict[str, Any]:
-    """The BC net through the CONFIG's seam (`reinit` decides the fresh heads; run6.yaml: value_head)."""
+    """The BC net through the CONFIG's seam (`reinit` decides the fresh heads)."""
     declared = resolve_bc_warm_start(config.model_dump())
     if declared is None:
         raise FrontierCellError("the config declares no identity.warm_start; bc_tp needs one")

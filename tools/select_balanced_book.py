@@ -21,7 +21,8 @@ DEFAULT_N = 128
 DEFAULT_MIN_REPLAYS = 4
 
 BOX_PROCEDURE = """\
-BOOK_V2 box procedure (R354(d)). Every command runs from the repo root of the box checkout.
+BOOK_V2 box procedure (R354(d)). Every command runs from the repo root of the box checkout;
+$CONFIG is the anchor's minted config under configs/.
 Cost, stated once: 4 replays x 2 games x 512 pool openings = 4096 games at PUCT-256, i.e. 1024
 games per replay cell. At run7's measured gate cost beside a live run (RUN7_EVAL_COST: 0.49-0.84
 s/ply, 55-77 plies/game, concurrency 8) that is roughly 27-65 s/game, so 31-74 box-hours serial;
@@ -49,7 +50,7 @@ were one measurement and the verdicts are one replay's, not four.
     {"label": "anchor_self_r3", ... "seed_base": 3},
     {"label": "anchor_self_r4", ... "seed_base": 4}
    ]
-   uv run python tools/strength_frontier.py --config configs/run7.yaml --cells $WORK/cells.json \\
+   uv run python tools/strength_frontier.py --config $CONFIG --cells $WORK/cells.json \\
      --work-dir $WORK/book_v2 --parallel 1
    Each cell writes its games to $WORK/book_v2/<label>/games/games_frontier1_seg*_*.jsonl
    (channel `promotion`, `seed` = the cell's seed_base, `served_sims` 256).
@@ -74,7 +75,7 @@ were one measurement and the verdicts are one replay's, not four.
      "search_kind": "puct", "sims": 256, "games": 256, "concurrency": 8,
      "opening_book": "book_v2_p4"}
    ]
-   uv run python tools/strength_frontier.py --config configs/run7.yaml --cells $WORK/bridge.json \\
+   uv run python tools/strength_frontier.py --config $CONFIG --cells $WORK/bridge.json \\
      --work-dir $WORK/bridge --parallel 1
    Readings on book_v2 are a NEW unit; the two bridge rows are the only comparison across books.
 """
