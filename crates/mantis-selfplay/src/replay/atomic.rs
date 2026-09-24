@@ -144,11 +144,27 @@ mod tests {
         );
     }
 
-    fn tempdir() -> std::path::PathBuf {
+    /// Owns a test-scratch directory; removes it on drop so a run leaves nothing under `$TMPDIR`.
+    struct TempDir(std::path::PathBuf);
+
+    impl std::ops::Deref for TempDir {
+        type Target = std::path::Path;
+        fn deref(&self) -> &std::path::Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn tempdir() -> TempDir {
         let n = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("mantis-atomic-{}-{n}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("test temp dir must be creatable");
-        dir
+        TempDir(dir)
     }
 
     fn entries(dir: &std::path::Path) -> Vec<String> {
