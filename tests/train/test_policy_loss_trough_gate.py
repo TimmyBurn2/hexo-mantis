@@ -21,6 +21,7 @@ from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
 from _graph_drive import GRAPH_FULL_CONFIG, filled_hexg
+from _spy import SpyEventSink
 
 _CONFIG = Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml"
 
@@ -131,16 +132,6 @@ class _Buffer:
                                              n_threads=n_threads)
 
 
-class _Sink:
-    def __init__(self) -> None:
-        self.events: list[dict] = []
-
-    def emit(self, event) -> None:
-        self.events.append(dict(event))
-
-    def named(self, name: str) -> list[dict]:
-        return [e for e in self.events if e.get("event") == name]
-
 
 def _harness(script, spec: PolicyLossTroughAbortSpec | None, *, gate_interval: int = 2):
     cfg = load_config(_CONFIG)
@@ -152,7 +143,7 @@ def _harness(script, spec: PolicyLossTroughAbortSpec | None, *, gate_interval: i
                                  min_buf_size=10, max_train_burst=1,
                                  training_steps_per_game=1.0, hard_gn_threshold=1e9)
     shutdown = ShutdownState()
-    sink = _Sink()
+    sink = SpyEventSink()
     pool = _Pool()
     coord = StepCoordinator(
         trainer=_Trainer(script), buffer=_Buffer(),

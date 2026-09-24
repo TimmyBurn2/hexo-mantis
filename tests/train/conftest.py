@@ -17,6 +17,7 @@ from mantis.config.loader import load_config
 from mantis.config.schema import ARCH_SCOPED_KEYS
 from mantis.encoding import lookup
 from mantis.model import GnnArch, arch_from_spec_and_config, build_net
+from _spy import SpyEventSink
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 TRAIN_FIXTURES = FIXTURES / "train"
@@ -25,22 +26,6 @@ ANCHOR_KEYS_FILE = FIXTURES / "value_probes" / "statedict_keys" / "gnn_axis_v1.t
 # The ONE registered representation since R346(f) deleted the grid path.
 GRAPH_ENCODING = "gnn_axis_v1"
 KILLED_PREFIXES = ("cluster_pool.", "global_encoder.", "gpool_bias_branch.")
-
-
-class SpyEventSink:
-    """Record every emitted event Mapping; the event name travels under the `event` key."""
-
-    def __init__(self) -> None:
-        self.events: list[dict[str, Any]] = []
-
-    def emit(self, event: Any) -> None:
-        self.events.append(dict(event))
-
-    def named(self, name: str) -> list[dict[str, Any]]:
-        return [e for e in self.events if e.get("event") == name]
-
-    def has(self, name: str) -> bool:
-        return any(e.get("event") == name for e in self.events)
 
 
 class FakeClock:

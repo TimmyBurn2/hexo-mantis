@@ -15,6 +15,7 @@ import pytest
 
 from mantis.monitor.config import MonitorConfig
 from _monitor_config import monitor_config
+from _spy import SpyEventSink
 from mantis.monitor.heartbeat import (
     HEARTBEAT_SOURCES,
     HeartbeatRegistry,
@@ -33,13 +34,6 @@ class _ExitSpy:
     def __call__(self, code: int) -> None:
         self.codes.append(int(code))
 
-
-class SpySink:
-    def __init__(self) -> None:
-        self.events: list[dict] = []
-
-    def emit(self, event) -> None:
-        self.events.append(dict(event))
 
 
 class BlockingPipeline:
@@ -82,7 +76,7 @@ def _fake_coord(*, watchdog, pipeline, sink):
 def test_close_out_disarms_staleness_no_false_fire(tmp_path) -> None:
     """A blocked drain past the deadline produces ZERO staleness fires, and the heartbeat seq
     keeps advancing through the window."""
-    sink, exit_spy, hb = SpySink(), _ExitSpy(), tmp_path / "hb.json"
+    sink, exit_spy, hb = SpyEventSink(), _ExitSpy(), tmp_path / "hb.json"
     wd = _make_watchdog(sink=sink, exit_fn=exit_spy, counters_fn=lambda: 0, hb_file=hb)
     pipe = BlockingPipeline(block_sec=0.8)
     coord = _fake_coord(watchdog=wd, pipeline=pipe, sink=sink)
@@ -110,7 +104,7 @@ def test_close_out_disarms_staleness_no_false_fire(tmp_path) -> None:
 
 def test_persist_fatal_still_fires_after_close_out_disarm(tmp_path) -> None:
     """Persist-fatal is NEVER disarmed: an increment mid-drain still fires 43."""
-    sink, exit_spy, hb = SpySink(), _ExitSpy(), tmp_path / "hb.json"
+    sink, exit_spy, hb = SpyEventSink(), _ExitSpy(), tmp_path / "hb.json"
     box = [0]
     wd = _make_watchdog(sink=sink, exit_fn=exit_spy, counters_fn=lambda: box[0], hb_file=hb)
     pipe = BlockingPipeline(block_sec=0.8, counters_box=box)
@@ -126,7 +120,7 @@ def test_persist_fatal_still_fires_after_close_out_disarm(tmp_path) -> None:
 
 def test_late_disarm_mutant_false_fires(tmp_path) -> None:
     """Disarming AFTER the blocked flush false-fires 42, so the row above is not vacuous."""
-    sink, exit_spy, hb = SpySink(), _ExitSpy(), tmp_path / "hb.json"
+    sink, exit_spy, hb = SpyEventSink(), _ExitSpy(), tmp_path / "hb.json"
     wd = _make_watchdog(sink=sink, exit_fn=exit_spy, counters_fn=lambda: 0, hb_file=hb)
     pipe = BlockingPipeline(block_sec=0.8)
     wd.start()
@@ -249,7 +243,7 @@ def _drain_coord(result, sink):
 def test_a_batch_of_eval_rounds_is_routed_not_dropped() -> None:
     """Every promoted Mapping in a batched drain reaches the promotion seam — a dropped batch
     takes the anchor's only feed path quiet."""
-    sink = SpySink()
+    sink = SpyEventSink()
     rounds = [{"step": 1, "promoted": True}, {"step": 2, "promoted": True}]
     coord = _drain_coord(rounds, sink)
     drain.flush_pending_eval(coord)
@@ -259,7 +253,7 @@ def test_a_batch_of_eval_rounds_is_routed_not_dropped() -> None:
 def test_an_unroutable_eval_result_is_recorded_loudly() -> None:
     """An unconsumable shape is RECORDED, not raised: a raise escapes `close_out` and skips
     `pool.stop` and the terminal eval."""
-    sink = SpySink()
+    sink = SpyEventSink()
     coord = _drain_coord("a bare ack string", sink)
     drain.flush_pending_eval(coord)
     assert coord.routed == []
@@ -269,7 +263,7 @@ def test_an_unroutable_eval_result_is_recorded_loudly() -> None:
 
 def test_close_out_fails_loud_when_the_watchdog_cannot_disarm() -> None:
     """A watchdog without `disarm_staleness` fails loud rather than skipping the disarm."""
-    sink = SpySink()
+    sink = SpyEventSink()
     coord = _drain_coord(None, sink)
     coord.heartbeat_watchdog = SimpleNamespace(arm=lambda: None)   # no disarm_staleness
     with pytest.raises(TypeError) as ei:

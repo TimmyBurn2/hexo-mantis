@@ -37,6 +37,7 @@ from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
 from _graph_drive import GRAPH_FULL_CONFIG, filled_hexg
+from _spy import SpyEventSink
 from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
 from mantis.selfplay.pool_hooks import RunnerStats
@@ -160,17 +161,6 @@ class _Buffer:
                                              n_threads=n_threads)
 
 
-class _SpySink:
-    def __init__(self) -> None:
-        self.events: list[dict] = []
-
-    def emit(self, event: Any) -> None:
-        self.events.append(dict(event))
-
-    def named(self, name: str) -> list[dict]:
-        # `event` is subscripted, not `.get`-ed: a payload without it is a producer defect.
-        return [e for e in self.events if e["event"] == name]
-
 
 def _drive(*snapshots: RunnerStats) -> list[dict]:
     """Drive a REAL `StepCoordinator` once per snapshot at `log_interval=1` and return the
@@ -186,7 +176,7 @@ def _drive(*snapshots: RunnerStats) -> list[dict]:
            "min_buf_size": 10},
     )
     pool = _Pool(snapshots[0])
-    sink = _SpySink()
+    sink = SpyEventSink()
     coord = StepCoordinator(
         trainer=_Trainer(), buffer=_Buffer(),
         pool=pool, eval_pipeline=None, subsystems=SimpleNamespace(gpu_monitor=None),

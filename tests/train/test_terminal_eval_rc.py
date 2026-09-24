@@ -52,6 +52,7 @@ from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks
 from mantis.model import GnnArch, build_net
 from _graph_drive import GRAPH_FULL_CONFIG, filled_hexg
+from _spy import SpyEventSink
 from _monitor_config import monitor_config
 from mantis.monitor.heartbeat import DRAW_RATE_COLLAPSE_EXIT_CODE
 from mantis.run import RunCollaborators, _step_coordinator_config
@@ -193,21 +194,6 @@ class _Buffer:
                                              n_threads=n_threads)
 
 
-class _SpySink:
-    def __init__(self) -> None:
-        self.events: list[dict] = []
-
-    def emit(self, event: Any) -> None:
-        self.events.append(dict(event))
-
-    def named(self, name: str) -> list[dict]:
-        # `event` is subscripted, not `.get`-ed: a payload without it is a producer defect and
-        # must be loud rather than silently filtered out of every assertion below.
-        return [e for e in self.events if e["event"] == name]
-
-    def order(self) -> list[str]:
-        return [e["event"] for e in self.events]
-
 
 def _broken_round(reason: str, *, round_id: str = "r000001_3_terminal", step: int = 3) -> dict:
     """A BROKEN round-result mapping in the post-R152 shape, hand-built: which reason a real
@@ -259,7 +245,7 @@ class _FakeEvalPipeline:
         return None
 
 
-def _make_coordinator(*, eval_pipeline: Any, sink: _SpySink,
+def _make_coordinator(*, eval_pipeline: Any, sink: SpyEventSink,
                       config_overrides: dict | None = None) -> SimpleNamespace:
     """A REAL `StepCoordinator`, so the latch's ABSENCE is an AttributeError here rather than a
     `SimpleNamespace` silently answering `None`."""
@@ -453,7 +439,7 @@ class _FakeCtx:
         return proc
 
 
-def _real_pipeline(tmp_path: Path, sink: _SpySink):
+def _real_pipeline(tmp_path: Path, sink: SpyEventSink):
     gate = GateConfig(stride=1, screen_games=80, confirm_games=128, promotion_winrate=0.55,
                       screen_confirm_lo=0.44, deploy_sims=150,
                       opening_book="book_v1_s20260625_p4", bootstrap_resamples=1000,
@@ -497,7 +483,7 @@ def test_neither_mid_run_route_writes_the_terminal_latch(tmp_path, monkeypatch) 
     MUTATION THAT REDS IT (M-O5): call `_record_terminal_outcome` from `flush_pending_eval`."""
     broken = _broken_round("killed", round_id="r000001_3", step=3)
     pipeline = _FakeEvalPipeline(poll_result=dict(broken), drain_result=dict(broken))
-    harness = _make_coordinator(eval_pipeline=pipeline, sink=_SpySink())
+    harness = _make_coordinator(eval_pipeline=pipeline, sink=SpyEventSink())
     coord = harness.coord
 
     assert coord.terminal_eval_reason is None, (
@@ -556,7 +542,7 @@ def test_the_latched_reason_is_the_routed_results_own_value(tmp_path) -> None:
     MUTATION THAT REDS IT (M-O6): latch a constant. rc 48 is still 48 and O-08 stays green."""
     for reason in _CENSUSED_REASONS:
         pipeline = _FakeEvalPipeline(terminal_result=_broken_round(reason))
-        harness = _make_coordinator(eval_pipeline=pipeline, sink=_SpySink())
+        harness = _make_coordinator(eval_pipeline=pipeline, sink=SpyEventSink())
         routed = drain.run_terminal_eval(harness.coord)
 
         assert routed["eval_broken_reason"] == reason, "premise: the rigged round routed"
@@ -776,7 +762,7 @@ def test_a_terminal_round_is_marked_terminal_in_the_stream(tmp_path, monkeypatch
     MUTATION THAT REDS IT (M-O32): drop the `_terminal` suffix from the round-id format."""
     ctx = _FakeCtx()
     monkeypatch.setattr(multiprocessing, "get_context", lambda name=None: ctx)
-    sink = _SpySink()
+    sink = SpyEventSink()
     pipeline = _real_pipeline(tmp_path, sink)
     harness = _make_coordinator(eval_pipeline=pipeline, sink=sink)
     try:
@@ -806,7 +792,7 @@ def test_a_mid_run_round_carries_neither_terminal_discriminator(tmp_path, monkey
     `_terminal` on every round. A mid-run round must carry neither discriminator."""
     ctx = _FakeCtx()
     monkeypatch.setattr(multiprocessing, "get_context", lambda name=None: ctx)
-    sink = _SpySink()
+    sink = SpyEventSink()
     pipeline = _real_pipeline(tmp_path, sink)
     harness = _make_coordinator(eval_pipeline=pipeline, sink=sink)
     try:

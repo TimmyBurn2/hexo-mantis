@@ -24,6 +24,7 @@ from mantis.train.lifecycle.signals import ShutdownState
 from _coordinator_pool import CoordinatorPoolStub
 from _drivable import DrivableTrainerStub
 from _graph_drive import GRAPH_FULL_CONFIG
+from _spy import SpyEventSink
 
 _REPO = Path(__file__).resolve().parents[2]
 _CONFIG = _REPO / "configs" / "dev_example.yaml"
@@ -119,16 +120,6 @@ class _Trainer(DrivableTrainerStub):
         return {"loss": 3.0, "policy_loss": 2.5, "value_loss": 0.6}
 
 
-class _Sink:
-    def __init__(self) -> None:
-        self.events: list[dict] = []
-
-    def emit(self, event) -> None:
-        self.events.append(dict(event))
-
-    def named(self, name: str) -> list[dict]:
-        return [e for e in self.events if e.get("event") == name]
-
 
 def test_the_coordinator_reads_the_slice_at_its_own_cadence_and_reports_the_gap(tmp_path: Path) -> None:
     """Producer test: `heldout_gap` lands at every `interval` boundary with the train mean since the last read."""
@@ -141,7 +132,7 @@ def test_the_coordinator_reads_the_slice_at_its_own_cadence_and_reports_the_gap(
         drain_caps=resolve_drain_caps(cfg.monitor), gate_interval=100, knobs=resolve_coordinator_knobs(cfg.train))
     config = dataclasses.replace(base, eval_interval=0, log_interval=100, min_buf_size=1, max_train_burst=1,
                                  training_steps_per_game=1.0, hard_gn_threshold=1e9, batch_size=4)
-    sink = _Sink()
+    sink = SpyEventSink()
     buffer = SimpleNamespace(size=100, capacity=1000, resize=lambda n: None, save_to_path=lambda p: None,
                              sample_graph_batch=opened.buffer.sample_graph_batch)
     coord = StepCoordinator(

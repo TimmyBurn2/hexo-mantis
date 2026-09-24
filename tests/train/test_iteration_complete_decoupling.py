@@ -16,6 +16,7 @@ from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
 from _graph_drive import GRAPH_FULL_CONFIG, filled_hexg
+from _spy import SpyEventSink
 from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.config import StepCoordinatorConfig
@@ -148,22 +149,12 @@ class _FakeEvalPipeline:
         return None
 
 
-class _SpySink:
-    def __init__(self) -> None:
-        self.events: list[dict] = []
-
-    def emit(self, event) -> None:
-        self.events.append(dict(event))
-
-    def named(self, name: str) -> list[dict]:
-        return [e for e in self.events if e.get("event") == name]
-
 
 def _make_coordinator(*, pool=None, config=None):
     pool = pool or _CountingPool()
     trainer = _FakeTrainer()
     buffer = _FakeBuffer()
-    sink = _SpySink()
+    sink = SpyEventSink()
     coord = StepCoordinator(
         trainer=trainer, buffer=buffer,
         pool=pool, eval_pipeline=_FakeEvalPipeline(),

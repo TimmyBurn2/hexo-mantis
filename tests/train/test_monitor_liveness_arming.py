@@ -42,19 +42,10 @@ from mantis.train.lifecycle.heartbeat_watchdog import (
     MonitorLivenessSpec,
     MonitorSample,
 )
+from _spy import SpyEventSink
 
 _PRODUCTION = "configs/run6.yaml"
 
-
-class _Sink:
-    def __init__(self) -> None:
-        self.events: list[dict[str, Any]] = []
-
-    def emit(self, event: Any) -> None:
-        self.events.append(dict(event))
-
-    def named(self, name: str) -> list[dict[str, Any]]:
-        return [e for e in self.events if e.get("event") == name]
 
 
 def _disk_row() -> ArmedAbort:
@@ -149,7 +140,7 @@ def test_the_live_audit_DIVERGES_from_the_config_audit_when_the_producer_is_dead
 
 
 
-def _guard(tmp_path: Path, sink: _Sink, *, interval: float = 0.01) -> DiskGuard:
+def _guard(tmp_path: Path, sink: SpyEventSink, *, interval: float = 0.01) -> DiskGuard:
     return DiskGuard(watch_path=tmp_path, interval_sec=interval, warn_gb=0.0, fail_gb=0.0,
                      keep_all=True, sink=sink)
 
@@ -179,7 +170,7 @@ def test_THE_PLANTED_BREAK_a_guard_whose_every_tick_raises_reads_ARMED_staticall
         raise OSError("planted break: the volume is unreadable")
 
     monkeypatch.setattr(_shutil, "disk_usage", _boom)
-    sink = _Sink()
+    sink = SpyEventSink()
     guard = _guard(tmp_path, sink)
     _drive_loop(guard, until=2, attr="errors_total")
 
@@ -199,7 +190,7 @@ def test_THE_PLANTED_BREAK_a_guard_whose_every_tick_raises_reads_ARMED_staticall
 def test_THE_CONTROL_a_healthy_guard_reads_ARMED_on_BOTH_audits(tmp_path: Path) -> None:
     """The break must be removable. Without this row the test above is satisfied by an audit
     that reports DISARMED unconditionally."""
-    sink = _Sink()
+    sink = SpyEventSink()
     guard = _guard(tmp_path, sink)
     _drive_loop(guard, until=1, attr="checks_total")
 
@@ -234,7 +225,7 @@ class _Clock:
         return self.t
 
 
-def _watchdog(tmp_path: Path, sink: _Sink, clock: _Clock,
+def _watchdog(tmp_path: Path, sink: SpyEventSink, clock: _Clock,
               sample_fn: Any, exits: list[int]) -> HeartbeatWatchdog:
     """A REAL `HeartbeatRegistry` on the same fake clock, one source, deadline `0.0`. Not a stub,
     because the staleness branch runs on every poll beside the liveness check; `0.0` is the
@@ -254,7 +245,7 @@ def test_a_monitor_that_does_not_exist_yet_is_SILENT_not_stalled(
 ) -> None:
     """The composition root starts the watchdog BEFORE it builds the guard, so `None` is a
     real state. Treating it as a stall would make every run report one at boot."""
-    sink, clock, exits = _Sink(), _Clock(), []
+    sink, clock, exits = SpyEventSink(), _Clock(), []
     wd = _watchdog(tmp_path, sink, clock, lambda: None, exits)
     for _ in range(5):
         clock.t += 100.0
@@ -266,7 +257,7 @@ def test_a_monitor_that_does_not_exist_yet_is_SILENT_not_stalled(
 def test_a_LIVE_monitor_logs_its_own_reading_in_run_and_never_stalls(tmp_path: Path) -> None:
     """LAW-18: a lever under test logs its reading on a HEALTHY run too, or no observer can
     tell a live reading from a frozen one."""
-    sink, clock, exits = _Sink(), _Clock(), []
+    sink, clock, exits = SpyEventSink(), _Clock(), []
     checks = [0]
 
     def sample() -> MonitorSample:
@@ -287,7 +278,7 @@ def test_a_LIVE_monitor_logs_its_own_reading_in_run_and_never_stalls(tmp_path: P
 def test_a_FROZEN_counter_stalls_after_its_own_intervals_and_the_event_is_LATCHED(
     tmp_path: Path,
 ) -> None:
-    sink, clock, exits = _Sink(), _Clock(), []
+    sink, clock, exits = SpyEventSink(), _Clock(), []
     frozen = MonitorSample(checks_total=7, errors_total=3, interval_sec=60.0)
     wd = _watchdog(tmp_path, sink, clock, lambda: frozen, exits)
 
@@ -312,7 +303,7 @@ def test_a_FROZEN_counter_stalls_after_its_own_intervals_and_the_event_is_LATCHE
 
 def test_a_RECOVERED_monitor_says_so_and_can_stall_again(tmp_path: Path) -> None:
     """Without the recovery arm the latch would silence a second, real outage."""
-    sink, clock, exits = _Sink(), _Clock(), []
+    sink, clock, exits = SpyEventSink(), _Clock(), []
     state = {"checks": 7}
 
     def sample() -> MonitorSample:
@@ -339,7 +330,7 @@ def test_a_stalled_monitor_NEVER_EXITS_THE_PROCESS(tmp_path: Path) -> None:
     watchdog's own code is 42 — the TRANSIENT class the supervisor RELAUNCHES on — so a disk
     guard raising every tick that could reach `exit_fn` would stall-abort and be relaunched into
     the same broken state: a crash loop into a filling volume."""
-    sink, clock, exits = _Sink(), _Clock(), []
+    sink, clock, exits = SpyEventSink(), _Clock(), []
     frozen = MonitorSample(checks_total=1, errors_total=999, interval_sec=1.0)
     wd = _watchdog(tmp_path, sink, clock, lambda: frozen, exits)
     for _ in range(20):
@@ -352,11 +343,11 @@ def test_a_stalled_monitor_NEVER_EXITS_THE_PROCESS(tmp_path: Path) -> None:
 def test_the_liveness_wiring_is_named_at_ARM_TIME_in_both_directions(tmp_path: Path) -> None:
     """An unwired monitor is a gap somebody must be able to see, exactly as an unwired
     heartbeat source is."""
-    sink, clock, exits = _Sink(), _Clock(), []
+    sink, clock, exits = SpyEventSink(), _Clock(), []
     _watchdog(tmp_path, sink, clock, lambda: None, exits).arm()
     assert sink.named("heartbeat_watchdog_armed")[0]["monitor_liveness"] == ["disk_guard"]
 
-    bare_sink = _Sink()
+    bare_sink = SpyEventSink()
     HeartbeatWatchdog(
         registry=HeartbeatRegistry(sources=("train_step",), clock=_Clock()),
         deadlines={"train_step": 0.0}, sink=bare_sink, counters_fn=lambda: 0,
@@ -503,7 +494,7 @@ def test_THE_LIVENESS_SAMPLE_IS_SILENT_DURING_CLOSE_OUT_because_it_is_self_fatal
     an argument about WHEN the reading is interesting that ignored WHO takes it. The watchdog's
     thread emits through the sink it polices, so an emit after `sink.close()` is a counted
     failed write and `counters_fn` answers a non-zero count with `os._exit(43)`."""
-    sink, clock, exits = _Sink(), _Clock(), []
+    sink, clock, exits = SpyEventSink(), _Clock(), []
     live = MonitorSample(checks_total=1, errors_total=0, interval_sec=60.0)
     wd = _watchdog(tmp_path, sink, clock, lambda: live, exits)
 
