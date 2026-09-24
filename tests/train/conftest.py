@@ -1,10 +1,5 @@
 """Shared fixtures for the `tests/train/` suites.
 
->300 justify: one shared fixture module for one directory's suites — the spies, the tiny-net
-and optim/scaler/sched builders, the full `gnn_axis_v1` net, and the `RunConfig`/`TrainHParams`
-block factories must stay co-located so every suite draws its config shape from ONE place;
-splitting them would let two copies of a block factory drift apart.
-
 This conftest imports only torch and `mantis.model`/`mantis.encoding`/`mantis.config`, never
 `mantis.train.*`, so it collects cleanly. The root conftest installs the autouse reseed
 fixture; this file does not re-seed and does not touch sys.modules.
@@ -70,9 +65,9 @@ def fake_clock() -> FakeClock:
 
 def make_tiny_arch() -> GnnArch:
     """Build the tiny graph net: the registered wire dims at toy widths."""
-    spec = lookup(GRAPH_ENCODING)
-    return GnnArch(in_dim=int(spec.node_feat_dim), edge_dim=int(spec.edge_feat_dim),
-                   hidden=16, num_layers=1, policy_hidden=16, value_hidden=16)
+    from _microbatch_harness import tiny_graph_arch
+
+    return tiny_graph_arch()
 
 
 @pytest.fixture
@@ -279,11 +274,6 @@ def mk_config():
 @pytest.fixture
 def mk_meta():
     return make_metadata_kwargs
-
-
-@pytest.fixture
-def mk_optim():
-    return make_optim_scaler_sched
 
 
 @pytest.fixture(scope="session")
