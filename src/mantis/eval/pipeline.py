@@ -18,10 +18,10 @@ import multiprocessing
 import threading
 import time
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from mantis.config.resolve.drain import DrainCapsSpec as DrainCaps
 from mantis.config.resolve.eval_posture import (
     resolve_ply_cap_adjudication,
     resolve_strength_floor,
@@ -60,17 +60,6 @@ def _bounded_join_timeout(timeout: float) -> float:
     if not math.isfinite(timeout):
         return _JOIN_TIMEOUT_CEILING_SEC
     return max(0.0, min(timeout, _JOIN_TIMEOUT_CEILING_SEC))
-
-
-@dataclass(frozen=True)
-class DrainCaps:
-    """The 4 drain-cap fields lifted from `StepCoordinatorConfig`; each gains a live consumer
-    here."""
-
-    final_eval_drain_timeout_sec: float
-    eval_final_drain_safety_factor: float
-    eval_final_drain_hard_cap_sec: float
-    terminal_eval_hard_cap_sec: float
 
 
 def drain_budget_sec(caps: DrainCaps) -> float:

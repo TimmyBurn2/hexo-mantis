@@ -1,9 +1,9 @@
 """`resolve_drain_caps` — the ONE read path for the close-out drain / terminal-eval caps.
 
 `monitor.drain.*` is read here and nowhere else. The composition root threads the resolved
-spec into `_step_coordinator_config`, whose four same-named fields it then lifts into
-`mantis.eval.pipeline.DrainCaps` — the object `drain_budget_sec` and `_run_terminal_sync`'s
-`budget_sec` actually read.
+spec into `_step_coordinator_config`, whose four same-named fields it then lifts into a
+`DrainCapsSpec` that `mantis.eval.pipeline` names `DrainCaps` — the object `drain_budget_sec`
+and `_run_terminal_sync`'s `budget_sec` actually read.
 
 There is no code-side default anywhere on the path: with the schema block authoritative, a
 dataclass default is a second authority a caller can silently inherit. `DrainCapsConfig`'s
@@ -17,11 +17,10 @@ from typing import Any
 
 @dataclass(frozen=True)
 class DrainCapsSpec:
-    """The resolved drain/terminal-eval wall-clock caps.
+    """The resolved drain/terminal-eval wall-clock caps, also `eval.pipeline.DrainCaps`.
 
-    Defined beside the resolver rather than on the pydantic block or `eval.pipeline.DrainCaps`
-    because nothing in `mantis.train` may import the schema class and `mantis.config` may not
-    import `mantis.eval`.
+    Defined beside the resolver rather than on the pydantic block because nothing in
+    `mantis.train` may import the schema class and `mantis.config` may not import `mantis.eval`.
     """
 
     final_eval_drain_timeout_sec: float
