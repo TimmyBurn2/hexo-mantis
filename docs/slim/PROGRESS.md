@@ -66,6 +66,12 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   - `.wt/w6-cards`, **sonnet**: legs 3+4 (RULINGS_ACTIVE.md retired, CARDS closed rows and drift).
   - `.wt/w6-mech`, **sonnet**: leg 5 minus the register annotations (CLAUDE.md, toolchain files,
     repo_design §3, Cargo profile, SHAKEDOWN7G, .gitattributes, analyzer_design, README).
+    LANDED 8db24400..6db4f09a (9 commits): CLAUDE.md (R368(g)'s one rule, floors count derived,
+    digest -> LAWS.md, viewer + analyzer admitted), mise/rust-toolchain (count gone, pin ->
+    `[provenance].rustc`), repo_design §3 R9 amendment (defect 43), `[profile.profiling]` deleted
+    (DOCS-4-11, no builder), SHAKEDOWN7G deleted (DOCS-3-01), .gitattributes (DOCS-4-04/-05),
+    analyzer_design Status (DOCS-3-06), README STATUS (DOCS-4-09), MSRV list (DOCS-4-10). Makefile
+    floor count REFUTED at contact (no such text). Gates 10/13/15/17 green; measures unchanged.
   - `.wt/w6-reg`, **opus**: the falsified.md F-43/F-04 and RULINGS.md defect-47 annotations.
     LANDED 4f9cd33c (F-43 by symbol), 174a9180 (F-04: the min pin left at 3dd20b49), b1e91385 (defect 47:
     the coverage pair one high, "Four" names five). Append-only, +36/-0; gates 10/13/17 green.
