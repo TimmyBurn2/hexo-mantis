@@ -304,9 +304,9 @@ def test_retired_max_form_rows_are_recorded_not_gating(arms) -> None:
         assert math.isfinite(value), f"{row}: non-finite reading"
 
     # The retirement's grounds, re-derived from the per-pair columns at point of use.
-    for stat, registered_abort, registered_pass in (
-        ("policy_max_rel", 4.0e-1, 1.5e-1),
-        ("bin_max_rel", 4.0e-1, 1.5e-1),
+    for stat, registered_pass in (
+        ("policy_max_rel", 1.5e-1),
+        ("bin_max_rel", 1.5e-1),
     ):
         cols = bp.cuda_pairs(doc, "null", stat)["prod27_run5shape"]
         null_max = max(cols)

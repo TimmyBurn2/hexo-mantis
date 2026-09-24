@@ -20,7 +20,6 @@ from _registry_nets import banned_net_names
 _SRC = Path(__file__).resolve().parents[2] / "src" / "mantis"
 _MODEL = _SRC / "model"
 
-_ARCH_ATTRS = ("in_channels", "filters", "out_features", "board_size")
 _ALLOWED_RECEIVERS = {"self", "arch", "spec"}
 
 _NETS = "|".join(re.escape(n) for n in sorted(banned_net_names(), key=len, reverse=True))
