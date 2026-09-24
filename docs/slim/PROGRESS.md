@@ -8,13 +8,34 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
 - Host: the operator's desktop (not a Claude environment; `CLAUDE_CODE_ENVIRONMENT_NAME` unset). AMD Ryzen 7
   3700X, 16 threads, 46 GiB, flags `avx2` only (no `avx512_bf16`, no `amx`). torch 2.11.0+cpu, `mantis._engine` OK.
 - origin/dev = 69e1532 at W0 entry (no moved commits; no rebase).
-- Wave: **W3** (Python src). W2 EXITED: REVIEW-W2 filed (`docs/audits/REVIEW_W2_2026-09-24.md`, 0 must-fix, one
-  loop); exit sweep `make gates` on 3db6ab5a ALL GREEN, 19 gates (2a 1068 s, 3a 356 s, 3b 3005 s); the post-review
-  text commits on 8b75f984 re-checked (gates 10/13/14/15/17, workspace build 0 warnings); run10 resolved MATCH at
-  3db6ab5a. W1 EXITED earlier (cadcc367, 19 gates green after a quota-voided first run). W3: the three package
-  groups AND the sha256 + residue leg INTEGRATED (collected 5147 → 5041; run10 MATCH at the tip).
-  NEXT STEP: REVIEW-W3 (fresh read-only agent over 8b75f984..HEAD, src rows only), its fixes, then `make gates` in
-  `.wt/gates` at the tip, then W4. The remaining waves are handed off: `docs/slim/HANDOFF.md`.
+- Wave: **W4** (tools). W3 EXITED. REVIEW-W3 filed (`docs/audits/REVIEW_W3_2026-09-24.md`, 0 must-fix beyond a
+  ruff red in the handoff helper, 2 should-fix, 4 notes, every row group HELD, run10 MATCH re-verified); its fixes:
+  ec0ac144 (ruff), cb4a5dd1 (`_is_graph` flag), bf22b4c3 (sweep docstring), plus 09fa8e6b — the exit sweep caught
+  `tests/eval/test_graph_round_encoding.py`'s recorder pinning the deleted `_is_graph`; re-pointed to the
+  constructor's own closed predicate (the finding-2 fix's miss; the sweep is what caught it). Exit sweep `make
+  gates` in `.wt/gates` at aad7eb6d: 18 of 19 green, gate 3a RED on exactly that witness plus one TRANSIENT
+  (`test_supervisor_signal_posture`'s subprocess SIGINT assert — the dispatcher ran two worktree `uv sync`s
+  concurrently with 3a; investigated to ground below), 3a re-run at the fixed tip 09fa8e6b: only that one red
+  remains. 3b 34 passed/4 skipped in 3050 s; 3c collected 5041;
+  14 GREEN pyright 247 files 0 errors; 8 ARMED+PASS; 12 rc 0; 15 166 justified 0 stale. W1 EXITED earlier
+  (cadcc367), W2 EXITED (3db6ab5a).
+  **The KNOWN-RED (recorded, not fixed — the loop's step-5 rule):** `tests/monitor/test_supervisor_signal_posture.py
+  ::test_the_stop_handlers_are_installed_by_main_and_never_at_import` reds in FULL default-tier runs on this host
+  (4/4: the sweep at aad7eb6d, two re-runs at 09fa8e6b, one at the W3 BASE 8b75f984 with a fresh venv — so NOT
+  the wave's; W2's sweep at 3db6ab5a was green earlier the same day) and passes standalone (6+/6 in .wt/gates
+  and the main checkout) and in every partial batch tried (tests/monitor whole; tests/util+victim;
+  arena..eval+victim; fixtures+model+victim). Mechanism, narrowed by instrumented runs: the pytest process's
+  SIGINT disposition is SIG_IGN at the moment the test spawns its import-probe child, and CPython preserves an
+  inherited SIG_IGN across exec (demonstrated directly), so the child's getsignal assert fails; the flip is NOT
+  made through Python's signal module (a sitecustomize wrapper on signal.signal fires only for pytest's own
+  startup install); a polling thread observed in-process flips between train/lifecycle's
+  `install_signal_handlers._stop` handler and SIG_IGN around root/train tests, but GIL starvation makes that
+  timeline unreliable and the exact C-level, timing-dependent setter is unidentified. Every later wave's exit
+  sweep and W8's gates.exit will show this one red until the operator rules on it.
+  W4 state: the sealbot vendor leg (w4-sealbot @ e4c22699) and the tools-dups leg (w4-toolsdup @
+  37eb5f04, 6 commits) are implemented on their branches, NOT yet integrated; the gate-14 measure leg and the
+  gate-16 widening leg are next; then REVIEW-W4, exit gates, PROGRESS. The remaining waves are handed off:
+  `docs/slim/HANDOFF.md` + `docs/slim/handoff/W4_ADDENDUM.md`.
 
 ## W0 — entry
 
