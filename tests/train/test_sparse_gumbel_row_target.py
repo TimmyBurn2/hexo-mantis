@@ -225,7 +225,6 @@ def test_the_real_graph_trainer_step_publishes_the_tail_mass_reading(tmp_path) -
     trainer = H.tiny_graph_trainer(tmp_path, sink=sink, checkpoint_interval=0)
     run_declared_train_step(
         trainer, replay, H.GSPEC, batch_size=8, augment=False, recency_weight=0.0,
-        recent_buffer=None,
         caps_provider=lambda: MicrobatchCapsSpec(*H.non_binding_caps(replay.wire)),
         sample_threads_provider=lambda: 1, fast_policy_weight_provider=lambda: 0.0)
 
@@ -265,7 +264,6 @@ def test_an_all_tail_sparse_row_is_admitted_stored_at_zero_and_trains_finite(tmp
     trainer = H.tiny_graph_trainer(tmp_path, sink=sink, checkpoint_interval=0)
     result = run_declared_train_step(
         trainer, replay, H.GSPEC, batch_size=8, augment=False, recency_weight=0.0,
-        recent_buffer=None,
         caps_provider=lambda: MicrobatchCapsSpec(*H.non_binding_caps(replay.wire)),
         sample_threads_provider=lambda: 1, fast_policy_weight_provider=lambda: 0.0)
     assert math.isfinite(float(result["loss"])) and math.isfinite(float(result["policy_loss"]))
@@ -309,7 +307,6 @@ def test_the_real_graph_trainer_step_publishes_the_kl_line(tmp_path) -> None:
     trainer = H.tiny_graph_trainer(tmp_path, sink=sink, checkpoint_interval=0)
     run_declared_train_step(
         trainer, replay, H.GSPEC, batch_size=8, augment=False, recency_weight=0.0,
-        recent_buffer=None,
         caps_provider=lambda: MicrobatchCapsSpec(*H.non_binding_caps(replay.wire)),
         sample_threads_provider=lambda: 1, fast_policy_weight_provider=lambda: 0.0)
     event = sink.named("trainer_step")[0]

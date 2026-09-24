@@ -207,11 +207,11 @@ def _coordinator(*, pool=None, config=None, shutdown=None):
     trainer, buffer, sink = _Trainer(), _Buffer(), _Sink()
     shutdown = shutdown if shutdown is not None else ShutdownState()
     coord = StepCoordinator(
-        trainer=trainer, buffer=buffer, pretrained_buffer=None, recent_buffer=None,
+        trainer=trainer, buffer=buffer,
         pool=pool, eval_pipeline=None, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
-        shutdown=shutdown, eval_model=object(), bufs=None,
-        config=config or _config(), full_config=_GRAPH_FULL_CONFIG, train_cfg={}, mixing_cfg={},
+        shutdown=shutdown, eval_model=object(),
+        config=config or _config(), full_config=_GRAPH_FULL_CONFIG,
         sink=sink, heartbeat=None, monitor_cfg=monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, trainer=trainer, buffer=buffer,

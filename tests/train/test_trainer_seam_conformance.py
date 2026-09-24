@@ -76,10 +76,9 @@ SEAM_MATRIX: tuple[tuple[object, tuple[str, ...], tuple[type, ...], tuple[str, .
     (step_mod, ("eval_pipeline",), (EvalPipelineLike,), ("poll_completed", "run_evaluation")),
     (drain_mod, ("eval_pipeline", "pipeline"), (EvalPipelineLike,),
      ("drain_pending", "apply_gate_decision", "run_evaluation")),
-    (step_mod, ("buffer", "pretrained_buffer", "bot_buffer"), (ReplayBufferLike,),
+    (step_mod, ("buffer",), (ReplayBufferLike,),
      ("resize", "save_to_path", "size")),
-    # The graph arm flows recency in-engine, so the only `recent_buffer` access left in
-    # `dispatch` is the refusal that names it.
+    # The graph arm flows recency in-engine: `dispatch` reaches no `recent_buffer` at all.
     (dispatch_mod, ("buffer",), (ReplayBufferLike, GraphRouteBufferLike),
      ("sample_graph_batch",)),
     (step_mod, ("_clock",), (ClockLike,), ("now", "sleep")),

@@ -154,15 +154,15 @@ def _harness(flags: list[int], spec: PlyCapAbortSpec | None, *, gate_interval: i
     sink = _Sink()
     pool = CoordinatorPoolStub(flags)
     coord = StepCoordinator(
-        trainer=_Trainer(), buffer=_Buffer(), pretrained_buffer=None, recent_buffer=None,
+        trainer=_Trainer(), buffer=_Buffer(),
         pool=pool, eval_pipeline=None, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
-        shutdown=shutdown, eval_model=object(), bufs=None, config=config,
+        shutdown=shutdown, eval_model=object(), config=config,
         full_config={"identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
                      "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
                                "fast_policy_weight": 0.0},
                      "selfplay": {"n_workers": 1}},
-        train_cfg={}, mixing_cfg={}, sink=sink, heartbeat=None, monitor_cfg=monitor_config(),
+        sink=sink, heartbeat=None, monitor_cfg=monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, shutdown=shutdown, sink=sink)
 

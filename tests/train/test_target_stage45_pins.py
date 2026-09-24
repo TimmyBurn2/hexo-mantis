@@ -81,7 +81,7 @@ def test_dispatch_forwards_policy_target_value_intact() -> None:
 
     rec = _RecordingTrainer()
     run_declared_train_step(rec, _RecordingHexg(), _GSPEC, batch_size=3, augment=False,
-                            recency_weight=0.0, recent_buffer=None,
+                            recency_weight=0.0,
                             caps_provider=lambda: _S4_CAPS, sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0)
     assert len(rec.calls) == 1 and len(sampled) == 1

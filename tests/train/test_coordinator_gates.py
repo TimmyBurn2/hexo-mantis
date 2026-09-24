@@ -233,15 +233,14 @@ def _make_coordinator(*, pool=None, config=None, eval_pipeline=None, heartbeat=N
     shutdown = ShutdownState()
     sink = SpySink()
     coord = StepCoordinator(
-        trainer=trainer, buffer=buffer, pretrained_buffer=None, recent_buffer=None,
+        trainer=trainer, buffer=buffer,
         pool=pool, eval_pipeline=eval_pipeline, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
-        shutdown=shutdown, eval_model=object(), bufs=None,
+        shutdown=shutdown, eval_model=object(),
         # WPTS/TD-1: the straight arm resolves its route from the DECLARED identity — these
         # unit drives declare the grid identity FakeBuffer's sampler serves.
         config=config or _make_config(),
         full_config=_GRAPH_FULL_CONFIG,
-        train_cfg={}, mixing_cfg={},
         sink=sink, heartbeat=heartbeat, monitor_cfg=monitor_cfg or monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, trainer=trainer, buffer=buffer,

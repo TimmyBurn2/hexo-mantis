@@ -8,8 +8,8 @@ The straight self-play arm routes through `run_declared_train_step`, keyed on th
 end-to-end from the coordinator path for the GRAPH representation; the dense route is
 TYPE-UNREACHABLE from a graph config; an unknown representation raises and an UNDECLARED
 encoding raises `MissingEncodingError` from THE resolver; removing the trainer-side
-implementation reds THIS suite, not the conformance gate; and the graph arm refuses a non-None
-recent_buffer while threading `recency_weight` in as `recent_frac`."""
+implementation reds THIS suite, not the conformance gate; and the graph arm threads
+`recency_weight` in as `recent_frac`."""
 from __future__ import annotations
 
 from typing import Any
@@ -139,10 +139,9 @@ class _RecordingTypedTrainer:
 def _coordinator(trainer, buffer, full_config, cfg=None, **over) -> StepCoordinator:
     return StepCoordinator(
         monitor_cfg=monitor_config(),
-        trainer=trainer, buffer=buffer, pretrained_buffer=over.pop("pretrained_buffer", None),
-        recent_buffer=over.pop("recent_buffer", None), pool=over.pop("pool", _Pool()),
+        trainer=trainer, buffer=buffer, pool=over.pop("pool", _Pool()),
         eval_pipeline=None, subsystems=None, anchor_state=None, shutdown=ShutdownState(),
-        eval_model=None, bufs=None, config=cfg or _coord_cfg(), full_config=full_config,
+        eval_model=None, config=cfg or _coord_cfg(), full_config=full_config,
         **over,
     )
 
@@ -167,7 +166,7 @@ def test_graph_step_advances_trainer_step_counter(tmp_path, mk_config) -> None:
     before = trainer.step
     run_declared_train_step(
         trainer, _graph_buffer(), _GSPEC,
-        batch_size=4, augment=False, recency_weight=0.0, recent_buffer=None,
+        batch_size=4, augment=False, recency_weight=0.0,
         caps_provider=_NON_BINDING_CAPS,
         sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0,
@@ -179,7 +178,7 @@ def test_graph_spec_never_calls_the_dense_entry_point() -> None:
     rec = _RecordingTypedTrainer()
     run_declared_train_step(rec, _graph_buffer(), _GSPEC,
                             batch_size=2, augment=False, recency_weight=0.0,
-                            recent_buffer=None, caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
+                            caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0)
     assert len(rec.graph_calls) == 1
     assert rec.tensor_calls == [], "dense entry point must be unreachable from a graph spec"
@@ -193,7 +192,7 @@ def test_unknown_representation_raises_named_error() -> None:
     with pytest.raises(RepresentationRouteError, match="voxel"):
         run_declared_train_step(_RecordingTypedTrainer(), _graph_buffer(), _AlienSpec(),
                                 batch_size=2, augment=False, recency_weight=0.0,
-                                recent_buffer=None, caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
+                                caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0)
 
 
@@ -225,19 +224,7 @@ def test_missing_graph_entry_point_dies_loud_on_the_graph_route() -> None:
     with pytest.raises(AttributeError, match="train_step_from_graph_batch"):
         run_declared_train_step(_HalfTrainer(), _graph_buffer(), _GSPEC,
                                 batch_size=2, augment=False, recency_weight=0.0,
-                                recent_buffer=None, caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0)
-
-
-def test_graph_arm_refuses_a_dense_recent_buffer() -> None:
-    class _RecentBuf:
-        size = 4
-
-    with pytest.raises(RepresentationRouteError, match="recent_buffer"):
-        run_declared_train_step(_RecordingTypedTrainer(), _graph_buffer(), _GSPEC,
-                                batch_size=2, augment=False, recency_weight=0.0,
-                                recent_buffer=_RecentBuf(),
-                            caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
+                                caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0)
 
 
@@ -259,7 +246,7 @@ def test_graph_arm_threads_recency_weight_as_recent_frac() -> None:
     rec = _RecordingTypedTrainer()
     run_declared_train_step(rec, _RecordingHexg(), _GSPEC,
                             batch_size=2, augment=False, recency_weight=0.25,
-                            recent_buffer=None, caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
+                            caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0)
     assert seen == [{"batch_size": 2, "augment": False, "recent_frac": 0.25}]
     assert len(rec.graph_calls) == 1
@@ -290,7 +277,7 @@ def test_the_caps_provider_is_invoked_exactly_once_per_graph_step() -> None:
         return _NON_BINDING_CAPS()
 
     run_declared_train_step(rec, _graph_buffer(), _GSPEC, batch_size=2, augment=False,
-                            recency_weight=0.0, recent_buffer=None, caps_provider=_counting,
+                            recency_weight=0.0, caps_provider=_counting,
                             sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0)
     assert invoked == [1], "the graph arm must invoke the provider exactly once"
@@ -307,7 +294,7 @@ def test_the_sample_threads_provider_is_invoked_exactly_once_per_graph_step() ->
         return 1
 
     run_declared_train_step(rec, _graph_buffer(), _GSPEC, batch_size=2, augment=False,
-                            recency_weight=0.0, recent_buffer=None,
+                            recency_weight=0.0,
                             caps_provider=_NON_BINDING_CAPS,
                             sample_threads_provider=_counting,
                             fast_policy_weight_provider=lambda: 0.0)

@@ -233,13 +233,13 @@ def _harness(*, trainer: _Trainer, config: StepCoordinatorConfig, pool: _Pool | 
     shutdown = shutdown if shutdown is not None else ShutdownState()
     sink = _Sink()
     coord = StepCoordinator(
-        trainer=trainer, buffer=_Buffer(), pretrained_buffer=None, recent_buffer=None,
+        trainer=trainer, buffer=_Buffer(),
         pool=pool, eval_pipeline=None, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
-        shutdown=shutdown, eval_model=object(), bufs=None,
+        shutdown=shutdown, eval_model=object(),
         config=config,
         full_config=_GRAPH_FULL_CONFIG,
-        train_cfg={}, mixing_cfg={}, sink=sink, heartbeat=None, monitor_cfg=monitor_config(),
+        sink=sink, heartbeat=None, monitor_cfg=monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, trainer=trainer, shutdown=shutdown, sink=sink)
 

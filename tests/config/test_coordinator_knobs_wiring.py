@@ -326,8 +326,7 @@ def test_the_composition_root_threads_monitor_gate_interval_and_never_log_interv
 
 
 # HALF TWO — behaviour, at the consumer each registry entry NAMES.
-def _coordinator(*, pretrained=None, bot=None, trainer=None, eval_pipeline=None,
-                 mixing_cfg=None, **knob_over):
+def _coordinator(*, trainer=None, eval_pipeline=None, **knob_over):
     """A real `StepCoordinator` whose config is DERIVED from the production builder."""
     # The GATE cadence mirrors the NARRATION cadence unless a drive names it — the shipped
     # posture — so a drive that moves only `log_interval` keeps the cadence it had.
@@ -341,11 +340,11 @@ def _coordinator(*, pretrained=None, bot=None, trainer=None, eval_pipeline=None,
     )
     pool, buffer, sink = _Pool(), _Buffer(), _Sink()
     coord = StepCoordinator(
-        trainer=trainer or DrivableTrainerStub(), buffer=buffer, pretrained_buffer=pretrained,
-        recent_buffer=None, pool=pool, eval_pipeline=eval_pipeline,
+        trainer=trainer or DrivableTrainerStub(), buffer=buffer,
+        pool=pool, eval_pipeline=eval_pipeline,
         subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
-        shutdown=ShutdownState(), eval_model=object(), bufs=None, config=config,
+        shutdown=ShutdownState(), eval_model=object(), config=config,
         # The straight arm resolves its route from the DECLARED identity: an identity-less
         # full_config raises MissingEncodingError.
         full_config={
@@ -357,7 +356,7 @@ def _coordinator(*, pretrained=None, bot=None, trainer=None, eval_pipeline=None,
             "deploy": {"search": {"kind": "puct"}},
             "selfplay": {"search": {"kind": "puct"}, "n_workers": 1},
         },
-        train_cfg={}, mixing_cfg=mixing_cfg or {}, sink=sink, bot_buffer=bot,
+        sink=sink,
         monitor_cfg=monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, buffer=buffer, sink=sink,

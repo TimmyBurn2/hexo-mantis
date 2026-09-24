@@ -168,7 +168,7 @@ def _drive_graph(trainer: Trainer, spec: Any, n_steps: int) -> None:
     buffer = _graph_buffer()
     for _ in range(n_steps):
         run_declared_train_step(trainer, buffer, spec, batch_size=4, augment=False,
-                                recency_weight=0.0, recent_buffer=None,
+                                recency_weight=0.0,
                                 caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0)
 
@@ -397,9 +397,9 @@ def test_terminus_holds_two_artefacts_and_leg_three_stays_exactly_once(
                              spy_sink)
     coord = StepCoordinator(
         monitor_cfg=monitor_config(),
-        trainer=trainer, buffer=_graph_buffer(), pretrained_buffer=None, recent_buffer=None,
+        trainer=trainer, buffer=_graph_buffer(),
         pool=_Pool(), eval_pipeline=None, subsystems=None, anchor_state=None,
-        shutdown=ShutdownState(), eval_model=None, bufs=None, config=_coord_cfg(),
+        shutdown=ShutdownState(), eval_model=None, config=_coord_cfg(),
         full_config=full_config, sink=spy_sink,
     )
     calls = 0

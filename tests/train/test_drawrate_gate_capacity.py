@@ -81,12 +81,12 @@ def _coordinator(*, spec, pool):
     )
     shutdown = ShutdownState()
     coord = StepCoordinator(
-        trainer=SimpleNamespace(step=0), buffer=_Buffer(), pretrained_buffer=None,
-        recent_buffer=None, pool=pool, eval_pipeline=None,
+        trainer=SimpleNamespace(step=0), buffer=_Buffer(),
+        pool=pool, eval_pipeline=None,
         subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
-        shutdown=shutdown, eval_model=object(), bufs=None, config=config,
-        full_config={}, train_cfg={}, mixing_cfg={}, sink=_SpySink(),
+        shutdown=shutdown, eval_model=object(), config=config,
+        full_config={}, sink=_SpySink(),
         heartbeat=None, monitor_cfg=monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, shutdown=shutdown, config=config)

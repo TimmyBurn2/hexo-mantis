@@ -212,12 +212,12 @@ def _drive(*snapshots: RunnerStats) -> list[dict]:
     pool = _Pool(snapshots[0])
     sink = _SpySink()
     coord = StepCoordinator(
-        trainer=_Trainer(), buffer=_Buffer(), pretrained_buffer=None, recent_buffer=None,
+        trainer=_Trainer(), buffer=_Buffer(),
         pool=pool, eval_pipeline=None, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
-        shutdown=ShutdownState(), eval_model=object(), bufs=None, config=config,
+        shutdown=ShutdownState(), eval_model=object(), config=config,
         full_config=_GRAPH_FULL_CONFIG,
-        train_cfg={}, mixing_cfg={}, sink=sink, monitor_cfg=monitor_config(),
+        sink=sink, monitor_cfg=monitor_config(),
     )
     for snapshot in snapshots:
         pool.current = snapshot

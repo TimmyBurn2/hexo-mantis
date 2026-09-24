@@ -167,12 +167,12 @@ def _coordinator(full_config: dict[str, Any]):
     )
     sink = _SpySink()
     coord = StepCoordinator(
-        trainer=_Trainer(), buffer=_Buffer(), pretrained_buffer=None, recent_buffer=None,
+        trainer=_Trainer(), buffer=_Buffer(),
         pool=_Pool(), eval_pipeline=_EvalPipeline(),
         subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
-        shutdown=ShutdownState(), eval_model=object(), bufs=None, config=cfg,
-        full_config=full_config, train_cfg={}, mixing_cfg={}, sink=sink,
+        shutdown=ShutdownState(), eval_model=object(), config=cfg,
+        full_config=full_config, sink=sink,
         monitor_cfg=monitor_config(),
     )
     return coord, cfg, sink

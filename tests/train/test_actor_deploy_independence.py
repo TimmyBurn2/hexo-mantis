@@ -223,12 +223,11 @@ def test_eval_kick_fields_deploy_tag_model_not_actor_weights(tmp_path) -> None:
                                 save_checkpoint=lambda info: None),
         buffer=SimpleNamespace(size=1000, capacity=100_000,
                                save_to_path=lambda p: None, resize=lambda n: None),
-        pretrained_buffer=None, recent_buffer=None,
         pool=SimpleNamespace(games_completed=0), eval_pipeline=pipeline,
         subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=sentinel_tag, best_model_step=42),
-        shutdown=ShutdownState(), eval_model=object(), bufs=None,
-        config=_kick_config(), full_config={}, train_cfg={}, mixing_cfg={},
+        shutdown=ShutdownState(), eval_model=object(),
+        config=_kick_config(), full_config={},
         sink=None, monitor_cfg=monitor_config(),
     )
     recorder = _AttrReadRecorder(sentinel_actor)

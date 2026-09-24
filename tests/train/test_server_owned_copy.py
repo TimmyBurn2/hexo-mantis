@@ -91,7 +91,7 @@ def _step(trainer, buf):
 
     replay = H.ReplayWireBuffer(buf, 8)
     return run_declared_train_step(
-        trainer, replay, H.GSPEC, batch_size=8, augment=False, recency_weight=0.0, recent_buffer=None,
+        trainer, replay, H.GSPEC, batch_size=8, augment=False, recency_weight=0.0,
         caps_provider=lambda: MicrobatchCapsSpec(*H.non_binding_caps(replay.wire)),
         sample_threads_provider=lambda: 1, fast_policy_weight_provider=lambda: 0.0)
 

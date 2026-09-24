@@ -197,13 +197,13 @@ def _coordinator(*, config, pool, trainer=None):
     with a config, not about how one is composed."""
     shutdown, sink = ShutdownState(), _SpySink()
     coord = StepCoordinator(
-        trainer=trainer or DrivableTrainerStub(), buffer=_Buffer(), pretrained_buffer=None,
-        recent_buffer=None, pool=pool, eval_pipeline=None,
+        trainer=trainer or DrivableTrainerStub(), buffer=_Buffer(),
+        pool=pool, eval_pipeline=None,
         subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
-        shutdown=shutdown, eval_model=object(), bufs=None, config=config,
+        shutdown=shutdown, eval_model=object(), config=config,
         # Unit drives declare the grid identity their _Buffer fake serves.
-        full_config=_GRAPH_FULL_CONFIG, train_cfg={}, mixing_cfg={}, sink=sink,
+        full_config=_GRAPH_FULL_CONFIG, sink=sink,
         heartbeat=None, monitor_cfg=monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, shutdown=shutdown, sink=sink)

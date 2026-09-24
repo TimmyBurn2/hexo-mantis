@@ -102,7 +102,6 @@ def run_declared_train_step(
     batch_size: int,
     augment: bool,
     recency_weight: float,
-    recent_buffer: Any | None,
     caps_provider: Callable[[], Any],
     sample_threads_provider: Callable[[], int],
     fast_policy_weight_provider: Callable[[], float],
@@ -116,7 +115,7 @@ def run_declared_train_step(
     representation = getattr(spec, "representation", None)
     if representation == "graph":
         return _graph_step(trainer, buffer, spec, batch_size=batch_size, augment=augment,
-                           recency_weight=recency_weight, recent_buffer=recent_buffer,
+                           recency_weight=recency_weight,
                            caps_provider=caps_provider,
                            sample_threads_provider=sample_threads_provider,
                            fast_policy_weight_provider=fast_policy_weight_provider)
@@ -128,7 +127,7 @@ def run_declared_train_step(
 
 def _build_graph_parts(
     trainer: Any, buffer: Any, spec: Any, *,
-    batch_size: int, augment: bool, recency_weight: float, recent_buffer: Any | None,
+    batch_size: int, augment: bool, recency_weight: float,
     caps_provider: Callable[[], Any], sample_threads_provider: Callable[[], int],
     fast_policy_weight_provider: Callable[[], float],
 ) -> dict[str, Any]:
@@ -145,12 +144,6 @@ def _build_graph_parts(
     and each part is a numpy slice collated on demand by a LAZY callable, so only one micro-batch's
     tensors are ever resident. That laziness IS the memory bound.
     """
-    if recent_buffer is not None:
-        raise RepresentationRouteError(
-            "the graph route takes no dense recent_buffer — recency flows in-engine "
-            "(sample_graph_batch recent_frac); a RecentBuffer injected on a graph run is "
-            "mis-wiring"
-        )
     sampler = getattr(buffer, "sample_graph_batch", None)
     if sampler is None:
         raise RepresentationRouteError(
@@ -275,14 +268,14 @@ def _build_graph_parts(
 
 def _graph_step(
     trainer: Any, buffer: Any, spec: Any, *,
-    batch_size: int, augment: bool, recency_weight: float, recent_buffer: Any | None,
+    batch_size: int, augment: bool, recency_weight: float,
     caps_provider: Callable[[], Any], sample_threads_provider: Callable[[], int],
     fast_policy_weight_provider: Callable[[], float],
 ) -> dict[str, float]:
     """One gradient update from a freshly sampled graph batch."""
     return trainer.train_step_from_graph_batch(**_build_graph_parts(
         trainer, buffer, spec, batch_size=batch_size, augment=augment,
-        recency_weight=recency_weight, recent_buffer=recent_buffer,
+        recency_weight=recency_weight,
         caps_provider=caps_provider, sample_threads_provider=sample_threads_provider,
         fast_policy_weight_provider=fast_policy_weight_provider,
     ))
@@ -330,7 +323,7 @@ def run_declared_eval_step(
         )
     return trainer.eval_step_from_graph_batch(**_build_graph_parts(
         trainer, buffer, spec, batch_size=batch_size, augment=False,
-        recency_weight=0.0, recent_buffer=None,
+        recency_weight=0.0,
         caps_provider=caps_provider, sample_threads_provider=sample_threads_provider,
         fast_policy_weight_provider=fast_policy_weight_provider,
     ))

@@ -250,7 +250,7 @@ def test_the_graph_arm_trains_THROUGH_the_declared_seam(tmp_path: Path, monkeypa
     first = calls[0]
     assert first["spec"].representation == "graph"
     assert first["batch_size"] == 8 and first["augment"] is True
-    assert first["recent_buffer"] is None, "the graph route takes no dense recent buffer"
+    assert "recent_buffer" not in first, "the graph route takes no dense recent buffer"
     # The providers are CALLABLES, not resolved values — the dispatcher's own contract.
     assert callable(first["caps_provider"]) and first["caps_provider"]() == "CAPS"
     assert callable(first["sample_threads_provider"]) and first["sample_threads_provider"]() == 3

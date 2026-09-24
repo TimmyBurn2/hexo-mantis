@@ -177,7 +177,6 @@ def test_launch_path_smoke(tmp_path, full_train_hparams):
     def one_step():
         run_declared_train_step(
             tr, ring, spec, batch_size=4, augment=False, recency_weight=0.0,
-            recent_buffer=None,
             caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps["max_edges"],
                                                      max_nodes=caps["max_nodes"]),
             sample_threads_provider=lambda: 1,

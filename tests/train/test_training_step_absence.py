@@ -56,7 +56,7 @@ def _real_graph_loss_info(tmp_path: Path) -> dict[str, float]:
     max_edges, max_nodes = H.non_binding_caps(wire)
     return production_graph_step(
         trainer, buffer, H.GSPEC,
-        batch_size=4, augment=False, recency_weight=0.0, recent_buffer=None,
+        batch_size=4, augment=False, recency_weight=0.0,
         caps_provider=lambda: MicrobatchCapsSpec(max_edges=max_edges, max_nodes=max_nodes),
         sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0,

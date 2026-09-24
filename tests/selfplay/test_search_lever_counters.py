@@ -140,11 +140,11 @@ def test_the_counters_reach_iteration_complete(drive: _Drive) -> None:
         knobs=resolve_coordinator_knobs(dev.train))
     events: list[dict[str, Any]] = []
     coord = StepCoordinator(
-        trainer=None, buffer=SimpleNamespace(size=0, capacity=1), pretrained_buffer=None,
-        recent_buffer=None, pool=_Pool(drive.runner), eval_pipeline=None,
+        trainer=None, buffer=SimpleNamespace(size=0, capacity=1),
+        pool=_Pool(drive.runner), eval_pipeline=None,
         subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
-        shutdown=ShutdownState(), eval_model=object(), bufs=None, config=config,
+        shutdown=ShutdownState(), eval_model=object(), config=config,
         full_config={}, sink=SimpleNamespace(emit=lambda e: events.append(dict(e))),
         monitor_cfg=monitor_config(),
     )

@@ -131,25 +131,17 @@ class StepCoordinator:
         *,
         trainer: Any,
         buffer: Any,
-        pretrained_buffer: Any | None,
-        recent_buffer: Any | None,
         pool: Any,
         eval_pipeline: Any | None,
         subsystems: Any,
         anchor_state: Any,
         shutdown: Any,
         eval_model: Any,
-        bufs: Any,
         config: StepCoordinatorConfig,
         full_config: dict[str, Any] | None = None,
-        train_cfg: dict[str, Any] | None = None,
-        mixing_cfg: dict[str, Any] | None = None,
-        batch_size_cfg: int | None = None,
-        iterations: int | None = None,
         run_id: str | None = None,
         clock: ClockLike | None = None,
         sink: Any = None,
-        bot_buffer: Any | None = None,
         exit_fn: Callable[[int], None] = os._exit,
         heartbeat: Callable[[str], None] | None = None,
         monitor_cfg: MonitorConfig,
@@ -159,22 +151,14 @@ class StepCoordinator:
     ) -> None:
         self.trainer = trainer
         self.buffer = buffer
-        self.pretrained_buffer = pretrained_buffer
-        self.bot_buffer = bot_buffer
-        self.recent_buffer = recent_buffer
         self.pool = pool
         self.eval_pipeline = eval_pipeline
         self.subsystems = subsystems
         self.anchor_state = anchor_state
         self.shutdown = shutdown
         self.eval_model = eval_model
-        self.bufs = bufs
         self.config = config
         self.full_config = full_config or {}
-        self.train_cfg = train_cfg or {}
-        self.mixing_cfg = mixing_cfg or {}
-        self.batch_size_cfg = batch_size_cfg
-        self.iterations = iterations
         self.run_id = run_id
         self._clock = clock or RealClock()
         self._sink = sink
@@ -257,10 +241,8 @@ class StepCoordinator:
         # code-side default for that path: it is derived from the trainer's own checkpoint dir
         # and resolved at FIRE time, so construction needs no trainer attribute.
         def _snapshot_target() -> Path:
-            bp = self.mixing_cfg.get("buffer_persist_path")
-            if bp is None:
-                bp = _buffer_persist.canonical_buffer_path(self.trainer.checkpoint_dir)
-            return watchdog_snapshot_path(Path(bp))
+            return watchdog_snapshot_path(
+                _buffer_persist.canonical_buffer_path(self.trainer.checkpoint_dir))
 
         self._watchdog = StallWatchdog(
             timeout_sec=config.selfplay_stall_timeout_sec,
@@ -923,7 +905,7 @@ class StepCoordinator:
         return run_declared_train_step(
             self.trainer, self.buffer, self._step_spec(),
             batch_size=batch_size, augment=cfg.augment,
-            recency_weight=cfg.recency_weight, recent_buffer=self.recent_buffer,
+            recency_weight=cfg.recency_weight,
             caps_provider=self._microbatch_caps,
             sample_threads_provider=self._sample_threads,
             fast_policy_weight_provider=self._fast_policy_weight,

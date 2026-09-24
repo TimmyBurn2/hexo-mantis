@@ -182,12 +182,12 @@ def _coordinator(*, config: StepCoordinatorConfig, pool: _Pool | None = None):
     trainer, buffer, sink = _Trainer(), _Buffer(), _Sink()
     shutdown = ShutdownState()
     coord = StepCoordinator(
-        trainer=trainer, buffer=buffer, pretrained_buffer=None, recent_buffer=None,
+        trainer=trainer, buffer=buffer,
         pool=pool, eval_pipeline=None, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
-        shutdown=shutdown, eval_model=object(), bufs=None, config=config,
+        shutdown=shutdown, eval_model=object(), config=config,
         full_config=_GRAPH_FULL_CONFIG,
-        train_cfg={}, mixing_cfg={}, sink=sink, monitor_cfg=monitor_config(),
+        sink=sink, monitor_cfg=monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, trainer=trainer, sink=sink,
                            shutdown=shutdown, config=config)

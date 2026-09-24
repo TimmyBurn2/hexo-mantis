@@ -216,11 +216,11 @@ def _make_coordinator(*, eval_pipeline=None, config=None):
     shutdown = ShutdownState()
     sink = SpySink()
     coord = StepCoordinator(
-        trainer=trainer, buffer=buffer, pretrained_buffer=None, recent_buffer=None,
+        trainer=trainer, buffer=buffer,
         pool=pool, eval_pipeline=eval_pipeline, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
-        shutdown=shutdown, eval_model=object(), bufs=None,
-        config=config or _make_config(), full_config=_GRAPH_FULL_CONFIG, train_cfg={}, mixing_cfg={},
+        shutdown=shutdown, eval_model=object(),
+        config=config or _make_config(), full_config=_GRAPH_FULL_CONFIG,
         sink=sink, monitor_cfg=monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, trainer=trainer, buffer=buffer,

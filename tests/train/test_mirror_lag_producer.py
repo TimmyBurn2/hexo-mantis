@@ -19,9 +19,9 @@ def _coordinator(tmp_path: Path, sink: H.SpySink) -> StepCoordinator:
     trainer = H.tiny_graph_trainer(tmp_path, sink=sink)
     return StepCoordinator(
         monitor_cfg=monitor_config(),
-        trainer=trainer, buffer=H.uniform_graph_buffer(8), pretrained_buffer=None,
-        recent_buffer=None, pool=None, eval_pipeline=None, subsystems=None,
-        anchor_state=None, shutdown=ShutdownState(), eval_model=None, bufs=None,
+        trainer=trainer, buffer=H.uniform_graph_buffer(8),
+        pool=None, eval_pipeline=None, subsystems=None,
+        anchor_state=None, shutdown=ShutdownState(), eval_model=None,
         config=SimpleNamespace(selfplay_stall_timeout_sec=1800.0),
         full_config={"run_id": "lag"}, sink=sink)
 

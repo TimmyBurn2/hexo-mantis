@@ -30,7 +30,7 @@ def _drive(trainer: Any, buffer: Any, n: int) -> None:
         caps = MicrobatchCapsSpec(*H.non_binding_caps(wire))
         production_graph_step(
             trainer, buffer, H.GSPEC,
-            batch_size=4, augment=False, recency_weight=0.0, recent_buffer=None,
+            batch_size=4, augment=False, recency_weight=0.0,
             caps_provider=lambda caps=caps: caps,
             sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0,

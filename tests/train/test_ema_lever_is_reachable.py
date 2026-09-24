@@ -130,7 +130,7 @@ def _one_real_step(trainer: Trainer) -> None:
     buf.seed_sampler(H.SEED)
     replay = H.ReplayWireBuffer(buf, 8)
     run_declared_train_step(
-        trainer, replay, H.GSPEC, batch_size=8, augment=False, recency_weight=0.0, recent_buffer=None,
+        trainer, replay, H.GSPEC, batch_size=8, augment=False, recency_weight=0.0,
         caps_provider=lambda: MicrobatchCapsSpec(*H.non_binding_caps(replay.wire)),
         sample_threads_provider=lambda: 1, fast_policy_weight_provider=lambda: 0.0)
     assert trainer.step == 1, "premise: the drive took exactly one optimizer step"

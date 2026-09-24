@@ -30,7 +30,7 @@ def test_the_graph_step_publishes_policy_entropy_in_loss_info_and_the_step_event
     caps = H.non_binding_caps(replay.wire)
     info = run_declared_train_step(
         trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
-        recent_buffer=None, sample_threads_provider=lambda: 1,
+        sample_threads_provider=lambda: 1,
         fast_policy_weight_provider=lambda: 0.0,
         caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps[0], max_nodes=caps[1]))
     assert info["policy_entropy"] > 0.0, "a tiny net over a uniform buffer is nowhere near one-hot"

@@ -242,7 +242,7 @@ def run_graph_pretrain(
         loss_info = run_declared_train_step(
             trainer, buf, spec,
             batch_size=knobs.batch_size, augment=knobs.augment,
-            recency_weight=BC_RECENCY_WEIGHT, recent_buffer=None,
+            recency_weight=BC_RECENCY_WEIGHT,
             caps_provider=_caps, sample_threads_provider=_threads,
             fast_policy_weight_provider=_fast_policy_weight,
         )

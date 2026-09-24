@@ -328,7 +328,7 @@ def test_of2_3a_prime_bin_logits_row_count_is_asserted_at_the_call(tmp_path) -> 
     with pytest.raises(ValueError, match="bin_logits"):
         run_declared_train_step(
             trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
-            recent_buffer=None, sample_threads_provider=lambda: 1,
+            sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0,
             caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps[0], max_nodes=caps[1]))
 
@@ -357,13 +357,13 @@ def _two_arm_step(tmp_path, m: int):
         for _ in range(_WARMUP_STEPS):
             run_declared_train_step(
                 trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
-                recent_buffer=None, sample_threads_provider=lambda: 1,
+                sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0,
                 caps_provider=lambda: MicrobatchCapsSpec(max_edges=non_binding[0],
                                                          max_nodes=non_binding[1]))
         info = run_declared_train_step(
             trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
-            recent_buffer=None, sample_threads_provider=lambda: 1,
+            sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0,
             caps_provider=lambda c=caps: MicrobatchCapsSpec(max_edges=c[0], max_nodes=c[1]))
         out.append((info, H.grad_vector(trainer.model), H.param_vector(trainer.model)))
@@ -419,7 +419,7 @@ def _drive_with_spies(tmp_path, m: int, *, checkpoint_interval: int = 1):
     try:
         info = run_declared_train_step(
             trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
-            recent_buffer=None, sample_threads_provider=lambda: 1,
+            sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0,
             caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps[0], max_nodes=caps[1]))
     finally:
@@ -476,7 +476,7 @@ def test_of2_4_the_ema_update_fires_exactly_once_per_training_step(tmp_path, m: 
     before = trainer.step
     run_declared_train_step(
         trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
-        recent_buffer=None, sample_threads_provider=lambda: 1,
+        sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0,
         caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps[0], max_nodes=caps[1]))
     assert trainer.step - before == 1
@@ -544,7 +544,7 @@ def test_of2_7_a_single_over_cap_graph_raises_and_nothing_partial_happens(tmp_pa
     with pytest.raises(GraphMicroBatchOverCap) as exc:
         run_declared_train_step(
             trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
-            recent_buffer=None, sample_threads_provider=lambda: 1,
+            sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0,
             caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps[0], max_nodes=caps[1]))
     message = str(exc.value)
@@ -587,7 +587,7 @@ def test_of2_11_records_whether_deterministic_mode_rejects_index_add(tmp_path, c
             trainer = H.tiny_graph_trainer(tmp_path)
             run_declared_train_step(
                 trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
-                recent_buffer=None, sample_threads_provider=lambda: 1,
+                sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0,
                 caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps[0],
                                                          max_nodes=caps[1]))
@@ -603,9 +603,9 @@ def _coordinator(full_config: dict, trainer: Any, buffer: Any) -> StepCoordinato
     `StepCoordinatorConfig`, and `_run_training_step` reads only three fields off it."""
     return StepCoordinator(
         monitor_cfg=monitor_config(),
-        trainer=trainer, buffer=buffer, pretrained_buffer=None, recent_buffer=None,
+        trainer=trainer, buffer=buffer,
         pool=None, eval_pipeline=None, subsystems=None, anchor_state=None, shutdown=None,
-        eval_model=None, bufs=None,
+        eval_model=None,
         config=SimpleNamespace(selfplay_stall_timeout_sec=1800.0),
         full_config=full_config)
 
@@ -634,7 +634,7 @@ def test_of2_15b_the_graph_route_propagates_the_named_absence(tmp_path) -> None:
     replay = H.ReplayWireBuffer(H.uniform_graph_buffer(8), 4)
     with pytest.raises(MissingMicrobatchCapsError):
         run_declared_train_step(trainer, replay, H.GSPEC, batch_size=4, augment=False,
-                                recency_weight=0.0, recent_buffer=None, sample_threads_provider=lambda: 1,
+                                recency_weight=0.0, sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0,
                                 caps_provider=coord._microbatch_caps)
 

@@ -79,15 +79,15 @@ def test_of2_8_run5s_own_config_reaches_the_split_through_its_own_route(tmp_path
 
     coord = StepCoordinator(
         monitor_cfg=monitor_config(),
-        trainer=None, buffer=None, pretrained_buffer=None, recent_buffer=None, pool=None,
+        trainer=None, buffer=None, pool=None,
         eval_pipeline=None, subsystems=None, anchor_state=None, shutdown=None,
-        eval_model=None, bufs=None,
+        eval_model=None,
         config=SimpleNamespace(selfplay_stall_timeout_sec=1800.0),
         full_config=full_config)
     sink = H.SpySink()
     trainer = H.tiny_graph_trainer(tmp_path, sink=sink)
     run_declared_train_step(trainer, replay, H.GSPEC, batch_size=4, augment=False,
-                            recency_weight=0.0, recent_buffer=None,
+                            recency_weight=0.0,
                             caps_provider=coord._microbatch_caps, sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0)
     ev = sink.named("trainer_step")[0]

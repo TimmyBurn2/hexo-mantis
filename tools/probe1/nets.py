@@ -75,7 +75,7 @@ def sample_parts(buffer: HexgBuffer, config: dict[str, Any], spec: Any, *, batch
     """ONE production sample (no augmentation, no recency) as the trainer's lazy micro-batch parts + denominators."""
     caps = resolve_microbatch_caps(config)
     return _build_graph_parts(
-        _Stub(), buffer, spec, batch_size=batch_size, augment=False, recency_weight=0.0, recent_buffer=None,
+        _Stub(), buffer, spec, batch_size=batch_size, augment=False, recency_weight=0.0,
         caps_provider=lambda: caps, sample_threads_provider=lambda: threads,
         fast_policy_weight_provider=lambda: float(config["train"]["fast_policy_weight"]))
 

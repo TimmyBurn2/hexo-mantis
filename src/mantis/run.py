@@ -836,14 +836,9 @@ def compose_run(
                 _LOG.info("heldout_slice_opened ring=%s rows=%s batches=%s interval=%s",
                           heldout.ring_path, heldout.rows, heldout_spec.batches, heldout_spec.interval)
 
-        # RESERVED, NOT DEAD — the mixed-batch / pretrained-buffer path. `pretrained_buffer`,
-        # `recent_buffer` and `bufs` are None here, so `train/batch_assembly.py` contributes
-        # nothing while its config keys and resolver stamps stay live: a WIRING gap, not dead
-        # code. **This path MUST NOT be deleted** — it is the corpus-mix candidate mechanism
-        # of the bootstrap prereg row, one of the two arms the mint is still choosing between.
         with _seam("StepCoordinator"):
             coordinator = StepCoordinator(
-                trainer=trainer, buffer=buffer, pretrained_buffer=None, recent_buffer=None,
+                trainer=trainer, buffer=buffer,
                 pool=pool, eval_pipeline=eval_pipeline,
                 # `disk_guard` rides the EXISTING subsystems carrier: the O3 arm persists
                 # the ring, and the one abort reaching O3 with `abort_rule` still unrecorded
@@ -851,9 +846,9 @@ def compose_run(
                 # is the only term that can see it in time.
                 subsystems=SimpleNamespace(gpu_monitor=None, disk_guard=disk_guard),
                 anchor_state=resolved_anchor, shutdown=shutdown,
-                eval_model=trainer.deploy_module(), bufs=None,
+                eval_model=trainer.deploy_module(),
                 config=step_coordinator_cfg, full_config=config.model_dump(),
-                train_cfg={}, mixing_cfg={}, run_id=run_id,
+                run_id=run_id,
                 sink=run_safety.sink, heartbeat=run_safety.heartbeat, monitor_cfg=monitor_cfg,
                 heartbeat_watchdog=run_safety.watchdog, actor_sync=actor_sync, heldout=heldout,
             )
