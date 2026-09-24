@@ -1,6 +1,5 @@
-# >300 lines: ports the OLD resolver surface whole (config/checkpoint/state-dict resolvers +
-# corpus/anchor/held-out registries + the unified detector) as one cohesive delegating shim;
-# splitting would scatter the single resolver authority.
+# >300 lines: the config/checkpoint/state-dict resolvers, the corpus/held-out registries and the
+# unified detector are ONE resolver authority; splitting would scatter it.
 """Encoding resolvers — config-form, checkpoint-form, state-dict detection.
 
 The `resolve_*` functions are the blessed paths to construct an `EncodingSpec` outside the
@@ -11,7 +10,6 @@ signal.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -25,10 +23,6 @@ from mantis.encoding.registry import (
 from mantis.encoding.registry import (
     _load as _load_registry,
 )
-
-
-class ShapeMismatchError(Exception):
-    """Raised when state-dict shapes contradict an EncodingSpec."""
 
 
 class EncodingDeclarationConflictError(EncodingRegistryError):
@@ -47,10 +41,6 @@ class MissingEncodingError(EncodingRegistryError):
     """Raised when an encoding value is absent (LAW-11). A subclass of `EncodingRegistryError`, so
     a caller wanting to distinguish "never specified" from "unknown to the registry" can catch
     this one; the retired default arm is dead and an absent encoding is always an error."""
-
-
-# Sentinel used by expand_auto_paths to detect unresolved artifact paths.
-_AUTO = "<auto>"
 
 
 def normalize_encoding_name(enc: Any) -> str:
@@ -212,36 +202,8 @@ def _assert_no_registry_overlap() -> None:
 _assert_no_registry_overlap()
 
 
-# The graph lineage warm-starts from `identity.warm_start`, a minted config row, not a path table.
-_ANCHOR_PATHS: dict[str, str] = {}
-
-
-# Architecture resolver — ONE registry-derived map from an encoding NAME to the arch facts
-# consumers used to hardcode. Every field is computed from `lookup(name)`.
-@dataclass(frozen=True)
-class ArchSpec:
-    """Registry-derived architecture facts for a single encoding: a thin, typed, immutable view
-    over the registry `EncodingSpec`, every field computed from `lookup(name)` and never
-    hardcoded."""
-
-    name: str
-    k_max: int                     # = spec.k_max
-    policy_logit_count: int        # = spec.policy_logit_count
-
-
-def resolve_arch(name: Any) -> ArchSpec:
-    """Resolve an encoding NAME (str / dict / EncodingSpec) to its `ArchSpec` — the one
-    registry-derived resolver, so never shape-sniff a checkpoint or hardcode a plane count."""
-    spec = lookup(normalize_encoding_name(name))
-    return ArchSpec(
-        name=spec.name,
-        k_max=spec.k_max,
-        policy_logit_count=spec.policy_logit_count,
-    )
-
-
 def resolve_corpus_path(spec: Any) -> Path:
-    """Canonical corpus npz for an encoding.
+    """Canonical corpus ring for an encoding.
 
     Raises:
         EncodingRegistryError: if no canonical path is registered for spec.name.
@@ -253,46 +215,6 @@ def resolve_corpus_path(spec: Any) -> Path:
             "Add an entry to _CORPUS_PATHS in mantis/encoding/resolvers.py."
         )
     return Path(p)
-
-
-def resolve_anchor_path(spec: Any) -> Path:
-    """Canonical bootstrap anchor checkpoint for an encoding.
-
-    Raises:
-        EncodingRegistryError: if no canonical path is registered for spec.name.
-    """
-    p = _ANCHOR_PATHS.get(spec.name)
-    if p is None:
-        raise EncodingRegistryError(
-            f"No canonical anchor path registered for encoding {spec.name!r}. "
-            "Add an entry to _ANCHOR_PATHS in mantis/encoding/resolvers.py."
-        )
-    return Path(p)
-
-
-def expand_auto_paths(config: dict[str, Any], spec: Any) -> None:
-    """Expand ``<auto>`` literals in *config* using the canonical artifact paths, in place. Handles
-    both flat top-level keys and the nested keys in variant YAML files, and only where the current
-    value is the literal string ``"<auto>"``."""
-    if config.get("corpus_npz") == _AUTO:
-        config["corpus_npz"] = str(resolve_corpus_path(spec))
-    if config.get("bootstrap_anchor") == _AUTO:
-        config["bootstrap_anchor"] = str(resolve_anchor_path(spec))
-
-    mixing = config.get("mixing")
-    if isinstance(mixing, dict) and mixing.get("pretrained_buffer_path") == _AUTO:
-        mixing["pretrained_buffer_path"] = str(resolve_corpus_path(spec))
-        # Stamp provenance so a corpus loader can require a sha pin for THIS path — only
-        # <auto>-resolved paths carry the flag.
-        mixing["_pretrained_buffer_path_auto_resolved"] = True
-
-    eval_cfg = config.get("eval_pipeline")
-    if isinstance(eval_cfg, dict):
-        opponents = eval_cfg.get("opponents")
-        if isinstance(opponents, dict):
-            anchor_cfg = opponents.get("bootstrap_anchor")
-            if isinstance(anchor_cfg, dict) and anchor_cfg.get("path") == _AUTO:
-                anchor_cfg["path"] = str(resolve_anchor_path(spec))
 
 
 def resolve_from_config(cfg: Mapping[str, Any] | None) -> EncodingSpec:

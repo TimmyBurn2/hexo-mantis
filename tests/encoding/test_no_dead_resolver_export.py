@@ -10,15 +10,17 @@ import inspect
 import subprocess
 from pathlib import Path
 
+import pytest
+
 import mantis.encoding as enc
+from mantis.encoding import resolvers
 
 _REPO = Path(__file__).resolve().parents[2]
 
-#: NOT an exemption — a NAMED, QUEUED exclusion, kept honest by the anti-rot test below.
-#: `resolve_arch` has zero call sites but IS a dense plane-geometry surface whose deletion is
-#: operator-sign-off-locked; `expand_auto_paths` is the ROOT of the transitively-dead cluster
-#: pinned further down, so the census reports that cluster once rather than twice.
-_QUEUED_DEAD_EXPORTS = frozenset({"resolve_arch", "expand_auto_paths"})
+#: Deleted resolver surface: the eval resolver with a shape fallback, then the dense arch
+#: resolver and the `<auto>`-path cluster (anchor paths had no registered row).
+_DELETED = ("resolve_encoding_for_eval", "resolve_arch", "ArchSpec", "expand_auto_paths",
+            "resolve_anchor_path")
 
 
 def _call_sites(name: str) -> list[str]:
@@ -34,10 +36,12 @@ def _call_sites(name: str) -> list[str]:
     return [ln for ln in proc.stdout.splitlines() if f"def {name}(" not in ln]
 
 
-def test_the_deleted_resolver_is_gone_from_the_module_and_its_exports() -> None:
+@pytest.mark.parametrize("name", _DELETED)
+def test_the_deleted_resolver_is_gone_from_the_module_and_its_exports(name: str) -> None:
     """The direct assertion. Reintroducing the symbol reds this immediately."""
-    assert not hasattr(enc, "resolve_encoding_for_eval")
-    assert "resolve_encoding_for_eval" not in enc.__all__
+    assert not hasattr(enc, name)
+    assert name not in enc.__all__
+    assert not hasattr(resolvers, name)
 
 
 def test_no_reference_to_the_deleted_resolver_survives_anywhere() -> None:
@@ -74,7 +78,7 @@ def test_every_exported_function_has_a_call_site() -> None:
     """
     dead = [
         name for name in _exported_callables()
-        if name not in _QUEUED_DEAD_EXPORTS and not _call_sites(name)
+        if not _call_sites(name)
     ]
     assert dead == [], (
         f"exported functions with zero call sites outside their own module: {dead} "
@@ -94,34 +98,4 @@ def test_the_census_covers_the_whole_export_surface_not_a_name_prefix() -> None:
     assert len(non_prefixed) >= 2, (
         "the census is watching a name prefix, not the export surface; that is the scoping "
         f"R327(e) removed. Non-`resolve_` members seen: {sorted(non_prefixed)}"
-    )
-
-
-def test_the_queued_dead_exports_are_still_dead() -> None:
-    """Anti-rot on the exclusion above: if an excluded row is ever wired, this reds and forces
-    the list to shrink, so an exclusion cannot outlive its grounds."""
-    for name in sorted(_QUEUED_DEAD_EXPORTS):
-        sites = _call_sites(name)
-        assert not sites, (
-            f"{name} now HAS call sites — it is no longer dead, so remove it from "
-            f"_QUEUED_DEAD_EXPORTS and re-rule its queue row:\n  " + "\n  ".join(sites)
-        )
-
-
-def test_transitively_dead_cluster_is_recorded_not_silently_deleted() -> None:
-    """A transitively dead cluster is recorded, not silently deleted.
-
-    `resolve_anchor_path` has live callers, but they sit inside `expand_auto_paths`, which is
-    itself unreferenced. This reds the moment the cluster's root gains a consumer (making the
-    leaf genuinely live) or loses its body (making the leaf genuinely deletable).
-    """
-    leaf = _call_sites("resolve_anchor_path")
-    assert leaf, "resolve_anchor_path lost its callers — re-rule ADJ-WP12R-19's leaf half"
-    assert all("resolvers.py" in ln for ln in leaf), (
-        "resolve_anchor_path gained a caller OUTSIDE resolvers.py — it is now genuinely "
-        "live, not transitively dead:\n  " + "\n  ".join(leaf)
-    )
-    assert not _call_sites("expand_auto_paths"), (
-        "expand_auto_paths — the dead cluster's ROOT — gained a caller, which makes "
-        "resolve_anchor_path genuinely reachable. Re-rule ADJ-WP12R-19 accordingly."
     )

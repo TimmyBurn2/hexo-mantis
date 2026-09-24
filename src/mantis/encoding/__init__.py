@@ -100,14 +100,10 @@ _registry_sha_handshake()
 
 
 from mantis.encoding.resolvers import (  # noqa: E402 — after the import handshake
-    ArchSpec,
     assert_not_heldout_sha,
     detect_encoding_from_state_dict,
-    expand_auto_paths,
     held_out_shas,
     normalize_encoding_name,
-    resolve_anchor_path,
-    resolve_arch,
     resolve_corpus_path,
     resolve_corpus_sha_pin,
     resolve_from_checkpoint,
@@ -115,18 +111,14 @@ from mantis.encoding.resolvers import (  # noqa: E402 — after the import hands
 )
 
 __all__ = [
-    "ArchSpec",
     "EncodingSpec",
     "EncodingRegistryError",
     "all_specs",
     "assert_not_heldout_sha",
     "detect_encoding_from_state_dict",
-    "expand_auto_paths",
     "held_out_shas",
     "lookup",
     "normalize_encoding_name",
-    "resolve_anchor_path",
-    "resolve_arch",
     "resolve_corpus_path",
     "resolve_corpus_sha_pin",
     "resolve_from_checkpoint",
