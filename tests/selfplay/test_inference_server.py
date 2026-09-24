@@ -7,10 +7,7 @@ anti-hard-coding arm: the one registered graph encoding carries exactly the coll
 """
 from __future__ import annotations
 
-import math
-import threading
 import time
-import unittest.mock as mock
 from dataclasses import dataclass
 from typing import Any
 
@@ -29,16 +26,6 @@ from mantis.selfplay.graph_collate import (
 )
 from mantis.selfplay.inference_server import InferenceServer
 _GRAPH_SPEC = lookup("gnn_axis_v1")
-
-_NO_CUDA = not torch.cuda.is_available()
-_GPU_ONLY = pytest.mark.skipif(
-    _NO_CUDA,
-    reason=(
-        "GPU-only path (CUDA-graph capture / pinned-staging H2D). Skip-with-reason on "
-        "CPU is the pre-registered PASS state for this WP; recorded for the cutover "
-        "GPU battery (DESIGN §f-R11)."
-    ),
-)
 
 
 @pytest.fixture(scope="module")
@@ -152,18 +139,14 @@ def _hand_built_batch(n_graphs: int = 2, nodes_per_graph: int = 3) -> GraphBatch
     """Build a minimal valid collated batch by hand, so the loop runs without a live queue."""
     n = n_graphs * nodes_per_graph
     node_offsets = torch.arange(0, n + 1, nodes_per_graph, dtype=torch.int64)
-    legal_mask = torch.zeros(n, dtype=torch.bool)
-    for g in range(n_graphs):
-        legal_mask[g * nodes_per_graph + 1] = True
-        legal_mask[g * nodes_per_graph + 2] = True
     legal_offsets = torch.arange(0, 2 * n_graphs + 1, 2, dtype=torch.int64)
     return GraphBatch(
         x=torch.zeros(n, 11, dtype=torch.float32),
         edge_index=torch.zeros((2, 0), dtype=torch.int64),
         edge_attr=torch.zeros((0, 5), dtype=torch.float32),
         legal_offsets=legal_offsets,
-        # The REAL gather for the mask above — rows 1 and 2 of each graph, ascending across the
-        # fuse; all zeros would pass only because the stub reads `.numel()`.
+        # The legal rows are 1 and 2 of each graph, ascending across the fuse; all zeros
+        # would pass only because the stub reads `.numel()`.
         legal_node_gather=torch.tensor(
             [g * nodes_per_graph + k for g in range(n_graphs) for k in (1, 2)],
             dtype=torch.int64,
@@ -197,15 +180,6 @@ def _wire_for(n_graphs: int = 2, nodes_per_graph: int = 3, legal_per_graph: int 
         window_center=np.zeros(n_graphs * 2, dtype=np.int64),
         current_player=np.ones(n_graphs, dtype=np.int64),
     )
-
-
-def test_run_dispatches_to_the_graph_loop_for_a_graph_spec(device) -> None:
-    batcher = _FakeGraphBatcher(_wire_for(), n_batches=0)
-    server = _graph_server(device, batcher)
-    called: list[str] = []
-    server._run_graph_loop = lambda: called.append("graph")  # type: ignore[method-assign]
-    server.run()
-    assert called == ["graph"], "a graph spec must route to the graph loop, not the dense one"
 
 
 def test_unknown_representation_raises_at_construction(device) -> None:

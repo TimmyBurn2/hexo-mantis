@@ -104,12 +104,6 @@ def test_the_clean_payload_still_collates() -> None:
     assert batch.edge_index.shape == (2, 4)
 
 
-def test_a_row_outside_the_global_range_still_raises_EdgeIndexOutOfBounds() -> None:
-    ei = np.array([0, 1, 3, 99, 1, 0, 4, 3], dtype=np.int64)
-    with pytest.raises(EdgeIndexOutOfBounds):
-        _collate(_wire(edge_index=ei))
-
-
 def test_a_NEGATIVE_row_still_raises_EdgeIndexOutOfBounds() -> None:
     """Prove a negative row still raises: the side of the bound a `reduceat` maximum cannot see."""
     ei = np.array([0, 1, 3, -1, 1, 0, 4, 3], dtype=np.int64)

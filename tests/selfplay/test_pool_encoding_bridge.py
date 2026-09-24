@@ -37,7 +37,7 @@ def _run5_dump() -> dict[str, Any]:
 
 
 def test_pool_resolves_encoding_from_a_real_run_config_dump() -> None:
-    """THE TD-4 oracle. RED at HEAD with `MissingEncodingError`."""
+    """THE TD-4 oracle: the pool resolves a REAL run-config dump's encoding."""
     resolved = resolve_pool_encoding(_run5_dump(), arch=None)
     # Against the REGISTRY, not a literal: the identity moved from `gnn_axis_v1` to
     # `gnn_axis_r8` at run6's mint, and this row's claim is that the pool resolves a REAL

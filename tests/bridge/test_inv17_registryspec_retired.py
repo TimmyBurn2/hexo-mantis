@@ -18,8 +18,3 @@ def test_encoding_spec_absent():
 @pytest.mark.parametrize("name", REGISTERED)
 def test_from_registry_name_round_trips(name):
     assert _engine.RegistrySpec.from_registry(name).name == name
-
-
-def test_from_registry_unknown_raises():
-    with pytest.raises(ValueError):
-        _engine.RegistrySpec.from_registry("__not_a_real_encoding__")

@@ -13,9 +13,8 @@ downstream-drop the DESIGN_T §1 census exists to catch.
 Constructions deliberately push fixture-recorded visits (NOT `record_position_graph`)
 — out of mutation M-J's reach (PREREG_T §3 M-J green column; T-2 reconciliation).
 
-PRE-FIX status at HEAD: GREEN (stage 3 is provably conserving — DESIGN_T §1.5); these
-are carry pins, red-armed by M-A (fixture pairs vs a re-dropping export at the fix
-commit) and M-F/M-L class mutations downstream.
+Carry pins: red-armed by M-A (fixture pairs vs a re-dropping export) and M-F/M-L class
+mutations downstream.
 Killers (PREREG_T §3): O1p — M-A; QA — M-A (mass leg).
 """
 from __future__ import annotations
@@ -24,7 +23,6 @@ import json
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from mantis._engine import HexgBuffer
 

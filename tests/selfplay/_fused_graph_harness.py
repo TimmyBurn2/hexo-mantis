@@ -1,7 +1,7 @@
 """Shared rig for the memory-bounded graph-inference-fusion oracles.
 
-Written before the feature exists, so it imports only surfaces LIVE at HEAD and collects today,
-while the suites importing the not-yet-written names are the ones that go RED. Real:
+Imports only surfaces LIVE at HEAD, so the rig cannot mask an import regression the suites
+would otherwise catch. Real:
 `InferenceServer._run_graph_loop` driven end to end, `segment_softmax`,
 `stone_mask_from_batch`, the finiteness gate, the D2H copies and the submit call. Fake: the ARCH
 (an identity-keyed stub net, so a transposition is visible instead of washed out) and

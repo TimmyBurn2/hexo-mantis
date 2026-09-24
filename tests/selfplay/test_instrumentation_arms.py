@@ -1,12 +1,13 @@
-"""Suite G remainder — G-01 … G-15 (old-suite ports) plus G-17 (the scipy pin).
+"""Suite G remainder — the stateful arms (G-01 … G-05, G-12, G-13) plus G-17 (the scipy pin).
 
-IMPL-written. `test_instrumentation.py` is the oracle file and carries G-16 only, and the slice
-DAG never assigned G-01 … G-15 or G-17 to a slice, so this file closes that coverage gap.
+IMPL-written. `test_instrumentation.py` is the oracle file and carries G-16 only, and its
+pure-function battery already pins every vector the old suite's G-06 … G-11 and G-14/G-15
+arms drove, so those ports are retired in favour of the captured goldens.
 
 Source of truth is the frozen old suite and the frozen module it tested: every vector is the old
 test's own vector and every ported assertion is the old assertion. Coverage is the 100/50/200
-windows, the P90 rule `sorted[max(0, int(n*0.9)-1)]`, the ply→player compound-turn split, the
-longest-line cap at `_WIN_LENGTH`, threshold connectivity, and the disabled/empty arms.
+windows, the P90 rule `sorted[max(0, int(n*0.9)-1)]`, the ply→player compound-turn split,
+and the disabled arms.
 
 G-17 pins that `spearman_rho_range_vs_draw` degrades to None when scipy cannot be imported. scipy
 is deliberately NOT a declared dependency, so the field is None until it is declared, and the pin
@@ -19,13 +20,7 @@ import importlib.util
 import threading
 
 from mantis._engine import DEFAULT_CLUSTER_THRESHOLD
-from mantis.selfplay.instrumentation import (
-    PoolInstrumentation,
-    _compute_colony_extension,
-    _compute_longest_line,
-    _compute_n_components,
-    _compute_stride5_metrics,
-)
+from mantis.selfplay.instrumentation import PoolInstrumentation
 
 
 def _lock() -> threading.Lock:
@@ -122,15 +117,6 @@ def test_g05b_current_stride5_p90_getter_matches_window() -> None:
     assert instr.current_stride5_p90(lk) == 8
 
 
-def test_g06_colony_extension_pure_function() -> None:
-    """G-06 — PASS iff two stones far apart (P1 at (0,0), P2 at (50,50)) both count as colony extension: total == 2, count == 2."""
-    # P1 at (0,0); P2 far away at (50,50)
-    moves = [(0, 0), (50, 50)]
-    count, total = _compute_colony_extension(moves)
-    assert total == 2
-    assert count == 2
-
-
 # Ply->player rule: ply0=P1, [1,2]=P2, [3,4]=P1, [5,6]=P2, [7,8]=P1, [9,10]=P2, [11]=P1, so six
 # P1 plies form a 6-in-a-row on the r=0 q-axis with the P2 filler far away.
 _SIX_IN_A_ROW_P1 = [
@@ -142,56 +128,6 @@ _SIX_IN_A_ROW_P1 = [
     (54, 50), (55, 50),  # ply9,10 P2
     (5, 0),            # ply11 P1  -> P1 = (0..5, 0)
 ]
-
-# P1 = two disjoint pairs: {(0,0),(1,0)} and {(20,0),(21,0)}; gap 19 > thresh 5.
-_TWO_CLUSTER_P1 = [
-    (0, 0),            # ply0  P1   clusterA
-    (50, 50), (51, 50),  # ply1,2 P2
-    (1, 0), (20, 0),   # ply3,4 P1  clusterA, clusterB
-    (52, 50), (53, 50),  # ply5,6 P2
-    (21, 0),           # ply7  P1   clusterB
-]
-
-
-def test_g07_longest_line_six_in_a_row() -> None:
-    """G-07 — PASS iff a 6-in-a-row for P1 gives longest_line == 6 and fraction == 1.0 (6 stones, all on one line)."""
-    ll, frac = _compute_longest_line(_SIX_IN_A_ROW_P1, 5, 1)
-    assert ll == 6
-    assert abs(frac - 1.0) < 1e-9
-
-
-def test_g08_longest_line_capped_at_six() -> None:
-    """G-08 — PASS iff 7 collinear P1 stones report longest_line == 6 (capped at `_WIN_LENGTH`), fraction == 6/7."""
-    seven_collinear = [
-        (0, 0),            # ply0  P1
-        (50, 50), (51, 50),  # ply1,2 P2
-        (1, 0), (2, 0),    # ply3,4 P1
-        (52, 50), (53, 50),  # ply5,6 P2
-        (3, 0), (4, 0),    # ply7,8 P1
-        (54, 50), (55, 50),  # ply9,10 P2
-        (5, 0), (6, 0),    # ply11,12 P1 -> P1 = (0..6, 0), raw run 7
-    ]
-    ll, frac = _compute_longest_line(seven_collinear, 5, 1)
-    assert ll == 6
-    assert abs(frac - 6.0 / 7.0) < 1e-9
-
-
-def test_g09_n_components_two_disjoint_clusters() -> None:
-    """G-09 — PASS iff two P1 pairs separated by 19 > threshold(5) give 2 components."""
-    nc = _compute_n_components(_TWO_CLUSTER_P1, 5, 1)
-    assert nc == 2
-
-
-def test_g10_n_components_cluster_threshold_honored() -> None:
-    """G-10 — PASS iff the same two pairs (gap 19) give 2 components at threshold 5 but 1 at threshold 19."""
-    assert _compute_n_components(_TWO_CLUSTER_P1, 5, 1) == 2
-    assert _compute_n_components(_TWO_CLUSTER_P1, 19, 1) == 1
-
-
-def test_g11_structural_metrics_empty() -> None:
-    """G-11 — PASS iff empty move histories give (0, 0.0) longest line and 0 components."""
-    assert _compute_longest_line([], 5, 1) == (0, 0.0)
-    assert _compute_n_components([], 5, 1) == 0
 
 
 def test_g12_structural_metrics_via_on_game_complete() -> None:
@@ -217,32 +153,8 @@ def test_g13_structural_metrics_off_when_log_disabled() -> None:
     )
 
 
-def test_g14_stride5_metrics_empty_history() -> None:
-    """G-14 — PASS iff an empty history gives (0, 0)."""
-    assert _compute_stride5_metrics([]) == (0, 0)
-
-
-def test_g15_stride5_metrics_chain_along_r_row() -> None:
-    """G-15 — PASS iff four stones on r=0 at q ∈ {3, 8, 13, 18} form a stride-5 chain of length 4, with row_max_density 4."""
-    # Four stones on r=0 at q ∈ {3, 8, 13, 18} → stride-5 chain of length 4.
-    moves = [(3, 0), (8, 0), (13, 0), (18, 0)]
-    stride5_max, row_max = _compute_stride5_metrics(moves)
-    assert stride5_max == 4
-    assert row_max == 4
-
-
-def test_g15b_stride5_metrics_no_stride5_pattern() -> None:
-    """G-15 (adjacent-trio arm) — three adjacent stones: row_max counts them (3), stride5 reads each as a degenerate length-1 chain (no stride-5 follow-on)."""
-    # Adjacent stones — row_max counts them; stride5_max reads each stone as
-    # a degenerate "chain of length 1" (no stride-5 follow-on in row).
-    moves = [(0, 0), (1, 0), (2, 0)]
-    stride5_max, row_max = _compute_stride5_metrics(moves)
-    assert stride5_max == 1
-    assert row_max == 3
-
-
 def _ten_varied_games(instr: PoolInstrumentation, lock: threading.Lock) -> None:
-    """Fill the model-version archive with 10 games of varied range + mixed outcome so the `n >= 10` branch that computes the spearman correlation is genuinely reached (a constant series would make even a present scipy return NaN, muddying the pin)."""
+    """Fill the archive with 10 varied games so the `n >= 10` spearman branch is genuinely reached (a constant series would return NaN even with scipy present, muddying the pin)."""
     for i in range(10):
         _game_complete(instr, lock, mv_min=0, mv_max=i + 1, mv_distinct=i + 1,
                        winner_code=(0 if i % 2 == 0 else 1))

@@ -53,12 +53,11 @@ def _collate(fields: dict[str, Any], **kw: Any):
 #: drop retired keys: a byte-parity capture whose bytes get rewritten when the code changes has
 #: stopped being a capture. The retirement is asserted POSITIVELY below rather than skipped,
 #: because a silent `continue` over an unmatched golden key is a check that stopped checking.
-_RETIRED_FIELDS = RETIRED_BATCH_FIELDS
 
 
 def _assert_tensor_parity(batch, golden: dict[str, np.ndarray], label: str) -> None:
     for field, expected in golden.items():
-        if field in _RETIRED_FIELDS:
+        if field in RETIRED_BATCH_FIELDS:
             assert not hasattr(batch, field), (
                 f"{label}.{field}: the batch produces a field this capture records as RETIRED. "
                 "Either the retirement was reverted without updating this list, or a field was "

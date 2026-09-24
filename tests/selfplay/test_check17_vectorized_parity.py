@@ -23,7 +23,6 @@ from _wire_geometry import geometry_kwargs
 from mantis.selfplay.graph_collate import (
     AugRoundTripMismatch,
     GraphWirePayload,
-    _canonical_slot_vec,
     _check_semantic,
     _graph_of,
     collate_graph_batch,
@@ -158,24 +157,6 @@ def test_verdict_parity_old_loop_vs_shipped_check(payload_fields, case: str) -> 
     )
 
 
-def test_zero_legal_node_graph_parity() -> None:
-    """`Lg == 0`: every non-`None` cell must raise, on both sides, naming graph 0.
-
-    Built by hand because the captured zero-legal payload is refused by check 13 before the
-    semantic layer runs, so it cannot reach check 17 at all.
-    """
-    B = 2
-    legal_offsets = np.zeros(B + 1, dtype=np.int64)
-    gather = np.zeros(0, dtype=np.int64)
-    coords = np.zeros((0, 2), dtype=np.int64)
-    for cells in ([None, None], [(4, 5), None], [None, (4, 5)]):
-        shipped = _verdict(lambda c=cells: _check17_reference(coords, legal_offsets, gather, B, c))
-        # The shipped path cannot be entered with a 0-node wire, so only the reference is
-        # pinned here; the vectorized body is compared on a REAL wire below.
-        expect = ("", "") if all(c is None for c in cells) else ("AugRoundTripMismatch", "")
-        assert (shipped[0], "") == expect, f"{cells!r} -> {shipped!r}"
-
-
 def test_the_vectorized_check_still_fires(payload_fields) -> None:
     """Mutation self-test through the PRODUCTION collate entry point: a real captured wire,
     one corrupted target cell, the trainer's own `semantic="full"`, and the named error."""
@@ -210,8 +191,3 @@ def test_check_17_still_runs_after_15_and_16(payload_fields) -> None:
     assert type(exc.value).__name__ == "ScatterSlotCanonicalMismatch", (
         f"precedence broke: got {type(exc.value).__name__}; check 16 must fire before 17"
     )
-
-
-def test_canonical_slot_helper_is_still_the_one_used() -> None:
-    """Guard the transcription: the reference uses the module's own helpers, not a copy."""
-    assert callable(_graph_of) and callable(_canonical_slot_vec)

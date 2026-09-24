@@ -2,14 +2,14 @@
 
 `LocalInferenceEngine` builds its graph server from a hand-built dict with no `RunConfig`, so
 the caps are THREADED there rather than hardcoded: a hardcoded cap would be a second authority
-over one byte budget, on the arm that runs with its own allocator on the eval device. The caps
-must also survive the eval process seam, or the child runs unbounded and the parent cannot tell.
+over one byte budget, on the arm that runs with its own allocator on the eval device. The caps'
+survival across the eval process seam is pinned by test_inference_batching_threaded.py's
+round-spec round trip.
 """
 from __future__ import annotations
 
 import ast
 import inspect
-import json
 from pathlib import Path
 
 import pytest
@@ -21,7 +21,6 @@ from mantis.config.resolve.fused_graph_caps import (
     MissingFusedGraphCapsError,
 )
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
-from mantis.eval.rounds import GateSpec, RoundSpec
 from mantis.model import GnnArch, build_net
 from mantis.selfplay.inference_local import LocalInferenceEngine
 from mantis.selfplay.inference_server import InferenceServer
@@ -78,20 +77,6 @@ def test_fg6_03_the_local_engine_takes_a_required_keyword_only_caps_parameter() 
         "authority over one byte budget, on the path that has no config to be the first")
 
 
-def test_fg6_04_a_graph_engine_cannot_be_built_without_the_caps() -> None:
-    """Prove omitting the caps is a TypeError at the call, not a surprise inside an eval round."""
-    net = build_net(GnnArch(in_dim=H.GRAPH_SPEC.node_feat_dim,
-                            edge_dim=H.GRAPH_SPEC.edge_feat_dim, hidden=16, num_layers=1,
-                            policy_hidden=16, value_hidden=16)).to(_CPU)
-    net.eval()
-    with pytest.raises(TypeError, match=r"missing 1 required keyword-only argument: 'fused_graph_caps'"):
-        LocalInferenceEngine(  # type: ignore[call-arg]
-            net, _CPU, encoding_spec=H.GRAPH_SPEC,
-            inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10),
-            max_in_flight=8,
-        )
-
-
 def test_fg6_06_the_threaded_caps_reach_the_engines_own_server() -> None:
     """Prove the threaded caps reach the engine's own server, not merely get stored."""
     net = build_net(GnnArch(in_dim=H.GRAPH_SPEC.node_feat_dim,
@@ -138,49 +123,3 @@ def test_fg6_07_no_cap_value_is_hardcoded_at_the_standalone_construction_site() 
                     f"{_INFERENCE_LOCAL.relative_to(_REPO)}. The spec is threaded as a "
                     "resolver-produced dataclass (the `RoundSpec` precedent), not smuggled "
                     "back through a config-shaped literal.")
-
-
-def _round_spec_base() -> dict:
-    """Build the `RoundSpec` field set minus the posture members and the caps member."""
-    return dict(
-        round_index=0, round_id="r1", step=1, candidate_snapshot="c.pt", best_snapshot=None, best_step=None,
-        encoding="gnn_axis_v1", worker_device="cpu",
-        gate=GateSpec(stride=1, screen_games=2, confirm_games=2, promotion_winrate=0.55,
-                      screen_confirm_lo=0.44, deploy_sims=1, opening_book="b",
-                      bootstrap_resamples=1, min_distinct_per_pair=1, seed_base=1,
-                      run_gate=False, sequential=None),
-        rung_jobs=[], random_floor_games=0, random_model_sims=1,
-        seed_base=1, round_timeout_sec=1.0,
-        result_path="r.json", progress_path="p.txt",
-        game_record=None,
-        ply_cap_adjudication=None, strength_floor=None,
-    )
-
-
-def test_fg6_08_the_round_spec_carries_the_caps_across_the_process_seam() -> None:
-    """Prove the round spec rehydrates the caps to their dataclass across the process seam.
-
-    A raw mapping would give the child an attribute error at the moment it bounds a forward.
-    """
-    assert "fused_graph_caps" in RoundSpec.__dataclass_fields__, (
-        "`RoundSpec` carries no `fused_graph_caps` field — the resolved caps stop at the "
-        "process boundary and the eval child (its OWN allocator, `eval.worker_device: cuda`) "
-        "runs unbounded")
-    caps = FusedGraphCapsSpec(max_fused_edges=4_500_000, max_fused_nodes=170_000)
-    spec = RoundSpec(**_round_spec_base(), fused_graph_caps=caps, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, max_plies=128, leaf_build_threads=1, concurrency=1, rung_concurrency=1,
-                     inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10))
-    back = RoundSpec.from_dict(json.loads(json.dumps(spec.to_dict())))
-    assert isinstance(back.fused_graph_caps, FusedGraphCapsSpec), (
-        f"the caps came back as {type(back.fused_graph_caps).__name__}, not the dataclass — "
-        "the child would raise on the first attribute read")
-    assert back.fused_graph_caps == caps
-    assert back == spec
-
-
-def test_fg6_08_a_grid_round_carries_none_across_the_same_seam() -> None:
-    """Prove a grid round's `None` round-trips as `None`, not as a rehydration failure."""
-    spec = RoundSpec(**_round_spec_base(), fused_graph_caps=None, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, max_plies=128, leaf_build_threads=1, concurrency=1, rung_concurrency=1,
-                     inference_batching=None)
-    back = RoundSpec.from_dict(json.loads(json.dumps(spec.to_dict())))
-    assert back.fused_graph_caps is None
-    assert back == spec

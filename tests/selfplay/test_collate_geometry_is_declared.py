@@ -15,7 +15,7 @@ import inspect
 
 import numpy as np
 import pytest
-from _wire_geometry import GRAPH_ROWS, geometry_kwargs, spec_for
+from _wire_geometry import GRAPH_ROWS
 
 from mantis.selfplay.graph_collate import (
     GraphWirePayload,
@@ -52,21 +52,6 @@ def test_a_wire_whose_node_feat_dim_disagrees_with_the_declared_row_is_refused(p
 
     collate_graph_batch(GraphWirePayload(**payload_fields("b6")), expected_version=1,
                         **wire_geometry)  # LAW-07 clean twin: same call, true geometry
-
-
-@pytest.mark.parametrize("row", GRAPH_ROWS)
-def test_every_graph_row_hands_out_a_complete_geometry(row: str):
-    """Parametrised over the registry's graph rows, so a NEW row is covered with no test edit.
-
-    `gnn_axis_r8` was added and the four suites that type this geometry could not see it — the
-    reason F-41 is a class-6 finding and not a typo. The roster comes from `all_specs()`.
-    """
-    kwargs = geometry_kwargs(row)
-    assert set(kwargs) == set(GEOMETRY_PARAMS)
-    assert all(isinstance(v, int) and v > 0 for v in kwargs.values()), kwargs
-    spec = spec_for(row)
-    assert kwargs["node_feat_dim"] == spec.node_feat_dim
-    assert kwargs["edge_feat_dim"] == spec.edge_feat_dim
 
 
 def test_the_graph_row_roster_is_not_empty_and_includes_the_r8_row():

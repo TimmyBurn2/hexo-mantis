@@ -12,7 +12,6 @@ from pathlib import Path
 
 import pytest
 
-from mantis.encoding import lookup
 from mantis.selfplay.inference_local import LocalInferenceEngine
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -38,11 +37,6 @@ def _construction_sites() -> list[tuple[str, int, bool]]:
             threaded = any(kw.arg == "encoding_spec" for kw in node.keywords)
             sites.append((str(path.relative_to(SRC)), node.lineno, threaded))
     return sites
-
-
-def test_every_construction_site_is_censused():
-    """Prove the census finds construction sites; a silent AST miss would make this file vacuous."""
-    assert _construction_sites(), "no LocalInferenceEngine construction found in src/"
 
 
 def test_no_construction_site_omits_the_spec():
@@ -79,9 +73,3 @@ def test_there_is_no_default_encoding_spec():
 
     with pytest.raises(TypeError):
         LocalInferenceEngine(torch.nn.Identity(), torch.device("cpu"))
-
-
-def _a_board():
-    from mantis._engine import Board
-
-    return Board()

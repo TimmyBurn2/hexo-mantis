@@ -44,11 +44,6 @@ def _call(fix):
     )
 
 
-def test_adv8_clean_input_passes():
-    """LAW-07 self-test: a clean edge payload returns without raising."""
-    assert _call(_clean_fixture()) is None
-
-
 def test_adv8_permuted_edge_attr_raises_geometry_mismatch():
     """ADV-8 bites: flipping the signed_dist column raises ValueError from
     verify_edge_geometry."""

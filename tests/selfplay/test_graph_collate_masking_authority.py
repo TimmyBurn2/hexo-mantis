@@ -7,13 +7,13 @@ path to omit it and fall back to a recomputed one.
 """
 from __future__ import annotations
 
+import ast
 import inspect
 import textwrap
 
 from mantis.model.gnn import GnnNet
 from mantis.selfplay.graph_collate import GraphWirePayload, collate_graph_batch
 from mantis.train.losses import ragged_policy_ce
-from mantis.train.trainer.core import Trainer
 
 
 def test_the_gather_and_the_CSR_are_one_set_total_count(payload_fields, wire_geometry) -> None:
@@ -56,12 +56,6 @@ def test_the_legal_set_is_never_RE_DERIVED_inside_its_consumers() -> None:
     is a guard with nothing to be red about. Derived from the AST, because a text scan for
     `"legal_offsets ="` also matches a comment, a docstring, or `legal_offsets == x`.
     """
-    import ast
-    import inspect
-    import textwrap
-
-    from mantis.train.losses import ragged_policy_ce
-
     tree = ast.parse(textwrap.dedent(inspect.getsource(ragged_policy_ce)))
     params = {p.arg for p in tree.body[0].args.args} | {p.arg for p in tree.body[0].args.kwonlyargs}
     assert "legal_offsets" in params, (

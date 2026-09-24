@@ -18,8 +18,6 @@ from collections import deque
 from pathlib import Path
 from typing import Any
 
-import pytest
-
 from mantis._engine import DEFAULT_CLUSTER_THRESHOLD
 from mantis.selfplay import pool_drain
 from mantis.selfplay.instrumentation import PoolInstrumentation
@@ -87,9 +85,6 @@ class _ScriptedBuffer:
     def __init__(self) -> None:
         self.size = 0
         self.capacity = 100_000
-
-    def push_many(self, *args, **kwargs):
-        return None
 
     def push_graph_position(self, *args, **kwargs):
         return None

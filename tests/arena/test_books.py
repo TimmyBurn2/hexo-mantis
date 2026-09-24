@@ -1,10 +1,9 @@
 """⊕ WP11-A arena — opening-book authority (LAW-15 sha-pin; design §a.2 books.py,
 §b arena/test_books.py).
 
-RED-at-import until IMPL writes `mantis.arena.books`. `tools/mint_opening_book.py` (the
-dev-only deterministic minter) is also new — the reproducibility test invokes it as a
-subprocess and is RED today via a nonzero/missing-file failure, not an import error,
-since the minter is a standalone script outside this suite's import surface.
+`tools/mint_opening_book.py` (the dev-only deterministic minter) is invoked as a subprocess
+by the reproducibility test, and the minter being a standalone script keeps it outside this
+suite's import surface.
 
 ORACLE-CHOSEN SEAM: `mantis.arena.books` functions accept an explicit `books_dir: Path`
 kwarg (defaulting, per the design, to the repo-packaged `src/mantis/arena/books/`) so this

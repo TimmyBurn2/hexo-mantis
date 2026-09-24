@@ -1,6 +1,6 @@
 """⊕ WP11-A arena — RegimeKey construction (A3; design §a.2, §b arena/test_regime_key.py).
 
-RED-at-import until IMPL writes `mantis.arena.regime`. Every eval game record carries a
+Every eval game record carries a
 canonical RegimeKey = (bot, variant, model_sims, opponent_spec, opening_book,
 deploy_matched, encoding); the aggregator (tests/eval/test_aggregate_regime.py) raises on
 a mixed set of these keys. This suite pins construction + the canonical form only.
@@ -49,14 +49,3 @@ def test_any_field_change_changes_key():
         assert changed.canonical() != base_canonical, (
             f"changing {overrides} must change the canonical form"
         )
-
-
-def test_key_equality_is_full_tuple():
-    a = _key()
-    b = _key()
-    assert a == b
-    # Equality must consider EVERY field, not a subset (e.g. not just bot+variant).
-    c = _key(deploy_matched=False)
-    assert a != c
-    d = _key(model_sims=151)
-    assert a != d

@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import numpy as np
 import pytest
 import torch
 
@@ -290,9 +289,6 @@ class _Buffer:
 class _RStats:
     mcts_mean_depth = 3.0
     mcts_mean_root_concentration = 0.1
-    cluster_value_std_mean = 0.0
-    cluster_policy_disagreement_mean = 0.0
-    cluster_variance_sample_count = 0
 
 
 def _emit(pool: Any) -> dict[str, Any]:

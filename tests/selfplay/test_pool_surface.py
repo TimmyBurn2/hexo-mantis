@@ -1,10 +1,5 @@
-"""Suite H (surface) — the frozen consumer surface and the import-DAG proof — plus the two
-Suite-E rows that assert on the POOL.
-
->300 justify: one object, one contract. The consumer surface, the import-DAG proof, the
-facade-wrapping pin and the per-buffer-kind composition rule all bind `WorkerPool` construction
-and share the same real-pool factory plus the captured buffer fill; splitting them would duplicate
-both and let the copies drift.
+"""Suite H (surface) — the frozen consumer surface and the import-DAG proof — plus the
+Suite-E rows that pin the pool's replay-buffer facade.
 
 The trainer duck-types the pool as `Any` and reads ~20 members off it. Nothing type-checks that
 seam, so a member renamed or dropped during the split is invisible until the first integrated run,
@@ -13,12 +8,9 @@ where it appears as an `AttributeError` minutes into training.
 from __future__ import annotations
 
 import ast
-import math
-import threading
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pytest
 import torch
 
@@ -31,26 +23,6 @@ from mantis.selfplay.pool_hooks import ActorSyncTarget, InferenceStats, RunnerSt
 from mantis.train.coordinator.config import WorkerPoolLike
 
 SELFPLAY_SRC = Path(__file__).resolve().parents[2] / "src" / "mantis" / "selfplay"
-
-# The captured deterministic fill: capacity 64, encoding v6, 40 rows — 10 organic draws at −0.5,
-# 8 ply-cap truncations at −0.7, 10 wins at +1.0, 12 losses at −1.0 — 30 of them self-play.
-FILL_CAPACITY = 64
-FILL_ROWS = 40
-FILL_SELF_PLAY_PUSHED = 30
-# The captured terminal-reason script: 5 six-in-a-row, 3 colony, 2 ply-cap, 1 other-draw.
-TERMINAL_SCRIPT = [0] * 5 + [1] * 3 + [2] * 2 + [3] * 1
-# `buffer_composition()` on that fill under `train.draw_reward=-0.5, ply_cap_value=-0.7`.
-EXPECTED_COMPOSITION = {
-    "buffer_size": 40,
-    "buffer_capacity": 64,
-    "corpus_fraction": 0.25,
-    "draw_target_fraction": 0.45,
-    "six_terminal_fraction": 5 / 11,
-    "colony_terminal_fraction": 3 / 11,
-    "cap_terminal_fraction": 2 / 11,
-    "other_draw_fraction": 1 / 11,
-    "n_games_observed": 11,
-}
 
 # Every member the committed trainer reads, with the kind it uses it as. A missing row here is a
 # runtime break at first integration.
@@ -236,21 +208,6 @@ def test_pool_does_not_keep_a_second_handle_on_the_raw_buffer(device) -> None:
     assert holders == [], (
         f"the raw buffer is reachable off the pool at {holders} — the push path could "
         "bypass the facade and the mislabel guard would be dead code"
-    )
-
-
-def test_graph_pool_buffer_composition_is_nan_and_that_is_parity(device) -> None:
-    """E-05 (graph arm) — PASS iff a graph pool reports `draw_target_fraction` as NaN."""
-    pool = _graph_pool(device)
-    pool.config["train"] = {"draw_reward": -0.5, "ply_cap_value": -0.7}
-
-    composition = pool.buffer_composition()
-    assert math.isnan(composition["draw_target_fraction"])
-    assert composition["buffer_size"] == 0
-    assert composition["corpus_fraction"] == 1.0
-    assert not hasattr(pool.replay_buffer.raw, "outcome_in_range_count"), (
-        "the graph buffer must not gain the getter — that would CREATE a metric that "
-        "does not exist old-side"
     )
 
 

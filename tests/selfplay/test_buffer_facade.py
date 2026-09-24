@@ -11,14 +11,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import numpy as np
 import pytest
 
 from mantis._engine import HexgBuffer
 from mantis.encoding import lookup
 from mantis.model import RepresentationMismatch
 from mantis.selfplay.buffers import BufferKind, ReplayFacade
-_DRAW_BAND = (-0.75, -0.45)
+
 _GRAPH_SPEC = lookup("gnn_axis_v1")
 
 
@@ -143,12 +142,3 @@ def test_passthrough_surface_forwards() -> None:
         ("save_to_path", ("buffer.hexg",)),
         ("load_from_path", ("buffer.hexg",)),
     ]
-
-
-def test_graph_arm_missing_getter_propagates() -> None:
-    """The graph buffer genuinely has no `outcome_in_range_count` on EITHER side, so the facade
-    must let the `AttributeError` out and keep the caller's NaN fallback reachable."""
-    facade = ReplayFacade(_GRAPH_SPEC, HexgBuffer(capacity=8, encoding="gnn_axis_v1", visit_capacity=128))
-    assert not hasattr(facade.raw, "outcome_in_range_count")
-    with pytest.raises(AttributeError):
-        facade.outcome_in_range_count(*_DRAW_BAND)

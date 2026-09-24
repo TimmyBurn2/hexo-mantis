@@ -8,7 +8,6 @@ from typing import Any
 import pytest
 
 from mantis import _engine
-from mantis.encoding import lookup
 from mantis.config.resolve.search import MissingSearchKindError
 from mantis.selfplay import hparams as hparams_mod
 from mantis.selfplay.pool import WorkerPool

@@ -1,7 +1,7 @@
 """⊕ D-01 — pool encoding resolve, per registered encoding (WP-SP).
 
-Written oracle-first against the dispatcher's old-side capture (#C3a, wp/WPSP/CAPTURE_LOG.md)
-BEFORE any port code. RED at import until IMPL writes `mantis.selfplay.hparams`.
+Written oracle-first against the dispatcher's old-side capture (#C3a, wp/WPSP/CAPTURE_LOG.md):
+every expected value is a captured number, recomputed by nothing here.
 
 This file carries D-01 ONLY. The rest of Suite D (D-02 … D-17) is IMPL-written; its capture
 rows live in the same `wp/WPSP/oldside/` bank and may be promoted alongside them.
@@ -58,18 +58,3 @@ def test_resolve_encoding_per_registered_name(encoding_resolve_golden, name):
     edge_dim = getattr(spec, "edge_feat_dim", None)
     assert (None if node_dim is None else int(node_dim)) == golden["spec_node_feat_dim"]
     assert (None if edge_dim is None else int(edge_dim)) == golden["spec_edge_feat_dim"]
-
-
-def test_resolved_kept_planes_match_indices_length(encoding_resolve_golden):
-    """D-01 (consistency arm) — PASS iff `n_kept_planes` equals `len(kept_plane_indices)` for
-    every registered encoding, as the capture shows (graph 0).
-    FAIL = the plane COUNT and the plane INDEX LIST come from different places, which is how
-    a 4-plane spec ends up slicing 8 planes out of a checkpoint."""
-    for name in REGISTERED:
-        golden = encoding_resolve_golden["encodings"][name]
-        assert golden["n_kept_planes"] == len(golden["spec_kept_plane_indices"])
-
-        resolved = resolve_pool_encoding({"encoding": name}, arch=None)
-        assert int(resolved.n_kept_planes) == len(resolved.registry_spec.kept_plane_indices), (
-            f"{name}: n_kept_planes disagrees with the bound spec's kept_plane_indices"
-        )

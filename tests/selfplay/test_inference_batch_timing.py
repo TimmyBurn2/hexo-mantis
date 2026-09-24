@@ -122,17 +122,13 @@ def _hand_built_batch(n_graphs: int = 2, nodes_per_graph: int = 3) -> GraphBatch
     """A minimal VALID collated batch, without a live Rust queue."""
     n = n_graphs * nodes_per_graph
     node_offsets = torch.arange(0, n + 1, nodes_per_graph, dtype=torch.int64)
-    legal_mask = torch.zeros(n, dtype=torch.bool)
-    for g in range(n_graphs):
-        legal_mask[g * nodes_per_graph + 1] = True
-        legal_mask[g * nodes_per_graph + 2] = True
     return GraphBatch(
         x=torch.zeros(n, 11, dtype=torch.float32),
         edge_index=torch.zeros((2, 0), dtype=torch.int64),
         edge_attr=torch.zeros((0, 5), dtype=torch.float32),
         legal_offsets=torch.arange(0, 2 * n_graphs + 1, 2, dtype=torch.int64),
-        # The REAL gather for the mask above: rows 1 and 2 of each graph, ascending across
-        # the fuse. All zeros worked only because the stub reads `.numel()`.
+        # The legal rows are 1 and 2 of each graph, ascending across the fuse. All zeros
+        # worked only because the stub reads `.numel()`.
         legal_node_gather=torch.tensor(
             [g * nodes_per_graph + k for g in range(n_graphs) for k in (1, 2)],
             dtype=torch.int64,
@@ -271,9 +267,6 @@ class _Buffer:
 class _RStats:
     mcts_mean_depth = 3.0
     mcts_mean_root_concentration = 0.1
-    cluster_value_std_mean = 0.0
-    cluster_policy_disagreement_mean = 0.0
-    cluster_variance_sample_count = 0
 
 
 def _emit(pool: Any) -> dict[str, Any]:

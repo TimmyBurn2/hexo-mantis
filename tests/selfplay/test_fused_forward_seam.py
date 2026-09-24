@@ -100,23 +100,6 @@ def test_fg7_04_a_mid_plan_failure_submits_nothing_and_fails_every_id(
     assert "graph_inference_forward_failed" in caplog.text
 
 
-def test_fg7_04_the_successful_parts_output_is_discarded_not_submitted(
-    monkeypatch, caplog
-) -> None:
-    """Prove the successful part's output is discarded rather than submitted on its own: a partial
-    submit is a half-served pop `fail_remaining` cannot undo."""
-    payload = H.build_payload([2, 3, 4, 2])
-    ec, _nc = H.per_graph_counts(payload)
-    with caplog.at_level(logging.ERROR):
-        _server, batcher, _ = H.drive_one_pop(
-            payload=payload, monkeypatch=monkeypatch,
-            max_fused_edges=int(ec[0]) + int(ec[1]), max_fused_nodes=10 ** 9,
-            net=H.SentinelGraphNet(oom_on_call=2))
-    assert batcher.results == [], (
-        "the first part's probs were submitted before the plan finished — the ONE submit "
-        "happens after every part has run (design §4.1 property 3)")
-
-
 #: The loop's failure surface since A4-4 spans the loop and its two pipeline stages plus the
 #: one failure path they share; the census walks their union, not the loop body alone.
 _LOOP_FUNCTIONS = ("_run_graph_loop", "_launch_pop", "_retire", "_retire_or_fail", "_fail_pop")

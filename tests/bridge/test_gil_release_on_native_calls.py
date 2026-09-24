@@ -162,8 +162,8 @@ def _read_ring_during_samples(ring: object, n_samples: int) -> _RingToucher:
     return toucher
 
 
-def test_a_concurrent_reader_is_NOT_refused_while_the_ring_is_sampled() -> None:
-    """Prove a concurrent reader is not refused while the ring is sampled."""
+def test_the_concurrent_reader_actually_OVERLAPS_the_sample_window() -> None:
+    """Prove reads land while sampling is in flight, so the refusal guard above is exercised."""
     ring = _mk_ring()
     toucher = _read_ring_during_samples(ring, n_samples=12)
     assert toucher.error is None, (
@@ -172,14 +172,6 @@ def test_a_concurrent_reader_is_NOT_refused_while_the_ring_is_sampled() -> None:
         "means a pymethod is holding pyo3's PyRefMut across the GIL release again; that "
         "refusal kills the sole self-play producer, which reads .size on its stats loop"
     )
-    assert toucher.reads > 0, "the toucher never read the ring; the guard proves nothing"
-
-
-def test_the_concurrent_reader_actually_OVERLAPS_the_sample_window() -> None:
-    """Prove reads land while sampling is in flight, so the refusal guard above is exercised."""
-    ring = _mk_ring()
-    toucher = _read_ring_during_samples(ring, n_samples=12)
-    assert toucher.error is None
     assert toucher.reads > _MIN_OBSERVER_TICKS, (
         f"only {toucher.reads} ring reads landed across 12 samples — too few to have "
         "overlapped the sample windows, so the refusal guard above is not being exercised"

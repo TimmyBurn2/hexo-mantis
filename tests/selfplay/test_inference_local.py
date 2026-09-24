@@ -10,7 +10,6 @@ no-op and the close/idempotence contract on the server thread the engine owns.
 from __future__ import annotations
 
 import numpy as np
-import pytest
 import torch
 
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec

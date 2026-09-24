@@ -64,10 +64,11 @@ def test_f42_every_pyclass_module_is_engine():
 
 def test_all_specs_binding_matches_registered_set():
     """O7: `all_specs()` yields exactly the TOML-registered names as RegistrySpec
-    instances."""
+    instances, with no name registered twice."""
     specs = _engine.all_specs()
     assert all(isinstance(s, _engine.RegistrySpec) for s in specs)
     assert {s.name for s in specs} == REGISTERED_NAMES
+    assert len(specs) == len(REGISTERED_NAMES), "a duplicate name would pass the set compare"
 
 
 def test_registry_sha_shapes():

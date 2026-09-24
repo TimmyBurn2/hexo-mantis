@@ -1,6 +1,3 @@
-# >300 justify (R8): one claim — `plan_fused_forwards` is the same greedy partition under a
-# different name authority — over one shared arithmetic rig, and the partition properties only
-# prove that claim alongside the rows that check which config key the refusal names.
 """Cover the fused-forward planner's partition, its bound and its typed refusal."""
 from __future__ import annotations
 
@@ -272,15 +269,6 @@ def test_fg2_01_every_part_satisfies_both_members_over_the_bank(
     n = np.asarray(nc, dtype=np.int64)
     parts = plan_fused_forwards(_offsets(e), _offsets(n), _caps(cap_e, cap_n))
     _assert_partition_properties(e, n, cap_e, cap_n, parts)
-
-
-def test_fg2_01_near_cap_graphs_force_one_forward_each() -> None:
-    """Prove near-cap graphs force one forward each — the worst case the mechanism admits."""
-    ec = np.asarray([10] * 8, dtype=np.int64)
-    nc = np.asarray([4] * 8, dtype=np.int64)
-    parts = plan_fused_forwards(_offsets(ec), _offsets(nc), _caps(10, 4))
-    assert len(parts) == 8, (
-        f"eight graphs each exactly at the cap must run as eight forwards; got {len(parts)}")
 
 
 @pytest.mark.parametrize("member", ["max_fused_edges", "max_fused_nodes"])

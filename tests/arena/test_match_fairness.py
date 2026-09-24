@@ -1,6 +1,6 @@
 """⊕ WP11-A arena — paired-match fairness law (design §a.2 match.py, §b test_match_fairness.py).
 
-RED-at-import until IMPL writes `mantis.arena.match`. Pins: argmax-only (no temperature
+Pins: argmax-only (no temperature
 token anywhere in arena/eval sources — dispatch item 7), the paired color-swap law (every
 opening is played exactly twice, colors swapped — deploy_strength_eval.py `_play_pair`
 :331-360 parity), and every `GameRecord`'s stamped fields (design §a.2:

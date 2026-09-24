@@ -21,7 +21,6 @@ surface: values thread through un-crosswired, and an idle lever stays VISIBLE at
 `getattr(..., 0)` legacy-wheel default in `runner_stats` means surface visibility is
 NOT a producer proof — that burden stays on the Rust legs (LAW-07).
 
-PRE-FIX status at HEAD: RED (RunnerStats has none of the three fields).
 Killer (PREREG_T §3): M-H (per-counter sub-runs; the surface legs red when the
 mutated counter's value no longer threads through).
 """
