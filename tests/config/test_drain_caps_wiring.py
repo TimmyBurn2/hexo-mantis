@@ -25,6 +25,7 @@ from mantis.config.resolve.drain import DrainCapsSpec, resolve_drain_caps
 from mantis.eval.pipeline import drain_budget_sec
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from _drivable import DrivableTrainerStub
+from _wiring_fakes import RunnerStats, fake_run_safety
 
 #: One distinguishable value per key. None is a shipped value (900/3/14400/14400), and the
 #: safety factor divides nothing else here, so a stale or defaulted number cannot match.
@@ -40,14 +41,6 @@ _DRAIN_KEYS = tuple(_DISTINGUISHABLE)
 #: The drive is bounded so it terminates; the three step-clock knobs move together because the
 #: reachability validator spans them.
 _DRIVE_STEPS = 4
-
-
-class _RunnerStats:
-    mcts_mean_depth = 5.0
-    mcts_mean_root_concentration = 0.1
-    cluster_value_std_mean = 0.0
-    cluster_policy_disagreement_mean = 0.0
-    cluster_variance_sample_count = 0
 
 
 class _Pool:
@@ -79,7 +72,7 @@ class _Pool:
         return 1
 
     def runner_stats(self):
-        return _RunnerStats()
+        return RunnerStats()
 
     def sync_inference_weights(self, state_dict) -> None: ...
     def update_checkpoint_step(self, step: int) -> None: ...
@@ -91,15 +84,6 @@ class _Buffer:
 
     def resize(self, n: int) -> None: ...
     def save_to_path(self, p) -> None: ...
-
-
-def _fake_run_safety(**_kwargs):
-    return SimpleNamespace(
-        sink=SimpleNamespace(emit=lambda e: None),
-        registry=SimpleNamespace(beat=lambda s: None),
-        watchdog=SimpleNamespace(start=lambda: None, disarm_staleness=lambda: None),
-        heartbeat=lambda s: None,
-    )
 
 
 def _composed_caps(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, **drain_over):
@@ -119,7 +103,7 @@ def _composed_caps(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, **d
             apply_gate_decision=lambda *a, **k: None, stop=lambda: None,
         )
 
-    monkeypatch.setattr(mantis.run, "build_run_safety", _fake_run_safety)
+    monkeypatch.setattr(mantis.run, "build_run_safety", fake_run_safety)
     monkeypatch.setattr(mantis.run, "build_eval_pipeline", _spy_build_eval_pipeline)
     monkeypatch.setattr(
         _anchor, "resolve_anchor",

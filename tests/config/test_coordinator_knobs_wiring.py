@@ -1,7 +1,7 @@
 """>300 justify (R8): one demonstration PER KEY — "set the knob, observe the consumer" — for
 eighteen registry citations, so half the length is one row and one behavioural drive per knob.
 The rest is the shared fakes harness BOTH halves use; splitting it would fork that harness into
-copies free to drift apart, and cross-test imports are barred.
+copies free to drift apart.
 
 The 18 `train.*` step-coordinator knobs reach the consumers their registry entries NAME, proved
 by MUTATION rather than by grep: four keys once reached nothing while both copies of the registry
@@ -33,6 +33,7 @@ from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
+from _wiring_fakes import RunnerStats, fake_run_safety
 from _drivable import DrivableTrainerStub
 
 _CONFIGS = Path(__file__).resolve().parents[2] / "configs"
@@ -75,14 +76,6 @@ _SCHEMA_TO_FIELD = {
 _KNOB_KEYS = tuple(_DISTINGUISHABLE)
 
 
-class _RunnerStats:
-    mcts_mean_depth = 5.0
-    mcts_mean_root_concentration = 0.1
-    cluster_value_std_mean = 0.0
-    cluster_policy_disagreement_mean = 0.0
-    cluster_variance_sample_count = 0
-
-
 class _Pool:
     def __init__(self) -> None:
         self.games_completed = 0
@@ -101,7 +94,7 @@ class _Pool:
     def check_producer_health(self) -> None: ...
     def pooled_draw_counts(self) -> tuple[int, int]: return (0, 0)
     def current_stride5_p90(self) -> int: return 1
-    def runner_stats(self) -> Any: return _RunnerStats()
+    def runner_stats(self) -> Any: return RunnerStats()
     def sync_inference_weights(self, state_dict) -> None: ...
     def update_checkpoint_step(self, step: int) -> None: ...
 
@@ -176,15 +169,6 @@ class _Sink:
         return [e for e in self.events if e.get("event") == name]
 
 
-def _fake_run_safety(**_kwargs):
-    return SimpleNamespace(
-        sink=SimpleNamespace(emit=lambda e: None),
-        registry=SimpleNamespace(beat=lambda s: None),
-        watchdog=SimpleNamespace(start=lambda: None, disarm_staleness=lambda: None),
-        heartbeat=lambda s: None,
-    )
-
-
 # HALF ONE — transport, through the REAL composition root.
 def _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
                                  monitor_over=None, **train_over):
@@ -197,7 +181,7 @@ def _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config, mk_gra
     """
     import mantis.train.anchor as _anchor
 
-    monkeypatch.setattr(mantis.run, "build_run_safety", _fake_run_safety)
+    monkeypatch.setattr(mantis.run, "build_run_safety", fake_run_safety)
     monkeypatch.setattr(
         _anchor, "resolve_anchor",
         lambda **_kw: SimpleNamespace(best_model=None, best_model_step=None,
