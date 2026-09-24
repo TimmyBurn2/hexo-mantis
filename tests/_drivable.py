@@ -1,6 +1,9 @@
-"""The composition seam's drivable doubles, ONE copy each for every root/wiring test; importable from any test directory through the root conftest's own path."""
+"""The composition seam's drivable doubles and drive helpers, ONE copy each for every root/wiring test; importable from any test directory through the root conftest's own path."""
 from __future__ import annotations
 
+import dataclasses
+import shutil
+import time
 from types import SimpleNamespace
 from typing import Any, Callable
 
@@ -157,3 +160,46 @@ class DrivablePoolStub:
 
     def update_checkpoint_step(self, step: int) -> None:
         self.step_calls.append(int(step))
+
+
+def with_deltas(builder: Callable[..., Any], **deltas: Any) -> Callable[..., Any]:
+    """`builder` with `deltas` replaced on its output; every keyword it is called with forwards untouched."""
+    def _patched(**kwargs: Any) -> Any:
+        return dataclasses.replace(builder(**kwargs), **deltas)
+    return _patched
+
+
+class ExitSpy:
+    """An `exit_fn` that records each code instead of exiting."""
+
+    def __init__(self) -> None:
+        self.codes: list[int] = []
+
+    def __call__(self, code: int) -> None:
+        self.codes.append(int(code))
+
+
+def inert_heartbeat_registry() -> SimpleNamespace:
+    """A heartbeat registry whose one source was beaten just now."""
+    return SimpleNamespace(
+        sources=("train_step",), ages=lambda: {"train_step": 0.0},
+        beaten_sources=lambda: frozenset({"train_step"}), arm=lambda: None,
+    )
+
+
+def fake_disk_usage(free_gb: float) -> Callable[[Any], Any]:
+    """A `shutil.disk_usage` stand-in reporting `free_gb` free of four times that total."""
+    def _usage(_path: Any) -> Any:
+        total = int(free_gb * 1_000_000_000) * 4
+        return shutil._ntuple_diskusage(  # type: ignore[attr-defined]
+            total=total, used=total - int(free_gb * 1_000_000_000),
+            free=int(free_gb * 1_000_000_000),
+        )
+    return _usage
+
+
+def await_signal(state: Any) -> None:
+    """Wait up to 5 s for a `ShutdownState` to record a stop: CPython delivers a signal at a bytecode boundary."""
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline and state.stop_count < 1:
+        time.sleep(0.005)

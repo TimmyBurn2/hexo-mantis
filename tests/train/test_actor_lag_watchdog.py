@@ -26,13 +26,7 @@ from mantis.monitor.heartbeat import (
 from _monitor_config import monitor_config
 from mantis.train.subsystems import build_run_safety
 from _spy import SpyEventSink
-
-
-def _registry():
-    return SimpleNamespace(
-        sources=("train_step",), ages=lambda: {"train_step": 0.0},
-        beaten_sources=lambda: frozenset({"train_step"}), arm=lambda: None,
-    )
+from _drivable import inert_heartbeat_registry
 
 
 def _watchdog(tmp_path, *, spec, sink=None, exit_codes=None):
@@ -41,7 +35,7 @@ def _watchdog(tmp_path, *, spec, sink=None, exit_codes=None):
     Every fire observed below is therefore the lag check's own.
     """
     return HeartbeatWatchdog(
-        registry=_registry(), deadlines={"train_step": 0.0},
+        registry=inert_heartbeat_registry(), deadlines={"train_step": 0.0},
         sink=sink if sink is not None else SpyEventSink(),
         counters_fn=lambda: 0, heartbeat_file=tmp_path / "hb.json",
         file_interval_sec=0.0, poll_interval_sec=0.0, clock=lambda: 0.0,

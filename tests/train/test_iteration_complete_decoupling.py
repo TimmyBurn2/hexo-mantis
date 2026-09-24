@@ -7,31 +7,15 @@ mcts/cluster block become one atomic read instead of two that could straddle a g
 """
 from __future__ import annotations
 
-import dataclasses
 from types import SimpleNamespace
 from typing import Any
 
-from _graph_drive import DEV_DRAIN_CAPS, DEV_GATE_INTERVAL, DEV_KNOBS, GRAPH_FULL_CONFIG, GraphSampleBuffer
+from _graph_drive import dev_coordinator_config, GRAPH_FULL_CONFIG, GraphSampleBuffer
 from _spy import SpyEventSink
 from _monitor_config import monitor_config
-from mantis.run import _step_coordinator_config
-from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
 from _drivable import DrivablePoolStub, DrivableTrainerStub, RunnerStats
-
-
-def _make_config(**overrides) -> StepCoordinatorConfig:
-    """Build a coordinator config whose `gate_interval` mirrors `log_interval` unless a drive
-    names it — the shipped posture, since every committed config mints the two equal."""
-    settings = {"eval_interval": 1, "log_interval": 1, "min_buf_size": 10, **overrides}
-    settings.setdefault("gate_interval", settings["log_interval"])
-    return dataclasses.replace(
-        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
-                                 drain_caps=DEV_DRAIN_CAPS, gate_interval=DEV_GATE_INTERVAL,
-                                 knobs=DEV_KNOBS),
-        **settings,
-    )
 
 
 class _CountingPool(DrivablePoolStub):
@@ -77,7 +61,7 @@ def _make_coordinator(*, pool=None, config=None):
         subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=ShutdownState(), eval_model=object(),
-        config=config or _make_config(),
+        config=config or dev_coordinator_config(),
         full_config=GRAPH_FULL_CONFIG,
         sink=sink, monitor_cfg=monitor_config(),
     )
@@ -91,7 +75,7 @@ def test_on1_iteration_complete_emits_below_log_interval() -> None:
     Killer: re-introduce the `_train_step % cfg.log_interval != 0` early return on the emit
     path, which drops the count to zero.
     """
-    cfg = _make_config(log_interval=1000)
+    cfg = dev_coordinator_config(log_interval=1000)
     h = _make_coordinator(config=cfg)
     h.pool.games_completed = 5  # above min_buf_size, new_games > 0 → O6 burst path
 
@@ -118,7 +102,7 @@ def test_on1_training_step_alerting_stays_gated_below_log_interval() -> None:
     `monitor_gates` rides `monitor.gate_interval`, which this drive MIRRORS onto `log_interval`
     as every committed config does; the two knobs stated apart are pinned elsewhere.
     """
-    cfg = _make_config(log_interval=1000)
+    cfg = dev_coordinator_config(log_interval=1000)
     h = _make_coordinator(config=cfg)
     h.pool.games_completed = 5
 
@@ -144,7 +128,7 @@ def test_on1b_collapse_one_runner_stats_call_per_iteration_complete() -> None:
     Killer: restore the local `rstats = pool.runner_stats()` inside the emit, which is two
     reads that can straddle a game boundary.
     """
-    cfg = _make_config(log_interval=1000)
+    cfg = dev_coordinator_config(log_interval=1000)
     h = _make_coordinator(config=cfg)
     h.pool.games_completed = 5
 

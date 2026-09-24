@@ -6,14 +6,12 @@ through the `ast.If`-only pin, so the behavioral test below observes the consequ
 from __future__ import annotations
 
 import ast
-import dataclasses
 import inspect
 from pathlib import Path
 from types import SimpleNamespace
 
 import mantis.run
-from mantis.train.coordinator.config import StepCoordinatorConfig
-from _drivable import DrivablePoolStub, DrivableTrainerStub, fake_run_safety
+from _drivable import DrivablePoolStub, DrivableTrainerStub, fake_run_safety, with_deltas
 
 _STOP_STEP = 4
 
@@ -22,15 +20,9 @@ _STOP_STEP = 4
 _PRODUCTION_BUILDER = mantis.run._step_coordinator_config
 
 
-def _bounded_config(**kwargs) -> StepCoordinatorConfig:
-    """Build the production config, then bound it so no eval round actually runs.
-
-    Expressed as deltas over the REAL builder, so every config-authored value passes
-    through and only `stop_step` is the harness's own bound.
-    """
-    return dataclasses.replace(_PRODUCTION_BUILDER(**kwargs),
-                               terminal_eval_enabled=False, eval_interval=1000,
-                               log_interval=1, stop_step=_STOP_STEP)
+#: The production builder bounded so no eval round runs; config-authored values pass through.
+_bounded_config = with_deltas(_PRODUCTION_BUILDER, terminal_eval_enabled=False, eval_interval=1000,
+                              log_interval=1, stop_step=_STOP_STEP)
 
 
 def _install_harness(monkeypatch):

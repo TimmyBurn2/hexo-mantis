@@ -48,18 +48,6 @@ def test_a_temperature_at_or_below_one_is_refused() -> None:
             _row_target([0.6, 0.4], 0.0, [0.5, 0.5], t)
 
 
-def _step_once(trainer, buf, *, replay_n: int = 8):
-    import _microbatch_harness as H  # noqa: PLC0415 — the tests/train rootdir harness
-    from mantis.config.resolve.microbatch import MicrobatchCapsSpec
-    from mantis.train.coordinator.dispatch import run_declared_train_step
-
-    replay = H.ReplayWireBuffer(buf, replay_n)
-    return run_declared_train_step(
-        trainer, replay, H.GSPEC, batch_size=replay_n, augment=False, recency_weight=0.0,
-        caps_provider=lambda: MicrobatchCapsSpec(*H.non_binding_caps(replay.wire)),
-        sample_threads_provider=lambda: 1, fast_policy_weight_provider=lambda: 0.0)
-
-
 def test_the_real_step_trains_the_aux_head_and_publishes_its_rows(tmp_path) -> None:
     """Producer test (LAW-18): the aux CE, KL(hard‖soft) > 0, both heads' grad norms, and the aux head moves."""
     import _microbatch_harness as H  # noqa: PLC0415
@@ -69,7 +57,7 @@ def test_the_real_step_trains_the_aux_head_and_publishes_its_rows(tmp_path) -> N
     sink = H.SpySink()
     trainer = H.soft_policy_graph_trainer(tmp_path, sink=sink, target_temperature=4.0, weight=4.0)
     aux_before = {k: v.detach().clone() for k, v in trainer.model.aux_policy_head.state_dict().items()}
-    result = _step_once(trainer, buf)
+    result = H.step_once(trainer, buf)
     event = sink.named("trainer_step")[0]
     assert event["aux_soft_policy_loss"] > 0.0 and result["loss"] > 0.0
     assert event["aux_soft_policy_kl_hard_vs_soft"] > 0.0, "the soft target differs from the hard one on a spread row"
@@ -94,7 +82,7 @@ def test_the_planted_break_a_dead_soft_target_is_caught_by_the_producer_row(tmp_
     buf.seed_sampler(H.SEED)
     sink = H.SpySink()
     trainer = H.soft_policy_graph_trainer(tmp_path, sink=sink)
-    _step_once(trainer, buf)
+    H.step_once(trainer, buf)
     kl = sink.named("trainer_step")[0]["aux_soft_policy_kl_hard_vs_soft"]
     assert kl == pytest.approx(0.0, abs=1e-6), "the planted break must read as a dead row"
     with pytest.raises(AssertionError):
@@ -107,7 +95,7 @@ def test_the_rows_are_omitted_on_an_arch_without_the_head(tmp_path) -> None:
     buf = H.uniform_graph_buffer()
     buf.seed_sampler(H.SEED)
     sink = H.SpySink()
-    _step_once(H.tiny_graph_trainer(tmp_path, sink=sink, checkpoint_interval=0), buf)
+    H.step_once(H.tiny_graph_trainer(tmp_path, sink=sink, checkpoint_interval=0), buf)
     event = sink.named("trainer_step")[0]
     assert "aux_soft_policy_loss" not in event and "aux_policy_head_grad_norm" not in event
 

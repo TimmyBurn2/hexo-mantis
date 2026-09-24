@@ -35,7 +35,7 @@ from mantis.monitor.heartbeat import DISK_SPACE_EXHAUSTED_EXIT_CODE
 from mantis.run import RunCollaborators
 from mantis.train.lifecycle.disk_guard import DiskGuard
 from mantis.train.lifecycle.signals import ShutdownState
-from _drivable import DrivablePoolStub, DrivableTrainerStub
+from _drivable import await_signal, DrivablePoolStub, DrivableTrainerStub, fake_disk_usage
 
 _REPO = Path(__file__).resolve().parents[1]
 
@@ -49,16 +49,6 @@ _DRIVE_GUARD = {"interval_sec": 0.02, "warn_gb": 4.0, "fail_gb": 2.0}
 #: Rigged free space, in decimal GB (`disk_guard.py`'s `/1e9` divisor).
 _HEALTHY_GB = 500.0
 _CRITICAL_GB = 1.0
-
-
-def _fake_disk_usage(free_gb: float):
-    def _usage(_path):
-        total = int(free_gb * 1_000_000_000) * 4
-        return shutil._ntuple_diskusage(  # type: ignore[attr-defined]
-            total=total, used=total - int(free_gb * 1_000_000_000),
-            free=int(free_gb * 1_000_000_000),
-        )
-    return _usage
 
 
 class _Drive:
@@ -93,7 +83,7 @@ def _drive_main(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, reques
     drive = _Drive()
     tmp_path = Path(tmp_path)
     tmp_path.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr(shutil, "disk_usage", _fake_disk_usage(free_gb))
+    monkeypatch.setattr(shutil, "disk_usage", fake_disk_usage(free_gb))
 
     class _RecordedGuard(DiskGuard):
         """The REAL guard; every behaviour is `super()`'s. Recorded so the drive can find it."""
@@ -146,14 +136,6 @@ def _drive_main(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, reques
     return drive
 
 
-def _await_signal(state: ShutdownState) -> None:
-    """CPython delivers a signal at a bytecode boundary, so the handler may still be pending when
-    `compose_run` returns. Bounded wait, then assert — never a SIGTERM left pending."""
-    deadline = time.monotonic() + 5.0
-    while time.monotonic() < deadline and state.stop_count < 1:
-        time.sleep(0.005)
-
-
 def _events(run_safety) -> list[dict]:
     return [json.loads(line) for line in
             Path(run_safety.sink.path).read_text(encoding="utf-8").splitlines() if line.strip()]
@@ -168,7 +150,7 @@ def test_a_run_the_disk_guard_killed_exits_47_and_a_clean_run_exits_0(
     fired = _drive_main(tmp_path / "fired", monkeypatch, smoke_run_config, mk_graph_buffer,
                         request, free_gb=_CRITICAL_GB, wait_for_fire=True)
     state = fired.handles.shutdown
-    _await_signal(state)
+    await_signal(state)
 
     assert fired.guards and fired.guards[-1].critical_fired, (
         "premise: the guard's critical arm fired on the rigged volume"
@@ -216,7 +198,7 @@ def test_the_rc_is_resolved_off_the_manifest_row_and_is_never_a_literal(
     REDS IT: `return 47` beside the resolver call — a literal cannot follow a rewired row."""
     drive = _drive_main(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
                         request, free_gb=_CRITICAL_GB, wait_for_fire=True)
-    _await_signal(drive.handles.shutdown)
+    await_signal(drive.handles.shutdown)
     row = next(r for r in MANIFEST if r.name == DISK_SPACE_ABORT_RULE)
     assert drive.rc == row.exit_code == exit_code_for_abort(DISK_SPACE_ABORT_RULE), (
         f"the rc IS the row's `exit_code`, resolved; got rc={drive.rc!r} against "
@@ -239,7 +221,7 @@ def test_suppressing_the_recording_collapses_the_rc_back_to_zero(
     drive = _drive_main(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
                         request, free_gb=_CRITICAL_GB, wait_for_fire=True)
     state = drive.handles.shutdown
-    _await_signal(state)
+    await_signal(state)
     assert drive.guards[-1].critical_fired and state.stop_count == 1, (
         "the guard's behaviour is UNTOUCHED by the mutation — it fired and it signalled"
     )
@@ -268,7 +250,7 @@ def test_the_critical_arm_signals_once_per_run_while_the_alert_keeps_firing() ->
     real_kill, real_usage = os.kill, shutil.disk_usage
     try:
         os.kill = lambda pid, sig: kills.append((pid, sig))          # type: ignore[assignment]
-        shutil.disk_usage = _fake_disk_usage(_CRITICAL_GB)           # type: ignore[assignment]
+        shutil.disk_usage = fake_disk_usage(_CRITICAL_GB)           # type: ignore[assignment]
         for _ in range(3):
             guard.check_once()
     finally:

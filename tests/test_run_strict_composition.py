@@ -12,7 +12,6 @@ would read a tree it does not drive and the drive's bounded-config deltas would 
 from __future__ import annotations
 
 import ast
-import dataclasses
 import importlib.util
 import inspect
 from pathlib import Path
@@ -38,8 +37,7 @@ from mantis.config.resolve.run_length import (
 from mantis.config.schema import RunConfig
 from mantis.encoding import lookup
 from _monitor_config import monitor_config
-from mantis.train.coordinator.config import StepCoordinatorConfig
-from _drivable import BufferStub, DrivablePoolStub, DrivableTrainerStub, fake_run_safety
+from _drivable import BufferStub, DrivablePoolStub, DrivableTrainerStub, fake_run_safety, with_deltas
 
 _REPO = Path(__file__).resolve().parents[1]
 _CONFIGS_DIR = _REPO / "configs"
@@ -87,12 +85,9 @@ class _ExplodingTrainer(DrivableTrainerStub):
 _PRODUCTION_BUILDER = mantis.run._step_coordinator_config
 
 
-def _no_terminal_eval_config(**kwargs) -> StepCoordinatorConfig:
-    """Patch `terminal_eval_enabled` off — a ONE-KNOB DELTA over the real builder, so
-    `**kwargs` still forwards every CONFIG-AUTHORED value including `stop_step`. The knob has
-    no config key, and left on, `close_out` runs a terminal eval that raises on a fake model
-    carrying no declared `.arch`."""
-    return dataclasses.replace(_PRODUCTION_BUILDER(**kwargs), terminal_eval_enabled=False)
+#: The production builder with terminal eval off: that knob has no config key, and left on,
+#: `close_out` runs a terminal round that reads `.arch` off a fake model.
+_no_terminal_eval_config = with_deltas(_PRODUCTION_BUILDER, terminal_eval_enabled=False)
 
 
 def _bounded(name: str = "smoke_preflight_armed.yaml", factory=None, steps: int = _DRIVE_STEPS,

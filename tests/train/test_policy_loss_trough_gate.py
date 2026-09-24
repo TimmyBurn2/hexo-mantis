@@ -21,7 +21,7 @@ from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
 from _drivable import DrivablePoolStub
-from _graph_drive import GRAPH_FULL_CONFIG, GraphSampleBuffer
+from _graph_drive import drive_one_game_per_step, GRAPH_FULL_CONFIG, GraphSampleBuffer
 from _spy import SpyEventSink
 
 _CONFIG = Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml"
@@ -103,14 +103,6 @@ def _harness(script, spec: PolicyLossTroughAbortSpec | None, *, gate_interval: i
     return SimpleNamespace(coord=coord, pool=pool, shutdown=shutdown, sink=sink)
 
 
-def _drive(h, steps: int) -> None:
-    for _ in range(steps):
-        if not h.shutdown.running:
-            return
-        h.pool.games_completed += 1
-        h.coord.step()
-
-
 _SPEC = PolicyLossTroughAbortSpec(delta_nats=0.2, consec=3, max_step=5000)
 
 
@@ -122,7 +114,7 @@ def _rising(step: int) -> float:
 def test_the_halt_fires_on_the_trough_signature_through_the_one_channel() -> None:
     """PRODUCER TEST: reference 2.28, three windows at +0.30, ONE `hard_abort` at boundary 4 (step 8)."""
     h = _harness(_rising, _SPEC)
-    _drive(h, 20)
+    drive_one_game_per_step(h, 20)
     assert h.shutdown.running is False
     aborts = h.sink.named("hard_abort")
     assert len(aborts) == 1 and aborts[0]["rule"] == "policy_loss_trough"
@@ -135,7 +127,7 @@ def test_the_halt_fires_on_the_trough_signature_through_the_one_channel() -> Non
 
 def test_a_flat_loss_never_fires_and_the_reference_is_the_first_window() -> None:
     h = _harness(lambda step: 2.28, _SPEC)
-    _drive(h, 20)
+    drive_one_game_per_step(h, 20)
     assert h.shutdown.running is True and h.sink.named("hard_abort") == []
     gates = h.sink.named("monitor_gates")[-1]
     assert gates["policy_loss_reference"] == pytest.approx(2.28)
@@ -148,13 +140,13 @@ def test_a_rise_that_is_not_consecutive_does_not_fire() -> None:
         return 2.28 if window == 0 or window % 2 == 0 else 2.58
 
     h = _harness(script, _SPEC)
-    _drive(h, 20)
+    drive_one_game_per_step(h, 20)
     assert h.shutdown.running is True and h.sink.named("hard_abort") == []
 
 
 def test_the_explicit_off_posture_never_fires_however_bad_the_rise() -> None:
     h = _harness(lambda step: 2.28 if step <= 2 else 9.0, None)
-    _drive(h, 20)
+    drive_one_game_per_step(h, 20)
     assert h.shutdown.running is True and h.sink.named("hard_abort") == []
     gates = h.sink.named("monitor_gates")[-1]
     assert gates["gates"]["policy_loss_trough"]["skips"] > 0, "a disarmed gate is SKIP-counted, not silent"
@@ -163,7 +155,7 @@ def test_the_explicit_off_posture_never_fires_however_bad_the_rise() -> None:
 
 def test_past_max_step_the_halt_is_silent() -> None:
     h = _harness(_rising, PolicyLossTroughAbortSpec(delta_nats=0.2, consec=3, max_step=7))
-    _drive(h, 20)
+    drive_one_game_per_step(h, 20)
     assert h.shutdown.running is True and h.sink.named("hard_abort") == []
 
 
@@ -184,7 +176,7 @@ def test_a_window_left_unconsumed_at_a_boundary_bundle_is_folded_on_restore() ->
     """B-7: a boundary bundle is written before the boundary consumed its window; the restore folds it."""
     h = _harness(_rising, _SPEC, gate_interval=2)
     # Steps 1-4: window 1 becomes the reference at 2, window 2's mean lands at 4.
-    _drive(h, 4)
+    drive_one_game_per_step(h, 4)
     assert h.coord._policy_loss_reference is not None
     assert len(h.coord._policy_loss_window_means) == 1
     # A bundle written at step 6 INSIDE the step: the window holds step 5 (and the boundary 6
@@ -201,5 +193,5 @@ def test_a_window_left_unconsumed_at_a_boundary_bundle_is_folded_on_restore() ->
     assert len(resumed.coord._policy_loss_window_means) == 2, "the boundary's mean was taken"
     # One more window (steps 7-8) is the third consecutive rise: the halt fires at 8.
     resumed.coord.trainer.step = 6
-    _drive(resumed, 2)
+    drive_one_game_per_step(resumed, 2)
     assert resumed.shutdown.running is False, "consec 3 met on the resumed process's first boundary"

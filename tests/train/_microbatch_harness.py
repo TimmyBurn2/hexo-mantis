@@ -14,8 +14,10 @@ import torch
 
 from _determinism import deterministic_algorithms  # re-export: H.deterministic_algorithms stays the microbatch suites' entry
 from mantis._engine import HexgBuffer
+from mantis.config.resolve.microbatch import MicrobatchCapsSpec
 from mantis.encoding import lookup
 from mantis.model import GnnArch, GnnArchV2SoftPolicy, build_net, gnn_widths_block
+from mantis.train.coordinator.dispatch import run_declared_train_step
 from mantis.train.trainer.core import Trainer, TrainHParams
 
 GRAPH_ENCODING = "gnn_axis_v1"
@@ -109,7 +111,6 @@ def non_binding_caps(wire: Any) -> tuple[int, int]:
 def graph_step(trainer: Any, buffer: Any) -> dict[str, float]:
     """One real graph training step through the PRODUCTION dispatch: `dispatch._graph_step`
     is what the coordinator calls, so a guard driven here sits on the path that runs."""
-    from mantis.config.resolve.microbatch import MicrobatchCapsSpec
     from mantis.train.coordinator.dispatch import _graph_step as production_graph_step
 
     wire, _targets = buffer.sample_graph_batch(4, augment=False, recent_frac=0.0)
@@ -121,6 +122,15 @@ def graph_step(trainer: Any, buffer: Any) -> dict[str, float]:
         sample_threads_provider=lambda: 1,
         fast_policy_weight_provider=lambda: 0.0,
     )
+
+
+def step_once(trainer: Any, buf: HexgBuffer, *, replay_n: int = 8) -> dict[str, float]:
+    """One declared train step over a fixed `replay_n`-row wire, with caps that cannot bind."""
+    replay = ReplayWireBuffer(buf, replay_n)
+    return run_declared_train_step(
+        trainer, replay, GSPEC, batch_size=replay_n, augment=False, recency_weight=0.0,
+        caps_provider=lambda: MicrobatchCapsSpec(*non_binding_caps(replay.wire)),
+        sample_threads_provider=lambda: 1, fast_policy_weight_provider=lambda: 0.0)
 
 
 def tiny_graph_arch() -> GnnArch:

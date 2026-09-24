@@ -3,6 +3,7 @@ non-binding drive declaration and the minted builder inputs for every tests/trai
 drives a `StepCoordinator`."""
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,8 @@ from mantis._engine import HexgBuffer
 from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
+from mantis.run import _step_coordinator_config
+from mantis.train.coordinator.config import StepCoordinatorConfig
 
 _DEV = load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml")
 #: The builder's config-authored inputs, read off the minted dev config and never restated.
@@ -62,3 +65,23 @@ def mirrored(settings: dict) -> dict:
     """Mirror `gate_interval` onto `log_interval` unless the drive names it, as every minted config does."""
     settings.setdefault("gate_interval", settings["log_interval"])
     return settings
+
+
+def dev_coordinator_config(**overrides: Any) -> StepCoordinatorConfig:
+    """The production builder's config for an unbounded, gate-disarmed drive with `overrides` applied."""
+    settings = mirrored({"eval_interval": 1, "log_interval": 1, "min_buf_size": 10, **overrides})
+    return dataclasses.replace(
+        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None,
+                                 ply_cap_abort=None, drain_caps=DEV_DRAIN_CAPS,
+                                 gate_interval=DEV_GATE_INTERVAL, knobs=DEV_KNOBS),
+        **settings,
+    )
+
+
+def drive_one_game_per_step(h: Any, steps: int) -> None:
+    """One game completes per coordinator step, so game i lands before training step i + 1."""
+    for _ in range(steps):
+        if not h.shutdown.running:
+            return
+        h.pool.games_completed += 1
+        h.coord.step()

@@ -58,7 +58,7 @@ from mantis.train.coordinator import drain
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.disk_guard import DiskGuard
 from mantis.train.lifecycle.signals import ShutdownState
-from _drivable import DrivablePoolStub, DrivableTrainerStub
+from _drivable import await_signal, DrivablePoolStub, DrivableTrainerStub, fake_disk_usage
 
 _REPO = Path(__file__).resolve().parents[2]
 _SRC = _REPO / "src" / "mantis"
@@ -175,16 +175,6 @@ def _make_coordinator(*, eval_pipeline: Any, sink: SpyEventSink,
     return SimpleNamespace(coord=coord, pool=pool, shutdown=shutdown, sink=sink)
 
 
-def _fake_disk_usage(free_gb: float):
-    def _usage(_path):
-        total = int(free_gb * 1_000_000_000) * 4
-        return shutil._ntuple_diskusage(  # type: ignore[attr-defined]
-            total=total, used=total - int(free_gb * 1_000_000_000),
-            free=int(free_gb * 1_000_000_000),
-        )
-    return _usage
-
-
 class _Drive:
     """What one `main()` drive observed: its rc, and the live objects it composed."""
 
@@ -233,7 +223,7 @@ def _drive_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest
     drive = _Drive()
     drive.pipeline = pipeline
     tmp_path.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr(shutil, "disk_usage", _fake_disk_usage(free_gb))
+    monkeypatch.setattr(shutil, "disk_usage", fake_disk_usage(free_gb))
 
     class _RecordedGuard(DiskGuard):
         """The REAL guard; every behaviour is `super()`'s. Recorded so the drive finds it."""
@@ -289,15 +279,6 @@ def _drive_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest
     request.getfixturevalue("preflight_stamped")(config_path)  # R348(c): the launcher demands it
     drive.rc = mantis_run.main(["--config", str(config_path), "--out-dir", str(out_dir)])
     return drive
-
-
-def _await_signal(state: ShutdownState) -> None:
-    """CPython delivers a signal at a bytecode boundary, so the handler may still be pending
-    when `compose_run` returns. Bounded wait: a race must fail loudly, never leave a SIGTERM
-    pending into the next test."""
-    deadline = time.monotonic() + 5.0
-    while time.monotonic() < deadline and state.stop_count < 1:
-        time.sleep(0.005)
 
 
 def _tiny_model():
@@ -606,7 +587,7 @@ def test_a_disk_full_run_whose_terminal_eval_also_broke_reports_47(
     pipeline = _FakeEvalPipeline(terminal_result=_broken_round("join_timeout"))
     drive = _drive_main(tmp_path, monkeypatch, request, pipeline=pipeline,
                         free_gb=_CRITICAL_GB, wait_for_fire=True)
-    _await_signal(drive.handles.shutdown)
+    await_signal(drive.handles.shutdown)
 
     assert drive.guards and drive.guards[-1].critical_fired, (
         "premise: the rigged volume drove the guard's critical arm"

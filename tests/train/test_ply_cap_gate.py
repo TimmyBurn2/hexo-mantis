@@ -21,7 +21,7 @@ from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
 from mantis.util.constants import PLY_CAP_RING_GAMES
 from _drivable import DrivablePoolStub
-from _graph_drive import GRAPH_FULL_CONFIG, GraphSampleBuffer
+from _graph_drive import drive_one_game_per_step, GRAPH_FULL_CONFIG, GraphSampleBuffer
 from _spy import SpyEventSink
 
 _CONFIG = Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml"
@@ -128,15 +128,6 @@ def _harness(flags: list[int], spec: PlyCapAbortSpec | None, *, gate_interval: i
     return SimpleNamespace(coord=coord, pool=pool, shutdown=shutdown, sink=sink)
 
 
-def _drive(h, steps: int) -> None:
-    """One game completes per coordinator step, so game i lands before training step i + 1."""
-    for _ in range(steps):
-        if not h.shutdown.running:
-            return
-        h.pool.games_completed += 1
-        h.coord.step()
-
-
 #: A 6-game window past step 8: the attractor arrives as caps from game 6 on.
 _SPEC = PlyCapAbortSpec(rate=0.5, window_games=6, min_step=8)
 _ATTRACTOR = [0] * 6 + [1] * 30
@@ -145,7 +136,7 @@ _ATTRACTOR = [0] * 6 + [1] * 30
 def test_the_halt_fires_at_the_first_step_past_min_step_whose_window_is_over_the_rate() -> None:
     """PRODUCER TEST: caps from game 6 on, the 6-game window first exceeds 0.5 at game 10 → step 10."""
     h = _harness(_ATTRACTOR, _SPEC)
-    _drive(h, 30)
+    drive_one_game_per_step(h, 30)
     assert h.shutdown.running is False
     aborts = h.sink.named("hard_abort")
     assert len(aborts) == 1 and aborts[0]["rule"] == "ply_cap_attractor", aborts
@@ -157,14 +148,14 @@ def test_the_halt_fires_at_the_first_step_past_min_step_whose_window_is_over_the
 def test_the_gate_is_checked_every_training_step_not_only_at_gate_boundaries() -> None:
     """Step 10 is not a gate boundary (interval 4): a boundary-clocked gate would fire at 12."""
     h = _harness(_ATTRACTOR, _SPEC, gate_interval=4)
-    _drive(h, 30)
+    drive_one_game_per_step(h, 30)
     assert h.sink.named("hard_abort")[0]["step"] == 10
 
 
 def test_min_step_gates_the_fire_and_not_the_observation() -> None:
     """Caps from game 0: every window reads 1.0, yet the fire waits for step 8."""
     h = _harness([1] * 40, _SPEC)
-    _drive(h, 30)
+    drive_one_game_per_step(h, 30)
     aborts = h.sink.named("hard_abort")
     assert len(aborts) == 1 and aborts[0]["step"] == 8
     gates = h.sink.named("monitor_gates")[0]
@@ -174,7 +165,7 @@ def test_min_step_gates_the_fire_and_not_the_observation() -> None:
 
 def test_a_rate_at_exactly_the_bar_does_not_fire() -> None:
     h = _harness([1, 0] * 40, _SPEC)  # every 6-window reads exactly 0.5
-    _drive(h, 30)
+    drive_one_game_per_step(h, 30)
     assert h.shutdown.running is True and h.sink.named("hard_abort") == []
     gates = h.sink.named("monitor_gates")[-1]
     assert gates["ply_cap_rate"] == pytest.approx(0.5)
@@ -184,7 +175,7 @@ def test_a_rate_at_exactly_the_bar_does_not_fire() -> None:
 
 def test_the_explicit_off_posture_never_fires_and_is_skip_counted() -> None:
     h = _harness([1] * 40, None)
-    _drive(h, 30)
+    drive_one_game_per_step(h, 30)
     assert h.shutdown.running is True and h.sink.named("hard_abort") == []
     gates = h.sink.named("monitor_gates")[-1]
     assert gates["gates"]["ply_cap_attractor"]["skips"] > 0, "a disarmed gate is SKIP-counted, not silent"
@@ -194,7 +185,7 @@ def test_the_explicit_off_posture_never_fires_and_is_skip_counted() -> None:
 
 def test_below_the_window_the_gate_makes_no_observation_and_skip_counts() -> None:
     h = _harness([1] * 40, PlyCapAbortSpec(rate=0.5, window_games=600, min_step=1))
-    _drive(h, 30)
+    drive_one_game_per_step(h, 30)
     assert h.shutdown.running is True and h.sink.named("hard_abort") == []
     gates = h.sink.named("monitor_gates")[-1]
     assert gates["gates"]["ply_cap_attractor"]["skips"] >= 20
@@ -203,7 +194,7 @@ def test_below_the_window_the_gate_makes_no_observation_and_skip_counts() -> Non
 
 def test_the_live_terms_ride_monitor_gates() -> None:
     h = _harness([0] * 40, _SPEC)
-    _drive(h, 12)
+    drive_one_game_per_step(h, 12)
     gates = h.sink.named("monitor_gates")[-1]
     assert gates["ply_cap_abort_rate"] == 0.5 and gates["ply_cap_window_games"] == 6
     assert gates["ply_cap_rate"] == 0.0
@@ -213,7 +204,7 @@ def test_the_planted_break_a_dead_producer_is_caught_by_the_producer_test() -> N
     """LAW-07's mutation self-test: a producer reporting NO games makes the fire above never come."""
     h = _harness(_ATTRACTOR, _SPEC)
     h.pool.ply_cap_window_counts = lambda window_games: (0, 0)  # type: ignore[method-assign]
-    _drive(h, 30)
+    drive_one_game_per_step(h, 30)
     assert h.shutdown.running is True and h.sink.named("hard_abort") == []
     gates = h.sink.named("monitor_gates")[-1]
     assert gates["gates"]["ply_cap_attractor"]["fires"] == 0

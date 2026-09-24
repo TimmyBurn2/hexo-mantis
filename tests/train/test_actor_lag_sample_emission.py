@@ -9,10 +9,10 @@ from __future__ import annotations
 import inspect
 import json
 from pathlib import Path
-from types import SimpleNamespace
 
 from mantis.monitor.sink import JsonlEventSink
 from mantis.train.lifecycle.heartbeat_watchdog import ActorLagSpec, HeartbeatWatchdog
+from _drivable import inert_heartbeat_registry
 
 # The event name is the contract surface: the event manifest gains a row for it in the SAME
 # commit as this file.
@@ -23,18 +23,11 @@ SAMPLE_EVENT = "actor_lag_sample"
 DETAIL_KEYS = ("learner_step", "actor_ckpt_step", "lag_steps", "threshold_steps")
 
 
-def _registry():
-    return SimpleNamespace(
-        sources=("train_step",), ages=lambda: {"train_step": 0.0},
-        beaten_sources=lambda: frozenset({"train_step"}), arm=lambda: None,
-    )
-
-
 def _watchdog(tmp_path: Path, *, spec, sink, file_interval_sec=0.0, clock=None, codes=None):
     """Silence staleness structurally (`deadline <= 0`) so every event comes from the lag check;
     the watchdog THREAD is never started, `poll_once()` is driven directly."""
     return HeartbeatWatchdog(
-        registry=_registry(), deadlines={"train_step": 0.0}, sink=sink,
+        registry=inert_heartbeat_registry(), deadlines={"train_step": 0.0}, sink=sink,
         counters_fn=lambda: 0, heartbeat_file=tmp_path / "hb.json",
         file_interval_sec=file_interval_sec, poll_interval_sec=0.0,
         clock=clock if clock is not None else (lambda: 0.0),

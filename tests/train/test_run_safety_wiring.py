@@ -23,17 +23,9 @@ from mantis.monitor.heartbeat import (
 )
 from mantis.train.coordinator import drain
 from mantis.train.lifecycle.heartbeat_watchdog import HeartbeatWatchdog
+from _drivable import ExitSpy
 _REPO = Path(__file__).resolve().parents[2]
 _SRC = _REPO / "src" / "mantis"
-
-
-class _ExitSpy:
-    def __init__(self) -> None:
-        self.codes: list[int] = []
-
-    def __call__(self, code: int) -> None:
-        self.codes.append(int(code))
-
 
 
 class BlockingPipeline:
@@ -76,7 +68,7 @@ def _fake_coord(*, watchdog, pipeline, sink):
 def test_close_out_disarms_staleness_no_false_fire(tmp_path) -> None:
     """A blocked drain past the deadline produces ZERO staleness fires, and the heartbeat seq
     keeps advancing through the window."""
-    sink, exit_spy, hb = SpyEventSink(), _ExitSpy(), tmp_path / "hb.json"
+    sink, exit_spy, hb = SpyEventSink(), ExitSpy(), tmp_path / "hb.json"
     wd = _make_watchdog(sink=sink, exit_fn=exit_spy, counters_fn=lambda: 0, hb_file=hb)
     pipe = BlockingPipeline(block_sec=0.8)
     coord = _fake_coord(watchdog=wd, pipeline=pipe, sink=sink)
@@ -104,7 +96,7 @@ def test_close_out_disarms_staleness_no_false_fire(tmp_path) -> None:
 
 def test_persist_fatal_still_fires_after_close_out_disarm(tmp_path) -> None:
     """Persist-fatal is NEVER disarmed: an increment mid-drain still fires 43."""
-    sink, exit_spy, hb = SpyEventSink(), _ExitSpy(), tmp_path / "hb.json"
+    sink, exit_spy, hb = SpyEventSink(), ExitSpy(), tmp_path / "hb.json"
     box = [0]
     wd = _make_watchdog(sink=sink, exit_fn=exit_spy, counters_fn=lambda: box[0], hb_file=hb)
     pipe = BlockingPipeline(block_sec=0.8, counters_box=box)
@@ -120,7 +112,7 @@ def test_persist_fatal_still_fires_after_close_out_disarm(tmp_path) -> None:
 
 def test_late_disarm_mutant_false_fires(tmp_path) -> None:
     """Disarming AFTER the blocked flush false-fires 42, so the row above is not vacuous."""
-    sink, exit_spy, hb = SpyEventSink(), _ExitSpy(), tmp_path / "hb.json"
+    sink, exit_spy, hb = SpyEventSink(), ExitSpy(), tmp_path / "hb.json"
     wd = _make_watchdog(sink=sink, exit_fn=exit_spy, counters_fn=lambda: 0, hb_file=hb)
     pipe = BlockingPipeline(block_sec=0.8)
     wd.start()

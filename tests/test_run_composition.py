@@ -10,7 +10,6 @@ and a split would fork the order spy rig the start-order rows drive.
 """
 from __future__ import annotations
 
-import dataclasses
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -25,8 +24,7 @@ from mantis.config.resolve.composition import (
 )
 from mantis.config.schema import RunConfig
 from _monitor_config import monitor_config
-from mantis.train.coordinator.config import StepCoordinatorConfig
-from _drivable import DrivablePoolStub, DrivableTrainerStub
+from _drivable import DrivablePoolStub, DrivableTrainerStub, with_deltas
 
 _REPO = Path(__file__).resolve().parents[1]
 _SRC = _REPO / "src" / "mantis"
@@ -56,13 +54,9 @@ def _bounded(smoke_run_config, *, eval_enabled: bool = False, **monitor_over):
 _PRODUCTION_BUILDER = mantis.run._step_coordinator_config
 
 
-def _no_terminal_eval_config(**kwargs) -> StepCoordinatorConfig:
-    """The ONE builder patch the `eval_enabled=True` drives still need: the production builder
-    defaults `terminal_eval_enabled=True`, so `close_out` runs a terminal eval round that
-    reaches a `.arch` read on a fake model, and that knob has no config key. A ONE-KNOB DELTA
-    over the real builder, so `**kwargs` forwards every CONFIG-AUTHORED value untouched —
-    `stop_step` above all, or a patched builder dictating run length would hide it."""
-    return dataclasses.replace(_PRODUCTION_BUILDER(**kwargs), terminal_eval_enabled=False)
+#: The production builder with terminal eval off: that knob has no config key, and left on,
+#: `close_out` runs a terminal round that reads `.arch` off a fake model.
+_no_terminal_eval_config = with_deltas(_PRODUCTION_BUILDER, terminal_eval_enabled=False)
 
 
 def _patch_eval_side(monkeypatch, capture: dict | None = None):

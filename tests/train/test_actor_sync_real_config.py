@@ -5,15 +5,13 @@ monkeypatched and `build_run_safety` is faked.
 """
 from __future__ import annotations
 
-import dataclasses
 import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 
 import mantis.run
 from mantis.config.schema.core import RunConfig
-from mantis.train.coordinator.config import StepCoordinatorConfig
-from _drivable import DrivablePoolStub, DrivableTrainerStub
+from _drivable import DrivablePoolStub, DrivableTrainerStub, with_deltas
 
 _CADENCE = 2
 _STOP_STEP = 6
@@ -38,11 +36,9 @@ def _frozen_payload():
 _PRODUCTION_BUILDER = mantis.run._step_coordinator_config
 
 
-def _bounded_config(**kwargs) -> StepCoordinatorConfig:
-    """Apply the harness's own deltas over the real builder, passing config values through."""
-    return dataclasses.replace(_PRODUCTION_BUILDER(**kwargs),
-                               terminal_eval_enabled=False, eval_interval=1000,
-                               log_interval=1, stop_step=_STOP_STEP)
+#: The production builder bounded so no eval round runs; config-authored values pass through.
+_bounded_config = with_deltas(_PRODUCTION_BUILDER, terminal_eval_enabled=False, eval_interval=1000,
+                              log_interval=1, stop_step=_STOP_STEP)
 
 
 def _real_run_config() -> RunConfig:

@@ -31,18 +31,6 @@ def test_the_hparams_read_the_block_and_refuse_its_absence(mk_config) -> None:
         TrainHParams.from_config(config)
 
 
-def _step_once(trainer, buf, *, replay_n: int = 8):
-    import _microbatch_harness as H  # noqa: PLC0415 — the tests/train rootdir harness
-    from mantis.config.resolve.microbatch import MicrobatchCapsSpec
-    from mantis.train.coordinator.dispatch import run_declared_train_step
-
-    replay = H.ReplayWireBuffer(buf, replay_n)
-    return run_declared_train_step(
-        trainer, replay, H.GSPEC, batch_size=replay_n, augment=False, recency_weight=0.0,
-        caps_provider=lambda: MicrobatchCapsSpec(*H.non_binding_caps(replay.wire)),
-        sample_threads_provider=lambda: 1, fast_policy_weight_provider=lambda: 0.0)
-
-
 def test_a_warm_up_step_moves_the_value_head_and_not_the_policy_head(tmp_path) -> None:
     """Real step: at weight 0 the policy head is byte-untouched, the value head moves; after, both move."""
     import _microbatch_harness as H  # noqa: PLC0415 — the tests/train rootdir harness
@@ -54,14 +42,14 @@ def test_a_warm_up_step_moves_the_value_head_and_not_the_policy_head(tmp_path) -
     policy_before = {k: v.detach().clone() for k, v in trainer.model.policy_head.state_dict().items()}
     value_before = {k: v.detach().clone() for k, v in trainer.model.value_head.state_dict().items()}
 
-    first = _step_once(trainer, buf)
+    first = H.step_once(trainer, buf)
     assert first["policy_loss"] > 0.0, "the reported policy loss must stay the unweighted CE"
     assert all(torch.equal(trainer.model.policy_head.state_dict()[k], v) for k, v in policy_before.items()), (
         "the policy head moved during the warm-up")
     assert any(not torch.equal(trainer.model.value_head.state_dict()[k], v) for k, v in value_before.items()), (
         "the value head did not move during the warm-up")
 
-    second = _step_once(trainer, buf)
+    second = H.step_once(trainer, buf)
     assert second["policy_loss"] > 0.0
     assert any(not torch.equal(trainer.model.policy_head.state_dict()[k], v) for k, v in policy_before.items()), (
         "the policy head did not move once the warm-up ended")

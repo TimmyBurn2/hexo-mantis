@@ -10,7 +10,6 @@ would duplicate that harness and let the two halves drift apart.
 """
 from __future__ import annotations
 
-import dataclasses
 
 import pytest
 from types import SimpleNamespace
@@ -18,10 +17,8 @@ from typing import Any
 
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec
 from _drivable import DrivablePoolStub
-from _graph_drive import DEV_DRAIN_CAPS, DEV_GATE_INTERVAL, DEV_KNOBS, GRAPH_FULL_CONFIG, GraphSampleBuffer
+from _graph_drive import dev_coordinator_config, GRAPH_FULL_CONFIG, GraphSampleBuffer
 from _monitor_config import monitor_config
-from mantis.run import _step_coordinator_config
-from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
 from _spy import SpyEventSink
@@ -94,22 +91,6 @@ class BeatSpy:
         self.beats.append(source)
 
 
-def _make_config(**overrides) -> StepCoordinatorConfig:
-    """DERIVED from the production builder, never a hand-written kwarg census: restating every
-    field made ten test files agree with `StepCoordinatorConfig` by maintenance rather than
-    construction. `stop_step`/`draw_rate_abort` are passed EXPLICITLY because neither the
-    builder nor this factory gives them a default, and `gate_interval` MIRRORS `log_interval`
-    unless a drive names it — the SHIPPED posture stated once."""
-    settings = {"eval_interval": 1, "log_interval": 1, "min_buf_size": 10, **overrides}
-    settings.setdefault("gate_interval", settings["log_interval"])
-    return dataclasses.replace(
-        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
-                                 drain_caps=DEV_DRAIN_CAPS, gate_interval=DEV_GATE_INTERVAL,
-                                 knobs=DEV_KNOBS),
-        **settings,
-    )
-
-
 def _make_coordinator(*, pool=None, config=None, eval_pipeline=None, heartbeat=None,
                       monitor_cfg=None, trainer_step: int = 0):
     pool = pool or DrivablePoolStub()
@@ -125,7 +106,7 @@ def _make_coordinator(*, pool=None, config=None, eval_pipeline=None, heartbeat=N
         shutdown=shutdown, eval_model=object(),
         # WPTS/TD-1: the straight arm resolves its route from the DECLARED identity — these
         # unit drives declare the grid identity FakeBuffer's sampler serves.
-        config=config or _make_config(),
+        config=config or dev_coordinator_config(),
         full_config=GRAPH_FULL_CONFIG,
         sink=sink, heartbeat=heartbeat, monitor_cfg=monitor_cfg or monitor_config(),
     )
@@ -197,7 +178,7 @@ class _KickSpy:
 
 
 def _boot_at(step: int, *, eval_interval: int):
-    return _make_coordinator(config=_make_config(eval_interval=eval_interval, log_interval=1),
+    return _make_coordinator(config=dev_coordinator_config(eval_interval=eval_interval, log_interval=1),
                              eval_pipeline=_KickSpy(), trainer_step=step)
 
 
@@ -255,7 +236,7 @@ def test_draw_rate_gate_fires_on_live_producer() -> None:
     draw-target phantom: a sustained 0.9 pooled rate over sufficient evidence, past min_step,
     fires. Grad-norm is quiet, so the fire is draw-rate."""
     pool = DrivablePoolStub(draw_counts=(90, 100))
-    cfg = _make_config(draw_rate_abort=DrawRateAbortSpec(threshold=0.4, min_step=0,
+    cfg = dev_coordinator_config(draw_rate_abort=DrawRateAbortSpec(threshold=0.4, min_step=0,
                                                         N_pool_min=10, consec=3))
     h = _make_coordinator(pool=pool, config=cfg)
     _drive_until_stopped(h)
@@ -270,7 +251,7 @@ def test_a_resume_restores_the_draw_rate_window_so_the_third_observation_fires()
     """B-7 (R355(e)): the resume emptied the abort windows (run7's draw-rate abort moved 25k -> 26k)."""
     spec = DrawRateAbortSpec(threshold=0.4, min_step=0, N_pool_min=10, consec=3)
     before = _make_coordinator(pool=DrivablePoolStub(draw_counts=(90, 100)),
-                               config=_make_config(draw_rate_abort=spec))
+                               config=dev_coordinator_config(draw_rate_abort=spec))
     for _ in range(2):
         before.pool.games_completed += 5
         before.coord.step()
@@ -278,14 +259,14 @@ def test_a_resume_restores_the_draw_rate_window_so_the_third_observation_fires()
     carried = before.coord.guard_state()
 
     resumed = _make_coordinator(pool=DrivablePoolStub(draw_counts=(90, 100)),
-                                config=_make_config(draw_rate_abort=spec))
+                                config=dev_coordinator_config(draw_rate_abort=spec))
     resumed.coord.restore_guard_state(carried)
     resumed.pool.games_completed += 5
     resumed.coord.step()
     assert resumed.shutdown.running is False, "the third observation, first after the resume, fires"
 
     fresh = _make_coordinator(pool=DrivablePoolStub(draw_counts=(90, 100)),
-                              config=_make_config(draw_rate_abort=spec))
+                              config=dev_coordinator_config(draw_rate_abort=spec))
     fresh.pool.games_completed += 5
     fresh.coord.step()
     assert fresh.shutdown.running is True, "the control: without the restore one observation is one"
@@ -313,7 +294,7 @@ def test_draw_rate_gate_default_off_does_not_fire() -> None:
     """On the EXPLICITLY disarmed posture a high draw rate NEVER fires. Bites a gate that ships
     hot against the config the operator actually wrote."""
     pool = DrivablePoolStub(draw_counts=(99, 100))
-    cfg = _make_config()  # draw_rate_abort is None — EXPLICITLY off
+    cfg = dev_coordinator_config()  # draw_rate_abort is None — EXPLICITLY off
     h = _make_coordinator(pool=pool, config=cfg)
     _drive_until_stopped(h, cap=6)
     assert h.shutdown.running is True, (
@@ -373,7 +354,7 @@ def test_log_interval_boundaries_are_evaluated_per_training_step() -> None:
     boundary test, which hits a boundary only when the post-burst step is an exact multiple —
     here just step 20, thinning the stream and both gates' sampling by roughly the burst.
     `iteration_complete` is decoupled and emits per burst, at `[4, 8, 12, 16, 20]`."""
-    cfg = _make_config(log_interval=5, max_train_burst=4, training_steps_per_game=4.0,
+    cfg = dev_coordinator_config(log_interval=5, max_train_burst=4, training_steps_per_game=4.0,
                        draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None)
     h = _make_coordinator(config=cfg)
     for _ in range(5):
@@ -389,7 +370,7 @@ def test_log_interval_boundaries_are_evaluated_per_training_step() -> None:
         "NOT per log_interval boundary. The step value is the post-burst _train_step."
     )
     assert [e["step"] for e in h.sink.named("monitor_gates")] == [5, 10, 15, 20], (
-        "monitor_gates rides monitor.gate_interval (R242), which `_make_config` mirrors onto "
+        "monitor_gates rides monitor.gate_interval (R242), which `dev_coordinator_config` mirrors onto "
         "log_interval here exactly as every committed config does"
     )
 
@@ -399,7 +380,7 @@ def test_gate_interval_boundaries_are_evaluated_per_training_step() -> None:
     to hold SEPARATELY on each knob. `gate_interval=5` with `log_interval=1000` and a burst of
     4 must give EXACTLY 4 summaries at 5/10/15/20 and ZERO `training_step` events; testing once
     per burst would hit only step 20 and stretch the `consec` window by the mean burst."""
-    cfg = _make_config(log_interval=1000, gate_interval=5, max_train_burst=4,
+    cfg = dev_coordinator_config(log_interval=1000, gate_interval=5, max_train_burst=4,
                        training_steps_per_game=4.0, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None)
     h = _make_coordinator(config=cfg)
     for _ in range(5):
@@ -421,7 +402,7 @@ def test_gate_sampling_cadence_follows_gate_interval_not_the_burst() -> None:
     3rd sample at step 15 and fires THERE, where a once-per-burst implementation could not have
     fired yet. The subject used to be `log_interval`, and that identity was the defect."""
     pool = DrivablePoolStub(draw_counts=(90, 100))
-    cfg = _make_config(log_interval=5, gate_interval=5, max_train_burst=4,
+    cfg = dev_coordinator_config(log_interval=5, gate_interval=5, max_train_burst=4,
                        training_steps_per_game=4.0,
                        draw_rate_abort=DrawRateAbortSpec(threshold=0.4, min_step=0,
                                                         N_pool_min=10, consec=3),
@@ -451,7 +432,7 @@ def test_grad_norm_gate_fires_with_the_uniform_contract() -> None:
     norm above the threshold for `hard_gn_min_steps` consecutive steps stops the run AND emits
     ONE `hard_abort` event naming the rule. It only wrote a log line before, so the one
     unconditionally-active hard abort was invisible in the ONE channel."""
-    cfg = _make_config(hard_gn_threshold=0.5, hard_gn_min_steps=3)
+    cfg = dev_coordinator_config(hard_gn_threshold=0.5, hard_gn_min_steps=3)
     h = _make_coordinator(config=cfg)
     h.trainer._gn = 10.0                              # sustained instability
     _drive_until_stopped(h)
@@ -467,7 +448,7 @@ def test_grad_norm_gate_fires_with_the_uniform_contract() -> None:
 def test_grad_norm_gate_does_not_fire_below_the_consecutive_count() -> None:
     """A single high-gn step (the consecutive counter reset by a healthy step) must NOT fire;
     only a sustained run of `hard_gn_min_steps` does. Bites a gate that aborts on one spike."""
-    cfg = _make_config(hard_gn_threshold=0.5, hard_gn_min_steps=3)
+    cfg = dev_coordinator_config(hard_gn_threshold=0.5, hard_gn_min_steps=3)
     h = _make_coordinator(config=cfg)
     for gn in (10.0, 0.1, 10.0, 0.1):
         h.trainer._gn = gn

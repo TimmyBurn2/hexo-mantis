@@ -17,14 +17,7 @@ from mantis.monitor.heartbeat import (
 from mantis.train.lifecycle.heartbeat_watchdog import HeartbeatWatchdog
 from mantis.train.subsystems import build_run_safety
 from _spy import SpyEventSink
-
-
-class _ExitSpy:
-    def __init__(self) -> None:
-        self.codes: list[int] = []
-
-    def __call__(self, code: int) -> None:
-        self.codes.append(int(code))
+from _drivable import ExitSpy
 
 
 class FakeBuffer:
@@ -92,7 +85,7 @@ def test_stale_eval_poller_fires_42_under_fake_clock(tmp_path) -> None:
     """A wedged `eval_round` poller fires the shared stall exit code, like the three shipped
     sources, under a FAKE clock."""
     sink = SpyEventSink()
-    exit_spy = _ExitSpy()
+    exit_spy = ExitSpy()
     fake_time = {"t": 0.0}
 
     def _clock() -> float:
@@ -124,7 +117,7 @@ def test_headless_launch_without_pipeline_is_unwired_loud_not_fatal(tmp_path) ->
     """A known, deadlined but never-beaten source is reported unwired, never aborted: killing a
     healthy pipeline-less run is the worse failure."""
     sink = SpyEventSink()
-    exit_spy = _ExitSpy()
+    exit_spy = ExitSpy()
     fake_time = {"t": 0.0}
 
     def _clock() -> float:
