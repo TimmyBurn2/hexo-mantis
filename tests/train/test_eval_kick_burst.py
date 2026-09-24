@@ -1,10 +1,10 @@
 """The eval round must not be SKIPPED by a multi-step burst.
 
-`_maybe_kick_eval` tests `self._train_step % cfg.eval_interval != 0`. Called ONCE after a whole
-burst, a `max_train_burst > 1` run steps OVER the exact multiple (interval 5, burst 3, step
-4 -> 7) and the round is not delayed but LOST, because `_eval_round_last_step` is keyed on the
-round index and nothing retries it. Calling INSIDE the burst tests the boundary per training
-step, so every exact multiple is hit.
+The kick guard is the round INDEX advancing past the last kicked one. Called ONCE after a
+whole burst, a `max_train_burst > 1` run steps OVER the boundary (interval 5, burst 3, step
+4 -> 7) and the round is not delayed but LOST, because the once-per-round-index latch never
+retries a boundary the burst jumped past. Calling INSIDE the burst tests the boundary per
+training step, so every exact multiple is hit.
 """
 from __future__ import annotations
 

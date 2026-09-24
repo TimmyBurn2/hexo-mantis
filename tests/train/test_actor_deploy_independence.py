@@ -2,9 +2,6 @@
 (the eval deploy-matched rung reads the DeployTag, never the actor's live weights).
 DESIGN_U §8.
 
-RED-at-import until IMPL lands `DeployTagHooks` (the renamed, `promotion_target`-less
-`PromotionHooks`, DESIGN §1.1) and `mantis.train.actor_sync.ActorSync`.
-
 Per DESIGN §0/GAPS-7 the gate-PASS direction cannot be proven on production wiring at
 HEAD (no production path yields `promoted=True`), so it is driven exactly the way the
 existing routing suites drive it: fabricated results through `drain._route_eval_result`
@@ -22,7 +19,7 @@ from typing import Any
 from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
-from mantis.eval.promote import DeployTagHooks, apply_gate_decision  # RED-at-import anchor
+from mantis.eval.promote import DeployTagHooks, apply_gate_decision
 from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
 from mantis.train.actor_sync import ActorSync

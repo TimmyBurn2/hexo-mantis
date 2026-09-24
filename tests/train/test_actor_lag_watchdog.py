@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from mantis.train.lifecycle.heartbeat_watchdog import (  # RED-at-import anchor
+from mantis.train.lifecycle.heartbeat_watchdog import (
     ActorLagSpec,
     HeartbeatWatchdog,
 )

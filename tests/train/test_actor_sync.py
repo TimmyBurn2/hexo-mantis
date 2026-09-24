@@ -1,8 +1,5 @@
 """⊕ WPUF Phase U ORACLE — O-U1: continuous, unconditional actor sync (DESIGN_U §1.1/§8).
 
-RED-at-import until IMPL lands `mantis.train.actor_sync.ActorSync` (the sync engine).
-Byte-frozen through IMPL; an oracle contradicting DESIGN is adjudicated, never satisfied.
-
 The headline law (R49): the actor's weights track the learner on a step-modulo cadence,
 with NO gate, promotion, deploy or eval object anywhere in the loop. There is deliberately
 no gate object in ANY harness below — "the gate fails forever" is vacuously true here,
@@ -14,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from mantis.train.actor_sync import ActorSync  # RED-at-import anchor (module does not exist yet)
+from mantis.train.actor_sync import ActorSync
 
 _EVENT_KEYS = {
     "event", "step", "actor_ckpt_step", "lag_steps_pre_sync",

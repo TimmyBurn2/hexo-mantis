@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import threading
 
-import mantis.eval.pipeline  # noqa: F401 — RED-at-import anchor
+import mantis.eval.pipeline
 from _monitor_config import monitor_config
 from mantis.monitor.heartbeat import (
     WATCHDOG_STALL_EXIT_CODE,

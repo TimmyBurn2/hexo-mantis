@@ -2,8 +2,6 @@
 (DESIGN_U §2.2 censuses S1–S5 + §2.4's unconditional-construction pin), each census with
 its LAW-07 bite test (template: tests/selfplay/test_pool_surface.py H-12).
 
-RED-at-import until IMPL lands `mantis.train.actor_sync` and `DeployTagHooks`.
-
 PLACEMENT DEVIATIONS (logged in ORACLE_NOTES_U.md): DESIGN homes S4 in the rewritten
 `tests/eval/test_promote_call_site.py` and E10's kept half (S5) in the edited
 `tests/test_run_composition.py` — both existing files ORACLE-WRITE may not touch; both
