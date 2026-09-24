@@ -18,8 +18,6 @@ import os
 import signal
 import time
 
-import pytest
-
 from mantis.train.lifecycle.signals import (
     ShutdownState,
     force_teardown_all,
@@ -32,15 +30,6 @@ from mantis.train.lifecycle.signals import (
 def _sleep_forever():
     """A child target that sleeps long enough to be torn down."""
     time.sleep(300)
-
-
-@pytest.fixture
-def restore_signals():
-    orig_int = signal.getsignal(signal.SIGINT)
-    orig_term = signal.getsignal(signal.SIGTERM)
-    yield
-    signal.signal(signal.SIGINT, orig_int)
-    signal.signal(signal.SIGTERM, orig_term)
 
 
 def _spawn_child(ctx_name: str = "spawn"):
@@ -86,7 +75,7 @@ def test_unregister_removes_child_from_registry():
             proc.join(2.0)
 
 
-def test_second_signal_kills_registered_child(restore_signals, monkeypatch):
+def test_second_signal_kills_registered_child(monkeypatch):
     """ORACLE — second SIGINT calls force_teardown_all then os._exit(1); the registered
     child is dead before the process exits."""
     state = ShutdownState()
@@ -110,7 +99,7 @@ def test_second_signal_kills_registered_child(restore_signals, monkeypatch):
     assert not proc.is_alive(), "second signal must kill the registered child"
 
 
-def test_mutation_disabled_teardown_leaves_child_alive(restore_signals, monkeypatch):
+def test_mutation_disabled_teardown_leaves_child_alive(monkeypatch):
     """MUTATION — if force_teardown_all is disabled (no-op), the child survives the second
     signal. This test REDS against the disabled teardown, proving the oracle bites."""
     from mantis.train.lifecycle import signals as sig_mod

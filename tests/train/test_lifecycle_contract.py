@@ -28,16 +28,6 @@ GB = 1_000_000_000  # decimal GB: reproduces the old `usage.free / 1e9` divisor 
 # `1024 ** 3` would have shifted every threshold by ~7.4%.
 
 
-@pytest.fixture
-def restore_signals():
-    """Capture + restore the process SIGINT/SIGTERM handlers around a signal test."""
-    orig_int = signal.getsignal(signal.SIGINT)
-    orig_term = signal.getsignal(signal.SIGTERM)
-    yield
-    signal.signal(signal.SIGINT, orig_int)
-    signal.signal(signal.SIGTERM, orig_term)
-
-
 def _fake_disk_usage(free_gb: float):
     """A shutil.disk_usage replacement reporting `free_gb` free on a 100 GB volume."""
     usage = collections.namedtuple("usage", "total used free")
@@ -48,7 +38,7 @@ def _fake_disk_usage(free_gb: float):
     return f
 
 
-def test_sigint_sets_save_then_exit_state(restore_signals):
+def test_sigint_sets_save_then_exit_state():
     """One SIGINT flips running=False and shutdown_save=True. Bites: a signal that does not
     request a save."""
     state = ShutdownState()
@@ -60,7 +50,7 @@ def test_sigint_sets_save_then_exit_state(restore_signals):
     assert state.shutdown_save is True
 
 
-def test_sigterm_sets_save_then_exit_state(restore_signals):
+def test_sigterm_sets_save_then_exit_state():
     """One SIGTERM does the same. Bites: SIGTERM ignored (the disk-guard fail path relies on
     it)."""
     state = ShutdownState()
@@ -72,7 +62,7 @@ def test_sigterm_sets_save_then_exit_state(restore_signals):
     assert state.shutdown_save is True
 
 
-def test_double_signal_force_exits(restore_signals, monkeypatch):
+def test_double_signal_force_exits(monkeypatch):
     """A second signal (stop_count>=2) force-tears-down registered children then calls
     os._exit(1). Bites: no forced exit, or exiting with children left orphaned."""
     from mantis.train.lifecycle import signals as sig_mod
