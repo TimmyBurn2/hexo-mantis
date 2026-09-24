@@ -5,7 +5,7 @@
 # The baseline it replaced, at b2e72de4, was 11711 / 1276 / 32405.
 comment_excess_lines 3161
 banner_comment_lines 0
-docstring_excess_lines 12122
+docstring_excess_lines 12109
 # 2026-09-17 (R355 step 12, C-15/C-16): two measures added at their measured values — the private-
 # docstring and Rust-doc halves of the judgment backlog (CARD-STYLE-BACKLOG). Down-only, like the rest.
 private_docstring_excess_lines 1361
@@ -14,5 +14,5 @@ rust_doc_excess_lines 2486
 # class (bare R-tokens and docstrings now included) and the narrative runs in the text-format
 # files the .py/.rs scopes never saw. Down-only, like the rest. The narrower ungated
 # ruling_cite_comment_lines counter is retired with the same edit.
-ruling_cite_lines 1203
+ruling_cite_lines 1202
 textfile_comment_excess_lines 466
