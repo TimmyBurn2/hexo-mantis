@@ -11,8 +11,8 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
 - Wave: **W3** (Python src). W2 EXITED: REVIEW-W2 filed (`docs/audits/REVIEW_W2_2026-09-24.md`, 0 must-fix, one
   loop); exit sweep `make gates` on 3db6ab5a ALL GREEN, 19 gates (2a 1068 s, 3a 356 s, 3b 3005 s); the post-review
   text commits on 8b75f984 re-checked (gates 10/13/14/15/17, workspace build 0 warnings); run10 resolved MATCH at
-  3db6ab5a. W1 EXITED earlier (cadcc367, 19 gates green after a quota-voided first run). W3: three agents in
-  `.wt/w3-{train,selfplay,eval}` branched from 8b75f984; the sha256 consolidation follows them.
+  3db6ab5a. W1 EXITED earlier (cadcc367, 19 gates green after a quota-voided first run). W3: the three package
+  groups INTEGRATED (collected 5147 → 5039); the sha256 consolidation + W3 residue agent running in `.wt/w3-sha`.
 
 ## W0 — entry
 
@@ -89,6 +89,33 @@ Integrated (commit subjects on the branch carry the row IDs):
   version_range, opening draw). CARD owed: hot-loop sites (core `Board::check_win`; selfplay queues/graph.rs 13
   lock/condvar-poison expects, graph.rs position(), search_drive.rs 261/265/724) and a POISON STANCE for 9
   lock-poison expects in selfplay runner (finalize.rs, mod.rs latch/stop/drain faces, spawn.rs, search_drive.rs:88).
+
+## W3 — Python src
+
+Integrated (commit subjects carry the row IDs):
+- eval/arena/bots/diagnostics/monitor/util: CORE-3-01/02/03/04/05/06/07/08/09/10/11/12/15/16/17, CORE-2-04,
+  CORE-3-NEW-1 (C→B: a duplicate, now called), TESTS-6-01 DONE; the sealbot adapter's src side GONE (R368(e),
+  find_vendor_root moved to bots/strix.py first; eval_instrument.md v2); CORE-3-13 refuted-at-contact (W1);
+  CORE-3-18/-19 KEEP (every diagnostics module has a caller; deploy/ reserved by CLAUDE.md). REVIEW-W2 note 6 DONE.
+  OPERATOR QUESTION: pipeline.py's round-completion catch-all repeats `repr(exc)` in its logger.exception message
+  (CLAUDE.md's style rule says it should not) but the protected O-30 witness
+  `test_the_round_completion_route_logs_a_traceback_and_the_detail` pins the repr — kept (a witness is never
+  narrowed); the rule vs the witness is the operator's call.
+- train/model/encoding: CORE-1-01/03/04/05/06/07/08/09/10/11..16/17/18/19/24/25/26/28/29/31/32/NEW-1/NEW-2 DONE;
+  CORE-1-22 anchor half DONE (resume_state half stays C: write_resume_state is PZ-1); CORE-1-30 partial (kept params
+  are PZ-1/seam/golden-pinned); CORE-1-27 stays C (touches _registry_sha_handshake, PZ-2, no ruling names it);
+  CORE-1-02 done at W1. 01_DEFECTS 15 RESOLVED (TrainerLike + GridRouteBufferLike gone; the production Trainer IS a
+  TrainerLike, pinned). Newly found: Trainer.load_checkpoint (classmethod) has zero callers — left (LAW-12 caution).
+- selfplay/config/data/env/run.py: CORE-2-01/02/03/05/06/07/08/10/11/12/15/16(run.py half)/17/18/19/20/21/22,
+  CORE-2-NEW-1, L-DUP-05/06/08/09 DONE; the old corpus pipeline and mantis.env GONE (uv.lock −465: matplotlib, rich
+  out of the `analysis` extra); 01_DEFECTS 16 RESOLVED (submit_and_wait was grid-only, deleted), 17 RESOLVED (module
+  gone + a new import-side-effect witness, tests/test_import_side_effects.py). Still C: CORE-2-13 (the nsims resolver
+  is a contract-cited seam member; its sealbot name goes with the residue agent), CORE-2-16 resolver modules,
+  CORE-2-23 (the dense drain arm is the drain-parity oracle's driven path → W5 with the drain re-base).
+- broad-except: fixed eval/child_memory make_probe, worker_sweep CLI refusals now log tracebacks, train stamp
+  resolver + parent-death arm + disk_guard loop, selfplay spearman read; the rest classified as top-level handlers,
+  record-and-surface contracts, PZ-1 dump-on-fire guards or re-raises (agent reports). Card candidates: the
+  worker_sweep sampler thread, the inference_server graph-loop fail paths, the signals.py:325 force-exit reap.
 
 ## Ledger (row → done / refuted-at-contact / halted)
 
