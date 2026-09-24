@@ -12,6 +12,7 @@ import pytest
 import torch
 
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
+from _pipeline_harness import caps_for
 from mantis.encoding import all_specs, lookup
 from mantis.eval import worker
 from mantis.eval.rounds import GateSpec, RoundSpec, RungJob
@@ -39,17 +40,6 @@ def _net(enc_name: str, *, seed: int) -> torch.nn.Module:
     net.arch = arch
     net.eval()
     return net
-
-
-def _caps_for(enc_name: str):
-    """Derive the fused-forward memory bound this encoding's route needs; the graph route resolves
-    it eagerly at construction, at a non-binding pair so no round here splits."""
-    from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
-    from mantis.encoding import lookup
-
-    if lookup(enc_name).representation != "graph":
-        return None
-    return FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921)
 
 
 def _round_spec(
@@ -82,7 +72,7 @@ def _round_spec(
         result_path=str(tmp_path / "result.json"), progress_path=str(tmp_path / "progress.txt"),
         game_record=None,
         ply_cap_adjudication=None, strength_floor=None,
-        fused_graph_caps=_caps_for(enc_name),
+        fused_graph_caps=caps_for(enc_name),
         inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10),
     )
 

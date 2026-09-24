@@ -5,8 +5,7 @@ from `gate.deploy_sims` — so a window confinement re-appearing at this seat wo
 frozen gate-seat oracle green while every strix cell number (the one rung job left since
 R362(c)) measured that asymmetry instead of strength.
 
-The stub net is the ONE stand-in and is duplicated rather than imported, since cross-test
-imports are barred; everything else on the path is production.
+Everything on the path under test is production code.
 """
 from __future__ import annotations
 
@@ -17,18 +16,11 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from mantis.config.resolve.inference_batching import InferenceBatchingSpec
+from _pipeline_harness import board_from, graph_engine
 from mantis._engine import Board
 from mantis.bots.random_bot import RandomBot
-from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.encoding import lookup
 from mantis.eval import worker
-from mantis.selfplay.inference_local import LocalInferenceEngine
-
-_ENC = "gnn_axis_v1"
-#: `LocalInferenceEngine` takes the fused-forward memory bound as a REQUIRED keyword. The pair
-#: here is non-binding by construction: nothing in this file exercises a split.
-_CAPS = FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921)
 _FIXTURE = (
     Path(__file__).resolve().parents[1] / "fixtures" / "eval_selfplay_parity" / "dispersed_r6_v1.json"
 )
@@ -42,56 +34,11 @@ _OFF_WINDOW_FLAT = 361
 _POSITIONS = (2, 3)
 
 
-def _rule_logit(i: int) -> float:
-    return ((i * 37) % 101) / 20.0
-
-
-class _RuleNet(torch.nn.Module):
-    """`GnnNet.forward_batch`'s contract with a deterministic policy head."""
-
-    def forward_batch(self, x, edge_index, edge_attr, legal_index, stone_mask, node_offsets):
-        n_graphs = int(node_offsets.shape[0]) - 1
-        logits: list[float] = []
-        for g in range(n_graphs):
-            lo, hi = int(node_offsets[g]), int(node_offsets[g + 1])
-            # `legal_index` gathers the ROWS of the legal nodes, not a dense mask; the gather is
-            # strictly ascending, so counting entries in `[lo, hi)` equals summing mask bits.
-            n_legal = int(((legal_index >= lo) & (legal_index < hi)).sum().item())
-            logits.extend(_rule_logit(i) for i in range(n_legal))
-        return (
-            torch.tensor(logits, dtype=torch.float32),
-            torch.zeros((n_graphs, 1), dtype=torch.float32),
-            torch.zeros((n_graphs, 65), dtype=torch.float32),
-        )
-
-
-@pytest.fixture
-def graph_engine():
-    spec = lookup(_ENC)
-    net = _RuleNet()
-    net.eval()
-    engine = LocalInferenceEngine(net, torch.device("cpu"), encoding_spec=spec,
-                                  fused_graph_caps=_CAPS,
-                                  inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10), max_in_flight=8, )
-    try:
-        yield engine, spec
-    finally:
-        engine.close()
-
-
 def _position(index: int) -> dict:
     """Re-nest the FLAT fixture (`p0_*`, `p1_*`, ...); a missing key raises, never defaults."""
     fx = json.loads(_FIXTURE.read_text(encoding="utf-8"))
     prefix = f"p{index}_"
     return {k[len(prefix):]: v for k, v in fx.items() if k.startswith(prefix)}
-
-
-def _board(pos: dict) -> Board:
-    board = Board.with_encoding_name(_ENC)
-    flat = pos["moves"]
-    for i in range(0, len(flat), 2):
-        board.apply_move(flat[i], flat[i + 1])
-    return board
 
 
 def _rung_round_spec() -> SimpleNamespace:
@@ -120,7 +67,7 @@ def test_rung_seat_head_plays_an_off_window_move_against_a_full_legal_set_oppone
     )
 
     pos = _position(position_index)
-    board = _board(pos)
+    board = board_from(pos)
     head_seat = int(board.current_player)
     player = worker.build_candidate_player(engine, rung_sims, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0)
     player.new_game()

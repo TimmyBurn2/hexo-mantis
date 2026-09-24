@@ -12,17 +12,14 @@ from pathlib import Path
 import pytest
 import torch
 
+from _pipeline_harness import CAPS, board_from
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis._engine import Board
-from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.encoding import lookup
 from mantis.eval import worker
 from mantis.selfplay.inference_local import LocalInferenceEngine
 
 _ENC = "gnn_axis_v1"
-#: The fused-forward memory bound is a required keyword with no `RunConfig` to resolve it
-#: from. Sized non-binding by construction: nothing here exercises a split.
-_CAPS = FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921)
 _FIXTURE = (
     Path(__file__).resolve().parents[1]
     / "fixtures" / "eval_selfplay_parity" / "dispersed_r6_v1.json"
@@ -46,14 +43,6 @@ def _positions() -> list[dict]:
         prefix = f"p{i}_"
         out.append({k[len(prefix):]: v for k, v in fx.items() if k.startswith(prefix)})
     return out
-
-
-def _board(pos: dict) -> Board:
-    board = Board.with_encoding_name(_ENC)
-    flat = pos["moves"]
-    for i in range(0, len(flat), 2):
-        board.apply_move(flat[i], flat[i + 1])
-    return board
 
 
 class _ValueVisibleNet(torch.nn.Module):
@@ -87,7 +76,7 @@ def _engine(sign: float) -> LocalInferenceEngine:
     net = _ValueVisibleNet(sign)
     net.eval()
     return LocalInferenceEngine(net, torch.device("cpu"), encoding_spec=lookup(_ENC),
-                                fused_graph_caps=_CAPS,
+                                fused_graph_caps=CAPS,
                                 inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10), max_in_flight=8, )
 
 
@@ -120,7 +109,7 @@ def test_value_channel_reaches_the_tree_at_production_sims(value_visible_engines
     """
     positive, _negative, spec = value_visible_engines
     for pos in _positions():
-        _move, qs = _search(positive, spec, _board(pos), _SIMS)
+        _move, qs = _search(positive, spec, board_from(pos), _SIMS)
         distinct = {round(q, 9) for q in qs}
         assert len(distinct) >= 2, (
             f"{pos['id']}: every root child reads q={distinct} after {_SIMS} sims — the "
@@ -137,9 +126,9 @@ def test_flipping_the_value_head_moves_the_heads_choice(value_visible_engines) -
     positive, negative, spec = value_visible_engines
     agreed = []
     for pos in _positions():
-        board = _board(pos)
+        board = board_from(pos)
         move_pos, _q = _search(positive, spec, board, _SIMS)
-        move_neg, _q = _search(negative, spec, _board(pos), _SIMS)
+        move_neg, _q = _search(negative, spec, board_from(pos), _SIMS)
         if move_pos == move_neg:
             agreed.append((pos["id"], move_pos))
     assert not agreed, (
@@ -157,9 +146,9 @@ def test_the_value_channel_is_inert_at_one_simulation(value_visible_engines) -> 
     """
     positive, negative, spec = value_visible_engines
     for pos in _positions():
-        board = _board(pos)
+        board = board_from(pos)
         move_pos, qs = _search(positive, spec, board, _INERT_SIMS)
-        move_neg, _q = _search(negative, spec, _board(pos), _INERT_SIMS)
+        move_neg, _q = _search(negative, spec, board_from(pos), _INERT_SIMS)
         assert {round(q, 9) for q in qs} == {0.0}, (
             f"{pos['id']}: root q is not uniformly 0 after one simulation"
         )

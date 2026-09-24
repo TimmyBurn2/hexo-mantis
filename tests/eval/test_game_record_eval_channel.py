@@ -13,11 +13,12 @@ import torch
 
 from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
+from _pipeline_harness import seeded_net
+
 from mantis.encoding import lookup
 from mantis.eval import worker
 from mantis.eval.rounds import GameRecordTarget, GateSpec, RoundSpec
 from mantis.eval.snapshot import write_model_snapshot
-from mantis.model import GnnArch, build_net
 from mantis.monitor.game_record import iter_run_games
 
 #: `book_v1_s20260625_p4` is minted against `gnn_axis_v1` and 292 of its 512 openings need
@@ -28,21 +29,10 @@ _SEED = 20260625
 _RUN_ID = "grec-eval"
 
 
-def _net(seed: int):
-    spec = lookup(_ENC)
-    torch.manual_seed(seed)
-    arch = GnnArch(in_dim=int(spec.node_feat_dim), edge_dim=int(spec.edge_feat_dim),
-                   hidden=8, num_layers=1, policy_hidden=8, value_hidden=8)
-    net = build_net(arch)
-    net.arch = arch
-    net.eval()
-    return net
-
-
 def _round_spec(tmp_path: Path, target: GameRecordTarget | None) -> RoundSpec:
     candidate, best = tmp_path / "candidate.pt", tmp_path / "best.pt"
-    write_model_snapshot(_net(seed=1), candidate)
-    write_model_snapshot(_net(seed=2), best)
+    write_model_snapshot(seeded_net(seed=1), candidate)
+    write_model_snapshot(seeded_net(seed=2), best)
     gate = GateSpec(
         stride=1, screen_games=2, confirm_games=2, promotion_winrate=0.55,
         screen_confirm_lo=0.44, deploy_sims=2, opening_book=_BOOK,

@@ -25,21 +25,15 @@ from pathlib import Path
 import pytest
 import torch
 
+from _pipeline_harness import CAPS, RuleNet, board_from, graph_engine
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis._engine import Board, MCTSTree
 from mantis.arena.deploy_head import DeployHeadPlayer
 from mantis.bots.random_bot import RandomBot
-from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.encoding import lookup
 from mantis.eval import worker
 from mantis.eval.errors import EvalDecodeUnsupportedError
 from mantis.selfplay.inference_local import LocalInferenceEngine
-
-_ENC = "gnn_axis_v1"
-#: `LocalInferenceEngine` takes the fused-forward memory bound as a REQUIRED keyword — it
-#: hand-builds its `InferenceServer` config with no `RunConfig`, so the spec is THREADED from a
-#: parent resolver and never hardcoded at the site. Nothing here exercises a split.
-_CAPS = FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921)
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "eval_selfplay_parity"
 _P1_FIXTURE = _FIXTURES / "child_parity_v1.json"
 _P2_FIXTURE = _FIXTURES / "dispersed_r6_v1.json"
@@ -80,15 +74,6 @@ def _positions(fx: dict) -> list[dict]:
     return out
 
 
-def _board(pos: dict) -> Board:
-    """Replay the recorded move sequence — the identical construction the Rust leg performs."""
-    board = Board.with_encoding_name(_ENC)
-    flat = pos["moves"]
-    for i in range(0, len(flat), 2):
-        board.apply_move(flat[i], flat[i + 1])
-    return board
-
-
 def _coords(flat: list[int]) -> list[tuple[int, int]]:
     return [(flat[i], flat[i + 1]) for i in range(0, len(flat), 2)]
 
@@ -97,53 +82,6 @@ def _packed(coord: tuple[int, int]) -> int:
     """The backup tie-break key, which is also the fixture's canonical ordering."""
     q, r = coord
     return ((q + 32768) << 16) | ((r + 32768) & 0xFFFF)
-
-
-def _rule_logit(i: int) -> float:
-    """The fixture's `logit_rule`, over the BUILDER's per-graph legal-node index."""
-    return ((i * 37) % 101) / 20.0
-
-
-class _RuleNet(torch.nn.Module):
-    """`GnnNet.forward_batch`'s contract with a deterministic policy head — the ONE stand-in.
-
-    Cross-language byte-parity needs determinism; the graph loop, `collate_graph_batch`,
-    `segment_softmax`, `assemble_ls_from_gnn_probs` and the expand are all production. The legal
-    rows of each graph are contiguous and in builder order, which is the order `legal_offsets`
-    segments and `assemble` zips against.
-    """
-
-    def forward_batch(self, x, edge_index, edge_attr, legal_index, stone_mask, node_offsets):
-        n_graphs = int(node_offsets.shape[0]) - 1
-        logits: list[float] = []
-        for g in range(n_graphs):
-            lo, hi = int(node_offsets[g]), int(node_offsets[g + 1])
-            # `legal_index` is the wire's `legal_node_gather`: the ROWS of the legal nodes, not a
-            # dense mask. The gather is strictly ascending, hence unique, so counting entries in
-            # this graph's `[lo, hi)` row range equals summing a mask's bits over it.
-            n_legal = int(((legal_index >= lo) & (legal_index < hi)).sum().item())
-            logits.extend(_rule_logit(i) for i in range(n_legal))
-        return (
-            torch.tensor(logits, dtype=torch.float32),
-            torch.zeros((n_graphs, 1), dtype=torch.float32),
-            torch.zeros((n_graphs, 65), dtype=torch.float32),
-        )
-
-
-@pytest.fixture
-def graph_engine():
-    """A REAL `LocalInferenceEngine` on the graph spec, driving the production graph seam."""
-    spec = lookup(_ENC)
-    net = _RuleNet()
-    net.eval()
-    engine = LocalInferenceEngine(net, torch.device("cpu"), encoding_spec=spec,
-                                  fused_graph_caps=_CAPS,
-                                  inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10), max_in_flight=8,
-                                  )
-    try:
-        yield engine, spec
-    finally:
-        engine.close()
 
 
 def _expand(engine, spec, tree, leaves, *, overflows=None) -> None:
@@ -179,7 +117,7 @@ def test_eval_child_set_equals_the_fixture(graph_engine) -> None:
     engine, spec = graph_engine
     fx = _load(_P1_FIXTURE)
     for pos in _positions(fx):
-        board = _board(pos)
+        board = board_from(pos)
         got = [coord for coord, _prior in _eval_children(engine, spec, board)]
         want = _coords(pos["expected_children"])
         assert got == want, f"{pos['id']}: eval child set != the frozen self-play golden"
@@ -191,7 +129,7 @@ def test_deploy_head_entrance_reaches_the_same_children(graph_engine) -> None:
     engine, spec = graph_engine
     fx = _load(_P1_FIXTURE)
     pos = _positions(fx)[0]
-    board = _board(pos)
+    board = board_from(pos)
 
     player = worker.build_candidate_player(engine, 1, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0)
     assert isinstance(player, DeployHeadPlayer)
@@ -214,7 +152,7 @@ def test_both_legs_agree_on_priors_to_1e_5(graph_engine) -> None:
     engine, spec = graph_engine
     fx = _load(_P1_FIXTURE)
     for pos in _positions(fx):
-        got = _eval_children(engine, spec, _board(pos))
+        got = _eval_children(engine, spec, board_from(pos))
         want_coords = _coords(pos["expected_children"])
         want_priors = pos["expected_child_priors"]
         assert [c for c, _p in got] == want_coords, f"{pos['id']}: child set precondition"
@@ -230,7 +168,7 @@ def test_overflow_order_does_not_change_the_child_set(graph_engine) -> None:
     engine, spec = graph_engine
     fx = _load(_P1_FIXTURE)
     pos = _positions(fx)[0]
-    board = _board(pos)
+    board = board_from(pos)
 
     tree = MCTSTree()
     tree.new_game(board)
@@ -271,7 +209,7 @@ def test_fixture_positions_are_in_the_over_361_regime() -> None:
     fx = _load(_P2_FIXTURE)
     assert fx["n_positions"] == 4, "PREREG pre-registers four dispersed positions"
     for pos in _positions(fx):
-        board = _board(pos)
+        board = board_from(pos)
         legal = board.legal_moves()
         n_off = sum(1 for q, r in legal if board.to_flat(q, r) >= _OFF_WINDOW_FLAT)
         assert len(legal) == pos["n_legal"], f"{pos['id']}: recorded n_legal is a lie"
@@ -285,7 +223,7 @@ def test_eval_root_children_include_off_window_moves(graph_engine) -> None:
     before the fix: 0 off-window children of 192 at 4/4 positions."""
     engine, spec = graph_engine
     for pos in _positions(_load(_P2_FIXTURE)):
-        board = _board(pos)
+        board = board_from(pos)
         children = [coord for coord, _prior in _eval_children(engine, spec, board)]
         n_off = sum(1 for q, r in children if board.to_flat(q, r) >= _OFF_WINDOW_FLAT)
         assert n_off >= 1, f"{pos['id']}: eval kept {len(children)} children, none off-window"
@@ -300,7 +238,7 @@ def test_eval_consumes_both_halves(graph_engine) -> None:
     validates that always-on. Dense alone measures 0.7155 / 0.4356 / 0.3086 / 0.2363."""
     engine, _spec = graph_engine
     for pos in _positions(_load(_P2_FIXTURE)):
-        dense, overflow, _values, _centers = engine.infer_batch_ls([_board(pos)])
+        dense, overflow, _values, _centers = engine.infer_batch_ls([board_from(pos)])
         total = sum(dense[0]) + sum(prob for _coord, prob in overflow[0])
         assert abs(total - 1.0) <= 1e-3, f"{pos['id']}: eval consumes mass {total!r}, not 1"
 
@@ -310,7 +248,7 @@ def test_eval_child_set_equals_the_rust_leg_on_dispersed_positions(graph_engine)
     `crates/mantis-selfplay/tests/graph_child_parity.rs` produces from the same file."""
     engine, spec = graph_engine
     for pos in _positions(_load(_P2_FIXTURE)):
-        got = [coord for coord, _prior in _eval_children(engine, spec, _board(pos))]
+        got = [coord for coord, _prior in _eval_children(engine, spec, board_from(pos))]
         assert got == _coords(pos["expected_children"]), (
             f"{pos['id']}: eval child set != the Rust leg's set"
         )
@@ -326,7 +264,7 @@ def test_every_off_window_legal_coord_is_in_overflow(graph_engine) -> None:
     """
     engine, _spec = graph_engine
     for pos in _positions(_load(_P2_FIXTURE)):
-        board = _board(pos)
+        board = board_from(pos)
         dense, overflow, _value = engine._graph_batcher.submit_graphs_and_wait(
             [(list(board.get_stones()), int(board.current_player), int(board.moves_remaining))]
         )[0]
@@ -345,7 +283,7 @@ def test_head_children_are_drawn_from_the_full_legal_set(graph_engine) -> None:
     symmetric."""
     engine, spec = graph_engine
     for pos in _positions(_load(_P2_FIXTURE)):
-        board = _board(pos)
+        board = board_from(pos)
         children = [coord for coord, _prior in _eval_children(engine, spec, board)]
         assert len(children) == _expected_children(board), (
             f"{pos['id']}: {len(children)} children")
@@ -364,7 +302,7 @@ def test_head_plays_an_off_window_move_against_random_bot(graph_engine) -> None:
     """
     engine, spec = graph_engine
     pos = _positions(_load(_P2_FIXTURE))[3]
-    board = _board(pos)
+    board = board_from(pos)
     head_seat = int(board.current_player)
     player = worker.build_candidate_player(engine, 1, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0)
     player.new_game()
@@ -420,7 +358,7 @@ def test_expand_ls_graph_arity_conjuncts_are_enforced(graph_engine, short_arg) -
     `expand_and_backup_ls_at` takes the MIN of every length and silently expands fewer leaves, so
     the bridge guard must be always-on."""
     engine, spec = graph_engine
-    board = _board(_positions(_load(_P1_FIXTURE))[0])
+    board = board_from(_positions(_load(_P1_FIXTURE))[0])
     assert len(_eval_children(engine, spec, board)) == _expected_children(board), (
         "clean-call control")
 
@@ -442,7 +380,7 @@ def test_expand_ls_graph_refuses_a_centre_the_board_disagrees_with(graph_engine)
     `board.window_center()`, so the producer returns its own centre and the bridge cross-checks it.
     A pairing/drift tripwire, expected always-equal."""
     engine, spec = graph_engine
-    board = _board(_positions(_load(_P1_FIXTURE))[0])
+    board = board_from(_positions(_load(_P1_FIXTURE))[0])
     assert len(_eval_children(engine, spec, board)) == _expected_children(board), (
         "clean-call control")
 
@@ -461,7 +399,7 @@ def test_expand_ls_graph_refuses_a_trunk_the_board_disagrees_with(graph_engine) 
     """Self-play asserts `agg_trunk_sz == spec.trunk_size` always-on while eval read
     `board.cluster_window_size()`. Both measure 19 here, so this guard is a drift tripwire."""
     engine, spec = graph_engine
-    board = _board(_positions(_load(_P1_FIXTURE))[0])
+    board = board_from(_positions(_load(_P1_FIXTURE))[0])
     assert len(_eval_children(engine, spec, board)) == _expected_children(board), (
         "clean-call control")
 
@@ -479,7 +417,7 @@ def test_expand_ls_graph_refuses_a_dense_half_of_the_wrong_stride(graph_engine) 
     """A 361-long dense half against a 362-wide policy stride is the silent wrong-width decode
     class; it must be loud here too."""
     engine, spec = graph_engine
-    board = _board(_positions(_load(_P1_FIXTURE))[0])
+    board = board_from(_positions(_load(_P1_FIXTURE))[0])
     assert len(_eval_children(engine, spec, board)) == _expected_children(board), (
         "clean-call control")
 
@@ -514,7 +452,7 @@ def test_build_candidate_player_closed_match_refuses_an_unknown_representation()
     spec = _SpecWithRepresentation(lookup("gnn_axis_v1"), "quantum")
     engine = LocalInferenceEngine(
         torch.nn.Identity(), torch.device("cpu"), encoding_spec=lookup("gnn_axis_v1"),
-        fused_graph_caps=_CAPS,
+        fused_graph_caps=CAPS,
         inference_batching=InferenceBatchingSpec(inference_batch_size=64,
                                                  inference_max_wait_ms=10),
         max_in_flight=8, )

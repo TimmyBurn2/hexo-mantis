@@ -16,6 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from _pipeline_harness import caps_for
 
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.eval import worker
@@ -28,21 +29,6 @@ _SEED = 20260625
 
 class _LoaderReached(RuntimeError):
     """Sentinel: `load_model_snapshot` was entered. Named, so no unrelated raise passes."""
-
-
-def _caps_for(enc_name: str):
-    """The fused-forward memory bound this encoding's route needs.
-
-    Derived from the encoding, not chosen per call site: the graph route resolves the bound
-    EAGERLY when its `InferenceServer` is constructed and the grid route never reads it. The
-    value is the template's NON-BINDING-BY-CONSTRUCTION pair, so no round here splits.
-    """
-    from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
-    from mantis.encoding import lookup
-
-    if lookup(enc_name).representation != "graph":
-        return None
-    return FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921)
 
 
 def _spec(tmp_path: Path, enc_name: str) -> RoundSpec:
@@ -72,7 +58,7 @@ def _spec(tmp_path: Path, enc_name: str) -> RoundSpec:
         progress_path=str(tmp_path / "progress.txt"),
         game_record=None,
         ply_cap_adjudication=None, strength_floor=None,
-        fused_graph_caps=_caps_for(enc_name),
+        fused_graph_caps=caps_for(enc_name),
         inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10),
     )
 

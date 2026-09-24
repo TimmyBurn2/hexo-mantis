@@ -16,15 +16,21 @@ from typing import Any
 import pytest
 import torch
 
+from mantis._engine import Board
 from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.config.schema import EvalConfig, GateConfig
+from mantis.encoding import lookup
 from mantis.eval.pipeline import DrainCaps
 from mantis.eval.promote import DeployTagHooks
-from mantis.encoding import lookup
 from mantis.model import GnnArch, build_net
+from mantis.selfplay.inference_local import LocalInferenceEngine
 
 GSPEC = lookup("gnn_axis_v1")
+#: `LocalInferenceEngine` hand-builds its `InferenceServer` config with no `RunConfig`, so
+#: the fused-forward memory bound is a REQUIRED keyword threaded as a spec; the pair is the
+#: template's NON-BINDING-BY-CONSTRUCTION one, so no round built on it splits.
+CAPS = FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921)
 
 
 def tiny_model() -> torch.nn.Module:
@@ -85,11 +91,87 @@ def pipeline_kwargs(
         run_id=run_id,
         spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
         promotion=promotion_hooks(tmp_path, run_id=run_id),
-        fused_graph_caps=FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921),
+        fused_graph_caps=CAPS,
         inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10),
     )
     kwargs.update(overrides)
     return kwargs
+
+
+def seeded_net(seed: int):
+    spec = lookup(GSPEC.name)
+    torch.manual_seed(seed)
+    arch = GnnArch(in_dim=int(spec.node_feat_dim), edge_dim=int(spec.edge_feat_dim),
+                   hidden=8, num_layers=1, policy_hidden=8, value_hidden=8)
+    net = build_net(arch)
+    net.arch = arch
+    net.eval()
+    return net
+
+
+def caps_for(enc_name: str):
+    """The fused-forward memory bound this encoding's route needs, derived from the encoding:
+    the graph route resolves the bound EAGERLY when its `InferenceServer` is constructed, and a
+    non-graph route never reads it."""
+    if lookup(enc_name).representation != "graph":
+        return None
+    return CAPS
+
+
+def rule_logit(i: int) -> float:
+    """The fixture's `logit_rule`, over the BUILDER's per-graph legal-node index."""
+    return ((i * 37) % 101) / 20.0
+
+
+class RuleNet(torch.nn.Module):
+    """`GnnNet.forward_batch`'s contract with a deterministic policy head — the ONE stand-in.
+
+    Cross-language byte-parity needs determinism; the graph loop, `collate_graph_batch`,
+    `segment_softmax`, `assemble_ls_from_gnn_probs` and the expand are all production. The legal
+    rows of each graph are contiguous and in builder order, which is the order `legal_offsets`
+    segments and `assemble` zips against.
+    """
+
+    def forward_batch(self, x, edge_index, edge_attr, legal_index, stone_mask, node_offsets):
+        n_graphs = int(node_offsets.shape[0]) - 1
+        logits: list[float] = []
+        for g in range(n_graphs):
+            lo, hi = int(node_offsets[g]), int(node_offsets[g + 1])
+            # `legal_index` is the wire's `legal_node_gather`: the ROWS of the legal nodes, not a
+            # dense mask. The gather is strictly ascending, hence unique, so counting entries in
+            # this graph's `[lo, hi)` row range equals summing a mask's bits over it.
+            n_legal = int(((legal_index >= lo) & (legal_index < hi)).sum().item())
+            logits.extend(rule_logit(i) for i in range(n_legal))
+        return (
+            torch.tensor(logits, dtype=torch.float32),
+            torch.zeros((n_graphs, 1), dtype=torch.float32),
+            torch.zeros((n_graphs, 65), dtype=torch.float32),
+        )
+
+
+@pytest.fixture()
+def graph_engine():
+    """A REAL `LocalInferenceEngine` on the graph spec, driving the production graph seam."""
+    spec = GSPEC
+    net = RuleNet()
+    net.eval()
+    engine = LocalInferenceEngine(net, torch.device("cpu"), encoding_spec=spec,
+                                  fused_graph_caps=CAPS,
+                                  inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10), max_in_flight=8,
+                                  )
+    try:
+        yield engine, spec
+    finally:
+        engine.close()
+
+
+def board_from(pos: dict) -> Board:
+    """Replay the recorded move sequence — the identical construction the Rust leg performs."""
+    board = Board.with_encoding_name(GSPEC.name)
+    flat = pos["moves"]
+    for i in range(0, len(flat), 2):
+        board.apply_move(flat[i], flat[i + 1])
+    return board
 
 
 class FakeClock:
