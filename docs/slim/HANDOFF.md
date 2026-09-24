@@ -46,13 +46,12 @@ You are continuing a long, gated refactor. READ IN THIS ORDER before touching an
 
 ## What is left (from the 2026-09-24 close-out)
 
-W0–W4 are EXITED (PROGRESS carries each wave's exit facts and per-row ledger; W4's is the current
-shape of the tree). The remaining waves:
-- **W5 TESTS + FIXTURES** — per `docs/slim/handoff/W5_ADDENDUM.md` (committed b0e959c3; the wave's
-  verified inventory is folded into it). Leg order: R368(e) fixture deletions first (the re-pin
-  mechanics are written out), dead-test deletes (L27/L28) before hoists, the AQ-* hoists, residue,
-  and the DRAIN RE-BASE LAST. REVIEW-W5 over the whole range, exit gates, PROGRESS.
-- **W6 DOCS + CONFIGS** (L35–L38): STATE.md rewritten to current facts (R368(f): each dropped
+W0–W5 are EXITED (PROGRESS carries each wave's exit facts and per-row ledger; W5's is the current
+shape of the tree). NEXT is W6, per `docs/slim/handoff/W6_ADDENDUM.md`. The remaining waves:
+- **W5 TESTS + FIXTURES** — EXITED 2026-09-25 at 8297c74d (PROGRESS `## W5`: REVIEW-W5 closed in one
+  loop, exit sweep green, the KNOWN-RED cured by cdbc8000, collected 4927, run10 MATCH).
+- **W6 DOCS + CONFIGS** (L35–L38) — the work order is `docs/slim/handoff/W6_ADDENDUM.md` (verified
+  inventory, leg order, census rule, hazards; it supersedes this summary where they differ): STATE.md rewritten to current facts (R368(f): each dropped
   paragraph class names where it lives); CARDS.md closed rows removed; delete
   `docs/governance/archive/RULINGS_ACTIVE.md`; delete configs/run6.yaml, run7.yaml, run8.yaml
   (tests binding them re-point to the census `mantis.config.census.production_configs`);
@@ -76,9 +75,9 @@ shape of the tree). The remaining waves:
   and two others, all at the same commits); standalone it always passes. Full account + mechanism
   in PROGRESS W3's exit: the pytest process's SIGINT disposition is transiently SIG_IGN (C-level,
   not the Python signal module) when the test spawns its probe child, and CPython preserves an
-  inherited SIG_IGN across exec. NOT the wave's (red at the W3 base). Recorded, not fixed — every
-  exit sweep's 3a must be read as "green except possibly this one row", and W8's gates.exit claim
-  needs the operator's ruling on it.
+  inherited SIG_IGN across exec. CURED in W5 by cdbc8000: the probe child starts from SIG_DFL.
+  REVIEW-W5 §3 H reproduced the old red, saw the new pass and found the plants still red, so the row
+  is not narrowed. W5's sweep 3a had 0 failed. A red there now is a real red.
 - Subagents: `reviewer` (read-only reviews — dispatch each wave's REVIEW there, never review your
   own wave), `worker` (implementation legs in their own worktrees), `scout` (read-only
   inventories). Worktrees under `.wt/<name>` with `git worktree add -b <branch> .wt/<name> HEAD`

@@ -8,7 +8,7 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
 - Host: the operator's desktop (not a Claude environment; `CLAUDE_CODE_ENVIRONMENT_NAME` unset). AMD Ryzen 7
   3700X, 16 threads, 46 GiB, flags `avx2` only (no `avx512_bf16`, no `amx`). torch 2.11.0+cpu, `mantis._engine` OK.
 - origin/dev = 69e1532 at W0 entry (no moved commits; no rebase).
-- Wave: **W5** (tests + fixtures) IN FLIGHT — see `## W5` below. W4 EXITED: W3 EXITED. REVIEW-W3 filed (`docs/audits/REVIEW_W3_2026-09-24.md`, 0 must-fix beyond a
+- Wave: **W6** (docs + configs) NEXT — work order `docs/slim/handoff/W6_ADDENDUM.md`. W5 EXITED (see `## W5`). W4 EXITED: W3 EXITED. REVIEW-W3 filed (`docs/audits/REVIEW_W3_2026-09-24.md`, 0 must-fix beyond a
   ruff red in the handoff helper, 2 should-fix, 4 notes, every row group HELD, run10 MATCH re-verified); its fixes:
   ec0ac144 (ruff), cb4a5dd1 (`_is_graph` flag), bf22b4c3 (sweep docstring), plus 09fa8e6b — the exit sweep caught
   `tests/eval/test_graph_round_encoding.py`'s recorder pinning the deleted `_is_graph`; re-pointed to the
@@ -58,42 +58,97 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   NEXT: W5 per its addendum (the 2026-09-24 dispatcher-session scout inventory is folded into it);
   then W6, W7, W8 per HANDOFF.md.
 
-## W5 — tests + fixtures (IN FLIGHT; resume here)
+## W5 — tests + fixtures (EXITED 2026-09-25)
 
-- Range starts at 9839becd. 74 commits integrated by the first W5 dispatcher (usage-limit stop) through
-  9d520676; the second dispatcher resumed 2026-09-24: w5-residue integrated (876f8353 four flat globs →
-  census, e5d236dc the fused-cap helper off dev_example, d3419b30 conftest cite) — collected 4906 → 4902
-  (the census drops the two exempt configs from four parametrizations). Integrated branches' worktrees and
-  branches removed (w5-root/-eval/-model/-cfgfin/-cfgtools/-selfplay/-train-a/-train-b/-residue,
-  /tmp/base_check).
-- In flight: w5-fakes (AQ-CARD-FAKES hoist; 26 files were left uncommitted mid-leg; rebased onto d3419b30,
-  finisher model opus); w5-drain (leg 8, the dense drain oracle re-base + src deletion; opus); a read-only
-  inventory of L20–L34 (sonnet) to name the remaining rows.
-- Models per leg so far (second dispatcher): fakes finisher opus, drain re-base opus, inventory scout sonnet.
-- LANDED leg 8 (drain re-base, opus): 15912645 (suite on graph goldens re-captured from current code; no generator
-  existed — scratch capture, arm-independent fields asserted equal to the dense oracle first) + a670e1dc (push_dense,
-  the dense arm, _is_graph, PoolDims, _feat/_chain/_pol_len gone; dense goldens + collect_data_input.npz deleted;
-  line-endings floor 41 → 39). Planted drain defects (row drop; per-row game id) RED before and after the deletion.
-  push_dense_many never existed in Rust. run10 MATCH. Collected 4899.
-- Inventory (sonnet scout): ~128 rows DONE, 11 in flight, 20 UNDONE + 4 unverifiable Δ0 NEW rows (TESTS-3-NEW-2,
-  L-SEAM-NEW-2/-NEW-3, L-STYLE-NEW-2: descriptions lived in a removed scratchpad). Policy rows L-STYLE-04
-  (subprocess text=True encoding) and L-STYLE-10 (function-scope imports) are NOT W5 legs: tree-wide, touch src and
-  tools/ci_gates (R368(b)) — carried to the HANDOFF as still-C.
-- LANDED (second dispatcher, model per leg): 905cf259 AQ-CARD-FAKES finished (opus; the cut-off 26-file diff
-  completed, not discarded: equivalence argued per family, 273 = 273 node ids over the touched files, two planted
-  run.py breaks red; −1419); drain follow-up (opus) 85cb2e9f L-DUP-22, fd6b28fc TESTS-5-03 residual, 0f7787f2 dense
-  residue (recent_buffer/_board_size/_trunk_size, pool_derived goldens), TESTS-5-17 REFUTED (planted row drop reds
-  only j01); residue2 (sonnet) 4300b691 note 11 config half (census-parametrized, +21 rows), 41e4271f atomic.rs
-  TempDir guard, 2f002d9d L-DUP-04 (dispatcher authorized widening from_stones' gate to any(test, feature)),
-  TESTS-1-14 REFUTED (6c28c1c9 already drives pretrain; plant reds 6); misc (sonnet) 0ae15928 TESTS-5-05+6-10a,
-  5ee831ef L-SEAM-05, 108279cc L-SEAM-06 (subsumer the GRAVES row; flatten plant reds), 7eca14b3 L-DUP-15 residual,
-  3b752fed L-DUP-28 residual (2 of 4 pairs; `_model_samples` is the R43/R310 frozen pair → C; the receipt pair
-  differs by a default arg → KEEP); TESTS-6-06 REFUTED (sealbot gone; the strix env-key row has no subsumer).
-  Collected 4918.
-- Assigned: w5-residue2 (sonnet: run6-bound _run5 → census, atomic.rs tempdir guard, L-DUP-04 fwm_board, TESTS-1-14);
-  w5-misc (sonnet: TESTS-5-05, 6-10a, L-SEAM-05/-06, TESTS-6-06, L-DUP-15/-28 residuals); drain agent follow-up
-  (opus: L-DUP-22, TESTS-5-03/-17 residuals, dense residue recent_buffer/_trunk_size/_board_size); after fakes lands:
-  train hoists TESTS-1-05/-06, L-DUP-25, L-DUP-26 residual.
+**Exit facts.**
+- Range 9839becd..8297c74d: 108 commits, 306 files, +3 302/−138 142. The bulk is fixture bytes; src/crates
+  are 7 files, +46/−124, all unreachable dense code, docstrings and test-only cfg.
+- Collected 5035 at W5 entry → **4927** = floor.
+- Comment measures only fell: comment_excess 3169→3124, docstring_excess 12239→11908, private_docstring
+  1378→1283, ruling_cite 1210→1163. banner 0, rust_doc 2486 and textfile 466 are unchanged.
+- **run10 MATCH** at the tip. configs/, templates and mint are byte-unchanged.
+- REVIEW-W5 filed (`docs/audits/REVIEW_W5_2026-09-24.md`): 3 MUST-FIX, 5 SHOULD-FIX, 9 NOTES. All eight
+  fixed in ONE loop (4e18a0c8..3a94133d, opus); the reviewer verified the closure with its own plants.
+- Exit sweep `make gates` in .wt/gates at b832d041, as user unit mantis-gates-w5:
+  - 17 green, 2 RED. Both were the wave's own: one slashed slice name in the filed review matched gate
+    17's abs-root-path pattern and redded gate 17, and 3a through test_gate_vacuity's wide scan.
+  - Fixed at 8297c74d (the only change: the review doc). Re-run there: **3a 4869 passed, 15 skipped,
+    0 failed**; gates 17/10/13/14/15/3c rc 0.
+  - Walls: 2a 1061 s, 3a 339 s (re-run 335 s), 3b 2512 s (34 passed, 4 skipped).
+  - pyright 0 errors; 8 ARMED+PASS; 12 rc 0.
+- **The KNOWN-RED is gone.** cdbc8000's SIG_DFL preexec reset cures the inherited-SIG_IGN flake. The
+  reviewer reproduced the old red under `trap '' TERM INT`, saw the new file pass under the same trap,
+  and found the import-time plants still red, so the row is NOT narrowed. It passed in the sweep, its
+  re-run, the review's full tier and the dispatcher's two pre-review tiers. The operator's pending row can
+  close.
+
+**Dispatchers and models per leg.**
+- First W5 dispatcher (usage-limit stop after 74 commits, 9839becd..9d520676): slice legs root, eval,
+  model, cfgtools/cfgfin, selfplay, train-a, train-b.
+- Second W5 dispatcher (2026-09-24/25), models chosen per leg:
+  - AQ-CARD-FAKES finisher: **opus**.
+  - Drain re-base plus follow-up: **opus**.
+  - Train helper hoists: **opus**.
+  - Residue2 (Rust + config): **sonnet**.
+  - Misc (eval/model/tools rows): **sonnet**.
+  - L20–L34 inventory and W6 docs inventory: **sonnet**, read-only.
+  - REVIEW-W5 and its closure check: **opus**.
+  - Fix loop 1: **opus**.
+
+**Landed by the second dispatcher** (sha: rows):
+- w5-residue: 876f8353 (the four flat globs; the census choice was corrected by 15c2b6e8, see REVIEW #3),
+  e5d236dc (REVIEW-W1 note 10, the fused-cap helper), d3419b30.
+- 905cf259 AQ-CARD-FAKES: the cut-off 26-file diff was COMPLETED, not discarded. Equivalence was argued
+  per family; node ids 273 = 273 over the touched files; two planted run.py breaks red; −1419.
+- Leg 8, the DRAIN RE-BASE:
+  - 15912645: the suite reads graph goldens re-captured from current code. No generator ever existed; a
+    scratch capture asserted the arm-independent fields equal the old dense oracle first. REVIEW #10:
+    acceptable.
+  - a670e1dc: push_dense, the dense arm, `_is_graph`, PoolDims and `_feat/_chain/_pol_len` are gone; the
+    dense goldens and collect_data_input.npz are deleted; line-endings floor 41→39.
+  - Planted drain defects red before and after the deletion. push_dense_many never existed.
+- Drain follow-up: 85cb2e9f L-DUP-22, fd6b28fc TESTS-5-03 residual, 0f7787f2 dense residue
+  (recent_buffer, _board_size, _trunk_size, the pool_derived golden blocks).
+- Residue2: 4300b691 REVIEW-W1 note 11 config half; 41e4271f atomic.rs TempDir guard; 2f002d9d L-DUP-04.
+  For L-DUP-04 the dispatcher authorized widening from_stones' gate to `any(test, feature)`; the release
+  build is unchanged.
+- Misc: 0ae15928 TESTS-5-05 + 6-10a; 5ee831ef L-SEAM-05; 108279cc L-SEAM-06; 7eca14b3 L-DUP-15 residual;
+  3b752fed L-DUP-28 residual.
+- Train hoists: e5436147 TESTS-1-05, 209451ee TESTS-1-06/L-DUP-13, a13d0cc6 L-DUP-25, 7360de68 L-DUP-26
+  residual. Node ids are equal per row, with planted breaks per family.
+- 80ba1f6e: STATE.md's F2 line re-pointed (gate 10 red on the deleted _coordinator_pool.py).
+- Fix loop 1: 4e18a0c8 (two falsely-subsumed rows restored), c79b4e79 (eval_enabled census value pin),
+  15c2b6e8 (sweeps over discovered_config_paths, no hard count), 6d02eaa5, 06cd974e, 7a5173b0, 3a94133d.
+
+**REFUTED at contact, with grounds.**
+- TESTS-5-17: a planted row drop reds only j01, so it is kept.
+- TESTS-1-14: 6c28c1c9 already drives pretrain; a plant reds 6.
+- TESTS-6-06: sealbot is gone, and the strix env-key row has no subsumer.
+
+**Still C / KEEP, with grounds.**
+- `_model_samples` pair: R43/R310 frozen oracle.
+- The receipt pair: KEEP-by-choice (REVIEW #15; open to a later hoist).
+- The 13 `train_step_from_tensors` stubs: the REPROBE verdict.
+- The drawrate trio's private fakes: PZ-1, with differing semantics.
+- `test_coordinator_knobs_wiring._real_graph_ring`: tests/config cannot import tests/train.
+- L-STYLE-04 (subprocess `text=True`, 79 sites; needs a gate-16 ruling) and L-STYLE-10 (function-scope
+  imports, on contact): tree-wide, touching src and tools/ci_gates.
+- TESTS-3-NEW-2, L-SEAM-NEW-2/-NEW-3, L-STYLE-NEW-2: closed-unverifiable. They are Δ0, and their text lived
+  in a removed scratchpad.
+
+**Records.**
+- REVIEW #9: the e4018c6a floor lag (+12 carried by f4c23467); no history rewrite.
+- REVIEW #12's subject inaccuracies are recorded as is.
+- The drain capture procedure: drive the base harness's `run_stats_loop` on the graph arm, dump the
+  recorded fields, and assert arm-independent equality with dense_5s_crossed before writing.
+- OPERATOR items:
+  - armed_aborts.py's `terminal_eval_broken` RESIDUAL cites the non-existent
+    test_minted_config_remint.py. The live holder is c79b4e79's census row. It needs a ruling-named
+    re-point.
+  - pipeline.py's repr row is still pending from W3.
+
+Worktrees: every w5-* worktree and branch is removed, and /tmp/base_check is gone. .wt/gates is detached at
+8297c74d. NEXT: W6 per `docs/slim/handoff/W6_ADDENDUM.md`.
 
 ## W0 — entry
 
