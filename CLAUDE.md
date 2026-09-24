@@ -91,7 +91,7 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
     orders or performs it (R365(a)'s "released" was the breach, annotated).
     Reason: a destroyed instance is a fresh instance's full setup, paid again.
 
-## Laws digest (full text: docs/governance/archive/laws.md)
+## Laws digest (full text: docs/governance/LAWS.md)
 
 - LAW-01 prime directive — context first, measurement mandatory.
 - LAW-02 re-validation discipline — never drop a driver on an un-re-validated prior.
@@ -119,21 +119,21 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
   enforces ZERO across the tree).
   Catch specific exceptions; bare `except Exception:` only in a top-level handler, which
   logs through `logger.exception` and does NOT repeat the exception in the message.
-- **Comments (R316(e), operator direction).** Comments only where needed; public APIs carry
-  docstrings. NO file-top banner comments and NO narrative comment blocks — a needed comment
-  states its non-obvious fact in ONE line. CARVE-OUT: load-bearing in-source markers are
-  mechanism, not commentary, and STAY — pinned bands, planted-break markers, armed-value
-  provenance, licence-required attribution. Applied ON CONTACT, never as a cleanup pass — with
-  the ONE exception R346(f) itself ordered, the wave-2 tree-wide pass, whose result is now held
-  by gate 14's ratchet rather than by memory.
+- **Comments (R368(g), replacing R316(e), R346(f)'s comment clause and R336(e)'s on-contact
+  clause).** A comment or docstring states what the code cannot: ONE line, more only for an
+  invariant. No ruling, card or finding numbers except in carve-out markers (pinned bands,
+  planted-break markers, armed-value provenance, licence-required attribution). ONE sanctioned
+  pass covers exactly two classes, cites and narrative runs, measured by gate 14 (floors that
+  only fall). Docstring length, missing docstrings and `Raises:` stay on contact.
 - **Rust.** No `unwrap()`/`expect()` on production paths — fail-loud means a NAMED error type
   that propagates, never a panic (R2/LAW-13 is about what crosses the FFI; this is about not
   reaching for the panic in the first place). `expect()` is fine in tests and in startup
   invariants when its message names the invariant. clippy rides gate 2 (`-D clippy::all`);
   **rustfmt runs on TOUCHED FILES** and is NOT gated anywhere — run it yourself on what you
-  edited, do not assume a gate caught it, and do NOT sweep the tree (R336(e), standards on
-  contact). `rustfmt.toml` is committed with defaults so the style has a definition rather
-  than living in whichever toolchain happens to run.
+  edited, do not assume a gate caught it, and do NOT sweep the tree (R336(e)'s formatting
+  clause, standards on contact — its comment-application half is the one R368(g) replaced).
+  `rustfmt.toml` is committed with defaults so the style has a definition rather than living
+  in whichever toolchain happens to run.
 
 ## Build & test
 
@@ -172,8 +172,9 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
 - Rust toolchain is PINNED by `rust-toolchain.toml` (channel 1.97.1 + clippy, rustfmt,
   wasm32-unknown-unknown). rustup honours it automatically — no `rustup default`, no setup
   step, and it provisions the components and target on first use. The channel matches the
-  rustc attested in `tools/bench_floors.toml`, so changing it invalidates all 28 bench
-  floors: a bump is a perf-host event, not a local one. Without rustup the file is inert,
+  rustc attested in `tools/bench_floors.toml`'s `[provenance]` table, so changing it
+  invalidates every `[floor.*]` table there (the census is `grep -c '^\[floor\.'
+  tools/bench_floors.toml`): a bump is a perf-host event, not a local one. Without rustup the file is inert,
   and the `rust-version = "1.87"` MSRV in `[workspace.package]` is what refuses the build.
 - Node is PINNED by `mise.toml` (`node = "26.7.0"`) and exists for ONE consumer: gate 14's
   pyright, which is a shim over node. Same contract as `rust-toolchain.toml` — committed,
@@ -256,11 +257,14 @@ lives only in workflow YAML.
 
 ## Deliberately absent
 
-- Display surfaces (web dashboard, viewer, TUI): the event-manifest JSONL contract
-  (docs/contracts/event_manifest.md) is what any future display builds against. The ONE
-  exception, admitted by R333(d) and amended into repo_design: `tools/run_dashboard.py`
-  (`make dashboard EVENTS=… OUT=…`) — an OFFLINE report, an existing run record in, one
-  self-contained HTML file out, no server and no new producer. A panel with no producer at
+- Display surfaces (web dashboard, TUI): the event-manifest JSONL contract
+  (docs/contracts/event_manifest.md) is what any future display builds against. THREE
+  exceptions, each admitted by a ruling and amended into repo_design: `tools/run_dashboard.py`
+  (`make dashboard EVENTS=… OUT=…`, R333(d)) — an OFFLINE report, an existing run record in,
+  one self-contained HTML file out; `tools/game_viewer.py` (`make viewer`, R352(g)) — a static
+  page built from existing game-record shards; `tools/position_analyzer.py` (`make analyzer`,
+  R363) — a loopback-bound server over stamped checkpoints, the one tool that listens on a
+  socket. None opens a connection to a live run or adds a producer. A panel with no producer at
   HEAD is drawn as a stated gap, never as a zero.
 - src/mantis/deploy/ is reserved-empty until post-cutover.
 - Vendoring only via vendor/pins.toml + `make vendor` — no submodules, no loose weights.
