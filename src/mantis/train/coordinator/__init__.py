@@ -1,45 +1,4 @@
-"""Step-coordinator package (WP10 §a.4 split of the old 13-class step_coordinator.py).
-
-`config` = collaborator Protocols + `StepCoordinatorConfig` + `StepOutcome` + the clock
-defaults; `step` = `StepCoordinator.step()`; `drain` = terminal-eval flush + `close_out`.
-`bot_refresh.py` is a DEFINITE KILL — NOT created. `run_until_stopped` is RETIRED (WPMAIN,
-R121(c)): a bare `while self.shutdown.running: self.step()` with no final save and no bound,
-zero callers and zero test references — wiring it would have forked LAW-16's save-then-exit
-into a second driver. `mantis.train.loop.run_training_loop` is THE loop, and after WPMAIN
-`mantis.run.launch_run` is what enters it.
-"""
-from __future__ import annotations
-
-from mantis.train.coordinator.config import (
-    ClockLike,
-    EvalPipelineLike,
-    GraphRouteBufferLike,
-    GridRouteBufferLike,
-    RealClock,
-    RecentBufferLike,
-    ReplayBufferLike,
-    StepCoordinatorConfig,
-    StepOutcome,
-    TrainerLike,
-    WorkerPoolLike,
-    pooled_draw_rate,
-    promotion_capable_rounds,
-)
+"""Step coordinator: `config` (Protocols), `step` (`StepCoordinator`), `drain` (close-out)."""
 from mantis.train.coordinator.step import StepCoordinator
 
-__all__ = [
-    "ClockLike",
-    "EvalPipelineLike",
-    "GraphRouteBufferLike",
-    "GridRouteBufferLike",
-    "RealClock",
-    "RecentBufferLike",
-    "ReplayBufferLike",
-    "StepCoordinator",
-    "StepCoordinatorConfig",
-    "StepOutcome",
-    "TrainerLike",
-    "WorkerPoolLike",
-    "pooled_draw_rate",
-    "promotion_capable_rounds",
-]
+__all__ = ["StepCoordinator"]

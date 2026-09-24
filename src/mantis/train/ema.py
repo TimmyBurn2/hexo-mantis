@@ -16,7 +16,6 @@ from typing import Any
 import torch
 
 DEFAULT_DECAY = 0.999
-DEFAULT_UPDATE_EVERY = 10
 
 #: The members `train.ema` must carry. Read by key; absent is an error.
 _EMA_MEMBERS: tuple[str, ...] = ("enabled", "decay", "update_every")
