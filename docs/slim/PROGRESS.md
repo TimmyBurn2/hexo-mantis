@@ -67,6 +67,8 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   - `.wt/w6-mech`, **sonnet**: leg 5 minus the register annotations (CLAUDE.md, toolchain files,
     repo_design §3, Cargo profile, SHAKEDOWN7G, .gitattributes, analyzer_design, README).
   - `.wt/w6-reg`, **opus**: the falsified.md F-43/F-04 and RULINGS.md defect-47 annotations.
+    LANDED 4f9cd33c (F-43 by symbol), 174a9180 (F-04: the min pin left at 3dd20b49), b1e91385 (defect 47:
+    the coverage pair one high, "Four" names five). Append-only, +36/-0; gates 10/13/17 green.
 - Queued: leg 6, the STATE rewrite (**opus**), then
   REVIEW-W6 (**opus**).
 
