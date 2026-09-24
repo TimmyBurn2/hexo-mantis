@@ -7,8 +7,8 @@ THE DEFECT: the sweep built a fresh `build_net(arch)` per rung from an UNSEEDED 
 rung raced a DIFFERENT random network — and on an unbounded board the policy decides how far
 stones spread, hence node and edge counts, hence what a fused forward costs. THE REPAIR is
 `build_sweep_net`, seeding from the config's own `seed` immediately before the one RNG consumer,
-through `mantis.util.determinism`, because importing anything under `mantis.train` pulls eight
-training modules in and the sweep must stay trainer-unreachable.
+through `mantis.util.determinism`, because the sweep must stay trainer-unreachable
+(test_worker_sweep_reachability pins that bar).
 
 THE CONTROL IS NET-PARAMETER-HASH EQUALITY, NO BAND: the retired throughput band measured 0.58%
 engine-side and 3.93% on the box, against within-drive round noise of ~6% peak-to-peak.
