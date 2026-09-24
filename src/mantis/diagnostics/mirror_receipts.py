@@ -15,7 +15,6 @@ from mantis.train.bundle import complete_bundles
 from mantis.train.bundle_receipts import (
     bundle_member_paths,
     stamped_checkpoints,
-    unreceipted_bundle_steps,
     unreceipted_members,
 )
 from mantis.util.mirror_receipts import MIRRORED_VERDICT, MirrorReceiptError, verify_receipt
@@ -122,8 +121,7 @@ def await_mirror_receipts(run_dir: str | Path, run_id: str, *, wait_sec: float,
 
 __all__ = [
     "CHECKPOINTS_SUBDIR", "GAMES_SUBDIR", "MirrorReceiptsMissingError", "await_mirror_receipts",
-    "bundle_member_paths", "first_closed_shard", "require_mirror_receipts",
-    "unreceipted_bundle_steps", "unreceipted_members",
+    "first_closed_shard", "require_mirror_receipts",
 ]
 
 

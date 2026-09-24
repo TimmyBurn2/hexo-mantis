@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from mantis.diagnostics import mirror_receipts as D
+from mantis.train import bundle_receipts as R
 from mantis.train.bundle import complete_bundles
 from mantis.util import mirror_receipts as U
 from mantis.util.hashing import sha256_file
@@ -18,7 +19,7 @@ def _receipt_everything(root: Path, run_id: str = "synth") -> None:
     """Receipt every bundle file and closed shard as the puller would, from the same bytes."""
     checkpoints = root / D.CHECKPOINTS_SUBDIR
     for manifest in complete_bundles(checkpoints):
-        for path in D.bundle_member_paths(manifest, checkpoints):
+        for path in R.bundle_member_paths(manifest, checkpoints):
             U.write_receipt(path, mirrored_sha256=sha256_file(path),
                             mirrored_bytes=path.stat().st_size, cycle=1, mirror_id="test")
     shard = D.first_closed_shard(root / D.GAMES_SUBDIR, run_id)
@@ -64,7 +65,7 @@ def test_the_halt_refuses_an_unreceipted_run_directory_and_names_the_gap(
     synthetic_run_dir(tmp_path)
     with pytest.raises(D.MirrorReceiptsMissingError, match="step 40 is not receipted"):
         D.require_mirror_receipts(tmp_path, "synth")
-    assert D.unreceipted_bundle_steps(tmp_path / D.CHECKPOINTS_SUBDIR) == [40]
+    assert R.unreceipted_bundle_steps(tmp_path / D.CHECKPOINTS_SUBDIR) == [40]
 
 
 def test_the_halt_passes_when_bundle_and_first_shard_are_receipted(
@@ -76,12 +77,12 @@ def test_the_halt_passes_when_bundle_and_first_shard_are_receipted(
     assert reading["verdict"] == U.MIRRORED_VERDICT
     assert reading["bundle"]["step"] == 40
     assert set(reading["bundle"]["files"]) == {
-        p.name for p in D.bundle_member_paths(
+        p.name for p in R.bundle_member_paths(
             complete_bundles(tmp_path / D.CHECKPOINTS_SUBDIR)[0], tmp_path / D.CHECKPOINTS_SUBDIR)
     }
     assert reading["shard"]["name"].endswith("seg0001_2026091201.jsonl"), (
         "the FIRST closed shard is the one demanded, not the newest")
-    assert D.unreceipted_bundle_steps(tmp_path / D.CHECKPOINTS_SUBDIR) == []
+    assert R.unreceipted_bundle_steps(tmp_path / D.CHECKPOINTS_SUBDIR) == []
 
 
 def test_a_receipt_for_a_rewritten_member_no_longer_covers_it(

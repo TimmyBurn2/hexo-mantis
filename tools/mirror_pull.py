@@ -15,10 +15,14 @@ import time
 from pathlib import Path
 from typing import Any
 
-from mantis.diagnostics.mirror_receipts import CHECKPOINTS_SUBDIR, GAMES_SUBDIR, bundle_member_paths
+from mantis.diagnostics.mirror_receipts import CHECKPOINTS_SUBDIR, GAMES_SUBDIR
 from mantis.monitor.game_record import index_filename
 from mantis.train.bundle import BundleError, complete_bundles
-from mantis.train.bundle_receipts import CHECKPOINT_NAME_RE, stamped_checkpoints
+from mantis.train.bundle_receipts import (
+    CHECKPOINT_NAME_RE,
+    bundle_member_paths,
+    stamped_checkpoints,
+)
 from mantis.util.hashing import sha256_file
 from mantis.util.mirror_receipts import (
     RECEIPT_SUFFIX,

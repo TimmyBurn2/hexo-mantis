@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from mantis.diagnostics import mirror_receipts as D
+from mantis.train import bundle_receipts as R
 from mantis.util import mirror_receipts as U
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -39,7 +40,7 @@ def test_one_cycle_receipts_the_bundle_and_the_closed_shard_beside_the_source(
     # The SOURCE (the box) now proves its own artifacts; the mirror holds a readable bundle.
     reading = D.require_mirror_receipts(source, "synth")
     assert reading["verdict"] == U.MIRRORED_VERDICT
-    assert D.unreceipted_bundle_steps(source / D.CHECKPOINTS_SUBDIR) == []
+    assert R.unreceipted_bundle_steps(source / D.CHECKPOINTS_SUBDIR) == []
     assert D.require_mirror_receipts(mirror, "synth")["bundle"]["step"] == 40
     receipt = U.read_receipt(U.receipt_path_for(
         D.first_closed_shard(source / D.GAMES_SUBDIR, "synth")))

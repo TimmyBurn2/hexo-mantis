@@ -13,6 +13,7 @@ import torch
 
 from mantis.config.loader import load_config
 from mantis.diagnostics import mirror_receipts as D
+from mantis.train import bundle_receipts as R
 from mantis.util import mirror_receipts as U
 from mantis.util.hashing import sha256_file
 
@@ -39,7 +40,7 @@ def _config(name: str = "run6.yaml"):
 def _receipt_run_dir(root: Path, run_id: str) -> None:
     checkpoints = root / D.CHECKPOINTS_SUBDIR
     for manifest in D.complete_bundles(checkpoints):
-        for path in D.bundle_member_paths(manifest, checkpoints):
+        for path in R.bundle_member_paths(manifest, checkpoints):
             U.write_receipt(path, mirrored_sha256=sha256_file(path),
                             mirrored_bytes=path.stat().st_size, cycle=1, mirror_id="test")
     shard = D.first_closed_shard(root / D.GAMES_SUBDIR, run_id)
