@@ -17,7 +17,6 @@ only wrapped to record, and `DiskGuard` is the REAL class subclassed to record k
 """
 from __future__ import annotations
 
-import signal
 from pathlib import Path
 from typing import Any
 
@@ -35,16 +34,6 @@ _DRIVE_STEPS = 3
 #: the resolver's values is vacuous if two are equal, and the transposition is exactly a swap of
 #: two. Low enough that the critical arm can NEVER fire on a real filesystem.
 _DRIVE_DISK_GUARD = {"interval_sec": 0.02, "warn_gb": 0.001, "fail_gb": 0.0005}
-
-
-@pytest.fixture(autouse=True)
-def restore_signal_dispositions():
-    """Save and restore the process-global SIGINT/SIGTERM handlers around each test, so one
-    drive's handlers cannot decide another test's fate."""
-    saved = {sig: signal.getsignal(sig) for sig in (signal.SIGINT, signal.SIGTERM)}
-    yield
-    for sig, handler in saved.items():
-        signal.signal(sig, handler)
 
 
 class _PartialStartFailure(RuntimeError):

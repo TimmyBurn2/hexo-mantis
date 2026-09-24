@@ -52,16 +52,6 @@ _RESOLVED_CONFIG_PRODUCER_TEST = (
 )
 
 
-@pytest.fixture(autouse=True)
-def restore_signal_dispositions():
-    """Save and restore the process-global SIGINT/SIGTERM handlers around each test, so one
-    drive's handlers cannot decide another test's fate."""
-    saved = {sig: signal.getsignal(sig) for sig in (signal.SIGINT, signal.SIGTERM)}
-    yield
-    for sig, handler in saved.items():
-        signal.signal(sig, handler)
-
-
 class _Pool:
     """Drivable stand-in for `WorkerPool` at the injected seam; `start`/`stop` are recorded
     because the teardown ladder's contract is "pool stopped IFF started"."""
