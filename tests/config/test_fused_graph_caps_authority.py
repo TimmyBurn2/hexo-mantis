@@ -222,10 +222,9 @@ def test_fg5_05_an_uncalibrated_production_config_cannot_build_its_graph_server(
     """An uncalibrated production config cannot build its graph server, through the REAL
     `InferenceServer.__init__`.
 
-    EAGER, in the graph branch — `__init__` already branches on `self._is_graph`, so failing a
-    mis-minted run in the first second rather than three hours in costs nothing. The caps are
-    NULLED IN THE DUMP rather than read as null from the file, which tests the REFUSAL rather
-    than the current mint state and so survives every future re-mint.
+    EAGER, in `__init__`, so a mis-minted run fails in the first second rather than three hours
+    in. The caps are NULLED IN THE DUMP rather than read as null from the file, which tests the
+    REFUSAL rather than the current mint state and so survives every future re-mint.
     """
     cfg = load_config(_CONFIGS / "run6.yaml")
     assert cfg.identity.representation == "graph", (

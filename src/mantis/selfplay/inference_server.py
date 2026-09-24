@@ -1,10 +1,10 @@
 """THE batched inference server — the one dispatch loop in the tree.
 
 >300 justify: the ONE inference loop. Rust owns request concurrency; this module is the whole
-Python side of the dispatch seam, and splitting the dense and graph loops apart would create a
-second place a batch can be prepared, submitted or failed.
+Python side of the dispatch seam, and splitting it would create a second place a batch can be
+prepared, submitted or failed.
 
-The representation is resolved ONCE at construction from the encoding spec, a closed match with no
+The encoding spec is checked ONCE at construction to be a graph spec, a closed match with no
 dense-by-default arm; autocast is bf16 UNCONDITIONALLY on the graph loop (LAW-06).
 """
 from __future__ import annotations
@@ -347,13 +347,10 @@ class InferenceServer(threading.Thread):
                 f"InferenceServer: unrecognised encoding_spec type "
                 f"{type(encoding_spec).__name__!r}; expected mantis.encoding.EncodingSpec"
             )
-        # Representation discriminant, and a closed match: the CNN staging / trace / (C,H,W) setup
-        # below is grid-only, and an unknown representation raises rather than defaulting dense.
-        self._is_graph = is_graph_representation(self.encoding_spec)
-        self._policy_len = self.encoding_spec.policy_logit_count
+        # A closed match: a grid or unknown representation raises rather than defaulting dense.
+        is_graph_representation(self.encoding_spec)
 
-        # Graph-loop batching instrumentation (LAW-18), written ONLY by `_run_graph_loop`, so a
-        # grid run reports `None` per derived reading rather than a fabricated 0.
+        # Graph-loop batching instrumentation (LAW-18), written ONLY by `_run_graph_loop`.
         self._batch_wait_count = 0
         self._batch_wait_total_s = 0.0
         self._batch_wait_min_s: float | None = None
@@ -394,64 +391,30 @@ class InferenceServer(threading.Thread):
         self._fused_nodes_hist: dict[int, int] = {}
         self._fused_caps: FusedGraphCapsSpec | None = None
 
-        if self._is_graph:
         # The fused-forward memory bound, resolved ONCE and EAGERLY here: failing a mis-minted run
         # in the first second beats failing it three hours in. An explicit spec WINS over config.
-            if fused_graph_caps is None:
-                self._fused_caps = resolve_fused_graph_caps(config)
-            else:
-                self._fused_caps = fused_graph_caps
-        # Graph mode: block-diagonal graph tensors, not a CNN — no H2D staging, no trace, no shape.
-            self._feature_len = 0
-            self._shape: tuple[int, int, int] | None = None
-            self._board_size = self.encoding_spec.trunk_size
-            self._batcher = batcher or InferenceBatcher(encoding_spec=self.encoding_spec)
-            self._stop_event = threading.Event()
-            self._weights_lock = threading.Lock()
-            self._forward_count = 0
-            self._total_requests = 0
-            self._traced_model: Any = None
-            self._h2d_staging: torch.Tensor | None = None
-            if self._compile_trunk:
-                import torch._dynamo.config as dynamo_config
-
-                # Past `recompile_limit` Dynamo would run the frame EAGER and say nothing — a
-                # silently-disabled lever (R1); with this set it raises and the pop fails loud.
-                dynamo_config.fail_on_recompile_limit_hit = True
-                # nn.Module's __getattr__ types the trunk as Tensor | Module; it is the module.
-                representation: Any = self.model.representation
-                self._trunk = torch.compile(representation, dynamic=True)
-            self._retirer = _PopRetirer(self)
+        if fused_graph_caps is None:
+            self._fused_caps = resolve_fused_graph_caps(config)
         else:
-            # H2D staging sizes to the TRUNK window, the spatial dim the model accepts. For
-            # single-window encodings trunk_size == board_size; multi-window encodings diverge.
-            board_size = self.encoding_spec.trunk_size
-            # Rust workers emit exactly `spec.kept_plane_indices` planes, so the wire width is the
-            # ACTIVE encoding's plane count and never a hard-coded channel count.
-            wire_channels = self.encoding_spec.n_planes
-            self._feature_len = wire_channels * board_size * board_size
-            self._shape = (wire_channels, board_size, board_size)
+            self._fused_caps = fused_graph_caps
+        self._batcher = batcher or InferenceBatcher(encoding_spec=self.encoding_spec)
+        self._stop_event = threading.Event()
+        self._weights_lock = threading.Lock()
+        self._forward_count = 0
+        self._total_requests = 0
+        if self._compile_trunk:
+            import torch._dynamo.config as dynamo_config
 
-            self._batcher = batcher or InferenceBatcher(encoding_spec=self.encoding_spec)
-            self._stop_event = threading.Event()
-            self._weights_lock = threading.Lock()
-            self._forward_count = 0
-            self._total_requests = 0
+            # Past `recompile_limit` Dynamo would run the frame EAGER and say nothing — a
+            # silently-disabled lever (R1); with this set it raises and the pop fails loud.
+            dynamo_config.fail_on_recompile_limit_hit = True
+            # nn.Module's __getattr__ types the trunk as Tensor | Module; it is the module.
+            representation: Any = self.model.representation
+            self._trunk = torch.compile(representation, dynamic=True)
+        self._retirer = _PopRetirer(self)
 
-            # Pinned host staging buffer: a DMA-engine copy on CUDA, no-op on CPU.
-            if self.device.type == "cuda":
-                self._h2d_staging = torch.empty(
-                    (self._batch_size, wire_channels, board_size, board_size),
-                    dtype=torch.float32,
-                    pin_memory=True,
-                )
-            else:
-                self._h2d_staging = None
-
-        # Autocast dtype, representation-aware: bf16 UNCONDITIONALLY on the graph loop (LAW-06),
-        # since fp16 GINE sum-aggregation overflows; the dense path must match the trainer's knob.
-        _representation = "graph" if self._is_graph else "grid"
-        self._amp_dtype = amp_dtype_for(_representation)
+        # bf16 UNCONDITIONALLY on the graph loop (LAW-06): fp16 GINE sum-aggregation overflows.
+        self._amp_dtype = amp_dtype_for("graph")
         # The eager call stays byte-identical to the pre-A4-3 one: no kwarg unless compiling.
         self._trunk_kwarg: dict[str, Any] = {} if self._trunk is None else {"trunk": self._trunk}
 
@@ -496,42 +459,6 @@ class InferenceServer(threading.Thread):
             "inference_model_version_bump context=%s model_version=%s",
             "inference_server", new_version,
         )
-
-    def submit_and_wait(self, state: np.ndarray) -> tuple[np.ndarray, float]:
-        """Synchronous single-state inference for test / diagnostic use, bypassing the Rust queue.
-
-        Raises:
-            ValueError: prefixed with ``"Model inference failed: "`` if the wrapped forward raises;
-                the translation keeps `threading.Event` waiters from deadlocking on it.
-        """
-        # Match the dispatcher's batch-prep contract (explicit C-contiguous f32).
-        arr = np.ascontiguousarray(state, dtype=np.float32).reshape(self._shape)
-        tensor = torch.from_numpy(arr).unsqueeze(0).to(self.device)
-        # The traced graph shares parameter storage with ``self.model``, so weight swaps propagate.
-        fwd_model = self._traced_model if self._traced_model is not None else self.model
-        try:
-            with self._weights_lock:
-                with torch.inference_mode():
-                    with torch.autocast(
-                        device_type=self.device.type,
-                        dtype=self._amp_dtype,
-                        enabled=self.device.type == "cuda",
-                    ):
-                        log_policy, value, _v_logit = fwd_model(tensor)
-        except Exception as exc:  # noqa: BLE001 — translated + re-raised, never swallowed
-            raise ValueError(f"Model inference failed: {exc}") from exc
-
-        probs = log_policy.float().exp()
-        probs = probs / probs.sum(dim=-1, keepdim=True)
-        policy_np = probs.squeeze(0).cpu().numpy().astype(np.float32)
-        value_f = float(value.squeeze().cpu().item())
-
-        self._total_requests += 1
-        self._forward_count += 1
-        return policy_np, value_f
-
-    def infer(self, state: np.ndarray) -> tuple[np.ndarray, float]:
-        return self.submit_and_wait(state)
 
     @property
     def forward_count(self) -> int:
@@ -634,11 +561,10 @@ class InferenceServer(threading.Thread):
         self._fused_nodes_hist[bucket_n] = self._fused_nodes_hist.get(bucket_n, 0) + 1
 
     def _fusion_snapshot(self) -> dict[str, Any] | None:
-        """The `fusion` sub-block, or `None` on a GRID run — a zeroed block would read as "the
-        lever ran and never fired". `caps` travels WITH the distributions, because a maximum of
-        4.4 M edges says nothing without the cap beside it."""
+        """The `fusion` sub-block, or `None` with no caps resolved. `caps` travels WITH the
+        distributions, because a maximum of 4.4 M edges says nothing without the cap beside it."""
         caps = self._fused_caps
-        if not self._is_graph or caps is None:
+        if caps is None:
             return None
         return {
             "caps": {
@@ -663,7 +589,7 @@ class InferenceServer(threading.Thread):
         and `max_wait_ms` travel with it, since a wait or an occupancy is unreadable without the
         deadline and the denominator behind it; a reading with no sample is `None`, never 0."""
         return {
-            "representation": "graph" if self._is_graph else "grid",
+            "representation": "graph",
             "batch_size": self._batch_size,
             "max_wait_ms": self._max_wait_ms,
             "queue_wait": _timing_agg(
@@ -678,22 +604,19 @@ class InferenceServer(threading.Thread):
                 self._batch_wait_count, self._occupancy_total, self._occupancy_min,
                 self._occupancy_max, self._occupancy_hist, self._batch_size,
             ),
-            # An idle counter stays VISIBLE at 0 on the producing path; `None` where none exists.
-            "empty_polls": self._empty_polls if self._is_graph else None,
-            # The memory bound's own in-run instrument: PRESENT with a `None` value on a grid run,
-            # never absent, since an absent key and a null one differ only if the key is always there.
+            # An idle counter stays VISIBLE at 0 on the producing path.
+            "empty_polls": self._empty_polls,
             "fusion": self._fusion_snapshot(),
-            # R347(e)'s lever, LAW-18: its posture and its own fire rate, visible at 0 on the
-            # producing path; `None` on a grid run.
+            # R347(e)'s lever, LAW-18: its posture and its own fire rate, visible at 0.
             "edge_geometry_check": {
                 "mode": self._edge_geometry_check,
                 "deferred": self._edge_geometry_deferred,
                 "inline_fallback": self._edge_geometry_inline_fallback,
                 "failures": self._edge_geometry_failures,
-            } if self._is_graph else None,
+            },
             # A4-3's lever, LAW-18: a `unique_graphs` count still climbing after warm-up is the
             # recompile storm the abort names; past `recompile_limit` Dynamo falls back to eager.
-            "compile": _compile_snapshot(self._compile_trunk) if self._is_graph else None,
+            "compile": _compile_snapshot(self._compile_trunk),
             # A4-4's lever, LAW-18: one pop in flight, and the wait its retire spent on the device.
             "pipeline": {
                 "depth": _PIPELINE_DEPTH,
@@ -705,7 +628,7 @@ class InferenceServer(threading.Thread):
                     self._gpu_wait_count, self._gpu_wait_total_s,
                     self._gpu_wait_min_s, self._gpu_wait_max_s,
                 ),
-            } if self._is_graph else None,
+            },
         }
 
     def _run_graph_loop(self) -> None:
@@ -717,12 +640,11 @@ class InferenceServer(threading.Thread):
             # Unreachable by construction: the caps are resolved before this thread starts. A None
             # here is a wiring break, and running unbounded must not be an available outcome.
             raise RuntimeError(
-                "InferenceServer graph loop: no fused-graph caps resolved — the graph branch "
-                "of __init__ must produce them before the loop runs (inference.fused_graph_"
-                "caps)."
+                "InferenceServer graph loop: no fused-graph caps resolved — __init__ must "
+                "produce them before the loop runs (inference.fused_graph_caps)."
             )
         spec = self.encoding_spec
-        # A graph spec carries all three graph fields; None means a grid spec routed here.
+        # A graph spec carries all three graph fields; None means a non-graph spec routed here.
         win_length = spec.win_length
         node_feat_dim = spec.node_feat_dim
         edge_feat_dim = spec.edge_feat_dim

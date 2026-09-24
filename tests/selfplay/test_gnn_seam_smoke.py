@@ -79,7 +79,7 @@ def test_gnn_inference_seam_end_to_end_smoke() -> None:
         }, "train": {"amp_dtype": "bf16"}},
         batcher=batcher, encoding_spec=_SPEC,
     )
-    assert server._is_graph is True
+    assert server._fused_caps is not None
     server.start()
     try:
         n = 8

@@ -266,16 +266,15 @@ CONSUMER_REGISTRY = {
     "inference.compile_trunk":
         "resolve_compile_trunk -> WorkerPool -> InferenceServer(compile_trunk=) -> the "
         "server-private compiled trunk handed to forward_batch(trunk=) (A4-3)",
-    # The GRAPH inference forward's memory bound, GRAPH-ROUTE-SCOPED: the resolver is called
-    # from the graph branch of `InferenceServer.__init__` alone, so a grid run cannot reach it.
+    # The GRAPH inference forward's memory bound, resolved eagerly in `InferenceServer.__init__`.
     "inference.fused_graph_caps.max_fused_edges":
         "resolve_fused_graph_caps -> FusedGraphCapsSpec.max_fused_edges ->"
-        " InferenceServer.__init__ (graph branch only, eager) -> _run_graph_loop"
+        " InferenceServer.__init__ (eager) -> _run_graph_loop"
         " plan_fused_forwards edge-term partition; also threaded parent-side into"
         " RoundSpec.fused_graph_caps -> the eval child's LocalInferenceEngine",
     "inference.fused_graph_caps.max_fused_nodes":
         "resolve_fused_graph_caps -> FusedGraphCapsSpec.max_fused_nodes ->"
-        " InferenceServer.__init__ (graph branch only, eager) -> _run_graph_loop"
+        " InferenceServer.__init__ (eager) -> _run_graph_loop"
         " plan_fused_forwards node-term partition; also threaded parent-side into"
         " RoundSpec.fused_graph_caps -> the eval child's LocalInferenceEngine",
     # Every MonitorSchemaConfig leaf's live consumer is resolve_monitor_config, a 1:1 field copy
