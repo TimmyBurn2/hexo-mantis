@@ -1,4 +1,4 @@
-"""mantis.model — nets (GNN + CNN), dist65 value codec, build_net authority.
+"""mantis.model — the GNN nets, dist65 value codec, build_net authority.
 
 Public API: `build_net` + the declared arch dataclasses (`ModelArch`/
 `GnnArch`/`GnnArchV2`) + `RepresentationMismatch`; the arch-kind vocabulary

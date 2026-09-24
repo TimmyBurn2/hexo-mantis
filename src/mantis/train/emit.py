@@ -1,11 +1,8 @@
 """The injected event-emit seam (repo_design §11 / WP10 §c.4).
 
-`monitoring/events.emit_event` was the ONE funnel every training-side event flowed
-through. `mantis/monitor/` is EMPTY until WP13, so the trainer/coordinator/lifecycle
-emit through a LOCAL structural `EventSink` Protocol (single `emit(event)` method) with
-an explicit `NullEventSink` no-op default (the WP9 `BotLike` precedent). WP13 supplies
-the real JSONL sink + the LAW-07 producer tests; the DAG stays clean — no `train → monitor`
-hard edge.
+The trainer/coordinator/lifecycle emit through a LOCAL structural `EventSink` Protocol (single
+`emit(event)` method) with an explicit `NullEventSink` no-op default; the composition root
+injects the real JSONL sink, so there is no `train → monitor` hard edge.
 
 The emitted event `Mapping` carries its NAME under the ``"event"`` key (the mantis emit
 convention, cf. `mantis.config.emit.ResolvedConfig.to_event_payload`); warning fields
@@ -29,8 +26,7 @@ class EventSink(Protocol):
 
 
 class NullEventSink:
-    """Explicit no-op default (WP9 BotLike precedent). Injected everywhere until WP13
-    wires the real sink."""
+    """Explicit no-op sink, for callers with no event stream (tests, benches, the BC route)."""
 
     def emit(self, event: Mapping[str, Any]) -> None:
         return None

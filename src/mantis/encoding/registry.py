@@ -35,8 +35,7 @@ def _load() -> dict[str, _EngineRegistrySpec]:
 
     Built from ONE `_engine.all_specs()` call — the compiled registry is the
     sole name source (no hardcoded name tuple, no per-name lookup loop).
-    Preserved as a private helper because `compat.py`, `resolvers.py`, and
-    `audit_sections.py` all import it.
+    Preserved as a private helper because `resolvers.py` and `audit_sections.py` import it.
     """
     global _REGISTRY_CACHE
     if _REGISTRY_CACHE is not None:

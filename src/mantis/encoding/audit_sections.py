@@ -202,25 +202,20 @@ def _section_checkpoints(
 
 _CORPUS_FILENAME_HEURISTIC: tuple[tuple[str, str], ...] = (
     # Order matters: most-specific first.
-    ("v6w25", "v6w25"),
-    ("v6_live2_ls", "v6_live2_ls"),
     ("gnn_corpus_r8", "gnn_axis_r8"),
     ("gnn", "gnn_axis_v1"),
 )
 
 
 def _infer_corpus_from_filename(name: str) -> str:
-    """Guess an encoding from a corpus filename, defaulting to v6.
+    """Guess an encoding from a corpus filename, `?` when no registered name matches.
 
-    Not a resolver: the only consumer compares the guess against the sidecar's declared
-    encoding to warn when they disagree, so the default cannot mis-encode anything.
+    Not a resolver: the only consumer compares the guess against the sidecar's declared encoding.
     """
     for needle, encoding in _CORPUS_FILENAME_HEURISTIC:
         if needle in name:
             return encoding
-    # silent-encoding-gate: ok -- diagnostic-only guess, compared against the declared
-    # sidecar value to raise a warning; never resolves an encoding for real work.
-    return "v6"
+    return "?"
 
 
 def _sha256_of_file(p: Path, chunk: int = 1 << 20) -> str:
@@ -266,7 +261,7 @@ def _section_corpora(
         has_sidecar = sidecar.is_file()
         if has_sidecar:
             try:
-                meta = json.loads(sidecar.read_text())
+                meta = json.loads(sidecar.read_text(encoding="utf-8"))
                 if not isinstance(meta, dict):
                     raise ValueError("metadata is not a JSON object")
                 if "encoding_name" not in meta:
@@ -313,7 +308,7 @@ def _section_corpora(
         )
 
         inferred = _infer_corpus_from_filename(p.name)
-        if declared not in ("-", "PARSE-ERR") and inferred != declared:
+        if declared not in ("-", "PARSE-ERR") and inferred not in ("?", declared):
             report.add_finding(
                 "warn", "§3",
                 f"{rel}: filename heuristic ({inferred}) disagrees with sidecar "

@@ -196,7 +196,7 @@ def arch_from_spec_and_config(spec: Any, config: Mapping[str, Any]) -> ModelArch
     if incumbent is None:
         raise RepresentationMismatch(
             f"spec.representation={rep!r} for encoding "
-            f"{getattr(spec, 'name', '?')!r} — expected 'grid' or 'graph'."
+            f"{getattr(spec, 'name', '?')!r} — expected 'graph'."
         )
     return select_arch(spec, config, arch_kind=incumbent)
 

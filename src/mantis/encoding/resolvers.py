@@ -3,9 +3,8 @@
 """Encoding resolvers — config-form, checkpoint-form, state-dict detection.
 
 The `resolve_*` functions are the blessed paths to construct an `EncodingSpec` outside the
-registry itself. The state-dict detector is UNIFIED: marker/stamp FIRST for grid AND graph, then
-a single deterministic shape fallback over the registered set. A filename is NEVER a dispatch
-signal.
+registry itself. The state-dict detector reads the stamp, then the graph marker, and never a
+shape. A filename is NEVER a dispatch signal.
 """
 from __future__ import annotations
 
@@ -310,9 +309,8 @@ def detect_encoding_from_state_dict(
 ) -> EncodingSpec | None:
     """Detect a registry encoding from a model state-dict.
 
-    UNIFIED precedence for grid and graph alike: an embedded ``metadata['encoding_name']`` STAMP
-    wins outright, then the graph-representation MARKER key, then ONE deterministic shape fallback
-    matching uniquely over the registered grid set. The filename is used ONLY in error text.
+    An embedded ``metadata['encoding_name']`` STAMP wins outright, then the graph-representation
+    MARKER key; there is no shape fallback. The filename is used ONLY in error text.
 
     Args:
         state: Model state-dict (key → tensor), optionally with a `metadata` envelope.
