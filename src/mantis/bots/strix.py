@@ -13,8 +13,8 @@ import tomllib
 from pathlib import Path
 from typing import Any, Protocol
 
+import mantis
 from mantis.bots.protocol import RungUnresolvable
-from mantis.bots.sealbot import find_vendor_root
 
 PIN_NAME = "hexo-strix"
 #: Path segments below the vendor root, kept as segments so no path-shaped literal lives here.
@@ -148,6 +148,19 @@ class StrixBot:
         self._transport.close()
 
 
+def find_vendor_root() -> Path | None:
+    """The `vendor/` directory of the repo the package is installed from, or None. Returns None,
+    never a default path and never an env-provided one: an endpoint that can point anywhere is a
+    host-path channel wearing a disguise."""
+    package_file = mantis.__file__
+    if package_file is None:  # namespace package: nothing to walk up from
+        return None
+    for ancestor in Path(package_file).resolve().parents:
+        if (ancestor / "vendor" / "pins.toml").is_file():
+            return ancestor / "vendor"
+    return None
+
+
 def _pin() -> dict[str, Any] | None:
     root = find_vendor_root()
     if root is None:
@@ -277,6 +290,6 @@ def resolve_strix(*, opponent_sims: int | None, variant: str) -> Any:
 __all__ = [
     "BUILD_SCRIPT", "CHECKPOINT_ABSENT_MARKER", "DEFAULT_M_ACTIONS", "DriverTransport", "FINDING_LOG_MARKER",
     "NET_ONLY_SUFFIX", "PIN_ABSENT_MARKER", "PIN_NAME", "RADIUS_SUFFIX", "SHA_MISMATCH_MARKER", "StrixBot",
-    "Transport", "VENDOR_ABSENT_MARKER", "VENV_ABSENT_MARKER", "load_request", "locate_strix", "resolve_strix",
+    "Transport", "VENDOR_ABSENT_MARKER", "VENV_ABSENT_MARKER", "find_vendor_root", "load_request", "locate_strix", "resolve_strix",
     "strix_availability", "variant_radius", "variant_solver", "verify_checkpoint_sha",
 ]

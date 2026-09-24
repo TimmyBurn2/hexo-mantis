@@ -30,8 +30,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import mantis
 from mantis.bots.protocol import RungUnresolvable
+from mantis.bots.strix import find_vendor_root
 
 #: An arithmetic discharge rather than a knob: the vendored deadline is
 #: `now + microseconds(int64(time_limit * 1e6))`, so 1e6 seconds is 1e12 microseconds — four
@@ -84,19 +84,6 @@ class SealBotDepthError(RuntimeError):
 
 class SealBotModuleCollisionError(RuntimeError):
     """`sys.modules["game"]` was already occupied by something this loader did not install."""
-
-
-def find_vendor_root() -> Path | None:
-    """The `vendor/` directory of the repo the package is installed from, or None. Returns None,
-    never a default path and never an env-provided one: an endpoint that can point anywhere is a
-    host-path channel wearing a disguise."""
-    package_file = mantis.__file__
-    if package_file is None:  # namespace package: nothing to walk up from
-        return None
-    for ancestor in Path(package_file).resolve().parents:
-        if (ancestor / "vendor" / "pins.toml").is_file():
-            return ancestor / "vendor"
-    return None
 
 
 def install_game_module(path: Path) -> Any:
@@ -368,7 +355,6 @@ __all__ = [
     "SealBotDepthError",
     "SealBotModuleCollisionError",
     "build_shadow_game",
-    "find_vendor_root",
     "install_game_module",
     "load_sealbot_modules",
 ]
