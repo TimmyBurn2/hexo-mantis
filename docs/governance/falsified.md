@@ -150,3 +150,19 @@ Each note names the ruling that authorised it; none of them re-opens its row.
   `crates/mantis-selfplay/tests/common/mod.rs::{corpus, concat_by_offset, fuse}` and the
   `queue_concat_cross_thread_pop40` arm of `crates/mantis-selfplay/benches/queue_fuse_bench.rs` — leaves the tree in R368's Rust wave. It lived through `69e15329`; a HOT-14
   re-litigation of a pre-fuse starts from that commit, under LAW-02.
+- **F-43 — COORDINATES RE-POINTED, per R368(a) (2026-09-25); the row and the R335(a) note stand.**
+  Their line cites have drifted and the drain suite they name was re-based, so each is re-pointed by
+  symbol (derive a line at point of use, R98). `coordinator/step.py:576`'s early return is
+  `StepCoordinator._run_log_interval` in `src/mantis/train/coordinator/step.py`. `pool_drain.py:177`'s
+  emission is the `game_complete` payload `run_stats_loop` hands to `_emit` in
+  `src/mantis/selfplay/pool_drain.py` (`_emit` still drops it when the pool has no sink). C-03
+  (`test_pool_drain_parity.py:332-352`) is `tests/selfplay/test_pool_drain_parity.py::test_game_complete_payload_golden`;
+  its golden `tests/fixtures/selfplay/drain/drain_goldens.json` was re-captured from the graph drain at
+  `15912645` and lost its dense arm at `a670e1dc`, so "golden-pinned" now means pinned to the graph
+  capture. J-05 (`test_selfplay_census.py:398-421`) is
+  `tests/selfplay/test_selfplay_census.py::test_j05_game_complete_source_key_set_frozen` over
+  `_game_complete_dict_keys`, with the capture arm `test_j05_game_complete_golden_key_set_frozen`
+  reading the same golden. `run.py:349` and the note's `run.py:528, 538`: `build_run_collaborators` in
+  `src/mantis/run.py` passes `sink=_DeferredSink()` to `init_trainer` and to the one production
+  `WorkerPool` (the note's "both pool constructions" are those two), and `compose_run` binds each
+  before `pool.start()`. Nothing in the row is re-opened.
