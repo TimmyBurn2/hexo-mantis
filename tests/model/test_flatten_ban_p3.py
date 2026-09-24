@@ -1,10 +1,8 @@
 """WPSC Phase 3 SC-B5 — flatten-ban architecture test (A7; DESIGN_P3.md §6). The graph
 path's policy head is a per-node scalar MLP (`out_features == 1`), never a flatten-to-
 fixed-FC head — the pattern that would silently cap the action space at a compile-time
-`n_actions` constant. `HexTacToeNet` (dense/grid) is the KNOWN, EXEMPT counter-example
-(A5/`DEBT_DOSSIER.md` item 5): it legitimately flattens a spatial feature map to a fixed
-FC head, and no test here asserts against it — this file only bans the pattern on the
-GNN path (`GnnNet`/`PolicyHead`/`RepresentationNetwork`).
+`n_actions` constant. This file bans the pattern on the GNN path (`GnnNet`/`PolicyHead`/
+`RepresentationNetwork`); the dense/grid net it once exempted is buried (T11 GRAVES).
 
 `tests/model/test_arch_ban.py` already exists but covers a DIFFERENT concern (the O3
 arch-off-module sniff census) — read in full before writing this file; it has no
@@ -25,10 +23,6 @@ from mantis.encoding.registry import lookup
 from mantis.model import GnnArch, build_net
 from mantis.model.gine import PolicyHead, RepresentationNetwork
 from mantis.model.gnn import GnnNet
-
-# Documentation anchor (§6.2 item 4) — a future reader finds the exemption at the same
-# place the ban lives. Not a skip-marker: no test targets HexTacToeNet here.
-KNOWN_DENSE_HEADS_EXEMPT_FROM_FLATTEN_BAN = {"HexTacToeNet"}
 
 #: AUDIT-1 F-41: `11` and `5` typed here, mirroring two `gnn.py` module constants that had
 #: NO consumer at all (deleted with this commit). Read off the registry row instead.
@@ -82,10 +76,6 @@ def test_forward_batch_policy_logits_are_unpadded_ungrouped() -> None:
         )
     assert policy_logits.shape == (8,)
     assert value.shape == (2, 1)
-
-
-def test_hextactoe_net_is_the_named_exempt_dense_head() -> None:
-    assert KNOWN_DENSE_HEADS_EXEMPT_FROM_FLATTEN_BAN == {"HexTacToeNet"}
 
 
 def test_no_view_or_reshape_reachable_from_policy_or_representation_modules() -> None:
