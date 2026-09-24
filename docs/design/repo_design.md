@@ -156,10 +156,13 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
   parser). Model/buffer/batcher construction dispatches through ONE authority per layer
   (`model.build.build_net(arch)`, buffer facade, batcher ctor). Reading arch attributes off
   live `nn.Module` instances is banned — arch metadata travels on declared dataclasses
-  (`model.arch.GnnArch` / `model.arch.GnnArchV2`), which
-  `build_net` consumes — and its dispatch ORDER is load-bearing, `GnnArchV2` first,
-  because `GnnArchV2` is a subclass of `GnnArch`; a live-module
-  representation sniff (the former `model_representation`) is DELETED and grep-gate-banned
+  (`model.arch.GnnArch` / `model.arch.GnnArchV2` / `model.arch.GnnArchV2SoftPolicy`), which
+  `build_net` consumes — its dispatch checks the most-derived kind first
+  (`GnnArchV2SoftPolicy`, then `GnnArchV2`, then `GnnArch`) as a defensive second line, not
+  because any kind subclasses another (SLIM-FIX S-A-DOCS-3-04: none of the three dataclasses
+  has a base at HEAD; this line previously claimed the order was load-bearing "because
+  `GnnArchV2` is a subclass of `GnnArch`", which is false and also omitted the third kind); a
+  live-module representation sniff (the former `model_representation`) is DELETED and grep-gate-banned
   (a census test proves it stays absent). The discriminator, stated so the prose stops being
   broader than the gate: what is banned is *deriving* arch metadata from a live module's
   structure (a representation sniff, or reading arch hyperparameters off an `nn.Module`);
