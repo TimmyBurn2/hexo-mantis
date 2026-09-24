@@ -2,28 +2,13 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-_REPO = Path(__file__).resolve().parents[1]
-
-
-def _load_ladder() -> Any:
-    """`tools/ladder` by path under its own name (`sys.path` untouched, R5); once per process."""
-    if "ladder" in sys.modules:
-        return sys.modules["ladder"]
-    pkg = _REPO / "tools" / "ladder"
-    spec = importlib.util.spec_from_file_location("ladder", pkg / "__init__.py", submodule_search_locations=[str(pkg)])
-    if spec is None or spec.loader is None:
-        raise ImportError(f"cannot load {pkg}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["ladder"] = module
-    spec.loader.exec_module(module)
-    return module
+from mantis.util.loadpkg import load_tools_package
 
 
 def parse_time_control(text: str) -> dict[str, Any]:
@@ -61,7 +46,7 @@ class ReplayReport:
 
 def replay_receipt(receipt: dict[str, Any], backend: Any) -> ReplayReport:
     """Rebuild every position the receipt answered from the server's own move list and answer it again. Raises: ValueError when the receipt carries no `moves_full` (the server kept no record)."""
-    ladder = _load_ladder()
+    ladder = load_tools_package("ladder")
     full = receipt.get("moves_full")
     if not full:
         raise ValueError(f"{receipt['game_id']}: no moves_full on the receipt; the positions cannot be rebuilt")
@@ -98,7 +83,7 @@ def replay_receipt(receipt: dict[str, Any], backend: Any) -> ReplayReport:
 
 def ladder_presets() -> dict[str, int | None]:
     """The presets the backends know (`unit`, `play`), read off the package so the CLI cannot drift from it."""
-    return dict(_load_ladder().backends.PRESET_SIMS)
+    return dict(load_tools_package("ladder").backends.PRESET_SIMS)
 
 
 def _open_backend(args: argparse.Namespace, ladder: Any) -> Any:
@@ -135,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-reconnect", action="store_true", help="exit when the stream ends instead of reconnecting")
     ap.add_argument("--replay", type=Path, metavar="RECEIPT", help="the witness: replay this receipt and exit")
     args = ap.parse_args(argv)
-    ladder = _load_ladder()
+    ladder = load_tools_package("ladder")
 
     if args.replay is not None:
         receipt = ladder.receipt.read_receipt(args.replay)

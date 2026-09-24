@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from mantis.util.loadpkg import load_tools_package
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 #: The probe paths from the out-dir and symlink oracles, kept as literals rather than imported
 #: so this file is not a consumer of a frozen oracle's internals.
@@ -133,21 +135,6 @@ def local_puller(tmp_path_factory) -> Iterator[Path]:
     finally:
         stop.set()
         thread.join(timeout=30)
-
-
-def load_tools_package(name: str):
-    """Load `tools/<name>` by path under that name, once per process; `sys.path` untouched (R5)."""
-    if name in sys.modules:
-        return sys.modules[name]
-    pkg_dir = REPO_ROOT / "tools" / name
-    spec = importlib.util.spec_from_file_location(
-        name, pkg_dir / "__init__.py", submodule_search_locations=[str(pkg_dir)],
-    )
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
 
 
 def load_dashboard_package():

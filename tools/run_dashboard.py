@@ -2,27 +2,10 @@
 from __future__ import annotations
 
 import importlib
-import importlib.util
-import sys
-from pathlib import Path
 
+from mantis.util.loadpkg import load_tools_package
 
-def _package():
-    """Load `tools/dashboard` by path — `tools/` is not a package and `sys.path` is not touched."""
-    if "dashboard" in sys.modules:
-        return sys.modules["dashboard"]
-    pkg = Path(__file__).resolve().parent / "dashboard"
-    spec = importlib.util.spec_from_file_location(
-        "dashboard", pkg / "__init__.py", submodule_search_locations=[str(pkg)])
-    if spec is None or spec.loader is None:
-        raise ImportError(f"cannot load the dashboard package from {pkg}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["dashboard"] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-_package()
+load_tools_package("dashboard")
 _cli = importlib.import_module("dashboard.cli")
 _health = importlib.import_module("dashboard.health")
 

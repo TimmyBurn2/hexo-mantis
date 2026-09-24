@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 import importlib
-import importlib.util
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -12,29 +10,17 @@ import pytest
 
 from mantis import _engine
 from mantis.diagnostics import ring_reader as R
+from mantis.util.loadpkg import load_tools_package
 
-_REPO = Path(__file__).resolve().parents[2]
 _ENCODING = "gnn_axis_r8"
 _K1_SEQ = [(0, 0), (1, 0), (0, 1), (3, 3), (-3, 3), (2, -4)]  # six plies: p2's second stone, mr = 1
 _K2_SEQ = [(0, 0), (1, 0), (0, 1), (3, 3), (-3, 3), (2, -4), (-2, 6)]  # seven: p1 to move, mr = 2
 
 
-def _package(name: str) -> Any:
-    if name in sys.modules:
-        return sys.modules[name]
-    pkg = _REPO / "tools" / name
-    spec = importlib.util.spec_from_file_location(name, pkg / "__init__.py", submodule_search_locations=[str(pkg)])
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
 @pytest.fixture(scope="module")
 def probe1() -> Any:
-    _package("analyzer")
-    _package("probe1")
+    load_tools_package("analyzer")
+    load_tools_package("probe1")
     return importlib.import_module("probe1.rings"), importlib.import_module("probe1.readings")
 
 
