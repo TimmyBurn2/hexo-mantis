@@ -10,9 +10,6 @@
 //!
 //! `compute_move_temperature` was extracted so this integration test can pin the
 //! formula without a full self-play smoke run.
-//!
-//! (The `default_config_schedule_is_off_constant_floor` test needs the
-//! self-play config type and DEFERS to the config work package.)
 
 use mantis_search::compute_move_temperature;
 
@@ -42,7 +39,8 @@ fn temperature_is_monotonically_non_increasing() {
         assert!(
             curr <= prev + 1e-6,
             "temperature must be non-increasing: t({}) = {curr} > t({}) = {prev}",
-            cm, cm - 1,
+            cm,
+            cm - 1,
         );
         prev = curr;
     }

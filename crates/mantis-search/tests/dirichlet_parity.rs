@@ -1,6 +1,4 @@
-//! Regression guard for the Dirichlet noise application, which is duplicated on both sides of
-//! the self-play `if gumbel_mcts` branch. It pins the building blocks both branches depend on,
-//! so a regression in any of them fails both branches together:
+//! Regression guard for the building blocks of self-play's root Dirichlet noise:
 //!   1. `sample_dirichlet` output is non-negative and sums to 1.0.
 //!   2. `apply_dirichlet_to_root` blends `new = (1-eps)*old + eps*noise` per child.
 //!   3. `apply_dirichlet_to_root` with epsilon=0 is a byte-exact no-op.
@@ -134,8 +132,7 @@ fn apply_dirichlet_with_zero_epsilon_is_noop() {
 
 #[test]
 fn intermediate_ply_gate_matches_self_play_spec() {
-    // The formula duplicated at both self-play call sites, so a change to how `ply` or
-    // `moves_remaining` advance reds here and forces both sites to be reviewed together.
+    // search_drive's gate, re-typed: a change to how `ply` or `moves_remaining` advance reds here.
 
     fn is_intermediate(b: &Board) -> bool {
         b.moves_remaining == 1 && b.ply.index() > 0
