@@ -229,15 +229,8 @@ def build_runner_config(
     `policy_len` are NOT passed: both are spec-derived Rust-side and the committed ctor rejects
     them, as it has no field for the two KILLed knobs either."""
     spec = spec_dims.registry_spec
-    trunk_size = spec_dims.trunk_size
-    if is_graph_representation(spec):
-        dims = PoolDims(0, 0, int(spec.policy_logit_count))
-    else:
-        dims = PoolDims(
-            spec_dims.n_kept_planes * trunk_size * trunk_size,
-            6 * trunk_size * trunk_size,
-            int(spec.policy_logit_count),
-        )
+    is_graph_representation(spec)
+    dims = PoolDims(0, 0, int(spec.policy_logit_count))
 
     cfg = SelfPlayRunnerConfig(
         n_workers=hp.n_workers,

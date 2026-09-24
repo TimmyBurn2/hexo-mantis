@@ -13,13 +13,7 @@ from __future__ import annotations
 import enum
 from typing import Any
 
-from mantis._engine import HexgBuffer
 from mantis.selfplay.hparams import is_graph_representation
-
-
-class BufferKindMismatch(TypeError):
-    """The buffer handle does not match the representation it is being used as; a `TypeError`
-    subclass because it is a wiring error, not a data error."""
 
 
 class BufferKind(enum.Enum):
@@ -34,11 +28,6 @@ class BufferKind(enum.Enum):
         rather than falling back to a dense arm."""
         is_graph_representation(spec)
         return cls.GRAPH
-
-
-#: The engine class the graph kind is backed by, kept as a NAME rather than an isinstance gate
-#: so the facade stays duck-typed for the recording/stub buffers the drain oracles push into.
-_RAW_FOR: dict[BufferKind, type] = {BufferKind.GRAPH: HexgBuffer}
 
 
 class ReplayFacade:
@@ -108,4 +97,4 @@ class ReplayFacade:
         return self.raw.outcome_in_range_count(lo, hi)
 
 
-__all__ = ["BufferKind", "BufferKindMismatch", "ReplayFacade"]
+__all__ = ["BufferKind", "ReplayFacade"]

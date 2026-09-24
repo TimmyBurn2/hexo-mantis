@@ -17,7 +17,7 @@ Nothing here imports `mantis.eval`, `mantis.train` or `mantis.bots`: outward col
 CALLEE surface — an evaluator reaches the pool, never the reverse.
 """
 
-from mantis.selfplay.buffers import BufferKind, BufferKindMismatch, ReplayFacade
+from mantis.selfplay.buffers import BufferKind, ReplayFacade
 from mantis.selfplay.graph_collate import (
     WIN_AXES,
     AugRoundTripMismatch,
@@ -76,7 +76,6 @@ __all__ = [
     "AugRoundTripMismatch",
     "BatchCountMismatch",
     "BufferKind",
-    "BufferKindMismatch",
     "DtypeMismatch",
     "EdgeAttrDimMismatch",
     "EdgeAttrGeometryMismatch",

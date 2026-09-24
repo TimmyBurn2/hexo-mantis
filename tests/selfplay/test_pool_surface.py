@@ -25,7 +25,7 @@ import torch
 from mantis._engine import HexgBuffer
 from mantis.encoding import lookup
 from mantis.model import GnnArch, build_net
-from mantis.selfplay.buffers import BufferKind, BufferKindMismatch, ReplayFacade
+from mantis.selfplay.buffers import BufferKind, ReplayFacade
 from mantis.selfplay.pool import WorkerPool
 from mantis.selfplay.pool_hooks import ActorSyncTarget, InferenceStats, RunnerStats
 from mantis.train.coordinator.config import WorkerPoolLike
@@ -90,7 +90,6 @@ RUNNER_STATS_FIELDS = {
     # Worker threads that died by panic — a lifecycle counter, a DIFFERENT family from the
     # target-integrity latches beside it, which is why it is kept out of that tuple.
     "worker_panics",
-    "runner_encoding",
 }
 INFERENCE_STATS_FIELDS = {"forward_count", "total_requests", "encoding_spec"}
 

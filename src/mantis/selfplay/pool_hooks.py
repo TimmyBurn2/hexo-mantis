@@ -132,9 +132,6 @@ class RunnerStats:
     positions_dropped: int = 0
     # Worker threads that died by panic: non-zero means self-play HALTED rather than slowed.
     worker_panics: int = 0
-    # Vestigial `None` slot, kept so kwarg constructions do not break; the live spec cross-check
-    # reads `pool.encoding_spec`.
-    runner_encoding: Any = None
 
 
 @dataclass(frozen=True)

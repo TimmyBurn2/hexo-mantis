@@ -17,7 +17,7 @@ import pytest
 from mantis._engine import HexgBuffer
 from mantis.encoding import lookup
 from mantis.model import RepresentationMismatch
-from mantis.selfplay.buffers import BufferKind, BufferKindMismatch, ReplayFacade
+from mantis.selfplay.buffers import BufferKind, ReplayFacade
 _DRAW_BAND = (-0.75, -0.45)
 _GRAPH_SPEC = lookup("gnn_axis_v1")
 
