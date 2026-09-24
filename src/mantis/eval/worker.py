@@ -260,11 +260,7 @@ def build_candidate_player(
     c_visit: float, c_scale: float, q_rescale: bool, search_kind: str, gumbel_m: int,
     gumbel_seed: int,
 ) -> DeployHeadPlayer:
-    """Build the candidate player by a CLOSED match on the DECLARED representation.
-
-    Never on a model attribute and never falling through to a dense arm: an unregistered
-    representation must not silently become a dropping decode. `leaf_batch_size` is THREADED.
-    """
+    """A closed match on the representation. Raises: EvalDecodeUnsupportedError if not graph."""
     if spec.representation == "graph":
         return DeployHeadPlayer(expand_fn=_graph_expand_fn(engine, spec), n_sims=n_sims,
                                 leaf_batch_size=leaf_batch_size,

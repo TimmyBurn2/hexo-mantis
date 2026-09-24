@@ -282,10 +282,10 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   min/max and a power-of-two histogram, because a mean cannot separate "always 1" from
   "sometimes 64, sometimes 0"). Each timing sub-block publishes RAW `count` + `total_ms`
   beside the derived `mean_ms`, so a consumer differences two consecutive events to get an
-  INTERVAL mean; min/max are run-cumulative extremes and do not difference. **Graph path
-  only** — the dense loop is not instrumented, so a grid run's block carries `None` for
-  every derived reading (the unproduced-field convention below, applied), while
-  `empty_polls` stays VISIBLE at 0 on the producing path.
+  INTERVAL mean; min/max are run-cumulative extremes and do not difference. Produced by the
+  graph server, the one inference path; `empty_polls` stays VISIBLE at 0. A record from the
+  retired grid path carries `None` for every derived reading (the unproduced-field convention
+  below).
   The block carries a `fusion` SUB-BLOCK (F-816-10, LAW-18/R164) — the graph inference
   forward's memory bound reporting its own fire rate in-run: `caps` (the two minted members
   of `inference.fused_graph_caps`), `fusion_parts` (GPU forwards actually run),
@@ -298,11 +298,9 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   both intended: `collate.count` becomes the part count (`sum(M)`) where it previously
   equalled `queue_wait.count`, and `batch_fill_pct`'s denominator `_forward_count` stays ONE
   PER POP, because that metric is an occupancy (requests per pop against
-  `inference_batch_size`) and not a GPU-forward count. **`fusion` is `None` on a grid run**,
-  key present and value null: the dense batch is a fixed-shape tensor already bounded by
-  `inference_batch_size`, so the grid path never reads the caps and never plans a split — a
-  zeroed block would read as "the lever ran and never fired", which is the opposite
-  statement (the unproduced-field convention below, applied). `graph_build_time` is
+  `inference_batch_size`) and not a GPU-forward count. A retired-grid-path record carries
+  `fusion` as key present and value null, never a zeroed block: zeros would read as "the lever
+  ran and never fired" (the unproduced-field convention below). `graph_build_time` is
   deliberately NOT built: it lives per-leaf in Rust (`mantis-graph::build_axis_graph`) and
   would be a LAW-09 hot-path change owing re-run parity oracles and an IQR-gated bench.
   Registration follows the `target_integrity_counters` precedent (R164) rather than the
@@ -314,7 +312,7 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   thread after their batch was served), `inline_fallback` (checks run on the serving loop
   because the bounded queue was full — never dropped) and `failures` (check-14 refusals
   found after serving, each with its F-816-37 dump). Cumulative since server start; visible
-  at 0 under `inline`; `None` on a grid run, for `fusion`'s reason.
+  at 0 under `inline`; `None` in a retired-grid-path record, for `fusion`'s reason.
   And a `compile` SUB-BLOCK (PERF-A4 lever 3, LAW-18): `enabled` (the minted
   `inference.compile_trunk`), `unique_graphs` (Dynamo's own count of distinct compiled graphs
   since process start — a count still climbing after warm-up is the recompile storm the lever's
@@ -322,8 +320,8 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   it compiles, so the limit RAISES and the pop fails loud instead of Dynamo running the frame
   eager and saying nothing — `unique_graphs` can never exceed the limit, so it alone cannot
   show a fallback), and `frames_total` / `frames_ok` (Dynamo's frame counters; `total > ok` is
-  a frame that ran eager). Visible with `enabled: false` and zeros on the eager path; `None` on
-  a grid run.
+  a frame that ran eager). Visible with `enabled: false` and zeros on the eager path; `None` in
+  a retired-grid-path record.
   And a `pipeline` SUB-BLOCK (PERF-A4 lever 4, LAW-18): the serving loop is a two-thread
   software pipeline — the server thread pops, collates and launches pop N+1 while pop N's
   forward and pinned D2H run on the device, and a retire thread dispatches each pop the moment
@@ -337,7 +335,7 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   reader must know: `collate` now measures the CPU cost alone (the seven H2D copies are
   `non_blocking` from pinned staging), and a check-14 finding under `checker_thread` refuses
   every pop retired after it latched, so only pops already launched when the finding landed
-  can have been served. `None` on a grid run.
+  can have been served. `None` in a retired-grid-path record.
 - `stride5_spam` was **REMOVED** at close-out (operator directive B — a dead artifact of bad
   hyperparams that never occurs under current recipes).
 - `eval_round` joins the heartbeat sources at WP11-A (4th source): the eval pipeline's

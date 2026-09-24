@@ -99,7 +99,7 @@ def test_the_graph_batcher_takes_the_declared_supply(supply: int) -> None:
 
 
 def test_a_graph_engine_refuses_an_absent_batching_spec() -> None:
-    """`None` is the GRID arm. A graph engine handed it raises rather than falling back."""
+    """A graph engine handed `None` raises rather than falling back."""
     with pytest.raises(ValueError, match="inference_batching"):
         LocalInferenceEngine(
             _Net(), _CPU, encoding_spec=_GRAPH_SPEC, fused_graph_caps=_CAPS,

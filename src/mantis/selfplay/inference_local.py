@@ -27,7 +27,7 @@ class LocalInferenceEngine:
     saturation threshold derives from it.
 
     Raises:
-        ValueError: a graph engine was constructed with `inference_batching=None`.
+        ValueError: `inference_batching` is None.
     """
 
     def __init__(
@@ -65,10 +65,8 @@ class LocalInferenceEngine:
 
             if inference_batching is None:
                 raise ValueError(
-                    "LocalInferenceEngine: a GRAPH engine was constructed with "
-                    "`inference_batching=None`. `None` is the GRID arm — it means 'this "
-                    "route builds no graph server' — and there is no literal to fall back "
-                    "to here (R1/LAW-11). Resolve it in the parent through "
+                    "LocalInferenceEngine: `inference_batching=None`, and there is no literal "
+                    "to fall back to here (R1/LAW-11). Resolve it in the parent through "
                     "`mantis.config.resolve.inference_batching` and thread it in."
                 )
 

@@ -555,9 +555,7 @@ def run(argv: list[str] | None = None) -> int:
     if config.identity.representation != "graph":
         raise CalibrationRefusal(
             f"{_TOOL}: {config_path} declares representation "
-            f"{config.identity.representation!r}. There is no fused graph forward on the "
-            f"dense route and therefore nothing to bound — the grid batch is a fixed-shape "
-            "tensor already bounded by inference.inference_batch_size."
+            f"{config.identity.representation!r}; only a graph run has a fused forward to bound."
         )
     spec = lookup(config.identity.encoding)
     counts = tuple(n for n in _GRAPH_COUNTS if n <= int(config.inference.inference_batch_size))
@@ -628,8 +626,6 @@ def run(argv: list[str] | None = None) -> int:
             measured.append(_measure_point(
                 net, spec, device, config.identity.encoding, max_moves, point,
                 *by_label[point.label], args.repeats, corpus,
-                # THREADED from the config, never named here, so this call site is not a second
-                # dtype authority the day a grid calibration exists.
             ))
         except torch.cuda.OutOfMemoryError as exc:
             # RECORDED, NEVER RETRIED, and never estimated: dying here would cost the sitting,
