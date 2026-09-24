@@ -24,6 +24,7 @@ from typing import Any
 import pytest
 
 from mantis.train.coordinator.config import StepOutcome
+from _events_harness import iteration_complete_payload
 
 
 # C06: the field is gone, and the real one is not
@@ -103,29 +104,6 @@ def test_a_rate_over_zero_elapsed_is_absent_not_zero() -> None:
 
 # the payload the rules and the perf floors actually read
 
-def _iteration_complete(pool: Any, *, gph: Any, sph: Any) -> dict[str, Any]:
-    """The PRODUCTION builder, driven with the collaborators it takes."""
-    from mantis.train.events import emit_iteration_complete_event
-
-    events: list[dict[str, Any]] = []
-
-    class _Sink:
-        def emit(self, event: Any) -> None:
-            events.append(dict(event))
-
-    class _Buffer:
-        size = 0
-        capacity = 1024
-
-    emit_iteration_complete_event(
-        train_step=0, games_played=0, last_iter_games=0, pool=pool,
-        buffer=_Buffer(),
-        games_per_hour_fn=lambda: gph, steps_per_hour_fn=(lambda: sph) if sph is not None else None,
-        target_integrity={}, rstats=_Rstats(), sink=_Sink(), search_levers={},
-    )
-    assert len(events) == 1, events
-    return events[0]
-
 
 class _Rstats:
     """The `RunnerStats` fields the builder reads, named off its own call sites."""
@@ -153,7 +131,7 @@ class _StubPool:
 
 def test_the_iteration_complete_payload_reports_four_absences_not_four_zeros() -> None:
     """THE PIN, on the payload a perf floor and a sitting record both read."""
-    payload = _iteration_complete(_StubPool(), gph=None, sph=None)
+    payload = iteration_complete_payload(_StubPool(), _Rstats(), gph=None, sph=None)
     for key in ("games_per_hour", "positions_per_hour", "avg_game_length", "sims_per_sec",
                 "steps_per_hour"):
         assert payload[key] is None, f"{key} = {payload[key]!r}: a fabricated rate"
@@ -165,7 +143,7 @@ def test_the_payload_carries_real_rates_when_they_were_measured() -> None:
         sims_per_sec = 480.0
         avg_game_length = 20.0
 
-    payload = _iteration_complete(_Live(), gph=120.0, sph=45.0)
+    payload = iteration_complete_payload(_Live(), _Rstats(), gph=120.0, sph=45.0)
     assert payload["games_per_hour"] == pytest.approx(120.0)
     assert payload["avg_game_length"] == pytest.approx(20.0)
     assert payload["positions_per_hour"] == pytest.approx(2400.0)
@@ -181,6 +159,6 @@ def test_a_measured_rate_of_zero_survives_as_zero() -> None:
         sims_per_sec = 0.0
         avg_game_length = 20.0
 
-    payload = _iteration_complete(_Idle(), gph=0.0, sph=0.0)
+    payload = iteration_complete_payload(_Idle(), _Rstats(), gph=0.0, sph=0.0)
     assert payload["sims_per_sec"] == 0.0 and payload["sims_per_sec"] is not None
     assert payload["games_per_hour"] == 0.0 and payload["games_per_hour"] is not None

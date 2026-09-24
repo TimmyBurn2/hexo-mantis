@@ -5,39 +5,18 @@ import dataclasses
 from typing import Any
 
 from mantis.selfplay.pool_hooks import RunnerStats
+from _events_harness import iteration_complete_payload
 
 
-def _iteration_complete(rstats: Any) -> dict[str, Any]:
-    from mantis.train.events import emit_iteration_complete_event
-
-    events: list[dict[str, Any]] = []
-
-    class _Sink:
-        def emit(self, event: Any) -> None:
-            events.append(dict(event))
-
-    class _Buffer:
-        size = 0
-        capacity = 1024
-
-    class _Pool:
-        sims_per_sec = None
-        avg_game_length = None
-        search_kind = "gumbel"
-        x_winrate = 0.0
-        o_winrate = 0.0
-        draw_rate = 0.0
-        batch_fill_pct = 0.0
-        inference_batch_timing = None
-
-    emit_iteration_complete_event(
-        train_step=0, games_played=0, last_iter_games=0, pool=_Pool(),
-        buffer=_Buffer(),
-        games_per_hour_fn=lambda: None, steps_per_hour_fn=None,
-        target_integrity={}, rstats=rstats, sink=_Sink(), search_levers={},
-    )
-    assert len(events) == 1, events
-    return events[0]
+class _Pool:
+    sims_per_sec = None
+    avg_game_length = None
+    search_kind = "gumbel"
+    x_winrate = 0.0
+    o_winrate = 0.0
+    draw_rate = 0.0
+    batch_fill_pct = 0.0
+    inference_batch_timing = None
 
 
 def _snapshot(fires: int) -> RunnerStats:
@@ -51,11 +30,11 @@ def test_the_runner_snapshot_carries_the_counter_by_name() -> None:
 
 
 def test_the_payload_carries_the_cumulative_fire_count() -> None:
-    assert _iteration_complete(_snapshot(10))["mcts_quiescence_fires"] == 10
+    assert iteration_complete_payload(_Pool(), _snapshot(10))["mcts_quiescence_fires"] == 10
 
 
 def test_a_measured_zero_survives_as_zero() -> None:
-    payload = _iteration_complete(_snapshot(0))
+    payload = iteration_complete_payload(_Pool(), _snapshot(0))
     assert payload["mcts_quiescence_fires"] == 0 and payload["mcts_quiescence_fires"] is not None
 
 
@@ -64,4 +43,4 @@ def test_a_snapshot_without_the_counter_reads_absent_not_zero() -> None:
         mcts_mean_depth = None
         mcts_mean_root_concentration = None
 
-    assert _iteration_complete(_NoCounter())["mcts_quiescence_fires"] is None
+    assert iteration_complete_payload(_Pool(), _NoCounter())["mcts_quiescence_fires"] is None
