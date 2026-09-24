@@ -48,7 +48,7 @@ TEMPLATES_DIR = REPO_ROOT / "tools" / "config_templates"
 RESOLVER_REL = "mantis/config/resolve/allocator_posture.py"
 
 
-def test_ap01_both_mint_templates_declare_the_posture_key():
+def test_ap01_every_mint_template_declares_the_posture_key():
     """A template that omits it would mint configs that omit it, failing gate 7 one layer later."""
     import yaml
 

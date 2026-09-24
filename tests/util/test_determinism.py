@@ -1,13 +1,13 @@
 """SC-A6 oracle — the ONE determinism boot site (R30a; DESIGN_P2.md §7 / PREREG_P2.md
 suite #13).
 
-RED-at-import until IMPL lands `mantis.util.determinism.seed_everything`. Pins: two
+Pins `mantis.util.determinism.seed_everything`: two
 `seed_everything(same_seed)` + build + first-step boots on CPU produce bit-identical
 `loss`/`grad_norm`/first-layer-weight-tensor; two DIFFERENT seeds produce DIFFERENT init
 weights (negative control — a suite that can't tell "seeded" from "unseeded" is
 worthless); `seed_everything` seeds all THREE RNG streams (`random`/`numpy`/`torch`), not
-a subset. Mutation-bite note (LAW-07): ORACLE-WRITE cannot literally comment out
-`torch.manual_seed` inside `seed_everything` before IMPL exists (RED-at-import) — the
+a subset. Mutation-bite note (LAW-07): the mutation is not driven by commenting out a seed
+call inside the function — the
 positive-control (same seed -> identical) paired with the negative-control (different
 seed -> different) structurally provides the bite (removing the seed call would make the
 positive control's "identical" claim depend on ambient RNG state, which the two builds do

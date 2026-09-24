@@ -1,7 +1,7 @@
 """⊕ WPUF Phase U ORACLE — O-U5: the three knobs and nothing else (DESIGN_U §5/§9).
 
-RED-at-import until IMPL lands `mantis.config.resolve.actor_sync.resolve_actor_sync_cadence`
-(K1's ONE read path) + the three schema fields.
+`mantis.config.resolve.actor_sync.resolve_actor_sync_cadence` (K1's ONE read path) and
+the three schema fields are the subject.
 
 R1/LAW-08: missing key = named error at load, never a fallback; `ge=1` on the cadence
 means NO representable "off" value exists (R49 at the type level); the cross-field
@@ -18,7 +18,7 @@ import yaml
 from pydantic import ValidationError
 
 from mantis.config.loader import load_config
-from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence  # RED-at-import anchor
+from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
 from mantis.config.resolve import resolve_monitor_config
 from mantis.config.schema import RunConfig, SCHEMA_VERSION, TrainConfig, MonitorSchemaConfig
 from _monitor_config import monitor_config

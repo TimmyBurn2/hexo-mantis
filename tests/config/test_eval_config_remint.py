@@ -88,7 +88,7 @@ def test_screen_confirm_hi_key_is_rejected_everywhere() -> None:
         GateConfig.model_validate(payload)
 
 
-def test_parity_config_mints_random_floor_disabled_and_dev_smoke_enabled() -> None:
+def test_parity_mints_random_floor_games_20_and_dev_smoke_4() -> None:
     """The production config mints the operator-owed `random_floor_games=20`; dev/smoke mint 4,
     so the headless round exercises a REAL bot and the key has a live EXERCISED consumer."""
     parity_cfg = load_config(_PARITY_CONFIG)
@@ -96,8 +96,6 @@ def test_parity_config_mints_random_floor_disabled_and_dev_smoke_enabled() -> No
         "run6 mints the operator-owed random_floor_games=20 (R147/R272(d))"
     )
     for path in _DEV_SMOKE_CONFIGS:
-        if not path.exists():
-            continue
         cfg = load_config(path)
         assert cfg.eval.random_floor_games == 4, (
             f"{path.name}: dev/smoke templates must mint random_floor_games=4 (A-2)"

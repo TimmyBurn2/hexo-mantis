@@ -1,13 +1,11 @@
 """SC-A4 oracle — radius shape (ii): NO config field, registry alone is the radius
 authority (DESIGN_P2.md §5 / PREREG_P2.md suite #7, REV1 MUST-FIX #1).
 
-Mixed suite (not uniformly RED-at-import): the two `import mantis.config[.resolve]`
-regression-pin tests are GREEN at HEAD today (nothing is broken yet) and MUST STAY green
-through SC-A4's `__init__.py` edits — the producer test for those edits (LAW-07): if either
-package's `__init__.py` still re-exports a deleted radius symbol after SC-A4, THIS is where
-it `ImportError`s, instead of silently at some unrelated call site. The remaining tests
-assert the POST-SC-A4 absence of `RadiusStage` / `legal_move_radius_schedule` /
-`mantis.config.resolve.radius` and are RED at HEAD today (all three still exist).
+Mixed suite: the two `import mantis.config[.resolve]` regression-pin tests are the
+producer test for `__init__.py` edits (LAW-07) — if either package's `__init__.py`
+re-exports a deleted radius symbol, THIS is where it `ImportError`s, instead of silently
+at some unrelated call site. The remaining tests assert the POST-SC-A4 absence of
+`RadiusStage` / `legal_move_radius_schedule` / `mantis.config.resolve.radius`.
 """
 from __future__ import annotations
 

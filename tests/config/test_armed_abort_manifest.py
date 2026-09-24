@@ -24,7 +24,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from mantis.config.armed_aborts import (  # RED-at-import anchor
+from mantis.config.armed_aborts import (
     MANIFEST,
     ArmedAbort,
     Mechanism,
@@ -48,12 +48,6 @@ CONFIG_PATHS = tuple(sorted(p.relative_to(_CONFIGS_DIR).as_posix() for p in disc
 def _load_tool():
     """Load the gate script by absolute path, with ZERO `sys.path` mutation; `tools/` is not
     a package."""
-    if not TOOL_PATH.is_file():
-        raise ModuleNotFoundError(
-            f"RED anchor: {TOOL_PATH.relative_to(REPO_ROOT)} does not exist at HEAD — "
-            "IMPL owes C-2 (DESIGN_P §13). SF-4 places `verify_source_pins` and ALL "
-            "repo-root path resolution here, not in the shipped package."
-        )
     spec = importlib.util.spec_from_file_location("preflight_mint", TOOL_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -61,7 +55,7 @@ def _load_tool():
     return module
 
 
-TOOL = _load_tool()  # RED-at-import anchor #2
+TOOL = _load_tool()
 
 
 def _dotted(obj, path: str):

@@ -1,8 +1,7 @@
 """SC-A2 oracle — `MctsConfig` / `PlayoutCapConfig` census (DESIGN_P2.md §3 / PREREG_P2.md suite
 #4, split from test_selfplay_schema.py).
 
-RED-at-import until IMPL lands `mantis.config.schema.selfplay.MctsConfig` /
-`PlayoutCapConfig`. The `PlayoutCapConfig` mutual-exclusion `model_validator` (the three
+The `PlayoutCapConfig` mutual-exclusion `model_validator` (the three
 named-error checks, including the Phase-2 "PCR quick>full" REV1 addition) is pinned
 separately in test_selfplay_playout_cap_mutual_exclusion.py — not duplicated here; every
 payload below stays inert w.r.t. that validator (all playout_cap defaults are 0/0.0).

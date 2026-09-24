@@ -1,4 +1,4 @@
-"""Config test fixtures (repo_design §8): production_config() loads the live run5.
+"""Config test fixtures (repo_design §8): production_config() loads the live production config.
 
 The regime-parity oracles (O9–O12) assert *suite default == production default* by
 deriving their expectations from this one fixture — no hardcoded regime knob divergent
