@@ -11,8 +11,6 @@ assert the oracle SEES it — an oracle that cannot fail on a wrong gather is no
 """
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import pytest
 import torch
@@ -26,28 +24,6 @@ from mantis.selfplay.graph_collate import (
 )
 
 _ENC = "gnn_axis_v1"
-
-#: The committed collate payload bank. The selfplay conftest exposes the same files through a
-#: session fixture, but cross-test imports are barred and a conftest fixture does not reach a
-#: sibling directory, so the two-line loader is duplicated. The files are the authority.
-_COLLATE = Path(__file__).resolve().parents[1] / "fixtures" / "selfplay" / "collate"
-
-
-@pytest.fixture(scope="module")
-def payload_fields():
-    """Factory -> a FRESH `GraphWirePayload` ctor-kwarg dict; arrays are copied per call because
-    the mutation rows corrupt their payload in place."""
-    import json
-    scalars_all = json.loads(
-        (_COLLATE / "collate_expectations.json").read_text(encoding="utf-8")
-    )["payloads"]
-
-    def _load(stem: str) -> dict:
-        with np.load(_COLLATE / f"{stem}_payload.npz") as z:
-            fields: dict = {k: z[k].copy() for k in z.files}
-        fields.update({k: int(v) for k, v in scalars_all[stem]["scalars"].items()})
-        return fields
-    return _load
 
 
 def _net(spec) -> GnnNet:
