@@ -1,8 +1,8 @@
 # Line-ending policy. Without this file git applies core.autocrlf, which is a PER-DEVELOPER
 # setting (`true` by default on Git for Windows) — so the bytes in a working tree depended on
 # who cloned it. Measured on this repo before this file existed: 33 of 65 manifest-pinned
-# fixtures failed their sha256 on a Windows checkout, and the Rust suite's
-# tests/fixtures/graph_parity/wpa_positions.json arrived 124 768 bytes too large — exactly one
+# fixtures failed their sha256 on a Windows checkout, and the Rust suite's largest json golden
+# arrived 124 768 bytes too large — exactly one
 # 0x0D per line. `git status` stayed clean throughout, because autocrlf normalises on the way
 # in, so the damage presented as unexplainable digest drift whose obvious "fix" — re-minting
 # the manifest — would have broken Linux CI. Line endings are now a property of the

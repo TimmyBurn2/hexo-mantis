@@ -10,7 +10,10 @@ schema = 1
 
 [[required]]
 path = "graph_parity/manifest.tsv"
-sha256 = "6684ae7e27f69bdd4cec1c9f7d5d60fc14d59a73e13c96f323ba1c3799199e88"
+# Re-pinned under the R368(e) grant: the wpa_positions.json corpus row (sha
+# 18ad4a262489c406fd40098572dc0248963d3735726e4c3622648f36dfc78a69, 966939 B) is deleted from
+# the tsv — the file lived from fe9d3973 through 69e15329 and had no reader beyond the F-row loop.
+sha256 = "9f14edb1671a23b5c82489ae5ed2e3df5757d1b7c0ac65040ce05cc27c79c944"
 added_by = "WP1"
 
 [[required]]
@@ -65,52 +68,19 @@ sha256 = "d9810901e7be4e7b23804a0c75c3c68a87d4f95a2a5f2182c9929da9fd8850c2"
 added_by = "WP6"
 
 # WP9 (model half) — committed model oracle fixtures under tests/fixtures/value_probes/.
-# dist65 golden (O1), value-health decoded-v + M1–M4 metrics + probe/negative sets
-# (O2/O2a/O2c), constructed + promoted-anchor state-dict KEY SETS (O3/O3b), and the
+# dist65 golden (O1) and constructed + promoted-anchor state-dict KEY SETS (O3/O3b), plus the
 # NEW-generated small-net forward drift goldens (O_bench A-committed). COPIED byte-for-
 # byte from wp/WP9/oldside/ except forward/*.pt (new-generated regression references).
-# probe_set_v1.jsonl (2.39 MB) is the sole gate-6 large-file exception (operator
-# allowlist; §f). The WP9 data half's replay / augment / q13 rows went with the dense
-# path (R346(f)) — the fixtures they read had no consumer left.
-# CORRECTED IN PLACE (R311(c)): the O2 value-health bank — decoded_v.npz, metrics.json,
-# probe_set_v1.jsonl, negatives_v1.jsonl — has NO reader at HEAD. Its only consumer was
-# tests/model/test_value_health.py, deleted with the dense arm it measured. The rows are KEPT
-# because the probe positions are representation-agnostic and a graph value-health harness
-# would re-point at them; that is a decision to revisit, not a fact to leave unstated, so it is
-# written here rather than inferred from four sha256 lines nobody reads.
+# The O2 value-health bank (decoded_v, metrics, probe_set, negatives) and the changelog are
+# deleted by the R368(e) grant: no reader at HEAD, and the recorded revisit is overridden.
 [[required]]
 path = "value_probes/dist65_golden.json"
 sha256 = "352f37d604a13cb15ab91e7a3d01102223ebdc12b06edadb1e8bf91215c5556b"
 added_by = "WP9"
 
 [[required]]
-path = "value_probes/decoded_v.npz"
-sha256 = "2acf8cbfd698c2a100a5e80feeb0d0379f3da4e8bd13bbd4f109cb89a33ab7d5"
-added_by = "WP9"
-
-[[required]]
-path = "value_probes/metrics.json"
-sha256 = "a2ded3aff59bef9d2f22ceb9c5ac49c34e956676a055a08b0bb708dd64c1a91b"
-added_by = "WP9"
-
-[[required]]
-path = "value_probes/probe_set_v1.jsonl"
-sha256 = "7899fa136ac083f0a428f5f6fa4c89918f1ba82c85618e8c7369a19506a9adb6"
-added_by = "WP9"
-
-[[required]]
-path = "value_probes/negatives_v1.jsonl"
-sha256 = "8faa6af74a7640f869cc3b1c4cb058b62660a052c5381e8ab7ad740a38cafef3"
-added_by = "WP9"
-
-[[required]]
 path = "value_probes/forward/small_gnn.pt"
 sha256 = "9f20be5dce9a257e042686f9e1caac25534ab38698f2a097fe8c97904b7c0e71"
-added_by = "WP9"
-
-[[required]]
-path = "value_probes/CHANGELOG.md"
-sha256 = "d4639ded1173a88296c53805bd8b172f9558d62a0b1af28226cde48ee3105b25"
 added_by = "WP9"
 
 [[required]]
