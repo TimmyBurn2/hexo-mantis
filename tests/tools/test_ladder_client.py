@@ -63,15 +63,14 @@ def test_a_challenge_posts_first_player_and_time_control_and_no_rated_key(ladder
     assert body == {"timeControl": {"mode": "unlimited"}, "firstPlayer": "challenged"}
 
 
-def test_accept_decline_cancel_and_resign_hit_their_paths(ladder, stub) -> None:
+def test_accept_decline_and_resign_hit_their_paths(ladder, stub) -> None:
     client = _client(ladder, stub)
     client.accept("c_1")
     client.decline("c_2")
-    client.cancel("c_3")
     client.resign("g_1")
     assert [(m, p) for m, p, _h, _b in stub.seen] == [
         ("POST", "/api/bot/challenge/c_1/accept"), ("POST", "/api/bot/challenge/c_2/decline"),
-        ("POST", "/api/bot/challenge/c_3/cancel"), ("POST", "/api/bot/game/g_1/resign")]
+        ("POST", "/api/bot/game/g_1/resign")]
 
 
 def test_the_account_read_returns_the_bot_and_its_active_games(ladder, stub) -> None:

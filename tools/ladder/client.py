@@ -126,14 +126,6 @@ class LadderClient:
         """`POST /api/bot/challenge/{challengeId}/decline`."""
         self._json("POST", f"/api/bot/challenge/{challenge_id}/decline")
 
-    def cancel(self, challenge_id: str) -> None:
-        """`POST /api/bot/challenge/{challengeId}/cancel`."""
-        self._json("POST", f"/api/bot/challenge/{challenge_id}/cancel")
-
-    def challenges(self) -> list[dict[str, Any]]:
-        """`GET /api/bot/challenges`: the bot's pending challenges, both directions."""
-        return self._json("GET", "/api/bot/challenges")[0]
-
     def finished_game(self, game_id: str) -> dict[str, Any] | None:
         """`GET /api/finished-games/{id}` (the website's public record, keyed by the stream's `gameId`): the full move list in HeXO `x,y` with server timestamps, or None when the server keeps no history."""
         try:
@@ -142,10 +134,6 @@ class LadderClient:
             if exc.status == 404:
                 return None
             raise
-
-    def list_bots(self, *, online: bool = False) -> list[dict[str, Any]]:
-        """`GET /api/bots`: the public roster (no token needed; sent anyway)."""
-        return self._json("GET", "/api/bots" + ("?online=1" if online else ""))[0]
 
 
 def _api_error(exc: urllib.error.HTTPError) -> ApiError:
