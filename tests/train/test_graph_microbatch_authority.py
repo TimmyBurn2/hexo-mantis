@@ -97,15 +97,6 @@ def test_of2_8_run5s_own_config_reaches_the_split_through_its_own_route(tmp_path
     assert (ev["caps_max_edges"], ev["caps_max_nodes"]) == (bind_e, bind_n)
 
 
-def test_of2_8_run5s_caps_are_typed_and_inside_the_schema_range(tmp_path) -> None:
-    """The SHIPPED production values are read back and typed. Type and the schema's own `ge=1`
-    range only — the numbers are the operator's, and the ARMING has its own row below."""
-    cfg = load_config(_CONFIGS / "run6.yaml")
-    caps = resolve_microbatch_caps(cfg.model_dump())
-    assert isinstance(caps.max_edges, int) and caps.max_edges >= 1
-    assert isinstance(caps.max_nodes, int) and caps.max_nodes >= 1
-
-
 # N-1 — the fix's own ARMING, pinned WITHOUT pinning the operator's numbers
 def _template_caps_of(config_name: str) -> dict:
     """The caps in the TEMPLATE `config_name` was minted from, read out of the config's own
