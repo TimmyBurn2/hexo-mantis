@@ -1,6 +1,3 @@
-# >300 justify (R8): the three oracles are one claim — "a composition that fails partway leaks
-# nothing and says WHERE" — driven through ONE real composed boot; splitting these would fork
-# the drivable pool/trainer harness a second time instead of once.
 """The teardown ladder's own boundary conditions — the seams BEFORE the coordinator, where the
 ladder did not reach.
 
@@ -24,16 +21,8 @@ import pytest
 
 import mantis.run as mantis_run
 from mantis.config.resolve.disk_guard import resolve_disk_guard
-from mantis.train.lifecycle.disk_guard import DiskGuard
 from _drivable import DrivableTrainerStub
-
-#: The bounded burst every drive runs; 3 is the smallest legal run at cadence 1.
-_DRIVE_STEPS = 3
-
-#: Disk-guard values, deliberately three DISTINCT numbers: an assertion that the guard received
-#: the resolver's values is vacuous if two are equal, and the transposition is exactly a swap of
-#: two. Low enough that the critical arm can NEVER fire on a real filesystem.
-_DRIVE_DISK_GUARD = {"interval_sec": 0.02, "warn_gb": 0.001, "fail_gb": 0.0005}
+from _root_recorders import bounded, install_recorders
 
 
 class _PartialStartFailure(RuntimeError):
@@ -117,70 +106,6 @@ class _PartiallyStartingPool(_Pool):
         self.stopped = True
 
 
-class _RecordedDiskGuard(DiskGuard):
-    """The REAL guard with one observation point; every behaviour is `super()`'s."""
-
-    instances: list = []
-
-    def __init__(self, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self.ctor_kwargs = dict(kwargs)
-        type(self).instances.append(self)
-
-
-class _Recorders:
-    def __init__(self) -> None:
-        self.run_safety: Any = None
-        self.watchdog_stops = 0
-        self.sink_closes = 0
-        self.disk_guards: list[_RecordedDiskGuard] = []
-
-
-def _install_recorders(monkeypatch, request) -> _Recorders:
-    """Close the REAL sink after every drive: on the COMPLETED path `close_out` never touches it,
-    which is bounded in production because both real callers exit the process right after."""
-    rec = _Recorders()
-    real_build = mantis_run.build_run_safety
-    _RecordedDiskGuard.instances = rec.disk_guards
-
-    def _recording_build(**kwargs):
-        run_safety = real_build(**kwargs)          # the REAL builder, unmodified
-        rec.run_safety = run_safety
-        real_stop, real_close = run_safety.watchdog.stop, run_safety.sink.close
-
-        def _stop() -> None:
-            rec.watchdog_stops += 1
-            real_stop()
-
-        def _close() -> None:
-            rec.sink_closes += 1
-            real_close()
-
-        run_safety.watchdog.stop = _stop
-        run_safety.sink.close = _close
-        request.addfinalizer(run_safety.sink.close)
-        return run_safety
-
-    monkeypatch.setattr(mantis_run, "build_run_safety", _recording_build)
-    monkeypatch.setattr(mantis_run, "DiskGuard", _RecordedDiskGuard)
-    return rec
-
-
-def _bounded(smoke_run_config, **over):
-    """A REAL minted graph config, bounded so the drive terminates; `eval_enabled` is the
-    CONFIG's own value, no parameter being able to force it."""
-    monitor = {"actor_lag_threshold_steps": _DRIVE_STEPS - 1,
-               "disk_guard": dict(_DRIVE_DISK_GUARD)}
-    monitor.update(over.pop("monitor", {}))
-    over.setdefault("eval_enabled", False)
-    return smoke_run_config(
-        "dev_example.yaml",
-        train={"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS,
-               "batch_size": 8},
-        monitor=monitor, **over,
-    )
-
-
 def _seam_names(exc: BaseException) -> list[str]:
     """The PEP 678 notes `_seam` attaches, as bare seam names."""
     prefix = "composition seam: "
@@ -196,12 +121,12 @@ def test_a_pool_that_comes_up_halfway_and_then_raises_is_still_stopped(
     rather than the fact that `stop()` was called — a `stop()` on a pool the ladder believes
     never started is the no-op this is about. Mutation: put `pool_started = True` back AFTER
     `pool.start()`. The other three halves of the ladder are asserted here too."""
-    rec = _install_recorders(monkeypatch, request)
+    rec = install_recorders(monkeypatch, request)
     pool = _PartiallyStartingPool()
 
     with pytest.raises(_PartialStartFailure) as wall:
         mantis_run.compose_run(
-            config=_bounded(smoke_run_config), trainer=DrivableTrainerStub(), pool=pool,
+            config=bounded(smoke_run_config), trainer=DrivableTrainerStub(), pool=pool,
             buffer=mk_graph_buffer(n_records=32),
             log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
         )
@@ -230,7 +155,7 @@ def test_an_eval_pipeline_wall_names_its_seam_and_closes_the_sink(
     sink opened was left OPEN, and the failure reached the process boundary with `notes: []`. The
     third leg is that a wall ABOVE `pool.start()` must NOT call `pool.stop()`.
     """
-    rec = _install_recorders(monkeypatch, request)
+    rec = install_recorders(monkeypatch, request)
 
     def _raising_eval_pipeline(**_kwargs):
         raise _EvalPipelineWall("the eval pipeline refused this composition")
@@ -240,7 +165,7 @@ def test_an_eval_pipeline_wall_names_its_seam_and_closes_the_sink(
 
     with pytest.raises(_EvalPipelineWall) as wall:
         mantis_run.compose_run(
-            config=_bounded(smoke_run_config, eval_enabled=True), trainer=DrivableTrainerStub(),
+            config=bounded(smoke_run_config, eval_enabled=True), trainer=DrivableTrainerStub(),
             pool=pool, buffer=mk_graph_buffer(n_records=32),
             log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
         )
@@ -273,8 +198,8 @@ def test_the_disk_guard_receives_exactly_what_its_resolver_resolved(
     CONFIG's leaves and nothing constrained what reached the guard. Asserted against the
     RESOLVER's output, never the literals this drive minted.
     """
-    rec = _install_recorders(monkeypatch, request)
-    config = _bounded(smoke_run_config)
+    rec = install_recorders(monkeypatch, request)
+    config = bounded(smoke_run_config)
     expected = resolve_disk_guard(config.monitor)
     assert len({expected.interval_sec, expected.warn_gb, expected.fail_gb}) == 3, (
         "vacancy guard: this drive's three thresholds must be DISTINCT or a transposition "

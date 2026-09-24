@@ -28,22 +28,15 @@ import yaml
 import mantis.run as mantis_run
 from mantis.config.emit import resolve_config
 from mantis.monitor.manifest import verify_manifest
-from mantis.train.lifecycle.disk_guard import DiskGuard
 from mantis.monitor.manifest import DEFAULT_MANIFEST_PATH
 from _drivable import DrivableTrainerStub
+from _root_recorders import DRIVE_STEPS, bounded, install_recorders
 
 _REPO = Path(__file__).resolve().parents[1]
 #: The SHIPPED manifest, from its own module. Its path constant had zero references while three
 #: test files rebuilt the path by hand, so deletion would have left the copies and no authority.
 _MANIFEST = DEFAULT_MANIFEST_PATH
 
-#: The bounded burst every drive runs; 3 is the smallest legal run at cadence 1.
-_DRIVE_STEPS = 3
-
-#: Disk-guard values: an interval short enough that the guard's thread emits inside a
-#: sub-second burst, and thresholds low enough that it can NEVER fire on a real filesystem — a
-#: critical alert SIGTERMs the pytest process.
-_DRIVE_DISK_GUARD = {"interval_sec": 0.02, "warn_gb": 0.001, "fail_gb": 0.0005}
 
 #: The producer-manifest row and the node it must name; both land in the SAME commit.
 _RESOLVED_CONFIG_PRODUCER_TEST = (
@@ -128,77 +121,6 @@ class _Trainer(DrivableTrainerStub):
         return path
 
 
-class _RecordedDiskGuard(DiskGuard):
-    """The REAL guard, with two observation points. Every behaviour is `super()`'s."""
-
-    instances: list = []
-
-    def __init__(self, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self.ctor_kwargs = dict(kwargs)
-        self.stop_calls = 0
-        type(self).instances.append(self)
-
-    def stop(self) -> None:
-        self.stop_calls += 1
-        super().stop()
-
-
-class _Recorders:
-    """What the real subsystems did, observed without standing any of them in."""
-
-    def __init__(self) -> None:
-        self.run_safety: Any = None
-        self.watchdog_stops = 0
-        self.sink_closes = 0
-        self.disk_guards: list[_RecordedDiskGuard] = []
-
-
-def _install_recorders(monkeypatch, request) -> _Recorders:
-    """Close the REAL sink after every drive: on the COMPLETED path `close_out` never touches
-    it, which is bounded in production because both real callers exit the process right after,
-    but this pytest process does not."""
-    rec = _Recorders()
-    real_build = mantis_run.build_run_safety
-    _RecordedDiskGuard.instances = rec.disk_guards
-
-    def _recording_build(**kwargs):
-        run_safety = real_build(**kwargs)          # the REAL builder, unmodified
-        rec.run_safety = run_safety
-        real_stop, real_close = run_safety.watchdog.stop, run_safety.sink.close
-
-        def _stop() -> None:
-            rec.watchdog_stops += 1
-            real_stop()
-
-        def _close() -> None:
-            rec.sink_closes += 1
-            real_close()
-
-        run_safety.watchdog.stop = _stop
-        run_safety.sink.close = _close
-        request.addfinalizer(run_safety.sink.close)
-        return run_safety
-
-    monkeypatch.setattr(mantis_run, "build_run_safety", _recording_build)
-    monkeypatch.setattr(mantis_run, "DiskGuard", _RecordedDiskGuard)
-    return rec
-
-
-def _bounded(smoke_run_config, **over):
-    """A REAL minted graph config, bounded so the drive terminates, with eval OFF by the
-    CONFIG's own value — no parameter can force it."""
-    monitor = {"actor_lag_threshold_steps": _DRIVE_STEPS - 1,
-               "disk_guard": dict(_DRIVE_DISK_GUARD)}
-    monitor.update(over.pop("monitor", {}))
-    return smoke_run_config(
-        "dev_example.yaml", eval_enabled=False,
-        train={"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS,
-               "batch_size": 8},
-        monitor=monitor, **over,
-    )
-
-
 def _events(run_safety) -> list[dict]:
     """The run's OWN event stream, read off the real sink's segment file."""
     return [json.loads(line) for line in
@@ -254,7 +176,7 @@ def test_the_installed_handlers_are_bound_to_the_state_the_loop_actually_polls(
     """The handlers close over the SAME `ShutdownState` the root injects, compared by IDENTITY:
     a root that installed over a different state passes every presence assertion and still never
     stops on a signal."""
-    rec = _install_recorders(monkeypatch, request)
+    rec = install_recorders(monkeypatch, request)
     captured: dict[str, Any] = {}
 
     def _capture(step: int) -> None:
@@ -262,7 +184,7 @@ def test_the_installed_handlers_are_bound_to_the_state_the_loop_actually_polls(
         captured.setdefault("sigterm", _installed(signal.SIGTERM))
 
     handles = mantis_run.compose_run(
-        config=_bounded(smoke_run_config), trainer=_Trainer(on_step=_capture),
+        config=bounded(smoke_run_config), trainer=_Trainer(on_step=_capture),
         pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
     )
@@ -284,7 +206,7 @@ def test_a_signal_mid_run_saves_then_exits(
     the run without its final checkpoint."""
     import os
 
-    _install_recorders(monkeypatch, request)
+    install_recorders(monkeypatch, request)
     trainer = _Trainer()
 
     def _signal_at_first_step(step: int) -> None:
@@ -294,7 +216,7 @@ def test_a_signal_mid_run_saves_then_exits(
 
     trainer.on_step = _signal_at_first_step
     handles = mantis_run.compose_run(
-        config=_bounded(smoke_run_config), trainer=trainer, pool=_Pool(),
+        config=bounded(smoke_run_config), trainer=trainer, pool=_Pool(),
         buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
     )
@@ -304,7 +226,7 @@ def test_a_signal_mid_run_saves_then_exits(
         "the final checkpoint is the save half of save-then-exit; without it a signalled "
         "run loses everything since the last interval save (LAW-16)"
     )
-    assert trainer.step < _DRIVE_STEPS, (
+    assert trainer.step < DRIVE_STEPS, (
         "the run stopped on the SIGNAL, not on its step ceiling — otherwise this test would "
         "pass with no handler installed at all"
     )
@@ -320,9 +242,9 @@ def test_a_second_signal_force_exits(
     teardown_called: list = []
     monkeypatch.setattr(sig_mod, "force_teardown_all", lambda: teardown_called.append(1))
     monkeypatch.setattr(os, "_exit", lambda code=0: (_ for _ in ()).throw(SystemExit(code)))
-    _install_recorders(monkeypatch, request)
+    install_recorders(monkeypatch, request)
     mantis_run.compose_run(
-        config=_bounded(smoke_run_config), trainer=_Trainer(), pool=_Pool(),
+        config=bounded(smoke_run_config), trainer=_Trainer(), pool=_Pool(),
         buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
     )
@@ -339,9 +261,9 @@ def test_the_watchdog_and_the_disk_guard_are_both_armed_at_boot(
 ) -> None:
     """The watchdog and the disk guard are both armed AND accounted for at teardown, asserted
     from the run's OWN stream — a guard thread outliving its run cannot pass as green."""
-    rec = _install_recorders(monkeypatch, request)
+    rec = install_recorders(monkeypatch, request)
     handles = mantis_run.compose_run(
-        config=_bounded(smoke_run_config), trainer=_Trainer(on_step=lambda _s: _sleep_a_beat()),
+        config=bounded(smoke_run_config), trainer=_Trainer(on_step=lambda _s: _sleep_a_beat()),
         pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
     )
@@ -375,7 +297,7 @@ def test_a_signal_delivered_during_composition_completes_the_boot_then_saves(
     saves and returns and `close_out` drains. A pre-start bail-out was argued against as a
     rarely-exercised branch in the one composer, so the window is bounded and PINNED instead.
     """
-    _install_recorders(monkeypatch, request)
+    install_recorders(monkeypatch, request)
     trainer = _Trainer()
 
     def _signal_during_pool_start() -> None:
@@ -384,7 +306,7 @@ def test_a_signal_delivered_during_composition_completes_the_boot_then_saves(
 
     pool = _Pool(on_start=_signal_during_pool_start)
     handles = mantis_run.compose_run(
-        config=_bounded(smoke_run_config), trainer=trainer, pool=pool,
+        config=bounded(smoke_run_config), trainer=trainer, pool=pool,
         buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
     )
@@ -414,7 +336,7 @@ def test_a_failure_at_the_coordinator_seam_tears_everything_down_and_re_raises(
     SIGTERM a process no longer running a run. Chaining as `__context__` rather than replacing
     the original is asserted by TYPE.
     """
-    rec = _install_recorders(monkeypatch, request)
+    rec = install_recorders(monkeypatch, request)
 
     def _raising_coordinator(**_kwargs):
         raise _CoordinatorSeamFailure("the coordinator seam refused this composition")
@@ -423,7 +345,7 @@ def test_a_failure_at_the_coordinator_seam_tears_everything_down_and_re_raises(
     pool = _Pool()
     with pytest.raises(_CoordinatorSeamFailure):
         mantis_run.compose_run(
-            config=_bounded(smoke_run_config), trainer=_Trainer(), pool=pool,
+            config=bounded(smoke_run_config), trainer=_Trainer(), pool=pool,
             buffer=mk_graph_buffer(n_records=32),
             log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
         )
@@ -445,8 +367,8 @@ def test_the_composed_boot_publishes_its_resolved_config_once_after_the_identity
     """`resolve_config` + `to_event_payload` are emitted exactly once, after the identity
     witness. Ordering is asserted, not just presence: `run_boot_identity` must land FIRST,
     because it has to exist even if the boot later wedges."""
-    _install_recorders(monkeypatch, request)
-    config = _bounded(smoke_run_config)
+    install_recorders(monkeypatch, request)
+    config = bounded(smoke_run_config)
     handles = mantis_run.compose_run(
         config=config, trainer=_Trainer(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
