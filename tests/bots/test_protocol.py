@@ -16,10 +16,10 @@ from mantis.bots import BotProtocol, RandomBot, RungUnresolvable, resolve_bot
 
 _SRC = Path(__file__).resolve().parents[2] / "src" / "mantis" / "bots"
 
-_KNOWN_KINDS = ("random", "sealbot")
-#: DELETED from `src/`; they survive here only as the names a refusal reason may never speak.
+_KNOWN_KINDS = ("random", "strix")
+#: Names a refusal reason may never speak: no env key locates a vendored engine.
 _ENV_KEYS = {
-    "sealbot": "MANTIS_BOT_SEALBOT",
+    "strix": "MANTIS_BOT_STRIX",
 }
 
 
@@ -74,27 +74,18 @@ def test_external_kinds_carry_a_reason_that_names_no_env_key(kind, monkeypatch):
     env_key = _ENV_KEYS[kind]
     monkeypatch.setenv(env_key, "some_adapter_module:build")
 
-    if kind == "sealbot":
-        # The one kind that CAN resolve, where `make vendor` plus the build have run. Both
-        # outcomes are legal; neither may consult the deleted env channel.
-        try:
-            factory = resolve_bot(kind, depth=5, opponent_sims=128)
-        except RungUnresolvable as exc:
-            assert exc.rung == kind
-            assert "MANTIS_BOT_" not in exc.reason and "env key" not in exc.reason, exc.reason
-            assert exc.reason.strip() != "", "a skip with an empty reason is a silent skip"
-        else:
-            assert callable(factory)
-        return
-
-    with pytest.raises(RungUnresolvable) as exc_info:
-        resolve_bot(kind, depth=None, opponent_sims=128)
-    assert exc_info.value.rung == kind
-    reason = exc_info.value.reason
-    assert reason.strip() != "", "a skip with an empty reason is a silent skip"
-    assert "MANTIS_BOT_" not in reason and "env key" not in reason, (
-        f"{kind}'s refusal still speaks the DELETED env-key contract: {reason}"
-    )
+    # Resolves where `make vendor` plus the build have run; either outcome is legal, and
+    # neither may consult an env channel.
+    try:
+        factory = resolve_bot(kind, depth=None, opponent_sims=128)
+    except RungUnresolvable as exc:
+        assert exc.rung == kind
+        assert exc.reason.strip() != "", "a skip with an empty reason is a silent skip"
+        assert "MANTIS_BOT_" not in exc.reason and "env key" not in exc.reason, (
+            f"{kind}'s refusal speaks an env-key contract: {exc.reason}"
+        )
+    else:
+        assert callable(factory)
 
 
 def test_no_host_path_tokens_in_bots_sources():

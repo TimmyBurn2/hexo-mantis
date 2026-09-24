@@ -19,9 +19,6 @@
 # because the census cannot tell which tier a marker moves a test INTO without being told, and
 # because a test silently gaining `integration` leaves the default tier just as completely.
 tests/arena/test_deploy_head_vram.py	<module>	importorskip
-tests/bots/test_sealbot_vendored.py	<module>	integration
-tests/bots/test_sealbot_vendored.py	_require_built_extension	skip
-tests/bots/test_sealbot_vendored.py	_require_vendored_game	skip
 tests/bots/test_strix_adapter.py	test_the_live_driver_plays_twenty_legal_games_end_to_end	integration
 tests/bots/test_strix_adapter.py	test_the_live_driver_plays_twenty_legal_games_end_to_end	skip
 tests/bridge/test_gil_release_on_native_calls.py	test_next_graph_batch_fuse_releases_the_gil	skip

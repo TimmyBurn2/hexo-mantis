@@ -110,17 +110,6 @@ def test_the_build_never_re_syncs_the_PROJECT_environment() -> None:
         )
 
 
-def test_the_refusal_reason_names_this_script_and_this_script_exists() -> None:
-    """The refusal reason names a step that exists; a name for an absent path is worse."""
-    from mantis.bots.sealbot import BUILD_ABSENT_REASON, BUILD_SCRIPT
-
-    assert BUILD_SCRIPT in BUILD_ABSENT_REASON, BUILD_ABSENT_REASON
-    assert (_REPO / BUILD_SCRIPT).is_file(), f"the reason names {BUILD_SCRIPT}, which is absent"
-    assert "make vendor" not in BUILD_ABSENT_REASON, (
-        "the build reason must name its OWN missing step only (O-A1's reason SHAPE arm)"
-    )
-
-
 def test_it_refuses_when_no_pin_has_been_fetched(tmp_path: Path) -> None:
     root = _synthetic_root(tmp_path)
     proc = _drive(root)

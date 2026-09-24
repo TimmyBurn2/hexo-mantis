@@ -945,7 +945,8 @@ document and nothing needs to be.
    `resolve_bot`'s known set and from `_KNOWN_OPPONENTS`, and `eval.kraken_model_sims` /
    `eval.strix_model_sims` go with them (their only consumer was the route to a permanent
    refusal). `sealbot_d5` is the minted rung; the adapter seam — `bots/protocol.py`,
-   `resolve_bot`, `SKIP_REASON_MARKERS` — is untouched, so a new rung is a row plus a factory.
+   `resolve_bot` — is untouched, so a new rung is a row plus a factory (`SKIP_REASON_MARKERS`
+   left with the sealbot adapter, R368(e)).
 
 7. **`configs/` keeps three files, not two, and the third is stated.** `run6.yaml` and
    `smoke_preflight_armed.yaml` are what R346(f) names; `dev_example.yaml` is KEPT on LAW-07
@@ -1066,9 +1067,9 @@ rejected one.
    `worker._play_rung_block` are how `tools/strength_frontier.py` and `tools/strix_follower.py`
    play the external scale (R352(e), R356(a)); a production round carries `rung_jobs: []` and a
    cell names its opponent (`strix`, or a snapshot through the gate) — the tool's old default
-   opponent, `sealbot_d5`, is gone. The sealbot ADAPTER (`bots/sealbot`, the vendored build and
-   its pin) is not a consumer of the rung and stays as a vendored opponent with no production
-   caller; deleting it is a separate decision nobody has taken.
+   opponent, `sealbot_d5`, is gone. The sealbot ADAPTER (`bots/sealbot`) is DELETED by R368(e),
+   `find_vendor_root` moved to `bots/strix` first; its vendored build and pin go under the same
+   ruling.
 4. **What the stream gains in the same commit.** `eval_round_complete.gate` carries the gate's
    rule fields (`rule`, `pairs_played`, `stopped`, `llr`, `wr_confirm`, `n_pooled`, `promoted`,
    `wall_sec` — the gate BLOCK's own wall, beside the row's round wall), `null` when no gate ran

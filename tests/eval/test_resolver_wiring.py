@@ -1,21 +1,14 @@
-"""Eval reads the SAME sims resolver seam self-play does, retiring two zero-consumer keys
-(`eval.random_model_sims`, `eval.sealbot_model_sims`).
-
-RED-at-import: the top-level `from mantis.bots.resolve import resolve_bot` below is the anchor —
-`mantis.bots` does not exist yet, so the whole file fails collection today. The kraken/strix
-sub-cases would be red by assertion even without it; the random/sealbot sub-cases of
-`test_unknown_opponent_and_none_value_raise_pre_existing_green` are already-green HEAD behaviour.
-"""
+"""Eval reads the SAME sims resolver seam self-play does: every bot kind routes its sims through
+`resolve_eval_model_sims` before it resolves or refuses."""
 from __future__ import annotations
 
 import pytest
 
 from mantis.bots.protocol import RungUnresolvable
-from mantis.bots.resolve import resolve_bot  # noqa: F401 — RED-at-import anchor: mantis.bots does not exist yet
 from mantis.config.resolve.nsims import resolve_eval_model_sims
 
 
-@pytest.mark.parametrize("opponent", ["random", "sealbot"])
+@pytest.mark.parametrize("opponent", ["random", "strix"])
 def test_unknown_opponent_and_none_value_raise_pre_existing_green(opponent: str) -> None:
     """Pre-existing HEAD behavior (NOT new-RED) — kept for completeness of the contract pin."""
     assert resolve_eval_model_sims(opponent, 96) == 96
@@ -29,7 +22,7 @@ def test_unknown_opponent_still_raises_after_extension() -> None:
 
 
 def test_none_value_still_raises_for_every_known_opponent() -> None:
-    for opponent in ("random", "sealbot"):
+    for opponent in ("random", "strix"):
         with pytest.raises(ValueError):
             resolve_eval_model_sims(opponent, None)
 
@@ -46,8 +39,8 @@ class _RoutingReached(Exception):
     """
 
 
-def test_sealbot_rung_model_sims_route_through_resolve_eval_model_sims(monkeypatch) -> None:
-    """`resolve_bot("sealbot", …)` must route sims through `resolve_eval_model_sims` FIRST.
+def test_strix_rung_model_sims_route_through_resolve_eval_model_sims(monkeypatch) -> None:
+    """`resolve_bot("strix", …)` must route sims through `resolve_eval_model_sims` FIRST.
 
     The spy RAISES rather than returning, so the sentinel reaches the caller only if the routing
     ran before `resolve_bot` could return a factory or raise its own refusal — the assertion IS
@@ -66,10 +59,10 @@ def test_sealbot_rung_model_sims_route_through_resolve_eval_model_sims(monkeypat
     monkeypatch.setattr(nsims_mod, "resolve_eval_model_sims", spy)
 
     with pytest.raises(_RoutingReached):
-        resolve_bot("sealbot", depth=5, opponent_sims=128)
+        resolve_bot("strix", depth=None, opponent_sims=128)
 
-    assert calls == [("sealbot", 128)], (
-        f"resolve_bot('sealbot', …) must route model_sims through resolve_eval_model_sims "
+    assert calls == [("strix", 128)], (
+        f"resolve_bot('strix', …) must route model_sims through resolve_eval_model_sims "
         f"exactly once, BEFORE it resolves or refuses; observed {calls}"
     )
 
@@ -100,12 +93,12 @@ def test_random_floor_routes_through_resolver(monkeypatch) -> None:
 
 # The routing must survive the resolver rewrite: this row asserts routing PER KIND while being
 # agnostic about whether a kind resolves or raises, so it holds both in CI (no vendor tree,
-# sealbot raises) and on a box with the extension built. The three rows above are HEAD's pins.
+# strix raises) and on a box with the extension built. The three rows above are HEAD's pins.
 # THE TRAP: `eval.{kraken,strix}_model_sims` have exactly ONE live consumer each, reached only
 # through this call, so hoisting a refusal above the routing would falsify two consumer-registry
 # citations while the LAW-08 bijection test stayed green. A single aggregated "the spy was
 # called" assertion would be green under a mutation that broke one kind's routing.
-@pytest.mark.parametrize("kind", ["random", "sealbot"])
+@pytest.mark.parametrize("kind", ["random", "strix"])
 def test_every_bot_kind_routes_its_sims_through_the_resolver_after_the_rewrite(
     monkeypatch, kind: str
 ) -> None:
@@ -121,9 +114,9 @@ def test_every_bot_kind_routes_its_sims_through_the_resolver_after_the_rewrite(
 
     monkeypatch.setattr(nsims_mod, "resolve_eval_model_sims", spy)
     try:
-        resolve_bot(kind, depth=5 if kind == "sealbot" else None, opponent_sims=128)
+        resolve_bot(kind, depth=None, opponent_sims=128)
     except RungUnresolvable:
-        pass  # sealbot's refusal is expected in CI; the routing must already have happened.
+        pass  # strix's refusal is expected without a vendor tree; the routing already happened.
 
     assert (kind, 128) in calls, (
         f"resolve_bot({kind!r}, ...) did not reach resolve_eval_model_sims. The routing must "

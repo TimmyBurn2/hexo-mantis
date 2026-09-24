@@ -1,93 +1,18 @@
-"""resolve_bot — the ONE rung -> bot resolver: `random` in-repo; `sealbot` and `strix` through
-their vendored trees, or a refusal naming the ONE missing step (a ruled-out sealbot depth carries
-the operator-authorized marker). NO env-key channel: `vendor/pins.toml` + `make vendor` is the
-one authority for where an engine lives. The sims routing runs BEFORE any refusal."""
+"""resolve_bot — the ONE rung -> bot resolver: `random` in-repo; `strix` through its vendored tree,
+or a refusal naming the ONE missing step. NO env-key channel: `vendor/pins.toml` + `make vendor` is
+the one authority for where an engine lives. The sims routing runs BEFORE any refusal."""
 from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
 
-import mantis.bots.sealbot as _sealbot_mod
 import mantis.bots.strix as _strix_mod
 import mantis.config.resolve.nsims as _nsims_mod
-from mantis.bots.protocol import RungUnresolvable
 from mantis.bots.random_bot import RandomBot
 
 BotFactory = Callable[..., Any]
 
-_KNOWN_KINDS: tuple[str, ...] = ("random", "sealbot", "strix")
-
-#: The marker every R139 refusal carries, and the `operator_authorized` skip class.
-_R139_SKIP_MARKER = "operator-authorized skip (R139)"
-
-#: The sealbot rung's own precondition: the reproducible bar IS the fixed depth, so a rung
-#: minted without one has no bar to play. Deliberately NOT one of the four skip classes — it
-#: is a config defect, not an environment state, and is reported as unclassifiable.
-_NO_DEPTH_REASON = (
-    "sealbot rung declares no fixed depth; LAW-15's reproducible bar IS `depth`, and a "
-    "sealbot rung without one names an instrument that does not exist"
-)
-
-#: Sealbot DEPTHS excluded from the default battery by ruling, depth -> grounds.
-#:
-#: The grounds are arithmetic: depth 6 measured 30.900 s per first move (three book
-#: positions, 15.331-42.176), and at `games_max: 32` under `round_timeout_sec: 3600.0` the
-#: whole round budget buys ~3.6 opponent moves per game before the candidate has moved once.
-#: A rung that cannot finish produces a KILLED round, not a weaker bar. A skip keyed on the
-#: depth, reversible by deleting one row. The strings are EXACT.
-_R326_EXCLUDED_SEALBOT_DEPTHS: dict[int, str] = {
-    6: ("sealbot depth 6 cannot finish its minted games inside eval.round_timeout_sec at the "
-        "measured 30.9 s/move — the whole round budget buys ~3.6 opponent moves per game. "
-        "Revisited at the gate-geometry re-adjudication"),
-}
-
-#: reason-class -> the marker substring that identifies it. ONE authority: every value here is
-#: the same object the reason strings are built from, so a reason cannot drift out of the
-#: classifier's reach. Consumed by `mantis.eval.pipeline`'s in-run skip-class counter.
-SKIP_REASON_MARKERS: dict[str, str] = {
-    "operator_authorized": _R139_SKIP_MARKER,
-    "vendor_absent": _sealbot_mod.VENDOR_ABSENT_MARKER,
-    "build_absent": _sealbot_mod.BUILD_ABSENT_MARKER,
-    "load_failed": _sealbot_mod.LOAD_FAILED_MARKER,
-}
-
-
-def _resolve_sealbot(depth: int | None) -> BotFactory:
-    """Probe the vendored engine EAGERLY, then hand back a factory over what was loaded.
-
-    Eager on purpose: a factory that failed only when the rung tried to play would leave every
-    skip oracle green while a scored round died. `worker.py` catches `RungUnresolvable` per
-    rung and nothing else, so any other exception type is fatal to a whole eval round.
-    """
-    if depth is None:
-        raise RungUnresolvable(rung="sealbot", reason=_NO_DEPTH_REASON)
-    # Before the probe, so an excluded rung reads the same in a warm checkout and a cold one
-    # and the log still distinguishes a ruled skip from a broken box.
-    if depth in _R326_EXCLUDED_SEALBOT_DEPTHS:
-        raise RungUnresolvable(
-            rung=f"sealbot_d{depth}",
-            reason=f"{_R139_SKIP_MARKER}: {_R326_EXCLUDED_SEALBOT_DEPTHS[depth]}",
-        )
-    try:
-        minimax_module, game_module = _sealbot_mod.load_sealbot_modules()
-    except RungUnresolvable:
-        raise
-    except Exception as exc:  # noqa: BLE001 — re-raised as a typed, per-rung refusal below
-        raise RungUnresolvable(
-            rung="sealbot",
-            reason=(
-                f"{_sealbot_mod.LOAD_FAILED_MARKER}: {exc!r}. The underlying failure is carried "
-                f"verbatim rather than collapsed into 'not built' — an ABI mismatch reported as "
-                f"a missing build is R145's predicted failure wearing the wrong label."
-            ),
-        ) from exc
-
-    def _factory() -> Any:
-        return _sealbot_mod.SealBotAdapter(
-            depth=depth, minimax_module=minimax_module, game_module=game_module
-        )
-
-    return _factory
+_KNOWN_KINDS: tuple[str, ...] = ("random", "strix")
 
 
 def resolve_bot(kind: str, *, depth: int | None, opponent_sims: int | None,
@@ -109,10 +34,7 @@ def resolve_bot(kind: str, *, depth: int | None, opponent_sims: int | None,
 
         return _factory
 
-    if kind == "strix":
-        return _strix_mod.resolve_strix(opponent_sims=opponent_sims, variant=variant)
-
-    return _resolve_sealbot(depth)
+    return _strix_mod.resolve_strix(opponent_sims=opponent_sims, variant=variant)
 
 
-__all__ = ["SKIP_REASON_MARKERS", "BotFactory", "resolve_bot"]
+__all__ = ["BotFactory", "resolve_bot"]
