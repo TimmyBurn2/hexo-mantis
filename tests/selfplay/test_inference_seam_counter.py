@@ -9,7 +9,7 @@ and an idle counter stays VISIBLE at 0. It is NOT a producer proof — `runner_s
 here, which is exactly the reading LAW-07 refuses to accept as evidence. The producer burden
 lives in Rust (`crates/mantis-selfplay/tests/search_seam_fatal.rs`: the counter fires on an
 injected failure on BOTH arms, and does NOT fire on a clean drain shutdown), and the in-run
-stream burden in `tests/train/test_inference_seam_events.py`.
+stream burden in `tests/train/test_target_counter_events.py`.
 
 MUTATION THAT REDS IT (M-SEAMPY): read `target_integrity_defects` into
 `inference_failures_total` in `runner_stats` — the two conjuncts of the F-816-9 class then
