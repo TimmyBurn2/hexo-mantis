@@ -1,1 +1,1 @@
-"""Single-definition production-importable readouts; skeleton, port lands with its work package."""
+"""Single-definition production-importable readouts, each a module with its own caller."""

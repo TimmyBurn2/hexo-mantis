@@ -1,9 +1,4 @@
-"""mantis.bots — BotProtocol + in-repo bots + the ONE rung resolver (design §a.1).
-
-Public API: `BotProtocol`, `RungUnresolvable`, `RandomBot`, `resolve_bot`. External bot
-adapters are WP12-R property; at HEAD `resolve_bot` raises
-`RungUnresolvable` for all three (0/6 ladder-rung census verdict, DESIGN.md).
-"""
+"""mantis.bots — BotProtocol, the in-repo random bot, the strix adapter and the ONE rung resolver."""
 from __future__ import annotations
 
 from mantis.bots.protocol import BotProtocol, RungUnresolvable
