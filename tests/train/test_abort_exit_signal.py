@@ -14,8 +14,8 @@ that suppresses the assignment must red the fired-abort oracle and NOT the clean
 
 Only the trainer/buffer/pool collaborators are fakes, and none of them touches the abort decision.
 
->300 justify (R8): the local `StepCoordinator` harness exists ONLY because R5 bars cross-test
-imports, and the mutation is only meaningful beside the oracle it must red and the one it must not.
+>300 justify (R8): the mutation rows are only meaningful beside the oracle each must red and
+the one it must not, and they share this file's StepCoordinator harness.
 """
 from __future__ import annotations
 
@@ -45,8 +45,7 @@ from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
 
 def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    """A real graph ring the coordinator stubs sample through (R5 bars cross-test imports, so each
-    file that needs one builds it)."""
+    """A real graph ring the coordinator stubs sample through."""
     hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
     for i in range(n_records):
         stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]

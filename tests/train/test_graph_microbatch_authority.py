@@ -1,6 +1,6 @@
-# >300 justify (R8): the four rows are ONE claim — "the cap block has exactly ONE authority, on
-# exactly ONE route, and moves nothing else" — and three of them are structural censuses over the
-# same parsed `src/` tree. Splitting them would separate the one-authority census from the
+# >300 justify (R8): these rows are ONE claim — "the cap block has exactly ONE authority, on
+# exactly ONE route, and moves nothing else" — and the census rows are structural over the same
+# parsed `src/` tree. Splitting them would separate the one-authority census from the
 # single-tail census it shares a parse with.
 """One authority on one route for the micro-batch cap block.
 

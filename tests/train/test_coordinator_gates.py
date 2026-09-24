@@ -30,8 +30,7 @@ from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
 
 def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    """A real graph ring the coordinator stubs sample through (R5 bars cross-test imports,
-    so each file that needs one builds it)."""
+    """A real graph ring the coordinator stubs sample through."""
     hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
     for i in range(n_records):
         stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]

@@ -1,9 +1,9 @@
-# >300 justify (R8): the ten rows are ONE claim — the third save leg: a run that reaches its own
+# >300 justify (R8): these rows are ONE claim — the third save leg: a run that reaches its own
 # declared terminus writes EXACTLY ONE stamped checkpoint, a rigged failure is
 # supervisor-distinguishable, and an in-loop abort still writes nothing — over one seam running
 # from `step.py`'s O2 arm through a latch on the coordinator to `loop.py`'s post-loop guard and on
-# to the registered persist-fatal chain. R5 bars cross-test imports, so the local `StepCoordinator`
-# harness must live here; a split forks it into copies that drift while both stay green.
+# to the registered persist-fatal chain. The local `StepCoordinator` harness stays with the rows
+# that drive it; a split forks it into copies that drift while both stay green.
 """The third save leg: a run that reaches `stop_step` writes exactly one final checkpoint.
 
 Before this leg, a run reaching `stop_step` exited 0 with `checkpoints/` EMPTY — the O2 arm set
@@ -47,8 +47,7 @@ from mantis.train.lifecycle.signals import ShutdownState
 from mantis.train.loop import run_training_loop
 
 def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    """A real graph ring the coordinator stubs sample through (R5 bars cross-test imports, so each
-    file that needs one builds it)."""
+    """A real graph ring the coordinator stubs sample through."""
     hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
     for i in range(n_records):
         stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
