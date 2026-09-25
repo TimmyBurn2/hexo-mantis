@@ -704,29 +704,17 @@ fn select_move(
         None
     };
     let floor = 1.0 / legal.len().max(1) as f32;
-    let sampled = |rng: &mut ThreadRng| match records::sample_policy_ls(
-        policy,
-        &legal,
-        board,
-        agg_trunk_sz,
-        floor,
-    ) {
-        Some(idx) => idx,
-        None => *legal.choose(rng).unwrap(),
-    };
-    let move_idx = if let Some(best_pool) = winner_pool {
+    if let Some(best_pool) = winner_pool {
         let val = tree.pool[best_pool as usize].action_idx;
         let mq = (val >> 16) as i32 - 32768;
         let mr = (val & 0xFFFF) as i32 - 32768;
         if legal.contains(&(mq, mr)) {
-            (mq, mr)
-        } else {
-            sampled(rng)
+            return Some((mq, mr));
         }
-    } else {
-        sampled(rng)
-    };
-    Some(move_idx)
+    }
+    // An empty policy falls back to a uniform legal draw; `legal` is non-empty, so this is `Some`.
+    records::sample_policy_ls(policy, &legal, board, agg_trunk_sz, floor)
+        .or_else(|| legal.choose(rng).copied())
 }
 
 #[cfg(test)]
