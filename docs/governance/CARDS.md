@@ -130,7 +130,9 @@ Both were found by running the gate set rather than by reading it, and both are 
   falsifier (the same B-curve on the same box, IDLE and CONTENDED, R361(d)); the pre-registered success
   line stays PERF-3's ≥ 1.4× on the same machine, and the determinism probe (the same-cell bf16 witness)
   must read 0 — a faster server that serves different numbers is not the same server. Design only after a
-  ruling; the box work is a perf-host event, not run10's window.
+  ruling; the box work is a perf-host event, not run10's window. **WAITS on a re-read (R369(e)):** its
+  premise was read off `launch − gpu_wait` while the mask sync inflated `launch`; the old probe is void and
+  the same-input repeat probe replaces it (`PERF_ADA_PROFILE_2026-09-24.md`, R369 ledger).
 - **CARD-RUN10-SIZE-PARENT — CLOSED by R367(c) 2026-09-21 into CARD-NET-EXPAND (run11).** Grounds: a
   6×192 `GnnNetV2` shares NO tensor shape with the 4×128 parent (`input_proj` 11→192, every conv
   192→192, the JK-cat readout 6 × 192 = 1 152 wide into both heads against 512) and `load_from_bc` is

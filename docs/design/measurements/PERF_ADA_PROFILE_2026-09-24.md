@@ -12,6 +12,34 @@ driver. Units: **leaves/s** = served leaves per second (PERF-3's unit); "cell" =
 weights, no trainer, no stamp. Base reference = the mean of four unsampled base cells, **1 808 leaves/s**
 (1 876 / 1 787 / 1 775 / 1 795; range ±4 %).
 
+## R369 packet ledger (PERF-ADA legs, 2026-09-25)
+
+**Void under R369(e).** Every `bench_server` determinism reading taken before L0 is void: the old probe served
+`positions[:4]` alone, so each cell read one constant batch (−0.0155016… in all 17 cells of item 3, and every
+PERF-3 probe line). PERF-3's "the CPU launch stage is the bound" is void too: it was read off `launch − gpu_wait`,
+two timers on different threads, while the mask sync (finding 1) inflated `launch`. CARD-PERF-4 waits on a re-read.
+
+**The L0 instrument.** `bench_server` now serves `--probe` (64) pairwise-distinct positions twice, back to back on
+the idle warm server after the load, and compares every output EXACTLY (`probe_repeat`); the measured window is
+`--windows` (5) sub-windows, whose quartiles are the IQR, and `--baseline` reads each B against an earlier record
+(faster = the new q1 above the baseline's q3). The no-sync witness is
+`tests/selfplay/test_served_forward_no_sync.py`: sync-debug "error" over the second pop's `_launch_pop`, with a
+planted `.item()` that must red; on the desktop 3070 at L0 it catches exactly `real[legal_index] = True`, and
+`index_fill_` clears it.
+
+**L2's error criterion, pre-stated before the new path was measured.** On the same captured batches (≥ 8 real
+B-64 batches of distinct positions, the 45k parent, eager), the new path's max |Δ| against the fp32 no-autocast
+reference, pooled over the set, must not exceed the CURRENT path's pooled repeat spread (max over outputs of the
+range across 5 bf16 repeats), for value and for legal logits separately. The current path on the desktop 3070
+(8 batches, 0.96–1.09 M edges each): spread **0.114 value / 1.19 logit**; its own error vs fp32 reaches 0.108 /
+1.03 (max), 0.0053–0.0095 value (mean). The box figures are read on the box at L2 against the box's own spread.
+
+**LAW-09 bench ledger** (bench_server, B 64, IDLE box, `--windows 5`; expected gain and abort threshold stated
+before the bench):
+
+| leg / commit | expected | abort below | benched sha | median leaves/s [IQR] | vs parent |
+|---|---|---|---|---|---|
+
 ## Findings first
 
 1. **The serving bound on this box is a hidden per-forward host↔device sync, then the bf16 atomics.**
