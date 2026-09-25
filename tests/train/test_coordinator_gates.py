@@ -1,7 +1,7 @@
 """ORACLE — the coordinator gate seam.
 
 step() never consumes the eval KICK return and makes ZERO blocking eval calls (the sealbot-WR
-consumer that once sat at the async result seam left with the rung, R362(c); a completed round
+consumer that once sat at the async result seam left with the rung; a completed round
 is routed to promotion by `drain._route_eval_result`). Also covered: draw-rate gate wiring on the
 LIVE producer, the emission wiring, and the `train_step` heartbeat beats.
 
@@ -25,7 +25,7 @@ from _spy import SpyEventSink
 
 
 class FakeTrainer:
-    """Conforms to the DECLARED seam (WPTS/TD-1 re-point, R90a): typed entry points +
+    """Conforms to the DECLARED seam: typed entry points +
     `device`; the dead `train_step` fake is gone with the card."""
 
     def __init__(self, grad_norm: float = 0.1) -> None:
@@ -72,9 +72,8 @@ class FakeEvalPipeline:
         return None
 
     def poll_completed(self):
-        # WP11-A: step()'s non-blocking poll at the top of every iteration. This fixture
-        # never has a completed round ready — the kick-return-is-never-consumed invariant this
-        # test pins is entirely about the KICK ack, not this seam.
+        # step()'s non-blocking poll at the top of every iteration; this fixture never has a
+        # completed round ready — the pin here is the KICK ack, not this seam.
         self.poll_calls += 1
         return None
 
@@ -104,7 +103,7 @@ def _make_coordinator(*, pool=None, config=None, eval_pipeline=None, heartbeat=N
         pool=pool, eval_pipeline=eval_pipeline, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=shutdown, eval_model=object(),
-        # WPTS/TD-1: the straight arm resolves its route from the DECLARED identity — these
+        # The straight arm resolves its route from the DECLARED identity — these
         # unit drives declare the grid identity FakeBuffer's sampler serves.
         config=config or dev_coordinator_config(),
         full_config=GRAPH_FULL_CONFIG,
@@ -144,7 +143,7 @@ def test_step_does_not_consume_the_kick_return_and_never_blocks() -> None:
 
 
 def test_steps_per_hour_after_a_resume_counts_steps_since_boot() -> None:
-    """B-2 (R355(e)): booted at 23 829 the rate read 23 829 + d over the hours since boot (4.79e9)."""
+    """B-2: booted at 23 829 the rate read 23 829 + d over the hours since boot (4.79e9)."""
     h = _make_coordinator(trainer_step=23_829)
     started = h.coord._run_started
     h.coord._clock = SimpleNamespace(now=lambda: started + 3600.0, sleep=lambda _s: None)
@@ -193,7 +192,7 @@ def test_a_fresh_run_crossing_the_boundary_kicks_once() -> None:
 
 
 def test_a_resume_exactly_at_the_boundary_with_no_record_kicks_it() -> None:
-    """B-3 (R355(e)): resumed at 3000 the old rule tested `3001 % 3000` and never kicked round 1."""
+    """B-3: resumed at 3000 the old rule tested `3001 % 3000` and never kicked round 1."""
     h = _boot_at(3000, eval_interval=3000)
     h.coord.restore_eval_round_state(-1)  # a sidecar that predates the field
     h.pool.games_completed = 5
@@ -248,7 +247,7 @@ def test_draw_rate_gate_fires_on_live_producer() -> None:
 
 
 def test_a_resume_restores_the_draw_rate_window_so_the_third_observation_fires() -> None:
-    """B-7 (R355(e)): the resume emptied the abort windows (run7's draw-rate abort moved 25k -> 26k)."""
+    """B-7: the resume emptied the abort windows (run7's draw-rate abort moved 25k -> 26k)."""
     spec = DrawRateAbortSpec(threshold=0.4, min_step=0, N_pool_min=10, consec=3)
     before = _make_coordinator(pool=DrivablePoolStub(draw_counts=(90, 100)),
                                config=dev_coordinator_config(draw_rate_abort=spec))
@@ -285,7 +284,7 @@ def test_guard_state_round_trips_through_json_and_tolerates_an_empty_one() -> No
     assert other.coord._consec_high_gn == 2 and other.coord._initial_policy_loss == 2.5
     assert other.trainer.skipped_steps == 4
     other.coord.restore_guard_state({})  # a pre-field sidecar: nothing to restore, nothing raised
-    # A pre-R362 sidecar's sealbot ring is ignored, not refused.
+    # A pre-existing sidecar's sealbot ring is ignored, not refused.
     other.coord.restore_guard_state({"wr_history": [[3000, 0.4]], "wr_history_rung": "sealbot_d5"})
     assert not hasattr(other.coord, "_wr_history")
 

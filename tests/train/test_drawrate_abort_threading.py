@@ -30,12 +30,12 @@ import mantis.train.coordinator.step as step_module
 from mantis.config.armed_aborts import audit_arming
 from mantis.config.census import production_configs
 from mantis.config.loader import load_config
-from mantis.config.resolve.draw_rate import (  # RED anchor (R80) — the ONE read path
+from mantis.config.resolve.draw_rate import (  # RED anchor — the ONE read path
     DrawRateAbortSpec,
     resolve_draw_rate_abort,
 )
 from _monitor_config import monitor_config
-from mantis.run import _step_coordinator_config  # RED anchor — the renamed builder (R73)
+from mantis.run import _step_coordinator_config  # RED anchor — the renamed builder
 from mantis.train.coordinator.config import StepCoordinatorConfig, pooled_draw_rate
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
@@ -48,8 +48,7 @@ _CONFIGS = Path(__file__).resolve().parents[2] / "configs"
 _ARMED_CONFIG = production_configs(_CONFIGS.parent)[0]
 _DRIVE_STEPS = 4
 #: Deliberately NOT run5's own numbers: a harness driving the production values cannot
-#: distinguish "the config reached the coordinator" from "the builder hardcodes the same
-#: numbers the config happens to carry".
+#: distinguish "the config reached the coordinator" from "the builder hardcodes the same numbers".
 _OFF_PREREG = {"threshold": 0.37, "min_step": 2, "N_pool_min": 7, "consec": 2}
 
 
@@ -340,9 +339,8 @@ def test_all_THREE_block_keys_reach_their_runtime_destination(monkeypatch) -> No
         f"config says {cfg.train.draw_rate_abort.min_step!r}, the rule saw "
         f"{call.get('min_step')!r}"
     )
-    # A DELIBERATE BOUNDARY MARKER, read from the other side: `consec` is the block's own
-    # authored term now, so the marker's job — do not leave the reader guessing which of these
-    # the config authors — is served by asserting it at the same call site as the other two.
+    # `consec` is the block's own authored term now, asserted at the same call site as the
+    # other two so the reader is not left guessing which of these the config authors.
     assert call["consec"] == spec.consec == cfg.train.draw_rate_abort.consec, (
         f"train.draw_rate_abort.consec must reach `check_draw_rate_collapse(consec=)`; "
         f"config says {cfg.train.draw_rate_abort.consec!r}, the rule saw "

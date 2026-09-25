@@ -24,7 +24,7 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 TRAIN_FIXTURES = FIXTURES / "train"
 ANCHOR_KEYS_FILE = FIXTURES / "value_probes" / "statedict_keys" / "gnn_axis_v1.txt"
 
-# The ONE registered representation since R346(f) deleted the grid path.
+# The ONE registered representation; the grid path is gone.
 GRAPH_ENCODING = "gnn_axis_v1"
 KILLED_PREFIXES = ("cluster_pool.", "global_encoder.", "gpool_bias_branch.")
 

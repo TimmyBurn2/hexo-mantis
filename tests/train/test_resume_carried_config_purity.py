@@ -3,7 +3,7 @@
 The first --resume-from burn died at its first periodic-checkpoint boundary:
 `build_resume_config_overrides` unconditionally injected the LEGACY `torch_compile` knob, the
 merge wrote it into the carried config, and the one writer's write-time validation correctly
-REJECTED the save, so LAW-14 re-raised and the loop died. Fresh runs were immune, so no
+REJECTED the save, so the persistence-fatal path re-raised and the loop died. Fresh runs were immune, so no
 pre-existing oracle saw it. The carried config now holds EXACTLY the schema keys, derived from
 `RunConfig.model_fields`; the strip is scoped to the resume machinery's own directives — never
 widening into a general unknown-key launder, never naming a real schema key — while a directive

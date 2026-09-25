@@ -1,10 +1,10 @@
-"""⊕ R343(c) — the ORDERED stop's shape: what a signal stop skips, and what it must not.
+"""⊕ The ORDERED stop's shape: what a signal stop skips, and what it must not.
 
-R343(c) orders "SIGTERM → drain under kill-grace → checkpoint → exit 0". At HEAD the fourth
+The order is "SIGTERM → drain under kill-grace → checkpoint → exit 0". At HEAD the fourth
 step did not follow the third: `close_out` ran the terminal battery synchronously under
 `terminal_eval_hard_cap_sec` (14400 s in production), MEASURED once at t+67 min and still
 running while the checkpoint had been safe for an hour (`ADJUDICATION_QUEUE.md`, F-R-P2B-4). On
-the 12 h block R343(f) sets, that is a third of the run spent closing a run about to be
+the 12 h block this sets, that is a third of the run spent closing a run about to be
 reopened.
 
 The defect each row is the ONLY witness to:
@@ -16,7 +16,7 @@ The defect each row is the ONLY witness to:
   neither `shutdown_save` nor `abort_rule` can see it in the epilogue. The default is False and
   these rows pin it;
 * the ring persisted on the one abort that fires because the disk is full — a large write onto
-  a full disk, out of a LAW-14 path.
+  a full disk, out of a persistence-fatal path.
 """
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ def test_the_skip_never_overrides_terminal_eval_disabled() -> None:
 
 
 class _DrainingPipeline(_Pipeline):
-    """Records WHICH drain `close_out` took (CARD-STOP-DRAIN-VS-GRACE)."""
+    """Records WHICH drain `close_out` took."""
 
     def __init__(self) -> None:
         super().__init__()

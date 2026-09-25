@@ -1,4 +1,4 @@
-""">300 justify (R8): one gate, one branch table. Every drive exercises a different arm of
+"""One gate, one branch table. Every drive exercises a different arm of
 `_run_hard_abort_gates`/`_sample` against the SAME coordinator harness, and the "which branch has
 no input that takes it" claim is only checkable while the drives sit together.
 
@@ -9,7 +9,7 @@ comment claimed it counted the EXPLICIT-off case.
 
 WHAT THIS ORACLE IS THE SOLE WITNESS FOR: branch reachability MEASURED with `sys.settrace`, so a
 dead arm re-introduced anywhere makes the covered-line union fall short; each remaining condition
-being independently decisive; the exact LAW-18 accounting pinned as an EQUALITY per gate run,
+being independently decisive; the exact accounting pinned as an EQUALITY per gate run,
 since an inequality could not tell a single skip from a double; and the NO-OBSERVATION contract,
 where insufficient evidence skip-counts through the SAME one site and appends NOTHING.
 
@@ -30,9 +30,8 @@ from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
 
-#: A spec whose `min_step=0` puts the live path in reach of a single drive; the FIRE arm
-#: additionally needs `consec` consecutive samples at/above threshold. `N_pool_min=10` is
-#: deliberately > 1: the NO-OBSERVATION arm needs a bar a drive can sit UNDER.
+#: A spec whose `min_step=0` puts the live path in reach of a single drive; `N_pool_min=10` is
+#: deliberately > 1 so the NO-OBSERVATION arm has a bar a drive can sit UNDER.
 _LIVE = DrawRateAbortSpec(threshold=0.4, min_step=0, N_pool_min=10, consec=3)
 _ZERO = {"checks": 0, "fires": 0, "skips": 0, "warns": 0}
 _GATE = "draw_rate_collapse"
@@ -152,9 +151,8 @@ def test_every_branch_of_the_draw_rate_gate_has_an_input_that_takes_it() -> None
     fired2, lines2 = _run_traced(b2)
     b3 = _coordinator(spec=_LIVE, pool=_Pool((0, 100)))
     fired3, lines3 = _run_traced(b3)
-    # A LIVE producer whose answer is `None`: one game under the bar, every one of them DRAWN. The
-    # rate would be 1.0 and would fire instantly if it were observed at all, so a gate that ignored
-    # the bar reds here rather than passing quietly.
+    # A LIVE producer one game under the bar, every one DRAWN: a gate that ignored the bar
+    # reds here rather than passing quietly.
     b5 = _coordinator(spec=_LIVE, pool=_Pool((_LIVE.N_pool_min - 1, _LIVE.N_pool_min - 1)))
     fired5, lines5 = _run_traced(b5)
     assert (fired1, fired2, fired3, fired5) == (False, False, False, False), (

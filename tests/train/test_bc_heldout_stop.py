@@ -104,7 +104,7 @@ def test_the_cadence_gates_evaluation(monkeypatch) -> None:
 
 
 def test_the_value_loss_rides_the_same_pass_and_never_the_stop(monkeypatch) -> None:
-    """BC-3 (R350(b)(ii)): the value loss rides every pass and is recorded; the stop reads POLICY ONLY."""
+    """The value loss rides every pass and is recorded; the stop reads POLICY ONLY."""
     import mantis.train.coordinator.dispatch as dispatch
 
     m = _monitor(eval_every=1, plies=200, batch_size=100)

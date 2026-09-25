@@ -185,7 +185,7 @@ def tiny_soft_policy_arch() -> GnnArchV2SoftPolicy:
 def soft_policy_graph_trainer(tmp_path: Path, *, sink: Any = None, seed: int = SEED,
                               target_temperature: float = 4.0, weight: float = 4.0,
                               **hp_over: Any) -> Trainer:
-    """A tiny `GnnNetV2SoftPolicy` trainer with `model.aux_soft_policy` ARMED (R366(b))."""
+    """A tiny `GnnNetV2SoftPolicy` trainer with `model.aux_soft_policy` ARMED."""
     torch.manual_seed(seed)
     arch = tiny_soft_policy_arch()
     config = graph_config()

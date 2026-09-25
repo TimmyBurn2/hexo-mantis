@@ -293,7 +293,7 @@ def test_of2_10_leg2_fixture_reaches_the_minted_cap_regime() -> None:
                            "`test_of2_10_only_one_microbatch_is_resident_at_a_time`, which is "
                            "device-free and runs in CI.")
 def test_of2_10_leg2_peak_allocation_is_under_the_sizing_budget(tmp_path) -> None:
-    """OF2-10 leg 2 — the MEASURED half, and the clause for closing CARD-RUN5-GPU-OOM.
+    """OF2-10 leg 2 — the MEASURED half, closing the GPU-OOM class.
 
     Three bands: PASS is `<= budget` with `>= 15%` margin; PASS-WITH-DISCLOSURE is within budget
     under that margin and prints the number; over budget is an ABORT — halt and re-size. Real

@@ -1,4 +1,4 @@
-"""CARD-ORPHAN-WORKERS (R230) — SIGINT during active self-play leaves ZERO descendant
+"""CARD-ORPHAN-WORKERS — SIGINT during active self-play leaves ZERO descendant
 processes (process-tree census, bounded wait). The second-signal path too.
 
 Oracle: spawn a child process simulating the eval pipeline's spawn child, register it,
@@ -7,7 +7,7 @@ send SIGINT to the test process — the child MUST be dead after a bounded wait.
 Mutation: disable ``force_teardown_all`` (no-op) → the child survives the second signal
 → the census test reds.
 
-Flip-set (R71 — class boundary, not the demo): the eval pipeline's spawn child is the
+Flip-set (a class boundary, not the demo): the eval pipeline's spawn child is the
 ONE orphanable child process in the system (the Rust runner uses threads, not
 processes). The registry covers the class; the test exercises the class.
 """

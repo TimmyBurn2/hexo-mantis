@@ -1,4 +1,4 @@
-"""The held-out gap witness (R366(c), v37): the rows resolve, the slice is pinned and FROZEN, the coordinator reads it at its own cadence, and the planted break (an un-seeded read) is caught."""
+"""The held-out gap witness (v37): the rows resolve, the slice is pinned and FROZEN, the coordinator reads it at its own cadence, and the planted break (an un-seeded read) is caught."""
 from __future__ import annotations
 
 import dataclasses

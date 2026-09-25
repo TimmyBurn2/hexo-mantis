@@ -1,5 +1,5 @@
 """O-DAG — `train/*` has no top-level import of `mantis.eval` / `mantis.arena`
-(WP10 §b O-DAG; repo_design §2).
+(repo_design §2).
 
 CI gate 9 (`tools/check_import_dag.py`) proves the whole `src/mantis` graph is acyclic, but
 a `train → eval` edge is only a CYCLE if the reverse edge also exists — so the
@@ -9,7 +9,7 @@ body — not a top-level edge). This test mirrors the check_import_dag semantics
 module TOP-LEVEL imports only (function/method-body and `if TYPE_CHECKING` imports are lazy
 by definition and are NOT edges).
 
-WP13-A: `mantis.monitor` LEAVES this blanket-ban tuple — `train → monitor` is a legal §2
+`mantis.monitor` LEAVES this blanket-ban tuple — `train → monitor` is a legal §2
 edge and the run-safety wiring uses exactly three of them. It is now policed by a STRICTER
 oracle with an exact allowlist rather than a ban:
 `tests/monitor/test_monitor_census.py::test_train_to_monitor_import_sites_are_exactly_the_pinned_set`

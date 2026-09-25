@@ -1,4 +1,4 @@
-"""`iteration_complete.sym_draws` (R358(b), R266): the LAW-18 augmentation-group counter, ring → row → audit."""
+"""`iteration_complete.sym_draws`: the augmentation-group counter, ring → row → audit."""
 from __future__ import annotations
 
 import json
@@ -136,7 +136,7 @@ def test_the_audit_reads_the_uniformity_row_off_the_last_row_with_a_block(tmp_pa
 
 
 def test_a_planted_stuck_rng_reds_the_uniformity_band(tmp_path: Path) -> None:
-    """LAW-07: a draw stuck on the identity is a row with every draw in bin 0; the band must red."""
+    """A draw stuck on the identity is a row with every draw in bin 0; the band must red."""
     stuck = [1200] + [0] * (N_SYMS - 1)
     events = _events(tmp_path / "events.jsonl", [_row(0.0, 0, 0, [0] * N_SYMS), _row(3600.0, 1200, 400, stuck)])
     rows = A.event_rows(events, ring_size=1000)

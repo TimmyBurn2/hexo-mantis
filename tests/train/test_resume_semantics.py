@@ -1,4 +1,4 @@
-"""O-F1E0 — resume-precedence semantics as an integrated round-trip (WP10 Slice-2 gate).
+"""O-F1E0 — resume-precedence semantics as an integrated round-trip (Slice-2 gate).
 
 The F1/E0/scheduler/lr resume gate SEMANTICS composed end-to-end through
 `orchestrator.build_resume_config_overrides → checkpoints.resume_trainer` (T-CK-14..20 pin the

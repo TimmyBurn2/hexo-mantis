@@ -102,7 +102,7 @@ class _Trainer(DrivableTrainerStub):
 
 
 def _broken_round(reason: str, *, round_id: str = "r000001_3_terminal", step: int = 3) -> dict:
-    """A BROKEN round-result mapping in the post-R152 shape, hand-built: which reason a real
+    """A BROKEN round-result mapping in the current shape, hand-built: which reason a real
     round produces is `tests/eval/test_eval_broken_reason_routes.py`'s subject."""
     return {"step": step, "round_id": round_id, "promoted": False, "promoted_step": None,
             "wr_sealbot": None, "wr_random": None, "eval_round_wall_sec": 0.5,
@@ -199,9 +199,8 @@ def _write_config(tmp_path: Path, **train_overrides: Any) -> Path:
     train.update(train_overrides)
     base["train"] = train
     monitor = dict(base["monitor"])
-    # The ARMING cadence is `monitor.gate_interval`, not `train.log_interval`, and this drive
-    # needs an observation on every step of a 3-step burst; at the config's own interval the
-    # gate would never run and O-09 arm (b) would measure a different stop reason.
+    # The ARMING cadence is `monitor.gate_interval`, not `train.log_interval`; at the config's
+    # own interval the gate would never run over this 3-step burst.
     monitor.update({"actor_lag_threshold_steps": _DRIVE_STEPS - 1,
                     "gate_interval": 1,
                     "disk_guard": dict(_DRIVE_GUARD)})
@@ -276,7 +275,7 @@ def _drive_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest
 
     monkeypatch.setattr(mantis_run, "compose_run", _recording_compose)
     config_path = _write_config(tmp_path, **train_overrides)
-    request.getfixturevalue("preflight_stamped")(config_path)  # R348(c): the launcher demands it
+    request.getfixturevalue("preflight_stamped")(config_path)  # the launcher demands it
     drive.rc = mantis_run.main(["--config", str(config_path), "--out-dir", str(out_dir)])
     return drive
 

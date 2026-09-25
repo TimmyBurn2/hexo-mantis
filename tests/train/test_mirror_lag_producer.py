@@ -1,4 +1,4 @@
-"""R349(b): `resume_state_persisted.unreceipted_bundles` is the run's reading of the puller's
+"""`resume_state_persisted.unreceipted_bundles` is the run's reading of the puller's
 lag (the dashboard warns at two); driving the coordinator's REAL publisher is its producer test."""
 from __future__ import annotations
 

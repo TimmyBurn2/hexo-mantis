@@ -85,7 +85,7 @@ def test_the_loss_info_contract_stays_seven_keys(tmp_path: Path) -> None:
 
 
 def test_the_counters_reach_the_event_stream(tmp_path: Path) -> None:
-    """LAW-18: a counter nothing can read in-run is not an instrument."""
+    """A counter nothing can read in-run is not an instrument."""
     sink = H.SpySink()
     trainer = H.tiny_graph_trainer(tmp_path, sink=sink)
     H.graph_step(trainer, H.uniform_graph_buffer())

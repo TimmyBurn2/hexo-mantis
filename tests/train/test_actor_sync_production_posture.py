@@ -76,7 +76,7 @@ def test_actor_syncs_with_eval_enabled_the_posture_a_real_run_uses(
 def test_sync_volume_does_not_depend_on_whether_the_deploy_side_exists(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
 ):
-    """Both postures must sync. A difference between them IS the coupling R49 forbids."""
+    """Both postures must sync. A difference between them IS forbidden coupling."""
     results = {}
     for label, eval_enabled in (("no_eval", False), ("with_eval", True)):
         pool, trainer = DrivablePoolStub(game_per_read=True), DrivableTrainerStub()

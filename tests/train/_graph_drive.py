@@ -51,8 +51,7 @@ class GraphSampleBuffer:
 
 
 #: The declaration a `StepCoordinator` reads on the graph route: the dispatch identity plus
-#: the sections its resolvers read. The caps are the NON-BINDING pair — nothing here
-#: exercises a split.
+#: the sections its resolvers read. The caps are the NON-BINDING pair — nothing here exercises a split.
 GRAPH_FULL_CONFIG: dict = {
     "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
     "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},

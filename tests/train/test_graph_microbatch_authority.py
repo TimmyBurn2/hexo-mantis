@@ -6,7 +6,7 @@
 
 The defect each row is the ONLY witness to:
 
-- a minted block with no live consumer on the route its OWN config declares (R1/LAW-08).
+- a minted block with no live consumer on the route its OWN config declares (R1).
 - a SECOND reader of the caps appearing. Two authorities agree right up until they diverge, and no
   behavioural oracle can see the second one. An `ast.parse` census, not a grep, because a grep
   cannot tell a reader from a string; subscripts with a constant string index are censused beside
@@ -132,9 +132,8 @@ _CENSUSED_NODES = 699_533
 _CENSUS_BATCH_SIZE = 256
 
 
-#: Every production config (the census, R367(a)), so the arming/sizing witness covers the config
-#: actually being launched. The transfer is guarded: the censused (E, N) describe this batch
-#: verbatim only at `_CENSUS_BATCH_SIZE`, and the staleness guard inside the test re-derives that premise.
+#: Every production config (the census) is covered, and the censused (E, N) describe this batch
+#: verbatim only at `_CENSUS_BATCH_SIZE` — the staleness guard inside the test re-derives that.
 _PRODUCTION_CAPPED = tuple(path.relative_to(_CONFIGS).as_posix() for path in production_configs(_REPO))
 
 
@@ -144,7 +143,7 @@ def test_n1_a_production_config_is_ARMED_with_a_sized_cap_not_the_templates_defa
     """The arming of the fix itself. Nothing else in the repository pins this.
 
     A re-mint that loses the `# delta:` header line gives the production config the TEMPLATE's
-    pair — a cap that is present, resolves, reports as present in the LAW-18 event, and does not
+    pair — a cap that is present, resolves, reports as present in the event, and does not
     bind at the measured E. The fix would be silently disarmed with every test green.
 
     VALUE-AGNOSTIC BY CONSTRUCTION: this row asserts NO number, only that the pair sits BELOW the

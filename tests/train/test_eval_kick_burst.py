@@ -81,7 +81,7 @@ def test_the_kick_outcomes_are_or_folded_across_the_burst() -> None:
 
 
 def test_the_kick_still_guards_on_the_round_index_advance() -> None:
-    """The fix must not become 'kick every step': since B-3 (R355(e)) the guard is the round
+    """The fix must not become 'kick every step': the guard is the round
     INDEX advancing past the last kicked one, which the modulo could not see after a resume."""
     tree = ast.parse(_STEP_PY.read_text(encoding="utf-8"))
     kick = next(n for n in ast.walk(tree)

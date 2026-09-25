@@ -1,4 +1,4 @@
-"""The auxiliary soft-policy head's training path (R366(b)): the target's construction, the step's rows, the LAW-07 planted break, the rows-and-head pairing, and the warm start onto the new kind."""
+"""The auxiliary soft-policy head's training path: the target's construction, the step's rows, the planted break, the rows-and-head pairing, and the warm start onto the new kind."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -49,7 +49,7 @@ def test_a_temperature_at_or_below_one_is_refused() -> None:
 
 
 def test_the_real_step_trains_the_aux_head_and_publishes_its_rows(tmp_path) -> None:
-    """Producer test (LAW-18): the aux CE, KL(hard‖soft) > 0, both heads' grad norms, and the aux head moves."""
+    """Producer test: the aux CE, KL(hard‖soft) > 0, both heads' grad norms, and the aux head moves."""
     import _microbatch_harness as H  # noqa: PLC0415
 
     buf = H.uniform_graph_buffer()
@@ -69,7 +69,7 @@ def test_the_real_step_trains_the_aux_head_and_publishes_its_rows(tmp_path) -> N
 
 
 def test_the_planted_break_a_dead_soft_target_is_caught_by_the_producer_row(tmp_path, monkeypatch) -> None:
-    """LAW-07: a construction that returns the HARD target (a temperature of 1 in effect) makes the KL row read 0, which the producer test refuses."""
+    """A construction that returns the HARD target (a temperature of 1 in effect) makes the KL row read 0, which the producer test refuses."""
     import _microbatch_harness as H  # noqa: PLC0415
     from mantis.train.trainer import core as core_module
 
@@ -101,7 +101,7 @@ def test_the_rows_are_omitted_on_an_arch_without_the_head(tmp_path) -> None:
 
 
 def test_the_net_is_the_authority_for_its_heads_and_the_kinds_table_must_agree(tmp_path, monkeypatch) -> None:
-    """A kind listed as soft-policy whose net declares one head (or the reverse) is refused at construction — a head added on one side only would train no aux term while its rows read as measured (LAW-18)."""
+    """A kind listed as soft-policy whose net declares one head (or the reverse) is refused at construction — a head added on one side only would train no aux term while its rows read as measured."""
     import _microbatch_harness as H  # noqa: PLC0415
     from mantis.model.gnn_v2 import GnnNetV2SoftPolicy
 

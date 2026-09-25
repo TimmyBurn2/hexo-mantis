@@ -1,4 +1,4 @@
-"""R328(d) — the pretrain CLI's held-out flags: all-or-none, and the ring must SAY it is held out.
+"""The pretrain CLI's held-out flags: all-or-none, and the ring must SAY it is held out.
 
 PB-8 GRADUATES HERE. `tests/train/test_bc_heldout_stop.py` records that a monitor handed the
 TRAINING ring reports a loss that falls forever while every monitor-level row still passes,

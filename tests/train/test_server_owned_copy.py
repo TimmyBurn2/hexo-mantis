@@ -1,4 +1,4 @@
-"""CARD-SERVER-OWNED-COPY (R366(b)): the actors serve a copy the sync writes and the learner never reads; with EMA on the actors STILL serve the learner while deploy, gate and follower read the EMA shadow, which rides the envelope and survives a resume."""
+"""CARD-SERVER-OWNED-COPY: the actors serve a copy the sync writes and the learner never reads; with EMA on the actors STILL serve the learner while deploy, gate and follower read the EMA shadow, which rides the envelope and survives a resume."""
 from __future__ import annotations
 
 from pathlib import Path

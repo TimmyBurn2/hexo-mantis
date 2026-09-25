@@ -1,4 +1,4 @@
-"""The value warm-up (R350(b)(iii)): weight 0 for the first N steps, reported; the BC route refuses it."""
+"""The value warm-up: weight 0 for the first N steps, reported; the BC route refuses it."""
 from __future__ import annotations
 
 import pytest

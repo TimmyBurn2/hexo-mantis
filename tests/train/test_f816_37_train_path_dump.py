@@ -1,8 +1,8 @@
-"""LAW-07 mutation self-test for the TRAINING path's `F-816-37` dump-on-fire (R340 leg 3).
+"""Mutation self-test for the TRAINING path's dump-on-fire mechanism.
 
-WHY THIS SUITE EXISTS. R339(c) armed dump-on-fire on the EVAL path, because that is where the
-class had been seen. At R340 leg 3 `F-816-37` fired in the TRAINER — `dispatch.py::_materialise`
-— and the run halted with **no artifact**, which is precisely what R340(c)'s *"a firing halts
+WHY THIS SUITE EXISTS. Dump-on-fire was armed on the EVAL path first, because that is where the
+class had been seen. It then fired in the TRAINER — `dispatch.py::_materialise`
+— and the run halted with **no artifact**, which is precisely what *"a firing halts
 with the artifact"* forbids. `tests/eval/test_f816_37_instrument.py` is the eval-path twin; this
 is the same contract on the path that actually took the run down.
 
@@ -31,7 +31,7 @@ from mantis.config.resolve.microbatch import MicrobatchCapsSpec
 from mantis.selfplay.graph_collate import GraphContractError
 from mantis.train.coordinator.dispatch import run_declared_train_step
 
-#: F-816-37's observed corruption, both firings identical.
+#: The dump-on-fire's observed corruption, both firings identical.
 _OBSERVED = [0.5, 0.0, 1.1754944e-38]
 
 
@@ -81,8 +81,8 @@ def test_a_planted_corruption_DUMPS_and_REDS(
 ) -> None:
     """Both halves: the trainer's check notices, AND the offending batch lands on disk.
 
-    A step that reds without dumping is exactly HEAD's behaviour before R340 leg 3 — the
-    failure that cost that leg its artifact — so the dump is the assertion that matters.
+    A step that reds without dumping is exactly HEAD's behaviour before this fix — the
+    failure that cost that run its artifact — so the dump is the assertion that matters.
     """
     trainer = H.tiny_graph_trainer(tmp_path)
     replay = H.ReplayWireBuffer(H.uniform_graph_buffer(), 4)

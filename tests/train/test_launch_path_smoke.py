@@ -1,8 +1,8 @@
-"""O-SMOKE — end-to-end launch-path smoke (WP10 Slice-2 gate, INTEGRATION tier).
+"""O-SMOKE — end-to-end launch-path smoke (Slice-2 gate, INTEGRATION tier).
 
 A minimal end-to-end launch of `run_training_loop` on a CPU synthetic config: build the trainer
 via `build_net(arch)`, run ≈2 steps, write an envelope-v2 checkpoint, resume from it, and shut
-down clean on a simulated signal. Bites the F-10 class — a launch-path wiring break unit tests
+down clean on a simulated signal. Bites a launch-path wiring break unit tests
 miss. Tier ruling (DISPATCHER CORRECTION of rev-1): the launch-path smoke homes in the
 INTEGRATION tier (operator brief + repo_design §8: "integration … includes at least one launch-
 path smoke"); carries `@pytest.mark.integration`, reached via `make test.integration`. Kept
@@ -35,7 +35,7 @@ ENCODING = "gnn_axis_v1"
 
 
 def _eval_block():
-    # WP11-A schema extension: eval.gate/eval.ladder are now required (design §c.1).
+    # Schema extension: eval.gate/eval.ladder are now required (design §c.1).
     return {
         "random_model_sims": 1, "max_plies": 128, "random_floor_games": 0, "worker_device": "cpu",
         "round_timeout_sec": 1.0, "worker_kill_grace_sec": 1.0,
@@ -48,17 +48,14 @@ def _eval_block():
     }
 
 
-#: WPMINT Phase K-A stage 0: the complete `train:` payload, DERIVED from a MINTED config
-#: rather than restated — eleven files carried a hand-written copy, so a new `train.*` key
-#: cost eleven edits. `dev_example.yaml`'s resolved block was measured byte-identical to this
-#: file's census except for `fp16`, which this smoke path pins itself below.
+#: The complete `train:` payload, DERIVED from a MINTED config rather than restated.
+#: `dev_example.yaml`'s resolved block is byte-identical to this file's census except `fp16`.
 _MINTED_TRAIN: dict = load_config(
     Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").train.model_dump()
 
 
-#: Every config this file builds is a GRAPH config, and it says so once. The block builders read
-#: it so any arch-scoped block belonging to another arch is dropped AT SOURCE (R322(d)), driven
-#: from `ARCH_SCOPED_KEYS` — the schema's own partition — rather than by name.
+#: Every config this file builds is a GRAPH config, and it says so once. The block builders drop
+#: any arch-scoped block belonging to another arch AT SOURCE, via `ARCH_SCOPED_KEYS`, not by name.
 _REPRESENTATION = "graph"
 
 
@@ -71,12 +68,12 @@ def _drop_foreign_arch_keys(section: str, block: dict) -> dict:
 
 
 def _train_block():
-    # WPSC Phase 2 SC-A1: `train:` is now a required RunConfig section (DESIGN_P2.md §2).
+    # `train:` is now a required RunConfig section (DESIGN_P2.md §2).
     return _drop_foreign_arch_keys("train", dict(_MINTED_TRAIN))
 
 
 def _selfplay_block():
-    # WPSC Phase 2 SC-A2: `selfplay:` is now the expanded nested shape (DESIGN_P2.md §3);
+    # `selfplay:` is now the expanded nested shape (DESIGN_P2.md §3);
     # `legal_move_radius_schedule` is gone (DESIGN_P2.md §5).
     return {
         "search": {"kind": "puct"}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
@@ -96,7 +93,7 @@ def _selfplay_block():
 def _inference_block():
     return _drop_foreign_arch_keys("inference", {
         "inference_batch_size": 64, "inference_max_wait_ms": 10,
-        # `fused_graph_caps` is ARCH-SCOPED to graph (R322(d)) and this is a GRID config, so it
+        # `fused_graph_caps` is ARCH-SCOPED to graph, and this is a GRID config, so it
         # is stripped by the helper above. Left in the block so the strip is visible here.
         "fused_graph_caps": CAPS_DICT,
     })
@@ -104,7 +101,7 @@ def _inference_block():
 
 def _monitor_block():
     return {
-        # R242 (ADJ-D12): the ARMING cadence, schema-only and required.
+        # The ARMING cadence, schema-only and required.
         "gate_interval": 1000,
         "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
         "alert_loss_increase_window": 3, "axis_warn": 0.45, "axis_alert": 0.50,
@@ -129,9 +126,8 @@ def _config():
     return {
         "schema_version": 1, "run_id": "smoke", "seed": 20260722,
         "eval_enabled": True,
-        # RECAL-PREP (R308(g)(i)): a REQUIRED top-level leaf. `null` is R119's
-        # placeholder — refused at boot on a cuda process, valued only by the
-        # re-calibration sitting under R282(b).
+        # RECAL-PREP: a REQUIRED top-level leaf. `null` is the placeholder — refused at boot
+        # on a cuda process, valued only by the re-calibration.
         "allocator_posture": None,
         "identity": {"encoding": ENCODING, "representation": _REPRESENTATION},
         "model": {"gnn": {"hidden": 16, "num_layers": 1}, "aux_soft_policy": None},

@@ -1,4 +1,4 @@
-"""`_steps_budget` carries its fractional remainder, so a fractional `training_steps_per_game` holds long-run (R364(b)'s envelope)."""
+"""`_steps_budget` carries its fractional remainder, so a fractional `training_steps_per_game` holds long-run."""
 from __future__ import annotations
 
 import pytest
@@ -17,7 +17,7 @@ def _bursts(games: list[int], ratio: float, burst: int) -> list[int]:
 
 
 def test_one_game_per_burst_at_two_and_a_half_realises_two_and_a_half_not_two() -> None:
-    # HEAD before R364 read min(max(1, round(2.5)), burst) = 2 on every such burst (banker's rounding)
+    # HEAD before this fix read min(max(1, round(2.5)), burst) = 2 on every such burst (banker's rounding)
     assert _bursts([1] * 4, 2.5, 8) == [2, 3, 2, 3]
     assert _bursts([1] * 10, 2.4, 8) == [2, 2, 3, 2, 3, 2, 2, 3, 2, 3]
     assert sum(_bursts([1] * 100, 2.4, 8)) == 240

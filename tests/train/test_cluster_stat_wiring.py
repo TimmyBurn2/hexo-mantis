@@ -114,9 +114,8 @@ def test_a_real_coordinator_emits_no_cluster_key_on_a_graph_run() -> None:
     )
 
 
-# The snapshot-crosswiring and wheel-compat pins retired with the fields they guarded: with no
-# cluster-mean getter, both would be pins on a constant. That the fields do not come back
-# without their producers is asserted in `tests/selfplay/test_pool_surface.py`.
+# With no cluster-mean getter, a snapshot-crosswiring or wheel-compat pin would only pin a
+# constant; the fields' absence is asserted in `tests/selfplay/test_pool_surface.py`.
 def test_neither_engine_stub_declares_a_cluster_mean_getter() -> None:
     """The `_engine.pyi` stub is the ONLY type authority for the FFI getters — pyright
     reads the stub, never the compiled module — so a stub declaring a getter the engine no

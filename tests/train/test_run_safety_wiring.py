@@ -212,7 +212,7 @@ def test_build_run_safety_requires_an_explicit_wiring_declaration() -> None:
 
 
 class _RecordingCoord(SimpleNamespace):
-    """`routed` records every result the drain applied a promotion for: since R362(c) the
+    """`routed` records every result the drain applied a promotion for: the
     promotion seam is the ONE consumer a routed round has."""
 
     def __init__(self, **kw) -> None:

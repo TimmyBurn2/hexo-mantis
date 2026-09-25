@@ -216,9 +216,8 @@ def test_exactly_one_checkpoint_interval_authority_in_src() -> None:
     because the two homes a second authority would look NATIVE in are the composition root and
     `config/resolve/`, and the expectation is line-free so it cannot go stale. Honest limit: a
     differently-spelled read defeats it — this raises the cost, not the possibility."""
-    # The replay-BUFFER key and its two reads are deleted, so the TRAINER's authority — the
-    # row this census protects — stands alone at one, and a same-spelled second reader anywhere
-    # in `src/mantis/` now reds it where before two legitimate buffer reads sat as noise.
+    # The replay-BUFFER key and its two reads are deleted, so the TRAINER's authority stands
+    # alone at one, and a same-spelled second reader anywhere in `src/mantis/` now reds it.
     _EXPECTED_READS = collections.Counter({
         ("src/mantis/train/trainer/core.py", "self.hp", _RESOLVER): 1,
     })

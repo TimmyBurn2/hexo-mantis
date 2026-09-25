@@ -1,4 +1,4 @@
-"""AUDIT-1 F-28 rows C06 and C07 — a rate nobody measured is `None`, not zero.
+"""A rate nobody measured is `None`, not zero.
 
 FOUR FABRICATIONS, ONE CLASS. `iteration_complete` published `games_per_hour`,
 `positions_per_hour`, `avg_game_length` and `sims_per_sec` as hard `0.0`s before anything had
@@ -13,7 +13,7 @@ now follow.
 C06 is the same class one field over: `StepOutcome.games_per_hour` was built as a hard `0.0`
 by `_build_outcome`, had NO reader in `src/`, `tests/` or `tools/`, and sat beside a REAL
 games-per-hour that `iteration_complete` publishes from the coordinator's own clock. Deleted
-rather than wired — LAW-08 wants a live consumer, and an always-zero twin of a measured field
+rather than wired — a live consumer is wanted, and an always-zero twin of a measured field
 is worse than no field.
 """
 from __future__ import annotations

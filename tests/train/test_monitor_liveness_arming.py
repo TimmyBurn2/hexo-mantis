@@ -157,7 +157,7 @@ def _drive_loop(guard: DiskGuard, *, until: int, attr: str, timeout: float = 5.0
 def test_THE_PLANTED_BREAK_a_guard_whose_every_tick_raises_reads_ARMED_statically_and_DISARMED_live(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """THE producer test (LAW-07), with the break planted in the producer rather than the
+    """THE producer test, with the break planted in the producer rather than the
     predicate: a real `DiskGuard`, its real loop and counters, against the real manifest and a
     real committed config. The config-only audit reports ARMED and is not wrong to — the
     threshold is minted and positive — while the live audit reports DISARMED, because nothing
@@ -243,7 +243,7 @@ def test_a_monitor_that_does_not_exist_yet_is_SILENT_not_stalled(
 
 
 def test_a_LIVE_monitor_logs_its_own_reading_in_run_and_never_stalls(tmp_path: Path) -> None:
-    """LAW-18: a lever under test logs its reading on a HEALTHY run too, or no observer can
+    """A lever under test logs its reading on a HEALTHY run too, or no observer can
     tell a live reading from a frozen one."""
     sink, clock, exits = SpyEventSink(), FakeClock(1000.0), []
     checks = [0]

@@ -1,4 +1,4 @@
-"""AUDIT-1 F-01 + F-28 (INST-C01/C02/C03) — the `training_step` payload never fabricates.
+"""The `training_step` payload never fabricates (INST-C01/C02/C03).
 
 THE DEFECT THIS PINS. `emit_training_step_event` built `policy_entropy` as
 `float(loss_info.get("policy_entropy", 0.0))`. No trainer tail produces that key, every
@@ -8,10 +8,10 @@ minted config sets `alert_entropy_min: 1.0`, and `check_entropy_collapse` fires 
 
 WHY THE PRODUCER IS REAL HERE AND WAS NOT BEFORE. Every coordinator test of this path
 injects a hand-built `loss_info` carrying `"policy_entropy": 2.0` — a shape production never
-emits — so LAW-07's producer test was satisfied against a fiction. These rows drive the two
+emits — so the producer test was satisfied against a fiction. These rows drive the two
 REAL tails (`_graph_step` through the production dispatch, and `train_step_from_tensors`)
 and feed their ACTUAL return dicts to the builder. The graph tail PRODUCES `policy_entropy`
-since R355(e) (B-4); row one pins that it is a finite measurement the alert reads, and every
+now (B-4); row one pins that it is a finite measurement the alert reads, and every
 row the payload carries is one the real tail PRODUCES: a field no tail fills leaves the event.
 """
 from __future__ import annotations
@@ -76,7 +76,7 @@ def _alerts(payload: dict[str, Any]) -> list[str]:
 # the premise, re-derived rather than assumed
 
 def test_the_real_graph_tail_produces_a_finite_policy_entropy(tmp_path: Path) -> None:
-    """F-01's premise, reversed by B-4: the producer exists, so the alert measures something."""
+    """The premise, reversed by B-4: the producer exists, so the alert measures something."""
     graph = _real_graph_loss_info(tmp_path)
     assert math.isfinite(graph["policy_entropy"]) and graph["policy_entropy"] > 0.0
     assert graph["policy_entropy_selfplay"] == graph["policy_entropy"]
@@ -110,7 +110,7 @@ def test_a_MEASURED_entropy_below_the_floor_still_fires(tmp_path: Path) -> None:
     assert "entropy_collapse" in _alerts(payload)
 
 
-# the rest of the family (F-28 INST-C02/C03)
+# the rest of the family (INST-C02/C03)
 
 def test_every_field_is_produced_by_the_real_tail(tmp_path: Path) -> None:
     """A field the real tail leaves `None` on every step has no producer and must leave the event."""

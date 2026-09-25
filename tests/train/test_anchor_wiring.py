@@ -1,4 +1,4 @@
-"""The resolved anchor reaches the objects that read it (WPUF-2 chunk U-w, R55).
+"""The resolved anchor reaches the objects that read it.
 
 The port defect: `mantis.run` hands ONE anchor object to `PromotionHooks` and to
 `StepCoordinator` before the training loop starts, then `run_training_loop` resolved the
@@ -11,7 +11,7 @@ The consequence was larger than the freeze WP-UNFREEZE was written to remove: th
 never synced AT ALL (not the ~39% of run3), and nothing was ever deploy-blessed either.
 
 No existing test pinned this, which is exactly how it survived the WP-SP zero-behavior port
-and WP11-A's wiring — see the R50 change-list re-verification in the dispatch log.
+and the later wiring pass — see the change-list re-verification in the dispatch log.
 """
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ def test_composition_root_actually_threads_the_anchor_into_the_loop():
     """`run.py` must PASS it — publication is useless if the loop never receives it.
 
     Asserted structurally rather than by booting a real run: `mantis.run.main` IS a real
-    launcher since WPMAIN, but a full boot is an integration-tier cost this assertion does
+    launcher, but a full boot is an integration-tier cost this assertion does
     not need — the AST census below reads exactly the keyword this test is about, and the
     live end-to-end path is covered by the launcher's own boot oracle.
     """

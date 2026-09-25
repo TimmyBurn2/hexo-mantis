@@ -1,5 +1,5 @@
-"""R349(a): fp32 on `train.device: cpu` is the ONE carve-out to LAW-06 — the autocast CONTEXT
-is off on a CPU trainer (CARD-OC7-OVERRUN's 72x generic GEMM), the dtype PIN is untouched and
+"""fp32 on `train.device: cpu` is the ONE carve-out to bf16 autocast — the autocast CONTEXT
+is off on a CPU trainer (a 72x generic-GEMM cost otherwise), the dtype PIN is untouched and
 the CUDA trainer still runs bf16; both halves are pinned so neither drifts into the other."""
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from mantis.train.trainer.core import Trainer
 
 
 def test_a_cpu_trainer_keeps_the_bf16_pin_but_runs_its_step_in_fp32(tmp_path: Path) -> None:
-    """Killer: the pre-R349 line, `_autocast_enabled = amp_dtype == torch.bfloat16`."""
+    """Killer: the prior line, `_autocast_enabled = amp_dtype == torch.bfloat16`."""
     trainer = H.tiny_graph_trainer(tmp_path)
     assert trainer.device.type == "cpu"
     assert trainer.amp_dtype is torch.bfloat16, (
@@ -28,7 +28,7 @@ def test_a_cpu_trainer_keeps_the_bf16_pin_but_runs_its_step_in_fp32(tmp_path: Pa
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="R349(a): the CUDA half needs a card")
 def test_a_cuda_trainer_still_autocasts_to_bf16(tmp_path: Path) -> None:
-    """Killer: `enabled=False` everywhere — the carve-out widened into a repeal of LAW-06."""
+    """Killer: `enabled=False` everywhere — the carve-out widened into a repeal of bf16 autocast."""
     torch.manual_seed(H.SEED)
     arch = H.tiny_graph_arch()
     trainer = Trainer(build_net(arch), H.graph_config(), arch=arch,

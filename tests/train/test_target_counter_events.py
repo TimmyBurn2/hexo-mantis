@@ -44,9 +44,7 @@ from mantis.train.lifecycle.signals import ShutdownState
 
 
 #: The counters carried in the `target_integrity` block plus the denominator the rate is taken
-#: over. Transcribed rather than derived from the payload under test: an oracle that read its
-#: own expectation off the subject would be satisfied by any consistent renaming. Three live
-#: counters are needed for the crosswire proof below to be a proof at all.
+#: over, transcribed rather than derived so the oracle cannot be satisfied by a renaming.
 _COUNTERS = ("export_offwindow_mass_moves", "target_integrity_defects",
              "inference_failures_total")
 _DENOMINATOR = "positions_delta"
@@ -291,7 +289,6 @@ def test_the_target_integrity_parameter_has_no_default() -> None:
     )
     # THE KEYWORD-ONLY HALF IS BANKED, not silently dropped: it held on the retired WRAPPER and
     # does not hold on the live builder, whose call sites pass their arguments positionally.
-    # The CONTRAST row, re-pointed: the defaulted, uncalled `solver_deltas` is DELETED, not tidied.
     assert "solver_deltas" not in inspect.signature(emit_training_step_event).parameters, (
         "`solver_deltas` is back on `emit_training_step_event`: a defaulted parameter no caller "
         "passes is the shape that let eight fire-rate counters silently never reach the stream"

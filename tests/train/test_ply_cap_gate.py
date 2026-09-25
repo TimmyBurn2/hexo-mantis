@@ -1,4 +1,4 @@
-"""The ply-cap attractor halt (R352(c)): rule, pool producer, coordinator gate, planted break."""
+"""The ply-cap attractor halt: rule, pool producer, coordinator gate, planted break."""
 from __future__ import annotations
 
 import dataclasses
@@ -201,7 +201,7 @@ def test_the_live_terms_ride_monitor_gates() -> None:
 
 
 def test_the_planted_break_a_dead_producer_is_caught_by_the_producer_test() -> None:
-    """LAW-07's mutation self-test: a producer reporting NO games makes the fire above never come."""
+    """The mutation self-test: a producer reporting NO games makes the fire above never come."""
     h = _harness(_ATTRACTOR, _SPEC)
     h.pool.ply_cap_window_counts = lambda window_games: (0, 0)  # type: ignore[method-assign]
     drive_one_game_per_step(h, 30)

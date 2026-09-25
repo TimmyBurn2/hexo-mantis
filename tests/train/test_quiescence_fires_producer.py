@@ -1,4 +1,4 @@
-"""`iteration_complete.mcts_quiescence_fires` — A-2's LAW-18 counter reaches the one channel (R355(a))."""
+"""`iteration_complete.mcts_quiescence_fires` — A-2's counter reaches the one channel."""
 from __future__ import annotations
 
 import dataclasses

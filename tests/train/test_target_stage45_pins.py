@@ -1,4 +1,4 @@
-"""⊕ WP12-R Phase T (TARGET INTEGRITY) — S4 + S5: the stage-4/5 target-pipeline pins
+"""⊕ Phase T (TARGET INTEGRITY) — S4 + S5: the stage-4/5 target-pipeline pins
 (DESIGN_T §1.6, §5 O-2). Written at T-2 ORACLE-WRITE, byte-frozen through IMPL.
 
 S4 — the dispatcher forwards `policy_target` VALUE-INTACT from `sample_graph_batch` to
@@ -54,13 +54,8 @@ class _RecordingTrainer:
         return {"policy_loss": 0.0}
 
 
-#: G-DFIX-1 (WP12-R F2). The largest per-graph edge count this fixture can produce, MEASURED
-#: over 40 draws of its own buffer: the records carry 2 or 3 stones, giving exactly two
-#: distinct per-graph edge counts, 3142 and 3316. Setting `max_edges` to the LARGER makes no
-#: single graph over-cap (so nothing raises) while making any two graphs together over-cap —
-#: which forces `len(parts) >= 2` on a `batch_size=3` drive and is what makes the strengthened
-#: assertions below exercise the cross-micro-batch property at all. `max_nodes` is set past
-#: the whole batch so the split is edge-driven and the binding member is unambiguous.
+#: The largest per-graph edge count this fixture can produce, MEASURED over 40 draws (3142 and
+#: 3316): setting `max_edges` to the LARGER forces `len(parts) >= 2` on a `batch_size=3` drive without any single graph over-capping alone.
 _S4_MAX_PER_GRAPH_EDGES = 3316
 _S4_CAPS = MicrobatchCapsSpec(max_edges=_S4_MAX_PER_GRAPH_EDGES, max_nodes=1_000_000)
 
@@ -85,12 +80,8 @@ def test_dispatch_forwards_policy_target_value_intact() -> None:
                             caps_provider=lambda: _S4_CAPS, sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0)
     assert len(rec.calls) == 1 and len(sampled) == 1
-    # G-DFIX-1 (WP12-R F2): after the micro-batch split the trainer receives a PARTITION, not
-    # a `policy_target` kwarg. The pin is UNCHANGED in what it claims and STRICTLY STRONGER in
-    # what it checks — the dtype is now asserted on every part, and the value assertion now
-    # also pins ORDER ACROSS micro-batch boundaries, which the single-tensor form could not
-    # express. The `len(parts) >= 2` assertion is what earns that: without a BINDING cap the
-    # fixture gives M = 1 and the cross-boundary claim would be vacuous.
+    # After the micro-batch split the trainer receives a PARTITION, not a `policy_target` kwarg:
+    # the assertions below pin dtype per part and value ORDER across micro-batch boundaries.
     parts = [make() for make in rec.calls[0]["parts"]]
     assert len(parts) >= 2, (
         f"the caps did not bind — {len(parts)} micro-batch(es) from a batch_size=3 drive. "

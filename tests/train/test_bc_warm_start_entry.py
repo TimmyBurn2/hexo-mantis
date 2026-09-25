@@ -80,7 +80,7 @@ def test_a_row_missing_its_hash_is_REFUSED_not_defaulted() -> None:
 
 
 def test_a_row_missing_reinit_is_REFUSED_not_defaulted() -> None:
-    """An absent `reinit` is not an empty one (the silent-head-set class R350(b)(i) closes)."""
+    """An absent `reinit` is not an empty one (never a silent head-set default)."""
     with pytest.raises(ValueError, match="reinit"):
         resolve_bc_warm_start({"identity": {"warm_start": {"checkpoint": "/x.pt", "net_hash": "a" * 64}}})
 

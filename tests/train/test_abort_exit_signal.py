@@ -51,14 +51,12 @@ class _Trainer:
         self.model = object()
         self.device = "cpu"
         self.saves = 0
-        # A REAL directory, because R343(c) made the O3 arm write a resume sidecar beside the
-        # checkpoint it saves. A fake `checkpoint_dir` would have made the O3 row assert a
-        # clean stop while the resumable leg went unexercised. Owned TemporaryDirectory.
+        # A REAL directory: the O3 arm writes a resume sidecar beside the checkpoint, and a fake
+        # `checkpoint_dir` would leave the resumable leg unexercised.
         self._ckpt_tmp = tempfile.TemporaryDirectory(prefix="mantis-abort-exit-")
         self.checkpoint_dir = Path(self._ckpt_tmp.name)
 
-    # WPTS/TD-1 re-point (R90a): the dead `train_step` fake is gone — the double
-    # conforms to the DECLARED seam (typed entry points + `device`).
+    # The double conforms to the declared seam: typed entry points plus `device`.
     def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
         self.step += 1
         return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
@@ -316,9 +314,8 @@ def test_the_rule_name_carrier_keeps_the_train_layer_free_of_the_manifest() -> N
     src = __import__("mantis.train.coordinator.step", fromlist=["x"]).__file__
     with open(src, encoding="utf-8") as fh:
         tree = ast.parse(fh.read())
-    # An IMPORT scan at any depth, not a token scan over the text: the file's own comments name
-    # `armed_aborts` (they explain why it is NOT imported), and a token scan would be satisfied by
-    # deleting the explanation. Function-body imports count — a lazy import is still the coupling.
+    # An IMPORT scan at any depth, not a token scan: a token scan would be satisfied by deleting
+    # the explaining comment. Function-body imports count — a lazy import is still the coupling.
     imported = {
         name
         for node in ast.walk(tree)

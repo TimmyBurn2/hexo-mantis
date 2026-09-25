@@ -503,7 +503,7 @@ def test_of2_5_grad_norm_matches_the_unsplit_steps_norm(tmp_path) -> None:
 @pytest.mark.parametrize("m", [1, 2, 4])
 def test_of2_6_graph_trainer_step_event_carries_the_counter_and_its_caps(tmp_path,
                                                                          m: int) -> None:
-    """LAW-18: the lever logs its own fire-rate in-run and the CAPS travel beside it, since a
+    """The lever logs its own fire-rate in-run and the CAPS travel beside it, since a
     fire-rate of 1 is uninterpretable without the bound that produced it. `M` is computed HERE from
     the wire's own per-graph counts and never read back out of the event."""
     r = _drive_with_spies(tmp_path, m)

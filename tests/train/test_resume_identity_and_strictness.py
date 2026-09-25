@@ -146,11 +146,10 @@ def test_the_halt_names_both_sides(tmp_path: Path) -> None:
     )
 
 
-# These target-semantics leaves build no net, so every identity check above passes them;
-# what they decide is whether a stored replay row is a visit-count distribution or a
-# completed improved policy, and a restored ring carries no per-row provenance to tell
-# the two apart. `selfplay.search.kind` decides it, `train.policy_target` is what the stamp
-# carries; the DEPLOY kind plays games nobody trains on and is deliberately not guarded.
+# These target-semantics leaves build no net, so identity checks above pass them; they decide
+# whether a stored replay row is a visit-count distribution or a completed improved policy,
+# which a restored ring carries no per-row provenance to tell apart. The DEPLOY kind plays
+# games nobody trains on and is deliberately not guarded here.
 @pytest.mark.parametrize("section,path,value", [
     ("train", ("policy_target",), "completed_improved_policy"),
     ("selfplay", ("search", "kind"), "gumbel"),
@@ -208,7 +207,7 @@ def test_the_target_semantics_halt_names_both_sides(tmp_path: Path) -> None:
 
 
 def test_the_deploy_kind_is_deliberately_not_a_target_semantics_key(tmp_path: Path) -> None:
-    """R351(c): the deploy head plays games nobody trains on, so a resume may re-take it."""
+    """The deploy head plays games nobody trains on, so a resume may re-take it."""
     path = _write_full(tmp_path)
     deploy = copy.deepcopy(load_checkpoint(path).config["deploy"])
     deploy["search"]["kind"] = "gumbel" if deploy["search"]["kind"] == "puct" else "puct"

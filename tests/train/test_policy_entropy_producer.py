@@ -1,4 +1,4 @@
-"""B-4 (R355(e)): the graph step MEASURES the model's policy entropy; the collapse rules read it."""
+"""B-4: the graph step MEASURES the model's policy entropy; the collapse rules read it."""
 from __future__ import annotations
 
 import math

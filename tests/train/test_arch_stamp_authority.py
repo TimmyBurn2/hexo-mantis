@@ -1,12 +1,12 @@
-"""R330(e) — a config-less call site resolves an ARTIFACT's arch from its STAMP, never from a
+"""A config-less call site resolves an ARTIFACT's arch from its STAMP, never from a
 config table, and there is ONE function that answers: `stamped_arch_kind`.
 
-THE DEFECT THIS CLOSES, and the planted break that shows the row bites. Before R330(e) the
+THE DEFECT THIS CLOSES, and the planted break that shows the row bites. Before this fix the
 call sites that hold no run config — `load_legacy_weights` (a v1 envelope's embedded config)
 and `strip_and_restamp` (passes `{}`) — both called
 `arch_from_spec_and_config`, i.e. resolved the INCUMBENT for the representation. For a V2-stamped
 source, `strip_and_restamp` therefore rebuilt `GnnArch` and re-stamped the stripped artifact as
-V1 — V2's weights under V1's provenance, the class LAW-12 exists for. The strip test below reds
+V1 — V2's weights under V1's provenance, the class this check exists to prevent. The strip test below reds
 under that code (`GnnArchV2` is a SIBLING of `GnnArch`, so the `type(...) is` check cannot be
 satisfied by the old resolution) and is green under the stamp read.
 """

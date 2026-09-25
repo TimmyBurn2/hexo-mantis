@@ -1,12 +1,12 @@
-"""AUDIT-1 F-30 — BC pretrain runs at the DECLARED autocast dtype, on both arms.
+"""BC pretrain runs at the DECLARED autocast dtype, on both arms.
 
 THE FINDING, AND THE HALF OF IT THAT IS FALSE AT CONTACT (REPAIR-2 §0 verifies before it
 repairs, and this row is why the rule exists):
 
 * **GRID — TRUE, repaired, and then DELETED.** `pretrain/trainer.py::BootstrapTrainer` read
   `config.get("fp16", True)` — a code-side default on a key the schema REQUIRED — and autocast
-  at a LITERAL `torch.float16`, while `amp_dtype_for` is the ONE dtype authority (LAW-06). The
-  repair routed both through `training_terms`; R346(f) then deleted the module, the key and the
+  at a LITERAL `torch.float16`, while `amp_dtype_for` is the ONE dtype authority. The
+  repair routed both through `training_terms`; a later change then deleted the module, the key and the
   second dtype spelling outright, so the arm has no subject left to pin.
 * **GRAPH — FALSE.** The finding reads *"`pretrain/graph_route.py` uses no autocast at all"*,
   and the module indeed contains none — but the step it drives is

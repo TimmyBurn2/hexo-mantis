@@ -34,7 +34,7 @@ from mantis.train.pretrain.graph_route import (
 _REPO = Path(__file__).resolve().parents[2]
 
 
-#: The route refuses a config that mints a policy warm-up (R350(b)(iii)), so a stub config must
+#: The route refuses a config that mints a policy warm-up, so a stub config must
 #: carry the key it reads — an absent key is a KeyError, never a silent zero.
 _NO_WARM_UP: dict[str, Any] = {"train": {"policy_loss_weight_schedule": {"warmup_steps": 0}}}
 

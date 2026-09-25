@@ -43,17 +43,14 @@ def _eval_block() -> dict:
     }
 
 
-#: The complete `train:` payload, DERIVED from a MINTED config rather than restated: eleven
-#: files carried a hand-written copy, so a new `train.*` key cost eleven edits. `lr_schedule`
-#: is the one leaf this file pins itself below.
+#: The complete `train:` payload, DERIVED from a MINTED config rather than restated: a
+#: hand-written copy cost eleven edits per new `train.*` key. `lr_schedule` is the one leaf pinned below.
 _MINTED_TRAIN: dict = load_config(
     Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").train.model_dump()
 
 
-#: Every config this file builds is a GRAPH config, and it says so once. The block builders read
-#: it so arch-scoped blocks are dropped AT SOURCE: these oracles compare an OVERRIDE block
-#: against the BAKED one, so a builder emitting a key the assembled config strips would make the
-#: comparison measure this file's own inconsistency.
+#: Every config this file builds is a GRAPH config, and it says so once: these oracles compare
+#: an OVERRIDE block against the BAKED one, so a stripped key would corrupt the comparison itself.
 _REPRESENTATION = "graph"
 
 
@@ -216,8 +213,7 @@ def test_no_config_overrides_leaves_baked_train_section_untouched(
 
 def test_resume_trainer_docstring_no_longer_asserts_unimplemented_f1_e0_semantics():
     # A light introspection oracle: the real behavior is pinned by the five tests above. The
-    # docstring must describe the F1(A)/E0 override rule and must not hedge it as aspirational,
-    # which it once did while neither rule was wired.
+    # docstring must describe the F1(A)/E0 override rule, not hedge it as aspirational.
     doc = (resume_trainer.__doc__ or "").lower()
     assert "f1(a)" in doc or "e0" in doc, (
         "the docstring must still describe the F1(A)/E0 override-application rule"

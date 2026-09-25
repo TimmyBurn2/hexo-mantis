@@ -25,7 +25,7 @@ from mantis.train.lifecycle.watchdog import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-#: What a stubbed R348(c) stamp check hands back: the three fields `main` logs.
+#: What a stubbed stamp check hands back: the three fields `main` logs.
 _STAMP = {"config_sha256": "stub", "tree_sha": "stub", "preflight_utc": "stub"}
 
 

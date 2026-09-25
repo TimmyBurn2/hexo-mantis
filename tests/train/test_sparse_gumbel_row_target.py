@@ -241,7 +241,7 @@ def test_the_real_graph_trainer_step_publishes_the_tail_mass_reading(tmp_path) -
 
 
 def test_an_all_tail_sparse_row_is_admitted_stored_at_zero_and_trains_finite(tmp_path) -> None:
-    """R349(c)'s parity vector (Rust twin `a_sparse_row_stores_every_support_cell_even_at_zero_mass`)."""
+    """The parity vector (Rust twin `a_sparse_row_stores_every_support_cell_even_at_zero_mass`)."""
     import _microbatch_harness as H  # noqa: PLC0415 — the tests/train rootdir harness
     from mantis._engine import HexgBuffer
     from mantis.config.resolve.microbatch import MicrobatchCapsSpec
@@ -269,14 +269,14 @@ def test_an_all_tail_sparse_row_is_admitted_stored_at_zero_and_trains_finite(tmp
     assert math.isfinite(float(result["loss"])) and math.isfinite(float(result["policy_loss"]))
     event = sink.named("trainer_step")[0]
     assert event[GUMBEL_TAIL_MASS_KEY]["max"] == pytest.approx(1.0)
-    # R350(e): every one of these rows is alpha = 1.0, so the step trained NO policy row and the
+    # Every one of these rows is alpha = 1.0, so the step trained NO policy row and the
     # count on the event says so; the policy loss over an empty set is a measured zero.
     assert event["policy_rows_excluded_alpha_full"] == 8
     assert float(result["policy_loss"]) == 0.0
 
 
 def test_the_target_entropy_makes_ce_minus_it_the_kl_to_the_prior() -> None:
-    """R350(b)(iv)'s line: `CE - H(target) == KL(target || model)` on the fixture; H carries no grad."""
+    """The line: `CE - H(target) == KL(target || model)` on the fixture; H carries no grad."""
     from mantis.train.losses import ragged_policy_ce_and_entropies
 
     f = _fixture()
@@ -317,7 +317,7 @@ def test_the_real_graph_trainer_step_publishes_the_kl_line(tmp_path) -> None:
 
 
 def test_an_alpha_full_row_leaves_the_policy_weight_and_the_denominator() -> None:
-    """R350(e), the unit: a row at alpha >= the threshold weighs 0, one just under it stays."""
+    """The unit: a row at alpha >= the threshold weighs 0, one just under it stays."""
     weights = graph_policy_row_weights(np.asarray([True, True, True, False]), 0.5)
     alpha = np.asarray([1.0, 1.0 - 1e-7, ALPHA_FULL_THRESHOLD - 1e-5, 1.0], dtype=np.float32)
     out, excluded = exclude_alpha_full_rows(weights, alpha)

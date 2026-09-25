@@ -205,7 +205,7 @@ def test_sidecar_write_is_atomic_leaving_no_temp_behind(tmp_path: Path) -> None:
 
 
 def test_a_sidecar_predating_the_kicked_round_field_reads_unknown(tmp_path: Path) -> None:
-    """B-3 (R355(e)): the field is read TOLERANTLY — the box's bundles predate it — as -1."""
+    """B-3: the field is read TOLERANTLY — the box's bundles predate it — as -1."""
     ckpt = tmp_path / "run6_00000750_abcdef12.ckpt"
     ckpt.write_bytes(b"x")
     write_resume_state(_state(tmp_path), ckpt)

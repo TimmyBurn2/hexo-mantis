@@ -1,4 +1,4 @@
-"""The policy-loss trough halt (R350(b)(iv)): the rule, and its producer through the coordinator."""
+"""The policy-loss trough halt: the rule, and its producer through the coordinator."""
 from __future__ import annotations
 
 import dataclasses

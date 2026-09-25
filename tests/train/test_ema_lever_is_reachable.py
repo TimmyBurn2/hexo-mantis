@@ -1,4 +1,4 @@
-"""AUDIT-1 F-06 / R332(d) — the EMA lever has an arming key, and every config states its posture.
+"""The EMA lever has an arming key, and every config states its posture.
 
 THE DEFECT. `train/ema.py::resolve_ema_config` read FOUR names — a nested `ema` block and the
 flat `ema_enabled` / `ema_decay` / `ema_update_every` — off a `RunConfig` that is

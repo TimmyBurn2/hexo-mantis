@@ -29,7 +29,7 @@ from mantis.model import GnnArch, RepresentationMismatch  # noqa: F401 (arch typ
 import mantis.train.checkpoints as checkpoints
 
 
-# WP11-A schema extension: eval.gate/eval.ladder are now required fields (design §c.1).
+# Schema extension: eval.gate/eval.ladder are now required fields (design §c.1).
 def _make_eval_block() -> dict:
     return {
         "random_model_sims": 96, "max_plies": 128, "random_floor_games": 0, "worker_device": "cuda",
@@ -190,7 +190,7 @@ def test_a_stamp_that_predates_a_required_leaf_still_loads_and_says_so(
 
 def test_a_stamp_carrying_a_retired_section_still_loads_and_says_so(
         tmp_path, tiny_net, optim_scaler_sched, valid_config, metadata_kwargs, caplog):
-    """The mirror image: a section the schema RETIRED after the stamp (R351(c) split the
+    """The mirror image: a section the schema RETIRED after the stamp (the split of the
     top-level `search`) loads as provenance, logged; an unregistered extra key still refuses."""
     import logging
 
@@ -212,7 +212,7 @@ def test_a_stamp_carrying_a_retired_section_still_loads_and_says_so(
 
 def test_a_run8_shaped_stamp_with_the_retired_rung_rows_still_loads_and_says_so(
         tmp_path, tiny_net, optim_scaler_sched, valid_config, metadata_kwargs, caplog):
-    """R362(c): run7/run8 stamps carry `eval.ladder`, `eval.sealbot_model_sims`,
+    """run7/run8 stamps carry `eval.ladder`, `eval.sealbot_model_sims`,
     `eval.rung_concurrency` and the nine `monitor.wr_*` leaves — NESTED retired paths, which the
     top-level-only tolerance refused. run9's warm start is one of these stamps, so a refusal here
     is a run that cannot boot from its parent. A nested key the schema never had still refuses."""
@@ -318,7 +318,7 @@ def test_restamp_from_loaded_config_is_error(tmp_path, tiny_net, optim_scaler_sc
         "encoding_name": ck.metadata.encoding_name,
         "run_id": ck.metadata.run_id,
         "arch": ck.metadata.arch,
-        "created_utc": ck.metadata.created_utc,  # carrying an existing stamp = the F-12 bug
+        "created_utc": ck.metadata.created_utc,  # carrying an existing stamp is the bug
         "commit_sha": ck.metadata.commit_sha,
     }
     with pytest.raises(CheckpointStampError):
@@ -488,9 +488,8 @@ def test_weights_strip_requires_wire_signature_equality(tmp_path, tiny_net, opti
     same = strip_and_restamp(src, new_encoding="gnn_axis_v1", run_id="runc",
                              checkpoint_dir=tmp_path)
     assert Path(same).exists()
-    # THE REFUSAL ARM HAS NO CONSTRUCTIBLE INPUT AT HEAD, asserted rather than quietly dropped:
-    # every registered encoding now shares one wire signature, so no `new_encoding` this repo knows
-    # can make the check fire. The row below reds the day a second signature is registered.
+    # THE REFUSAL ARM HAS NO CONSTRUCTIBLE INPUT AT HEAD: every registered encoding shares one
+    # wire signature, so the row below reds only the day a second signature is registered.
     signatures = {checkpoints._wire_signature(spec) for spec in all_specs()}
     assert len(signatures) == 1, (
         f"more than one registered wire signature ({signatures}) — the strip's mismatch "
@@ -674,7 +673,7 @@ def test_reads_full_v1_envelope_via_field_map(tmp_path, full_graph_net, full_gra
             "fused_graph_caps": CAPS_DICT,
         },
         "monitor": {
-            # R242 (ADJ-D12): the ARMING cadence, schema-only and required.
+            # The ARMING cadence, schema-only and required.
             "gate_interval": 1000,
             "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
             "alert_loss_increase_window": 3, "axis_warn": 0.45, "axis_alert": 0.50,
@@ -695,8 +694,7 @@ def test_reads_full_v1_envelope_via_field_map(tmp_path, full_graph_net, full_gra
         },
     }
     # Every ARCH-SCOPED block that is not this envelope's arch is dropped through
-    # `ARCH_SCOPED_KEYS` — the schema's own partition — rather than by name, so a third scoped
-    # block needs no edit here.
+    # `ARCH_SCOPED_KEYS`, the schema's own partition, so a third scoped block needs no edit here.
     for _key in ARCH_SCOPED_KEYS:
         if valid_config["identity"]["representation"] != _key.arch:
             valid_config[_key.section].pop(_key.field, None)

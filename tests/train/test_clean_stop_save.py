@@ -47,9 +47,8 @@ from _spy import SpyEventSink
 
 #: The declared terminus for the leg-3 drives.
 _CEILING = 5
-#: The trainer's step at O2 entry, DELIBERATELY DISTINCT from `_CEILING`: the `clean_stop_save`
-#: event carries BOTH `step` and `stop_step`, and equal values would let an implementation that
-#: emits one number twice — or swaps the two fields — pass forever.
+#: The trainer's step at O2 entry, DELIBERATELY DISTINCT from `_CEILING`: equal values would let
+#: an implementation that emits one number twice, or swaps `step`/`stop_step`, pass forever.
 _RESUMED_STEP = 7
 #: The CANONICAL shape — the run arriving exactly at its ceiling — so the file covers both `>`
 #: and `==` on the O2 predicate.
@@ -328,7 +327,7 @@ def test_a_coordinator_publishing_no_latch_makes_the_loop_raise() -> None:
 
 
 def test_a_rigged_final_save_failure_propagates_out_of_step() -> None:
-    """A rigged final-save failure propagates out of `step()` — leg 3 catches NOTHING (LAW-14).
+    """A rigged final-save failure propagates out of `step()` — leg 3 catches NOTHING.
     A swallowed failure is a run reporting success having written nothing, and a SECOND authority
     for a storage fault's exit code beside the registered persist-fatal chain."""
     trainer = _Trainer(step=_RESUMED_STEP, raises=OSError("rigged: the volume went away"))
@@ -555,7 +554,7 @@ def test_a_clean_run_at_the_minted_bound_leaves_one_stamped_checkpoint(
 
 
 def test_a_signal_in_the_pre_O3_poll_window_saves_ONCE() -> None:
-    """B-8 (R355(e)): a signal in the pre-O3 poll window saved at O3 AND at the loop's `_final_save`."""
+    """A signal in the pre-O3 poll window saved at O3 AND at the loop's `_final_save`."""
     shutdown = ShutdownState()
     trainer = _Trainer(step=5)
     h = _harness(trainer=trainer, config=_config(stop_step=1000), shutdown=shutdown)

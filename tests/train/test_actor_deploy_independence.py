@@ -1,4 +1,4 @@
-"""⊕ WPUF Phase U ORACLE — O-U2 (both directions of actor⊥deploy independence) + O-U6
+"""⊕ Phase U ORACLE — O-U2 (both directions of actor⊥deploy independence) + O-U6
 (the eval deploy-matched rung reads the DeployTag, never the actor's live weights).
 DESIGN_U §8.
 
@@ -51,7 +51,7 @@ class _ActorTargetSpy:
 
 class _DeployOnlyPipeline:
     """Delegates to the REAL single-signature applier. Deliberately accepts NO
-    `sync_inference` keyword: a drain that still threads one fails here (R49)."""
+    `sync_inference` keyword: a drain that still threads one fails here."""
 
     def __init__(self, hooks: Any) -> None:
         self._hooks = hooks
@@ -139,7 +139,7 @@ def test_gate_fail_freezes_deploy_tag_while_sync_continues(tmp_path) -> None:
 
 
 def test_apply_gate_decision_has_no_sync_parameter() -> None:
-    """R49 signature pin: the `sync_inference` keyword — the parameter that made
+    """The `sync_inference` keyword — the parameter that made
     sync-on-gate representable — no longer exists on the ONE applier."""
     params = inspect.signature(apply_gate_decision).parameters
     assert "sync_inference" not in params, (
@@ -177,14 +177,14 @@ class _AttrReadRecorder:
 
 
 def _kick_config() -> StepCoordinatorConfig:
-    """DERIVED from the production builder (WPMINT Phase K-A stage 0) — this file's deltas
+    """DERIVED from the production builder — this file's deltas
     only. `None` is the EXPLICIT disarmed draw-rate posture; the four drain caps come from
-    a MINTED `monitor.drain` block (R93/DR-11)."""
+    a MINTED `monitor.drain` block (DR-11)."""
     return dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
                                  drain_caps=DEV_DRAIN_CAPS, gate_interval=DEV_GATE_INTERVAL,
                                  knobs=DEV_KNOBS),
-        # R242: `gate_interval` mirrors `log_interval` here — this file drives the deploy
+        # `gate_interval` mirrors `log_interval` here — this file drives the deploy
         # seam, not either cadence, and 0 is its way of asking for no emission at all.
         eval_interval=4, log_interval=0, gate_interval=0,
     )

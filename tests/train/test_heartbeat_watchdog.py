@@ -208,7 +208,7 @@ def test_close_out_deadline_zero_keeps_the_old_unbounded_behaviour(tmp_path, spy
 def test_checkpoint_source_live_attribute_increment_fires_43(tmp_path, spy_sink, monkeypatch):
     """O-28 / P-28 — an increment of `mantis.train.checkpoints.persist_errors_total` made AFTER
     the watchdog's `counters_fn` is constructed is observed (live module-attribute read) → fire
-    43. LAW-14 requires the checkpoint source fatal via the watchdog, not just the sink."""
+    43. The checkpoint source must be fatal via the watchdog, not just the sink."""
     import mantis.train.checkpoints as checkpoints
 
     clock = FakeClock()

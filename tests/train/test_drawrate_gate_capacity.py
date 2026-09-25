@@ -123,7 +123,7 @@ def test_a_skipped_boundary_neither_appends_nor_resets_above_the_old_depth() -> 
     for _ in range(20):
         assert h.coord._run_hard_abort_gates(h.config) is False
     ring_before = list(h.coord._draw_rate_history)
-    pool.set_counts((9, 9))  # completed 9 < N_pool_min 10: NO OBSERVATION (R92)
+    pool.set_counts((9, 9))  # completed 9 < N_pool_min 10: NO OBSERVATION
     assert h.coord._run_hard_abort_gates(h.config) is False
     assert h.coord._draw_rate_history == ring_before, (
         "a blackout boundary touched the ring: a skipped boundary must neither append "

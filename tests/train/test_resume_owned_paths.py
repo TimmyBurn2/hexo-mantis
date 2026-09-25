@@ -95,7 +95,7 @@ def spy_sink():
 def test_a_launch_eta_min_never_reaches_a_resumed_run_and_is_said_out_loud(
     tmp_path, tiny_net, optim_scaler_sched, metadata_kwargs, spy_sink,
 ) -> None:
-    """LAW-07 producer: the baked owned leaf wins, the ignore is loud, the record is stripped."""
+    """Producer test: the baked owned leaf wins, the ignore is loud, the record is stripped."""
     opt, scaler, sched = optim_scaler_sched
     baked_cfg = _nested(eta_min=5e-4, lr_schedule="none")
     path = save_checkpoint(model=tiny_net, optimizer=opt, scaler=scaler, scheduler=sched,

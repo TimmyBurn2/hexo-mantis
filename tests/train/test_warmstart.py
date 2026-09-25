@@ -2,7 +2,7 @@
 
 WHAT THIS FILE USED TO BE, and what stayed. O-WARM tested the value-head warm-start arm:
 `resolve_warmstart_head_file`, `default_head_for_arm`, `maybe_warmstart_value_head`. That arm is
-DELETED (AUDIT-1 F-19's dead-code half) — it had no production entry, and it read two keys the
+DELETED (dead code) — it had no production entry, and it read two keys the
 schema does not have with code-side defaults on identity quantities. Its tests go with it, which
 is the discipline: a test whose subject is gone is not evidence of anything.
 
@@ -12,7 +12,7 @@ gate 17 (rule 7) exists to keep out of a public repo, and a personal path could 
 by any future edit to this file — including one that re-adds a head-seeding arm. So the ban is
 asserted over the whole source, and the assertion now covers the BC entry that replaced the arm.
 
-The BC warm-start entry R332(d) built has its own suite: `tests/train/test_bc_warm_start_entry.py`.
+The BC warm-start entry has its own suite: `tests/train/test_bc_warm_start_entry.py`.
 """
 from __future__ import annotations
 
@@ -63,8 +63,8 @@ def test_the_deleted_value_head_arm_stays_deleted() -> None:
     """The inverse pin. Re-adding the arm must be a decision, not a merge.
 
     Every member below read `combined_config["warm_start"]` or `["value_head_type"]` — keys the
-    schema does not have — with code-side defaults under them. R332(d) decided what the entry
-    IS (`identity.warm_start`: a checkpoint named by path AND by the net hash it must turn out
+    schema does not have — with code-side defaults under them. What the entry IS was decided
+    (`identity.warm_start`: a checkpoint named by path AND by the net hash it must turn out
     to be), and a second, key-less entry sitting beside it is the ambiguity that decision closed.
     """
     for gone in ("resolve_warmstart_head_file", "default_head_for_arm", "load_value_head",
@@ -74,10 +74,8 @@ def test_the_deleted_value_head_arm_stays_deleted() -> None:
             f"{gone} is back. If a value-head warm-start arm is wanted, it needs a SCHEMA key "
             "with a live consumer (R1) — which is a mint act (R323(b)), not a module edit"
         )
-    # Over the AST's string CONSTANTS, not the raw source: the comment that records this
-    # deletion necessarily names the key it removed, and a text census over source cannot tell
-    # a defect from a note about a defect. REPAIR-2 recorded that trap three times in one leg;
-    # this is the same file paying it forward.
+    # Over the AST's string CONSTANTS, not the raw source: a comment recording this deletion
+    # names the key it removed, so a text census over source could not tell the two apart.
     import ast
 
     sniffed = [n.value for n in ast.walk(ast.parse(_WARMSTART_SRC))

@@ -59,10 +59,9 @@ def _tiny_graph_trainer(tmp_path, mk_config) -> Trainer:
                    checkpoint_dir=tmp_path / "ckpt", device=torch.device("cpu"))
 
 
-#: A REQUIRED zero-arg `caps_provider` the GRAPH arm alone invokes. A default was refused: it
-#: would be a code-side default for a config-derived value, and a caller that forgot it would
-#: silently get an UNCAPPED step. These caps are far past anything the fixtures can build, so
-#: every assertion below is about ROUTING and none accidentally exercises a split.
+#: A REQUIRED zero-arg `caps_provider` the GRAPH arm alone invokes: no default, since a caller
+#: that forgot it would silently get an UNCAPPED step. These caps are far past anything the
+#: fixtures can build, so every assertion below is about ROUTING, not a split.
 def _NON_BINDING_CAPS() -> MicrobatchCapsSpec:
     return MicrobatchCapsSpec(max_edges=100_000_000, max_nodes=4_000_000)
 

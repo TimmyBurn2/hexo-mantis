@@ -1,6 +1,6 @@
-"""⊕ WPUF Phase U ORACLE — O-U3 static half: the no-cross-read law, enforced structurally
+"""⊕ Phase U ORACLE — O-U3 static half: the no-cross-read law, enforced structurally
 (DESIGN_U §2.2 censuses S1–S5 + §2.4's unconditional-construction pin), each census with
-its LAW-07 bite test (template: tests/selfplay/test_pool_surface.py H-12).
+its bite test (template: tests/selfplay/test_pool_surface.py H-12).
 
 PLACEMENT DEVIATIONS (logged in ORACLE_NOTES_U.md): DESIGN homes S4 in the rewritten
 `tests/eval/test_promote_call_site.py` and E10's kept half (S5) in the edited
@@ -20,7 +20,7 @@ _SRC = _REPO / "src" / "mantis"
 
 _SYNC_METHODS = ("sync_inference_weights", "update_checkpoint_step")
 # The pre-existing pool seam (definitions + self-forwarders), same exclusion as the
-# WP11-A census (test_promote_call_site.py) — no new exclusions without adjudication.
+# census (test_promote_call_site.py) — no new exclusions without adjudication.
 _EXCLUDED = (_SRC / "selfplay" / "pool.py", _SRC / "selfplay" / "pool_hooks.py")
 
 _S3_TOKENS = ("best_model", "anchor", "promot", "deploy", "gate", "eval_pipeline")
@@ -74,7 +74,7 @@ def test_sync_call_sites_are_exactly_the_actor_sync_engine() -> None:
 
 
 def test_s1_census_would_notice_a_second_sync_call_site() -> None:
-    """LAW-07 bite: the walker flags a call and does NOT flag a bare definition."""
+    """Bite test: the walker flags a call and does NOT flag a bare definition."""
     assert _sync_calls_in_source("foo.sync_inference_weights(x)") == ["sync_inference_weights"]
     assert _sync_calls_in_source("def sync_inference_weights(self, sd): ...") == []
 
@@ -154,7 +154,7 @@ def test_compose_run_builds_actor_sync_unconditionally() -> None:
     """`ActorSync(` is constructed in `compose_run`'s function body, under NO `if` —
     the same no-conditional shape as the pool.start() ordering pin. `actor_sync=None`
     on the coordinator is a unit-test affordance only; the ONE production wiring site
-    must never make sync conditional on config/eval state (§2.4: not an R49 hole
+    must never make sync conditional on config/eval state (§2.4: not a hole
     precisely because this pin exists)."""
     tree = ast.parse((_SRC / "run.py").read_text(encoding="utf-8"))
     compose = next(

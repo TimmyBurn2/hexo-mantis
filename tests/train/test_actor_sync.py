@@ -1,6 +1,6 @@
-"""⊕ WPUF Phase U ORACLE — O-U1: continuous, unconditional actor sync (DESIGN_U §1.1/§8).
+"""⊕ Phase U ORACLE — O-U1: continuous, unconditional actor sync (DESIGN_U §1.1/§8).
 
-The headline law (R49): the actor's weights track the learner on a step-modulo cadence,
+The headline law: the actor's weights track the learner on a step-modulo cadence,
 with NO gate, promotion, deploy or eval object anywhere in the loop. There is deliberately
 no gate object in ANY harness below — "the gate fails forever" is vacuously true here,
 which per DESIGN §0 is also HEAD's production reality on the compose_run path.
@@ -101,7 +101,7 @@ def test_actor_tracks_learner_within_cadence_when_gate_never_passes() -> None:
 def test_actor_step_advances_only_after_successful_push(failing_method: str) -> None:
     """Producer honesty (DESIGN §3, R4): `_actor_step` is written ONLY after both target
     calls return. A raising target leaves the recorded step un-advanced — the lag
-    invariant then reports the truth — and the exception PROPAGATES (LAW-14: no swallow)."""
+    invariant then reports the truth — and the exception PROPAGATES (no swallow)."""
     target = _SyncTargetSpy(raise_on=failing_method)
     learner = _Learner(step=0)
     engine = _engine(target=target, learner=learner, cadence_steps=4)
@@ -141,7 +141,7 @@ def test_sync_pushes_state_dict_and_step_together() -> None:
 
 
 def test_actor_sync_event_carries_lever_fire_rate_fields() -> None:
-    """LAW-18: the cadence is a lever under test — every sync emits an `actor_sync`
+    """The cadence is a lever under test — every sync emits an `actor_sync`
     event with exactly the DESIGN §5 payload keys, `sync_count` monotonic."""
     sink = SpyEventSink()
     target = _SyncTargetSpy()

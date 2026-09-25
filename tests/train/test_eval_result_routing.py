@@ -106,7 +106,7 @@ def _make_coordinator(*, eval_pipeline=None, config=None):
 
 def test_step_polls_and_routes_completed_rounds_on_main_thread() -> None:
     """`step()` polls the pipeline and routes a completed round on the MAIN thread — to the
-    promotion seam, the one consumer a routed round has since R362(c)."""
+    promotion seam, the one consumer a routed round has."""
     pipe = ThreadIdentSpyEvalPipeline(poll_result={"step": 5, "promoted": True,
                                                     "eval_broken_reason": None})
     h = _make_coordinator(eval_pipeline=pipe)
