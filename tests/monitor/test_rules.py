@@ -128,7 +128,7 @@ def test_a_finite_loss_does_not_fire_the_nonfinite_rule() -> None:
 
 
 def test_pooled_draw_rate_below_the_bar_is_no_observation() -> None:
-    """O-03, RE-POINTED by WPMINT Phase DS (R92)."""
+    """O-03, RE-POINTED by the mint's Phase DS."""
     assert pooled_draw_rate((0, 0), N_pool_min=50) is None
     assert pooled_draw_rate((3, 3), N_pool_min=50) is None, (
         "three drawn games is not evidence: a 1.0 here would be a total-collapse abort on "
@@ -159,7 +159,7 @@ def test_draw_rate_collapse_below_consec_no_fire() -> None:
 
 
 def test_draw_rate_collapse_threshold_nonpositive_disables() -> None:
-    """O-03 — threshold <= 0 disables the gate (ships OFF at WP13-A landing, §f R9)."""
+    """O-03 — threshold <= 0 disables the gate (ships OFF at landing, §f)."""
     assert check_draw_rate_collapse([0.9, 0.9, 0.9], 50000,
                                     threshold=0.0, consec=3, min_step=0) is None
 

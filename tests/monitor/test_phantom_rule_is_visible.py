@@ -159,7 +159,6 @@ def test_the_skip_is_readable_as_STATE_not_only_as_a_log_line() -> None:
     assert callable(enc.handshake_ran)
     assert isinstance(enc.handshake_skipped, list)
     # In this repo layout the on-disk registry IS found, so the import-time handshake really
-    # compared a sha. The row above calls the handshake with an EXPLICIT absent path, which is a
-    # probe and must not poison the run's provenance state.
+    # compared a sha; the row above's EXPLICIT-absent-path probe must not poison this state.
     assert enc.handshake_ran() is True
     assert enc.handshake_skipped == []

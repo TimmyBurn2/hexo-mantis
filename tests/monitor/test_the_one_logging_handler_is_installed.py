@@ -1,4 +1,4 @@
-"""AUDIT-1 F-08 — every process entry installs THE mantis stderr handler.
+"""Every process entry installs THE mantis stderr handler.
 
 THE DEFECT. `monitor/logging_setup.py::configure_logging` — whose own docstring calls itself
 "the ONE mantis stderr handler" — had ZERO callers. `mantis.run`, `mantis.monitor.supervise`,
@@ -10,7 +10,7 @@ WHAT WAS INVISIBLE, and this is why it is an R1 finding rather than a cosmetic o
 * every INFO diagnostic a run emits, for the whole run;
 * the registry-sha handshake's SKIP reason (`_LOG.info` in `mantis.encoding`), whose own
   docstring says the skip is "NEVER a silent pass" — it was exactly that;
-* REPAIR-1's new `disk_guard_error` warning, which F-11 landed so a dead disk guard would be
+* REPAIR-1's new `disk_guard_error` warning, landed so a dead disk guard would be
   visible. It went to an unformatted lastResort line at best.
 
 `pretrain/cli.py` used `logging.basicConfig` instead — two bootstraps for one sink, one of them
@@ -33,8 +33,7 @@ from mantis.monitor.logging_setup import _MANTIS_HANDLER, configure_logging
 _REPO = Path(__file__).resolve().parents[2]
 _SRC = _REPO / "src" / "mantis"
 #: Every process entry point: `python -m mantis.run`, the supervisor, the eval child, and the
-#: pretrain CLI. Each is a separate PROCESS, so each needs its own installation — a handler on
-#: the parent's root logger says nothing about a spawned child's.
+#: pretrain CLI — each a separate PROCESS needing its own installation.
 _ENTRIES = {
     "run.py": "main",
     "monitor/supervise.py": "main",

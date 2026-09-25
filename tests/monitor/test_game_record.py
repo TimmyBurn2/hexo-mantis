@@ -191,7 +191,7 @@ def test_the_recorder_writes_one_record_per_game_with_the_actor_step(tmp_path: P
 
 
 def test_a_sampled_game_writes_the_eval_shaped_visits_plus_q_and_prior(tmp_path: Path) -> None:
-    """R355(d): eval's `visits` shape plus PARALLEL `q`/`prior`, `root_raw` when stored, no `by`."""
+    """Eval's `visits` shape plus PARALLEL `q`/`prior`, `root_raw` when stored, no `by`."""
     recorder = GameRecorder(record_dir=tmp_path, run_id="testrun", seed=1)
     recorder.maybe_record(
         game_id="g", moves=[(0, 0), (1, 0), (0, 1)], winner_code=0, plies=3, worker_id=0,
@@ -213,7 +213,7 @@ def test_a_sampled_game_writes_the_eval_shaped_visits_plus_q_and_prior(tmp_path:
 
 
 def test_the_recorder_writes_every_moves_arm_and_sims(tmp_path: Path) -> None:
-    """R353(d): the record carries the arm the runner DREW per ply, never one inferred from `served_sims`."""
+    """The record carries the arm the runner DREW per ply, never one inferred from `served_sims`."""
     recorder = GameRecorder(record_dir=tmp_path, run_id="testrun", seed=1)
     recorder.maybe_record(
         game_id="g", moves=[(0, 0), (1, 0), (0, 1), (2, 0)], winner_code=1, plies=4, worker_id=0,

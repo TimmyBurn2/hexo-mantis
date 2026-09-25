@@ -1,5 +1,5 @@
 """⊕ O-07 / P-07 — persist-fatal: a killed sink write ⇒ counter++ ⇒ the INDEPENDENT
-watchdog observes the counter and aborts with code 43 (LAW-14; pays the WP6 debt).
+watchdog observes the counter and aborts with code 43; pays the WP6 debt.
 
 PASS bars (PREREG P-07): one failed emit ⇒ `persist_errors_total` +1 exactly; the watchdog
 fires on the next poll after observation; exit code 43; a `.watchdog` snapshot is attempted
@@ -49,7 +49,7 @@ def test_sink_failure_counts_and_aborts(tmp_path: Path, spy_sink, fake_clock,
     wd.poll_once()                       # counter still 0 → no fire
     assert not exit_spy.fired
 
-    # Kill the underlying serialization so the next emit fails (LAW-14: count, do not raise).
+    # Kill the underlying serialization so the next emit fails: count, do not raise.
     import mantis.monitor.sink as sink_mod
 
     def _boom(*_a, **_k):

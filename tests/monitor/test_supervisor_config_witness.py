@@ -46,10 +46,8 @@ _GRACE_OVERRIDE = 4.25
 #: the config rather than a flag means a SECOND minted key must reach the process.
 _POLL = 0.075
 #: ALL FOUR subject keys are minted distinctively, and all four are asserted: a red-team break of
-#: `stale_after_sec` and `max_relaunches` back to their dataclass literals left the whole suite
-#: green, because nothing here looked at them. Deliberately LARGE so the staleness rule cannot fire
-#: during a drive whose subject is the stop ladder — the child never writes a heartbeat file, so a
-#: small value would kill and relaunch it mid-test.
+#: `stale_after_sec` and `max_relaunches` back to their dataclass literals once left the whole
+#: suite green. Deliberately LARGE so the staleness rule cannot fire mid-drive.
 _STALE = 611.25
 _RELAUNCHES = 3
 #: Small, distinctive, and used ONLY by the staleness witness below, which needs the rule to fire.
@@ -59,9 +57,9 @@ _STALE_FAST = 0.625
 _STALE_DEADLINE_SEC = 20.0
 
 _DEADLINE_SEC = 60.0
-#: A refusal is a decision taken before anything is spawned, so it is fast or it is not a refusal.
-#: Kept well under `_DEADLINE_SEC`, so a supervisor that supervises instead of refusing is reported
-#: as the wrong BEHAVIOUR rather than as a slow test.
+#: A refusal is a decision taken before anything is spawned, so it is fast or it is not a
+#: refusal — kept well under `_DEADLINE_SEC` so a wrongly-supervising run reports as wrong
+#: BEHAVIOUR, not a slow test.
 _REFUSAL_DEADLINE_SEC = 20.0
 
 
@@ -120,9 +118,8 @@ def _spawn_supervisor(tmp_path: Path, child: Path, err: Path, *,
     argv = [sys.executable, "-m", "mantis.monitor.supervise"]
     if config is not None:
         argv += ["--config", str(config)]
-    # NO FLAG OF THE HARNESS'S OWN: passing one here makes `overrides` legitimately non-empty and
-    # breaks the assertions that check exactly what is and is not reported as overridden. The
-    # cadence is MINTED instead, so a second minted key must reach the process.
+    # NO FLAG OF THE HARNESS'S OWN: passing one would make `overrides` legitimately non-empty and
+    # break the assertions; the cadence is MINTED instead, so a second minted key must reach it.
     argv += ["--heartbeat-file", str(tmp_path / "hb.json")]
     argv += list(extra or [])
     argv += ["--", sys.executable, str(child)]
@@ -246,9 +243,8 @@ def test_the_minted_staleness_bound_is_the_one_the_liveness_rule_FIRES_on(tmp_pa
     try:
         proc.wait(timeout=_STALE_DEADLINE_SEC)
     except subprocess.TimeoutExpired:
-        # NAME THE LIKELY CAUSE INSTEAD OF REPORTING A CLOCK: a supervisor that outlives this bound
-        # is almost always one whose staleness deadline is the dataclass 900.0 rather than the
-        # minted one, so the symptom of the defect under test is "this never finished".
+        # NAME THE LIKELY CAUSE INSTEAD OF REPORTING A CLOCK: outliving this bound almost always
+        # means the staleness deadline is the dataclass 900.0, not the minted one.
         timed_out = True
     finally:
         if proc.poll() is None:
@@ -277,7 +273,7 @@ def test_the_minted_staleness_bound_is_the_one_the_liveness_rule_FIRES_on(tmp_pa
 
 
 def test_a_missing_config_is_a_NAMED_refusal_not_a_default(tmp_path):
-    """R1/LAW-11: absent is an error, never a default — and the error NAMES the input."""
+    """R1: absent is an error, never a default — and the error NAMES the input."""
     child = _child_script(tmp_path, tmp_path / "child.log")
     proc = subprocess.run(
         [sys.executable, "-m", "mantis.monitor.supervise",
@@ -288,9 +284,8 @@ def test_a_missing_config_is_a_NAMED_refusal_not_a_default(tmp_path):
     assert proc.returncode != 0, "a supervisor with no config must refuse to start"
     message = proc.stderr + proc.stdout
     assert "--config" in message, f"the refusal must NAME the missing input: {message!r}"
-    # The message must point at where a minted config COMES FROM, and the accepted markers are
-    # enumerated rather than left to one phrasing, since a single required word would prescribe
-    # wording the design never ordered.
+    # The message must point at where a minted config COMES FROM; the accepted markers are
+    # enumerated rather than left to one phrasing the design never ordered.
     remedies = ("mint", "configs/", "tools/mint_config.py", ".yaml")
     assert any(token in message.lower() for token in remedies), (
         "the refusal must point at where a config comes from — argparse's own 'the following "
@@ -361,9 +356,8 @@ def test_running_main_with_a_real_config_does_not_import_torch(tmp_path):
     proc = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True,
                           check=False, timeout=_DEADLINE_SEC)
     assert proc.returncode == 0, proc.stderr
-    # THE PROBE MUST PROVE IT RAN BEFORE ITS torch VERDICT MEANS ANYTHING: a `main` that refused at
-    # argparse would report torch=False and pass, which is what this test did on its first run
-    # against the un-fixed head.
+    # THE PROBE MUST PROVE IT RAN BEFORE ITS torch VERDICT MEANS ANYTHING: a `main` that refused
+    # at argparse would report torch=False and pass — which is what this did against the un-fixed head.
     assert marker.exists(), (
         "the supervisor never spawned its child, so this process never executed the config path "
         f"whose torch-freeness is under test: {proc.stdout!r} {proc.stderr[-400:]!r}"
@@ -376,13 +370,12 @@ def test_running_main_with_a_real_config_does_not_import_torch(tmp_path):
 
 
 def test_the_supervisor_module_constructs_no_MonitorConfig_by_any_shape():
-    """R1/R79: the resolver is the ONE construction authority reachable from this module."""
+    """R1: the resolver is the ONE construction authority reachable from this module."""
     tree = ast.parse(SUPERVISE_SRC.read_text(encoding="utf-8"))
 
     # EVERY LOCAL NAME BOUND TO THE CLASS, derived from the module's own imports rather than from
-    # the class's own spelling: `from … import MonitorConfig as MC` binds "MC" and `import
-    # mantis.monitor.config as _mc` reaches it as an attribute, both of which a bare `ast.Name`
-    # match escapes.
+    # the class's own spelling: `import X as Y` binds `Y`, and `import mod as _mc` reaches it as
+    # an attribute — both of which a bare `ast.Name` match escapes.
     bound: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):

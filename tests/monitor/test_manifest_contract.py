@@ -1,4 +1,4 @@
-"""The producer-manifest contract plus the LAW-07 mutation self-tests.
+"""The producer-manifest contract plus its mutation self-tests.
 
 The shipped `producer_manifest.yaml` must load with EVERY row resolving — its producer (an
 importable dotted symbol, a quoted event-literal present in the named module's source, or a `seam`
@@ -17,7 +17,7 @@ from mantis.monitor.manifest import ManifestError, load_manifest, verify_manifes
 from mantis.monitor.manifest import DEFAULT_MANIFEST_PATH
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-#: The SHIPPED manifest, from its own module — one authority, not a path copy (AUDIT-1 F-47).
+#: The SHIPPED manifest, from its own module — one authority, not a path copy.
 _SHIPPED_MANIFEST = DEFAULT_MANIFEST_PATH
 
 
@@ -138,12 +138,10 @@ def test_every_armed_heartbeat_source_has_a_manifest_row() -> None:
     )
 
 
-# The two ways a row resolved against nothing. `_verify_event_literal` was `re.search` over RAW
-# MODULE SOURCE, so any occurrence of the quoted literal satisfied the row — including one inside
-# a docstring, while the live producer was a call that could be deleted with the row still
-# resolving. `_verify_producer_test` found a `test_*` FunctionDef and stopped there, so a cited
-# test carrying a deselecting marker (or a module-level `pytestmark` with one) satisfied the row
-# while running in no default-tier invocation.
+# The two ways a row resolved against nothing: `_verify_event_literal` was `re.search` over RAW
+# MODULE SOURCE, so any occurrence (even inside a docstring) satisfied the row while the live
+# producer could be deleted; `_verify_producer_test` found a `test_*` FunctionDef and stopped
+# there, so a deselected test still satisfied the row.
 
 def _module_row(tmp_path: Path, module: str, literal: str) -> Path:
     return _write_manifest(tmp_path / "m.yaml", [
@@ -161,7 +159,7 @@ def _fake_module(tmp_path: Path, name: str, body: str) -> None:
 def test_a_literal_that_appears_ONLY_in_a_docstring_does_not_satisfy_a_row(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """THE PIN (F-10). Documented is not live."""
+    """THE PIN. Documented is not live."""
     import sys
 
     _fake_module(tmp_path, "_f10_docstring_only", '''"""A module whose only mention of

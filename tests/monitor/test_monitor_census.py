@@ -26,16 +26,14 @@ _EXPECTED_TRAIN_MONITOR_SITES = {
     "train/coordinator/step.py",
     "train/subsystems.py",
     # `train/pretrain/cli.py` top-level imports `monitor.logging_setup.configure_logging`
-    # because a process entry with no root handler drops every `logger.info` it emits; it
-    # replaced `logging.basicConfig`, so it removes a second sink bootstrap, not adds a first.
+    # because a process entry with no root handler drops every `logger.info` it emits.
     "train/pretrain/cli.py",
     "train/lifecycle/heartbeat_watchdog.py",
     # The stall watchdog routes its two saves through `monitor.best_effort`, the same
     # sanctioned optional-effect seam as its sibling `heartbeat_watchdog.py` above.
     "train/lifecycle/watchdog.py",
     # `signals.py` imports `PARENT_DEATH_PPID_ENV` from `monitor.heartbeat`: the supervisor
-    # stamps its pid into the child's environment under that name and the run's arming gate
-    # reads it, so both sides must key off ONE constant.
+    # stamps its pid under that name, and the run's arming gate must key off the SAME constant.
     "train/lifecycle/signals.py",
 }
 

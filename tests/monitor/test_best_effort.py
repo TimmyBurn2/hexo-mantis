@@ -1,4 +1,4 @@
-"""O-09 / P-09 — `best_effort()` with a MANDATORY named counter (LAW-14).
+"""O-09 / P-09 — `best_effort()` with a MANDATORY named counter.
 
 The ONLY sanctioned optional-effect path in `monitor/**` (the other outcome is the
 except-pass census, O-20).
@@ -8,7 +8,7 @@ PASS bars (PREREG P-09):
     keyword-only, no default);
   * a failing fn ⇒ the named counter +1, WARN logged, returns (False, None), NEVER raises;
   * success ⇒ (True, value), counter unchanged.
-A swallowed failure with counter +0 is the exact LAW-14 bug this bites.
+A swallowed failure with counter +0 is the exact bug this bites.
 """
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ def test_failure_logs_a_warning(caplog) -> None:
 def test_counters_is_mandatory_keyword_only() -> None:
     """P-09 — calling WITHOUT `counters` is a TypeError: the mandatory counter is enforced by
     the signature (keyword-only, no default). A default-None counters would silently permit an
-    uncounted optional effect — the LAW-14 hole."""
+    uncounted optional effect."""
     with pytest.raises(TypeError):
         best_effort("snapshot", lambda: 1)  # type: ignore[call-arg]
 
