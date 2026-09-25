@@ -184,12 +184,11 @@ def test_the_static_walk_reds_on_a_planted_lazy_trainer_import(planted_tree: Pat
     )
 
 
-# arm 3 — no process creation of a Python entry point: the driver already imports `subprocess`
-# for its `git` provenance, so one `subprocess.run([sys.executable, "-m", "mantis.run", ...])`
-# keeps both import arms green and steps a trainer anyway. THE PREDICATE: `sys.executable` may
-# not appear; `os.exec*`/`os.spawn*`/`os.system`/`multiprocessing.Process` may not be called;
-# every `subprocess.*` argv must be a literal list whose program is on a one-entry allowlist,
-# because an argv built at runtime is a program this census cannot read.
+# arm 3 — no process creation of a Python entry point, which would keep both import arms green
+# while stepping a trainer anyway. THE PREDICATE: `sys.executable` may not appear;
+# `os.exec*`/`os.spawn*`/`os.system`/`multiprocessing.Process` may not be called; every
+# `subprocess.*` argv must be a literal list on a one-entry allowlist, since a runtime-built argv
+# is a program this census cannot read.
 
 _PROCESS_APIS = ("run", "Popen", "call", "check_call", "check_output", "system", "Process",
                  "popen", "fork", "forkpty", "spawn", "spawn_main", "run_module", "run_path",
@@ -281,7 +280,7 @@ def test_the_sweep_cannot_launch_a_python_entry_point_as_a_subprocess() -> None:
 
 
 def test_the_process_census_reds_on_a_planted_mantis_run_subprocess(tmp_path: Path) -> None:
-    """LAW-07. The plant is the exact escape the two import arms cannot see."""
+    """Mutation self-test: the plant is the exact escape the two import arms cannot see."""
     planted = tmp_path / "worker_sweep.py"
     planted.write_text(
         "import subprocess, sys\n"

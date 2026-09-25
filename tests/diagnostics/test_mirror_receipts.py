@@ -1,4 +1,4 @@
-"""R349(b): a receipt proves one byte string left the box and the START halt demands receipts
+"""A receipt proves one byte string left the box and the START halt demands receipts
 for the burst's bundle and first shard; the deleted volume arm's replacement must bite the same
 way — other bytes refused, a missing receipt refused, the pass naming what it read."""
 from __future__ import annotations
@@ -116,7 +116,7 @@ def test_the_cli_mirrors_the_halt(tmp_path: Path, synthetic_run_dir, capsys) -> 
 def test_a_clean_completion_with_no_bundle_is_proven_on_its_checkpoint(
     tmp_path: Path, synthetic_run_dir,
 ) -> None:
-    """R137's third leg writes no bundle; killer: the halt that demanded one (three box rows red)."""
+    """A clean completion's third leg writes no bundle; killer: the halt that demanded one (three box rows red)."""
     synthetic_run_dir(tmp_path, bundle=False)
     with pytest.raises(D.MirrorReceiptsMissingError, match="checkpoint .* is not receipted"):
         D.require_mirror_receipts(tmp_path, "synth")

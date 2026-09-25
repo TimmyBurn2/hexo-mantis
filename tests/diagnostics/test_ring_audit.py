@@ -1,4 +1,4 @@
-"""`mantis.diagnostics.ring_audit` (R357(b)): a planted ring, one poisoned forced-block row, exit 1 naming it."""
+"""`mantis.diagnostics.ring_audit`: a planted ring, one poisoned forced-block row, exit 1 naming it."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -127,7 +127,7 @@ def test_h_rows_are_the_reader_entropy_by_arm_with_the_one_hot_share(planted: Pa
 
 
 def test_the_per_mr_rows_split_the_full_arm_share_and_count_the_tail_only_rows(tmp_path: Path) -> None:
-    """R366(c): the one-hot share at each stored `moves_remaining` over full-arm rows alone, and a planted α = 1.0 row is COUNTED, not hidden inside the share."""
+    """The one-hot share at each stored `moves_remaining` over full-arm rows alone, and a planted α = 1.0 row is COUNTED, not hidden inside the share."""
     mr2 = _board(_QUIET_SEQ)
     quiet = _board(_QUIET_SEQ[:-1])
     assert (int(quiet.moves_remaining), int(mr2.moves_remaining)) == (1, 2), "the two boards sit at the two mid-turn states"
@@ -160,12 +160,12 @@ def test_sample_age_and_replay_ratio_are_not_measured_and_say_why(clean: Path) -
     ring = R.load_ring(clean)
     got = {row.key: row for row in A.audit(ring) + A.event_rows(None, ring_size=ring.header.size)}
     assert got["sample_age"].value is None and "no step field" in got["sample_age"].note
-    # R358(c): the ratio is read off the events stream, so without one the row names the flag.
+    # The ratio is read off the events stream, so without one the row names the flag.
     assert got["replay_ratio"].value is None and "--events" in got["replay_ratio"].note
 
 
 def test_the_planted_ring_exits_1_naming_the_poisoned_row(planted: Path, tmp_path: Path, capsys) -> None:
-    """LAW-07: the producer test — one poisoned forced-block row reds the audit and is named."""
+    """The producer test — one poisoned forced-block row reds the audit and is named."""
     bands = _bands(tmp_path, "counter_threat_share = { lt = 0.005 }\nquiescence_residue = { le = 0 }\n")
     assert A.main([str(planted), "--bands", str(bands)]) == 1
     out = capsys.readouterr().out

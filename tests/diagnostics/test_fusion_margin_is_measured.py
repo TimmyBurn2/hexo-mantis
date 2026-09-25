@@ -1,10 +1,10 @@
-"""AUDIT-1 F-07 — `margin_achieved` is a measurement, and `margin_requested` is the input.
+"""`margin_achieved` is a measurement, and `margin_requested` is the input.
 
 THE DEFECT. `run` wrote `"margin_achieved": float(args.margin) if recommending else None` —
 the `--margin` argument echoed back under a name that says the tool measured it. The achieved
 ratio (`predicted_peak_bytes / budget_bytes`) was not a field at all. `RECAL_SITTING4_RECORD`
 and `RECAL_SITTING5_RECORD` both carry `| margin_achieved | 0.85 |`, read off exactly that,
-and R327(c)'s `k = 0.849998` was hand-derived from elsewhere because the report could not
+and `k = 0.849998` was hand-derived from elsewhere because the report could not
 supply it.
 
 WHY THE TWO NUMBERS ARE GENUINELY DIFFERENT, and not a rename for its own sake: `nodes` is a

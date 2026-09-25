@@ -1,4 +1,4 @@
-"""AUDIT-1 F-28 rows A03–A11: a diagnostics tool publishing a number nothing measured; one test per row."""
+"""Rows A03–A11: a diagnostics tool publishing a number nothing measured; one test per row."""
 from __future__ import annotations
 
 import argparse

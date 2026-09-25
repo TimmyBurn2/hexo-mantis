@@ -1,6 +1,6 @@
 """The sweep plan is a PRE-REGISTRATION, and these rows are what makes that word mean something.
 
-R309(f) closes with "no post-hoc movement of any of it". A rule that lives in a tool's argument
+The prereg closes with "no post-hoc movement of any of it". A rule that lives in a tool's argument
 defaults is a rule nobody can date; `tools/worker_sweep_plan.toml` is committed before the
 sitting so `git log` dates it against the numbers. This suite pins the two properties that make
 the file load-bearing rather than decorative:
@@ -12,7 +12,7 @@ the file load-bearing rather than decorative:
     file is the only place the rule exists.
 
 Plus the one refusal that is a RULE and not a shape check: a plan may not put `n_workers = 1`
-back. R309(f) REJECTS it, and a rule that could be un-made by editing the file it is written in
+back. It REJECTS that, and a rule that could be un-made by editing the file it is written in
 is not a rule.
 """
 from __future__ import annotations
@@ -56,7 +56,7 @@ def base() -> dict:
 
 # the shipped plan is the one the sitting runs
 def test_the_committed_plan_loads_and_carries_the_operator_ladder() -> None:
-    """R309(f)'s bracket, verbatim in substance: (1..14], and 1 is ABSENT because it is
+    """The prereg's bracket, verbatim in substance: (1..14], and 1 is ABSENT because it is
     REJECTED. If this row ever has to change, the change is a pre-registration change."""
     plan = load_plan(_PLAN)
     assert plan.rungs == (2, 4, 8, 12, 14)
@@ -155,30 +155,26 @@ def test_a_non_positive_round_length_is_refused(base: dict, tmp_path: Path) -> N
         load_plan(_write(tmp_path, base))
 
 
-# THE PINS BITE — the producer test the pins did not have
-# MEASURED: `RULED_RUNGS`, `MAX_BAND_PCT` and `MIN_PLATEAU_ROUNDS` could be DELETED WHOLE and
-# 151/151 tests stayed green. The committed plan satisfies every pin, so no row ever asked one to
-# reject anything — and a pin nobody has seen reject anything is indistinguishable from no pin.
-# That is `0bb4381`'s standard, which this packet cites twice while its own most-argued closure
-# (design-review D-3, the ruling-constant-left-editable class) had no producer at all.
+# THE PINS BITE — the producer test the pins did not have: `RULED_RUNGS`, `MAX_BAND_PCT` and
+# `MIN_PLATEAU_ROUNDS` could be DELETED WHOLE and 151/151 tests stayed green. A pin nobody has
+# seen reject anything is indistinguishable from no pin.
 
 @pytest.mark.parametrize(
     ("section", "key", "value", "needle"),
     [
-        # R309(g)'s base ladder. `[2, 4, 8, 12, 16]` is a plausible-looking edit: every rung is
+        # The base ladder. `[2, 4, 8, 12, 16]` is a plausible-looking edit: every rung is
         # >= 2, strictly increasing, and inside the extension ceiling — every OTHER check passes.
         ("ladder", "rungs", [2, 4, 8, 12, 16], "R309"),
         ("ladder", "rungs", [2, 4, 8, 12], "R309"),
         ("ladder", "rungs", [2, 4, 8, 12, 14, 16], "R309"),
-        # R309(f)'s knee percent, IN RANGE and not the ruling's — the range check cannot see it.
+        # The knee percent, IN RANGE and not the prereg's own — the range check cannot see it.
         ("selection", "knee_pct", 94.0, "R309"),
         ("selection", "knee_pct", 90.0, "R309"),
         ("selection", "knee_pct", 99.0, "R309"),
         # Amendment A1's ranking metric: in the closed token set, and not the pre-registered one.
         ("selection", "metric", "games_per_min", "PRE-REGISTERED"),
-        # The band's upper bound. 5.0 is the value the plan file argues AGAINST at length
-        # (774 MiB/round on this card against a falsifier that fired on 343 MiB); 500 turns the
-        # memory conjunct off entirely.
+        # The band's upper bound. 5.0 is the value the plan argues AGAINST at length (774
+        # MiB/round against a falsifier that fired on 343 MiB); 500 turns the memory conjunct off.
         ("stopping_rule", "band_pct", 5.5, "band_pct"),
         ("stopping_rule", "band_pct", 500.0, "band_pct"),
         # A one-round window is not a convergence test, and 0 used to load clean and die inside

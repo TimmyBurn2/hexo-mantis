@@ -1,4 +1,4 @@
-"""`ring_audit.replay_ratio` (R358(c)): samples consumed ÷ positions produced over the ring's span, off `--events`."""
+"""`ring_audit.replay_ratio`: samples consumed ÷ positions produced over the ring's span, off `--events`."""
 from __future__ import annotations
 
 import json

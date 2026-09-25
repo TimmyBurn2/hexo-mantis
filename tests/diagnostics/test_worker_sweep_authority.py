@@ -420,7 +420,7 @@ def test_a_dead_card_sampler_refuses_the_rung_instead_of_switching_instrument(
     FELL 9.3 GiB then rose 47% verdicted PLATEAU."""
     class _Pool:
         _producer_exc = None
-        # R317(c)(i): drive_rung hashes `pool.model` right after the build; a mock pool needs one.
+        # drive_rung hashes `pool.model` right after the build; a mock pool needs one.
         model = type("_NoParams", (), {"state_dict": lambda self: {}})()
 
         def start(self) -> None: ...
@@ -511,7 +511,7 @@ def test_select_only_refuses_a_report_whose_stated_rule_is_not_the_ruling_s(
     base = {"tool": ws.TOOL, "provenance": {"produced_by": "run5@abc"},
             "plan": {"knee_pct": 95.0, "metric": "moves_per_min"},
             "rungs": [{"n_workers": 2, "verdict": "PLATEAU", "moves_per_min": 900.0,
-                       # R330(d): the rung states its own noise; a row without it is refused.
+                       # the rung states its own noise; a row without it is refused.
                        "moves_per_min_spread": {"rel_se": 0.0, "n_rounds": 5}}]}
     ok = tmp_path / "ok.json"
     ok.write_text(json.dumps(base), encoding="utf-8")
@@ -649,7 +649,7 @@ def test_one_probe_and_one_counter_reset_per_round_on_a_counters_present_host(
 
     class _Pool:
         _producer_exc = None
-        # R317(c)(i): drive_rung hashes `pool.model` right after the build; a mock pool needs one.
+        # drive_rung hashes `pool.model` right after the build; a mock pool needs one.
         model = type("_NoParams", (), {"state_dict": lambda self: {}})()
 
         def start(self) -> None: ...

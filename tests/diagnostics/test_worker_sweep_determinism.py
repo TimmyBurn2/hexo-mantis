@@ -1,6 +1,5 @@
 # ONE CLAIM with two halves deliberately not split: the sweep's per-rung network is reproducible,
-# and the control that says so can fail. Each arm carries its own planted break in-file, so a
-# predicate and the proof it can fire move together.
+# and the control that says so can fail. Each arm carries its own planted break in-file.
 """The per-rung network is seeded, and the control that witnesses it.
 
 THE DEFECT: the sweep built a fresh `build_net(arch)` per rung from an UNSEEDED RNG, so every

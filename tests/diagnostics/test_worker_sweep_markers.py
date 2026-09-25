@@ -9,7 +9,7 @@ answers that by refusing a file with no markers; this reader inherits the refusa
 token, because a sweep log carrying `MANTIS_EVAL_MEM` lines would be read by the eval-child
 reader as an eval drive, which it is not.
 
-EVERY FIGURE CARRIES ITS SAMPLING LIMIT AND ITS PRODUCING RUN. R287(a), and the box block's own
+EVERY FIGURE CARRIES ITS SAMPLING LIMIT AND ITS PRODUCING RUN, and the box block's own
 convention: rounds observed and the wall seconds they cover print beside the peaks. A number
 lifted out of this report into a sitting record still names what produced it and over how long.
 """
@@ -35,7 +35,7 @@ class _Stats:
 
 class _Pool:
     _producer_exc = None
-    # R317(c)(i): drive_rung hashes `pool.model` right after the build; a mock pool needs one.
+    # drive_rung hashes `pool.model` right after the build; a mock pool needs one.
     model = type("_NoParams", (), {"state_dict": lambda self: {}})()
 
     def start(self) -> None: ...
@@ -176,7 +176,7 @@ def test_the_report_carries_the_prereg_and_the_whole_plan_it_ran_under(
 
 
 def test_the_report_carries_no_host_identifier_fields(driven, plan: ws.SweepPlan) -> None:
-    """R112 / CI gate 17: GPU model and thread count are regime facts; a hostname, a home path
+    """CI gate 17: GPU model and thread count are regime facts; a hostname, a home path
     or a provider name is not, and none is read here."""
     result, _log = driven
     prov = _report(plan, result, counters=True)["provenance"]

@@ -1,9 +1,9 @@
-"""R328(e) — the CPU-only-torch guard, and the matmul that is the actual proof.
+"""The CPU-only-torch guard, and the matmul that is the actual proof.
 
 WHY THIS SUITE EXISTS. `uv sync` on the GPU box replaces a CUDA torch with `2.11.0+cpu`,
 because `pyproject.toml` pins torch to the PyTorch CPU wheel index. The MINT-CLOSE session hit
 it, repaired it by hand, and verified the repair with a real matmul rather than with
-`torch.cuda.is_available()`. R328(e) turns that into mechanism.
+`torch.cuda.is_available()`. This suite turns that into mechanism.
 
 The suite runs entirely on a CPU-only host: the refusal arm is this host's real state, and the
 CUDA arms drive the REAL residual arithmetic with `Tensor.cuda` monkeypatched, so what is
@@ -85,7 +85,7 @@ def _patch_cuda_transport(monkeypatch: pytest.MonkeyPatch, perturbation: float) 
 
 def test_r328e_04_a_wrong_cuda_result_refuses_even_though_the_build_check_passed(
         monkeypatch: pytest.MonkeyPatch) -> None:
-    """THE MUTATION SELF-TEST (LAW-07): the guard's value is exactly this row.
+    """THE MUTATION SELF-TEST: the guard's value is exactly this row.
 
     The build half is forced to pass, so the only thing standing between a broken card and a
     green is the arithmetic. A guard resting on `torch.cuda.is_available()` reports green here.
@@ -141,7 +141,7 @@ def test_r328e_09_the_refusals_pyproject_claim_is_true_of_the_shipped_pyproject(
     """The message says the pin causes this. Derived from the file, so it cannot become a lie.
 
     Read STRUCTURALLY out of `[tool.uv.sources]` / `[[tool.uv.index]]` rather than grepped for
-    a string, so a rename of the index does not quietly pass (R296(f))."""
+    a string, so a rename of the index does not quietly pass."""
     data = tomllib.loads((_REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     sources = data["tool"]["uv"]["sources"]["torch"]
     urls = {entry["name"]: entry["url"] for entry in data["tool"]["uv"]["index"]}
@@ -150,7 +150,7 @@ def test_r328e_09_the_refusals_pyproject_claim_is_true_of_the_shipped_pyproject(
         selector = ("group", source["group"]) if "group" in source else ("extra", source["extra"])
         assert source["index"] in urls, f"torch names index {source['index']!r}, undeclared"
         by_selector[selector] = urls[source["index"]].rstrip("/")
-    # R348(a): the DEFAULT is the CPU wheel — the `cpu` group is in `default-groups` — and the
+    # The DEFAULT is the CPU wheel — the `cpu` group is in `default-groups` — and the
     # cu128 wheel rides the `cuda` extra, declared conflicting so neither can shadow the other.
     assert "cpu" in data["tool"]["uv"]["default-groups"]
     assert by_selector[("group", "cpu")].endswith("/cpu"), (
