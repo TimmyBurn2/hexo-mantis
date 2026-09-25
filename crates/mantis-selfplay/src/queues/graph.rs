@@ -453,8 +453,7 @@ mod poison_tests {
     use super::{build_leaf_graph, GraphQueue, GraphWaiter};
     use crate::poison::poison;
 
-    /// Closes the queue when its thread ends or unwinds, so a producer that dies fails the waiting
-    /// consumer instead of hanging it: a reverted recovery site must red, never wedge the suite.
+    /// Closes the queue when its thread ends or unwinds, so a dead producer fails the consumer, never hangs it.
     struct CloseOnExit(GraphQueue);
 
     impl Drop for CloseOnExit {
