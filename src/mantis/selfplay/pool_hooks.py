@@ -110,7 +110,7 @@ class RunnerStats:
     mcts_quiescence_fires: int
     mcts_mean_depth: float
     mcts_mean_root_concentration: float
-    # The playout-cap draw's two arms and the Gumbel round-width terms (LAW-18 fire rates).
+    # The playout-cap draw's two arms and the Gumbel round-width terms — fire rates.
     pcr_full_moves: int
     pcr_quick_moves: int
     gumbel_round_leaves: int

@@ -152,7 +152,7 @@ class WorkerPool:
             # 63 chances in 64 of passing through untouched.
             collate_check_period=1,
             collate_dump=_collate_dump_target(config),
-            # R347(e): where check 14 runs, read through its one resolver, never a literal.
+            # Where check 14 runs, read through its one resolver, never a literal.
             edge_geometry_check=resolve_edge_geometry_check(config),
             # A4-3: whether the serving trunk is compiled, read through its one resolver.
             compile_trunk=resolve_compile_trunk(config),
@@ -168,7 +168,7 @@ class WorkerPool:
         self.games_completed = 0
         self.positions_pushed = 0
         self.self_play_positions_pushed = 0
-        # R349(c): graph rows pushed and, of those, the sparse rows whose explicit entries carry
+        # Graph rows pushed and, of those, the sparse rows whose explicit entries carry
         # no target mass (alpha = 1.0); `iteration_complete` publishes the pair as a rate.
         self.graph_rows_pushed = 0
         self.alpha_full_rows = 0
@@ -272,7 +272,7 @@ class WorkerPool:
 
     @property
     def alpha_full(self) -> dict[str, Any]:
-        """R349(c)'s LAW-18 reading `{rows, graph_rows, per_1000}`; `per_1000` is `None` before the first graph row."""
+        """The `{rows, graph_rows, per_1000}` reading; `per_1000` is `None` before the first graph row."""
         with self._lock:
             rows, total = self.alpha_full_rows, self.graph_rows_pushed
         return {"rows": int(rows), "graph_rows": int(total),
@@ -339,7 +339,7 @@ class WorkerPool:
                 "self-play buffer feeder died — training cannot continue on a "
                 "stale buffer (see the selfplay_producer_died log for the cause)"
             ) from self._producer_exc
-        # R347(e): a check-14 failure found after its batch was served is run-fatal on the
+        # A check-14 failure found after its batch was served is run-fatal on the
         # NEXT step whether or not another pop ever arrives to carry it to the runner's latch.
         server = getattr(self, "_inference_server", None)
         deferred = getattr(server, "deferred_contract_failure", None)

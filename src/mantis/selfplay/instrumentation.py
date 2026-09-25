@@ -235,7 +235,7 @@ class PoolInstrumentation:
         # Cumulative terminal-reason counts (0=six 1=colony 2=cap 3=other_draw).
         self._terminal_reason_counts: dict[int, int] = {0: 0, 1: 0, 2: 0, 3: 0}
         # Pool-wide ring of per-game cap flags (1 = ply_cap) in completion order, the ply-cap
-        # halt's evidence (R352(c)); the window READ from it is the abort decision's.
+        # halt's evidence; the window READ from it is the abort decision's.
         self._ply_cap_ring: deque[int] = deque(maxlen=_PLY_CAP_RING_GAMES)
         # Per-game model-version range archive — last 200 games.
         self._mv_range_history: deque[tuple[int, int, int, int, int]] = deque(maxlen=200)

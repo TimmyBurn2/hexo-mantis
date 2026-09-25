@@ -331,7 +331,7 @@ def collate_graph_batch(
     `semantic`: "full" (trainer), "canary" (hot path — first + every Nth) or "off". The
     structural layer always runs full, and any mismatch raises a NAMED `GraphContractError`.
     `deferred_edge_geometry`: a sink for check 14 — when given, the check is appended to it
-    instead of run, exactly when it would have run, for the caller's checker thread (R347(e)).
+    instead of run, exactly when it would have run, for the caller's checker thread.
 
     THE FOUR GEOMETRY PARAMETERS ARE REQUIRED: they are the EXPECTED geometry the wire is
     checked against, so a default is a silent expectation and a payload re-captured at another
@@ -628,8 +628,8 @@ def _check_semantic(
     coords = node_coords.reshape(N, 2).astype(np.int64)
 
     # 14. EdgeAttrGeometryMismatch — attrs re-derived from coords + player id in Rust over the
-    # same post-marshal zero-copy views. With a `deferred` sink the call is CAPTURED for the
-    # caller's checker thread (R347(e)) instead of run here; it still runs on every batch.
+    # same post-marshal zero-copy views. A `deferred` sink CAPTURES the call for the caller's
+    # checker thread instead of running it here; it still runs on every batch.
     if E > 0:
         check = EdgeGeometryCheck(
             node_feat, node_coords, edge_index, edge_attr, node_offsets, current_player,

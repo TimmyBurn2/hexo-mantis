@@ -25,7 +25,7 @@ class ResolvedPoolEncoding:
 
 
 def is_graph_representation(spec: Any) -> bool:
-    """Closed match on ``spec.representation`` — no dense-by-default arm (LAW-11). `"grid"` is
+    """Closed match on ``spec.representation`` — no dense-by-default arm. `"grid"` is
     REFUSED BY NAME rather than answered `False`, because a spec still declaring the deleted
     dense path would otherwise be handed a graph buffer.
 
@@ -92,7 +92,7 @@ class SelfPlayHParams:
     search_kind: str
     c_visit: float
     c_scale: float
-    #: `selfplay.q_rescale`, REQUIRED with no default: the σ's rescale switch (F-50).
+    #: `selfplay.q_rescale`, REQUIRED with no default: the σ's rescale switch.
     q_rescale: bool
     #: `selfplay.search_stats_every`, REQUIRED with no default: 1-in-N games record their roots.
     search_stats_every: int
@@ -149,7 +149,7 @@ class SelfPlayHParams:
             n_workers=int(n_workers if n_workers is not None else sp["n_workers"]),
             leaf_batch_size=int(sp["leaf_batch_size"]),
             max_moves_per_game=int(sp["max_game_moves"]),
-            # THE self-play selector; the deploy head reads its own key (R351(c)).
+            # THE self-play selector; the deploy head reads its own key.
             search_kind=resolve_selfplay_search_kind(config),
             c_visit=float(sp["c_visit"]),
             c_scale=float(sp["c_scale"]),

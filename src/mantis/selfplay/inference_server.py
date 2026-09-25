@@ -5,7 +5,7 @@ Python side of the dispatch seam, and splitting it would create a second place a
 prepared, submitted or failed.
 
 The encoding spec is checked ONCE at construction to be a graph spec, a closed match with no
-dense-by-default arm; autocast is bf16 UNCONDITIONALLY on the graph loop (LAW-06).
+dense-by-default arm; autocast is bf16 UNCONDITIONALLY on the graph loop.
 """
 from __future__ import annotations
 
@@ -190,7 +190,7 @@ _EDGE_GEOMETRY_QUEUE_DEPTH = 4
 
 
 class _EdgeGeometryChecker(threading.Thread):
-    """R347(e): runs check 14 AFTER the batch is served; a failure dumps and latches the server."""
+    """Runs check 14 AFTER the batch is served; a failure dumps and latches the server."""
 
     def __init__(self, server: InferenceServer) -> None:
         super().__init__(daemon=True, name="edge-geometry-checker")
@@ -350,7 +350,7 @@ class InferenceServer(threading.Thread):
         # A closed match: a grid or unknown representation raises rather than defaulting dense.
         is_graph_representation(self.encoding_spec)
 
-        # Graph-loop batching instrumentation (LAW-18), written ONLY by `_run_graph_loop`.
+        # Graph-loop batching instrumentation, written ONLY by `_run_graph_loop`.
         self._batch_wait_count = 0
         self._batch_wait_total_s = 0.0
         self._batch_wait_min_s: float | None = None
@@ -413,7 +413,7 @@ class InferenceServer(threading.Thread):
             self._trunk = torch.compile(representation, dynamic=True)
         self._retirer = _PopRetirer(self)
 
-        # bf16 UNCONDITIONALLY on the graph loop (LAW-06): fp16 GINE sum-aggregation overflows.
+        # bf16 UNCONDITIONALLY on the graph loop: fp16 GINE sum-aggregation overflows.
         self._amp_dtype = amp_dtype_for("graph")
         # The eager call stays byte-identical to the pre-A4-3 one: no kwarg unless compiling.
         self._trunk_kwarg: dict[str, Any] = {} if self._trunk is None else {"trunk": self._trunk}
@@ -607,17 +607,17 @@ class InferenceServer(threading.Thread):
             # An idle counter stays VISIBLE at 0 on the producing path.
             "empty_polls": self._empty_polls,
             "fusion": self._fusion_snapshot(),
-            # R347(e)'s lever, LAW-18: its posture and its own fire rate, visible at 0.
+            # The check-14 lever: its posture and its own fire rate, visible at 0.
             "edge_geometry_check": {
                 "mode": self._edge_geometry_check,
                 "deferred": self._edge_geometry_deferred,
                 "inline_fallback": self._edge_geometry_inline_fallback,
                 "failures": self._edge_geometry_failures,
             },
-            # A4-3's lever, LAW-18: a `unique_graphs` count still climbing after warm-up is the
-            # recompile storm the abort names; past `recompile_limit` Dynamo falls back to eager.
+            # A `unique_graphs` count still climbing after warm-up is the recompile storm the
+            # abort names; past `recompile_limit` Dynamo falls back to eager.
             "compile": _compile_snapshot(self._compile_trunk),
-            # A4-4's lever, LAW-18: one pop in flight, and the wait its retire spent on the device.
+            # One pop in flight, and the wait its retire spent on the device.
             "pipeline": {
                 "depth": _PIPELINE_DEPTH,
                 "launch": _timing_agg(
