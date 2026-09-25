@@ -42,10 +42,12 @@ before the bench):
 | L0 instrument (parent of L1) | 0 (tools and tests only) | — | `c9474c85` | 1 853 [1 768, 1 869]; repeat DIFFERS, max \|Δvalue\| 0.0657, \|Δp\| 0.0153 | — |
 | L1 `index_fill_` mask | +8 … +15 % (item 3: +12 %) | median < 0.97 × parent, or slower beyond the IQR | `a25183cd` | 2 101 [1 994, 2 106]; `launch` 31.4 → 8.9 ms; repeat DIFFERS 0.0671 / 0.0148 | **+13.4 %**, faster beyond the IQR |
 
+The repeat probe reads DIFFERS on both rows by construction: the mask is bit-identical, and the non-determinism is the bf16 `index_add_` aggregation L2 replaces.
+
 ## Findings first
 
 1. **The serving bound on this box is a hidden per-forward host↔device sync, then the bf16 atomics.**
-   `GnnNetV2.real_mask_from_batch` (`src/mantis/model/gnn_v2.py:118`, `real[legal_index] = True`) copies a
+   `GnnNetV2.real_mask_from_batch` (`src/mantis/model/gnn_v2.py:118`, `real[legal_index] = True`; removed at L1, `a25183cd`) copies a
    pageable 0-dim CPU tensor to the device on every forward, which blocks the server thread until the stream drains.
    py-spy puts **78.4 %** of the server thread's wall on that one line in the cell (2 761 samples) and **66.9 %**
    in-run. `torch.cuda.set_sync_debug_mode` flags the same line. The server thread's CPU-only share is **13.4 %**

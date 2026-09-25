@@ -11,7 +11,7 @@ _DEVICES = ["cpu", pytest.param("cuda", marks=pytest.mark.skipif(
 
 
 def _assignment_form(stone_mask: torch.Tensor, legal_index: torch.Tensor) -> torch.Tensor:
-    """The oracle: the pre-L1 expression, whose pageable scalar H2D synced every CUDA forward."""
+    """The oracle: the scalar-assignment form, whose pageable scalar H2D synced every CUDA forward."""
     real = stone_mask.clone()
     real[legal_index] = True
     return real

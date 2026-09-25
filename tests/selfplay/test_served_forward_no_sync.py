@@ -63,6 +63,7 @@ def _serve_with_checked_launch(compile_trunk: bool,
             torch.cuda.set_sync_debug_mode("default")
 
     server._launch_pop = checked  # type: ignore[method-assign]
+    frames_before = server.batch_timing_snapshot()["compile"]["frames_ok"]
     server.start()
     positions = _positions(config["identity"]["encoding"])
     try:
@@ -74,7 +75,8 @@ def _serve_with_checked_launch(compile_trunk: bool,
     finally:
         server.stop()
         server.join(timeout=30.0)
-    frames = server.batch_timing_snapshot()["compile"]["frames_ok"]
+    # Dynamo's frame counter is process-global, so only this server's delta says it compiled.
+    frames = server.batch_timing_snapshot()["compile"]["frames_ok"] - frames_before
     assert (frames > 0) == compile_trunk, f"compile_trunk={compile_trunk} but {frames} compiled frame(s)"
     assert len(calls) >= 2, f"only {len(calls)} pop(s) launched; the checked launch never ran"
     return caught
