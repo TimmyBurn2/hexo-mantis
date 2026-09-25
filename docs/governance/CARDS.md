@@ -73,6 +73,12 @@ Both were found by running the gate set rather than by reading it, and both are 
   `tests/train/_graph_drive.py::filled_hexg`. L-STYLE-04 (subprocess `text=True` without `encoding=`, needs
   a gate-16 widening ruling before it can be fixed). L-STYLE-10 (function-scope imports, fixed on contact,
   no tracking needed).
+- **CARD-GAME-RECORD-STATUS-DRIFT — CARDED (found by REVIEW-W6): the game-record contract still says
+  self-play search stats have no producer.** `docs/contracts/game_record.md`'s status line (and
+  `docs/design/repo_design.md`'s game-record amendment, point 4) cite `CARD-GAME-RECORD-SELFPLAY-STATS`
+  for "no producer on the self-play channel", but `selfplay.search_stats_every` is that producer
+  (R355(d), `18eb4f4e`) and the same contract's `search_stats` section already describes it. Repaired on
+  contact: the contract's text, version and tests move in one commit; repo_design's by an R9 amendment.
 
 ## Opened by R367 (DESIGN STANDARD + REVIEW GATE; SIZE CONDITIONAL WITHDRAWN; PRICE LAW; 2026-09-21)
 
@@ -681,6 +687,23 @@ already names.
   ADDITIVE-only. `tests/fixtures/manifest.toml`
 - `CARD-TRAINSTEP-ADAPTER` — a dormant contingency: TD-1 sits behind TD-4 on a CPU box and has
   never fired; the test pins its absence. `tests/tools/test_preflight_mint_process.py`
+
+CLOSED, still cited from the tree. Their card rows left this file with R368(e)'s sweep; each line
+names what closed it, so every live cite resolves here.
+
+- `CARD-A4-MINT` — CLOSED 2026-09-11: the four PERF-A4 rows decided by matrix and minted,
+  `0f20896e`. `tests/eval/test_deploy_matched_hparam_coincidence.py`
+- `CARD-EVAL-GATE-FIELDS-IN-STREAM` — CLOSED 2026-09-19 by R362(c), `94b8286a`:
+  `eval_round_complete.gate` carries the gate's rule fields.
+  `tests/eval/test_gate_fields_ride_the_round_complete_row.py`
+- `CARD-SEALBOT-TT-SEAT` — CLOSED 2026-09-15 on the A/B's reading, R353(b), `7e0a424c`
+  (`SEALBOT_TT_AB_2026-09-14.md`); the rung itself was deleted by R362. `tools/dashboard/tier2.py`
+- `CARD-SELFPLAY-SEARCH-STATS` — LANDED 2026-09-16 by R355(d), `18eb4f4e`:
+  `selfplay.search_stats_every` samples self-play games into the record. `tools/viewer/html.py`
+- `CARD-SERVER-OWNED-COPY` — LANDED 2026-09-21 by R366(b), `857187af`: the inference server serves
+  its own copy, which `ActorSync` writes and the learner never reads. `src/mantis/train/checkpoints.py`
+- `CARD-STAMP-FLOOR` — CLOSED 2026-09-11, decided by matrix, `652b9f02`: the preflight burst is a
+  stop-step bound over the minted config. `tools/ci_gates/preflight_mint.py`
 
 ## RQ-*
 
