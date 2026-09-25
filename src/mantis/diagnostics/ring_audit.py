@@ -1,6 +1,6 @@
 # >300 justify (R8): the audit's rows, the two oracles they compose (tactics, the A-2 backup
 # probe) and the band verdict are ONE authority — split, "what a miss means" lives in two places.
-"""Ring audit (R357(b)): one ring proves its targets before START; exit 1 on a pre-stated band's miss."""
+"""Ring audit: one ring proves its targets before START; exit 1 on a pre-stated band's miss."""
 from __future__ import annotations
 
 import argparse
@@ -20,7 +20,7 @@ from mantis.diagnostics import tactics as T
 from mantis.diagnostics.ring_reader import Ring, explicit_entropy, load_ring
 from mantis.util.constants import is_alpha_full
 
-#: A row with H(explicit) under this is a one-hot (R357(a)).
+#: A row with H(explicit) under this is a one-hot.
 ONE_HOT_H = 1e-3
 #: The census's `mass(F) < 0.1`: the one-hot went to a cell that loses to the completion next turn.
 COUNTER_THREAT_MASS = 0.1
@@ -352,7 +352,7 @@ def sym_uniformity_row(rows: list[dict[str, Any]]) -> Row:
 
 
 def event_rows(events: Path | None, *, ring_size: int) -> list[Row]:
-    """The two rows read off the events stream (R358(b)/(c)); NOT MEASURED, naming `--events`, without one."""
+    """The two rows read off the events stream; NOT MEASURED, naming `--events`, without one."""
     if events is None:
         absent = "NOT MEASURED: pass --events <events_<run>_seg*.jsonl>; the ring carries no counter"
         return [Row("replay_ratio", None, None, "none", absent), Row("sym_bin0_over_mean", None, None, "none", absent)]

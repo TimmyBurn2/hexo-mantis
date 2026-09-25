@@ -133,7 +133,7 @@ def record_runs(record: Any, *, encoding_name: str) -> tuple[int, int]:
 
 
 def _positive_games(raw: str) -> int:
-    """`--games` must be at least 1 (AUDIT-1 F-28/A08).
+    """`--games` must be at least 1.
 
     Raises:
         argparse.ArgumentTypeError: the value is not an integer, or is below 1.
@@ -291,7 +291,7 @@ def run_witness(config_path: Path, arms: Sequence[ArmSpec], *, games: int,
                                        c_visit=cfg.selfplay.c_visit,
                                        c_scale=cfg.selfplay.c_scale,
                                        q_rescale=cfg.selfplay.q_rescale,
-                                       # The deploy head's own key (R351(c)).
+                                       # The deploy head's own key.
                                        search_kind=resolve_deploy_search_kind(cfg),
                                        gumbel_m=cfg.selfplay.gumbel_m,
                                        gumbel_seed=cfg.seed),

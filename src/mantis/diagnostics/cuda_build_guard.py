@@ -1,7 +1,7 @@
 """Refuse a CPU-only torch build, and PROVE the CUDA path with a real matmul.
 
 `pyproject.toml` installs the PyTorch CPU wheel by default and the cu128 wheel only under
-`--extra cuda` (R348(a)), so a bare `uv sync` on a GPU host replaces a CUDA torch with a
+`--extra cuda`, so a bare `uv sync` on a GPU host replaces a CUDA torch with a
 `+cpu` one — committed configuration doing what it says, not a host accident, which is why the
 guard rides in the repo. `torch.cuda.is_available()` is not
 the check: it answers "did this build find a driver", which a CPU wheel answers False and a

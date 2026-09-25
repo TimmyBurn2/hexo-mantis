@@ -14,8 +14,8 @@ TWO SINKS, LARGER GOVERNS, AND THE REPORT SAYS WHICH ONE DID: `card` is a LEVEL,
 per-round DEMAND peak. They disagreed by 3.62 GiB at matched config on one host, and the
 disagreement is a finding.
 
-Game counts come from the Rust runner's counters, never events (falsified F-43: `game_complete`
-is dropped in production). `moves` is `positions_generated`, one per APPLIED COMPOUND TURN, not
+Game counts come from the Rust runner's counters, never events (`game_complete` is dropped in
+production). `moves` is `positions_generated`, one per APPLIED COMPOUND TURN, not
 per ply. Every figure carries its sampling limit; unmeasured rounds are excluded BY NAME.
 
 `--config` + `--plan` DRIVES; `--select-only` re-derives a pick from a written report and drives

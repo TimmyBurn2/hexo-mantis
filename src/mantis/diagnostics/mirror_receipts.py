@@ -1,4 +1,4 @@
-"""START pre-flight, the mirror arm (R349(b)): R347(d)'s volume halt is deleted (no host on
+"""START pre-flight, the mirror arm: the volume halt is deleted (no host on
 offer has a volume) and the puller's receipts are the rule — the preflight demands them for the
 burst's bundle and first shard, so the loop is proven, not assumed."""
 from __future__ import annotations
@@ -57,7 +57,7 @@ def require_mirror_receipts(run_dir: str | Path, run_id: str) -> dict[str, Any]:
             path.name: verify_receipt(path)["verified_sha256"]
             for path in bundle_member_paths(newest, checkpoint_dir)}}}
     else:
-        # A clean completion writes a checkpoint and NO bundle (R137's third leg).
+        # A clean completion writes a checkpoint and NO bundle.
         checkpoints = stamped_checkpoints(checkpoint_dir)
         if not checkpoints:
             raise MirrorReceiptsMissingError(
