@@ -1187,9 +1187,12 @@ def resume_trainer(
             dict(baked_config) if baked_config else dict(fallback_config or {}),
             frozenset(),
         )
-    # Drop the machinery's OWN directive keys — and only those — before the Trainer carries the
-    # config into every future save; anything else non-schema still reaches the writer and raises.
-    config = {k: v for k, v in resolved_config.items() if k not in RESUME_DIRECTIVE_KEYS}
+    # Drop the machinery's OWN directive keys and the schema's RETIRED paths — only those — before
+    # the Trainer carries the config into every future save; anything else non-schema still raises.
+    config, retired = split_retired(
+        {k: v for k, v in resolved_config.items() if k not in RESUME_DIRECTIVE_KEYS})
+    if retired:
+        _LOG.info("resume_retired_paths_dropped checkpoint=%s retired=%s", path.name, sorted(retired))
     _refuse_identity_drift(path, baked_config, config, arch)
     _refuse_target_semantics_drift(path, baked_config, config)
     # Pass the DECLARED arch so the Trainer re-stamps it rather than re-deriving one.
