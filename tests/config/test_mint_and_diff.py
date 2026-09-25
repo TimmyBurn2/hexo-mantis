@@ -160,6 +160,7 @@ def test_diff_across_a_retirement_names_the_retired_leaf_and_nothing_else(tmp_pa
     diff = _run(str(DIFF), str(older), str(base), "--expect", "monitor.wr_hard_abort_enabled")
     assert diff.returncode == 0, diff.stdout + diff.stderr
     assert "MATCH: monitor.wr_hard_abort_enabled" in diff.stdout
+    assert f"RETIRED path read from {older}: monitor.wr_hard_abort_enabled" in diff.stdout, "the leniency is said aloud"
 
 
 def test_diff_still_refuses_a_leaf_the_schema_never_had(tmp_path):

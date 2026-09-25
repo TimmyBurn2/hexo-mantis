@@ -11,7 +11,7 @@ Lying-header mode:
   Exit 0 MATCH; exit 1 naming the lie (an omitted real diff OR a claimed-but-unchanged key); exit 2
   on load/parse error (missing template, unparseable header, invalid config).
 
-Both configs must schema-validate, but a RETIRED path (`mantis.config.retired`) reads as a leaf.
+Both configs must schema-validate; in two-file mode only, a RETIRED path (`mantis.config.retired`) reads as a leaf, named aloud.
 """
 import argparse
 import sys
@@ -107,6 +107,7 @@ def _flat_across_retirement(config_path: str) -> dict[str, object]:
     kept, retired = split_retired(raw)
     flat = flat_leaves(RunConfig.model_validate(kept).model_dump())
     for dotted, value in retired.items():
+        print(f"RETIRED path read from {config_path}: {dotted}")
         flat.update(flat_leaves(value, dotted) if isinstance(value, dict) else {dotted: value})
     return flat
 
