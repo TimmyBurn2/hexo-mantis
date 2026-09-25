@@ -44,6 +44,17 @@ def _node_offsets_to_batch_vec(node_offsets: Tensor, n_total: int) -> Tensor:
     )
 
 
+def segment_lengths(seg: Tensor, num_segments: int) -> Tensor:
+    """`[num_segments]` member counts of the non-decreasing ids `seg`; integer sums are exact in any order."""
+    return torch.zeros(num_segments, dtype=torch.long, device=seg.device).index_add_(0, seg, torch.ones_like(seg))
+
+
+def segment_sums(values: Tensor, lengths: Tensor) -> Tensor:
+    """Fixed-order fp32 sums of CONTIGUOUS segments along dim 0; offsets because `lengths=` syncs, fp32 because it sums in the input dtype."""
+    offsets = torch.cat((lengths.new_zeros(1), lengths.cumsum(0)))
+    return torch.segment_reduce(values.float(), "sum", offsets=offsets, axis=0).to(values.dtype)
+
+
 def segment_mean_with_fallback(
     emb: Tensor, mask: Tensor, batch_vec: Tensor, num_graphs: int
 ) -> Tensor:
@@ -52,25 +63,19 @@ def segment_mean_with_fallback(
     Args:
         emb:        (N, D) node embeddings (block-diagonal batch).
         mask:       (N,) bool — the preferred subset (stone nodes).
-        batch_vec:  (N,) long — graph id per node, in [0, num_graphs).
+        batch_vec:  (N,) long — graph id per node, in [0, num_graphs), non-decreasing (contiguous graphs).
         num_graphs: B.
     Returns:
         (num_graphs, D) pooled vectors.
     """
-    d = emb.shape[1]
-    device = emb.device
     dtype = emb.dtype
     mask_f = mask.to(dtype)
 
-    masked_sums = torch.zeros(num_graphs, d, device=device, dtype=dtype)
-    masked_sums.index_add_(0, batch_vec, emb * mask_f.unsqueeze(-1))
-    masked_counts = torch.zeros(num_graphs, device=device, dtype=dtype)
-    masked_counts.index_add_(0, batch_vec, mask_f)
-
-    all_sums = torch.zeros(num_graphs, d, device=device, dtype=dtype)
-    all_sums.index_add_(0, batch_vec, emb)
-    all_counts = torch.zeros(num_graphs, device=device, dtype=dtype)
-    all_counts.index_add_(0, batch_vec, torch.ones_like(mask_f))
+    lengths = segment_lengths(batch_vec, num_graphs)
+    masked_sums = segment_sums(emb * mask_f.unsqueeze(-1), lengths)
+    masked_counts = segment_sums(mask_f, lengths)
+    all_sums = segment_sums(emb, lengths)
+    all_counts = lengths.to(dtype)
 
     use_fallback = masked_counts == 0
     denom = torch.where(use_fallback, all_counts.clamp(min=1.0), masked_counts.clamp(min=1.0))

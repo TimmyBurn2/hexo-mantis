@@ -718,12 +718,10 @@ def segment_ids(legal_offsets: Any, *, total: int | None = None) -> Any:
 
 
 def segment_sum(values: Any, seg: Any, num_graphs: int) -> Any:
-    """Per-graph sums of flat per-node `values` under the ids `seg`, `[B]`."""
-    import torch
+    """Per-graph sums of flat per-node `values` under the non-decreasing ids `seg`, `[B]`, in a fixed order."""
+    from mantis.model.gnn import segment_lengths, segment_sums
 
-    out = torch.zeros(num_graphs, device=values.device, dtype=values.dtype)
-    out.scatter_add_(0, seg, values)
-    return out
+    return segment_sums(values, segment_lengths(seg, num_graphs))
 
 
 def segment_softmax(logits: Any, legal_offsets: Any) -> Any:

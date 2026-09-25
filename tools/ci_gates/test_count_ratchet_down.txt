@@ -1,3 +1,3 @@
 # The ONE sanctioned ratchet-down record, `<from> -> <to>  <grounds>` on one line; DELETED in the commit
 # after it lands on dev, since the next run's ref floor is <to> and a record left behind reds by name.
-4948 -> 4867  PERF-ADA W0: configs/run6.yaml deleted; its 100 census-parametrized rows went with the config, and every row still runs over each remaining production config. No behaviour lost a witness.
+4948 -> 4871  PERF-ADA W0: configs/run6.yaml deleted; its 100 census-parametrized rows went with the config, and every row still runs over each remaining production config. No behaviour lost a witness.
