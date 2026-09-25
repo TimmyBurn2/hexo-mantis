@@ -5,7 +5,7 @@ UV ?= uv
 build:
 	$(UV) sync
 
-# R348(a): CUDA torch is the `cuda` extra; the CPU wheel is a DEFAULT group, so the group is
+# CUDA torch is the `cuda` extra; the CPU wheel is a DEFAULT group, so the group is
 # dropped explicitly (uv refuses to drop a default group on its own). Box only.
 build.cuda:
 	$(UV) sync --extra cuda --no-group cpu
@@ -22,33 +22,33 @@ test:
 test.integration:
 	UV_NO_SYNC=1 $(UV) run pytest -m integration
 
-# CI gate 14 (R98): curated lint/type gate — zero-error baseline, self-tested trigger.
+# CI gate 14: curated lint/type gate — zero-error baseline, self-tested trigger.
 lint:
 	bash tools/ci_gates/lint_gate.sh --self-test
 
 # CI gate 2b. `--all-targets` is the load-bearing flag: without it the non-smoke
 # `[[bench]]` targets are compiled by NO local command, so the floors in
-# tools/bench_floors.toml stand behind code nothing builds (AUDIT-1 F-09).
+# tools/bench_floors.toml stand behind code nothing builds.
 lint.rust:
 	cargo clippy --workspace --all-targets --locked -- -D clippy::all
 
-# THE LOCAL GATE SET (AUDIT-1 F-09). R311(b) made local green the gate; this is what
+# THE LOCAL GATE SET. Local green is the gate; this is what
 # "local green" means. Two opt-ins, both self-declaring in the summary: `--with-fresh-sync`
-# (gate 1) and `--with-slow` (the tier BOTH pytest tiers deselect — R333(b)). The set gates
+# (gate 1) and `--with-slow` (the tier BOTH pytest tiers deselect). The set gates
 # the venv AS BUILT and never re-syncs it: `make build` (or `make build.cuda` on a box) first.
 gates:
 	bash tools/ci_gates/run_all.sh
 
-# The packet-exit form: the whole set PLUS the slow tier. R333(b) — a `slow`-marked test is
+# The packet-exit form: the whole set PLUS the slow tier. A `slow`-marked test is
 # executed by no other gate, so this is the only invocation that covers the tree.
 gates.exit:
 	bash tools/ci_gates/run_all.sh --with-slow
 
-# THE RUN DASHBOARD (R333(d)). ONE command, an existing run record in, one self-contained
+# THE RUN DASHBOARD. ONE command, an existing run record in, one self-contained
 # HTML file out. No server, no producer, no live connection to a run. A panel with no producer
 # at HEAD is drawn as a stated gap, never as a zero.
 #   make dashboard EVENTS=<run>/events.jsonl OUT=/tmp/run.html [LADDER=<run>/eval_ladder_state.json]
-#                  [EXTERNAL="<run>/checkpoints <parent-run>/checkpoints"]  # strix sidecars (R356(d))
+#                  [EXTERNAL="<run>/checkpoints <parent-run>/checkpoints"]  # strix sidecars
 dashboard:
 	UV_NO_SYNC=1 $(UV) run python tools/run_dashboard.py --events "$(EVENTS)" --out "$(OUT)" \
 	  $(if $(LADDER),--ladder-state "$(LADDER)",) $(foreach d,$(EXTERNAL),--external-points "$(d)")
