@@ -1,6 +1,6 @@
 """Oracle test for VRAM cache release at move boundaries (Phase V, VERDICT-A).
 
-Producer test (LAW-07): verifies `DeployHeadPlayer.select_move` calls
+Producer test: verifies `DeployHeadPlayer.select_move` calls
 `torch.cuda.empty_cache()` exactly once after each move's MCTS completes. Mutation: remove the
 `_release_cuda_cache()` call from `select_move` → `test_*_fires_per_move`
 reds; hoist it into the per-simulation loop → `== 1` assertion reds.

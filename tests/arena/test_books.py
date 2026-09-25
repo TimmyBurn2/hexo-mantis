@@ -1,4 +1,4 @@
-"""⊕ WP11-A arena — opening-book authority (LAW-15 sha-pin; design §a.2 books.py,
+"""⊕ Arena — opening-book authority (sha-pin; design §a.2 books.py,
 §b arena/test_books.py).
 
 `tools/mint_opening_book.py` (the dev-only deterministic minter) is invoked as a subprocess

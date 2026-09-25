@@ -1,4 +1,4 @@
-"""⊕ WP11-A arena — RegimeKey construction (A3; design §a.2, §b arena/test_regime_key.py).
+"""⊕ Arena — RegimeKey construction (A3; design §a.2, §b arena/test_regime_key.py).
 
 Every eval game record carries a
 canonical RegimeKey = (bot, variant, model_sims, opponent_spec, opening_book,

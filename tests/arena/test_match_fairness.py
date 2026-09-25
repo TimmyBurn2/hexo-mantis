@@ -1,4 +1,4 @@
-"""⊕ WP11-A arena — paired-match fairness law (design §a.2 match.py, §b test_match_fairness.py).
+"""⊕ Arena — paired-match fairness law (design §a.2 match.py, §b test_match_fairness.py).
 
 Pins: argmax-only (no temperature
 token anywhere in arena/eval sources — dispatch item 7), the paired color-swap law (every

@@ -23,9 +23,8 @@ from mantis.arena.deploy_head import DeployHeadPlayer
 
 from _dense_expand import dense_expand
 
-#: `selfplay.c_visit` / `selfplay.c_scale` as the committed configs mint them. STATED here
-#: rather than imported so this file does not silently re-anchor when the keys are re-minted
-#: — these are the head's inputs, not its subject.
+#: `selfplay.c_visit` / `selfplay.c_scale` as the committed configs mint them — STATED here,
+#: not imported, so this file does not silently re-anchor when the keys are re-minted.
 _C_VISIT = 50.0
 _C_SCALE = 1.0
 #: v6_live2_ls's `policy_logit_count` (19x19 + pass).
@@ -72,7 +71,7 @@ def test_the_head_reports_and_configures_the_kind_it_was_given(kind: str):
 @pytest.mark.parametrize("rescale", [True, False])
 def test_the_head_configures_the_sigma_it_was_given(rescale: bool):
     """σ = (c_visit, c_scale, rescale) is set ONCE at `configure_search` and read back off the
-    tree — the root pick and the interior selector then hold one σ, not two (R351(b))."""
+    tree — the root pick and the interior selector then hold one σ, not two."""
     player = _head("gumbel", c_scale=0.1, q_rescale=rescale)
     player.new_game()
     assert player._tree is not None
@@ -96,7 +95,7 @@ def test_no_dirichlet_no_temperature_parameters_exist():
 def test_the_search_regime_keys_are_required_and_have_no_defaults():
     """Every knob that decides the SEARCH is required — a default is a regime nobody minted.
 
-    `c_visit`/`c_scale` carry AUDIT-1 F-39's history: they were defaulted on this
+    `c_visit`/`c_scale` carry a history: they were defaulted on this
     signature, so the deploy-matched bar searched at numbers no config authored. The same
     reasoning covers `search_kind` and `gumbel_m`.
     """
@@ -112,8 +111,8 @@ def test_the_search_regime_keys_are_required_and_have_no_defaults():
 
 @pytest.mark.parametrize("kind", ["puct", "gumbel"])
 def test_the_head_is_deterministic_given_fixed_inference(kind: str):
-    """Both kinds replay. The Gumbel draw is SEEDED (LAW-15: a bar is a reproducible
-    instrument), so two heads at one seed pick one move."""
+    """Both kinds replay. The Gumbel draw is SEEDED — a bar is a reproducible
+    instrument — so two heads at one seed pick one move."""
     player_a, player_b = _head(kind), _head(kind)
     player_a.new_game()
     player_b.new_game()

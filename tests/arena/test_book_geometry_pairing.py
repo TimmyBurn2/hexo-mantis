@@ -27,9 +27,8 @@ from mantis.encoding import lookup
 _REPO = Path(__file__).resolve().parents[2]
 _BOOKS_DIR = _REPO / "src" / "mantis" / "arena" / "books"
 
-#: Configs whose `identity.encoding` cannot replay the book their eval blocks name. Not a
-#: waiver but an inventory, asserted EXACTLY below, so closing a gap reds this suite and the
-#: row must be removed rather than outliving its reason.
+#: Configs whose `identity.encoding` cannot replay the book their eval blocks name — an
+#: inventory, asserted EXACTLY below, so closing a gap reds this suite.
 _KNOWN_UNPLAYABLE_PAIRINGS: set[str] = set()
 
 

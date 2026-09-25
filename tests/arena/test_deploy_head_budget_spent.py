@@ -1,4 +1,4 @@
-"""EVERY search kind spends EXACTLY `n_sims` leaves (R355(b); the old Gumbel driver served 0.19–0.42 of 512, A-1)."""
+"""EVERY search kind spends EXACTLY `n_sims` leaves (the old Gumbel driver served 0.19–0.42 of 512, A-1)."""
 from __future__ import annotations
 
 import math

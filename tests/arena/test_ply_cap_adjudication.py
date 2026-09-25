@@ -29,8 +29,7 @@ from mantis.arena.regime import RegimeKey
 _ENCODING = "gnn_axis_v1"
 
 #: A LOPSIDED, unfinished, and LEGALLY REACHABLE position, ten plies long — every stone within
-#: the encoding's `legal_move_radius`, or the replay refuses it. Its properties are re-derived
-#: from the engine below, never asserted here.
+#: the encoding's `legal_move_radius`; its properties are re-derived from the engine, never asserted here.
 _PLANTED = [
     (0, 0),          # ply 0  -> player  1
     (0, 4), (2, 4),  # plies 1,2 -> player -1
