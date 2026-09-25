@@ -14,6 +14,7 @@ import torch
 import _fused_graph_harness as H
 from _wire_geometry import geometry_kwargs
 
+from mantis.config.census import production_configs
 from mantis.config.loader import load_config
 from mantis.config.resolve.edge_geometry_check import (
     EDGE_GEOMETRY_CHECK_MODES,
@@ -39,12 +40,13 @@ _DEADLINE_SEC = 20.0
 
 
 def test_the_schema_defaults_to_inline_through_the_one_loader() -> None:
-    """The DEFAULT is read off a config that omits the row; run6 MINTS `checker_thread` (PERF-A4)."""
+    """The DEFAULT is read off a config that omits the row; production configs MINT `checker_thread` (PERF-A4)."""
     config = load_config(_REPO / "configs" / "smoke_preflight_armed.yaml").model_dump()
     assert config["inference"]["edge_geometry_check"] == "inline"
     assert resolve_edge_geometry_check(config) == "inline"
-    minted = load_config(_REPO / "configs" / "run6.yaml").model_dump()
-    assert resolve_edge_geometry_check(minted) == "checker_thread"
+    for path in production_configs(_REPO):
+        minted = load_config(path).model_dump()
+        assert resolve_edge_geometry_check(minted) == "checker_thread"
 
 
 @pytest.mark.parametrize("bad", [{}, {"inference": {}}, {"inference": {"edge_geometry_check": "async"}}])

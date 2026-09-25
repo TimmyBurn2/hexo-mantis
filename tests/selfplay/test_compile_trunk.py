@@ -9,6 +9,7 @@ import pytest
 import torch
 from _wire_geometry import geometry_kwargs
 
+from mantis.config.census import production_configs
 from mantis.config.loader import load_config
 from mantis.config.resolve.compile_trunk import (
     MissingCompileTrunkError,
@@ -28,11 +29,12 @@ _GEOMETRY = geometry_kwargs()
 
 
 def test_the_schema_defaults_to_eager_through_the_one_loader() -> None:
-    """The DEFAULT is read off a config that omits the row; run6 MINTS `true` (PERF-A4)."""
+    """The DEFAULT is read off a config that omits the row; production configs MINT `true` (PERF-A4)."""
     config = load_config(_REPO / "configs" / "smoke_preflight_armed.yaml").model_dump()
     assert config["inference"]["compile_trunk"] is False
     assert resolve_compile_trunk(config) is False
-    assert resolve_compile_trunk(load_config(_REPO / "configs" / "run6.yaml").model_dump()) is True
+    for path in production_configs(_REPO):
+        assert resolve_compile_trunk(load_config(path).model_dump()) is True, path.name
 
 
 @pytest.mark.parametrize("bad", [{}, {"inference": {}}, {"inference": {"compile_trunk": "yes"}}])

@@ -1,4 +1,4 @@
-"""R357(a)'s pin: `selfplay.q_rescale` reaches the completed-Q TARGET BUILDER, read off the shipped configs."""
+"""R357(a)'s pin: `selfplay.q_rescale` reaches the completed-Q TARGET BUILDER, set each way on a shipped config."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,10 +7,14 @@ import numpy as np
 import pytest
 
 from mantis._engine import Board, MCTSTree
+from mantis.config.census import production_configs
 from mantis.config.loader import load_config
+from mantis.config.schema import RunConfig
 from mantis.selfplay.hparams import SelfPlayHParams
 
 _REPO = Path(__file__).resolve().parents[2]
+#: Any census member: the rows set `selfplay.q_rescale` themselves, so two targets differ in that key alone.
+_BASE = production_configs(_REPO)[0]
 _STRIDE = 19 * 19 + 1
 # The ring stores no Q (FORCED_MOVE_CENSUS §"What the record cannot answer"), so the two candidates'
 # Q's are PLANTED through the real backup on one fixed root and read back in the root's view.
@@ -19,8 +23,10 @@ _ROOT = ((0, 0), (1, 0), (0, 1))
 _ROWS = {"dq_0.01": (0.105, 0.095), "dq_0.2": (0.2, 0.0)}
 
 
-def _hparams(config: str) -> SelfPlayHParams:
-    return SelfPlayHParams.from_config(load_config(_REPO / "configs" / config).model_dump())
+def _hparams(q_rescale: bool) -> SelfPlayHParams:
+    raw = load_config(_BASE).model_dump()
+    raw["selfplay"]["q_rescale"] = q_rescale
+    return SelfPlayHParams.from_config(RunConfig.model_validate(raw).model_dump())
 
 
 def _root_board() -> Board:
@@ -69,17 +75,17 @@ def _entropy(masses: np.ndarray) -> float:
 
 
 @pytest.mark.parametrize("row", sorted(_ROWS))
-def test_run8_and_run7_configs_build_different_targets_on_the_same_root(row: str) -> None:
+def test_rescale_on_and_off_build_different_targets_on_the_same_root(row: str) -> None:
     q_a, q_b = _ROWS[row]
-    raw, _, _, _ = _target(_hparams("run8.yaml"), q_a, q_b)
-    rescaled, _, _, _ = _target(_hparams("run7.yaml"), q_a, q_b)
+    raw, _, _, _ = _target(_hparams(False), q_a, q_b)
+    rescaled, _, _, _ = _target(_hparams(True), q_a, q_b)
     assert raw.shape == rescaled.shape == (_STRIDE,)
     assert not np.allclose(raw, rescaled, atol=1e-6), "the key did not reach the target builder"
 
 
 @pytest.mark.parametrize("row", sorted(_ROWS))
 def test_under_raw_q_the_logit_gap_is_visit_scale_times_dq(row: str) -> None:
-    hp = _hparams("run8.yaml")
+    hp = _hparams(False)
     assert hp.q_rescale is False
     q_a, q_b = _ROWS[row]
     masses, dq, max_n, (fa, fb) = _target(hp, q_a, q_b)
@@ -90,7 +96,7 @@ def test_under_raw_q_the_logit_gap_is_visit_scale_times_dq(row: str) -> None:
 
 def test_the_near_equal_row_is_one_hot_under_rescale_and_not_under_raw_q() -> None:
     q_a, q_b = _ROWS["dq_0.01"]
-    rescaled, _, _, _ = _target(_hparams("run7.yaml"), q_a, q_b)
-    raw, _, _, _ = _target(_hparams("run8.yaml"), q_a, q_b)
+    rescaled, _, _, _ = _target(_hparams(True), q_a, q_b)
+    raw, _, _, _ = _target(_hparams(False), q_a, q_b)
     assert _entropy(rescaled) < 1e-3
     assert _entropy(raw) >= 1e-3
