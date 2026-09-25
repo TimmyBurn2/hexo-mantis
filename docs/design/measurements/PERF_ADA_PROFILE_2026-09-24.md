@@ -39,6 +39,8 @@ before the bench):
 
 | leg / commit | expected | abort below | benched sha | median leaves/s [IQR] | vs parent |
 |---|---|---|---|---|---|
+| L0 instrument (parent of L1) | 0 (tools and tests only) | — | `c9474c85` | 1 853 [1 768, 1 869]; repeat DIFFERS, max \|Δvalue\| 0.0657, \|Δp\| 0.0153 | — |
+| L1 `index_fill_` mask | +8 … +15 % (item 3: +12 %) | median < 0.97 × parent, or slower beyond the IQR | | | |
 
 ## Findings first
 

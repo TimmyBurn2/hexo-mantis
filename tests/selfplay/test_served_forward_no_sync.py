@@ -74,6 +74,8 @@ def _serve_with_checked_launch(compile_trunk: bool,
     finally:
         server.stop()
         server.join(timeout=30.0)
+    frames = server.batch_timing_snapshot()["compile"]["frames_ok"]
+    assert (frames > 0) == compile_trunk, f"compile_trunk={compile_trunk} but {frames} compiled frame(s)"
     assert len(calls) >= 2, f"only {len(calls)} pop(s) launched; the checked launch never ran"
     return caught
 
@@ -84,7 +86,6 @@ def test_the_instrument_reds_on_a_planted_sync() -> None:
     assert caught and "synchroniz" in str(caught[0]), f"the planted sync was not caught: {caught}"
 
 
-@pytest.mark.xfail(strict=True, reason="real_mask_from_batch's pageable scalar H2D syncs every forward")
 def test_one_served_forward_launches_without_a_host_sync() -> None:
     """The eager trunk: collate, H2D, forward and the queued D2H never wait on the device."""
     caught = _serve_with_checked_launch(False)
@@ -92,7 +93,6 @@ def test_one_served_forward_launches_without_a_host_sync() -> None:
 
 
 @pytest.mark.slow
-@pytest.mark.xfail(strict=True, reason="real_mask_from_batch's pageable scalar H2D syncs every forward")
 def test_one_compiled_served_forward_launches_without_a_host_sync() -> None:
     """The compiled trunk the box serves with: the same property through Inductor's kernels."""
     caught = _serve_with_checked_launch(True)

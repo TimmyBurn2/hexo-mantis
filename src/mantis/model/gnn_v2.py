@@ -113,10 +113,8 @@ class GnnNetV2(GnnNet):
 
     @staticmethod
     def real_mask_from_batch(stone_mask: Tensor, legal_index: Tensor) -> Tensor:
-        """`real = stone | legal`, and the dummy is what is left. Derived, never `N-1`."""
-        real = stone_mask.clone()
-        real[legal_index] = True
-        return real
+        """`real = stone | legal`, the dummy what is left, never `N-1`; `index_fill_` because `real[i] = True` syncs the device."""
+        return stone_mask.clone().index_fill_(0, legal_index, True)
 
     def node_embeddings(  # type: ignore[override]
         self,
