@@ -132,23 +132,22 @@ impl RegistrySpec {
         const SYM_CHAIN_PLANES: usize = 6;
         if !SYM_TABLE_IDS.contains(&self.sym_table_id) {
             errs.push(format!(
-                "sym_table_id {:?} is not one of {SYM_TABLE_IDS:?}: `sym_tables_for` has no \
-                 table for it and would panic at the first runner start",
+                "sym_table_id {:?} is not one of {SYM_TABLE_IDS:?}: the registry refuses it \
+                 at load",
                 self.sym_table_id
             ));
         }
         if self.sym_table_id == "size_25" && self.n_planes != 8 {
             errs.push(format!(
-                "sym_table_id \"size_25\" requires n_planes == 8, got {}: `sym_tables_for` \
-                 matches on the PAIR and would panic at the first runner start",
+                "sym_table_id \"size_25\" requires n_planes == 8, got {}: the registry \
+                 refuses it at load",
                 self.n_planes
             ));
         }
         if self.n_chain_planes != SYM_CHAIN_PLANES {
             errs.push(format!(
-                "n_chain_planes must be {SYM_CHAIN_PLANES} (the D6 chain tables' fixed inner \
-                 dimension), got {}: `sym_tables_for` asserts this and would panic at the \
-                 first runner start",
+                "n_chain_planes must be {SYM_CHAIN_PLANES}, got {}: the registry refuses it \
+                 at load",
                 self.n_chain_planes
             ));
         }
