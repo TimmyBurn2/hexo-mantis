@@ -2,7 +2,7 @@
 # `build_run_safety`, `JsonlEventSink`, `HeartbeatWatchdog`, `DiskGuard` and signal handlers —
 # so splitting them would fork a second drivable harness AND a second real-subsystem boot per
 # file.
-"""LAW-16 at the composition root.
+"""At the composition root.
 
 What this file exists to stop, measured and not inferred: signals were UNARMED in every composed
 run, because `install_signal_handlers` fired only on the loop's self-construct branch while the

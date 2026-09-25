@@ -50,22 +50,16 @@ _SANCTIONED_SITES = {
     "tools/ci_gates/preflight_mint.py::_boot_main",
 }
 
-#: The re-cut composer's parameter tuple, as the LAUNCHER passes it. `resume_state` joined it
-#: at R343(c); the CHILD passes the same tuple plus `burst_stop_step`, its burst bound over the
-#: minted config — the one parameter the launcher must NOT have a route to.
+#: The re-cut composer's parameter tuple, as the LAUNCHER passes it (`resume_state` joined it);
+#: the CHILD adds `burst_stop_step`, its burst bound — the one param the launcher must NOT reach.
 _COMPOSE_KWARGS = (
     "config", "trainer", "pool", "buffer", "log_dir", "checkpoint_dir", "resume_state",
 )
 
-#: Where a `WorkerPool` may be CONSTRUCTED in shipped code. TWO entries, the second argued
-#: rather than typed — an allowlist that grows by edit is not an allowlist. The rule is one pool
-#: construction ON ANY BOOT PATH, weaker than the original claim, and the assertion message says
-#: the weaker thing.
-#:
-#: `mantis.diagnostics.worker_sweep` is not a boot path, and checkably so: it composes no
-#: trainer, no `compose_run`, no `StepCoordinator`, no run-safety triple and no lifecycle, and
-#: every one of those absences is asserted above by the same census. A third entry is a design
-#: decision that edits this set, and a planted-break row proves the allowlist can still say no.
+#: Where a `WorkerPool` may be CONSTRUCTED in shipped code. TWO entries: the rule is one pool
+#: construction ON ANY BOOT PATH. `mantis.diagnostics.worker_sweep` is NOT a boot path, and
+#: checkably so — it composes no trainer, no `compose_run`, no `StepCoordinator`, no run-safety
+#: triple and no lifecycle. A third entry is a design decision that edits this set.
 _SANCTIONED_POOL_SITES = {
     "src/mantis/run.py::build_run_collaborators",
     "src/mantis/diagnostics/worker_sweep.py::build_sweep_pool",
@@ -379,7 +373,7 @@ def test_no_or_fallback_or_dict_get_stands_behind_a_config_fact_at_the_root() ->
 
 
 def test_the_pool_allowlist_BITES_on_a_third_construction_site(tmp_path) -> None:
-    """LAW-07 self-test: an allowlist rule never shown to reject anything is indistinguishable
+    """Mutation self-test: an allowlist rule never shown to reject anything is indistinguishable
     from one that accepts everything. The plant is a THIRD construction site in a temp tree, the
     same shape the second entry was granted for, so if that grant ever becomes a blanket
     exemption this row fails first."""

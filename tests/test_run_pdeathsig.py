@@ -39,7 +39,7 @@ from mantis.train.lifecycle.signals import (
 
 _LINUX = sys.platform.startswith("linux")
 _DEADLINE_SEC = 20.0
-#: What a stubbed R348(c) stamp check hands back: the three fields `main` logs.
+#: What a stubbed stamp check hands back: the three fields `main` logs.
 _STAMP = {"config_sha256": "stub", "tree_sha": "stub", "preflight_utc": "stub"}
 _LINUX_ONLY = pytest.mark.skipif(
     not _LINUX, reason="PR_SET_PDEATHSIG is a Linux prctl; there is no equivalent here"
@@ -179,7 +179,7 @@ def test_a_supervised_run_entry_dies_with_its_SIGKILLED_parent(tmp_path) -> None
 
 @_LINUX_ONLY
 def test_an_UNSTAMPED_run_entry_SURVIVES_the_same_kill(tmp_path) -> None:
-    """THE NEGATIVE CONTROL, and the load-bearing half of this file (LAW-07). Identical to the
+    """THE NEGATIVE CONTROL, and the load-bearing half of this file. Identical to the
     row above but unstamped, and it must SURVIVE: if it dies anyway something else reaps every
     grandchild and the positive row is green without its mechanism. It is also the pin on the
     deliberate residual — an unsupervised run stays orphanable, by the operator's own choice.

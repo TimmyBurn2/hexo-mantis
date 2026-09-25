@@ -43,17 +43,15 @@ from _drivable import BufferStub, DrivablePoolStub, DrivableTrainerStub, fake_ru
 _REPO = Path(__file__).resolve().parents[1]
 _CONFIGS_DIR = _REPO / "configs"
 
-#: The axis, DERIVED from the ONE discovery authority rather than re-typed, as a path
-#: RELATIVE to configs/ so a subdirectory config is unambiguous. A sixth minted config joins
-#: every parametrized oracle below automatically; a flat `*.yaml` glob would be a sixth answer
-#: to "what is a config" and blind to the `configs/prod/<name>.yaml` shape.
+#: The axis, DERIVED from the ONE discovery authority rather than re-typed. A sixth minted
+#: config joins every parametrized oracle below automatically; a flat `*.yaml` glob would be
+#: blind to the `configs/prod/<name>.yaml` shape.
 _MINTED: tuple[str, ...] = tuple(
     path.relative_to(_CONFIGS_DIR).as_posix() for path in discover_configs(_CONFIGS_DIR)
 )
 
 #: `cadence < threshold < max_train_steps` (the reachability bound) makes 3 the smallest legal
-#: run at cadence 1. The drives below use 4 and 5; lowering the thresholds stops the config
-#: loading.
+#: run at cadence 1; the drives below use 4 and 5, and lowering the thresholds stops config loading.
 _DRIVE_STEPS = 4
 _DRIVE_THRESHOLD = 3
 
@@ -121,8 +119,8 @@ def _evasion_corpus(cfg: RunConfig) -> dict[str, Any]:
     return {
         # the shape 9 of the 12 call sites carry today
         "namespace": SimpleNamespace(),
-        # the ADJ-07 shape, with the most plausible payload available: a MINTED config's own
-        # model_dump(), so this file adds no hand-written payload census.
+        # the most plausible payload available: a MINTED config's own model_dump(), so this
+        # file adds no hand-written payload census.
         "dict": dumped,
         # satisfies the RETIRED `.train` arm and has no monitor section at all
         "no_monitor_section": SimpleNamespace(
@@ -134,9 +132,8 @@ def _evasion_corpus(cfg: RunConfig) -> dict[str, Any]:
             train=cfg.train, monitor=cfg.monitor, eval=cfg.eval, identity=cfg.identity,
             model_dump=lambda: dumped),
         "duck_typed": _Duck(),
-        # `unittest.mock` SETS `__class__`, so `isinstance(Mock(spec=RunConfig), RunConfig)` is
-        # True for an object that has been through no validation. An isinstance gate is
-        # therefore not a validation statement; these two rows force a read of the REAL type.
+        # `unittest.mock` SETS `__class__`, so an isinstance check on a spec'd Mock passes
+        # without validation; these two rows force a read of the REAL type instead.
         "mock_spec": Mock(spec=RunConfig),
         "magicmock_spec": MagicMock(spec=RunConfig),
     }

@@ -131,7 +131,7 @@ def _drive_main(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, reques
     monkeypatch.setattr(mantis_run, "compose_run", _recording_compose)
 
     config_path = _write_config(tmp_path, smoke_run_config)
-    request.getfixturevalue("preflight_stamped")(config_path)  # R348(c): the launcher demands it
+    request.getfixturevalue("preflight_stamped")(config_path)  # the launcher demands it
     drive.rc = mantis_run.main(["--config", str(config_path), "--out-dir", str(out_dir)])
     return drive
 
@@ -215,7 +215,7 @@ def test_the_rc_is_resolved_off_the_manifest_row_and_is_never_a_literal(
 def test_suppressing_the_recording_collapses_the_rc_back_to_zero(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
-    """THE MUTATION R84's template requires: `record_abort` neutered, the guard still fires, still
+    """THE MUTATION the template requires: `record_abort` neutered, the guard still fires, still
     SIGTERMs, still stops the run — and the process reports 0."""
     monkeypatch.setattr(ShutdownState, "record_abort", lambda self, rule: False)
     drive = _drive_main(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,

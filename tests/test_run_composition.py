@@ -30,8 +30,7 @@ _REPO = Path(__file__).resolve().parents[1]
 _SRC = _REPO / "src" / "mantis"
 
 #: `stop_step` is config-authored, so every `compose_run` call below drives a REAL bounded
-#: burst. The reachability validator spans all three step-clock knobs, so they are co-overridden
-#: together; 3 is the smallest legal run at cadence 1.
+#: burst; 3 is the smallest legal run at cadence 1.
 _DRIVE_STEPS = 3
 
 
@@ -42,7 +41,7 @@ def _bounded(smoke_run_config, *, eval_enabled: bool = False, **monitor_over):
     here rather than at the call."""
     return smoke_run_config(
         train={"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS,
-               # WPTS/TD-1: the drive runs the real graph route; minted 256 batch is drag.
+               # The drive runs the real graph route; minted 256 batch is drag.
                "batch_size": 8},
         monitor={"actor_lag_threshold_steps": _DRIVE_STEPS - 1, **monitor_over},
         eval_enabled=eval_enabled,
@@ -50,7 +49,7 @@ def _bounded(smoke_run_config, *, eval_enabled: bool = False, **monitor_over):
 
 
 #: The UNPATCHED production builder, captured at import so the patch below can delegate to
-#: it without re-entering itself (WPMINT Phase K-A stage 0).
+#: it without re-entering itself.
 _PRODUCTION_BUILDER = mantis.run._step_coordinator_config
 
 
@@ -299,9 +298,8 @@ def test_build_run_collaborators_does_not_build_the_trainer_with_sink_none() -> 
     sink_kw = [kw for kw in calls[0].keywords if kw.arg == "sink"]
     assert sink_kw, "the init_trainer call must pass sink= explicitly (F-R-P2B-2)"
     val = sink_kw[0].value
-    # Stronger than an `is not None` refusal: `sink=NullEventSink()` or an adapter nobody binds
-    # would satisfy a bare not-None pin while still dropping every event. The site must
-    # construct the SAME late-binding adapter the pool's construction does.
+    # Stronger than an `is not None` refusal: `sink=NullEventSink()` or an unbound adapter
+    # would satisfy a bare not-None pin while still dropping every event.
     assert isinstance(val, ast.Call) and isinstance(val.func, ast.Name) \
         and val.func.id == "_DeferredSink", (
         "the production trainer's sink must be a _DeferredSink(...) construction — a dead "
@@ -439,7 +437,7 @@ def test_revalidation_does_not_over_reject_a_good_config_or_a_validated_subclass
     )
 
 
-# ══ AUDIT-1 F-32 / R334(c) SHAPE A — the launch pin DERIVES from `identity.warm_start` ═══
+# ══ SHAPE A — the launch pin DERIVES from `identity.warm_start` ═══
 def _capture_anchor(monkeypatch) -> dict:
     """The anchor stub, but CAPTURING: the pin's consumer is `resolve_anchor`, so asserting
     there proves the value crossed every hop rather than that one call site spells the kwarg."""
@@ -456,9 +454,8 @@ def _capture_anchor(monkeypatch) -> dict:
     return seen
 
 
-#: A row the RESOLVER accepts without touching the filesystem — it parses and never stats, and
-#: the pin's derivation happens before anything opens the artifact. What this drive owns is
-#: whether the row's value reaches the guard at all.
+#: A row the RESOLVER accepts without touching the filesystem — it parses and never stats.
+#: What this drive owns is whether the row's value reaches the guard at all.
 _WARM_START_ROW = {"checkpoint": "/nonexistent/bc_of_record.ckpt", "net_hash": "b" * 64, "reinit": []}
 
 

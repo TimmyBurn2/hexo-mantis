@@ -46,7 +46,7 @@ _CONFIG = production_configs(_REPO)[0]
 #: The launcher's whole flag surface. The two REQUIRED inputs; neither may carry a `default=`.
 _LAUNCHER_REQUIRED_OPTIONS = {"--config", "--out-dir"}
 #: The OPTIONAL flags, enumerated by name so a further optional flag still reds the census:
-#: `--resume-from` (a resume target) and `--inherit-preflight` (R360(c): a twin's run config).
+#: `--resume-from` (a resume target) and `--inherit-preflight` (a twin's run config).
 _LAUNCHER_OPTIONAL_OPTIONS = {"--resume-from", "--inherit-preflight"}
 _LAUNCHER_OPTIONS = _LAUNCHER_REQUIRED_OPTIONS | _LAUNCHER_OPTIONAL_OPTIONS
 
@@ -74,7 +74,7 @@ def test_the_launcher_declares_exactly_config_and_out_dir_with_no_defaults() -> 
     A defaulted out-dir is a run input the code decides — R1's exact subject — and every run that
     forgets the flag then writes into one shared directory, which is how two runs' checkpoints end
     up in one lineage. The optional flags — a resume target, a twin's run to inherit a preflight
-    from (R360(c)) — are properties of THIS invocation, not of the run's identity, so a schema key
+    from — are properties of THIS invocation, not of the run's identity, so a schema key
     would make two runs differ by an identity key describing neither. The SET is pinned.
     """
     tree = ast.parse(_RUN_PY.read_text(encoding="utf-8"))
@@ -89,9 +89,8 @@ def test_the_launcher_declares_exactly_config_and_out_dir_with_no_defaults() -> 
         names = [arg.value for arg in call.args if isinstance(arg, ast.Constant)]
         flag = next((n for n in names if n in _LAUNCHER_OPTIONS), None)
         if flag in _LAUNCHER_OPTIONAL_OPTIONS:
-            # Its `default=None` must be exactly `None`, which selects no action. R1 bans a
-            # default that picks a VALUE on the operator's behalf; a non-None default here would
-            # be exactly that, so it still reds.
+            # Its `default=None` must be exactly `None`, which selects no action; a non-None
+            # default would pick a VALUE on the operator's behalf, so it still reds.
             default = [kw for kw in call.keywords if kw.arg == "default"]
             assert default and isinstance(default[0].value, ast.Constant) \
                 and default[0].value.value is None, (
@@ -155,7 +154,7 @@ def test_a_clean_run_exits_zero(monkeypatch, tmp_path, preflight_stamped) -> Non
 def test_main_refuses_to_launch_a_config_with_no_preflight_stamp(
     monkeypatch, tmp_path, preflight_stamped,
 ) -> None:
-    """R348(c): no stamp for this config on this tree means `main` refuses BEFORE `launch_run`."""
+    """No stamp for this config on this tree means `main` refuses BEFORE `launch_run`."""
     launched: list[dict] = []
     monkeypatch.setattr(mantis_run, "launch_run",
                         lambda **kw: (launched.append(kw), _handles(None))[1])
@@ -277,10 +276,8 @@ def test_launch_run_boots_a_minted_config_into_the_live_loop_and_stops_clean(
 
     residents = sorted(p.name for p in (tmp_path / "checkpoints").iterdir())
 
-    # `best_model.pt` — the promotion ANCHOR — lands here. It used to go to a CWD-RELATIVE
-    # `checkpoints/best_model.pt` while the promotion WRITE side got the run's real path, so read
-    # and write named different files. The `.ckpt` count is asserted separately below so the two
-    # facts cannot mask each other.
+    # `best_model.pt` — the promotion ANCHOR — lands here; it used to go to a CWD-RELATIVE
+    # path while the WRITE side got the run's real one, so read and write named different files.
     ckpts = [n for n in residents if n.endswith(".ckpt")]
     assert "best_model.pt" in residents, (
         "the promotion anchor is not under the run's own checkpoint_dir — it has gone back "
@@ -321,7 +318,7 @@ def test_launch_run_boots_a_minted_config_into_the_live_loop_and_stops_clean(
         f"construct objects (LAW-18); saw {sorted(events)}"
     )
 
-    # The leg is READABLE from the ONE channel, not only from the filesystem (LAW-18).
+    # The leg is READABLE from the ONE channel, not only from the filesystem.
     clean_stop = [row for row in rows if row["event"] == "clean_stop_save"]
     assert len(clean_stop) == 1, (
         "exactly ONE `clean_stop_save` — the run's own record that it wrote its FINAL "
@@ -349,7 +346,7 @@ def test_a_periodic_cadence_burst_streams_periodic_checkpoint_save(
     The event is authored at the ONE periodic seam and unit-pinned through a spy sink, but the
     production composition built the trainer with `sink=None`, so a live burn's stream carried ZERO
     checkpoint events while the .ckpt files appeared on disk (measured: grep count 0 over seg0001
-    against a stamped step-25 artefact). LAW-18: the leg must log its own fires IN-RUN.
+    against a stamped step-25 artefact); the leg must log its own fires IN-RUN.
 
     One delta from the clean-stop row: `checkpoint_interval=5` against the 16-step burst, so the
     boundaries are 5/10/15 and the terminus is NOT one. The files-vs-events split is asserted in
@@ -394,8 +391,7 @@ def test_a_periodic_cadence_burst_streams_periodic_checkpoint_save(
     )
 
     # The trainer's OWN per-step diagnostic literal is delivered too, under its own name
-    # (`trainer_step`, NEVER the coordinator's `training_step`): one row per learner step, and the
-    # same `sink=None` revert that kills the periodic assertions kills this one.
+    # (`trainer_step`, NEVER the coordinator's `training_step`): one row per learner step.
     trainer_rows = [row for row in rows if row["event"] == "trainer_step"]
     assert {row["step"] for row in trainer_rows} == set(range(1, _BURST_STEPS + 1)), (
         "one trainer_step diagnostic row per learner step must ride the composed stream; "

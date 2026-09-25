@@ -9,7 +9,7 @@ from typing import Any, Callable
 
 
 class DrivableTrainerStub:
-    """The ONE trainer double (R367(a)): the declared entry points plus `device`; `actor_sd` and `inference_sd` are DISTINCT so a root that hands the deploy view to the actors reds."""
+    """The ONE trainer double: the declared entry points plus `device`; `actor_sd` and `inference_sd` are DISTINCT so a root that hands the deploy view to the actors reds."""
 
     def __init__(self, *, step: int = 0, grad_norm: float = 0.1, on_step: Any = None, model: Any = None) -> None:
         self.step = step

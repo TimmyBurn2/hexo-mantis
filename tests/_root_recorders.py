@@ -10,8 +10,7 @@ from mantis.train.lifecycle.disk_guard import DiskGuard
 DRIVE_STEPS = 3
 
 #: Disk-guard values, deliberately three DISTINCT numbers: an assertion that the guard received
-#: the resolver's values is vacuous if two are equal, and the transposition is exactly a swap of
-#: two. Low enough that the critical arm can NEVER fire on a real filesystem.
+#: the resolver's values is vacuous if two are equal. Low enough to NEVER fire on a real filesystem.
 DRIVE_DISK_GUARD = {"interval_sec": 0.02, "warn_gb": 0.001, "fail_gb": 0.0005}
 
 

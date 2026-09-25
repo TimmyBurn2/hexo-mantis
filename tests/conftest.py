@@ -69,8 +69,7 @@ def seeded_libs() -> list[str]:
 
 
 # Real RunConfigs for composition tests, derived from an already-minted config through the ONE
-# loader, with per-test deltas re-validated — so a test cannot construct a config the loader
-# would reject. Imports are lazy to keep this conftest scaffold-independent.
+# loader with per-test deltas re-validated, so a test cannot construct a config the loader would reject.
 CONFIGS_DIR = Path(__file__).resolve().parents[1] / "configs"
 
 
@@ -134,7 +133,7 @@ def state_home(monkeypatch, tmp_path) -> Path:
 
 @pytest.fixture
 def preflight_stamped(monkeypatch, tmp_path):
-    """Redirect the R348(c) stamp store to a tmp home; the stamp carries R349(b)'s verdict."""
+    """Redirect the stamp store to a tmp home; the stamp carries the preflight's verdict."""
     from mantis.config.loader import load_config
     from mantis.config.preflight_stamp import write_stamp
     from mantis.util.mirror_receipts import MIRRORED_VERDICT
