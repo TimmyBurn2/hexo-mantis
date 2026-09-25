@@ -125,14 +125,28 @@ def test_the_probe_positions_are_pairwise_distinct(bench) -> None:
         bench.distinct_positions([a, b, c], 3)
 
 
-def test_the_iqr_reading_separates_only_on_non_overlapping_quartiles(bench) -> None:
-    """A change is faster only when its q1 clears the baseline's q3."""
+def _row(*windows: float, **over) -> dict:
+    row = {"batch_size": 64, "workers": 32, "leaf_batch": 8, "device": "cuda", "compile_trunk": True,
+           "max_wait_ms": 10, "edge_geometry_check": "checker_thread", "window_leaves_per_s": list(windows)}
+    return {**row, **over}
+
+
+def test_the_iqr_reading_needs_separated_quartiles_and_the_run_spread(bench) -> None:
+    """Faster only when q1 clears the baseline's q3 AND the median clears RUN_SPREAD; one run's windows understate the noise."""
     assert bench.quartiles([1.0, 2.0, 3.0, 4.0, 5.0]) == (2.0, 3.0, 4.0)
-    base = {"batch_size": 64, "window_leaves_per_s": [100.0, 101.0, 102.0, 103.0, 104.0]}
-    fast = {"batch_size": 64, "window_leaves_per_s": [104.0, 105.0, 106.0, 107.0, 108.0]}
-    near = {"batch_size": 64, "window_leaves_per_s": [102.0, 103.0, 104.0, 105.0, 106.0]}
+    base = _row(100.0, 101.0, 102.0, 103.0, 104.0)
+    fast = _row(110.0, 111.0, 112.0, 113.0, 114.0)
+    separated_but_small = _row(104.0, 105.0, 106.0, 107.0, 108.0)
     got = bench.compare_rows(base, fast)
     assert got["faster_beyond_iqr"] and not got["slower_beyond_iqr"]
-    assert got["delta_pct"] == pytest.approx(100.0 * 4 / 102)
-    assert not bench.compare_rows(base, near)["faster_beyond_iqr"]
+    assert got["delta_pct"] == pytest.approx(100.0 * 10 / 102)
+    assert not bench.compare_rows(base, separated_but_small)["faster_beyond_iqr"]
     assert bench.compare_rows(fast, base)["slower_beyond_iqr"]
+
+
+def test_a_baseline_from_another_cell_or_before_l0_is_refused(bench) -> None:
+    """A different load shape or a record without sub-windows is not a baseline, and says why."""
+    with pytest.raises(bench.BaselineMismatch, match="workers"):
+        bench.compare_rows(_row(100.0, workers=48), _row(110.0))
+    with pytest.raises(bench.BaselineMismatch, match="before the repeat probe"):
+        bench.compare_rows({"batch_size": 64, "leaves_per_s": 100.0}, _row(110.0))

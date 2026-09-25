@@ -1,3 +1,5 @@
+# >300 justify (R8): the cell, its repeat probe, its summary and its reading against a baseline write and
+# read one record format; split, a reader could compare records no cell wrote.
 """The server bench: the REAL batcher and `InferenceServer` per batch size, standalone, fed by threads replaying a run's own games."""
 from __future__ import annotations
 
@@ -28,6 +30,10 @@ Position = tuple[list[tuple[int, int, int]], int, int]
 Served = tuple[list[float], list[tuple[tuple[int, int], float]], float]
 #: The curve: ms/batch for these batch sizes.
 DEFAULT_BATCH_SIZES = (16, 32, 64, 128, 256)
+#: The same B-64 cell's run-to-run spread on one host (four base cells, ±4 %): one run's sub-windows understate it.
+RUN_SPREAD = 0.04
+#: The row fields that shape the load; a baseline that differs in any of them measured another cell.
+_COMPARABLE = ("workers", "leaf_batch", "device", "compile_trunk", "max_wait_ms", "edge_geometry_check")
 _COLUMNS = ("batch_size", "pops_per_s", "b_mean", "full_share", "sat_share", "deadline_share",
             "leaves_per_s", "cycle_ms", "queue_wait_ms", "collate_ms", "launch_ms", "gpu_wait_ms",
             "cpu_ms_per_leaf", "gpu_ms_per_leaf", "edges_per_graph", "gpu_duty_estimate")
@@ -80,13 +86,22 @@ def quartiles(xs: list[float]) -> tuple[float, float, float]:
     return q1, med, q3
 
 
+class BaselineMismatch(ValueError):
+    """A baseline record that cannot be read against this one: another load shape, a missing B, or no sub-windows."""
+
+
 def compare_rows(base: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
-    """One B read against a baseline: the median's change and whether the IQRs separate."""
+    """One B against a baseline: faster or slower only past both the IQR and RUN_SPREAD; Raises: BaselineMismatch."""
+    if "window_leaves_per_s" not in base:
+        raise BaselineMismatch("the baseline row has no sub-windows: a record from before the repeat probe, void")
+    differ = {k: (base.get(k), new.get(k)) for k in _COMPARABLE if base.get(k) != new.get(k)}
+    if differ:
+        raise BaselineMismatch(f"the baseline measured another cell: {differ}")
     b1, bm, b3 = quartiles(base["window_leaves_per_s"])
     n1, nm, n3 = quartiles(new["window_leaves_per_s"])
     return {"batch_size": new["batch_size"], "base_median": bm, "new_median": nm,
-            "delta_pct": 100.0 * (nm - bm) / bm, "faster_beyond_iqr": n1 > b3,
-            "slower_beyond_iqr": n3 < b1}
+            "delta_pct": 100.0 * (nm - bm) / bm, "faster_beyond_iqr": n1 > b3 and nm > bm * (1 + RUN_SPREAD),
+            "slower_beyond_iqr": n3 < b1 and nm < bm * (1 - RUN_SPREAD)}
 
 
 def _delta(after: dict[str, Any], before: dict[str, Any], *keys: str, field: str = "total_ms") -> float:
@@ -249,6 +264,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="eager trunk regardless of inference.compile_trunk")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
+    if args.windows < 1 or args.probe < 1:
+        parser.error("--windows and --probe must be at least 1")
 
     config = load_config(args.config).model_dump()
     device = torch.device(args.device)
@@ -273,8 +290,12 @@ def main(argv: list[str] | None = None) -> int:
     print(_table(rows, reference))
     comparisons = []
     if args.baseline is not None:
-        base = {r["batch_size"]: r for r in json.loads(args.baseline.read_text(encoding="utf-8"))["rows"]}
-        comparisons = [compare_rows(base[r["batch_size"]], r) for r in rows if r["batch_size"] in base]
+        record = json.loads(args.baseline.read_text(encoding="utf-8"))
+        base = {r["batch_size"]: r for r in record["rows"]}
+        missing = sorted({r["batch_size"] for r in rows} - set(base))
+        if missing or (record["net"], record["config"], record["events"]) != (net_id, str(args.config), str(args.events)):
+            raise BaselineMismatch(f"{args.baseline}: another net, config or event stream, or no row for B {missing}")
+        comparisons = [compare_rows(base[r["batch_size"]], r) for r in rows]
         for c in comparisons:
             print(f"vs baseline B={c['batch_size']}: median {c['base_median']:.0f} -> {c['new_median']:.0f} "
                   f"({c['delta_pct']:+.1f} %), faster beyond IQR {c['faster_beyond_iqr']}, "
