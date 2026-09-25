@@ -46,19 +46,14 @@ You are continuing a long, gated refactor. READ IN THIS ORDER before touching an
 
 ## What is left (from the 2026-09-24 close-out)
 
-W0–W5 are EXITED (PROGRESS carries each wave's exit facts and per-row ledger; W5's is the current
-shape of the tree). NEXT is W6, per `docs/slim/handoff/W6_ADDENDUM.md`. The remaining waves:
+W0–W6 are EXITED (PROGRESS carries each wave's exit facts and per-row ledger). NEXT is W7, per
+`docs/slim/handoff/W7_ADDENDUM.md` (it supersedes the W7 summary below where they differ). The remaining waves:
 - **W5 TESTS + FIXTURES** — EXITED 2026-09-25 at 8297c74d (PROGRESS `## W5`: REVIEW-W5 closed in one
   loop, exit sweep green, the KNOWN-RED cured by cdbc8000, collected 4927, run10 MATCH).
-- **W6 DOCS + CONFIGS** (L35–L38) — the work order is `docs/slim/handoff/W6_ADDENDUM.md` (verified
-  inventory, leg order, census rule, hazards; it supersedes this summary where they differ): STATE.md rewritten to current facts (R368(f): each dropped
-  paragraph class names where it lives); CARDS.md closed rows removed; delete
-  `docs/governance/archive/RULINGS_ACTIVE.md`; delete configs/run6.yaml, run7.yaml, run8.yaml
-  (tests binding them re-point to the census `mantis.config.census.production_configs`);
-  stale text 01_DEFECTS 40–51; CLAUDE.md's comment bullet becomes R368(g)'s one rule;
-  repo_design §3 (GnnArchV2 has no base class); remove the "28 bench floors" counts
-  (AQ-FLOORS28: derive at point of use); CARD-STYLE-BACKLOG's measure list refreshed (REVIEW-W4
-  note 3). Gate 10's DISSOLVED_PATHS takes deleted paths a scanned doc still cites.
+- **W6 DOCS + CONFIGS** — EXITED 2026-09-25 at 0c8b9176 (PROGRESS `## W6`: REVIEW-W6 closed in one loop,
+  exit sweep ALL GREEN, collected 4928, run10 MATCH). configs/run7.yaml and run8.yaml are deleted; **configs/run6.yaml
+  STAYS on a HALT** that needs an operator grant (R310-frozen preflight oracle plus the ruling-named deploy_sims row;
+  the measured diff is `docs/slim/handoff/halt_twin_heldout.diff` and it NARROWS the oracle, see PROGRESS).
 - **W7 STYLE PASS**: R368(g)'s two classes only (ruling/card/finding cites and narrative runs),
   ONE package per commit, the floor lowered in the same commit — the two measures are GATED since
   W4 (`ruling_cite_lines`, `textfile_comment_excess_lines`; integrate.sh folds them automatically).

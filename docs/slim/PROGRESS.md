@@ -58,7 +58,23 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   NEXT: W5 per its addendum (the 2026-09-24 dispatcher-session scout inventory is folded into it);
   then W6, W7, W8 per HANDOFF.md.
 
-## W6 — docs + configs (IN PROGRESS, dispatcher session 2026-09-25)
+## W6 — docs + configs (EXITED 2026-09-25)
+
+**Exit facts.**
+- Range 4e8c663a..0c8b9176 (plus the record commits after it): 61 commits at exit record, 80 files, +1 408/−9 785.
+  src, crates and tools: 5 files, +8/−7, all prose. The armed_aborts.py MANIFEST text is back at its base bytes.
+- Collected 4927 at W6 entry → **4928** = floor. Every comment measure is unchanged at its floor.
+- configs/ at exit: dev_example, run10, run6 (HALT), smoke_preflight_armed. run10, dev_example, smoke and run6 are
+  byte-identical to 69e15329. **run10 MATCH** at the tip.
+- REVIEW-W6 (`docs/audits/REVIEW_W6_2026-09-25.md`): 1 MUST-FIX, 7 SHOULD-FIX, 10 NOTE. All eight were fixed in ONE
+  loop; the reviewer's closure check found them CLOSED with 0 new must/should, and its 3 notes were fixed.
+- Exit sweep `make gates` at 0c8b9176 in .wt/gates, user unit mantis-gates-w6 (01:32–02:37 UTC): **ALL GREEN,
+  19 green**. Walls: 2a 1056 s, 3a 336 s (4868 passed, 17 skipped, 0 failed), 3b 2492 s (34 passed, 4 skipped).
+  pyright 0 errors; 8 ARMED+PASS; 12 rc 0. Gate 17 ran at the tracked floor in the worktree; the main tree's
+  `--full-tree` run with the local supplement is rc 0. Gate 1 and the slow tier were not run, by design (W8).
+- Operator asks: see the OPERATOR ASKS row below. NEXT: W7 per `docs/slim/handoff/W7_ADDENDUM.md` (8e5eab3e).
+
+**Dispatch log** (models per leg are named in each row):
 
 - Entry at 4e8c663a: collected 4927 = floor, comment_lint GREEN at floor, run10 MATCH, tree clean.
 - Legs launched in parallel, each in its own worktree (branch = worktree name):
