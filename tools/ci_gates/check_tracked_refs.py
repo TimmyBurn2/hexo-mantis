@@ -38,6 +38,8 @@ DISSOLVED_PATHS: dict[str, str] = {
                          "is spent; STATE names it as history",
     "crates/mantis-selfplay/tests/prefuse_concat_parity.rs": "deleted by R368(e)/(k) with the "
                          "refuted S-PREFUSE harness; falsified.md names its last commit",
+    "docs/slim/": "dissolved at SLIM-FIX's close (R368); the exit record is "
+                         "docs/audits/SLIM_FIX_EXIT_2026-09-25.md and the files live in git history",
 }
 
 
