@@ -1099,6 +1099,18 @@ rejected one.
 
 ---
 
+### AMENDMENT — PERF-ADA H5: the retired config paths get ONE authority, `mantis.config.retired`
+
+Item 6 of the R362(c) amendment above put the retired-path set in the stamp loader
+(`RETIRED_STAMP_PATHS`, `mantis.train.checkpoints`). Retiring `train.value_target`
+(`docs/contracts/run_config_schema.md` v38) needed a second reader: `tools/config_diff.py`'s two-file mode, so a
+re-mint across a retirement diffs to exactly the retired leaf. The set moves to
+`mantis.config.retired.RETIRED_PATHS` with `split_retired`, read by the loader, by `resume_trainer`
+(which drops the paths from the config the Trainer carries, the stamp untouched) and by that
+mode. `--from-header` and `load_config` stay strict: a config carrying a retired path is refused.
+
+---
+
 ### AMENDMENT — LADDER-1 (CARD-LADDER-RUNG): a SECOND operator-side tool is admitted under `tools/`, the ladder bot
 
 **The LADDER-1 packet, 2026-09-19; the card is `docs/governance/CARDS.md` CARD-LADDER-RUNG.** Recorded
