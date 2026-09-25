@@ -2,11 +2,8 @@
 //! graph queue's pop. A plain-Rust flat-`Vec` type: index arrays come out ALREADY
 //! globally offset (`i64`), and `edge_index` is `[src_global (E) ‖ dst_global (E)]`.
 //!
-//! The write pattern was rebuilt after the fuse measured 33.78 ms/pop at a derived
-//! 1.35 GB/s of output: every array is reserved from a sizing pass, `edge_index` is
-//! one `2E` buffer written once rather than a src/dst pair plus a terminal concat, and
-//! the widening `u32 -> i64 + offset` runs through `extend` over a `TrustedLen`
-//! iterator; `tests/queue_fuse_pin.rs` pins the fused arrays against frozen inputs.
+//! Every array is reserved from a sizing pass and written once (`edge_index` as one `2E` buffer);
+//! `tests/queue_fuse_pin.rs` pins the fused arrays against frozen inputs.
 //!
 //! Single-read is a type guarantee: `take()` moves every array out exactly once and a
 //! second call is the named error `WireAlreadyConsumed`. The `-1` off-window sentinel

@@ -69,7 +69,7 @@ pub fn assemble_ls_from_gnn_probs(
     Ok(LegalSetPolicy { dense, overflow })
 }
 
-/// Typed target-integrity refusal (LAW-14), in two scopes.
+/// Typed, run-fatal target-integrity refusal, in two scopes.
 ///
 /// `MassNotUnity` / `EmptyTarget` / `VisitSlotsExceeded` bind the GRAPH record constructor only,
 /// making the degenerate target class unconstructible there; the dense fast-game zero-policy arm
@@ -162,13 +162,11 @@ pub const TARGET_MASS_TOL: f64 = 1e-4;
 /// failure landing LATE leaves a truncated search with nonzero visits that only the seam catches,
 /// while this one also catches a zero-visit search with every inference healthy.
 ///
-/// Deleting the prior fallback instead would swap a prior dump for an all-zero target, which the
-/// DENSE recorder does not catch at all. This pin, its seam sibling and the capacity formula are
-/// all derived from the CURRENT visit-limited construction and re-derive with it.
+/// Refusing rather than falling back matters: an all-zero target slips past the DENSE recorder.
 ///
 /// # Errors
 /// [`TargetIntegrityError::ZeroVisitSearch`] when the root is unexpanded, has no children, or
-/// every child carries `n_visits == 0`. The caller latches it run-fatal (LAW-14).
+/// every child carries `n_visits == 0`. The caller latches it run-fatal.
 pub fn refuse_zero_visit_export(
     tree: &MCTSTree,
     ply_index: u16,
@@ -224,7 +222,7 @@ pub fn record_position_graph(
     let half = (trunk_sz - 1) / 2;
 
     // Visit target: the ragged mass at each legal coord, accumulated on the RAW read. A SPARSE row
-    // stores every support cell, at zero mass too (the explicit mask is MEMBERSHIP, R349(c)).
+    // stores every support cell, at zero mass too (the explicit mask is MEMBERSHIP).
     let legal = board.legal_moves();
     let mut visits: Vec<(i16, i16, f32)> = Vec::with_capacity(legal.len());
     let mut sum: f64 = 0.0;
@@ -314,7 +312,7 @@ pub fn record_position_graph(
         outcome: 0.0,      // placeholder → finalize_graph_outcome
         value_valid: true, // placeholder → finalize_graph_outcome
         game_length: 0,    // placeholder → finalize_graph_outcome
-        game_id: -1,       // placeholder → finalize_game_graph (R345(b)(6))
+        game_id: -1,       // placeholder → finalize_game_graph
     })
 }
 
@@ -659,7 +657,7 @@ mod gnn_assemble_tests {
 
     #[test]
     fn a_sparse_row_stores_every_support_cell_even_at_zero_mass() {
-        // R349(c)'s parity vector: every sampled candidate underflowed to zero mass, so the row
+        // Parity vector: every sampled candidate underflowed to zero mass, so the row
         // stores the m cells AT ZERO with alpha = 1.0 — never the empty set the ring refuses.
         let b = small_board();
         let (bcq, bcr) = b.window_center();

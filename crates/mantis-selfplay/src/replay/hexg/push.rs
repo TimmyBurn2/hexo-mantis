@@ -1,14 +1,11 @@
 //! HEXG ring push — write one compact `GraphRecord` into the `head` slot,
-//! handling ring overwrite + weight-bucket bookkeeping. Ported from the
-//! predecessor engine's `replay_buffer/hexg/push.rs` with the FFI-binding strip
-//! (the error type becomes `Result<_, String>`; the `validate_*` helpers were
-//! already pure `Result<(), String>`).
+//! handling ring overwrite + weight-bucket bookkeeping.
 
 use std::sync::atomic::Ordering;
 
 use super::{weight_bucket, GraphRecord, HexgBuffer, MAX_STONES};
 
-/// Reject a tail mass that is not a probability at push time (R347(a)). α is the mass the
+/// Reject a tail mass that is not a probability at push time. α is the mass the
 /// row does NOT store cell-by-cell, so a non-finite or out-of-range value is a target the
 /// trainer would spread over the remaining legal set as garbage.
 pub fn validate_tail_mass(tail_mass: f32) -> Result<(), String> {
@@ -75,7 +72,7 @@ impl HexgBuffer {
                 MAX_STONES
             ));
         }
-        // R347(a) — a row claiming more than the composed slot count is REFUSED here, at
+        // A row claiming more than the composed slot count is REFUSED here, at
         // insert. Under `search.kind: gumbel` that slot count IS m, so overrun is not merely
         // unstorable, it is a claim that Sequential Halving visited more than m candidates.
         if rec.visits.len() > self.visit_capacity {

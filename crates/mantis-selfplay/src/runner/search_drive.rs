@@ -54,7 +54,7 @@ pub(crate) struct MoveAccumulators<'a> {
     /// The Gumbel round's width; zero on a PUCT run, whose reader omits the mean.
     pub(crate) gumbel_round_leaves: &'a AtomicU64,
     pub(crate) gumbel_rounds: &'a AtomicU64,
-    /// Root Dirichlet applications; zero on a Gumbel run by construction (R359(d)).
+    /// Root Dirichlet applications; zero on a Gumbel run by construction.
     pub(crate) dirichlet_root_fires: &'a AtomicU64,
     pub(crate) positions_generated: &'a AtomicUsize,
     pub(crate) export_offwindow_mass_moves: &'a AtomicU64,
@@ -161,10 +161,7 @@ enum McTSSearchResult {
 
 /// A leaf inference that FAILED, as distinct from a shutdown.
 ///
-/// Pre-fix every failure arm collapsed to `return 0`: the reason was dropped, the sim loop
-/// `break`ed on `n == 0`, and the search still reported `Completed`. A search that backed up
-/// ZERO visits then reached the exporter, which manufactured a target out of the noise-mixed
-/// priors, and the failure resurfaced 100+ plies later as an unrelated-looking refusal.
+/// A failure read as `0` would let a zero-visit search reach the exporter as `Completed`.
 ///
 /// **A DRAIN SHUTDOWN IS NOT A FAILURE, AND `is_closed()` IS THE WRONG WAY TO SAY SO.**
 /// `close()` takes no reason, and the Python inference server closes the batcher from a
@@ -239,8 +236,7 @@ fn select_for(
 /// A selection refusal, a build-guard trip or a leaf inference that FAILS on an OPEN queue is a
 /// named [`InferenceSeamFailure`]; an empty leaf set, or a failure after our own `stop()`, is
 /// `Ok(0)`.
-// `#[cold]`/`#[inline(never)]` are DELETED with the dense arm: they told LLVM to optimize this
-// as the unlikely branch, and it is now the only inference path there is.
+// No `#[cold]`: this is the only inference path there is.
 fn infer_and_expand_graph(
     tree: &mut MCTSTree,
     selection: LeafSelection<'_>,
@@ -299,9 +295,8 @@ fn infer_and_expand_graph(
         }
     }
 
-    // Submit the WHOLE leaf batch in one shot: one graph at a time put exactly one leaf in
-    // flight per worker, making the collector's saturation threshold structurally unreachable.
-    // The returned `Vec` is indexed by SUBMISSION ORDER, which `expand_and_backup_ls_at` requires.
+    // The WHOLE leaf batch in one shot, so the collector's saturation threshold is reachable; the
+    // returned `Vec` is indexed by SUBMISSION ORDER, which `expand_and_backup_ls_at` requires.
     let results = infer.graph_queue.submit_graphs_and_wait(graphs);
     // COLLECT-ALL-THEN-DECIDE: every waiter has resolved by the time this Vec exists, so the
     // refusal below cannot orphan one, and `Err(reason)` is carried into the named failure.
@@ -346,7 +341,7 @@ fn infer_and_expand_graph(
 /// Sequential Halving, no Dirichlet — the Gumbel draw IS the root exploration) or PUCT.
 ///
 /// THE ROOT'S OWN EVALUATION IS CHARGED under both kinds, which is what makes `N` mean `N
-/// leaves`; a config key for the charge made "equal NN work at a fixed budget" falsifiable.
+/// leaves`.
 #[allow(clippy::too_many_arguments)]
 fn run_mcts_search(
     tree: &mut MCTSTree,
@@ -498,7 +493,7 @@ pub(crate) fn play_one_move(
     } else {
         (true, ctx.game_sims)
     };
-    // LAW-18, counted HERE — at the draw, before anything else can move the flag.
+    // Fire-rate counted HERE — at the draw, before anything else can move the flag.
     if move_is_full_search {
         accumulators.pcr_full_moves.fetch_add(1, Ordering::Relaxed);
     } else {
@@ -614,7 +609,7 @@ pub(crate) fn play_one_move(
 
     if let Some(stats) = search_stats {
         // The root as the search left it — only the visited children, Q in the root's view —
-        // the record the census could not read from the ring (R355(d)).
+        // the record the census cannot read from the ring.
         let root_raw = if ctx.search_kind.stores_sparse_rows() {
             Some(tree.root_raw_value())
         } else {
@@ -666,7 +661,7 @@ pub(crate) fn play_one_move(
         return MoveOutcome::Break;
     }
     move_history.push((move_idx.0, move_idx.1));
-    // The arm travels with the move so the game RECORD can label it (R353(d)); the graph row's
+    // The arm travels with the move so the game RECORD can label it; the graph row's
     // `is_full_search` reaches the replay ring, not the record.
     move_arms.push((
         u32::try_from(move_sims).unwrap_or(u32::MAX),

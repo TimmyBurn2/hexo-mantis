@@ -1,13 +1,11 @@
-//! Finalize phase — `finalize_game_graph` (frozen `worker_loop/inner.rs:1624/1767`, dispatch
-//! branch `:571`).
+//! Finalize phase — `finalize_game_graph`.
 //!
-//! Ports the §178 ply-cap value branch VERBATIM: the `winner == None` arm pays `ply_cap_value`
-//! when `terminal_reason == 2` else `draw_reward`; `value_valid` is the DRAW-MASK
-//! (`terminal_reason != 2`). The per-game push loop holds the results-queue lock ONCE across the
-//! whole game (frozen `:1689`) so every game's rows are CONTIGUOUS in the shared queue (observable
-//! only multi-worker; ported as a verbatim obligation). The terminal reason / outcome are read from
-//! `board.winner()` + `terminal_reason` (never re-derived from ply parity, LAW-03). Drop-oldest
-//! past `results_queue_cap` bumps `positions_dropped`.
+//! The `winner == None` arm pays `ply_cap_value` when `terminal_reason == 2` else `draw_reward`;
+//! `value_valid` is the DRAW-MASK (`terminal_reason != 2`). The per-game push loop holds the
+//! results-queue lock ONCE across the whole game so every game's rows are CONTIGUOUS in the shared
+//! queue (observable only multi-worker). The terminal reason / outcome are read from
+//! `board.winner()` + `terminal_reason`, never re-derived from ply parity. Drop-oldest past
+//! `results_queue_cap` bumps `positions_dropped`.
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -20,7 +18,7 @@ use crate::replay::hexg::GraphRecord;
 
 use super::{GameResultRow, PositionStats};
 
-/// Per-game terminal handler (frozen `inner.rs:1624`; warm path).
+/// Per-game terminal handler (warm path).
 ///
 /// Classifies the outcome (winner / `terminal_reason` / `version_seen` range), pushes all rows
 /// into the shared graph results queue under ONE lock, bumps the win/draw counters, caps the queue
@@ -71,9 +69,8 @@ pub(crate) fn finalize_game_graph(
     // Compound-move game length: `(plies+1)/2` (== `div_ceil(2)`).
     let game_length: u16 = plies.div_ceil(2).min(u16::MAX as usize) as u16;
 
-    // R345(b)(6): ONE id for the whole game, taken before the loop. Taking it per record
-    // would tag every position as its own game, which is the `-1` sentinel's behaviour wearing
-    // real numbers — the dedupe would still never fire and nothing would say so.
+    // ONE id for the whole game, taken before the loop: a per-record id would silently defeat
+    // the same-game dedupe.
     let game_id = graph_game_seq.fetch_add(1, Ordering::Relaxed) as i64;
     let mut gq = graph_results_queue
         .lock()
@@ -147,7 +144,7 @@ fn bump_win_counters(
     }
 }
 
-/// Push the single per-game `recent_game_results` metadata row (frozen `:1723`),
+/// Push the single per-game `recent_game_results` metadata row,
 /// capped at 2000 entries. Shared by both finalize variants (representation-blind
 /// drain).
 #[allow(clippy::too_many_arguments)]

@@ -17,10 +17,6 @@ use mantis_search::QSigma;
 
 /// Run one worker body, converting a panic into a COUNTED, run-halting event.
 ///
-/// A worker that panicked used to vanish silently: `thread::spawn` parks the panic in the
-/// `JoinHandle`, `stop()` threw that result away, and `running` stayed `true`, so the pool kept
-/// reporting healthy while producing nothing.
-///
 /// Catching HERE rather than reading join results at `stop()` is what makes the halt LIVE, and
 /// leaves `join()` returning `Ok`, so `stop()`'s own join check counts only panics that ESCAPED
 /// this function and never double-counts one death.
@@ -185,7 +181,7 @@ mod sigma_wire {
         .expect("gnn_axis_v1 must resolve via the registry")
     }
 
-    /// R357(a): the ctor's `q_rescale` is the σ every worker searches and exports targets under.
+    /// The ctor's `q_rescale` is the σ every worker searches and exports targets under.
     #[test]
     fn the_ctor_q_rescale_is_the_workers_sigma_rescale() {
         for arm in [false, true] {

@@ -1,14 +1,6 @@
-//! `WorkerParams` + themed sub-flag bundles + the per-worker `WorkerGeometry`
-//! (WP6 D1/D2), ported from the frozen `worker_loop/params.rs` + the
-//! representation-resolution head of `worker_loop/mod.rs:130-193`.
-//!
-//! The 4 bundles (`WorkerStats`/`WorkerAtomics`/`WorkerChannels`/`WorkerParams`)
-//! are cloned once per worker spawn and destructured at `game::run_worker_thread`
-//! entry, so the per-sim hot path sees local scalars, never a `&RegistrySpec`
-//! field access (`feedback_registryspec_by_ref_in_hotpath.md`).
-//!
-//! KILLs vs the frozen source (D7/D10): the radius-jitter field is NEVER authored (D7); the
-//! interior-selection field is NOT authored (D10 — `MCTSTree` has no such field new-side).
+//! `WorkerParams` + themed sub-flag bundles + the per-worker `WorkerGeometry`, cloned once per
+//! worker spawn and destructured at `game::run_worker_thread` entry, so the per-sim hot path sees
+//! local scalars, never a `&RegistrySpec` field access.
 
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
@@ -34,9 +26,9 @@ pub struct WorkerGeometry {
 /// Resolve the per-worker geometry from a resolved `&'static RegistrySpec` (D2).
 ///
 /// The kind dispatch is a **closed** `match spec.representation` with NO `_ =>`
-/// arm: a new `Representation` variant fails WP6 compilation loudly. There is no
+/// arm: a new `Representation` variant fails compilation loudly. There is no
 /// `None → v6` fallback — an absent spec is rejected as an error BEFORE this
-/// point (`SelfPlayRunner::new`, LAW-11).
+/// point (`SelfPlayRunner::new`).
 #[must_use]
 pub fn resolve_geometry(spec: &'static RegistrySpec) -> WorkerGeometry {
     match spec.representation {
@@ -96,11 +88,11 @@ pub(crate) struct WorkerParams {
     pub(crate) n_sims_full: usize,
     pub(crate) random_opening_plies: u32,
     pub(crate) search_stats_every: usize,
-    /// DERIVED HEXG visit-slot capacity (R255/ADJ-D34) — composed once in
+    /// DERIVED HEXG visit-slot capacity — composed once in
     /// `SelfPlayRunner::new`, never a default.
     pub(crate) visit_capacity: usize,
-    /// Resolved (never `None` — LAW-11) encoding spec, used by the per-game board
-    /// construction (`init_per_game_board`, R2).
+    /// Resolved (never `None`) encoding spec, used by the per-game board
+    /// construction (`init_per_game_board`).
     pub(crate) registry_spec: &'static RegistrySpec,
     pub(crate) search_flags: SearchFlags,
     pub(crate) exploration_flags: ExplorationFlags,

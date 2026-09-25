@@ -65,9 +65,8 @@ pub fn effective_standard_sims(n_simulations: usize, standard_sims: usize) -> us
 ///
 /// `capacity = max(ARMED effective sim budgets) + leaf_batch_size − 1`, the largest positive-mass
 /// support a graph record can carry; armed arms are standard always, fast iff `fast_prob > 0`,
-/// quick/full iff `full_search_prob > 0`. The `− 1` is now HEADROOM rather than a bound, and the
-/// formula is deliberately UNCHANGED, because tightening a mint-time validator changes which
-/// configs mint.
+/// quick/full iff `full_search_prob > 0`. The `− 1` is HEADROOM, not a bound; tightening it would
+/// change which configs mint.
 ///
 /// Called by BOTH enforcement surfaces — the mint-time schema validator through its bridge twin
 /// and the `SelfPlayRunner` boot guard — so the two cannot drift onto second formulas. Under
@@ -186,9 +185,7 @@ pub struct GraphRecord {
     pub value_valid: bool,
     /// Completed-game length (compound moves) — sampling weight.
     pub game_length: u16,
-    /// WHICH GAME this position came from, stamped once per game. `-1` is the untagged sentinel;
-    /// before this field every self-play row carried `-1`, so `sample_indices`'s same-game dedupe
-    /// had never once fired on real data.
+    /// WHICH GAME this position came from, stamped once per game; `-1` is the untagged sentinel.
     pub game_id: i64,
 }
 
@@ -216,7 +213,7 @@ pub struct HexgBuffer {
     pub visit_qr: Vec<i16>,       // flat [cap * visit_capacity * 2]
     pub visit_probs: Vec<f32>,    // flat [cap * visit_capacity]
     pub n_visits: Vec<u16>,       // [cap]
-    pub tail_mass: Vec<f32>,      // [cap]; R347(a) α
+    pub tail_mass: Vec<f32>,      // [cap]; tail mass α
     pub current_player: Vec<i8>,  // [cap]
     pub moves_remaining: Vec<u8>, // [cap]
     pub ply_index: Vec<u16>,      // [cap]
@@ -236,7 +233,7 @@ pub struct HexgBuffer {
     pub last_batch_untagged_rows: u32,
     /// Rows back from the newest, at p50 / p90 / p99.
     pub last_batch_age_quantiles: [u32; 3],
-    /// LAW-18 (R266/R358): per-element D6 draws since boot, one bin per `sym::N_SYMS` element.
+    /// In-run fire-rate: per-element D6 draws since boot, one bin per `sym::N_SYMS` element.
     pub sym_draw_counts: [u64; N_SYMS],
     /// Draws that landed on an empty-board row under `augment` and were left unrotated.
     pub sym_empty_skipped: u64,
@@ -261,9 +258,8 @@ impl HexgBuffer {
             known.sort_unstable();
             format!("HexgBuffer: unknown encoding {encoding:?}; registered: {known:?}")
         })?;
-        // `capacity` was UNBOUNDED at the FFI: zero panics on the first push, and a huge value
-        // wraps the slot-geometry product or aborts inside `handle_alloc_error` — the one exit
-        // `panic = "unwind"` cannot convert into a Python exception. Both are refused by name.
+        // Zero panics on the first push; a huge value wraps the slot geometry or aborts inside
+        // `handle_alloc_error`, which `panic = "unwind"` cannot convert. Both are refused by name.
         if capacity == 0 {
             return Err(
                 "HexgBuffer: capacity 0 stores nothing and panics on the first push \
@@ -346,9 +342,8 @@ impl HexgBuffer {
         self.rng = StdRng::seed_from_u64(seed);
     }
 
-    /// Fresh monotonic game id.
     /// The `game_id` of the `index`-th record in insertion order (oldest first), or `None`
-    /// when `index` is past `size`. R345(b)(6)'s read half.
+    /// when `index` is past `size`.
     pub fn game_id_at(&self, index: usize) -> Option<i64> {
         if index >= self.size {
             return None;
@@ -357,6 +352,7 @@ impl HexgBuffer {
         Some(self.game_ids[slot])
     }
 
+    /// Fresh monotonic game id.
     pub fn next_game_id(&mut self) -> i64 {
         let id = self.next_game_id;
         self.next_game_id += 1;

@@ -71,7 +71,7 @@ pub struct RunnerStatsSnapshot {
     /// quotient: BOTH are zero on a PUCT run.
     pub gumbel_round_leaves: u64,
     pub gumbel_rounds: u64,
-    /// Root Dirichlet applications (the PUCT arm's site); 0 under Gumbel — R359(d)'s pin, not a bridge field.
+    /// Root Dirichlet applications (the PUCT arm's site); 0 under Gumbel — a pin, not a bridge field.
     pub dirichlet_root_fires: u64,
     /// Moves whose exported policy target carried off-window (overflow) mass.
     pub export_offwindow_mass_moves: u64,
@@ -102,10 +102,8 @@ pub struct SelfPlayRunner {
 
     running: Arc<AtomicBool>,
     handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
-    /// Worker threads that died by panic. MUST read 0 in a healthy run: before this counter a
-    /// panicking worker was invisible, since the panic sat in its `JoinHandle`, `stop()`
-    /// discarded it and `running` stayed `true`, so the pool ran with fewer workers and presented
-    /// as "slow" rather than "broken".
+    /// Worker threads that died by panic. MUST read 0 in a healthy run: a panic otherwise sits in
+    /// its `JoinHandle` and the pool presents as "slow" rather than "broken".
     worker_panics: Arc<AtomicU64>,
 
     /// Model-version snapshot source, read once per move by each worker and dedup-pushed into
@@ -132,9 +130,9 @@ pub struct SelfPlayRunner {
 
     export_offwindow_mass_moves: Arc<AtomicU64>,
     target_integrity_defects: Arc<AtomicU64>,
-    /// R275(b) SEAM conjunct fire count (see the snapshot field).
+    /// SEAM conjunct fire count (see the snapshot field).
     inference_failures_total: Arc<AtomicU64>,
-    /// R345(b)(6): the monotonic graph-game id source. See `WorkerAtomics::graph_game_seq`.
+    /// The monotonic graph-game id source. See `WorkerAtomics::graph_game_seq`.
     graph_game_seq: Arc<AtomicU64>,
     /// The fatal-defect latch: a worker panic is NOT loud, since `stop()` swallows join results,
     /// so a `TargetIntegrityError` stores its message here and the drain face raises it typed.
@@ -499,9 +497,8 @@ mod seam_roundtrip {
         assert!(r.drain_graph_records().is_empty());
     }
 
-    // Worker-panic propagation. The defect these pin: a panicking worker was parked in its
-    // `JoinHandle`, `stop()` discarded the result, and `running` stayed true, so the pool
-    // reported healthy while producing nothing. Every test below injects a REAL panic.
+    // Worker-panic propagation: a panicked worker must not leave the pool reporting healthy.
+    // Every test below injects a REAL panic.
 
     /// The live arm, driving the SAME `guard_worker` the spawn closure calls.
     #[test]
@@ -552,8 +549,7 @@ mod seam_roundtrip {
     }
 
     /// The escape arm: `stop()` must CHECK the join result, not discard it. A handle that
-    /// panicked outside `guard_worker` is pushed straight onto the handle list `stop()` reads;
-    /// before the fix this was `let _ = handle.join()` and the count stayed 0.
+    /// panicked outside `guard_worker` is pushed straight onto the handle list `stop()` reads.
     #[test]
     fn stop_counts_a_panic_that_escaped_the_guard() {
         let r = runner();

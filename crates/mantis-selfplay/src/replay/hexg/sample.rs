@@ -273,9 +273,7 @@ struct SampleOut {
 }
 
 /// Rebuild + align every sampled record, across at most `n_threads` OS threads, returning the
-/// results IN INDEX ORDER. Measured on the run5 shape, `sample_ring` splits 1 221 ms of
-/// `build_axis_graph` against 163 ms of fuse and 2 ms of align — a serial loop over an
-/// embarrassingly parallel rebuild whose items touch only their own record.
+/// results IN INDEX ORDER; each item touches only its own record.
 fn build_and_align_batch(
     items: &[(GraphRecord, i64, usize)],
     params_base: &BuildParams,

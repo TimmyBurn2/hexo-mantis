@@ -5,9 +5,7 @@
 //! Graph inference queue — the pure-Rust half of the graph seam: its own queue, `Condvar` and
 //! waiter map, whose payload is the ragged `(LegalSetPolicy, f32)`.
 //!
-//! Reason-travels is honoured where the frozen code dropped a reason: `build_leaf_graph`
-//! returns `Result<AxisGraph, String>` rather than `.ok()`-swallowing to `None`, and
-//! `submit_graph_and_wait` returns the waiter's `Err(reason)` verbatim instead of `Err(())`.
+//! A reason travels: `build_leaf_graph` and `submit_graph_and_wait` return `Err(reason)` verbatim.
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -51,11 +49,8 @@ struct GraphInner {
 /// The queue depth at which [`GraphInner::pop_graph_batch_blocking`] returns BEFORE its
 /// deadline — the collector's saturation threshold, DERIVED from what the run can supply.
 ///
-/// The frozen `batch_size / 2` was unrelated to what the configured workers can put in flight:
-/// at `inference_batch_size = 64` the threshold is 32 while a minted `n_workers = 1 x
-/// leaf_batch_size = 8` supplies at most 8, so EVERY pop ran to the 10 ms deadline — a mean of
-/// 10.064 ms over 8 116 pops, 33 % of the single-stream eval path. Clamping to `max_in_flight`
-/// can only LOWER it, never below what is achievable.
+/// Half the batch, clamped to `max_in_flight` so an unsuppliable half-batch cannot send every pop
+/// to its deadline; the clamp only LOWERS it, never below what is achievable.
 #[must_use]
 pub fn saturation_threshold(batch_size: usize, max_in_flight: usize) -> usize {
     let half = batch_size / 2;
@@ -379,8 +374,8 @@ impl GraphQueue {
 
 /// Build one leaf's axis graph from its stones, running the seam guards.
 ///
-/// Returns `Result<AxisGraph, String>` so the build error REASON can travel to the failed waiter,
-/// replacing a `.ok()`-swallow to `None` that dropped it. The guard messages are ported VERBATIM:
+/// Returns `Result<AxisGraph, String>` so the build error REASON can travel to the failed waiter.
+/// The guard messages are VERBATIM:
 /// `current_player` and each stone player in {-1, +1}; `moves_remaining` in [0, 255] before the
 /// `u8` cast; each stone's `|q|,|r|` below `i32::MAX - radius`.
 ///
@@ -445,10 +440,7 @@ pub type LeafRequest = (Vec<(i64, i64, i64)>, i64, i64);
 
 /// Build one leaf graph per position across at most `n_threads` OS threads, IN INDEX ORDER.
 ///
-/// The serial loop this replaces built its leaves on the calling thread while holding the GIL;
-/// the measured split at a 64-move board is a slope of 5.2 ms per leaf against a 2.4 ms
-/// round-trip intercept, so the whole of the eval path's cost is this loop. Each leaf touches
-/// only its own stone list; `n_threads <= 1` runs the serial path IN THIS THREAD.
+/// Each leaf touches only its own stone list; `n_threads <= 1` runs the serial path IN THIS THREAD.
 ///
 /// # Errors
 /// Returns the FIRST error in index order, so a build failure names the same position it named on

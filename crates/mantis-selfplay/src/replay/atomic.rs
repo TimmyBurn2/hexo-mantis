@@ -1,17 +1,7 @@
-//! Atomic file publication for the replay rings (R345(b)(3)).
+//! Atomic file publication for the replay rings: a kill mid-save leaves the previous ring intact.
 //!
-//! Both ring formats used to open their FINAL path with `File::create`, which truncates an
-//! existing file to zero before the first new byte is written. For the one artifact a resume
-//! cannot be reconstructed without, that is the worst available order: a process killed
-//! mid-save left no ring at all, rather than the previous one. The ring is the most expensive
-//! file the run writes and the only one whose loss costs hours of self-play.
-//!
-//! The fix is the ordinary one and the ordering is the whole of it: write a temp sibling,
-//! `sync_all` it so the bytes are durable, rename over the target (atomic with respect to any
-//! reader), then fsync the DIRECTORY so the rename itself survives a power loss. Skipping the
-//! last step leaves a window where the name resolves but the directory entry does not, which
-//! is the failure a bundle manifest cannot detect because the manifest is in the same
-//! directory.
+//! The ordering is the whole of it: write a temp sibling, `sync_all` it, rename over the target
+//! (atomic to any reader), then fsync the DIRECTORY so the rename itself survives a power loss.
 
 use std::io::{BufWriter, Write};
 use std::sync::atomic::{AtomicU64, Ordering};

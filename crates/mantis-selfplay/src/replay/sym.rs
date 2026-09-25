@@ -1,11 +1,5 @@
-//! D6 axial symmetry primitive + the proof that it is a lattice bijection.
-//!
-//! Ported from the predecessor engine's `replay_buffer/sym_tables.rs` (the D6 half of the
-//! 3-way split). R346(f) deleted the dense ring, and with it everything in this file that
-//! existed to scatter a WINDOW-clamped grid record: the `SymTables` LUTs, the per-spec
-//! `sym_tables_for` singletons, the dropped-cell derivation and the `WINDOW_PRESERVING_SYMS`
-//! draw gate. What survives is the window-free half — the axial transform itself, which the
-//! graph (HEXG) sample path uses to rotate coords and visit keys.
+//! D6 axial symmetry primitive + the proof that it is a lattice bijection. Window-free: the
+//! graph (HEXG) sample path uses it to rotate coords and visit keys.
 
 /// D6 group order: 6 rotations × 2 (with/without prior reflection).
 pub const N_SYMS: usize = 12;
@@ -48,7 +42,7 @@ mod tests {
     use super::*;
 
     /// Live board sizes, taken from the registry rather than hardcoded, so a newly
-    /// registered encoding is covered automatically (LAW-08 / derive-never-transcribe).
+    /// registered encoding is covered automatically (derive, never transcribe).
     fn registry_board_sizes() -> Vec<usize> {
         let mut sizes: Vec<usize> = mantis_encoding::all_specs().map(|s| s.board_size).collect();
         sizes.sort_unstable();
@@ -60,7 +54,7 @@ mod tests {
         sizes
     }
 
-    /// R245: the GRAPH path is structurally unaffected by any window. `rotate_axial` is an
+    /// The GRAPH path is structurally unaffected by any window. `rotate_axial` is an
     /// axial lattice automorphism with no window to leave, so it is injective (hence a
     /// bijection of the lattice) for ALL 12 elements. Checked over a box strictly larger
     /// than the widest shipped board, so no element could hide a drop at the boundary.

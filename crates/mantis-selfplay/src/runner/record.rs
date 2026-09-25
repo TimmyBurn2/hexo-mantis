@@ -1,8 +1,5 @@
-//! Record phase (WP6 D14) — `record_position_graph_dispatch` (frozen
-//! `worker_loop/inner.rs:1590`, dispatch branch `:1398`), called BEFORE `apply_move` so the
-//! pre-move `board.ply` is the row's `ply_index` (LAW-03 measurement-unit: never reframed in
-//! ply-parity units). The dense K-cluster recorder and the in-run K histogram beside it went
-//! with the grid path (R346(f)).
+//! Record phase — `record_position_graph_dispatch`, called BEFORE `apply_move` so the pre-move
+//! `board.ply` is the row's `ply_index` (never reframed in ply-parity units).
 
 use mantis_core::Board;
 use mantis_search::LegalSetPolicy;
@@ -13,10 +10,8 @@ use crate::replay::hexg::GraphRecord;
 /// Push ONE whole-board graph record for this decision.
 ///
 /// # Errors
-/// WP12-R Phase T (DESIGN_T §3.3/§3.4): forwards `record_position_graph`'s
-/// typed [`TargetIntegrityError`] to the caller, which latches it run-fatal
-/// (LAW-14) — the record that would carry a degenerate target cannot be built.
-// `#[cold]`/`#[inline(never)]` are DELETED with the dense recorder they were paired against.
+/// Forwards `record_position_graph`'s typed [`TargetIntegrityError`] to the caller, which
+/// latches it run-fatal — the record that would carry a degenerate target cannot be built.
 pub(crate) fn record_position_graph_dispatch(
     board: &Board,
     target_policy: &LegalSetPolicy,

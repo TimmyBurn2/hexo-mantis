@@ -1,5 +1,4 @@
-//! `WorkerAtomics` — per-worker control-flag bundle (WP6 D1), ported verbatim
-//! from the frozen `worker_loop/atomics.rs`.
+//! `WorkerAtomics` — per-worker control-flag bundle.
 //!
 //! One live tunable: `running` (the kill switch flipped by `stop()`). Cloned
 //! once per worker spawn; destructured at `game::run_worker_thread` entry.
@@ -10,23 +9,18 @@ use std::sync::{Arc, Mutex};
 #[derive(Clone)]
 pub(crate) struct WorkerAtomics {
     pub(crate) running: Arc<AtomicBool>,
-    /// Runner-owned model-version snapshot source (frozen
-    /// `batcher.current_model_version()`); each move dedup-pushes it into
+    /// Runner-owned model-version snapshot source; each move dedup-pushes it into
     /// `version_seen`. Default 0 (no-NN) until the bridge's `set_model_version` sets it.
     pub(crate) model_version: Arc<AtomicU64>,
-    /// WP12-R Phase T fatal-defect latch (DESIGN_T §3.4): the graph-record
-    /// dispatch stores a `TargetIntegrityError` message here, counts the fire,
-    /// then flips `running=false` (store-then-halt; LAW-14).
+    /// Fatal-defect latch: the graph-record dispatch stores a `TargetIntegrityError`
+    /// message here, counts the fire, then flips `running=false` (store-then-halt).
     pub(crate) fatal_defect: Arc<Mutex<Option<String>>>,
     pub(crate) target_integrity_defects: Arc<AtomicU64>,
-    /// R275(b) SEAM conjunct fire count: leaf inferences that FAILED on an open
-    /// queue (LAW-18). Shares `fatal_defect`'s slot and store-then-halt ordering,
-    /// keeps its OWN count so the two conjuncts of the F-816-9 class stay
-    /// distinguishable in the event stream.
+    /// SEAM conjunct fire count: leaf inferences that FAILED on an open queue. Shares
+    /// `fatal_defect`'s slot and store-then-halt ordering but keeps its OWN count, so the
+    /// two conjuncts stay distinguishable in the event stream.
     pub(crate) inference_failures_total: Arc<AtomicU64>,
-    /// R345(b)(6): the runner-wide monotonic GAME id, one `fetch_add` per completed graph
-    /// game. Its own counter rather than `games_completed`: that one is a STAT a monitor reads
-    /// and could legitimately be reset, and an id derived from a resettable counter collides
-    /// the moment it is (R1's duplicate-authority class, applied to an identifier).
+    /// The runner-wide monotonic GAME id, one `fetch_add` per completed graph game. Its own
+    /// counter, not `games_completed`: that STAT may be reset, and an id derived from it collides.
     pub(crate) graph_game_seq: Arc<AtomicU64>,
 }
