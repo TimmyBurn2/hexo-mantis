@@ -12,6 +12,7 @@ from pathlib import Path
 
 import torch
 
+from _determinism import deterministic_algorithms
 from mantis.model import GnnArch, GnnNet, build_net
 
 _FWD = Path(__file__).resolve().parents[1] / "fixtures" / "value_probes" / "forward"
@@ -33,8 +34,17 @@ def _assert_match(got, expected) -> None:
 
 
 def test_gnn_forward_single_golden() -> None:
-    torch.use_deterministic_algorithms(True)
+    """Deterministic mode and one thread for this test only: both are process-global, and leaked they re-number every later test."""
+    threads = torch.get_num_threads()
     torch.set_num_threads(1)
+    try:
+        with deterministic_algorithms():
+            _check_small_gnn()
+    finally:
+        torch.set_num_threads(threads)
+
+
+def _check_small_gnn() -> None:
     payload = _load("small_gnn")
     net = build_net(GnnArch(**payload["arch"]))
     assert isinstance(net, GnnNet)
