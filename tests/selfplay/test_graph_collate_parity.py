@@ -50,9 +50,7 @@ def _collate(fields: dict[str, Any], **kw: Any):
 
 
 #: The ONE authority lives in `_retired_batch_fields`. The capture `.npz` is NOT regenerated to
-#: drop retired keys: a byte-parity capture whose bytes get rewritten when the code changes has
-#: stopped being a capture. The retirement is asserted POSITIVELY below rather than skipped,
-#: because a silent `continue` over an unmatched golden key is a check that stopped checking.
+#: drop retired keys, so the retirement is asserted POSITIVELY below rather than skipped.
 
 
 def _assert_tensor_parity(batch, golden: dict[str, np.ndarray], label: str) -> None:
@@ -152,7 +150,7 @@ def _battery() -> list[tuple[str, torch.Tensor, torch.Tensor]]:
 
 
 def test_train_reads_the_selfplay_segment_softmax_and_never_a_copy():
-    """§c.6's declared duplication is RESOLVED (R367(a)): `train.losses.segment_softmax` IS the selfplay authority, one object, so the two cannot drift."""
+    """§c.6's declared duplication is RESOLVED: `train.losses.segment_softmax` IS the selfplay authority, one object, so the two cannot drift."""
     assert train_segment_softmax is segment_softmax
     for label, logits, offsets in _battery():
         probs = segment_softmax(logits, offsets)

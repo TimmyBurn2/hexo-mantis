@@ -3,7 +3,7 @@
 IMPL-written (non-⊕). The four dense-decode invariants this suite was built around —
 min-over-windows value, max-over-windows policy, the out-of-action-space skip and the
 uniform fallback — were properties of the K-cluster decode, and went with the dense path
-(R346(f)) together with the no-graph-server dense arm and the two model/spec-disagreement
+together with the no-graph-server dense arm and the two model/spec-disagreement
 arms. What remains is the graph branch: shape, legality of the argmax, the empty-batch
 no-op and the close/idempotence contract on the server thread the engine owns.
 """
@@ -21,10 +21,8 @@ from mantis.model import GnnArch, build_net
 from mantis.selfplay.inference_local import LocalInferenceEngine
 _GRAPH_SPEC = lookup("gnn_axis_v1")
 _CPU = torch.device("cpu")
-#: F-816-10 D-1: `fused_graph_caps` is REQUIRED and keyword-only on this class — it
-#: hand-builds its `InferenceServer` config with no `RunConfig`, so the bound is
-#: THREADED from a parent resolver and never hardcoded at the site. The engine below
-#: gets a NON-BINDING pair (nothing here splits).
+#: `fused_graph_caps` is REQUIRED and keyword-only on this class — it hand-builds its
+#: `InferenceServer` config with no `RunConfig`, so the bound is THREADED, never hardcoded.
 
 
 def _graph_engine() -> LocalInferenceEngine:

@@ -19,12 +19,12 @@ import threading
 
 from mantis._engine import DEFAULT_CLUSTER_THRESHOLD
 from mantis.monitor.rules import check_draw_rate_collapse
-from mantis.selfplay.instrumentation import (  # RED anchor (R92) — `pooled_draw_counts` is new
+from mantis.selfplay.instrumentation import (  # RED anchor — `pooled_draw_counts` is new
     _DRAW_RATE_WINDOW,
     PoolInstrumentation,
 )
 from mantis.selfplay.pool import WorkerPool
-from mantis.train.coordinator.config import (  # RED anchor (R92) — replaces recent_pool_draw_rate
+from mantis.train.coordinator.config import (  # RED anchor — replaces recent_pool_draw_rate
     WorkerPoolLike,
     pooled_draw_rate,
 )

@@ -1,16 +1,16 @@
 """⊕ D-01 — pool encoding resolve, per registered encoding (WP-SP).
 
-Written oracle-first against the dispatcher's old-side capture (#C3a, wp/WPSP/CAPTURE_LOG.md):
+Written oracle-first against the dispatcher's old-side capture (#C3a, the capture log):
 every expected value is a captured number, recomputed by nothing here.
 
 This file carries D-01 ONLY. The rest of Suite D (D-02 … D-17) is IMPL-written; its capture
-rows live in the same `wp/WPSP/oldside/` bank and may be promoted alongside them.
+rows live in the same old-side bank and may be promoted alongside them.
 
 Q3 ruling this pins: the resolver is ALREADY the kept-plane authority, so `n_kept_planes` and
 `kept_plane_indices` must come from the bound spec — the old module-level `KEPT_PLANE_INDICES`
 const (dense-only, and a live hazard on a 10-channel spec) is not ported.
 
-R346(f) deleted the three grid rows the capture covers, so what is comparable against the
+The three grid rows the capture covers were deleted, so what is comparable against the
 old-side bank is `gnn_axis_v1` alone. The capture file keeps the grid entries — it is a record
 of what was measured, not a claim about what is registered — and this file reads only the rows
 whose encoding still resolves.
@@ -21,10 +21,9 @@ import pytest
 
 from mantis.selfplay.hparams import resolve_pool_encoding
 
-# THE ENCODINGS THE OLD-SIDE CAPTURE COVERS — not the live registered set, and the two have
-# diverged: R328(b) registered `gnn_axis_r8`, which post-dates the capture and therefore has no
-# golden to be compared against. This tuple is a property of the FIXTURE, so it does not grow
-# when the registry does; `tests/bridge/test_surface.py` is where the live set is pinned.
+# THE ENCODINGS THE OLD-SIDE CAPTURE COVERS — not the live registered set. This tuple is a
+# property of the FIXTURE, so it does not grow when the registry does; the live set is pinned
+# in `tests/bridge/test_surface.py`.
 REGISTERED = ("gnn_axis_v1",)
 
 

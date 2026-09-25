@@ -365,9 +365,8 @@ def test_heartbeat_emission_at_drain(run_drain):
     assert with_beat.games_completed == without_beat.games_completed
 
 
-#: Every kwarg `maybe_record` is called with, asserted as a SET so drift reds in BOTH directions —
-#: a dropped field and a smuggled one. Only the golden-valued subset is compared by value:
-#: `game_id` is a fresh uuid4 per game and can never be a golden.
+#: Every kwarg `maybe_record` is called with, asserted as a SET so drift reds in BOTH directions.
+#: Only the golden-valued subset is compared by value: `game_id` is a fresh uuid4 per game.
 _RECORDER_KWARGS = {
     "game_id", "moves", "winner_code", "plies", "worker_id", "terminal_reason",
     "game_id_byte_hash", "served_sims", "move_arms", "search_stats",
@@ -379,7 +378,7 @@ def test_recorder_receives_every_drained_game(run_drain, drain_goldens):
 
     The golden's `game_length` was RENAMED to `plies` carrying the same values: this call site
     always passed plies while the drain computes a real game length as `(plies + 1) // 2`, so the
-    golden was recording plies under a name that means something else (LAW-03).
+    golden was recording plies under a name that means something else.
     """
     pool, _ = run_drain()
     expected = _variant(drain_goldens, "graph")["recorder_calls"]
@@ -392,9 +391,9 @@ def test_recorder_receives_every_drained_game(run_drain, drain_goldens):
         assert [list(m) for m in actual["moves"]] == want["moves"], f"recorder call {i}: moves"
         assert actual["winner_code"] == want["winner_code"]
         assert actual["plies"] == want["plies"]
-        # R353(d): the runner's per-move arms reach the recorder one per move, untouched.
+        # The runner's per-move arms reach the recorder one per move, untouched.
         assert len(actual["move_arms"]) == len(actual["moves"]), f"recorder call {i}: arms"
-        # R355(d): the tenth field reaches the recorder untouched — `None` on an un-sampled game.
+        # The tenth field reaches the recorder untouched — `None` on an un-sampled game.
         assert json.loads(json.dumps(actual["search_stats"])) == want["search_stats"], (
             f"recorder call {i}: search_stats"
         )

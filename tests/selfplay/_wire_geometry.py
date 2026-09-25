@@ -1,6 +1,6 @@
 """The graph-wire geometry the collate fixtures were captured at, READ OFF THE REGISTRY.
 
-AUDIT-1 F-41. `collate_graph_batch`'s four geometry parameters used to default to the
+`collate_graph_batch`'s four geometry parameters used to default to the
 `gnn_axis_v1` row's values, typed as literals in `graph_collate.py`; every production caller
 passed `spec.*`, so the defaults' only consumers were tests that omitted them. The parameters
 are required now, which means every test states its geometry — and this module is why "states"

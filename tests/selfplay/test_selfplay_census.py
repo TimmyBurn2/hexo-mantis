@@ -1,9 +1,9 @@
-# >300 justify (R8): five mechanical censuses (J-01..J-05) over the ONE package src/mantis/selfplay, each with its LAW-07 bite arm; J-01's mutation self-tests re-drive the same _loop_census/_find_function primitives they prove bite, and each remaining census is small — a per-census split would duplicate the AST walker or import test-from-test.
+# >300 justify (R8): five mechanical censuses (J-01..J-05) over the ONE package src/mantis/selfplay, each with its own bite arm; J-01's mutation self-tests re-drive the same _loop_census/_find_function primitives they prove bite, and each remaining census is small — a per-census split would duplicate the AST walker or import test-from-test.
 """Suite J — census pins over `src/mantis/selfplay` (J-01 … J-05).
 
 Mechanical, review-blocking censuses of the SHIPPED source, each with a named bug class and,
-where checker-shaped, a LAW-07 mutation self-test proving it bites: J-01 the hot-path loop ban
-against a frozen table, J-02 the LAW-11 zero-`"grid"`-default census, J-03 the killed-knob
+where checker-shaped, a mutation self-test proving it bites: J-01 the hot-path loop ban
+against a frozen table, J-02 the zero-`"grid"`-default census, J-03 the killed-knob
 census, J-04 the `except …: pass` swallow census against one allowlisted `__del__` site, and
 J-05 the frozen `game_complete` key set. Nothing here modifies what it reads.
 """
@@ -162,7 +162,7 @@ def test_j01_census_covers_every_frozen_row() -> None:
     )
 
 
-# J-01 mutation self-test (LAW-07): `segment_softmax` is the (0,0,0) row, and a doctored copy
+# J-01 mutation self-test: `segment_softmax` is the (0,0,0) row, and a doctored copy
 # with an injected loop or comprehension must be detected by the SAME census logic used above.
 _SEGMENT_SOFTMAX_SRC = _SELFPLAY / "graph_collate.py"
 
@@ -183,7 +183,7 @@ def _doctored_func(inject: str) -> ast.AST:
 
 
 def test_j01_mutation_self_test_injected_for_loop_bites() -> None:
-    """J-01 (LAW-07, arm 1) — an injected `for` loop into the (0,0,0) function makes the census
+    """J-01 (arm 1) — an injected `for` loop into the (0,0,0) function makes the census
     report a nonzero `for` count, so the frozen-table comparison would FAIL."""
     func = _doctored_func("for _ in range(1):\n    pass\n")
     census = _loop_census(func)
@@ -192,7 +192,7 @@ def test_j01_mutation_self_test_injected_for_loop_bites() -> None:
 
 
 def test_j01_mutation_self_test_injected_comprehension_bites() -> None:
-    """J-01 (LAW-07, arm 2) — an injected comprehension makes the census report a nonzero
+    """J-01 (arm 2) — an injected comprehension makes the census report a nonzero
     comprehension count, closing the hole a name-only loop census left."""
     func = _doctored_func("_evade = [x for x in range(1)]\n")
     census = _loop_census(func)
@@ -201,14 +201,14 @@ def test_j01_mutation_self_test_injected_comprehension_bites() -> None:
 
 
 def test_j01_mutation_self_test_injected_map_bites() -> None:
-    """J-01 (LAW-07, arm 3) — an injected `map(...)` call is caught by the map/filter census
+    """J-01 (arm 3) — an injected `map(...)` call is caught by the map/filter census
     (the M8 extension names map/filter as per-item loops alongside comprehensions)."""
     func = _doctored_func("_evade = list(map(str, range(1)))\n")
     assert _mapfilter_census(func) >= 1, "census must bite an injected map() call"
 
 
-# J-02 — LAW-11: a `"grid"` default recovered off a spec/getattr is the silently-dense-by-default
-# class LAW-11 kills.
+# J-02: a `"grid"` default recovered off a spec/getattr is the silently-dense-by-default
+# class this census kills.
 _RE_DENSE_DEFAULT = re.compile(
     r"getattr\([^)]*,\s*[\"']grid[\"']\s*\)"
     r"|\.get\(\s*[\"']representation[\"']\s*,\s*[\"']grid[\"']"
@@ -233,7 +233,7 @@ def test_j02_no_dense_default_representation_tokens() -> None:
 
 
 def test_j02_census_bites_planted_dense_default(tmp_path: Path) -> None:
-    """J-02 (LAW-07) — a planted grid-default line makes the census fire."""
+    """J-02 — a planted grid-default line makes the census fire."""
     (tmp_path / "planted.py").write_text(
         'def f(cfg):\n    return cfg.get("representation", "grid")\n'
     , encoding="utf-8")
@@ -283,7 +283,7 @@ def test_j03_no_killed_tokens() -> None:
 
 
 def test_j03_census_bites_planted_killed_token(tmp_path: Path) -> None:
-    """J-03 (LAW-07) — a planted killed-knob reference makes the census fire."""
+    """J-03 — a planted killed-knob reference makes the census fire."""
     (tmp_path / "planted.py").write_text('LEGAL = cfg["legal_move_radius_jitter"]\n', encoding="utf-8")
     assert _killed_hits(tmp_path), "census must bite a planted killed token"
 
@@ -329,7 +329,7 @@ def test_j04_swallow_census_is_the_single_del_site() -> None:
 
 
 def test_j04_census_bites_planted_swallow(tmp_path: Path) -> None:
-    """J-04 (LAW-07) — a planted `except: pass` makes the census fire."""
+    """J-04 — a planted `except: pass` makes the census fire."""
     (tmp_path / "planted.py").write_text(
         "def f():\n    try:\n        g()\n    except Exception:\n        pass\n"
     , encoding="utf-8")

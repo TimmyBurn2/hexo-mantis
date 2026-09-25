@@ -1,4 +1,4 @@
-"""Suite F-07 — GNN inference-seam end-to-end smoke (INTEGRATION tier).
+"""GNN inference-seam end-to-end smoke (INTEGRATION tier).
 
 IMPL-written (non-⊕). Drives the LIVE graph seam through every production component the
 self-play worker's graph leaf evaluation rides:
@@ -11,7 +11,7 @@ self-play worker's graph leaf evaluation rides:
       → `submit_graph_inference_results`
       → the Rust legal-set assemble wakes the blocked mock games
 
-Exit criterion (DESIGN §b F-07): `completed_graph_games == n` within the timeout, with no
+Exit criterion (DESIGN §b): `completed_graph_games == n` within the timeout, with no
 thread left running. Multi-thread end-to-end, so it lives on the integration tier
 (`make test.integration`), not the default tier.
 
@@ -65,17 +65,15 @@ def test_gnn_inference_seam_end_to_end_smoke() -> None:
 
     server = InferenceServer(
         net, device,
-        # WPSC Phase 2 SC-A2: InferenceHParams.from_config reads config["inference"] now.
-        # WPSC Phase 3 SC-B3: InferenceServer now hard-reads config["train"]["amp_dtype"]
-        # unconditionally (R30b, no fallback) — inert on this graph path, still required.
+        # InferenceHParams.from_config reads config["inference"], and InferenceServer hard-reads
+        # config["train"]["amp_dtype"] unconditionally (no fallback) — inert here, still required.
         {"inference": {
             "inference_batch_size": 8, "inference_max_wait_ms": 10,
             "trace_inference": True, "compile_inference": False,
             "compile_inference_mode": "default", "compile_inference_dynamic": True,
             "perf_timing": False, "perf_sync_cuda": False,
-            # F-816-10: the graph arm resolves the fused-forward memory bound at
-            # construction. Non-binding by construction here, so this end-to-end smoke
-            # exercises the M == 1 path production takes when the caps do not bind.
+            # Non-binding by construction here, so this end-to-end smoke exercises the M == 1
+            # path production takes when the caps do not bind.
             "fused_graph_caps": CAPS_DICT,
         }, "train": {"amp_dtype": "bf16"}},
         batcher=batcher, encoding_spec=_SPEC,

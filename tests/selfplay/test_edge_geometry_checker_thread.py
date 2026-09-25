@@ -1,4 +1,4 @@
-"""R347(e): check 14 off the critical path, still 1-in-1, still detect-and-halt — driven over
+"""Check 14 off the critical path, still 1-in-1, still detect-and-halt — driven over
 the real loop, the real collate and the engine's verifier, with ADV-8's flip as the defect."""
 from __future__ import annotations
 

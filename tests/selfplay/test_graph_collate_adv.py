@@ -8,7 +8,7 @@ All four batch-level ADV payloads RAISE old-side, so this is a PARITY port: ever
 asserts the exception CLASS the old side produced, never a message substring — one row fires the
 *endpoint* arm of `OffsetsNonMonotonic`, so a substring pin would pass for the wrong reason.
 
-LAW-07: every corruption row carries its clean twin, the same payload uncorrupted under the same
+Every corruption row carries its clean twin, the same payload uncorrupted under the same
 kwargs, asserted NOT to raise. A resolver that rejected everything would otherwise pass.
 """
 from __future__ import annotations
@@ -70,9 +70,8 @@ _ERROR_CLASSES = {
     )
 }
 
-#: The capture's geometry, READ OFF THE REGISTRY ROW it was built at. These were typed here as
-#: literals, under a suite whose subject is that the collate refuses geometry it was not given —
-#: while the suite itself asserted geometry nobody derived.
+#: The capture's geometry, READ OFF THE REGISTRY ROW it was built at, not typed here as literals
+#: (the suite's subject is that collate refuses geometry it was not given).
 GEOMETRY: dict[str, int] = geometry_kwargs()
 NODE_FEAT_DIM = GEOMETRY["node_feat_dim"]
 EDGE_FEAT_DIM = GEOMETRY["edge_feat_dim"]
@@ -85,7 +84,7 @@ def _collate(fields: dict[str, Any], **kw: Any):
 
 
 def _clean_twin_ok(payload_fields, name: str = "b6", **kw: Any) -> None:
-    """LAW-07 arm: the uncorrupted payload must collate under the SAME kwargs."""
+    """Clean-twin arm: the uncorrupted payload must collate under the SAME kwargs."""
     _collate(payload_fields(name), **kw)
 
 
@@ -121,8 +120,7 @@ def test_clean_capture_collates_full_semantic(payload_fields, collate_expectatio
     for field, meta in golden["tensors"].items():
         if field in RETIRED_BATCH_FIELDS:
             # The expectations file still records this field and is NOT rewritten. Asserted
-            # ABSENT rather than skipped — a silent continue over an unmatched golden key is a
-            # check that passes by not checking.
+            # ABSENT rather than skipped — a silent continue would pass by not checking.
             assert not hasattr(batch, field), f"{field}: retired, yet produced"
             continue
         tensor = getattr(batch, field)
@@ -130,9 +128,8 @@ def test_clean_capture_collates_full_semantic(payload_fields, collate_expectatio
         assert str(tensor.dtype) == meta["torch_dtype"], f"{field}: torch dtype drift"
 
     scalars = collate_expectations["b6_scalars"]
-    # Re-expressed against the gather; the CAPTURED scalar is untouched. `legal_mask.sum()` counted
-    # DISTINCT legal nodes, because the mask was a scatter and a repeated gather row would have
-    # collapsed into one cell. `unique().numel()` is that same quantity named directly.
+    # Re-expressed against the gather; the CAPTURED scalar is untouched. `legal_mask.sum()`
+    # counted DISTINCT legal nodes; `unique().numel()` is that same quantity named directly.
     assert int(batch.legal_node_gather.unique().numel()) == scalars["legal_mask_sum"] == scalars["Lg"], (
         "the gather must contain exactly one row per distinct legal node (captured 2088)"
     )
@@ -145,10 +142,8 @@ def test_off_window_sentinel_survives_collate(payload_fields, collate_expectatio
     assert int((fields["policy_dst_slot"] == -1).sum()) == expected == 1800
 
     _collate(fields, expected_version=1, device="cpu", semantic="full")
-    # The device tensor this once counted is retired — collate carried it and nothing read it — so
-    # the claim moves to the path that consumes the sentinel: the WIRE array the bridge reads off
-    # the queue. Collate VALIDATES that array and must not MUTATE it, and the arrays here are the
-    # caller's own objects passed by reference, so this bites for real.
+    # The device tensor this once counted is retired, so the claim moves to the WIRE array the
+    # bridge reads off the queue: collate VALIDATES it and must not MUTATE it.
     assert int((fields["policy_dst_slot"] == -1).sum()) == expected, (
         "collate mutated the caller's policy_dst_slot — the off-window sentinels it is supposed "
         "to validate did not survive the call that validated them"
@@ -374,7 +369,7 @@ def test_aug_round_trip_mismatch(payload_fields):
     with pytest.raises(AugRoundTripMismatch):
         _collate(fields, device="cpu", semantic="full", target_argmax_cells=targets)
 
-    # LAW-07 twin: all-None targets on the SAME trainer path must collate clean.
+    # Clean twin: all-None targets on the SAME trainer path must collate clean.
     clean = payload_fields("b6")
     _collate(clean, device="cpu", semantic="full",
              target_argmax_cells=[None] * int(clean["n_graphs"]))
@@ -440,7 +435,7 @@ def test_offsets_boundary_sweep(payload_fields, cell):
 
 
 def test_offsets_boundary_sweep_clean_twin(payload_fields):
-    """LAW-07 arm: the unpoked payload collates, so the 24 cells are not measured against a
+    """Clean-twin arm: the unpoked payload collates, so the 24 cells are not measured against a
     resolver that rejects every batch."""
     _clean_twin_ok(payload_fields, device="cpu")
 
@@ -462,7 +457,7 @@ def test_dtype_sweep(payload_fields, field):
 
 
 def test_dtype_sweep_clean_twin(payload_fields):
-    """LAW-07 arm: the untouched payload collates, so the sweep is not vacuous."""
+    """Clean-twin arm: the untouched payload collates, so the sweep is not vacuous."""
     _clean_twin_ok(payload_fields, device="cpu")
 
 
@@ -504,7 +499,7 @@ def test_semantic_canary_cadence(payload_fields, trace_key, semantic, period):
 
 
 def test_semantic_canary_cadence_clean_twin(payload_fields):
-    """LAW-07 arm: an UNCORRUPTED payload raises on NO call in any mode."""
+    """Clean-twin arm: an UNCORRUPTED payload raises on NO call in any mode."""
     reset_semantic_canary()
     for _ in range(8):
         _collate(payload_fields("b6"), device="cpu", semantic="canary", canary_period=3)

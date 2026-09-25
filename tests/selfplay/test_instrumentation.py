@@ -1,6 +1,6 @@
 """⊕ G-16 — instrumentation pure-function GOLDENS (WP-SP).
 
-Written oracle-first against the dispatcher's old-side capture (#C3c, wp/WPSP/CAPTURE_LOG.md):
+Written oracle-first against the dispatcher's old-side capture (#C3c, the capture log):
 every expected value is a captured number, recomputed by nothing here.
 
 This file carries G-16 ONLY; G-01 … G-15 and G-17 are IMPL-written ports of the old suite.

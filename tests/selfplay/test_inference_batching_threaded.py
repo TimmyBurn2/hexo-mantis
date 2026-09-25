@@ -5,7 +5,7 @@ carrying `inference_batch_size: 64` and `inference_max_wait_ms: 10`. The literal
 comment already stated the argument against exactly this for the cap beside it — *"a cap
 written here would be a SECOND authority over one byte budget, on the one construction path
 with no config to be the first"* — and the ledger measured what the un-threaded pair costs
-on the arm LAW-15 reads a promotion bar off: at the single-stream deploy head, supply 8
+on the arm the promotion bar is read off: at the single-stream deploy head, supply 8
 against a collector threshold the literal set to 32, **1.76 of the eval path's 5.30 ms/sim,
 33 %**, is the collector's own deadline.
 
@@ -107,7 +107,7 @@ def test_a_graph_engine_refuses_an_absent_batching_spec() -> None:
 
 
 def test_the_resolver_refuses_an_absent_member() -> None:
-    """LAW-11 at the read path: absent is a named error, never a default."""
+    """At the read path: absent is a named error, never a default."""
     good = {"inference": {"inference_batch_size": 64, "inference_max_wait_ms": 10}}
     assert resolve_inference_batching(good) == InferenceBatchingSpec(64, 10)
     for missing in ("inference_batch_size", "inference_max_wait_ms"):

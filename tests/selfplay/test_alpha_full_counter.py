@@ -1,4 +1,4 @@
-"""R349(c): the alpha = 1.0 count is a LAW-18 reading with a live producer — such a row ships
+"""The alpha = 1.0 count is a reading with a live producer — such a row ships
 its sampled cells at sub-ULP mass and a tail that rounds to 1.0 (an EMPTY explicit set is
 refused at the ring), the push arm counts it, and the first rows are emitted whole."""
 from __future__ import annotations

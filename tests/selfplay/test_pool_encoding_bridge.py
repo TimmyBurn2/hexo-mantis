@@ -1,5 +1,5 @@
-"""WPBRIDGE Phase T — TD-4 / CARD-POOL-ENCODING-BRIDGE at its own seam, plus the
-mutation self-test that proves this suite detects the census'd defect (LAW-07).
+"""Phase T — TD-4 / CARD-POOL-ENCODING-BRIDGE at its own seam, plus the
+mutation self-test that proves this suite detects the census'd defect.
 
 The subject is the exact call `WorkerPool.__init__` makes (`selfplay/pool.py:97`) on the
 exact input a real boot hands it: `RunConfig.model_dump()`. TD-4 was measured at HEAD
@@ -8,8 +8,8 @@ already built — the wall that left `preflight_mint.py --config` on the product
 unable to run a burst at all.
 
 The mutation self-test re-introduces the defect at the one line that carried it (the
-resolver's flat-only read) and asserts this suite goes RED there and ONLY there — the
-R81/R86 condition: not self-satisfying, no unrelated casualty.
+resolver's flat-only read) and asserts this suite goes RED there and ONLY there:
+not self-satisfying, no unrelated casualty.
 """
 from __future__ import annotations
 
@@ -41,9 +41,8 @@ def _dump(config: Path) -> dict[str, Any]:
 def test_pool_resolves_encoding_from_a_real_run_config_dump(config: Path) -> None:
     """THE TD-4 oracle: the pool resolves a REAL run-config dump's encoding."""
     resolved = resolve_pool_encoding(_dump(config), arch=None)
-    # Against the REGISTRY, not a literal: the identity moved from `gnn_axis_v1` to
-    # `gnn_axis_r8` at run6's mint, and this row's claim is that the pool resolves a REAL
-    # registered encoding — the row below is the one that says WHICH.
+    # Against the REGISTRY, not a literal: the identity moved since this pool was captured, and
+    # this row's claim is that the pool resolves a REAL registered encoding.
     assert resolved.encoding_name in {spec.name for spec in all_specs()}
     assert resolved.registry_spec.representation == "graph"
     assert resolved.board_size > 0
@@ -60,14 +59,14 @@ def test_pool_resolution_agrees_with_the_config_identity_key(config: Path) -> No
 
 @pytest.mark.parametrize("config", _PRODUCTION, ids=lambda p: p.name)
 def test_pool_still_refuses_a_config_that_declares_no_encoding(config: Path) -> None:
-    """LAW-11 survives the widening: strip the declaration and the pool dies, loudly."""
+    """The absent-encoding refusal survives the widening: strip the declaration and the pool dies, loudly."""
     dump = _dump(config)
     dump.pop("identity")
     with pytest.raises(MissingEncodingError):
         resolve_pool_encoding(dump, arch=None)
 
 
-# mutation self-test (LAW-07): does this suite actually detect the defect?
+# mutation self-test: does this suite actually detect the defect?
 
 
 def _flat_only_resolve(cfg: Mapping[str, Any] | None) -> Any:
@@ -99,7 +98,7 @@ def test_mutation_reintroducing_the_defect_reds_the_td4_oracle(
 
 
 def test_mutation_leaves_the_flat_shape_untouched(monkeypatch: pytest.MonkeyPatch) -> None:
-    """No unrelated casualty (R86 'alone'): the mutation is confined to the nested shape.
+    """No unrelated casualty: the mutation is confined to the nested shape.
     A legacy flat config resolves identically before and after it, so the oracle above is
     detecting the bridge specifically and not a broken resolver in general."""
     flat = {"encoding": "gnn_axis_v1", "selfplay": {}, "mcts": {}}

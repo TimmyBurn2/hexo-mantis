@@ -39,17 +39,15 @@ FROZEN_METHODS = (
     "model_version_summary", "terminal_reason_counts",
 )
 
-#: R346(f) took FIFTEEN of these. The engine exposes a getter for none of them, so each would have
-#: snapshotted its wheel-compat default forever — a fabricated reading with no producer. The set
-#: below is what a live engine still answers, asserted EXACTLY, so a field that comes back without
-#: a getter reds here.
+#: A schema change took FIFTEEN of these; the engine exposes a getter for none of them, so each
+#: would have snapshotted its wheel-compat default forever. Asserted EXACTLY below.
 RUNNER_STATS_FIELDS = {
     "games_completed", "positions_generated", "x_wins", "o_wins", "draws",
     "model_version", "mcts_quiescence_fires", "mcts_mean_depth",
     "mcts_mean_root_concentration",
-    # The playout-cap draw's two arms and the Gumbel round-width terms (LAW-18).
+    # The playout-cap draw's two arms and the Gumbel round-width terms.
     "pcr_full_moves", "pcr_quick_moves", "gumbel_round_leaves", "gumbel_rounds",
-    # WP12-R Phase T target-integrity counters (LAW-18; the byte-frozen oracle
+    # Phase T target-integrity counters (the byte-frozen oracle
     # bank fixes these names — see tests/selfplay/test_target_law18_counters.py).
     "export_offwindow_mass_moves", "target_integrity_defects",
     # The SEAM conjunct of the same class the two above guard: a leaf inference that FAILED,
@@ -96,7 +94,7 @@ def test_pool_presents_every_frozen_member(device) -> None:
 
 
 def test_pool_satisfies_both_runtime_protocols(device) -> None:
-    """H-01 (Protocol arm) — PASS iff the pool satisfies the trainer's committed `WorkerPoolLike` AND this package's `ActorSyncTarget` (WP-UNFREEZE, R49)."""
+    """H-01 (Protocol arm) — PASS iff the pool satisfies the trainer's committed `WorkerPoolLike` AND this package's `ActorSyncTarget`."""
     pool = graph_pool(device=device, capacity=32, n_simulations=50, fast_sims=40)
     assert isinstance(pool, WorkerPoolLike)
     assert isinstance(pool, ActorSyncTarget)

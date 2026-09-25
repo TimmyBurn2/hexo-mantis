@@ -1,4 +1,4 @@
-"""F-816-9 Phase C — the SEAM counter on the Python stats surface (R275(b), LAW-18).
+"""Phase C — the SEAM counter on the Python stats surface.
 
 `mantis.selfplay.pool_hooks.RunnerStats` carries `inference_failures_total`, read off the
 engine runner by `runner_stats(pool)` exactly like the Phase-T target-integrity counters.
@@ -6,13 +6,13 @@ engine runner by `runner_stats(pool)` exactly like the Phase-T target-integrity 
 WHAT THIS LEG IS AND IS NOT. It pins the SURFACE: the value threads through un-crosswired
 and an idle counter stays VISIBLE at 0. It is NOT a producer proof — `runner_stats`'
 `getattr(..., 0)` legacy-wheel default means a missing engine getter reads as a real zero
-here, which is exactly the reading LAW-07 refuses to accept as evidence. The producer burden
+here, which is exactly the reading a producer test refuses to accept as evidence. The producer burden
 lives in Rust (`crates/mantis-selfplay/tests/search_seam_fatal.rs`: the counter fires on an
 injected failure on BOTH arms, and does NOT fire on a clean drain shutdown), and the in-run
 stream burden in `tests/train/test_target_counter_events.py`.
 
 MUTATION THAT REDS IT (M-SEAMPY): read `target_integrity_defects` into
-`inference_failures_total` in `runner_stats` — the two conjuncts of the F-816-9 class then
+`inference_failures_total` in `runner_stats` — the two conjuncts then
 report each other's counts, and the distinct values below are what sees it.
 """
 from __future__ import annotations

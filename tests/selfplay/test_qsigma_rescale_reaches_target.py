@@ -1,4 +1,4 @@
-"""R357(a)'s pin: `selfplay.q_rescale` reaches the completed-Q TARGET BUILDER, set each way on a shipped config."""
+"""The pin: `selfplay.q_rescale` reaches the completed-Q TARGET BUILDER, set each way on a shipped config."""
 from __future__ import annotations
 
 from pathlib import Path

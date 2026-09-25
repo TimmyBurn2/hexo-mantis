@@ -259,9 +259,8 @@ def drive_one_pop(
 
 
 def server_cfg(**over: Any) -> dict[str, Any]:
-    # `from_config` reads `config["inference"]` and requires an explicit `encoding` key. The
-    # graph arm resolves the fused-forward memory bound at construction, so every site built
-    # from this base needs it; the pair is non-binding by construction, so nothing splits on it.
+    # `from_config` reads `config["inference"]` and requires an explicit `encoding` key; the
+    # pair is non-binding by construction here, so nothing splits on it.
     base = {
         "inference_batch_size": 8, "inference_max_wait_ms": 20.0,
         "fused_graph_caps": CAPS_DICT,

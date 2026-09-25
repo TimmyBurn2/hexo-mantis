@@ -1,8 +1,8 @@
-"""⊕ WP12R Step 3 narration — LAW-07 producer tests for the six lifecycle events (R210 ii).
+"""⊕ Step 3 narration — producer tests for the six lifecycle events.
 
-Each lifecycle event (R210/R216/R218, DESIGN §6) has a producer + a mutation test: kill the
-producer (remove the emit) → its pin reds. These are PERMANENT instrumentation (R202-3),
-emitted in-run through the injected selfplay-local `EventSink` (LAW-18).
+Each lifecycle event (DESIGN §6) has a producer + a mutation test: kill the
+producer (remove the emit) → its pin reds. These are PERMANENT instrumentation,
+emitted in-run through the injected selfplay-local `EventSink`.
 
 The six events (DESIGN §4.4):
   - runner_started        (pool.py:start())
@@ -43,7 +43,7 @@ class _RecordingSink:
 
 # runner_started + workers_spawned (pool.start)
 def test_runner_started_emits_on_pool_start() -> None:
-    """LAW-07 producer test — `runner_started` emits once when `WorkerPool.start()` runs."""
+    """Producer test — `runner_started` emits once when `WorkerPool.start()` runs."""
     from mantis.selfplay.pool import WorkerPool
     from unittest.mock import MagicMock, patch
 
@@ -72,7 +72,7 @@ def test_runner_started_emits_on_pool_start() -> None:
 
 
 def test_workers_spawned_emits_on_pool_start() -> None:
-    """LAW-07 producer test — `workers_spawned` emits once after `_runner.start()` returns."""
+    """Producer test — `workers_spawned` emits once after `_runner.start()` returns."""
     from mantis.selfplay.pool import WorkerPool
     from unittest.mock import MagicMock, patch
 
@@ -142,7 +142,7 @@ def _make_drain_pool(games, sink):
 
 
 def test_game_loop_entered_emits_once(monkeypatch) -> None:
-    """LAW-07 producer test — `game_loop_entered` emits once on drain-thread entry."""
+    """Producer test — `game_loop_entered` emits once on drain-thread entry."""
     sink = _RecordingSink()
     pool = _make_drain_pool([(4, 1, [], 0, 0, 0, 0, 0, [], None)], sink)
     monkeypatch.setattr(pool_drain, "time", type("T", (), {
@@ -156,7 +156,7 @@ def test_game_loop_entered_emits_once(monkeypatch) -> None:
 
 
 def test_first_record_drained_emits_on_first_non_empty_drain(monkeypatch) -> None:
-    """LAW-07 producer test — `first_record_drained` emits once on the first NON-EMPTY drain
+    """Producer test — `first_record_drained` emits once on the first NON-EMPTY drain
     (DESIGN §4.5 (β) — a record actually flowed)."""
     sink = _RecordingSink()
     pool = _make_drain_pool([(4, 1, [], 0, 0, 0, 0, 0, [], None)], sink)
@@ -196,7 +196,7 @@ def _drive_graph_pops(monkeypatch, pops: list[list[int]]) -> tuple[_RecordingSin
 
 
 def test_first_inference_enqueued_emits_once(monkeypatch) -> None:
-    """LAW-07 producer test — the graph loop emits `first_inference_enqueued` on its first pop only."""
+    """Producer test — the graph loop emits `first_inference_enqueued` on its first pop only."""
     sink, _ = _drive_graph_pops(monkeypatch, [[3, 4, 5], [2, 2]])
 
     assert sink.named("first_inference_enqueued") == [
@@ -205,7 +205,7 @@ def test_first_inference_enqueued_emits_once(monkeypatch) -> None:
 
 
 def test_first_inference_served_emits_once(monkeypatch) -> None:
-    """LAW-07 producer test — the retire stage emits `first_inference_served` on its first pop only."""
+    """Producer test — the retire stage emits `first_inference_served` on its first pop only."""
     sink, _ = _drive_graph_pops(monkeypatch, [[3, 4, 5], [2, 2]])
 
     assert sink.named("first_inference_served") == [

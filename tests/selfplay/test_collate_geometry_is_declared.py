@@ -1,6 +1,6 @@
 """`collate_graph_batch` has no geometry defaults, and the tests that call it read the registry.
 
-AUDIT-1 F-41. The four geometry parameters (`trunk_size`, `win_length`, `node_feat_dim`,
+The four geometry parameters (`trunk_size`, `win_length`, `node_feat_dim`,
 `edge_feat_dim`) used to default to the `gnn_axis_v1` row's values typed as literals in
 `graph_collate.py`, under comments saying "caller passes spec.*". All three PRODUCTION callers
 did pass `spec.*` — which is exactly why the defaults were invisible: their only consumers were
@@ -50,7 +50,7 @@ def test_a_wire_whose_node_feat_dim_disagrees_with_the_declared_row_is_refused(p
                             **{**wire_geometry, "node_feat_dim": wire_geometry["node_feat_dim"] + 1})
 
     collate_graph_batch(GraphWirePayload(**payload_fields("b6")), expected_version=1,
-                        **wire_geometry)  # LAW-07 clean twin: same call, true geometry
+                        **wire_geometry)  # clean twin: same call, true geometry
 
 
 def test_the_capture_association_is_derived_from_the_arrays_not_declared(payload_fields,

@@ -1,11 +1,11 @@
-"""⊕ WP12-R Phase T (TARGET INTEGRITY) — O-1 exported-target parity, PYTHON LEG (O1p)
+"""⊕ Phase T (TARGET INTEGRITY) — O-1 exported-target parity, PYTHON LEG (O1p)
 + the quick-arm parity Python leg (QA). Written at T-2 ORACLE-WRITE, byte-frozen
-through IMPL (R138 pattern: same fixture, both sides of the FFI — the Rust leg is
+through IMPL (same fixture, both sides of the FFI — the Rust leg is
 `crates/mantis-selfplay/tests/target_export_parity.rs`).
 
 The fixture pairs are the POST-FIX export (full visit distribution, Σ == 1), minted
-from the raw root-child visits of the production call sequence (mint probe preserved
-at wp/WP12R/oracle_write_probes/). This leg drives the pairs through the REAL engine
+from the raw root-child visits of the production call sequence (mint probe preserved).
+This leg drives the pairs through the REAL engine
 buffer (`HexgBuffer.push_graph_position` → `sample_graph_batch`) and asserts the
 Python-side `policy_target` carries the FULL ragged target — exactly the
 downstream-drop the DESIGN_T §1 census exists to catch.
@@ -112,7 +112,7 @@ def test_policy_target_round_trips_the_dispersed_fixture() -> None:
 
 def test_fixture_pairs_are_unit_mass_and_fit_the_slot() -> None:
     """Fixture self-check: every position's frozen pairs are a distribution that fits
-    the suite's 128-slot test geometry (post-R255 the production capacity is DERIVED
+    the suite's 128-slot test geometry (the production capacity is DERIVED
     from the sims regime) — the M-D deliberate-green grounds (<= 57 = 50 + 8 - 1 cells)."""
     budget = 65536
     total_bytes = 0

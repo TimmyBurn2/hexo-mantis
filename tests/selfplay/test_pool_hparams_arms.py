@@ -30,9 +30,7 @@ BASE_PLAYOUT_CAP: dict[str, Any] = {
     "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
 }
 # NOT a `train:` schema payload — `cfg()` builds the LEGACY flat hparams dict the pool reads, so
-# this block is deliberately INCOMPLETE and never reaches `RunConfig.model_validate`; a new
-# `train.*` schema key costs this file nothing. `draw_reward: -0.4` and `ply_cap_value: -0.7` are
-# DISTINGUISHABLE from the minted defaults so the oracles can prove they reached the Rust runner.
+# this block is deliberately INCOMPLETE and never reaches `RunConfig.model_validate`.
 BASE_TRAIN: dict[str, Any] = {
     "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0,
     "lr_schedule": "cosine", "total_steps": 1_000_000, "scheduler_t_max": None,
@@ -116,7 +114,7 @@ def test_dirichlet_alpha_field_name_equals_its_key(assemble) -> None:
 @pytest.mark.parametrize("rescale", [True, False])
 def test_q_rescale_reaches_hparams_and_wire(assemble, rescale: bool) -> None:
     """`selfplay.q_rescale` (Mctx's `rescale_values`) reaches the hparams field and the runner
-    kwarg — the third σ knob beside `c_visit`/`c_scale`, R351(b)'s lever."""
+    kwarg — the third σ knob beside `c_visit`/`c_scale`."""
     config = cfg(selfplay={"q_rescale": rescale})
     assert SelfPlayHParams.from_config(config).q_rescale is rescale
     assert assemble(config).recorded_kwargs["q_rescale"] is rescale
@@ -162,8 +160,7 @@ def test_search_kind_property_reads_live_config() -> None:
     assert holder.search_kind == "gumbel", "the property must re-read the live config"
 
     # NO FALLBACK: a pool that cannot say which search it ran must raise rather than answer
-    # "puct", because the emitter gates PUCT-only diagnostics on this. The refusal is the
-    # RESOLVER's, so the pool cannot grow a fallback of its own.
+    # "puct" — the refusal is the RESOLVER's, so the pool cannot grow a fallback of its own.
     holder.config = {}
     with pytest.raises(MissingSearchKindError):
         _ = holder.search_kind

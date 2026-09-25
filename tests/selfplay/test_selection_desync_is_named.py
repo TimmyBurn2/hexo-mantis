@@ -1,4 +1,4 @@
-"""AUDIT-1 F-02 (Python face) — the MCTS desync is a named exception, not a matched panic.
+"""Python face — the MCTS desync is a named exception, not a matched panic.
 
 `MCTSTree::select_one_leaf` did `board.apply_move_tracked(q, r).expect("selected move should
 always be legal")`. `Board::apply_move` errs ONLY on occupancy — never on radius — so the
@@ -13,10 +13,10 @@ Three things were wrong with that recovery, and all three are closed engine-side
   unnamed `PanicException`;
 * on the RUST self-play arm nothing reached it at all — the unwind is caught by
   `runner::spawn::guard_worker`, which increments `worker_panics` and sets `running = false`,
-  halting the run with NO reason in the fatal-defect latch, so R275(b)'s instrument never saw
+  halting the run with NO reason in the fatal-defect latch, so the instrument never saw
   it;
 * matching a panic's message text is a contract nothing enforces, and `panic = "unwind"`
-  (R2/LAW-13) is what made the panic catchable at all — a guarantee about the worst case.
+  is what made the panic catchable at all — a guarantee about the worst case.
 """
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def test_the_named_exception_is_exported_from_the_engine() -> None:
 
 
 def test_a_forced_root_child_outside_the_range_raises_ValueError_not_a_panic() -> None:
-    """F-02's second trigger, at the FFI. `u32::MAX` index-panicked on the next descent, and
+    """The second trigger, at the FFI. `u32::MAX` index-panicked on the next descent, and
     any other foreign index descended into a node the root does not own — an uninitialised
     slot carries `action_idx = u32::MAX`, which decodes to (32767, 32767), a cell an
     UNBOUNDED board accepts. That arm produced neither a panic nor an error."""
@@ -50,7 +50,7 @@ def test_a_forced_root_child_outside_the_range_raises_ValueError_not_a_panic() -
 
 
 def test_a_short_expand_batch_is_refused_by_name(monkeypatch: pytest.MonkeyPatch) -> None:
-    """AUDIT-1 F-22. The inner call took `n = min(pending, policies, values)` and DROPPED the
+    """The inner call took `n = min(pending, policies, values)` and DROPPED the
     rest, so a short batch from the inference side expanded the leading leaves and silently
     skipped the others — on the self-play worker and on `arena/deploy_head.py`, the
     deploy-strength path. The graph sibling already carried C-1..C-4 guards for exactly this."""
