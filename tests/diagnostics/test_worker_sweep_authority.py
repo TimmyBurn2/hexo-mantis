@@ -703,7 +703,7 @@ def test_the_report_carries_the_card_total_every_peak_is_measured_against(
 ) -> None:
     """The report carries the card total, so headroom arithmetic works against the report itself."""
     prov = {
-        "tool": ws.TOOL, "produced_by": "run5@abc", "config_name": "run6.yaml",
+        "tool": ws.TOOL, "produced_by": "run5@abc", "config_name": "runx.yaml",
         "config_sha256": "d" * 64, "git_commit": "abc1234", "git_dirty": False,
         "device": "cuda", "torch_version": "2.11", "gpu_name": "X",
         "card_total_bytes": 16 * 1024 ** 3, "declared_allocator_posture": "default",
