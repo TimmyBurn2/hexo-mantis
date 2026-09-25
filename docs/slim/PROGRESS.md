@@ -104,6 +104,26 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   the two CARD tokens restored). L8 src/mantis/selfplay LANDED dd08abb8 (**sonnet**). Floors folded:
   cite 993→851, comment_excess 2675→2535. Gates 10/12/13/15/17 rc 0.
 - L7's first resume HALTED on the stash trap. It was re-launched (**opus**) for config, eval and root.
+- L7 LANDED (**opus**; second resume): e2c0ca7a train (cite 73→2, comment_excess 110→10), dd1c8985 config (39→0,
+  87→35; tests/config 797 passed), 7e2545ad eval (41→1, 62→3; tests/eval 352 passed), e00bc282 root (17→0, 118→8;
+  root tests 160 + 883 run-importing passed). The one MANIFEST-literal hunk (fused_graph_caps_calibrated's row
+  comment) was reverted to base. Two bound grounds the inherited trim had dropped were restored:
+  `eval_interval ge=1` (`<= 0` kills promotion) and `MAX_ARMED_SIMS` 4× (uncounted TT-hit expansions;
+  `finish_expansion` panics on overflow). schema/train.py fell to 289 lines and lost its R8 header. Kept:
+  CARD-EVAL-GATE-FIELDS-IN-STREAM in rounds.py; provenance (the allocator measurement, the seed-offset overlap,
+  the batching-literal cost); every cite inside a string. Dropped: CARD-STOP-DRAIN-VS-GRACE in pipeline.py's
+  docstring (an open card with its own CARDS row, so not in-source-only). run10 MATCH after each; make lint
+  rc 0 (pyright 248 files 0 errors).
+- L8 LANDED (**sonnet**): dd08abb8 selfplay, 741bc95b monitor (22→0), 38dc900e diagnostics (9→0), 35e60ed3 model
+  (10→0), 006f3ed5 encoding (3→0), 5897e055 util (4→0), b36c4c2e bots (5→0), 275e604e tools/ root (cite 39→4,
+  textfile 92→68; worker_sweep_plan.toml's data tomllib-equal to base), c43b6717 dashboard (16→0), a9093063 ladder
+  (9→0), 2adc79ae probe1, ad2f69b8 viewer, c4d2fdcd Makefile (8→0). No change to arena or data (cite 0; every
+  remaining run states an invariant). comment_excess unchanged in the src packages: their runs are invariants.
+  Kept: tools/bench_floors.toml's 4 cites (the LAW-09 floor register, same class as the floor files);
+  CARD-SEALBOT-TT-SEAT and CARD-SELFPLAY-SEARCH-STATS. CARD-LADDER-RUNG was dropped: it has its own CARDS row.
+  make lint GREEN; it ran unsandboxed after the sandbox refused its uv-cache probe.
+- Floors after L7+L8: cite 993→298, comment_excess 2675→2180, textfile 252→228; collected 4928; gates
+  10/12/13/15/17 rc 0.
 
 ## W6 — docs + configs (EXITED 2026-09-25)
 
