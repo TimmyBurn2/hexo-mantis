@@ -17,12 +17,12 @@ Geometry, plane-layout and action-space values are NOT here: the registry at
 # import THIS name so no second literal can re-open the dead zone silently.
 DRAW_RATE_WINDOW: int = 50
 
-# Depth of the pool-wide ring of per-game ply-cap flags (R352(c)'s halt evidence); the same
+# Depth of the pool-wide ring of per-game ply-cap flags (the halt evidence); the same
 # coupling as `DRAW_RATE_WINDOW`: `train.ply_cap_abort.window_games` is bounded by it in core.py.
 PLY_CAP_RING_GAMES: int = 4096
 
 # A sparse Gumbel row at alpha = 1.0 (within one f32 ULP): ONE authority for the self-play counter
-# and the trainer's exclusion (R350(e)) — `selfplay` and `train` may not import each other.
+# and the trainer's exclusion — `selfplay` and `train` may not import each other.
 ALPHA_FULL_THRESHOLD: float = 1.0 - 1e-6
 
 

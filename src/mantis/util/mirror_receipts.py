@@ -1,4 +1,4 @@
-"""Mirror receipts (R349(b)): a receipt beside an artifact carries the sha256 of the MIRRORED
+"""Mirror receipts: a receipt beside an artifact carries the sha256 of the MIRRORED
 bytes; verifying it recomputes the artifact's sha256 HERE, so a receipt covers exactly one byte
 string and none can be honest about bytes that never left the box."""
 from __future__ import annotations

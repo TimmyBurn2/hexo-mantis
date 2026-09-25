@@ -1,6 +1,6 @@
 """THE YAML parser for this repo's config-shaped files — one loader, one decode.
 
-AUDIT-1 F-45. Four YAML read paths existed over the same files and they did not agree.
+Four YAML read paths existed over the same files and they did not agree.
 `config.loader.load_config` used a duplicate-key-refusing loader and read with no
 `encoding=`; `encoding.audit_sections` §4 — the section whose stated job is to report on
 "whatever `load_config` accepts" — used a bare `yaml.safe_load`, which is LAST-WINS on a
