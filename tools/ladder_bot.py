@@ -1,4 +1,4 @@
-"""LADDER-1 (CARD-LADDER-RUNG): one process per registered bot on a HeXO server's bot API — hold the stream, answer every move request through ONE backend (`mantis` or `strix`) from the book prefix R363(c) fixed (`book_v1_s20260625_p4` paired, opening index = match index), write a receipt per game; EVAL only, nothing here writes a ring; the token comes from `HEXO_TOKEN` alone; `--replay RECEIPT` is the determinism + budget witness."""
+"""LADDER-1: one process per registered bot on a HeXO server's bot API — hold the stream, answer every move request through ONE backend (`mantis` or `strix`) from the book prefix fixed (`book_v1_s20260625_p4` paired, opening index = match index), write a receipt per game; EVAL only, nothing here writes a ring; the token comes from `HEXO_TOKEN` alone; `--replay RECEIPT` is the determinism + budget witness."""
 from __future__ import annotations
 
 import argparse

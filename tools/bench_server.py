@@ -1,4 +1,4 @@
-"""F-47's server bench (R360(b) step 2): the REAL batcher and `InferenceServer` per batch size, standalone, fed by threads replaying a run's own games."""
+"""The server bench: the REAL batcher and `InferenceServer` per batch size, standalone, fed by threads replaying a run's own games."""
 from __future__ import annotations
 
 import argparse
@@ -24,7 +24,7 @@ from mantis.train.checkpoints import load_checkpoint
 from mantis.util.git import head_sha, is_dirty
 
 Position = tuple[list[tuple[int, int, int]], int, int]
-#: R360(b) step 3's curve: ms/batch for these batch sizes.
+#: The curve: ms/batch for these batch sizes.
 DEFAULT_BATCH_SIZES = (16, 32, 64, 128, 256)
 _COLUMNS = ("batch_size", "pops_per_s", "b_mean", "full_share", "sat_share", "deadline_share",
             "leaves_per_s", "cycle_ms", "queue_wait_ms", "collate_ms", "launch_ms", "gpu_wait_ms",

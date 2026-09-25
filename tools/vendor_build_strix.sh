@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The strix rung's BUILD step (RUNG-2, R352(e)): `make vendor` fetches the pin; this builds
+# The strix rung's BUILD step (RUNG-2): `make vendor` fetches the pin; this builds
 # strix's OWN venv (its torch is separate from ours: CPU wheel, its Rust engine `hexo_rs` via
 # maturin, the `train` extra for torch_geometric) inside the vendored tree. Refuses before
 # building on a missing tree or a drifted sha, because a venv over the wrong source plays a

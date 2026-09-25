@@ -6,7 +6,7 @@ gate-opening mechanics), off ONE `random.Random(seed)` stream in generation orde
 reproduce byte-identical output (tests/arena/test_books.py::test_book_v1_reproducible_from_minter_args).
 `--exclude-book PATH.json` (repeatable) runs the same stream but SKIPS any opening whose move list is in
 an excluded book or earlier in the pool — an EXACT match, since the Python package has no D6 symmetry
-helper (R354(d); tests/tools/test_mint_opening_book.py). The pool is the balance measurement's INPUT, in
+helper (tests/tools/test_mint_opening_book.py). The pool is the balance measurement's INPUT, in
 manifest.toml only because the eval worker resolves books by id; its consumers: the box's anchor-vs-itself cells and tools/select_balanced_book.py.
 """
 from __future__ import annotations

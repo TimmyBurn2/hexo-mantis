@@ -1,4 +1,4 @@
-"""The puller (R349(b)), run on the OPERATOR'S machine: each cycle rsyncs the run directory
+"""The puller, run on the OPERATOR'S machine: each cycle rsyncs the run directory
 down, verifies bundles against their manifests and closed shards against the index's sizes,
 receipts the mirrored bytes and rsyncs the receipts up. `--source` is an rsync spec; no host here."""
 from __future__ import annotations

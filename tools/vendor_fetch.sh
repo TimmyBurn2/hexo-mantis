@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # `make vendor`: reads vendor/pins.toml; clones each pin into vendor/external/<name>
 # (gitignored) at its exact sha and applies the optional tracked patch. Empty pin table
-# is honest empty behavior (exit 0), not a gate. IDEMPOTENT (R326(e)): a warm, correct
+# is honest empty behavior (exit 0), not a gate. IDEMPOTENT: a warm, correct
 # tree is a no-op, not a failure.
 set -euo pipefail
 python3 - <<'PYEOF'

@@ -1,4 +1,4 @@
-"""The game viewer command (R352(g)); the implementation is `tools/viewer`, this is the CLI."""
+"""The game viewer command; the implementation is `tools/viewer`, this is the CLI."""
 from __future__ import annotations
 
 import importlib

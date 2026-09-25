@@ -9,7 +9,7 @@ encoding-geometry literals outside an allowlist, so a new hardcoded board-size o
 surfaces instead of silently drifting from the registry.
 
 It lives in `tools/` because it is a dev-only CI-gate scanner, not part of the shipped package,
-and the CLI loads it by file path — no sys.path mutation (LAW-17).
+and the CLI loads it by file path — no sys.path mutation.
 """
 from __future__ import annotations
 

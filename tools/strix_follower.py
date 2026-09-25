@@ -1,4 +1,4 @@
-"""The strix follower (R356(a)): the equal-work strix cell on every 15 000-step checkpoint and every promotion."""
+"""The strix follower: the equal-work strix cell on every 15 000-step checkpoint and every promotion."""
 # >300 justify (R8): one unit — the triggers (the EVENT STREAM, never polled filenames), the tail, the regime
 # read, the cell (`tools/strength_frontier.py`'s) and the sidecar receipt (the stamp never touched) are one contract.
 from __future__ import annotations
@@ -19,8 +19,8 @@ from mantis.util.hashing import sha256_file
 
 EQUAL_WORK = "equal_work"
 AS_SHIPPED = "as_shipped"
-NET_ONLY = "net_only"  # R358(a): equal work with strix's root VCF solver OFF
-RULER_R6 = "ruler_r6"  # R365 E1: equal work with strix at its TRAINED placement_radius 6 (the driver's default is 8)
+NET_ONLY = "net_only"  # equal work with strix's root VCF solver OFF
+RULER_R6 = "ruler_r6"  # equal work with strix at its TRAINED placement_radius 6 (the driver's default is 8)
 #: unit -> (our sims, strix sims, sidecar suffix). The suffix names OUR sims: the 256 series.
 UNITS: dict[str, tuple[int, int, str]] = {EQUAL_WORK: (256, 256, "strix256"),
                                           AS_SHIPPED: (512, 128, "strix512"),

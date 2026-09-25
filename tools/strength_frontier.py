@@ -1,4 +1,4 @@
-"""STRENGTH-FRONTIER-1 driver (R350(c)): frozen nets x search kind x sims, through the eval child.
+"""STRENGTH-FRONTIER-1 driver: frozen nets x search kind x sims, through the eval child.
 
 >300 justify (R8): one instrument whose halves — cell vocabulary, snapshot builders, the RoundSpec
 composition mirroring `mantis.run`'s eval seam, the parallel child runner, the pair-level readout
@@ -6,7 +6,7 @@ composition mirroring `mantis.run`'s eval seam, the parallel child runner, the p
 A cell: `label`, `candidate` (a checkpoint path, `bc_full` = every head of the BC checkpoint, or
 `bc_tp` = the BC net through the config's `identity.warm_start` seam), `search_kind`, `sims`, `games`,
 `opponent` (`strix` at its own `strix_sims` — RUNG-2; or a snapshot source played through the GATE
-block; the sealbot cell went with the sealbot rung, R362(c)), `gumbel_m`, `c_scale`/`q_rescale` (the
+block; the sealbot cell went with the sealbot rung, since deleted), `gumbel_m`, `c_scale`/`q_rescale` (the
 deploy head's σ), `concurrency` (games in flight; 1 = the arena's serial loop), `opening_book` (a
 manifest id) and `seed_base` — all the config's when absent; BOOK_V2's replays vary the last two. No
 random floor, one rung, `round_index` 0; a refused floor probe is a FAILED cell.
@@ -54,7 +54,7 @@ _RUN_ID = "frontier1"
 _BOOTSTRAP_RESAMPLES = 2000
 _CI_LEVEL = 0.95
 #: The rung block's own pair-bootstrap terms, the values every receipt on record was aggregated
-#: under (`eval.ladder.bootstrap_*` until R362(c) deleted the block): the child's `rungs` CI at
+#: under (`eval.ladder.bootstrap_*` until the block was deleted): the child's `rungs` CI at
 #: 1000 resamples, this tool's `pair_readout` at 2000, both seeded here.
 _RUNG_BOOTSTRAP_RESAMPLES = 1000
 _BOOTSTRAP_SEED = 1234
@@ -69,7 +69,7 @@ def _snapshot_from_checkpoint(path: Path, out: Path) -> dict[str, Any]:
     if ck.metadata.arch is None:
         raise FrontierCellError(f"{path}: the stamp resolves no arch, so the net cannot be rebuilt")
     net = build_net(ck.metadata.arch)
-    # The DEPLOY weights (R366(b)): the EMA shadow when the stamp carries one, else the learner's.
+    # The DEPLOY weights: the EMA shadow when the stamp carries one, else the learner's.
     state, weights = deploy_state(ck)
     net.load_state_dict(state)
     sha = write_model_snapshot(net, out)
@@ -152,7 +152,7 @@ def base_round_spec(config: Any, *, work_dir: Path) -> RoundSpec:
 
 def _strix_rung(config: Any, games: int, strix_sims: int, *, solver: bool = True,
                 radius: int | None = None) -> RungJob:
-    """The strix rung (RUNG-2) at `strix_sims` on the gate's book; `solver` False = `<stem>:net_only` (R358(a)), `radius` N = `<stem>:r<N>` (R365 E1)."""
+    """The strix rung (RUNG-2) at `strix_sims` on the gate's book; `solver` False = `<stem>:net_only`, `radius` N = `<stem>:r<N>`."""
     from mantis.bots import strix as _strix
 
     pin = _strix._pin()
@@ -175,7 +175,7 @@ def _rung_on_cell_book(job: RungJob, cell: Mapping[str, Any]) -> RungJob:
 
 
 def cell_opponent(cell: Mapping[str, Any]) -> str:
-    """The cell's `opponent`, REQUIRED: the old default (`sealbot_d5`) went with the rung (R362(c))."""
+    """The cell's `opponent`, REQUIRED: the old default (`sealbot_d5`) went with the rung."""
     if "opponent" not in cell:
         raise FrontierCellError(f"{cell.get('label')}: a cell names its opponent ({STRIX!r} or a "
                                 "snapshot source); the sealbot rung is deleted and there is no default")
@@ -231,12 +231,12 @@ def _candidate_outcome(record: Mapping[str, Any]) -> float:
 
 
 def _dedupe_key(record: Mapping[str, Any]) -> str:
-    """LAW-04's key as `mantis.eval.aggregate` spells it: the trajectory, qualified by the seat."""
+    """The dedupe key as `mantis.eval.aggregate` spells it: the trajectory, qualified by the seat."""
     return f"{int(record['colors']['candidate'])}|{record.get('trajectory_hash') or json.dumps(record['moves'])}"
 
 
 def pair_readout(records: Sequence[Mapping[str, Any]], *, seed: int) -> dict[str, Any]:
-    """WR with a PAIR-level bootstrap CI over DISTINCT games (LAW-04); records `2k`/`2k+1` are one opening."""
+    """WR with a PAIR-level bootstrap CI over DISTINCT games; records `2k`/`2k+1` are one opening."""
     ordered = sorted(records, key=lambda r: int(r["game_index"]))
     seen: set[str] = set()
     pairs: list[list[float]] = []

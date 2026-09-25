@@ -776,7 +776,7 @@ def _in_repo_move_keys(corpus_dir: Path) -> tuple[list[str], list[str]]:
 
 
 def dedupe_leg(records: list[dict[str, Any]], corpus_dir: Path | None) -> dict[str, Any]:
-    """R247's dedupe leg. Loud about the absence of an in-repo ``game_hash`` producer."""
+    """The dedupe leg. Loud about the absence of an in-repo ``game_hash`` producer."""
     hashes = [r["game_hash"] for r in records]
     derived = [derived_move_key(r["moves"]) for r in records]
     leg: dict[str, Any] = {
@@ -813,7 +813,7 @@ def dedupe_leg(records: list[dict[str, Any]], corpus_dir: Path | None) -> dict[s
 
 
 def selection_biases(records: list[dict[str, Any]], conv: dict[str, Any]) -> list[dict[str, Any]]:
-    """Measured-plus-stated. The measurement is taken here; the statement is R247's."""
+    """Measured-plus-stated. The measurement is taken here; the statement is the ruling's."""
     ply_counts = [len(r["moves"]) for r in records]
     below = sum(1 for n in ply_counts if n < DECLARED_MIN_PLIES)
     decisive = sum(1 for r in records if r["winner"] in WINNER_DOMAIN)

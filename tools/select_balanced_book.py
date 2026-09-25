@@ -1,4 +1,4 @@
-"""BOOK_V2 selector (R354(d)): keep the pool openings whose paired anchor-vs-itself result SPLITS by seat; `--procedure` prints the box run-book (`BOX_PROCEDURE`, a constant because gate 14's docstring ratchet sits at its floor). >300 justify (R8): the pair law, the verdict, the cut, the report and the run-book that orders them are one measurement's definition and must read as one unit."""
+"""BOOK_V2 selector: keep the pool openings whose paired anchor-vs-itself result SPLITS by seat; `--procedure` prints the box run-book (`BOX_PROCEDURE`, a constant because gate 14's docstring ratchet sits at its floor). >300 justify (R8): the pair law, the verdict, the cut, the report and the run-book that orders them are one measurement's definition and must read as one unit."""
 from __future__ import annotations
 
 import argparse

@@ -34,8 +34,8 @@ class Driver:
         device = torch.device(str(req.get("device", "cpu")))
         ckpt = torch.load(req["checkpoint"], map_location="cpu", weights_only=True)
         mc = model_config_from_checkpoint(ckpt, None)
-        # STRIX's net class by name string: it shares its name with a mantis class buried by
-        # R346, and the grave guard must not read this FOREIGN use as the grave disturbed.
+        # STRIX's net class by name string: it shares its name with a mantis class that was
+        # deleted, and the grave guard must not read this FOREIGN use as the grave disturbed.
         model = getattr(strix_model, "HeXO" + "Net")(mc).to(device)
         state = {k.removeprefix("_orig_mod."): v for k, v in ckpt["model_state_dict"].items()}
         missing, unexpected = model.load_state_dict(state, strict=False)
@@ -58,7 +58,7 @@ class Driver:
                 relative_stones=getattr(mc, "relative_stone_encoding", False))
         self.model, self.graph_fn, self.torch, self.hexo_rs = model, graph_fn, torch, hexo_rs
         self.device = device
-        # R358(a): `disable_forcing_solver` False (the default) is the rung on record — strix's root VCF
+        # `disable_forcing_solver` False (the default) is the rung on record — strix's root VCF
         # solver ON, as in its own self-play, SPRT and eval; True is the NET-ONLY cell.
         solver_off = bool(req.get("disable_forcing_solver", False))
         self.m_actions, self.solver_off = int(req["m_actions"]), solver_off

@@ -1,4 +1,4 @@
-"""PROBE-1's command (R365(b)); the implementation is `tools/probe1`, loaded by path with `analyzer` (no `sys.path` write)."""
+"""PROBE-1's command; the implementation is `tools/probe1`, loaded by path with `analyzer` (no `sys.path` write)."""
 from __future__ import annotations
 
 import importlib
