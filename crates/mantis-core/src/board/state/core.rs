@@ -603,6 +603,14 @@ mod from_stones_tests {
         );
     }
 
+    /// A `last_move` naming an empty cell is not a win, never a panic in the hot terminal check.
+    #[test]
+    fn check_win_on_a_last_move_with_no_stone_is_not_a_win() {
+        let five: Vec<((i32, i32), Cell)> = (0..5).map(|q| ((q, 0), Cell::P1)).collect();
+        let b = Board::from_stones(&five, Player::One, 1, 9, Some((5, 0)));
+        assert!(!b.check_win());
+    }
+
     #[test]
     fn from_stones_empty_leaves_default_bbox() {
         let b = Board::from_stones(&[], Player::One, 1, 0, None);

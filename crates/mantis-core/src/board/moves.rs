@@ -111,12 +111,11 @@ impl Board {
     pub fn check_win(&self) -> bool {
         match self.last_move {
             None => false,
-            Some((q, r)) => {
-                // `apply_move` atomically inserts the cell and sets `last_move`, so when
-                // `last_move == Some((q, r))` the cell is present and `.unwrap()` is sound.
-                let cell = *self.cells.get(&(q, r)).unwrap();
-                self.count_in_line(q, r, cell) >= WIN_LENGTH
-            }
+            // An empty `last_move` cell holds no line, so it is not a win.
+            Some((q, r)) => self
+                .cells
+                .get(&(q, r))
+                .is_some_and(|&cell| self.count_in_line(q, r, cell) >= WIN_LENGTH),
         }
     }
 
