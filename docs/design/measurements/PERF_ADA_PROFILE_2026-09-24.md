@@ -64,6 +64,8 @@ before the bench):
 | L0 instrument (parent of L1) | 0 (tools and tests only) | — | `c9474c85` | 1 853 [1 768, 1 869]; repeat DIFFERS, max \|Δvalue\| 0.0657, \|Δp\| 0.0153 | — |
 | L1 `index_fill_` mask | +8 … +15 % (item 3: +12 %) | median < 0.97 × parent, or slower beyond the IQR | `a25183cd` | 2 101 [1 994, 2 106]; `launch` 31.4 → 8.9 ms; repeat DIFFERS 0.0671 / 0.0148 | **+13.4 %**, faster beyond the IQR |
 | L2 fp32 sorted aggregation (custom op) | +30 … +65 % over L1 (item 3 idxput + nosync: +87 % over base, but fp32 values and chunking cost more) | median < 0.97 × L1, or slower beyond the IQR | `6efa0c2e` | 1 934 [1 907, 2 003]; `launch` 8.9 → 11.4 ms, `gpu_wait` 25.3 → 26.6 ms; repeat: value EXACT, prob 1.2e-7 (the fp32 `segment_sum` of the served softmax) | **−7.9 %: PAST THE ABORT LINE (2 038) — HALT** |
+| B3 fixed-order readout sums (`segment_reduce`, fp32) | +2 … +8 % over L2 (the pools and served softmax sum ~2× faster than their atomics) | median < 0.97 × L2 (1 876), or slower beyond the IQR | | | |
+| L2′ fused CSR aggregation (B1) | +62 … +110 % over L1 (think agent INF from the box forward times) | median < 0.97 × L1 (2 038), or slower beyond the IQR; below +40 % (2 941) stop and profile | | | |
 
 The repeat probe reads DIFFERS on both rows by construction: the mask is bit-identical, and the non-determinism is the bf16 `index_add_` aggregation L2 replaces.
 
@@ -88,6 +90,14 @@ messages. Its prototype (desktop): 4-layer aggregation 3.3–3.9 ms vs 44.1 comm
 forward 21.6 ms vs 28.3 fp32 atomics; bitwise equal to the committed op. The operator's conditional on determinism
 (accept non-determinism only if no deterministic fp32 path comes within ~10 % of the fp32-atomic path) is decided
 by B1's box reading. The later levers are carded (CARDS.md, "Opened by the PERF-ADA packet").
+
+**B1's box microbench (IDLE 4080S, one real B-64 batch of 1.09 M edges, compiled trunk, full served forward):**
+L1 bf16 `index_add_` 34.1 ms (not repeatable); committed L2 35.6 ms; fp32 atomics fused 17.6 ms (not repeatable);
+**B1 fused CSR 11.8 ms** (repeatable); B1 + edge table 6.5 ms (repeatable). B1 is 1.5x faster than the
+non-deterministic fp32 path, so the operator's conditional does not fire: determinism stays (R369(b) unamended).
+B1 changes three served facts, stated: the degree divisor is exact fp32 (the bf16 path rounded 779 to 780 on the
+dummy); the per-edge add is rounded to bf16 inside the kernel exactly as autocast's add was; CPU keeps its edge
+order and its serial `index_add_`, so the CPU goldens stay bit-identical.
 
 ## Findings first
 
