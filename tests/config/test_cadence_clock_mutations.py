@@ -71,7 +71,7 @@ def test_the_battery_baseline_is_green_or_every_kill_below_is_meaningless(produc
 @pytest.mark.parametrize(
     "label,section,key,value,expected",
     [
-        # The draw-rate axis's own clock: gate boundaries, this module's measured config.
+        # The draw-rate axis's own clock: gate boundaries, the adjudication's measured config.
         ("gate_interval outruns the run", "monitor", "gate_interval", 1_000_000_000,
          "draw_rate_collapse"),
         # The BOUND rather than a cadence key.

@@ -2,8 +2,8 @@
 
 `DiskGuard` was constructed at exactly one site, `build_subsystems`, which had ZERO callers,
 and its `60.0/10.0/5.0` arrived as `dict.get`-shaped code-side defaults over a key that existed
-in no schema and no config: four dead numbers and the disk-guard watchdog's third leg unarmed.
-The root must construct the guard, and a literal or `dict.get` value is forbidden.
+in no schema and no config: four dead numbers and the disk guard (the lifecycle rule's third leg)
+unarmed. The root must construct the guard, and a literal or `dict.get` value is forbidden.
 
 O-D3 is LIVENESS — set the knob through the ONE loader, observe the consumer. O-D4 is
 STRUCTURE — a live key can grow a pydantic default tomorrow, and a defaulted key is a second
@@ -36,8 +36,8 @@ from mantis.train.lifecycle.disk_guard import DiskGuard
 
 _GB = 1_000_000_000  # decimal GB — the divisor `disk_guard.py` calibrates against
 
-#: The minted family, stated here so a re-mint that quietly moves them is loud — revisable at
-#: mint prereg, a mint decision and not an IMPL edit.
+#: The minted family, stated so a re-mint that moves them is loud. Unmeasured: the literals were
+#: dead before the mint, so the values stay revisable at mint prereg (a mint decision, not IMPL).
 _MINTED = {"interval_sec": 60.0, "warn_gb": 10.0, "fail_gb": 5.0}
 _FIELDS = sorted(_MINTED)
 

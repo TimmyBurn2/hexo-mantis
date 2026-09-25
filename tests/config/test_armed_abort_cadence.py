@@ -333,7 +333,7 @@ def test_the_production_config_can_fire_every_armed_row_with_margin(production) 
 
 
 def test_an_interval_that_outruns_the_run_is_CADENCE_DISARMED(production) -> None:
-    """The module layer's own config. `gate_interval` stays schema-legal
+    """The adjudication's measured config, at the module layer. `gate_interval` stays schema-legal
     (`ge=1`) and the threshold stays armed — every check that existed before
     still reads this config as healthy."""
     vacuous = _revalidated(production, "monitor", "gate_interval", 1_000_000_000)
