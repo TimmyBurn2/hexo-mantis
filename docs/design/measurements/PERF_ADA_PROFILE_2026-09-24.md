@@ -75,6 +75,12 @@ before the bench):
 
 The repeat probe reads DIFFERS on both rows by construction: the mask is bit-identical, and the non-determinism is the bf16 `index_add_` aggregation L2 replaces.
 
+**The real self-play loop (exit reading; `WorkerPool`, run10 cfg + the 45k weights, no trainer, IDLE box, 8 min steady
+window after 2 min):** tip `855d230c` (code-identical to the exit tip's serving path) **1 710 games/h, 35.2 turns/s,
+4 505 leaves/s, GPU 89 %** — against the profile's base loop 696 games/h, 15.9 turns/s, 2 010 leaves/s (**2.46×**). The
+parked L4 cache (`perf-ada-l4`) on the same box: 2 212 games/h (+29 %), 48.7 turns/s, 6 232 served / 4 045 GPU
+leaves/s, hit rate **35.1 %**, GPU 82 % — the gain R369(d)'s batch-invariance precondition holds back.
+
 **L2 on the box (4080S, `6efa0c2e`):** every witness green — (i) exact eager / compiled / trainer gradients; (ii-a)
 0 outputs past one ulp, max |Δ| 2.42 vs the pre-L2 spread 16; (ii-b) 0.045222 vs 0.051383; (iii) peak 8.877 vs
 8.878 GiB; OF2-10 legs 2/2b 8.877 GiB (margin 0.2 %), ratio 1.000. Trainer step A/B (run10 cfg, 45k weights and
