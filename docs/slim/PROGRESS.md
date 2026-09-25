@@ -93,7 +93,10 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   - the twin drops the `train.heldout_gap=` header delta;
   - `differing == FORCED_TWIN_LEAVES` becomes `differing <= FORCED_TWIN_LEAVES and "train.device" in differing`.
 
-  That needs a grant (R43/R310). Operator: grant it, then delete run6.yaml. The implementer's
+  That needs a grant (R43/R310). The diff NARROWS the frozen oracle (REVIEW-W6 #7): the equality becomes a
+  subset check, so a twin that silently failed to replace a forced leaf would pass. A non-narrowing shape keeps
+  `==` by deriving the forced set from the base config (the heldout_gap leaves only when the base carries the
+  block); the grant should name which shape. Operator: grant it, then delete run6.yaml. The implementer's
   oracle-body commit ad29e624 was DROPPED, and so was 3334eda1's test_preflight_mint.py half (also
   R310-frozen). With run6 kept, neither is needed.
 - cards LANDED 33e32a16..5edc954a (9 commits, **sonnet**): RULINGS_ACTIVE.md deleted after its F-816-34/35/36
@@ -118,9 +121,10 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   (RUN5/_RUN5/_PRODUCTION, test_run3_parity_values_pinned -> test_the_gate_parity_values_are_pinned, the PZ-1
   drawrate RUN5_PREREG -> DRAW_RATE_PREREG with values unchanged). PZ-1 extensions: the deploy-matched coincidence
   gained a census row (plant c_puct += 0.5 reds it), f32 launch pin census-parametrized, q_rescale re-expressed as
-  a key flip on one census config (never-set-key plant reds three rows). Pins REMOVED with grounds: the inherited
-  by-name run10 pin (R367(a)) and run6's `screen_confirm_lo == 0.44` (no ruling names it; minted values are
-  provenance). Absent-configs check (run6-8 moved out): 498 passed, 1 failed = the HALT row below only.
+  a key flip on one census config (never-set-key plant reds three rows). Pin REMOVED with grounds: run6's
+  `screen_confirm_lo == 0.44` (no ruling names it; minted values are
+  provenance; run7's re-mint had already moved it to 0.5). The implementer's "inherited by-name run10 pin"
+  removal does not appear in the diff (REVIEW-W6 #9): the one run10 by-name reader was re-pointed. Absent-configs check (run6-8 moved out): 498 passed, 1 failed = the HALT row below only.
   Main-checkout run of every W6-touched test file: 915 passed, 4 skipped. Collected 5086 with run6-8 present.
   - **HALT 2 (same operator grant):** tests/config/test_eval_config_remint.py::test_the_ruled_deploy_sims_are_pinned
     binds `deploy_sims == 160` (R346(b)/R348(e)) to configs/run6.yaml by path; no census member carries 160.
@@ -132,7 +136,9 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   run10, run6 byte-identical to 69e15329. Collected 5086 -> **4928** (floor folded). tools/ci_gates/** untouched.
 - Residue (on contact / W7 or card, not W6's): run-named symbols in non-reader files — test_gate_parity
   `..._matches_run3`, test_drawrate_pooled_statistic RUN5_* (PZ-1), test_checkpoint_conformance `run8_shaped`,
-  test_gate_interval_decoupling `_RUN5_LOG_INTERVAL`, test_steps_budget_carry `run8s`, the `_run5()` helper;
+  test_gate_interval_decoupling `_RUN5_LOG_INTERVAL`, test_steps_budget_carry `run8s`, the `_run5()` helper; and (REVIEW-W6 #10) test_ring_audit's
+  `..._run8_bands` pair, test_resolvers_nested_identity `..._run5_declares`, test_deploy_matched_hparam_coincidence's
+  `..._equals_run5` and `..._run5_declares` (renames only, not assertion edits);
   armed_aborts.py policy_loss_trough owner text "run7's mint" (PZ-6 row, needs a ruling-named re-point).
 - REVIEW-W6 (**opus**, fresh, read-only) LAUNCHED over 4e8c663a..8eec45a9. W7_ADDENDUM committed 8e5eab3e
   (exit step 5 taken early so a stop cannot lose it; its measures are derived at 8eec45a9).
