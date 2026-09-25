@@ -48,6 +48,10 @@ fp32 buffer cast once stays within one bf16 ulp (4.0). The box's `agg_micro.json
 L2 therefore implements R369(b) as ONE custom op, `mantis::gine_aggregate`: an fp32 buffer summed by the
 deterministic sorted `index_put_` in bounded edge chunks, divided in fp32, rounded once; its backward is the bf16
 gather; opaque to Inductor, so the compiled server cannot lower it to fp32 atomics (non-deterministic, item 3).
+The trainer-gradient repeat (witness (i)) then still differed on the desktop: the gather `x[src]` has a graph
+aggregation as its gradient (bf16 atomics over the repeated sources), so L2 also routes it through ONE op,
+`mantis::gine_gather`, whose backward is `gine_aggregate` over `src`; the forward is the same `index_select`. On CPU
+both ops sum by `index_add_` (serial): CPU `index_put_(accumulate=True)` races (repeat |Δvalue| 1.9e-8 measured).
 
 **(iii), re-stated before L2 was measured.** Two runs of the same path at the cap differ by 18 MiB (allocator state),
 so the two paths are alternated twice in one process and max(production) ≤ max(pre-L2) is the rule.

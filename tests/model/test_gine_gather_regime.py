@@ -21,7 +21,10 @@ from torch.overrides import TorchFunctionMode
 from mantis.model.gine import RepresentationNetwork, _GINEConv
 
 # The ops whose RECEIVER dtype is the allocation fact; `to` shows the no-op where it happens.
-_WATCHED = ("index_select", "index_add_", "new_zeros", "to")
+# RE-PINNED: the gather and the aggregation are the `mantis::gine_gather` / `gine_aggregate` ops.
+_GATHER = "gine_gather.default"
+_AGGREGATE = "gine_aggregate.default"
+_WATCHED = (_GATHER, _AGGREGATE, "new_zeros", "to")
 
 _HIDDEN = 8
 _N_NODES = 10
@@ -80,16 +83,16 @@ def _run(enabled: bool) -> tuple[_OpRecorder, Tensor, _GINEConv, Tensor, Tensor,
 
 def test_recorder_observes_exactly_one_gather_and_one_scatter_per_conv() -> None:
     """Without this the dtype assertions below are satisfiable by recording NOTHING: exactly one
-    `index_select` and one `index_add_` run per `_GINEConv.forward` with a non-empty edge set."""
+    `index_select` and one aggregation run per `_GINEConv.forward` with a non-empty edge set."""
     for enabled in (False, True):
         rec, _out, *_ = _run(enabled=enabled)
-        assert len(rec.named("index_select")) == 1, (
+        assert len(rec.named(_GATHER)) == 1, (
             f"autocast={enabled}: expected exactly 1 index_select inside _GINEConv.forward, "
-            f"got {len(rec.named('index_select'))} — the instrument is not seeing the gather"
+            f"got {len(rec.named(_GATHER))} — the instrument is not seeing the gather"
         )
-        assert len(rec.named("index_add_")) == 1, (
-            f"autocast={enabled}: expected exactly 1 index_add_, "
-            f"got {len(rec.named('index_add_'))}"
+        assert len(rec.named(_AGGREGATE)) == 1, (
+            f"autocast={enabled}: expected exactly 1 {_AGGREGATE}, "
+            f"got {len(rec.named(_AGGREGATE))}"
         )
 
 
@@ -99,16 +102,16 @@ def test_gather_receiver_and_agg_are_bf16_under_bf16_autocast() -> None:
     where `x.index_select(0, src)` receives the fp32 pre-norm tensor; also kills a cast placed
     AFTER the gather, which has identical numerics and zero memory benefit."""
     rec, out, *_ = _run(enabled=True)
-    gather = rec.named("index_select")[0]
-    scatter = rec.named("index_add_")[0]
+    gather = rec.named(_GATHER)[0]
+    scatter = rec.named(_AGGREGATE)[0]
     assert gather.receiver.dtype is torch.bfloat16, (
         f"gather receiver dtype is {gather.receiver.dtype} under bf16 autocast; "
         "index_select preserves its receiver's dtype, so the [E, H] materialization is "
         "2x the width the bf16 regime implies (R179 / CARD-RUN5-GPU-OOM)"
     )
     assert scatter.receiver.dtype is gather.receiver.dtype, (
-        f"agg dtype {scatter.receiver.dtype} != gather receiver dtype "
-        f"{gather.receiver.dtype}; the accumulator must be built from the SAME tensor "
+        f"aggregated message dtype {scatter.receiver.dtype} != gather receiver dtype "
+        f"{gather.receiver.dtype}; the messages must be built from the SAME tensor "
         "the gather reads (MA-4)"
     )
     assert out.dtype is torch.bfloat16, f"conv output dtype {out.dtype} under bf16 autocast"
@@ -132,7 +135,7 @@ def test_every_conv_in_the_representation_gathers_in_bf16() -> None:
     rec = _OpRecorder()
     with torch.autocast(device_type="cpu", dtype=torch.bfloat16, enabled=True), rec:
         net(x, edge_index, edge_attr)
-    gathers = rec.named("index_select")
+    gathers = rec.named(_GATHER)
     assert len(gathers) == 4, f"expected 4 gathers (one per layer), got {len(gathers)}"
     dtypes = [g.receiver.dtype for g in gathers]
     assert dtypes == [torch.bfloat16] * 4, f"per-layer gather receiver dtypes: {dtypes}"
@@ -142,13 +145,13 @@ def test_gather_receiver_and_agg_are_fp32_without_autocast() -> None:
     """Reference regime: with autocast OFF nothing may change dtype — the deploy fp32 arm and the
     1e-6 forward-parity goldens depend on it. A hard-coded bf16 cast would fire in BOTH."""
     rec, out, *_ = _run(enabled=False)
-    gather = rec.named("index_select")[0]
-    scatter = rec.named("index_add_")[0]
+    gather = rec.named(_GATHER)[0]
+    scatter = rec.named(_AGGREGATE)[0]
     assert gather.receiver.dtype is torch.float32, (
         f"gather receiver dtype is {gather.receiver.dtype} with autocast OFF — the cast "
         "became real in the fp32 regime, which is a silent precision change on deploy"
     )
-    assert scatter.receiver.dtype is torch.float32, f"agg dtype {scatter.receiver.dtype}"
+    assert scatter.receiver.dtype is torch.float32, f"aggregated message dtype {scatter.receiver.dtype}"
     assert out.dtype is torch.float32, f"conv output dtype {out.dtype} with autocast off"
 
 
@@ -157,7 +160,7 @@ def test_gather_receiver_is_the_input_tensor_without_autocast() -> None:
     matches, so the fp32 arm is bit-unchanged. Kills `x.clone().to(...)`, whose identity is False
     while every numeric oracle stays green, and a hard-coded bf16 cast."""
     rec, _out, _conv, x, _ei, _ea = _run(enabled=False)
-    gather = rec.named("index_select")[0]
+    gather = rec.named(_GATHER)[0]
     assert gather.receiver is x, (
         "the gather's receiver is not the tensor handed to forward — with autocast off "
         "the alignment allocated a copy, so F1 is not a no-op in the fp32 regime and "
@@ -174,7 +177,7 @@ def test_conv_output_equals_head_form_expression_without_autocast() -> None:
     """With autocast off the conv output is `torch.equal` — bit-exact, not close — to a locally
     recomputed HEAD-form expression: a before/after of the ARITHMETIC, not of the goldens."""
     rec, out, conv, x, edge_index, edge_attr = _run(enabled=False)
-    assert rec.named("index_select"), "instrument saw no gather"
+    assert rec.named(_GATHER), "instrument saw no gather"
     with torch.autocast(device_type="cpu", dtype=torch.bfloat16, enabled=False):
         src, dst = edge_index[0], edge_index[1]
         msg = (x.index_select(0, src) + conv.lin(edge_attr)).relu()
@@ -197,5 +200,5 @@ def test_empty_edge_branch_is_untouched(enabled: bool) -> None:
     rec = _OpRecorder()
     with torch.autocast(device_type="cpu", dtype=torch.bfloat16, enabled=enabled), rec:
         out = conv(x, empty_index, empty_attr)
-    assert not rec.named("index_select"), "no gather may run on an empty edge set"
+    assert not rec.named(_GATHER), "no gather may run on an empty edge set"
     assert out.shape == (_N_NODES, _HIDDEN)

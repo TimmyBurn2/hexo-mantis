@@ -19,6 +19,68 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
+#: Edges per fp32 chunk of the sum: bounds the fp32 copy of the messages the aggregation reads.
+_AGGREGATE_CHUNK_EDGES = 1 << 18
+
+
+@torch.library.custom_op("mantis::gine_aggregate", mutates_args=())
+def gine_aggregate(msg: Tensor, dst: Tensor, n: int, divisor: Tensor | None) -> Tensor:
+    """Per-node fp32 message sum, divided in fp32, rounded once; an op so Inductor cannot lower it to atomics, `index_add_` on CPU where `index_put_` races."""
+    agg = torch.zeros((n, msg.shape[1]), dtype=torch.float32, device=msg.device)
+    for start in range(0, msg.shape[0], _AGGREGATE_CHUNK_EDGES):
+        stop = start + _AGGREGATE_CHUNK_EDGES
+        if msg.is_cuda:
+            agg.index_put_((dst[start:stop],), msg[start:stop].float(), accumulate=True)
+        else:
+            agg.index_add_(0, dst[start:stop], msg[start:stop].float())
+    if divisor is not None:
+        agg = agg / divisor.float()
+    return agg.to(msg.dtype)
+
+
+@gine_aggregate.register_fake
+def _gine_aggregate_fake(msg: Tensor, dst: Tensor, n: int, divisor: Tensor | None) -> Tensor:
+    return msg.new_empty((n, msg.shape[1]))
+
+
+def _gine_aggregate_setup(ctx: torch.autograd.function.FunctionCtx, inputs: tuple, output: Tensor) -> None:
+    _msg, dst, _n, divisor = inputs
+    ctx.save_for_backward(dst, divisor)
+
+
+def _gine_aggregate_backward(ctx: torch.autograd.function.FunctionCtx, grad: Tensor) -> tuple:
+    dst, divisor = ctx.saved_tensors  # pyright: ignore[reportAttributeAccessIssue]
+    g = grad if divisor is None else (grad.float() / divisor.float()).to(grad.dtype)
+    return g.index_select(0, dst), None, None, None
+
+
+gine_aggregate.register_autograd(_gine_aggregate_backward, setup_context=_gine_aggregate_setup)
+
+
+@torch.library.custom_op("mantis::gine_gather", mutates_args=())
+def gine_gather(x: Tensor, src: Tensor) -> Tensor:
+    """`x[src]`; its gradient is a graph aggregation over `src`, so it sums through `gine_aggregate`, never atomics."""
+    return x.index_select(0, src)
+
+
+@gine_gather.register_fake
+def _gine_gather_fake(x: Tensor, src: Tensor) -> Tensor:
+    return x.new_empty((src.shape[0], x.shape[1]))
+
+
+def _gine_gather_setup(ctx: torch.autograd.function.FunctionCtx, inputs: tuple, output: Tensor) -> None:
+    x, src = inputs
+    ctx.save_for_backward(src)
+    ctx.n = x.shape[0]  # pyright: ignore[reportAttributeAccessIssue]
+
+
+def _gine_gather_backward(ctx: torch.autograd.function.FunctionCtx, grad: Tensor) -> tuple:
+    (src,) = ctx.saved_tensors  # pyright: ignore[reportAttributeAccessIssue]
+    return gine_aggregate(grad, src, ctx.n, None), None  # pyright: ignore[reportAttributeAccessIssue]
+
+
+gine_gather.register_autograd(_gine_gather_backward, setup_context=_gine_gather_setup)
+
 
 class _GINEConv(nn.Module):
     """Plain-torch GINEConv (sum aggregation, edge-feature injection), state-dict keys mirroring
@@ -57,15 +119,12 @@ class _GINEConv(nn.Module):
             # pre-norm tensor under bf16 autocast materialises an [E, H] copy at 2x the width,
             # on the one tensor that scales with E (a single 8.94 GiB request killed a run).
             e = self.lin(edge_attr)
-            xs = x.to(e.dtype)
-            msg = (xs.index_select(0, src) + e).relu()
-            # `agg` is built from `xs`: `index_add_` requires matching dtypes.
-            agg = xs.new_zeros((n, xs.shape[1]))
-            agg.index_add_(0, dst, msg)
+            msg = (gine_gather(x.to(e.dtype), src) + e).relu()
+            agg = gine_aggregate(msg, dst, n, agg_divisor)
         else:
             agg = x.new_zeros((n, x.shape[1]))
-        if agg_divisor is not None:
-            agg = agg / agg_divisor.to(agg.dtype)
+            if agg_divisor is not None:
+                agg = agg / agg_divisor.to(agg.dtype)
         out = agg + (1.0 + self.eps) * x
         return self.nn(out)
 

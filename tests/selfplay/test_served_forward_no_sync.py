@@ -35,6 +35,8 @@ def _positions(encoding: str) -> list[tuple[list[tuple[int, int, int]], int, int
 def _serve_with_checked_launch(compile_trunk: bool,
                                plant: Callable[[], None] | None = None) -> list[BaseException]:
     """Serve two pops through the real server; the SECOND pop's launch runs under sync-debug "error"."""
+    if compile_trunk:
+        torch._dynamo.reset()  # an earlier test's cache entries would otherwise stand in for this compile
     config = load_config(production_configs(_REPO)[0]).model_dump()
     # One pop per submit, so the checked launch is the second submission whole and never a warm-up's tail.
     config["inference"]["inference_batch_size"] = max(int(config["inference"]["inference_batch_size"]), len(_GAME))
