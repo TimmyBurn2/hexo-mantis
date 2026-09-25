@@ -21,8 +21,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   no AVX-512 BF16) ran LAW-06's bf16 autocast through ATen's generic path at 72× per GEMM. Fixed
   by CARD-TIER-HOST's carve-out — fp32 on `train.device: cpu`, landed at `9491b4d0` with its own
   parity test (`tests/train/test_law06_cpu_carveout.py`). OC-7 PASSES in 178.4 s inside its ceiling
-  on the AVX-512 BF16 box (Ryzen 9 9900X, the measurement's row); on the AVX2 host the carve-out
-  removes the emulated-bf16 hang. `make gates.exit` completes: the 2026-09-21 exit sweep read the
+  on the AVX-512 BF16 box (Ryzen 9 9900X, the measurement's row); on the AVX2 host the carve-out's
+  fp32 path is what the parity test pins (no post-carve-out OC-7 row is measured there). `make gates.exit` completes: the 2026-09-21 exit sweep read the
   integration tier at 49 passed, none of it hanging.
 
 - **CARD-GATE17-LOCAL-COUPLING — CARDED.** `tests/tools/test_gate_vacuity.py::test_an_empty_diff_degrades_WIDE_rather_than_printing_green`
@@ -581,8 +581,8 @@ full 3600 s `round_timeout_sec` and return `wr_sealbot: null`; G=8 at 7.09 s/gam
 fully escalated 264-game round in 1872.8 s, 78.8% of the 2376 s bar, with a real `wr_sealbot`**,
 and the 4 h shakedown held a steady 900.6 s wall with no growth over seven completed rounds, zero
 nulls, two promotions. run6 minted `eval.concurrency = 8`. **The row is discharged by the ARMED
-VALUE, not by the geometry becoming safe:** lowering concurrency below 8 walks straight back into
-the timeout, and a null round is not a slow reading. run10 arms `eval.concurrency: 8`; a re-mint
+VALUE, not by the geometry becoming safe:** lowering concurrency to 4 walks straight back into
+the timeout (G=5–7 unmeasured), and a null round is not a slow reading. run10 arms `eval.concurrency: 8`; a re-mint
 below 8 re-opens this row. R343(a).
 
 ## F-816-* findings
