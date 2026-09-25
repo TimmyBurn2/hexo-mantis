@@ -953,8 +953,9 @@ document and nothing needs to be.
    `resolve_bot` — is untouched, so a new rung is a row plus a factory (`SKIP_REASON_MARKERS`
    left with the sealbot adapter, R368(e)).
 
-7. **`configs/` keeps three files, not two, and the third is stated.** `run6.yaml` and
-   `smoke_preflight_armed.yaml` are what R346(f) names; `dev_example.yaml` is KEPT on LAW-07
+7. **`configs/` keeps the production census plus two stated exempt files.** Production is
+   `census.production_configs` (run10.yaml today; run6.yaml left with R369's packet, W0);
+   `smoke_preflight_armed.yaml` is what R346(f) names; `dev_example.yaml` is KEPT on LAW-07
    grounds and its `EXEMPT_CONFIGS` row says so — ADJ-13 N-3 makes it gate 12's M1 mutation
    row, the only real committed config that demonstrates the audit going RED on the real
    `configs/` tree, and with run5, the shakedown and the plain smoke gone it is the only

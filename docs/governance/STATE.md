@@ -39,12 +39,11 @@ the merged tip (full gate set green, slow tier included, or run10 launches from 
 
 ## Configs
 
-The committed configs are `configs/run10.yaml`, `configs/run6.yaml`, `configs/dev_example.yaml` and
+The committed configs are `configs/run10.yaml`, `configs/dev_example.yaml` and
 `configs/smoke_preflight_armed.yaml`. Production is a CENSUS, never a
 list: `mantis.config.census.production_configs` (every `configs/` file minus its `EXEMPT_CONFIGS`
-rows, which carry their grounds). run7's and run8's configs were deleted at `8b00b4dd` (R368(e)).
-`configs/run6.yaml` STAYS on a HALT: an R310-frozen oracle binds it and its re-point needs an
-operator grant (`docs/slim/PROGRESS.md`, W6).
+rows, which carry their grounds). run7's and run8's configs were deleted at `8b00b4dd` (R368(e)),
+run6's by R369's packet (W0).
 
 ## Where things live
 

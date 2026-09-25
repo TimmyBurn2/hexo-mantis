@@ -1,0 +1,4 @@
+# The ONE sanctioned ratchet-down record. `<from> -> <to>  <grounds>`, exactly one line, and
+# it is DELETED in the commit after it lands — the next run's ref floor is <to>, so a record
+# left behind stops matching and gate 3c reds on it by name.
+4948 -> 4848  PERF-ADA W0: configs/run6.yaml deleted; its 100 census-parametrized rows went with the config, and every row still runs over each remaining production config. No behaviour lost a witness.
