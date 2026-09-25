@@ -111,6 +111,30 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   oracle diff is filed at `docs/slim/handoff/halt_twin_heldout.diff` for the operator (NOT applied).
   `.wt/w6-configs` found with a pytest absent-configs check still running (run6-8 deleted uncommitted);
   waiting for it to go quiet before integrating 60cabe25..2aa476f4.
+- configs A LANDED 16e1a912..1a651436 (8 commits, **opus**; implementer SHAs 60cabe25..2aa476f4): src/tools prose
+  generic (armed_aborts owner text, pipeline comment, select_balanced_book, strength_frontier, probe1 `--run-id`
+  required); tests/config, eval, train, selfplay, run, arena, encoding readers onto the census (sweeps on
+  `discovered_config_paths`, production-only laws on `production_configs`); run-named symbols renamed
+  (RUN5/_RUN5/_PRODUCTION, test_run3_parity_values_pinned -> test_the_gate_parity_values_are_pinned, the PZ-1
+  drawrate RUN5_PREREG -> DRAW_RATE_PREREG with values unchanged). PZ-1 extensions: the deploy-matched coincidence
+  gained a census row (plant c_puct += 0.5 reds it), f32 launch pin census-parametrized, q_rescale re-expressed as
+  a key flip on one census config (never-set-key plant reds three rows). Pins REMOVED with grounds: the inherited
+  by-name run10 pin (R367(a)) and run6's `screen_confirm_lo == 0.44` (no ruling names it; minted values are
+  provenance). Absent-configs check (run6-8 moved out): 498 passed, 1 failed = the HALT row below only.
+  Main-checkout run of every W6-touched test file: 915 passed, 4 skipped. Collected 5086 with run6-8 present.
+  - **HALT 2 (same operator grant):** tests/config/test_eval_config_remint.py::test_the_ruled_deploy_sims_are_pinned
+    binds `deploy_sims == 160` (R346(b)/R348(e)) to configs/run6.yaml by path; no census member carries 160.
+- STATE rewrite LANDED 14f86534, 57279306 (**opus**, implementer 37b25df3/14173647): 726 -> 90 lines, the
+  "dropped class -> where it lives" table; landed BEFORE the config delete so gate 10 needed no
+  DISSOLVED_PATHS row (the old STATE was the only scanned citer of run7/run8.yaml).
+- 8b00b4dd: configs/run7.yaml + run8.yaml deleted (run6 stays on the HALT). Gates 7, 10, 12, 13 rc 0; tests/config
+  + census 797 passed; W6-touched files 774 passed, 3 skipped; run10 MATCH; dev_example, smoke_preflight_armed,
+  run10, run6 byte-identical to 69e15329. Collected 5086 -> **4928** (floor folded). tools/ci_gates/** untouched.
+- Residue (on contact / W7 or card, not W6's): run-named symbols in non-reader files — test_gate_parity
+  `..._matches_run3`, test_drawrate_pooled_statistic RUN5_* (PZ-1), test_checkpoint_conformance `run8_shaped`,
+  test_gate_interval_decoupling `_RUN5_LOG_INTERVAL`, test_steps_budget_carry `run8s`, the `_run5()` helper;
+  armed_aborts.py policy_loss_trough owner text "run7's mint" (PZ-6 row, needs a ruling-named re-point).
+- NEXT: REVIEW-W6 (**opus**, fresh, read-only) over 4e8c663a..tip.
 
 ## W5 — tests + fixtures (EXITED 2026-09-25)
 
