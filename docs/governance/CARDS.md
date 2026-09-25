@@ -20,8 +20,9 @@ Both were found by running the gate set rather than by reading it, and both are 
   (`docs/design/measurements/MEASUREMENT_OC7_2026-09-11.md`): the dev box (Ryzen 7 3700X, AVX2,
   no AVX-512 BF16) ran LAW-06's bf16 autocast through ATen's generic path at 72× per GEMM. Fixed
   by CARD-TIER-HOST's carve-out — fp32 on `train.device: cpu`, landed at `9491b4d0` with its own
-  parity test (`tests/train/test_law06_cpu_carveout.py`); OC-7 now PASSES in 178.4 s inside its
-  ceiling on that host. `make gates.exit` completes: the 2026-09-21 exit sweep read the
+  parity test (`tests/train/test_law06_cpu_carveout.py`). OC-7 PASSES in 178.4 s inside its ceiling
+  on the AVX-512 BF16 box (Ryzen 9 9900X, the measurement's row); on the AVX2 host the carve-out
+  removes the emulated-bf16 hang. `make gates.exit` completes: the 2026-09-21 exit sweep read the
   integration tier at 49 passed, none of it hanging.
 
 - **CARD-GATE17-LOCAL-COUPLING — CARDED.** `tests/tools/test_gate_vacuity.py::test_an_empty_diff_degrades_WIDE_rather_than_printing_green`
@@ -573,13 +574,16 @@ run6 RAN its block from these holds (`RUN6_BLOCK_2026-09-12.md`) and was STOPPED
 
 Riding the run rather than holding it: **`F-816-37`**, below.
 
-**`R341(b)` / `R319(d)` — DISCHARGED AT G=8 (R343(a)).** R341(b) withdrew R340(a)'s closure
+**`R341(b)` / `R319(d)` — DISCHARGED AT G=8 ONLY (R343(a)); still LIVE below G=8.** R341(b) withdrew R340(a)'s closure
 because the round that must finish is the CONTENDED one. R341(c)'s G table then ran and G=8 was
 armed on the operator's forward: **G=1 at 53.33 s/game and G=4 at 13.99 s/game both consume the
 full 3600 s `round_timeout_sec` and return `wr_sealbot: null`; G=8 at 7.09 s/game completed a
 fully escalated 264-game round in 1872.8 s, 78.8% of the 2376 s bar, with a real `wr_sealbot`**,
 and the 4 h shakedown held a steady 900.6 s wall with no growth over seven completed rounds, zero
-nulls, two promotions. run6 minted `eval.concurrency = 8`. R343(a).
+nulls, two promotions. run6 minted `eval.concurrency = 8`. **The row is discharged by the ARMED
+VALUE, not by the geometry becoming safe:** lowering concurrency below 8 walks straight back into
+the timeout, and a null round is not a slow reading. run10 arms `eval.concurrency: 8`; a re-mint
+below 8 re-opens this row. R343(a).
 
 ## F-816-* findings
 
@@ -614,7 +618,7 @@ nulls, two promotions. run6 minted `eval.concurrency = 8`. R343(a).
 | item | subject | status | last moved |
 |---|---|---|---|
 | DASH-2 | `mantis dash serve`, a read-only stdlib HTTP server over the run record carrying the GAME VIEWER, loopback by default | ORDERED, NOT BUILT. Owes an R9 amendment to repo_design.md in the SAME commit as the code. One finding already booked: a concurrent block writes every progress row at BLOCK END, so from outside it is indistinguishable from a wedge. The OBSERVATORY design (`docs/design/observatory_design.md`, 2026-09-14) is this card's design; its phase-1 readers landed at `3a563574..4678537d` and were RETIRED from the tree on 2026-09-17 under R355(f) (one dashboard implementation stays: `tools/dashboard` + `tools/viewer`, which serve the box page) — revive them from history when this is built: they read run6's record in 3.0 s at 84 MB peak against the dashboard's 5.0 s at 729 MB, parity-tested against it | R344(d) |
-| RUNG-2 | new external rungs — strix first, shrimp second | strix LANDED (the frontier's cell, the `tools/strix_follower.py` equal-work 256/256 cell on every checkpoint and promotion, ACCEPTED at 15k + promotions, R359(e)). shrimp HELD for an architect read on the R257 radius fence | R356(a), R359(e) |
+| RUNG-2 | new external rungs — strix first, shrimp second | strix LANDED (the frontier's cell, the `tools/strix_follower.py` equal-work 256/256 cell on every 15 000-step checkpoint (the per-promotion trigger withdrawn, R361(a))). shrimp HELD for an architect read on the R257 radius fence | R356(a), R359(e), R361(a) |
 | INCR-GRAPH / S-INCR-GRAPH | incremental axis-graph construction from the parent position | PARKED, after being elevated to the top of the floor lane at R325. A CANDIDATE, not a plan: gated on a Rust-criterion box measurement, falsifier pre-registered as F-19's own inequality (`delta_cost x depth < build_cost`). Outside F-17/F-19's measured scope — see `docs/governance/falsified.md` | R335(e) |
 | HOT-14 | cross-core ownership explains x1.66 of x6.84 | RE-OPENED when S-PREFUSE was refuted | R336(a) |
 | S-BATTERY-G | eval battery concurrency capability | landed UNARMED; the CUDA arm is OWED at the mint's battery | R336(a) |
