@@ -42,7 +42,7 @@ class Net:
 
 
 def load_net(path: Path) -> Net:
-    """The LAW-12 loader, the stamp's arch rebuilt, eval mode; raises `RuntimeError` when the stamp resolves no arch."""
+    """The checkpoint-stamp loader, the stamp's arch rebuilt, eval mode; raises `RuntimeError` when the stamp resolves no arch."""
     from mantis.encoding import lookup
 
     ck = load_checkpoint(path)
