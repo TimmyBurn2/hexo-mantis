@@ -280,6 +280,22 @@ impl MCTSTree {
         policy: &[f32],
         value: f32,
     ) {
+        self.expand_leaf_with(leaf_idx, board, value, |legal_moves, cap| {
+            // `trunk_sz` is Board's cached `cluster_window_size`.
+            let (cq, cr) = board.window_center();
+            let trunk_sz = board.cluster_window_size() as i32;
+            let half = (trunk_sz - 1) / 2;
+            pick_topk_children(legal_moves, cq, cr, policy, trunk_sz, half, cap)
+        });
+    }
+
+    /// The one expansion body: the non-expandable arms back up directly, else `pick` takes the
+    /// Top-K under this leaf's cap. Generic over `pick`, so each caller stays monomorphic.
+    #[inline]
+    fn expand_leaf_with<P>(&mut self, leaf_idx: u32, board: &Board, value: f32, pick: P)
+    where
+        P: FnOnce(&FxHashSet<(i32, i32)>, usize) -> TopKPick,
+    {
         if self.pool[leaf_idx as usize].is_terminal {
             let tv = self.pool[leaf_idx as usize].terminal_value;
             self.backup(leaf_idx, tv);
@@ -314,20 +330,15 @@ impl MCTSTree {
             return;
         }
 
-        // Top-K cap on leaf children; `trunk_sz` is Board's cached `cluster_window_size`.
-        let (cq, cr) = board.window_center();
-        let trunk_sz = board.cluster_window_size() as i32;
-        let half = (trunk_sz - 1) / 2;
         // The ROOT's cap is the dialect's; `leaf_idx == 0` IS the root, since slot 0 is never
         // reallocated.
         let cap = self.expansion_cap(leaf_idx);
-        let pick = pick_topk_children(legal_moves, cq, cr, policy, trunk_sz, half, cap);
+        let pick = pick(legal_moves, cap);
         self.record_omitted_prior(pick.dropped_prior_mass);
         self.finish_expansion(leaf_idx, board, pick.children, value);
     }
 
-    /// Shared tail of `expand_and_backup_single`[`_ls`]: materialise the children, quiesce and
-    /// backup. Representation-agnostic, so both paths share it.
+    /// Tail of `expand_leaf_with`: materialise the children, quiesce and backup.
     fn finish_expansion(
         &mut self,
         leaf_idx: u32,
@@ -387,8 +398,7 @@ impl MCTSTree {
         self.backup(leaf_idx, corrected);
     }
 
-    /// Legal-set counterpart of `expand_and_backup_single`: identical pre-checks, priors from
-    /// the ragged `ls` by coord.
+    /// Legal-set counterpart of `expand_and_backup_single`: priors from the ragged `ls` by coord.
     pub(crate) fn expand_and_backup_single_ls(
         &mut self,
         leaf_idx: u32,
@@ -416,39 +426,10 @@ impl MCTSTree {
         cr: i32,
         trunk_sz: i32,
     ) {
-        if self.pool[leaf_idx as usize].is_terminal {
-            let tv = self.pool[leaf_idx as usize].terminal_value;
-            self.backup(leaf_idx, tv);
-            return;
-        }
-        if self.pool[leaf_idx as usize].is_expanded() {
-            let corrected = self.apply_quiescence(board, value);
-            self.backup(leaf_idx, corrected);
-            return;
-        }
-        if board.check_win() {
-            let tv = if board.moves_remaining == 1 {
-                1.0
-            } else {
-                -1.0
-            };
-            self.pool[leaf_idx as usize].is_terminal = true;
-            self.pool[leaf_idx as usize].terminal_value = tv;
-            self.backup(leaf_idx, tv);
-            return;
-        }
-        let legal_moves = board.legal_moves_set();
-        if legal_moves.is_empty() {
-            self.pool[leaf_idx as usize].is_terminal = true;
-            self.pool[leaf_idx as usize].terminal_value = 0.0;
-            self.backup(leaf_idx, 0.0);
-            return;
-        }
-        let half = (trunk_sz - 1) / 2;
-        let cap = self.expansion_cap(leaf_idx);
-        let pick = pick_topk_children_ls(legal_moves, cq, cr, ls, trunk_sz, half, cap);
-        self.record_omitted_prior(pick.dropped_prior_mass);
-        self.finish_expansion(leaf_idx, board, pick.children, value);
+        self.expand_leaf_with(leaf_idx, board, value, |legal_moves, cap| {
+            let half = (trunk_sz - 1) / 2;
+            pick_topk_children_ls(legal_moves, cq, cr, ls, trunk_sz, half, cap)
+        });
     }
 
     /// Expand all pending leaves and backup values to the root.
