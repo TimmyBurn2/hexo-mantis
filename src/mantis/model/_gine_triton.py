@@ -2,83 +2,88 @@
 from __future__ import annotations
 
 import torch
-import triton
-import triton.language as tl
 from torch import Tensor
+
+try:
+    import triton
+    import triton.language as tl
+except ModuleNotFoundError:  # the CPU wheel ships no Triton; nothing below runs off CUDA
+    triton = None
 
 _BLOCK_E = 32
 _NUM_WARPS = 2
 
 
-@triton.jit
-def _message_sum_fwd(xs_ptr, e_ptr, src_ptr, rowptr_ptr, div_ptr, out_ptr, H,
-                     BLOCK_H: tl.constexpr, BLOCK_E: tl.constexpr, ROUND_BF16: tl.constexpr,
-                     HAS_DIV: tl.constexpr):
-    v = tl.program_id(0)
-    start = tl.load(rowptr_ptr + v)
-    end = tl.load(rowptr_ptr + v + 1)
-    h = tl.arange(0, BLOCK_H)
-    hm = h < H
-    acc = tl.zeros([BLOCK_H], dtype=tl.float32)
-    for j0 in range(start, end, BLOCK_E):
-        j = j0 + tl.arange(0, BLOCK_E)
-        m = j < end
-        s = tl.load(src_ptr + j, mask=m, other=0)
-        m2 = m[:, None] & hm[None, :]
-        xv = tl.load(xs_ptr + s[:, None] * H + h[None, :], mask=m2, other=0.0).to(tl.float32)
-        ev = tl.load(e_ptr + j[:, None] * H + h[None, :], mask=m2, other=0.0).to(tl.float32)
-        pre = xv + ev
-        if ROUND_BF16:
-            pre = pre.to(tl.bfloat16).to(tl.float32)
-        acc += tl.sum(tl.where(m2, tl.maximum(pre, 0.0), 0.0), axis=0)
-    if HAS_DIV:
-        acc = tl.div_rn(acc, tl.zeros_like(acc) + tl.load(div_ptr + v))
-    tl.store(out_ptr + v * H + h, acc.to(out_ptr.dtype.element_ty), mask=hm)
+if triton is not None:
+    @triton.jit
+    def _message_sum_fwd(xs_ptr, e_ptr, src_ptr, rowptr_ptr, div_ptr, out_ptr, H,
+                         BLOCK_H: tl.constexpr, BLOCK_E: tl.constexpr, ROUND_BF16: tl.constexpr,
+                         HAS_DIV: tl.constexpr):
+        v = tl.program_id(0)
+        start = tl.load(rowptr_ptr + v)
+        end = tl.load(rowptr_ptr + v + 1)
+        h = tl.arange(0, BLOCK_H)
+        hm = h < H
+        acc = tl.zeros([BLOCK_H], dtype=tl.float32)
+        for j0 in range(start, end, BLOCK_E):
+            j = j0 + tl.arange(0, BLOCK_E)
+            m = j < end
+            s = tl.load(src_ptr + j, mask=m, other=0)
+            m2 = m[:, None] & hm[None, :]
+            xv = tl.load(xs_ptr + s[:, None] * H + h[None, :], mask=m2, other=0.0).to(tl.float32)
+            ev = tl.load(e_ptr + j[:, None] * H + h[None, :], mask=m2, other=0.0).to(tl.float32)
+            pre = xv + ev
+            if ROUND_BF16:
+                pre = pre.to(tl.bfloat16).to(tl.float32)
+            acc += tl.sum(tl.where(m2, tl.maximum(pre, 0.0), 0.0), axis=0)
+        if HAS_DIV:
+            acc = tl.div_rn(acc, tl.zeros_like(acc) + tl.load(div_ptr + v))
+        tl.store(out_ptr + v * H + h, acc.to(out_ptr.dtype.element_ty), mask=hm)
 
 
-@triton.jit
-def _message_grad(grad_ptr, xs_ptr, e_ptr, src_ptr, rowptr_ptr, div_ptr, gpre_ptr, H,
-                  BLOCK_H: tl.constexpr, BLOCK_E: tl.constexpr, ROUND_BF16: tl.constexpr,
-                  HAS_DIV: tl.constexpr):
-    v = tl.program_id(0)
-    start = tl.load(rowptr_ptr + v)
-    end = tl.load(rowptr_ptr + v + 1)
-    h = tl.arange(0, BLOCK_H)
-    hm = h < H
-    g = tl.load(grad_ptr + v * H + h, mask=hm, other=0.0).to(tl.float32)
-    if HAS_DIV:
-        g = tl.div_rn(g, tl.zeros_like(g) + tl.load(div_ptr + v))
-    g = g.to(gpre_ptr.dtype.element_ty).to(tl.float32)
-    for j0 in range(start, end, BLOCK_E):
-        j = j0 + tl.arange(0, BLOCK_E)
-        m = j < end
-        s = tl.load(src_ptr + j, mask=m, other=0)
-        m2 = m[:, None] & hm[None, :]
-        xv = tl.load(xs_ptr + s[:, None] * H + h[None, :], mask=m2, other=0.0).to(tl.float32)
-        ev = tl.load(e_ptr + j[:, None] * H + h[None, :], mask=m2, other=0.0).to(tl.float32)
-        pre = xv + ev
-        if ROUND_BF16:
-            pre = pre.to(tl.bfloat16).to(tl.float32)
-        gp = tl.where(pre > 0.0, g[None, :], 0.0)
-        tl.store(gpre_ptr + j[:, None] * H + h[None, :], gp.to(gpre_ptr.dtype.element_ty), mask=m2)
+    @triton.jit
+    def _message_grad(grad_ptr, xs_ptr, e_ptr, src_ptr, rowptr_ptr, div_ptr, gpre_ptr, H,
+                      BLOCK_H: tl.constexpr, BLOCK_E: tl.constexpr, ROUND_BF16: tl.constexpr,
+                      HAS_DIV: tl.constexpr):
+        v = tl.program_id(0)
+        start = tl.load(rowptr_ptr + v)
+        end = tl.load(rowptr_ptr + v + 1)
+        h = tl.arange(0, BLOCK_H)
+        hm = h < H
+        g = tl.load(grad_ptr + v * H + h, mask=hm, other=0.0).to(tl.float32)
+        if HAS_DIV:
+            g = tl.div_rn(g, tl.zeros_like(g) + tl.load(div_ptr + v))
+        g = g.to(gpre_ptr.dtype.element_ty).to(tl.float32)
+        for j0 in range(start, end, BLOCK_E):
+            j = j0 + tl.arange(0, BLOCK_E)
+            m = j < end
+            s = tl.load(src_ptr + j, mask=m, other=0)
+            m2 = m[:, None] & hm[None, :]
+            xv = tl.load(xs_ptr + s[:, None] * H + h[None, :], mask=m2, other=0.0).to(tl.float32)
+            ev = tl.load(e_ptr + j[:, None] * H + h[None, :], mask=m2, other=0.0).to(tl.float32)
+            pre = xv + ev
+            if ROUND_BF16:
+                pre = pre.to(tl.bfloat16).to(tl.float32)
+            gp = tl.where(pre > 0.0, g[None, :], 0.0)
+            tl.store(gpre_ptr + j[:, None] * H + h[None, :], gp.to(gpre_ptr.dtype.element_ty), mask=m2)
 
 
-@triton.jit
-def _gathered_sum(val_ptr, perm_ptr, rowptr_ptr, out_ptr, H,
-                  BLOCK_H: tl.constexpr, BLOCK_E: tl.constexpr):
-    u = tl.program_id(0)
-    start = tl.load(rowptr_ptr + u)
-    end = tl.load(rowptr_ptr + u + 1)
-    h = tl.arange(0, BLOCK_H)
-    hm = h < H
-    acc = tl.zeros([BLOCK_H], dtype=tl.float32)
-    for j0 in range(start, end, BLOCK_E):
-        j = j0 + tl.arange(0, BLOCK_E)
-        m = j < end
-        p = tl.load(perm_ptr + j, mask=m, other=0)
-        m2 = m[:, None] & hm[None, :]
-        acc += tl.sum(tl.load(val_ptr + p[:, None] * H + h[None, :], mask=m2, other=0.0).to(tl.float32), axis=0)
-    tl.store(out_ptr + u * H + h, acc.to(out_ptr.dtype.element_ty), mask=hm)
+    @triton.jit
+    def _gathered_sum(val_ptr, perm_ptr, rowptr_ptr, out_ptr, H,
+                      BLOCK_H: tl.constexpr, BLOCK_E: tl.constexpr):
+        u = tl.program_id(0)
+        start = tl.load(rowptr_ptr + u)
+        end = tl.load(rowptr_ptr + u + 1)
+        h = tl.arange(0, BLOCK_H)
+        hm = h < H
+        acc = tl.zeros([BLOCK_H], dtype=tl.float32)
+        for j0 in range(start, end, BLOCK_E):
+            j = j0 + tl.arange(0, BLOCK_E)
+            m = j < end
+            p = tl.load(perm_ptr + j, mask=m, other=0)
+            m2 = m[:, None] & hm[None, :]
+            acc += tl.sum(tl.load(val_ptr + p[:, None] * H + h[None, :], mask=m2, other=0.0).to(tl.float32), axis=0)
+        tl.store(out_ptr + u * H + h, acc.to(out_ptr.dtype.element_ty), mask=hm)
 
 
 def _div_arg(divisor: Tensor | None, like: Tensor) -> Tensor:
