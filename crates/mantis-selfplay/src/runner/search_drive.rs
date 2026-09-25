@@ -27,8 +27,7 @@ use crate::replay::hexg::GraphRecord;
 use super::record::record_position_graph_dispatch;
 use super::PositionStats;
 
-/// Graph queue handle + per-game symmetry context + the resolved spec (graph-build
-/// geometry). `Copy` — passed by value.
+/// A worker's inference seam, built once per worker thread; `Copy`, passed by value.
 #[derive(Clone, Copy)]
 pub(crate) struct InferContext<'a> {
     pub(crate) graph_queue: &'a GraphQueue,

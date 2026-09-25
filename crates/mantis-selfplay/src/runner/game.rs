@@ -16,7 +16,7 @@
 //! `legal_move_radius_jitter` is NEVER authored, being dead for every registry spec.
 
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 use rand::prelude::IndexedRandom;
@@ -271,7 +271,6 @@ pub(crate) fn run_worker_thread(
             &mut tree,
             &mut rng,
             &mut version_seen,
-            &running,
             infer,
             board_geometry,
             init_ctx,
@@ -296,7 +295,6 @@ fn run_one_game(
     tree: &mut MCTSTree,
     rng: &mut ThreadRng,
     version_seen: &mut Vec<u64>,
-    running: &AtomicBool,
     infer: InferContext,
     board_geometry: BoardGeometry,
     init_ctx: PerGameInitCtx,
@@ -365,7 +363,10 @@ fn run_one_game(
 
     let move_iters = init_ctx.max_moves;
     for _ in 0..move_iters {
-        if !running.load(Ordering::Relaxed) || board.check_win() || board.legal_move_count() == 0 {
+        if !infer.running.load(Ordering::Relaxed)
+            || board.check_win()
+            || board.legal_move_count() == 0
+        {
             break;
         }
 
@@ -391,7 +392,7 @@ fn run_one_game(
             search_stats.as_mut(),
             version_seen,
             rng,
-            running,
+            infer.running,
             play_ctx,
             policy_stride,
             agg_trunk_sz,
@@ -407,7 +408,7 @@ fn run_one_game(
     // Drain shutdown skip: if the move loop broke because `running` was flipped false by
     // `stop()`, the game is IN PROGRESS, not terminal, so returning here short-circuits to the
     // outer `while running...` guard.
-    if !running.load(Ordering::Relaxed) {
+    if !infer.running.load(Ordering::Relaxed) {
         return;
     }
 
