@@ -182,7 +182,7 @@ class GnnNetV2(GnnNet):
         batch_vec = _node_offsets_to_batch_vec(node_offsets, n_total)
         pooled = torch.cat(
             (
-                segment_mean_with_fallback(emb, stone_mask, batch_vec, num_graphs),
+                segment_mean_with_fallback(emb, stone_mask, node_offsets),
                 segment_max_with_fallback(emb, real_mask, batch_vec, num_graphs),
             ),
             dim=-1,

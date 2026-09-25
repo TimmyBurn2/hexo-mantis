@@ -46,7 +46,6 @@ from mantis.train.losses import (
     ragged_policy_ce,
     ragged_policy_ce_and_entropies,
     rebuild_sparse_target,
-    segment_ids,
     segment_softmax,
     segment_sum,
     soft_policy_target,
@@ -529,8 +528,7 @@ class Trainer:
             hard = rebuild_sparse_target(inputs.policy_target.to(torch.float32), prior,
                                          inputs.explicit_mask, inputs.tail_mass, inputs.legal_offsets)
             per_node = hard * (torch.log(hard.clamp_min(1e-12)) - torch.log(soft.clamp_min(1e-12)))
-            b = int(inputs.legal_offsets.shape[0]) - 1
-            per_graph = segment_sum(per_node, segment_ids(inputs.legal_offsets, total=int(hard.shape[0])), b)
+            per_graph = segment_sum(per_node, inputs.legal_offsets)
             mask = inputs.policy_row_weight.reshape(-1).to(per_graph.dtype)
             aux_kl = (per_graph * mask).sum() / policy_denominator
         return aux_loss, aux_kl

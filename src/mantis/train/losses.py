@@ -22,10 +22,9 @@ def sparse_tail(
     legal_offsets: torch.Tensor,
 ) -> torch.Tensor:
     """The SPARSE row's tail: `tail_mass` spread over the non-explicit legal nodes in proportion to the DETACHED prior — the ONE construction the CE, the soft target and the KL row share; an all-explicit graph has an empty tail."""
-    b = int(legal_offsets.shape[0]) - 1
     seg = segment_ids(legal_offsets, total=int(prior_probs.shape[0]))
     tail_prior = prior_probs.detach() * (1.0 - explicit_mask.reshape(-1).to(prior_probs.dtype))
-    scale = tail_mass.reshape(-1).to(tail_prior.dtype) / segment_sum(tail_prior, seg, b).clamp_min(1e-12)
+    scale = tail_mass.reshape(-1).to(tail_prior.dtype) / segment_sum(tail_prior, legal_offsets).clamp_min(1e-12)
     return tail_prior * scale[seg]
 
 
@@ -157,16 +156,15 @@ def ragged_policy_ce_and_entropies(
         return zero, zero.clone(), zero.clone()
     probs = segment_softmax(policy_logits, legal_offsets)
     logp = torch.log(probs.clamp(min=1e-12))
-    seg = segment_ids(legal_offsets, total=int(probs.shape[0]))
     target = policy_target
     if explicit_mask is not None and tail_mass is not None:
         target = rebuild_sparse_target(policy_target, probs, explicit_mask, tail_mass, legal_offsets)
-    per_graph = segment_sum(-(target * logp), seg, b)
+    per_graph = segment_sum(-(target * logp), legal_offsets)
     with torch.no_grad():
         t = target.detach()
-        entropy_graph = segment_sum(-(t * torch.log(t.clamp(min=1e-12))), seg, b)
+        entropy_graph = segment_sum(-(t * torch.log(t.clamp(min=1e-12))), legal_offsets)
         p = probs.detach()
-        model_graph = segment_sum(-(p * torch.log(p.clamp(min=1e-12))), seg, b)
+        model_graph = segment_sum(-(p * torch.log(p.clamp(min=1e-12))), legal_offsets)
 
     def _reduce(values: torch.Tensor) -> torch.Tensor:
         if full_search_mask is not None:
@@ -195,14 +193,13 @@ def soft_policy_target(
     with torch.no_grad():
         target = policy_target.to(torch.float32).reshape(-1)
         explicit = explicit_mask.reshape(-1).to(torch.bool)
-        b = int(legal_offsets.shape[0]) - 1
         seg = segment_ids(legal_offsets, total=int(target.shape[0]))
         alpha = tail_mass.reshape(-1).to(torch.float32)
         sharpened = torch.where(explicit & (target > 0),
                                 torch.exp(torch.log(target.clamp_min(1e-30)) / temperature),
                                 torch.zeros_like(target))
         explicit_mass = (1.0 - alpha).clamp_min(0.0)
-        soft_explicit = sharpened * (explicit_mass / segment_sum(sharpened, seg, b).clamp_min(1e-30))[seg]
+        soft_explicit = sharpened * (explicit_mass / segment_sum(sharpened, legal_offsets).clamp_min(1e-30))[seg]
         prior32 = prior_probs.detach().to(torch.float32).reshape(-1)
         return soft_explicit + sparse_tail(prior32, explicit_mask, tail_mass, legal_offsets)
 

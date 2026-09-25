@@ -717,11 +717,11 @@ def segment_ids(legal_offsets: Any, *, total: int | None = None) -> Any:
     )
 
 
-def segment_sum(values: Any, seg: Any, num_graphs: int) -> Any:
-    """Per-graph sums of flat per-node `values` under the non-decreasing ids `seg`, `[B]`, in a fixed order."""
-    from mantis.model.gnn import segment_lengths, segment_sums
+def segment_sum(values: Any, legal_offsets: Any) -> Any:
+    """Per-graph sums of flat per-legal-node `values` over the `[B+1]` CSR `legal_offsets`, `[B]`, in a fixed order."""
+    from mantis.model.gnn import segment_sums
 
-    return segment_sums(values, segment_lengths(seg, num_graphs))
+    return segment_sums(values, legal_offsets)
 
 
 def segment_softmax(logits: Any, legal_offsets: Any) -> Any:
@@ -739,7 +739,7 @@ def segment_softmax(logits: Any, legal_offsets: Any) -> Any:
     seg_max = torch.full((b,), float("-inf"), dtype=logits.dtype, device=logits.device)
     seg_max.scatter_reduce_(0, seg, logits, reduce="amax", include_self=False)
     ex = torch.exp(logits - seg_max[seg])
-    return ex / segment_sum(ex, seg, b)[seg]
+    return ex / segment_sum(ex, legal_offsets)[seg]
 
 
 def stone_mask_from_batch(batch: GraphBatch) -> Any:

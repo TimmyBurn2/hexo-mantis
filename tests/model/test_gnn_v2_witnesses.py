@@ -68,7 +68,7 @@ def _readout_value(net, emb: torch.Tensor, masks: dict, is_v2: bool) -> torch.Te
 
     with torch.no_grad():
         batch_vec = torch.zeros(emb.shape[0], dtype=torch.long)
-        mean = segment_mean_with_fallback(emb, masks["stone"], batch_vec, 1)
+        mean = segment_mean_with_fallback(emb, masks["stone"], torch.tensor([0, emb.shape[0]]))
         pooled = (
             torch.cat((mean, segment_max_with_fallback(emb, masks["real"], batch_vec, 1)), -1)
             if is_v2

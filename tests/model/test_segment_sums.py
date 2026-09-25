@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from mantis.model.gnn import segment_lengths, segment_sums
+from mantis.model.gnn import segment_sums
 from mantis.selfplay.graph_collate import segment_ids, segment_softmax
 
 _CUDA = pytest.mark.skipif(not torch.cuda.is_available(), reason="LOUD SKIP — the atomic sums jitter only on CUDA")
@@ -23,7 +23,7 @@ def _segments(device: str) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 def test_segment_sums_match_fp64_and_zero_an_empty_segment(device: str) -> None:
     """Every segment within fp32 rounding of the fp64 sum; an empty graph sums to exactly 0."""
     values, seg, offsets = _segments(device)
-    got = segment_sums(values, segment_lengths(seg, 64))
+    got = segment_sums(values, offsets)
     ref = torch.stack([values[offsets[i]:offsets[i + 1]].double().sum(0) for i in range(64)])
     assert got.dtype is values.dtype and got.shape == (64, 512)
     assert torch.equal(got[5], torch.zeros_like(got[5]))
@@ -33,11 +33,10 @@ def test_segment_sums_match_fp64_and_zero_an_empty_segment(device: str) -> None:
 @_CUDA
 def test_segment_sums_repeat_exactly_where_the_atomic_sum_does_not() -> None:
     """CONTROL first: the atomic `index_add_` over the same segments must differ across ten repeats."""
-    values, seg, _offsets = _segments("cuda")
+    values, seg, offsets = _segments("cuda")
     atomic = [torch.zeros(64, 512, device="cuda").index_add_(0, seg, values) for _ in range(10)]
     assert any(not torch.equal(atomic[0], a) for a in atomic[1:]), "the atomic control never jittered: no reading"
-    lengths = segment_lengths(seg, 64)
-    runs = [segment_sums(values, lengths) for _ in range(10)]
+    runs = [segment_sums(values, offsets) for _ in range(10)]
     assert all(torch.equal(runs[0], r) for r in runs[1:])
 
 

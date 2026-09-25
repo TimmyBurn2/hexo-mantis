@@ -44,38 +44,28 @@ def _node_offsets_to_batch_vec(node_offsets: Tensor, n_total: int) -> Tensor:
     )
 
 
-def segment_lengths(seg: Tensor, num_segments: int) -> Tensor:
-    """`[num_segments]` member counts of the non-decreasing ids `seg`; integer sums are exact in any order."""
-    return torch.zeros(num_segments, dtype=torch.long, device=seg.device).index_add_(0, seg, torch.ones_like(seg))
-
-
-def segment_sums(values: Tensor, lengths: Tensor) -> Tensor:
-    """Fixed-order fp32 sums of CONTIGUOUS segments along dim 0; offsets because `lengths=` syncs, fp32 because it sums in the input dtype."""
-    offsets = torch.cat((lengths.new_zeros(1), lengths.cumsum(0)))
+def segment_sums(values: Tensor, offsets: Tensor) -> Tensor:
+    """Fixed-order fp32 sums along dim 0 of the `[B+1]` CSR segments; offsets because `lengths=` syncs, fp32 because it sums in the input dtype."""
     return torch.segment_reduce(values.float(), "sum", offsets=offsets, axis=0).to(values.dtype)
 
 
-def segment_mean_with_fallback(
-    emb: Tensor, mask: Tensor, batch_vec: Tensor, num_graphs: int
-) -> Tensor:
+def segment_mean_with_fallback(emb: Tensor, mask: Tensor, node_offsets: Tensor) -> Tensor:
     """Per-graph mean over `mask`-selected nodes, falling back to ALL nodes where none.
 
     Args:
         emb:        (N, D) node embeddings (block-diagonal batch).
         mask:       (N,) bool — the preferred subset (stone nodes).
-        batch_vec:  (N,) long — graph id per node, in [0, num_graphs), non-decreasing (contiguous graphs).
-        num_graphs: B.
+        node_offsets: (B+1,) long — the CSR pointer of each graph's contiguous node rows.
     Returns:
         (num_graphs, D) pooled vectors.
     """
     dtype = emb.dtype
     mask_f = mask.to(dtype)
 
-    lengths = segment_lengths(batch_vec, num_graphs)
-    masked_sums = segment_sums(emb * mask_f.unsqueeze(-1), lengths)
-    masked_counts = segment_sums(mask_f, lengths)
-    all_sums = segment_sums(emb, lengths)
-    all_counts = lengths.to(dtype)
+    masked_sums = segment_sums(emb * mask_f.unsqueeze(-1), node_offsets)
+    masked_counts = segment_sums(mask_f, node_offsets)
+    all_sums = segment_sums(emb, node_offsets)
+    all_counts = (node_offsets[1:] - node_offsets[:-1]).to(dtype)
 
     use_fallback = masked_counts == 0
     denom = torch.where(use_fallback, all_counts.clamp(min=1.0), masked_counts.clamp(min=1.0))
@@ -147,7 +137,6 @@ class GnnNet(nn.Module):
         device = x.device
         if node_offsets is None:
             node_offsets = torch.tensor([0, n_total], dtype=torch.long, device=device)
-        num_graphs = node_offsets.shape[0] - 1
 
         emb = (self.representation if trunk is None else trunk)(x, edge_index, edge_attr)
         # Sync-free gather: `emb[bool_mask]` runs `aten::nonzero`, which host-syncs on CUDA,
@@ -156,8 +145,7 @@ class GnnNet(nn.Module):
         legal_emb = emb.index_select(0, legal_index)
         policy_logits = self.policy_head.mlp(legal_emb).squeeze(-1)
 
-        batch_vec = _node_offsets_to_batch_vec(node_offsets, n_total)
-        pooled = segment_mean_with_fallback(emb, stone_mask, batch_vec, num_graphs)
+        pooled = segment_mean_with_fallback(emb, stone_mask, node_offsets)
         value, bin_logits = self.value_head(pooled)
         return policy_logits, value, bin_logits
 

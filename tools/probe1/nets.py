@@ -87,15 +87,14 @@ def read_rows(model: torch.nn.Module, inputs: Any) -> dict[str, np.ndarray]:
         inputs.x, inputs.edge_index, inputs.edge_attr, inputs.legal_index, inputs.stone_mask, node_offsets=inputs.node_offsets)
     logits = logits.to(torch.float32)
     lo = inputs.legal_offsets
-    b = int(lo.shape[0]) - 1
     seg = segment_ids(lo, total=int(logits.shape[0]))
     p = segment_softmax(logits, lo)
     t = rebuild_sparse_target(inputs.policy_target, p, inputs.explicit_mask, inputs.tail_mass, lo)
     logp, logt = torch.log(p.clamp_min(1e-12)), torch.log(t.clamp_min(1e-12))
     # The WHOLE-SET soft form PROBE-1 measured (the artefact the explicit-only trainer form replaced) — kept as read.
     soft = torch.exp(logt / SOFT_POLICY_TEMPERATURE) * (t > 0).to(t.dtype)
-    soft = soft / segment_sum(soft, seg, b).clamp_min(1e-12)[seg]
-    unsupported = segment_sum(p * ((t <= 0) & (p > 1e-6)).to(p.dtype), seg, b)
+    soft = soft / segment_sum(soft, lo).clamp_min(1e-12)[seg]
+    unsupported = segment_sum(p * ((t <= 0) & (p > 1e-6)).to(p.dtype), lo)
     ev = decode_binned_value(bins).reshape(-1)
     z = inputs.outcomes.reshape(-1).to(torch.float32)
     logbins = torch.log_softmax(bins.to(torch.float32), dim=-1)
@@ -105,10 +104,10 @@ def read_rows(model: torch.nn.Module, inputs: Any) -> dict[str, np.ndarray]:
         "ev": ev.numpy(), "z": z.numpy(), "valid": inputs.value_valid.reshape(-1).numpy().astype(bool),
         "mr": mr.numpy().astype(np.int64), "full": (inputs.policy_row_weight.reshape(-1) > 0).numpy(),
         "alpha": inputs.tail_mass.reshape(-1).numpy(), "value_ce": value_ce.numpy(),
-        "policy_ce": segment_sum(-(t * logp), seg, b).numpy(),
-        "kl_prior_target": segment_sum(p * (logp - logt), seg, b).numpy(),
-        "kl_target_prior": segment_sum(t * (logt - logp), seg, b).numpy(),
-        "kl_target_soft": segment_sum(t * (logt - torch.log(soft.clamp_min(1e-12))), seg, b).numpy(),
+        "policy_ce": segment_sum(-(t * logp), lo).numpy(),
+        "kl_prior_target": segment_sum(p * (logp - logt), lo).numpy(),
+        "kl_target_prior": segment_sum(t * (logt - logp), lo).numpy(),
+        "kl_target_soft": segment_sum(t * (logt - torch.log(soft.clamp_min(1e-12))), lo).numpy(),
         "unsupported_mass": unsupported.numpy(),
     }
 
