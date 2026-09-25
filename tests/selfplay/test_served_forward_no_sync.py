@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 import torch
 
-from mantis._engine import InferenceBatcher
+from mantis._engine import Board, InferenceBatcher
 from mantis.config.census import production_configs
 from mantis.config.loader import load_config
 from mantis.config.resolve.edge_geometry_check import resolve_edge_geometry_check
@@ -25,8 +25,6 @@ pytestmark = pytest.mark.skipif(not torch.cuda.is_available(),
 
 
 def _positions(encoding: str) -> list[tuple[list[tuple[int, int, int]], int, int]]:
-    from mantis._engine import Board
-
     board, out = Board.with_encoding_name(encoding), []
     for q, r in _GAME:
         out.append((list(board.get_stones()), int(board.current_player), int(board.moves_remaining)))
@@ -38,6 +36,8 @@ def _serve_with_checked_launch(compile_trunk: bool,
                                plant: Callable[[], None] | None = None) -> list[BaseException]:
     """Serve two pops through the real server; the SECOND pop's launch runs under sync-debug "error"."""
     config = load_config(production_configs(_REPO)[0]).model_dump()
+    # One pop per submit, so the checked launch is the second submission whole and never a warm-up's tail.
+    config["inference"]["inference_batch_size"] = max(int(config["inference"]["inference_batch_size"]), len(_GAME))
     spec = lookup(config["identity"]["encoding"])
     net = build_net(arch_from_spec_and_config(spec, config)).cuda()
     batcher = InferenceBatcher(encoding_spec=spec)
@@ -78,7 +78,7 @@ def _serve_with_checked_launch(compile_trunk: bool,
     # Dynamo's frame counter is process-global, so only this server's delta says it compiled.
     frames = server.batch_timing_snapshot()["compile"]["frames_ok"] - frames_before
     assert (frames > 0) == compile_trunk, f"compile_trunk={compile_trunk} but {frames} compiled frame(s)"
-    assert len(calls) >= 2, f"only {len(calls)} pop(s) launched; the checked launch never ran"
+    assert len(calls) == 2, f"{len(calls)} pops for two submissions; the checked launch was not one whole submission"
     return caught
 
 

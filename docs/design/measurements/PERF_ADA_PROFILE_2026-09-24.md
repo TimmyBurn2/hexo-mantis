@@ -25,7 +25,8 @@ the idle warm server after the load, and compares every output EXACTLY (`probe_r
 (faster = the new q1 above the baseline's q3). The no-sync witness is
 `tests/selfplay/test_served_forward_no_sync.py`: sync-debug "error" over the second pop's `_launch_pop`, with a
 planted `.item()` that must red; on the desktop 3070 at L0 it catches exactly `real[legal_index] = True`, and
-`index_fill_` clears it.
+`index_fill_` clears it. Out of its reach: an allocator-growth sync (`cudaMalloc` / `cudaHostAlloc` on a cache miss),
+which sync-debug mode does not flag; the checked pop repeats the first pop's shapes, so its caches hit.
 
 **L2's error criterion: v1 was pre-stated, failed its own control, and was replaced by E before the new path was
 measured.** v1 (pooled max |Δ| vs fp32 over 8 real batches ≤ the current path's pooled repeat spread) fails on the
