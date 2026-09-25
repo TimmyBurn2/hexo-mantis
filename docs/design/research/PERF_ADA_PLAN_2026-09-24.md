@@ -152,7 +152,7 @@ regime label reads the box's mirrored heartbeat and would say CONTENDED).
 
 - Each lever is its own leg on its own branch, test-first, one commit per change, a LAW-09 bench per commit.
 - Each leg ends with a FRESH read-only review agent (R10 review gate), findings fixed before merge, report
-  under `docs/audits/`.
+  a local record outside the tree (R369(f); repaired in place, this line said `docs/audits/`).
 - The exit sweep is `make gates.exit` on the leg's tip; box numbers are re-read on the box, IDLE.
 
 ## 5. Box validation

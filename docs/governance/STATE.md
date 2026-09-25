@@ -7,12 +7,13 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
-**PERF-ADA (R369) IN PROGRESS** on branch `perf-ada` (dev `fc37f3f2` + the plan commit `7dfdd4a4`):
-make the rented 4080S box the run box and harden the run. SLIM-FIX (R368) is merged (`fc37f3f2`).
-LAW-06 already reads R369(b) while the aggregation lands in leg L2, so the branch does not merge to
-`dev` before L2. The packet's legs, benches and pre-stated criteria are the R369 ledger in
-`docs/design/measurements/PERF_ADA_PROFILE_2026-09-24.md`; its reviews and exit record are local
-records outside the tree (R369(f)).
+**PERF-ADA (R369) EXITED 2026-09-25**, fast-forwarded into `dev`: the rented 4080S box is the run box. Serving
+at B 64 reads 3 984 leaves/s IDLE (admission PASS, 1.62x the reference box's 2 466; it read 0.74x before the
+packet), the real self-play loop 1 710 games/h (2.46x), the trainer step at the cap −25 % at 4.69 GiB peak. The
+legs, benches, halts and decisions are the R369 ledger in
+`docs/design/measurements/PERF_ADA_PROFILE_2026-09-24.md`; the reviews and the exit record are local records
+outside the tree (R369(f)). Not landed, and why, is in the ledger and carded: the torch/CUDA bump (L3, not
+faster), the exact eval cache (L4, on branch `perf-ada-l4`: the served path is not batch-invariant, R369(d)).
 
 ## The run
 
@@ -23,13 +24,14 @@ records outside the tree (R369(f)).
 - **run10 is ARMED, not started.** `configs/run10.yaml` is minted (R366, ratified by R367(c)); its
   order, witnesses and pre-registered reading are
   `docs/design/measurements/RUN10_PREREG_2026-09-21.md`, the box sequence its §6. run10 launches
-  from PERF-ADA's exit tip (R369(a), amending R368(i)) once the full gate set incl. the slow tier is
-  green there, its resolved config matches its mint by value except leaves a ruling retires,
-  admission is re-read IDLE (R367(e)) and the parent's strix @ r8 cell is re-read there; a re-read
-  outside the parent's recorded CI sends the bar to the operator. SEAM-2's implementation
+  from PERF-ADA's exit tip, the `dev` commit that merged it (R369(a), amending R368(i)): the full gate set
+  incl. the slow tier is green there, its resolved config matches its mint by value except the retired
+  `train.value_target` (`config_diff --expect` MATCH), admission was re-read IDLE (3 984), and the parent's
+  strix @ r8 re-read was WAIVED by the operator on 2026-09-25 (no reading exists for this tip). A re-read
+  outside the parent's recorded CI would send the bar to the operator. SEAM-2's implementation
   merges only after run10 STARTs (R368(j)). Read a config's values from the file itself and diff
   two with `tools/config_diff.py`; STATE does not restate minted rows.
-- **A box is rented** (2026-09-24: an RTX 4080 SUPER host, the operator's, R11); the previous instance was
+- **A box is rented** (2026-09-24: an RTX 4080 SUPER host, the operator's, R11; PERF-ADA made it the run box); the previous instance was
   destroyed on 2026-09-21 (R365, annotated by R367(d)); the operator's mirror (`tools/mirror_pull.py`) holds run7's and run8's
   artifacts, run10's parent and the ring its held-out slice reads. The run10 box criterion and its
   admission bench are R367(e), run with `tools/bench_server.py` per the prereg's §6; any admission
@@ -85,11 +87,7 @@ The pre-rewrite text is `git show 029adc0a:docs/governance/STATE.md`; history is
 
 ## Provenance
 
-Derived 2026-09-25 on the SLIM-FIX branch at `029adc0a`, from the tree:
-`configs/`, `src/mantis/config/census.py`, `docs/governance/RULINGS.md` (R365–R368),
-`docs/slim/PROGRESS.md`, `docs/slim/handoff/W6_ADDENDUM.md`, `docs/design/measurements/` and
-`git cat-file` / `git merge-base --is-ancestor` on every commit named above.
-Repaired in place 2026-09-25 (R311(c)): the pointer rows, the phase and configs lines, after
-`docs/audits/REVIEW_W6_2026-09-25.md` §2 #2 and #11.
-The exit paragraph above was written at the W8 close from `docs/audits/SLIM_FIX_EXIT_2026-09-25.md`
-and the branch tip it names.
+Derived 2026-09-25 at the PERF-ADA exit from the tree and the R369 ledger in
+`docs/design/measurements/PERF_ADA_PROFILE_2026-09-24.md` (every reading there names its benched sha).
+The configs and "where things live" sections below the run were carried from the SLIM-FIX rewrite and
+re-checked against `configs/` and `census.py` at this tip.
