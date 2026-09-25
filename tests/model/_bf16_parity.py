@@ -1,4 +1,4 @@
-"""Shared instrument for the WP12-R F1 bf16 parity oracles.
+"""Shared instrument for the F1 bf16 parity oracles.
 
 NOT COLLECTED (leading `_`): it carries the one fixture, the one arm runner and the pinned
 null-distribution artifact, so the drift rows and the null-calibration rows read the SAME two

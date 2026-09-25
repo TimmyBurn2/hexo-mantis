@@ -2,7 +2,7 @@
 
 `build_net(arch)` produces the exact state-dict KEY SET per registered encoding
 (frozen old-side goldens, COPIED from capture #3), and the spec/config→arch adapter
-enforces LAW-11 (no dense-by-default): an absent/unknown representation, a graph
+enforces no-dense-by-default: an absent/unknown representation, a graph
 value_head_type≠dist65, or a graph spec missing node/edge geometry all raise
 `RepresentationMismatch`.
 """
@@ -46,7 +46,7 @@ def test_no_killed_branch_keys_on_any_constructed_net() -> None:
             assert not k.startswith(killed), f"{enc}: killed-branch key {k!r}"
 
 
-# RepresentationMismatch / no-dense-default (LAW-11)
+# RepresentationMismatch / no-dense-default
 
 
 def test_absent_representation_raises_no_default() -> None:

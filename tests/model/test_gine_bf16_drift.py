@@ -154,7 +154,7 @@ def test_policy_argmax_agreement(arms) -> None:
 def test_bin_argmax_within_one_bin(arms) -> None:
     """OF1-3f. PASS >= 95%; DISCLOSE [90%, 95%); ABORT < 90%.
 
-    **CUDA NULL UNVERIFIED (R181 disclosure)** — see OF1-3e's docstring; the same applies.
+    **CUDA NULL UNVERIFIED** — see OF1-3e's docstring; the same applies.
     """
     ref, treat, _b = arms
     delta = (treat.bin_logits.argmax(dim=-1) - ref.bin_logits.argmax(dim=-1)).abs()

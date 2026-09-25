@@ -4,7 +4,7 @@ Pins the ported net's forward on fixed seed+input+weights to a committed KB-scal
 golden (`value_probes/forward/small_gnn.pt`). The golden is NEW-generated (a
 self-contained regression reference for the ported code, NOT the old-side parity
 reference — that Tier-1 leg loads `wp/WP9/oldside/` and is recorded in IMPL_NOTES).
-The three `small_cnn_*` legs went with the dense path (R346(f)). Guards future drift.
+The three `small_cnn_*` legs went with the dense path. Guards future drift.
 """
 from __future__ import annotations
 

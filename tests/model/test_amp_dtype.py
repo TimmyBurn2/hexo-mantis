@@ -1,12 +1,12 @@
-"""O6 — bf16-graph LAW-06 regime-parity + single amp authority (R30b).
+"""O6 — bf16-graph regime-parity + single amp authority.
 
-The signature has narrowed twice. WPSC Phase 3 SC-B3 replaced the 1-arg-dict
+The signature has narrowed twice. Phase 3 SC-B3 replaced the 1-arg-dict
 `amp_dtype_for(representation, config_dict)` with an explicit
-`amp_dtype_for(representation, declared_amp_dtype)`; R346(f) then deleted `train.amp_dtype`
+`amp_dtype_for(representation, declared_amp_dtype)`; `train.amp_dtype` was then deleted
 outright, so there is no declared value left and the signature is
 `amp_dtype_for(representation)`.
 
-The unconditional graph->bf16 code pin is the LAW-06 protection (F-11: fp16 GINE
+The unconditional graph->bf16 code pin is the bf16 protection (fp16 GINE
 sum-aggregation overflows 65504 -> NaN). It used to have to survive a declared value that
 disagreed; now there is no second spelling of the question, and what is pinned is that the
 answer comes off the representation alone and that an unknown representation is an ERROR.

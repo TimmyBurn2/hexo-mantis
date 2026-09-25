@@ -1,4 +1,4 @@
-"""`GnnArchV2SoftPolicy` (R366(b)): a sibling kind whose net serves V2's outputs exactly and evaluates its second policy head only on the trainer's entry."""
+"""`GnnArchV2SoftPolicy`: a sibling kind whose net serves V2's outputs exactly and evaluates its second policy head only on the trainer's entry."""
 from __future__ import annotations
 
 import torch

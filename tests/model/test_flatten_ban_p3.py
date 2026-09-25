@@ -1,4 +1,4 @@
-"""WPSC Phase 3 SC-B5 — flatten-ban architecture test (A7; DESIGN_P3.md §6). The graph
+"""Phase 3 SC-B5 — flatten-ban architecture test (A7; DESIGN_P3.md §6). The graph
 path's policy head is a per-node scalar MLP (`out_features == 1`), never a flatten-to-
 fixed-FC head — the pattern that would silently cap the action space at a compile-time
 `n_actions` constant. This file bans the pattern on the GNN path (`GnnNet`/`PolicyHead`/
@@ -11,7 +11,7 @@ file (`test_flatten_ban.py`... `_p3` suffix here, see deviation note) rather tha
 extension.
 
 GREEN-guard (DESIGN_P3.md §6.3): `GnnNet`/`PolicyHead` already satisfy every assertion
-below at HEAD — this is a producer test for an EXISTING correct structure (LAW-07), not a
+below at HEAD — this is a producer test for an EXISTING correct structure, not a
 RED-at-import pin. Stays in the tree unstaged (not moved to the RED oracle-staging dir).
 """
 from __future__ import annotations
@@ -24,7 +24,7 @@ from mantis.model import GnnArch, build_net
 from mantis.model.gine import PolicyHead, RepresentationNetwork
 from mantis.model.gnn import GnnNet
 
-#: AUDIT-1 F-41: `11` and `5` typed here, mirroring two `gnn.py` module constants that had
+#: `11` and `5` typed here, mirroring two `gnn.py` module constants that had
 #: NO consumer at all (deleted with this commit). Read off the registry row instead.
 _SPEC = lookup("gnn_axis_v1")
 _IN_DIM = _SPEC.node_feat_dim
@@ -64,7 +64,7 @@ def test_forward_batch_policy_logits_are_unpadded_ungrouped() -> None:
     x = torch.randn(n_total, _IN_DIM)
     edge_index = torch.zeros((2, 0), dtype=torch.long)
     edge_attr = torch.zeros((0, _EDGE_DIM), dtype=torch.float32)
-    # The wire's `legal_node_gather` (R284 P-MASK): ascending ROWS, not a dense mask.
+    # The wire's `legal_node_gather`: ascending ROWS, not a dense mask.
     # 3 of graph 0's 4 nodes, then 5 of graph 1's 6.
     legal_index = torch.tensor([0, 1, 2, 4, 5, 6, 7, 8], dtype=torch.long)
     stone_mask = torch.zeros(n_total, dtype=torch.bool)

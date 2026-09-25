@@ -26,10 +26,8 @@ import pytest
 import torch
 
 # The DETECTION FLOOR: the value below which a reading carries no information. It is NOT a null
-# bound on any device — both null legs assert EXACT equality — and its derivation is re-executed
-# live in `test_detection_floor_is_derived_and_its_null_role_is_withdrawn`. Margin 3 is not
-# invented here: it comes from the measurement's own tail ratios (worst max/p99 = 1.422, worst
-# max/p50 = 7.99), rounded down to the decade.
+# bound on any device — both null legs assert EXACT equality. Margin 3 comes from the measurement's
+# own tail ratios (worst max/p99 = 1.422, worst max/p50 = 7.99), rounded down to the decade.
 _DETECTION_FLOOR = 1.0e-3
 _DERIVATION_MARGIN = 3.0
 
@@ -43,8 +41,7 @@ _FIXTURES = ("synth8", "prod27_samesizes", "prod27_run5shape")
 _PROD = "prod27_run5shape"
 
 # `|a|` p50 of the fp32 reference policy logits, per fixture. The `synth8` value is DERIVED
-# LOCALLY below from the real fp32 arm and is the BINDING one (smallest floor); the other two are
-# transcribed box quantities, recorded only so the worst-case selection is visible.
+# LOCALLY and is the BINDING one (smallest floor); the other two are transcribed box quantities.
 _BOX_ABS_P50 = {"prod27_samesizes": 0.2050, "prod27_run5shape": 0.2102}
 
 
