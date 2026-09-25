@@ -1,12 +1,12 @@
-"""The eval path's code-side literals EQUAL run5's config values.
+"""The eval path's code-side literals EQUAL the production config's values.
 
 Thirteen hyper-parameters on the LAW-15 deploy-matched eval path are code-side literals measured
-equal to `configs/run6.yaml` by coincidence of defaults, not by threading, and nothing detected
+equal to the production config by coincidence of defaults, not by threading, and nothing detected
 the day they stopped being equal. This file is that detector: it PINS THE COINCIDENCE rather
-than threading the config (a behaviour change on a frozen parity surface), so retuning run5
-without following the eval path names the decoupling instead of letting the promotion bar stop
-measuring the net that ships. Both literal sets are read FROM THEIR SOURCE — the pyo3 signature,
-the inline dict — never transcribed.
+than threading the config (a behaviour change on a frozen parity surface), so retuning a
+production config without following the eval path names the decoupling instead of letting the
+promotion bar stop measuring the net that ships. Both literal sets are read FROM THEIR SOURCE —
+the pyo3 signature, the inline dict — never transcribed.
 """
 from __future__ import annotations
 
@@ -18,14 +18,17 @@ from typing import Any
 import pytest
 import yaml
 
+from mantis.config.census import production_configs
+
 _REPO = Path(__file__).resolve().parents[2]
-_RUN5 = _REPO / "configs" / "run6.yaml"
+#: One census member; the last test holds every other member to the values read here.
+_PRODUCTION_CONFIG = production_configs(_REPO)[0]
 _MCTS_RS = _REPO / "crates" / "mantis-bridge" / "src" / "mcts.rs"
 _INFERENCE_PY = _REPO / "src" / "mantis" / "selfplay" / "inference_local.py"
 
 
 def _run5() -> dict[str, Any]:
-    return yaml.safe_load(_RUN5.read_text(encoding="utf-8"))
+    return yaml.safe_load(_PRODUCTION_CONFIG.read_text(encoding="utf-8"))
 
 
 def _pyo3_mctstree_defaults() -> dict[str, Any]:
@@ -184,3 +187,14 @@ def test_the_train_SECTION_IS_GONE_and_law06_still_pins_the_dtype() -> None:
         "LAW-06's graph pin is what made the OLD literal-vs-declared divergence inert. The "
         "divergence is gone, but the pin is still what the graph path's dtype rests on."
     )
+
+
+@pytest.mark.parametrize("path", production_configs(_REPO), ids=lambda p: p.name)
+def test_every_production_config_carries_the_values_read_above(path: Path) -> None:
+    """The rows above read one census member; each other member must carry the same values."""
+    read, other = _run5(), yaml.safe_load(path.read_text(encoding="utf-8"))
+    keys = ("c_puct", "fpu_reduction", "quiescence_enabled", "quiescence_blend_2")
+    assert {k: other["selfplay"]["mcts"][k] for k in keys} == {
+        k: read["selfplay"]["mcts"][k] for k in keys}, path.name
+    assert set(other["inference"]) == set(read["inference"]), path.name
+    assert "amp_dtype" not in other["train"], path.name

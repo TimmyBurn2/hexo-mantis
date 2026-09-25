@@ -20,6 +20,7 @@ from pydantic import ValidationError
 from mantis.arena.match import DEFAULT_MAX_PLIES, play_paired_match
 from mantis.arena.regime import RegimeKey
 from _fused_caps import CAPS
+from mantis.config.census import production_configs
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.config.schema import RunConfig
 from _pipeline_harness import seeded_net
@@ -33,9 +34,11 @@ from mantis.eval.snapshot import write_model_snapshot
 _ENC = "gnn_axis_v1"
 _BOOK = "book_v1_s20260625_p4"
 _SEED = 20260625
-_CONFIG = Path(__file__).resolve().parents[2] / "configs" / "run6.yaml"
-#: run6 MINTS the row now, so the absent-row parity arm needs a file that still omits it.
-_UNMINTED_CONFIG = _CONFIG.with_name("smoke_preflight_armed.yaml")
+_REPO = Path(__file__).resolve().parents[2]
+#: Any census member: the refusal rows only need a real mint to mutate.
+_CONFIG = production_configs(_REPO)[0]
+#: Production configs MINT the row, so the absent-row parity arm needs a file that still omits it.
+_UNMINTED_CONFIG = _REPO / "configs" / "smoke_preflight_armed.yaml"
 
 
 def _raw(source: Path | None = None) -> dict[str, Any]:

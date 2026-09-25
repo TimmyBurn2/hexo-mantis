@@ -168,17 +168,19 @@ class _StubModel:
         return {}
 
 
-def test_the_production_round_spec_carries_what_the_config_states(tmp_path, monkeypatch) -> None:
+@pytest.mark.parametrize("name", sorted(_ARMED_STRENGTH_FLOOR))
+def test_the_production_round_spec_carries_what_the_config_states(
+    tmp_path, monkeypatch, name: str,
+) -> None:
     """An armed config's round spec must CARRY the floor across the process seam; a spec that
     dropped it would leave the value minted, audited and inert."""
     monkeypatch.setattr(
         "mantis.eval.pipeline.write_model_snapshot", lambda model, path: str(path)
     )
-    spec = _spec_from("run6.yaml", tmp_path)
+    spec = _spec_from(name, tmp_path)
     assert spec.ply_cap_adjudication is None
-    assert "run6.yaml" in _ARMED_STRENGTH_FLOOR, "this row's premise: its subject is a production config"
     assert spec.strength_floor is not None, (
-        "run5's armed floor did not reach the round spec — minted and inert"
+        f"{name}'s armed floor did not reach the round spec — minted and inert"
     )
     assert spec.strength_floor.probe_games >= 1
 
