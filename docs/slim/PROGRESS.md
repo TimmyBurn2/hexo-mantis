@@ -8,7 +8,7 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
 - Host: the operator's desktop (not a Claude environment; `CLAUDE_CODE_ENVIRONMENT_NAME` unset). AMD Ryzen 7
   3700X, 16 threads, 46 GiB, flags `avx2` only (no `avx512_bf16`, no `amx`). torch 2.11.0+cpu, `mantis._engine` OK.
 - origin/dev = 69e1532 at W0 entry (no moved commits; no rebase).
-- Wave: **W7** (the style pass) IN PROGRESS (see `## W7`) — work order `docs/slim/handoff/W7_ADDENDUM.md`. W6 EXITED (see `## W6`). W5 EXITED (see `## W5`). W4 EXITED: W3 EXITED. REVIEW-W3 filed (`docs/audits/REVIEW_W3_2026-09-24.md`, 0 must-fix beyond a
+- Wave: **W8** (the close) NEXT — work order `docs/slim/handoff/W8_ADDENDUM.md` (W8-D, the operator grants, first). W7 EXITED (see `## W7`). W6 EXITED (see `## W6`). W5 EXITED (see `## W5`). W4 EXITED: W3 EXITED. REVIEW-W3 filed (`docs/audits/REVIEW_W3_2026-09-24.md`, 0 must-fix beyond a
   ruff red in the handoff helper, 2 should-fix, 4 notes, every row group HELD, run10 MATCH re-verified); its fixes:
   ec0ac144 (ruff), cb4a5dd1 (`_is_graph` flag), bf22b4c3 (sweep docstring), plus 09fa8e6b — the exit sweep caught
   `tests/eval/test_graph_round_encoding.py`'s recorder pinning the deleted `_is_graph`; re-pointed to the
@@ -58,7 +58,69 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   NEXT: W5 per its addendum (the 2026-09-24 dispatcher-session scout inventory is folded into it);
   then W6, W7, W8 per HANDOFF.md.
 
-## W7 — the style pass (IN PROGRESS)
+## W7 — the style pass (EXITED 2026-09-25)
+
+**Exit facts.**
+- Range d18dc5bc..W7 exit: 63 commits. src/tests/tools/crates/Makefile: 496 files, +2 122/−3 392 (net −1 270),
+  every one comment-only by the verifier. REVIEW-W7 re-ran the verifier on all 39 style commits and closed its
+  blind spots independently.
+- Measures, from the floor at entry to the floor at exit:
+
+  | measure | entry | exit |
+  |---|---:|---:|
+  | ruling_cite_lines | 1163 | 91 |
+  | comment_excess_lines | 3124 | 2144 |
+  | textfile_comment_excess_lines | 466 | 228 |
+  | docstring_excess_lines | 11908 | 11897 |
+
+  private_docstring, rust_doc and banner are unchanged. Collected 4928 = floor, unchanged.
+- Per package: model; cite before→after; comment_excess before→after (textfile where it has one); Δlines.
+  - crates/mantis-selfplay (**opus**): 78→3; 871→701; −181
+  - crates/mantis-search (**opus**): 9→0; 559→446; −116
+  - crates/mantis-encoding (**opus**): 13→0; 105→72; −35
+  - tools/ci_gates (**opus**): 67→9; 92→9, textfile 252→38; −299
+  - crates/mantis-core (**sonnet**): 5→0; 207→198; −9
+  - crates/mantis-bridge (**sonnet**): 5→0; 189→189; ±0
+  - crates/mantis-graph (**sonnet**): 5→0; 112→71; −41
+  - tests/train (**sonnet**): 137→2; 129→90; −40
+  - tests/config (**sonnet**): 90→1; 99→71; −28
+  - tests/tools (**sonnet**): 84→8; 36→33; −3
+  - tests/selfplay (**sonnet**): 91→1; 28→7; −21
+  - tests/eval (**sonnet**): 53→2; 44→4; −42
+  - tests/model (**sonnet**; conformance untouched): 36→22; 43→40; −3
+  - tests/bridge (**sonnet**): 24→0; 31→4; −28
+  - tests/ root (**sonnet**): 26→0; 28→10; −18
+  - tests/diagnostics (**sonnet**): 29→0; 10→4; −6
+  - tests/monitor (**sonnet**): 16→0; 18→5; −13
+  - tests/encoding (**sonnet**): 27→0; 5→3; −2
+  - tests/util (**sonnet**): 4→0; 8→3; −5
+  - tests/arena (**sonnet**): 8→0; 3→0; −3
+  - tests/data (**sonnet**): 2→0; 1→1; ±0
+  - src/mantis/train (**opus**): 73→2; 110→10; −117
+  - src/mantis/config (**opus**): 39→0; 87→35; −64
+  - src/mantis/eval (**opus**): 41→1; 62→3; −60
+  - src/mantis root (**opus**): 17→0; 118→8; −112
+  - src selfplay/monitor/diagnostics/model/encoding/util/bots (**sonnet**): cite 73→0; runs unchanged (each
+    one states an invariant); ±0
+  - arena and data: no change
+  - tools/ root (**sonnet**): 39→4, textfile 92→68; −24
+  - dashboard, ladder, probe1 and viewer (**sonnet**): 28→0; ±0
+  - Makefile (**sonnet**): 8→0; ±0
+
+  The fix loop (**opus** ×2) is included in the rows above.
+- Exit sweep `make gates` at 816c003e in .wt/gates, user unit mantis-gates-w7 (06:23–07:30 UTC): **ALL GREEN,
+  19 green.**
+  - Walls: 2a 1060 s; 3a 342 s (4868 passed, 17 skipped, 0 failed; the KNOWN-RED stayed cured); 3b 2571 s
+    (34 passed, 4 skipped).
+  - 3c collected 4928; pyright 248 files, 0 errors; 8 ARMED+PASS; 12 rc 0.
+  - Gate 17 ran at the tracked floor in the worktree. The main tree's run with the local supplement,
+    `--base d18dc5bc`, is rc 0.
+  - Gate 1 and the slow tier were not run, by design (W8).
+- run10 MATCH at the exit tip.
+- REVIEW-W7: 5 MUST-FIX, 7 SHOULD-FIX, 6 NOTE, all closed in ONE loop; the closure check found 0 new MUST/SHOULD.
+  Carried to W8 (W8_ADDENDUM item 10): validate.rs's stale refusal strings and the verifier upgrade.
+- Worktrees: every w7-* worktree and branch is removed; .wt/gates is detached at 816c003e. NEXT: W8 per
+  `docs/slim/handoff/W8_ADDENDUM.md`.
 
 **Dispatch log** (models per leg named in each row):
 

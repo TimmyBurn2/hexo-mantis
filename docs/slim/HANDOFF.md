@@ -46,19 +46,21 @@ You are continuing a long, gated refactor. READ IN THIS ORDER before touching an
 
 ## What is left (from the 2026-09-24 close-out)
 
-W0–W6 are EXITED (PROGRESS carries each wave's exit facts and per-row ledger). NEXT is W7, per
-`docs/slim/handoff/W7_ADDENDUM.md` (it supersedes the W7 summary below where they differ). The remaining waves:
+W0–W7 are EXITED (PROGRESS carries each wave's exit facts and per-row ledger). NEXT is W8, per
+`docs/slim/handoff/W8_ADDENDUM.md`. That file supersedes the W8 summary below where the two differ. It opens
+with W8-D, the operator's grants of 2026-09-25: run6 stays and is unbound by name, the MANIFEST prose,
+pipeline.py's repr, the R336(e) annotation, the archive tombstone, and the dead Trainer.load_checkpoint.
+The waves:
 - **W5 TESTS + FIXTURES** — EXITED 2026-09-25 at 8297c74d (PROGRESS `## W5`: REVIEW-W5 closed in one
   loop, exit sweep green, the KNOWN-RED cured by cdbc8000, collected 4927, run10 MATCH).
 - **W6 DOCS + CONFIGS** — EXITED 2026-09-25 at 0c8b9176 (PROGRESS `## W6`: REVIEW-W6 closed in one loop,
   exit sweep ALL GREEN, collected 4928, run10 MATCH). configs/run7.yaml and run8.yaml are deleted; **configs/run6.yaml
   STAYS on a HALT** that needs an operator grant (R310-frozen preflight oracle plus the ruling-named deploy_sims row;
   the measured diff is `docs/slim/handoff/halt_twin_heldout.diff` and it NARROWS the oracle, see PROGRESS).
-- **W7 STYLE PASS**: R368(g)'s two classes only (ruling/card/finding cites and narrative runs),
-  ONE package per commit, the floor lowered in the same commit — the two measures are GATED since
-  W4 (`ruling_cite_lines`, `textfile_comment_excess_lines`; integrate.sh folds them automatically).
-  Carve-out markers stay. REVIEW-W7 note 2's one reclaimable gate-docstring line lands here.
-- **W8 CLOSE**: the AFTER figure (00_MAP §1's command, per top dir and per slice); one exit
+- **W7 STYLE PASS** — EXITED 2026-09-25 at the W7 exit commit (PROGRESS `## W7`). All eight legs landed, one
+  package per commit. REVIEW-W7 closed in one loop, the exit sweep was ALL GREEN, collected 4928, run10 MATCH.
+  Measures fell: cite 1163→91, comment_excess 3124→2144, textfile 466→228.
+- **W8 CLOSE** (see W8_ADDENDUM.md): the W8-D grants first, then the AFTER figure (00_MAP §1's command, per top dir and per slice); one exit
   paragraph in STATE.md; `git rm -r docs/slim` then `test ! -e docs/slim`; the FULL gate set incl.
   the slow tier (`make gates.exit`, ≈ 2 h); then STOP at READY-TO-MERGE: do NOT fast-forward or
   push dev — the operator (or the original session) does ENACTS 4 after reading the exit report.
