@@ -117,6 +117,8 @@ impl SelfPlayRunner {
             fatal_defect: self.fatal_defect.clone(),
             target_integrity_defects: self.target_integrity_defects.clone(),
             inference_failures_total: self.inference_failures_total.clone(),
+            served_leaves_total: self.served_leaves_total.clone(),
+            gpu_evals_total: self.gpu_evals_total.clone(),
             graph_game_seq: self.graph_game_seq.clone(),
         };
         let channels_proto = WorkerChannels {

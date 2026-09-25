@@ -58,6 +58,8 @@ RUNNER_STATS_FIELDS = {
     # Worker threads that died by panic — a lifecycle counter, a DIFFERENT family from the
     # target-integrity latches beside it, which is why it is kept out of that tuple.
     "worker_panics",
+    # Leaves expanded and the GPU's share of them: the exact eval cache's hits are the gap.
+    "served_leaves_total", "gpu_evals_total",
 }
 INFERENCE_STATS_FIELDS = {"forward_count", "total_requests", "encoding_spec"}
 

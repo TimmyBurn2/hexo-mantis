@@ -55,6 +55,8 @@ pub struct SelfPlayRunnerConfig {
     /// Registry-form encoding name, resolved to a `&'static RegistrySpec` at
     /// `SelfPlayRunner::new`. `None` = **error**, never a grid/dense default.
     pub encoding_name: Option<String>,
+    /// Entries of the exact per-net eval cache the workers share; `0` turns it off.
+    pub eval_cache_capacity: usize,
 }
 
 /// **TEST-SCAFFOLDING ONLY**, not a config default-authority. Manual rather than derived: a
@@ -95,6 +97,7 @@ impl Default for SelfPlayRunnerConfig {
             random_opening_plies: 0,
             search_stats_every: 0,
             encoding_name: None,
+            eval_cache_capacity: 0,
         }
     }
 }

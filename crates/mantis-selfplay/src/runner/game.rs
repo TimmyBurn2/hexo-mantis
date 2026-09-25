@@ -130,6 +130,8 @@ pub(crate) fn run_worker_thread(
         fatal_defect,
         target_integrity_defects,
         inference_failures_total,
+        served_leaves_total,
+        gpu_evals_total,
         graph_game_seq,
     } = atomics;
     let WorkerChannels {
@@ -209,6 +211,8 @@ pub(crate) fn run_worker_thread(
         running: &running,
         win_length,
         graph_radius,
+        served_leaves: &served_leaves_total,
+        gpu_evals: &gpu_evals_total,
     };
     let fatal_latch = FatalDefectLatch {
         slot: &fatal_defect,

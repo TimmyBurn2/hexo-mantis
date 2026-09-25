@@ -126,6 +126,9 @@ class RunnerStats:
     positions_dropped: int = 0
     # Worker threads that died by panic: non-zero means self-play HALTED rather than slowed.
     worker_panics: int = 0
+    # Leaves expanded, and the ones the GPU served: their gap is the exact eval cache's hits.
+    served_leaves_total: int = 0
+    gpu_evals_total: int = 0
 
 
 @dataclass(frozen=True)
@@ -140,7 +143,7 @@ class InferenceStats:
 def runner_stats(pool: Any) -> RunnerStats:
     """Snapshot the runner's counters; the search levers and the drop count have no `getattr` default.
 
-    Raises: AttributeError: the runner has no search-lever or `positions_dropped` getter.
+    Raises: AttributeError: the runner has no search-lever, `positions_dropped` or leaf-count getter.
     """
     r = pool._runner
     return RunnerStats(
@@ -164,6 +167,8 @@ def runner_stats(pool: Any) -> RunnerStats:
         inference_failures_total=int(getattr(r, "inference_failures_total", 0)),
         positions_dropped=int(r.positions_dropped),
         worker_panics=int(getattr(r, "worker_panics", 0)),
+        served_leaves_total=int(r.served_leaves_total),
+        gpu_evals_total=int(r.gpu_evals_total),
     )
 
 

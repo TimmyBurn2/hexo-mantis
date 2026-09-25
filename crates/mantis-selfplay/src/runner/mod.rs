@@ -104,6 +104,10 @@ pub struct RunnerStatsSnapshot {
     /// Leaf inferences that FAILED on an open queue and halted the run; a drain shutdown does
     /// NOT count here.
     pub inference_failures_total: u64,
+    /// Leaves the search expanded (every one a served simulation, cached or not).
+    pub served_leaves_total: u64,
+    /// Leaves that went to the GPU: `served_leaves_total` less the exact eval cache's hits.
+    pub gpu_evals_total: u64,
     /// Worker threads that died by panic (must read 0 in a healthy run).
     pub worker_panics: u64,
 }
@@ -158,6 +162,8 @@ pub struct SelfPlayRunner {
     target_integrity_defects: Arc<AtomicU64>,
     /// SEAM conjunct fire count (see the snapshot field).
     inference_failures_total: Arc<AtomicU64>,
+    served_leaves_total: Arc<AtomicU64>,
+    gpu_evals_total: Arc<AtomicU64>,
     /// The monotonic graph-game id source. See `WorkerAtomics::graph_game_seq`.
     graph_game_seq: Arc<AtomicU64>,
     /// The fatal-defect latch: a worker panic is NOT loud, since `stop()` swallows join results,
@@ -287,9 +293,10 @@ impl SelfPlayRunner {
         // The collector's saturation threshold is DERIVED from what this run can supply: a worker
         // blocks on its whole submitted batch, so `n_workers x leaf_batch_size` caps queue depth.
         let max_in_flight = config.n_workers.saturating_mul(config.leaf_batch_size);
-        let graph_queue = GraphQueue::with_contract_version_and_supply(
+        let graph_queue = GraphQueue::with_eval_cache(
             spec.contract_version.unwrap_or(1),
             max_in_flight,
+            config.eval_cache_capacity,
         );
 
         Ok(Self {
@@ -323,6 +330,8 @@ impl SelfPlayRunner {
             export_offwindow_mass_moves: Arc::new(AtomicU64::new(0)),
             target_integrity_defects: Arc::new(AtomicU64::new(0)),
             inference_failures_total: Arc::new(AtomicU64::new(0)),
+            served_leaves_total: Arc::new(AtomicU64::new(0)),
+            gpu_evals_total: Arc::new(AtomicU64::new(0)),
             graph_game_seq: Arc::new(AtomicU64::new(0)),
             fatal_defect: Arc::new(Mutex::new(None)),
         })
@@ -435,6 +444,8 @@ impl SelfPlayRunner {
             export_offwindow_mass_moves: self.export_offwindow_mass_moves.load(Ordering::Relaxed),
             target_integrity_defects: self.target_integrity_defects.load(Ordering::Relaxed),
             inference_failures_total: self.inference_failures_total.load(Ordering::Relaxed),
+            served_leaves_total: self.served_leaves_total.load(Ordering::Relaxed),
+            gpu_evals_total: self.gpu_evals_total.load(Ordering::Relaxed),
             worker_panics: self.worker_panics.load(Ordering::Relaxed),
         }
     }
@@ -644,6 +655,8 @@ mod seam_roundtrip {
         r.target_integrity_defects.store(24, Ordering::Relaxed);
         r.worker_panics.store(25, Ordering::Relaxed);
         r.inference_failures_total.store(36, Ordering::Relaxed);
+        r.served_leaves_total.store(42, Ordering::Relaxed);
+        r.gpu_evals_total.store(43, Ordering::Relaxed);
 
         let expected = RunnerStatsSnapshot {
             games_completed: 1,
@@ -665,6 +678,8 @@ mod seam_roundtrip {
             export_offwindow_mass_moves: 22,
             target_integrity_defects: 24,
             inference_failures_total: 36,
+            served_leaves_total: 42,
+            gpu_evals_total: 43,
             worker_panics: 25,
         };
         assert_eq!(

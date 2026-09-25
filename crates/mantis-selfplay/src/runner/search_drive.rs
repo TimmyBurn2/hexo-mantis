@@ -20,7 +20,7 @@ use mantis_search::{
 };
 
 use crate::poison::lock_or_recover;
-use crate::queues::{build_leaf_graph, GraphQueue};
+use crate::queues::{build_leaf_graph, CachedEval, GraphQueue, PositionKey};
 use crate::records;
 use crate::replay::hexg::GraphRecord;
 
@@ -39,6 +39,9 @@ pub(crate) struct InferContext<'a> {
     /// The builder geometry `resolve_geometry` narrowed at boot; no leaf re-reads the spec.
     pub(crate) win_length: u8,
     pub(crate) graph_radius: u16,
+    /// Leaves expanded, and the ones of those the GPU served (the rest were exact cache hits).
+    pub(crate) served_leaves: &'a AtomicU64,
+    pub(crate) gpu_evals: &'a AtomicU64,
 }
 
 /// Per-move MCTS accumulators. `export_offwindow_mass_moves` fires once per move whose
@@ -255,14 +258,26 @@ fn infer_and_expand_graph(
     }
 
     let (win_length, radius) = (infer.win_length, infer.graph_radius);
-    let mut graphs = Vec::with_capacity(leaves.len());
-    let mut centers: Vec<(i32, i32)> = Vec::with_capacity(leaves.len());
-    for leaf in &leaves {
+    // One version per batch; the server bumps it only after the new weights are in place.
+    let version = infer.model_version.load(Ordering::Acquire);
+    let cache = infer.graph_queue.eval_cache();
+    let mut served: Vec<Option<CachedEval>> = Vec::with_capacity(leaves.len());
+    let mut miss_keys: Vec<(usize, PositionKey)> = Vec::new();
+    let mut graphs = Vec::new();
+    for (i, leaf) in leaves.iter().enumerate() {
         // Order is irrelevant: the builder coordinate-sorts. `Cell`/`Player` are `#[repr(i8)]`.
         let mut stones: Vec<(i64, i64, i64)> = Vec::new();
+        let mut key_stones: Vec<(i32, i32, i8)> = Vec::new();
         for (&(q, r), &cell) in leaf.cells_iter() {
             stones.push((i64::from(q), i64::from(r), cell as i64));
+            key_stones.push((q, r, cell as i8));
         }
+        let key = PositionKey::new(key_stones, leaf.current_player as i8, leaf.moves_remaining);
+        if let Some(hit) = cache.get(&key, version) {
+            served.push(Some(hit));
+            continue;
+        }
+        served.push(None);
         let current_player = leaf.current_player as i64;
         let moves_remaining = i64::from(leaf.moves_remaining);
         match build_leaf_graph(
@@ -274,7 +289,7 @@ fn infer_and_expand_graph(
             agg_trunk_sz,
         ) {
             Ok(g) => {
-                centers.push(g.window_center);
+                miss_keys.push((i, key));
                 graphs.push(g);
             }
             // Seam guard tripped (unreachable for a valid self-play board). NOT routed through
@@ -290,36 +305,75 @@ fn infer_and_expand_graph(
         }
     }
 
-    // The WHOLE leaf batch in one shot, so the collector's saturation threshold is reachable; the
-    // returned `Vec` is indexed by SUBMISSION ORDER, which `expand_and_backup_ls_at` requires.
-    let results = infer.graph_queue.submit_graphs_and_wait(graphs);
+    let centers_of_misses: Vec<(i32, i32)> = graphs.iter().map(|g| g.window_center).collect();
+    let n_misses = graphs.len();
+    // The misses in one shot, so the collector's saturation threshold is reachable; the
+    // returned `Vec` is indexed by SUBMISSION ORDER.
+    let results = if graphs.is_empty() {
+        Vec::new()
+    } else {
+        infer.graph_queue.submit_graphs_and_wait(graphs)
+    };
     // COLLECT-ALL-THEN-DECIDE: every waiter has resolved by the time this Vec exists, so the
     // refusal below cannot orphan one, and `Err(reason)` is carried into the named failure.
-    let mut aggregated_ls: Vec<LegalSetPolicy> = Vec::with_capacity(results.len());
-    let mut aggregated_values: Vec<f32> = Vec::with_capacity(results.len());
+    let mut fresh: Vec<(LegalSetPolicy, f32)> = Vec::with_capacity(results.len());
     for res in results {
         match res {
-            Ok((ls, v)) => {
-                aggregated_ls.push(ls);
-                aggregated_values.push(v);
-            }
+            Ok(pair) => fresh.push(pair),
             Err(reason) => {
                 return seam_or_shutdown(infer.running, "graph", "submit_graphs_and_wait", reason)
             }
         }
     }
-    if aggregated_ls.len() < leaves.len() {
+    if fresh.len() < n_misses {
         return seam_or_shutdown(
             infer.running,
             "graph",
             "result-count",
             format!(
                 "inference returned {} payloads for {} submitted graphs",
+                fresh.len(),
+                n_misses
+            ),
+        );
+    }
+    for (((i, key), (policy, value)), center) in
+        miss_keys.into_iter().zip(fresh).zip(centers_of_misses)
+    {
+        let eval = CachedEval {
+            policy,
+            value,
+            center,
+        };
+        cache.put(key, version, eval.clone());
+        served[i] = Some(eval);
+    }
+    let mut aggregated_ls: Vec<LegalSetPolicy> = Vec::with_capacity(leaves.len());
+    let mut aggregated_values: Vec<f32> = Vec::with_capacity(leaves.len());
+    let mut centers: Vec<(i32, i32)> = Vec::with_capacity(leaves.len());
+    for eval in served.into_iter().flatten() {
+        aggregated_ls.push(eval.policy);
+        aggregated_values.push(eval.value);
+        centers.push(eval.center);
+    }
+    if aggregated_ls.len() != leaves.len() {
+        return seam_or_shutdown(
+            infer.running,
+            "graph",
+            "result-count",
+            format!(
+                "assembled {} evaluations for {} leaves",
                 aggregated_ls.len(),
                 leaves.len()
             ),
         );
     }
+    infer
+        .served_leaves
+        .fetch_add(leaves.len() as u64, Ordering::Relaxed);
+    infer
+        .gpu_evals
+        .fetch_add(n_misses as u64, Ordering::Relaxed);
 
     let n = leaves.len();
     // Expand frame trunk = spec.trunk_size — the SAME trunk the builder baked into
@@ -741,6 +795,8 @@ mod forced_round_tests {
             running: &running,
             win_length: geometry.win_length,
             graph_radius: geometry.graph_radius,
+            served_leaves: &AtomicU64::new(0),
+            gpu_evals: &AtomicU64::new(0),
         };
         let err = infer_and_expand_graph(&mut tree, LeafSelection::Round(&[u32::MAX]), 19, infer)
             .expect_err("a foreign forced child must be refused");

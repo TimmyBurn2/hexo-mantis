@@ -88,10 +88,11 @@ _TARGET_INTEGRITY_COUNTERS: tuple[str, ...] = (
     "positions_dropped",
 )
 _POSITIONS_COUNTER = "positions_generated"
-#: The playout-cap draw's two arms and the Gumbel round-width terms, published beside the
-#: target-integrity block over the same snapshot and the same `positions_delta`.
+#: The playout-cap arms, the Gumbel round-width terms and the eval cache's served/GPU leaf pair,
+#: published beside the target-integrity block over the same snapshot and `positions_delta`.
 _SEARCH_LEVER_COUNTERS: tuple[str, ...] = (
     "pcr_full_moves", "pcr_quick_moves", "gumbel_round_leaves", "gumbel_rounds",
+    "served_leaves_total", "gpu_evals_total",
 )
 
 # The draw-rate ring has no depth constant: capacity is derived at the point of use, so no
