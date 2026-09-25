@@ -390,8 +390,8 @@ def test_a_periodic_cadence_burst_streams_periodic_checkpoint_save(
         f"{sorted(ckpt_names)}"
     )
 
-    # The trainer's OWN per-step diagnostic literal is delivered too, under its own name
-    # (`trainer_step`, NEVER the coordinator's `training_step`): one row per learner step.
+    # The trainer's own `trainer_step` (NEVER the coordinator's `training_step`), one per step: the
+    # same `sink=None` revert that kills the periodic assertions kills this one.
     trainer_rows = [row for row in rows if row["event"] == "trainer_step"]
     assert {row["step"] for row in trainer_rows} == set(range(1, _BURST_STEPS + 1)), (
         "one trainer_step diagnostic row per learner step must ride the composed stream; "

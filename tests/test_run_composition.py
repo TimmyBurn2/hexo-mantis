@@ -29,8 +29,8 @@ from _drivable import DrivablePoolStub, DrivableTrainerStub, with_deltas
 _REPO = Path(__file__).resolve().parents[1]
 _SRC = _REPO / "src" / "mantis"
 
-#: `stop_step` is config-authored, so every `compose_run` call below drives a REAL bounded
-#: burst; 3 is the smallest legal run at cadence 1.
+#: `stop_step` is config-authored, so each `compose_run` drives a REAL bounded burst. The step-clock
+#: knobs are co-overridden (the validator spans them all); 3 is the smallest legal run at cadence 1.
 _DRIVE_STEPS = 3
 
 

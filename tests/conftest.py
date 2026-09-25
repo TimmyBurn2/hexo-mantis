@@ -68,8 +68,8 @@ def seeded_libs() -> list[str]:
     return list(_SEEDED_LIBS)
 
 
-# Real RunConfigs for composition tests, derived from an already-minted config through the ONE
-# loader with per-test deltas re-validated, so a test cannot construct a config the loader would reject.
+# Real RunConfigs from a minted config through the ONE loader, deltas re-validated, so a test cannot
+# build a config the loader rejects. Imports are lazy to keep this conftest scaffold-independent.
 CONFIGS_DIR = Path(__file__).resolve().parents[1] / "configs"
 
 
