@@ -1,4 +1,4 @@
-"""The R348(c) preflight stamp: named refusals, host-state store, tree-bound acceptance."""
+"""The preflight stamp: named refusals, host-state store, tree-bound acceptance."""
 from __future__ import annotations
 
 import json
@@ -135,7 +135,7 @@ def test_clear_stamp_removes_the_pass_and_is_idempotent(state_home: Path, tmp_pa
 
 
 def test_a_reading_without_the_mirrored_verdict_covers_no_host(state_home: Path, tmp_path: Path) -> None:
-    """R349(b): any workspace verdict but MIRRORED (the deleted arm's DURABLE included) is refused."""
+    """Any workspace verdict but MIRRORED (the deleted arm's DURABLE included) is refused."""
     unmirrored = {"workspace": {"verdict": "DURABLE", "fstype": "xfs"},
                   "cuda_build": {"verdict": "not_run"}}
     config, _path = _write(tmp_path, halts=unmirrored)
@@ -164,7 +164,7 @@ def _twin_of(tmp_path: Path, **edits: str) -> Path:
 def test_a_twin_differing_in_run_id_alone_inherits_its_runs_vested_stamp(
     state_home: Path, tmp_path: Path,
 ) -> None:
-    """R360(c): the twin's stamp is written from the parent's and says where it came from."""
+    """The twin's stamp is written from the parent's and says where it came from."""
     parent, parent_path = _write(tmp_path)
     twin = load_config(_twin_of(tmp_path))
     assert twin.run_id != parent.run_id
@@ -182,7 +182,7 @@ def test_a_twin_differing_in_run_id_alone_inherits_its_runs_vested_stamp(
 
 
 def test_a_planted_third_difference_is_refused_by_name(state_home: Path, tmp_path: Path) -> None:
-    """R360(c)'s pin: `run_id` may differ; a `seed` that differs too is refused, naming `seed`."""
+    """The pin: `run_id` may differ; a `seed` that differs too is refused, naming `seed`."""
     _write(tmp_path)
     twin = load_config(_twin_of(tmp_path, seed="1"))
     with pytest.raises(PreflightStampTwinMismatchError, match=r"beyond .*run_id.*: \['seed'\]"):

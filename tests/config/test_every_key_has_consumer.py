@@ -402,10 +402,10 @@ def test_bijection_bites_on_a_real_schema_mutation():
     assert leaves != set(CONSUMER_REGISTRY), "bijection must break when a new leaf is unregistered"
 
 
-# ── B-11 (R355(e)): the strings above are RESOLVED, not only counted ──
+# ── the strings above are RESOLVED, not only counted ──
 
 def test_every_registry_string_names_symbols_that_exist() -> None:
-    """B-11: an entry naming a deleted function stayed green forever; every code token must resolve."""
+    """An entry naming a deleted function stayed green forever; every code token must resolve."""
     defined = defined_names()
     assert len(defined) > 1000, "the definition census walked nothing"
     dead = {key: toks for key, text in CONSUMER_REGISTRY.items()

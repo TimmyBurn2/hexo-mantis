@@ -1,6 +1,6 @@
 """O13 — duplicate-key rejection (util.yaml_io.UniqueKeyLoader).
 
-AUDIT-1 F-45 moved the loader to `mantis.util.yaml_io` (a DAG leaf) so the encoding audit
+The loader moved to `mantis.util.yaml_io` (a DAG leaf) so the encoding audit
 can read through THE parser instead of a strictly more permissive `yaml.safe_load`.
 
 Frozen utils/config.py merely LOGGED a warning on overlap (last-wins). The new loader

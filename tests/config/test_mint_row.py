@@ -1,16 +1,16 @@
 """`--mint-row` — the flag that writes a row every template omits by design.
 
 WHY THIS FILE EXISTS. `identity.arch_kind` and `identity.warm_start` are schema-OPTIONAL and
-absent from every committed config and every template: R323(b) rules that they enter production
-configs ONLY as a minted row at run6's mint. `--set` refuses a key the template does not carry,
+absent from every committed config and every template: they enter production
+configs ONLY as a minted row. `--set` refuses a key the template does not carry,
 so before `--mint-row` the tool could not write the one class of row a mint exists for, and the
 run6 mint act had no mechanism. The tests below pin the capability AND the two refusals that
 keep it from becoming "create any key you like".
 
-R347/CONFIG-1 MADE THIS FLAG THE MAIN ROAD rather than a two-key special case. The operational
+This flag is the MAIN ROAD rather than a two-key special case. The operational
 constants now carry schema defaults and leave the template, so overriding one is a minted row —
 which is the point: the override stays a deliberate act with a stamped header line, exactly as
-R323(b) wanted for the identity rows. Two of those constants are BLOCKS (`monitor.drain`,
+wanted for the identity rows. Two of those constants are BLOCKS (`monitor.drain`,
 `monitor.disk_guard`), and a block is minted WHOLE, because `--mint-row` adds a leaf to an
 existing block and does not build one. That is a property worth a row of its own rather than a
 limitation to work around: a half-minted block whose other leaves came silently from the schema
@@ -102,7 +102,7 @@ def test_a_minted_row_and_a_delta_compose_in_one_act(tmp_path: Path) -> None:
 
 
 def test_a_defaulted_BLOCK_is_minted_WHOLE_and_its_old_slot_is_the_schemas(tmp_path: Path) -> None:
-    """R347/CONFIG-1. `monitor.drain` left the template with a schema default, so a run that
+    """`monitor.drain` left the template with a schema default, so a run that
     wants a different cap mints the block — all four leaves, one row — and the header's OLD
     slot is what the schema resolves the template to, not a guess and not `null`.
 

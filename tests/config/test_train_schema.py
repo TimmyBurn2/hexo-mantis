@@ -94,7 +94,7 @@ BOUND_VIOLATIONS: list[tuple[str, object]] = [
     ("hard_gn_threshold", 0.0),         # fires on every finite step
     ("hard_gn_threshold", float("inf")),  # accepted, reads ARMED, can never be met
     ("hard_gn_min_steps", 0),           # fires on the FIRST breach — not "sustained"
-    ("selfplay_stall_timeout_sec", 0.0),   # LAW-16's always-armed guard, silently disarmed
+    ("selfplay_stall_timeout_sec", 0.0),   # the always-armed guard, silently disarmed
     ("selfplay_stall_timeout_sec", -1.0),
 ]
 

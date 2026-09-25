@@ -16,9 +16,8 @@ def _valid_payload() -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
         "eval_enabled": True,
-        # RECAL-PREP (R308(g)(i)): a REQUIRED top-level leaf. `null` is R119's
-        # placeholder — refused at boot on a cuda process, valued only by the
-        # re-calibration sitting under R282(b).
+        # A REQUIRED top-level leaf. `null` is the placeholder — refused at boot on a
+        # cuda process, valued only by the re-calibration.
         "allocator_posture": None,
         "run_id": "unit_test",
         "seed": 1,
@@ -57,7 +56,7 @@ def test_bool_to_int_rejected():
 def test_selfplay_nested_float_to_int_rejected():
     # O14 strict-coercion pin ported off the retired RadiusStage float-step case: a nested
     # sub-model field (`selfplay.mcts.n_simulations`) still rejects a silent float->int
-    # coercion (WPSC Phase 2 SC-A2: `selfplay.legal_move_radius_schedule`/`RadiusStage` are
+    # coercion (`selfplay.legal_move_radius_schedule`/`RadiusStage` are
     # gone from the schema, DESIGN_P2.md §5).
     payload = _valid_payload()
     payload["selfplay"]["mcts"]["n_simulations"] = 50.0

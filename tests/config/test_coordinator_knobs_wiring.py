@@ -46,9 +46,8 @@ _GATE_INTERVAL = _DEV.monitor.gate_interval
 #: reachability validator spans them.
 _DRIVE_STEPS = 4
 
-#: ONE distinguishable value per schema key: every value differs from the minted one and from
-#: every other knob's, so a field reporting a stale, defaulted or NEIGHBOURING number cannot
-#: accidentally match. Also the key census — `_SCHEMA_TO_FIELD` must cover exactly these.
+#: ONE distinguishable value per schema key, so a field reporting a stale, defaulted or
+#: NEIGHBOURING number cannot accidentally match. Also the key census `_SCHEMA_TO_FIELD` must cover.
 _DISTINGUISHABLE: dict[str, Any] = {
     "eval_interval": 37,
     "log_interval": 17,
@@ -152,8 +151,7 @@ def _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config, mk_gra
                # drag; baseline(8) != mutated(41) keeps the transport assertion honest.
                "batch_size": 8,
                # `mixing_min_w` cannot be mutated alone against a minted `mixing_initial_w` of
-               # 0.0 — a floor above the start is rejected by design — so both drives share a
-               # raised start and the comparison stays one-key-at-a-time.
+               # 0.0, so both drives share a raised start and stay one-key-at-a-time.
                **train_over},
         monitor={"actor_lag_threshold_steps": _DRIVE_STEPS - 1, **(monitor_over or {})},
         # `eval_enabled` and `run_id` are CONFIG facts: `compose_run` has no parameter for
@@ -209,8 +207,7 @@ def test_each_knob_reaches_the_coordinator_the_composition_root_builds(
 
 
 #: The ONE distinguishable ARMING cadence, held apart from `_DISTINGUISHABLE` because it is a
-#: `monitor.*` key and that census is `train.*`-only. No config mints it and no other knob
-#: carries it; the drive ASSERTS that against the loaded config rather than trusting this line.
+#: `monitor.*` key and that census is `train.*`-only; the drive ASSERTS this against the loaded config.
 _GATE_INTERVAL_MUTATED = 23
 
 

@@ -39,7 +39,7 @@ from mantis.config.census import production_configs
 from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
-from mantis.config.resolve.draw_rate import (  # RED anchor #1 — the ONE read path (R80)
+from mantis.config.resolve.draw_rate import (  # RED anchor #1 — the ONE read path
     DrawRateAbortSpec,
     resolve_draw_rate_abort,  # noqa: F401 — anchor; its oracles live in the sibling files
 )
@@ -69,8 +69,8 @@ DRAW_RATE_PREREG = {"threshold": 0.25, "min_step": 25000, "N_pool_min": 50, "con
 
 
 def _load_tool():
-    """Load the tool by absolute path — `tools/` is not a package and R5/LAW-17 bar a `sys.path`
-    write."""
+    """Load the tool by absolute path — `tools/` is not a package and no `sys.path`
+    write is permitted."""
     spec = importlib.util.spec_from_file_location("preflight_mint_for_wpax_d", TOOL_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)

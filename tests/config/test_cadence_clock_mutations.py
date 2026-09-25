@@ -5,7 +5,7 @@ BITES, per axis, in that axis's own sample clock. Every drive has one shape: tak
 production config, make ONE armed row unfireable IN ITS OWN CLOCK, assert the audit reds for
 THAT row and stays green for the others, then put the key back and assert green. Per-axis rather
 than per-config, because the defect being closed is one axis's verdict computed from another
-axis's key. The WR axis (the EVAL-ROUND clock) left this battery with the sealbot rung, R362(c);
+axis's key. The WR axis (the EVAL-ROUND clock) left this battery with the sealbot rung;
 the draw-rate axis on the GATE-BOUNDARY clock is what remains.
 """
 from __future__ import annotations
@@ -71,7 +71,7 @@ def test_the_battery_baseline_is_green_or_every_kill_below_is_meaningless(produc
 @pytest.mark.parametrize(
     "label,section,key,value,expected",
     [
-        # The draw-rate axis's own clock: gate boundaries. ADJ-D22's measured config.
+        # The draw-rate axis's own clock: gate boundaries, this module's measured config.
         ("gate_interval outruns the run", "monitor", "gate_interval", 1_000_000_000,
          "draw_rate_collapse"),
         # The BOUND rather than a cadence key.

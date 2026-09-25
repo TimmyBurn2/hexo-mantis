@@ -81,8 +81,8 @@ def _stringified_none(value: object) -> bool:
 def test_a_None_bearing_delta_mints_a_header_that_replays_green(tmp_path: Path) -> None:
     """A `None`-bearing delta mints a header whose slot replays to the SAME BYTES.
     Killer: `str()` in the delta line, which replays `max_fused_edges: 'None'` and exits 2.
-    (The block is `inference.fused_graph_caps`, whose `null` pair is R119's schema-valid
-    placeholder; the `eval.ladder.rungs` list this once used left with the rung, R362(c).)"""
+    (The block is `inference.fused_graph_caps`, whose `null` pair is a schema-valid
+    placeholder; the `eval.ladder.rungs` list this once used left with the rung.)"""
     caps = "{max_fused_edges: null, max_fused_nodes: null}"
     first = tmp_path / "first.yaml"
     minted = _run_mint("--out", str(first), "--set", "run_id=none_bearing",

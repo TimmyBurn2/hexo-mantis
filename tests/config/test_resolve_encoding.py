@@ -1,4 +1,4 @@
-"""O1 — the encoding resolver: a declared name passes through, an absent one RAISES (LAW-11)."""
+"""O1 — the encoding resolver: a declared name passes through, an absent one RAISES."""
 import pytest
 
 from mantis.config.resolve.encoding import AbsentEncodingError, reconcile_encoding

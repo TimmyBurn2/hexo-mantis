@@ -23,7 +23,7 @@ def test_existing_path_is_cli_source():
 
 
 def test_missing_path_raises_naming_path_and_knob():
-    """The knob is `--resume-from` (AUDIT-1 F-47). This asserted `BOOTSTRAP`, which named a make
+    """The knob is `--resume-from`. This asserted `BOOTSTRAP`, which named a make
     target that does not exist — and the assertion passed for as long as the message was wrong,
     because both sides were the same fiction."""
     with pytest.raises(BootstrapNotFoundError) as exc:
@@ -49,7 +49,7 @@ def test_existence_checked_exactly_once():
 
 # the guard is WIRED, and that is the half that was missing
 def test_run_main_calls_the_resolver_before_it_launches() -> None:
-    """AUDIT-1 F-47's repair, pinned STRUCTURALLY rather than by running a launch.
+    """The repair, pinned STRUCTURALLY rather than by running a launch.
 
     The resolver had ZERO callers. `mantis.run.main` parsed `--resume-from` and handed it
     straight to `launch_run`, so a mistyped path surfaced as whatever `torch.load` says about a

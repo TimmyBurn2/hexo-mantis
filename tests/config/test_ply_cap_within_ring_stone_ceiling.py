@@ -1,6 +1,6 @@
-"""R328 amendment — a configured ply cap may not exceed the HEXG ring's stone ceiling.
+"""A configured ply cap may not exceed the HEXG ring's stone ceiling.
 
-THE MEASURED INSTANCE. Encoding the R247 human corpus at radius 8 hit `MAX_STONES`: 88 of
+THE MEASURED INSTANCE. Encoding the human corpus at radius 8 hit `MAX_STONES`: 88 of
 8 698 games exceed 257 plies and 7 866 of 547 251 ply rows (1.4374 %) cannot be stored,
 because `stones_qr` is a FIXED-WIDTH `[capacity * MAX_STONES * 2]` slot and
 `push_graph_position` refuses anything wider. The architect ruled `MAX_STONES` STAYS 256 and

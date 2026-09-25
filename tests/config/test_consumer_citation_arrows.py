@@ -105,14 +105,10 @@ def _referenced_names(path: Path) -> frozenset[str]:
     tree = ast.parse(path.read_text(encoding="utf-8"))
     names: set[str] = set()
     for node in ast.walk(tree):
-        # LOAD CONTEXT ONLY. A binding is not a reference: `resolve_drain_caps = None` is a STORE,
-        # and counting it verified an arrow into a module that receives nothing while staying
-        # ruff-clean. An unused import is likewise not a delivery, so only a name the module
-        # actually READS survives this filter.
-        #
-        # THE LIMIT, STATED RATHER THAN LEFT TO BE FOUND: a Load inside code that never executes is
-        # still a Load, so it counts. That residual is accepted — reachability is a different
-        # instrument, and the two shapes that reach it are already caught by ruff F821/F401.
+        # LOAD CONTEXT ONLY: a binding (`resolve_drain_caps = None`) is a STORE, not a reference,
+        # and an unused import is not a delivery — only a name the module actually READS survives.
+        # THE LIMIT: a Load inside dead code still counts here; that residual is accepted since
+        # ruff F821/F401 already catch the two shapes that reach it.
         if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
             names.add(node.id)
         elif isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load):
@@ -130,9 +126,8 @@ def _arrow_violations(registry: dict[str, str]) -> list[str]:
                 continue
             cited = _cited_symbols(citation, rel)
             if not cited:
-                # A CITATION WITH NOTHING VERIFIABLE IN IT IS NOT A PASS: naming an entry point as
-                # a destination while naming no symbol that carries the value there asserts a
-                # delivery and offers no way to check it, so it used to pass VACUOUSLY.
+                # A CITATION WITH NOTHING VERIFIABLE IN IT IS NOT A PASS: naming an entry point
+                # with no symbol carrying the value there used to pass VACUOUSLY.
                 bad.append(
                     f"{key}: {rel} is its own process and the citation names no symbol at all, "
                     "so the arrow asserts a delivery nothing can verify"
@@ -167,7 +162,7 @@ def test_every_cited_path_resolves_to_exactly_one_file():
 
 
 def test_the_resolution_check_bites_on_a_path_the_tree_cannot_resolve():
-    """LAW-07 self-test for the precondition above."""
+    """A producer-test self-test for the precondition above."""
     planted = {"planted.key": "resolve_monitor_config -> monitor/no_such_module.py something"}
     assert _unresolvable_citations(planted), (
         "a cited path matching no file was treated as resolved; the precondition test above is "
@@ -176,7 +171,7 @@ def test_the_resolution_check_bites_on_a_path_the_tree_cannot_resolve():
 
 
 def test_the_arrow_check_bites_on_a_planted_false_arrow():
-    """LAW-07 mutation self-test: a checker that cannot fail is a phantom gate."""
+    """Mutation self-test: a checker that cannot fail is a phantom gate."""
     planted = {
         "monitor.drain.terminal_eval_hard_cap_sec":
             "resolve_drain_caps -> monitor/supervise.py terminal cap",

@@ -1,7 +1,7 @@
 """The eval schema extension and the config remint that must carry it (CI gate 7 adjunct).
 
 Every committed config and template must validate with the gate block. (`eval.ladder` and
-`eval.sealbot_model_sims` were deleted with the sealbot rung by R362(c); the parity pins
+`eval.sealbot_model_sims` were deleted with the sealbot rung; the parity pins
 below are what remains.)
 """
 from __future__ import annotations
@@ -74,7 +74,7 @@ def test_the_gate_parity_values_are_pinned(config: Path) -> None:
 def test_the_ruled_deploy_sims_are_pinned() -> None:
     """The eval deploy sims a ruling named, on the config it named them for."""
     gate = load_config(_RULED_DEPLOY_CONFIG).eval.gate
-    assert gate.deploy_sims == 160  # R346(b)/R348(e): eval deploy Gumbel 160 / m 16
+    assert gate.deploy_sims == 160  # eval deploy Gumbel 160 / m 16
 
 
 @pytest.mark.parametrize("config", _PRODUCTION, ids=lambda p: p.name)

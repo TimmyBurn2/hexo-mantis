@@ -117,9 +117,8 @@ def test_invalid_config_exits_2(tmp_path):
 
 # ── F2 — arm --from-header structurally over the SHIPPED configs (CI test tier, gate 3) ──
 def test_every_committed_config_header_is_truthful():
-    # ADJ-13 F-1 corrective pass (recheck R-5): the ONE discovery authority, not a
-    # sixth flat glob. A flat `*.yaml` census is blind to `configs/prod/<name>.yaml`,
-    # which gate 7 and gate 12 both now make legal.
+    # The ONE discovery authority, not a sixth flat glob. A flat `*.yaml` census is blind to
+    # `configs/prod/<name>.yaml`, which gate 7 and gate 12 both now make legal.
     configs = discover_configs(REPO_ROOT / "configs")
     assert configs, "no committed configs found"
     for cfg in configs:

@@ -39,9 +39,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
 MANIFEST_MODULE = REPO_ROOT / "src" / "mantis" / "config" / "armed_aborts.py"
 _CONFIGS_DIR = REPO_ROOT / "configs"
-# A flat `*.yaml` glob here would be a SECOND answer to "what is a config", blind to nested
-# configs that gates 7 and 12 both make legal; `discover_configs` is the ONE discovery
-# authority. Relative-posix, not `.name`, so a nested path survives the round trip below.
+# `discover_configs` is the ONE discovery authority — a flat `*.yaml` glob would be blind to
+# nested configs gates 7 and 12 both make legal. Relative-posix so a nested path round-trips.
 CONFIG_PATHS = tuple(sorted(p.relative_to(_CONFIGS_DIR).as_posix() for p in discover_configs(_CONFIGS_DIR)))
 _PRODUCTION = production_configs(REPO_ROOT)
 
@@ -118,8 +117,7 @@ def test_the_audit_reads_the_CONFIG_not_the_config_FILENAME(smoke_run_config, pr
         "dev_example.yaml",
         monitor={"actor_lag_abort_enabled": True},
         # The manifest carries TWO required rows, so "the arming flipped ON" means flipping
-        # BOTH postures; leaving the draw-rate block `null` would lose this oracle's real
-        # subject behind an unrelated red.
+        # BOTH postures.
         train={"draw_rate_abort": {"threshold": 0.25, "min_step": 25000,
                                    "N_pool_min": 50, "consec": 3}},
     )
@@ -196,10 +194,8 @@ def test_the_manifest_is_not_vacuous() -> None:
                 "on a real RunConfig — a manifest row whose arming surface does not exist is a "
                 "phantom gate input (R4 / LAW-07)"
             )
-    # The deferred-row rules are asserted on the REAL manifest first, then on a synthetic row
-    # through `_deferred`'s own `manifest` parameter — the only way to drive a row whose pinned
-    # file is ABSENT. Membership, not identity, so a future deferred row does not red a test
-    # about a different row.
+    # Asserted on the REAL manifest first, then on a synthetic row through `_deferred`'s own
+    # `manifest` parameter — membership, not identity, so an unrelated deferred row cannot red this.
     assert _deferred(), (
         "the shipped manifest holds NO deferred row, so `_print_deferred_rows` and every "
         "rule below it are being asserted on an empty list — R81's kept machinery with no "
@@ -281,9 +277,8 @@ def test_flipping_the_deferred_row_to_required_needs_no_code_change() -> None:
     to REQUIRED and a config carrying the key, then drives `audit_arming` unchanged. Both
     threshold arms are driven, because `CONFIG_THRESHOLD_GT_ZERO` must route through the same
     branch-free path as `CONFIG_BOOL` and a mechanism returning a constant passes only one."""
-    # The subject is synthetic because the shipped manifest holds no deferred draw-rate row.
-    # What survives the flip, and is why this is kept: `audit_arming` DISPATCHES ON DATA —
-    # `status` selects the list, `mechanism` the predicate — and nothing branches on a name.
+    # Synthetic because the shipped manifest holds no deferred draw-rate row: `audit_arming`
+    # DISPATCHES ON DATA — `status` selects the list, `mechanism` the predicate — never on a name.
     assert "draw_rate_collapse" not in [other.name for other in _deferred()], (
         "the flip is landed: the draw-rate row must not be deferred (a deferred row prints "
         f"and does not gate); got {_deferred()}"
@@ -312,8 +307,7 @@ def test_flipping_the_deferred_row_to_required_needs_no_code_change() -> None:
         drive is `tests/config/test_drawrate_arming_authority.py`'s, because a stub built FROM
         `config_path` cannot disagree with it."""
         # EVERY REQUIRED row's arming surface has to appear here: a stub that omits one raises
-        # `ArmingSurfaceMissingError`, the phantom-input guard doing its job. Each is at its
-        # minted, ARMED value, so no row enters `disarmed`.
+        # `ArmingSurfaceMissingError`. Each is at its minted, ARMED value, so none enters `disarmed`.
         return SimpleNamespace(
             allocator_posture="expandable_segments",
             monitor=SimpleNamespace(actor_lag_abort_enabled=True,
@@ -338,9 +332,8 @@ def test_flipping_the_deferred_row_to_required_needs_no_code_change() -> None:
         "a positive threshold arms the row — CONFIG_THRESHOLD_GT_ZERO must be a real "
         "predicate over the value, not a constant"
     )
-    # DERIVED from the manifest the audit was handed, never a transcribed row list. The claim
-    # is that the draw-rate flip leaves the deferred list ALONE, which is a statement about
-    # `status` selecting the list and is sharper against the real set than against a copy.
+    # DERIVED from the manifest the audit was handed, never a transcribed row list, so the
+    # claim (the draw-rate flip leaves the deferred list ALONE) is sharper than against a copy.
     shipped_deferred = [r.name for r in manifest if r.status is Status.DEFERRED]
     assert shipped_deferred, "no deferred row means this arm has no subject"
     assert ([r.name for r in off.deferred] == [r.name for r in on.deferred]
@@ -360,9 +353,8 @@ def test_the_mechanisms_are_real_predicates_in_both_directions() -> None:
     assert Mechanism.CONFIG_THRESHOLD_GT_ZERO.is_armed(0.0) is False
     assert Mechanism.CONFIG_THRESHOLD_GT_ZERO.is_armed(-1.0) is False
 
-    # The UPPER-bounded mechanism, real in BOTH inputs. `CONFIG_THRESHOLD_GT_ZERO` cannot judge
-    # `train.hard_gn_threshold`, whose range is unbounded above, so the shipped `1e9` reads
-    # ARMED while no finite gradient norm reaches it. Every arm below moves ONE operand.
+    # The UPPER-bounded mechanism: `CONFIG_THRESHOLD_GT_ZERO` cannot judge `train.hard_gn_threshold`,
+    # whose range is unbounded above, so the shipped `1e9` reads ARMED while nothing reaches it.
     below = Mechanism.CONFIG_THRESHOLD_BELOW_CEILING
     assert below.is_armed(5.0, ceiling=10.0) is True
     assert below.is_armed(10.0, ceiling=10.0) is True, "the ceiling itself is IN range"
@@ -564,14 +556,11 @@ def test_the_terminal_eval_broken_row_is_armed_on_every_production_config() -> N
         )
 
 
-# The REQUIRED set is the disarm switch, and nothing pinned it. `audit_arming` gates on
-# `row.status is Status.REQUIRED`, so a DEFERRED row prints loudly and gates NOTHING: `status`
-# is a one-field disarm switch that leaves gate 12 at rc 0 with a stdout paragraph as the only
-# trace. Measured: `fused_graph_caps_calibrated` — the row that stops a `null`-cap config being
-# minted — appeared only in comments and docstrings, and flipping it to DEFERRED left gate 12
-# green. An EXACT set and not membership, unlike the deferred assertion above: the REQUIRED set
-# IS the mint's gate list, so a row leaving it is a DISARMAMENT and a row joining it a
-# mint-visible tightening — decisions somebody makes, never drift.
+# The REQUIRED set is the disarm switch, and nothing pinned it: `audit_arming` gates on
+# `row.status is Status.REQUIRED`, so a DEFERRED row prints loudly and gates NOTHING — a
+# one-field flip leaves gate 12 at rc 0. Measured: flipping `fused_graph_caps_calibrated` (the
+# row that stops a `null`-cap config being minted) to DEFERRED left gate 12 green. An EXACT
+# set below, not membership, so a row leaving or joining it is a decision, never drift.
 
 #: The rows that GATE a production mint. Editing this literal is the act of arming or
 #: disarming the audit, and it must be reviewed as one.
@@ -586,7 +575,7 @@ _REQUIRED_ROWS_OF_RECORD = frozenset({
 
 
 def test_the_REQUIRED_row_set_is_exactly_the_declared_one() -> None:
-    """THE PIN (F-13). A one-field `status` flip disarms a row with gate 12 still rc 0."""
+    """THE PIN. A one-field `status` flip disarms a row with gate 12 still rc 0."""
     observed = frozenset(row.name for row in _required())
     assert observed == _REQUIRED_ROWS_OF_RECORD, (
         f"the mint's gate list changed. Disarmed (was REQUIRED, now is not): "
@@ -597,7 +586,7 @@ def test_the_REQUIRED_row_set_is_exactly_the_declared_one() -> None:
 
 
 def test_the_memory_bound_mint_gate_is_REQUIRED_and_is_named_here() -> None:
-    """The specific row F-13 measured: it is the one that refuses a `null`-cap config at the
+    """The specific row measured: it is the one that refuses a `null`-cap config at the
     mint, and it was the one REQUIRED row no test named."""
     assert "fused_graph_caps_calibrated" in {row.name for row in _required()}
 

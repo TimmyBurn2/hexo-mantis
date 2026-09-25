@@ -2,7 +2,7 @@
 authority (DESIGN_P2.md §5 / PREREG_P2.md suite #7, REV1 MUST-FIX #1).
 
 Mixed suite: the two `import mantis.config[.resolve]` regression-pin tests are the
-producer test for `__init__.py` edits (LAW-07) — if either package's `__init__.py`
+producer test for `__init__.py` edits — if either package's `__init__.py`
 re-exports a deleted radius symbol, THIS is where it `ImportError`s, instead of silently
 at some unrelated call site. The remaining tests assert the POST-SC-A4 absence of
 `RadiusStage` / `legal_move_radius_schedule` / `mantis.config.resolve.radius`.

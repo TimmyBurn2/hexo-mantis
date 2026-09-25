@@ -59,15 +59,15 @@ def test_mint_rejects_an_unknown_INTERMEDIATE_delta_segment(tmp_path):
     """The BEHAVIOUR — an unknown intermediate segment of a dotted key is rc 2 by name — with
     the honest note that it is **not** a flip row for `_resolve_parent`'s `part not in node`.
 
-    WPAX ADJ-13 corrective pass, R72 rule R72-C. That conjunct came out UNCOVERED, and the
+    That conjunct came out UNCOVERED, and the
     reason is that it is **provably redundant**, not that nobody wrote a test: deleting it lets
     the loop fall into `node[part]`, which raises the same `KeyError` the caller already
     catches, and nothing reads the exception's argument. Measured — `--set nosuchsection.seed=1`,
     `identity.nosuch.leaf=1` and `identity.bogus=1` each produce **byte-identical rc 2 and
     stderr** with the conjunct and with it replaced by `False`. No test can distinguish it, so a
-    row claiming to kill it would be a row that cannot fail, which is exactly what R72 exists to
-    find. Stated here rather than dressed up (the precedent is R72 row L5's
-    `max(learners) >= 1`), and carded as CARD-MINT-RESOLVE-PARENT-CONJUNCT.
+    row claiming to kill it would be a row that cannot fail. Stated here rather than dressed up
+    (the precedent is the sibling `max(learners) >= 1` conjunct),
+    and carded as CARD-MINT-RESOLVE-PARENT-CONJUNCT.
 
     `test_mint_rejects_unknown_delta_key` does not cover this behaviour either: `identity.bogus`
     walks a REAL section and fails on the LEAF check one line further down, so the intermediate
@@ -83,12 +83,12 @@ def test_mint_rejects_an_unknown_INTERMEDIATE_delta_segment(tmp_path):
 
 
 def test_mint_refuses_to_overwrite_WITHOUT_force_and_obeys_it_WITH_it(tmp_path):
-    """R72 (same pass): the `args.force` conjunct of `if out_path.exists() and not args.force`
+    """The `args.force` conjunct of `if out_path.exists() and not args.force`
     was uncovered — replacing it with a constant left the full default tier green in BOTH
     directions, so the flag was decoration.
 
     Both arms matter and neither is cosmetic. Without `--force`, a mint that silently
-    overwrites is a minted config replaced with no record — the R1/LAW-12 provenance failure.
+    overwrites is a minted config replaced with no record — a provenance failure.
     With `--force`, a mint that refuses anyway makes the documented re-mint path dead, which is
     how an operator ends up hand-editing a config instead (the very thing minting exists to
     stop).

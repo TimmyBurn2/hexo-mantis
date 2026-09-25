@@ -1,10 +1,10 @@
-"""⊕ WPUF Phase U ORACLE — O-U5: the three knobs and nothing else (DESIGN_U §5/§9).
+"""⊕ ORACLE — O-U5: the three knobs and nothing else (DESIGN_U §5/§9).
 
 `mantis.config.resolve.actor_sync.resolve_actor_sync_cadence` (K1's ONE read path) and
 the three schema fields are the subject.
 
-R1/LAW-08: missing key = named error at load, never a fallback; `ge=1` on the cadence
-means NO representable "off" value exists (R49 at the type level); the cross-field
+Missing key = named error at load, never a fallback; `ge=1` on the cadence
+means NO representable "off" value exists (enforced at the type level); the cross-field
 validator (`RunConfig`-level, since it spans sections) rejects a threshold at or below
 the cadence with a NAMED message. Payload builders mirror
 tests/config/test_train_policy_value_target_consistency.py's full-RunConfig shape.
@@ -55,9 +55,8 @@ def _payload(*, train_over: dict | None = None, monitor_over: dict | None = None
     return {
         "schema_version": SCHEMA_VERSION, "run_id": "unit_test", "seed": 1,
         "eval_enabled": True,
-        # RECAL-PREP (R308(g)(i)): a REQUIRED top-level leaf. `null` is R119's
-        # placeholder — refused at boot on a cuda process, valued only by the
-        # re-calibration sitting under R282(b).
+        # A REQUIRED top-level leaf. `null` is the placeholder — refused at boot on a
+        # cuda process, valued only by the re-calibration.
         "allocator_posture": None,
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
         "model": {"gnn": {"hidden": 128, "num_layers": 4}, "aux_soft_policy": None},
@@ -85,10 +84,10 @@ def test_missing_knob_is_a_named_error_at_load(section: str, key: str) -> None:
         RunConfig.model_validate(payload)
 
 
-# bounds: no representable "off" (R49)
+# bounds: no representable "off"
 @pytest.mark.parametrize("bad_cadence", [0, -1])
 def test_cadence_has_no_representable_off_value(bad_cadence: int) -> None:
-    """`ge=1`: the schema CANNOT express "don't sync" — R49 enforced at the type level."""
+    """`ge=1`: the schema CANNOT express "don't sync" — enforced at the type level."""
     with pytest.raises(ValidationError, match="actor_sync_cadence_steps"):
         RunConfig.model_validate(
             _payload(train_over={"actor_sync_cadence_steps": bad_cadence}))

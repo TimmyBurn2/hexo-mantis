@@ -7,7 +7,7 @@ value raises a `ValidationError` naming the field, one in-domain boundary value 
 The two timeout fields were floor-only bounds that admitted a REAL `.inf` YAML literal end to
 end, which reproduced a silent poller death through `Process.join(float("inf"))`. They now carry
 `allow_inf_nan=False` and a finite ceiling. (The `eval.ladder` rows this file also bounded were
-deleted with the sealbot rung, R362(c).)
+deleted with the sealbot rung.)
 """
 from __future__ import annotations
 

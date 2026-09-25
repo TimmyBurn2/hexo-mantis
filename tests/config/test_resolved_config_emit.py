@@ -3,7 +3,7 @@ and O7 — death-of-merge census (grep-gate + mutation self-test).
 
 The merge/layer-reconstruct machinery is deleted; emit is thin per-knob (value, source)
 tagging. The payload carries EXACTLY the 6 schema leaves (source="file") plus the derived
-amp_dtype (source="derived") = 7 knobs (WPSC Phase 2 SC-A2: `selfplay.
+amp_dtype (source="derived") = 7 knobs (`selfplay.
 legal_move_radius_schedule` dropped out of the schema entirely, DESIGN_P2.md §5/§9 — no
 replacement leaf).
 """
@@ -47,7 +47,7 @@ def test_payload_event_and_seven_knob_key_set(path):
 def test_payload_pins_production_values(path):
     """The EMIT carries the config's own values — a transport assertion, not a mint assertion.
 
-    AUDIT-1 F-49: `== 96` / `== 128` were typed here, a third copy of one config's minted sims
+    `== 96` / `== 128` were typed here, a third copy of one config's minted sims
     with no provenance line. What this test is for is that `to_event_payload` does not transform
     or drop a value on the way out, so it compares the payload to the LOADED CONFIG — every
     production config, not one named file. The one provenance pin for a specific minted value's
@@ -102,7 +102,7 @@ def test_resolved_knob_shape():
     assert kb.value == 1 and kb.source == "file"
 
 
-# O7 death-of-merge census (grep-gate, LAW-07 mutation self-test)
+# O7 death-of-merge census (grep-gate, mutation self-test)
 _FORBIDDEN = (
     "capture_config_layers",
     "merged_layers",
@@ -131,7 +131,7 @@ def test_no_merge_machinery_in_config_package():
 
 
 def test_census_checker_bites():
-    # Mutation self-test: a source that reintroduces any symbol MUST be flagged (LAW-07).
+    # Mutation self-test: a source that reintroduces any symbol MUST be flagged.
     assert _scan("x = _deep_merge(a, b)") == {"_deep_merge"}
     assert _scan("_PRELOAD_SEED_DEFAULT = 42") == {"_PRELOAD_SEED_DEFAULT"}
     assert _scan("clean source with no forbidden symbol") == set()

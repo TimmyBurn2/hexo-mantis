@@ -117,7 +117,7 @@ def test_the_bound_follows_the_RUN_LENGTH_authority_never_the_scheduler_horizon(
 
 
 def test_every_required_row_declares_a_cadence_whose_paths_all_resolve(production) -> None:
-    """LAW-07's phantom-input class on the new axis, both directions: a REQUIRED row with no
+    """The phantom-input class on the new axis, both directions: a REQUIRED row with no
     cadence cannot be judged, and a `cadence_paths` entry that resolves to nothing is a claim
     the audit does not make."""
     required = [row for row in MANIFEST if row.status is Status.REQUIRED]
@@ -139,10 +139,8 @@ def test_every_required_row_declares_a_cadence_whose_paths_all_resolve(productio
                 f"row {row.name!r} names cadence path {path!r}, which resolves to None on "
                 "the shipped production config"
             )
-        # The row's CLOCK must resolve too, and a row may NOT declare its own period: an
-        # unresolvable clock cannot be judged, and a period in `cadence_paths` is a row
-        # denominating itself, which is how an axis ends up audited in a clock it does not
-        # tick in.
+        # The row's CLOCK must resolve too, and a row may NOT declare its own period: that
+        # would be an axis audited in a clock it does not tick in.
         clock = row.cadence.sample_clock
         if clock.period_path is not None:
             assert clock.period_path not in row.cadence_paths, (
@@ -312,7 +310,7 @@ def test_the_verdict_publishes_the_clock_it_judged_each_row_in(production) -> No
 
 
 def test_the_production_config_can_fire_every_armed_row_with_margin(production) -> None:
-    """R251's sanity anchor, RE-DERIVED here rather than transcribed: the verdicts are read
+    """The sanity anchor, RE-DERIVED here rather than transcribed: the verdicts are read
     off `audit_cadence`, and each is compared to the bound the constant actually implies."""
     verdicts = audit_cadence(production)
     assert verdicts, "no verdict means the audit judged nothing"
@@ -335,8 +333,8 @@ def test_the_production_config_can_fire_every_armed_row_with_margin(production) 
 
 
 def test_an_interval_that_outruns_the_run_is_CADENCE_DISARMED(production) -> None:
-    """ADJ-D22's own config, at the module layer. `gate_interval` stays schema-legal
-    (`ge=1`) and the threshold stays armed — every check that existed before this ruling
+    """The module layer's own config. `gate_interval` stays schema-legal
+    (`ge=1`) and the threshold stays armed — every check that existed before
     still reads this config as healthy."""
     vacuous = _revalidated(production, "monitor", "gate_interval", 1_000_000_000)
     assert vacuous.train.draw_rate_abort is not None

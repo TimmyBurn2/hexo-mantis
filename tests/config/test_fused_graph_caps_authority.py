@@ -42,7 +42,7 @@ _REPO = Path(__file__).resolve().parents[2]
 _CONFIGS = _REPO / "configs"
 _READ_PATH = _REPO / "src" / "mantis" / "config" / "resolve" / "fused_graph_caps.py"
 
-#: The census (R367(a)): production is every config on disk that no exempt row names, so a mint
+#: The census: production is every config on disk that no exempt row names, so a mint
 #: joins these sets by landing under `configs/`, never by an edit here.
 _PRODUCTION = tuple(path.relative_to(_CONFIGS).as_posix() for path in production_configs(_REPO))
 _NON_PRODUCTION = tuple(sorted(Path(rel).relative_to("configs").as_posix() for rel in exempt_config_paths()))

@@ -444,7 +444,7 @@ def test_ap08_the_row_exists_and_names_the_top_level_key():
 def test_ap08_the_row_is_REQUIRED_and_therefore_unowned_and_still_pinned():
     """The row is REQUIRED and therefore unowned, and still pinned. `owner` is None, NOT ABSENT:
     `ArmedAbort` takes it positionally, so dropping the keyword is a `TypeError` at import. The
-    pin stays, because a deleted refusal would make this the phantom gate input LAW-07 prevents."""
+    pin stays, because a deleted refusal would make this the phantom gate input a producer test prevents."""
     row = _row("allocator_posture_minted")
     assert row.status is Status.REQUIRED
     assert row.owner is None, (

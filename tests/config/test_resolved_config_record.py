@@ -1,4 +1,4 @@
-"""R347 / CONFIG-1 — the run directory's COMPLETE resolved-config record.
+"""CONFIG-1 — the run directory's COMPLETE resolved-config record.
 
 WHY THIS FILE EXISTS. CONFIG-1 gave the operational constants schema defaults and took them
 out of the YAML, so a shipped config no longer STATES every value its run uses. That is only
@@ -141,7 +141,7 @@ def test_the_record_RE_VALIDATES_from_its_own_bytes(tmp_path: Path, production: 
 def test_a_record_that_would_not_validate_is_a_REFUSAL_and_not_a_written_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The mutation self-test (LAW-07): drop the re-validation and this row goes green on a
+    """The mutation self-test: drop the re-validation and this row goes green on a
     record nobody could load. A truncated dump must raise, not be written and forgotten."""
     config = load_config(PRODUCTION[0])
     broken = config.model_dump()

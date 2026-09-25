@@ -1,9 +1,9 @@
 """O4 — amp dtype resolver (resolve/amp.resolve_amp_dtype) + O4b DAG no-torch guard.
 
-graph->bf16 is a pinned code constant (LAW-06 / F-11: fp16 GINE overflow -> NaN); the token
+graph->bf16 is a pinned code constant (fp16 GINE overflow -> NaN); the token
 is a STRING, never a torch.dtype (config -> encoding, util only; the model maps token->dtype).
-The declared-value argument went with `train.amp_dtype` (R346(f)) — the resolver takes the
-representation alone, so there is no longer a config spelling that could disagree with LAW-06.
+The declared-value argument went with `train.amp_dtype` — the resolver takes the
+representation alone, so there is no longer a config spelling that could disagree with it.
 """
 import re
 import subprocess

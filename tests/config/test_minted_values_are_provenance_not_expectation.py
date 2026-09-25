@@ -1,7 +1,7 @@
 """A minted value is pinned ONCE, with its provenance; everywhere else the RELATION is asserted.
 
-AUDIT-1 F-49. run5's minted `eval.random_model_sims: 96` and `eval.sealbot_model_sims: 128` (the
-latter deleted with the sealbot rung, R362(c)) were asserted as literals in four places — the regime-parity suite and its `_p2` twin, and both
+run5's minted `eval.random_model_sims: 96` and `eval.sealbot_model_sims: 128` (the
+latter deleted with the sealbot rung) were asserted as literals in four places — the regime-parity suite and its `_p2` twin, and both
 `test_resolved_config_emit*` files — under docstrings that said DERIVED. Re-pointing
 `production_config` at run6 would have reddened all four with "96 != N" and no line anywhere
 saying 96 was run5's.

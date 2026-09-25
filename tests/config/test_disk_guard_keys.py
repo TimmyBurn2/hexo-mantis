@@ -2,8 +2,8 @@
 
 `DiskGuard` was constructed at exactly one site, `build_subsystems`, which had ZERO callers,
 and its `60.0/10.0/5.0` arrived as `dict.get`-shaped code-side defaults over a key that existed
-in no schema and no config: four dead numbers and LAW-16's third leg unarmed. R121(b) mandates
-the root construct the guard and R1 forbids literal or `dict.get` values.
+in no schema and no config: four dead numbers and the disk-guard watchdog's third leg unarmed.
+The root must construct the guard, and a literal or `dict.get` value is forbidden.
 
 O-D3 is LIVENESS — set the knob through the ONE loader, observe the consumer. O-D4 is
 STRUCTURE — a live key can grow a pydantic default tomorrow, and a defaulted key is a second
@@ -36,9 +36,8 @@ from mantis.train.lifecycle.disk_guard import DiskGuard
 
 _GB = 1_000_000_000  # decimal GB — the divisor `disk_guard.py` calibrates against
 
-#: R122's minted family, stated here so a re-mint that quietly moves them is loud. The values
-#: are revisable at mint prereg — the literals were dead, so nothing has ever measured them —
-#: and that is a mint decision, not an IMPL edit.
+#: The minted family, stated here so a re-mint that quietly moves them is loud — revisable at
+#: mint prereg, a mint decision and not an IMPL edit.
 _MINTED = {"interval_sec": 60.0, "warn_gb": 10.0, "fail_gb": 5.0}
 _FIELDS = sorted(_MINTED)
 
@@ -81,8 +80,8 @@ def test_disk_guard_valid_payload_constructs_clean() -> None:
 @pytest.mark.parametrize("field", _FIELDS)
 def test_an_omitted_disk_guard_key_lands_on_its_declared_default(field: str) -> None:
     """O-D4 arm 1, INVERTED: all three thresholds are declared operational constants now, so a
-    missing key is legal and the claim moves to the VALUE. What R122 forbade was `.get(name,
-    60.0)` at a CALL SITE — a second authority no config could override."""
+    missing key is legal and the claim moves to the VALUE. `.get(name,
+    60.0)` at a CALL SITE was forbidden — a second authority no config could override."""
     payload = _payload()
     del payload[field]
     cfg = DiskGuardConfig.model_validate(payload)
@@ -99,9 +98,8 @@ def test_disk_guard_has_no_pydantic_level_default() -> None:
     every path, so a default is invisible to them. Asserted here as well as in the shared
     census, on purpose: one census that can be forgotten is one census.
     """
-    # INVERTED rather than deleted: the thresholds are operational constants, so they carry
-    # schema defaults and leave the YAML, and the guard becomes the equality — every field is
-    # DECLARED in `OPERATIONAL_DEFAULT_KEYS`, so a fourth leaf without a registry row reds.
+    # INVERTED rather than deleted: the thresholds carry schema defaults and leave the YAML;
+    # every field is DECLARED in `OPERATIONAL_DEFAULT_KEYS`, so a fourth leaf without a row reds.
     assert set(DiskGuardConfig.model_fields) == operational_default_fields(
         "monitor.disk_guard"), (
         "a DiskGuardConfig field is not declared in OPERATIONAL_DEFAULT_KEYS (or a declared "
@@ -138,7 +136,7 @@ def _minted(smoke_run_config, **disk_guard) -> RunConfig:
 def test_each_disk_guard_key_arrives_whole_at_its_one_resolver(
     field: str, value: float, smoke_run_config
 ) -> None:
-    """O-D3, arm 1 — the per-key mutation, through the resolver R122 mandates.
+    """O-D3, arm 1 — the per-key mutation, through the mandated resolver.
 
     MUTATION THAT REDS IT: a resolver that reads a constant or the wrong leaf — a transposed
     `warn_gb`/`fail_gb` kills the run at the warning threshold while every field bound passes.

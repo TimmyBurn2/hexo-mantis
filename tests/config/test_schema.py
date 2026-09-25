@@ -118,7 +118,7 @@ def test_representation_closed_set_rejects_dense():
 
 
 def test_f1_graph_encoding_declared_grid_rejected_at_validate():
-    # gnn_axis_v1 is a GRAPH encoding; declaring representation=grid must RAISE (LAW-06 pin guard).
+    # gnn_axis_v1 is a GRAPH encoding; declaring representation=grid must RAISE (pin guard).
     payload = _valid_payload()
     payload["identity"] = {"encoding": "gnn_axis_v1", "representation": "grid"}
     with pytest.raises(ValidationError, match="disagrees with the registry"):

@@ -11,7 +11,7 @@ the lag threshold out of reach — so the exit-45 invariant that exists precisel
 frozen actor could never fire on one. A bound on either knob alone would not have closed it.
 
 Reuses the frozen schema oracle's payload builders by IMPORT (reading a frozen file is not
-editing it, R43).
+editing it).
 
 NOT frozen: written after ORACLE-WRITE in response to a RED-TEAM finding.
 """
@@ -28,7 +28,7 @@ def _load_frozen_schema_oracle():
 
     `tests` is deliberately not a package and no `sys.path` mutation is permitted (R5),
     so its payload builders are reached the same way the gate-11 producer test reaches
-    its subject. Reading a frozen file is not editing it (R43).
+    its subject. Reading a frozen file is not editing it.
     """
     import importlib.util
     from pathlib import Path
@@ -45,7 +45,7 @@ _payload = _load_frozen_schema_oracle()._payload
 
 
 def _max_train_steps() -> int:
-    """WPAX S-4: the bound is anchored to the RUN-LENGTH knob, not to the LR-scheduler
+    """The bound is anchored to the RUN-LENGTH knob, not to the LR-scheduler
     horizon `train.total_steps` that it used to read (F-C re-anchor)."""
     return int(_payload()["train"]["max_train_steps"])
 

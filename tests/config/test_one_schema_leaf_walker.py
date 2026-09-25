@@ -1,11 +1,11 @@
 """THE schema leaf walk has ONE implementation, and both of its modes are driven here.
 
-AUDIT-1 F-44 counted FOUR hand-mirrored copies of this walk. The census at REPAIR-3's landing
+An earlier audit counted FOUR hand-mirrored copies of this walk. A later census
 found FIVE, and the fifth is the interesting one: the audit's census was scoped to the NAME
 `_leaf_paths`, and the fifth copy is called `live_leaf_paths`. Measured against the live schema
 at that moment, the five walked to THREE different answers — 191 (gate 13 and the consumer
 bijection), 182 (`test_eval_config_remint.py`'s pre-DR-6 copy, which stopped at `Block | None`
-— the exact blindness R93 fixed — while its docstring claimed to mirror the others), and 199
+— the exact blindness that was fixed — while its docstring claimed to mirror the others), and 199
 (the conformance partition's copy, which descends `list[SubModel]`). Nothing compared them.
 
 TWO ARMS, AND THE SECOND IS THE ONE THAT WOULD HAVE CAUGHT THE FIFTH COPY. The first drives the
@@ -64,7 +64,7 @@ class _Fixture(BaseModel):
 
 
 def test_the_default_mode_hands_out_only_paths_a_config_can_write():
-    """DR-6/R93 descends the OPTIONAL block; NIT-3 keeps every generic container one leaf."""
+    """DR-6 descends the OPTIONAL block; NIT-3 keeps every generic container one leaf."""
     assert leaf_paths(_Fixture) == (
         "required_block.a", "required_block.b",
         "optional_block.a", "optional_block.b",
@@ -192,7 +192,7 @@ def test_exactly_one_walker_shaped_function_exists_in_the_tree():
 
 
 def test_the_census_finds_a_planted_copy_under_any_name(tmp_path: Path):
-    """LAW-07 positive control. The census must fire on a copy that shares NO name with the
+    """Positive control. The census must fire on a copy that shares NO name with the
     authority — the exact case (`live_leaf_paths`) a name-scoped census missed."""
     (tmp_path / "some_module.py").write_text(
         "def totally_unrelated_name(model, prefix=''):\n"

@@ -18,7 +18,7 @@ from pydantic import ValidationError
 # module does not exist; it sits here, with its `mantis.*` siblings, where it belongs.
 from mantis.config.loader import discover_configs, load_config
 from mantis.config.census import production_configs
-from mantis.config.resolve.draw_rate import resolve_draw_rate_abort  # RED anchor (R80)
+from mantis.config.resolve.draw_rate import resolve_draw_rate_abort  # RED anchor
 from mantis.config.schema import RunConfig
 from mantis.util.constants import DRAW_RATE_WINDOW
 

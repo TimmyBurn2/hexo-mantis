@@ -1,4 +1,4 @@
-"""The config census (R367(a)): production is every config on disk minus the exempt rows, taken at point of use."""
+"""The config census: production is every config on disk minus the exempt rows, taken at point of use."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -48,7 +48,7 @@ def test_an_empty_census_refuses(tmp_path: Path) -> None:
 
 
 def test_an_exemption_is_a_ruling_event_so_the_exempt_set_is_pinned_by_name() -> None:
-    """The one escape the census leaves — a production config excused with a written reason — reds here: the exempt set is the ONE by-name list R367(a) permits, moved only with the ruling cited."""
+    """The one escape the census leaves — a production config excused with a written reason — reds here: the exempt set is the ONE by-name list permitted, moved only with the ruling cited."""
     assert census.exempt_config_paths() == frozenset({"configs/dev_example.yaml", "configs/smoke_preflight_armed.yaml"}), (
         "an exemption is a ruling event; move this pin with the ruling cited (R367(a): the exempt "
         "list's size plus the review gate is what stands between a config and an unaudited run)"

@@ -47,16 +47,15 @@ def selfplay_block() -> dict:
 def inference_block() -> dict:
     return {
         "inference_batch_size": 64, "inference_max_wait_ms": 10,
-        # `inference.fused_graph_caps` is a REQUIRED block, and the pair here is the
-        # template's NON-BINDING-BY-CONSTRUCTION value, so nothing exercises a split; the
-        # real configs are pinned by tests/config/test_fused_graph_caps_authority.py.
+        # `inference.fused_graph_caps` is a REQUIRED block; this template pair is
+        # NON-BINDING-BY-CONSTRUCTION (real configs are pinned by test_fused_graph_caps_authority.py).
         "fused_graph_caps": CAPS_DICT,
     }
 
 
 def monitor_block(**over: object) -> dict:
     base = {
-        # R242 (ADJ-D12): the ARMING cadence, schema-only and required.
+        # The ARMING cadence, schema-only and required.
         "gate_interval": 1000,
         "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
         "alert_loss_increase_window": 3, "axis_warn": 0.45, "axis_alert": 0.50,

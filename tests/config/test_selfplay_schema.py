@@ -176,7 +176,7 @@ def test_the_gumbel_kind_lowers_the_sim_ceiling_at_mint(smoke_run_config):
             selfplay={"search": {"kind": "gumbel"}, "mcts": {"n_simulations": in_gap}},
         )
 
-    # The DEPLOY kind spends the eval sims against the same pool (R351(c)'s split).
+    # The DEPLOY kind spends the eval sims against the same pool (the split's design).
     with pytest.raises(ValidationError, match="eval.gate.deploy_sims"):
         smoke_run_config(
             "dev_example.yaml",
@@ -199,7 +199,7 @@ def test_every_armed_sims_knob_is_checked_against_the_kinds_ceiling(smoke_run_co
 
 def test_q_rescale_is_required_with_no_default() -> None:
     """The σ's rescale switch has no default: rescale × `c_scale` 1.0 is the pair that read
-    run6 (F-50), so a block that never wrote the switch does not silently get either arm."""
+    run6, so a block that never wrote the switch does not silently get either arm."""
     block = _selfplay()
     del block["q_rescale"]
     with pytest.raises(ValidationError) as excinfo:
@@ -209,7 +209,7 @@ def test_q_rescale_is_required_with_no_default() -> None:
 
 
 def test_search_stats_every_is_required_non_negative_and_has_no_default() -> None:
-    """1-in-N self-play games record their roots (R355(d)); 0 is off; no default (R1)."""
+    """1-in-N self-play games record their roots; 0 is off; no default."""
     assert SelfplayConfig.model_validate(_selfplay(search_stats_every=8)).search_stats_every == 8
     assert SelfplayConfig.model_validate(_selfplay(search_stats_every=0)).search_stats_every == 0
     missing = _selfplay()
