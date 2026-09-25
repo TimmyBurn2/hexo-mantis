@@ -609,7 +609,7 @@ nulls, two promotions. run6 minted `eval.concurrency = 8`. R343(a).
 | CARD-EVAL-CORESIDENCY | characterize eval-child steady VRAM for the co-residency prereg row | OPEN. The founding 8.21 GiB figure was superseded by R229(1) (unbounded, to 13.5 GiB) without naming the card |
 | CARD-A10-CAP | whether an entropy term enters the graph loop at all | RECORDED, explicitly NOT executed. R335(b) makes entropy normalization a PRECONDITION on ever arming one |
 | CARD-SEALBOT-BRANCHES | evaluate ramora0 branches (nnue) as a higher ladder rung | DEFERRED, not mint-relevant |
-| CARD-MINPIN | the K-cluster min/max asymmetry, pending the matched-FLOP dense arm | PARTIAL — the parity pin landed; the asymmetry stays a flagged defect. See falsified.md F-04 |
+| CARD-MINPIN | the K-cluster min/max asymmetry, pending the matched-FLOP dense arm | OPEN — no in-tree pin exists (`aggregate_cluster_values_min` has zero hits; both registry rows read `value_pool = "none"`); the asymmetry stays a flagged defect. See falsified.md F-04 |
 | CARD-CHECK14-EDGE-GEOMETRY | the `verify_edge_geometry` collate check ("check 14", NOT CI gate 14) | NO STATUS EVER RULED. R336(e) separately CARDS check 14's 41.4 ms/part, not ordered |
 | CARD-FRESHSYNC | gate 1 fresh-clone sync broken since WP7 | OPEN in governance, REPAIRED IN CODE — the gate pins `registry_sha_hex()` and describes the failure in the past tense |
 
