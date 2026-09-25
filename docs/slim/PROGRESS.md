@@ -75,6 +75,13 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   - `.wt/w6-reg`, **opus**: the falsified.md F-43/F-04 and RULINGS.md defect-47 annotations.
     LANDED 4f9cd33c (F-43 by symbol), 174a9180 (F-04: the min pin left at 3dd20b49), b1e91385 (defect 47:
     the coverage pair one high, "Four" names five). Append-only, +36/-0; gates 10/13/17 green.
+- RESUMED 2026-09-25 by a second W6 dispatcher (the first, plus the configs and cards
+  implementers, stopped on a usage limit). Both cut-off diffs were read and KEPT for finishing:
+  - `.wt/w6-configs` (**opus**): 60cabe25 + 19 uncommitted tests/config re-points, sound in
+    direction; the implementer verifies, commits, and re-points the other test dirs.
+  - `.wt/w6-configs-b` (**opus**, new, from 98fb255a): tests/tools + tests/diagnostics re-points.
+  - `.wt/w6-cards` (**sonnet**): the archive delete + F-816-34/35/36 carry kept; leg 4 to finish.
+  - The run6–8 delete follows once both configs halves land, with gate 10 `DISSOLVED_PATHS` rows.
 - Queued: leg 6, the STATE rewrite (**opus**), then
   REVIEW-W6 (**opus**).
 
