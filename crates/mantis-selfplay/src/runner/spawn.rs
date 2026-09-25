@@ -6,8 +6,9 @@
 //! [`super::game::run_worker_thread`].
 
 use std::sync::atomic::Ordering;
-use std::sync::PoisonError;
 use std::thread;
+
+use crate::poison::lock_or_recover;
 
 use super::atomics::WorkerAtomics;
 use super::params::{ExplorationFlags, SearchFlags, WorkerChannels, WorkerParams};
@@ -65,8 +66,8 @@ impl SelfPlayRunner {
         let (stats_proto, atomics_proto, channels_proto, params_proto) =
             self.build_worker_prototypes();
 
-        // The panic that poisoned the list was already counted; stop() still joins what it holds.
-        let mut handles = self.handles.lock().unwrap_or_else(PoisonError::into_inner);
+        // Only a panic mid-spawn poisons the list; it holds whole handles that stop() still joins.
+        let mut handles = lock_or_recover(&self.handles, None);
         for worker_id in 0..self.config.n_workers {
             let stats = stats_proto.clone();
             let atomics = atomics_proto.clone();

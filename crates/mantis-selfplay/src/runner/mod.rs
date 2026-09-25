@@ -19,10 +19,12 @@ pub use config::SelfPlayRunnerConfig;
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
 use mantis_encoding::{all_specs, lookup, RegistrySpec};
+
+use crate::poison::lock_or_recover;
 
 use crate::queues::GraphQueue;
 use crate::replay::hexg::GraphRecord;
@@ -330,10 +332,7 @@ impl SelfPlayRunner {
     /// THEN flip `running=false`, so the drain can always read the reason for the halt.
     pub fn store_fatal_defect(&self, msg: String) {
         {
-            let mut slot = self
-                .fatal_defect
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner);
+            let mut slot = lock_or_recover(&self.fatal_defect, None);
             if slot.is_none() {
                 *slot = Some(msg);
             }
@@ -346,10 +345,7 @@ impl SelfPlayRunner {
     /// exception so the pool drain loop dies with the variant name; a poisoned slot still reads.
     #[must_use]
     pub fn fatal_defect(&self) -> Option<String> {
-        self.fatal_defect
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone()
+        lock_or_recover(&self.fatal_defect, None).clone()
     }
 
     /// Worker threads that have died by panic. Reads 0 in a healthy run.
@@ -368,7 +364,7 @@ impl SelfPlayRunner {
     pub fn stop(&self) {
         self.running.store(false, Ordering::SeqCst);
         self.graph_queue.close();
-        let mut handles = self.handles.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut handles = lock_or_recover(&self.handles, None);
         while let Some(handle) = handles.pop() {
             // CHECKED, not discarded. `Err` here means the thread unwound OUT of the spawn
             // closure, which the normal path cannot do, so this double-counts nothing and is the

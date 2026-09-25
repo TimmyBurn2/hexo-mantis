@@ -19,6 +19,7 @@ use pyo3::types::PyDict;
 use mantis_encoding::RegistrySpec;
 use mantis_graph::{AxisGraph, BUILDER_IMPL_NATIVE};
 use mantis_search::LegalSetPolicy;
+use mantis_selfplay::poison::lock_or_recover;
 use mantis_selfplay::queues::{
     build_leaf_graph, build_leaf_graphs_batch, GraphQueue, GraphWire, GraphWireArrays,
     WireAlreadyConsumed as WireConsumedGuard,
@@ -103,25 +104,6 @@ impl ModelVersionSrc {
 struct InFlightGraph {
     policy_dst_slot: Vec<i32>,
     legal_coords: Vec<(i32, i32)>,
-}
-
-/// Take a lock, RECOVERING from poisoning instead of propagating it.
-///
-/// Poisoning is a one-way latch, so the first panic under the guard would brick this batcher
-/// for the rest of the run — and under `panic = "unwind"` the process survives to keep hitting
-/// the dead lock. Sound HERE because the guarded value is plain owned data and the seam already
-/// skips unknown ids. Every recovery bumps `counter`, which is what makes it observable.
-pub(crate) fn lock_or_recover<'a, T>(
-    mutex: &'a Mutex<T>,
-    counter: &AtomicUsize,
-) -> MutexGuard<'a, T> {
-    match mutex.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => {
-            counter.fetch_add(1, Ordering::SeqCst);
-            poisoned.into_inner()
-        }
-    }
 }
 
 /// Saturating decrement of a mock-pending counter (a production batcher never incremented it).
@@ -210,10 +192,9 @@ impl PyInferenceBatcher {
         )
     }
 
-    /// The ONE place `in_flight_graphs` is locked — no caller may re-introduce a bare
-    /// `.lock().expect(...)`.
+    /// The ONE place `in_flight_graphs` is locked; each recovery is counted so a poison is visible.
     fn lock_in_flight(&self) -> MutexGuard<'_, HashMap<u64, InFlightGraph>> {
-        lock_or_recover(&self.in_flight_graphs, &self.lock_recoveries)
+        lock_or_recover(&self.in_flight_graphs, Some(&self.lock_recoveries))
     }
 
     /// Drop the in-flight metadata for `ids` and wake+fail their still-pending graph waiters.
@@ -746,7 +727,7 @@ mod tests {
     fn lock_or_recover_recovers_and_counts() {
         let mutex = Arc::new(Mutex::new(HashMap::<u64, InFlightGraph>::new()));
         let counter = AtomicUsize::new(0);
-        lock_or_recover(&mutex, &counter).insert(
+        lock_or_recover(&mutex, Some(&counter)).insert(
             7,
             InFlightGraph {
                 policy_dst_slot: vec![1, 2],
@@ -761,7 +742,7 @@ mod tests {
 
         poison(&mutex);
 
-        let guard = lock_or_recover(&mutex, &counter);
+        let guard = lock_or_recover(&mutex, Some(&counter));
         assert_eq!(
             counter.load(Ordering::SeqCst),
             1,
@@ -776,7 +757,7 @@ mod tests {
         );
         drop(guard);
 
-        drop(lock_or_recover(&mutex, &counter));
+        drop(lock_or_recover(&mutex, Some(&counter)));
         assert_eq!(counter.load(Ordering::SeqCst), 2);
     }
 
@@ -810,7 +791,7 @@ mod tests {
         let counter = AtomicUsize::new(0);
         poison(&mutex);
         let before = counter.load(Ordering::SeqCst);
-        let guard = lock_or_recover(&mutex, &counter);
+        let guard = lock_or_recover(&mutex, Some(&counter));
         let after = counter.load(Ordering::SeqCst);
         assert!(
             guard.is_empty(),

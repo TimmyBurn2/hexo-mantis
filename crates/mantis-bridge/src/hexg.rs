@@ -11,13 +11,14 @@ use numpy::PyArray1;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
+use mantis_selfplay::poison::lock_or_recover;
 use mantis_selfplay::queues::GraphWire;
 use mantis_selfplay::records::{TargetIntegrityError, TARGET_MASS_TOL};
 use mantis_selfplay::replay::hexg::{
     derived_visit_capacity as derived_visit_capacity_impl, GraphRecord, GraphTargets, HexgBuffer,
 };
 
-use crate::inference::{lock_or_recover, PyGraphWire, SeamFailure};
+use crate::inference::{PyGraphWire, SeamFailure};
 
 /// `push_graph_position` is the SECOND public graph-record constructor, so it refuses
 /// non-distribution rows with the SAME typed semantics as `record_position_graph`: this face has
@@ -68,7 +69,7 @@ pub struct PyHexgBuffer {
 impl PyHexgBuffer {
     /// The ring, or a recovered guard over it. Never panics on a poisoned lock.
     fn ring(&self) -> MutexGuard<'_, HexgBuffer> {
-        lock_or_recover(&self.inner, &self.lock_recoveries)
+        lock_or_recover(&self.inner, Some(&self.lock_recoveries))
     }
 }
 

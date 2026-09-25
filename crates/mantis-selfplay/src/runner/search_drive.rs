@@ -7,7 +7,6 @@
 
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::PoisonError;
 
 use rand::prelude::IndexedRandom;
 use rand::rngs::ThreadRng;
@@ -20,6 +19,7 @@ use mantis_search::{
     QSigma, SearchKind,
 };
 
+use crate::poison::lock_or_recover;
 use crate::queues::{build_leaf_graph, GraphQueue};
 use crate::records;
 use crate::replay::hexg::GraphRecord;
@@ -90,7 +90,7 @@ impl FatalDefectLatch<'_> {
     fn store_counted(&self, msg: String, counter: &AtomicU64) {
         {
             // A latch must not itself fail: the poisoning panic already halted the run.
-            let mut slot = self.slot.lock().unwrap_or_else(PoisonError::into_inner);
+            let mut slot = lock_or_recover(self.slot, None);
             if slot.is_none() {
                 *slot = Some(msg);
             }

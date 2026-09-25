@@ -6,21 +6,18 @@
 //! waiter map, whose payload is the ragged `(LegalSetPolicy, f32)`.
 //!
 //! A reason travels: `build_leaf_graph` and `submit_graph_and_wait` return `Err(reason)` verbatim.
+//! Locks recover uncounted: guarded sections are container ops with no reachable unwind.
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use fxhash::FxBuildHasher;
 use mantis_graph::{build_axis_graph, AxisGraph, BuildParams, StoneList, BUILDER_IMPL_NATIVE};
 use mantis_search::LegalSetPolicy;
 
-/// Each guarded section is one container op that leaves no torn state: poison carries no signal.
-#[inline]
-fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(PoisonError::into_inner)
-}
+use crate::poison::lock_or_recover;
 
 /// One queued graph inference request (the once-per-leaf `AxisGraph` payload).
 struct PendingGraphRequest {
@@ -87,7 +84,7 @@ impl GraphInner {
         max_wait_ms: u64,
     ) -> Vec<PendingGraphRequest> {
         let deadline = Instant::now() + Duration::from_millis(max_wait_ms);
-        let mut queue = lock(&self.queue);
+        let mut queue = lock_or_recover(&self.queue, None);
         let threshold = saturation_threshold(batch_size, self.max_in_flight);
         while queue.len() < threshold && !self.closed.load(Ordering::SeqCst) {
             let now = Instant::now();
@@ -169,11 +166,11 @@ impl GraphQueue {
         // Register the waiter BEFORE enqueuing so a producer that pops this id can
         // never miss its waiter.
         {
-            let mut wmap = lock(&self.inner.waiters);
+            let mut wmap = lock_or_recover(&self.inner.waiters, None);
             wmap.insert(id, waiter.clone());
         }
         {
-            let mut queue = lock(&self.inner.queue);
+            let mut queue = lock_or_recover(&self.inner.queue, None);
             queue.push_back(PendingGraphRequest { id, graph });
             self.inner.queue_cv.notify_all();
         }
@@ -235,13 +232,13 @@ impl GraphQueue {
             return Vec::new();
         }
         {
-            let mut wmap = lock(&self.inner.waiters);
+            let mut wmap = lock_or_recover(&self.inner.waiters, None);
             for (waiter, req) in waiters.iter().zip(requests.iter()) {
                 wmap.insert(req.id, waiter.clone());
             }
         }
         {
-            let mut queue = lock(&self.inner.queue);
+            let mut queue = lock_or_recover(&self.inner.queue, None);
             for req in requests {
                 queue.push_back(req);
             }
@@ -280,7 +277,7 @@ impl GraphQueue {
     /// re-checked on EVERY wake; the payload is a single `guard.take()` read and the reason
     /// travels with it.
     fn wait_for(&self, waiter: &Arc<GraphWaiter>) -> GraphWaiterPayload {
-        let mut guard = lock(&waiter.result);
+        let mut guard = lock_or_recover(&waiter.result, None);
         loop {
             if let Some(res) = guard.take() {
                 return res;
@@ -312,11 +309,11 @@ impl GraphQueue {
     pub fn submit_graph_results(&self, ids: &[u64], results: Vec<GraphWaiterPayload>) {
         for (&id, res) in ids.iter().zip(results) {
             let removed = {
-                let mut wmap = lock(&self.inner.waiters);
+                let mut wmap = lock_or_recover(&self.inner.waiters, None);
                 wmap.remove(&id)
             };
             if let Some(waiter) = removed {
-                let mut guard = lock(&waiter.result);
+                let mut guard = lock_or_recover(&waiter.result, None);
                 *guard = Some(res);
                 waiter.cv.notify_all();
             }
@@ -330,11 +327,11 @@ impl GraphQueue {
     pub fn fail_remaining(&self, ids: &[u64], reason: &str) {
         for &id in ids {
             let removed = {
-                let mut wmap = lock(&self.inner.waiters);
+                let mut wmap = lock_or_recover(&self.inner.waiters, None);
                 wmap.remove(&id)
             };
             if let Some(waiter) = removed {
-                let mut guard = lock(&waiter.result);
+                let mut guard = lock_or_recover(&waiter.result, None);
                 if guard.is_none() {
                     *guard = Some(Err(reason.to_string()));
                 }
@@ -347,7 +344,7 @@ impl GraphQueue {
     pub fn close(&self) {
         self.inner.closed.store(true, Ordering::SeqCst);
         self.inner.queue_cv.notify_all();
-        let wmap = lock(&self.inner.waiters);
+        let wmap = lock_or_recover(&self.inner.waiters, None);
         for waiter in wmap.values() {
             waiter.cv.notify_all();
         }
