@@ -10,14 +10,17 @@ per-row ledger and per-wave dispatch logs remain in git history at the dissoluti
 **Status: READY-TO-MERGE.** The wave STOPS here by ruling: no fast-forward, no push, `dev`
 untouched. The operator enacts the merge after reading this record. run10's launch base rule
 (R368(i)) applies to the merge: run10 launches from the merged tip only if the full gate set is
-green at it, slow tier included (it is, below); otherwise from `69e1532`.
+green at it, slow tier included (the sweep runs at this packet's close and its result is recorded
+in §9); otherwise from `69e1532`.
 
 ## 1. BEFORE and AFTER figures
 
 Both commands verbatim from `docs/slim/00_MAP.md` §1; unit = text lines from
 `git diff --numstat <empty-tree> HEAD` (git's own count; binary files count 0 and are tallied
-separately). BEFORE at `1e8d6d6`; AFTER at `2e69d0e2` (the post-W8-D tip, before the exit-record
-commits). `E=$(git hash-object -t tree /dev/null)`.
+separately). BEFORE at `69e1532` (`dev` — 00_MAP §1's own landing commit measures there; the W8
+addendum's "at `1e8d6d6`" label was wrong, and at that census tip the tree is 1 098 files /
+428 980 lines because the scout's `docs/slim` files are already in it); AFTER at `2e69d0e2` (the
+post-W8-D tip, before the exit-record commits). `E=$(git hash-object -t tree /dev/null)`.
 
 Per top dir (`$E` and the tip substituted for `HEAD` at each measurement):
 
@@ -106,7 +109,7 @@ dispatch logs) and `:docs/slim/LEDGER.md` §6 (the census row table, verdicts an
   KNOWN-RED cured** by `cdbc8000` (§6 below).
 - **W6 docs + configs. EXITED** at `0c8b9176`. 61 commits. run7.yaml and run8.yaml deleted
   (`8b00b4dd`); **run6.yaml STAYED on a HALT** (§3 below); RULINGS_ACTIVE.md deleted
-  (`33e32a16`), CARDS 1028→730 lines; STATE.md rewritten to current facts. REVIEW-W6 1/7/10, fixed
+  (`33e32a16`), CARDS 1028→778 lines at exit (730 at the cards-leg landing); STATE.md rewritten to current facts. REVIEW-W6 1/7/10, fixed
   in ONE loop (three notes left with grounds, each later closed: #12 by W8-D item 4; #3's class by
   W8-D item 2; #13/#15 on contact in W6). Exit sweep ALL GREEN, 19 gates.
 - **W7 style pass (R368(g)'s sanctioned pass). EXITED.** 63 commits over
@@ -182,7 +185,8 @@ decisions". Each landed as ONE commit naming the grant; every item was executed 
    message no longer repeats `repr(exc)`. The O-30 witness
    (`test_the_round_completion_route_logs_a_traceback_and_the_detail`) reads the detail off the
    log record's `exc_info`. Plants: `_LOG.error` reds ("none carrying exc_info"); `str(exc)` as
-   detail reds the re-pointed assertion. 42 passed before/after.
+   detail reds the re-pointed assertion. The witness file green before and after (11 rows at
+   HEAD; 42 rows in the landed leg's logged run set).
 4. `8d77b5da` — R368's Amends line annotated at the RULINGS.md register foot (ANNOTATION under
    R368's foot (A1)): R336(e)'s on-contact clause is the rustfmt one, so (g) replaces nothing in
    it. CLAUDE.md's Rust bullet dropped the "comment-application half" gloss.
@@ -216,7 +220,7 @@ decisions". Each landed as ONE commit naming the grant; every item was executed 
 |---|---|---:|---:|---:|---|
 | W1 | REVIEW_W1_2026-09-23.md | 0 | 3 | 8 | all closed |
 | W2 | REVIEW_W2_2026-09-24.md | 0 | 3 | 9 | closed except the recorded par.rs deviation (grant 8) |
-| W3 | REVIEW_W3_2026-09-24.md | 0 | 2 | 4 | all closed |
+| W3 | REVIEW_W3_2026-09-24.md | 0¹ | 2 | 4 | all closed (¹the file's table carries 1 MUST: the handoff-helper ruff red, fixed at `ec0ac144`) |
 | W4 | REVIEW_W4_2026-09-24.md | 0 | 0 | 5 | all recorded with grounds |
 | W5 | REVIEW_W5_2026-09-24.md | 3 | 5 | 9 | one loop, closed; the reviewer verified with its own plants |
 | W6 | REVIEW_W6_2026-09-25.md | 1 | 7 | 10 | one loop, closed (3 notes on grounds; #12 closed by grant 4) |
@@ -259,8 +263,9 @@ what makes this the packet-exit gate (R333(b)).
   comment_excess 2 143, banner 0, docstring_excess 11 897, private_docstring 1 283, rust_doc
   2 235, ruling_cite 91, textfile 228.
 - run10 MATCH at the post-grant tip and at the final tip (the pinned procedure: §10's appendix).
-- `make gates.exit` at the final tip in `.wt/gates`, user unit `mantis-gates-w8`:
-  **ALL GREEN — 20 gates** (result appended below at the sweep's landing).
+- `make gates.exit` at the final tip in `.wt/gates`, user unit `mantis-gates-w8`: **PENDING —
+  the result is appended HERE, verbatim from the unit's log, when the sweep lands** (green, or the
+  recorded-red path per the loop's step-5 rule).
 - The branch does NOT fast-forward `dev` and is NOT pushed. ENACTS 4 is the operator's.
 
 ## 10. Appendix — the run10 MATCH procedure (verbatim, before docs/slim dies)
