@@ -32,7 +32,7 @@ def _message_sum_fwd(xs_ptr, e_ptr, src_ptr, rowptr_ptr, div_ptr, out_ptr, H,
             pre = pre.to(tl.bfloat16).to(tl.float32)
         acc += tl.sum(tl.where(m2, tl.maximum(pre, 0.0), 0.0), axis=0)
     if HAS_DIV:
-        acc = acc / tl.load(div_ptr + v)
+        acc = tl.div_rn(acc, tl.zeros_like(acc) + tl.load(div_ptr + v))
     tl.store(out_ptr + v * H + h, acc.to(out_ptr.dtype.element_ty), mask=hm)
 
 
@@ -47,7 +47,7 @@ def _message_grad(grad_ptr, xs_ptr, e_ptr, src_ptr, rowptr_ptr, div_ptr, gpre_pt
     hm = h < H
     g = tl.load(grad_ptr + v * H + h, mask=hm, other=0.0).to(tl.float32)
     if HAS_DIV:
-        g = g / tl.load(div_ptr + v)
+        g = tl.div_rn(g, tl.zeros_like(g) + tl.load(div_ptr + v))
     g = g.to(gpre_ptr.dtype.element_ty).to(tl.float32)
     for j0 in range(start, end, BLOCK_E):
         j = j0 + tl.arange(0, BLOCK_E)
@@ -102,8 +102,8 @@ def message_grads(grad: Tensor, xs: Tensor, e: Tensor, src: Tensor, rowptr: Tens
     """`(grad_xs, grad_e)`: the masked per-edge gradient, then its fp32 sum over each source row, rounded once."""
     n, h = xs.shape
     block_h = triton.next_power_of_2(h)
-    grad_e = torch.empty_like(e)
-    grad_xs = torch.empty_like(xs)
+    grad_e = torch.empty(e.shape, dtype=e.dtype, device=e.device)
+    grad_xs = torch.empty(xs.shape, dtype=xs.dtype, device=xs.device)
     if n == 0 or src.numel() == 0:
         return grad_xs.zero_(), grad_e
     _message_grad[(n,)](grad.contiguous(), xs.contiguous(), e.contiguous(), src, rowptr, _div_arg(divisor, xs),

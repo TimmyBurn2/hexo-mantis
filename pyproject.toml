@@ -117,7 +117,9 @@ include = ["src", "tools"]
 # tools/strix_driver.py runs INSIDE the vendored hexo-strix venv (RUNG-2): its imports
 # (hexo_rs, hexo_a0, torch_geometric) exist only there, by design, so it is excluded with
 # that ground; everything it does is exercised by tests/bots/test_strix_adapter.py's live witness.
-exclude = ["tools/strix_driver.py"]
+# src/mantis/model/_gine_triton.py imports triton, which only the CUDA torch wheel brings; it is imported only on
+# the CUDA path, and its kernels are witnessed by the CUDA rows of tests/model/test_gine_*.
+exclude = ["tools/strix_driver.py", "src/mantis/model/_gine_triton.py"]
 pythonVersion = "3.11"
 typeCheckingMode = "basic"
 # src/mantis is a regular package, so pyright never merges the wheel's namespace portion into it.

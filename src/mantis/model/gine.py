@@ -1,4 +1,4 @@
-"""Self-contained pure-PyTorch GINE axis-graph net definition (no torch_geometric).
+"""Self-contained GINE axis-graph net definition (no torch_geometric; one Triton op on CUDA).
 
 `_GINEConv`, `RepresentationNetwork` and `PolicyHead` live here; `gnn.py`/`gnn_v2.py` import
 sideways. `HeXONet` and `ValueHead` are BURIED, goldens frozen at
@@ -14,6 +14,8 @@ Attribution: the representation and policy modules follow the public SootyOwl/he
 forward pass (MIT), reimplemented pure-torch. Licence-required, and it STAYS.
 """
 from __future__ import annotations
+
+from typing import cast
 
 import torch
 import torch.nn as nn
@@ -35,7 +37,11 @@ def csr_edges(edge_index: Tensor, edge_attr: Tensor, n: int) -> tuple[Tensor, Te
 @torch.library.custom_op("mantis::gine_message_sum", mutates_args=())
 def gine_message_sum(xs: Tensor, e: Tensor, src: Tensor, dst: Tensor, rowptr: Tensor | None,
                      divisor: Tensor | None) -> Tensor:
-    """Per-node fp32 Σ relu(xs[src] + e) / divisor, rounded once, atomic-free: a fused kernel over `csr_edges` on CUDA, `index_add_` on CPU."""
+    """Per-node fp32 Σ relu(xs[src] + e) / divisor, rounded once, atomic-free: a fused kernel over `csr_edges` on CUDA, `index_add_` on CPU.
+
+    Raises:
+        ValueError: CUDA inputs without `csr_edges`' row pointer.
+    """
     if xs.is_cuda:
         from mantis.model import _gine_triton
 
@@ -74,7 +80,7 @@ gine_message_sum.register_autograd(_gine_message_sum_backward, setup_context=_gi
 
 
 class _GINEConv(nn.Module):
-    """Plain-torch GINEConv (sum aggregation, edge-feature injection), state-dict keys mirroring
+    """GINEConv (sum aggregation, edge-feature injection) over `gine_message_sum`, state-dict keys mirroring
     the reference GINEConv. `edge_in` is the width of the edge tensor handed to `forward` — the
     representation applies `edge_proj` (5→128) ONCE, so each conv's own `lin` is Linear(128→128),
     matching the checkpoint shapes."""
@@ -99,21 +105,16 @@ class _GINEConv(nn.Module):
         agg_divisor: Tensor | None = None,
         rowptr: Tensor | None = None,
     ) -> Tensor:
-        """`agg_divisor` `(N, 1)` divides each node's sum; a `rowptr` means the edges come in `csr_edges` order.
-        The one aggregation authority stays here because the block is dtype-critical under
-        autocast and a second copy is a second place for that care to drift."""
+        """`agg_divisor` `(N, 1)` divides each node's sum; a `rowptr` means the edges come in `csr_edges` order."""
         n = x.shape[0]
         if edge_index.shape[1] > 0:
             src = edge_index[0]
             dst = edge_index[1]
-            # The edge projection is evaluated FIRST and the node tensor aligned to ITS dtype
-            # BEFORE the gather: `index_select` is dtype-PRESERVING, so gathering the fp32
-            # pre-norm tensor under bf16 autocast materialises an [E, H] copy at 2x the width,
-            # on the one tensor that scales with E (a single 8.94 GiB request killed a run).
             if rowptr is None:
                 edge_index, edge_attr, rowptr = csr_edges(edge_index, edge_attr, n)
                 src, dst = edge_index[0], edge_index[1]
             e = self.lin(edge_attr)
+            # `xs` takes `e`'s dtype: the op's per-edge rounding reads it, and a wider gather doubles the [E, H] width.
             agg = gine_message_sum(x.to(e.dtype), e, src, dst, rowptr, agg_divisor)
         else:
             agg = x.new_zeros((n, x.shape[1]))
@@ -159,7 +160,8 @@ class RepresentationNetwork(nn.Module):
         """Layer `i`'s pre-norm conv; in training recomputed in backward, so no layer keeps its [E, H] edge tensor."""
         args = (i, x, edge_index, projected_edge_attr, divisor, rowptr)
         if torch.is_grad_enabled() and x.requires_grad:
-            return checkpoint(self._conv, *args, use_reentrant=False)
+            # RNG-free region, so no state is stashed for the replay.
+            return cast(Tensor, checkpoint(self._conv, *args, use_reentrant=False, preserve_rng_state=False))
         return self._conv(*args)
 
     def _conv(self, i: int, x: Tensor, edge_index: Tensor, projected_edge_attr: Tensor,
