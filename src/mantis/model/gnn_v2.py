@@ -86,12 +86,8 @@ class RepresentationNetworkV2(RepresentationNetwork):
         x = self.input_proj(x)
         projected_edge_attr = self.edge_proj(edge_attr)
         hs: list[Tensor] = []
-        for conv, norm in zip(self.convs, self.norms, strict=False):
-            residual = x
-            xn = norm(x)
-            xc = conv(xn, edge_index, projected_edge_attr, divisor, rowptr)
-            x = xc + residual
-            x = self.activation(x)
+        for i in range(self.num_layers):
+            x = self.activation(self._layer(i, x, edge_index, projected_edge_attr, divisor, rowptr) + x)
             hs.append(x)
         hs = [self.final_norm(h) for h in hs]
         return torch.cat(hs, dim=-1)

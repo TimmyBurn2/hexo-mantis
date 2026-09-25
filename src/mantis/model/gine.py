@@ -18,6 +18,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 from torch import Tensor
+from torch.utils.checkpoint import checkpoint
 
 
 def csr_edges(edge_index: Tensor, edge_attr: Tensor, n: int) -> tuple[Tensor, Tensor, Tensor | None]:
@@ -145,16 +146,25 @@ class RepresentationNetwork(nn.Module):
         # Projected ONCE and reused; each layer's own `lin` re-projects THAT tensor (H->H).
         projected_edge_attr = self.edge_proj(edge_attr)
         hs: list[Tensor] = []
-        for conv, norm in zip(self.convs, self.norms, strict=False):
-            residual = x
-            xn = norm(x)                                  # pre-norm
-            xc = conv(xn, edge_index, projected_edge_attr, None, rowptr)
-            x = xc + residual
-            x = self.activation(x)
+        for i in range(self.num_layers):
+            x = self.activation(self._layer(i, x, edge_index, projected_edge_attr, None, rowptr) + x)
             hs.append(x)
         # jk_mode="cat": final_norm(H) applied to EACH h_i, then concat.
         hs = [self.final_norm(h) for h in hs]
         return torch.cat(hs, dim=-1)                      # (N, L*H)
+
+
+    def _layer(self, i: int, x: Tensor, edge_index: Tensor, projected_edge_attr: Tensor,
+               divisor: Tensor | None, rowptr: Tensor | None) -> Tensor:
+        """Layer `i`'s pre-norm conv; in training recomputed in backward, so no layer keeps its [E, H] edge tensor."""
+        args = (i, x, edge_index, projected_edge_attr, divisor, rowptr)
+        if torch.is_grad_enabled() and x.requires_grad:
+            return checkpoint(self._conv, *args, use_reentrant=False)
+        return self._conv(*args)
+
+    def _conv(self, i: int, x: Tensor, edge_index: Tensor, projected_edge_attr: Tensor,
+              divisor: Tensor | None, rowptr: Tensor | None) -> Tensor:
+        return self.convs[i](self.norms[i](x), edge_index, projected_edge_attr, divisor, rowptr)
 
 
 class PolicyHead(nn.Module):

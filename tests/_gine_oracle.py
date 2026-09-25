@@ -7,7 +7,7 @@ from contextlib import AbstractContextManager, contextmanager
 import torch
 from torch import Tensor
 
-from mantis.model.gine import _GINEConv
+from mantis.model.gine import RepresentationNetwork, _GINEConv
 
 
 SumFn = Callable[[Tensor, Tensor, int, "Tensor | None"], Tensor]
@@ -48,12 +48,15 @@ def fp64_sum(msg: Tensor, dst: Tensor, n: int, divisor: Tensor | None) -> Tensor
 
 @contextmanager
 def _patched(forward: Callable[..., Tensor]) -> Iterator[None]:
-    current = _GINEConv.forward
+    """The conv's forward swapped, and the layer run without recompute, as the replaced path ran."""
+    current, layer = _GINEConv.forward, RepresentationNetwork._layer
     _GINEConv.forward = forward  # type: ignore[method-assign]
+    RepresentationNetwork._layer = RepresentationNetwork._conv  # type: ignore[method-assign]
     try:
         yield
     finally:
         _GINEConv.forward = current  # type: ignore[method-assign]
+        RepresentationNetwork._layer = layer  # type: ignore[method-assign]
 
 
 def aggregating_with(sum_fn: SumFn) -> AbstractContextManager[None]:
