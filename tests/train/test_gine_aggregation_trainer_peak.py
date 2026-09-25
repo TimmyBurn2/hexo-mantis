@@ -7,11 +7,12 @@ import pytest
 import torch
 
 import _microbatch_harness as H
-from _gine_oracle import aggregating_with, exact_sum, index_add_aggregation
+from _gine_oracle import index_add_aggregation
 from mantis.config.census import production_configs
 from mantis.config.loader import load_config
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.model import arch_from_spec_and_config, build_net
+from mantis.model.gine import RepresentationNetwork
 from mantis.train.coordinator.dispatch import run_declared_train_step
 from mantis.train.trainer.core import Trainer, TrainHParams
 
@@ -65,11 +66,10 @@ def test_iii_the_trainer_peak_at_the_caps_does_not_rise(tmp_path: Path) -> None:
     gib = [f"{x / 1024 ** 3:.3f}" for x in old + new]
     print(f"(iii): peak delta bf16 index_add_ {gib[:2]} GiB, fused {gib[2:]} GiB")
     assert max(new) <= max(old), f"the fused aggregation raised the trainer peak: {new} > {old} bytes"
-    # PLANTED BREAK: an fp32 [E, H] message copy per layer must read as a rise, or the instrument is blind.
-    try:
-        with aggregating_with(exact_sum):
-            planted = peak("planted")
-    except torch.cuda.OutOfMemoryError:
-        planted = torch.cuda.get_device_properties(0).total_memory
-    print(f"(iii) control: fp32 [E, H] copy peak {planted / 1024 ** 3:.3f} GiB")
-    assert planted > max(old), "the planted fp32 message copy did not raise the peak: (iii) cannot see a rise"
+    # PLANTED BREAK: the fused op WITHOUT the per-layer recompute keeps each layer's bf16 input for its backward
+    # (measured +168 MiB at the cap); the instrument must read it as a rise, or it is blind.
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(RepresentationNetwork, "_layer", RepresentationNetwork._conv)
+        planted = peak("planted")
+    print(f"(iii) control: the fused op without recompute peaks {planted / 1024 ** 3:.3f} GiB")
+    assert planted > max(old), "the planted no-recompute path did not raise the peak: (iii) cannot see a rise"
