@@ -68,26 +68,26 @@ recommended one; each is its own leg with a LAW-09 bench.
 
 ## Opened by R368 (SLIM-FIX; 2026-09-23)
 
-- **CARD-RUST-HOTLOOP-EXPECTS — CARDED: the `unwrap()`/`expect()` sites on hot loops, classified by R368(g)'s
+- **CARD-RUST-HOTLOOP-EXPECTS — CLOSED by PERF-ADA H2 (e5658e4b, 1cfe2ced, 1e9b2e78, a80d0587; box bench flat, 3 981 vs 3 982): the `unwrap()`/`expect()` sites on hot loops, classified by R368(g)'s
   correctness pass and left as they are, because a named-error rewrite there is a hot-path change that needs
   LAW-09's one-change-one-bench.** `mantis-core` `Board::check_win` (a cell lookup `apply_move` has just set);
   `mantis-selfplay` `queues/graph.rs` (13 lock/condvar-poison expects on the per-batch inference path, plus the
   infallible `position()` in `submit_graphs_and_wait`); `runner/search_drive.rs` `infer_and_expand_graph`'s
   `win_length`/`graph_radius` expects (the fix is hoisting both into the worker's inference context at start)
   and `select_move`'s guarded fallback `choose().unwrap()`. `mantis-search` has none left.
-- **CARD-POISON-STANCE — OWED: one stance on a poisoned `Mutex` in the self-play runner.** Nine production
+- **CARD-POISON-STANCE — CLOSED by PERF-ADA H1 (a38d9dff, 1f1062b3, b3e09d7b; the planted panic in Drop keeps the save): one stance on a poisoned `Mutex` in the self-play runner.** Nine production
   `lock().expect(..)` sites (`runner/finalize.rs` ×2, `runner/mod.rs` latch / fatal read / `stop` / the two drain
   faces, `runner/spawn.rs`, `search_drive.rs`'s latch store) panic on a poisoned lock. `stop()` runs from `Drop`
   and cannot return a `Result`, and a latch must not itself fail. The measured recommendation (the W2 selfplay
   leg): latch, stop, finalize and spawn take `PoisonError::into_inner` (the panic that poisoned the lock is
   already counted by `worker_panics` and halts the run); the drain faces return a named error the bridge raises.
-- **CARD-SEARCH-HOT-DUP — CARDED (R368(h)): the MCTS hot-path duplicates the census found (S-A-RUST-1-13, -14:
+- **CARD-SEARCH-HOT-DUP — CLOSED by PERF-ADA H3 (5b423c5e, 453912ba, 68350493; monomorphic, box bench flat): the MCTS hot-path duplicates the census found (S-A-RUST-1-13, -14:
   shared selection/expansion helpers; -15: the `action_idx` decode re-typed inline).** Each lands only
   monomorphic (a shared fn, no kind flag), with LAW-09's bench and `search_kind_conformance.rs` as witness.
-- **CARD-SCHEMA-KEY-RETIREMENT — CARDED (R368(h)): retiring a schema key and its minted rows (first:
+- **CARD-SCHEMA-KEY-RETIREMENT — CLOSED for `train.value_target` by PERF-ADA H5 (923a7882; both run8 parents load, `mantis.config.retired` is the one authority): retiring a schema key and its minted rows (first:
   `train.value_target`, S-A-CORE-2-14).** A retirement needs a loader witness over every mirrored parent
   stamp before the key leaves the schema; not before run10 STARTs (R368(i)).
-- **CARD-CLUSTER-THRESHOLD-RESIDUE — CARDED: `Board.cluster_threshold` is write-only since the cluster BFS
+- **CARD-CLUSTER-THRESHOLD-RESIDUE — CLOSED by PERF-ADA H6 (177d11df; the golden fixture keeps the field as capture provenance): `Board.cluster_threshold` is write-only since the cluster BFS
   went (R368 W2).** Plumbed from the registry (bridge `board.rs`, selfplay `game.rs`) into `BoardGeometry` and
   the golden-replay fixture's geometry, read by nothing; removal touches `BoardGeometry` and that fixture's field.
 - **CARD-SEAM-2 — HELD (R368(j)): the seam for a kind that brings its own head, objective and config rows.**
