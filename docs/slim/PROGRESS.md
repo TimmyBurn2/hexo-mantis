@@ -8,7 +8,7 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
 - Host: the operator's desktop (not a Claude environment; `CLAUDE_CODE_ENVIRONMENT_NAME` unset). AMD Ryzen 7
   3700X, 16 threads, 46 GiB, flags `avx2` only (no `avx512_bf16`, no `amx`). torch 2.11.0+cpu, `mantis._engine` OK.
 - origin/dev = 69e1532 at W0 entry (no moved commits; no rebase).
-- Wave: **W8** (the close) NEXT — work order `docs/slim/handoff/W8_ADDENDUM.md` (W8-D, the operator grants, first). W7 EXITED (see `## W7`). W6 EXITED (see `## W6`). W5 EXITED (see `## W5`). W4 EXITED: W3 EXITED. REVIEW-W3 filed (`docs/audits/REVIEW_W3_2026-09-24.md`, 0 must-fix beyond a
+- Wave: **W8** (the close) IN PROGRESS (see `## W8`) — work order `docs/slim/handoff/W8_ADDENDUM.md` (W8-D, the operator grants, first). W7 EXITED (see `## W7`). W6 EXITED (see `## W6`). W5 EXITED (see `## W5`). W4 EXITED: W3 EXITED. REVIEW-W3 filed (`docs/audits/REVIEW_W3_2026-09-24.md`, 0 must-fix beyond a
   ruff red in the handoff helper, 2 should-fix, 4 notes, every row group HELD, run10 MATCH re-verified); its fixes:
   ec0ac144 (ruff), cb4a5dd1 (`_is_graph` flag), bf22b4c3 (sweep docstring), plus 09fa8e6b — the exit sweep caught
   `tests/eval/test_graph_round_encoding.py`'s recorder pinning the deleted `_is_graph`; re-pointed to the
@@ -57,6 +57,19 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   post-review docs commits (b0e959c3 + this one) re-checked with gates 10/13/14/15/17 green.
   NEXT: W5 per its addendum (the 2026-09-24 dispatcher-session scout inventory is folded into it);
   then W6, W7, W8 per HANDOFF.md.
+
+## W8 — the close (IN PROGRESS 2026-09-25)
+
+**Dispatch log** (models per leg named in each row):
+
+- Entry at e4043497: collected 4928 = floor; comment_lint GREEN at floor; run10 MATCH; tree clean; stash empty.
+  `.git/config.lock` is a stale 0-byte read-only file (2026-09-24 22:31, predates this session): branch deletes
+  print "could not lock config" and still work. Left for the operator.
+- W8-D grant 10 (delegate's decision at W8 entry): validate.rs's three refusal strings naming the deleted
+  `sym_tables_for` are rewritten to state what the registry refuses; logic, refused inputs and registry sha unchanged.
+- Legs launched from e4043497, each in `.wt/w8-<leg>` with its own venv: preflight (**opus**, grant 1(a)+(c)),
+  o30 (**opus**, grant 3), prose (**sonnet**, grants 2, 4, 5), code (**sonnet**, grants 1(b), 6, 10). Grants 7, 8,
+  9 are records in the exit document. Grant 1 lands as one commit per sub-item (a)/(b)/(c), each naming the grant.
 
 ## W7 — the style pass (EXITED 2026-09-25)
 
