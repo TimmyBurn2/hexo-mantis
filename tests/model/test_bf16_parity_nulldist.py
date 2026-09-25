@@ -25,9 +25,9 @@ import _bf16_parity as bp
 import pytest
 import torch
 
-# The DETECTION FLOOR: the value below which a reading carries no information. It is NOT a null
-# bound on any device — both null legs assert EXACT equality. Margin 3 comes from the measurement's
-# own tail ratios (worst max/p99 = 1.422, worst max/p50 = 7.99), rounded down to the decade.
+# The DETECTION FLOOR: below it a reading carries no information; NOT a null bound (both null
+# legs assert EXACT equality). `test_detection_floor_is_derived_and_its_null_role_is_withdrawn`
+# re-derives it live; margin 3 = worst tail ratios (max/p99 1.422, max/p50 7.99), decade-rounded.
 _DETECTION_FLOOR = 1.0e-3
 _DERIVATION_MARGIN = 3.0
 
@@ -40,8 +40,8 @@ _EXPECTED_COMMIT = "982da03bae57758efc65c6cfe0d451d77f15561c"
 _FIXTURES = ("synth8", "prod27_samesizes", "prod27_run5shape")
 _PROD = "prod27_run5shape"
 
-# `|a|` p50 of the fp32 reference policy logits, per fixture. The `synth8` value is DERIVED
-# LOCALLY and is the BINDING one (smallest floor); the other two are transcribed box quantities.
+# `|a|` p50 of the fp32 reference policy logits. `synth8`'s is DERIVED LOCALLY from the fp32 arm and
+# BINDS (smallest floor); these two are transcribed box values, kept so the worst case is visible.
 _BOX_ABS_P50 = {"prod27_samesizes": 0.2050, "prod27_run5shape": 0.2102}
 
 
