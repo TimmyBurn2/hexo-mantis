@@ -1,4 +1,4 @@
-# RULINGS — R23 to R369
+# RULINGS — R23 to R370
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R370.
+- Numbering continues from R346. The next ruling is R371.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,34 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R370 — FINISH
+Decision: verbatim below.
+
+> R370 — FINISH.
+> (a) GOV-ECON is accepted: its MERGE and MOVE-TO-TEST rows execute; no rule
+> drops; gate 15 and the twin stay.
+> (b) LAW-19 CONTROLS FIRST: before a pre-registered criterion gates work, a
+> correct design must pass it and the known-bad path must fail it; a
+> criterion no correct design can pass is void. Criterion E is ratified.
+> (c) R369(d) is amended under (b): the cache key is the net version plus a
+> hash of the encoded input; stored-vs-fresh deviation stays within the
+> uncached path's own batch-size spread; a hit is a served simulation;
+> memory is bounded.
+> (d) CLAUDE.md keeps only what an agent must know and no gate enforces;
+> each rule is stated once across CLAUDE.md and LAWS.md.
+> (e) RECORD docs move to the local records; whatever a tree file, test or
+> gate cites stays.
+> (f) LAWS.md's protected set names each invariant's pinning tests, and a
+> test checks they exist.
+> (g) Test isolation defects are fixed before any speed lever; a lever lands
+> only as measured.
+> (h) A RULINGS entry is its title, its decision and its status.
+> (i) R369(a)'s launch conditions apply to FINISH's exit tip.
+
+Status: standing. Adds LAW-19 by (b); amends R369(d) by (c) and R369(a)'s tip by (i).
+
+---
 
 ### R369 — PERF-ADA (standing: R368(i) amended — run10 launches from PERF-ADA's exit tip once the full gate set incl. slow tier is green there, its resolved config matches its mint by value except retired leaves, admission is re-read IDLE and the parent's strix @ r8 cell is re-read; LAW-06 amended — bf16 storage and GEMMs, graph message aggregation accumulated in fp32, deterministically, in one implementation shared by server and trainer; torch and CUDA move together only after (b) and only if faster; the exact eval cache lands only bit-identical, counted and bounded; earlier bench_server determinism and PERF-3 CPU-launch readings void; review reports, exit records and packets are local records; rulings state decisions only)
 Decision: verbatim below.
