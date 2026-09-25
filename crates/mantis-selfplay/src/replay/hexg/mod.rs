@@ -284,12 +284,9 @@ impl HexgBuffer {
                  (R255/ADJ-D34)"
             ));
         }
-        let win_length =
-            spec.win_length
-                .expect("validate guarantees win_length for a graph spec") as u8;
-        let radius =
-            spec.graph_radius
-                .expect("validate guarantees graph_radius for a graph spec") as u16;
+        let geometry = crate::runner::params::resolve_geometry(spec)
+            .map_err(|e| format!("HexgBuffer: {e}"))?;
+        let (win_length, radius) = (geometry.win_length, geometry.graph_radius);
         let contract_version = spec
             .contract_version
             .expect("validate guarantees contract_version for a graph spec");

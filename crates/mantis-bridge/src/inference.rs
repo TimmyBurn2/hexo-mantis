@@ -25,6 +25,7 @@ use mantis_selfplay::queues::{
     WireAlreadyConsumed as WireConsumedGuard,
 };
 use mantis_selfplay::records::assemble_ls_from_gnn_probs;
+use mantis_selfplay::runner::params::{resolve_geometry, GraphGeometryError};
 use mantis_selfplay::runner::SelfPlayRunner;
 
 use crate::encoding::PyRegistrySpec;
@@ -179,7 +180,8 @@ impl PyInferenceBatcher {
         graph: GraphQueue,
         runner: Arc<SelfPlayRunner>,
     ) -> Self {
-        let (win_length, radius, trunk_size, contract_version) = graph_params(spec);
+        let (win_length, radius, trunk_size, contract_version) = graph_params(spec)
+            .expect("SelfPlayRunner::new resolved this spec's geometry before the batcher exists");
         Self::from_parts(
             graph,
             spec.policy_stride(),
@@ -209,17 +211,16 @@ impl PyInferenceBatcher {
     }
 }
 
-/// Resolve the graph build params from a spec; a missing `Some` field is a registry desync.
-fn graph_params(spec: &'static RegistrySpec) -> (u8, u16, i32, u32) {
-    (
-        spec.win_length
-            .expect("validate guarantees win_length for a graph spec") as u8,
-        spec.graph_radius
-            .expect("validate guarantees graph_radius for a graph spec") as u16,
-        spec.trunk_size as i32,
+/// The graph build params through the runner's one checked geometry resolver, never a truncating cast.
+fn graph_params(spec: &'static RegistrySpec) -> Result<(u8, u16, i32, u32), GraphGeometryError> {
+    let geometry = resolve_geometry(spec)?;
+    Ok((
+        geometry.win_length,
+        geometry.graph_radius,
+        geometry.agg_trunk_sz,
         spec.contract_version
             .expect("validate guarantees contract_version for a graph spec"),
-    )
+    ))
 }
 
 #[pymethods]
@@ -229,10 +230,11 @@ impl PyInferenceBatcher {
     /// from it — `0` is UNDECLARED, not a supply of zero.
     #[new]
     #[pyo3(signature = (encoding_spec, max_in_flight = 0))]
-    pub fn new(encoding_spec: PyRegistrySpec, max_in_flight: usize) -> Self {
+    pub fn new(encoding_spec: PyRegistrySpec, max_in_flight: usize) -> PyResult<Self> {
         let spec = encoding_spec.inner();
-        let (win_length, radius, trunk_size, contract_version) = graph_params(spec);
-        Self::from_parts(
+        let (win_length, radius, trunk_size, contract_version) =
+            graph_params(spec).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        Ok(Self::from_parts(
             GraphQueue::with_contract_version_and_supply(contract_version, max_in_flight),
             spec.policy_stride(),
             spec.representation.as_str(),
@@ -241,7 +243,7 @@ impl PyInferenceBatcher {
             trunk_size,
             contract_version,
             ModelVersionSrc::Own(Arc::new(AtomicU64::new(0))),
-        )
+        ))
     }
 
     /// Times the in-flight-graph lock was recovered from poisoning; STAYS ZERO in a healthy run.
@@ -763,7 +765,8 @@ mod tests {
 
     #[test]
     fn seam_survives_a_poisoned_in_flight_lock_and_reports() {
-        let b = PyInferenceBatcher::new(PyRegistrySpec::from_static(gnn_spec()), 0);
+        let b = PyInferenceBatcher::new(PyRegistrySpec::from_static(gnn_spec()), 0)
+            .expect("the registry's graph row resolves");
         assert_eq!(
             b.lock_recoveries(),
             0,
@@ -808,7 +811,8 @@ mod tests {
     fn a_spec_batcher_derives_its_policy_width_from_the_spec() {
         // The sibling of `graph_batcher_reads_graph_params` on the DERIVED policy width.
         let spec = gnn_spec();
-        let b = PyInferenceBatcher::new(PyRegistrySpec::from_static(spec), 0);
+        let b = PyInferenceBatcher::new(PyRegistrySpec::from_static(spec), 0)
+            .expect("the registry's graph row resolves");
         assert_eq!(b.representation, "graph");
         assert_eq!(b.policy_len, spec.policy_stride());
         assert_eq!(b.policy_len, 362, "the graph action space is 19*19 + 1");
@@ -816,7 +820,8 @@ mod tests {
 
     #[test]
     fn graph_batcher_reads_graph_params() {
-        let b = PyInferenceBatcher::new(PyRegistrySpec::from_static(gnn_spec()), 0);
+        let b = PyInferenceBatcher::new(PyRegistrySpec::from_static(gnn_spec()), 0)
+            .expect("the registry's graph row resolves");
         assert_eq!(b.representation, "graph");
         // These used to restate the row's own geometry by hand in the test whose subject is
         // that the batcher READS the row, so an r8 row could land with this pin asserting 6.
@@ -835,7 +840,8 @@ mod tests {
 
     #[test]
     fn model_version_own_bump_and_get() {
-        let b = PyInferenceBatcher::new(PyRegistrySpec::from_static(gnn_spec()), 0);
+        let b = PyInferenceBatcher::new(PyRegistrySpec::from_static(gnn_spec()), 0)
+            .expect("the registry's graph row resolves");
         assert_eq!(b.model_version(), 0);
         assert_eq!(b.bump_model_version(), 1);
         assert_eq!(b.bump_model_version(), 2);
