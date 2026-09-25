@@ -18,8 +18,7 @@ pub const fn hex_ball_cells(radius: i32) -> usize {
     (3 * radius * radius + 3 * radius + 1) as usize
 }
 
-/// Default maximum hex distance between stones sharing a cluster, held equal to the
-/// legal-move radius so the cluster and move windows cannot mismatch.
+/// The `n_components` metric's stone-connectivity bound when the registry names none (exported to Python).
 pub const DEFAULT_CLUSTER_THRESHOLD: i32 = 5;
 
 impl Board {
