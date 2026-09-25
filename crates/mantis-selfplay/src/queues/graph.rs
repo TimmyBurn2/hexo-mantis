@@ -9,12 +9,18 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 use fxhash::FxBuildHasher;
 use mantis_graph::{build_axis_graph, AxisGraph, BuildParams, StoneList, BUILDER_IMPL_NATIVE};
 use mantis_search::LegalSetPolicy;
+
+/// Each guarded section is one container op that leaves no torn state: poison carries no signal.
+#[inline]
+fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(PoisonError::into_inner)
+}
 
 /// One queued graph inference request (the once-per-leaf `AxisGraph` payload).
 struct PendingGraphRequest {
@@ -81,7 +87,7 @@ impl GraphInner {
         max_wait_ms: u64,
     ) -> Vec<PendingGraphRequest> {
         let deadline = Instant::now() + Duration::from_millis(max_wait_ms);
-        let mut queue = self.queue.lock().expect("graph queue lock poisoned");
+        let mut queue = lock(&self.queue);
         let threshold = saturation_threshold(batch_size, self.max_in_flight);
         while queue.len() < threshold && !self.closed.load(Ordering::SeqCst) {
             let now = Instant::now();
@@ -92,7 +98,7 @@ impl GraphInner {
             let (q, _) = self
                 .queue_cv
                 .wait_timeout(queue, remaining)
-                .expect("graph queue condvar poisoned");
+                .unwrap_or_else(PoisonError::into_inner);
             queue = q;
         }
         if queue.is_empty() {
@@ -163,15 +169,11 @@ impl GraphQueue {
         // Register the waiter BEFORE enqueuing so a producer that pops this id can
         // never miss its waiter.
         {
-            let mut wmap = self
-                .inner
-                .waiters
-                .lock()
-                .expect("graph waiter map lock poisoned");
+            let mut wmap = lock(&self.inner.waiters);
             wmap.insert(id, waiter.clone());
         }
         {
-            let mut queue = self.inner.queue.lock().expect("graph queue lock poisoned");
+            let mut queue = lock(&self.inner.queue);
             queue.push_back(PendingGraphRequest { id, graph });
             self.inner.queue_cv.notify_all();
         }
@@ -201,10 +203,11 @@ impl GraphQueue {
             .iter()
             .map(|g| self.handshake_reject_reason(g))
             .collect();
-        if let Some(first) = rejections.iter().position(Option::is_some) {
-            let culprit = rejections[first]
-                .clone()
-                .expect("position() found the reason");
+        let culprit = rejections
+            .iter()
+            .enumerate()
+            .find_map(|(i, reason)| reason.clone().map(|reason| (i, reason)));
+        if let Some((first, culprit)) = culprit {
             return rejections
                 .into_iter()
                 .map(|reason| {
@@ -232,17 +235,13 @@ impl GraphQueue {
             return Vec::new();
         }
         {
-            let mut wmap = self
-                .inner
-                .waiters
-                .lock()
-                .expect("graph waiter map lock poisoned");
+            let mut wmap = lock(&self.inner.waiters);
             for (waiter, req) in waiters.iter().zip(requests.iter()) {
                 wmap.insert(req.id, waiter.clone());
             }
         }
         {
-            let mut queue = self.inner.queue.lock().expect("graph queue lock poisoned");
+            let mut queue = lock(&self.inner.queue);
             for req in requests {
                 queue.push_back(req);
             }
@@ -281,7 +280,7 @@ impl GraphQueue {
     /// re-checked on EVERY wake; the payload is a single `guard.take()` read and the reason
     /// travels with it.
     fn wait_for(&self, waiter: &Arc<GraphWaiter>) -> GraphWaiterPayload {
-        let mut guard = waiter.result.lock().expect("graph waiter lock poisoned");
+        let mut guard = lock(&waiter.result);
         loop {
             if let Some(res) = guard.take() {
                 return res;
@@ -292,7 +291,7 @@ impl GraphQueue {
             guard = waiter
                 .cv
                 .wait(guard)
-                .expect("graph waiter condvar poisoned");
+                .unwrap_or_else(PoisonError::into_inner);
         }
     }
 
@@ -313,15 +312,11 @@ impl GraphQueue {
     pub fn submit_graph_results(&self, ids: &[u64], results: Vec<GraphWaiterPayload>) {
         for (&id, res) in ids.iter().zip(results) {
             let removed = {
-                let mut wmap = self
-                    .inner
-                    .waiters
-                    .lock()
-                    .expect("graph waiter map lock poisoned");
+                let mut wmap = lock(&self.inner.waiters);
                 wmap.remove(&id)
             };
             if let Some(waiter) = removed {
-                let mut guard = waiter.result.lock().expect("graph waiter lock poisoned");
+                let mut guard = lock(&waiter.result);
                 *guard = Some(res);
                 waiter.cv.notify_all();
             }
@@ -335,15 +330,11 @@ impl GraphQueue {
     pub fn fail_remaining(&self, ids: &[u64], reason: &str) {
         for &id in ids {
             let removed = {
-                let mut wmap = self
-                    .inner
-                    .waiters
-                    .lock()
-                    .expect("graph waiter map lock poisoned");
+                let mut wmap = lock(&self.inner.waiters);
                 wmap.remove(&id)
             };
             if let Some(waiter) = removed {
-                let mut guard = waiter.result.lock().expect("graph waiter lock poisoned");
+                let mut guard = lock(&waiter.result);
                 if guard.is_none() {
                     *guard = Some(Err(reason.to_string()));
                 }
@@ -356,11 +347,7 @@ impl GraphQueue {
     pub fn close(&self) {
         self.inner.closed.store(true, Ordering::SeqCst);
         self.inner.queue_cv.notify_all();
-        let wmap = self
-            .inner
-            .waiters
-            .lock()
-            .expect("graph waiter map lock poisoned");
+        let wmap = lock(&self.inner.waiters);
         for waiter in wmap.values() {
             waiter.cv.notify_all();
         }
@@ -458,4 +445,79 @@ pub fn build_leaf_graphs_batch(
         "graph request: a leaf-build worker thread panicked",
         |p: &LeafRequest| build_leaf_graph(&p.0, p.1, p.2, win_length, radius, trunk_size),
     )
+}
+
+#[cfg(test)]
+mod poison_tests {
+    use std::sync::{Arc, Mutex};
+
+    use super::{build_leaf_graph, GraphQueue, GraphWaiter};
+
+    /// Poison `m` the way a panicking thread does: it unwinds while holding the guard.
+    fn poison<T: Send>(m: &Mutex<T>) {
+        std::thread::scope(|s| {
+            let joined = s
+                .spawn(|| {
+                    let _held = m.lock();
+                    panic!("planted: a thread panics holding the lock");
+                })
+                .join();
+            assert!(joined.is_err(), "the planted panic did not fire");
+        });
+        assert!(m.is_poisoned(), "the planted panic did not poison the lock");
+    }
+
+    fn empty_graph() -> mantis_graph::AxisGraph {
+        build_leaf_graph(&[], 1, 2, 6, 3, 19).expect("the empty board builds")
+    }
+
+    /// With the queue and waiter-map locks poisoned, a batch still round-trips and close wakes.
+    #[test]
+    fn a_poisoned_queue_still_serves_a_batch_and_closes() {
+        let q = GraphQueue::new();
+        poison(&q.inner.queue);
+        poison(&q.inner.waiters);
+        let producer = q.clone();
+        let served = std::thread::spawn(move || loop {
+            let batch = producer.pop_graph_batch(8, 50);
+            if !batch.is_empty() {
+                let ids: Vec<u64> = batch.iter().map(|(id, _)| *id).collect();
+                let replies = ids.iter().map(|id| Err(format!("served {id}"))).collect();
+                producer.submit_graph_results(&ids, replies);
+                return ids.len();
+            }
+        });
+        let results = q.submit_graphs_and_wait(vec![empty_graph(), empty_graph()]);
+        assert_eq!(served.join().expect("the producer thread"), 2);
+        for res in &results {
+            let reason = res.as_ref().expect_err("the test producer replies Err");
+            assert!(reason.starts_with("served "), "{reason}");
+        }
+        q.fail_remaining(&[u64::MAX], "no such id");
+        q.close();
+        assert!(q.is_closed());
+        let after = q.submit_graph_and_wait(empty_graph());
+        assert_eq!(
+            after.expect_err("a closed queue refuses"),
+            "graph batcher is closed"
+        );
+    }
+
+    /// A poisoned waiter lock still delivers the payload it is handed.
+    #[test]
+    fn a_poisoned_waiter_still_delivers_its_payload() {
+        let q = GraphQueue::new();
+        let waiter = Arc::new(GraphWaiter::default());
+        poison(&waiter.result);
+        q.inner
+            .waiters
+            .lock()
+            .expect("unpoisoned in this test")
+            .insert(7, waiter.clone());
+        q.submit_graph_results(&[7], vec![Err("payload".to_string())]);
+        assert_eq!(
+            q.wait_for(&waiter).expect_err("the payload is an Err"),
+            "payload"
+        );
+    }
 }
