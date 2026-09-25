@@ -4,8 +4,8 @@ mutation self-test that proves this suite detects the census'd defect (LAW-07).
 The subject is the exact call `WorkerPool.__init__` makes (`selfplay/pool.py:97`) on the
 exact input a real boot hands it: `RunConfig.model_dump()`. TD-4 was measured at HEAD
 (`ca237d2`) as parent rc 33 / child rc 1 in mode PREFLIGHT, ~1.4 s in, with a real Trainer
-already built — the wall that made `preflight_mint.py --config configs/run6.yaml` unable to
-run a burst at all.
+already built — the wall that left `preflight_mint.py --config` on the production config
+unable to run a burst at all.
 
 The mutation self-test re-introduces the defect at the one line that carried it (the
 resolver's flat-only read) and asserts this suite goes RED there and ONLY there — the

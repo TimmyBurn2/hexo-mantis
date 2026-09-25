@@ -2,7 +2,7 @@
 
 R343(c) orders "SIGTERM → drain under kill-grace → checkpoint → exit 0". At HEAD the fourth
 step did not follow the third: `close_out` ran the terminal battery synchronously under
-`terminal_eval_hard_cap_sec` (14400 s in `run6.yaml`), MEASURED once at t+67 min and still
+`terminal_eval_hard_cap_sec` (14400 s in production), MEASURED once at t+67 min and still
 running while the checkpoint had been safe for an hour (`ADJUDICATION_QUEUE.md`, F-R-P2B-4). On
 the 12 h block R343(f) sets, that is a third of the run spent closing a run about to be
 reopened.
