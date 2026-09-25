@@ -126,10 +126,8 @@ impl RegistrySpec {
             errs.push("n_chain_planes must be >= 1".to_string());
         }
 
-        // `mantis_selfplay`'s `sym_tables_for` PANICS at runner start (graph runs included) on
-        // any other `(sym_table_id, n_chain_planes)`, so the registry refuses it here, at load.
-        // Duplicated rather than imported: this crate sits BELOW mantis-selfplay in the DAG, and
-        // `registry_census.rs` holds the two equal.
+        // The registry refuses at load any `(sym_table_id, n_chain_planes)` other than these, and
+        // `size_25` without `n_planes == 8`; the selfplay `sym_tables_for` they guarded is deleted.
         const SYM_TABLE_IDS: [&str; 2] = ["size_19", "size_25"];
         const SYM_CHAIN_PLANES: usize = 6;
         if !SYM_TABLE_IDS.contains(&self.sym_table_id) {
