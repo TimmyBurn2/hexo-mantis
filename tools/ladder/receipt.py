@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-#: v2 (R363(c)): the game's `opening` (book, index, id, relative stones, where it went off-book) and `book_stones` per move.
+#: v2: the game's `opening` (book, index, id, relative stones, where it went off-book) and `book_stones` per move.
 RECEIPT_SCHEMA_VERSION = 2
 OUTCOMES = ("win", "loss", "aborted")
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")

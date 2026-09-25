@@ -1,4 +1,4 @@
-"""The bot's loop (LADDER-1 §1.2): hold the stream (that IS registration and presence), answer every move request through the backend in arrival order — the book's stones first (R363(c): pair `m` against one opponent plays opening `m`, both bots counting the same `gameStart`s) — accept challenges, write one receipt per finished game; the challenger arm issues paired challenges, first player alternating, and stops at its count."""
+"""The bot's loop (LADDER-1 §1.2): hold the stream (that IS registration and presence), answer every move request through the backend in arrival order — the book's stones first (pair `m` against one opponent plays opening `m`, both bots counting the same `gameStart`s) — accept challenges, write one receipt per finished game; the challenger arm issues paired challenges, first player alternating, and stops at its count."""
 from __future__ import annotations
 
 import http.client

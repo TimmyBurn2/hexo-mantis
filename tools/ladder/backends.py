@@ -14,13 +14,13 @@ class BackendError(RuntimeError):
     """A backend that cannot be opened as asked; the reason names the missing or mismatched thing."""
 
 
-#: R363 §0(5): the ONE preset beside the unit — the ladder tool's own row, labelled on every receipt, never a unit reading.
+#: The ONE preset beside the unit — the ladder tool's own row, labelled on every receipt, never a unit reading.
 PRESET_SIMS: dict[str, int | None] = {"unit": None, "play": 64}
 
 
 @dataclass(frozen=True)
 class TurnResult:
-    """Two placements, the leaves spent on the SEARCHED ones (the backend's own count), the wall the pair took, and how many of the two the book forced (R363(c))."""
+    """Two placements, the leaves spent on the SEARCHED ones (the backend's own count), the wall the pair took, and how many of the two the book forced."""
 
     placements: tuple[Cell, Cell]
     sims: int
@@ -109,7 +109,7 @@ class MantisBackend:
         if ck.metadata.arch is None:
             raise BackendError(f"{Path(checkpoint).name}: the stamp resolves no arch, so the net cannot be rebuilt")
         net = build_net(ck.metadata.arch)
-        state, self.weights = deploy_state(ck)  # the EMA shadow when the stamp carries one (R366(b))
+        state, self.weights = deploy_state(ck)  # the EMA shadow when the stamp carries one
         net.load_state_dict(state)
         net.to("cpu").eval()
         self.net_hash = net_param_hash(net)
@@ -211,7 +211,7 @@ class StrixBackend:
 
     @property
     def findings(self) -> list[str]:
-        """The fence findings so far (R257): every disagreement between the driver's legal set and ours."""
+        """The fence findings so far: every disagreement between the driver's legal set and ours."""
         return list(self._bot.findings)
 
     def close(self) -> None:

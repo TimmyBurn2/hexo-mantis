@@ -1,4 +1,4 @@
-"""The ladder's opening unit (R363(c)): `book_v1_s20260625_p4` PAIRED, opening index = match index, a convention between OUR two bots — the server's challenge carries no opening field, so both bots play the same book prefix from the server's auto-placed origin and search only past it."""
+"""The ladder's opening unit: `book_v1_s20260625_p4` PAIRED, opening index = match index, a convention between OUR two bots — the server's challenge carries no opening field, so both bots play the same book prefix from the server's auto-placed origin and search only past it."""
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence

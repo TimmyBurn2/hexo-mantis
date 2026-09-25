@@ -1,4 +1,4 @@
-"""The HeXO bot-API client (LADDER-1), the ONE module with endpoint strings, stdlib only; verified against the DEPLOYED server (TimmyBurn2/HeXO@8166053, live 2026-09-19), which is ahead of the spec file where CARD-LADDER-RUNG says."""
+"""The HeXO bot-API client (LADDER-1), the ONE module with endpoint strings, stdlib only; verified against the DEPLOYED server (TimmyBurn2/HeXO@8166053, live 2026-09-19), which is ahead of the spec file's card."""
 from __future__ import annotations
 
 import json
