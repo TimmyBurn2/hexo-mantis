@@ -7,11 +7,14 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
-**SLIM-FIX (R368)**, in progress on branch `claude/slim-fix-r368` (cut from the SLIM-SCOUT census at
-`1e8d6d6`, base `dev` `69e1532`), not yet on `dev`. It runs as waves W0–W8, W8 the close. Which
-waves have exited is its resume point's to say, `docs/slim/PROGRESS.md`; the per-wave facts live
-there and in the wave reviews under `docs/audits/`, not here. At packet
-exit, with the full gate set green including the slow tier, the branch fast-forwards `dev` (R368).
+**SLIM-FIX (R368) EXITED 2026-09-25** on branch `claude/slim-fix-r368` (cut from the SLIM-SCOUT
+census at `1e8d6d6`, base `dev` `69e1532`), range `1e8d6d6..` the exit tip, not yet on `dev`. The
+packet's exit record — the BEFORE/AFTER figures, the per-wave ledger, the HALTs and their
+closures, the operator grants of 2026-09-25, the review list and the sweep procedure — is
+`docs/audits/SLIM_FIX_EXIT_2026-09-25.md`; `docs/slim/` is dissolved at the close and its files
+live in git history. The branch is **READY-TO-MERGE**: it does not fast-forward `dev` and is not
+pushed until the operator enacts the merge, and run10's launch-base rule (R368(i)) then applies to
+the merged tip (full gate set green, slow tier included, or run10 launches from `69e1532`).
 
 ## The run
 
@@ -90,3 +93,5 @@ Derived 2026-09-25 on the SLIM-FIX branch at `029adc0a`, from the tree:
 `git cat-file` / `git merge-base --is-ancestor` on every commit named above.
 Repaired in place 2026-09-25 (R311(c)): the pointer rows, the phase and configs lines, after
 `docs/audits/REVIEW_W6_2026-09-25.md` §2 #2 and #11.
+The exit paragraph above was written at the W8 close from `docs/audits/SLIM_FIX_EXIT_2026-09-25.md`
+and the branch tip it names.

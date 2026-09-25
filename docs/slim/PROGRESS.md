@@ -104,6 +104,11 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   folded per commit (count 4928→4927→4948; comment_excess 2144→2143). Post-W8-D at 2e69d0e2: run10 MATCH;
   comment_lint GREEN at floor; gates 7/10/12/13/15/17 rc 0; `git grep -n 'run6\.yaml' -- src tools tests` EMPTY —
   not even history prose remains (grant 2's prose rewrite and 1(b)'s deletion removed the last of it).
+- W8-E at 94b7765a→exit-record commit: the AFTER figure taken at 2e69d0e2 (1 090 files / 276 332 text lines
+  against BEFORE 1 071 / 419 648, both 00_MAP §1 commands, per-dir and per-package tables in the record);
+  `docs/audits/SLIM_FIX_EXIT_2026-09-25.md` written (the ledger, the halts, grants 7/8/9 recorded, the review
+  list, models per leg, the KNOWN-RED account, the run10 appendix); halt_twin_heldout.diff `git mv`ed to
+  `docs/audits/SLIM_FIX_halt_twin_heldout.diff`; STATE.md's phase paragraph rewritten to EXITED/READY-TO-MERGE.
 
 ## W7 — the style pass (EXITED 2026-09-25)
 

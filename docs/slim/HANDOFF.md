@@ -44,26 +44,14 @@ You are continuing a long, gated refactor. READ IN THIS ORDER before touching an
    A red you cannot attribute to the wave: record it in PROGRESS, do not fix it.
 6. Update `docs/slim/PROGRESS.md` (wave, rows done/refuted/still-C with grounds, exit facts) and commit it.
 
-## What is left (from the 2026-09-24 close-out)
+## What is left (from the 2026-09-25 close-out)
 
-W0–W7 are EXITED (PROGRESS carries each wave's exit facts and per-row ledger). NEXT is W8, per
-`docs/slim/handoff/W8_ADDENDUM.md`. That file supersedes the W8 summary below where the two differ. It opens
-with W8-D, the operator's grants of 2026-09-25: run6 stays and is unbound by name, the MANIFEST prose,
-pipeline.py's repr, the R336(e) annotation, the archive tombstone, and the dead Trainer.load_checkpoint.
-The waves:
-- **W5 TESTS + FIXTURES** — EXITED 2026-09-25 at 8297c74d (PROGRESS `## W5`: REVIEW-W5 closed in one
-  loop, exit sweep green, the KNOWN-RED cured by cdbc8000, collected 4927, run10 MATCH).
-- **W6 DOCS + CONFIGS** — EXITED 2026-09-25 at 0c8b9176 (PROGRESS `## W6`: REVIEW-W6 closed in one loop,
-  exit sweep ALL GREEN, collected 4928, run10 MATCH). configs/run7.yaml and run8.yaml are deleted; **configs/run6.yaml
-  STAYS on a HALT** that needs an operator grant (R310-frozen preflight oracle plus the ruling-named deploy_sims row;
-  the measured diff is `docs/slim/handoff/halt_twin_heldout.diff` and it NARROWS the oracle, see PROGRESS).
-- **W7 STYLE PASS** — EXITED 2026-09-25 at the W7 exit commit (PROGRESS `## W7`). All eight legs landed, one
-  package per commit. REVIEW-W7 closed in one loop, the exit sweep was ALL GREEN, collected 4928, run10 MATCH.
-  Measures fell: cite 1163→91, comment_excess 3124→2144, textfile 466→228.
-- **W8 CLOSE** (see W8_ADDENDUM.md): the W8-D grants first, then the AFTER figure (00_MAP §1's command, per top dir and per slice); one exit
-  paragraph in STATE.md; `git rm -r docs/slim` then `test ! -e docs/slim`; the FULL gate set incl.
-  the slow tier (`make gates.exit`, ≈ 2 h); then STOP at READY-TO-MERGE: do NOT fast-forward or
-  push dev — the operator (or the original session) does ENACTS 4 after reading the exit report.
+W0–W7 are EXITED. **W8 is at its close**: W8-D (the operator grants) is DONE — all eight code commits
+integrated 0f4bab11..2e69d0e2, grants 7/8/9 recorded in `docs/audits/SLIM_FIX_EXIT_2026-09-25.md`, which also
+carries the AFTER figure and the per-wave ledger. Remaining: REVIEW-W8, the full `make gates.exit`, the
+dissolution of docs/slim, and STOP at READY-TO-MERGE (no fast-forward, no push; the operator enacts ENACTS 4).
+This file (HANDOFF.md) and everything under docs/slim/ dies at the dissolution commit; after that the exit
+record and STATE.md are the resume points.
 
 ### Session notes for the next dispatcher (learned 2026-09-24, W3/W4)
 - **The KNOWN-RED** (`tests/monitor/test_supervisor_signal_posture.py::
