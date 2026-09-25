@@ -28,7 +28,6 @@ fn geometry() -> (BoardGeometry, usize, i32) {
     (
         BoardGeometry {
             legal_move_radius: spec.legal_move_radius as i32,
-            cluster_threshold: spec.cluster_threshold.unwrap_or(5) as i32,
             cluster_window_size: spec.cluster_window_size.unwrap_or(spec.board_size),
         },
         spec.policy_logit_count,

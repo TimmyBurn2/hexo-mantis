@@ -46,7 +46,6 @@ fn load_pos(src: &str, i: usize) -> Pos {
     let id = value_of(src, &key("id")).to_string();
     let geom = BoardGeometry {
         legal_move_radius: spec.legal_move_radius as i32,
-        cluster_threshold: spec.cluster_threshold.unwrap_or(5) as i32,
         cluster_window_size: spec.cluster_window_size.unwrap_or(spec.board_size),
     };
     let mut board = Board::with_geometry(geom);

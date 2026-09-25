@@ -10,7 +10,6 @@ use mantis_core::board::{Board, BoardGeometry, HALF};
 fn wide_board_25() -> Board {
     Board::with_geometry(BoardGeometry {
         legal_move_radius: 8,
-        cluster_threshold: 8,
         cluster_window_size: 25,
     })
 }
@@ -27,7 +26,11 @@ fn window_flat_idx_round_trips_at_19_and_25() {
         for q in -half..=half {
             for r in -half..=half {
                 let flat = board.window_flat_idx(q, r);
-                assert_ne!(flat, usize::MAX, "in-window ({q},{r}) must index at size {size}");
+                assert_ne!(
+                    flat,
+                    usize::MAX,
+                    "in-window ({q},{r}) must index at size {size}"
+                );
                 assert!(flat < (size * size) as usize);
                 assert_eq!(
                     board.window_coords(flat),
@@ -38,8 +41,12 @@ fn window_flat_idx_round_trips_at_19_and_25() {
         }
         // One-beyond-edge cells are out-of-window → usize::MAX.
         for &(q, r) in &[
-            (half + 1, 0), (-(half + 1), 0), (0, half + 1), (0, -(half + 1)),
-            (half + 1, half + 1), (-(half + 1), -(half + 1)),
+            (half + 1, 0),
+            (-(half + 1), 0),
+            (0, half + 1),
+            (0, -(half + 1)),
+            (half + 1, half + 1),
+            (-(half + 1), -(half + 1)),
         ] {
             assert_eq!(
                 board.window_flat_idx(q, r),
@@ -73,18 +80,42 @@ fn window_flat_idx_at_matches_geom_kernel_19_9() {
 fn window_flat_idx_literal_layout_pins() {
     // Size 19, empty default board (center (0,0), half 9).
     let b19 = Board::new();
-    assert_eq!(b19.window_flat_idx(0, 0), 180, "center cell at size 19 is 9*19+9 = 180");
+    assert_eq!(
+        b19.window_flat_idx(0, 0),
+        180,
+        "center cell at size 19 is 9*19+9 = 180"
+    );
     // Off-center: (1,0) → wq=10, wr=9 → 10*19+9 = 199 (q-major: q strides by 19).
-    assert_eq!(b19.window_flat_idx(1, 0), 199, "(1,0) at size 19 is 10*19+9 = 199");
+    assert_eq!(
+        b19.window_flat_idx(1, 0),
+        199,
+        "(1,0) at size 19 is 10*19+9 = 199"
+    );
     // The transposed layout would give (0,1) → 199; the correct q-major gives 181.
-    assert_eq!(b19.window_flat_idx(0, 1), 181, "(0,1) at size 19 is 9*19+10 = 181");
+    assert_eq!(
+        b19.window_flat_idx(0, 1),
+        181,
+        "(0,1) at size 19 is 9*19+10 = 181"
+    );
 
     // Size 25, empty wide board (center (0,0), half 12).
     let b25 = wide_board_25();
-    assert_eq!(b25.window_flat_idx(0, 0), 312, "center cell at size 25 is 12*25+12 = 312");
+    assert_eq!(
+        b25.window_flat_idx(0, 0),
+        312,
+        "center cell at size 25 is 12*25+12 = 312"
+    );
     // Off-center: (1,0) → wq=13, wr=12 → 13*25+12 = 337 (q-major: q strides by 25).
-    assert_eq!(b25.window_flat_idx(1, 0), 337, "(1,0) at size 25 is 13*25+12 = 337");
-    assert_eq!(b25.window_flat_idx(0, 1), 313, "(0,1) at size 25 is 12*25+13 = 313");
+    assert_eq!(
+        b25.window_flat_idx(1, 0),
+        337,
+        "(1,0) at size 25 is 13*25+12 = 337"
+    );
+    assert_eq!(
+        b25.window_flat_idx(0, 1),
+        313,
+        "(0,1) at size 25 is 12*25+13 = 313"
+    );
 
     // The associated-fn kernel pins the same literals independently of Board.
     assert_eq!(Board::window_flat_idx_at(0, 0, 0, 0), 180);

@@ -81,8 +81,6 @@ pub enum Cell {
 pub struct BoardGeometry {
     /// Hex-ball radius for legal-move expansion.
     pub legal_move_radius: i32,
-    /// Max `hex_distance` at which two stones share a cluster.
-    pub cluster_threshold: i32,
     /// Cluster-view side length; odd, >= 7.
     pub cluster_window_size: usize,
 }
@@ -149,15 +147,13 @@ pub struct Board {
     /// Per-board legal-move radius override; `legal_moves_set()` rebuilds by hex-ball
     /// expansion at this radius. Default `moves::DEFAULT_LEGAL_MOVE_RADIUS` (5).
     pub(crate) legal_move_radius: i32,
-    /// Registry-carried cluster threshold; no reader since the cluster BFS was deleted (carded).
-    pub(crate) cluster_threshold: i32,
     /// Per-board window side length (the graph trunk size). Default `BOARD_SIZE`.
     pub(crate) cluster_window_size: usize,
 }
 
 impl Board {
     /// Create an empty board ready for the first move. The baked constants (radius 5,
-    /// threshold 5, window 19) are game-rules constants, not config defaults.
+    /// window 19) are game-rules constants, not config defaults.
     pub fn new() -> Self {
         // Pre-populated with the 5x5 region at (0,0): every cell is legal on an empty board,
         // but bounding the first move to 25 cells keeps branching ~24 for the whole game.
@@ -186,7 +182,6 @@ impl Board {
             legal_cache: UnsafeCell::new(init_cache),
             cache_dirty: StdCell::new(false),
             legal_move_radius: super::super::moves::DEFAULT_LEGAL_MOVE_RADIUS,
-            cluster_threshold: super::super::moves::DEFAULT_CLUSTER_THRESHOLD,
             cluster_window_size: BOARD_SIZE,
         }
     }
@@ -201,7 +196,6 @@ impl Board {
         );
         let mut b = Board::new();
         b.cluster_window_size = g.cluster_window_size;
-        b.cluster_threshold = g.cluster_threshold;
         b.legal_move_radius = g.legal_move_radius;
         b.cache_dirty.set(true);
         b
@@ -211,14 +205,8 @@ impl Board {
     pub fn geometry(&self) -> BoardGeometry {
         BoardGeometry {
             legal_move_radius: self.legal_move_radius,
-            cluster_threshold: self.cluster_threshold,
             cluster_window_size: self.cluster_window_size,
         }
-    }
-
-    /// Current cluster threshold (default 5 = v6 wire-format).
-    pub fn cluster_threshold(&self) -> i32 {
-        self.cluster_threshold
     }
 
     /// Current cluster window side length (default 19 = v6 wire-format).
@@ -512,7 +500,6 @@ impl Clone for Board {
             )),
             cache_dirty: StdCell::new(true),
             legal_move_radius: self.legal_move_radius,
-            cluster_threshold: self.cluster_threshold,
             cluster_window_size: self.cluster_window_size,
         }
     }
@@ -630,23 +617,19 @@ mod geometry_tests {
     //! registry decoupling.
     use super::*;
 
-    /// Asymmetric values (radius 4, threshold 7, window 9) so a `with_geometry` transcription
-    /// bug swapping the two same-typed i32 fields cannot pass.
+    /// Off-default values (radius 4, window 9) so a `with_geometry` that drops a field cannot pass.
     #[test]
     fn with_geometry_propagates_fields() {
         let b = Board::with_geometry(BoardGeometry {
             legal_move_radius: 4,
-            cluster_threshold: 7,
             cluster_window_size: 9,
         });
         assert_eq!(b.legal_move_radius(), 4);
-        assert_eq!(b.cluster_threshold(), 7);
         assert_eq!(b.cluster_window_size(), 9);
         assert_eq!(
             b.geometry(),
             BoardGeometry {
                 legal_move_radius: 4,
-                cluster_threshold: 7,
                 cluster_window_size: 9
             }
         );
@@ -656,7 +639,6 @@ mod geometry_tests {
     fn clone_preserves_geometry() {
         let a = Board::with_geometry(BoardGeometry {
             legal_move_radius: 8,
-            cluster_threshold: 8,
             cluster_window_size: 25,
         });
         let b = a.clone();

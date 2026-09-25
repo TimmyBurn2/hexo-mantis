@@ -7,7 +7,7 @@
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
-use mantis_core::board::{BOARD_SIZE, DEFAULT_CLUSTER_THRESHOLD, HALF};
+use mantis_core::board::{BOARD_SIZE, HALF};
 use mantis_core::{Board as RustBoard, BoardGeometry, Cell, Player};
 use mantis_encoding::RegistrySpec;
 
@@ -57,10 +57,6 @@ impl PyBoard {
         })?;
         let geom = BoardGeometry {
             legal_move_radius: spec.legal_move_radius as i32,
-            cluster_threshold: spec
-                .cluster_threshold
-                .unwrap_or(DEFAULT_CLUSTER_THRESHOLD as usize)
-                as i32,
             cluster_window_size: spec.cluster_window_size.unwrap_or(spec.board_size),
         };
         Ok(PyBoard {

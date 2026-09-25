@@ -18,7 +18,7 @@ added_by = "WP1"
 
 [[required]]
 path = "board/board_replay_golden_v1.json"
-sha256 = "71b356f3420b12fc6c106d053085bf2e7e8e1a126398451bf690e330cb93a18c"
+sha256 = "fb10daac2c2c7300ce36829fb476ffad3acdaccee220cb2eb5bf2d489e0d156f"
 added_by = "WP2"
 
 [[required]]

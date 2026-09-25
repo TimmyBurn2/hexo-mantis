@@ -1,3 +1,5 @@
+// >300 justify (R8): one oracle — the capture's schema, the replay and its field comparisons read one fixture.
+
 //! Golden replay oracle: replays the predecessor-engine capture
 //! (`tests/fixtures/board/board_replay_golden_v1.json`, schema
 //! `board-golden-v1`) against this crate's Board and asserts EVERY recorded
@@ -44,7 +46,6 @@ struct Game {
 #[derive(Deserialize, Clone, Copy)]
 struct Geometry {
     legal_move_radius: i32,
-    cluster_threshold: i32,
     cluster_window_size: usize,
 }
 
@@ -124,7 +125,6 @@ fn build_board(c: Construction, g: Geometry) -> Board {
         Construction::Default => Board::new(),
         Construction::Geometry => Board::with_geometry(BoardGeometry {
             legal_move_radius: g.legal_move_radius,
-            cluster_threshold: g.cluster_threshold,
             cluster_window_size: g.cluster_window_size,
         }),
         Construction::RadiusOverride { radius } => {
@@ -136,7 +136,12 @@ fn build_board(c: Construction, g: Geometry) -> Board {
 }
 
 fn cmp<T: PartialEq + std::fmt::Debug>(
-    div: &mut Vec<String>, game: usize, ply: u32, field: &str, got: &T, want: &T,
+    div: &mut Vec<String>,
+    game: usize,
+    ply: u32,
+    field: &str,
+    got: &T,
+    want: &T,
 ) {
     if got != want {
         div.push(format!(
@@ -154,41 +159,138 @@ fn verify(golden: &Golden) -> Vec<String> {
         for rec in &game.plies {
             let (q, r) = rec.mv;
             if let Err(e) = board.apply_move(q, r) {
-                div.push(format!("game {g} ply {}: recorded move ({q},{r}) rejected: {e}", rec.ply));
+                div.push(format!(
+                    "game {g} ply {}: recorded move ({q},{r}) rejected: {e}",
+                    rec.ply
+                ));
                 break;
             }
-            cmp(&mut div, g, rec.ply, "zobrist", &format!("{:032x}", board.zobrist_hash), &rec.zobrist);
+            cmp(
+                &mut div,
+                g,
+                rec.ply,
+                "zobrist",
+                &format!("{:032x}", board.zobrist_hash),
+                &rec.zobrist,
+            );
             let legal = board.legal_moves();
-            cmp(&mut div, g, rec.ply, "legal_sha256", &sha_legal(&legal), &rec.legal_sha256);
-            cmp(&mut div, g, rec.ply, "current_player", &player_i8(board.current_player), &rec.current_player);
-            cmp(&mut div, g, rec.ply, "moves_remaining", &board.moves_remaining, &rec.moves_remaining);
+            cmp(
+                &mut div,
+                g,
+                rec.ply,
+                "legal_sha256",
+                &sha_legal(&legal),
+                &rec.legal_sha256,
+            );
+            cmp(
+                &mut div,
+                g,
+                rec.ply,
+                "current_player",
+                &player_i8(board.current_player),
+                &rec.current_player,
+            );
+            cmp(
+                &mut div,
+                g,
+                rec.ply,
+                "moves_remaining",
+                &board.moves_remaining,
+                &rec.moves_remaining,
+            );
             cmp(&mut div, g, rec.ply, "ply", &board.ply.index(), &rec.ply);
-            cmp(&mut div, g, rec.ply, "check_win", &board.check_win(), &rec.check_win);
-            cmp(&mut div, g, rec.ply, "window_center", &board.window_center(), &rec.window_center);
+            cmp(
+                &mut div,
+                g,
+                rec.ply,
+                "check_win",
+                &board.check_win(),
+                &rec.check_win,
+            );
+            cmp(
+                &mut div,
+                g,
+                rec.ply,
+                "window_center",
+                &board.window_center(),
+                &rec.window_center,
+            );
             if let Some(want) = &rec.legal_moves {
                 cmp(&mut div, g, rec.ply, "legal_moves", &legal, want);
             }
             if let Some(want) = &rec.winning_moves_p1 {
-                cmp(&mut div, g, rec.ply, "winning_moves_p1", &board.winning_moves(Player::One), want);
+                cmp(
+                    &mut div,
+                    g,
+                    rec.ply,
+                    "winning_moves_p1",
+                    &board.winning_moves(Player::One),
+                    want,
+                );
             }
             if let Some(want) = &rec.winning_moves_p2 {
-                cmp(&mut div, g, rec.ply, "winning_moves_p2", &board.winning_moves(Player::Two), want);
+                cmp(
+                    &mut div,
+                    g,
+                    rec.ply,
+                    "winning_moves_p2",
+                    &board.winning_moves(Player::Two),
+                    want,
+                );
             }
             if let Some(want) = &rec.threat_moves_p1 {
-                cmp(&mut div, g, rec.ply, "threat_moves_p1", &board.threat_moves(Player::One), want);
+                cmp(
+                    &mut div,
+                    g,
+                    rec.ply,
+                    "threat_moves_p1",
+                    &board.threat_moves(Player::One),
+                    want,
+                );
             }
             if let Some(want) = &rec.threat_moves_p2 {
-                cmp(&mut div, g, rec.ply, "threat_moves_p2", &board.threat_moves(Player::Two), want);
+                cmp(
+                    &mut div,
+                    g,
+                    rec.ply,
+                    "threat_moves_p2",
+                    &board.threat_moves(Player::Two),
+                    want,
+                );
             }
             if let Some(want) = &rec.forced_win_move_d2 {
-                let got = board.forced_win_move(2).map(|m| vec![m]).unwrap_or_default();
+                let got = board
+                    .forced_win_move(2)
+                    .map(|m| vec![m])
+                    .unwrap_or_default();
                 cmp(&mut div, g, rec.ply, "forced_win_move_d2", &got, want);
             }
         }
         let ply = board.ply.index();
-        cmp(&mut div, g, ply, "terminal.winner", &board.winner().map_or(0, player_i8), &game.terminal.winner);
-        cmp(&mut div, g, ply, "terminal.winning_line", &board.find_winning_line(), &game.terminal.winning_line);
-        cmp(&mut div, g, ply, "terminal.value_to_move", &board.terminal_value_to_move(), &game.terminal.terminal_value_to_move);
+        cmp(
+            &mut div,
+            g,
+            ply,
+            "terminal.winner",
+            &board.winner().map_or(0, player_i8),
+            &game.terminal.winner,
+        );
+        cmp(
+            &mut div,
+            g,
+            ply,
+            "terminal.winning_line",
+            &board.find_winning_line(),
+            &game.terminal.winning_line,
+        );
+        cmp(
+            &mut div,
+            g,
+            ply,
+            "terminal.value_to_move",
+            &board.terminal_value_to_move(),
+            &game.terminal.terminal_value_to_move,
+        );
     }
     div
 }
@@ -224,7 +326,8 @@ fn golden_replay_mutation_self_test() {
         "MUTATION SELF-TEST FAILED: the checker passed a flipped move"
     );
     assert!(
-        div.iter().any(|d| d.starts_with("game 0 ply 1:") && d.contains("zobrist")),
+        div.iter()
+            .any(|d| d.starts_with("game 0 ply 1:") && d.contains("zobrist")),
         "mutation must surface a zobrist divergence naming game 0 ply 1; got:\n{}",
         div.join("\n")
     );

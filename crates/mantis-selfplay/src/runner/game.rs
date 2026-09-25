@@ -23,7 +23,6 @@ use rand::prelude::IndexedRandom;
 use rand::rngs::ThreadRng;
 use rand::{rng, RngExt};
 
-use mantis_core::board::DEFAULT_CLUSTER_THRESHOLD;
 use mantis_core::{Board, BoardGeometry};
 use mantis_encoding::RegistrySpec;
 use mantis_search::{MCTSTree, QSigma, SearchKind, VIRTUAL_LOSS_PENALTY};
@@ -184,9 +183,6 @@ pub(crate) fn run_worker_thread(
     // Resolve the per-game `BoardGeometry` ONCE from the spec; there is no None board arm.
     let board_geometry = BoardGeometry {
         legal_move_radius: registry_spec.legal_move_radius as i32,
-        cluster_threshold: registry_spec
-            .cluster_threshold
-            .unwrap_or(DEFAULT_CLUSTER_THRESHOLD as usize) as i32,
         cluster_window_size: registry_spec
             .cluster_window_size
             .unwrap_or(registry_spec.board_size),

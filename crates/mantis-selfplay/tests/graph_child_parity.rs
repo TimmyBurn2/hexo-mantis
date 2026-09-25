@@ -52,7 +52,6 @@ fn check_position(src: &str, i: usize, with_priors: bool) {
     // the Python side, so the two legs share one board.
     let geom = BoardGeometry {
         legal_move_radius: spec.legal_move_radius as i32,
-        cluster_threshold: spec.cluster_threshold.unwrap_or(5) as i32,
         cluster_window_size: spec.cluster_window_size.unwrap_or(spec.board_size),
     };
     let mut board = Board::with_geometry(geom);

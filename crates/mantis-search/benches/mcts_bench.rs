@@ -25,7 +25,6 @@ const OFF_WINDOW_FLAT: usize = 361;
 fn dispersed_board(n_stones: usize) -> Board {
     let mut board = Board::with_geometry(BoardGeometry {
         legal_move_radius: 6,
-        cluster_threshold: 5,
         cluster_window_size: TRUNK_SZ as usize,
     });
     let mut state: u64 = 0x2026_0731;
