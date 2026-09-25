@@ -1,4 +1,4 @@
-"""Human-diagnostic stderr logging (WP13-A §a.1) — stdlib only.
+"""Human-diagnostic stderr logging — stdlib only.
 
 Replaces `hexo_rl/monitoring/configure.py`. What DIES and why: **structlog** (mantis takes
 no such dependency — machine-readable event DATA now flows through the JSONL event sink,

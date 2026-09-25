@@ -38,17 +38,17 @@ ACTOR_LAG_EXIT_CODE: int = 45
 DRAW_RATE_COLLAPSE_EXIT_CODE: int = 46
 # 46 is the first COOPERATIVE member: the draw-rate abort sets `shutdown.running = False` and
 # RETURNS, so the loop unwinds through `close_out`, the terminal-eval drain and the shutdown
-# checkpoint, all of which an `os._exit(46)` would discard (LAW-16). Parity is taken in this
+# checkpoint, all of which an `os._exit(46)` would discard. Parity is taken in this
 # registry and in the supervisor's READING of the rc, never in the delivery mechanism.
 DISK_SPACE_EXHAUSTED_EXIT_CODE: int = 47
 # 46 is the first COOPERATIVE member: the draw-rate abort sets `shutdown.running = False` and
 # RETURNS, so the loop unwinds through `close_out`, the terminal-eval drain and the shutdown
-# checkpoint, all of which an `os._exit(46)` would discard (LAW-16).
+# checkpoint, all of which an `os._exit(46)` would discard.
 TERMINAL_EVAL_BROKEN_EXIT_CODE: int = 48
-# 49 is the FOURTH cooperative member (R350(b)(iv)): the policy-loss trough halt fires through
+# 49 is the FOURTH cooperative member: the policy-loss trough halt fires through
 # `_fire_hard_abort` like 46 and unwinds through `close_out`, so the save survives the halt.
 POLICY_LOSS_TROUGH_EXIT_CODE: int = 49
-# 50 is the FIFTH cooperative member (R352(c)): the ply-cap attractor halt fires through
+# 50 is the FIFTH cooperative member: the ply-cap attractor halt fires through
 # `_fire_hard_abort` like 46 and unwinds through `close_out`, so the save survives the halt.
 PLY_CAP_ATTRACTOR_EXIT_CODE: int = 50
 

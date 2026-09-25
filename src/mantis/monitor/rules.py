@@ -3,7 +3,7 @@
 Ports the surviving part of the predecessor's alert rules with DECISION PARITY — the old code is
 the spec. IN: the four training-step WARN rules and `check_draw_rate_collapse`. OUT: the
 value-spread canary, which stayed green through a 33%→5% WR collapse, the strength/robustness
-family, fed by a killed phantom input, and (R362(c)) the sealbot-WR trajectory instrument, whose
+family, fed by a killed phantom input, and the sealbot-WR trajectory instrument, whose
 producer — the sealbot rung — is deleted.
 
 Every function is stateless — the caller owns the history/window ring. The draw-rate
@@ -29,10 +29,10 @@ WARN_RULE_NAMES: tuple[str, ...] = (
     "nonfinite_loss",
 )
 
-#: The payload key(s) each WARN rule's verdict is a function of. LAW-18: a rule whose INPUT is
+#: The payload key(s) each WARN rule's verdict is a function of. A rule whose INPUT is
 #: absent DID NOT RUN, which is a different fact from one that ran and found nothing wrong, and the
 #: two were one observable. Both entropy rules were the first for the whole life of the run until
-#: R355(e) (B-4): the graph step now publishes `policy_entropy` and `policy_entropy_selfplay`.
+#: the graph step began publishing `policy_entropy` and `policy_entropy_selfplay`.
 WARN_RULE_INPUTS: dict[str, tuple[str, ...]] = {
     "entropy_collapse": ("policy_entropy",),
     "selfplay_entropy_collapse": ("policy_entropy_selfplay",),
@@ -148,7 +148,7 @@ def emit_training_step_alerts(
     )
     fired: list[str] = []
     for name, message in zip(WARN_RULE_NAMES, results, strict=True):
-        # AUDIT-1 F-29: count the steps a rule could not run at, BEFORE deciding it is quiet.
+        # Count the steps a rule could not run at, BEFORE deciding it is quiet.
         if rule_input_absent(name, payload):
             WARN_RULE_SKIPS[name] += 1
         if message is None:
@@ -169,7 +169,7 @@ def check_policy_loss_trough(
     consec: int,
     max_step: int,
 ) -> str | None:
-    """R350(b)(iv): the last ``consec`` window means all sit ``delta_nats`` above ``reference``
+    """The last ``consec`` window means all sit ``delta_nats`` above ``reference``
     while ``current_step <= max_step``; silent past it (the signature is an EARLY overwrite)."""
     if delta_nats <= 0 or consec <= 0 or len(history) < consec:
         return None
@@ -195,7 +195,7 @@ def check_ply_cap_attractor(
     window_games: int,
     min_step: int,
 ) -> str | None:
-    """R352(c): the last ``window_games`` games' cap fraction STRICTLY above ``rate`` past ``min_step``."""
+    """The last ``window_games`` games' cap fraction STRICTLY above ``rate`` past ``min_step``."""
     if rate <= 0 or window_games <= 0 or current_step < min_step:
         return None
     if float(observed_rate) > float(rate):

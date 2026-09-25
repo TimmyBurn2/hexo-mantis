@@ -43,7 +43,7 @@ _MAX_SHARD_CLAIM_RETRIES = 64
 #: `(ply, root_value, root_raw | None, [((q, r), visits, q_root_view, prior), ...])`.
 PositionStatsRow = tuple[int, float, float | None, list[tuple[tuple[int, int], int, float, float]]]
 
-#: The four channels a game can come from (R344(b) names all four).
+#: The four channels a game can come from.
 CHANNELS = ("selfplay", "promotion", "external", "random_floor")
 
 
@@ -269,8 +269,8 @@ def selfplay_record(
 ) -> dict[str, Any]:
     """Build one self-play game as a record. `step` is the ACTOR step — the weights that played
     this game — and `step_kind` says so; `colors` is ABSENT (both seats are the same net);
-    `move_arms` is the runner's `(sims, is_full_search)` per move (R353(d)); `search_stats` is
-    written for a SAMPLED game only (R355(d)) and an un-sampled game carries no key.
+    `move_arms` is the runner's `(sims, is_full_search)` per move; `search_stats` is
+    written for a SAMPLED game only and an un-sampled game carries no key.
     Raises: ValueError when `move_arms` and `moves` differ in length."""
     if len(move_arms) != len(moves):
         raise ValueError(
@@ -295,7 +295,7 @@ def selfplay_record(
         "move_arms": [_arm_label(int(sims), bool(full)) for sims, full in move_arms],
     }
     if game_id_byte_hash is not None:
-        # LAW-04's dedupe input, carried so effective-n is counted off the RECORD.
+        # The dedupe input, carried so effective-n is counted off the RECORD.
         record["game_id_byte_hash"] = game_id_byte_hash
     if search_stats is not None:
         record["search_stats"] = [_position_entry(*row) for row in search_stats]

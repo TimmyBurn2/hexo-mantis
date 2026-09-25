@@ -1,4 +1,4 @@
-"""The ONE sanctioned optional-effect path (LAW-14; WP13-A §c.2).
+"""The ONE sanctioned optional-effect path.
 
 `best_effort(label, fn, *, counters)` is the only way an effect in `monitor/**` (and in
 the watchdog fire path) may fail without taking the run down: the failure is COUNTED
@@ -25,7 +25,7 @@ class BestEffortCounters:
     """A TOTAL named-counter registry: an untouched label reads 0, never a KeyError.
 
     Thread-safe (the watchdog thread, the drain loop and the main thread all count into
-    one registry); `snapshot()` is what the LAW-18 in-run summary events publish.
+    one registry); `snapshot()` is what the in-run summary events publish.
     """
 
     def __init__(self) -> None:

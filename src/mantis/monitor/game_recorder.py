@@ -1,9 +1,9 @@
-"""`GameRecorder` — the self-play channel's GAME-RECORD-1 producer (R344(b)).
+"""`GameRecorder` — the self-play channel's GAME-RECORD-1 producer.
 
 It fills `mantis.selfplay.pool_hooks.RecorderLike`, a seam that has been injected into the
-worker pool and defaulted to `NullRecorder` since WP13-A, described in its own docstring as
-*"a display surface that does not exist in this tree"*. R344(b) is that surface's producer
-half, so this is a seam being filled rather than a seam being cut.
+worker pool and defaulted to `NullRecorder`, described in its own docstring as *"a display
+surface that does not exist in this tree"*. This is that surface's producer half, so this is
+a seam being filled rather than a seam being cut.
 
 IT LIVES UNDER `monitor/` AND IMPORTS NO `selfplay`. The Protocol is structural, so
 satisfying it needs no import, and the DAG edge stays absent in both directions: the pool is
@@ -17,8 +17,8 @@ from mantis.monitor.game_record import GameRecordWriter, PositionStatsRow, selfp
 
 #: Rust `winner_code` -> the record's seat vocabulary. `0` is a DRAW, `1` is the first mover
 #: and `2` the second (`pool_drain._WINNER_NAMES = ("draw", "x", "o")`). Anything else is
-#: `"unknown"` and NEVER a draw: AUDIT-1 F-28/C04 is the finding that an undecodable outcome
-#: reported as a measured draw is worse than an outcome reported as unread.
+#: `"unknown"` and NEVER a draw: an undecodable outcome reported as a measured draw is worse
+#: than an outcome reported as unread.
 _SEAT_BY_WINNER_CODE = {0: "draw", 1: "p1", 2: "p2"}
 
 
