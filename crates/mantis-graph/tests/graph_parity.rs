@@ -204,12 +204,8 @@ fn sentinel_present_and_roundtrips() {
 
 #[test]
 fn window_boundary_slots_honest() {
-    // Adversarial construction (no fixtures, no behavior change): a wide bbox
-    // whose 19x19 policy window both CONTAINS legal cells exactly at the
-    // window edge and EXCLUDES others. In-window edge cells must carry the
-    // canonical slot; out-of-window cells must carry the -1 sentinel; the
-    // always-on verify_contract inside the builder accepted the graph (the
-    // build returning at all proves it).
+    // Adversarial wide bbox: in-window legal cells at the 19x19 window edge carry the canonical
+    // slot, out-of-window carry -1, and verify_contract accepts it (build returning proves it).
     let trunk = 19i32;
     let half = (trunk - 1) / 2;
     let stones = mantis_graph::StoneList { stones: vec![(0, 0, 1), (28, 0, -1)] };

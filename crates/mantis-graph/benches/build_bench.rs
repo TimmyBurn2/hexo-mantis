@@ -28,10 +28,8 @@ use mantis_graph::{build_axis_graph, BuildParams, StoneList};
 mod common;
 
 fn load_positions() -> Vec<(StoneList, BuildParams)> {
-    // The frozen predecessor self-play set = exactly the `class == base` cases
-    // of the committed fixture (320 corpus positions IN ORDER, identical
-    // stones and identical per-position params to what the predecessor bench
-    // loaded: wl=6, r=6, trunk=19, corpus cp/mr).
+    // The frozen predecessor self-play set = the fixture's `class == base` cases (320 corpus
+    // positions IN ORDER, same stones/params as the predecessor bench: wl=6, r=6, trunk=19, cp/mr).
     let root = common::fixture_root();
     common::verify_fixture_root(&root).unwrap_or_else(|e| panic!("{e}"));
     let cases = common::read_inputs_bin(&root.join("inputs.bin")).unwrap_or_else(|e| panic!("{e}"));

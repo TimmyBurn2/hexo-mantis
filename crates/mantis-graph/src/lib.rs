@@ -531,7 +531,7 @@ fn legal_moves_from_stones(
 
 /// Build one axis-graph — the once-per-evaluated-leaf construction, a faithful port of
 /// `build_axis_graph_raw`. One payload per evaluated leaf, no parallelism inside; no
-/// search-time-incremental variant exists, and proposing one is falsified work (F-19).
+/// search-time-incremental variant exists, and proposing one is falsified work.
 #[must_use]
 #[allow(clippy::missing_panics_doc)] // panics ARE the contract (verify_contract, die loud)
 pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGraph {
@@ -573,10 +573,8 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
     let n_legal = legal.len();
     let n_real = n_stones + n_legal;
     let n = n_real + 1;
-    // Dedup key budget (predecessor review + red-team): the packed edge key
-    // `(src<<34)|(dst<<2)|axis` gives src 30 bits and dst 32 — injective only
-    // while node ids < 2^30. Red-team proved >=1e9 nodes unreachable (OOM long
-    // before); this assert makes the ceiling explicit instead of incidental.
+    // Dedup key `(src<<34)|(dst<<2)|axis` gives src 30 bits, dst 32 — injective only while
+    // node ids < 2^30 (>=1e9 nodes is unreachable, OOM long before); this makes the ceiling explicit.
     assert!(n < (1 << 30), "node count {n} exceeds the 30-bit dedup key budget");
     let dummy_idx = n_real as u32;
     let fdim = NODE_FEAT_DIM;
@@ -682,9 +680,8 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
     let mut edge_src: Vec<u32> = Vec::with_capacity(cap);
     let mut edge_dst: Vec<u32> = Vec::with_capacity(cap);
     let mut edge_attr: Vec<f32> = Vec::with_capacity(cap * EDGE_FEAT_DIM);
-    // `(src, axis, sign, d)` partitions the axis edges IDENTICALLY to `(src, dst, axis)` since
-    // `dst = src + sign * d * axis_delta`, so the key is carried rather than reconstructed from
-    // a one-hot scan — and it is LINEAR in the node count where `(src, dst)` is quadratic.
+    // `(src, axis, sign, d)` partitions the axis edges identically to `(src, dst, axis)`, since
+    // `dst = src + sign*d*axis_delta`: the key is carried, LINEAR, not reconstructed by a quadratic scan.
     let mut edge_key: Vec<u32> = Vec::with_capacity(cap);
 
     for i in 0..n_real {
@@ -889,17 +886,8 @@ fn verify_contract(g: &AxisGraph, n_stones: usize, n_legal: usize, params: &Buil
         g.edge_attr.0.len(), EDGE_FEAT_DIM * n_edges
     );
     assert!(g.builder_impl == BUILDER_IMPL_NATIVE, "NonNativeSampleBuilder: impl tag != 1");
-    // EmptyLegalSet — a non-terminal position must produce >= 1 legal node.
-    // WP-1 empty-board fix: `legal_moves_from_stones` now special-cases
-    // n_stones == 0 with the dense-engine-mirrored 5×5 fallback (25 cells,
-    // see that fn's doc comment), so n_legal > 0 holds UNCONDITIONALLY —
-    // the `|| n_stones == 0` disjunct below is now vacuous in practice
-    // (never needed to fire) but kept as a defensive belt-and-suspenders:
-    // if a future edit ever reintroduces a stoneless vacuous path, this
-    // assert degrades gracefully to the old "escape hatch" behavior rather
-    // than a confusing panic. Any stone-bearing board on the infinite
-    // lattice ALWAYS has empty neighbors, so n_legal == 0 with n_stones > 0
-    // is still, unconditionally, a builder bug.
+    // n_legal > 0 holds unconditionally: `legal_moves_from_stones` dense-mirrors the empty
+    // board with a 25-cell fallback, so `|| n_stones == 0` below is a vacuous defensive disjunct.
     assert!(
         n_legal > 0 || n_stones == 0,
         "EmptyLegalSet: {n_stones} stones but zero legal nodes"
@@ -1016,12 +1004,8 @@ mod tests {
         assert_eq!(g.n_stones, 0);
         assert_eq!(g.legal_node_gather.len(), 25, "empty board must yield the dense 5x5 = 25 legal cells");
         assert_eq!(g.num_nodes(), 25 + 1); // 25 legal + 1 dummy, no stones
-        // Axis-window edges DO form among the 25 (all-Empty-kind) legal
-        // nodes themselves — the empty-kind walk-stop rule only stops on a
-        // Stone neighbor (there are none here), so adjacent legal cells
-        // within the win_length-1 window link up. This is unrelated to the
-        // legal-move-derivation fix (unchanged edge-building code); just
-        // documenting it's expected, not a regression.
+        // Axis-window edges DO form among the 25 empty-kind legal nodes: the walk-stop rule
+        // only stops on a Stone neighbor (none here), so adjacent cells within the window link.
         assert!(g.num_edges() > 0);
         assert_eq!(g.window_center, (0, 0));
 
@@ -1051,11 +1035,8 @@ mod tests {
 
     #[test]
     fn single_stone_legal_set_matches_dense_ball_formula() {
-        // Verification, not a fix. This replicates the dense engine's OWN loop shape rather
-        // than calling `legal_moves_from_stones`, so a real divergence between two independent
-        // formulas is caught. The radius literal is deliberately NOT `mantis_core`'s
-        // `DEFAULT_LEGAL_MOVE_RADIUS` — this crate is dep-free, and importing it would make it
-        // the same authority twice; the cross-check lives in `mantis-encoding/tests/axis_pin.rs`.
+        // Verification, not a fix: replicates the dense engine's own loop shape independently
+        // of `legal_moves_from_stones`; radius is a literal since this crate is dep-free of mantis_core.
         let radius = 5i32; // the predecessor dense engine's default, replicated independently
         let (sq, sr) = (3i32, -2i32);
         let mut expected: Vec<(i32, i32)> = Vec::new();
@@ -1116,13 +1097,8 @@ mod tests {
     #[test]
     #[should_panic(expected = "ScatterSlotAliasing")]
     fn verify_contract_dies_loud_on_slot_aliasing() {
-        // ADV-2b: two policy rows claiming one slot must be a NAMED panic,
-        // in every profile (verify_contract is always-on). Within one graph
-        // the canonical-slot check makes aliasing-with-honest-geometry
-        // impossible (window_flat_idx is injective on the window), so the
-        // adversarial payload is a DUPLICATED GATHER ROW: two policy rows
-        // gather the same legal node (each passes the subrange + canonical
-        // checks individually) and claim the same slot — aliasing fires.
+        // Two policy rows claiming one slot must panic in every profile: the canonical-slot
+        // check makes aliasing-with-honest-geometry impossible, so this duplicates a gather row.
         let stones = StoneList { stones: vec![(0, 0, 1), (1, 0, -1)] };
         let params = BuildParams::V1_GEOMETRY;
         let mut g = build_axis_graph(&stones, &params);

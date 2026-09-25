@@ -1,5 +1,5 @@
-//! Fixture-checker mutation self-tests (LAW-07: prove the gate bites before
-//! trusting it). BINDING: every test calls the IDENTICAL public `common::`
+//! Fixture-checker mutation self-tests: prove the gate bites before
+//! trusting it. BINDING: every test calls the IDENTICAL public `common::`
 //! helpers graph_parity.rs uses (manifest parser, F-row verifier, blob
 //! readers, fixture-root resolver), parametrized ONLY by the fixture-root
 //! path — no parallel/re-implemented checker.
@@ -90,9 +90,8 @@ fn truncated_fixture_detected() {
 
 #[test]
 fn absent_fixtures_fail_not_skip() {
-    // Point the SAME fixture-root resolver the gate uses at an absent dir:
-    // the result must be a loud error naming the path (FAIL semantics; the
-    // gate tests panic on this error — they never skip).
+    // Point the SAME fixture-root resolver at an absent dir: the result must be a loud FAIL
+    // naming the path (the gate tests panic on this, never skip).
     let tmp = scratch("absent");
     let missing = tmp.join("no_such_fixture_root");
     let err = common::verify_fixture_root(&missing).unwrap_err();

@@ -1,4 +1,4 @@
-//! R358(b): build(rot_s(board)) IS rot_s(build(board)) under all 12 D6 elements at radius 8 (RESEARCH-STRENGTH-1 App. A, pinned).
+//! build(rot_s(board)) IS rot_s(build(board)) under all 12 D6 elements at radius 8 (RESEARCH-STRENGTH-1 App. A, pinned).
 
 use std::collections::{BTreeMap, BTreeSet};
 

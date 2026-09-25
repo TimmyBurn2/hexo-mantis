@@ -1,4 +1,4 @@
-//! T2-2 (R334(e), AUDIT-1 F-51 HOT-08/HOT-09) — the dense lookups and the arm they fall back to.
+//! T2-2 — the dense lookups and the arm they fall back to.
 //!
 //! `all_1696_cases_byte_parity` in `graph_parity.rs` already proves the builder's OUTPUT is
 //! byte-identical to the frozen predecessor goldens, and it is the authority for that claim.
@@ -79,12 +79,8 @@ fn a_scattered_position_takes_the_hash_arm() {
 
 #[test]
 fn the_dense_index_answers_exactly_what_the_hash_map_answers() {
-    // THE SUBSTITUTION ITSELF, proven rather than inferred. `all_1696_cases_byte_parity` covers
-    // the builder's output but every golden position is compact, so it exercises one arm only
-    // and can say nothing about whether the two arms agree. This builds the hash map the dense
-    // table replaced and compares them on EVERY cell inside the bbox plus a ring outside it —
-    // the outside ring is the half a bounds bug would hide, since a table that silently wrapped
-    // an out-of-range probe would answer with some other node instead of `None`.
+    // This builds the hash map the dense table replaced and compares both on EVERY cell inside
+    // the bbox plus an outside ring — the half a wrapped out-of-range probe would hide.
     for n in [1usize, 2, 8, 32, 64] {
         let g = build_axis_graph(&compact_stones(n), &params());
         let n_real = g.num_nodes() - 1;
@@ -139,11 +135,8 @@ fn a_scattered_position_has_no_dense_index_to_probe() {
 
 #[test]
 fn the_two_arms_build_the_same_graph() {
-    // The fallback is only safe if it is not a different builder. A scattered position is built
-    // through the hash arm; the same stone SET translated into a compact frame is built through
-    // the dense arm; the graphs must agree field for field up to the translation, which the
-    // coords carry. Rather than translate, this drives the strongest available form: a position
-    // that sits just inside the budget and one just outside, sharing every other property.
+    // A scattered (hash-arm) position and the same stones translated into a compact (dense-arm)
+    // frame must agree field for field: one position just inside the budget, one just outside.
     let inside = build_axis_graph(&scattered_stones(4), &params());
     let outside = build_axis_graph(&scattered_stones(4000), &params());
     let n_in = inside.num_nodes() - 1;
@@ -156,10 +149,8 @@ fn the_two_arms_build_the_same_graph() {
         !axis_index_is_dense(&outside.node_coords, n_out),
         "the far pair must not be"
     );
-    // Two stones far apart have disjoint radius-balls, so each contributes the same local
-    // structure the near pair's stones do when they are far enough not to overlap. The invariant
-    // asserted here is the one that matters for the fallback: the arm changes the LOOKUP, never
-    // the edge count per node.
+    // Two far-apart stones have disjoint radius-balls, contributing the same local structure
+    // as a near pair: the fallback arm changes the LOOKUP only, never the edge count per node.
     assert_eq!(
         inside.edge_index.src.len() % 2,
         outside.edge_index.src.len() % 2,
@@ -202,8 +193,7 @@ fn an_empty_node_set_is_not_dense_and_does_not_panic() {
 #[test]
 fn the_empty_board_still_builds_through_the_fallback_shaped_path() {
     // Zero stones: `StoneIndex::build` returns `None`, so the threat walk takes the hash arm on
-    // an empty map. The 25-cell opening legal set (the documented dense-engine special case)
-    // must still come out.
+    // an empty map; the 25-cell dense-engine opening fallback must still come out.
     let g = build_axis_graph(&StoneList { stones: Vec::new() }, &params());
     assert_eq!(g.n_stones, 0);
     assert_eq!(

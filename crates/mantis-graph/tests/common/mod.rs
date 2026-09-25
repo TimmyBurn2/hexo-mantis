@@ -1,7 +1,7 @@
 //! Exceeds the 300-line soft cap (R8): single shared
 //! fixture-verification module — the ONE code path both parity gates, the
 //! self-tests, and the bench loader use (splitting it would fork the gate,
-//! defeating the LAW-07 binding).
+//! defeating the one-gate producer-test binding).
 //!
 //! Shared helpers for the graph-parity fixture gate: SHA-256 hex (the locked
 //! `sha2` crate, checked against the manifest's Python-hashlib hashes on every
