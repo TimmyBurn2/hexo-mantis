@@ -238,6 +238,24 @@ def test_a_run8_shaped_stamp_with_the_retired_rung_rows_still_loads_and_says_so(
         load_checkpoint(_resave_rehashed(payload, tmp_path))
 
 
+def test_a_stamp_carrying_the_retired_value_target_still_loads_and_says_so(
+        tmp_path, tiny_net, optim_scaler_sched, valid_config, metadata_kwargs, caplog):
+    """Every run8-era stamp carries `train.value_target`; it loads, logged as retired, the payload untouched."""
+    import logging
+
+    opt, scaler, sched = optim_scaler_sched
+    path = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
+                      config=valid_config, meta=metadata_kwargs)
+    payload = _load_raw(path)
+    payload["config"]["train"]["value_target"] = "pure_outcome_z"
+    older = _resave_rehashed(payload, tmp_path)
+    with caplog.at_level(logging.INFO, logger="mantis.train.checkpoints"):
+        ck = load_checkpoint(older)
+    assert ck.config["train"]["value_target"] == "pure_outcome_z", "the payload was repaired"
+    assert any("checkpoint_config_predates_schema" in r.message and "train.value_target" in r.message
+               for r in caplog.records)
+
+
 def test_metadata_encoding_name_required(tmp_path, tiny_net, optim_scaler_sched, valid_config,
                                          tiny_arch):
     """T-CK-05 — a save whose encoding_name cannot be resolved raises; there is no metadata-omitted fallback."""

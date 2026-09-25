@@ -43,7 +43,6 @@ VALID_TRAIN_PAYLOAD: dict = {
     "hard_gn_min_steps": 3,
     "terminal_eval_enabled": True,
     "selfplay_stall_timeout_sec": 1800.0,
-    "value_target": "pure_outcome_z",
     "policy_target": "raw_visit_distribution",
     "draw_reward": -0.5,
     "ply_cap_value": -0.5,
@@ -100,7 +99,6 @@ BOUND_VIOLATIONS: list[tuple[str, object]] = [
 
 LITERAL_VIOLATIONS: list[tuple[str, object]] = [
     ("lr_schedule", "step"),
-    ("value_target", "raw_z"),
     ("policy_target", "completed_q"),
 ]
 
@@ -114,7 +112,6 @@ def _payload(**over: object) -> dict:
 def test_valid_payload_constructs_clean():
     cfg = TrainConfig.model_validate(VALID_TRAIN_PAYLOAD)
     assert cfg.lr == 1e-3
-    assert cfg.value_target == "pure_outcome_z"
     assert cfg.scheduler_t_max is None
 
 

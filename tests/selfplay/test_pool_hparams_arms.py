@@ -35,7 +35,7 @@ BASE_TRAIN: dict[str, Any] = {
     "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0,
     "lr_schedule": "cosine", "total_steps": 1_000_000, "scheduler_t_max": None,
     "eta_min": 5e-4, "checkpoint_interval": 0,
-    "value_target": "pure_outcome_z", "policy_target": "raw_visit_distribution",
+    "policy_target": "raw_visit_distribution",
     "draw_reward": -0.4, "ply_cap_value": -0.7,
     "fast_policy_weight": 0.0,
 }

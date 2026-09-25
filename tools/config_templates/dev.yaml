@@ -152,7 +152,6 @@ train:
   # A fraction of each batch drawn from the bot corpus. Its sibling `bot_corpus_path` was one
   # of the six DEAD fields deleted at Phase K-B, so only an injecting caller can supply a bot
   # buffer — 0.0 is the only value the composition root can honour.
-  value_target: pure_outcome_z
   policy_target: raw_visit_distribution
   draw_reward: -0.5
   ply_cap_value: -0.5

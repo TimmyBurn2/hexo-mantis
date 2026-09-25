@@ -123,9 +123,10 @@ def test_a_gumbel_m_past_the_minted_bound_is_refused_on_a_graph_run():
         )
 
 
-def test_out_of_enum_value_target_rejected_by_literal_before_cross_section_validator():
+def test_a_config_still_carrying_the_retired_value_target_is_refused():
+    """`train.value_target` is RETIRED: a config carrying it fails `extra="forbid"`, only a stamp may."""
     with pytest.raises(ValidationError, match="value_target"):
-        RunConfig.model_validate(_payload(train_over={"value_target": "raw_z"}))
+        RunConfig.model_validate(_payload(train_over={"value_target": "pure_outcome_z"}))
 
 
 def test_out_of_enum_policy_target_rejected_by_literal_before_cross_section_validator():

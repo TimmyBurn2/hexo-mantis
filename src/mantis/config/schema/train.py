@@ -259,9 +259,8 @@ class TrainConfig(StrictModel):
     # silently disable its fire); an OPERATIONAL CONSTANT, hence its default.
     selfplay_stall_timeout_sec: float = Field(default=1800.0, gt=0, allow_inf_nan=False)
 
-    # loss selection + targets. `completed_q_values` is DELETED here and on `selfplay`: which
-    # loss the trainer applies follows from `policy_target`, itself pinned to `search.kind`.
-    value_target: Literal["pure_outcome_z"]
+    # loss selection + targets: which policy loss the trainer applies follows from
+    # `policy_target`, itself pinned to `search.kind`; the value target is the game outcome z.
     policy_target: Literal["raw_visit_distribution", "completed_improved_policy"]
     draw_reward: float
     ply_cap_value: float

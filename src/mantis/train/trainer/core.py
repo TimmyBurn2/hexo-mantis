@@ -97,8 +97,8 @@ class TrainHParams:
         `model.aux_soft_policy` rows); every member is REQUIRED, no flat-key fallback.
 
         Raises:
-            ValueError: no `train` section, an unsupported value target, or a policy target that
-                disagrees with `search.kind`. KeyError: a required `train` member is missing.
+            ValueError: no `train` section, or a policy target that disagrees with
+                `search.kind`. KeyError: a required `train` member is missing.
         """
         cfg = config if isinstance(config, dict) else {}
         train = cfg.get("train")
@@ -107,8 +107,6 @@ class TrainHParams:
                 "TrainHParams.from_config: config['train'] is required (R-TRAINCONFIG-SCHEMA "
                 "closure) — no flat legacy training keys are read anymore."
             )
-        if train["value_target"] != "pure_outcome_z":
-            raise ValueError(f"train.value_target: unsupported {train['value_target']!r}")
         _assert_policy_target_consistency(train, (cfg.get("selfplay") or {}).get("search") or {})
         fields = set(cls.__dataclass_fields__) - {"policy_loss_warmup_steps", "aux_soft_policy"}
         kwargs = {k: train[k] for k in fields}

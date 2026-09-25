@@ -856,7 +856,7 @@ def strip_and_restamp(
             "augment": False, "recency_weight": 0.0, "hard_gn_threshold": 1e9,
             "hard_gn_min_steps": 3, "terminal_eval_enabled": True,
             "selfplay_stall_timeout_sec": 1800.0,
-            "value_target": "pure_outcome_z", "policy_target": "raw_visit_distribution",
+            "policy_target": "raw_visit_distribution",
             "draw_reward": -0.5, "ply_cap_value": -0.5,
             "fast_policy_weight": 0.0,
         },

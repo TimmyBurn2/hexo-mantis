@@ -193,7 +193,6 @@ CONSUMER_REGISTRY = {
     "train.selfplay_stall_timeout_sec":
         "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
         " StallWatchdog(timeout_sec=) (LAW-16 always-armed guard)",
-    "train.value_target": "TrainHParams.from_config single-variant assertion (T-D)",
     "train.policy_target": (
         "TrainHParams.from_config -> the CE-vs-KL policy-loss switch; cross-validated "
         "against search.kind by RunConfig._policy_target_matches_the_search_kind and by "

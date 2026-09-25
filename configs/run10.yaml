@@ -150,7 +150,6 @@ train:
   hard_gn_threshold: 1000000000.0
   hard_gn_min_steps: 3
   terminal_eval_enabled: true
-  value_target: pure_outcome_z
   policy_target: completed_improved_policy
   draw_reward: -0.5
   ply_cap_value: -0.5
