@@ -20,10 +20,16 @@ from typing import Any
 import pytest
 import torch
 
+from mantis.config.census import production_configs
+from mantis.config.loader import load_config
 from mantis.diagnostics import worker_sweep as ws
 
 _MODULE = Path(ws.__file__)
-_PLAN = Path(__file__).resolve().parents[2] / "tools" / "worker_sweep_plan.toml"
+_REPO = Path(__file__).resolve().parents[2]
+_PLAN = _REPO / "tools" / "worker_sweep_plan.toml"
+_PRODUCTION = production_configs(_REPO)
+#: Any production config: these rows refuse or stub before the config's values are read.
+_ANY_CONFIG = str(_PRODUCTION[0])
 _MIB = 1024 ** 2
 
 
@@ -65,21 +71,22 @@ class _StopAfterPosture(Exception):
     """Sentinel: the posture check was PASSED and pool construction was reached."""
 
 
-def _null_posture_twin(tmp_path: Path) -> Path:
-    """`configs/run6.yaml` with its posture returned to the `null` placeholder, CONSTRUCTED rather
+def _null_posture_twin(tmp_path: Path, config: Path) -> Path:
+    """A production config with its posture returned to the `null` placeholder, CONSTRUCTED rather
     than borrowed: the property is the REFUSAL, not the state of the committed tree."""
     import yaml
 
-    raw = yaml.safe_load(Path("configs/run6.yaml").read_text(encoding="utf-8"))
+    raw = yaml.safe_load(config.read_text(encoding="utf-8"))
     assert raw["train"]["device"] == "cuda", "the refusal is cuda-side; the twin must stay cuda"
     raw["allocator_posture"] = None
-    out = tmp_path / "run5_null_posture.yaml"
+    out = tmp_path / "null_posture.yaml"
     out.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
     return out
 
 
+@pytest.mark.parametrize("config", _PRODUCTION, ids=lambda p: p.name)
 def test_a_cuda_config_with_a_null_posture_refuses_before_any_pool_is_built(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, config: Path,
 ) -> None:
     """BEHAVIOURAL half: discovering this here costs nothing, at the box it costs a sitting."""
     def explode(*_a: Any, **_k: Any) -> Any:
@@ -88,7 +95,7 @@ def test_a_cuda_config_with_a_null_posture_refuses_before_any_pool_is_built(
     monkeypatch.setattr(ws, "build_sweep_pool", explode)
     sink = io.StringIO()
     with pytest.raises(ValueError, match="allocator_posture"):
-        ws.run_sweep(config_path=_null_posture_twin(tmp_path), plan_path=_PLAN, out=sink)
+        ws.run_sweep(config_path=_null_posture_twin(tmp_path, config), plan_path=_PLAN, out=sink)
 
 
 @pytest.mark.parametrize("argv", [[], ["--determinism-control", "2"]])
@@ -100,7 +107,7 @@ def test_a_refused_run_logs_its_traceback_not_only_a_repr(
 
     monkeypatch.setattr(ws, "run_sweep", explode)
     monkeypatch.setattr(ws, "run_determinism_control", explode)
-    rc = ws.main(["--config", "configs/run10.yaml", "--plan", str(_PLAN), *argv])
+    rc = ws.main(["--config", _ANY_CONFIG, "--plan", str(_PLAN), *argv])
     assert rc == ws.RC_REFUSED
     logged = [r for r in caplog.records if r.name == ws.__name__ and r.exc_info is not None]
     assert logged and logged[0].exc_info[1].args == ("planted sweep fault",)
@@ -110,22 +117,23 @@ def test_the_null_posture_refusal_reaches_the_exit_code_as_a_named_refusal(
     monkeypatch: pytest.MonkeyPatch, capsys, tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(ws, "build_sweep_pool", lambda *a, **k: None)
-    rc = ws.main(["--config", str(_null_posture_twin(tmp_path)), "--plan", str(_PLAN)])
+    rc = ws.main(["--config", str(_null_posture_twin(tmp_path, _PRODUCTION[0])), "--plan", str(_PLAN)])
     assert rc == ws.RC_REFUSED
     assert "REFUSED" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("config", _PRODUCTION, ids=lambda p: p.name)
 def test_the_MINTED_posture_no_longer_refuses_and_that_is_the_mints_own_witness(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, config: Path,
 ) -> None:
-    """The other direction: `configs/run6.yaml` AS MINTED gets past the posture check and reaches
+    """The other direction: every production config AS MINTED gets past the posture check and reaches
     pool construction, which a twin-based refusal row cannot show. It also carries the mint's
     second consequence — a minted posture is a CONTRACT ON THE LAUNCH ENVIRONMENT, so a cuda
     process started without `PYTORCH_CUDA_ALLOC_CONF` refuses for a MISMATCHED posture. The
     required conf is DERIVED from the resolver, so a third regime leaves no stale literal."""
     from mantis.config.resolve.allocator_posture import resolve_allocator_posture
 
-    spec = resolve_allocator_posture({"allocator_posture": "expandable_segments"})
+    spec = resolve_allocator_posture(load_config(config).model_dump())
     monkeypatch.setenv("PYTORCH_CUDA_ALLOC_CONF",
                        ",".join(f"{k}:{v}" for k, v in spec.required_conf.items()))
     monkeypatch.delenv("PYTORCH_ALLOC_CONF", raising=False)
@@ -140,8 +148,8 @@ def test_the_MINTED_posture_no_longer_refuses_and_that_is_the_mints_own_witness(
     monkeypatch.setattr(ws, "walk_ladder", record)
     sink = io.StringIO()
     with pytest.raises(_StopAfterPosture):
-        ws.run_sweep(config_path=Path("configs/run6.yaml"), plan_path=_PLAN, out=sink)
-    assert reached, "run5's minted posture must reach the ladder, not refuse before it"
+        ws.run_sweep(config_path=config, plan_path=_PLAN, out=sink)
+    assert reached, f"{config.name}'s minted posture must reach the ladder, not refuse before it"
 
 
 def test_growth_visible_ONLY_on_the_card_sink_still_verdicts_growing(plan: ws.SweepPlan) -> None:
@@ -616,7 +624,7 @@ def test_an_unwritable_out_is_refused_BEFORE_the_ladder_not_after_it(
     unwritable = tmp_path / "nodir" / "x" / "report.json"
     monkeypatch.setattr(ws.Path, "mkdir",
                         lambda *_a, **_k: (_ for _ in ()).throw(OSError("read-only")))
-    assert ws.main(["--config", "configs/run6.yaml", "--plan", str(_PLAN),
+    assert ws.main(["--config", _ANY_CONFIG, "--plan", str(_PLAN),
                     "--out", str(unwritable)]) == ws.RC_REFUSED
 
 

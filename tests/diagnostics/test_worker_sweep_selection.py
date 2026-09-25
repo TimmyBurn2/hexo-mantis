@@ -13,7 +13,11 @@ from pathlib import Path
 
 import pytest
 
+from mantis.config.census import production_configs
 from mantis.diagnostics import worker_sweep as ws
+
+#: A real config, so each refusal below is for the missing or extra input, not an absent file.
+_ANY_CONFIG = str(production_configs(Path(__file__).resolve().parents[2])[0])
 
 
 def _row(n_workers: int, value: float, verdict: str = ws.PLATEAU, *,
@@ -175,7 +179,7 @@ def test_select_only_re_derives_the_same_pick_from_a_written_report(tmp_path: Pa
 def test_select_only_refuses_to_be_given_inputs_it_does_not_read(tmp_path: Path) -> None:
     path = tmp_path / "report.json"
     path.write_text("{}", encoding="utf-8")
-    assert ws.main(["--select-only", str(path), "--config", "configs/run6.yaml"]) \
+    assert ws.main(["--select-only", str(path), "--config", _ANY_CONFIG]) \
         == ws.RC_REFUSED
 
 
@@ -188,7 +192,7 @@ def test_select_only_refuses_a_report_it_cannot_read(tmp_path: Path) -> None:
 def test_the_driver_refuses_to_default_either_of_its_two_inputs() -> None:
     """A config this tool picked would measure a program nobody asked about."""
     assert ws.main([]) == ws.RC_REFUSED
-    assert ws.main(["--config", "configs/run6.yaml"]) == ws.RC_REFUSED
+    assert ws.main(["--config", _ANY_CONFIG]) == ws.RC_REFUSED
     assert ws.main(["--plan", "tools/worker_sweep_plan.toml"]) == ws.RC_REFUSED
 
 
