@@ -1,0 +1,30 @@
+--- a/tests/tools/test_preflight_mint_process.py
++++ b/tests/tools/test_preflight_mint_process.py
+@@ -101,6 +101,8 @@
+     "run_id", "train.device", "eval.worker_device",
+     "identity.warm_start", "identity.warm_start.checkpoint", "identity.warm_start.net_hash",
+     "identity.warm_start.reinit",
++    "train.heldout_gap", "train.heldout_gap.ring", "train.heldout_gap.ring_sha256",
++    "train.heldout_gap.batches", "train.heldout_gap.seed", "train.heldout_gap.interval",
+ })
+ 
+ 
+@@ -169,7 +171,8 @@
+     dest = out_dir / f"{name}.yaml"
+     deltas = [
+         # The warm start is replayed by nobody: its checkpoint is an untracked artifact.
+-        *(d for d in _run5_header_deltas() if not d.startswith("identity.warm_start=")),
++        *(d for d in _run5_header_deltas()
++          if not d.startswith(("identity.warm_start=", "train.heldout_gap="))),
+         "run_id=run5_cpu_boot",
+         "train.device=cpu",
+         "eval.worker_device=cpu",
+@@ -206,7 +209,7 @@
+         # The bounded-difference guarantee binds the UNNAMED twin alone; the named variant
+         # states its own extra leaves.
+         return dest
+-    assert differing == FORCED_TWIN_LEAVES, (
++    assert differing <= FORCED_TWIN_LEAVES and "train.device" in differing, (
+         "the twin must be the config with the device this box has, minus a warm start no checkout "
+         "can hold, and NOTHING else — anything more and these drives stop being evidence "
+         f"about the config's own boot. Differing leaves: {sorted(differing)}"

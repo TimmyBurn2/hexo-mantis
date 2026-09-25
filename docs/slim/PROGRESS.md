@@ -107,6 +107,10 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
     CARD-E1-RULER-R6 (self-retaining).
 - Queued: leg 6, the STATE rewrite (**opus**), then
   REVIEW-W6 (**opus**).
+- RESUMED 2026-09-25 by a third W6 dispatcher (the second hit a forced hand-back). The HALT's measured
+  oracle diff is filed at `docs/slim/handoff/halt_twin_heldout.diff` for the operator (NOT applied).
+  `.wt/w6-configs` found with a pytest absent-configs check still running (run6-8 deleted uncommitted);
+  waiting for it to go quiet before integrating 60cabe25..2aa476f4.
 
 ## W5 — tests + fixtures (EXITED 2026-09-25)
 
