@@ -23,6 +23,7 @@ import pytest
 from pydantic import ValidationError
 
 import mantis.run
+from mantis.config.census import exempt_config_paths, production_configs
 from mantis.config.loader import discover_configs, load_config
 from mantis.config.resolve.composition import (
     UnvalidatedConfigError,
@@ -45,7 +46,7 @@ _CONFIGS_DIR = _REPO / "configs"
 #: The axis, DERIVED from the ONE discovery authority rather than re-typed, as a path
 #: RELATIVE to configs/ so a subdirectory config is unambiguous. A sixth minted config joins
 #: every parametrized oracle below automatically; a flat `*.yaml` glob would be a sixth answer
-#: to "what is a config" and blind to the `configs/prod/run6.yaml` shape.
+#: to "what is a config" and blind to the `configs/prod/<name>.yaml` shape.
 _MINTED: tuple[str, ...] = tuple(
     path.relative_to(_CONFIGS_DIR).as_posix() for path in discover_configs(_CONFIGS_DIR)
 )
@@ -258,12 +259,14 @@ def test_the_launcher_has_no_route_to_the_burst_bound():
     assert "burst" not in parser_src and "stop-step" not in parser_src, (
         "mantis.run's parser must declare no burst/stop option — the bound is the preflight's"
     )
+    minted = load_config(production_configs(_REPO)[0])
+    ceiling = minted.train.max_train_steps
     with pytest.raises(mantis.run.BurstBoundError):
-        mantis.run._resolve_stop_step(load_config(_CONFIGS_DIR / "run6.yaml"), 0)
+        mantis.run._resolve_stop_step(minted, 0)
     with pytest.raises(mantis.run.BurstBoundError):
-        mantis.run._resolve_stop_step(load_config(_CONFIGS_DIR / "run6.yaml"), 10**9)
-    assert mantis.run._resolve_stop_step(load_config(_CONFIGS_DIR / "run6.yaml"), None) == 1_000_000
-    assert mantis.run._resolve_stop_step(load_config(_CONFIGS_DIR / "run6.yaml"), 101) == 101
+        mantis.run._resolve_stop_step(minted, ceiling + 1)
+    assert mantis.run._resolve_stop_step(minted, None) == ceiling
+    assert mantis.run._resolve_stop_step(minted, 101) == 101
 
 
 def test_the_composition_root_contains_no_duck_typed_config_getattr():
@@ -427,8 +430,9 @@ def test_a_run_that_outlives_its_LR_horizon_is_accepted():
 def test_the_axis_is_the_whole_minted_set_and_is_not_empty():
     """The globbed minted-config axis is non-empty; a zero-param parametrize is a green
     no-op."""
-    assert len(_MINTED) >= 3, f"the minted-config axis collapsed to {_MINTED}"
-    assert "run6.yaml" in _MINTED, f"the production config is not on the axis: {_MINTED}"
+    census = {path.relative_to(_CONFIGS_DIR).as_posix() for path in production_configs(_REPO)}
+    census |= {Path(rel).relative_to("configs").as_posix() for rel in exempt_config_paths()}
+    assert census <= set(_MINTED), f"a census row is not on the axis: {sorted(census - set(_MINTED))}"
 
 
 @pytest.mark.parametrize("name", _MINTED)

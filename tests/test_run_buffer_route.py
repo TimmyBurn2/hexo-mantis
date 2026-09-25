@@ -7,14 +7,18 @@ carry one: `Literal["grid", "graph"]` plus the registry cross-check make it unre
 from __future__ import annotations
 
 import inspect
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+from mantis.config.census import production_configs
 from mantis.run import _select_buffer
 from mantis.train.coordinator.dispatch import RepresentationRouteError
 
 _CAPACITY = 64
+#: Any census member: the shapes below vary the sims regime and only need a real mint underneath.
+_MINTED = production_configs(Path(__file__).resolve().parents[1])[0]
 
 
 def _derived(config) -> int:
@@ -118,7 +122,7 @@ def test_the_graph_buffer_is_composed_with_the_derived_visit_capacity(
                    "train": {"policy_target": "raw_visit_distribution"}}
     puct_selfplay = {"search": {"kind": "puct"}}
     pcr = smoke_run_config(
-        "run6.yaml",
+        _MINTED,
         selfplay={
             **puct_selfplay,
             "playout_cap": {
@@ -130,14 +134,14 @@ def test_the_graph_buffer_is_composed_with_the_derived_visit_capacity(
         **full_vector,
     )
     assert _select_buffer(pcr, _CAPACITY).visit_capacity == _derived(pcr)
-    puct_minted_sims = smoke_run_config("run6.yaml", selfplay=puct_selfplay, **full_vector)
+    puct_minted_sims = smoke_run_config(_MINTED, selfplay=puct_selfplay, **full_vector)
     assert _select_buffer(puct_minted_sims, _CAPACITY).visit_capacity == _derived(puct_minted_sims)
     assert _derived(pcr) != _derived(puct_minted_sims), (
         "the two sims regimes now derive the same capacity, so this test can no longer tell a "
         "derivation from a constant — the whole point of driving both shapes"
     )
 
-    minted = smoke_run_config("run6.yaml")
+    minted = smoke_run_config(_MINTED)
     assert _select_buffer(minted, _CAPACITY).visit_capacity == _derived(minted)
 
 

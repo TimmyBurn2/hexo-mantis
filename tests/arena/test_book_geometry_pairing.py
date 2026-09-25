@@ -21,12 +21,11 @@ from pathlib import Path
 import pytest
 import yaml
 
-from mantis.config.census import discovered_config_paths
+from mantis.config.census import discovered_config_paths, production_configs
 from mantis.encoding import lookup
 
 _REPO = Path(__file__).resolve().parents[2]
 _BOOKS_DIR = _REPO / "src" / "mantis" / "arena" / "books"
-_CONFIGS = _REPO / "configs"
 
 #: Configs whose `identity.encoding` cannot replay the book their eval blocks name. Not a
 #: waiver but an inventory, asserted EXACTLY below, so closing a gap reds this suite and the
@@ -141,11 +140,14 @@ def test_every_shipped_config_pairs_its_encoding_with_a_replayable_book() -> Non
     )
 
 
-def test_run6_is_not_one_of_them() -> None:
-    """Prove run6's encoding replays every book it names, stated separately so it is visible."""
-    config = yaml.safe_load((_CONFIGS / "run6.yaml").read_text(encoding="utf-8"))
+@pytest.mark.parametrize("path", production_configs(_REPO), ids=lambda p: p.name)
+def test_no_production_config_is_one_of_them(path: Path) -> None:
+    """Prove a production config names a book and its encoding replays each, stated per config."""
+    config = yaml.safe_load(path.read_text(encoding="utf-8"))
     radius = lookup(config["identity"]["encoding"]).legal_move_radius
-    for book_id in _books_named_by(config):
+    books = _books_named_by(config)
+    assert books, f"{path.name} names no opening book, so this row has no subject"
+    for book_id in books:
         assert all(_required_radius(mv) <= radius for mv in _book_openings(book_id)), (
-            f"run6 names {book_id}, which its encoding cannot replay"
+            f"{path.name} names {book_id}, which its encoding cannot replay"
         )
