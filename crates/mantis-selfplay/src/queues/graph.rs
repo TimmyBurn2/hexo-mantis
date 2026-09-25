@@ -446,24 +446,21 @@ pub fn build_leaf_graphs_batch(
 
 #[cfg(test)]
 mod poison_tests {
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
     use std::thread::JoinHandle;
     use std::time::{Duration, Instant};
 
     use super::{build_leaf_graph, GraphQueue, GraphWaiter};
+    use crate::poison::poison;
 
-    /// Poison `m` the way a panicking thread does: it unwinds while holding the guard.
-    fn poison<T: Send>(m: &Mutex<T>) {
-        std::thread::scope(|s| {
-            let joined = s
-                .spawn(|| {
-                    let _held = m.lock();
-                    panic!("planted: a thread panics holding the lock");
-                })
-                .join();
-            assert!(joined.is_err(), "the planted panic did not fire");
-        });
-        assert!(m.is_poisoned(), "the planted panic did not poison the lock");
+    /// Closes the queue when its thread ends or unwinds, so a producer that dies fails the waiting
+    /// consumer instead of hanging it: a reverted recovery site must red, never wedge the suite.
+    struct CloseOnExit(GraphQueue);
+
+    impl Drop for CloseOnExit {
+        fn drop(&mut self) {
+            self.0.close();
+        }
     }
 
     fn empty_graph() -> mantis_graph::AxisGraph {
@@ -474,6 +471,7 @@ mod poison_tests {
     fn serve(q: &GraphQueue, want: usize) -> JoinHandle<usize> {
         let producer = q.clone();
         std::thread::spawn(move || {
+            let _close = CloseOnExit(producer.clone());
             let (deadline, mut served) = (Instant::now() + Duration::from_secs(2), 0);
             while served < want && Instant::now() < deadline {
                 let ids: Vec<u64> = producer
@@ -525,6 +523,7 @@ mod poison_tests {
             .insert(7, waiter.clone());
         let producer = q.clone();
         let late = std::thread::spawn(move || {
+            let _close = CloseOnExit(producer.clone());
             std::thread::sleep(Duration::from_millis(50));
             producer.submit_graph_results(&[7], vec![Err("payload".to_string())]);
         });

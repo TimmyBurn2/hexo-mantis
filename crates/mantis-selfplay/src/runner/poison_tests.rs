@@ -12,6 +12,7 @@ use crate::replay::hexg::GraphRecord;
 use super::finalize::finalize_game_graph;
 use super::search_drive::FatalDefectLatch;
 use super::{DrainPoisoned, GameResultRow, SelfPlayRunner, SelfPlayRunnerConfig};
+use crate::poison::poison;
 
 fn runner(n_workers: usize) -> SelfPlayRunner {
     SelfPlayRunner::new(SelfPlayRunnerConfig {
@@ -20,20 +21,6 @@ fn runner(n_workers: usize) -> SelfPlayRunner {
         ..Default::default()
     })
     .expect("gnn_axis_v1 must resolve via the registry")
-}
-
-/// Poison `m` the way a worker does: a thread panics while it holds the guard.
-fn poison<T: Send>(m: &Mutex<T>) {
-    std::thread::scope(|s| {
-        let joined = s
-            .spawn(|| {
-                let _held = m.lock();
-                panic!("planted: a worker panics holding the lock");
-            })
-            .join();
-        assert!(joined.is_err(), "the planted panic did not fire");
-    });
-    assert!(m.is_poisoned(), "the planted panic did not poison the lock");
 }
 
 /// The save the unwinding owner still owes: latch the reason, then finalize one finished game.
