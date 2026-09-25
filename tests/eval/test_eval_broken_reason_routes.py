@@ -2,7 +2,7 @@
 
 The defect: every broken round used to route a bare `str` reason that nothing in `src/` read,
 so the failures were indistinguishable to anything but a human reading a log line. (The
-`ladder_persist_failed` route left with the sealbot rung, R362(c).)
+`ladder_persist_failed` route left with the sealbot rung.)
 
 Per-oracle mutations: M-O2 swap two reasons; M-O3 collapse two members onto one value; M-O4
 emit `phase="drain"` for `result_missing`; M-O30a downgrade `_LOG.exception` to `_LOG.error`;
@@ -33,9 +33,8 @@ from _pipeline_harness import (
 from mantis.eval.errors import EvalBrokenReason
 from mantis.eval.pipeline import build_eval_pipeline
 
-#: The routes, each with the member it must produce and the phase that member forces.
-#: Stated here rather than derived from the enum under test, which any consistent renaming
-#: would satisfy.
+#: The routes, each with the member it must produce and the phase that member forces, stated
+#: here rather than derived from the enum under test.
 _ROUTE_REASON = {
     "join_timeout": "join_timeout",
     "killed": "killed",

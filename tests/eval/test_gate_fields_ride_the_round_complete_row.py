@@ -1,11 +1,11 @@
-"""The gate's rule fields ride `eval_round_complete.gate` (R362(c), CARD-EVAL-GATE-FIELDS-IN-STREAM).
+"""The gate's rule fields ride `eval_round_complete.gate` (CARD-EVAL-GATE-FIELDS-IN-STREAM).
 
 Until this row `pairs_played`, `stopped`, `llr` and the gate block's wall lived in the child's
 `result.json` and the in-process routed result only, so a stream reader (the dashboard, the
 eval census) could not see HOW a round stopped without the spool. The producer is
 `EvalPipeline._success_result` on the success route and `_broken_result` on the A-3 partial
 route; the projection is `mantis.eval.rounds.gate_stream_fields`, read here through the real
-methods. LAW-07: the planted break (a projection that drops a field) reds the row by name.
+methods. The planted break (a projection that drops a field) reds the row by name.
 """
 from __future__ import annotations
 
@@ -135,7 +135,7 @@ def test_a_broken_round_with_no_partial_carries_gate_None(tmp_path, monkeypatch)
 
 
 def test_the_PLANTED_break_a_projection_that_drops_a_field_reds_the_row(monkeypatch) -> None:
-    """LAW-07 mutation self-test: the producer row above is not vacuous."""
+    """Mutation self-test: the producer row above is not vacuous."""
     import mantis.eval.pipeline as pipeline_mod
     from mantis.eval.pipeline import EvalPipeline
 

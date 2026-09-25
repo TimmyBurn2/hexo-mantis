@@ -1,6 +1,6 @@
 """⊕ the deploy head and the self-play workers read ONE selector, by construction.
 
-WHAT LAW-15 ACTUALLY CLAIMS. "Deploy-matched eval is the DEFAULT promotion bar" is a claim
+WHAT DEPLOY-MATCHED EVAL ACTUALLY CLAIMS. "Deploy-matched eval is the DEFAULT promotion bar" is a claim
 about the SEARCH: the head that decides a promotion plays the game the run's workers played.
 Before `search.kind` the eval head's regime came from `DeployHeadPlayer`'s own body — a PUCT
 tree with a Gumbel-scored root pick, an algorithm that appeared in no config at all — so the
@@ -10,9 +10,9 @@ them grew a fallback.
 
 SO THE PROPERTY UNDER TEST IS "ONE READER", NOT "TWO EQUAL READS", and it is checked over the
 composition root's own source. The behavioural half — that the kind reaches the head's TREE —
-lives in `tests/arena/test_deploy_head.py`. R351(c) SPLIT THE KEY (`selfplay.search.kind` is
-what the workers run, `deploy.search.kind` what the bar plays), so the property is now ONE
-READER PER KEY: each wire reads its own resolver and never the other's.
+lives in `tests/arena/test_deploy_head.py`. The key is SPLIT (`selfplay.search.kind` is what
+the workers run, `deploy.search.kind` what the bar plays), so the property is ONE READER PER
+KEY: each wire reads its own resolver and never the other's.
 """
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ def test_each_wire_calls_its_own_resolver_and_not_the_other():
     """The self-play wire resolves `selfplay.search.kind`; the eval wire `deploy.search.kind`.
 
     MUTATION THAT REDS IT: either side reading `config[...]["kind"]` directly again, or the
-    self-play wire reaching for the DEPLOY key (the coupling R351(c) undid).
+    self-play wire reaching for the DEPLOY key.
     """
     selfplay_calls = _calls(_SRC / "selfplay" / "hparams.py")
     assert "resolve_selfplay_search_kind" in selfplay_calls
@@ -119,7 +119,7 @@ def test_the_selfplay_resolver_is_what_the_workers_are_configured_with(kind, smo
 
 
 def test_the_two_kinds_may_differ_by_construction(smoke_run_config):
-    """A Gumbel self-play with a PUCT deploy head VALIDATES (R351(c)'s run7 shape): the
+    """A Gumbel self-play with a PUCT deploy head VALIDATES: the
     policy target follows the SELF-PLAY kind, and the deploy kind constrains nothing there."""
     cfg = smoke_run_config("dev_example.yaml").model_dump()
     cfg["selfplay"]["search"]["kind"] = "puct"
@@ -150,7 +150,7 @@ def test_each_kind_is_required_with_no_default(section, smoke_run_config):
 
 
 def test_an_absent_or_unknown_kind_is_refused_by_either_selector():
-    """No fallback, on either shape of input, for either key (R1/LAW-11)."""
+    """No fallback, on either shape of input, for either key."""
     for resolve, section in ((resolve_selfplay_search_kind, "selfplay"),
                              (resolve_deploy_search_kind, "deploy")):
         with pytest.raises(MissingSearchKindError):

@@ -1,12 +1,12 @@
-"""ADJ-WP12R-6 producer: the eval decode refuses a value_pool it does not implement.
+"""The eval decode refuses a value_pool it does not implement.
 
 `value_pool` had ZERO Python consumers. `LocalInferenceEngine.infer_batch` hardcodes the
 cluster reduction (`v = float(board_values.min())`) and the graph arm reduces nothing, so a
 registry row later declaring `value_pool="mean"` would pass every existing check and be
-SILENTLY min-pooled. This is the value-channel half of the class R138 named on the policy
+SILENTLY min-pooled. This is the value-channel half of the same class named on the policy
 channel, and these oracles are what make the silent case loud.
 
-LAW-07: each assertion below names the producer it fires against. LAW-08: the guard IS the
+Each assertion below names the producer it fires against. The guard IS the
 live consumer that `value_pool` previously lacked, so this file is also that citation.
 """
 from __future__ import annotations

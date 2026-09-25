@@ -27,9 +27,8 @@ from mantis.model import GnnArch, build_net
 from mantis.selfplay.inference_local import LocalInferenceEngine
 
 GSPEC = lookup("gnn_axis_v1")
-#: `LocalInferenceEngine` hand-builds its `InferenceServer` config with no `RunConfig`, so
-#: the fused-forward memory bound is a REQUIRED keyword threaded as a spec; the pair is the
-#: template's NON-BINDING-BY-CONSTRUCTION one, so no round built on it splits.
+#: `LocalInferenceEngine` builds its `InferenceServer` config with no `RunConfig`, so the
+#: fused-forward memory bound is a REQUIRED keyword threaded as a spec.
 
 
 def tiny_model() -> torch.nn.Module:
@@ -136,9 +135,8 @@ class RuleNet(torch.nn.Module):
         logits: list[float] = []
         for g in range(n_graphs):
             lo, hi = int(node_offsets[g]), int(node_offsets[g + 1])
-            # `legal_index` is the wire's `legal_node_gather`: the ROWS of the legal nodes, not a
-            # dense mask. The gather is strictly ascending, hence unique, so counting entries in
-            # this graph's `[lo, hi)` row range equals summing a mask's bits over it.
+            # `legal_index` is the wire's `legal_node_gather`: ROWS of legal nodes (strictly
+            # ascending, hence unique), so counting entries in `[lo, hi)` equals summing a mask's bits.
             n_legal = int(((legal_index >= lo) & (legal_index < hi)).sum().item())
             logits.extend(rule_logit(i) for i in range(n_legal))
         return (

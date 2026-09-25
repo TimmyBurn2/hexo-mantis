@@ -1,5 +1,5 @@
 """The eval head's σ is the run's: `q_rescale` rides `RoundSpec` beside `c_visit`/`c_scale` and
-reaches the deploy head's tree, so the bar scores its root the way self-play did (R351(b)).
+reaches the deploy head's tree, so the bar scores its root the way self-play did.
 """
 from __future__ import annotations
 

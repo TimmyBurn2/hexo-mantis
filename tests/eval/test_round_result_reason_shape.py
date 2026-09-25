@@ -21,14 +21,13 @@ from mantis.eval.rounds import build_round_result
 
 _SRC = Path(__file__).resolve().parents[2] / "src" / "mantis"
 
-#: The two names R79 deletes. Named here, not derived, so a rename cannot satisfy the pin.
+#: The two deleted names, named here rather than derived, so a rename cannot satisfy the pin.
 _DELETED_NAMES = ("eval_broken", "error")
 #: The two MAPPING KEYS that replace them — one authority for the fact, one slot for the
 #: prose. Read against the routed result, never against the signature (see below).
 _REQUIRED_NAMES = ("eval_broken_reason", "eval_broken_detail")
 #: The two PARAMETER names — the SIGNATURE half's expectation, deliberately NOT the mapping-key
-#: tuple: no signature can declare `eval_broken_reason`/`eval_broken_detail` as required
-#: parameters and also accept the `reason=`/`detail=` call below.
+#: tuple: no signature can require the mapping-key names AND accept `reason=`/`detail=` below.
 _REQUIRED_PARAMS = ("reason", "detail")
 
 

@@ -1,10 +1,8 @@
-"""The round-progress escalation is its own route, and its phase says so (R316(c)).
+"""The round-progress escalation is its own route, and its phase says so.
 
-`_poll_loop` kills a round that exceeds `eval.round_timeout_sec` — a PROGRESS budget — and
-reported it as `join_timeout` until R316(c). That named the kill sequence rather than the cause:
-at the 2026-08-27 re-sit every in-run round ended this way and the operator was told the child
-would not exit. `_drain_escalate`'s genuine join timeout keeps the name, and the two must stay
-distinguishable.
+`_poll_loop` kills a round that exceeds `eval.round_timeout_sec` — a PROGRESS budget — and used
+to report it as `join_timeout`, which named the kill sequence rather than the cause.
+`_drain_escalate`'s genuine join timeout keeps the name, and the two must stay distinguishable.
 
 `test_eval_broken_reason_routes.py` pins reason→phase for the routes it enumerates, so
 the new member's phase is pinned here instead — an unpinned

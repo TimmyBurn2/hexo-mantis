@@ -5,7 +5,7 @@ by `_emit_posture_events` onto `eval_strength_floor`, and carried by `_success_r
 mapping the promotion seam reads — three surfaces that must agree. PRESENCE IS THE ARMING
 EVIDENCE: a disarmed round carries no `strength_floor` key and reads exactly as it did before
 the floor existed. (The coordinator gate that once NAMED the refusal on its own skip channel
-left with the sealbot rung, R362(c); the mapping and the stream are the surfaces that remain.)
+left with the sealbot rung; the mapping and the stream are the surfaces that remain.)
 """
 from __future__ import annotations
 
@@ -156,9 +156,8 @@ def test_the_PIPELINE_carries_the_workers_floor_payload_onto_the_routed_mapping(
         assert floor_events == []
 
 
-# `_success_result` sums random + gate games, all zero on a refused floor, so
-# `eval_round_complete.games_total` read 0 for a round that had just played `probe_games` real
-# games. The 0 was COMPUTED, so the sentinel banning a literal `0` at the call site never saw it.
+# `_success_result` sums random + gate games, all zero on a refused floor, so `games_total`
+# read 0 for a round that had just played real games — COMPUTED, so a literal-`0` sentinel never saw it.
 
 def test_a_floor_refused_round_reports_the_games_its_probe_PLAYED() -> None:
     """Sixteen probe games, every other phase empty: `games_total` is 16, not the 0 it read."""

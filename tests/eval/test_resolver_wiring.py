@@ -17,10 +17,8 @@ def test_unknown_opponent_and_none_value_raise_pre_existing_green(opponent: str)
         resolve_eval_model_sims(opponent, None)
 
 
-# `resolve_bot` is fed the ALREADY-RESOLVED config value as `opponent_sims` (a real int; None
-# is reserved for "this rung has no sims dimension at all") and must route it through
-# `resolve_eval_model_sims(kind, opponent_sims)` for every kind — the resolver call itself is
-# the consumer, independent of whether the constructed bot uses the int.
+# `resolve_bot` is fed the ALREADY-RESOLVED `opponent_sims` (a real int; None means no sims
+# dimension) and must route it through `resolve_eval_model_sims` for every kind.
 class _RoutingReached(Exception):
     """Raised BY THE SPY, from inside `resolve_eval_model_sims`, and by nothing else.
 
@@ -54,13 +52,9 @@ def test_strix_rung_model_sims_route_through_resolve_eval_model_sims(monkeypatch
     )
 
 
-# The routing must survive the resolver rewrite: this row asserts routing PER KIND while being
-# agnostic about whether a kind resolves or raises, so it holds both in CI (no vendor tree,
-# strix raises) and on a box with the extension built. The rows above are HEAD's pins.
-# THE TRAP: `eval.{kraken,strix}_model_sims` have exactly ONE live consumer each, reached only
-# through this call, so hoisting a refusal above the routing would falsify two consumer-registry
-# citations while the LAW-08 bijection test stayed green. A single aggregated "the spy was
-# called" assertion would be green under a mutation that broke one kind's routing.
+# This row asserts routing PER KIND, agnostic about whether a kind resolves or raises. THE TRAP:
+# a single aggregated "the spy was called" assertion stays green under a mutation that breaks
+# just one kind's routing, so each kind gets its own assertion.
 @pytest.mark.parametrize("kind", ["random", "strix"])
 def test_every_bot_kind_routes_its_sims_through_the_resolver_after_the_rewrite(
     monkeypatch, kind: str

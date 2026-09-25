@@ -83,8 +83,7 @@ def test_the_refusal_happens_before_any_snapshot_is_loaded(
     `EvalDecodeUnsupportedError`."""
     reached = _explode_on_load(monkeypatch)
     # No registered encoding declares an unimplemented pool, so the refusable input is made by
-    # NARROWING the capability constant rather than by naming an encoding: the guard, the spec
-    # and the ordering under test are all the real ones.
+    # NARROWING the capability constant rather than by naming an encoding: the guard is real.
     monkeypatch.setattr(worker, "_DECODE_IMPLEMENTED_POLICY_POOLS", frozenset())
 
     with pytest.raises(EvalDecodeUnsupportedError) as excinfo:

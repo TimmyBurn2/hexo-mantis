@@ -54,9 +54,8 @@ def _expected_children(board: Board) -> int:
 #: Measured at mint over up to 1294 terms: the largest cross-language disagreement between the
 #: torch-f32 softmax and the Rust-f32 softmax is 7.3e-10.
 _PRIOR_TOL = 1e-5
-#: The two fixtures together, enforced not asserted. RE-DERIVED when the per-node cap was raised,
-#: not loosened: a position's frozen child set is `min(n_legal, K)` coords, so the fixtures grew by
-#: the same factor. The budget's job is R7 hygiene — keep a committed fixture small enough to read.
+#: The two fixtures together, enforced not asserted: a position's frozen child set is
+#: `min(n_legal, K)` coords, so the budget keeps a committed fixture small enough to read.
 _FIXTURE_BYTE_BUDGET = 131072
 
 
@@ -147,8 +146,8 @@ def test_deploy_head_entrance_reaches_the_same_children(graph_engine) -> None:
 
 def test_both_legs_agree_on_priors_to_1e_5(graph_engine) -> None:
     """The priors the eval leg computes equal the Rust leg's frozen priors to 1e-5 over up to 1294
-    terms. LAW-06 is not weakened: autocast is CUDA-gated and the segment softmax is forced to f32,
-    so a CPU run is float32 end to end."""
+    terms. The graph autocast pin is not weakened: autocast is CUDA-gated and the segment softmax
+    is forced to f32, so a CPU run is float32 end to end."""
     engine, spec = graph_engine
     fx = _load(_P1_FIXTURE)
     for pos in _positions(fx):
@@ -341,8 +340,7 @@ def test_there_is_exactly_one_child_cap_authority() -> None:
     assert not hits, "a second child-cap authority appeared in Python:\n" + "\n".join(hits)
 
     # The subject is "exactly ONE definition, and it is in the search crate" — the FILE and the
-    # COUNT, never the LINE. This once pinned a line number, and a doc comment added above the
-    # constant moved it and reddened a test with no opinion about doc comments (derive-or-delete).
+    # COUNT, never the LINE, which a doc comment added above the constant can move.
     definitions = [
         str(path.relative_to(root))
         for path in sorted((root / "crates").rglob("*.rs"))

@@ -1,4 +1,4 @@
-"""AUDIT-1 F-27 — one distinct game is not a confidence interval, and cannot promote.
+"""One distinct game is not a confidence interval, and cannot promote.
 
 THE DEFECT. `gate_promotion_decision` is `wr_ok and ci_lo_boot > 0 and not low_power`. The
 low-power guard is `_distinct_per_pair(pooled) < gate_cfg.min_distinct_per_pair`, and the
@@ -36,7 +36,7 @@ class _Gate:
 
 def _record(traj: str, *, won: bool = True) -> dict[str, Any]:
     """The shape `aggregate_gate` reads — the same one `test_aggregate_regime.py` builds:
-    `trajectory_hash` is the LAW-04 dedupe key, and `winner` is `p1`/`p2`."""
+    `trajectory_hash` is the dedupe key, and `winner` is `p1`/`p2`."""
     return {"p1": "cand", "p2": "best", "winner": "p1" if won else "p2",
             "regime_key": "rk", "trajectory_hash": traj}
 
@@ -83,7 +83,7 @@ def test_the_interval_appears_exactly_at_two_distinct_games(n_distinct: int) -> 
 
 
 def test_a_repeated_trajectory_is_not_a_second_distinct_game() -> None:
-    """LAW-04's own point, and the reason the count is DISTINCT games: two byte-identical
+    """The reason the count is DISTINCT games: two byte-identical
     games are one observation, and cannot manufacture an interval."""
     same = _record("t1")
     result = _agg([same, dict(same)])

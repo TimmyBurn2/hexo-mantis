@@ -5,7 +5,7 @@ this one runs the REAL out-of-process worker on CPU: no `multiprocessing.get_con
 
 The net is built at dims READ OFF `_ENC`'s registry spec, because the worker runs inference
 bound to the encoding the ROUND declared — the wire carries that geometry whatever the net was
-built at. Since R362(c) a production round carries no rung job: the round is the floor probe,
+built at. A production round carries no rung job: the round is the floor probe,
 the gate block (skipped here — no anchor) and the random floor, whose games are the ones played.
 
 The routed result carries an ADDITIONAL `"worker_pid"` key beyond the superset-stable shape; it
@@ -32,18 +32,16 @@ from mantis.model import GnnArch, build_net
 pytestmark = pytest.mark.integration
 
 
-#: A DENSE encoding at radius 8, not radius-5 `v6`: the round replays real openings from
-#: `book_v1_s20260625_p4`, most of which need radius >= 6. Under `v6` the round dies in the
-#: eval CHILD with `IllegalOpeningError`, surfacing only as `EXIT_NONZERO`.
+#: A DENSE encoding at radius 8, not radius-5 `v6`: the round replays real openings needing
+#: radius >= 6; under `v6` the round dies in the eval CHILD as `EXIT_NONZERO`.
 _ENC = "gnn_axis_v1"
 _REPO = Path(__file__).resolve().parents[2]
 _SMOKE = load_config(_REPO / "configs" / "smoke_preflight_armed.yaml").model_dump()
 
 
 def _tiny_model(*, weight_seed: int) -> torch.nn.Module:
-    # Registry-TRUE dims, DERIVED from the spec rather than written as literals, so the wire and
-    # the net cannot drift apart when the encoding moves. `weight_seed` is deterministic-but
-    # -different per round because at `n_sims=4` a decisive game is a high-variance event.
+    # Registry-TRUE dims, DERIVED from the spec so the wire and net cannot drift apart. `weight_seed`
+    # is deterministic-but-different per round: at `n_sims=4` a decisive game is high-variance.
     torch.manual_seed(weight_seed)
     spec = lookup(_ENC)
     arch = GnnArch(in_dim=int(spec.node_feat_dim), edge_dim=int(spec.edge_feat_dim),

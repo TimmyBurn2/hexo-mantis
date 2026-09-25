@@ -1,10 +1,10 @@
-"""⊕ WP-UNFREEZE (R50 rows E4/E5/E6) — the surviving half of the WP11-A call-site suite.
+"""⊕ WP-UNFREEZE rows E4/E5/E6 — the surviving half of the call-site suite.
 
 The split happened: `PromotionTarget` became `ActorSyncTarget` (actor seam) +
 `DeployTagHooks` (deploy seam). The E4 call-site census relocated to
 `tests/train/test_actor_sync_isolation.py` as S1/S2 (call sites == exactly
 `{train/actor_sync.py}`; zero under eval/arena) and the promote-file pins live there as
-S4 — the frozen copies are the ONLY copies (LAW-03: one census, one authority). The E5
+S4 — the frozen copies are the ONLY copies (one census, one authority). The E5
 seam-comment marker announced this split; executing the split discharged it.
 
 What remains HERE is E6, KEPT VERBATIM: the anchor/best-model proxy-read ban across
@@ -21,15 +21,9 @@ import mantis.eval.promote  # noqa: F401 — the one file allowed to touch these
 _REPO = Path(__file__).resolve().parents[2]
 _SRC = _REPO / "src" / "mantis"
 
-# O-G (FIX-PASS supplemental, DISPATCH_LOG-authorized): the census must ban ATTRIBUTE
-# READS of best-model/anchor state as an actor-weight sync proxy, NOT the bare substring
-# `best_model_step` — that substring is also the shipped `EvalPipelineLike` protocol's
-# (coordinator/config.py:66-74) REQUIRED keyword parameter NAME, which DESIGN §c.3 orders
-# `EvalPipeline.run_evaluation` to satisfy EXACTLY (pipeline.py's `best_model_step: "int |
-# None"` parameter + its `best_model_step=best_model_step` pass-through are a protocol
-# keyword name, never an attribute read). A genuine proxy read always has a leading `.`
-# (`anchor_state.best_model_step`, `resolved_anchor.best_model`) — a bare parameter name,
-# keyword argument, or local variable never does.
+# O-G: the census bans ATTRIBUTE READS of anchor/best-model state as a sync proxy, not the bare
+# substring `best_model_step` (also a required protocol parameter name): a proxy read always has
+# a leading `.` (`anchor_state.best_model_step`); a parameter or keyword name never does.
 _PROXY_READ_RE = re.compile(r"anchor_state\.\w+|\.best_model(?:_step)?\b")
 
 

@@ -1,4 +1,4 @@
-"""AUDIT-1 F-15 — the eval arena caps at the RUN's `selfplay.max_game_moves`, not at a constant.
+"""The eval arena caps at the RUN's `selfplay.max_game_moves`, not at a constant.
 
 THE DEFECT. `arena/match.py::DEFAULT_MAX_PLIES = 128` defaulted `_play_one_game` and
 `play_paired_match`, and its own comment said it *"mirrors the production self-play default
@@ -10,7 +10,7 @@ eval side passed none of them: `eval/worker.py`, `eval/pipeline.py` and `run.py`
 WHY IT MATTERS RATHER THAN BEING TIDY. The ply cap is half of the ply-cap x adjudication matrix
 that is an operator-owed prereg row. The moment `max_game_moves` is re-minted, eval would keep
 capping at 128 with NO config diff, and the draw channel — a capped game is a draw when no
-adjudicator is armed — would change meaning underneath the bar LAW-15 calls deploy-matched.
+adjudicator is armed — would change meaning underneath the deploy-matched promotion bar.
 
 THE REPAIR is threading, not a new number: `max_plies` is REQUIRED on both arena entry points
 and on `RoundSpec`, resolved once in the parent from `config.selfplay.max_game_moves`. The

@@ -100,7 +100,7 @@ def test_killed_worker_yields_eval_broken_and_clean_drain(fake_mp, tmp_path) -> 
 
 
 def test_a_resumable_stop_abandons_the_live_round_at_once_without_the_drain_budget(fake_mp, tmp_path) -> None:
-    """CARD-STOP-DRAIN-VS-GRACE: a LIVE round is terminated at once, finalised as killed, nothing in flight."""
+    """A LIVE round is terminated at once, finalised as killed, nothing in flight."""
     sink = _SpySink()
     clock = FakeClock(0.0)
     cfg = _eval_cfg(round_timeout_sec=3600.0, worker_kill_grace_sec=0.1)
@@ -231,7 +231,7 @@ def _kill_after_partial(fake_mp, pipeline, *, partial_step: int, promoted: bool)
 
 
 def test_a_round_killed_after_its_gate_phase_promotes_off_the_partial_verdict(fake_mp, tmp_path) -> None:
-    """A-3 (R355(e)): a round killed after its gate phase is broken for the ladder and still promotes."""
+    """A-3: a round killed after its gate phase is broken for the ladder and still promotes."""
     sink = _SpySink()
     pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
     try:

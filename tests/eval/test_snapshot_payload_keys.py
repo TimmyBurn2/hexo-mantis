@@ -1,9 +1,9 @@
-"""ADJ-WP12R-1 producer: the eval snapshot writes EXACTLY the keys its loader reads.
+"""The eval snapshot writes EXACTLY the keys its loader reads.
 
 `write_model_snapshot` used to also write `"encoding"` and `"representation"` via
 `getattr(..., None)` while `load_model_snapshot` read NEITHER — two written fields, zero
-consumers (LAW-08), recorded through the silent-fallback shape the red-team greps for.
-Deleted under the dead-weight law (R116). This oracle is what stops them coming back
+consumers, recorded through the silent-fallback shape the red-team greps for.
+Deleted under the dead-weight law. This oracle is what stops them coming back
 unnoticed, and what would red if a future field is written without a reader.
 """
 from __future__ import annotations
@@ -20,7 +20,7 @@ from mantis.model import ARCH_KINDS, GnnArch, build_net
 #: The payload contract: exactly what `load_model_snapshot` consumes, nothing else.
 _EXPECTED_KEYS = {"state_dict", "arch"}
 
-#: R330(e): the snapshot speaks the ONE arch-kind vocabulary — every ARCH_KINDS class shares
+#: The snapshot speaks the ONE arch-kind vocabulary — every ARCH_KINDS class shares
 #: this field set by design, so one kwargs dict, not a per-class row.
 _TINY_KWARGS = dict(in_dim=11, edge_dim=5, hidden=8, num_layers=1, policy_hidden=8,
                      value_hidden=8)
@@ -34,7 +34,7 @@ def _net():
 
 
 def test_payload_carries_exactly_the_keys_the_loader_reads(tmp_path: Path) -> None:
-    """THE PRODUCER. A written key outside this set is a LAW-08 gap by construction: the
+    """THE PRODUCER. A written key outside this set is a live-consumer gap by construction: the
     loader below is the only consumer, and it reads only these two."""
     path = tmp_path / "snap.pt"
     write_model_snapshot(_net(), path)
@@ -49,14 +49,12 @@ def test_no_key_is_written_through_a_silent_getattr_fallback(tmp_path: Path) -> 
     arch with no `.representation` must produce a payload identical to a model that has
     them — i.e. neither attribute may influence what is written. Before the fix this test
     would red: the payload recorded `None` for the missing attributes rather than failing,
-    which is exactly the silent fallback LAW-11/R1 forbid.
+    which is exactly the silent fallback the identity-key rule forbids.
     """
     plain = _net()
     tagged = _net()
-    # The exact attribute the deleted `getattr(model, "encoding", None)` line read. The
-    # arch half needs no counterpart: `GnnArch` is a FROZEN dataclass, so
-    # `getattr(arch, "representation", None)` could only ever return the declared field or
-    # None — it was unconditionally unread either way, which is the defect.
+    # The exact attribute the deleted `getattr(model, "encoding", None)` line read. The arch
+    # half needs no counterpart: `GnnArch` is FROZEN, so its declared field was unread either way.
     tagged.encoding = "gnn_axis_v1"
 
     a, b = tmp_path / "plain.pt", tmp_path / "tagged.pt"
@@ -71,7 +69,7 @@ def test_no_key_is_written_through_a_silent_getattr_fallback(tmp_path: Path) -> 
 
 
 def test_roundtrip_still_rebuilds_the_identical_net(tmp_path: Path) -> None:
-    """NO UNRELATED CASUALTY (R81/R86): deleting the two unread fields must not disturb
+    """NO UNRELATED CASUALTY: deleting the two unread fields must not disturb
     the load path. Weights and arch survive the roundtrip bit-for-bit."""
     path = tmp_path / "snap.pt"
     original = _net()
@@ -87,7 +85,7 @@ def test_roundtrip_still_rebuilds_the_identical_net(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("kind", sorted(ARCH_KINDS))
 def test_every_arch_kind_in_the_vocabulary_round_trips_through_the_snapshot(tmp_path, kind):
-    """AUDIT-1 F-16, closed at R330(e): this module carried a private two-row type table, so a
+    """This module carried a private two-row type table, so a
     `GnnArchV2` net could be trained and checkpointed but never snapshotted for the eval child —
     `write_model_snapshot` raised `unsupported arch type`. The table is now `ARCH_KINDS` itself;
     a class whose field set differs from `_TINY_KWARGS` reds here with a TypeError."""

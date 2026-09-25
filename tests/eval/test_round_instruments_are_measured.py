@@ -5,7 +5,7 @@ Three rows, one class — each published a value that read as a measurement and 
 * the random floor's `RegimeKey` claimed `deploy_matched=True` while playing at
   `random_model_sims` against a uniform bot; only the GATE block is deploy-matched. (The rung
   STATUS row this file also carried — the child's constant `"active"` against the ladder's real
-  status — left with the sealbot rung, R362(c).)
+  status — left with the sealbot rung.)
 * the progress writer defaulted `plies` to `0`, publishing a game that ended at ply zero for a
   record shape carrying no ply count. An unrecognised shape writes NULLS.
 * `eval_round_complete.promoted: false` covered three different rounds — the gate ran and

@@ -18,14 +18,8 @@ import pytest
 
 from mantis.eval.errors import EvalBrokenReason
 
-#: The censused routes, spelled EXACTLY as `mantis/eval/pipeline.py` emits them. Transcribed on
-#: purpose — this file IS the independent statement of the census, and deriving it from the enum
-#: under test would make the assertion self-satisfying.
-#:
-#: `round_timeout` is a route that always existed under another route's name: a round killed for
-#: exceeding `eval.round_timeout_sec` (a PROGRESS budget) was reported as `join_timeout`, which
-#: names the kill sequence rather than the cause. It is one existing mode ceasing to wear
-#: another's label, not a new failure mode.
+#: The censused routes, spelled EXACTLY as `mantis/eval/pipeline.py` emits them — transcribed on
+#: purpose, not derived from the enum under test, so the assertion is not self-satisfying.
 _CENSUSED_REASONS = {
     "join_timeout",
     "round_timeout",
@@ -45,9 +39,8 @@ def test_the_enum_declares_exactly_the_censused_reasons() -> None:
     reason is unrepresentable and therefore back to being a bare string.
     """
     members = list(EvalBrokenReason)
-    # DERIVED from the census set, not a literal: a hard `== 7` had to be re-edited the first
-    # time a route was correctly named, and a count re-edited on every edit is the defect class
-    # this oracle exists to catch.
+    # DERIVED from the census set, not a literal `== 7`: a re-edited count on every route rename
+    # is the defect class this oracle exists to catch.
     assert len(members) == len(_CENSUSED_REASONS), (
         f"the taxonomy is the censused routes (DESIGN_O §a.2); got {len(members)}: "
         f"{[m.name for m in members]}"

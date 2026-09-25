@@ -1,11 +1,11 @@
-"""⊕ WP11-A — A3 regime_key discipline + LAW-04 dedupe + low-power guard (mantis.eval.aggregate).
+"""⊕ A3 regime_key discipline, trajectory-hash dedupe and the low-power guard (mantis.eval.aggregate).
 
 Game records are plain dicts
 carrying `p1`, `p2`, `winner` ("p1"|"p2"|"draw"), `regime_key` (the canonical `str` form
 `RegimeKey.canonical()` produces — this suite never imports `mantis.arena.regime` so it
 stays decoupled from the arena package; it treats `regime_key` as an opaque string tag,
 exactly what a JSON-serialized game record carries) and `trajectory_hash` (a sha256-shaped
-opaque string standing in for the real move-list hash; LAW-04 dedupe keys ONLY on this
+opaque string standing in for the real move-list hash; dedupe keys ONLY on this
 field, so a synthetic string is a faithful substitute for arena's real hash).
 
 `aggregate_rung` RAISES `MixedRegimeError` the instant more than one distinct `regime_key`
@@ -43,8 +43,7 @@ def test_mixed_regime_keys_in_one_aggregation_raises() -> None:
 
 
 def test_trajectory_hash_dedupe_collapses_copies_to_eff_n() -> None:
-    # 40 raw records, all the SAME move sequence (same trajectory_hash) — the deterministic
-    # deploy regime's known failure mode (§D-ARGMAX heritage). LAW-04: the effective sample
+    # 40 raw records, all the SAME move sequence (same trajectory_hash): the effective sample
     # size for a CI must count this as 1 distinct game, not 40.
     records = [
         _record(p1="cand", p2="rung_a", winner="p1", regime_key="rk", traj="same_traj")
@@ -78,11 +77,8 @@ def test_pair_bootstrap_lower_ci_all_wins_and_n_zero_degenerates() -> None:
 
 
 def test_low_power_guard_blocks_promotion() -> None:
-    # 20 screen games + 20 confirm games, all WINS for cand (a clear point-estimate pass),
-    # but only 2 DISTINCT trajectories repeated 20x each in both halves — distinct-per-pair
-    # (2) is far below min_distinct_per_pair (10). The low_power guard must trip and BLOCK
-    # promotion even though the raw win rate alone would clear the bar (run3 :555-563 parity:
-    # low_power blocks regardless of wr_ok/ci_clean).
+    # 20 screen + 20 confirm games, all WINS for cand, but only 2 DISTINCT trajectories (repeated
+    # 20x each) — below min_distinct_per_pair (10), so low_power blocks promotion despite the win rate.
     gate_cfg = SimpleNamespace(
         promotion_winrate=0.55,
         min_distinct_per_pair=10,

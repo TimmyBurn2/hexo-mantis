@@ -1,6 +1,6 @@
 """The eval path's code-side literals EQUAL the production config's values.
 
-Thirteen hyper-parameters on the LAW-15 deploy-matched eval path are code-side literals measured
+Thirteen hyper-parameters on the deploy-matched eval path are code-side literals measured
 equal to the production config by coincidence of defaults, not by threading, and nothing detected
 the day they stopped being equal. This file is that detector: it PINS THE COINCIDENCE rather
 than threading the config (a behaviour change on a frozen parity surface), so retuning a
@@ -117,14 +117,12 @@ def test_deploy_head_mcts_default_equals_run5(ctor_key: str, config_key: str) ->
 _INFERENCE_KEYS: list[str] = []
 
 #: Keys run5 declares that the literal DELIBERATELY does not mirror, a CLOSED set: the caps are
-#: threaded (F-816-10 D-1); the two serving postures the eval child does not take — eager
-#: forward, inline dump-on-fire check 14 (F-816-37; PERF-A4 §4, CARD-A4-MINT).
+#: threaded; the two serving postures the eval child does not take — eager forward, inline
+#: dump-on-fire check 14 (CARD-A4-MINT).
 _DELIBERATELY_NOT_IN_THE_LITERAL = {"fused_graph_caps", "compile_trunk", "edge_geometry_check"}
 
 #: Keys in the inline dict that are THREADED rather than written, so there is no literal to
-#: drift; the coverage row proves the move STRUCTURALLY, not on this comment. Un-threaded,
-#: `inference_batch_size`/`inference_max_wait_ms` cost 1.76 of the eval path's 5.30 ms/sim
-#: (33 %) at the single-stream deploy head: supply 8 against a collector threshold of 32.
+#: drift; the coverage row proves the move STRUCTURALLY, not on this comment.
 _THREADED_NOT_LITERAL = {"inference_batch_size", "inference_max_wait_ms"}
 
 
@@ -161,7 +159,7 @@ def test_the_literal_covers_every_key_run5_declares() -> None:
 
 
 def test_the_train_SECTION_IS_GONE_and_law06_still_pins_the_dtype() -> None:
-    """The inline server dict must not grow a `train` section back, and LAW-06's graph pin must
+    """The inline server dict must not grow a `train` section back, and the graph autocast pin must
     still hold.
 
     The dict once wrote `train.amp_dtype = "bf16"` as a literal while run5 declared `fp16`; the

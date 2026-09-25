@@ -2,8 +2,8 @@
 
 The rung builds its player at `_model_sims_for_kind(spec, bot)` — a DIFFERENT sims authority
 from `gate.deploy_sims` — so a window confinement re-appearing at this seat would leave the
-frozen gate-seat oracle green while every strix cell number (the one rung job left since
-R362(c)) measured that asymmetry instead of strength.
+frozen gate-seat oracle green while every strix cell number (the one rung job left) measured
+that asymmetry instead of strength.
 
 Everything on the path under test is production code.
 """

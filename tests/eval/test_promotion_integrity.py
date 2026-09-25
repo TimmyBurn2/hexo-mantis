@@ -77,7 +77,7 @@ def test_the_training_loop_forwards_the_anchor_path() -> None:
     )
 
 
-# (b) both colour legs survive LAW-04 dedupe
+# (b) both colour legs survive trajectory-hash dedupe
 
 
 def _leg(colour: int, winner: str) -> dict[str, Any]:

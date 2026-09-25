@@ -99,9 +99,8 @@ def test_the_resolvers_return_none_except_where_a_ruling_armed_them(path) -> Non
         assert floor is None
 
 
-#: Every production config arms `eval.strength_floor`: the census (R367(a)) is discovery minus the
-#: exempt rows, never a predicate over the property under test, so it cannot go vacuous on the
-#: event this suite exists to catch — a production config silently disarming.
+#: Every production config arms `eval.strength_floor`: the census is discovery minus the exempt
+#: rows, so it cannot go vacuous on a config silently disarming.
 _ARMED_STRENGTH_FLOOR = frozenset(path.relative_to(_CONFIG_DIR).as_posix() for path in production_configs(_CONFIG_DIR.parent))
 
 

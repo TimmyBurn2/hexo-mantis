@@ -104,8 +104,8 @@ def test_a_probe_that_clears_both_bars_passes_with_no_failed_bar() -> None:
 
 
 def test_an_empty_probe_fails_loudly_rather_than_dividing_by_zero() -> None:
-    """Zero games is zero evidence, and a floor that PASSED on no evidence is the
-    phantom-gate class LAW-07 exists to prevent. `probe_games >= 1` makes this unreachable
+    """Zero games is zero evidence, and a floor that PASSED on no evidence is a
+    phantom gate. `probe_games >= 1` makes this unreachable
     through a validated config, so the arm is defence in depth."""
     verdict = evaluate_strength_floor([], _spec(decisive=0.0, wr=0.0))
     assert not verdict.passed
@@ -124,7 +124,7 @@ def test_a_zero_winrate_bar_is_an_EXPLICIT_posture_not_a_disabled_lever() -> Non
 
 
 def test_the_payload_carries_every_number_the_decision_used() -> None:
-    """LAW-18's complaint about a bare flag: a `False` with no measurement beside it cannot
+    """A bare `False` with no measurement beside it cannot
     distinguish a starved probe from a failing candidate. The emitted payload must carry the
     bars it was judged against, not only the verdict."""
     spec = _spec(decisive=0.6, wr=0.4)

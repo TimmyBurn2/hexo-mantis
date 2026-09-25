@@ -1,4 +1,4 @@
-"""⊕ WP11-A DESIGN §c.4 — round wall-time events (pays recon T6 gap (c): the eval-round WALL
+"""⊕ DESIGN §c.4 — round wall-time events (pays recon T6 gap (c): the eval-round WALL
 event producer lands here; the floor itself is a cutover re-baseline item, NOT this WP's job —
 PREREG P-2 bench posture n/a).
 
