@@ -110,6 +110,7 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
 - LAW-16 lifecycle — signals save-then-exit; stall watchdog always armed; disk guard.
 - LAW-17 structure — zero sys.path writes; one tests/ root; pyo3 only in the bridge.
 - LAW-18 in-run observability — a lever under test logs its own fire-rate in-run.
+- LAW-19 controls first — a criterion gates work only after a correct design passes it and the known-bad path fails it.
 
 ## Code style
 

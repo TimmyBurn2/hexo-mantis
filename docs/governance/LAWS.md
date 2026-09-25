@@ -4,7 +4,7 @@ Read this first. Each law was bought by a measured failure; the earned mechanism
 pre-R346 wording are in docs/governance/archive/laws.md. Changing or dropping a law takes an
 amendment commit and operator sign-off.
 
-## The seventeen
+## The eighteen
 
 - LAW-01 Prime directive. Context first, measurement mandatory: no architectural change
   without reading the design docs and the source, no perf-sensitive change without a bench.
@@ -43,6 +43,8 @@ amendment commit and operator sign-off.
 - LAW-17 Structure. Zero sys.path writes; one tests/ collection root; pyo3 only in the bridge;
   configs explicit and complete; a >300-line file justifies itself and states no line count.
 - LAW-18 In-run observability. A lever under test logs its own fire-rate in-run — a post-hoc probe cannot tell "starved" from "ineffective".
+- LAW-19 Controls first (R370(b)). Before a pre-registered criterion gates work, a correct design
+  must pass it and the known-bad path must fail it; a criterion no correct design can pass is void.
 
 ## The protected set
 
