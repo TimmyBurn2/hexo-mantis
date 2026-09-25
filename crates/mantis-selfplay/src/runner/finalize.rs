@@ -9,7 +9,7 @@
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 
 use mantis_core::{Board, Player};
 
@@ -72,9 +72,10 @@ pub(crate) fn finalize_game_graph(
     // ONE id for the whole game, taken before the loop: a per-record id would silently defeat
     // the same-game dedupe.
     let game_id = graph_game_seq.fetch_add(1, Ordering::Relaxed) as i64;
+    // Written through a poisoned lock: the poisoning panic already halted the run.
     let mut gq = graph_results_queue
         .lock()
-        .expect("graph_results_queue lock poisoned");
+        .unwrap_or_else(PoisonError::into_inner);
     for mut rec in graph_records {
         // §178 KEEP-verbatim split — reads rec.current_player / winner /
         // terminal_reason only, no cell geometry.
@@ -162,7 +163,7 @@ fn push_recent_meta(
     let (mv_min, mv_max, mv_distinct) = versions;
     let mut rg = recent_game_results
         .lock()
-        .expect("recent_game_results lock poisoned");
+        .unwrap_or_else(PoisonError::into_inner);
     rg.push_back((
         plies,
         winner_code,

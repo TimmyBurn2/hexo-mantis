@@ -7,6 +7,7 @@
 
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::PoisonError;
 
 use rand::prelude::IndexedRandom;
 use rand::rngs::ThreadRng;
@@ -85,7 +86,8 @@ impl FatalDefectLatch<'_> {
 
     fn store_counted(&self, msg: String, counter: &AtomicU64) {
         {
-            let mut slot = self.slot.lock().expect("fatal_defect lock poisoned");
+            // A latch must not itself fail: the poisoning panic already halted the run.
+            let mut slot = self.slot.lock().unwrap_or_else(PoisonError::into_inner);
             if slot.is_none() {
                 *slot = Some(msg);
             }

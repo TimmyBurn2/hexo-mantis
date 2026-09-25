@@ -8,6 +8,8 @@ pub mod config;
 pub mod finalize;
 pub mod game;
 pub mod params;
+#[cfg(test)]
+mod poison_tests;
 pub mod record;
 pub mod search_drive;
 pub mod spawn;
@@ -17,7 +19,7 @@ pub use config::SelfPlayRunnerConfig;
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::JoinHandle;
 
 use mantis_encoding::{all_specs, lookup, RegistrySpec};
@@ -305,7 +307,7 @@ impl SelfPlayRunner {
             let mut slot = self
                 .fatal_defect
                 .lock()
-                .expect("fatal_defect lock poisoned");
+                .unwrap_or_else(PoisonError::into_inner);
             if slot.is_none() {
                 *slot = Some(msg);
             }
@@ -315,12 +317,12 @@ impl SelfPlayRunner {
     }
 
     /// Read the stored fatal defect, if any — the bridge drain face raises it as a typed Python
-    /// exception so the pool drain loop dies with the variant name.
+    /// exception so the pool drain loop dies with the variant name; a poisoned slot still reads.
     #[must_use]
     pub fn fatal_defect(&self) -> Option<String> {
         self.fatal_defect
             .lock()
-            .expect("fatal_defect lock poisoned")
+            .unwrap_or_else(PoisonError::into_inner)
             .clone()
     }
 
@@ -335,12 +337,12 @@ impl SelfPlayRunner {
         self.start_impl();
     }
 
-    /// Flip `running=false`, close both inference queues (waking blocked waiters with `Err`),
-    /// and join all worker threads. An in-progress game is DROPPED, never finalized as a draw.
+    /// Flip `running=false`, close the queue, join every worker; an in-progress game is DROPPED.
+    /// Runs from `Drop`, so a poisoned handle list is recovered: a panic mid-unwind aborts.
     pub fn stop(&self) {
         self.running.store(false, Ordering::SeqCst);
         self.graph_queue.close();
-        let mut handles = self.handles.lock().expect("runner handles lock poisoned");
+        let mut handles = self.handles.lock().unwrap_or_else(PoisonError::into_inner);
         while let Some(handle) = handles.pop() {
             // CHECKED, not discarded. `Err` here means the thread unwound OUT of the spawn
             // closure, which the normal path cannot do, so this double-counts nothing and is the
