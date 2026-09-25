@@ -2,14 +2,14 @@
 //!
 //! `registry.toml` is embedded at compile time via `include_str!`; the first
 //! call to `lookup`/`all_specs` parses it, validates every entry, and builds a
-//! `HashMap<&'static str, &'static RegistrySpec>` whose values live (leaked) for
+//! `BTreeMap<&'static str, &'static RegistrySpec>` whose values live (leaked) for
 //! the process lifetime.
 //!
 //! Parse failures panic with a multi-line diagnostic listing every offending
 //! field. Init-time panic is acceptable — registry parse failure is
 //! unrecoverable (a Board cannot be constructed without a valid encoding).
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
 use sha2::{Digest, Sha256};
@@ -24,7 +24,7 @@ use parse::parse_one;
 /// self-contained — runtime never reads from disk.
 static REGISTRY_TOML: &str = include_str!("../registry.toml");
 
-static REGISTRY: LazyLock<HashMap<&'static str, &'static RegistrySpec>> = LazyLock::new(load);
+static REGISTRY: LazyLock<BTreeMap<&'static str, &'static RegistrySpec>> = LazyLock::new(load);
 
 static REGISTRY_SHA_HEX: LazyLock<String> = LazyLock::new(|| {
     let mut s = String::with_capacity(64);
@@ -46,13 +46,12 @@ pub fn lookup_or_panic(name: &str) -> &'static RegistrySpec {
     if let Some(s) = lookup(name) {
         s
     } else {
-        let mut known: Vec<&str> = REGISTRY.keys().copied().collect();
-        known.sort_unstable();
+        let known: Vec<&str> = REGISTRY.keys().copied().collect();
         panic!("encoding registry: unknown encoding {name:?}; registered: {known:?}");
     }
 }
 
-/// Iterate all registered specs (order is HashMap-arbitrary).
+/// Iterate all registered specs in name order, identical in every process.
 pub fn all_specs() -> impl Iterator<Item = &'static RegistrySpec> {
     REGISTRY.values().copied()
 }
@@ -90,7 +89,7 @@ pub fn registry_sha_hex() -> &'static str {
 
 // TOML parsing — runs once via LazyLock.
 
-fn load() -> HashMap<&'static str, &'static RegistrySpec> {
+fn load() -> BTreeMap<&'static str, &'static RegistrySpec> {
     let root: Value = toml::from_str(REGISTRY_TOML)
         .unwrap_or_else(|e| panic!("encoding registry: TOML parse error: {e}"));
 
@@ -100,7 +99,7 @@ fn load() -> HashMap<&'static str, &'static RegistrySpec> {
         .unwrap_or_else(|| panic!("encoding registry: missing top-level [encodings] table"));
 
     let mut errors: Vec<String> = Vec::new();
-    let mut map: HashMap<&'static str, &'static RegistrySpec> = HashMap::new();
+    let mut map: BTreeMap<&'static str, &'static RegistrySpec> = BTreeMap::new();
 
     for (name, body) in encodings {
         match parse_one(name, body) {

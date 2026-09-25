@@ -61,5 +61,5 @@ def lookup(name: str) -> _EngineRegistrySpec:
 
 
 def all_specs() -> Iterable[_EngineRegistrySpec]:
-    """Iterate every registered spec (registry.toml insertion order)."""
+    """Iterate every registered spec in name order, identical in every process."""
     return _load().values()

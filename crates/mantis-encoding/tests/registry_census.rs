@@ -21,6 +21,14 @@ const ABSENT: [&str; 11] = [
     "v6tp",
 ];
 
+#[test]
+fn all_specs_iterates_in_name_order() {
+    let names: Vec<&str> = all_specs().map(|s| s.name).collect();
+    let mut sorted = names.clone();
+    sorted.sort_unstable();
+    assert_eq!(names, sorted, "all_specs must iterate in name order");
+}
+
 // O-4: census exact-N + names + ARCH/KILL absence
 #[test]
 fn census_exact_n_and_names() {
