@@ -13,12 +13,7 @@ tooling: no census, no stamp, no mirror, no sync. One repo needs no mirror.
 - `laws.md` — the pre-R346 operating-law register. It carries each law's EARNED
   MECHANISM — the measured incident that bought it — and the R345(e) annotation
   under LAW-10. `../LAWS.md` is the standing text; this is where the reasons live.
-
-`RULINGS_ACTIVE.md`, the derived working index this directory once also carried, was DELETED
-by R368(e): it was never authority (R271, R346(e) annotated), and every function it served was
-already superseded — laws by `../LAWS.md`, live values and armed rows by `../STATE.md`, cards by
-`../CARDS.md`, ruling texts by `rulings_register.md` and `../RULINGS.md`. Its F-816-34/35/36
-findings were carried into `../CARDS.md`'s F-816-* table before deletion.
+- `RULINGS_ACTIVE.md` (a derived index, never authority) was deleted by R368(e) in `33e32a16`.
 
 ## Two things a reader must know
 
