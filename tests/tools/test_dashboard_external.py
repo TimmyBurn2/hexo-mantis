@@ -80,6 +80,7 @@ def test_the_panel_draws_one_series_per_unit_with_whiskers_regime_and_axis_label
     assert "y = WR vs strix in the unit the legend names" in panel and "x = step" in panel
     assert "30.0 pp below parity" in panel and "36.0 pp below parity" in panel
     assert "not measured" not in panel
+    assert "the host playing the cell was busy" in panel, "the legend states the receipt's regime rule"
 
 
 def test_without_sidecars_the_panel_is_a_stated_gap_naming_the_producer(html, reader, tmp_path: Path) -> None:

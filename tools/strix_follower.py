@@ -37,7 +37,8 @@ HEARTBEAT_LIVE_SEC = 300.0
 GPU_BUSY_PCT = 10
 #: ... or when its 1-minute load per logical CPU is at or above this (a quarter of the cores already busy).
 LOAD_BUSY_PER_CPU = 0.25
-SIDECAR_SCHEMA_VERSION = 1
+#: 2: the regime is the playing host's load (`regime_evidence.host`); 1 read it off the run's heartbeat.
+SIDECAR_SCHEMA_VERSION = 2
 _REPO = Path(__file__).resolve().parents[1]
 _STEP_IN_NAME = re.compile(r"_(\d{8})_[0-9a-f]{8}\.ckpt$")
 
@@ -130,9 +131,14 @@ def _gpu_util_pct() -> tuple[int, ...] | None:
         return None
 
 
+def _usable_cpus() -> int:
+    affinity = getattr(os, "sched_getaffinity", None)
+    return len(affinity(0)) if affinity is not None else (os.cpu_count() or 1)
+
+
 def read_host_load() -> HostLoad:
-    """This machine's 1-minute load average, logical CPU count and per-GPU utilisation."""
-    return HostLoad(load_1m=os.getloadavg()[0], cpu_count=os.cpu_count() or 1, gpu_util_pct=_gpu_util_pct())
+    """This machine's 1-minute load average, the CPUs this process may use, and per-GPU utilisation."""
+    return HostLoad(load_1m=os.getloadavg()[0], cpu_count=_usable_cpus(), gpu_util_pct=_gpu_util_pct())
 
 
 def regime(run_dir: Path, run_id: str, now: float, host: HostLoad) -> tuple[str, dict[str, Any]]:

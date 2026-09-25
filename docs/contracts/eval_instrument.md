@@ -24,7 +24,8 @@ v2: the sealbot adapter, its fixed-depth receipt and its refusal classes are DEL
 v3: the sealbot vendor side — build script, patch, pin, `vendor.sealbot` target and both pin
 tests — is DELETED (R368(e)).
 v4: the strix cell's regime is the load of the host that PLAYS it, not the run's mirrored heartbeat
-(PERF-ADA H7): off the box that heartbeat is always live and labelled every cell CONTENDED.
+(PERF-ADA H7): off the box that heartbeat is always live and labelled every cell CONTENDED. The
+receipt's `schema_version` moves 1 → 2 with it, so a v1 receipt's regime reads under the heartbeat rule.
 
 The run5 decision document carried that run's choices and is DELETED with its config
 (R346(f)): a decision document whose subject config is not in the tree
@@ -72,7 +73,7 @@ and are folded in here, because a reader of any ladder reading needs them:
   net's `net_param_hash`, strix's pinned commit and checkpoint sha256, the unit's two sims, the
   trigger, the regime — CONTENDED when the host playing the cell is busy at cell start (any GPU at
   or above `GPU_BUSY_PCT` by nvidia-smi, or its 1-minute load per logical CPU at or above
-  `LOAD_BUSY_PER_CPU`), IDLE otherwise, with that host's load (`regime_evidence.host`: `load_1m`,
+  `LOAD_BUSY_PER_CPU`, over the CPUs the process may use), IDLE otherwise, with that host's load (`regime_evidence.host`: `load_1m`,
   `cpu_count`, `load_per_cpu`, `gpu_util_pct`, `null` without nvidia-smi) and every run's heartbeat
   age under the runs root (`live` names a live twin or parent) as evidence — and the pair-level readout: games, eff_n, wins, losses,
   draws, wr and its CI). The sidecar is the receipt: an existing one is never re-read, the stamp

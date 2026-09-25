@@ -275,8 +275,7 @@ def test_a_stale_preflight_heartbeat_with_the_same_filename_cannot_hide_the_live
     stale = tmp_path / "runs" / "runx-preflight" / "logs"
     stale.mkdir(parents=True)
     (stale / "heartbeat_runx.json").write_text(json.dumps({"wall_ts": 1_000.0 - 18_000.0}), encoding="utf-8")
-    name, evidence = follower_mod.regime(run, _RUN, 1_000.0, _host(follower_mod, gpu=(60,))())
-    assert name == "CONTENDED", evidence
+    _name, evidence = follower_mod.regime(run, _RUN, 1_000.0, _host(follower_mod)())
     assert evidence["heartbeat_age_sec_self"] == 2.0
     assert "runx/logs/heartbeat_runx.json" in evidence["live"] and len(evidence["live"]) == 1
     assert evidence["heartbeat_age_sec"]["runx-preflight/logs/heartbeat_runx.json"] == 18_000.0
@@ -294,6 +293,7 @@ def test_a_live_mirrored_heartbeat_on_an_idle_host_reads_IDLE(follower_mod, tmp_
     assert body["regime_evidence"]["live"] == [f"{_RUN}/logs/heartbeat_{_RUN}.json"], "the run's liveness stays evidence"
     assert body["regime_evidence"]["host"] == {"load_1m": 1.0, "cpu_count": 16, "load_per_cpu": 0.0625,
                                                "gpu_util_pct": [3]}
+    assert body["schema_version"] == 2, "the regime's rule changed, so the receipt's version moves"
 
 
 @pytest.mark.parametrize(("load_1m", "cpus", "gpu", "want"), [
@@ -318,7 +318,7 @@ def test_the_host_load_reader_reads_nvidia_smi_and_survives_its_absence(follower
     import subprocess
 
     monkeypatch.setattr(follower_mod.os, "getloadavg", lambda: (2.0, 1.0, 0.5))
-    monkeypatch.setattr(follower_mod.os, "cpu_count", lambda: 8)
+    monkeypatch.setattr(follower_mod.os, "sched_getaffinity", lambda _pid: set(range(8)), raising=False)
     monkeypatch.setattr(follower_mod.shutil, "which", lambda _name: "/usr/bin/nvidia-smi")
     monkeypatch.setattr(follower_mod.subprocess, "run",
                         lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout="37\n5\n", stderr=""))

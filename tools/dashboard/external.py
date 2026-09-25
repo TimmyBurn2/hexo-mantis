@@ -151,7 +151,7 @@ def external_chart(units: dict[str, list[ExternalPoint]]) -> str:
             body.append(f'<circle class="marker {kind} {cls}" cx="{x:.1f}" cy="{y:.1f}" r="5"/>')
         legend.append(f'<li><i class="swatch {cls}"></i>{esc(label)}: {len(pts)} point(s), '
                       "whiskers = the pair-level bootstrap CI over distinct games (LAW-04)</li>")
-    legend.append('<li><i class="swatch"></i>filled = CONTENDED (a live trainer shared the card) · '
+    legend.append('<li><i class="swatch"></i>filled = CONTENDED (the host playing the cell was busy; a v1 receipt: a live heartbeat) · '
                   '<i class="swatch idle"></i>hollow = IDLE</li>')
     latest = max(points, key=lambda p: p.step)
     caption = ("y = WR vs strix in the unit the legend names · x = step · the dashed rule is parity "
