@@ -36,6 +36,25 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by the PERF-ADA packet (R369; 2026-09-25) — the levers after L2
+
+Grounds and numbers: the R369 ledger in `docs/design/measurements/PERF_ADA_PROFILE_2026-09-24.md`. Order is the
+recommended one; each is its own leg with a LAW-09 bench.
+- **CARD-PERF-CSR — the fused CSR aggregation (B1): IN PROGRESS as L2's replacement.** One Triton op over
+  dst-sorted edges: gather + edge add + relu fused, fp32 register sum, one rounding, no atomics, no fp32 [E, H];
+  its backward the same sum over src order. Desktop prototype: 3.3–3.9 ms per 4 layers (committed L2 44.1,
+  fp32 atomics 7.1), bitwise equal to the committed L2 op.
+- **CARD-PERF-EDGE-TABLE — the edge-code table (B2).** The edge embedding has 91 distinct raw rows, so each layer's
+  `lin(edge_proj(·))` is a lookup; the table is bitwise equal to the per-edge GEMM when padded to M ≥ 1024 (sm_86;
+  sm_89 unverified). Desktop forward −41 % on top of B1. Reaches past R369(b)'s "aggregation": its own leg.
+- **CARD-PERF-READOUT — the deterministic readout (B3), OPERATOR-ENDORSED 2026-09-25.** The served softmax's
+  `segment_sum` and the value/mean pools sum by atomics (served probabilities jitter ~1e-7 on a repeat); a
+  segment reduction over the CSR offsets makes them exact. A precondition for L4's bit-identity witness.
+- **CARD-PERF-DST-SORT — dst-sorted edges from the Rust builder.** Removes the per-forward GPU argsort
+  (0.5–0.8 ms/pop INF); a wire/golden contract change.
+- **CARD-PERF-GRAPHS — CUDA graphs for the serving forward.** Dynamic shapes need bucketing; worth it only once
+  the server is CPU-bound, after CARD-PERF-4's re-read.
+
 ## Opened by R368 (SLIM-FIX; 2026-09-23)
 
 - **CARD-RUST-HOTLOOP-EXPECTS — CARDED: the `unwrap()`/`expect()` sites on hot loops, classified by R368(g)'s

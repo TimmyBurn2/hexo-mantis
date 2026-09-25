@@ -81,6 +81,14 @@ fused fp32 atomic path (or the bf16 sorted path, 3 381, which does not accumulat
 still differ by 6e-8–1.2e-7 on a repeat in every variant: the served softmax's fp32 `segment_sum` (and the value
 pool's `index_add_`) are atomic; the value head output is exact.
 
+**After the HALT (operator, 2026-09-25): resume with the fused CSR op (B1) replacing the committed L2 ops.** A
+read-only think agent root-caused the regression: the dummy hub's ~1000-deep serial run in ATen's sorted
+`index_put_`, paid once per 2^18-edge chunk; the opaque gather blocking Inductor's fusion; the fp32 copy of the
+messages. Its prototype (desktop): 4-layer aggregation 3.3–3.9 ms vs 44.1 committed and 7.1 fp32 atomics; full
+forward 21.6 ms vs 28.3 fp32 atomics; bitwise equal to the committed op. The operator's conditional on determinism
+(accept non-determinism only if no deterministic fp32 path comes within ~10 % of the fp32-atomic path) is decided
+by B1's box reading. The later levers are carded (CARDS.md, "Opened by the PERF-ADA packet").
+
 ## Findings first
 
 1. **The serving bound on this box is a hidden per-forward host↔device sync, then the bf16 atomics.**
