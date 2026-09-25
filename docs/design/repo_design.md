@@ -332,8 +332,8 @@ ADDED (v7 → v8). `docs/contracts/run_config_schema.md` is the version authorit
   data), never a list edited per mint; one implementation per thing; a comment states what code
   cannot; no compatibility shim for a state the tree no longer has. Every implementation leg
   ends with a fresh read-only review against this bullet plus correctness (budget, determinism,
-  seam contracts, LAW-07 breaks); the report lives under `docs/audits/`; findings are fixed
-  before merge; the dispatcher does not review its own leg.
+  seam contracts, LAW-07 breaks); the report is a local record outside the public tree
+  (R369(f)); findings are fixed before merge; the dispatcher does not review its own leg.
 - Rust: inline unit tests near code; invariant pins and cross-language goldens under
   `crates/*/tests/`; proptest for board invariants; goldens are f32-bit-exact where the
   contract is numeric identity.
@@ -427,7 +427,8 @@ ADDED (v7 → v8). `docs/contracts/run_config_schema.md` is the version authorit
   a hot path is a review-blocking defect.
 - Graph input is built once per evaluated leaf, co-located with the NN forward. No
   search-time incremental graph deltas (falsified; see the register).
-- amp policy: graph path = bf16 (law, pinned in code and by a regime-parity test).
+- amp policy (LAW-06, R369(b)): bf16 storage and GEMMs; the graph aggregation accumulates in fp32,
+  deterministically, in one op shared by server and trainer; pinned in code and by parity tests.
 - Profile first (flamegraph / py-spy; DHAT for allocation-rate hunting — allocation
   churn in hot loops is the first suspect; capacity-reserve fixes beat clever
   algorithms). Profiling builds: release + debug symbols via `CARGO_PROFILE_RELEASE_DEBUG=true`

@@ -7,14 +7,12 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
-**SLIM-FIX (R368) EXITED 2026-09-25** on branch `claude/slim-fix-r368` (cut from the SLIM-SCOUT
-census at `1e8d6d6`, base `dev` `69e1532`), range `1e8d6d6..` the exit tip, not yet on `dev`. The
-packet's exit record — the BEFORE/AFTER figures, the per-wave ledger, the HALTs and their
-closures, the operator grants of 2026-09-25, the review list and the sweep procedure — is
-`docs/audits/SLIM_FIX_EXIT_2026-09-25.md`; `docs/slim/` is dissolved at the close and its files
-live in git history. The branch is **READY-TO-MERGE**: it does not fast-forward `dev` and is not
-pushed until the operator enacts the merge, and run10's launch-base rule (R368(i)) then applies to
-the merged tip (full gate set green, slow tier included, or run10 launches from `69e1532`).
+**PERF-ADA (R369) IN PROGRESS** on branch `perf-ada` (dev `fc37f3f2` + the plan commit `7dfdd4a4`):
+make the rented 4080S box the run box and harden the run. SLIM-FIX (R368) is merged (`fc37f3f2`).
+LAW-06 already reads R369(b) while the aggregation lands in leg L2, so the branch does not merge to
+`dev` before L2. The packet's legs, benches and pre-stated criteria are the R369 ledger in
+`docs/design/measurements/PERF_ADA_PROFILE_2026-09-24.md`; its reviews and exit record are local
+records outside the tree (R369(f)).
 
 ## The run
 
@@ -24,14 +22,15 @@ the merged tip (full gate set green, slow tier included, or run10 launches from 
   series and every cell on record are in the measurement records named below.
 - **run10 is ARMED, not started.** `configs/run10.yaml` is minted (R366, ratified by R367(c)); its
   order, witnesses and pre-registered reading are
-  `docs/design/measurements/RUN10_PREREG_2026-09-21.md`, the box sequence its §6. `dev` `69e1532`
-  is run10's validated base (R368(i)): until run10 STARTs no leg moves its resolved config, the
-  stamp format or trainer/search/eval numerics, and run10 launches from a later `dev` tip only if
-  every merge since carried the full gate set green, slow tier included. SEAM-2's implementation
+  `docs/design/measurements/RUN10_PREREG_2026-09-21.md`, the box sequence its §6. run10 launches
+  from PERF-ADA's exit tip (R369(a), amending R368(i)) once the full gate set incl. the slow tier is
+  green there, its resolved config matches its mint by value except leaves a ruling retires,
+  admission is re-read IDLE (R367(e)) and the parent's strix @ r8 cell is re-read there; a re-read
+  outside the parent's recorded CI sends the bar to the operator. SEAM-2's implementation
   merges only after run10 STARTs (R368(j)). Read a config's values from the file itself and diff
   two with `tools/config_diff.py`; STATE does not restate minted rows.
-- **No box is rented as far as the tree records.** The last instance was destroyed on 2026-09-21
-  (R365, annotated by R367(d)); the operator's mirror (`tools/mirror_pull.py`) holds run7's and run8's
+- **A box is rented** (2026-09-24: an RTX 4080 SUPER host, the operator's, R11); the previous instance was
+  destroyed on 2026-09-21 (R365, annotated by R367(d)); the operator's mirror (`tools/mirror_pull.py`) holds run7's and run8's
   artifacts, run10's parent and the ring its held-out slice reads. The run10 box criterion and its
   admission bench are R367(e), run with `tools/bench_server.py` per the prereg's §6; any admission
   reading taken since is not a tracked record. Renting, stopping or re-speccing a box is the
