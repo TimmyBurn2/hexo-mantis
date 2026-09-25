@@ -77,6 +77,17 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   claimed every node selects by PUCT, false under Gumbel). Verifier comment-only; run10 MATCH; gates 10/12/13/15/17 rc 0.
 - L5 tests/train+config+tools+selfplay (**sonnet**) and L6 the remaining tests/ packages (**sonnet**; tests/model/
   conformance/** excluded under R368(h)) launched in the freed slots.
+- L3 LANDED 463bba16 (**opus**): tools/ci_gates cite 67→9, comment_excess 92→9, textfile 252→38 (+184/−483, 17
+  files). Kept: the two registers (comment_length_floor.txt, tier_declaration.txt), CARD-LINT-GATE, a LAW-07 token
+  inside registry_gate.sh's Python heredoc (data), CARD-POOL-ENCODING-BRIDGE in preflight_mint.py's docstring (a
+  test asserts it in `__doc__`), every cite inside a string/refusal text. REVIEW-W4 N2 DONE (comment_lint's docstring
+  says "two-digit-and-up"). CARD-STAMP-FLOOR's docstring cite dropped; CARDS' row re-pointed to the file that still
+  cites it (preflight_mint_parent.py, a string). Every touched gate's self-test green; 786 tools/preflight tests green.
+- L4 LANDED f03b4d08 (core), 3c6bf3af (bridge), e6b56e5d (graph) (**sonnet**): cite 5→0 each; comment_excess core
+  207→198, bridge 189→189 (its excess is `///` API docs and R8 headers — docstring length is on contact), graph
+  112→71. SAFETY blocks and the `!Sync` invariant kept; rustfmt skipped on base-unformatted files; check.wasm green.
+- L7 src train+config+eval+root (**opus**) and L8 the remaining src packages, tools/ root + dashboard/ladder/probe1/
+  viewer and the Makefile (**sonnet**) launched.
 
 ## W6 — docs + configs (EXITED 2026-09-25)
 

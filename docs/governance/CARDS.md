@@ -707,7 +707,7 @@ names what closed it, so every live cite resolves here.
 - `CARD-SERVER-OWNED-COPY` — LANDED 2026-09-21 by R366(b), `857187af`: the inference server serves
   its own copy, which `ActorSync` writes and the learner never reads. `src/mantis/train/checkpoints.py`
 - `CARD-STAMP-FLOOR` — CLOSED 2026-09-11, decided by matrix, `652b9f02`: the preflight burst is a
-  stop-step bound over the minted config. `tools/ci_gates/preflight_mint.py`
+  stop-step bound over the minted config. `tools/ci_gates/preflight_mint_parent.py`
 
 ## RQ-*
 
