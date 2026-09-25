@@ -157,6 +157,11 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
 - OPERATOR ASKS from W6: (1) the run6 grant (HALT 1 + HALT 2; the diff narrows, see above); (2) ONE ruling for
   armed_aborts.py MANIFEST text: policy_loss_trough's note/owner ("run7's mint"; three mints since kept it null),
   ply_cap_attractor's owner/note, terminal_eval_broken's RESIDUAL cite of the missing test file; (3) REVIEW-W6 #12.
+- Closure check (the reviewer, read-only) at 80cc7779: every routed finding CLOSED, 0 new MUST/SHOULD, 3 notes
+  (N1 fixed 4d9f4c09, N2/N3 fixed aea3a34c); §5 filed 0c8b9176.
+- Exit sweep `make gates` LAUNCHED at 0c8b9176 in .wt/gates as user unit mantis-gates-w6 (01:32 UTC).
+  Worktrees and branches w6-cards, w6-configs, w6-configs-b, w6-state, w6-fix REMOVED (each branch's content is on
+  main, less the deliberately dropped frozen-oracle commits ad29e624 and 3334eda1).
 
 ## W5 — tests + fixtures (EXITED 2026-09-25)
 
