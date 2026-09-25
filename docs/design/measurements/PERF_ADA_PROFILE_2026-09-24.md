@@ -71,9 +71,15 @@ before the bench):
 | L3b torch 2.11.0+cu130 (operator's ask: the runtime alone) | land only if faster beyond the IQR | not faster | `9f4e8768` + 2.11+cu130 | 3 827 [3 760, 3 827], repeat EXACT; 27/27 green; `launch` 13.1 vs 12.2 ms | −3.9 %: **NOT LANDED**; both cu130 builds read 3–4 % under cu128 with a slower launch stage |
 | H2 + H3 hot-path hardening (named errors, one search helper set), integrated | no change (a hot-path edit may not regress) | median < 0.97 × the recompute tip | `9e4ed476` | 3 981 [3 968, 4 017], repeat EXACT | −0.0 % |
 | H4 `par::map_in_order` vs its inlined parent (criterion `graph_build_bench`, box) | revert if the shared form is slower where production runs | — | tip vs tip + revert | 64 leaves: 1 thread revert **+10.0 %** slower, 4 threads revert −6.3 %, 8 threads ±1 %; 8 leaves ±1 % | production runs the sample fan-out at **1 thread** on this box (`max(1, cpu − n_workers − 1)` = 1), where the shared form is faster: **KEPT**, the conditional revert dropped |
+| H2 + H3 criterion (box, tip vs pre-hardening `7b081aa4`) | no hot-path regression | — | `acc39a05` | `check_win` −1.3 … −4.9 %; `mcts_sims_cpu_only` −0.2 … −0.9 %; `expand_leaf` ±2 % (noise); path replay −1.8 … −18 %; **`board_clone` +4.5 … +6.4 %** (off the per-leaf path) | end-to-end flat: bench_server 3 984, the real loop unchanged |
+| **EXIT admission (R367(e), IDLE, bench_server alone at B 64)** | ≥ 0.85 × 2 466 = 2 096 | — | `93f43ce3` | **3 984** [3 968, 4 045], repeat EXACT | **PASS at 1.62× the reference box** (was 0.74× at L0's parent tree) |
 | L4 exact per-net eval cache (R369(d)) | lands only if served outputs are bit-identical with and without it | — | branch `perf-ada-l4` (`94784c4a`), NOT on perf-ada | the served path is NOT batch-invariant (3070, the parent, 64 distinct positions vs the whole batch): groups of 1 → 38–39/64 differ (max \|Δvalue\| 0.0076, \|Δp\| 2e-3); groups of 4–16 → 33–35/64 (\|Δvalue\| 0.0075); groups of 32 → 0–1/64 | **NOT LANDED**: a hit replays a value from another batch size; the bf16 value-head GEMM's kernel choice varies with B |
 
 The repeat probe reads DIFFERS on both rows by construction: the mask is bit-identical, and the non-determinism is the bf16 `index_add_` aggregation L2 replaces.
+
+**The parent's strix @ r8 re-read (R369(a)) is WAIVED by the operator (2026-09-25, "skip since I want to finish this
+cleanly here"; strix may itself be retired).** The cell was stopped three minutes in, unread; no reading exists for
+this tip. run10's launch under R369(a) therefore rests on the operator's waiver, or on a re-read before its preflight.
 
 **The real self-play loop (exit reading; `WorkerPool`, run10 cfg + the 45k weights, no trainer, IDLE box, 8 min steady
 window after 2 min):** tip `855d230c` (code-identical to the exit tip's serving path) **1 710 games/h, 35.2 turns/s,
