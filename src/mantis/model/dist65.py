@@ -66,7 +66,7 @@ def binned_value_loss(
     Mask semantics: value_mask==0 rows excluded from numerator AND denominator;
     all-masked → zeros(()).
 
-    `denominator` (WP12-R F2): when supplied, the reduction is `kept.sum() / denominator`
+    `denominator`: when supplied, the reduction is `kept.sum() / denominator`
     instead of this batch's own mean — how ONE micro-batch of a gradient-accumulating split
     divides by the WHOLE step's denominator, so the parts sum to the un-split loss exactly
     (`mantis.train.losses.graph_loss_denominators`). With `denominator=None` every statement

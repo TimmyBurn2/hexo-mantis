@@ -241,7 +241,7 @@ def load_from_bc(
     reinit: Sequence[str],
 ) -> BcTransferReport:
     """Load EVERY tensor of a BC checkpoint onto `net` (strict both ways), then put the heads
-    `reinit` names back to the fresh init (R350(b)(i)); every landed tensor is verified `torch.equal`.
+    `reinit` names back to the fresh init; every landed tensor is verified `torch.equal`.
 
     Raises:
         ValueError:   a `reinit` entry matches no tensor, or repeats.
@@ -249,7 +249,7 @@ def load_from_bc(
     """
     own_sd = net.state_dict()
     reinit_keys = _reinit_keys(list(own_sd), reinit)
-    # A head `reinit` names may be ABSENT from the source (R366(b): a fresh head the parent never had).
+    # A head `reinit` names may be ABSENT from the source: a fresh head the parent never had.
     missing = own_sd.keys() - bc_state_dict.keys() - set(reinit_keys)
     unexpected = bc_state_dict.keys() - own_sd.keys()
     if missing or unexpected:

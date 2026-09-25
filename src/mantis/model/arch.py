@@ -4,7 +4,7 @@ Arch metadata travels on these frozen dataclasses: a caller retains the declared
 it to `build_net`, and nobody infers arch by reading attributes off a live `nn.Module` — that
 sniff is deleted and grep-gate-banned. `arch_from_spec_and_config` consumes a resolved encoding
 spec and a plain `Mapping`; the `model.gnn` parser is the config package's, wrapped here (the
-`model -> config` edge, R367(a): one implementation per thing); there is NO representation
+`model -> config` edge, one implementation per thing); there is NO representation
 default. `RepresentationMismatch` is defined here, the lowest layer that
 raises it, and re-exported by `build` and the package.
 """
