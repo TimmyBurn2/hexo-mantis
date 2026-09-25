@@ -17,12 +17,14 @@ from typing import Any
 import pytest
 import torch
 
+from mantis.config.census import production_configs
 from mantis.encoding import lookup
 from mantis.model import build_net, select_arch
 from mantis.model.identity import net_param_hash
 from mantis.train.anchor import checkpoint_state_sha256, verify_launch_anchor_pin
 
 _ENC = "gnn_axis_v1"
+_REPO = Path(__file__).resolve().parents[2]
 
 
 def _arch() -> Any:
@@ -140,7 +142,8 @@ def test_init_trainer_leaves_the_source_None_when_no_row_is_declared(tmp_path: P
     assert getattr(trainer, "checkpoint_source", "unset") is None
 
 
-def test_the_minted_warm_start_row_names_an_artifact_whose_hashes_AGREE() -> None:
+@pytest.mark.parametrize("config_path", production_configs(_REPO), ids=lambda p: p.name)
+def test_the_minted_warm_start_row_names_an_artifact_whose_hashes_AGREE(config_path: Path) -> None:
     """Both currencies must answer the same thing about the artifact the minted row names.
 
     LOUD-SKIPS rather than passing when the artifact is absent: `checkpoints/` is never tracked,
@@ -150,13 +153,10 @@ def test_the_minted_warm_start_row_names_an_artifact_whose_hashes_AGREE() -> Non
     from mantis.model import build_net
     from mantis.train.checkpoints import load_checkpoint
 
-    repo = Path(__file__).resolve().parents[2]
-    config_path = repo / "configs" / "run6.yaml"
-    if not config_path.exists():
-        pytest.skip("configs/run6.yaml is not in this tree — nothing minted, nothing to check")
+    repo = _REPO
     row = load_config(config_path).identity.warm_start
     assert row is not None, (
-        "configs/run6.yaml carries no `identity.warm_start`: the 4b pin act's row is missing, "
+        f"{config_path.name} carries no `identity.warm_start`: the 4b pin act's row is missing, "
         "and the launch pin it derives from would be None on the run that needs it"
     )
     artifact = repo / row.checkpoint
@@ -173,7 +173,7 @@ def test_the_minted_warm_start_row_names_an_artifact_whose_hashes_AGREE() -> Non
     assert net_param_hash(net) == row.net_hash, (
         f"{row.checkpoint} rebuilds from its own stamp to net_param_hash "
         f"{net_param_hash(net)}, but the minted row declares {row.net_hash}. The artifact at "
-        "that path is not the one run6 was pre-registered against"
+        f"that path is not the one {config_path.name} was pre-registered against"
     )
     assert checkpoint_state_sha256(artifact) == row.net_hash, (
         "the row's currency and the launch guard's currency disagree on the MINTED artifact: "

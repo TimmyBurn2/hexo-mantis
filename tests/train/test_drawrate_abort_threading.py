@@ -28,6 +28,7 @@ import mantis.train.coordinator.step as step_module
 # `ruff --fix` re-sorts the `resolve.draw_rate` import into the third-party block while the
 # module it names does not exist; it belongs here with its `mantis.*` siblings.
 from mantis.config.armed_aborts import audit_arming
+from mantis.config.census import production_configs
 from mantis.config.loader import load_config
 from mantis.config.resolve.draw_rate import (  # RED anchor (R80) — the ONE read path
     DrawRateAbortSpec,
@@ -43,6 +44,8 @@ from _graph_drive import DEV_DRAIN_CAPS, DEV_GATE_INTERVAL, DEV_KNOBS, GRAPH_FUL
 
 
 _CONFIGS = Path(__file__).resolve().parents[2] / "configs"
+#: Any census member: gate 12 holds the draw-rate block armed in each.
+_ARMED_CONFIG = production_configs(_CONFIGS.parent)[0]
 _DRIVE_STEPS = 4
 #: Deliberately NOT run5's own numbers: a harness driving the production values cannot
 #: distinguish "the config reached the coordinator" from "the builder hardcodes the same
@@ -308,7 +311,7 @@ def test_all_THREE_block_keys_reach_their_runtime_destination(monkeypatch) -> No
     `is not None` is required by the type change and this is its only witness. The skip
     accounting is asserted with a NON-EMPTY producer, because a coordinator that never reached
     the gate would satisfy "no TypeError" while witnessing nothing."""
-    cfg = load_config(_CONFIGS / "run6.yaml")
+    cfg = load_config(_ARMED_CONFIG)
     spec = resolve_draw_rate_abort(cfg.train)
     seen: list[dict] = []
 

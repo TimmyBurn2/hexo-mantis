@@ -6,7 +6,7 @@
 """ORACLE — the periodic checkpoint seam.
 
 `train.checkpoint_interval` had exactly one reader in `src/`, inside the dense step tail, while
-the graph step held no interval read and no `save_checkpoint` call — so on run5's DECLARED graph
+the graph step held no interval read and no `save_checkpoint` call — so on the DECLARED graph
 representation the minted knob had no consumer at any value. The fix is ONE resolver both step
 tails call, with two arms: interval N writes at N and 2N (a step SET, never a count — an
 off-by-one writes the same NUMBER of files), and interval 0 writes none but the final.
@@ -14,7 +14,7 @@ off-by-one writes the same NUMBER of files), and interval 0 writes none but the 
 Each row is the only witness to one defect: a graph run that never checkpoints; a cadence that
 fires when DISABLED (asserted as an ABSENCE, so its oracle-first proof is its mutation); the
 dense leg regressing; a SECOND interval authority, which no behavioural oracle can see because
-two readers agree until they diverge; the live-consumer claim on run5's own wiring; a swallowed
+two readers agree until they diverge; the live-consumer claim on a production config's own wiring; a swallowed
 save failure; an artefact outside the ONE stamp path; the leg-1/leg-3 terminus coincidence; and
 the event carrying the WRITER's returned path. Real everywhere except the ARCH and the SINK.
 """
@@ -32,10 +32,11 @@ import torch
 from _monitor_config import monitor_config
 from _drivable import DrivablePoolStub
 from _graph_drive import filled_hexg
+from mantis.config.census import production_configs
 from mantis.config.loader import load_config
 from mantis.config.resolve.microbatch import MicrobatchCapsSpec
 from mantis.encoding import lookup
-from mantis.model import GnnArch, build_net, gnn_widths_block
+from mantis.model import GnnArch, arch_from_spec_and_config, build_net, gnn_widths_block
 from mantis.train import checkpoints
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.dispatch import resolve_step_spec, run_declared_train_step
@@ -143,9 +144,9 @@ def _graph_arch() -> GnnArch:
                    num_layers=1, policy_hidden=16, value_hidden=16)
 
 
-def _graph_trainer(tmp_path, config, hparams, sink) -> Trainer:
+def _graph_trainer(tmp_path, config, hparams, sink, arch: Any = None) -> Trainer:
     torch.manual_seed(20260803)
-    arch = _graph_arch()
+    arch = arch or _graph_arch()
     return Trainer(build_net(arch), config, arch=arch, checkpoint_dir=tmp_path,
                    device=torch.device("cpu"), train_hparams=hparams, sink=sink)
 
@@ -243,28 +244,30 @@ def test_exactly_one_checkpoint_interval_authority_in_src() -> None:
         "call — exactly once (rule 3 / LAW-12: no second write surface)")
 
 
-# the live-consumer claim on run5's OWN config, key, identity, resolver and route
-def test_run5_config_produces_a_periodic_checkpoint_on_its_declared_route(
-        tmp_path, spy_sink) -> None:
+# the live-consumer claim on a production config's OWN config, key, identity, resolver and route
+@pytest.mark.parametrize("config", production_configs(_REPO), ids=lambda p: p.name)
+def test_a_production_config_produces_a_periodic_checkpoint_on_its_declared_route(
+        tmp_path, spy_sink, config: Path) -> None:
     """A minted key with zero live consumers on the representation its own config declares.
-    Everything here is run5's except the net's size — the config comes through the real loader,
+    Everything here is the config's except the net's size — the config comes through the real loader,
     the key through the real hparams resolver, the spec through THE resolver, the step through
     the real dispatcher. The interval is overridden IN MEMORY ONLY; `configs/` is read-only
     here."""
-    d = load_config(_REPO / "configs" / "run6.yaml").model_dump()
+    d = load_config(config).model_dump()
     d["train"]["checkpoint_interval"] = 2
     d["model"]["gnn"] = gnn_widths_block(_graph_arch())
     hp = TrainHParams.from_config(d)
     spec = resolve_step_spec(d)
-    trainer = _graph_trainer(tmp_path, d, hp, spy_sink)
+    arch = arch_from_spec_and_config(lookup(d["identity"]["encoding"]), d)
+    trainer = _graph_trainer(tmp_path, d, hp, spy_sink, arch)
     _drive_graph(trainer, spec, 4)
     residents = sorted(tmp_path.glob("*.ckpt"))
 
     assert (d["identity"]["representation"], spec.representation) == ("graph", "graph"), (  # 1
-        "premise: `graph` is the route run5 DECLARES — without this the row is about nothing")
+        "premise: `graph` is the route the config DECLARES — without this the row is about nothing")
     assert hp.checkpoint_interval == 2, (                                        # 2
         "premise: the KEY reached the runtime hparams through the production resolver")
-    assert len(residents) == 2, f"run5's route must honour its own cadence, got {residents}"  # 3
+    assert len(residents) == 2, f"{config.name}'s route must honour its own cadence, got {residents}"  # 3
     assert set(_steps_of(residents)) == {2, 4}                                   # 4
 
 
@@ -344,7 +347,7 @@ def _coord_cfg(**over: Any) -> StepCoordinatorConfig:
 
 def test_terminus_holds_two_artefacts_and_leg_three_stays_exactly_once(
         tmp_path, mk_config, full_train_hparams, spy_sink) -> None:
-    """`stop_step % interval == 0` is run5's real terminus at the recommended N: the burst writes
+    """`stop_step % interval == 0` is a production run's real terminus at the recommended N: the burst writes
     a PERIODIC artefact at the ceiling step and the next `step()` takes the O2 arm, so leg 3
     writes the CLEAN-COMPLETION artefact at the SAME step. Two facts, two files, distinct ONLY
     because `created_utc` carries a sub-second field that enters the content hash — at second

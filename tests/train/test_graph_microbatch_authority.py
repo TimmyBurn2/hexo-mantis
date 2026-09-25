@@ -48,7 +48,9 @@ _CONFIGS = _REPO / "configs"
 _CAP_NAMES = frozenset({"microbatch_caps", "max_edges", "max_nodes"})
 
 
-def test_of2_8_run5s_own_config_reaches_the_split_through_its_own_route(tmp_path) -> None:
+@pytest.mark.parametrize("config", production_configs(_REPO), ids=lambda p: p.name)
+def test_of2_8_a_production_config_reaches_the_split_through_its_own_route(
+        tmp_path, config: Path) -> None:
     """The production config reaches the split through its OWN route.
 
     Real loader, representation read FROM the config, caps through the REAL resolver behind the
@@ -56,12 +58,12 @@ def test_of2_8_run5s_own_config_reaches_the_split_through_its_own_route(tmp_path
     minted values are non-binding on any batch a test can build, so binding them is what makes the
     consumer LIVE, and editing the minted FILE to pass would be tuning to green.
     """
-    cfg = load_config(_CONFIGS / "run6.yaml")
+    cfg = load_config(config)
     assert cfg.identity.representation == "graph", (
-        "run5 no longer declares the graph representation — this row's premise is gone")
+        f"{config.name} no longer declares the graph representation — this row's premise is gone")
     full_config = cfg.model_dump()
     assert "microbatch_caps" in full_config["train"], (
-        "configs/run6.yaml carries no train.microbatch_caps block")
+        f"{config.name} carries no train.microbatch_caps block")
 
     buf = H.uniform_graph_buffer(8)
     replay = H.ReplayWireBuffer(buf, 4)
@@ -83,7 +85,7 @@ def test_of2_8_run5s_own_config_reaches_the_split_through_its_own_route(tmp_path
                             fast_policy_weight_provider=lambda: 0.0)
     ev = sink.named("trainer_step")[0]
     assert ev["microbatches"] >= 2, (
-        f"run5's own declared route produced {ev['microbatches']} micro-batches — the block "
+        f"{config.name}'s own declared route produced {ev['microbatches']} micro-batches — the block "
         "has no live consumer on the route its own config declares (R1/LAW-08)")
     assert (ev["caps_max_edges"], ev["caps_max_nodes"]) == (bind_e, bind_n)
 
@@ -125,8 +127,8 @@ _FIT_BYTES_PER_EDGE = 1_620.96
 _FIT_BYTES_PER_NODE = 15_741.05
 _SIZING_BUDGET_BYTES = 10_126_561_000
 
-_RUN5_CENSUSED_EDGES = 18_735_930
-_RUN5_CENSUSED_NODES = 699_533
+_CENSUSED_EDGES = 18_735_930
+_CENSUSED_NODES = 699_533
 _CENSUS_BATCH_SIZE = 256
 
 
@@ -137,7 +139,7 @@ _PRODUCTION_CAPPED = tuple(path.relative_to(_CONFIGS).as_posix() for path in pro
 
 
 @pytest.mark.parametrize("name", _PRODUCTION_CAPPED)
-def test_n1_run5_is_ARMED_with_a_sized_cap_not_the_templates_non_binding_default(
+def test_n1_a_production_config_is_ARMED_with_a_sized_cap_not_the_templates_default(
         name: str) -> None:
     """The arming of the fix itself. Nothing else in the repository pins this.
 
@@ -164,16 +166,16 @@ def test_n1_run5_is_ARMED_with_a_sized_cap_not_the_templates_non_binding_default
         f"row binds against were measured at batch_size={_CENSUS_BATCH_SIZE}. Re-census "
         "before trusting the arming check — the constants no longer describe this batch")
     # THE ARMING PROPERTY. Tighter-than-the-template is its CONVERSE:
-    # `run5 >= template => cannot bind` does not give `run5 < template => can bind`.
-    assert minted.max_edges < _RUN5_CENSUSED_EDGES, (
+    # `minted >= template => cannot bind` does not give `minted < template => can bind`.
+    assert minted.max_edges < _CENSUSED_EDGES, (
         f"{name} max_edges {minted.max_edges} is NOT below the censused production edge count "
-        f"{_RUN5_CENSUSED_EDGES}, so this config's own batch never reaches the cap and the "
+        f"{_CENSUSED_EDGES}, so this config's own batch never reaches the cap and the "
         "step is never split. The cap resolves, types, round-trips its `# delta:` header and "
         "reports present in the LAW-18 event — and bounds nothing. That is the phantom-arming "
         "shape (R4/LAW-07) this row exists to kill")
-    assert minted.max_nodes < _RUN5_CENSUSED_NODES, (
+    assert minted.max_nodes < _CENSUSED_NODES, (
         f"{name} max_nodes {minted.max_nodes} is NOT below the censused production node count "
-        f"{_RUN5_CENSUSED_NODES} — same defect on the node member")
+        f"{_CENSUSED_NODES} — same defect on the node member")
     # THE SIZING PROPERTY. Binding is necessary and not sufficient: a cap can sit one edge below
     # the censused batch, split it in two, and still ask for 4x the card per micro-batch.
     predicted_peak = (_FIT_INTERCEPT_BYTES
@@ -190,7 +192,7 @@ def test_n1_run5_is_ARMED_with_a_sized_cap_not_the_templates_non_binding_default
 
 
 @pytest.mark.parametrize("name", _PRODUCTION_CAPPED)
-def test_n1_run5s_minted_header_records_the_microbatch_caps_delta(name: str) -> None:
+def test_n1_the_minted_header_records_the_microbatch_caps_delta(name: str) -> None:
     """The sized pair arrived by MINT, not by a hand-edit (R1).
 
     The value half above would still pass if someone hand-edited the body and left the header
@@ -384,7 +386,7 @@ def test_of2_14_the_smoke_configs_caps_do_not_bind(name: str) -> None:
     assert cfg.identity.representation == "graph"   # the sweep's own premise, executed
 
 
-def test_of2_14_run5_is_excluded_deliberately_and_the_set_is_the_whole_directory() -> None:
+def test_of2_14_production_is_excluded_deliberately_and_the_set_is_the_whole_directory() -> None:
     """The two above plus the production config are ALL the configs.
 
     Enumeration is `discover_configs`, the ONE authority both gates 7 and 12 consume; a second flat

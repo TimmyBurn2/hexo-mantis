@@ -28,6 +28,7 @@ import pytest
 import torch
 
 import _microbatch_harness as H
+from mantis.config.census import production_configs
 from mantis.config.loader import load_config
 from mantis.config.resolve.microbatch import MicrobatchCapsSpec, resolve_microbatch_caps
 from mantis.model import arch_from_spec_and_config, build_net
@@ -36,6 +37,8 @@ from mantis.train.coordinator.dispatch import run_declared_train_step
 from mantis.train.trainer.core import Trainer
 
 _CONFIGS = Path(__file__).resolve().parents[2] / "configs"
+#: One census member: its minted caps and arch are the regime the leg-2 rows measure.
+_MINTED = production_configs(_CONFIGS.parent)[0]
 
 
 def _offsets(counts: np.ndarray) -> np.ndarray:
@@ -235,9 +238,9 @@ _MIN_EDGE_FRACTION = 0.75
 _MIN_NODE_FRACTION = 0.95
 
 
-def _run5_caps() -> MicrobatchCapsSpec:
-    """run5's OWN minted caps, through the real loader and resolver — DERIVED, never transcribed."""
-    return resolve_microbatch_caps(load_config(_CONFIGS / "run6.yaml").model_dump())
+def _minted_caps() -> MicrobatchCapsSpec:
+    """The production config's OWN minted caps, through the real loader and resolver."""
+    return resolve_microbatch_caps(load_config(_MINTED).model_dump())
 
 
 def _cap_regime_batch(caps: MicrobatchCapsSpec):
@@ -254,7 +257,7 @@ def _cap_regime_batch(caps: MicrobatchCapsSpec):
 def test_of2_10_leg2_fixture_reaches_the_minted_cap_regime() -> None:
     """OF2-10 leg 2's PREMISE, device-free so CI carries it: a peak measured far below the caps
     bounds nothing, so a fixture change that shrinks `(E, N)` is caught here."""
-    caps = _run5_caps()
+    caps = _minted_caps()
     replay, n_graphs = _cap_regime_batch(caps)
     ec, nc = H.per_graph_counts(replay.wire)
     e_total, n_total = int(ec.sum()), int(nc.sum())
@@ -276,7 +279,7 @@ def test_of2_10_leg2_fixture_reaches_the_minted_cap_regime() -> None:
 @pytest.mark.integration
 @pytest.mark.skipif(not torch.cuda.is_available(),
                     reason="OF2-10 leg 2 measures the max_memory_allocated DELTA over one real "
-                           "graph training step at (E, N) ~ the MINTED caps, with run5's own "
+                           "graph training step at (E, N) ~ the MINTED caps, with the production config's own "
                            f"arch, against the sizing pass's {_SIZING_BUDGET_GIB} GiB budget; "
                            "it needs the CUDA "
                            "device the sizing pass measured. LOUD SKIP: the MEASURED half does "
@@ -294,19 +297,19 @@ def test_of2_10_leg2_peak_allocation_is_under_the_sizing_budget(tmp_path) -> Non
 
     Three bands: PASS is `<= budget` with `>= 15%` margin; PASS-WITH-DISCLOSURE is within budget
     under that margin and prints the number; over budget is an ABORT — halt and re-size. Real
-    here: run5's own minted caps and arch through the real loader and resolver, the real
+    here: the production config's own minted caps and arch through the real loader and resolver, the real
     dispatcher, partition and collate, and a `(E, N)` just under both members; the measurement
     is the DELTA across the step. DISCLOSED: the buffer is SYNTHETIC at mean in-degree 22.4
     against run5's measured 26.8, the node member binds first so `E` reaches only ~85% of
     `max_edges`, and the co-resident eval child appears in NO number here.
     """
-    caps = _run5_caps()
+    caps = _minted_caps()
     replay, n_graphs = _cap_regime_batch(caps)
     ec, nc = H.per_graph_counts(replay.wire)
     e_total, n_total = int(ec.sum()), int(nc.sum())
 
-    run5_cfg = load_config(_CONFIGS / "run6.yaml").model_dump()
-    arch = arch_from_spec_and_config(H.GSPEC, run5_cfg)
+    minted_cfg = load_config(_MINTED).model_dump()
+    arch = arch_from_spec_and_config(H.GSPEC, minted_cfg)
     torch.manual_seed(H.SEED)
     trainer = Trainer(build_net(arch), H.graph_config(), arch=arch,
                       checkpoint_dir=tmp_path / "ckpt", device=torch.device("cuda"),
@@ -345,7 +348,7 @@ def test_of2_10_leg2b_premise_the_doubled_batch_actually_binds_the_caps() -> Non
     """Leg 2b's PREMISE, device-free so CI carries it: a premise that only runs where the test
     runs is a premise nobody checks. If the doubled batch stops splitting, leg 2b silently
     becomes a second copy of leg 2 and the accumulation loop goes unmeasured again."""
-    caps = _run5_caps()
+    caps = _minted_caps()
     _single, n_single = _cap_regime_batch(caps)
     replay = H.ReplayWireBuffer(H.uniform_graph_buffer(2 * n_single + 8), 2 * n_single)
     ec, nc = H.per_graph_counts(replay.wire)
@@ -379,11 +382,11 @@ def test_of2_10_leg2b_doubling_the_input_does_not_move_the_peak(tmp_path) -> Non
     process, so a leak that scales peak with the INPUT reads ~2.0. Leg 2b's own disclosure: the
     budget's fragmentation divisor was measured on the UN-SPLIT program.
     """
-    caps = _run5_caps()
+    caps = _minted_caps()
     single, n_single = _cap_regime_batch(caps)
     doubled = H.ReplayWireBuffer(H.uniform_graph_buffer(2 * n_single + 8), 2 * n_single)
-    run5_cfg = load_config(_CONFIGS / "run6.yaml").model_dump()
-    arch = arch_from_spec_and_config(H.GSPEC, run5_cfg)
+    minted_cfg = load_config(_MINTED).model_dump()
+    arch = arch_from_spec_and_config(H.GSPEC, minted_cfg)
 
     def _peak(replay, batch_size: int, tag: str) -> int:
         torch.manual_seed(H.SEED)

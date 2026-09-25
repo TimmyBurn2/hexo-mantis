@@ -33,6 +33,7 @@ from mantis.config.armed_aborts import (
     audit_arming,
     audit_arming_live,
 )
+from mantis.config.census import production_configs
 from mantis.config.loader import load_config
 from mantis.monitor.heartbeat import HeartbeatRegistry
 from mantis.train.lifecycle.disk_guard import DiskGuard
@@ -45,7 +46,8 @@ from mantis.train.lifecycle.heartbeat_watchdog import (
 from _spy import SpyEventSink
 from _drivable import FakeClock
 
-_PRODUCTION = "configs/run6.yaml"
+#: Any census member: gate 12 holds the disk row armed in each, and that row is all these read.
+_PRODUCTION = production_configs(Path(__file__).resolve().parents[2])[0]
 
 
 def _disk_row() -> ArmedAbort:
