@@ -159,7 +159,7 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
   (`model.arch.GnnArch` / `model.arch.GnnArchV2` / `model.arch.GnnArchV2SoftPolicy`), which
   `build_net` consumes — its dispatch checks the most-derived kind first
   (`GnnArchV2SoftPolicy`, then `GnnArchV2`, then `GnnArch`) as a defensive second line, not
-  because any kind subclasses another (SLIM-FIX S-A-DOCS-3-04: none of the three dataclasses
+  because any kind subclasses another (AMENDMENT (R368, 2026-09-25): none of the three dataclasses
   has a base at HEAD; this line previously claimed the order was load-bearing "because
   `GnnArchV2` is a subclass of `GnnArch`", which is false and also omitted the third kind); a
   live-module representation sniff (the former `model_representation`) is DELETED and grep-gate-banned
@@ -296,9 +296,9 @@ ADDED (v7 → v8). `docs/contracts/run_config_schema.md` is the version authorit
 - maturin builds `crates/mantis-bridge` as `mantis._engine` (underscore-private, re-
   exported by the package); `uv sync` builds it; abi3 (py311) for release wheels.
 - Workspace release profile: `panic = "unwind"` — Rust panics cross the FFI boundary as
-  `PanicException`, never a process abort. lto=fat, codegen-units=1, strip=symbols. SLIM-FIX
-  S-A-DOCS-4-11: the committed `profiling` profile (inherits release, keeps debug symbols) is
-  DELETED — nothing in the tree built it.
+  `PanicException`, never a process abort. lto=fat, codegen-units=1, strip=symbols.
+  AMENDMENT (R368, 2026-09-25): the committed `profiling` profile (inherits release, keeps debug
+  symbols) is DELETED — nothing in the tree built it.
 - No `target-cpu=native` in committed config; `make build.native` sets it via env for
   local perf work. Built artifacts are portable by default.
 - `mantis-graph` is dep-free and wasm32-clean; `make check.wasm` (cargo check
@@ -431,8 +431,9 @@ ADDED (v7 → v8). `docs/contracts/run_config_schema.md` is the version authorit
 - Profile first (flamegraph / py-spy; DHAT for allocation-rate hunting — allocation
   churn in hot loops is the first suspect; capacity-reserve fixes beat clever
   algorithms). Profiling builds: release + debug symbols via `CARGO_PROFILE_RELEASE_DEBUG=true`
-  over the release profile (SLIM-FIX S-A-DOCS-4-11: the dedicated `profiling` profile §7 named
-  is deleted, unbuilt by any command).
+  plus `CARGO_PROFILE_RELEASE_STRIP=none` over the release profile, whose `strip = "symbols"`
+  would otherwise drop the debuginfo too (AMENDMENT (R368, 2026-09-25): the dedicated `profiling`
+  profile §7 named is deleted, unbuilt by any command).
 - One optimization = pre-registered hotspot list + expected gain bracket + abort
   threshold, one change = one commit = one IQR-gated bench, parity oracles re-run after
   every hot-path change. Measure end-to-end steps/hr, not just the microbench. A
