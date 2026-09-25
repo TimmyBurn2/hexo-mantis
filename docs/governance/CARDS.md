@@ -615,19 +615,33 @@ nulls, two promotions. run6 minted `eval.concurrency = 8`. R343(a).
 
 ## CARD-* that exist only as in-source markers
 
-Zero governance mentions; their status comes from the code, not from a ruling.
+Zero governance mentions; their status comes from the code, not from a ruling. Derived by
+`git grep -hoE "CARD-[A-Z0-9.-]+"` over `src`, `tests`, `tools` and `crates`, less what this file
+already names.
 
-- `CARD-BUDGET-AUTHORITY-CONSOLIDATION` — the second `_SIZING_BUDGET_*` authority; filed as debt by
-  R327(d). `tests/train/test_graph_microbatch_authority.py`
-- `CARD-GAME-RECORD-SELFPLAY-STATS` — per-position self-play stats are un-associable to a game
-  without a hot-drain engine act (LAW-09). `src/mantis/monitor/game_record.py`
-- `CARD-CONFIG-DISCOVERY-ROOT` — config discovery root for every `--config` route.
-  `src/mantis/config/loader.py`
-- `CARD-EXEMPT-CONFIGS-OPERATOR-CONFIRM` — awaits a ruling. `src/mantis/config/armed_aborts.py`
+- `CARD-ABORT-EXIT` — `heartbeat.DRAW_RATE_COLLAPSE_EXIT_CODE`'s cooperative (not OS) exit delivery,
+  discharged by R84. `src/mantis/config/armed_aborts.py`
+- `CARD-COORD-KNOBS` — a follow-up owed to the operator at run5's mint prereg.
+  `src/mantis/config/armed_aborts.py`
+- `CARD-CS2` — both step tails call the ONE periodic-checkpoint resolver, closing the graph-arm
+  gap WP12-R found. `tests/test_run_launcher.py`
+- `CARD-LINT-GATE` — the curated lint/type gate itself (R98). `tools/ci_gates/lint_gate.sh`
 - `CARD-MINT-RESOLVE-PARENT-CONJUNCT` — the `max(learners) >= 1` mint-resolve conjunct.
   `tests/config/test_mint_and_diff.py`
-- `CARD-PREFLIGHT-ORACLE-OUTDIR-CLEANUP` — oracle out-dir cleanup. `tests/tools/conftest.py`
-- `CARD-DESIGN-P-3.4-ORDERING` — status unknown. `tools/ci_gates/preflight_mint.py`
+- `CARD-ORPHAN-WORKERS` — SIGINT during self-play leaves zero descendant processes (R230), the
+  second-signal path too. `tests/train/test_orphan_workers_census.py`
+- `CARD-POOL-ENCODING-BRIDGE` — the pool/encoding bridge seam (WPBRIDGE Phase T, TD-4).
+  `tests/selfplay/test_pool_encoding_bridge.py`
+- `CARD-PREFLIGHT-CHILD-STDERR-BUDGET` — the preflight child's stderr tail is a bounded VIEW, not
+  the full spool. `tests/tools/test_preflight_pfc_cards.py`
+- `CARD-PREFLIGHT-OUTDIR-REUSE` — preflight out-dir reuse across phases.
+  `tests/tools/test_preflight_pfc_cards.py`
+- `CARD-RING-SAMPLER-SEED` — `seed_sampler` buys run-to-run reproducibility, not stop/resume
+  continuity, by refusal rather than deferral. `crates/mantis-selfplay/tests/replay_sampler_seed.rs`
+- `CARD-RUN-MAIN` — the six minted configs frozen at `b482243`, proving the WPMAIN re-mint
+  ADDITIVE-only. `tests/fixtures/manifest.toml`
+- `CARD-TRAINSTEP-ADAPTER` — a dormant contingency: TD-1 sits behind TD-4 on a CPU box and has
+  never fired; the test pins its absence. `tests/tools/test_preflight_mint_process.py`
 
 ## RQ-*
 
