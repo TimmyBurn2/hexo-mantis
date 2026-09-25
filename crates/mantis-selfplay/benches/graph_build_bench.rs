@@ -13,10 +13,12 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 
 use mantis_graph::BUILDER_IMPL_NATIVE;
-use mantis_selfplay::queues::build_leaf_graph;
+use mantis_selfplay::queues::{
+    build_leaf_graph, build_leaf_graphs_batch, LeafRequest as BatchRequest,
+};
 
 #[path = "../tests/common/mod.rs"]
 mod common;
@@ -138,12 +140,41 @@ fn graph_build_gnn_axis_v1_leafcorpus(c: &mut Criterion) {
     });
 }
 
+/// The batch builder's fan-out: 1 thread is the serial control, 8 leaves the spawn-bound batch.
+fn leaf_graphs_batch(c: &mut Criterion) {
+    let requests: Vec<BatchRequest> = build_leaf_corpus()
+        .into_iter()
+        .map(|leaf| (leaf.stones, leaf.current_player, leaf.moves_remaining))
+        .collect();
+    let mut group = c.benchmark_group("leaf_graphs_batch");
+    for &n_leaves in &[8usize, LEAF_CORPUS_SIZE] {
+        let batch = &requests[..n_leaves];
+        for &n_threads in &[1usize, 4, 8] {
+            let id = BenchmarkId::new(format!("leaves_{n_leaves}"), format!("threads_{n_threads}"));
+            group.bench_function(id, |b| {
+                b.iter(|| {
+                    let graphs = build_leaf_graphs_batch(
+                        black_box(batch),
+                        WIN_LENGTH,
+                        RADIUS,
+                        TRUNK_SIZE,
+                        n_threads,
+                    )
+                    .expect("corpus leaves build");
+                    black_box(&graphs);
+                });
+            });
+        }
+    }
+    group.finish();
+}
+
 criterion_group! {
     name = benches;
     // Pinned criterion regime: warm_up_time = 3s, sample_size = 100.
     config = Criterion::default()
         .warm_up_time(Duration::from_secs(3))
         .sample_size(100);
-    targets = graph_build_gnn_axis_v1_leafcorpus
+    targets = graph_build_gnn_axis_v1_leafcorpus, leaf_graphs_batch
 }
 criterion_main!(benches);
