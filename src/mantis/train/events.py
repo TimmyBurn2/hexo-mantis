@@ -125,8 +125,8 @@ def emit_axis_distribution(
     axis_alert = float(monitor_cfg.axis_alert)
     max_frac = max(axis_q, axis_r, axis_s)
 
-    # A METRIC, not a warning: the minted threshold sits near the ~0.33 three-axis floor, so the
-    # band is still computed and published for its re-derivation, only never logged loud.
+    # A METRIC, not a warning: it fired on 193/193 emissions at the minted 0.5 (the three-axis floor
+    # is ~0.33), so the band is still computed and published for re-derivation, never logged loud.
     band = "alert" if max_frac >= axis_alert else ("warn" if max_frac >= axis_warn else "ok")
     if band != "ok":
         _LOG.info(
