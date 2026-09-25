@@ -74,6 +74,36 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   unchanged. The O-30 witness now requires the exc_info record's exception to be `_InjectedCompletionError` whose repr
   equals the emitted and routed `detail`. Plants: `_LOG.error` reds ("none carrying exc_info"); `str(exc)` as detail
   reds the re-pointed assertion. 42 passed before/after; collected 4928; measures unchanged; run10 MATCH.
+- RESUMED 2026-09-25 by a second W8 dispatcher at 2318b65f (usage limit had cut the first session mid-leg). Stock at
+  resume: w8-prose 3 commits clean (grants 2, 4, 5); w8-code 1 commit (grant 1(b)) + an uncommitted complete grant-10
+  validate.rs diff; w8-preflight 0 commits + an uncommitted near-complete grant-1(a) diff. No gate unit was running.
+- Grant 10 LANDED be1ff899 (dispatcher, **opus session**): validate.rs's three refusal strings state what the registry
+  refuses at load; conditions, refused inputs and registry sha untouched. mantis-encoding 13 tests green
+  (axis_pin 7, registry_census 6); clippy clean; rustfmt clean; no other reader of the old text (grep: zero).
+- Grant 6 LANDED e98addd9 (dispatcher, **opus session**): `Trainer.load_checkpoint` deleted (19 lines). Resume and
+  checkpoint rows green before AND after (131 passed incl. the integration-marked ones; tests/model/conformance 200
+  passed, read-only); run10 MATCH; comment_lint GREEN; gate 15 green.
+- Grant 1(a) LANDED af27c298 (dispatcher, **opus session**, from the recovered cut-off diff): the oracle derives
+  FORCED_TWIN_LEAVES off the config it runs on (`forced_twin_leaves` + `_carried_artifact_blocks`), the heldout_gap
+  leaves only when the base carries the block; every base-dependent row runs `@_OVER_THE_CENSUS` over
+  `census.production_configs`. 169 default + 12 integration rows green (6:21 min). PLANT: drop the `run_id` forced
+  leaf from the twin mint → both census members RED (`AssertionError: the twin must be … Extra items in the right
+  set: 'run_id'`); reverted, green. `_full_tier_burst`'s docstring went one-line with inline Raises (the 4-line form
+  had grown docstring_excess/private_docstring +3/+3 over the floor). Collected 4949 in the worktree.
+  TRAP hit and closed: a `git checkout -- <file>` on the uncommitted diff wiped it; recovered byte-identical from the
+  session's saved diff log, `git apply --check` first. Plants now use file copies, never checkout, in worktrees.
+- Grant 1(c) LANDED 830bb693 (dispatcher, **opus session**): test_preflight_mint.py's modelled constants are READ
+  off the census (`_modelled_monitor` with an all-members-agree premise; `_P`/`_SAMPLE_TS`/`_THRESHOLD` derived),
+  the corpus default config and the three tool invocations use the census's first member, the stale "all five minted
+  configs" comments corrected. 30 rows green; `run6.yaml` gone from the file.
+- Grants 2/4/5 verified as landed by the first session's prose leg (**sonnet**) and integrated unchanged:
+  c21dae11 (grant 2: armed_aborts prose — the nine rows' required/config_path/source_pin AST-identical, gate 12 rc 0
+  after, test_armed_abort_manifest 22 passed), f421dace (grant 4: RULINGS.md annotation at the foot + CLAUDE.md gloss
+  dropped), 42b61f4f (grant 5: one tombstone line, sha 33e32a16 verified as the deleting commit).
+- ALL EIGHT W8-D CODE COMMITS INTEGRATED 0f4bab11..2e69d0e2 in grant order (1b, 1a, 1c, 2, 4, 5, 6, 10); floors
+  folded per commit (count 4928→4927→4948; comment_excess 2144→2143). Post-W8-D at 2e69d0e2: run10 MATCH;
+  comment_lint GREEN at floor; gates 7/10/12/13/15/17 rc 0; `git grep -n 'run6\.yaml' -- src tools tests` EMPTY —
+  not even history prose remains (grant 2's prose rewrite and 1(b)'s deletion removed the last of it).
 
 ## W7 — the style pass (EXITED 2026-09-25)
 
