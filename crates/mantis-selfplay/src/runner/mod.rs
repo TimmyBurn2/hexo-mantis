@@ -116,6 +116,8 @@ pub struct SelfPlayRunner {
     config: SelfPlayRunnerConfig,
     /// HEXG visit-slot capacity, DERIVED once at composition from the sims regime; never a default.
     visit_capacity: usize,
+    /// Per-worker geometry resolved once here, so a spec missing builder geometry fails at boot.
+    geometry: params::WorkerGeometry,
 
     graph_queue: GraphQueue,
 
@@ -274,6 +276,9 @@ impl SelfPlayRunner {
         )
         .map_err(|e| format!("SelfPlayRunner: {e}"))?;
 
+        let geometry =
+            params::resolve_geometry(spec).map_err(|e| format!("SelfPlayRunner: {e}"))?;
+
         // Bake the resolved budget so the workers read the effective value.
         config.standard_sims = effective_standard;
 
@@ -289,6 +294,7 @@ impl SelfPlayRunner {
             spec,
             config,
             visit_capacity,
+            geometry,
             graph_queue,
             graph_results: Arc::new(Mutex::new(VecDeque::new())),
             recent_game_results: Arc::new(Mutex::new(VecDeque::new())),

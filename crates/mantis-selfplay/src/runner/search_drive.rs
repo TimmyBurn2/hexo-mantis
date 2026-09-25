@@ -37,6 +37,9 @@ pub(crate) struct InferContext<'a> {
     pub(crate) model_version: &'a AtomicU64,
     /// The runner's kill switch: tells OUR stop from a queue closed by anything else.
     pub(crate) running: &'a AtomicBool,
+    /// The builder geometry `resolve_geometry` narrowed at boot; no leaf re-reads the spec.
+    pub(crate) win_length: u8,
+    pub(crate) graph_radius: u16,
 }
 
 /// Per-move MCTS accumulators. `export_offwindow_mass_moves` fires once per move whose
@@ -252,16 +255,7 @@ fn infer_and_expand_graph(
         return Ok(0);
     }
 
-    // Graph-build geometry from the resolved spec (graph specs define these).
-    let win_length = infer
-        .spec
-        .win_length
-        .expect("graph spec must define win_length") as u8;
-    let radius = infer
-        .spec
-        .graph_radius
-        .expect("graph spec must define graph_radius") as u16;
-
+    let (win_length, radius) = (infer.win_length, infer.graph_radius);
     let mut graphs = Vec::with_capacity(leaves.len());
     let mut centers: Vec<(i32, i32)> = Vec::with_capacity(leaves.len());
     for leaf in &leaves {
@@ -753,11 +747,15 @@ mod forced_round_tests {
         tree.new_game(Board::new());
         let (queue, version, running) =
             (GraphQueue::new(), AtomicU64::new(0), AtomicBool::new(true));
+        let spec = mantis_encoding::lookup_or_panic("gnn_axis_v1");
+        let geometry = crate::runner::params::resolve_geometry(spec).expect("a registry spec");
         let infer = InferContext {
             graph_queue: &queue,
-            spec: mantis_encoding::lookup_or_panic("gnn_axis_v1"),
+            spec,
             model_version: &version,
             running: &running,
+            win_length: geometry.win_length,
+            graph_radius: geometry.graph_radius,
         };
         let err = infer_and_expand_graph(&mut tree, LeafSelection::Round(&[u32::MAX]), 19, infer)
             .expect_err("a foreign forced child must be refused");

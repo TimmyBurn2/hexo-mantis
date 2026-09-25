@@ -1,7 +1,6 @@
 //! Worker spawn loop — `SelfPlayRunner::start_impl`.
 //!
-//! Resolves the per-worker `WorkerGeometry` ONCE via the closed
-//! [`super::params::resolve_geometry`] match (no default fallback, no `_ =>` arm), Arc-clones
+//! Copies the `WorkerGeometry` [`super::params::resolve_geometry`] resolved at boot, Arc-clones
 //! the SHARED accumulators (never fresh-per-worker), gives each worker its graph
 //! inference-queue producer handle, and spawns a thread running
 //! [`super::game::run_worker_thread`].
@@ -11,7 +10,7 @@ use std::sync::PoisonError;
 use std::thread;
 
 use super::atomics::WorkerAtomics;
-use super::params::{self, ExplorationFlags, SearchFlags, WorkerChannels, WorkerParams};
+use super::params::{ExplorationFlags, SearchFlags, WorkerChannels, WorkerParams};
 use super::stats::WorkerStats;
 use super::{game, SelfPlayRunner};
 use mantis_search::QSigma;
@@ -61,8 +60,7 @@ impl SelfPlayRunner {
             self.config.full_search_prob,
         );
 
-        // Resolve the per-worker geometry ONCE via the closed-match resolver (`Copy`, ~32 B).
-        let geometry = params::resolve_geometry(self.spec);
+        let geometry = self.geometry;
 
         let (stats_proto, atomics_proto, channels_proto, params_proto) =
             self.build_worker_prototypes();

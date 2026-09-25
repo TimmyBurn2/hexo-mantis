@@ -21,21 +21,66 @@ use super::GameResultRow;
 pub struct WorkerGeometry {
     pub policy_stride: usize,
     pub agg_trunk_sz: i32,
+    /// The leaf graph builder's win length, resolved at boot so no leaf re-reads the spec.
+    pub win_length: u8,
+    /// The leaf graph builder's axis-walk radius, resolved at boot likewise.
+    pub graph_radius: u16,
 }
 
-/// Resolve the per-worker geometry from a resolved `&'static RegistrySpec` (D2).
+/// A graph spec whose builder geometry is absent or does not fit the builder's integer width.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GraphGeometryError {
+    pub spec: &'static str,
+    pub key: &'static str,
+    /// The spec's value; `None` when the key is absent.
+    pub value: Option<usize>,
+}
+
+impl std::fmt::Display for GraphGeometryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.value {
+            None => write!(f, "graph spec {:?} does not define {}", self.spec, self.key),
+            Some(v) => write!(
+                f,
+                "graph spec {:?} has {} = {v}, outside the builder's integer width",
+                self.spec, self.key
+            ),
+        }
+    }
+}
+
+impl std::error::Error for GraphGeometryError {}
+
+/// Narrow one optional spec key to the builder's width, naming the key on refusal.
+fn builder_key<T: TryFrom<usize>>(
+    spec: &'static RegistrySpec,
+    key: &'static str,
+    value: Option<usize>,
+) -> Result<T, GraphGeometryError> {
+    let refuse = |value| GraphGeometryError {
+        spec: spec.name,
+        key,
+        value,
+    };
+    let v = value.ok_or_else(|| refuse(None))?;
+    T::try_from(v).map_err(|_| refuse(Some(v)))
+}
+
+/// Resolve the per-worker geometry ONCE, at `SelfPlayRunner::new`, from the resolved spec.
 ///
-/// The kind dispatch is a **closed** `match spec.representation` with NO `_ =>`
-/// arm: a new `Representation` variant fails compilation loudly. There is no
-/// `None → v6` fallback — an absent spec is rejected as an error BEFORE this
-/// point (`SelfPlayRunner::new`).
-#[must_use]
-pub fn resolve_geometry(spec: &'static RegistrySpec) -> WorkerGeometry {
+/// The kind dispatch is a **closed** `match spec.representation` with NO `_ =>` arm, so a new
+/// `Representation` variant fails compilation loudly.
+///
+/// # Errors
+/// [`GraphGeometryError`] when `win_length` or `graph_radius` is absent or out of width.
+pub fn resolve_geometry(spec: &'static RegistrySpec) -> Result<WorkerGeometry, GraphGeometryError> {
     match spec.representation {
-        Representation::Graph => WorkerGeometry {
+        Representation::Graph => Ok(WorkerGeometry {
             policy_stride: spec.policy_stride(),
             agg_trunk_sz: spec.trunk_size as i32,
-        },
+            win_length: builder_key(spec, "win_length", spec.win_length)?,
+            graph_radius: builder_key(spec, "graph_radius", spec.graph_radius)?,
+        }),
     }
 }
 
@@ -96,4 +141,46 @@ pub(crate) struct WorkerParams {
     pub(crate) registry_spec: &'static RegistrySpec,
     pub(crate) search_flags: SearchFlags,
     pub(crate) exploration_flags: ExplorationFlags,
+}
+
+#[cfg(test)]
+mod geometry_tests {
+    use super::{resolve_geometry, GraphGeometryError};
+
+    fn spec_with(
+        win_length: Option<usize>,
+        graph_radius: Option<usize>,
+    ) -> &'static mantis_encoding::RegistrySpec {
+        let mut spec = *mantis_encoding::lookup_or_panic("gnn_axis_v1");
+        spec.win_length = win_length;
+        spec.graph_radius = graph_radius;
+        Box::leak(Box::new(spec))
+    }
+
+    /// The registry's own graph spec resolves to exactly its declared builder geometry.
+    #[test]
+    fn the_registry_spec_resolves_its_builder_geometry() {
+        let spec = mantis_encoding::lookup_or_panic("gnn_axis_v1");
+        let g = resolve_geometry(spec).expect("a registry graph spec resolves");
+        assert_eq!(Some(usize::from(g.win_length)), spec.win_length);
+        assert_eq!(Some(usize::from(g.graph_radius)), spec.graph_radius);
+    }
+
+    /// An absent or over-wide key is refused at boot by name, never at the first leaf by panic.
+    #[test]
+    fn an_absent_or_over_wide_key_is_a_named_refusal() {
+        let refusal = |key, value| GraphGeometryError {
+            spec: "gnn_axis_v1",
+            key,
+            value,
+        };
+        let absent = resolve_geometry(spec_with(None, Some(6))).err();
+        assert_eq!(absent, Some(refusal("win_length", None)));
+        let wide = resolve_geometry(spec_with(Some(6), Some(70_000))).err();
+        assert_eq!(wide, Some(refusal("graph_radius", Some(70_000))));
+        assert_eq!(
+            refusal("win_length", None).to_string(),
+            "graph spec \"gnn_axis_v1\" does not define win_length"
+        );
+    }
 }

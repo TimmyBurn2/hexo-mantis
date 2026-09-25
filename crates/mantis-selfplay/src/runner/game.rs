@@ -24,7 +24,6 @@ use rand::rngs::ThreadRng;
 use rand::{rng, RngExt};
 
 use mantis_core::{Board, BoardGeometry};
-use mantis_encoding::RegistrySpec;
 use mantis_search::{MCTSTree, QSigma, SearchKind, VIRTUAL_LOSS_PENALTY};
 
 use crate::replay::hexg::GraphRecord;
@@ -103,6 +102,8 @@ pub(crate) fn run_worker_thread(
     let WorkerGeometry {
         policy_stride,
         agg_trunk_sz,
+        win_length,
+        graph_radius,
     } = geometry;
     let WorkerStats {
         games_completed,
@@ -201,6 +202,14 @@ pub(crate) fn run_worker_thread(
         positions_generated: &positions_generated,
         export_offwindow_mass_moves: &export_offwindow_mass_moves,
     };
+    let infer = InferContext {
+        graph_queue: &graph_queue,
+        spec: registry_spec,
+        model_version: &model_version,
+        running: &running,
+        win_length,
+        graph_radius,
+    };
     let fatal_latch = FatalDefectLatch {
         slot: &fatal_defect,
         fires: &target_integrity_defects,
@@ -263,9 +272,7 @@ pub(crate) fn run_worker_thread(
             &mut rng,
             &mut version_seen,
             &running,
-            &model_version,
-            &graph_queue,
-            registry_spec,
+            infer,
             board_geometry,
             init_ctx,
             policy_stride,
@@ -290,9 +297,7 @@ fn run_one_game(
     rng: &mut ThreadRng,
     version_seen: &mut Vec<u64>,
     running: &AtomicBool,
-    model_version: &AtomicU64,
-    graph_queue: &crate::queues::GraphQueue,
-    registry_spec: &'static RegistrySpec,
+    infer: InferContext,
     board_geometry: BoardGeometry,
     init_ctx: PerGameInitCtx,
     policy_stride: usize,
@@ -339,12 +344,6 @@ fn run_one_game(
     } = init_per_game_board(board_geometry, init_ctx, rng, version_seen);
     let mut search_stats: Option<Vec<PositionStats>> = sample_stats.then(Vec::new);
 
-    let infer = InferContext {
-        graph_queue,
-        spec: registry_spec,
-        model_version,
-        running,
-    };
     let play_ctx = MovePlayContext {
         leaf_batch_size,
         visit_capacity,
