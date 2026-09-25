@@ -27,6 +27,7 @@ import tokenize
 from pathlib import Path
 from types import SimpleNamespace
 
+from mantis.config import census
 from mantis.config.armed_aborts import MANIFEST, audit_arming  # RED anchor #2
 from mantis.config.loader import load_config
 from mantis.monitor.sink import JsonlEventSink
@@ -63,13 +64,28 @@ def _load_tool():
 
 TOOL = _load_tool()  # RED-at-import anchor #1
 
-# The modelled run: every number below is a MEASURED repo fact, none invented.
-_N = 101              # §5.5 — the minimum legal burst on all five minted configs
-_C = 1                # train.actor_sync_cadence_steps, all five minted configs
-_P = 5.0              # monitor.heartbeat_poll_interval_sec — configs/run6.yaml:198
+
+def _modelled_monitor(config) -> tuple[float, float, int]:
+    """The three monitor leaves the oracle model pins: (poll, file interval, threshold)."""
+    monitor = config.monitor
+    return (float(monitor.heartbeat_poll_interval_sec),
+            float(monitor.heartbeat_file_interval_sec),
+            int(monitor.actor_lag_threshold_steps))
+
+
+#: The modelled run: every number below is a MEASURED repo fact, none invented. The
+#: config-sourced ones are read off the census, so no config file is named here.
+_CENSUS_BASES = census.production_configs(REPO_ROOT)
+_MODEL = _modelled_monitor(load_config(_CENSUS_BASES[0]))
+assert all(_modelled_monitor(load_config(p)) == _MODEL for p in _CENSUS_BASES), (
+    "the census must agree on the modelled monitor posture, or the model has no one subject"
+)
+_N = 101              # §5.5 — the minimum legal burst on every census config
+_C = 1                # the cadence the model drives `ActorSync` at; the tool must accept any
+_P = _MODEL[0]
 _STEP_SEC = 0.5       # §7.4's modelled step duration (§14 item 17: the real ratio is unmeasured)
-_SAMPLE_TS = (0.0, 15.0, 30.0, 45.0)   # heartbeat_file_interval_sec 15.0 — run6.yaml:199
-_THRESHOLD = 100      # monitor.actor_lag_threshold_steps — run6.yaml:202
+_SAMPLE_TS = tuple(float(k) * _MODEL[1] for k in range(4))
+_THRESHOLD = _MODEL[2]
 
 #: (learner_step, actor_ckpt_step) at each of the four sample instants. The third pair is the
 #: one poll that lands INSIDE the sync window, which is what makes
@@ -296,7 +312,7 @@ _CORPUS = {
 def _observe(row):
     """Evaluate all four assertion axes over one corpus row."""
     blocks = _assertions(row["events"])
-    config = load_config(REPO_ROOT / "configs" / row.get("config", "run6.yaml"))
+    config = load_config(REPO_ROOT / "configs" / row.get("config", _CENSUS_BASES[0].name))
     return {
         "a": blocks["a_sync"],
         "b": blocks["b_lag"],
@@ -599,7 +615,8 @@ def test_an_out_dir_inside_the_repo_is_refused(tmp_path) -> None:
     # When the guard under test FAILS, the tool creates this path inside the repo; the finally
     # removes what the failure created so one red assertion does not also litter the tree.
     try:
-        result = _run_tool("--config", "configs/run6.yaml", "--burst-steps", str(_N),
+        result = _run_tool("--config", _CENSUS_BASES[0].relative_to(REPO_ROOT).as_posix(),
+                           "--burst-steps", str(_N),
                            "--out-dir", str(inside), "--timeout-sec", "60", "--receipt-wait-sec", "0")
         assert result.returncode == 13, (
             "§6.3 rc 13 PreflightOutDirInsideRepoError; got "
@@ -618,7 +635,8 @@ def test_an_out_dir_inside_the_repo_is_refused(tmp_path) -> None:
 def test_a_burst_below_the_lag_threshold_is_refused_by_name(tmp_path) -> None:
     """The minimum legal burst is 101 on every minted config, and the refusal must TEACH that —
     quote the binding validator, state the minimum — not merely reject."""
-    result = _run_tool("--config", "configs/run6.yaml", "--burst-steps", "50",
+    result = _run_tool("--config", _CENSUS_BASES[0].relative_to(REPO_ROOT).as_posix(),
+                       "--burst-steps", "50",
                        "--out-dir", str(tmp_path), "--timeout-sec", "60", "--receipt-wait-sec", "0")
     output = result.stdout + result.stderr
     assert result.returncode == 11, (
@@ -635,7 +653,8 @@ def test_a_burst_below_the_lag_threshold_is_refused_by_name(tmp_path) -> None:
 def test_the_preflight_args_carry_no_defaults_and_are_enforced_per_mode(tmp_path) -> None:
     """Requiredness is pinned BEHAVIOURALLY, per mode: argparse cannot express "required in mode
     PREFLIGHT only" and the gate-12 step invokes `--audit-only` alone."""
-    full = {"--config": "configs/run6.yaml", "--burst-steps": str(_N),
+    full = {"--config": _CENSUS_BASES[0].relative_to(REPO_ROOT).as_posix(),
+            "--burst-steps": str(_N),
             "--out-dir": str(tmp_path), "--timeout-sec": "60", "--receipt-wait-sec": "0"}
     for omitted in full:
         argv = [token for key, value in full.items() if key != omitted
@@ -653,7 +672,7 @@ def test_audit_only_is_green_on_the_real_tree() -> None:
     (c) alone — a CI log reading `gate 12 ... exit 0` is what a later reader cites."""
     result = _run_tool("--audit-only")
     assert result.returncode == 0, (
-        "configs/run6.yaml arms the one required row (the R59 flip at :203), so mode AUDIT "
+        "a census config arms the one required row (the R59 flip), so mode AUDIT "
         f"is green TODAY; got rc {result.returncode}\n"
         f"{(result.stdout + result.stderr)[-3000:]}"
     )
