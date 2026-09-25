@@ -59,16 +59,11 @@ def test_best_device_falls_back_to_cpu(monkeypatch):
     assert devmod.best_device().type == "cpu"
 
 
-# WORKER-SWEEP (R309(g)) — the card-level sink and the per-round boundary
-# Two readings the caching-allocator counters do not carry, added HERE because
-# `mantis.util.device` owns `torch.cuda` for the paths `tests/eval/test_pipeline_isolation.py`
-# fences off — NOT for the whole repo, which is measurably false (`selfplay/graph_collate.py`,
-# `selfplay/inference_server.py`, `train/subsystems.py` and `diagnostics/fusion_calibrate.py` all
-# touch it directly). The narrower claim is the one that survives a grep, and it is still the
-# reason these two live here rather than in the sweep. The card-level one is the sink
-# that measured 15 342 MiB against the allocator's own figure at matched config on the
-# 2026-08-22 host (RECAL_EXIT_2026-08-22.md §2/§8.3); where the two disagree the LARGER
-# governs, which is a rule no reader can apply against one number.
+# The card-level sink and the per-round boundary — two readings the caching-allocator counters
+# do not carry, added HERE because `mantis.util.device` owns `torch.cuda` for the paths
+# `tests/eval/test_pipeline_isolation.py` fences off, not for the whole repo. The card-level
+# one is the sink that measured against the allocator's own figure at matched config; where
+# the two disagree the LARGER governs.
 
 
 def test_cuda_device_used_bytes_is_total_minus_free(monkeypatch):

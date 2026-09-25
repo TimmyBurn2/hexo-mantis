@@ -1,7 +1,7 @@
 """Smoke net for the thread-budget helper (net addition — the module had no old test).
 
-The subject relocated from `mantis.util.cpu_budget` to `tests/util/_cpu_budget.py` under
-R289(q); it is imported as a tests/ helper (the `_value_health` / `_microbatch_harness`
+The subject relocated from `mantis.util.cpu_budget` to `tests/util/_cpu_budget.py`;
+it is imported as a tests/ helper (the `_value_health` / `_microbatch_harness`
 convention), not from `mantis`.
 
 Pins the stdlib-only thread-budget contract: detection returns a sane int, the
