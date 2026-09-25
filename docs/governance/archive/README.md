@@ -10,19 +10,20 @@ tooling: no census, no stamp, no mirror, no sync. One repo needs no mirror.
   with its `## REGISTER-FOOT ANNOTATIONS` block. This is the canonical WORDING of
   every ruling up to R345. `../RULINGS.md` carries the condensed entry for each;
   when a condensed entry is not enough, the full text is here.
-- `RULINGS_ACTIVE.md` — the derived working index that used to be the seed
-  document (v3.67, its own §1 census, §2 locks, §3 fences, §4 standing laws,
-  §5 live pre-mint force, §6 dispatch governance, §7 superseded, §8 curation log).
-  Superseded in every function: laws by `../LAWS.md`, live values and armed rows
-  by `../STATE.md`, cards by `../CARDS.md`, ruling texts by `../RULINGS.md`.
 - `laws.md` — the pre-R346 operating-law register. It carries each law's EARNED
   MECHANISM — the measured incident that bought it — and the R345(e) annotation
   under LAW-10. `../LAWS.md` is the standing text; this is where the reasons live.
 
+`RULINGS_ACTIVE.md`, the derived working index this directory once also carried, was DELETED
+by R368(e): it was never authority (R271, R346(e) annotated), and every function it served was
+already superseded — laws by `../LAWS.md`, live values and armed rows by `../STATE.md`, cards by
+`../CARDS.md`, ruling texts by `rulings_register.md` and `../RULINGS.md`. Its F-816-34/35/36
+findings were carried into `../CARDS.md`'s F-816-* table before deletion.
+
 ## Two things a reader must know
 
-1. **The mirror headers at the top of `rulings_register.md`, `RULINGS_ACTIVE.md`
-   and the redaction placeholders inside them are historical.** They say the
+1. **The mirror header at the top of `rulings_register.md` and the redaction
+   placeholders inside it are historical.** They say the
    authoritative text lives in `mantis-migration` and must never be edited here.
    That was true until R346. It is not true now: `hexo-mantis` is the one repo,
    and the live governance files beside this directory are authoritative. The

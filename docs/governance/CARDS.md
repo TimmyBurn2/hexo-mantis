@@ -796,10 +796,6 @@ Gumbel regime at scale on the box — and every one is pre-existing on `dev`. Re
 
 ## Reading the identifiers
 
-Cites below are `A:` for `docs/governance/archive/RULINGS_ACTIVE.md` and `R:` for
-`docs/governance/archive/rulings_register.md`. Line numbers are unchanged by the R346 move, and
-they are a starting point, not evidence — derive at point of use.
-
 Four traps, each of which has already misled a reader:
 
 1. **`F-<number>` is five namespaces, not one.** The graves in `docs/governance/falsified.md`
@@ -813,70 +809,62 @@ Four traps, each of which has already misled a reader:
 4. **Two ADJ number-spaces collide** (WPUF/WPAX-era against WP12-R-era) at ADJ-19 through ADJ-26
    and ADJ-29. Qualify by era or by the enclosing ruling.
 
-## What holds run6
+## What held run6's START
 
 run6 RAN its block from these holds (`RUN6_BLOCK_2026-09-12.md`) and was STOPPED by R350(a) at
-35 084 steps; the items below are kept as the record of what held its START.
+35 084 steps; every hold below is DISCHARGED, kept as the record of what held its START.
 
-- **REPAIR-A2 leg 5 — the MCTS root child cap. BLOCKING, the architect's.** Seven of eight legs
-  landed; leg 5 halted with numbers rather than moving `MAX_CHILDREN_PER_NODE = 192`. Measured: the
-  cap discards a mean 88% of the policy's prior mass on 99.97% of expansions; "the r8 legal
-  maximum" is not a constant (355 median, 489 max clustered, up to 8142 sprawling); the witness
-  "omitted mass reads 0" is unreachable at any feasible K, since K = 2048 still drops 25% and halves
-  `MAX_ARMED_SIMS` to 122. The tree memory delta is EXACTLY ZERO — the pool is preallocated at
-  `MAX_NODES` — so what K costs is the armed-sims ceiling, which gates configs. R345(b)(5); A:7687.
+- **REPAIR-A2 leg 5 — the MCTS root child cap. DISCHARGED.** Landed at `b9f5f509` (R347(c)):
+  `MAX_CHILDREN_PER_NODE` moved from 192 to 1024 (crates/mantis-search/src/mcts/mod.rs), a 4M-node
+  pool with the ceilings re-derived to 976/960. The 192 measurement that drove the move (a mean 88%
+  of the policy's prior mass discarded on 99.97% of expansions) is superseded by the landed value.
 - **`F-816-24` — CLOSED by R349(a).** Read at contact 2026-09-11 (R348(e)'s AUDIT-3 lead):
   `supervise.main` loads the minted config and resolves every `monitor.supervisor_*` through
   `resolve_monitor_config` since `c8bd7190` (2026-08-21), with a named refusal for a missing
   `--config`; `tests/monitor/test_supervisor_config_witness.py` carries the running-supervisor
   witnesses (integration) and an AST pin that the module constructs no `MonitorConfig` by any
-  shape (default tier). R291(b); A:2662.
+  shape (default tier). R291(b).
 - **The `supervisor_kill_grace_sec` reading — SETTLED at `a37d2e5e`.** The operator read it the
   other way: the re-mint reverts `600.0` to the template's `30.0` (R348(e), merged under R349).
-  A:7718.
 
 Riding the run rather than holding it: **`F-816-37`**, below.
 
-**`R341(b)` / `R319(d)` — DISCHARGED AT G=8 ONLY (R343(a)). Not a hold on run6; still LIVE below
-G=8.** R341(b) withdrew R340(a)'s closure because the round that must finish is the CONTENDED one.
-R341(c)'s G table then ran and G=8 was armed on the operator's forward: **G=1 at 53.33 s/game and
-G=4 at 13.99 s/game both consume the full 3600 s `round_timeout_sec` and return
-`wr_sealbot: null`; G=8 at 7.09 s/game completed a fully escalated 264-game round in 1872.8 s,
-78.8% of the 2376 s bar, with a real `wr_sealbot`**, and the 4 h shakedown held a steady 900.6 s
-wall with no growth over seven completed rounds, zero nulls, two promotions. run6 mints
-`eval.concurrency = 8`. **The row is discharged by the ARMED VALUE, not by the geometry becoming
-safe** — lowering concurrency to 4 walks straight back into a timeout, and a null is not a slow
-reading: witness (iii) fits an Elo slope over at least 5 rounds and cannot fit nulls, so a geometry
-failure disarms one of run6's three success witnesses. R343(a); A:1927-1939, A:7249, A:7341.
+**`R341(b)` / `R319(d)` — DISCHARGED AT G=8 (R343(a)).** R341(b) withdrew R340(a)'s closure
+because the round that must finish is the CONTENDED one. R341(c)'s G table then ran and G=8 was
+armed on the operator's forward: **G=1 at 53.33 s/game and G=4 at 13.99 s/game both consume the
+full 3600 s `round_timeout_sec` and return `wr_sealbot: null`; G=8 at 7.09 s/game completed a
+fully escalated 264-game round in 1872.8 s, 78.8% of the 2376 s bar, with a real `wr_sealbot`**,
+and the 4 h shakedown held a steady 900.6 s wall with no growth over seven completed rounds, zero
+nulls, two promotions. run6 minted `eval.concurrency = 8`. R343(a).
 
 ## F-816-* findings
 
-| id | subject | status | last moved | cite |
-|---|---|---|---|---|
-| F-816-37 | run-fatal `EdgeAttrGeometryMismatch` at run6's minted geometry, not root-caused | OPEN. Converted into a 1-in-1 eval-path instrument with dump-on-fire (protected set); zero shakedown firings is explicitly NOT a close. Every firing on record is on the host R341 condemned and R342 downgraded to SUSPECT, and the work moved to a different box — the halt is spent, the class is not | R342(a) | A:1926 |
-| F-816-24 | bare `MonitorConfig()` — minted `supervisor_*` reach no process | CLOSED by R349(a); fixed at `c8bd7190` (2026-08-21), witnessed | R349(a) | A:2662 |
-| F-816-27 | supervisor kill-grace CEILING absent (schema is `Field(ge=0)` only) | RULED; rides prereg row 19 to the operator | R338(c) | A:3498 |
-| F-816-34 | vacuous knee band — PICK = 2 from a band widened below every rung | FILED 2026-09-04, never adjudicated | none | A:6739 |
-| F-816-35 | r8 trainer need is a DISTRIBUTION exceeding `_SIZING_BUDGET_GIB` and R330(b)'s 3% | FILED, never adjudicated | none | A:6741 |
-| F-816-36 | an unplayable rung sets every ring's composed visit capacity | FILED, never adjudicated | none | A:6745 |
-| F-816-15 | `freeze_verify.py` red on 39 of 64 paths; audit-before-rebaseline | ORDERED as its own packet, never dispatched | R285(g)/R286(c) | A:3582 |
-| F-816-19 | the run's own process is spawned unparented (PDEATHSIG class) | ORDERED PRE-MINT, no close | R285(h) | A:2533 |
-| F-816-21 | test de-triplication — one stub in three files across two registers | RE-SEQUENCED behind RQ-1; owed inside the freeze packet | R288(d) | R:5058 |
-| F-816-26 | parent/child config binding; a mismatch is a NAMED REFUSAL | RULED, queued behind Q3/Q4 | R306(d) | A:4048 |
-| F-816-28 | preserve BOTH invariants or the primitive does not move | RULED BY PRINCIPLE, queued behind Q3/Q4 | R306(d) | A:4049 |
-| F-816-30 | a skip guard must detect the MECHANISM, never a proxy | RULED; carried by PACKET_CI_RUNTIME, which forwards first | R306(d) | A:4042 |
-| F-816-11 | arena/eval ply cap as an unconfigurable literal | LIVE precondition, discharged IN FACT at HEAD but never closed | R338(d) | A:3444 |
-| F-816-14 | the eval child survives its parent's SIGTERM holding 458 MiB | HALF-OPEN — the SIGKILL leg closed, the SIGTERM leg re-worded as F-Q6-8 | R300(d) | A:2716 |
-| F-816-17 | dead `legal_mask` build | routing RATIFIED AS FILED, no close | R286(f) | A:2592 |
-| F-816-1 | run5 death was a host event with no software error line | no close ever recorded | R268 | A:2287 |
-| F-816-2 | independent card riding the VisitSlotsExceeded packet | CARDED, no close recorded | R274(e) | R:4309 |
-| F-816-4 | thread-leak / process-global-state hazard class | no status ever recorded | R289(s) | R:5034 |
-| F-816-6 | degenerate ply-cap flood, draw_rate 1.000 at bootstrap | MINT-CRITICAL headline, no close recorded | R269 | A:2288 |
-| F-816-8 | `wppre-scratch` branch containment ground | no status recorded | R277(c) | R:4270 |
-| F-R302-1 | trainer-forward OOM; allocator-reservation fragmentation | EXPLAINED, NOT CLOSED — "closes at a standing mint" | R315(a) | A:1827 |
-| F-B1 | parent/child same-file config binding (`config_identity_sha256`) | LIVE as DESIGN input to the F-816-24 packet | R292(c) | A:2683 |
-| F-Q6-1 | the flamegraph tool's own 12.4 GiB orphan (PDEATHSIG family, instrument side) | routed to the carry-over queue, "live until their rows close", not seen since | R300(d) | A:2722 |
-| F-Q6-8 | save-then-exit did not hold under OOM (LAW-16) — the re-worded F-816-14 SIGTERM leg | OPEN; the close-out measurement is filed beside it | R302(d) | A:2718 |
+| id | subject | status | last moved |
+|---|---|---|---|
+| F-816-37 | run-fatal `EdgeAttrGeometryMismatch` at run6's minted geometry, not root-caused | OPEN. Converted into a 1-in-1 eval-path instrument with dump-on-fire (protected set); zero shakedown firings is explicitly NOT a close. Every firing on record is on the host R341 condemned and R342 downgraded to SUSPECT, and the work moved to a different box — the halt is spent, the class is not | R342(a) |
+| F-816-24 | bare `MonitorConfig()` — minted `supervisor_*` reach no process | CLOSED by R349(a); fixed at `c8bd7190` (2026-08-21), witnessed | R349(a) |
+| F-816-27 | supervisor kill-grace CEILING absent (schema is `Field(ge=0)` only) | RULED; rides prereg row 19 to the operator | R338(c) |
+| F-816-34 | vacuous knee band | FILED 2026-09-04, never adjudicated. PICK = 2 from `adjusted_threshold` 54.9167, widened below every rung's throughput (min passing 89.600; unwidened the rule picks 16); a pre-statable vacuity test is `adjusted_threshold < min passing throughput` | none |
+| F-816-35 | r8 trainer need is a DISTRIBUTION | FILED, never adjudicated. Measured p50 7.9072 / p95 8.3581 / max 8.6381 GiB over 60 steps, exceeding both the minted `_SIZING_BUDGET_GIB = 8.40` and R330(b)'s armed 3% over FINISH-1's single-draw point (8.3341); not a halt alone — the peak is cap-bound and STEP 3 re-fits the caps — but which statistic the allowance is taken over is worth 0.75 GiB | none |
+| F-816-36 | an unplayable rung sets every ring's composed visit capacity | FILED, never adjudicated. The retained `strix_256` rung can never play a game (only sealbot is pinned), so it sets the composed `visit_capacity` of every ring the run writes and refuses the corpus fit | none |
+| F-816-15 | `freeze_verify.py` red on 39 of 64 paths; audit-before-rebaseline | ORDERED as its own packet, never dispatched | R285(g)/R286(c) |
+| F-816-19 | the run's own process is spawned unparented (PDEATHSIG class) | ORDERED PRE-MINT, no close | R285(h) |
+| F-816-21 | test de-triplication — one stub in three files across two registers | RE-SEQUENCED behind RQ-1; owed inside the freeze packet | R288(d) |
+| F-816-26 | parent/child config binding; a mismatch is a NAMED REFUSAL | RULED, queued behind Q3/Q4 | R306(d) |
+| F-816-28 | preserve BOTH invariants or the primitive does not move | RULED BY PRINCIPLE, queued behind Q3/Q4 | R306(d) |
+| F-816-30 | a skip guard must detect the MECHANISM, never a proxy | RULED; carried by PACKET_CI_RUNTIME, which forwards first | R306(d) |
+| F-816-11 | arena/eval ply cap as an unconfigurable literal | LIVE precondition, discharged IN FACT at HEAD but never closed | R338(d) |
+| F-816-14 | the eval child survives its parent's SIGTERM holding 458 MiB | HALF-OPEN — the SIGKILL leg closed, the SIGTERM leg re-worded as F-Q6-8 | R300(d) |
+| F-816-17 | dead `legal_mask` build | routing RATIFIED AS FILED, no close | R286(f) |
+| F-816-1 | run5 death was a host event with no software error line | no close ever recorded | R268 |
+| F-816-2 | independent card riding the VisitSlotsExceeded packet | CARDED, no close recorded | R274(e) |
+| F-816-4 | thread-leak / process-global-state hazard class | no status ever recorded | R289(s) |
+| F-816-6 | degenerate ply-cap flood, draw_rate 1.000 at bootstrap | MINT-CRITICAL headline, no close recorded | R269 |
+| F-816-8 | `wppre-scratch` branch containment ground | no status recorded | R277(c) |
+| F-R302-1 | trainer-forward OOM; allocator-reservation fragmentation | EXPLAINED, NOT CLOSED — "closes at a standing mint" | R315(a) |
+| F-B1 | parent/child same-file config binding (`config_identity_sha256`) | LIVE as DESIGN input to the F-816-24 packet | R292(c) |
+| F-Q6-1 | the flamegraph tool's own 12.4 GiB orphan (PDEATHSIG family, instrument side) | routed to the carry-over queue, "live until their rows close", not seen since | R300(d) |
+| F-Q6-8 | save-then-exit did not hold under OOM (LAW-16) — the re-worded F-816-14 SIGTERM leg | OPEN; the close-out measurement is filed beside it | R302(d) |
 
 ## Named work items
 
@@ -904,7 +892,7 @@ failure disarms one of run6's three success witnesses. R343(a); A:1927-1939, A:7
 - **R227, R228, R267 — TEXTS OWED, operator residue.** ADJ-D2 covers R227/R228 and directs that
   they are NOT filled agent-side; it is load-bearing because it discharges R56/R133/R138. R267 has
   no section at all — the only record is a STATE digest line, deliberately not reconstructed
-  because a digest line is not the ruling. A:1367, A:3732.
+  because a digest line is not the ruling.
 - **run5 prereg values — SPENT.** R137 leg (b) `checkpoint_interval` and R147
   `eval.random_floor_games` were owed against run5's config, which minted them at `0`. R346(f)
   pruned that config out of the tree, so the rows have no subject; run6 mints `1000` and `20`.
@@ -1003,10 +991,9 @@ Every other ADJ row resolves to a numbered ruling.
 
 ## Q-C*
 
-**None open.** Q-C0 through Q-C10 are all ruled or closed, and Q-C6/Q-C7/Q-C8 never existed. One
-stale line survives in the archive at A:3901, still reading "Q-C1..Q-C4 are OPEN at the queue
-foot" — superseded by R304 and never stamped the way the archive's §7 stamps its superseded rows.
-It is recorded here so nobody re-opens four closed questions from it.
+**None open.** Q-C0 through Q-C10 are all ruled or closed, and Q-C6/Q-C7/Q-C8 never existed. A
+stale line once read "Q-C1..Q-C4 are OPEN at the queue foot" — superseded by R304. It is recorded
+here so nobody re-opens four closed questions from it.
 
 ## How this list was derived, and what it cannot cover
 
