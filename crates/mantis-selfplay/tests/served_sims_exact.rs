@@ -59,7 +59,7 @@ fn drive_graph(
     let deadline = Instant::now() + Duration::from_secs(600);
     let mut records = Vec::new();
     while Instant::now() < deadline {
-        records.extend(runner.drain_graph_records());
+        records.extend(runner.drain_graph_records().expect("unpoisoned"));
         if records.len() >= want_records || runner.fatal_defect().is_some() {
             break;
         }
@@ -71,7 +71,7 @@ fn drive_graph(
     // The producer keeps serving until the queue closes, so both halves are read AFTER the
     // join or the ratio is taken across a moving denominator.
     producer.join().expect("producer exits");
-    records.extend(runner.drain_graph_records());
+    records.extend(runner.drain_graph_records().expect("unpoisoned"));
 
     assert!(
         defect.is_none(),
@@ -127,7 +127,7 @@ fn drive_kind(
     let deadline = Instant::now() + Duration::from_secs(600);
     let mut records = Vec::new();
     while Instant::now() < deadline {
-        records.extend(runner.drain_graph_records());
+        records.extend(runner.drain_graph_records().expect("unpoisoned"));
         if records.len() >= want_records || runner.fatal_defect().is_some() {
             break;
         }
@@ -137,7 +137,7 @@ fn drive_kind(
     let snap = runner.stats_snapshot();
     runner.stop();
     producer.join().expect("producer exits");
-    records.extend(runner.drain_graph_records());
+    records.extend(runner.drain_graph_records().expect("unpoisoned"));
 
     assert!(
         defect.is_none(),

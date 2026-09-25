@@ -58,7 +58,7 @@ fn drive(kind: SearchKind, want_records: usize) -> (u64, u64, u64) {
     let deadline = Instant::now() + Duration::from_secs(600);
     let mut records = 0usize;
     while Instant::now() < deadline {
-        records += runner.drain_graph_records().len();
+        records += runner.drain_graph_records().expect("unpoisoned").len();
         if records >= want_records || runner.fatal_defect().is_some() {
             break;
         }

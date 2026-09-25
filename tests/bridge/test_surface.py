@@ -51,6 +51,10 @@ def test_wire_already_consumed_exception_present():
     assert issubclass(_engine.WireAlreadyConsumed, Exception)
 
 
+def test_runner_drain_poisoned_exception_is_a_runtime_error():
+    assert issubclass(_engine.RunnerDrainPoisoned, RuntimeError)
+
+
 def test_f42_every_pyclass_module_is_engine():
     """Pinned: explicit `module = "mantis._engine"` on every pyclass —
     never the pyo3 default `builtins`."""

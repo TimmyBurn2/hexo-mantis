@@ -130,7 +130,7 @@ fn mcts_drive_with_mock_producer_stop_midgame_no_false_draws() {
         .expect("mock producer exits once the queue is closed");
     assert!(!runner.is_running(), "runner stopped");
 
-    let drained = runner.drain_game_results();
+    let drained = runner.drain_game_results().expect("unpoisoned");
 
     // De-vacuum: served batches prove a worker was mid-MCTS-search when `stop()` fired, so the
     // short-circuit was on a LIVE mid-game path rather than an empty drain.
@@ -168,7 +168,7 @@ fn random_only_runner(max_moves: usize) -> SelfPlayRunner {
 #[test]
 fn random_only_stop_midgame_no_false_draws() {
     let runner = random_only_runner(50);
-    let _baseline = runner.drain_game_results();
+    let _baseline = runner.drain_game_results().expect("unpoisoned");
 
     runner.start();
 
@@ -177,7 +177,7 @@ fn random_only_stop_midgame_no_false_draws() {
     let deadline = Instant::now() + Duration::from_secs(5);
     let mut games: Vec<GameResultRow> = Vec::new();
     while Instant::now() < deadline {
-        games.extend(runner.drain_game_results());
+        games.extend(runner.drain_game_results().expect("unpoisoned"));
         if !games.is_empty() {
             break;
         }
@@ -192,7 +192,7 @@ fn random_only_stop_midgame_no_false_draws() {
     // Workers churn games back-to-back, so a worker is mid-game at the stop instant; without the
     // short-circuit that partial game would finalize as reason==3.
     runner.stop();
-    games.extend(runner.drain_game_results());
+    games.extend(runner.drain_game_results().expect("unpoisoned"));
 
     assert!(
         !has_false_draw(&games),

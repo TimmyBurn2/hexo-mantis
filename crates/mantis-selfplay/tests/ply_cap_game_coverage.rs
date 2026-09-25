@@ -88,7 +88,7 @@ fn a_full_ply_cap_game_at_production_parameters_records_within_the_derived_capac
     let deadline = Instant::now() + Duration::from_secs(600);
     let mut records = Vec::new();
     while Instant::now() < deadline {
-        records.extend(runner.drain_graph_records());
+        records.extend(runner.drain_graph_records().expect("unpoisoned"));
         let reached_cap = records
             .iter()
             .any(|r| usize::from(r.ply_index) + 1 == PROD_PLY_CAP);

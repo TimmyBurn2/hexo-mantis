@@ -24,7 +24,7 @@ fn _engine(m: &Bound<'_, PyModule>) -> PyResult<()> {
     tactics::register(m)?; // TacticalSolver
     utils::register(m)?; // pool-overflow counters, armed-sims ceilings, graph_row_outcome
     inference::register(m)?; // InferenceBatcher + GraphWire + WireAlreadyConsumed
-    runner::register(m)?; // SelfPlayRunnerConfig + SelfPlayRunner
+    runner::register(m)?; // SelfPlayRunnerConfig + SelfPlayRunner + RunnerDrainPoisoned
     hexg::register(m)?; // HexgBuffer + GraphTargets
     Ok(())
 }

@@ -14,9 +14,20 @@ use pyo3::prelude::*;
 
 use mantis_search::SearchKind;
 use mantis_selfplay::runner::config::SelfPlayRunnerConfig;
-use mantis_selfplay::runner::{GameResultRow, RunnerStatsSnapshot, SelfPlayRunner};
+use mantis_selfplay::runner::{DrainPoisoned, GameResultRow, RunnerStatsSnapshot, SelfPlayRunner};
 
 use crate::inference::PyInferenceBatcher;
+
+pyo3::create_exception!(
+    mantis_engine,
+    RunnerDrainPoisoned,
+    pyo3::exceptions::PyRuntimeError,
+    "Raised when a runner drain queue's lock is poisoned: a worker panicked mid-write."
+);
+
+fn drain_poisoned(err: DrainPoisoned) -> PyErr {
+    RunnerDrainPoisoned::new_err(err.to_string())
+}
 
 /// Per-row tuple from `collect_graph_data`: the first NINE fields are
 /// `HexgBuffer.push_graph_position`'s positional signature verbatim, the tenth its keyword `game_id`.
@@ -255,7 +266,7 @@ impl PySelfPlayRunner {
     /// are variable-length); grid runners return an empty list.
     ///
     /// # Errors
-    /// `RuntimeError` when the runner's fatal-defect latch is set.
+    /// `RuntimeError` on a set fatal-defect latch; `RunnerDrainPoisoned` on a poisoned queue.
     pub fn collect_graph_data(&self) -> PyResult<Vec<GraphRecordRow>> {
         if let Some(msg) = self.inner.fatal_defect() {
             return Err(pyo3::exceptions::PyRuntimeError::new_err(
@@ -265,6 +276,7 @@ impl PySelfPlayRunner {
         Ok(self
             .inner
             .drain_graph_records()
+            .map_err(drain_poisoned)?
             .into_iter()
             .map(|r| {
                 (
@@ -391,9 +403,9 @@ impl PySelfPlayRunner {
         self.snapshot().worker_panics
     }
 
-    /// Drain and return all buffered game results since the last call.
-    pub fn drain_game_results(&self) -> Vec<GameResultRow> {
-        self.inner.drain_game_results()
+    /// Drain buffered game results since the last call; a poisoned queue is `RunnerDrainPoisoned`.
+    pub fn drain_game_results(&self) -> PyResult<Vec<GameResultRow>> {
+        self.inner.drain_game_results().map_err(drain_poisoned)
     }
 
     /// Current model-version snapshot; the batcher's `bump_model_version` writes through to it.
@@ -427,6 +439,10 @@ impl Drop for PySelfPlayRunner {
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PySelfPlayRunnerConfig>()?;
     m.add_class::<PySelfPlayRunner>()?;
+    m.add(
+        "RunnerDrainPoisoned",
+        m.py().get_type::<RunnerDrainPoisoned>(),
+    )?;
     Ok(())
 }
 
@@ -561,5 +577,19 @@ mod tests {
             .collect_graph_data()
             .expect("no fatal defect on a fresh runner")
             .is_empty());
+    }
+
+    /// A poisoned drain queue crosses the FFI as the named `RunnerDrainPoisoned`, a `RuntimeError`.
+    #[test]
+    fn a_poisoned_drain_raises_the_named_exception() {
+        Python::initialize();
+        Python::attach(|py| {
+            let err = drain_poisoned(DrainPoisoned {
+                queue: "graph_results",
+            });
+            assert!(err.is_instance_of::<RunnerDrainPoisoned>(py));
+            assert!(err.is_instance_of::<pyo3::exceptions::PyRuntimeError>(py));
+            assert!(err.value(py).to_string().contains("graph_results"), "{err}");
+        });
     }
 }

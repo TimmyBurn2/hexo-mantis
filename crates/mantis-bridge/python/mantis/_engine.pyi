@@ -17,6 +17,9 @@ import numpy
 class WireAlreadyConsumed(Exception):
     """Raised when GraphWire.take() is called a second time (single-read latch)."""
 
+class RunnerDrainPoisoned(RuntimeError):
+    """Raised when a runner drain queue's lock is poisoned: a worker panicked mid-write."""
+
 class SelectionDesync(RuntimeError):
     """Raised when the PUCT descent selects a child whose `action_idx` decodes to a cell the
     board refuses — the tree and the board have desynchronised (AUDIT-1 F-02).

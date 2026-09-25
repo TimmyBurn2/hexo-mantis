@@ -49,7 +49,7 @@ fn drive_to_completion(
     let deadline = Instant::now() + timeout;
     let mut games = Vec::new();
     while Instant::now() < deadline {
-        for row in runner.drain_game_results() {
+        for row in runner.drain_game_results().expect("unpoisoned") {
             games.push((row.0, row.4)); // (plies, terminal_reason)
         }
         if games.len() >= min_games {
@@ -58,7 +58,7 @@ fn drive_to_completion(
         std::thread::sleep(Duration::from_millis(10));
     }
     runner.stop();
-    for row in runner.drain_game_results() {
+    for row in runner.drain_game_results().expect("unpoisoned") {
         games.push((row.0, row.4));
     }
     games
@@ -108,9 +108,18 @@ fn ply_cap_regime_never_organic_draws() {
     let runner = random_only_runner(10, -0.1, -0.5);
     let games = drive_to_completion(&runner, 4, Duration::from_secs(5));
     for (_plies, reason) in &games {
-        assert_ne!(*reason, 3, "random-only ply-cap regime must not organic-draw");
-        assert_ne!(*reason, 0, "≤5 stones/player cannot 6-in-a-row (no six-in-a-row win)");
-        assert_ne!(*reason, 1, "≤5 stones/player cannot win (no colony win either)");
+        assert_ne!(
+            *reason, 3,
+            "random-only ply-cap regime must not organic-draw"
+        );
+        assert_ne!(
+            *reason, 0,
+            "≤5 stones/player cannot 6-in-a-row (no six-in-a-row win)"
+        );
+        assert_ne!(
+            *reason, 1,
+            "≤5 stones/player cannot win (no colony win either)"
+        );
     }
     // Compile-time anchor: GameResultRow is the drain carrier tuple.
     let _: fn() -> Vec<GameResultRow> = || Vec::new();

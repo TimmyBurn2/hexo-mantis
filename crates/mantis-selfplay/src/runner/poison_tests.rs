@@ -11,7 +11,7 @@ use crate::replay::hexg::GraphRecord;
 
 use super::finalize::finalize_game_graph;
 use super::search_drive::FatalDefectLatch;
-use super::{GameResultRow, SelfPlayRunner, SelfPlayRunnerConfig};
+use super::{DrainPoisoned, GameResultRow, SelfPlayRunner, SelfPlayRunnerConfig};
 
 fn runner(n_workers: usize) -> SelfPlayRunner {
     SelfPlayRunner::new(SelfPlayRunnerConfig {
@@ -162,4 +162,31 @@ fn poison_every_runner_lock(r: &SelfPlayRunner) {
     poison(&r.fatal_defect);
     poison(&r.graph_results);
     poison(&r.recent_game_results);
+}
+
+/// Both drain faces refuse a poisoned queue by name instead of panicking across the FFI.
+#[test]
+fn the_drain_faces_refuse_a_poisoned_queue_by_name() {
+    let r = runner(1);
+    assert_eq!(r.drain_graph_records(), Ok(vec![]));
+    assert_eq!(r.drain_game_results(), Ok(vec![]));
+    poison(&r.graph_results);
+    poison(&r.recent_game_results);
+    assert_eq!(
+        r.drain_graph_records(),
+        Err(DrainPoisoned {
+            queue: "graph_results"
+        })
+    );
+    assert_eq!(
+        r.drain_game_results(),
+        Err(DrainPoisoned {
+            queue: "recent_game_results"
+        })
+    );
+    assert!(DrainPoisoned {
+        queue: "graph_results"
+    }
+    .to_string()
+    .starts_with("DrainPoisoned: the graph_results queue"));
 }

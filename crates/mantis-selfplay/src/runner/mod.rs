@@ -47,6 +47,26 @@ pub type GameResultRow = (
     Option<Vec<PositionStats>>,
 );
 
+/// A drain face found its queue poisoned: a worker panicked mid-write, so rows may be torn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DrainPoisoned {
+    /// Which drain queue refused: `graph_results` or `recent_game_results`.
+    pub queue: &'static str,
+}
+
+impl std::fmt::Display for DrainPoisoned {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "DrainPoisoned: the {} queue's lock is poisoned — a worker panicked while writing \
+             it, so its rows may be torn and are refused rather than drained (see worker_panics)",
+            self.queue
+        )
+    }
+}
+
+impl std::error::Error for DrainPoisoned {}
+
 /// Flat snapshot of the runner's in-run counter atomics, each read once via a `Relaxed` load.
 /// RAW cumulative counts ONLY: the fixed-point accumulators are handed back UNDIVIDED so the
 /// bridge can derive the means, since a cluster mean over zero samples is not a measurement.
@@ -358,25 +378,23 @@ impl SelfPlayRunner {
         self.running.load(Ordering::SeqCst)
     }
 
-    /// Drain and return all buffered game results since the last call.
-    pub fn drain_game_results(&self) -> Vec<GameResultRow> {
-        let mut rg = self
-            .recent_game_results
-            .lock()
-            .expect("recent_game_results lock poisoned");
-        rg.drain(..).collect()
+    /// Drain all buffered game results since the last call; a poisoned queue is [`DrainPoisoned`].
+    pub fn drain_game_results(&self) -> Result<Vec<GameResultRow>, DrainPoisoned> {
+        let mut rg = self.recent_game_results.lock().map_err(|_| DrainPoisoned {
+            queue: "recent_game_results",
+        })?;
+        Ok(rg.drain(..).collect())
     }
 
     // Narrow pub read/drain faces the bridge producer pyclasses build over. None of these mutate
     // self beyond the drain queues they own.
 
-    /// Drain and return all buffered graph training records since the last call, FIFO.
-    pub fn drain_graph_records(&self) -> Vec<GraphRecord> {
-        let mut rows = self
-            .graph_results
-            .lock()
-            .expect("graph_results lock poisoned");
-        rows.drain(..).collect()
+    /// Drain buffered graph records FIFO since the last call; a poisoned queue is [`DrainPoisoned`].
+    pub fn drain_graph_records(&self) -> Result<Vec<GraphRecord>, DrainPoisoned> {
+        let mut rows = self.graph_results.lock().map_err(|_| DrainPoisoned {
+            queue: "graph_results",
+        })?;
+        Ok(rows.drain(..).collect())
     }
 
     /// Set the shared model-version snapshot workers read once per move and dedup-push into the
@@ -469,7 +487,7 @@ mod seam_roundtrip {
     #[test]
     fn drain_graph_records_returns_pushed_records_then_empties() {
         let r = runner();
-        assert!(r.drain_graph_records().is_empty());
+        assert!(r.drain_graph_records().expect("unpoisoned").is_empty());
 
         let g0 = GraphRecord {
             stones: vec![(1i16, 2i16, 1i8)],
@@ -495,8 +513,8 @@ mod seam_roundtrip {
             q.push_back(g1.clone());
         }
 
-        assert_eq!(r.drain_graph_records(), vec![g0, g1]);
-        assert!(r.drain_graph_records().is_empty());
+        assert_eq!(r.drain_graph_records().expect("unpoisoned"), vec![g0, g1]);
+        assert!(r.drain_graph_records().expect("unpoisoned").is_empty());
     }
 
     // Worker-panic propagation: a panicked worker must not leave the pool reporting healthy.

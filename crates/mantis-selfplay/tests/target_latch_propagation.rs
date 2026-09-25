@@ -68,7 +68,7 @@ fn latch_carries_the_variant_name_from_the_production_store_site_to_the_drain_fa
     // Read the halt state BEFORE our own stop(), so store-then-halt is what is observed.
     let halted = !runner.is_running();
     let fires = runner.stats_snapshot().target_integrity_defects;
-    let drained = runner.drain_graph_records();
+    let drained = runner.drain_graph_records().expect("unpoisoned");
     runner.stop();
     producer.join().expect("mock graph producer exits on close");
 

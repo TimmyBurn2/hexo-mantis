@@ -67,7 +67,7 @@ fn drive(kind: SearchKind, want_rows: usize) -> Drive {
     let deadline = Instant::now() + Duration::from_secs(600);
     let mut rows = Vec::new();
     while Instant::now() < deadline {
-        rows.extend(runner.drain_graph_records());
+        rows.extend(runner.drain_graph_records().expect("unpoisoned"));
         if rows.len() >= want_rows || runner.fatal_defect().is_some() {
             break;
         }
@@ -76,7 +76,7 @@ fn drive(kind: SearchKind, want_rows: usize) -> Drive {
     let defect = runner.fatal_defect();
     runner.stop();
     producer.join().expect("producer exits");
-    rows.extend(runner.drain_graph_records());
+    rows.extend(runner.drain_graph_records().expect("unpoisoned"));
     // AFTER the join, so the counters cannot trail the rows they are compared against.
     let snap = runner.stats_snapshot();
 

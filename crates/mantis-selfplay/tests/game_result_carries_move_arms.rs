@@ -42,7 +42,7 @@ fn drive(random_opening_plies: u32, want_games: usize) -> Vec<GameResultRow> {
     let deadline = Instant::now() + Duration::from_secs(600);
     let mut games = Vec::new();
     while Instant::now() < deadline {
-        games.extend(runner.drain_game_results());
+        games.extend(runner.drain_game_results().expect("unpoisoned"));
         if games.len() >= want_games || runner.fatal_defect().is_some() {
             break;
         }
@@ -51,7 +51,7 @@ fn drive(random_opening_plies: u32, want_games: usize) -> Vec<GameResultRow> {
     let defect = runner.fatal_defect();
     runner.stop();
     producer.join().expect("producer exits");
-    games.extend(runner.drain_game_results());
+    games.extend(runner.drain_game_results().expect("unpoisoned"));
     assert!(defect.is_none(), "latched a fatal defect: {defect:?}");
     assert!(
         games.len() >= want_games,

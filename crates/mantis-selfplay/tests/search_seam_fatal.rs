@@ -147,7 +147,7 @@ fn injected_graph_inference_failure_dies_loud_and_named_at_the_seam() {
     let msg = wait_for_defect(&runner, 120);
     let halted = !runner.is_running();
     let snap = runner.stats_snapshot();
-    let drained = runner.drain_graph_records();
+    let drained = runner.drain_graph_records().expect("unpoisoned");
     runner.stop();
     producer.join().expect("producer exits");
 

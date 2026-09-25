@@ -210,7 +210,7 @@ fn the_exporter_pin_stops_a_zero_visit_run_with_the_seam_never_firing() {
     }
     let halted = !runner.is_running();
     let snap = runner.stats_snapshot();
-    let drained = runner.drain_graph_records();
+    let drained = runner.drain_graph_records().expect("unpoisoned");
     runner.stop();
     producer.join().expect("producer exits");
 

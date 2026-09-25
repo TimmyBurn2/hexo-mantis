@@ -76,7 +76,7 @@ fn s2w_drained_graph_records_carry_full_mass_visits_verbatim() {
     let deadline = Instant::now() + Duration::from_secs(300);
     let mut records: Vec<GraphRecord> = Vec::new();
     while Instant::now() < deadline {
-        records.extend(runner.drain_graph_records());
+        records.extend(runner.drain_graph_records().expect("unpoisoned"));
         if records.len() >= 3 {
             break;
         }
