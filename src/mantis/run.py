@@ -1,9 +1,6 @@
-# >300 justify (R8). This module is the ONE composition authority: the collaborator builder,
-# the launcher and LAW-16's three legs (signals, watchdog, disk guard) live here together,
-# and it is the only module importing both `mantis.train` and `mantis.eval` at top level.
-# Splitting any layer out would create a SECOND site where a collaborator set or a
-# `StepCoordinatorConfig` can be built, which is the two-surfaces shape the one-authority
-# tests forbid; the per-decision rationale is the file's bulk and is what R8's clause protects.
+# >300 justify (R8): the ONE composition authority — collaborator builder, launcher and the
+# signal/watchdog/disk-guard legs; split, a SECOND site could build a collaborator set or a
+# `StepCoordinatorConfig`, which the one-authority tests forbid. Its bulk is per-decision rationale.
 """mantis.run — the run composition root AND the run launcher (design §a.4/§c.6).
 
 The ONE module importing both `mantis.train` and `mantis.eval` at module top level; nothing
@@ -203,15 +200,14 @@ class RunCollaborators(NamedTuple):
     buffer: Any
     log_dir: Path
     checkpoint_dir: Path
-    #: The resume sidecar this boot restored FROM, or None on a fresh run. It rides the
-    #: tuple rather than being re-read in `compose_run`: a second read of the same sidecar
-    #: is a second authority for what this boot resumed from.
+    #: The resume sidecar this boot restored FROM (None when fresh), carried, never re-read:
+    #: a second read would be a second authority for what this boot resumed from.
     resume_state: Any = None
 
 
 @contextmanager
 def _seam(name: str) -> Iterator[None]:
-    """NAME a composition seam without catching anything (LAW-14).
+    """NAME a composition seam without catching anything.
 
     Annotates the in-flight exception with a PEP 678 note and re-raises it unchanged, so the
     preflight's rc-32 sniff still reads the original final line. Seamed: the four builder
@@ -241,9 +237,9 @@ def _stop_pool_if_start_attempted(pool: Any, *, start_attempted: bool) -> Callab
 
 def _select_buffer(config: Any, capacity: int) -> Any:
     """Select the replay buffer off `config.identity.representation`; an unknown or absent
-    representation RAISES (LAW-11) — never sniffed off a live module, never defaulted.
+    representation RAISES — never sniffed off a live module, never defaulted.
 
-    This raise is the boot's one LAW-11 refusal, and it lives under `src/` so CI gate 11 can
+    This raise is the boot's one identity-key refusal, and it lives under `src/` so CI gate 11 can
     see it. `RepresentationRouteError` is REUSED from the train-step route — one error family
     per axis — and carries no `rc`: a `src/` exception carrying a CI tool's exit code is the
     layering defect this closes. (That tool error class is named by description and never
@@ -271,10 +267,8 @@ def _restore_resume_state(buffer: Any, checkpoint_path: str) -> Any:
         ResumeStateError: the sidecar exists but is malformed, or names another checkpoint.
         RingIdentityError: the persisted ring hashes differently than recorded, or reloads a
             different number of positions."""
-    # THE SIDECAR'S PRESENCE IS WHAT DISCRIMINATES A RESUME FROM A WARM START, and nothing
-    # else at HEAD can: `--resume-from` carries both meanings, and refusing a sidecar-less
-    # checkpoint would refuse a BC warm-start launch. The absence is announced, never inferred:
-    # the one thing that must not happen quietly is a CONTINUATION refilling from empty.
+    # The SIDECAR'S PRESENCE alone tells a resume from a warm start (`--resume-from` means both);
+    # its absence is announced, since a CONTINUATION must never refill from empty quietly.
     if not sidecar_path_for(checkpoint_path).exists():
         _LOG.warning(
             "resume_state_absent checkpoint=%s — no sidecar beside this checkpoint, so it is "
@@ -329,38 +323,31 @@ def build_run_collaborators(
     log_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     # The run records its COMPLETE resolved config, including every leaf the shipped file
-    # left to a schema default, BEFORE anything can wedge. Persistence-fatal by LAW-14.
+    # left to a schema default, BEFORE anything can wedge. Persistence-fatal.
     with _seam("resolved_config record"):
         write_resolved_config(config, out_dir)
 
     device = torch.device(config.train.device)
-    # The allocator-posture assertion, BEFORE the first CUDA allocation and therefore before
-    # `init_trainer`: a cap fitted under one allocator regime and run under the other is a
-    # partition measured for a machine state this process is not in, and that difference
-    # measured 3.62 GiB of card high-water on 2026-08-22. Non-cuda runs are not enforced.
+    # The allocator-posture assertion precedes the first CUDA allocation: caps run under the other
+    # regime differed by 3.62 GiB of card high-water (measured 2026-08-22); non-cuda is exempt.
     _assert_allocator_posture(config.model_dump(), device_type=device.type)
     with _seam("init_trainer"):
-        # The trainer gets the SAME late-binding adapter shape the WorkerPool below gets;
-        # `sink=None` here meant every trainer-side emission was authored, unit-tested and
-        # DROPPED in every production run. Pre-bind emissions (resume-time events fire in
-        # this builder) still drop, which is the adapter's documented semantics.
+        # The SAME late-binding sink adapter the WorkerPool gets; pre-bind emissions (resume-time
+        # events fired in this builder) still drop, per the adapter's semantics.
         trainer = init_trainer(config=config.model_dump(), checkpoint_dir=str(checkpoint_dir),
                                device=device, sink=_DeferredSink(),
                                checkpoint_path=checkpoint_path)
     capacity = int(resolve_coordinator_knobs(config.train).capacity)
     with _seam("_select_buffer"):
         buffer = _select_buffer(config, capacity)
-    # THE RING IS A RESUME INPUT, NOT A BUFFER THAT REFILLS FROM EMPTY. Placed immediately
-    # after construction and before `WorkerPool` can push, because a load into a ring
-    # self-play has already written is a load into a ring whose contents nobody declared. On
-    # a resume a failure PROPAGATES (LAW-14) — it must not quietly become a fresh run.
+    # THE RING IS A RESUME INPUT, loaded before `WorkerPool` can push into it; on a resume a
+    # failure PROPAGATES — it must not quietly become a fresh run.
     resume_state = None
     if checkpoint_path is not None:
         with _seam("restore_resume_state"):
             resume_state = _restore_resume_state(buffer, checkpoint_path)
-    # The game record's self-play producer, constructed before the pool that feeds it, so
-    # from step 0 every self-play game is written. Constructed here rather than lazily on the
-    # first game because an un-openable store must be a loud STARTUP failure.
+    # The self-play recorder, built before the pool so every game from step 0 is written and an
+    # un-openable store is a loud STARTUP failure.
     with _seam("GameRecorder"):
         recorder = GameRecorder(record_dir=log_dir / "games", run_id=config.run_id,
                                 seed=config.seed)
@@ -420,7 +407,7 @@ def _step_coordinator_config(
 
 
 def _parent_death_event(decision: ParentDeathDecision | None) -> dict[str, Any] | None:
-    """The LAW-18 payload for the parent-death arming decision — or None if there is none.
+    """The in-run payload for the parent-death arming decision — or None if there is none.
 
     Built from the GATE'S OWN LATCH and never re-derived, because the gate runs at `main`'s
     first statement. `None` in means `None` out: a None latch means the gate never ran, and
@@ -520,28 +507,19 @@ def compose_run(
         BurstBoundError: `burst_stop_step` is outside the minted run length.
     """
     config = require_run_config(config, caller="compose_run")
-    # The gate above answers "is this the class?"; this answers "is this a config the loader
-    # would accept?". `model_copy(update=…)` builds a genuine RunConfig whose CROSS-FIELD
-    # validators never re-ran, and one such copy drove a 20-step run with a single actor sync.
-    # A second statement, because the gate must remain compose_run's first and the two rules
-    # have different contracts: the gate is identity-preserving, this is not.
+    # The gate above checks the CLASS and stays first; this re-runs the CROSS-FIELD validators a
+    # `model_copy(update=…)` skips (one such copy drove a 20-step run with a single actor sync).
     config = revalidate_run_config(config, caller="compose_run")
 
-    # LAW-16 leg 1, HOISTED to the top of the composition: `install_signal_handlers` used to
-    # fire only on `run_training_loop`'s self-construct branch, which this root never takes, so
-    # save-then-exit was dead in every composed run (probed at 19/19). "Signal-covered" here
-    # means the STATE IS SET, not that save-then-exit fires mid-compose: nothing between this
-    # line and `run_training_loop` polls the state, so a signal in that window lets composition
-    # COMPLETE and the save happens at the loop's entry-set arm.
+    # Signal handling, HOISTED: the loop installs only on a branch this root never takes. A signal
+    # mid-compose only SETS the state; composition completes and the loop's entry arm saves.
     shutdown = ShutdownState()
     install_signal_handlers(shutdown)
 
     log_dir = Path(log_dir)
     checkpoint_dir = Path(checkpoint_dir)
-    # Not a second derivation (that lives in `build_run_collaborators`) — the root making the
-    # directory it was HANDED usable. Load-bearing for LAW-16 leg 3: the disk guard stats
-    # `watch_path` and its poll thread swallows its own errors, so a checkpoint dir that does
-    # not exist yet buys a guard that runs, logs and publishes NOTHING.
+    # The root making the dir it was HANDED usable: the disk guard stats `watch_path` and its poll
+    # thread swallows errors, so a missing dir buys a guard that publishes NOTHING.
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     with _seam("resolve_monitor_config"):
         monitor_cfg = resolve_monitor_config(config.monitor)
@@ -551,10 +529,8 @@ def compose_run(
     if config.eval_enabled:
         wired_sources.append("eval_round")
 
-    # HOISTED above `build_run_safety` because `_disk_guard_sample` closes over this name and
-    # the watchdog polls it from its own thread. The pinned order is pool -> watchdog -> guard,
-    # so a closure over an unassigned local would raise `NameError` on that thread instead of
-    # reading "not yet".
+    # HOISTED: `_disk_guard_sample` closes over it and the watchdog (started before the guard)
+    # polls it from its own thread, where an unassigned local would raise `NameError`.
     disk_guard = None
 
     def _disk_guard_sample() -> MonitorSample | None:
@@ -566,10 +542,8 @@ def compose_run(
                              errors_total=guard.errors_total,
                              interval_sec=guard.interval_sec)
 
-    # The lag-watchdog callables are read LIVE at poll time, never at build time —
-    # `actor_sync` is assigned immediately below, before anything can start. The design's
-    # "ActorSync first" ordering is inverted here because the engine's LAW-18 sink IS
-    # `run_safety.sink`, which only exists after this call.
+    # The lag-watchdog callables read `actor_sync` LIVE at poll time (it is assigned below, before
+    # any start): ActorSync comes after this call because its sink IS `run_safety.sink`.
     with _seam("build_run_safety"):
         run_safety = build_run_safety(
             log_dir=log_dir, run_id=run_id, buffer=buffer,
@@ -581,25 +555,20 @@ def compose_run(
                                                   sample_fn=_disk_guard_sample),),
         )
 
-    # Bind the pool's `_DeferredSink` to the real sink now that it exists; `pool.start()`
-    # runs below, so events are delivered from the first emit. `bind()` claims no resource,
-    # so it sits OUTSIDE the teardown ladder. Sink-only — `heartbeat=` is untouched here. The
-    # `isinstance` guard keeps test harnesses injecting a bare fake pool working.
+    # Bind the pool's `_DeferredSink` before `pool.start()` so the first emit is delivered; `bind()`
+    # claims nothing, so it sits outside the teardown ladder. `isinstance` spares bare fake pools.
     deferred = getattr(pool, "_sink", None)
     if isinstance(deferred, _DeferredSink):
         deferred.bind(run_safety.sink)
 
-    # Bind the TRAINER's `_DeferredSink` the same way — a SEPARATE bind for a SEPARATE
-    # adapter, so neither can silently unbind the other's surface. The first trainer-side
-    # emission fires inside `run_training_loop`, after this bind. The `isinstance` guard keeps
-    # test harnesses injecting a bare fake trainer working.
+    # The TRAINER's `_DeferredSink`: a SEPARATE bind for a SEPARATE adapter, so neither unbinds the
+    # other; its first emission is inside `run_training_loop`. `isinstance` spares bare fakes.
     deferred_tr = getattr(trainer, "_sink", None)
     if isinstance(deferred_tr, _DeferredSink):
         deferred_tr.bind(run_safety.sink)
 
-    # Bind the pool's `_DeferredHeartbeat` now that the real fn exists; `pool.start()` runs
-    # below, so beats are forwarded from the first tick. Heartbeat-only, a SEPARATE bind from
-    # the sink's. The `isinstance` guard keeps bare fake pools in test harnesses working.
+    # The pool's `_DeferredHeartbeat`, bound before `pool.start()` so beats forward from the first
+    # tick; a separate bind from the sink's. `isinstance` spares bare fake pools.
     deferred_hb = getattr(pool, "_heartbeat", None)
     if isinstance(deferred_hb, _DeferredHeartbeat):
         deferred_hb.bind(run_safety.heartbeat)
@@ -608,46 +577,32 @@ def compose_run(
     coordinator = None
     eval_pipeline = None
     resolved_anchor = SimpleNamespace(best_model=None, best_model_step=None)
-    # TEARDOWN LADDER. By the time `StepCoordinator` is constructed the pool is started and
-    # the watchdog and disk-guard threads are running; a bare propagation would leave all
-    # three alive after a failed compose. The contract: nothing is half-alive, and the
-    # ORIGINAL failure propagates (nothing here catches; a teardown failure chains).
-    #
-    # THE LADDER OPENS AT THE SINK, not at `pool.start()`: `build_run_safety` OPENS the run's
-    # JSONL segment file, and the steps that used to sit between it and the old `try:` were
-    # outside both the ladder and any seam — so an eval-pipeline wall reached the process
-    # boundary with the segment file still open and no seam name for the rc-32/33 classifier.
-    #
-    # `coordinator is None` is the discriminator, not a second flag: once it exists,
-    # `close_out` owns the drain, the buffer save and the guarded pool stop.
+    # TEARDOWN LADDER: nothing is left half-alive after a failed compose and the ORIGINAL failure
+    # propagates (a teardown failure chains). It opens at the SINK, which opens the JSONL segment.
+    # `coordinator is None` is the discriminator: once it exists `close_out` owns drain, save, stop.
     try:
         with _seam("run_boot_identity emit"):
-            # The booted process publishes ITS OWN post-revalidation config identity, first
-            # thing after the sink exists. One authority on both sides: the mint preflight's
-            # parent hashes the config IT loaded with the same function and compares, so a
-            # child that read a different file is a NAMED failure instead of invisible.
+            # The booted process publishes ITS OWN post-revalidation config identity first; the
+            # preflight parent hashes its own the same way, so a child on another file is NAMED.
             emit_via(run_safety.sink, {
                 "event": "run_boot_identity",
                 "run_id": run_id,
                 "config_sha256": config_identity_sha256(config),
             })
         with _seam("resolved_config emit"):
-            # The run's own resolved posture, immediately after the identity witness — which
-            # must land FIRST because it has to exist even if the boot later wedges. Exactly
-            # once per segment, and the payload IS `to_event_payload(resolve_config(config))`:
-            # a hand-assembled copy would be a second authority for it.
+            # After the identity witness (which lands FIRST in case the boot wedges), once per
+            # segment; the payload IS `to_event_payload(resolve_config(config))`, never hand-built.
             emit_via(run_safety.sink, resolve_config(config).to_event_payload())
 
         with _seam("parent_death_signal_armed emit"):
-            # LAW-18: the arming lever announces itself in the run's OWN stream. Payload
+            # The arming lever announces itself in the run's OWN stream. Payload
             # and None-guard both live in `_parent_death_event`.
             parent_death_event = _parent_death_event(last_parent_death_decision())
             if parent_death_event is not None:
                 emit_via(run_safety.sink, parent_death_event)
 
-        # The continuous-sync engine is built UNCONDITIONALLY — no config or eval state may
-        # make actor sync conditional. The actor's weights come from the learner on a cadence
-        # and NEVER from a gate decision.
+        # Built UNCONDITIONALLY: the actor's weights come from the learner on a cadence and NEVER
+        # from a gate decision, so no config or eval state may make actor sync conditional.
         with _seam("ActorSync"):
             actor_sync = ActorSync(
                 target=pool,
@@ -658,11 +613,8 @@ def compose_run(
                 run_id=run_id,
             )
 
-        # The StepCoordinatorConfig is built FIRST and DrainCaps is LIFTED from its own 4
-        # fields, never a second independently-hardcoded set of literals. `stop_step`,
-        # `draw_rate_abort`, `drain_caps` and `knobs` are PASSED IN through their own
-        # resolvers rather than replaced afterwards: a literal that is always overwritten is
-        # still a second default authority.
+        # Built FIRST, `DrainCaps` LIFTED from its 4 fields, every term PASSED IN through its own
+        # resolver: a literal always overwritten afterwards is still a second default authority.
         with _seam("_step_coordinator_config"):
             step_coordinator_cfg = _step_coordinator_config(
                 stop_step=_resolve_stop_step(config, burst_stop_step),
@@ -670,9 +622,8 @@ def compose_run(
                 policy_loss_trough_abort=resolve_policy_loss_trough_abort(config.train),
                 ply_cap_abort=resolve_ply_cap_abort(config.train),
                 drain_caps=resolve_drain_caps(config.monitor),
-                # The ARMING cadence, named directly off the validated monitor section. It
-                # is NOT `knobs.log_interval` and must never become it: that identity IS the
-                # defect (armed aborts with a blind first `log_interval` steps).
+                # The ARMING cadence; never `knobs.log_interval`, which would blind armed aborts
+                # for the first `log_interval` steps.
                 gate_interval=config.monitor.gate_interval,
                 knobs=resolve_coordinator_knobs(config.train),
             )
@@ -692,34 +643,27 @@ def compose_run(
                     fused_graph_caps=resolve_fused_graph_caps(config.model_dump()),
                     # The collector's pop width and deadline; the child has no `RunConfig`.
                     inference_batching=resolve_inference_batching(config.model_dump()),
-                    # The deploy head's MCTS leaf-batch width, read from the SAME
-                    # `selfplay.leaf_batch_size` the self-play worker reads. The net's targets
-                    # are generated by leaf-batched search, so a deploy head searching at a
-                    # different width is a train/deploy mismatch.
+                    # The SAME `selfplay.leaf_batch_size` the targets were searched at; another
+                    # deploy-head width is a train/deploy mismatch.
                     leaf_batch_size=config.selfplay.leaf_batch_size,
                     # The eval leaf-graph build's WIDTH; the derivation reserves the pool's and
                     # the server's threads, so it takes only what the run has not promised.
                     leaf_build_threads=resolve_leaf_build_threads(config.model_dump()),
-                    # The eval child is a SECOND allocator on the same card, in its own
-                    # process with its own CUDA context, so it asserts the posture FOR ITSELF
-                    # at round start. THREADED here, not judged here: this seam does not know
-                    # the child's device and the child does. `None` on the not-cuda arm.
+                    # The child, a SECOND allocator in its own process, asserts the posture FOR
+                    # ITSELF; this seam only threads the token. `None` on the not-cuda arm.
                     allocator_posture=(
                         _declared_allocator_posture(config.model_dump())
                         if _posture_governs_device(config.eval.worker_device)
                         else None
                     ),
-                    # The run's declared autocast dtype, resolved ONCE here and carried to
-                    # every round — the eval child has no RunConfig, and its dense forward had
-                    # no dtype at all. The arena's ply cap is likewise the RUN's, not a module
-                    # constant that was a copy of a copy of this key.
+                    # The RUN's ply cap, carried to every round: the eval child has no RunConfig.
                     max_plies=config.eval.max_plies,
                     # The deploy head's sigma terms are the RUN's minted keys, not the
                     # player's signature defaults.
                     c_visit=config.selfplay.c_visit, c_scale=config.selfplay.c_scale,
                     q_rescale=config.selfplay.q_rescale,
                     # The deploy head searches with `deploy.search.kind` — matched to what
-                    # will be deployed, not to the training search (R351(c), LAW-15).
+                    # will be deployed, not to the training search.
                     search_kind=resolve_deploy_search_kind(config),
                     gumbel_m=config.selfplay.gumbel_m,
                     run_id=run_id, spool_dir=log_dir / "eval_spool",
@@ -736,33 +680,26 @@ def compose_run(
                     sink=run_safety.sink, heartbeat=run_safety.heartbeat,
                 )
 
-        # The round counter a stopped process left behind, restored before `pool.start()` so
-        # no round is kicked against a counter that restarted at zero: `_build_round_spec`
-        # gates the promotion channel on `round_idx % gate.stride`, so without this a resumed
-        # run's promotion cadence realigns to the restart.
+        # Restored before `pool.start()`: promotion is gated on `round_idx % gate.stride`, so a
+        # counter restarting at zero would realign a resumed run's promotion cadence.
         if resume_state is not None and eval_pipeline is not None:
             with _seam("restore_round_state"):
                 eval_pipeline.restore_round_state(round_counter=resume_state.round_counter)
 
-        # ORDER PINNED: pool starts, THEN the watchdog. The flag is set BEFORE the call, not
-        # after: `WorkerPool.start()` is three sub-starts, so a raise inside it leaves a
-        # HALF-started pool that a set-after flag reports as never started.
+        # ORDER PINNED: pool, THEN watchdog. The flag is set BEFORE the call: `start()` is three
+        # sub-starts, and a raise inside leaves a HALF-started pool a set-after flag misses.
         with _seam("pool.start"):
             pool_start_attempted = True
             pool.start()
-        # Before the watchdog arms, assert the pool's heartbeat is a bound
-        # `_DeferredHeartbeat`: a pool that got `heartbeat=None` has dead producers, so the
-        # watchdog would arm on phantom sources and fire rc 42 at 1800 s on every healthy run.
-        # The conjunct lives HERE, not inside `HeartbeatWatchdog.arm()`.
+        # A bound `_DeferredHeartbeat` is asserted HERE, before the watchdog arms: with
+        # `heartbeat=None` it would fire rc 42 at 1800 s on every healthy run.
         with _seam("producer_liveness_conjunct"):
             _assert_pool_producers_live(pool)
         with _seam("watchdog.start"):
             run_safety.watchdog.start()
 
-        # LAW-16 leg 3. The guard's only prior construction site had ZERO callers and read
-        # `dict.get` defaults over a key no schema carried; the root constructs it now from
-        # the config family's ONE resolver. Its critical arm SIGTERMs the process, which lands
-        # on the handlers installed above.
+        # The disk guard, from the config family's ONE resolver; its critical arm SIGTERMs the
+        # process, landing on the handlers installed above.
         with _seam("DiskGuard"):
             guard_spec = resolve_disk_guard(config.monitor)
             disk_guard = DiskGuard(
@@ -772,7 +709,7 @@ def compose_run(
             )
             disk_guard.start()
 
-        # The held-out witness (R366(c)): the frozen slice is opened HERE, before the coordinator
+        # The held-out witness: the frozen slice is opened HERE, before the coordinator
         # can step, so a missing or mis-hashed ring is a loud STARTUP failure; `null` opens nothing.
         with _seam("HeldoutSlice"):
             heldout_spec = resolve_heldout_gap(config.model_dump())
@@ -789,10 +726,8 @@ def compose_run(
             coordinator = StepCoordinator(
                 trainer=trainer, buffer=buffer,
                 pool=pool, eval_pipeline=eval_pipeline,
-                # `disk_guard` rides the EXISTING subsystems carrier: the O3 arm persists
-                # the ring, and the one abort reaching O3 with `abort_rule` still unrecorded
-                # is the disk guard's — it latches `critical_fired` BEFORE it signals, so this
-                # is the only term that can see it in time.
+                # The guard latches `critical_fired` BEFORE it signals, so this is how the O3 arm
+                # sees the one abort that reaches it with `abort_rule` still unrecorded.
                 subsystems=SimpleNamespace(gpu_monitor=None, disk_guard=disk_guard),
                 anchor_state=resolved_anchor, shutdown=shutdown,
                 eval_model=trainer.deploy_module(),
@@ -809,18 +744,11 @@ def compose_run(
             # fire does not move by a window on every resume (B-7).
             coordinator.restore_guard_state(resume_state.guards)
 
-        # NOTHING is swallowed. The old blanket `except Exception -> log -> return` swallowed
-        # actor-SYNC failures into an exit-0 return — a run that looks launched and never
-        # syncs. The loop's failure propagates and `close_out` still runs in a `finally`.
-        # The launch pin DERIVES from `identity.warm_start` — ONE source, no hand-synced twin;
-        # an absent row is `None`.
+        # NOTHING is swallowed: the loop's failure propagates, `close_out` runs in a `finally`.
+        # The launch pin DERIVES from `identity.warm_start` (one source); an absent row is `None`.
         declared_warm_start = resolve_bc_warm_start(config.model_dump())
-        # THE PIN HOLDS AT STEP 0 ONLY, and that qualifier is load-bearing: the config pin is
-        # the WARM-START artifact's hash, the anchor a FRESH launch must have, but a RESUMED
-        # run's anchor has legitimately moved (a promotion rewrites `best_model.pt`) and
-        # asserting the step-0 pin against it refused a resume after ONE promotion.
-        # So the pin's SOURCE follows the launch mode and neither mode is unpinned: a resume
-        # asserts the anchor THE STOP RECORDED, carried on the sidecar.
+        # THE PIN HOLDS AT STEP 0 ONLY: a fresh launch asserts the WARM-START hash, but a promotion
+        # moves a resumed run's anchor legitimately, so a resume asserts what THE STOP RECORDED.
         resumed_anchor_sha = getattr(resume_state, "anchor_sha256", None)
         expected_anchor = (
             resumed_anchor_sha if resumed_anchor_sha is not None
@@ -833,11 +761,9 @@ def compose_run(
                               best_model_path=canonical_anchor_path(checkpoint_dir),
                               expected_anchor_sha256=expected_anchor)
         finally:
-            # THE RESUMABLE-STOP DECISION, taken HERE because this is the only scope holding
-            # all three terms: `shutdown_save`, the guard's LATCHED `critical_fired`, and
-            # `abort_rule`. The teardown below records the disk rule AFTER this call, so
-            # `abort_rule` alone cannot see a disk abort. Anything short of all three saying
-            # "operator stop" runs the terminal battery.
+            # THE RESUMABLE-STOP DECISION: the only scope holding `shutdown_save`, the guard's
+            # LATCHED `critical_fired` and `abort_rule` (blind to a disk abort, recorded later).
+            # Anything short of all three saying "operator stop" runs the terminal battery.
             resumable_stop = bool(
                 shutdown.shutdown_save
                 and shutdown.abort_rule is None
@@ -848,67 +774,37 @@ def compose_run(
                     pool, start_attempted=pool_start_attempted),
                 resumable_stop=resumable_stop)
     finally:
-        # THE LIVE ARMING AUDIT, and this is its ONE production consumer. CI gate 12 audits
-        # the `disk_space_exhausted` row against a CONFIG NUMBER with no process to ask, so it
-        # cannot tell a guard that ran from one whose `check_once` raised on every tick. This
-        # REPORTS and does not refuse; the refusal half belongs at the mint preflight.
-        #
-        # It sits at the TOP of the ladder because `run_safety.sink.close()` runs on the
-        # PARTIAL path and `disk_guard.stop()` after it — an emit there hits a closed file,
-        # which `JsonlEventSink` counts as a persistence failure and the heartbeat watchdog
-        # turns into `os._exit(43)`. This is the only point where the sink is open on BOTH
-        # paths. The counters are read before the thread is joined, but `checks_total` only
-        # ever RISES, so the reading can under-report and never over-report.
+        # THE LIVE ARMING AUDIT (gate 12 sees only a config number); it REPORTS, never refuses. At
+        # the TOP of the ladder, the only point where the sink is open on BOTH paths; `checks_total`
+        # only RISES, so reading it before the join can under-report, never over-report.
         _emit_live_arming_audit(
             config, run_safety.sink,
             probes={DISK_GUARD_LIVENESS_PROBE:
                     lambda: disk_guard is not None and disk_guard.checks_total > 0},
         )
         if coordinator is None:
-            # PARTIAL COMPOSITION: `close_out` never ran and never will, so this is the only
-            # place the run-safety threads and the pool get stopped.
-            #
-            # Why the arm restriction: `close_out` owns neither call — repo-wide,
-            # `watchdog.stop()` and `sink.close()` have EXACTLY ONE call site each in all of
-            # `src/`, the two lines below, so on the COMPLETED path both are left to process
-            # exit. The forcing cause is DEBT, not principle: seven off-list suites stand in
-            # `SimpleNamespace` sinks and watchdogs implementing no `close`/`stop`, so an
-            # unconditional teardown here reds them; completing that protocol against
-            # concretes is the condition under which these two lines move out of the `if`.
-            # Bounded meanwhile: the sink is line-buffered, the watchdog thread is a daemon,
-            # and both production callers exit the process immediately after this returns.
+            # PARTIAL COMPOSITION: `close_out` never ran, so the pool and run-safety threads stop
+            # HERE. The arm restriction is DEBT (test fakes lack `close`/`stop`); meanwhile the sink
+            # is line-buffered, the watchdog a daemon, and both production callers exit right after.
             _stop_pool_if_start_attempted(pool, start_attempted=pool_start_attempted)()
             run_safety.watchdog.stop()
             run_safety.sink.close()
-        # The eval pipeline's poller thread and any in-flight spawn child need explicit
-        # teardown on BOTH paths: `close_out` drains the in-flight round on the completed path
-        # but never joins the poller, and on the PARTIAL path it never ran at all.
+        # The eval poller and any spawn child need teardown on BOTH paths: `close_out` never joins
+        # the poller, and on the PARTIAL path it never ran.
         if eval_pipeline is not None:
             eval_pipeline.stop()
         # The disk guard is this root's on BOTH paths — `close_out` has never heard of it, and
         # a daemon guard that outlives its run will SIGTERM a process no longer running one.
         if disk_guard is not None:
             disk_guard.stop()
-            # THE SEAM: a guard that fired stopped this run, and until this line said so the
-            # run exited 0 — the handler writes `shutdown_save`/`running` and never
-            # `abort_rule`, so a supervisor relaunched into the same full volume. Named HERE
-            # and not in the guard because the name is a MANIFEST row's and `mantis.train` may
-            # not import that module. The read happens AFTER `stop()` joined the guard thread,
-            # so the latch is final; `record_abort` is set-once, so first fire wins.
+            # A fired guard's handler never writes `abort_rule`, so it is recorded HERE (the name is
+            # a MANIFEST row's, which `mantis.train` may not import), AFTER `stop()` joined the
+            # thread so the latch is final; `record_abort` is set-once, so first fire wins.
             if disk_guard.critical_fired:
                 shutdown.record_abort(DISK_SPACE_ABORT_RULE)
-        # THE TERMINAL-EVAL SEAM. `close_out` computed the terminal round's result and then
-        # DISCARDED it one frame below `ShutdownState` — the only object that can carry an
-        # outcome to `main` — so a run whose terminal battery was killed or could not persist
-        # its ladder state exited 0 and the supervisor recorded a clean finish.
-        #
-        # This read sits AFTER the disk-guard read so first-fire-wins keeps the ROOT CAUSE: a
-        # disk-full run whose terminal eval then breaks BECAUSE the volume is full reports 47.
-        #
-        # The bare `EvalBrokenReason(raw)` is the RUNTIME half of the unrepresentability claim
-        # — a `# type: ignore` slips past the typed chokepoints, and the reason crosses a JSON
-        # boundary where types do not travel. A spelling no member spells is a loud
-        # `ValueError` here rather than a silent rc 0.
+        # THE TERMINAL-EVAL SEAM: `ShutdownState` alone carries the outcome to `main`. Read AFTER
+        # the disk guard so a disk-full run reports the ROOT CAUSE (47); the bare
+        # `EvalBrokenReason(raw)` makes an unknown spelling crossing JSON raise instead of rc 0.
         if coordinator is not None:
             terminal_reason = coordinator.terminal_eval_reason
             if terminal_reason is not None:
@@ -936,7 +832,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     `--config` and `--out-dir` are required with NO `default=`: a defaulted `--out-dir` is a run
     input the code decides, and every run that forgets the flag writes into one shared directory.
-    The OPTIONAL flags, `--resume-from` and `--inherit-preflight` (R360(c)), default to `None` —
+    The OPTIONAL flags, `--resume-from` and `--inherit-preflight`, default to `None` —
     no action, not a value — and are flags, not schema keys, because each names a property of
     THIS invocation. NO `--device` flag and no eval switch: `config.train.device` and
     `config.eval_enabled` are the only routes. The preflight's in-repo `--out-dir` refusal is not
@@ -951,14 +847,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     Raises:
         PreflightStampRefusal: the loaded config has no passing preflight stamp for this tree
-            (R348(c)) and inherits none (R360(c)); a named subclass says which fact is missing.
+            and inherits none; a named subclass says which fact is missing.
         UnregisteredAbortExitError: an abort fired whose rule authors no exit code.
     """
-    # THE FIRST STATEMENT, before argparse and before any collaborator exists: the window this
-    # closes is exactly "the supervisor was killed while the run was still coming up". A NO-OP
-    # unless a mantis supervisor stamped its pid in the environment — an unconditional arm
-    # would SIGKILL every unattended run the moment its launching shell exited, and would arm
-    # the pytest process through this function's in-process callers. Never at import time.
+    # THE FIRST STATEMENT: closes the window where the supervisor dies while the run comes up. A
+    # NO-OP unless a supervisor stamped its pid in the env (else unattended runs and pytest would
+    # be armed); never at import time.
     arm_parent_death_if_supervised()
     parser = argparse.ArgumentParser(
         prog="python -m mantis.run",
@@ -976,18 +870,14 @@ def main(argv: Sequence[str] | None = None) -> int:
              "run's vested preflight stamp instead of one of its own (R360(c))")
     args = parser.parse_args(list(sys.argv[1:] if argv is None else argv))
 
-    # THE ONE mantis stderr handler, installed at the process entry. Until this call
-    # `configure_logging` had ZERO callers, so Python's lastResort dropped every `logger.info`
-    # and printed WARNING+ unformatted. Installed BEFORE the launch so the boot path's own
+    # THE ONE mantis stderr handler, installed before the launch so the boot path's own
     # diagnostics are covered.
     configure_logging()
 
-    # `resolve_bootstrap` exists to fail a stale `--resume-from` AT LAUNCH, before
-    # `torch.load`, and had zero callers — so a mistyped path surfaced as a torch error deep
-    # inside `init_trainer`'s resume branch, after the composition root had built a run.
+    # Fails a stale `--resume-from` AT LAUNCH, before `torch.load` and before any run is built.
     bootstrap = resolve_bootstrap(args.resume_from)
     config = load_config(args.config)
-    # R348(c): a run cannot skip the manual preflight by not running it; the stamp is keyed by
+    # A run cannot skip the manual preflight by not running it; the stamp is keyed by
     # the config's identity hash and bound to the tree that preflighted it.
     stamp = require_preflight_stamp(config, tree_root=Path(__file__).resolve().parent,
                                     inherit_from=args.inherit_preflight)
