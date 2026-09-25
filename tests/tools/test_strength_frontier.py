@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 from _toolpath import load_module_by_path
 
+from mantis.config.census import production_configs
+
 _REPO = Path(__file__).resolve().parents[2]
 
 
@@ -14,11 +16,11 @@ def frontier():
     return load_module_by_path("strength_frontier_under_test", _REPO / "tools" / "strength_frontier.py")
 
 
-@pytest.fixture(scope="module")
-def base(frontier, tmp_path_factory):
+@pytest.fixture(scope="module", params=production_configs(_REPO), ids=lambda p: p.name)
+def base(frontier, tmp_path_factory, request):
     from mantis.config.loader import load_config
 
-    config = load_config(str(_REPO / "configs" / "run7.yaml"))
+    config = load_config(request.param)
     return config, frontier.base_round_spec(config, work_dir=tmp_path_factory.mktemp("f"))
 
 

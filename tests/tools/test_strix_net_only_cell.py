@@ -10,6 +10,7 @@ import pytest
 
 from mantis.bots.protocol import BotProtocol
 from mantis.bots.strix import NET_ONLY_SUFFIX, StrixBot, load_request
+from mantis.config.census import production_configs
 from _toolpath import load_module_by_path
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -60,10 +61,12 @@ def test_the_resolver_admits_the_net_only_variant_and_refuses_a_third() -> None:
         variant_solver("checkpoint_00000001", stem=_STEM)
 
 
-def test_a_frontier_cell_with_the_solver_off_composes_the_net_only_rung(frontier, tmp_path: Path) -> None:
+@pytest.mark.parametrize("config_path", production_configs(_REPO), ids=lambda p: p.name)
+def test_a_frontier_cell_with_the_solver_off_composes_the_net_only_rung(
+        frontier, tmp_path: Path, config_path: Path) -> None:
     from mantis.config.loader import load_config
 
-    config = load_config(str(_REPO / "configs" / "run8.yaml"))
+    config = load_config(config_path)
     base = frontier.base_round_spec(config, work_dir=tmp_path / "w")
     cell = {"label": "net_only", "candidate": "x", "search_kind": "puct", "sims": 256, "opponent": "strix",
             "strix_sims": 256, "strix_solver": False, "games": 288, "concurrency": 8}

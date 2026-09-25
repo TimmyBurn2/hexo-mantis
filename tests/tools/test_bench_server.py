@@ -8,13 +8,15 @@ from pathlib import Path
 import pytest
 import torch
 
+from mantis.config.census import production_configs
 from mantis.config.loader import load_config
 from mantis.encoding import lookup
 from mantis.model import arch_from_spec_and_config, build_net
 from _toolpath import load_module_by_path
 
 _REPO = Path(__file__).resolve().parents[2]
-_CONFIG = _REPO / "configs" / "run8.yaml"
+#: One production member: the witness is the server's leaf accounting, and each member builds a full net.
+_CONFIG = production_configs(_REPO)[0]
 _GAME = ["(-2,2)", "(1,2)", "(3,1)", "(-2,1)", "(-2,0)", "(-2,-2)", "(-2,-1)", "(-1,1)", "(-1,0)",
          "(0,0)", "(-3,2)", "(0,1)", "(-3,1)", "(-4,1)", "(1,1)", "(-4,2)", "(-1,-1)", "(0,-2)"]
 

@@ -10,6 +10,7 @@ import pytest
 from mantis._engine import Board
 from mantis.encoding import lookup
 from mantis.model import GnnArchV2, build_net, gnn_widths_block
+from mantis.config.census import production_configs
 from mantis.model.identity import net_param_hash
 from mantis.train.checkpoints import save_checkpoint
 from _toolpath import load_module_by_path
@@ -31,7 +32,9 @@ def _tiny_checkpoint(tmp_path: Path, encoding: str = _ENC) -> tuple[Path, str]:
     spec = lookup(encoding)
     arch = GnnArchV2(in_dim=int(spec.node_feat_dim), edge_dim=int(spec.edge_feat_dim), **_TINY)
     net = build_net(arch)
-    config = _minimal_config() if encoding == _ENC else load_config(_REPO / "configs" / "run8.yaml").model_dump()
+    config = _minimal_config() if encoding == _ENC else next(
+        dump for dump in (load_config(path).model_dump() for path in production_configs(_REPO))
+        if dump["identity"]["encoding"] == encoding)
     assert config["identity"]["encoding"] == encoding
     config["model"]["gnn"] = gnn_widths_block(arch)
     path = save_checkpoint(model=net, optimizer=None, scaler=None, scheduler=None, step=0,

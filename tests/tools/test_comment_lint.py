@@ -113,7 +113,7 @@ def test_unparseable_python_measures_as_zero_rather_than_crashing_the_gate():
     ("docs/design/repo_design.md", False),
     ("docs/x.py", False),
     ("src/mantis/py.typed", False),
-    ("configs/run6.yaml", False),
+    ("configs/dev_example.yaml", False),
 ])
 def test_the_scope_predicate_names_the_four_directories_and_two_suffixes(rel: str, want: bool):
     assert GATE.in_scope(rel) is want

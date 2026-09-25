@@ -10,6 +10,8 @@ from typing import Any
 import pytest
 from _toolpath import load_module_by_path
 
+from mantis.config.census import production_configs
+
 _REPO = Path(__file__).resolve().parents[2]
 _RUN = "runx"
 
@@ -222,12 +224,14 @@ def test_once_reads_the_named_checkpoint_in_the_named_unit(follower_mod, tmp_pat
     assert f.read_one(ckpt, trigger="once") == ("receipted", out) and len(cells.calls) == 1
 
 
-def test_the_equal_work_cell_composes_through_the_frontier_as_the_256_256_rung(follower_mod, tmp_path: Path) -> None:
+@pytest.mark.parametrize("config_path", production_configs(_REPO), ids=lambda p: p.name)
+def test_the_equal_work_cell_composes_through_the_frontier_as_the_256_256_rung(
+        follower_mod, tmp_path: Path, config_path: Path) -> None:
     """The unit the sidecar names is the RoundSpec the child plays: ours 256, strix 256, 288 games, 8 in flight."""
     from mantis.config.loader import load_config
 
     frontier = load_module_by_path("strength_frontier_for_follower", _REPO / "tools" / "strength_frontier.py")
-    config = load_config(str(_REPO / "configs" / "run8.yaml"))
+    config = load_config(config_path)
     base = frontier.base_round_spec(config, work_dir=tmp_path / "w")
     cell = follower_mod.compose_cell(Path("/x/run8_00015000_deadbeef.ckpt"), unit="equal_work",
                                      step=15000, games=288, concurrency=8, label="equal_work_run8_15000")
@@ -236,7 +240,7 @@ def test_the_equal_work_cell_composes_through_the_frontier_as_the_256_256_rung(f
     assert (round_spec.search_kind, round_spec.strix_model_sims, job.bot, job.opponent_sims, job.games) == (
         "puct", 256, "strix", 256, 288)
     assert round_spec.rung_concurrency == 8 and round_spec.step == 15000
-    assert job.opening_book == config.eval.gate.opening_book == "book_v1_s20260625_p4"
+    assert job.opening_book == config.eval.gate.opening_book
     assert frontier.cell_channel(cell) == "external"
 
 
