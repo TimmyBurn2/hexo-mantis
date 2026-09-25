@@ -349,20 +349,20 @@ Both were found by running the gate set rather than by reading it, and both are 
 - **CARD-STYLE-BACKLOG — the judgment half of the R346(f) census, held by the ratchet.** The
   mechanical half landed 2026-09-17 (63 stale R8 headers, nine three-line runs, the labelled
   separator rules, a cite-only line, a file-top banner). What is left is a POLICY call and
-  site-by-site work, measured at HEAD by `comment_lint.py --measure` and the census script:
-  `private_docstring_excess_lines` 1 530 (R346(f) names PUBLIC APIs; whether a private symbol may
-  carry a multi-line docstring is the architect's call — the measure exists so the answer can be
-  driven, never presumed), `rust_doc_excess_lines` 2 677, `comment_excess_lines` 3 451 (1 225 runs
-  beyond two, 442 of them invariant-tagged), `ruling_cite_comment_lines` 351 (measured, not gated).
-  The 104 parenthetical ruling cites in comments and 152 in docstrings were REVIEWED and kept:
-  each attaches a ruling or law to the fact it grounds (a pool size, a refused default, a fatal
-  latch), which is the provenance class R346(f) carves out — a strip would delete where a number
-  came from. Also on contact, never as a pass: the dense push arm (`push_dense`, DELETED
-  with the drain oracle's re-base on graph goldens, R368 W5); the F1 defer path (`declared_keys`/`declared_lr` no production caller
-  passes, B-14 — its flat `RESUME_CHECKPOINT_OWNED_KEYS` is a golden-pinned contract row);
-  `get_temperature` (DELETED with selfplay/utils.py, R368 W3), `collate_graph_batch(device=None)`, the two segment softmaxes,
-  the double `torch.load` (B-15). Every measure may fall and may never rise; the floors are the
-  record of progress.
+  site-by-site work, measured at HEAD by `comment_lint.py --measure` against the gated floors
+  named in `tools/ci_gates/comment_length_floor.txt` (that file holds the current values, never
+  transcribed here): `comment_excess_lines`, `banner_comment_lines`, `docstring_excess_lines`,
+  `private_docstring_excess_lines` (R346(f) names PUBLIC APIs; whether a private symbol may carry
+  a multi-line docstring is the architect's call — the measure exists so the answer can be driven,
+  never presumed), `rust_doc_excess_lines`, `ruling_cite_lines` (R368(g); supersedes the retired
+  `ruling_cite_comment_lines`), and `textfile_comment_excess_lines`. The parenthetical ruling cites
+  in comments and docstrings were REVIEWED and kept: each attaches a ruling or law to the fact it
+  grounds (a pool size, a refused default, a fatal latch), which is the provenance class R346(f)/
+  R368(g) carve out — a strip would delete where a number came from. Also on contact, never as a
+  pass: the F1 defer path (`declared_keys`/`declared_lr` no production caller passes, B-14 — its
+  flat `RESUME_CHECKPOINT_OWNED_KEYS` is a golden-pinned contract row); `collate_graph_batch(device=None)`,
+  the two segment softmaxes, the double `torch.load` (B-15). Every measure may fall and may never
+  rise; the floor file is the record of progress.
 
 ## Opened by R352 (run7 kind, strix rung, viewer)
 
