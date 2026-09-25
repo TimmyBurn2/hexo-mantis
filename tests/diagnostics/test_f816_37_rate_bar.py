@@ -1,6 +1,6 @@
-"""Planted breaks for the draw-rate collapse bar — each condemnation path must fire on its own.
+"""Planted breaks for the memory-corruption rate bar — each condemnation path must fire on its own.
 
-It condemns with no further ruling, so the cost of this check being wrong is either a
+The bar condemns with no further ruling, so the cost of this check being wrong is either a
 run that should have stopped or an instance destroyed for nothing. Every branch is planted here,
 including the two ways it could wrongly report CLEAR.
 """
