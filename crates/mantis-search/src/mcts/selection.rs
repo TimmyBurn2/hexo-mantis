@@ -121,6 +121,14 @@ fn pick_best_puct(
     best_idx
 }
 
+/// Rewind `board` over one descent's `diffs`, newest first, back to the root position.
+#[inline]
+fn rewind(board: &mut Board, diffs: &mut Vec<MoveDiff>) {
+    while let Some(diff) = diffs.pop() {
+        board.undo_move(diff);
+    }
+}
+
 impl MCTSTree {
     /// PUCT score for `child_idx`, from `parent_idx`'s player perspective.
     ///
@@ -255,6 +263,53 @@ impl MCTSTree {
         best.map(|(j, _)| (first + j) as u32)
     }
 
+    /// One descent from the root: the leaf, or `None` on overlap with a pending leaf (virtual loss
+    /// undone, `board` rewound). A desync unwinds both before it propagates.
+    #[inline]
+    fn descend(
+        &mut self,
+        board: &mut Board,
+        diffs: &mut Vec<MoveDiff>,
+        pending_ids: &FxHashSet<u32>,
+    ) -> Result<Option<u32>, SelectionDesync> {
+        diffs.clear();
+        let (leaf_idx, leaf_depth) = match self.select_one_leaf(board, diffs) {
+            Ok(pair) => pair,
+            Err(desync) => {
+                self.undo_virtual_loss(desync.node);
+                rewind(board, diffs);
+                return Err(desync);
+            }
+        };
+        self.depth_accum += leaf_depth as u64;
+        self.sim_count += 1;
+
+        if pending_ids.contains(&leaf_idx) {
+            self.undo_virtual_loss(leaf_idx);
+            rewind(board, diffs);
+            return Ok(None);
+        }
+        Ok(Some(leaf_idx))
+    }
+
+    /// Queue the leaf `board` sits on for evaluation, then rewind `board` to the root.
+    #[inline]
+    fn queue_leaf(
+        &mut self,
+        leaf_idx: u32,
+        board: &mut Board,
+        diffs: &mut Vec<MoveDiff>,
+        boards: &mut Vec<Board>,
+        pending_ids: &mut FxHashSet<u32>,
+    ) {
+        // `pending` owns the fully-replayed leaf `Board`, so expansion never re-replays from
+        // `root_board`; this sibling of the NN-input board skips the `legal_cache` copy.
+        boards.push(board.clone());
+        self.pending.push((leaf_idx, board.clone()));
+        pending_ids.insert(leaf_idx);
+        rewind(board, diffs);
+    }
+
     /// Select up to `n` distinct leaves for evaluation.
     ///
     /// # Errors
@@ -276,29 +331,9 @@ impl MCTSTree {
 
         while i < n && attempts < max_attempts {
             attempts += 1;
-            diffs.clear();
-            let (leaf_idx, leaf_depth) = match self.select_one_leaf(&mut board, &mut diffs) {
-                Ok(pair) => pair,
-                Err(desync) => {
-                    // Unwind before propagating, or the path keeps a virtual loss for a walk that
-                    // produced no leaf; the board rewinds too, so `root_board` holds for a retry.
-                    self.undo_virtual_loss(desync.node);
-                    while let Some(diff) = diffs.pop() {
-                        board.undo_move(diff);
-                    }
-                    return Err(desync);
-                }
-            };
-            self.depth_accum += leaf_depth as u64;
-            self.sim_count += 1;
-
-            if pending_ids.contains(&leaf_idx) {
-                self.undo_virtual_loss(leaf_idx);
-                while let Some(diff) = diffs.pop() {
-                    board.undo_move(diff);
-                }
+            let Some(leaf_idx) = self.descend(&mut board, &mut diffs, &pending_ids)? else {
                 continue;
-            }
+            };
 
             // An `Arc` refcount bump, not a 1448 B copy; the TT borrow drops before the
             // `&mut self` expand. Dispatch on the dense vs ragged legal-set variant.
@@ -315,21 +350,17 @@ impl MCTSTree {
                         self.expand_and_backup_single_ls(leaf_idx, &board, &ls, value)
                     }
                 }
-                while let Some(diff) = diffs.pop() {
-                    board.undo_move(diff);
-                }
+                rewind(&mut board, &mut diffs);
                 continue;
             }
 
-            // `pending` owns the fully-replayed leaf `Board`, so expansion never re-replays from
-            // `root_board`; this sibling of the NN-input board skips the `legal_cache` copy.
-            boards.push(board.clone());
-            self.pending.push((leaf_idx, board.clone()));
-            pending_ids.insert(leaf_idx);
-
-            while let Some(diff) = diffs.pop() {
-                board.undo_move(diff);
-            }
+            self.queue_leaf(
+                leaf_idx,
+                &mut board,
+                &mut diffs,
+                &mut boards,
+                &mut pending_ids,
+            );
             i += 1;
         }
 
@@ -373,39 +404,23 @@ impl MCTSTree {
 
         for &child in forced {
             self.forced_root_child = Some(child);
-            diffs.clear();
-            let (leaf_idx, leaf_depth) = match self.select_one_leaf(&mut board, &mut diffs) {
-                Ok(pair) => pair,
+            let leaf = match self.descend(&mut board, &mut diffs, &pending_ids) {
+                Ok(leaf) => leaf,
                 Err(desync) => {
-                    // Unwind this descent before propagating, exactly as `select_leaves` does: a
-                    // virtual loss left applied would permanently penalise nodes for a leafless walk.
-                    self.undo_virtual_loss(desync.node);
-                    while let Some(diff) = diffs.pop() {
-                        board.undo_move(diff);
-                    }
                     self.forced_root_child = None;
                     return Err(desync.into());
                 }
             };
-            self.depth_accum += leaf_depth as u64;
-            self.sim_count += 1;
-
-            if pending_ids.contains(&leaf_idx) {
-                self.undo_virtual_loss(leaf_idx);
-                while let Some(diff) = diffs.pop() {
-                    board.undo_move(diff);
-                }
-                continue;
-            }
-
             // No TT fast path here: a Gumbel round needs an exact leaf count per round trip,
             // which `select_leaves`' uncounted TT-hit expansions would break.
-            boards.push(board.clone());
-            self.pending.push((leaf_idx, board.clone()));
-            pending_ids.insert(leaf_idx);
-
-            while let Some(diff) = diffs.pop() {
-                board.undo_move(diff);
+            if let Some(leaf_idx) = leaf {
+                self.queue_leaf(
+                    leaf_idx,
+                    &mut board,
+                    &mut diffs,
+                    &mut boards,
+                    &mut pending_ids,
+                );
             }
         }
         self.forced_root_child = None;
