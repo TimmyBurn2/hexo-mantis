@@ -1,7 +1,7 @@
-"""The strix rung adapter (RUNG-2, R352(e)): the pinned `SootyOwl/hexo-strix` checkpoint as a
+"""The strix rung adapter: the pinned `SootyOwl/hexo-strix` checkpoint as a
 fixed external reference, played by `tools/strix_driver.py` in the vendored tree's own venv
 (JSON lines; deterministic — strix's noise-off argmax-of-improved-policy acting). The fence is
-read at contact: every reply's legal set is compared with the board's and counted (R257)."""
+read at contact: every reply's legal set is compared with the board's and counted."""
 from __future__ import annotations
 
 import json
@@ -32,10 +32,10 @@ PIN_ABSENT_MARKER = "strix pin absent"
 
 #: strix's `m_actions` at its own deploy (`scripts/play_vs_shrimp.py`); cell B keeps it too.
 DEFAULT_M_ACTIONS = 16
-#: R358(a): `<stem>:net_only` plays the pinned checkpoint with its root VCF solver OFF — a distinct
+#: `<stem>:net_only` plays the pinned checkpoint with its root VCF solver OFF — a distinct
 #: instrument (the variant rides the regime key), never the rung on record, which loads solver ON.
 NET_ONLY_SUFFIX = ":net_only"
-#: R365 E1: `<stem>:r<N>` plays the pinned checkpoint, solver ON, at the driver's `placement_radius` N
+#: `<stem>:r<N>` plays the pinned checkpoint, solver ON, at the driver's `placement_radius` N
 #: (strix trained at 6; every reading on record rides the default 8); the load line carries the key only there.
 RADIUS_SUFFIX = ":r"
 

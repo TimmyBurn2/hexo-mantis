@@ -1,6 +1,6 @@
 """BotProtocol + RungUnresolvable — the ONE opponent-bot contract (design §a.2 protocol.py).
 
-Every arena/eval opponent (in-repo or a future WP12-R adapter) satisfies this Protocol.
+Every arena/eval opponent (in-repo or a future adapter) satisfies this Protocol.
 NO temperature, NO think-time parameter: deploy-matched play is argmax-only end to end
 (dispatch item 7) — a bot that needed either would not be representable here, by design.
 """
