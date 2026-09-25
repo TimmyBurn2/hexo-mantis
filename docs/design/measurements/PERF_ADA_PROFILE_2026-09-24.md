@@ -63,9 +63,23 @@ before the bench):
 |---|---|---|---|---|---|
 | L0 instrument (parent of L1) | 0 (tools and tests only) | — | `c9474c85` | 1 853 [1 768, 1 869]; repeat DIFFERS, max \|Δvalue\| 0.0657, \|Δp\| 0.0153 | — |
 | L1 `index_fill_` mask | +8 … +15 % (item 3: +12 %) | median < 0.97 × parent, or slower beyond the IQR | `a25183cd` | 2 101 [1 994, 2 106]; `launch` 31.4 → 8.9 ms; repeat DIFFERS 0.0671 / 0.0148 | **+13.4 %**, faster beyond the IQR |
-| L2 fp32 sorted aggregation (custom op) | +30 … +65 % over L1 (item 3 idxput + nosync: +87 % over base, but fp32 values and chunking cost more) | median < 0.97 × L1, or slower beyond the IQR | | | |
+| L2 fp32 sorted aggregation (custom op) | +30 … +65 % over L1 (item 3 idxput + nosync: +87 % over base, but fp32 values and chunking cost more) | median < 0.97 × L1, or slower beyond the IQR | `6efa0c2e` | 1 934 [1 907, 2 003]; `launch` 8.9 → 11.4 ms, `gpu_wait` 25.3 → 26.6 ms; repeat: value EXACT, prob 1.2e-7 (the fp32 `segment_sum` of the served softmax) | **−7.9 %: PAST THE ABORT LINE (2 038) — HALT** |
 
 The repeat probe reads DIFFERS on both rows by construction: the mask is bit-identical, and the non-determinism is the bf16 `index_add_` aggregation L2 replaces.
+
+**L2 on the box (4080S, `6efa0c2e`):** every witness green — (i) exact eager / compiled / trainer gradients; (ii-a)
+0 outputs past one ulp, max |Δ| 2.42 vs the pre-L2 spread 16; (ii-b) 0.045222 vs 0.051383; (iii) peak 8.877 vs
+8.878 GiB; OF2-10 legs 2/2b 8.877 GiB (margin 0.2 %), ratio 1.000. Trainer step A/B (run10 cfg, 45k weights and
+ring, alternated): 530.7 / 529.9 ms pre-L2 vs 529.6 / 533.4 ms production — no gain (item 3's −10 % was the bf16
+sorted path); peaks 8.92 / 8.71 vs 8.88 / 8.83 GiB. The serving bench regresses past its abort line: HALT.
+**HALT diagnosis (measurement only, same cell, 60 s × 3 windows, scratch patches of the op's module globals):**
+committed 2 051 [1 837, 2 088]; one chunk 2 294; plain `index_select` gather 2 218; plain gather + one chunk
+**2 485** [2 483, 2 596] (+18 % over L1). Both costs are real: the opaque gather blocks Inductor's gather+add+relu
+fusion, and 2^18-edge chunks multiply the sort and copy launches (`launch` 12.7 → 9.2 ms, `gpu_wait` 27.5 → 18.8
+ms). Even the best deterministic fp32 variant sits far below item 3's 3 378–3 393, which was the NON-deterministic
+fused fp32 atomic path (or the bf16 sorted path, 3 381, which does not accumulate in fp32). Served probabilities
+still differ by 6e-8–1.2e-7 on a repeat in every variant: the served softmax's fp32 `segment_sum` (and the value
+pool's `index_add_`) are atomic; the value head output is exact.
 
 ## Findings first
 
