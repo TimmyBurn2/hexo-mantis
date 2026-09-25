@@ -8,7 +8,7 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
 - Host: the operator's desktop (not a Claude environment; `CLAUDE_CODE_ENVIRONMENT_NAME` unset). AMD Ryzen 7
   3700X, 16 threads, 46 GiB, flags `avx2` only (no `avx512_bf16`, no `amx`). torch 2.11.0+cpu, `mantis._engine` OK.
 - origin/dev = 69e1532 at W0 entry (no moved commits; no rebase).
-- Wave: **W6** (docs + configs) IN PROGRESS (see `## W6`) — work order `docs/slim/handoff/W6_ADDENDUM.md`. W5 EXITED (see `## W5`). W4 EXITED: W3 EXITED. REVIEW-W3 filed (`docs/audits/REVIEW_W3_2026-09-24.md`, 0 must-fix beyond a
+- Wave: **W7** (the style pass) IN PROGRESS (see `## W7`) — work order `docs/slim/handoff/W7_ADDENDUM.md`. W6 EXITED (see `## W6`). W5 EXITED (see `## W5`). W4 EXITED: W3 EXITED. REVIEW-W3 filed (`docs/audits/REVIEW_W3_2026-09-24.md`, 0 must-fix beyond a
   ruff red in the handoff helper, 2 should-fix, 4 notes, every row group HELD, run10 MATCH re-verified); its fixes:
   ec0ac144 (ruff), cb4a5dd1 (`_is_graph` flag), bf22b4c3 (sweep docstring), plus 09fa8e6b — the exit sweep caught
   `tests/eval/test_graph_round_encoding.py`'s recorder pinning the deleted `_is_graph`; re-pointed to the
@@ -57,6 +57,17 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   post-review docs commits (b0e959c3 + this one) re-checked with gates 10/13/14/15/17 green.
   NEXT: W5 per its addendum (the 2026-09-24 dispatcher-session scout inventory is folded into it);
   then W6, W7, W8 per HANDOFF.md.
+
+## W7 — the style pass (IN PROGRESS)
+
+**Dispatch log** (models per leg named in each row):
+
+- Entry at d18dc5bc: collected 4928 = floor; comment_lint GREEN at floor (cite 1163, comment_excess 3124, textfile
+  466); run10 MATCH; tree clean. Per-package measures re-derived with the addendum's method: identical to its table.
+- Every leg commit is checked by a scratch verifier (Python: AST equal with docstrings stripped; Rust: comment-stripped
+  token text equal; text formats: own-line `#` lines dropped) before integration.
+- Launched in parallel, each in `.wt/w7-<leg>` from d18dc5bc: L1 crates/mantis-selfplay (**opus**), L2 crates/mantis-search
+  + crates/mantis-encoding (**opus**), L3 tools/ci_gates (**opus**), L4 crates/mantis-core + -bridge + -graph (**sonnet**).
 
 ## W6 — docs + configs (EXITED 2026-09-25)
 
