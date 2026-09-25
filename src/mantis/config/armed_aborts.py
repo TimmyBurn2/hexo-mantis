@@ -565,7 +565,7 @@ MANIFEST: tuple[ArmedAbort, ...] = (
                        "train.policy_loss_trough_abort.max_step"),
         status=Status.DEFERRED,
         exit_code=POLICY_LOSS_TROUGH_EXIT_CODE,
-        owner="run7's mint (R350(b)(iv): armed by the operator's forward at the re-mint)",
+        owner="a mint that pre-registers it (R350(b)(iv): armed by the operator's forward at the mint)",
         source_pin=(
             "src/mantis/run.py",
             "policy_loss_trough_abort=resolve_policy_loss_trough_abort(config.train)",
@@ -575,11 +575,11 @@ MANIFEST: tuple[ArmedAbort, ...] = (
             "pooled into one mean per monitor.gate_interval window, the FIRST window's mean is "
             "the reference (under the value warm-up it is the untouched prior's CE against "
             "the run's own targets), and consec later windows each at least delta_nats above "
-            "it, at or before max_step, halt cooperatively (exit 49) — run6's trough rose "
-            "2.28 -> 2.86 nats over 12k steps with nobody watching. DEFERRED, not REQUIRED: "
-            "configs/run6.yaml is a finished run's record and mints null truthfully; run7's "
-            "mint proposes {delta_nats: 0.2, consec: 3, max_step: 5000} and flips this row to "
-            "REQUIRED as a one-field data edit. The cadence is an UPPER bound: at gate_interval "
+            "it, at or before max_step, halt cooperatively (exit 49) — the run6 block's trough "
+            "rose 2.28 -> 2.86 nats over 12k steps with nobody watching. DEFERRED, not "
+            "REQUIRED: no production config has armed it yet; a mint that pre-registers "
+            "{delta_nats: 0.2, consec: 3, max_step: 5000} flips this row REQUIRED as a "
+            "one-field data edit. The cadence is an UPPER bound: at gate_interval "
             "1000 the earliest fire is boundary 4 = step 4000 <= 5000."
         ),
     ),
@@ -591,8 +591,8 @@ MANIFEST: tuple[ArmedAbort, ...] = (
         cadence_paths=("train.ply_cap_abort.min_step",),
         status=Status.DEFERRED,
         exit_code=PLY_CAP_ATTRACTOR_EXIT_CODE,
-        owner=("configs/run6.yaml — a finished run's record that mints null truthfully; the row "
-               "flips REQUIRED (one field) when that file leaves the config census"),
+        owner=("a production config that is a finished run's record mints null truthfully; "
+               "the row flips REQUIRED (one field) when every production config arms it"),
         source_pin=(
             "src/mantis/run.py",
             "ply_cap_abort=resolve_ply_cap_abort(config.train)",
@@ -604,12 +604,13 @@ MANIFEST: tuple[ArmedAbort, ...] = (
             "min_step halts cooperatively (exit 50). Below window_games completed games the "
             "gate makes NO OBSERVATION (skip-counted), never a rate over a partial window. "
             "shakedown7 (F-52) reached 0.84-0.86 inside four hours while the armed draw-rate "
-            "abort's min_step 25000 was a day away; run7 mints {rate: 0.5, window_games: 600, "
-            "min_step: 3000} — run6's block never exceeded 0.005; on shakedown7's record the "
+            "abort's min_step 25000 was a day away; the minted value is {rate: 0.5, "
+            "window_games: 600, min_step: 3000} (what run10 arms) — run6's block never "
+            "exceeded 0.005; on shakedown7's record the "
             "600-game window first exceeded 0.5 at game 2229 (+3.4 h, train step ~2170), and "
-            "min_step 3000 is ~2.6 h at run6's 1160 steps/h. DEFERRED, not REQUIRED, for the "
-            "trough row's reason: "
-            "configs/run6.yaml is a finished run's record and mints null truthfully. The "
+            "min_step 3000 is ~2.6 h at run6's 1160 steps/h. DEFERRED, not REQUIRED: a "
+            "production config that is a finished run's record mints null truthfully; the row "
+            "flips REQUIRED (one field) when every production config arms it. The "
             "cadence is the train-step clock: the earliest fire is min_step itself."
         ),
     ),
@@ -699,8 +700,8 @@ MANIFEST: tuple[ArmedAbort, ...] = (
             "'terminal eval degraded' and not WHICH break; that is stated, not hidden. "
             "WHY REQUIRED AND NOT DEFERRED, the exact test the grad-norm row below fails: "
             "nothing has to be invented and nothing is owed. train.terminal_eval_enabled is "
-            "a REQUIRED typed bool (config/schema/train.py) minted true on all six "
-            "committed configs, so gate 12 is green the moment this row lands and NO armed "
+            "a REQUIRED typed bool (config/schema/train.py) minted true on every "
+            "committed config, so gate 12 is green the moment this row lands and NO armed "
             "value moves. What the row is FOR is the drift it makes loud: the day someone "
             "mints a production config with the terminal eval off, gate 12 goes RED instead "
             "of the run quietly shipping with no terminal promotion decision at all. "
@@ -708,9 +709,9 @@ MANIFEST: tuple[ArmedAbort, ...] = (
             "train.terminal_eval_enabled are true, and a row carries ONE config_path. The "
             "nearer condition is armed here (it gates the terminal round specifically, "
             "where eval_enabled gates all eval); the other half is held by "
-            "tests/config/test_minted_config_remint.py::"
-            "test_a_minted_config_carries_the_identity_and_eval_leaves, which asserts "
-            "leaves['eval_enabled'] is True over all six committed configs — a real "
+            "tests/test_run_eval_enabled_authority.py::"
+            "test_every_production_config_declares_eval_enabled_true, which asserts every "
+            "production config declares eval_enabled in its own text and True — a real "
             "per-config assertion, not a live-consumer pin, which is why disclosure is "
             "sufficient rather than merely tolerable. "
             "SECOND RESIDUAL: target_integrity_defects, the sibling Phase-T counter this "
