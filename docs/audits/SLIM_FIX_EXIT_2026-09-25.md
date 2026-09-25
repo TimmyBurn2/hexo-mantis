@@ -10,8 +10,8 @@ per-row ledger and per-wave dispatch logs remain in git history at the dissoluti
 **Status: READY-TO-MERGE.** The wave STOPS here by ruling: no fast-forward, no push, `dev`
 untouched. The operator enacts the merge after reading this record. run10's launch base rule
 (R368(i)) applies to the merge: run10 launches from the merged tip only if the full gate set is
-green at it, slow tier included (the sweep runs at this packet's close and its result is recorded
-in §9); otherwise from `69e1532`.
+green at it, slow tier included (it is: §9's re-run at `4e119a3c`, ALL GREEN, slow tier RAN);
+otherwise from `69e1532`.
 
 ## 1. BEFORE and AFTER figures
 
@@ -263,9 +263,20 @@ what makes this the packet-exit gate (R333(b)).
   comment_excess 2 143, banner 0, docstring_excess 11 897, private_docstring 1 283, rust_doc
   2 235, ruling_cite 91, textfile 228.
 - run10 MATCH at the post-grant tip and at the final tip (the pinned procedure: §10's appendix).
-- `make gates.exit` at the final tip in `.wt/gates`, user unit `mantis-gates-w8`: **PENDING —
-  the result is appended HERE, verbatim from the unit's log, when the sweep lands** (green, or the
-  recorded-red path per the loop's step-5 rule).
+- `make gates.exit` at the final tip, user unit `mantis-gates-w8` in `.wt/gates`, run twice:
+  - First run at `34cbc656` (10:27–11:40 UTC, 1 h 13 m wall): 2a/2b/4/5 GREEN, 3b GREEN (40 passed,
+    4 skipped, 2 912 s), slow tier GREEN (5 passed), gates 7–17 GREEN — and **3a/3c RED on one
+    root cause**: grant 1(a)'s test rename (`test_booting_run5…` → `test_booting_a_cuda_minted_config…`)
+    left `tools/ci_gates/tier_declaration.txt` stale (2 UNDECLARED + 2 STALE rows; 10 failures, all
+    the gate-3 self-tests). The sweep is what caught it — the file-local runs never execute the
+    census. Fixed at `4e119a3c` (the two declaration rows renamed; gate 3c rc 0, the 41 self-tests
+    green, comment_lint GREEN, run10 MATCH re-verified).
+  - Re-run at `4e119a3c` (1 h 12 m wall, 7 h 24 m CPU, 9.4 G peak): **ALL GREEN — 19 gates,
+    slow tier RAN.** 2a 1 083 s; 3a 356 s (4 883 passed, 16 skipped, 0 failed); 3b 2 859 s (40
+    passed, 4 skipped); slow 5 passed; 3c collected 4 948 = floor, tier census 73 declared; 8
+    ARMED+PASS (mutation self-test BITES); 14 GREEN (comment_lint at floor, pyright 248 files
+    0 errors); 15 148 justified, 0 stale; 6/7/9/10/11/12/13/16/17 GREEN. Gate 1 NOT RUN (opt-in
+    by design; the accepted cost on the record — the one check no local run reproduces).
 - The branch does NOT fast-forward `dev` and is NOT pushed. ENACTS 4 is the operator's.
 
 ## 10. Appendix — the run10 MATCH procedure (verbatim, before docs/slim dies)
