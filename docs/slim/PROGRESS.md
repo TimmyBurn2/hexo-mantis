@@ -70,6 +70,10 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
 - Legs launched from e4043497, each in `.wt/w8-<leg>` with its own venv: preflight (**opus**, grant 1(a)+(c)),
   o30 (**opus**, grant 3), prose (**sonnet**, grants 2, 4, 5), code (**sonnet**, grants 1(b), 6, 10). Grants 7, 8,
   9 are records in the exit document. Grant 1 lands as one commit per sub-item (a)/(b)/(c), each naming the grant.
+- Grant 3 LANDED 16c1b4ed (**opus**): the catch-all's `logger.exception` message drops `detail=%s`; the payload is
+  unchanged. The O-30 witness now requires the exc_info record's exception to be `_InjectedCompletionError` whose repr
+  equals the emitted and routed `detail`. Plants: `_LOG.error` reds ("none carrying exc_info"); `str(exc)` as detail
+  reds the re-pointed assertion. 42 passed before/after; collected 4928; measures unchanged; run10 MATCH.
 
 ## W7 — the style pass (EXITED 2026-09-25)
 
