@@ -34,7 +34,7 @@ from mantis.config.resolve.microbatch import MicrobatchCapsSpec, resolve_microba
 from mantis.model import arch_from_spec_and_config, build_net
 from mantis.selfplay.graph_wire_split import GraphMicroBatchOverCap, plan_microbatches
 from mantis.train.coordinator.dispatch import run_declared_train_step
-from mantis.train.trainer.core import Trainer
+from mantis.train.trainer.core import Trainer, TrainHParams
 
 _CONFIGS = Path(__file__).resolve().parents[2] / "configs"
 #: One census member: its minted caps and arch are the regime the leg-2 rows measure.
@@ -243,6 +243,11 @@ def _minted_caps() -> MicrobatchCapsSpec:
     return resolve_microbatch_caps(load_config(_MINTED).model_dump())
 
 
+def _minted_hparams(minted_cfg: dict[str, Any]):
+    """The harness hparams with the minted config's aux-head rows, which the Trainer refuses to see disagree with the arch."""
+    return H.graph_hparams(aux_soft_policy=TrainHParams.from_config(minted_cfg).aux_soft_policy)
+
+
 def _cap_regime_batch(caps: MicrobatchCapsSpec):
     """A wire sized to sit just under BOTH minted members, with the graph count derived from the
     caps and the fixture's own per-graph counts so it tracks a re-mint."""
@@ -313,7 +318,7 @@ def test_of2_10_leg2_peak_allocation_is_under_the_sizing_budget(tmp_path) -> Non
     torch.manual_seed(H.SEED)
     trainer = Trainer(build_net(arch), H.graph_config(), arch=arch,
                       checkpoint_dir=tmp_path / "ckpt", device=torch.device("cuda"),
-                      train_hparams=H.graph_hparams())
+                      train_hparams=_minted_hparams(minted_cfg))
 
     torch.cuda.synchronize()
     torch.cuda.reset_peak_memory_stats()
@@ -392,7 +397,7 @@ def test_of2_10_leg2b_doubling_the_input_does_not_move_the_peak(tmp_path) -> Non
         torch.manual_seed(H.SEED)
         trainer = Trainer(build_net(arch), H.graph_config(), arch=arch,
                           checkpoint_dir=tmp_path / f"ckpt_{tag}", device=torch.device("cuda"),
-                          train_hparams=H.graph_hparams())
+                          train_hparams=_minted_hparams(minted_cfg))
         torch.cuda.synchronize()
         torch.cuda.reset_peak_memory_stats()
         before = int(torch.cuda.max_memory_allocated())
