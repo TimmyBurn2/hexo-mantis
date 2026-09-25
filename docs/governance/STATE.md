@@ -8,15 +8,15 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 ## Current phase
 
 **SLIM-FIX (R368)**, in progress on branch `claude/slim-fix-r368` (cut from the SLIM-SCOUT census at
-`1e8d6d6`, base `dev` `69e1532`), not yet on `dev`: waves W0–W5 exited, W6 (docs + configs) in
-progress, W7 (the style pass) and W8 (close) remain. Its resume point is `docs/slim/PROGRESS.md`;
-the per-wave facts live there and in the wave reviews under `docs/audits/`, not here. At packet
+`1e8d6d6`, base `dev` `69e1532`), not yet on `dev`. It runs as waves W0–W8, W8 the close. Which
+waves have exited is its resume point's to say, `docs/slim/PROGRESS.md`; the per-wave facts live
+there and in the wave reviews under `docs/audits/`, not here. At packet
 exit, with the full gate set green including the slow tier, the branch fast-forwards `dev` (R368).
 
 ## The run
 
-- **No run is live.** run7 stopped at step 83 482 on 2026-09-18
-  (`docs/design/measurements/EVAL_COST_2026-09-19.md` reads its rounds) and run8 at 55 170 on
+- **No run is live.** run7 stopped at step 83 482 on 2026-09-18 (the stop is recorded by commit
+  `8cb5ca6a`; `docs/design/measurements/EVAL_COST_2026-09-19.md` reads its rounds) and run8 at 55 170 on
   2026-09-21 (R365); run9 was never started and its config is deleted (R365(a), R367). The strength
   series and every cell on record are in the measurement records named below.
 - **run10 is ARMED, not started.** `configs/run10.yaml` is minted (R366, ratified by R367(c)); its
@@ -36,10 +36,10 @@ exit, with the full gate set green including the slow tier, the branch fast-forw
 
 ## Configs
 
-After W6 the committed configs are `configs/run10.yaml`, `configs/run6.yaml`,
-`configs/dev_example.yaml` and `configs/smoke_preflight_armed.yaml`. Production is a CENSUS, never a
+The committed configs are `configs/run10.yaml`, `configs/run6.yaml`, `configs/dev_example.yaml` and
+`configs/smoke_preflight_armed.yaml`. Production is a CENSUS, never a
 list: `mantis.config.census.production_configs` (every `configs/` file minus its `EXEMPT_CONFIGS`
-rows, which carry their grounds). run7's and run8's configs are deleted in W6 (R368(e)).
+rows, which carry their grounds). run7's and run8's configs were deleted at `8b00b4dd` (R368(e)).
 `configs/run6.yaml` STAYS on a HALT: an R310-frozen oracle binds it and its re-point needs an
 operator grant (`docs/slim/PROGRESS.md`, W6).
 
@@ -56,7 +56,7 @@ operator grant (`docs/slim/PROGRESS.md`, W6).
 - The instruments at HEAD: `tools/strix_follower.py` (the strength series, strix @ r8, R366),
   `mantis.diagnostics.ring_audit` (the ring bands a prereg declares), `tools/ci_gates/preflight_mint.py`
   (the MANUAL mint preflight), `tools/mint_config.py` + `tools/config_diff.py` (mint and diff),
-  `tools/probe1.py`, and the three display tools `CLAUDE.md` admits.
+  `tools/probe1.py`, and the display tools `CLAUDE.md` admits under "Deliberately absent".
 
 ## Dropped in the R368(f) rewrite, and where each class lives
 
@@ -74,17 +74,19 @@ The pre-rewrite text is `git show 029adc0a:docs/governance/STATE.md`; history is
 | run7's minted values and delta counts | R362(c), R364 (the re-mints); commit `ce0a8ff6`; the file's `# delta:` header in history |
 | The protected-set / laws / cards line | `docs/governance/LAWS.md`, `docs/slim/00_MAP.md` §3, `docs/governance/CARDS.md` |
 | Dispatcher items 1–8: run7's rounds and strix cadence, the observatory decision, REPAIR-A4, run8's mint, the witness correction, run7's stop | R355, R356, R357; `docs/design/measurements/STRIX_RUN7_60K_2026-09-17.md`, `docs/design/measurements/RUN8_PREREG_2026-09-17.md` |
-| Items 9–12: run8's re-mint, shakedown, witness, audit, START, the follower chain, PERF-3 steps 1–2, twin inheritance | R358, R359, R360; `docs/design/measurements/PERF3_2026-09-18.md`; commits `f06c3234` (the re-mint), `5e25e40c` (the follower fix), `ee6e7abe` (twin inheritance) |
+| Items 9–12: run8's re-mint, shakedown, witness, audit, START, the follower chain, PERF-3 steps 1–2, twin inheritance | R358, R359, R360; `docs/design/measurements/PERF3_2026-09-18.md`; commits `86308bc7` (the re-mint leg's exit), `be863f16` (the START, the shakedown's witness and the audit), `f06c3234` (the re-mint), `5e25e40c` (the follower fix), `ee6e7abe` (twin inheritance) |
 | Items 13–15: the eval census, the sealbot rung's deletion, the 15k/30k/45k cells, the ladder unit, the CPU-head profile | R361, R362, R363; `docs/design/measurements/EVAL_COST_2026-09-19.md`, `docs/design/measurements/CPU_HEAD_PROFILE_2026-09-20.md`, `docs/design/measurements/RUN9_PREREG_2026-09-19.md`; commits `0d6ee0ee` (the follower's promotion switch), `94b8286a` (the rung's deletion) |
 | Items 16–17: run9's mint, the parameter-distance test, run8's stop, PERF-3 step 3, E1, PROBE-1 | R364, R365; `docs/design/measurements/PARAM_DISTANCE_2026-09-21.md`, `docs/design/measurements/PROBE1_2026-09-21.md`, `docs/design/measurements/PERF3_2026-09-18.md`; commits `61bd2fd1` (run9's mint), `d4804e58` (the E1 ruler-r6 variant) |
 | Items 18–19: run10's composition, REVIEW-1/REVIEW-2 and the fix leg | R366, R367; `docs/design/measurements/RUN10_PREREG_2026-09-21.md`; `docs/audits/REVIEW_2026-09-21.md`, `docs/audits/REVIEW2_2026-09-21.md`; commit `f088407e` |
-| Per-leg exit facts (gate results, collected-test counts, comment floors, push state) | the leg exit commits: `c31fd74e` (R353), `a693a0a4` (R357), `ff5a43d8` (R362), `23003bb9` (R365), `e5b01d88` (R366), `69e15329` (R367); SLIM-FIX's in `docs/slim/PROGRESS.md` |
-| Box-local specifics (box branches, ops-dir logs, launch scripts, unit names, tunnels) | out of the tree (R368(f), R281(b)); already sanitized forward in history |
+| Per-leg exit facts (gate results, collected-test counts, comment floors, push state) | the STATE commit that recorded each leg's exit: `7e0a424c` (R353), `0c880a6e` (R357), `86308bc7` (R358), `7278476a` (R359), `8379073e` (R360), `671bf12c` (R361), `07699fe6` (R362), `ea67af89` (R363), `6bbbfac9` (R364), `51f40a18` (R365), `19e8351d` (R366), `69e15329` (R367); SLIM-FIX's in `docs/slim/PROGRESS.md` |
+| Box-local specifics (box branches, ops-dir logs, launch scripts, unit names, tunnels) | out of the tree (R368(f), R281(b)); they left the tree, and history is not rewritten |
 | Per-item provenance chains | `git log -- docs/governance/STATE.md` |
 
 ## Provenance
 
-Derived 2026-09-25 on the SLIM-FIX branch (worktree branch `w6-state`) at `029adc0a`, from the tree:
+Derived 2026-09-25 on the SLIM-FIX branch at `029adc0a`, from the tree:
 `configs/`, `src/mantis/config/census.py`, `docs/governance/RULINGS.md` (R365–R368),
 `docs/slim/PROGRESS.md`, `docs/slim/handoff/W6_ADDENDUM.md`, `docs/design/measurements/` and
 `git cat-file` / `git merge-base --is-ancestor` on every commit named above.
+Repaired in place 2026-09-25 (R311(c)): the pointer rows, the phase and configs lines, after
+`docs/audits/REVIEW_W6_2026-09-25.md` §2 #2 and #11.
