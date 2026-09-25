@@ -87,8 +87,9 @@ Both were found by running the gate set rather than by reading it, and both are 
   `docs/design/` first; the expanded shape's leaves/s is `bench_server`'s reading on the box (IDLE, B 64)
   and is recorded before the row is armed. Not run10's; nothing perf rides it (R366(e)).
 - **CARD-MECHANISM-SWEEP — the PRE-EXISTING inventory R367(a) now names, out of the R366 range and out of
-  the fix leg's scope (REVIEW-1 F1.6, F4.2, F2.1).** Measured by REVIEW-1 at `19e8351d`: `RUN5 = …/run6.yaml`
-  (a name that lies about its file) in four test modules; 32 test functions carrying a `runN` token in 16
+  the fix leg's scope (REVIEW-1 F1.6, F4.2, F2.1).** Measured by REVIEW-1 at `19e8351d`: a `RUN5`
+  constant bound to a different run's config (a name that lies about its file) in four test modules;
+  32 test functions carrying a `runN` token in 16
   files; ≈ 800 `run5`/`run6` identifier tokens across `src`/`tests`/`tools`; the analyzer tests' (under `tests/tools/`)
   synthetic `"run9"` run ids; `crates/mantis-selfplay/tests/dirichlet_inert_on_gumbel.rs`'s run9 message;
   `tests/config/test_every_key_has_consumer.py`'s at_max_pairs note; the file-sha256 copies beside the one
