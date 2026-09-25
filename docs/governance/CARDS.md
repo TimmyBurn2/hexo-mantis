@@ -55,6 +55,12 @@ recommended one; each is its own leg with a LAW-09 bench.
 - **CARD-PERF-READOUT — the deterministic readout (B3), OPERATOR-ENDORSED 2026-09-25.** The served softmax's
   `segment_sum` and the value/mean pools sum by atomics (served probabilities jitter ~1e-7 on a repeat); a
   segment reduction over the CSR offsets makes them exact. A precondition for L4's bit-identity witness.
+- **CARD-PERF-BATCH-INVARIANCE — served outputs that do not depend on the pop's size; then the eval cache.**
+  R369(d)'s precondition failed: the value head's bf16 GEMM runs over the batch dimension and its kernel
+  varies with B (a single-position pop serves |Δvalue| up to 0.0076 from the same position in a full pop).
+  A fixed-M head (pad to one tile) or a batch-invariant kernel set makes it exact; the cache itself is built
+  and parked on branch `perf-ada-l4` (sharded FIFO, full-position key, per-version, served/GPU counters,
+  the runner field off by default so `served_sims_exact` stays unchanged). 35.8 % of leaves are repeats.
 - **CARD-PERF-DST-SORT — dst-sorted edges from the Rust builder.** Removes the per-forward GPU argsort
   (0.5–0.8 ms/pop INF); a wire/golden contract change.
 - **CARD-PERF-GRAPHS — CUDA graphs for the serving forward.** Dynamic shapes need bucketing; worth it only once
