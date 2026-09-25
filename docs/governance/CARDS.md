@@ -10,65 +10,19 @@ Status words mean what they mean elsewhere in this repo: **BLOCKING** stops the 
 **MINT-BLOCKING** stops a mint; **HELD** is waiting on a named event; **CARDED** is accepted work
 with no date; **OWED** is a text or a value someone must supply.
 
-## Opened by R346 itself
-
-All four came out of the CLEANUP ERA move and are now CLOSED, by wave 2. Kept as one line each
-because a card leaves this file by being closed, not by going quiet.
-
-- **CARD-CLAUDEMD-REPOINT — CLOSED, closing line in R348.** `CLAUDE.md` names
-  `docs/governance/falsified.md`, `docs/governance/LAWS.md` and `docs/governance/archive/laws.md`;
-  gate 10 is green on it.
-- **CARD-GATE10-SCOPE — CLOSED.** `tools/ci_gates/check_tracked_refs.py` globs
-  `docs/governance/` and carries a per-directory floor, so a dissolved directory can no longer be
-  absorbed into a full one's count. `RULINGS.md` is exempt by declaration with grounds in the
-  gate: it corrects only by annotation and ANNOTATION 7 deliberately preserves a wrong path
-  string. `docs/registers/` is whitelisted as DISSOLVED and the entry refuses itself if the path
-  is ever tracked again.
-- **CARD-STALE-REGISTER-CITES — CLOSED.** All six source cites now name `docs/governance/`.
-- **CARD-PHANTOM-TOOL-COMMENT — CLOSED.** `tools/ci_gates/tier_census.py` cites LAW-07 instead of
-  two tools that never existed here.
-
-
 ## Opened by R347 (CLEANUP WAVE 2)
 
 Both were found by running the gate set rather than by reading it, and both are pre-existing on
 `dev` — neither was introduced by wave 2.
 
-- **CARD-OC7-OVERRUN — BLOCKING (the integration tier, hence `make gates.exit`).**
-  `tests/train/test_clean_stop_save.py::test_a_clean_run_at_the_minted_bound_leaves_one_stamped_checkpoint`
-  (OC-7) drives a real 50-step run on 14 workers and **exceeds its own stated 300 s tier ceiling**:
-  killed at the cap on `dev`, and uncapped it passed 900 s on both `dev` and `gumbel-3`. Its bound
-  `_OC7_BOUND = 50` was fixed by a stated, host-relative decision rule — the largest member of
-  {200, 100, 50, 32, 16} measuring <= 300 s **on the dev box** — and M-0 (PREREG_CS §5.3) measured
-  50 at **240.2 s** on 2026-08-01. The measurement no longer holds on that same box. Not yet
-  separated: host drift versus a real slowdown landing after 2026-08-01, a window that contains
-  five `mcts/` commits dated 2026-09-08/09, all of wave 1 among them. Until it is separated the
-  bound must NOT be re-aimed — the docstring records that the three measurements were taken before
-  the row existed precisely so the bound could not be lowered to make a red go away. Wave 2
-  proceeds with the integration tier NOT RUN and the exclusion stated at each merge, on operator
-  direction; the separation belongs to AUDIT-3.
-  **CORRECTION, measured after this card was first written: OC-7 is not the whole of it.** The
-  tier with OC-7 deselected — 49 tests — ALSO failed to finish, hitting a 3 000 s cap on
-  `gumbel-3`. So the tier is not one bad test on an otherwise healthy suite; it is >50 min of
-  work at best, and CLAUDE.md's "the superset is ~35 min" is stale by a wide margin on this host.
-  What is NOT yet known: whether the remaining 49 are merely slow (49 real 14-worker boots would
-  explain it) or whether a second test is unbounded like OC-7. A `-v` per-test timing pass is the
-  next measurement and it is owed. **The consequence to hold on to: while this stands,
-  no `make gates.exit` run in this repository can complete, so "local green is the gate" is
-  answered by a gate that never finishes — the false-clean class, in the time dimension.**
-  **DISCRIMINATED 2026-09-11 under R348(b) — HOST, not code.** Record:
-  `docs/design/measurements/MEASUREMENT_OC7_2026-09-11.md`. (i) SLOW, not hung: the dev box's
-  main thread sits in a bf16 CPU GEMM inside the GNN backward at ~60 s/step (14 workers) and
-  ~40 s/step (1 worker); (ii) the same row at HEAD on the box **PASSES in 178.4 s**, inside its
-  ceiling, at the minted 14 workers; (iii) the 2026-08-01 tree runs at the same ~40 s/step on the
-  dev box today, so no bisect. Mechanism measured, not inferred: the dev box (Ryzen 7 3700X,
-  AVX2, no AVX-512 BF16) runs LAW-06's bf16 autocast through ATen's generic path — one GEMM at
-  the trainer's edge shape is **72× slower than fp32** there — while the box has native bf16.
-  Contributing: `1203f740` (2026-08-31) minted 14 workers into the smoke config the row drives.
-  The first fact at contact was a different defect: the row FAILED in 46 s on DELETE-1's 10→8
-  `GameResultRow` change that the Python drain never received (fixed `92643671`). The bound is
-  NOT re-aimed: the docstring's rule yields 50 on the box and nothing on an AVX2 host, and
-  which of (tier runs on the box / row marked `slow` / LAW-06 CPU carve-out) is the operator's.
+- **CARD-OC7-OVERRUN — DISCHARGED, not BLOCKING.** `tests/train/test_clean_stop_save.py`'s
+  50-step OC-7 row and the AVX2 tier hang it exposed were root-caused as HOST, not code
+  (`docs/design/measurements/MEASUREMENT_OC7_2026-09-11.md`): the dev box (Ryzen 7 3700X, AVX2,
+  no AVX-512 BF16) ran LAW-06's bf16 autocast through ATen's generic path at 72× per GEMM. Fixed
+  by CARD-TIER-HOST's carve-out — fp32 on `train.device: cpu`, landed at `9491b4d0` with its own
+  parity test (`tests/train/test_law06_cpu_carveout.py`); OC-7 now PASSES in 178.4 s inside its
+  ceiling on that host. `make gates.exit` completes: the 2026-09-21 exit sweep read the
+  integration tier at 49 passed, none of it hanging.
 
 - **CARD-GATE17-LOCAL-COUPLING — CARDED.** `tests/tools/test_gate_vacuity.py::test_an_empty_diff_degrades_WIDE_rather_than_printing_green`
   shells out to `rule7_gate.py --base HEAD` and asserts `returncode == 0`. Gate 17's local
@@ -121,13 +75,6 @@ Both were found by running the gate set rather than by reading it, and both are 
   batch. Design before code (R9): the expansion's mechanism and its identity proof are a design doc under
   `docs/design/` first; the expanded shape's leaves/s is `bench_server`'s reading on the box (IDLE, B 64)
   and is recorded before the row is armed. Not run10's; nothing perf rides it (R366(e)).
-- **CARD-REVIEW-1 — LANDED 2026-09-21: the report `docs/audits/REVIEW_2026-09-21.md` (34 findings, six
-  classes) and the fix leg, one commit per class (F5 `a92feada`, F1 `95489040`, F4 `3d93447c`, F2 `596f9f91`,
-  F6 `548343f6`, F3 `7b33b38e`), its own REVIEW-2 at `docs/audits/REVIEW2_2026-09-21.md`; the disposition
-  is the report's §9.** Ordered by R367(b) on `51f40a18..19e8351d`. The one finding deferred with grounds:
-  F5.6 (the frozen slice's buffer is allocated at the training ring's capacity — a virtual reservation,
-  the loader writes only the file's rows; the fix is a header-reading constructor in the Rust bridge,
-  which this leg's range did not touch) rides CARD-MECHANISM-SWEEP.
 - **CARD-MECHANISM-SWEEP — the PRE-EXISTING inventory R367(a) now names, out of the R366 range and out of
   the fix leg's scope (REVIEW-1 F1.6, F4.2, F2.1).** Measured by REVIEW-1 at `19e8351d`: `RUN5 = …/run6.yaml`
   (a name that lies about its file) in four test modules; 32 test functions carrying a `runN` token in 16
@@ -142,7 +89,9 @@ Both were found by running the gate set rather than by reading it, and both are 
   wiring and config wiring pools are `tests/_drivable.py::DrivablePoolStub`, their buffers
   `tests/train/_graph_drive.py::GraphSampleBuffer` or `_drivable.BufferStub`; OPEN: the draw-rate
   files' pools (PZ-1) and those of augment_sym_counter, quiescence_fires_producer and rates_are_measured); the nine full-config literal dicts whose
-  `model` line the fix leg left (each is a complete config a schema test owns); F5.6 above. Applied ON
+  `model` line the fix leg left (each is a complete config a schema test owns); REVIEW-1's F5.6 (the
+  frozen held-out slice's buffer allocated at the training ring's capacity rather than the file's own
+  rows; the fix is a header-reading constructor in the Rust bridge). Applied ON
   CONTACT (R316(e)'s rule for comments, extended by R367(a)) — a leg that touches one of these files fixes
   what it touches; no tree-wide pass is ordered.
 
@@ -157,18 +106,10 @@ Both were found by running the gate set rather than by reading it, and both are 
   line stays PERF-3's ≥ 1.4× on the same machine, and the determinism probe (the same-cell bf16 witness)
   must read 0 — a faster server that serves different numbers is not the same server. Design only after a
   ruling; the box work is a perf-host event, not run10's window.
-- **CARD-RUN10-SIZE-PARENT — CLOSED by R367(c) 2026-09-21 into CARD-NET-EXPAND (run11): the size
-  conditional is WITHDRAWN, no shape-compatible parent exists, and the ruling the card waited on is
-  that run11's build is a function-preserving expansion; the record below stands as the grounds.**
-  As opened: the size conditional's UNPRICED PREMISE, the operator's ruling before any
-  re-mint arms `model.gnn: {hidden: 192, num_layers: 6}`.** R366 §0(2) states the conditional over "parent:
-  run8@45k (unchanged)", but a 6×192 `GnnNetV2` shares NO tensor shape with the 4×128 parent (`input_proj`
-  11→192, every conv 192→192, the JK-cat readout 6 × 192 = 1 152 wide into both heads against 512) and
-  `load_from_bc` is strict both ways — the warm start cannot land. The leaves exist (v35), the bench builds
-  the net from them (`bench_server.py` with no `--checkpoint` is a random-init net of the config's shape),
-  the bench runs in the window and is RECORDED either way (it prices run11's row); the ARMING waits on a
-  parent ruling: a fresh net, a BC pretrain at 6×192, or a net-growth transfer (a design in itself), and
-  with any of them "equal games vs 0.142" is a different comparison than run10's. Stated in
+- **CARD-RUN10-SIZE-PARENT — CLOSED by R367(c) 2026-09-21 into CARD-NET-EXPAND (run11).** Grounds: a
+  6×192 `GnnNetV2` shares NO tensor shape with the 4×128 parent (`input_proj` 11→192, every conv
+  192→192, the JK-cat readout 6 × 192 = 1 152 wide into both heads against 512) and `load_from_bc` is
+  strict both ways, so the warm start cannot land — no shape-compatible parent exists. Stated in
   `RUN10_PREREG_2026-09-21.md` §2.
 - **CARD-RUN10-WEIGHT-ENVELOPE — the aux head's weight, minted 4 inside [2, 8], picked in the twin.**
   The rule (R366 §0(2), prereg §1a): the SETTLED ratio `aux_policy_head_grad_norm / policy_head_grad_norm`
@@ -355,46 +296,16 @@ Both were found by running the gate set rather than by reading it, and both are 
   for an equal candidate's false-promotion 2 % → 5 % — the long end is the (μ0+μ1)/2 = 0.57
   midpoint, not H0; gate sims 64 is UNMEASURED (the gate game is the unit that costs: 38–40 s at
   256/256 over 91–93 plies; a 64/64 cell's s/game is a bench, not a census).
-- **CARD-EVAL-GATE-FIELDS-IN-STREAM — CLOSED 2026-09-19 (R362(c), the rung-deletion commit).**
-  `eval_round_complete.gate` now carries `{rule, pairs_played, stopped, llr, wr_confirm, n_pooled,
-  promoted, wall_sec}` (`mantis.eval.rounds.GATE_STREAM_FIELDS`), `null` when no gate ran, on the
-  success route and on the A-3 partial route; `wall_sec` is the gate BLOCK's own wall (measured in
-  the child, not read off the CUDA probe's phase marks, which carry no clock on a CPU child), so the
-  round's split is readable beside the row's own `wall_sec`. Producer test with its planted break:
-  `tests/eval/test_gate_fields_ride_the_round_complete_row.py`; the event manifest row names it.
-  Was: `pairs_played`, `stopped`, `llr` lived in the child's `<round>_result.json` and the
-  in-process routed result only, so a stream reader (the dashboard, the census) could not see how
-  a round stopped without the spool.
-
 ## Opened by R358 (RUN8 RE-MINT, THE NET-ONLY CELL, THE RUN9 QUEUE); moved by R359 (READINGS LANDED, QUEUE SOURCED, PERF-3 ISSUED)
 
-- **CARD-STRIX-NET-ONLY — READ 2026-09-18, SPENT by R359(a); CLOSED by R366(a) 2026-09-21 (its A1's training-side hypothesis READ by PROBE-1 reading 4: proof 2.30 % [1.88, 2.72], strict novelty 0/112 — proof-as-target is DEAD, F-53); ordered as the first box cell after run8's START (R358(a)).** The parent
-  (`run7_00042000_46fdb931.ckpt`) at PUCT-256 vs strix 256 sims with its root VCF solver OFF, 288
-  paired games, book_v1, both colours, CONTENDED labelled; read beside the same session's solver-ON
-  256/256 cell. Tooling LANDED 2026-09-18: `tools/strix_follower.py --once <ckpt> --unit net_only`
-  → `<ckpt>.strix256_nosolver.json`; the driver's `disable_forcing_solver` pass-through (default
-  False, nothing on record changes). Pre-stated reading: Δ > the pair-level CI → a design packet
-  (root proof solver in self-play with the proof AS the policy target; R239's condition, F-15's
-  hazard, F-38–F-40 read in their regime — deploy probes on the dense tree); Δ within CI → the
-  solver is not the gap and search-in-the-loop leaves the queue until new evidence.
-  **READ 2026-09-18 (both cells CONTENDED beside run8, 288 paired games each, book_v1, the parent
-  `a9a46c55…` at PUCT-256 vs strix 256 sims, 0 fence findings):** solver ON **0.111 [0.073, 0.149]**
-  (32/256, median 43 plies, 14.8 s/game, wall 4 256 s); solver OFF **0.115 [0.076, 0.153]** (33/255,
-  median 45 plies, 19.7 s/game, wall 5 682 s). **Δ = +0.3 pp, inside both CIs → the solver is NOT the
-  gap**; by the pre-stated rule search-in-the-loop LEAVES the run9 queue until new evidence. What is
-  left on strix's side of the equal-work cell is the net and the head. Receipts:
-  `<run7 dir>/checkpoints/run7_00042000_46fdb931.ckpt.strix256{,_nosolver}.json` (mirrored).
-  **A1 (R359(a), the reading's scope):** the cell switched strix's PLAY-TIME solver (the root VCF at
-  rung time) and read the play-time question only. strix's net was TRAINED under proof targets, so
-  the training-side hypothesis — the proof AS the self-play policy target — is UNTESTED and UNRANKED,
-  not refuted; it leaves the queue for want of a measurement, not by this Δ.
 - **CARD-RUN9-QUEUE — RECORDED, nothing armed (R358(f)); sourced and ORDERED by R359(c).** One
   swap per run, each carrying its own in-run producer before it is armed. The entries: (i) DATA
   REGIME — `replay_capacity` 500 000 with `training_steps_per_game` set so the MEASURED replay ratio
   (`ring_audit --events`, run7 3.6; shakedown8 READ 3.02) holds ≈ 8, strix's setpoint; (ii) LR —
   AdamW 2e-4 → 2e-5 cosine over the block horizon; (iii) the root proof solver — OUT of the queue
-  2026-09-18 by CARD-STRIX-NET-ONLY's reading (Δ +0.3 pp within CI; the PLAY-TIME solver — A1 there
-  keeps the training-side hypothesis untested, not refuted), until new evidence; (iv) PRIOR
+  2026-09-18 by the net_only cell's reading (solver ON 0.111 vs OFF 0.115, Δ +0.3 pp within CI; the
+  PLAY-TIME solver only — the training-side proof-as-target hypothesis stayed untested, not refuted),
+  until new evidence; (iv) PRIOR
   TEMPERATURE — KataGo's root policy softmax temperature 1.25 → 1.1 (g170), applied to the logits
   BEFORE the Gumbel top-m draw (source: KataGo's upstream `KataGoMethods.md`, read 2026-09-18);
   (v) sims; NEW (vi) POLICY-SURPRISE WEIGHTING — half the sampling weight uniform, half ∝
@@ -433,72 +344,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   (strix is 6 % smaller and wins); curriculum (no ablation in any source, strix's r2 stage
   degenerate); opponent diversity (one asymmetric-game cumulative ablation); teacher signal (no
   measured later cost anywhere; the goal call is the operator's).
-- **CARD-PERF-3 — RE-AIMED by R360(b) at the cost-vs-fill curve; steps 1–2 DONE 2026-09-18, step 3
-  RESERVED for run9's preflight window; design only after step 3.** R359(f)'s §2 (the two-stage
-  pipeline as the design to build against a GPU-52.8 %-busy baseline) was issued against F-47's
-  PRE-PIPELINE tree — A4-4 (`c888c3b7`, +52 %, 1 831 → 3 127 eager / 3 662 compiled at 32 workers)
-  is at HEAD and run7/run8 ride it; R360(a) annotated it (A1 under R359's foot). The record:
-  `docs/design/measurements/PERF3_2026-09-18.md`. **Step 1 (the mirror):** run8 ALONE serves
-  **3,208 leaves/s** at B 46.3 — 85 % of pops wake at the 32-leaf saturation threshold
-  (`batch_size / 2`), 14.6 % find a full 64, 0.4 % are deadline pops, `empty_polls` 0; cycle 14.44 ms
-  = `queue_wait` 2.96 + `launch` 11.46 (the CPU stage, collate 3.99 of it) + 0.02, the device stage
-  9.36 ms/pop — the CPU stage is the bound and the GPU ≈ 65 % duty (ESTIMATE, `gpu_wait`/cycle);
-  16.1 k edges per graph, 80 % of pops in [512 k, 1 M) fused edges. Beside a strix cell **1,222**
-  (38 %): every CPU term ×3–7, the GPU +2 ms — R359(e)'s cost priced. shakedown8's 3 196 vs A4's
-  3 662 is the SAME unit (served leaves/s; the billed `sims_per_sec` is 1.8× and never the number)
-  in a longer-game regime: B −6.7 % × cycle +6.2 %, from +28 % GPU and +35 % collate per graph on
-  88-ply games against the arm's 32; A-2, augment, the recorder and the cadence are present but
-  unseparated. **Step 2:** `tools/bench_server.py` — the real batcher and server per B ∈ {16, 32,
-  64, 128, 256}, threads replaying a run's newest games, budget and probe witnesses on every cell,
-  JSON out with host facts (`tests/tools/test_bench_server.py`). Workstation CPU ratio: collate per
-  graph flat-to-falling in B (0.075 → 0.048 ms; F-47's linear-in-edges holds), the probe 0 across B,
-  and the in-flight supply CAPS B at ≈ workers × leaf_batch / 2 (the 256 cell served 128). **Step 3
-  (box, ≈ 19 min):** the tool at HEAD with the net, `--device cuda`, 200-s cells — ms/batch, the
-  device stage and the wake shares at each B; the same-cell probe under bf16 is the determinism
-  witness. Candidates, in R360(b)'s order and none designed: batch fill (workers, wait), the
-  edge-count cutoff, the CPU stage. Pre-registered success unchanged: ≥ 1.4× on the same machine.
-  **R361(d), 2026-09-19:** step 3 gains a CONTENDED arm — the same B-curve beside one strix cell —
-  and the success line is stated in BOTH regimes (alone, beside a cell); the census measured the
-  cell's cost in a second unit, run8's trainer at 356–415 steps/h inside a cell against 999–1 069
-  alone (`EVAL_COST_2026-09-19.md` §(iv)). **R364 §0(6), 2026-09-21:** step 3's window is FIXED — after
-  run8's stop, before run9's stamp, ≈ 40 min (B ∈ {16 … 256} alone, then the contended arm beside one
-  cell); numbers before any design; nothing from it rides run9. **R365 §0(3), 2026-09-21: the window
-  MOVED to "after run8's stop, before the box is released" (run9 not started) and READ — alone at 200-s
-  cells on the 45k parent: 2 236 / 2 394 / **2 466** / 2 055 / 2 091 leaves/s at B 16 / 32 / 64 / 128 / 256,
-  the CPU launch stage 0.34–0.39 ms per leaf at EVERY B, the probe exact across B; contended beside the
-  E1 strix cell: 593 / 984 / 1 326 / 1 101 / 1 039 (27–54 % of alone, the CPU stage per leaf doubled, the
-  device stage unchanged). THERE IS NO KNEE: batch size buys nothing above 64 and D-1 (fill-at-the-knee)
-  is DEAD by its own falsifier (1.10× from B 16 to the best cell; fill 100 % everywhere). The CPU stage is
-  the whole lever (R360(b)'s third candidate); design only after a ruling. The "bench_server at 128 sims"
-  arm the packet named has NO PRODUCER in the tool (`bench_server.py` measures the server per batch size;
-  sims never enter it) and every self-play harness in the tree either walks a pinned ladder
-  (`worker_sweep`) or needs a preflight stamp, so it is NOT MEASURED and is priced as P-B3's own 3-h
-  twin in run10's preflight window, not asserted.** The numbers: `PERF3_2026-09-18.md` §step 3.
-  **R366(e), 2026-09-21: the design phase is CARD-PERF-4 (its own packet); this card is SPENT — steps
-  1–3 read, nothing built, nothing rides run10.**
-
 ## Opened by R355 (REPAIR-A4)
 
-- **CARD-SERVER-OWNED-COPY — the inference server serves the learner's module itself.** `run.py`
-  hands `trainer.model` to `WorkerPool` → `InferenceServer`, and `ActorSync` loads the state dict
-  INTO it (a self-copy). Two consequences landed as refusals on 2026-09-16 (B-1, R355(e)):
-  `train.ema.enabled: true` is refused at mint (the shadow would be synced into the learner), and
-  the `actor_lag` armed-abort row is RETIRED from `armed_aborts.MANIFEST` — its lag is
-  learner_step minus the step of the last self-copy and cannot exceed `actor_sync_cadence_steps`.
-  The keys `monitor.actor_lag_threshold_steps` / `actor_lag_abort_enabled` STAY: they drive the
-  watchdog's live `actor_lag_sample` (LAW-18) and its fire arm, and `Cadence.STEP_LAG_THRESHOLD`
-  stays with them, so the row returns as a one-line manifest edit the day this card lands. The
-  repair: the server owns a COPY the sync writes and the learner never reads; then EMA (and its
-  shadow in the checkpoint, B-7's deferred half) and the lag row return in one commit. **LANDED
-  2026-09-21 (R366(b), one commit): `mantis.selfplay.pool.served_copy` — the server serves a net of the
-  DECLARED arch seeded from the learner, `ActorSync` writes it from `Trainer.actor_state_dict` (the
-  LEARNER's weights, EMA on or off: the actors serve the learner), the learner never reads it (the hash
-  witness `tests/train/test_server_owned_copy.py`); the EMA shadow is the DEPLOY net —
-  `Trainer.inference_state_dict` / `deploy_module` for the gate's candidate and promotion, `ema_state`
-  on the envelope (`checkpoint_envelope.md`) for the follower's cell and the ladder bot (`deploy_state`,
-  `weights: ema` on the receipt), restored on resume (`ema_shadow_reseeded` when the stamp has none);
-  the B-1 refusal is deleted, `train.ema.enabled: true` mints, the `actor_lag` row is BACK in the
-  REQUIRED set. Whether EMA ARMS on run10 is the cell's (prereg §2). CLOSED.**
 - **CARD-STYLE-BACKLOG — the judgment half of the R346(f) census, held by the ratchet.** The
   mechanical half landed 2026-09-17 (63 stale R8 headers, nine three-line runs, the labelled
   separator rules, a cite-only line, a file-top banner). What is left is a POLICY call and
@@ -519,14 +366,6 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by R352 (run7 kind, strix rung, viewer)
 
-- **CARD-PUCT-ATTRACTOR — CLOSED by R353(e), on a reading, not a fix.** The mechanism GAME-QUALITY
-  read on shakedown7's 2 421 games (`GAME_QUALITY_2026-09-14.md` §B, §E): PUCT self-play at τ 0.5
-  for the whole game is tactically degenerate — a quarter of the loser's must-block turns leave a
-  four standing and 3 % of wins-in-turn are missed, both rising with the drift (9 → 33 % missed
-  blocks, draws 6 → 66 % by 600-game window), a shape-building fingerprint (26 % `connect`, 9.5 %
-  `four`) without threats; hypothesis (2) "defends but cannot attack" is contradicted as stated
-  (the cap games show unanswered fours), (3) τ-0.5 sampling is consistent and not separated from
-  the 64-sim arm by the record. run7 self-plays under Gumbel (R352(a)); PUCT stays the deploy head.
 - **CARD-GUMBEL-HEAD-RESIDUE — which part of the Gumbel deploy head loses to the most-visited
   child at every σ (F-51's residue, R352(b)).** All three σ pairs read the 18k net within 7 pp of
   each other at 128 sims and within 2 pp at 512, halving per doubling, against PUCT's 0.774. The
@@ -538,41 +377,11 @@ Both were found by running the gate set rather than by reading it, and both are 
   18k net, 288 paired games, the same rung; the card is NOT a run7 question — as a TRAINER the
   head works. CARDED.
 
-- **CARD-SEALBOT-GIL-SERIAL — CLOSED on run7's first in-run round wall (R353 §0.1).** The lever
-  (the tracked patch's third hunk, `2177c926`: `py::gil_scoped_release` around `engine.get_move`)
-  took the idle rung from 48 to 21 min on the stamps; the reading the card waited for is the round
-  BESIDE the trainer: `r000001_3000` (2026-09-14 19:26–21:42 UTC) walled **8 131 s against
-  14 400** — probe 6 s, gate screen 80 games 2 154 s (0.49 s/ply), gate confirm 128 games 3 800 s
-  (0.51 s/ply), **the 288-game `sealbot_d5` rung 2 142 s (0.19 s/ply; 1.7× its idle wall, where the
-  GIL-held build's idle wall alone was 2 880 s)**, random floor 28 s. The gate blocks, not the rung,
-  are the round's cost now; the timeout's headroom was 6 269 s with the trainer stepping at
-  ≈ 1 400 steps/h throughout. The card's fix shape is the shipped one; nothing further is owed.
-
-- **CARD-SEALBOT-TT-SEAT — CLOSED on the A/B's reading (R353(b); `SEALBOT_TT_AB_2026-09-14.md`).**
-  The defect is real in the engine (the table persists across `get_move`, keyed without the root
-  player, scores root-relative; the Tier-2 colour-swapped pair is RED on the old adapter against
-  a sealbot opponent) and INERT as a bias on the instrument: four cells, 1 152 games, old tree
-  `15109ac3` vs the fixed worktree, Δ 0.000 (serial) / −0.007 / +0.028 / −0.014 (concurrency 8),
-  every paired CI including 0, ratio 1.00, and no game in which sealbot's move differed before the
-  candidate's — against our nets game 2's tree never revisits game 1's nodes. Every sealbot level
-  on the record stands as read. The fix (`748f5c47`, fresh engine per game, 5 ms) stays for
-  reproducibility: a game is now a deterministic function of its own moves. Sealbot's mate claims
-  at distance ≥ 3 remain non-proofs (the second finding); nothing further is owed here.
-
-- **CARD-EVAL-ROUND-OVERRUN — the eval round outlasts its cadence; two readings lost (2026-09-15,
-  operator direction, `RUN7_EVAL_COST_2026-09-15.md`).** r4 @12k and r5 @18k died at the 14 400 s
-  bound and the 15k/21k kicks were skipped; the gate block (208 games of PUCT-512 vs PUCT-512,
-  55 → 95 plies a game, every screen escalating at 0.44) is 64–85 % of the wall. FIXED IN THE
-  RESUME MINT at `ce0a8ff6`: gate and rung at 256, `eval.max_plies` its own row (256), the band
-  0.5 and the GSPRT (`eval.gate.sequential`); expected round ≈ 4 500 s typical / ≈ 8 800 s worst.
-  CLOSES when the resumed run's first three rounds land inside the bound with the GSPRT's
-  `pairs_played` on the record. Still OPEN beside it, from the same review: the eval child emits
-  no `batch_timing_snapshot()` (LAW-18; needed before concurrency is touched), `book_v2` (the
-  balanced book is worth +11 pp of gate power), and the ruling that names "gate pair statistics"
-  for the GSPRT. MECHANISM LANDED 2026-09-16 (A-3, R355(e)): the child persists the gate
-  verdict the moment the gate block ends (`<result>.json.gate.partial.json`), and a round
-  killed at the bound or abandoned by a stop promotes off it (`gate_verdict_partial`), so a
-  lost round no longer loses a promotion.
+- **CARD-EVAL-ROUND-OVERRUN — the eval round outlasted its cadence; the overrun itself is FIXED
+  (resume mint `ce0a8ff6`: gate and rung at 256, `eval.max_plies` its own row, the band 0.5, the
+  GSPRT). Still OPEN, from the same review:** the eval child emits no `batch_timing_snapshot()`
+  (LAW-18; needed before concurrency is touched), `book_v2` (the balanced book is worth +11 pp of
+  gate power), and the ruling that names "gate pair statistics" for the GSPRT.
 
 ## Opened by R350 (the block verdict)
 
@@ -602,17 +411,6 @@ Both were found by running the gate set rather than by reading it, and both are 
   a 1-in-~5 flake of `tests/eval/test_eval_broken.py::test_killed_worker_yields_eval_broken_and_clean_drain`
   on 2026-09-13 (the fake process is flipped dead just before the drain). Fix shape: the second
   finaliser WAITS (bounded by the kill grace) for `_result` rather than returning `None`.
-- **CARD-SELFPLAY-SEARCH-STATS — the self-play game record carries no per-position search
-  stats.** R344 ordered "per-position search stats on every eval-channel game and a 1-in-N
-  sample of self-play"; the eval channel writes them, the self-play recorder
-  (`mantis.monitor.game_recorder.GameRecorder.maybe_record`) writes the move list and result
-  only, so INVESTIGATION-1's "KL-from-prior reconstructed from the shards" had to be read from
-  the RINGS instead (`INVESTIGATION1_TROUGH_2026-09-13.md`). The sample (rate a minted key with
-  a live consumer, the root's prior + visits + completed target per position) is owed before
-  run7 if the trough is to be read per position rather than per ring.
-  LANDED 2026-09-16 (R355(d)): `selfplay.search_stats_every` (contract v32) samples 1-in-N games
-  per worker and the record carries per searched ply `root_value`/`root_raw`/`visits`/`q`/`prior`
-  (`docs/contracts/game_record.md`); the completed target is rebuilt from those under any σ.
 - **CARD-WARMSTART-CONTROL — the R340 control's head set, read from the tree.** R350(a) states
   the burst copied ALL heads; `run6-mint` at `d3ba75e` carries the same trunk+policy seam run6
   booted with (the burst's log died with the box, archive v3.54). The frontier measures the head
@@ -622,22 +420,6 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 Records: `docs/design/measurements/MEASUREMENT_STARTPATH_2026-09-11.md`; falsified.md F-44/F-45.
 
-- **CARD-STAMP-FLOOR — DECIDED by matrix under operator delegation (2026-09-11), landed.**
-  R348(c)'s trap met the schema's reachability rule: run6 mints `train.draw_rate_abort.min_step
-  25000`, so `_apply_burst_override` refused every burst below 25 001 steps and the only
-  stamp-writing preflight of run6 was the block itself (≈ 22.6 h). The matrix — keeps the trap's
-  intent / time to a stamp / code / governance: **(i) the burst as a STOP-STEP BOUND over the
-  minted config**: yes / ≈ 12 min / small / a tool design, not a ruling; (ii) an in-process
-  shakedown plus a trap bypass: no / 0 / small / contradicts R348(c); (iii) pay the 25 001-step
-  burst: yes / 22.6 h twice / 0 / —; (iv) lower `min_step` for the tool: formally / 12 min / a
-  mint row / moves an armed abort's pre-registered value to suit a tool. **(i) selected.** As
-  landed: `compose_run(burst_stop_step=)` is the eighth census parameter (a prefix of the run,
-  refused outside it, no launcher route), the preflight child boots the MINTED identity with the
-  bound, the refusing floors are the two actor-sync rows, the draw-rate row decides the TIER, and
-  the stamp RECORDS the tier so it never implies a demonstration its burst did not make. A
-  production config therefore stamps at `sync_lag` from a ≈ 100-step burst; tier `full` is
-  unchanged in meaning and needs a burst past `min_step`. The old pin ("a production config can
-  never be preflighted in the short tier") is reversed in place with these grounds.
 - **CARD-SHAKEDOWN-TIMEOUT-STOP — LAW-16's save did NOT fire under the R340 launcher's
   `timeout`; it DOES fire under a direct SIGTERM (the supervisor's path). OPEN, not a START hold.**
   The 4 h shakedown (2026-09-11 21:56 → 01:56 UTC, `/workspace/runs/shakedown`) ended by the
@@ -654,41 +436,6 @@ Records: `docs/design/measurements/MEASUREMENT_STARTPATH_2026-09-11.md`; falsifi
   R343 leg 3) is suspect the same way. Falsifier: a 5-min twin under `timeout` vs `timeout
   --foreground`, `strace -f -e trace=signal` on the child. START is unaffected: the block stops
   through the supervisor (one SIGTERM, witnessed) and its bundles every 1 000 steps bound a loss.
-- **CARD-A4-MINT — the four PERF-A4 rows, DECIDED by matrix under operator delegation, minted.**
-  Inputs: `docs/design/measurements/PERF_A4_2026-09-11.md` §11. `selfplay.n_workers 16 → 32`
-  (+59 % leaves/s over 16 once the pipeline is in; +1.3 GiB RSS; the ring rebuild drops to one
-  sample thread, inside the trainer's slack — R309(f)'s 2..14 bracket was already exceeded by the
-  operator's own 16 and is superseded by this measurement); `inference.edge_geometry_check:
-  checker_thread` (+17 % at 16 and 32 on the GIL-released verifier; check 14 still halts by test);
-  `inference.compile_trunk: true` (+17–21 %; numerics inside the eager path's own run-to-run null on
-  the RTX 5080; the recompile limit fails loud; the eval child stays eager — the 4 h shakedown is
-  this row's witness and a bad reading flips it back with a re-preflight); `train.max_train_burst
-  1 → 2` (steps/game 0.925–0.96 measured at the new game rate; the row keeps the minted 1 step per
-  game honest, the ratio itself untouched). `train.eval_interval` stays at R343(b)'s 1000 (a
-  ruling); at the new step rate a round fires every ≈ 23 min of wall — the architect's regime note.
-  Block ESTIMATE at this mint: ≈ 10.2 h.
-- **CARD-PREFLIGHT-CADENCE — DECIDED by matrix, landed as one mint row.** The first real run6
-  preflight (17:00 UTC) ran its 101-step burst, mirrored and receipted its checkpoint and first
-  shard, played its terminal eval round — and returned **rc 23**
-  `PreflightInversionUndiscriminatedError`: at `train.actor_sync_cadence_steps 1` (the template
-  default run6 inherited; no ruling pinned it) the actor never lags the learner, so assertion (b)
-  cannot prove the armed lag abort's operand order, and the tool refuses to certify that by
-  design (`unproven` is never rc 0). Matrix: (a) mint cadence 2, the smoke config's own value —
-  proves the wiring on the production config, actor ≤ 1 step (≈ 6 s) stale, re-preflight 30 min;
-  (b) accept `undiscriminated` at cadence 1 in the tool — an armed abort's wiring left unproven,
-  the class the tool exists to refuse. **(a) selected**: `configs/run6.yaml` mints
-  `train.actor_sync_cadence_steps: 2` (its header carries the delta); the shakedown twin follows.
-- **CARD-PHASE-W-AT-GUMBEL — DECIDED by matrix: not re-run before START.** The rider named the
-  n_workers sweep at the Gumbel regime as part of the mint. Measured instead by the investigation
-  (F-47): 16 → 32 workers buys +5 % leaves/s with the server thread at 90.6 % → 99 %, so the knee
-  rule (the smallest rung within 95 % of the plateau) lands at or below the minted 16 — the sweep's
-  answer is inside the noise of its own instrument (± 5 % per 150-step arm) and costs ≈ 2–3 h of
-  box. Falsifier: the shakedown's `positions_per_hour` against the burst's 46,800; a reading
-  ≥ 5 % below re-opens the sweep. The post-rebuild cap term was measured by PERF-3b on the rebuilt
-  box (GPU 7.66 GB max, RSS 4.70 GiB max at the minted caps) and the shakedown reads it again.
-- **CARD-ALPHA-TARGET-FORM — CLOSED by R350(e).** α = 1.0 rows (4.98 per 1 000, flat from
-  ≈ 9 000) are EXCLUDED from the policy loss from run7's first step; the matrix's (a)–(c) are not
-  taken. The three-row reconstruction R349(c) ordered stays OWED (owed section below).
 - **CARD-TRAINER-CADENCE — the architect's.** Steps/h ≡ games/h by `train.training_steps_per_game
   1.0` / `max_train_burst 1` (6.6 draws per row); the trainer is 92 % idle (run6's regime — F-44's annotation, R365(e)). The block is ≈ 22.6 h
   at 1,105 steps/h. Raising the ratio halves the wall clock and doubles sample reuse — a regime
@@ -710,13 +457,6 @@ Records: `docs/design/measurements/MEASUREMENT_STARTPATH_2026-09-11.md`; falsifi
   two-thread software pipeline (+52 % over serial) — 1,831 → 3,662 leaves/s at 32 workers
   (2.0×), the block ≈ 10.6–11.1 h ESTIMATE against 20.5–21.5 h; the codebook is bit-exact on the
   RTX 5080 only and is deferred with its numbers; the mint rows are in that record's §11.
-- **CARD-CHECKER-THREAD-GIL — the landed lever is a net loss as built (F-46).**
-  `inference.edge_geometry_check: checker_thread` costs −12.6 % leaves/s at 32 workers because
-  `verify_edge_geometry` holds the GIL for the whole verify; do NOT arm it in a mint. The repair
-  is `py.detach` around the verifier (a Send wrapper over the borrowed slices) — a small packet
-  with the `w32ct` arm as its falsifier (pops/s 32 → ≥ 37; abort < +8 %). REPAIRED at
-  `13562ce1` (PERF-A4 §2): pops/s 33.4 → 39.0, +17 % leaves/s at 32 AND at 16 workers; arming
-  the posture is now a recommended mint row (F-46 annotated).
 - **CARD-EVAL-CONTENTION — a measured term nobody had priced.** While an eval round is alive
   self-play runs at **0.79×** (arm `w16ev`: −20.7 % leaves/s over a 12-min round; two CUDA
   contexts time-slicing plus the child's 8 CPU threads, the child allocating only 38 MB). At run6's
@@ -726,13 +466,6 @@ Records: `docs/design/measurements/MEASUREMENT_STARTPATH_2026-09-11.md`; falsifi
   **RE-MEASURED on the block (25 rounds, 5.9 h alive of 21.8 h): self-play at 0.94× during a
   round at 32 workers behind the PERF-A4 pipeline — ≈ 440 steps, 1.7 % of the block, ≈ 22 min.
   The term is priced and small; lever (a) stays a proposal.**
-- **CARD-EVAL-CADENCE — CLOSED by R350(d).** run7's proposed rows: `eval_interval 3 000`, the
-  sealbot point 288 paired games (± 5 pp), random floor 20, the promotion gate at stride 1 on that
-  cadence, witness (iii) an OLS Elo slope over every point with CI excluding 0, witness (ii)
-  statable from WR ≥ 0.56. Armed at run7's mint by the operator's forward; R343(b)'s 1 000 and
-  R345(c)'s stride 3 are superseded for run7.
-- **CARD-SEALBOT-HORIZON — FOLDED into STRENGTH-FRONTIER-1 by R350(c)/(f).** The question
-  ("net weak" vs "search short" vs "kind") is the frontier's; its record is the answer's home.
 - **CARD-DEPLOY-HEAD-BUDGET — item 4.** In decided positions the deploy head spends 28–40 of a
   64-sim budget and 52–77 of 320: `gumbel_root_select` returns `None` early. The eval instrument
   under-spends exactly where the position is settled; whether that moves a bar is unmeasured.
@@ -741,28 +474,13 @@ Records: `docs/design/measurements/MEASUREMENT_STARTPATH_2026-09-11.md`; falsifi
 
 ## Opened by R348 (WAVE 3, leg 1)
 
-All five were found by running things the dev box could not run — the integration tier and the
-Gumbel regime at scale on the box — and every one is pre-existing on `dev`. Records:
-`docs/design/measurements/MEASUREMENT_OC7_2026-09-11.md`, `docs/design/archive/measurements/MEASUREMENT_PERF3B_2026-09-11.md` (archived 2026-09-17).
+Found by running things the dev box could not run — the integration tier and the Gumbel regime at
+scale on the box. Records: `docs/design/measurements/MEASUREMENT_OC7_2026-09-11.md`,
+`docs/design/archive/measurements/MEASUREMENT_PERF3B_2026-09-11.md` (archived 2026-09-17).
 
-- **CARD-BOX-VOLUME — CLOSED by R349(b) at `8e307af1`.** `/` and `/workspace` on the box are
-  `overlay`; R347(d)'s rc 16 refused every preflight there and is DELETED. `tools/mirror_pull.py`
-  (the operator's machine, an rsync spec, receipts beside each artifact on the box) is the arm;
-  the preflight's rc 16 now demands receipts for the burst's bundle and first shard, `mantis.run`
-  refuses a stamp without the `MIRRORED` verdict, and `resume_state_persisted.unreceipted_bundles`
-  feeds the dashboard's two-interval warning. Proven over the alias on the START-path burst
-  (cycle 11.1 s). Loss-on-recycle is the operator's RECORDED acceptance.
-- **CARD-WARMSTART-STAMP-SCHEMA — CLOSED by R349(a) at `1793fee1`.** run6's BC artifact's stamped
-  config no longer validated under the wave-2 schema (49 `extra_forbidden`); the LAW-12 strip
-  (`checkpoints/bc/run6_00006500_ca1afb71.ckpt`, net hash unchanged) is now the minted
-  `identity.warm_start.checkpoint`, and the default tier's one true red is green wherever the
-  strip exists.
-- **CARD-TIER-HOST — RULED by R349(a): the carve-out.** On an AVX2 host LAW-06's bf16 CPU trainer
-  was emulated (72× per GEMM) and the tier could not finish. R349(a) takes the third option as a
-  law amendment: fp32 on `train.device: cpu` (the autocast context, never the dtype pin), landed
-  at `9491b4d0` with its own parity test; the tier runs on CUDA where a card exists (the dev box's
-  3070 via `make build.cuda`, the box remotely). TEST-1's minted CUDA smoke profile is the fourth
-  option and is still owed.
+- **CARD-TIER-HOST residue — TEST-1's minted CUDA smoke profile is OWED.** The AVX2-host carve-out
+  itself is landed (LAW-06's fp32-on-`train.device: cpu` amendment, `9491b4d0`, its own parity
+  test); the fourth option named at the time, a minted CUDA smoke profile, is still owed.
 - **CARD-ALPHA-MAX-ROWS — DISCRIMINATED under R349(c); the run-fatal half FIXED, the target
   half OWED to the architect.** 25 rows reconstructed (`MEASUREMENT_STARTPATH_2026-09-11.md`
   §B): all at `moves_remaining == 1`, all lost positions, the perspective flip CORRECT (F-45).
@@ -774,25 +492,6 @@ Gumbel regime at scale on the box — and every one is pre-existing on `dev`. Re
   the paper's σ without min-max, `c_scale 0.1`, or a span floor — each a regime change needing
   the PERF-3b re-measure. The per-1,000 count rides `iteration_complete.gumbel_alpha_full` and
   the dashboard from step 0.
-- **CARD-GATES-ON-CUDA-VENV — the gate set had never gated a CUDA venv.** Every `$UV run` in
-  `run_all.sh` re-synced to the default groups, so every box gate run in history silently ran
-  on the CPU wheel; fixed at `8dfa8b5f` (`UV_NO_SYNC=1`, torch build printed). Gated as built
-  on `+cu128`, gate 3a shows rows whose expectations assume a CPU torch: the model puts itself
-  on CUDA while the test's tensors stay on CPU ("Expected all tensors to be on the same
-  device") in `tests/model/conformance/test_arch_states_its_memory_envelope.py` (8),
-  `tests/model/test_gnn_v2_witnesses.py::test_both_arches_FORWARD_on_a_real_wire_position` (2),
-  the `slow` tier's harness rows through `test_local_gate_runner`, and the ten-row control in
-  `test_preflight_start_halts` (fixed in place). **CLOSED by R349(a)** — the four collate sites
-  in the model oracles state `device="cpu"` at `8443d0e5` instead of letting
-  `collate_graph_batch(device=None)` sniff CUDA beside a CPU net; all 150 rows of the affected
-  suites pass on the box's `+cu128` venv.
-- **CARD-CHECKER-THREAD-LEVER — the lever LANDED at `8443d0e5`; the A/B is the measurement.**
-  `inference.edge_geometry_check` (schema default `inline`; `checker_thread` moves check 14 to
-  one bounded checker thread after the batch is served, a full queue runs it inline, a failure
-  dumps the same artifact and halts through `deferred_contract_failure` on the next pop and the
-  pool health check). LAW-18 counters ride `iteration_complete.inference_batching.edge_geometry_check`.
-  The Rust verifier holds the GIL, which bounds the gain; the A/B reading is in
-  `docs/design/archive/measurements/MEASUREMENT_PERF3B_2026-09-11.md` (archived 2026-09-17). Arming it in run6 is a mint row.
 
 ## Reading the identifiers
 
@@ -842,7 +541,6 @@ nulls, two promotions. run6 minted `eval.concurrency = 8`. R343(a).
 | id | subject | status | last moved |
 |---|---|---|---|
 | F-816-37 | run-fatal `EdgeAttrGeometryMismatch` at run6's minted geometry, not root-caused | OPEN. Converted into a 1-in-1 eval-path instrument with dump-on-fire (protected set); zero shakedown firings is explicitly NOT a close. Every firing on record is on the host R341 condemned and R342 downgraded to SUSPECT, and the work moved to a different box — the halt is spent, the class is not | R342(a) |
-| F-816-24 | bare `MonitorConfig()` — minted `supervisor_*` reach no process | CLOSED by R349(a); fixed at `c8bd7190` (2026-08-21), witnessed | R349(a) |
 | F-816-27 | supervisor kill-grace CEILING absent (schema is `Field(ge=0)` only) | RULED; rides prereg row 19 to the operator | R338(c) |
 | F-816-34 | vacuous knee band | FILED 2026-09-04, never adjudicated. PICK = 2 from `adjusted_threshold` 54.9167, widened below every rung's throughput (min passing 89.600; unwidened the rule picks 16); a pre-statable vacuity test is `adjusted_threshold < min passing throughput` | none |
 | F-816-35 | r8 trainer need is a DISTRIBUTION | FILED, never adjudicated. Measured p50 7.9072 / p95 8.3581 / max 8.6381 GiB over 60 steps, exceeding both the minted `_SIZING_BUDGET_GIB = 8.40` and R330(b)'s armed 3% over FINISH-1's single-draw point (8.3341); not a halt alone — the peak is cap-bound and STEP 3 re-fits the caps — but which statistic the allowance is taken over is worth 0.75 GiB | none |
@@ -870,11 +568,8 @@ nulls, two promotions. run6 minted `eval.concurrency = 8`. R343(a).
 
 | item | subject | status | last moved |
 |---|---|---|---|
-| STRENGTH-FRONTIER-1 | the BC net (all heads / as the seam loaded it) under PUCT-150 and Gumbel-160/m16; frozen 3k/13k/18k/25k × sims {128, 256, 512} × kind vs `sealbot_d5`; 25k vs the BC net at equal search; 288 paired games per cell, pair-level CI | COMPLETE — 31 cells, 8 928 games, 0 failed (`docs/design/measurements/STRENGTH_FRONTIER_1_2026-09-13.md`); verdict R351(a): the instrument was the failure, not the net | R351(a) |
-| GUMBEL-REPAIR-1 | Gumbel repaired to Mctx invariants; lands DURING the block, enabled in no run until the frontier compares at equal NN work | LANDED and ARMED: run7's trainer is the repaired Gumbel head (`selfplay.search.kind: gumbel`, R352(a)); the `gumbel_mcts` key this row once named was replaced by `search.kind` and then split into the self-play and deploy rows (R351(c)) | R352(a) |
-| GAME-RECORD-1 | every game written from step 0; move list in axial coordinates, append-only length-delimited msgpack shards, no new hard dependency | LANDED (`docs/contracts/game_record.md`, contract #11, `937694e7`); the self-play search-stats sample followed at R355(d) | R355(d) |
 | DASH-2 | `mantis dash serve`, a read-only stdlib HTTP server over the run record carrying the GAME VIEWER, loopback by default | ORDERED, NOT BUILT. Owes an R9 amendment to repo_design.md in the SAME commit as the code. One finding already booked: a concurrent block writes every progress row at BLOCK END, so from outside it is indistinguishable from a wedge. The OBSERVATORY design (`docs/design/observatory_design.md`, 2026-09-14) is this card's design; its phase-1 readers landed at `3a563574..4678537d` and were RETIRED from the tree on 2026-09-17 under R355(f) (one dashboard implementation stays: `tools/dashboard` + `tools/viewer`, which serve the box page) — revive them from history when this is built: they read run6's record in 3.0 s at 84 MB peak against the dashboard's 5.0 s at 729 MB, parity-tested against it | R344(d) |
-| RUNG-2 | new external rungs — strix first, shrimp second | strix LANDED: the frontier's cell (`STRIX_RUNG_2026-09-14.md`, step-0 point 2026-09-14; nine run7 points through 60k on the as-shipped unit) and, at R356(a), the FOLLOWER `tools/strix_follower.py` — the equal-work 256/256 cell on every 15 000-step checkpoint and every promotion read off the event stream, a sidecar receipt beside the checkpoint (`<ckpt>.strix256.json`), the as-shipped cell at block ends only; its first cell is run8's parent (`run7_00042000_46fdb931.ckpt`), the unit bridge; a follower cell beside the live trainer costs ≈ 1 h of run progress (two 8-in-flight cells cut run8 to ≈ 35 % of its rate, 2026-09-18) — ACCEPTED at 15k + promotions, R359(e). shrimp HELD for an architect read on the R257 radius fence | R356(a), R359(e) |
+| RUNG-2 | new external rungs — strix first, shrimp second | strix LANDED (the frontier's cell, the `tools/strix_follower.py` equal-work 256/256 cell on every checkpoint and promotion, ACCEPTED at 15k + promotions, R359(e)). shrimp HELD for an architect read on the R257 radius fence | R356(a), R359(e) |
 | INCR-GRAPH / S-INCR-GRAPH | incremental axis-graph construction from the parent position | PARKED, after being elevated to the top of the floor lane at R325. A CANDIDATE, not a plan: gated on a Rust-criterion box measurement, falsifier pre-registered as F-19's own inequality (`delta_cost x depth < build_cost`). Outside F-17/F-19's measured scope — see `docs/governance/falsified.md` | R335(e) |
 | HOT-14 | cross-core ownership explains x1.66 of x6.84 | RE-OPENED when S-PREFUSE was refuted | R336(a) |
 | S-BATTERY-G | eval battery concurrency capability | landed UNARMED; the CUDA arm is OWED at the mint's battery | R336(a) |
@@ -882,7 +577,6 @@ nulls, two promotions. run6 minted `eval.concurrency = 8`. R343(a).
 | PERF-TRANCHE-1 residual | the 7.2% pre-control/ledger disagreement | OPEN as instrument hygiene; ledger absolute levels are not quotable without re-measurement | R320 |
 | PERF-TRANCHE-2 | six items T2-1..T2-6 | EXECUTED — its findings are cited as landed evidence by R335 — but NO ratifying clause exists in either archive file | R334(e) |
 | WP-AXIS2 | Phase 2 axis-graph arch, then a shakedown | LAST ORDERED, NEVER CONFIRMED. Neither the shakedown nor the R339 mint is ever labelled WP-AXIS2, so completion would be an inference, not a record | R335(g) |
-| AUDIT-2 filing | the `AUDIT_2026-09-09.md` analysis text | **CLOSED.** Filed to `dev` at `428f3c8` as `docs/audits/archive/AUDIT_2026-09-09.md`, 1661 lines. Read it with its own header caveat: the audit was taken at `97e814e3`, 29 commits behind `fb3725f`, so REPAIR-A2 and GUMBEL-REPAIR-1 both post-date it and its findings are not a statement about HEAD | R346 era |
 | DASH-1 banked panels | average sims/move, held-out loss | 2 BANKED with no producer at HEAD; drawn as stated gaps, never as zeros | R334(a) |
 | R317(c)(ii) diagnostic | move-sequence-hash diagnostic | accepted as NON-BLOCKING DEBT, never shipped | R318 |
 | AUDIT-1 P10 | lane-C design input, explicitly "not a packet" | still the architect's, undispatched | R331(d) |
@@ -925,7 +619,6 @@ nulls, two promotions. run6 minted `eval.concurrency = 8`. R343(a).
 | CARD-DENSE-EVAL-ADAPTER | wire `infer_batch_per_cluster` into the deploy-head decode | OPEN — pre-Stage-0 BLOCKING, not mint-blocking |
 | CARD-LINT-TYPE | ruff/pyright advisory type-debt backlog | OPEN debt row, deliberately kept out of the gate by R98 |
 | CARD-PYRIGHT-STRICT | pyright strict-mode adoption as a post-cutover ratchet | OPEN; live marker at `pyproject.toml:92` |
-| CARD-MAXPLIES | `_DEFAULT_MAX_PLIES` schema promotion | CLOSED IN CODE twice over — `_DEFAULT_MAX_PLIES` is gone, and since contract v30 (2026-09-15) `eval.max_plies` is its OWN REQUIRED row rather than a copy of `selfplay.max_game_moves` |
 | CARD-TORCH-INDEX | conditional torch index / uv extra for the CPU-wheel parity regime | OPEN, post-mint |
 | CARD-EVAL-CORESIDENCY | characterize eval-child steady VRAM for the co-residency prereg row | OPEN. The founding 8.21 GiB figure was superseded by R229(1) (unbounded, to 13.5 GiB) without naming the card |
 | CARD-A10-CAP | whether an entropy term enters the graph loop at all | RECORDED, explicitly NOT executed. R335(b) makes entropy normalization a PRECONDITION on ever arming one |
@@ -955,7 +648,6 @@ Zero governance mentions; their status comes from the code, not from a ruling.
 - **RQ-5** — an independent cross-model review of the `freeze_verify` mission diff. ORDERED
   findings-only, unexecuted. R289(c).
 - **RQ-7** — `supervisor_kill_grace_sec`. SPLIT; the VALUE is a prereg row and is operator-owed.
-- **RQ-8** — `MonitorConfig` schema-resident defaults. ESCALATED into F-816-24, above.
 - **RQ-16** — dead-transfer field removals (`node_coords` plus four TEST-ONLY LAW-08 rows).
   DISPOSITIONED PER FIELD, one commit per field, execution pending on the hygiene packet.
 - **RQ-18** — the compiled-arm parity criterion, four legs with `k` pre-registered. Criterion
