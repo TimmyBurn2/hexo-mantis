@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 
+from mantis.config.census import production_configs
 from mantis.config.loader import load_config
 from mantis.diagnostics import mirror_receipts as D
 from mantis.train import bundle_receipts as R
@@ -28,8 +29,17 @@ def _tool() -> object:
 TOOL = _tool()
 
 
-def _config(name: str = "run6.yaml"):
+def _config(name: str):
     return load_config(REPO_ROOT / "configs" / name)
+
+
+def _cuda_config():
+    """The first production config that declares a cuda device, or None if the census holds none."""
+    for path in production_configs(REPO_ROOT):
+        config = load_config(path)
+        if "cuda" in {config.train.device, config.eval.worker_device}:
+            return config
+    return None
 
 
 def _receipt_run_dir(root: Path, run_id: str) -> None:
@@ -89,11 +99,10 @@ def test_a_receipt_written_for_other_bytes_still_HALTS(tmp_path: Path, synthetic
                     reason="loud skip: this host has a CUDA torch build, so the refusal arm "
                            "has no subject here")
 def test_a_cuda_config_on_a_cpu_torch_HALTS_with_its_own_rc() -> None:
-    """THE PIN. run6 declares `train.device: cuda`; a `+cpu` wheel cannot run it, and the
+    """THE PIN. A production config declares a cuda device; a `+cpu` wheel cannot run it, and the
     downgrade recurs on every bare `uv sync` because the default group is the CPU wheel."""
-    config = _config()
-    assert "cuda" in {config.train.device, config.eval.worker_device}, (
-        "this pin needs a config that declares cuda; run6 does")
+    config = _cuda_config()
+    assert config is not None, "this pin needs a production config that declares cuda"
     with pytest.raises(TOOL.PreflightCudaBuildError) as caught:
         TOOL._assert_cuda_build_halt(config, {})
     assert caught.value.rc == 17, f"the named outcome is rc 17; got {caught.value.rc}"
@@ -106,16 +115,20 @@ def test_a_cuda_config_on_a_cpu_torch_HALTS_with_its_own_rc() -> None:
                            "no subject here")
 def test_a_cuda_config_on_a_cuda_torch_records_the_build_and_does_not_halt() -> None:
     report: dict = {}
-    TOOL._assert_cuda_build_halt(_config(), report)
+    config = _cuda_config()
+    assert config is not None, "this pass arm needs a production config that declares cuda"
+    TOOL._assert_cuda_build_halt(config, report)
     assert report["cuda_build"]["cuda_available"] is True
 
 
 def test_a_cpu_config_records_not_run_rather_than_asserting_cuda() -> None:
     """The condition is what the RUN declares. A cpu-declaring config must reach a report line
     saying the CUDA question was not asked — a silent skip and a pass look identical."""
-    config = _config().model_copy(
-        update={"train": _config().train.model_copy(update={"device": "cpu"}),
-                "eval": _config().eval.model_copy(update={"worker_device": "cpu"})})
+    cuda = _cuda_config()
+    assert cuda is not None, "the flip needs a production config that declares cuda to flip"
+    config = cuda.model_copy(
+        update={"train": cuda.train.model_copy(update={"device": "cpu"}),
+                "eval": cuda.eval.model_copy(update={"worker_device": "cpu"})})
     report: dict = {}
     TOOL._assert_cuda_build_halt(config, report)
     assert report["cuda_build"]["verdict"] == "not_run"

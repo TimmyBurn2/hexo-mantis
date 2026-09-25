@@ -7,7 +7,7 @@ CLASS: the arms drive a typo on the ACTOR-LAG row too, since a fix fitted to the
 alone would leave the next row's typo on rc 1 exactly as before. The disarmed asymmetry is
 pinned both ways — a `None` met mid-walk short-circuits, a MISSING attribute still raises — and
 the residual, a typo AFTER a legitimately-`None` segment reporting "disarmed", is caught where
-it gates, since run5 is ARMED and the walk reaches the leaf. Everything drives `audit_arming`,
+it gates, since every production config is ARMED and the walk reaches the leaf. Everything drives `audit_arming`,
 the walker's only consumer; the tool's report goes to `tmp_path`, never inside the tree.
 """
 from __future__ import annotations
@@ -57,12 +57,13 @@ def _retyped(name: str, config_path: str) -> tuple[ArmedAbort, ...]:
     return tuple(out)
 
 
-def _run5() -> RunConfig:
-    return load_config(REPO_ROOT / "configs" / "run6.yaml")
+def _armed() -> RunConfig:
+    """One production member: gate 12 holds every one of them armed, so any serves."""
+    return load_config(production_configs(REPO_ROOT)[0])
 
 
-def _disarmed_run5() -> RunConfig:
-    dumped = _run5().model_dump()
+def _disarmed() -> RunConfig:
+    dumped = _armed().model_dump()
     dumped["train"]["draw_rate_abort"] = None
     return RunConfig.model_validate(dumped)
 
@@ -76,7 +77,7 @@ def test_an_unresolvable_config_path_is_a_NAMED_failure_not_an_unnamed_rc_1() ->
         "that catches AttributeError today must not start leaking this one"
     )
 
-    config = _run5()
+    config = _armed()
     cases = {
         "a leaf typo on the draw-rate row": (
             "draw_rate_collapse", "train.draw_rate_abort.thrshold", "thrshold"),
@@ -108,15 +109,15 @@ def test_an_explicitly_disarmed_block_reports_DISARMED_and_never_raises() -> Non
     'threshold'`, so a legitimately disarmed config would fail gate 12 at rc 31 rather than be
     reported disarmed: a `None` met MID-WALK short-circuits, a MISSING attribute still raises.
     Both arms, because a walker short-circuiting on ANY failure would satisfy just one."""
-    disarmed = _disarmed_run5()
+    disarmed = _disarmed()
     result = audit_arming(disarmed)
     assert [row.name for row in result.disarmed] == ["draw_rate_collapse"], (
         "a `null` block must report DISARMED through `Mechanism.CONFIG_THRESHOLD_GT_ZERO`'s "
         f"non-numeric arm, with zero change to `Mechanism`; got {result.disarmed}"
     )
-    assert list(audit_arming(_run5()).disarmed) == [], (
+    assert list(audit_arming(_armed()).disarmed) == [], (
         "…and the same walk on the ARMED committed config must reach the leaf and find 0.25 "
-        "— a short-circuit that fired on the armed path would report run5 disarmed"
+        "— a short-circuit that fired on the armed path would report it disarmed"
     )
 
     with pytest.raises(ArmingSurfaceMissingError):
@@ -181,8 +182,8 @@ def test_the_shipped_manifest_still_audits_green_so_the_rc_31_arm_is_not_vacuous
     the post-flip fact plainly — with `draw_rate_collapse` REQUIRED and armed, the audit is GREEN.
     """
     assert TOOL.main(["--audit-only", "--out-dir", str(tmp_path / "control")]) == 0, (
-        "the SHIPPED manifest must audit the real tree green after the flip: run5 arms both "
-        "required rows, so rc 0 here is the state Phase D lands in"
+        "the SHIPPED manifest must audit the real tree green after the flip: every production "
+        "config arms both required rows, so rc 0 here is the state Phase D lands in"
     )
     # Derived, not transcribed: the deferred set must be non-empty so "deferred rows print and
     # do not gate" has a subject, and rc 0 above must hold anyway.

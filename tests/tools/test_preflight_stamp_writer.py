@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+from mantis.config.census import production_configs
 from mantis.config.loader import config_identity_sha256, load_config
 from mantis.config.preflight_stamp import (
     PreflightStampMalformedError,
@@ -26,7 +27,8 @@ def _tool() -> Any:
 
 
 TOOL = _tool()
-_CONFIG_PATH = REPO_ROOT / "configs" / "run6.yaml"
+#: One production member: the stamp is keyed by whichever config it certifies, so any serves.
+_CONFIG_PATH = production_configs(REPO_ROOT)[0]
 
 
 def _report(**halts) -> dict:
