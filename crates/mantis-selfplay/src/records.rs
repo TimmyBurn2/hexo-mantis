@@ -154,15 +154,15 @@ impl std::error::Error for TargetIntegrityError {}
 /// the SAME window.
 pub const TARGET_MASS_TOL: f64 = 1e-4;
 
-/// Refuse to build a training target out of a search that backed up nothing. Returns the backed-up
-/// root-child visit total.
+/// Refuse a target built from a search that backed up nothing; returns the root-child visit total.
 ///
 /// The class: *a search that did not run is exported as if it had.* The seam conjunct stops the
-/// usual CAUSE and this stops the CONSEQUENCE; each sees a population the other cannot, since a
-/// failure landing LATE leaves a truncated search with nonzero visits that only the seam catches,
-/// while this one also catches a zero-visit search with every inference healthy.
+/// usual CAUSE and this the CONSEQUENCE: a failure landing LATE leaves nonzero visits only the seam
+/// catches, while this also catches a zero-visit search with every inference healthy.
 ///
-/// Refusing rather than falling back matters: an all-zero target slips past the DENSE recorder.
+/// Falling back to the prior would export the prior as the target, and deleting that fallback would
+/// export an all-zero one. This pin, its seam sibling and the capacity formula derive from the
+/// current visit-limited construction and re-derive with it.
 ///
 /// # Errors
 /// [`TargetIntegrityError::ZeroVisitSearch`] when the root is unexpanded, has no children, or

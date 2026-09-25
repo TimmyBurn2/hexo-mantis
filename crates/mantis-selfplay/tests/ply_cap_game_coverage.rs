@@ -1,12 +1,12 @@
 //! Complete games driven to the ply cap at production self-play parameters, through the
 //! PRODUCTION record path, served by a healthy mock graph producer.
 //!
-//! The accelerator: `random_opening_plies` is set HERE, in the harness, never in a config file,
-//! and it skips MCTS *and* recording for the opening, so it reaches the deep regime without
-//! touching a single SEARCH parameter. Asserted: the cap is genuinely reached;
-//! every recorded position's support fits the capacity as computed by the production derivation
-//! rather than transcribed; and no fatal defect with both counters at 0 — the negative control,
-//! since a pin firing on healthy play is worse than the defect it replaces.
+//! The accelerator: `random_opening_plies` is set HERE, in the harness, never in a config file, and
+//! it skips MCTS *and* recording for the opening, so it reaches the deep regime (ply > ~120)
+//! without touching a SEARCH parameter; a full 128-ply game at 50 sims did not finish in 600 s
+//! (DEBUG build). Asserted: the cap is reached; every recorded position's support fits the capacity
+//! the production derivation computes; and no fatal defect with both counters at 0 — the negative
+//! control, since a pin firing on healthy play is worse than the defect it replaces.
 //!
 //! Killer: any change that re-admits an over-capacity or zero-visit export on healthy play, or a
 //! regression that stops games reaching the cap, reds this file.
