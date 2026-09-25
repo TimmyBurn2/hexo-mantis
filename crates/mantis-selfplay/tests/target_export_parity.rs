@@ -17,6 +17,7 @@
 
 use mantis_core::board::{Board, BoardGeometry};
 use mantis_encoding::lookup_or_panic;
+use mantis_search::mcts::pack_cell;
 use mantis_search::{LegalSetPolicy, MCTSTree};
 use mantis_selfplay::replay::hexg::{GraphRecord, HexgBuffer};
 
@@ -166,9 +167,7 @@ fn export_map(pos: &Pos, ls: &LegalSetPolicy) -> Vec<((i32, i32), f64)> {
             out.push(((q, r), m));
         }
     }
-    out.sort_unstable_by_key(|&((q, r), _)| {
-        (((q + 32768) as u32) << 16) | ((r + 32768) as u32 & 0xFFFF)
-    });
+    out.sort_unstable_by_key(|&((q, r), _)| pack_cell(q, r));
     out
 }
 
@@ -237,9 +236,7 @@ fn check_roundtrip(src: &str, i: usize) {
             got.push(((q, r), m));
         }
     }
-    got.sort_unstable_by_key(|&((q, r), _)| {
-        (((q + 32768) as u32) << 16) | ((r + 32768) as u32 & 0xFFFF)
-    });
+    got.sort_unstable_by_key(|&((q, r), _)| pack_cell(q, r));
     assert_pairs_match(&pos.id, &got, &pos.expected);
 }
 
@@ -327,9 +324,7 @@ fn o1r_record_chain_full_mass() {
                     got.push(((q, r), m));
                 }
             }
-            got.sort_unstable_by_key(|&((q, r), _)| {
-                (((q + 32768) as u32) << 16) | ((r + 32768) as u32 & 0xFFFF)
-            });
+            got.sort_unstable_by_key(|&((q, r), _)| pack_cell(q, r));
             assert_pairs_match(&pos.id, &got, &pos.expected);
         }
     }

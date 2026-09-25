@@ -33,6 +33,13 @@ pub struct TTEntry {
     pub value: f32,
 }
 
+/// Pack an axial cell into a node's `action_idx`: each coordinate offset by 32768 into one u16 half.
+#[inline]
+#[must_use]
+pub fn pack_cell(q: i32, r: i32) -> u32 {
+    (((q + 32768) as u32) << 16) | ((r + 32768) as u32 & 0xFFFF)
+}
+
 /// One node in the MCTS tree.
 #[derive(Clone, Copy)]
 pub struct Node {
@@ -81,5 +88,39 @@ impl Node {
     #[inline]
     pub fn is_expanded(&self) -> bool {
         self.first_child != u32::MAX
+    }
+
+    /// The axial cell `action_idx` encodes, the inverse of `pack_cell`.
+    #[inline]
+    #[must_use]
+    pub fn cell(&self) -> (i32, i32) {
+        (
+            (self.action_idx >> 16) as i32 - 32768,
+            (self.action_idx & 0xFFFF) as i32 - 32768,
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{pack_cell, Node};
+
+    #[test]
+    fn pack_cell_round_trips_through_node_cell() {
+        for &(q, r) in &[(0, 0), (-1, 1), (28, -9), (-32768, 32767), (32767, -32768)] {
+            let node = Node {
+                action_idx: pack_cell(q, r),
+                ..Node::uninit()
+            };
+            assert_eq!(node.cell(), (q, r));
+        }
+    }
+
+    #[test]
+    fn pack_cell_keeps_the_offset_layout() {
+        // The layout is stored in trees and sort keys, so the bit pattern itself is pinned.
+        assert_eq!(pack_cell(0, 0), 0x8000_8000);
+        assert_eq!(pack_cell(-32768, -32768), 0);
+        assert_eq!(pack_cell(1, -1), 0x8001_7FFF);
     }
 }

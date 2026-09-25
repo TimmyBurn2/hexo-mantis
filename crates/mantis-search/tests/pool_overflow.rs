@@ -7,7 +7,9 @@
 //! overflow regime, whose fabricated-terminal mitigation silently corrupted training targets.
 
 use mantis_core::board::{Board, BOARD_SIZE};
-use mantis_search::{MCTSTree, MAX_CHILDREN_PER_NODE, pool_overflow_count, take_pool_overflow_count};
+use mantis_search::{
+    pool_overflow_count, take_pool_overflow_count, MCTSTree, MAX_CHILDREN_PER_NODE,
+};
 
 const N_SIMS_PER_MOVE: usize = 400;
 const LEAF_BATCH: usize = 8;
@@ -23,8 +25,9 @@ fn run_uniform_search(tree: &mut MCTSTree, n_sims: usize, leaf_batch: usize) {
     let mut completed = 0;
     while completed < n_sims {
         let take = leaf_batch.min(n_sims - completed);
-        let boards = tree.select_leaves(take)
-        .expect("select_leaves: no desync in this fixture");
+        let boards = tree
+            .select_leaves(take)
+            .expect("select_leaves: no desync in this fixture");
         if boards.is_empty() {
             break;
         }
@@ -44,9 +47,7 @@ fn argmax_visit_action(tree: &MCTSTree) -> Option<(i32, i32)> {
     let first = root.first_child as usize;
     let n = root.n_children as usize;
     let best = (first..first + n).max_by_key(|&i| tree.pool[i].n_visits)?;
-    let val = tree.pool[best].action_idx;
-    let q = (val >> 16) as i32 - 32768;
-    let r = (val & 0xFFFF) as i32 - 32768;
+    let (q, r) = tree.pool[best].cell();
     Some((q, r))
 }
 
@@ -71,8 +72,10 @@ fn topk_eliminates_pool_overflow_across_full_game() {
             if n_ch > max_children_seen {
                 max_children_seen = n_ch;
             }
-            assert!(n_ch as usize <= MAX_CHILDREN_PER_NODE,
-                "ply {ply}: node {i} has {n_ch} children, exceeds K={MAX_CHILDREN_PER_NODE}");
+            assert!(
+                n_ch as usize <= MAX_CHILDREN_PER_NODE,
+                "ply {ply}: node {i} has {n_ch} children, exceeds K={MAX_CHILDREN_PER_NODE}"
+            );
         }
 
         let action = match argmax_visit_action(&tree) {
@@ -85,10 +88,16 @@ fn topk_eliminates_pool_overflow_across_full_game() {
     }
 
     let after = pool_overflow_count();
-    assert_eq!(after, before,
-        "pool overflow must remain zero with top-K cap (delta={})", after - before);
-    assert!(max_children_seen as usize <= MAX_CHILDREN_PER_NODE,
-        "max children observed = {max_children_seen}, K={MAX_CHILDREN_PER_NODE}");
+    assert_eq!(
+        after,
+        before,
+        "pool overflow must remain zero with top-K cap (delta={})",
+        after - before
+    );
+    assert!(
+        max_children_seen as usize <= MAX_CHILDREN_PER_NODE,
+        "max children observed = {max_children_seen}, K={MAX_CHILDREN_PER_NODE}"
+    );
 }
 
 #[test]
@@ -99,12 +108,19 @@ fn normal_sized_pool_does_not_overflow_on_empty_root() {
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
     let uniform = vec![1.0_f32 / n_actions as f32; n_actions];
 
-    let _leaves = tree.select_leaves(1)
+    let _leaves = tree
+        .select_leaves(1)
         .expect("select_leaves: no desync in this fixture");
     tree.expand_and_backup(&[uniform], &[0.0]);
 
     let root = &tree.pool[0];
-    assert!(!root.is_terminal, "default pool must expand root, not mark terminal");
-    assert!(root.n_children > 0, "root must have children after first expansion");
+    assert!(
+        !root.is_terminal,
+        "default pool must expand root, not mark terminal"
+    );
+    assert!(
+        root.n_children > 0,
+        "root must have children after first expansion"
+    );
     assert!(root.n_children as usize <= MAX_CHILDREN_PER_NODE);
 }

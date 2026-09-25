@@ -110,9 +110,7 @@ fn measure(board: &Board, n_actions: usize, trunk_sz: i32, ply: u32) -> Option<R
 
     let mut offwindow_children = 0usize;
     for i in first..first + n_ch {
-        let val = tree.pool[i].action_idx;
-        let q = (val >> 16) as i32 - 32768;
-        let r = (val & 0xFFFF) as i32 - 32768;
+        let (q, r) = tree.pool[i].cell();
         if board.window_flat_idx(q, r) >= n_actions {
             offwindow_children += 1;
         }

@@ -27,7 +27,7 @@ pub use backup::{pool_overflow_count, take_pool_overflow_count};
 pub use completed_q::QSigma;
 pub use gumbel_mctx::MctxRootState;
 pub use kind::SearchKind;
-pub use node::{CachedPolicy, Node, TTEntry, MAX_NODES, VIRTUAL_LOSS_PENALTY};
+pub use node::{pack_cell, CachedPolicy, Node, TTEntry, MAX_NODES, VIRTUAL_LOSS_PENALTY};
 pub use selection::{ForcedChildOutOfRange, ForcedSelectionError, SelectionDesync};
 
 /// Maximum children created per leaf expansion: past this many legal moves only the top-K by NN

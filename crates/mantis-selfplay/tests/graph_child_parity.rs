@@ -15,6 +15,7 @@
 
 use mantis_core::{Board, BoardGeometry};
 use mantis_encoding::lookup;
+use mantis_search::mcts::pack_cell;
 use mantis_search::{MCTSTree, MAX_CHILDREN_PER_NODE, VIRTUAL_LOSS_PENALTY};
 use mantis_selfplay::queues::build_leaf_graph;
 use mantis_selfplay::records::assemble_ls_from_gnn_probs;
@@ -33,12 +34,6 @@ const OFF_WINDOW_FLAT: usize = 361;
 
 fn text<'a>(src: &'a str, key: &str) -> &'a str {
     value_of(src, key)
-}
-
-/// Packed `(q, r)` tie-break key, and the fixture's canonical ordering, so both legs compare
-/// aligned `(coord, prior)` sequences rather than sets that print in the same order.
-fn packed(q: i32, r: i32) -> u32 {
-    (((q + 32768) as u32) << 16) | ((r + 32768) as u32 & 0xFFFF)
 }
 
 /// Run one fixture position through the production self-play path and assert the frozen
@@ -150,9 +145,10 @@ fn check_position(src: &str, i: usize, with_priors: bool) {
     );
     tree.expand_and_backup_ls_at(&[ls], &[0.0f32], &[g.window_center], spec.trunk_size as i32);
 
-    // `get_top_visits` returns zero-visit children too, so this is the COMPLETE child set.
+    // `get_top_visits` returns zero-visit children too, so this is the COMPLETE child set. The
+    // packed key is the fixture's canonical order, so both legs compare aligned sequences.
     let mut kids = tree.get_top_visits(MAX_CHILDREN_PER_NODE);
-    kids.sort_unstable_by_key(|((q, r), _, _, _)| packed(*q, *r));
+    kids.sort_unstable_by_key(|((q, r), _, _, _)| pack_cell(*q, *r));
     let got: Vec<(i32, i32)> = kids.iter().map(|(c, _, _, _)| *c).collect();
     let want = pairs(&ints(src, &key("expected_children")));
 

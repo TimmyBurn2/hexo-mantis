@@ -704,9 +704,7 @@ fn select_move(
     };
     let floor = 1.0 / legal.len().max(1) as f32;
     if let Some(best_pool) = winner_pool {
-        let val = tree.pool[best_pool as usize].action_idx;
-        let mq = (val >> 16) as i32 - 32768;
-        let mr = (val & 0xFFFF) as i32 - 32768;
+        let (mq, mr) = tree.pool[best_pool as usize].cell();
         if legal.contains(&(mq, mr)) {
             return Some((mq, mr));
         }

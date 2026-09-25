@@ -97,8 +97,7 @@ fn game_board(seed: u64, n_plies: usize) -> Board {
 }
 
 fn coord_of(tree: &MCTSTree, i: usize) -> (i32, i32) {
-    let val = tree.pool[i].action_idx;
-    ((val >> 16) as i32 - 32768, (val & 0xFFFF) as i32 - 32768)
+    tree.pool[i].cell()
 }
 
 fn export_mass(ls: &LegalSetPolicy) -> f64 {

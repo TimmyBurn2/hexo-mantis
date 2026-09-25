@@ -2,7 +2,7 @@
 // quiescence, finish_expansion, backup, and the pool-overflow path port together.
 //! Expansion and backup for the MCTS tree.
 
-use super::node::{CachedPolicy, Node};
+use super::node::{pack_cell, CachedPolicy, Node};
 use super::{MCTSTree, MAX_CHILDREN_PER_NODE};
 use crate::legal_set::LegalSetPolicy;
 use fxhash::FxHashSet;
@@ -73,7 +73,7 @@ pub(crate) fn pick_topk_children(
             };
             // The packed (q, r) key is the FINAL tie-break: `flat` is `usize::MAX` for EVERY
             // off-window cell, so `sort_unstable` would leave two of them unordered.
-            let key = (((q + 32768) as u32) << 16) | ((r + 32768) as u32 & 0xFFFF);
+            let key = pack_cell(q, r);
             ((q, r), sort_prior, flat, key)
         })
         .collect();
@@ -130,7 +130,7 @@ pub(crate) fn pick_topk_children_ls(
         .map(|&(q, r)| {
             let prior = ls.get(q, r, cq, cr, trunk_sz, half, floor);
             // packed (q,r) — unique, total-orderable, deterministic tiebreak.
-            let key = (((q + 32768) as u32) << 16) | ((r + 32768) as u32 & 0xFFFF);
+            let key = pack_cell(q, r);
             ((q, r), prior, key)
         })
         .collect();
@@ -362,7 +362,7 @@ impl MCTSTree {
 
         for (j, &((q, r), prior)) in chosen.iter().enumerate() {
             let ci = first_child as usize + j;
-            let action_encoded = (((q + 32768) as u32) << 16) | ((r + 32768) as u32 & 0xFFFF);
+            let action_encoded = pack_cell(q, r);
 
             self.pool[ci] = Node {
                 parent: leaf_idx,

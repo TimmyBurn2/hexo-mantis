@@ -139,9 +139,7 @@ mod perspective_parity {
             let idx = info
                 .iter()
                 .position(|&(pool_idx, _)| {
-                    let val = tree.pool[pool_idx as usize].action_idx;
-                    let q = (val >> 16) as i32 - 32768;
-                    let r = (val & 0xFFFF) as i32 - 32768;
+                    let (q, r) = tree.pool[pool_idx as usize].cell();
                     (q, r) == visited
                 })
                 .expect("the visited child is one of the root children");

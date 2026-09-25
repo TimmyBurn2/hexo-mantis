@@ -19,8 +19,8 @@ pub(super) fn setup_two_child_tree(c_puct: f32) -> (MCTSTree, u32, u32) {
     tree.pool[0].first_child = first_child;
     tree.pool[0].n_children = 2;
 
-    let action_a = ((0u32 + 32768) << 16) | (0u32 + 32768);
-    let action_b = ((0u32 + 32768) << 16) | (1u32 + 32768);
+    let action_a = pack_cell(0, 0);
+    let action_b = pack_cell(0, 1);
 
     tree.pool[1] = Node {
         parent: 0,
@@ -86,7 +86,7 @@ fn test_backup_single_value_reaches_root() {
     tree.pool[0].moves_remaining = 1;
     tree.pool[1] = Node {
         parent: 0,
-        action_idx: (32768u32 << 16) | 32768u32,
+        action_idx: pack_cell(0, 0),
         n_visits: 0,
         w_value: 0.0,
         prior: 1.0,
@@ -99,7 +99,7 @@ fn test_backup_single_value_reaches_root() {
     };
     tree.pool[2] = Node {
         parent: 1,
-        action_idx: (32768u32 << 16) | 32769u32,
+        action_idx: pack_cell(0, 1),
         n_visits: 0,
         w_value: 0.0,
         prior: 1.0,
@@ -128,7 +128,7 @@ fn test_backup_negamax_player_change() {
     tree.pool[0].moves_remaining = 1;
     tree.pool[1] = Node {
         parent: 0,
-        action_idx: (32768u32 << 16) | 32768u32,
+        action_idx: pack_cell(0, 0),
         n_visits: 0,
         w_value: 0.0,
         prior: 1.0,
@@ -261,7 +261,7 @@ fn test_virtual_loss_causes_path_divergence() {
 fn test_virtual_loss_q_adjustment() {
     let node = Node {
         parent: u32::MAX,
-        action_idx: (32768u32 << 16) | 32768u32,
+        action_idx: pack_cell(0, 0),
         n_visits: 4,
         w_value: 2.0,
         prior: 0.5,
@@ -551,10 +551,7 @@ fn test_quiescence_census_row_3664_vetoes_the_counter_threat() {
         let (idx, _) = info
             .iter()
             .copied()
-            .find(|&(i, _)| {
-                let v = tree.pool[i as usize].action_idx;
-                ((v >> 16) as i32 - 32768, (v & 0xFFFF) as i32 - 32768) == cell
-            })
+            .find(|&(i, _)| tree.pool[i as usize].cell() == cell)
             .expect("the cell is a root child (the root expands the full legal set)");
         let leaves = tree.select_leaves_forced(&[idx]).expect("forced descent");
         assert_eq!(leaves.len(), 1);
@@ -701,7 +698,7 @@ fn run_terminal_leaf(parent_mr: u8, leaf_mr: u8, board: &Board) -> (f32, f32) {
     tree.next_free = 2;
     tree.pool[1] = Node {
         parent: 0,
-        action_idx: (32768u32 << 16) | 32773u32,
+        action_idx: pack_cell(0, 5),
         n_visits: 0,
         w_value: 0.0,
         prior: 1.0,
@@ -1370,7 +1367,7 @@ fn desynchronised_root() -> MCTSTree {
     tree.expand_and_backup(&[vec![1.0 / n_actions as f32; n_actions]], &[0.0]);
 
     let first = tree.pool[0].first_child as usize;
-    tree.pool[first].action_idx = (32768u32 << 16) | 32768u32; // decodes to (0, 0)
+    tree.pool[first].action_idx = pack_cell(0, 0);
     tree.pool[0].n_children = 1; // the descent has no other child to take
     tree
 }

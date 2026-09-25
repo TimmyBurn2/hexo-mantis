@@ -37,9 +37,7 @@ impl MCTSTree {
 
         for j in 0..n_ch {
             let child = &self.pool[first + j];
-            let val = child.action_idx;
-            let q = (val >> 16) as i32 - 32768;
-            let r = (val & 0xFFFF) as i32 - 32768;
+            let (q, r) = child.cell();
             let action = self.root_board.window_flat_idx(q, r);
             if action >= n_actions {
                 continue;
@@ -90,9 +88,7 @@ impl MCTSTree {
 
         if temperature == 0.0 {
             if let Some(best) = (first..first + n_ch).max_by_key(|&i| self.pool[i].n_visits) {
-                let val = self.pool[best].action_idx;
-                let q = (val >> 16) as i32 - 32768;
-                let r = (val & 0xFFFF) as i32 - 32768;
+                let (q, r) = self.pool[best].cell();
                 let flat = self.root_board.window_flat_idx(q, r);
                 if flat < n_actions {
                     dense[flat] = 1.0;
@@ -109,9 +105,7 @@ impl MCTSTree {
         let total: f32 = visits.iter().sum();
         if total > 0.0 {
             for (j, &v) in visits.iter().enumerate() {
-                let val = self.pool[first + j].action_idx;
-                let q = (val >> 16) as i32 - 32768;
-                let r = (val & 0xFFFF) as i32 - 32768;
+                let (q, r) = self.pool[first + j].cell();
                 let flat = self.root_board.window_flat_idx(q, r);
                 if flat < n_actions {
                     dense[flat] = v / total;
@@ -128,9 +122,7 @@ impl MCTSTree {
         let mut coords: Vec<(i32, i32, usize)> = Vec::with_capacity(n_ch);
         for j in 0..n_ch {
             let child = &self.pool[first + j];
-            let val = child.action_idx;
-            let q = (val >> 16) as i32 - 32768;
-            let r = (val & 0xFFFF) as i32 - 32768;
+            let (q, r) = child.cell();
             let flat = self.root_board.window_flat_idx(q, r);
             children.push(completed_q::CqChild {
                 visits: child.n_visits,
@@ -179,9 +171,7 @@ impl MCTSTree {
 
         for j in 0..n_ch {
             let child = &self.pool[first + j];
-            let val = child.action_idx;
-            let q = (val >> 16) as i32 - 32768;
-            let r = (val & 0xFFFF) as i32 - 32768;
+            let (q, r) = child.cell();
             let flat = self.root_board.window_flat_idx(q, r);
 
             let visits = child.n_visits;
@@ -269,10 +259,7 @@ impl MCTSTree {
         let n_ch = root.n_children as usize;
         (first..first + n_ch)
             .filter(|&i| self.pool[i].n_visits > 0)
-            .map(|i| {
-                let val = self.pool[i].action_idx;
-                ((val >> 16) as i32 - 32768, (val & 0xFFFF) as i32 - 32768)
-            })
+            .map(|i| self.pool[i].cell())
             .collect()
     }
 
@@ -330,9 +317,7 @@ impl MCTSTree {
             .into_iter()
             .map(|(i, visits)| {
                 let node = &self.pool[i];
-                let val = node.action_idx;
-                let q = (val >> 16) as i32 - 32768;
-                let r = (val & 0xFFFF) as i32 - 32768;
+                let (q, r) = node.cell();
                 let q_value = if visits > 0 {
                     q_sign * node.w_value / visits as f32
                 } else {
@@ -348,7 +333,7 @@ impl MCTSTree {
 mod tests {
     use super::super::tests::{setup_expanded_root, setup_two_child_tree};
     use super::*;
-    use crate::mcts::node::Node;
+    use crate::mcts::node::{pack_cell, Node};
     use mantis_core::board::{Board, BOARD_SIZE};
 
     /// The rescaled arm at the board-game scale these tests were written against.
@@ -424,8 +409,7 @@ mod tests {
         for (j, &(visits, w_value, prior)) in children.iter().enumerate() {
             let q = 0i32;
             let r = j as i32;
-            let action_idx =
-                ((q as u32).wrapping_add(32768) << 16) | (r as u32).wrapping_add(32768);
+            let action_idx = pack_cell(q, r);
             tree.pool[1 + j] = Node {
                 parent: 0,
                 action_idx,

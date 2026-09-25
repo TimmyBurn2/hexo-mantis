@@ -156,10 +156,7 @@ impl PyMCTSTree {
         })?;
         Ok(state
             .best_action(&self.inner, self.inner.q_sigma())
-            .map(|pool_idx| {
-                let val = self.inner.pool[pool_idx as usize].action_idx;
-                ((val >> 16) as i32 - 32768, (val & 0xFFFF) as i32 - 32768)
-            }))
+            .map(|pool_idx| self.inner.pool[pool_idx as usize].cell()))
     }
 
     /// Total quiescence value overrides/blends since last `new_game()`.
@@ -406,9 +403,7 @@ impl PyMCTSTree {
                 } else {
                     0.0
                 };
-                let val = child.action_idx;
-                let aq = (val >> 16) as i32 - 32768;
-                let ar = (val & 0xFFFF) as i32 - 32768;
+                let (aq, ar) = child.cell();
                 ((aq, ar), pool_idx, prior, visits, q_value)
             })
             .collect()

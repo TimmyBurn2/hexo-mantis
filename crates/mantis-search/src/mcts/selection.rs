@@ -215,9 +215,7 @@ impl MCTSTree {
                 pick_best_puct(self, first, n_ch, cur, parent_n, fpu_value)
             };
 
-            let val = self.pool[best as usize].action_idx;
-            let q = (val >> 16) as i32 - 32768;
-            let r = (val & 0xFFFF) as i32 - 32768;
+            let (q, r) = self.pool[best as usize].cell();
 
             let diff = board
                 .apply_move_tracked(q, r)

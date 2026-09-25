@@ -44,9 +44,7 @@ fn root_children(tree: &MCTSTree) -> Vec<((i32, i32), f32, u32)> {
     (first..first + root.n_children as usize)
         .map(|i| {
             let node = &tree.pool[i];
-            let val = node.action_idx;
-            let cell = ((val >> 16) as i32 - 32768, (val & 0xFFFF) as i32 - 32768);
-            (cell, node.prior, node.n_visits)
+            (node.cell(), node.prior, node.n_visits)
         })
         .collect()
 }
