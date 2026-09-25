@@ -129,6 +129,17 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   (2→0). Each package's tests green; make lint GREEN. Cites inside assertion messages and parametrize needles stay.
 - Floors after L7+L8: cite 993→298, comment_excess 2675→2180, textfile 252→228; collected 4928; gates
   10/12/13/15/17 rc 0.
+- L5 LANDED (**sonnet**): 28cb8660 tests/train (65 files, cite 137→2: CARD-ORPHAN-WORKERS and
+  CARD-SERVER-OWNED-COPY kept; comment_excess 129→90; 851 passed; test_drawrate_gate_branch_flipset.py fell
+  to 299 lines and lost its R8 header). 676934d4 tests/config (90→1: CARD-MINT-RESOLVE-PARENT-CONJUNCT kept;
+  797 passed). a45414cd tests/tools (84→8: the CARD-PREFLIGHT-*/TRAINSTEP-ADAPTER/STAMP-FLOOR markers kept,
+  plus the R351(d)/R352(c)/R353(b) comments, because tests assert the dashboard's rendered strings; 1013
+  passed). 97ec5d2b tests/selfplay (91→1: CARD-POOL-ENCODING-BRIDGE kept; 503 passed).
+- ALL EIGHT LEGS LANDED at 97ec5d2b. Main-tree checks: make lint GREEN (pyright 248 files, 0 errors);
+  collected 4928; run10 MATCH; gates 10/12/13/15/17 rc 0. The CARD census over src/tests/tools/crates/Makefile,
+  d18dc5bc against the tip: no in-source-only marker fell. The in-source drops each have their own CARDS row:
+  LADDER-RUNG, STOP-DRAIN-VS-GRACE, PYRIGHT-STRICT (its home is pyproject.toml), and part of OC7-OVERRUN,
+  RUN5-GPU-OOM and STAMP-FLOOR. REVIEW-W7 (**opus**, fresh, read-only) was launched over d18dc5bc..97ec5d2b.
 
 ## W6 — docs + configs (EXITED 2026-09-25)
 
