@@ -11,6 +11,8 @@ import contextlib
 import importlib.util
 import io
 import json
+import math
+import operator
 import os
 import shutil
 import signal
@@ -46,11 +48,18 @@ TOOL_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
 PARENT_PATH = TOOL_PATH.with_name("preflight_mint_parent.py")
 
 
-#: run5's own constants, read from the file rather than restated.
-RUN5 = REPO_ROOT / "configs" / "run6.yaml"
+#: The oracle's bases: the production config census at point of use, never a file named here.
+BASES = census.production_configs(REPO_ROOT)
+#: A base-dependent row runs once per census member, so each base derives its own premises.
+_OVER_THE_CENSUS = pytest.mark.parametrize("base", BASES, ids=lambda path: path.name)
 _N = 101
-#: run6's `full`-tier floor, the draw-rate abort's `min_step + 1`; shorter is a `sync_lag` prefix.
-_RUN5_BURST = 25001
+
+
+def _full_tier_burst(base: Path) -> int:
+    """`base`'s `full`-tier floor, its draw-rate abort's `min_step + 1`; Raises: AssertionError — `base` disarms the draw-rate abort, so it has no `full` tier."""
+    draw = load_config(base).train.draw_rate_abort
+    assert draw is not None, f"premise: {base.name} arms the draw-rate abort (the tier-full floor row)"
+    return int(draw.min_step) + 1
 
 
 def _load_tool():
@@ -66,7 +75,7 @@ TOOL = _load_tool()
 
 #: Read from the generator that stamps the header separator rather than restating the format.
 _MINT_SPEC = importlib.util.spec_from_file_location(
-    "_mint_config_for_run5_twin", REPO_ROOT / "tools" / "mint_config.py")
+    "_mint_config_for_the_cpu_twin", REPO_ROOT / "tools" / "mint_config.py")
 assert _MINT_SPEC is not None and _MINT_SPEC.loader is not None
 MINT_CONFIG = importlib.util.module_from_spec(_MINT_SPEC)
 _MINT_SPEC.loader.exec_module(MINT_CONFIG)
@@ -87,19 +96,34 @@ def _cuda_is_available() -> bool:
     return bool(torch.cuda.is_available())
 
 
-#: Declared once. `configs/run6.yaml` mints `train.device: cuda`, so what a real run5 boot
-#: does is a property of the host; both halves are pinned rather than one left to chance.
+#: Declared once. Every base is premise-checked to mint `train.device: cuda`, so what its real
+#: boot does is a property of the host; both halves are pinned rather than one left to chance.
 _CUDA_BOX = _cuda_is_available()
 
 
 
-#: The leaves a CPU twin of run6 is ALLOWED to differ in, and nothing else. The warm-start
-#: block collapses to one null because run6's BC checkpoint lives under untracked `checkpoints/`.
-FORCED_TWIN_LEAVES: frozenset[str] = frozenset({
-    "run_id", "train.device", "eval.worker_device",
-    "identity.warm_start", "identity.warm_start.checkpoint", "identity.warm_start.net_hash",
-    "identity.warm_start.reinit",
-})
+#: Every CPU twin differs from its base in these: its own name and the device this box has.
+_TWIN_DEVICE_LEAVES: frozenset[str] = frozenset({"run_id", "train.device", "eval.worker_device"})
+#: Blocks naming untracked `checkpoints/` artifacts no checkout holds: a twin drops each its base
+#: carries, and the block then collapses to one null leaf.
+_UNTRACKED_ARTIFACT_BLOCKS: dict[str, tuple[str, ...]] = {
+    "identity.warm_start": ("checkpoint", "net_hash", "reinit"),
+    "train.heldout_gap": ("ring", "ring_sha256", "batches", "seed", "interval"),
+}
+
+
+def _carried_artifact_blocks(base_config) -> tuple[str, ...]:
+    """The untracked-artifact blocks `base_config` carries — exactly the ones its twin drops."""
+    return tuple(block for block in _UNTRACKED_ARTIFACT_BLOCKS
+                 if operator.attrgetter(block)(base_config) is not None)
+
+
+def forced_twin_leaves(base_config) -> frozenset[str]:
+    """The leaves a CPU twin of `base_config` is ALLOWED to differ in, and nothing else."""
+    forced = set(_TWIN_DEVICE_LEAVES)
+    for block in _carried_artifact_blocks(base_config):
+        forced |= {block, *(f"{block}.{field}" for field in _UNTRACKED_ARTIFACT_BLOCKS[block])}
+    return frozenset(forced)
 
 
 def _flat_leaves(config) -> dict[str, object]:
@@ -107,8 +131,8 @@ def _flat_leaves(config) -> dict[str, object]:
     return flat_leaves(config.model_dump())
 
 
-def _mint_run5_cpu_bootable_twin(out_dir: Path) -> Path:
-    """Mint run5's CPU twin PLUS a valued fused-graph cap — the launch-surface row's target only.
+def _mint_cpu_bootable_twin(base: Path, out_dir: Path) -> Path:
+    """Mint `base`'s CPU twin PLUS a valued fused-graph cap — the launch-surface row's target only.
 
     The cap pair is read OFF THE TEMPLATE, so the day the template's non-binding derivation
     moves, this twin moves with it.
@@ -116,27 +140,27 @@ def _mint_run5_cpu_bootable_twin(out_dir: Path) -> Path:
     template = yaml.safe_load(
         (REPO_ROOT / "tools" / "config_templates" / "dev.yaml").read_text(encoding="utf-8")
     )["inference"]["fused_graph_caps"]
-    dest = _mint_run5_cpu_twin(out_dir, name="run5_cpu_bootable", extra_deltas=[
+    dest = _mint_cpu_twin(base, out_dir, variant="cpu_bootable", extra_deltas=[
         (f"inference.fused_graph_caps={{max_fused_edges: {template['max_fused_edges']}, "
          f"max_fused_nodes: {template['max_fused_nodes']}}}"),
     ])
     return dest
 
 
-def _run5_header_deltas() -> list[str]:
-    """Re-issue run5's own stamped `# delta:` lines as `mint_config.py --set` arguments.
+def _header_deltas(base: Path) -> list[str]:
+    """Re-issue `base`'s own stamped `# delta:` lines as `mint_config.py --set` arguments.
 
     Derived from the stamped header, never transcribed: a leaf inside a template block that
     ships `null` is not addressable by `--set` at all, so a leaf diff cannot produce a
     replayable delta set. The separator is imported from the generator that writes it.
 
     Raises:
-        AssertionError: if run5's header carries no delta lines, or a line does not carry the
+        AssertionError: if the header carries no delta lines, or a line does not carry the
             separator — either means the stamped provenance is unreadable, and a twin minted
-            from an unreadable header is not run5's twin.
+            from an unreadable header is not the base's twin.
     """
     deltas: list[str] = []
-    for line in RUN5.read_text(encoding="utf-8").splitlines():
+    for line in base.read_text(encoding="utf-8").splitlines():
         if not line.startswith("# delta:"):
             continue
         key, _, rest = line[len("# delta:"):].strip().partition(": ")
@@ -145,30 +169,29 @@ def _run5_header_deltas() -> list[str]:
         assert key and old, f"unreadable delta line (no key or old slot): {line!r}"
         deltas.append(f"{key}={new}")
     assert deltas, (
-        f"{RUN5} carries no `# delta:` header lines — the twin has nothing to replay, and a "
-        "config minted from the bare template is not run5"
+        f"{base} carries no `# delta:` header lines — the twin has nothing to replay, and a "
+        "config minted from the bare template is not the base"
     )
     return deltas
 
 
-def _mint_run5_cpu_twin(out_dir: Path, *, name: str = "run5_cpu_boot",
-                        extra_deltas: list[str] | None = None) -> Path:
-    """Mint run5's CPU twin: run5's own header deltas replayed, plus `run_id` and the two
-    device leaves, minus the warm start.
+def _mint_cpu_twin(base: Path, out_dir: Path, *, variant: str = "cpu_twin",
+                   extra_deltas: list[str] | None = None) -> Path:
+    """Mint `base`'s CPU twin: its own header deltas replayed, plus `run_id` and the two
+    device leaves, minus every untracked-artifact block it carries.
 
-    `identity.warm_start` is dropped because run6 declares a BC checkpoint under
-    `checkpoints/`, which is never tracked, so no drive here can supply the file. Minted
-    per-drive into `tmp_path` rather than committed, so no near-clone of run5 sits in the
-    audit root where an operator could preflight it believing it was run5.
+    Those blocks name files under `checkpoints/`, which is never tracked, so no drive here can
+    supply them. Minted per-drive into `tmp_path` rather than committed, so no near-clone of a
+    production config sits in the audit root where an operator could preflight it believing it
+    was the real one.
     """
-    run5 = load_config(RUN5)
-    draw = run5.train.draw_rate_abort
-    assert draw is not None, "premise: run5 arms the draw-rate abort (the tier-full floor row)"
-    dest = out_dir / f"{name}.yaml"
+    base_config = load_config(base)
+    _full_tier_burst(base)
+    carried = _carried_artifact_blocks(base_config)
+    dest = out_dir / f"{base.stem}_{variant}.yaml"
     deltas = [
-        # The warm start is replayed by nobody: its checkpoint is an untracked artifact.
-        *(d for d in _run5_header_deltas() if not d.startswith("identity.warm_start=")),
-        "run_id=run5_cpu_boot",
+        *(d for d in _header_deltas(base) if not d.startswith(tuple(f"{b}=" for b in carried))),
+        f"run_id={base_config.run_id}_cpu_twin",
         "train.device=cpu",
         "eval.worker_device=cpu",
         *(extra_deltas or ()),
@@ -196,21 +219,23 @@ def _mint_run5_cpu_twin(out_dir: Path, *, name: str = "run5_cpu_boot",
         f"{minted.returncode}\n{(minted.stdout + minted.stderr)[-2000:]}"
     )
     twin = load_config(dest)
-    base, other = _flat_leaves(run5), _flat_leaves(twin)
+    ours, other = _flat_leaves(base_config), _flat_leaves(twin)
     absent = object()
-    keys = base.keys() | other.keys()
-    differing = {key for key in keys if base.get(key, absent) != other.get(key, absent)}
+    keys = ours.keys() | other.keys()
+    differing = {key for key in keys if ours.get(key, absent) != other.get(key, absent)}
     if extra_deltas:
         # The bounded-difference guarantee binds the UNNAMED twin alone; the named variant
         # states its own extra leaves.
         return dest
-    assert differing == FORCED_TWIN_LEAVES, (
-        "the twin must be run6 with the device this box has, minus a warm start no checkout "
-        "can hold, and NOTHING else — anything more and these drives stop being evidence "
-        f"about run6's own boot. Differing leaves: {sorted(differing)}"
+    forced = forced_twin_leaves(base_config)
+    assert differing == forced, (
+        f"the twin must be {base.name} with the device this box has, minus the untracked "
+        "artifacts no checkout can hold, and NOTHING else — anything more and these drives stop "
+        f"being evidence about the base's own boot. Differing leaves: {sorted(differing)}; "
+        f"forced: {sorted(forced)}"
     )
-    assert twin.train.device == "cpu" and run5.train.device == "cuda", (
-        f"got twin device {twin.train.device!r} against run5 {run5.train.device!r}"
+    assert twin.train.device == "cpu" and base_config.train.device == "cuda", (
+        f"got twin device {twin.train.device!r} against {base.name} {base_config.train.device!r}"
     )
     return dest
 
@@ -404,16 +429,17 @@ def test_the_module_docstring_names_the_wall_the_boot_actually_hits() -> None:
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("local_puller")
-def test_the_real_boot_terminates_where_the_docstring_says(tmp_path) -> None:
+@_OVER_THE_CENSUS
+def test_the_real_boot_terminates_where_the_docstring_says(tmp_path, base) -> None:
     """The real boot, on the real tree, in production posture — the only test that drives a
     preflight child to completion, so the child's rc is read off the report and never restated."""
     out_dir = tmp_path / "boot"
-    result = _run_tool("--config", str(_mint_run5_cpu_twin(tmp_path)),
-                       "--burst-steps", str(_RUN5_BURST),
+    result = _run_tool("--config", str(_mint_cpu_twin(base, tmp_path)),
+                       "--burst-steps", str(_full_tier_burst(base)),
                        "--out-dir", str(out_dir), "--timeout-sec", "45", "--receipt-wait-sec", "0")
     assert result.returncode == 40, (
         "post-TD-4, and post-mint, the boot runs until the timeout kills it: rc 40 "
-        "PreflightTimeoutError. An rc 33 here means run5's minted caps stopped resolving. "
+        "PreflightTimeoutError. An rc 33 here means the base's minted caps stopped resolving. "
         f"got {result.returncode}\n{(result.stdout + result.stderr)[-3000:]}"
     )
     reports = sorted(out_dir.glob("preflight_*.json"))
@@ -423,7 +449,7 @@ def test_the_real_boot_terminates_where_the_docstring_says(tmp_path) -> None:
     assert report["child"]["timed_out"] is True
     tail = report["child"]["stderr_tail"]
     assert "UncalibratedFusedGraphCapsError" not in tail, (
-        "run5 is CALIBRATED since 2026-08-18; a refusal here means the minted pair stopped "
+        f"{base.name} is CALIBRATED; a refusal here means the minted pair stopped "
         f"reaching the resolver. got tail {tail[-600:]!r}"
     )
     assert "MissingEncodingError" not in tail, (
@@ -448,14 +474,15 @@ def test_the_real_boot_terminates_where_the_docstring_says(tmp_path) -> None:
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("local_puller")
-def test_an_UNCALIBRATED_twin_is_refused_by_the_ARMING_AUDIT_before_it_can_boot(tmp_path) -> None:
+@_OVER_THE_CENSUS
+def test_an_UNCALIBRATED_twin_is_refused_by_the_ARMING_AUDIT_before_it_can_boot(tmp_path, base) -> None:
     """An uncalibrated production config is refused by the ARMING AUDIT before a child is ever
     spawned, so the audit shadows the composition seam the refusal used to be measured at."""
     out_dir = tmp_path / "boot_uncalibrated"
-    twin = _mint_run5_cpu_twin(tmp_path, name="run5_cpu_uncalibrated", extra_deltas=[
+    twin = _mint_cpu_twin(base, tmp_path, variant="cpu_uncalibrated", extra_deltas=[
         "inference.fused_graph_caps={max_fused_edges: null, max_fused_nodes: null}",
     ])
-    result = _run_tool("--config", str(twin), "--burst-steps", str(_RUN5_BURST),
+    result = _run_tool("--config", str(twin), "--burst-steps", str(_full_tier_burst(base)),
                        "--out-dir", str(out_dir), "--timeout-sec", "45", "--receipt-wait-sec", "0")
     assert result.returncode == 30, (
         "an UNCALIBRATED production config must be refused by the ARMING AUDIT before any "
@@ -480,12 +507,13 @@ def test_an_UNCALIBRATED_twin_is_refused_by_the_ARMING_AUDIT_before_it_can_boot(
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("local_puller")
-def test_the_real_boot_still_reaches_an_ARMED_loop_on_a_CALIBRATED_config(tmp_path) -> None:
+@_OVER_THE_CENSUS
+def test_the_real_boot_still_reaches_an_ARMED_loop_on_a_CALIBRATED_config(tmp_path, base) -> None:
     """The tool's SUCCESS path: an otherwise-identical config that HAS a cap boots clean and
     arms both watchdogs, so the refusal above is caused by the missing value and nothing else."""
     out_dir = tmp_path / "boot_calibrated"
-    result = _run_tool("--config", str(_mint_run5_cpu_bootable_twin(tmp_path)),
-                       "--burst-steps", str(_RUN5_BURST),
+    result = _run_tool("--config", str(_mint_cpu_bootable_twin(base, tmp_path)),
+                       "--burst-steps", str(_full_tier_burst(base)),
                        "--out-dir", str(out_dir), "--timeout-sec", "45", "--receipt-wait-sec", "0")
     assert result.returncode == 40, (
         "with the cap VALUED the boot runs until the timeout kills it: rc 40 "
@@ -517,30 +545,33 @@ def test_the_real_boot_still_reaches_an_ARMED_loop_on_a_CALIBRATED_config(tmp_pa
 @pytest.mark.usefixtures("local_puller")
 @pytest.mark.skipif(
     _CUDA_BOX,
-    reason="asserts what a CUDA-MINTED run5 does on a NON-CUDA host; this box has CUDA, so "
+    reason="asserts what a CUDA-MINTED config does on a NON-CUDA host; this box has CUDA, so "
            "the boot legitimately proceeds instead of refusing. The binding measurement for "
-           "run5 on a CUDA box is the box preflight (CARD-RUN5-GPU-OOM, R130) — not this row, "
+           "a config on a CUDA box is the box preflight (CARD-RUN5-GPU-OOM, R130) — not this row, "
            "which exists to keep the device false-clear dead on every CPU box in the fleet.",
 )
-def test_booting_run5_on_a_non_CUDA_box_fails_LOUD_in_init_trainer(tmp_path) -> None:
-    """A cuda-minted run6 on a non-CUDA host fails LOUD and BEFORE any boot: the
+@_OVER_THE_CENSUS
+def test_booting_a_cuda_minted_config_on_a_non_CUDA_box_fails_LOUD_in_init_trainer(
+    tmp_path, base,
+) -> None:
+    """A cuda-minted production config on a non-CUDA host fails LOUD and BEFORE any boot: the
     START halt rc 17 (`PreflightCudaBuildError`) fires ahead of the child, where the old rc 33
     in `init_trainer` used to be the first wall. The device stays a config fact either way, so a
     cpu preflight can never false-clear the GPU memory wall."""
-    out_dir = tmp_path / "run5_on_cpu"
-    assert load_config(RUN5).train.device == "cuda", (
-        "PREMISE: run6 mints `train.device: cuda`. If it is ever re-minted to cpu this row "
+    out_dir = tmp_path / "cuda_minted_on_cpu"
+    assert load_config(base).train.device == "cuda", (
+        f"PREMISE: {base.name} mints `train.device: cuda`. If it is ever re-minted to cpu this row "
         "is testing nothing and must be re-adjudicated, not adjusted"
     )
     from mantis.config.resolve.allocator_posture import resolve_allocator_posture
 
-    conf = resolve_allocator_posture(load_config(RUN5).model_dump()).required_conf
+    conf = resolve_allocator_posture(load_config(base).model_dump()).required_conf
     rendered = ",".join(f"{k}:{v}" for k, v in sorted(conf.items()))
     env = {**os.environ, "PYTORCH_CUDA_ALLOC_CONF": rendered}
-    result = _run_tool("--config", str(RUN5), "--burst-steps", str(_RUN5_BURST),
+    result = _run_tool("--config", str(base), "--burst-steps", str(_full_tier_burst(base)),
                        "--out-dir", str(out_dir), "--timeout-sec", "45", "--receipt-wait-sec", "0", env=env)
     assert result.returncode == 17, (
-        "run6 on a non-CUDA box must HALT by name before the boot: rc 17 "
+        f"{base.name} on a non-CUDA box must HALT by name before the boot: rc 17 "
         f"PreflightCudaBuildError. got {result.returncode}\n"
         f"{(result.stdout + result.stderr)[-3000:]}"
     )
@@ -654,8 +685,8 @@ def test_a_config_nobody_declared_is_production_and_AUDITED(tmp_path) -> None:
     root = _mini_tree(tmp_path)
     rel = f"{_F1_PLANT_STEM}.yaml"
     plant = root / "configs" / rel
-    plant.write_text(RUN5.read_text(encoding="utf-8").replace("terminal_eval_enabled: true",
-                                              "terminal_eval_enabled: false"), encoding="utf-8")
+    plant.write_text(_a_production_config(REPO_ROOT).read_text(encoding="utf-8").replace(
+        "terminal_eval_enabled: true", "terminal_eval_enabled: false"), encoding="utf-8")
     assert "terminal_eval_enabled: false" in plant.read_text(encoding="utf-8"), (
         "the planted config must really be disarmed, or this test is vacuous"
     )
@@ -710,7 +741,7 @@ def test_naming_a_config_ADDS_scrutiny_and_never_replaces_the_production_set(tmp
     production.write_text(production.read_text(encoding="utf-8").replace("terminal_eval_enabled: true",
                                                          "terminal_eval_enabled: false"), encoding="utf-8")
     healthy = tmp_path / "healthy.yaml"
-    healthy.write_text(RUN5.read_text(encoding="utf-8"), encoding="utf-8")
+    healthy.write_text(_a_production_config(REPO_ROOT).read_text(encoding="utf-8"), encoding="utf-8")
 
     bare = _mini_audit(root)
     assert bare.returncode == 30, (
@@ -785,7 +816,7 @@ def test_an_interval_that_outruns_the_run_REDS_the_real_gate(tmp_path) -> None:
     production = _a_production_config(root)
     original = production.read_text(encoding="utf-8")
     assert original.count("gate_interval: 1000\n") == 1, (
-        "the rig rewrites exactly one key; if run5's gate_interval spelling moved, this "
+        "the rig rewrites exactly one key; if the config's gate_interval spelling moved, this "
         "perturbation is no longer the one the defect needs"
     )
     production.write_text(original.replace("gate_interval: 1000\n",
@@ -866,7 +897,8 @@ _COLLAPSED_CLOCKS = (_Clock("gate_boundary", "monitor.gate_interval"),
                      _Clock("eval_round", "monitor.gate_interval"))
 
 
-def test_the_TOOLS_OWN_fraction_is_the_one_the_audit_compares(monkeypatch, tmp_path) -> None:
+@_OVER_THE_CENSUS
+def test_the_TOOLS_OWN_fraction_is_the_one_the_audit_compares(monkeypatch, tmp_path, base) -> None:
     """The audit compares against the TOOL'S OWN fraction, not the callee default — at HEAD the
     two are the same object, so every published number agrees with every compared number by
     coincidence.
@@ -876,12 +908,18 @@ def test_the_TOOLS_OWN_fraction_is_the_one_the_audit_compares(monkeypatch, tmp_p
     tool's number, and a config whose earliest fire sits between the two bounds FLIPS verdict.
     """
     assert not TOOL._cadence_self_test(), "the unmutated self-test must be green"
-    run5_length = load_config(RUN5).train.max_train_steps
-    # Earliest fire 100000 * max(3, ceil(25000/100000)) = 300000 — above run5's 0.25 bound
-    # (250000) and inside a 1.0 bound (1000000). Written OUTSIDE configs/ so the declaration
-    # partition is untouched and the only variable is the fraction.
+    run_length = load_config(base).train.max_train_steps
+    draw = load_config(base).train.draw_rate_abort
+    assert draw is not None, f"premise: {base.name} arms the draw-rate abort"
+    earliest = 100000 * max(draw.consec, math.ceil(draw.min_step / 100000))
+    assert EARLIEST_FIRE_FRACTION * run_length < earliest <= 1.0 * run_length, (
+        f"premise: on {base.name} a 100000 gate interval fires at {earliest}, between the "
+        f"tool's bound and a 1.0 bound of the {run_length}-step run"
+    )
+    # Written OUTSIDE configs/ so the declaration partition is untouched and the only variable
+    # is the fraction.
     between = tmp_path / "between_the_bounds.yaml"
-    between.write_text(RUN5.read_text(encoding="utf-8").replace("gate_interval: 1000\n",
+    between.write_text(base.read_text(encoding="utf-8").replace("gate_interval: 1000\n",
                                                 "gate_interval: 100000\n"), encoding="utf-8")
     with pytest.raises(TOOL.PreflightArmingAuditError):
         TOOL._audit_manifest_and_configs([between])
@@ -893,9 +931,9 @@ def test_the_TOOLS_OWN_fraction_is_the_one_the_audit_compares(monkeypatch, tmp_p
     block = TOOL._audit_manifest_and_configs([between])
     assert block["cadence_fraction"] == 1.0
     for row in block["cadence"]:
-        assert row["bound"] == 1.0 * run5_length, (
+        assert row["bound"] == 1.0 * run_length, (
             "the PUBLISHED fraction must be the fraction the comparison USED — under the "
-            f"callee default this row's bound would still read {0.25 * run5_length}, and the "
+            f"callee default this row's bound would still read {0.25 * run_length}, and the "
             f"report would say one number while the audit compared another; got {row!r}"
         )
 
@@ -1056,7 +1094,8 @@ def test_the_deferred_print_carries_the_field(field: str, audit_stdout: str) -> 
         )
 
 
-def test_the_report_publishes_the_RESOLVED_coordinator_config(tmp_path) -> None:
+@_OVER_THE_CENSUS
+def test_the_report_publishes_the_RESOLVED_coordinator_config(tmp_path, base) -> None:
     """The report publishes the RESOLVED coordinator config: present and complete by NAME off
     the dataclasses, agreeing with the config on disk key for key, and MOVING when it moves."""
     import dataclasses
@@ -1064,7 +1103,7 @@ def test_the_report_publishes_the_RESOLVED_coordinator_config(tmp_path) -> None:
     from mantis.config.resolve.coordinator import CoordinatorKnobsSpec, resolve_coordinator_knobs
     from mantis.config.resolve.drain import DrainCapsSpec
 
-    _run_tool("--audit-only", "--config", "configs/run6.yaml",
+    _run_tool("--audit-only", "--config", base.relative_to(REPO_ROOT).as_posix(),
               "--out-dir", str(tmp_path / "coord"))
     report = json.loads(sorted((tmp_path / "coord").glob("preflight_*.json"))[0].read_text(encoding="utf-8"))
     block = report["coordinator"]
@@ -1073,7 +1112,7 @@ def test_the_report_publishes_the_RESOLVED_coordinator_config(tmp_path) -> None:
         "the census measured its absence"
     )
 
-    config = load_config(REPO_ROOT / "configs" / "run6.yaml")
+    config = load_config(base)
     assert set(block["knobs"]) == {f.name for f in dataclasses.fields(CoordinatorKnobsSpec)}
     assert set(block["drain_caps"]) == {f.name for f in dataclasses.fields(DrainCapsSpec)}
     assert block["knobs"] == json.loads(json.dumps(
@@ -1082,13 +1121,14 @@ def test_the_report_publishes_the_RESOLVED_coordinator_config(tmp_path) -> None:
         f"anything else is a restated literal; got {block['knobs']}"
     )
     assert block["stop_step"] == int(config.train.max_train_steps)
-    assert block["draw_rate_abort"] == {"threshold": 0.25, "min_step": 25000,
-                                        "N_pool_min": 50, "consec": 3}, (
-        "run6's armed terms, as the run will really see them — the four travel together"
+    assert config.train.draw_rate_abort is not None, f"premise: {base.name} arms the draw-rate abort"
+    assert block["draw_rate_abort"] == config.train.draw_rate_abort.model_dump(), (
+        f"{base.name}'s armed terms, as the run will really see them — the four travel together"
     )
+    assert set(block["draw_rate_abort"]) == {"threshold", "min_step", "N_pool_min", "consec"}
 
-    # The two arms need two DIFFERENT properties: the smoke profile is the only config whose
-    # run length differs from run6's, and `dev_example` the only DISARMED one.
+    # The two arms need two DIFFERENT properties: the smoke profile's run length differs from
+    # the base's, and `dev_example` is DISARMED.
     _run_tool("--audit-only", "--config", "configs/smoke_preflight_armed.yaml",
               "--out-dir", str(tmp_path / "smoke"))
     other = json.loads(
@@ -1216,10 +1256,11 @@ def test_the_ONE_declared_representation_selects_its_own_real_buffer() -> None:
 
     graph = _select_buffer(_identity("graph"), 8)
     assert isinstance(graph, HexgBuffer), f"graph -> HexgBuffer; got {type(graph)}"
-    assert load_config(RUN5).identity.representation == "graph", (
-        "run6 is the graph arm, so the graph branch is the one the mint actually takes — "
-        "pinned here so a config change that flips it is visible"
-    )
+    for base in BASES:
+        assert load_config(base).identity.representation == "graph", (
+            f"{base.name} is the graph arm, so the graph branch is the one the mint actually "
+            "takes — pinned here so a config change that flips it is visible"
+        )
 
 
 def test_an_unwritable_out_dir_is_rc_41_and_never_a_silent_return(tmp_path) -> None:
@@ -1532,20 +1573,21 @@ def test_a_foreign_runs_segment_is_not_read_as_this_runs_evidence(tmp_path) -> N
     )
 
 
-def test_the_second_lag_sample_costs_a_full_file_interval_of_WALL_CLOCK(tmp_path) -> None:
+@_OVER_THE_CENSUS
+def test_the_second_lag_sample_costs_a_full_file_interval_of_WALL_CLOCK(tmp_path, base) -> None:
     """The second lag sample costs a full `heartbeat_file_interval_sec` of wall clock, which is
-    what decides rc 23 vs rc 25 for run5.
+    what decides rc 23 vs rc 25 for the base.
 
     The watchdog reuses the file interval as the sample interval and the poll loop polls FIRST,
-    then waits `heartbeat_poll_interval_sec`. run5 sets file 15.0 / poll 5.0, so sample #2 lands
+    then waits `heartbeat_poll_interval_sec`. The base sets file 15.0 / poll 5.0, so sample #2 lands
     on the first poll at or after t + 15.0 s — a 101-step burst yields two samples only if a
     step costs >= ~148.5 ms.
     """
-    config = load_config(RUN5)
+    config = load_config(base)
     file_interval = float(config.monitor.heartbeat_file_interval_sec)
     poll_interval = float(config.monitor.heartbeat_poll_interval_sec)
     assert (file_interval, poll_interval) == (15.0, 5.0), (
-        "run5's own sampling constants, read from the file; if they change this "
+        f"{base.name}'s own sampling constants, read from the file; if they change this "
         f"determination changes with them. got file={file_interval} poll={poll_interval}"
     )
 
@@ -1583,7 +1625,7 @@ def test_the_second_lag_sample_costs_a_full_file_interval_of_WALL_CLOCK(tmp_path
         f"{[t * poll_interval for t in range(5)]}"
     )
     assert emitted[1] - emitted[0] >= file_interval, (
-        "b0 (>= 2 samples) therefore costs a full 15.0 s of armed wall clock on run5. A "
+        f"b0 (>= 2 samples) therefore costs a full 15.0 s of armed wall clock on {base.name}. A "
         "101-step burst shorter than that is rc 25 PreflightLagUnobservableError, NOT the "
         "rc 23 ADJ-12 filed — and the step/wall ratio that would settle it is unmeasured "
         "(TD-4 blocks the boot). The mint checklist must carry both outcomes."
@@ -1612,16 +1654,16 @@ def test_the_F1_plant_stem_is_on_no_exempt_row_and_on_no_file() -> None:
 
 
 def _a_production_config(root: Path) -> Path:
-    """The first production config of `root`'s census — the rig's subject, derived at point of use."""
+    """The first of `root`'s census: any member serves a row that asserts what it needs of it."""
     return census.production_configs(root)[0]
 
 
 def _plant_disarmed(root: Path, rel: str) -> Path:
-    """A really-disarmed copy of run5 at `configs/<rel>` inside a mini tree."""
+    """A really-disarmed copy of a production config at `configs/<rel>` inside a mini tree."""
     target = root / "configs" / rel
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(RUN5.read_text(encoding="utf-8").replace("terminal_eval_enabled: true",
-                                               "terminal_eval_enabled: false"), encoding="utf-8")
+    target.write_text(_a_production_config(REPO_ROOT).read_text(encoding="utf-8").replace(
+        "terminal_eval_enabled: true", "terminal_eval_enabled: false"), encoding="utf-8")
     assert "terminal_eval_enabled: false" in target.read_text(encoding="utf-8"), (
         "the planted config must really be disarmed, or this row is vacuous"
     )
@@ -1669,8 +1711,9 @@ def test_a_SUBDIRECTORY_config_is_discovered_and_audited(monkeypatch, tmp_path) 
 #: Each of these files is loadable, therefore DISCOVERED, therefore production, therefore gate
 #: 12 is RED when it is disarmed. The complement of an enumeration rather than another
 #: enumeration: an unknown suffix, a CASE variant, no suffix, a known suffix that is not final, and a dotfile.
-_F1_UNRECOGNISED = ("run6.txt", "run6.YAML", "run6", "run6.yaml.bak", "run6.YML", "run6.yamL",
-                    ".yaml", "run6.yamlx")
+_F1_UNRECOGNISED = (*(f"{_F1_PLANT_STEM}{suffix}" for suffix in
+                      (".txt", ".YAML", "", ".yaml.bak", ".YML", ".yamL")),
+                    ".yaml", f"{_F1_PLANT_STEM}.yamlx")
 
 
 @pytest.mark.parametrize("rel", _F1_UNRECOGNISED)
@@ -1684,7 +1727,7 @@ def test_a_config_shaped_file_at_an_UNRECOGNISED_suffix_is_DISCOVERED_and_AUDITE
     monkeypatch.setattr(TOOL, "REPO_ROOT", root)
     relposix = planted.relative_to(root).as_posix()
 
-    assert load_config(planted).run_id == "run6", (
+    assert load_config(planted).run_id == load_config(_a_production_config(REPO_ROOT)).run_id, (
         f"{rel} must still LOAD — R75 declined the accept-set narrowing, so the protection has "
         "to come from the audit seeing it, not from the loader refusing it"
     )
@@ -1706,8 +1749,9 @@ def test_a_config_shaped_file_at_an_UNRECOGNISED_suffix_is_DISCOVERED_and_AUDITE
 
 def test_the_LAUNCH_route_accepts_any_shape_and_the_gates_SEE_it(tmp_path) -> None:
     """`mantis.run`'s launcher calls `load_config` on a FREE path, and both gates see the file."""
-    canonical = _mint_run5_cpu_bootable_twin(tmp_path)
-    odd = tmp_path / "run6.txt"
+    # The subject is the launch route, not the config, and each launch costs a real boot.
+    canonical = _mint_cpu_bootable_twin(_a_production_config(REPO_ROOT), tmp_path)
+    odd = tmp_path / f"{canonical.stem}.txt"
     odd.write_bytes(canonical.read_bytes())
     identity = config_identity_sha256(load_config(odd))
     # The launcher demands a stamp for this identity on this tree; one stamp covers
@@ -1783,7 +1827,8 @@ def test_there_is_NO_excluded_class_left_under_configs(monkeypatch, tmp_path) ->
     genuine non-config that is not even valid YAML — red on purpose."""
     root = _mini_tree(tmp_path)
     planted = [_plant_disarmed(root, rel)
-               for rel in ("run6.yml", "prod/run6.yaml", "run6.conf", "run6.txt")]
+               for rel in (f"{_F1_PLANT_STEM}.yml", f"prod/{_F1_PLANT_STEM}.yaml",
+                           f"{_F1_PLANT_STEM}.conf", f"{_F1_PLANT_STEM}.txt")]
     notes = root / "configs" / "NOTES.md"
     notes.write_text("not a config\n", encoding="utf-8")
     planted.append(notes)
@@ -1836,7 +1881,8 @@ def test_a_config_SHAPED_but_BROKEN_path_is_a_LOUD_gate_7_failure_and_not_silenc
     else:
         hidden = tmp_path / "hidden_subtree"
         hidden.mkdir()
-        (hidden / "run6.yaml").write_text(RUN5.read_text(encoding="utf-8"), encoding="utf-8")
+        source = _a_production_config(REPO_ROOT)
+        (hidden / source.name).write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
         broken.symlink_to(hidden)
 
     result = _run_tool(cwd=root, tool=root / "tools" / "ci_gates" / "validate_configs.py")
@@ -1856,7 +1902,8 @@ def test_a_REAL_directory_is_skipped_UNIFORMLY_and_never_by_its_name(tmp_path, m
     `configs/prod/` are the same path type and get the same answer."""
     root = _mini_tree(tmp_path)
     (root / "configs" / "adir.yaml").mkdir()
-    (root / "configs" / "adir.yaml" / "inner.yaml").write_text(RUN5.read_text(encoding="utf-8"), encoding="utf-8")
+    (root / "configs" / "adir.yaml" / "inner.yaml").write_text(
+        _a_production_config(REPO_ROOT).read_text(encoding="utf-8"), encoding="utf-8")
     monkeypatch.setattr(TOOL, "REPO_ROOT", root)
 
     discovered = census.discovered_config_paths(root)
@@ -1891,13 +1938,14 @@ def test_one_config_reached_two_ways_is_audited_ONCE_and_not_twice(tmp_path, mon
     root = _mini_tree(tmp_path)
     real = tmp_path / "elsewhere"
     real.mkdir()
-    target = real / "run6.yaml"
-    target.write_text((root / "configs" / "run6.yaml").read_text(encoding="utf-8"), encoding="utf-8")
-    (root / "configs" / "run6.yaml").unlink()
-    (root / "configs" / "run6.yaml").symlink_to(target)
+    victim = _a_production_config(root)
+    target = real / victim.name
+    target.write_text(victim.read_text(encoding="utf-8"), encoding="utf-8")
+    victim.unlink()
+    victim.symlink_to(target)
 
     monkeypatch.setattr(TOOL, "REPO_ROOT", root)
-    named = TOOL._resolve_config_path(str(root / "configs" / "run6.yaml"))
+    named = TOOL._resolve_config_path(str(victim))
     paths = TOOL._audit_paths(named)
     assert len(paths) == len(set(paths)) == len(census.production_configs(root)), (
         "one config reached by two spellings must be ONE entry — a set of paths that "
@@ -1906,7 +1954,7 @@ def test_one_config_reached_two_ways_is_audited_ONCE_and_not_twice(tmp_path, mon
     # The expectation is DERIVED from the declaration at point of use; the subject stays
     # "two spellings collapse onto one".
     others = sorted(path.resolve() for path in census.production_configs(root)
-                    if path.name != "run6.yaml")
+                    if path != victim)
     assert paths == sorted([target, *others]), (
         f"…and both spellings must collapse onto the target; got {paths}"
     )
@@ -2141,11 +2189,12 @@ def test_a_verdict_that_was_REACHED_is_never_overwritten_by_the_disclaimer(tmp_p
     )
 
 
-def test_a_real_PREFLIGHT_report_never_claims_a_boot_ITS_OWN_child_block_denies(tmp_path) -> None:
+@_OVER_THE_CENSUS
+def test_a_real_PREFLIGHT_report_never_claims_a_boot_ITS_OWN_child_block_denies(tmp_path, base) -> None:
     """A real PREFLIGHT report never claims a boot its own child block denies — driven through
     the shipped process on a real config, and asserted on TRUTH rather than mode-agreement."""
     out = tmp_path / "out"
-    result = _run_tool("--config", "configs/run6.yaml", "--burst-steps", "5",
+    result = _run_tool("--config", base.relative_to(REPO_ROOT).as_posix(), "--burst-steps", "5",
                        "--out-dir", str(out), "--timeout-sec", "60", "--receipt-wait-sec", "0")
     assert result.returncode == 11, (result.stdout + result.stderr)[-2000:]
     reports = sorted(out.glob("preflight_*.json"))
@@ -2170,11 +2219,12 @@ def test_a_real_PREFLIGHT_report_never_claims_a_boot_ITS_OWN_child_block_denies(
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("local_puller")
-def test_a_BOOTED_preflight_reports_a_boot_and_names_its_childs_own_rc(tmp_path) -> None:
+@_OVER_THE_CENSUS
+def test_a_BOOTED_preflight_reports_a_boot_and_names_its_childs_own_rc(tmp_path, base) -> None:
     """A BOOTED preflight reports a boot and names its child's own rc, whatever the child did."""
     out = tmp_path / "boot"
-    result = _run_tool("--config", str(_mint_run5_cpu_twin(tmp_path)),
-                       "--burst-steps", str(_RUN5_BURST),
+    result = _run_tool("--config", str(_mint_cpu_twin(base, tmp_path)),
+                       "--burst-steps", str(_full_tier_burst(base)),
                        "--out-dir", str(out), "--timeout-sec", "45", "--receipt-wait-sec", "0")
     # The child's rc is read off the report and never restated here: a run that spawned a child
     # must not carry the NOT_BOOTED disclaimer, whatever the child then did.
@@ -2189,7 +2239,8 @@ def test_a_BOOTED_preflight_reports_a_boot_and_names_its_childs_own_rc(tmp_path)
         assert f"child rc {report['child']['rc']}" in reason
 
 
-def test_a_report_with_no_config_block_is_still_NAMED_and_never_unnamed(tmp_path) -> None:
+@_OVER_THE_CENSUS
+def test_a_report_with_no_config_block_is_still_NAMED_and_never_unnamed(tmp_path, base) -> None:
     """A report with no config block is still NAMED and never unnamed — the `or "unknown"`
     run_id fallback was deletable with the whole default tier green."""
     report = TOOL._new_report("preflight")
@@ -2198,20 +2249,21 @@ def test_a_report_with_no_config_block_is_still_NAMED_and_never_unnamed(tmp_path
         "a report with no config block must still carry a NAME a reader can file; got "
         f"{TOOL._report_name(report)!r}"
     )
+    run_id = load_config(base).run_id
     named = TOOL._new_report("audit")
-    named["config"] = {"run_id": "run6"}
-    assert TOOL._report_name(named).startswith("preflight_run6_"), (
+    named["config"] = {"run_id": run_id}
+    assert TOOL._report_name(named).startswith(f"preflight_{run_id}_"), (
         "…and when the config block IS populated the run_id must come from it, or the "
         f"fallback is a constant. got {TOOL._report_name(named)!r}"
     )
     out = tmp_path / "out"
-    result = _run_tool("--config", "configs/run6.yaml", "--burst-steps", "5",
+    result = _run_tool("--config", base.relative_to(REPO_ROOT).as_posix(), "--burst-steps", "5",
                        "--out-dir", str(out), "--timeout-sec", "60", "--receipt-wait-sec", "0")
     assert result.returncode == 11
     assert [path.name for path in sorted(out.glob("*.json"))][0].startswith(
-        "preflight_run6_"), (
-        "the rc-11 route populates `config` before `_burst_bound` raises, so the "
-        f"real artefact is run6-named; got {sorted(path.name for path in out.glob('*.json'))}"
+        f"preflight_{run_id}_"), (
+        "the rc-11 route populates `config` before `_burst_bound` raises, so the real "
+        f"artefact carries {run_id!r}; got {sorted(path.name for path in out.glob('*.json'))}"
     )
 
 
@@ -2250,8 +2302,8 @@ def test_naming_a_DISARMED_config_is_AUDITED_and_never_ignored(tmp_path) -> None
         f"{bare.returncode}\n{(bare.stdout + bare.stderr)[-2000:]}"
     )
     candidate = tmp_path / "candidate.yaml"
-    candidate.write_text(RUN5.read_text(encoding="utf-8").replace("terminal_eval_enabled: true",
-                                                  "terminal_eval_enabled: false"), encoding="utf-8")
+    candidate.write_text(_a_production_config(REPO_ROOT).read_text(encoding="utf-8").replace(
+        "terminal_eval_enabled: true", "terminal_eval_enabled: false"), encoding="utf-8")
     named = _mini_audit(root, "--config", str(candidate))
     output = named.stdout + named.stderr
     assert named.returncode == 30, (
@@ -2263,21 +2315,22 @@ def test_naming_a_DISARMED_config_is_AUDITED_and_never_ignored(tmp_path) -> None
     )
 
 
+@_OVER_THE_CENSUS
 def test_an_inversion_on_a_NON_SAMPLING_poll_is_caught_only_by_b5as_negatives_conjunct(
-    tmp_path,
+    tmp_path, base,
 ) -> None:
     """An inversion on a NON-SAMPLING poll is caught only by b5a's negatives conjunct.
 
-    The conjuncts are not redundant at run5's own constants: samples are gated on
+    The conjuncts are not redundant at the base's own constants: samples are gated on
     `heartbeat_file_interval_sec` (15.0) while polls run at `heartbeat_poll_interval_sec` (5.0),
     so two of every three polls emit no sample and an inversion between samples is invisible to
     `all(lag >= 0)`.
     """
-    config = load_config(RUN5)
+    config = load_config(base)
     file_interval = float(config.monitor.heartbeat_file_interval_sec)
     poll_interval = float(config.monitor.heartbeat_poll_interval_sec)
     assert (file_interval, poll_interval) == (15.0, 5.0), (
-        "run5's own constants, read from the file — this finding IS the ratio between them; "
+        f"{base.name}'s own constants, read from the file — this finding IS the ratio between them; "
         f"got file={file_interval} poll={poll_interval}"
     )
 
@@ -2474,11 +2527,12 @@ def test_both_arms_of_the_config_path_resolver_are_live(monkeypatch, tmp_path) -
     so the rows are driven from a cwd that is not the repo."""
     monkeypatch.chdir(tmp_path)
     local = tmp_path / "local.yaml"
-    local.write_text(RUN5.read_text(encoding="utf-8"), encoding="utf-8")
+    source = _a_production_config(REPO_ROOT)
+    local.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
     assert TOOL._resolve_config_path("local.yaml") == local.resolve(), (
         "the cwd-relative arm: a config beside the operator, which REPO_ROOT cannot find"
     )
-    assert TOOL._resolve_config_path("configs/run6.yaml") == RUN5.resolve(), (
+    assert TOOL._resolve_config_path(source.relative_to(REPO_ROOT).as_posix()) == source.resolve(), (
         "the REPO_ROOT fallback arm: a repo-relative path from a foreign cwd, which the "
         "cwd-relative arm cannot find"
     )
@@ -2533,7 +2587,7 @@ _RETIRED_WATCHDOG_CONSTANT = "reason not found in the segment"
 #: `_watchdog_reason`'s three arms, each named by what the RUN did rather than by intent.
 _WATCHDOG_POSTURES = (
     ("the run read a reason", {"fired_reason": "actor_lag_exceeded",
-                               "segments_scanned": ["events_run5_seg0000.jsonl"]},
+                               "segments_scanned": ["events_rig_seg0000.jsonl"]},
      "actor_lag_exceeded"),
     ("no scan is recorded on the block at all", {}, "no segment scan is recorded"),
     ("the scan RAN and read nothing", {"segments_scanned": []}, "NO segment was read"),
@@ -2598,8 +2652,9 @@ _SCAN_POSTURES = (
 @pytest.mark.parametrize(("mode", "expected", "segments"), _SCAN_POSTURES,
                          ids=[posture[0] for posture in _SCAN_POSTURES])
 @pytest.mark.usefixtures("local_puller")
+@_OVER_THE_CENSUS
 def test_the_POST_CHILD_segment_scan_is_driven_and_agrees_with_the_reports_OWN_events_block(
-    monkeypatch, tmp_path, mode, expected, segments,
+    monkeypatch, tmp_path, mode, expected, segments, base,
 ) -> None:
     """The POST-CHILD segment scan is driven and agrees with the report's OWN events block.
 
@@ -2610,13 +2665,13 @@ def test_the_POST_CHILD_segment_scan_is_driven_and_agrees_with_the_reports_OWN_e
     to `True` fails too.
     """
     out_dir = tmp_path / "out"
-    target = _mint_run5_cpu_twin(tmp_path)
+    target = _mint_cpu_twin(base, tmp_path)
     run_id = load_config(target).run_id
     monkeypatch.setattr(TOOL, "_child_argv",
                         lambda args: [sys.executable, "-c", _SCAN_CHILD, str(out_dir), mode,
                                       run_id])
     report = TOOL._new_report("preflight")
-    args = SimpleNamespace(config=str(target), burst_steps=_RUN5_BURST, out_dir=str(out_dir),
+    args = SimpleNamespace(config=str(target), burst_steps=_full_tier_burst(base), out_dir=str(out_dir),
                            timeout_sec=120.0, device="cpu")
     with pytest.raises(TOOL.PreflightWatchdogFiredError) as caught:
         TOOL._run_preflight(args, report, out_dir)
@@ -2740,17 +2795,19 @@ def test_every_mint_tier_has_a_NOT_PROVEN_entry_and_there_is_NO_default() -> Non
     assert "no code-side default" in str(caught.value)
 
 
-def test_the_burst_tier_is_DERIVED_from_the_configs_OWN_floor_rows() -> None:
+@_OVER_THE_CENSUS
+def test_the_burst_tier_is_DERIVED_from_the_configs_OWN_floor_rows(base) -> None:
     """The tier is DERIVED from the config's OWN floor rows; no draw-rate row, no `full`."""
-    run5 = _tier_config(RUN5)
-    minimum = TOOL._minimum_legal_burst(run5)
-    assert minimum == _N, f"run5's refusing floor moved: {minimum}"
-    assert TOOL._burst_tier(run5, minimum) == TOOL.TIER_SYNC_LAG, (
+    armed = _tier_config(base)
+    full = _full_tier_burst(base)
+    minimum = TOOL._minimum_legal_burst(armed)
+    assert minimum == _N, f"{base.name}'s refusing floor moved: {minimum}"
+    assert TOOL._burst_tier(armed, minimum) == TOOL.TIER_SYNC_LAG, (
         "the shortest legal burst on a production config proves sync and lag, not draw-rate "
         "reachability — the tier must say so")
-    assert TOOL._burst_tier(run5, _RUN5_BURST) == TOOL.TIER_FULL
-    assert TOOL._burst_tier(run5, _RUN5_BURST - 1) == TOOL.TIER_SYNC_LAG
-    assert TOOL._burst_tier(run5, minimum - 1) == TOOL.TIER_NONE, (
+    assert TOOL._burst_tier(armed, full) == TOOL.TIER_FULL
+    assert TOOL._burst_tier(armed, full - 1) == TOOL.TIER_SYNC_LAG
+    assert TOOL._burst_tier(armed, minimum - 1) == TOOL.TIER_NONE, (
         "a burst below the actor floors is not a shorter tier — it is a burst the tool "
         "refuses, and no tier ran at all"
     )
@@ -2760,7 +2817,7 @@ def test_the_burst_tier_is_DERIVED_from_the_configs_OWN_floor_rows() -> None:
     for path in unarmed:
         config = _tier_config(path)
         assert TOOL._burst_tier(config, TOOL._minimum_legal_burst(config)) == TOOL.TIER_SYNC_LAG
-        assert TOOL._burst_tier(config, _RUN5_BURST) == TOOL.TIER_SYNC_LAG, (
+        assert TOOL._burst_tier(config, full) == TOOL.TIER_SYNC_LAG, (
             f"{path.name} declares no {TOOL.DRAW_RATE_FLOOR_KEY} row, so no burst length on "
             "it can reach the draw-rate abort's first firing step. Tier `full` here would be "
             "a reachability claim about an abort this config does not arm"
@@ -2793,11 +2850,12 @@ _TIER_HISTORIES = ("no_verdict", "verdict")
 
 
 @pytest.mark.parametrize("history", _TIER_HISTORIES)
-def test_a_tier_is_COVERED_only_when_the_run_reached_a_verdict(history) -> None:
+@_OVER_THE_CENSUS
+def test_a_tier_is_COVERED_only_when_the_run_reached_a_verdict(history, base) -> None:
     """A tier is COVERED only when the run reached a verdict, re-derived from the report's own
     (a)/(b) blocks rather than from the burst length."""
     report = TOOL._new_report("preflight")
-    report["tier"] = TOOL._tier_block(_tier_config(RUN5), _RUN5_BURST)
+    report["tier"] = TOOL._tier_block(_tier_config(base), _full_tier_burst(base))
     assert report["tier"]["tier"] == TOOL.TIER_FULL
     if history == "verdict":
         for name in ("a_sync", "b_lag"):
@@ -2822,14 +2880,15 @@ def test_a_tier_is_COVERED_only_when_the_run_reached_a_verdict(history) -> None:
         assert "NOTHING in this tier is demonstrated" in block["does_not_prove"]
 
 
+@_OVER_THE_CENSUS
 def test_the_tier_disclaimer_is_RE_DERIVED_at_write_time_and_never_the_prediction(
-        tmp_path) -> None:
+        tmp_path, base) -> None:
     """The tier disclaimer is RE-DERIVED at write time and is never the prediction `_new_report`
     stamped."""
     report = TOOL._new_report("preflight")
     assert report["tier"]["tier"] == TOOL.TIER_NONE and report["tier"]["burst_steps"] is None
     stale = report["tier"]["does_not_prove"]
-    report["tier"] = TOOL._tier_block(_tier_config(RUN5), _RUN5_BURST)
+    report["tier"] = TOOL._tier_block(_tier_config(base), _full_tier_burst(base))
     assert report["tier"]["does_not_prove"] is None, (
         "`_tier_block` must not compose the disclaimer — the run has not happened yet"
     )
@@ -2840,7 +2899,7 @@ def test_the_tier_disclaimer_is_RE_DERIVED_at_write_time_and_never_the_predictio
     assert TOOL.TIER_NOT_PROVEN[TOOL.TIER_FULL] in written["tier"]["does_not_prove"]
     assert written["tier"]["floors"] == [
         {"key": key, "value": value, "floor": floor, "cleared": True}
-        for key, value, floor in TOOL._burst_floors(_tier_config(RUN5))
+        for key, value, floor in TOOL._burst_floors(_tier_config(base))
     ], "the block must name WHICH rule made the tier what it is, row by row"
 
 
@@ -2859,10 +2918,11 @@ def test_the_none_tier_disclaimer_is_TRUE_in_mode_AUDIT_and_not_only_at_rc_11() 
         )
 
 
-def test_a_refused_burst_publishes_tier_none_and_owes_BOTH_tiers(tmp_path) -> None:
+@_OVER_THE_CENSUS
+def test_a_refused_burst_publishes_tier_none_and_owes_BOTH_tiers(tmp_path, base) -> None:
     """A refused burst (below `_N`) publishes tier `none` and owes BOTH tiers."""
     out_dir = tmp_path / "refused"
-    result = _run_tool("--config", "configs/run6.yaml", "--burst-steps", str(_N - 1),
+    result = _run_tool("--config", base.relative_to(REPO_ROOT).as_posix(), "--burst-steps", str(_N - 1),
                        "--out-dir", str(out_dir), "--timeout-sec", "60", "--receipt-wait-sec", "0")
     assert result.returncode == 11, (result.stdout + result.stderr)[-2000:]
     report = json.loads(next(iter(out_dir.glob("preflight_*.json"))).read_text(encoding="utf-8"))
@@ -2879,20 +2939,21 @@ def test_a_refused_burst_publishes_tier_none_and_owes_BOTH_tiers(tmp_path) -> No
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("local_puller")
+@_OVER_THE_CENSUS
 def test_the_real_preflight_publishes_the_tier_it_RAN_and_what_it_does_NOT_prove(
-        tmp_path) -> None:
+        tmp_path, base) -> None:
     """The real preflight publishes the tier it RAN and what that tier does NOT prove; the tier
-    arithmetic is run5's own floor, carried through the twin's identical draw-rate block."""
+    arithmetic is the base's own floor, carried through the twin's identical draw-rate block."""
     out_dir = tmp_path / "tiered"
-    result = _run_tool("--config", str(_mint_run5_cpu_twin(tmp_path)),
-                       "--burst-steps", str(_RUN5_BURST),
+    result = _run_tool("--config", str(_mint_cpu_twin(base, tmp_path)),
+                       "--burst-steps", str(_full_tier_burst(base)),
                        "--out-dir", str(out_dir), "--timeout-sec", "45", "--receipt-wait-sec", "0")
     # The TIER ARITHMETIC does not move with the outcome: the tier block is published on every
     # terminating preflight, and a run that proved LESS must still say what it did not prove.
     assert result.returncode == 40, (result.stdout + result.stderr)[-3000:]
     report = json.loads(next(iter(out_dir.glob("preflight_*.json"))).read_text(encoding="utf-8"))
     block = report["tier"]
-    assert block["tier"] == TOOL.TIER_FULL and block["burst_steps"] == _RUN5_BURST
+    assert block["tier"] == TOOL.TIER_FULL and block["burst_steps"] == _full_tier_burst(base)
     assert all(row["cleared"] for row in block["floors"])
     assert block["covered"] == [] and block["owed"] == list(TOOL.MINT_REQUIRED_TIERS), (
         "the burst cleared every floor, but the run never took a step — the report must not "
@@ -2905,9 +2966,10 @@ def test_the_real_preflight_publishes_the_tier_it_RAN_and_what_it_does_NOT_prove
     assert "NOTHING in this tier is demonstrated" in block["does_not_prove"]
 
 
-# Driving gate 12 against a PERTURBED run5 needs the mini-tree rig, so these two rows live here
-# rather than beside the other gate-12 tests.
-def test_a_production_config_with_the_terminal_eval_off_fails_gate_12(tmp_path) -> None:
+# Driving gate 12 against a PERTURBED production config needs the mini-tree rig, so these two rows
+# live here rather than beside the other gate-12 tests.
+@_OVER_THE_CENSUS
+def test_a_production_config_with_the_terminal_eval_off_fails_gate_12(tmp_path, base) -> None:
     """A production config with the terminal eval switched off fails gate 12 — the unperturbed
     tree must be green and the perturbed one red by name, or neither arm proves anything."""
     import yaml
@@ -2920,14 +2982,14 @@ def test_a_production_config_with_the_terminal_eval_off_fails_gate_12(tmp_path) 
         f"{(healthy.stdout + healthy.stderr)[-2000:]}"
     )
 
-    run5_copy = root / "configs" / "run6.yaml"
-    document = yaml.safe_load(run5_copy.read_text(encoding="utf-8"))
+    base_copy = root / base.relative_to(REPO_ROOT)
+    document = yaml.safe_load(base_copy.read_text(encoding="utf-8"))
     assert document["train"]["terminal_eval_enabled"] is True, (
-        "premise: run5 mints the terminal eval ON, which is what makes the row REQUIRED "
+        f"premise: {base.name} mints the terminal eval ON, which is what makes the row REQUIRED "
         f"rather than DEFERRED; got {document['train']['terminal_eval_enabled']!r}"
     )
     document["train"]["terminal_eval_enabled"] = False
-    run5_copy.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+    base_copy.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
 
     perturbed = _mini_audit(root)
     output = perturbed.stdout + perturbed.stderr
