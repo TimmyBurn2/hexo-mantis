@@ -36,7 +36,7 @@ def test_r328b_01_the_r8_row_exists_and_carries_radius_8_at_BOTH_sites() -> None
 
 
 def test_r328b_02_the_v1_identity_is_untouched() -> None:
-    """The whole ground for a new row rather than an edit. If this reds, run5's radius pin is broken."""
+    """The whole ground for a new row rather than an edit. If this reds, the v1 row's radius-6 pin is broken."""
     v1 = _spec(V1)
     assert v1.legal_move_radius == 6
     assert v1.graph_radius == 6
