@@ -1,4 +1,4 @@
-# RULINGS — R23 to R368
+# RULINGS — R23 to R369
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R369.
+- Numbering continues from R346. The next ruling is R370.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,38 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R369 — PERF-ADA (standing: R368(i) amended — run10 launches from PERF-ADA's exit tip once the full gate set incl. slow tier is green there, its resolved config matches its mint by value except retired leaves, admission is re-read IDLE and the parent's strix @ r8 cell is re-read; LAW-06 amended — bf16 storage and GEMMs, graph message aggregation accumulated in fp32, deterministically, in one implementation shared by server and trainer; torch and CUDA move together only after (b) and only if faster; the exact eval cache lands only bit-identical, counted and bounded; earlier bench_server determinism and PERF-3 CPU-launch readings void; review reports, exit records and packets are local records; rulings state decisions only)
+Decision: verbatim below.
+
+> R369 — PERF-ADA.
+> (a) R368(i) is amended: run10 launches from PERF-ADA's exit tip once
+> - the full gate set incl. slow tier is green there;
+> - run10's resolved config matches its mint by value, except leaves a
+>   ruling retires;
+> - admission has been re-read IDLE under R367(e);
+> - the parent's strix @ r8 cell has been re-read there. A re-read outside
+>   the parent's recorded CI sends the bar to the operator.
+> (b) LAW-06 is amended: bf16 storage and GEMMs; graph message aggregation
+> accumulates in fp32, deterministically, in one implementation shared by
+> server and trainer. No key restores the old path; this is not a new arch
+> kind.
+> (c) torch and the CUDA runtime move together, after (b), and only if
+> benched faster.
+> (d) The exact eval cache lands only if served outputs are bit-identical
+> with and without it, a hit counts as a served simulation, and its memory
+> is bounded.
+> (e) Earlier bench_server determinism readings and PERF-3's CPU-launch
+> reading are void; CARD-PERF-4 waits on a re-read.
+> (f) Review reports, exit records and packets are local records, outside
+> the public tree.
+> (g) Rulings state decisions only, about ten lines; grounds and procedure
+> stay in the packet.
+
+Amends: R368(i) by (a); LAW-06 by (b); R367(b)'s and CLAUDE.md R10's report location by (f).
+Status: standing.
+
+---
 
 ### R368 — SLIM-FIX (standing: the SLIM-SCOUT census accepted as the work list, every PENDING-PROBE row re-probed on a torch host before it lands; PROTECTION BINDS THE INVARIANT, NOT THE FILE — LAWS.md's eleven invariants held by their implementing symbols and pinning tests, other code in the same file changes under the normal legs, a card never protects code, a freeze is a manifest row, a reding test or gate or a ruling naming the file; CORRECTNESS FIRST — the census's defects and gate holes land before any slimming, each proven by a planted break, the test-count floor raised to the base's collected count; R367(a) ORDERED on the census — grid/dense residue, the phantom protocol members, run-named symbols and duplicated helpers go, the dense drain oracle re-based on graph goldens; DECIDED DELETIONS — wpa_positions.json, the unread value_probes, RULINGS_ACTIVE.md, CARDS' closed rows, configs/run6–8, the sealbot adapter, the old corpus pipeline, the S-PREFUSE harness; STATE rewritten to current facts; ONE COMMENT RULE with one sanctioned pass over cites and narrative runs; schema keys, minted rows, the CI workflow and hot-path refactors OUT of this phase; RUN10 SAFETY — 69e1532 is run10's validated base and nothing moves its resolved config, stamp format or numerics before run10 STARTs; SEAM-2 recorded, its implementation after run10 STARTs; the queue disposed)
 Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as

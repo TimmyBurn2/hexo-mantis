@@ -82,8 +82,8 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
     per thing; a comment states what code cannot; no compatibility shim for a state the tree no
     longer has. Every implementation leg ends with a FRESH read-only review agent against this
     rule plus correctness (budget, determinism, seam contracts, LAW-07 breaks); its findings are
-    fixed before merge, its report lives under docs/audits/, and the dispatcher never reviews its
-    own leg. A leg that violates either half is not done.
+    fixed before merge, its report is a local record outside the public tree (R369(f)), and the
+    dispatcher never reviews its own leg. A leg that violates either half is not done.
     Reason: the run10 mint edited seven by-name pin sets and left a run-named schedule test
     (R367 packet, 2026-09-21); the leg that wrote them ran its own exit sweep and no review.
 11. **R11 price law (R367(d)).** Renting, stopping, destroying or re-speccing the box is the
@@ -98,7 +98,7 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
 - LAW-03 measurement-unit — verify turn-vs-ply and the completing cell before framing.
 - LAW-04 effective-n — strength CIs count DISTINCT games (trajectory-hash dedupe).
 - LAW-05 falsified-register-first — read the register before proposing experiments.
-- LAW-06 bf16-graph — graph-path autocast dtype is bf16, pinned by parity test.
+- LAW-06 bf16-graph — bf16 storage + GEMMs, fp32 deterministic aggregation in one implementation (R369(b)).
 - LAW-07 producer-test — every gate/monitor input cites a live producer + mutation self-test.
 - LAW-08 live-consumer — every config key / registered encoding has a live consumer.
 - LAW-09 bench discipline — prereg hotspots, one change = one commit = one IQR-gated bench.

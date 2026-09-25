@@ -15,7 +15,9 @@ amendment commit and operator sign-off.
 - LAW-04 Effective-n. A strength CI counts DISTINCT games (trajectory-hash dedupe), not the
   game count; argmax/temp-0 regimes collapse to ~2 distinct games per pairing.
 - LAW-05 Falsified-register-first. Read docs/governance/falsified.md before proposing any optimization or experiment, and apply LAW-02 when citing a row from it.
-- LAW-06 bf16-graph. Graph-path autocast dtype is bf16, pinned in code and by a parity test.
+- LAW-06 bf16-graph (R369(b)). bf16 storage and GEMMs; graph message aggregation accumulates in
+  fp32, deterministically, in one implementation shared by server and trainer. No key restores the
+  old path; this is not a new arch kind. Pinned in code and by parity tests.
   R349(a): fp32 on `train.device: cpu` is the ONE carve-out (the autocast context, never the
   dtype pin), pinned by its own parity test; it applies to no production path.
 - LAW-07 Producer-test. No gate or monitor input without a live producer test, and the checker
