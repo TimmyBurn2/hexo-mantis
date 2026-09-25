@@ -82,17 +82,18 @@ def _split_literal_and_threaded(section: str) -> tuple[dict[str, Any], set[str]]
     pytest.fail(f"the inline dict has no {section!r} section")
 
 
+#: `(pyo3 ctor key, selfplay.mcts key)`, read by the ctor row and the census row alike.
+_CTOR_DEFAULT_KEYS: tuple[tuple[str, str], ...] = (
+    ("c_puct", "c_puct"),
+    ("fpu_reduction", "fpu_reduction"),
+    ("quiescence_enabled", "quiescence_enabled"),
+    ("quiescence_blend_2", "quiescence_blend_2"),
+)
+
+
 # D-15: `DeployHeadPlayer.new_game` builds `MCTSTree()` on the pyo3 ctor defaults while
 # self-play threads the same knobs from config.
-@pytest.mark.parametrize(
-    "ctor_key, config_key",
-    [
-        ("c_puct", "c_puct"),
-        ("fpu_reduction", "fpu_reduction"),
-        ("quiescence_enabled", "quiescence_enabled"),
-        ("quiescence_blend_2", "quiescence_blend_2"),
-    ],
-)
+@pytest.mark.parametrize("ctor_key, config_key", _CTOR_DEFAULT_KEYS)
 def test_deploy_head_mcts_default_equals_run5(ctor_key: str, config_key: str) -> None:
     ctor = _pyo3_mctstree_defaults()[ctor_key]
     configured = _run5()["selfplay"]["mcts"][config_key]
@@ -193,7 +194,7 @@ def test_the_train_SECTION_IS_GONE_and_law06_still_pins_the_dtype() -> None:
 def test_every_production_config_carries_the_values_read_above(path: Path) -> None:
     """The rows above read one census member; each other member must carry the same values."""
     read, other = _run5(), yaml.safe_load(path.read_text(encoding="utf-8"))
-    keys = ("c_puct", "fpu_reduction", "quiescence_enabled", "quiescence_blend_2")
+    keys = tuple(config_key for _, config_key in _CTOR_DEFAULT_KEYS)
     assert {k: other["selfplay"]["mcts"][k] for k in keys} == {
         k: read["selfplay"]["mcts"][k] for k in keys}, path.name
     assert set(other["inference"]) == set(read["inference"]), path.name
