@@ -630,25 +630,6 @@ class Trainer:
             ema_state=None if self.ema_model is None else self.ema_model.state_dict(),
         )
 
-    @classmethod
-    def load_checkpoint(
-        cls,
-        checkpoint_path: str | Path,
-        *,
-        device: torch.device | None = None,
-        fallback_config: dict[str, Any] | None = None,
-        config_overrides: dict[str, Any] | None = None,
-        declared_keys: frozenset | set | None = None,
-        sink: Any = None,
-    ) -> Trainer:
-        """Restore a Trainer — thin delegate to `checkpoints.resume_trainer` (§c.7)."""
-        return checkpoints.resume_trainer(
-            cls, checkpoint_path, fallback_config=fallback_config,
-            config_overrides=config_overrides, declared_keys=declared_keys,
-            sink=sink, device=device,
-        )
-
-
 def _resolve_spec(config: Any):
     """Resolve the encoding spec from a config. Both the NESTED `identity.encoding` shape and the
     legacy FLAT `encoding` shape are read by `resolve_from_config` itself, the ONE authority for
