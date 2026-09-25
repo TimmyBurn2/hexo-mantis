@@ -134,7 +134,8 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   `..._matches_run3`, test_drawrate_pooled_statistic RUN5_* (PZ-1), test_checkpoint_conformance `run8_shaped`,
   test_gate_interval_decoupling `_RUN5_LOG_INTERVAL`, test_steps_budget_carry `run8s`, the `_run5()` helper;
   armed_aborts.py policy_loss_trough owner text "run7's mint" (PZ-6 row, needs a ruling-named re-point).
-- NEXT: REVIEW-W6 (**opus**, fresh, read-only) over 4e8c663a..tip.
+- REVIEW-W6 (**opus**, fresh, read-only) LAUNCHED over 4e8c663a..8eec45a9. W7_ADDENDUM committed 8e5eab3e
+  (exit step 5 taken early so a stop cannot lose it; its measures are derived at 8eec45a9).
 
 ## W5 — tests + fixtures (EXITED 2026-09-25)
 
