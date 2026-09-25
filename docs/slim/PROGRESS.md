@@ -81,7 +81,21 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
     direction; the implementer verifies, commits, and re-points the other test dirs.
   - `.wt/w6-configs-b` (**opus**, new, from 98fb255a): tests/tools + tests/diagnostics re-points.
   - `.wt/w6-cards` (**sonnet**): the archive delete + F-816-34/35/36 carry kept; leg 4 to finish.
-  - The run6–8 delete follows once both configs halves land, with gate 10 `DISSOLVED_PATHS` rows.
+  - The run7/run8 delete follows once both configs halves land, with gate 10 `DISSOLVED_PATHS` rows.
+- configs-b LANDED c7e5cbba, 9650fd10, e97609be, 92156f4e (tests/tools + tests/diagnostics onto the
+  census; collected 4969 while run6–8 exist, since the census rows parametrize). Main-checkout run of the
+  touched files: 532 passed, 1 CUDA skip.
+- **HALT, configs/run6.yaml STAYS.** tests/tools/test_preflight_mint_process.py is R310-frozen (00_MAP
+  §5), and its `RUN5` binds run6. A path-only re-point to run10 reds all 4 real-boot integration rows (rc
+  33): run10's `train.heldout_gap.ring` names an untracked checkpoint ring, which run6 lacks. The measured
+  fix, applied and driven 6/6 green, edits the oracle:
+  - `train.heldout_gap{,.ring,.ring_sha256,.batches,.seed,.interval}` join `FORCED_TWIN_LEAVES`;
+  - the twin drops the `train.heldout_gap=` header delta;
+  - `differing == FORCED_TWIN_LEAVES` becomes `differing <= FORCED_TWIN_LEAVES and "train.device" in differing`.
+
+  That needs a grant (R43/R310). Operator: grant it, then delete run6.yaml. The implementer's
+  oracle-body commit ad29e624 was DROPPED, and so was 3334eda1's test_preflight_mint.py half (also
+  R310-frozen). With run6 kept, neither is needed.
 - Queued: leg 6, the STATE rewrite (**opus**), then
   REVIEW-W6 (**opus**).
 
