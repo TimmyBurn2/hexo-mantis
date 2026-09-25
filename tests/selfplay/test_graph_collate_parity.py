@@ -49,8 +49,8 @@ def _collate(fields: dict[str, Any], **kw: Any):
     return collate_graph_batch(GraphWirePayload(**fields), **{**GEOMETRY, **kw})
 
 
-#: The ONE authority lives in `_retired_batch_fields`. The capture `.npz` is NOT regenerated to
-#: drop retired keys, so the retirement is asserted POSITIVELY below rather than skipped.
+#: The ONE authority lives in `_retired_batch_fields`. The capture `.npz` is NOT regenerated (a
+#: rewritten capture stops being one), so the retirement is asserted POSITIVELY, never skipped.
 
 
 def _assert_tensor_parity(batch, golden: dict[str, np.ndarray], label: str) -> None:

@@ -29,8 +29,8 @@ BASE_PLAYOUT_CAP: dict[str, Any] = {
     "n_sims_quick": 0, "n_sims_full": 0,
     "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
 }
-# NOT a `train:` schema payload — `cfg()` builds the LEGACY flat hparams dict the pool reads, so
-# this block is deliberately INCOMPLETE and never reaches `RunConfig.model_validate`.
+# The LEGACY flat hparams dict `cfg()` builds, never a validated `train:` payload, so INCOMPLETE;
+# `draw_reward` -0.4 and `ply_cap_value` -0.7 differ from the minted defaults so oracles see them.
 BASE_TRAIN: dict[str, Any] = {
     "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0,
     "lr_schedule": "cosine", "total_steps": 1_000_000, "scheduler_t_max": None,
@@ -159,8 +159,8 @@ def test_search_kind_property_reads_live_config() -> None:
     holder.config["selfplay"]["search"]["kind"] = "gumbel"
     assert holder.search_kind == "gumbel", "the property must re-read the live config"
 
-    # NO FALLBACK: a pool that cannot say which search it ran must raise rather than answer
-    # "puct" — the refusal is the RESOLVER's, so the pool cannot grow a fallback of its own.
+    # NO FALLBACK: a pool that cannot name its search raises, never answers "puct" (the emitter
+    # gates PUCT-only diagnostics on it); the refusal is the RESOLVER's, so no pool fallback grows.
     holder.config = {}
     with pytest.raises(MissingSearchKindError):
         _ = holder.search_kind
