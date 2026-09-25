@@ -99,12 +99,12 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
 - TRAP: `refs/stash` is SHARED by every worktree. L7's `stash pop` took L6's stash (12235a77). The
   dispatcher restored both sides by sha, with `git stash apply <sha>` and the content compared equal.
   Nothing was lost. The legs were told never to stash again.
-- L7 train LANDED e2c0ca7a (**opus**): cite 73→2 (the two kept CARD-SERVER-OWNED-COPY markers),
+- L7 train LANDED 00f04f6a (**opus**): cite 73→2 (the two kept CARD-SERVER-OWNED-COPY markers),
   comment_excess 110→10. tests/train 851 passed; run10 MATCH. L6 tests/eval LANDED c7ea737b (**sonnet**,
   the two CARD tokens restored). L8 src/mantis/selfplay LANDED dd08abb8 (**sonnet**). Floors folded:
   cite 993→851, comment_excess 2675→2535. Gates 10/12/13/15/17 rc 0.
 - L7's first resume HALTED on the stash trap. It was re-launched (**opus**) for config, eval and root.
-- L7 LANDED (**opus**; second resume): e2c0ca7a train (cite 73→2, comment_excess 110→10), dd1c8985 config (39→0,
+- L7 LANDED (**opus**; second resume): 00f04f6a train (cite 73→2, comment_excess 110→10), dd1c8985 config (39→0,
   87→35; tests/config 797 passed), 7e2545ad eval (41→1, 62→3; tests/eval 352 passed), e00bc282 root (17→0, 118→8;
   root tests 160 + 883 run-importing passed). The one MANIFEST-literal hunk (fused_graph_caps_calibrated's row
   comment) was reverted to base. Two bound grounds the inherited trim had dropped were restored:
@@ -140,6 +140,18 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   d18dc5bc against the tip: no in-source-only marker fell. The in-source drops each have their own CARDS row:
   LADDER-RUNG, STOP-DRAIN-VS-GRACE, PYRIGHT-STRICT (its home is pyproject.toml), and part of OC7-OVERRUN,
   RUN5-GPU-OOM and STAMP-FLOOR. REVIEW-W7 (**opus**, fresh, read-only) was launched over d18dc5bc..97ec5d2b.
+- The exit sweep was LAUNCHED at 5c0e7749 and STOPPED by the dispatcher once REVIEW-W7 returned MUST-FIXes,
+  so the sweep runs once, at the post-fix tip. Worktrees and branches w7-l5..l8 were removed.
+- REVIEW-W7 is filed at b6a8a843 (`docs/audits/REVIEW_W7_2026-09-25.md`): 5 MUST-FIX, 7 SHOULD-FIX, 6 NOTE. Every
+  finding is comment text the pass got wrong. It cut invariants to wrong stubs, dropped measured grounds and a
+  planted-break clause, and replaced cites with wrong attributions. There was NO code change: the verifier
+  passed all 39 commits, and the reviewer closed each of its blind spots independently.
+  ONE fix loop covered them, run by two fresh fix legs (**opus**): w7-fix-py produced 11 commits
+  a535b82a..b4bdaddd, and w7-fix-rust produced 4, 1d490bec..81c1b6bd. The closure check found every row
+  CLOSED, 0 new MUST/SHOULD and 1 note (not a deviation, see §5). Carried to W8: validate.rs's three
+  refusal strings naming the deleted `sym_tables_for` (code, on contact), and the verifier upgrade (#18).
+  Kept, #17: tests/model/test_net_param_hash_promotion.py and test_one_amp_dtype_authority.py keep their cites
+  (PZ-listed pinning tests). Worktrees w7-fix-py/-rust were removed.
 
 ## W6 — docs + configs (EXITED 2026-09-25)
 
