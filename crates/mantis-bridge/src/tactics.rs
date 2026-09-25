@@ -11,7 +11,7 @@
 //! present) is the cached 2nd stone of the turn.
 //!
 //! No Board is held — `TacticalSolver` is `Send + Sync` (POD config), so the
-//! pyclass takes the default derive (no `unsendable`). F-42: `module = "mantis._engine"`.
+//! pyclass takes the default derive (no `unsendable`); `module = "mantis._engine"`.
 
 use pyo3::prelude::*;
 

@@ -239,7 +239,7 @@ impl PyHexgBuffer {
         ])
     }
 
-    /// LAW-18 (R266/R358): `(bins, empty_skipped)` — the D6 draw bins and empty-board skips since boot.
+    /// `(bins, empty_skipped)` — the D6 draw bins and empty-board skips since boot.
     pub fn sym_draw_counts(&self, py: Python<'_>) -> (Vec<u64>, u64) {
         py.detach(|| {
             let r = self.ring();
@@ -247,7 +247,7 @@ impl PyHexgBuffer {
         })
     }
 
-    /// Rows handed to the trainer by `sample_graph_batch` since boot — the replay ratio's numerator (R358(c)).
+    /// Rows handed to the trainer by `sample_graph_batch` since boot — the replay ratio's numerator.
     pub fn samples_consumed_total(&self, py: Python<'_>) -> u64 {
         py.detach(|| self.ring().samples_consumed_total)
     }
@@ -337,7 +337,7 @@ impl PyGraphTargets {
     fn explicit_mask<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<u8>> {
         PyArray1::from_slice(py, &self.inner.explicit_mask)
     }
-    /// R347(a) — `[B]` per-row tail mass alpha.
+    /// `[B]` per-row tail mass alpha.
     #[getter]
     fn tail_mass<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f32>> {
         PyArray1::from_slice(py, &self.inner.tail_mass)
