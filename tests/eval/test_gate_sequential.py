@@ -68,7 +68,7 @@ def test_the_decision_maps_the_llr_to_accept_reject_continue() -> None:
 
 
 def test_at_max_pairs_promote_accepts_an_undecided_candidate_at_the_cap_and_nowhere_else() -> None:
-    # At the cap the bounds still decide before it fires, and a reject is still a reject.
+    # The cap promotes; the bounds still decide before it, and a reject is still a reject.
     lower, upper = llr_bounds(alpha=0.05, beta=0.10)
     assert gsprt_decision(-0.5, lower, upper, at_max=True, at_max_pairs="promote") == "accept"
     assert gsprt_decision(0.0, lower, upper, at_max=True, at_max_pairs="promote") == "accept"

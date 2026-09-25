@@ -140,8 +140,8 @@ def test_bootstrap_and_low_power_guard_consume_the_pooled_set() -> None:
          "moves": distinct_screen_moves[i % 3]}
         for i in range(80)
     ]
-    # 128 new distinct sequences take the pooled count to 131, flipping low_power to False. The
-    # MIXED outcome cycle is load-bearing: a plain 0/1 alternation collides on one quantile across seeds.
+    # 128 new distinct sequences take the pooled count to 131, flipping low_power to False. MIXED is
+    # load-bearing: 0/1 alone collided on one 2.5% quantile (12 at n=11; still n=67, 20260625/999).
     _confirm_outcome_cycle = ["p1", "p1", "draw", "p2", "p1", "p2", "draw", "p1", "p2", "p1"]
     distinct_confirm_moves = [[[9, k], [8, k]] for k in range(128)]
     confirm = [

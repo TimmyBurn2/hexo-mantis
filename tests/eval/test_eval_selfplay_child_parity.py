@@ -54,8 +54,8 @@ def _expected_children(board: Board) -> int:
 #: Measured at mint over up to 1294 terms: the largest cross-language disagreement between the
 #: torch-f32 softmax and the Rust-f32 softmax is 7.3e-10.
 _PRIOR_TOL = 1e-5
-#: The two fixtures together, enforced not asserted: a position's frozen child set is
-#: `min(n_legal, K)` coords, so the budget keeps a committed fixture small enough to read.
+#: Both fixtures, enforced: a child set is `min(n_legal, K)` coords, so a raised cap RE-DERIVES the
+#: budget by the same factor, never loosens it; it keeps a committed fixture small enough to read.
 _FIXTURE_BYTE_BUDGET = 131072
 
 

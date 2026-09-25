@@ -25,8 +25,8 @@ _FIXTURE = (
     / "fixtures" / "eval_selfplay_parity" / "dispersed_r6_v1.json"
 )
 
-#: 32 rather than production's 150: measured, the killing mutation reds at every n_sims >= 2,
-#: and 150 costs ~13.5 s against ~3.0 s here for no added detection.
+#: 32, not production's 150: measured, n_sims=1 gives one distinct root q at 4/4 positions and 32
+#: gives 2-4; the mutation reds at every n_sims >= 2, and 150 costs ~13.5 s vs ~3.0 s for nothing.
 _SIMS = 32
 
 #: With every child at `visits=0, q=0` PUCT's Q term is identically 0, so the move reduces to
