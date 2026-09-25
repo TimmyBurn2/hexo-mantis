@@ -4799,6 +4799,16 @@ counts the entries, and the same with `sort -u` before `wc -l` counts the number
 names R24, R29, R32, R33 and R267 under "Four".
 Ordered by: R368(a) (the census's defect 47), appended 2026-09-25 by the SLIM-FIX W6 register leg
 
+### ANNOTATION under R368's foot (A1) — ITS AMENDS LINE'S "R336(e)'s ON-CONTACT CLAUSE" IS THE RUSTFMT ONE
+Corrects: R368's Amends line's listing of "R336(e)'s on-contact clause" among the three comment rules its
+(g) replaces; nothing in (g) itself, which still replaces R316(e) and R346(f)'s comment clause
+Fact: R336(e) (docs/governance/archive/rulings_register.md's verbatim ruling text) is rustfmt-only —
+"CLAUDE.md's line becomes 'rustfmt on touched files'; rustfmt.toml with defaults is committed so the
+style has a definition; no tree-wide format pass (standards on contact)", plus two unrelated riders
+(check 14's carding, the Gumbel undershoot pin). It carries no comment rule, so (g) replaces nothing in
+it and it stands whole, unamended.
+Ordered by: the operator's grant of 2026-09-25 (REVIEW-W6 #12), appended 2026-09-25 by the SLIM-FIX W8 close
+
 ### ANNOTATION under LAW-10 (in laws.md) — GRID-ERA
 Corrects: LAW-10's applicability, not its criterion structure
 Fact: every threshold in LAW-10 was measured on the DENSE threat-logit head. `GnnNet` ships

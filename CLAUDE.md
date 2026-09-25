@@ -131,7 +131,7 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
   invariants when its message names the invariant. clippy rides gate 2 (`-D clippy::all`);
   **rustfmt runs on TOUCHED FILES** and is NOT gated anywhere — run it yourself on what you
   edited, do not assume a gate caught it, and do NOT sweep the tree (R336(e)'s formatting
-  clause, standards on contact — its comment-application half is the one R368(g) replaced).
+  clause, standards on contact).
   `rustfmt.toml` is committed with defaults so the style has a definition rather than living
   in whichever toolchain happens to run.
 
