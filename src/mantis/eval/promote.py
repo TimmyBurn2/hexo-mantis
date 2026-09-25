@@ -1,12 +1,12 @@
 """apply_gate_decision — the EXACTLY-ONE gate-decision call site (deploy seam).
 
-DEPLOY-TAG SEAM (WP-UNFREEZE, R49): gate decisions move ONLY the deploy tag (the
+DEPLOY-TAG SEAM: gate decisions move ONLY the deploy tag (the
 resolved anchor + best_model.pt). Actor weights sync continuously in
 mantis.train.actor_sync — this module must never name, hold, or call an actor-side
 surface, and `DeployTagHooks` carries no attribute through which one could be reached
 (field set pinned by tests/train/test_actor_sync_isolation.py).
 
-Sequence (F-12/LAW-12): load the EVALUATED candidate snapshot (the exact bytes the
+Sequence: load the EVALUATED candidate snapshot (the exact bytes the
 worker played — never the live trainer module) into the resolved anchor's best-model
 slot via the injected guarded loader -> `save_anchor(...)` -> update the resolved
 anchor's recorded step -> return the promoted step. NO read of the resolved anchor's
@@ -24,7 +24,7 @@ from typing import Any, cast
 @dataclass(frozen=True)
 class DeployTagHooks:
     """Constructed by the composition root (train side): the deploy-side collaborators,
-    and nothing else — there is deliberately no actor-shaped field here (R49)."""
+    and nothing else — there is deliberately no actor-shaped field here."""
 
     anchor_state: Any                # train.anchor.AnchorState (anchor.py:75-85)
     best_model_path: Path
@@ -38,9 +38,9 @@ def apply_gate_decision(hooks: DeployTagHooks, result: Mapping[str, Any]) -> int
     """No-op (`None`) unless `promoted` and the round is clean or carries a PARTIAL gate verdict (A-3).
 
     A gate pass advances the deploy tag and ONLY the deploy tag; the actor's weights
-    are none of this function's business (WP-UNFREEZE, R49).
+    are none of this function's business.
 
-    WP12-R Phase O (R152/LAW-11): the reason is read as a SUBSCRIPT and it is read FIRST.
+    The reason is read as a SUBSCRIPT and it is read FIRST.
     Both halves are load-bearing. A subscript makes an ABSENT `eval_broken_reason` a loud
     `KeyError` instead of the silent-`None`-is-falsy read that made a stale, hand-built or
     half-migrated round mapping indistinguishable from a clean one — absent is an ERROR,
@@ -48,8 +48,8 @@ def apply_gate_decision(hooks: DeployTagHooks, result: Mapping[str, Any]) -> int
     with the `promoted` test leading, a NON-promoted stale mapping would never have its
     reason read at all, which is exactly the case the guard claims to close.
     """
-    # The reason is read FIRST and as a SUBSCRIPT (R152); a broken round promotes ONLY off a
-    # partial gate verdict the child persisted before the break (A-3, R355(e)).
+    # The reason is read FIRST and as a SUBSCRIPT; a broken round promotes ONLY off a partial
+    # gate verdict the child persisted before the break (A-3).
     reason = result["eval_broken_reason"]
     if not result.get("promoted"):
         return None
@@ -61,10 +61,8 @@ def apply_gate_decision(hooks: DeployTagHooks, result: Mapping[str, Any]) -> int
     step = int(result["step"])
     snapshot_path = result.get("candidate_snapshot_path")
     loaded = load_model_snapshot(snapshot_path, device="cpu") if snapshot_path else {}
-    # `load_model_snapshot` returns a built nn.Module in production (snapshot.py); the
-    # gate-parity oracle monkeypatches it to hand back a bare state_dict directly — both
-    # shapes are handled here without a live-module state read. The no-method arm IS the
-    # bare-dict shape, hence the cast.
+    # Production gets a built nn.Module; the gate-parity oracle monkeypatches in a bare
+    # state_dict, which is the no-method arm, hence the cast.
     sd_method = getattr(loaded, "state_dict", None)
     state_dict = cast("dict[str, Any]", sd_method() if callable(sd_method) else loaded)
 

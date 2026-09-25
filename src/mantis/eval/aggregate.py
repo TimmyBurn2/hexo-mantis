@@ -1,13 +1,10 @@
-# >300 justify (R8): one arithmetic unit. Every function here reads the SAME record convention
-# and feeds ONE decision, the promotion gate, in a chain where each step's output is the next
-# step's input. Splitting it would put the dedupe key in one file and the estimator that depends
-# on its semantics in another — and the defect this file most recently carried was exactly a
-# dedupe key whose meaning had drifted from what the estimator assumed. The run3 parity
-# citations are load-bearing for the same reason: they sit beside the arithmetic they certify.
+# >300 justify (R8): one arithmetic unit; each function reads the SAME record convention and feeds
+# the next toward ONE decision, the promotion gate. Split, the dedupe key would drift from the
+# estimator relying on it (this file's last defect) and the run3 parity cites from their arithmetic.
 """Vectorized aggregation over game-record arrays (design §a.3).
 
 `aggregate_rung` RAISES `MixedRegimeError` on >1 distinct `regime_key` in one call, and
-trajectory-hash dedupe feeds `eff_n` (LAW-04). `pair_bootstrap_wr_ci` is vectorized numpy with
+trajectory-hash dedupe feeds `eff_n`. `pair_bootstrap_wr_ci` is vectorized numpy with
 no per-game Python loop.
 
 `aggregate_gate` reproduces run3's POOLED draw-aware gate arithmetic EXACTLY
@@ -17,7 +14,7 @@ the low-power guard. `gate_promotion_decision` / `should_escalate` are the oracl
 truth-table functions it calls, never reimplemented ad hoc.
 
 Game records follow the hexo_rl `_play_pair` convention, or the arena-native
-`{"regime_key", "trajectory_hash"}` shape; either satisfies the LAW-04 dedupe key.
+`{"regime_key", "trajectory_hash"}` shape; either satisfies the trajectory dedupe key.
 """
 from __future__ import annotations
 
@@ -57,9 +54,9 @@ def _outcome_value(record: Mapping[str, Any]) -> float:
 
 
 def _traj_key(record: Mapping[str, Any]) -> str:
-    """The LAW-04 dedupe key: the trajectory, QUALIFIED BY WHO SAT WHERE.
+    """The distinct-game dedupe key: the trajectory, QUALIFIED BY WHO SAT WHERE.
 
-    LAW-04 dedupes COPIES of one game, because a deterministic regime replays the same game and
+    The dedupe drops COPIES of one game, because a deterministic regime replays the same game and
     a CI over the raw count is over-confident by sqrt(copies). Two colour-swapped legs are not
     copies, but `trajectory_hash` is a sha256 over the MOVE LIST alone, so coinciding legs hash
     identically and the unqualified key threw one away — biasing the win rate toward whichever
@@ -87,7 +84,7 @@ def _pair_key(record: Mapping[str, Any]) -> tuple[Any, Any]:
 
 
 def _distinct_outcomes(records: Sequence[Mapping[str, Any]]) -> np.ndarray:
-    """One outcome value per DISTINCT trajectory (LAW-04: copies of one game count once;
+    """One outcome value per DISTINCT trajectory (copies of one game count once;
     the first-seen record for a trajectory supplies its outcome)."""
     seen: dict[str, float] = {}
     for record in records:
@@ -134,7 +131,7 @@ def _distinct_per_pair(records: Sequence[Mapping[str, Any]]) -> int:
 def pair_bootstrap_wr_ci(
     pair_outcomes: np.ndarray, *, resamples: int, ci_level: float, seed: int
 ) -> tuple[float | None, float | None]:
-    """Vectorized bootstrap CI over `pair_outcomes` (one value per DISTINCT game, LAW-04).
+    """Vectorized bootstrap CI over `pair_outcomes` (one value per DISTINCT game).
     `n == 0` degenerates to `(None, None)` — never an exception."""
     arr = np.asarray(pair_outcomes, dtype=np.float64)
     n = arr.shape[0]
@@ -261,10 +258,8 @@ class GateAggregate:
     low_power: bool
     eff_n: int
     promoted: bool
-    #: The pooled game counts, RETAINED beside the decision: a promotion recorded as a win rate
-    #: and a boolean cannot be re-read afterwards, since 0.58 over 24 games and 0.58 over 240
-    #: are the same field. Counted over GAMES while the CI is over PAIRS, deliberately — these
-    #: are the raw tallies, not the estimator's unit.
+    #: The pooled game COUNTS, kept because a bare win rate cannot be re-read (0.58 over 24 games
+    #: and over 240 are one field); over GAMES, not the CI's PAIRS, deliberately: raw tallies.
     wins: int = 0
     losses: int = 0
     draws: int = 0
@@ -292,10 +287,8 @@ def aggregate_gate(
         (screen_wins + 0.5 * screen_draws) / n_screen if n_screen > 0 else None
     )
 
-    # Escalation is normally the worker's own decision BEFORE it plays a confirm game.
-    # `screen_confirm_lo` is read when present so the field matches the cited formula; a minimal
-    # duck-typed `gate_cfg` that omits it falls back to confirm games having been played at all,
-    # which any correctly-wired caller already guarantees.
+    # Escalation is normally the worker's decision before any confirm game; a duck-typed
+    # `gate_cfg` without `screen_confirm_lo` falls back to whether confirm games were played.
     screen_confirm_lo = getattr(gate_cfg, "screen_confirm_lo", None)
     if screen_confirm_lo is not None and wr_screen is not None:
         escalated = should_escalate(wr_screen, screen_confirm_lo)
@@ -308,18 +301,12 @@ def aggregate_gate(
     pooled_draws = sum(1 for r in pooled if r["winner"] == "draw")
     wr_confirm = (pooled_wins + 0.5 * pooled_draws) / n_pooled if n_pooled > 0 else None
 
-    # The resampling UNIT is the opening pair, not the game: resampling games treats two legs of
-    # one opening as independent draws, understating the between-opening variance on the LOWER
-    # bound `gate_promotion_decision` reads, so the bar cleared more often than its stated
-    # confidence. `eff_n` moves with it, since an effective-n counted in games beside a CI over
-    # pairs would be two answers to one question.
+    # The resampling UNIT is the opening PAIR: resampling games treats one opening's legs as
+    # independent and understates the LOWER bound's variance; `eff_n` counts the same unit.
     unit_outcomes = np.asarray(pair_units(pooled), dtype=np.float64)
     eff_n = int(unit_outcomes.shape[0])
-    # Distinct-game bootstrap Elo-CI-vs-best, seeded from `gate.seed_base`: the pooled
-    # distinct-game WR bootstrap lower bound RE-CENTERED to the Elo zero-point, so it is
-    # positive iff the candidate's bootstrap-lower WR clears 50% — exactly the sign
-    # `gate_promotion_decision` reads. A literal BT-rating bootstrap is NOT reproduced
-    # numerically, since no oracle pins its magnitude; recorded as an implementation choice.
+    # The pooled WR bootstrap lower bound, seeded from `gate.seed_base` and RE-CENTERED so it is
+    # > 0 iff it clears 50 %; no oracle pins a literal BT-rating bootstrap, so none is reproduced.
     wr_lower_boot, _wr_upper_boot = pair_bootstrap_wr_ci(
         unit_outcomes, resamples=gate_cfg.bootstrap_resamples,
         ci_level=0.95, seed=gate_cfg.seed_base,
@@ -328,11 +315,9 @@ def aggregate_gate(
 
     distinct_per_pair = _distinct_per_pair(pooled) if pooled else 0
     low_power = distinct_per_pair < int(gate_cfg.min_distinct_per_pair)
-    # `min_distinct_per_pair` is `Field(ge=1)`, so the low-power guard can be SATISFIED by ONE
-    # distinct game — and a bootstrap over one sample collapses to the point estimate, so a
-    # single distinct WIN re-centres to +0.5 > 0 and promotes. The smoke config deliberately
-    # mints 1, so the floor cannot be raised in the schema; the refusal belongs to the
-    # STATISTIC, which reports no interval below two distinct games.
+    # `min_distinct_per_pair` is `ge=1` (the smoke config mints 1), but a one-sample bootstrap is
+    # its point estimate, so one distinct WIN would re-centre to +0.5 and promote: the STATISTIC
+    # refuses an interval below two distinct games.
     _MIN_DISTINCT_FOR_AN_INTERVAL = 2
     if distinct_per_pair < _MIN_DISTINCT_FOR_AN_INTERVAL:
         elo_ci_lower_boot = None

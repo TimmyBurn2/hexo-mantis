@@ -10,7 +10,7 @@ snapshot's plain-dict arch (never a live-module sniff).
 
 Snapshots are SPOOL FILES, never checkpoints: no envelope version, no checkpoint stamp —
 the ONE checkpoint loader (`mantis.train.checkpoints`) stays the only checkpoint reader
-(LAW-12 one-loader carve-out).
+(the one-loader carve-out).
 """
 from __future__ import annotations
 
@@ -23,9 +23,7 @@ import torch
 from mantis.model import ARCH_KINDS, build_net
 from mantis.util.hashing import sha256_file
 
-#: THE ONE arch-kind vocabulary, imported (R330(e)). This module carried its own two-row copy,
-#: which is why `GnnNetV2` could be trained and checkpointed but never snapshotted for the eval
-#: child (AUDIT-1 F-16): a private table is a second authority that silently lags the first.
+#: THE ONE arch-kind vocabulary, imported: a private copy is a second authority that lags.
 _ARCH_TYPES: dict[str, type] = ARCH_KINDS
 
 
@@ -56,16 +54,8 @@ def write_model_snapshot(model: torch.nn.Module, path: str | Path) -> str:
         )
     base = getattr(model, "_orig_mod", model)
     state_dict = {key: value.detach().cpu() for key, value in base.state_dict().items()}
-    # EXACTLY the two keys `load_model_snapshot` reads. ADJ-WP12R-6's sibling defect
-    # (ADJ-WP12R-1) lived here: this dict also wrote "encoding" and "representation" via
-    # `getattr(..., None)`, and the loader read NEITHER — two written fields, zero
-    # consumers (LAW-08), recorded through the exact silent-fallback shape the red-team
-    # greps for (a model with no `.encoding` recorded `None` instead of failing). Deleted
-    # under the dead-weight law (R116) rather than wired: giving them a consumer means
-    # deciding what a loader does when the snapshot's encoding disagrees with the round's
-    # DECLARED one, and that is a design decision on the arm-8 seam, not a patch. The hole
-    # they might have covered is already closed upstream by ONE resolution of the declared
-    # encoding in `eval/worker.py` (the round's spec sizes board geometry AND the decode).
+    # EXACTLY the two keys `load_model_snapshot` reads; the encoding is resolved ONCE from the
+    # round's spec in `eval/worker.py`, never from the snapshot.
     payload = {
         "state_dict": state_dict,
         "arch": _arch_to_plain_dict(arch),

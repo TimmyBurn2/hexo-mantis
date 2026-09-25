@@ -5,7 +5,7 @@ from enum import StrEnum
 
 
 class EvalBrokenReason(StrEnum):
-    """WHY an eval round broke — the ONE authority (WP12-R Phase O, R152).
+    """WHY an eval round broke — the ONE authority.
 
     One member per censused failure route in `mantis.eval.pipeline`, with wire
     spellings BYTE-IDENTICAL to the bare literals this taxonomy replaces: the change is a
@@ -15,16 +15,16 @@ class EvalBrokenReason(StrEnum):
     `StrEnum` and not `Enum`: the value crosses a JSON round trip (the round-result mapping
     is consumed on the train side and serialized into the event stream), so a member that
     was not its own wire string would need a second member→string table — the duplicated
-    authority R1 exists to kill. Re-parsing an unregistered spelling
+    authority the config rule exists to kill. Re-parsing an unregistered spelling
     (`EvalBrokenReason(raw)`) RAISES `ValueError`, which is what makes a reason no member
-    spells loud at the process boundary instead of a silent clean exit (LAW-11's posture
-    applied to the taxonomy; `mantis.run.compose_run` is the consumer).
+    spells loud at the process boundary instead of a silent clean exit
+    (`mantis.run.compose_run` is the consumer).
 
     `phase` is deliberately NOT folded in: it is a FUNCTION of the reason, stays on the
     event payload, and the map is pinned by
     `tests/eval/test_eval_broken_reason_routes.py::test_the_reason_to_phase_map_is_fixed`.
     There is no member for a healthy drain either — the ABSENCE of a reason (`None`) is the
-    clean state, and a second value saying so would be the R79 shape this taxonomy deletes.
+    clean state, and a second value saying so would be a duplicate authority.
     """
 
     JOIN_TIMEOUT = "join_timeout"
@@ -44,8 +44,8 @@ class EvalDecodeUnsupportedError(RuntimeError):
 
     Raised once per round, at spec-resolution time, before any model is loaded — the
     alternative is reporting an eval result pooled differently from the encoding's own
-    declaration, which is a plausible-looking number nobody can attribute (LAW-11's shape:
-    the unimplemented case is an ERROR, never a silent approximation).
+    declaration, which is a plausible-looking number nobody can attribute: the unimplemented
+    case is an ERROR, never a silent approximation.
     """
 
 

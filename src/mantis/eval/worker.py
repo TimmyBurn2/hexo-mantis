@@ -1,6 +1,6 @@
 """mantis.eval.worker — CHILD-ONLY: `python -m mantis.eval.worker <spec.json> <result.json>`
 loads the snapshots, builds the nets on `spec.worker_device`, plays the floor probe, the gate
-block, any rung job the spec carries (a strix cell's, R352(e); a `RungUnresolvable` is RECORDED,
+block, any rung job the spec carries (a strix cell's; a `RungUnresolvable` is RECORDED,
 never fatal) and the random floor, and writes the sidecar result ATOMICALLY.
 
 >300 justify (R8): one entry point owning all four blocks, which share the candidate player,
@@ -97,7 +97,7 @@ class _RoundProgress:
     """Per-game progress, written by the CHILD as the round plays: PLAIN COUNTERS, LABELS AND
     TIMESTAMPS ONLY (no moves, positions or trajectory hash, so redaction holds by construction);
     `margin` is `None` when no adjudicator was armed or the cap not reached, never a measured `0`.
-    A write error is reported ONCE and disables further writes — diagnostic, not LAW-14's posture."""
+    A write error is reported ONCE and disables further writes — diagnostic, never run-fatal."""
 
     def __init__(self, path: str | Path) -> None:
         self._path = Path(path)
@@ -219,9 +219,8 @@ def _agg_record(game_record: Any) -> dict[str, Any]:
         "moves": [list(m) for m in game_record.moves],
         "regime_key": game_record.regime_key.canonical(),
         "trajectory_hash": game_record.trajectory_hash,
-        # The SEAT. `trajectory_hash` covers the MOVE LIST ALONE, so two legs of a colour pair
-        # with coinciding moves hash identically and LAW-04's dedupe collapsed them to ONE game
-        # — dropping a result whose outcome is typically the OPPOSITE of the leg it kept.
+        # The SEAT: `trajectory_hash` covers the MOVE LIST ALONE, so without it coinciding colour
+        # legs dedupe to ONE game, dropping a result typically OPPOSITE to the one kept.
         "candidate_color": game_record.colors["candidate"],
         # The PAIR the legs belong to: `candidate_color` keeps them DISTINCT for the dedupe,
         # this keeps them RELATED for a bootstrap that must resample openings, not games.
@@ -439,11 +438,9 @@ def _play_gate_block(
         if escalate:
             confirm_openings = round_openings(
                 spec.gate.opening_book, n_pairs=max(spec.gate.confirm_games // 2, 1),
-                # The offset stays on the SEED. On the ROUND INDEX it is not equivalent:
-                # screen and confirm draw windows of DIFFERENT widths from the SAME permutation,
-                # so an index offset collides on a schedule — MEASURED at run6's 40/64 widths,
-                # round 2's confirm drew ALL FORTY of the screen's openings. On its own
-                # permutation the worst overlap is 8 of 40 against ~5 expected by chance.
+                # The offset stays on the SEED: a ROUND-INDEX offset over the SAME permutation
+                # collides (MEASURED at run6's 40/64 widths: round 2's confirm drew ALL FORTY
+                # screen openings); on its own permutation the worst overlap is 8 of 40 vs ~5.
                 seed_base=spec.gate.seed_base + _CONFIRM_SEED_OFFSET,
                 round_index=spec.round_index,
             )
@@ -592,9 +589,8 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
     parent classifies them."""
     from mantis._engine import Board
 
-    # The eval child asserts the allocator posture FOR ITSELF, first statement: it is a SECOND
-    # allocator on the same card in its own process. A cuda worker_device with no token RAISES,
-    # so the seam's `None` default can fail an assertion but never excuse one.
+    # The child asserts the allocator posture FOR ITSELF, first, as a SECOND allocator on the
+    # card; a cuda worker_device with no token RAISES, so `None` can never excuse one.
     assert_posture_token(spec.allocator_posture, device_type=spec.worker_device)
     probe = make_probe(spec.worker_device, round_id=spec.round_id)
     progress = _RoundProgress(spec.progress_path)
@@ -651,7 +647,7 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
             adjudicator=adjudicator, progress=progress, games=games,
         )
         # The gate block's OWN wall, measured here rather than read off the device probe's
-        # phase marks, which carry no clock on a CPU child (R362(c): the split rides the stream).
+        # phase marks, which carry no clock on a CPU child (the split rides the stream).
         gate_wall_sec = round(time.monotonic() - gate_t0, 3)
         # The one phase putting a SECOND model and engine on the card, skipped WHOLE with no
         # anchor. Marked whichever branch it took.
@@ -733,9 +729,8 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
             device_memory=probe.payload(),
         )
     finally:
-        # The shard is closed and INDEXED on every exit path OUT OF THIS TRY: one left open by
-        # a broken round is indistinguishable from "no games played". A raise BEFORE the try
-        # leaves it unindexed, but `iter_run_games` scans shards rather than trusting the index.
+        # Closed and INDEXED on every exit OUT OF THIS TRY (an open shard reads "no games"); a
+        # raise BEFORE it leaves no index, but `iter_run_games` scans shards, not the index.
         games.close()
         candidate_engine.close()
 

@@ -304,14 +304,11 @@ class EvalPipeline:
         #: The graph collector's batching geometry. NOT defaulted: these two were LITERALS in
         #: the child's hand-made server dict, and a default would put them back.
         self._inference_batching = inference_batching
-        #: The eval leaf-graph build's WIDTH, derived ONCE in the parent. DEFAULTED TO 1
-        #: because 1 is the SERIAL path, the exact-parity control. A producer test over
-        #: `run.py`'s AST keeps it from silently disabling: a build that stopped being threaded
-        #: shows up as correct results with 95 % of the eval path back in a serial loop.
+        #: The eval leaf-graph build's WIDTH, derived ONCE in the parent; DEFAULTED TO 1, the SERIAL
+        #: exact-parity path, and a producer test over `run.py`'s AST keeps it from going silent.
         self._leaf_build_threads = max(1, int(leaf_build_threads))
-        #: The allocator REGIME the round's caps were fitted under. It carries a DEFAULT
-        #: because the safety is "a cuda child handed no token RAISES", which `None` can only
-        #: fail, never excuse. `None` is the not-cuda arm.
+        #: The allocator REGIME the round's caps were fitted under; `None` (the not-cuda arm) is a
+        #: safe default because a cuda child handed no token RAISES.
         self._allocator_posture = allocator_posture
         self._run_id = run_id
         self._spool_dir = Path(spool_dir)
@@ -319,18 +316,12 @@ class EvalPipeline:
         #: The run's game-record directory, THREADED from the composition root — deriving it
         #: from `spool_dir.parent` would be a second authority for a path `mantis.run` owns.
         self._game_record_dir = Path(game_record_dir)
-        # Sidecars live in a SIBLING directory: spool_dir holds ONLY snapshot (.pt) files, the
-        # LAW-12 one-loader carve-out a test pins by torch.load()ing everything there. SCOPED
-        # BY `run_id` because round ids are a per-run counter, so two runs sharing an out-dir
-        # wrote identical sidecar names; the schema constrains `run_id`, so a sanitizer here
-        # would be a second authority for it.
+        # Sidecars live in a SIBLING dir: spool_dir holds ONLY snapshot (.pt) files, which a test
+        # torch.load()s. Scoped by `run_id` since round ids are per-run and out-dirs may be shared.
         self._work_dir = self._spool_dir.parent / f"{self._spool_dir.name}.work" / self._run_id
         self._work_dir.mkdir(parents=True, exist_ok=True)
-        # The litter sweep, the ONLY handle the "the run itself was SIGKILLed" case has. Its
-        # precondition — no live writer at construction — is structural because the dir derives
-        # from `--out-dir` AND `run_id`; from the out-dir alone it was false exactly when two
-        # runs shared one. Only `.tmp` is in scope, and no age threshold, which would be an
-        # unmeasured constant against a race the precondition already excludes.
+        # The litter sweep, the ONLY handle on a SIGKILLed run; no live writer exists at
+        # construction because the dir derives from `--out-dir` AND `run_id`, so no age threshold.
         for pattern in ("*_result.json.tmp", "*_result.json.gate.partial.json"):
             for stale in self._work_dir.glob(pattern):
                 try:
@@ -472,8 +463,8 @@ class EvalPipeline:
             candidate_snapshot=str(candidate_path),
             best_snapshot=(str(best_path) if best_path is not None else None),
             best_step=None, encoding=self._encoding, worker_device=cfg.worker_device,
-            # No rung job since R362(c): the sealbot rung is deleted and strix cells are the
-            # frontier tool's (R352(e)); the round is the gate, the floor probe and the random floor.
+            # No rung job: strix cells are the frontier tool's, and the round is the gate, the
+            # floor probe and the random floor.
             gate=gate_spec, rung_jobs=[], random_floor_games=cfg.random_floor_games,
             random_model_sims=cfg.random_model_sims,
             seed_base=cfg.gate.seed_base, round_timeout_sec=cfg.round_timeout_sec,
@@ -490,8 +481,7 @@ class EvalPipeline:
             # Same seam and same reason: the deploy head must search at the width the net's
             # targets were generated at, and the child cannot read the config to find it.
             leaf_batch_size=self._leaf_batch_size,
-            # Same seam: the child's DENSE autocast had no `dtype=` and ran at torch's device
-            # default on the path LAW-15 reads the bar off; the ply cap was a module constant.
+            # Same seam: the child cannot read the config, and the ply cap was a module constant.
             max_plies=self._max_plies,
             # Same seam and same reason: two REQUIRED schema keys the deploy head was never
             # given, so it searched at its own signature defaults.
@@ -570,7 +560,7 @@ class EvalPipeline:
 
     def abandon_pending(self) -> dict | list | None:
         """A RESUMABLE stop's drain: terminate the in-flight round NOW (bounded by twice the kill
-        grace) and finalise it as ABANDONED (CARD-STOP-DRAIN-VS-GRACE)."""
+        grace) and finalise it as ABANDONED."""
         with self._lock:
             inflight = self._inflight
         if inflight is None:
@@ -589,11 +579,8 @@ class EvalPipeline:
     def _finalize_round(
         self, inflight: dict[str, Any], *, escalated_reason: EvalBrokenReason | None = None,
     ) -> dict[str, Any] | None:
-        # ONCE-ONLY. `_poll_loop` and the drain both read `self._inflight` before it is cleared
-        # at the END of this method, so both can finalise the SAME dict — appending twice,
-        # persisting twice, promoting off one round's games counted as two. The latch lives on
-        # the `inflight` dict because it must be per-ROUND: a `self`-level flag would need a
-        # reset between rounds, and a missed reset disables the guard forever.
+        # ONCE-ONLY: `_poll_loop` and the drain can both finalise the SAME dict (it is cleared at
+        # the END), promoting twice. The latch is per-ROUND on `inflight`, so it needs no reset.
         with self._lock:
             if inflight.get("_finalized"):
                 self._double_finalize_suppressed += 1
@@ -620,10 +607,8 @@ class EvalPipeline:
         wall_sec = max(self._clock() - inflight["t0"], 0.0)
         exit_code = getattr(proc, "exitcode", None)
 
-        # The whole round-completion decision runs under one catch-all: any uncaught exception
-        # becomes a delivered `eval_broken(round_completion_error)` instead of propagating out
-        # of the poller thread, where silent death stops the heartbeat and hangs the run to the
-        # watchdog staleness deadline.
+        # One catch-all: an uncaught exception becomes `eval_broken(round_completion_error)`
+        # rather than silently killing the poller thread, its heartbeat and so the run.
         try:
             if escalated_reason is not None:
                 # `phase` is a FUNCTION of the reason, so it stays on the payload: a constant
@@ -741,9 +726,8 @@ class EvalPipeline:
             eval_round_wall_sec=wall_sec, reason=None, detail=None,
             random_wr=random_raw.get("wr"), worker_pid=raw.get("worker_pid"),
             candidate_snapshot_path=inflight.get("candidate_snapshot_path"),
-            # The floor's verdict reaches the LAW-15 gate ONLY through this mapping.
-            # `_emit_posture_events` reads the same `raw` key; neither is the other's source,
-            # so a floor payload that stops arriving silences both rather than staling one.
+            # The floor's verdict reaches the gate ONLY through this mapping; `_emit_posture_events`
+            # reads the same `raw` key, so a missing payload silences both rather than staling one.
             strength_floor=raw.get("strength_floor"),
         )
         emit_round_complete(

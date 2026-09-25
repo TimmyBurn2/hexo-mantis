@@ -1,7 +1,5 @@
-# Exceeds the 300-line soft cap (R8): the round contract and its rehydration are ONE unit — the
-# fields carried across the eval process seam, the table saying which must be rebuilt as a
-# dataclass on the far side, and the result-shape validation the child answers with. A field
-# split from its rehydration row arrives as a raw mapping and fails at the first attribute read.
+# Exceeds the 300-line soft cap (R8): the round contract, its far-side rehydration table and the
+# result-shape validation are ONE unit; a field split from its rehydration row arrives raw.
 """RoundSpec (PATHS AND PRIMITIVES ONLY: no live model crosses the process seam) and
 `build_round_result`, the coordinator-facing round-result mapping."""
 from __future__ import annotations
@@ -35,10 +33,8 @@ __all__ = [
     "validate_worker_result",
 ]
 
-#: The gate mapping's rule fields that ride `eval_round_complete.gate` (R362(c), CARD-EVAL-GATE-
-#: FIELDS-IN-STREAM): how the round's gate stopped, what it read, and what it cost — until this
-#: row they lived only in the child's `result.json`, so a stream reader could not see how a
-#: round stopped without the spool. Names are the child's own; `wall_sec` is the gate block's.
+#: The gate's rule fields riding `eval_round_complete.gate` (CARD-EVAL-GATE-FIELDS-IN-STREAM): how
+#: it stopped, read and cost; names are the child's own, and `wall_sec` is the gate block's.
 GATE_STREAM_FIELDS: tuple[str, ...] = (
     "rule", "pairs_played", "stopped", "llr", "wr_confirm", "n_pooled", "promoted", "wall_sec",
 )
@@ -47,7 +43,7 @@ GATE_STREAM_FIELDS: tuple[str, ...] = (
 def gate_stream_fields(gate: Mapping[str, Any] | None) -> dict[str, Any] | None:
     """The `eval_round_complete.gate` projection of a gate mapping; `None` when no gate ran.
 
-    Every field is read with `.get`, never a subscript: the A-3 partial sidecar and a pre-R362
+    Every field is read with `.get`, never a subscript: the A-3 partial sidecar and an older
     result mapping may lack one, and an absent field must read as `None`, never kill the poller.
     """
     if gate is None:
@@ -76,9 +72,8 @@ class GameRecordTarget:
     run_id: str
 
 
-#: The resolver-produced specs `from_dict` must REHYDRATE, as DATA rather than transcribed
-#: statements: a field added to `RoundSpec` and forgotten here arrives in the child as a raw
-#: mapping and fails at its first attribute read, in a subprocess whose stderr nobody reads.
+#: The resolver-produced specs `from_dict` must REHYDRATE; a `RoundSpec` field forgotten here
+#: arrives in the child raw and fails at its first attribute read, in an unread stderr.
 _REHYDRATED_SPEC_FIELDS: tuple[tuple[str, Any], ...] = (
     ("ply_cap_adjudication", PlyCapAdjudicationSpec),
     ("strength_floor", StrengthFloorSpec),
@@ -90,9 +85,9 @@ _REHYDRATED_SPEC_FIELDS: tuple[tuple[str, Any], ...] = (
 
 @dataclass(frozen=True)
 class RungJob:
-    """One external-opponent block the child plays beside the gate. Since R362(c) no production
-    round carries one (the sealbot rung is deleted); the strix cells compose theirs in
-    `tools/strength_frontier.py` (R352(e)), so the block's pair-bootstrap terms ride the job."""
+    """One external-opponent block the child plays beside the gate. No production round
+    carries one; the strix cells compose theirs in `tools/strength_frontier.py`, so the
+    block's pair-bootstrap terms ride the job."""
 
     name: str
     bot: str
@@ -129,9 +124,8 @@ class RoundSpec:
     """PATHS AND PRIMITIVES ONLY — a torch module is not representable here."""
 
     round_id: str
-    #: The round's ordinal within the run, monotone and resume-restored; it is what makes each
-    #: round's opening subset non-overlapping with the last. Parsing it back out of `round_id`
-    #: would be transcription — the id's format is a display decision, not a data contract.
+    #: The round's ordinal, monotone and resume-restored, keeping each round's openings off the
+    #: last's; never parsed from `round_id`, whose format is display, not contract.
     round_index: int
     step: int
     candidate_snapshot: str
@@ -140,7 +134,7 @@ class RoundSpec:
     encoding: str
     worker_device: str
     gate: GateSpec
-    #: `[]` on every production round since R362(c); a strix cell carries exactly one.
+    #: `[]` on every production round; a strix cell carries exactly one.
     rung_jobs: list[RungJob]
     random_floor_games: int
     random_model_sims: int
@@ -155,9 +149,8 @@ class RoundSpec:
     #: dataclasses that round-trip without a schema import. `None` is the ARMED=NO posture.
     ply_cap_adjudication: PlyCapAdjudicationSpec | None
     strength_floor: StrengthFloorSpec | None
-    #: The graph inference forward's memory bound: the eval worker is a SECOND allocator on the
-    #: same card that no in-process bound can see, and its engine builds a server from a
-    #: hand-made dict with no `RunConfig`. `None` must round-trip as `None`.
+    #: The graph forward's memory bound for the worker, a SECOND allocator on the card whose
+    #: server is built with no `RunConfig`. `None` must round-trip as `None`.
     fused_graph_caps: FusedGraphCapsSpec | None
     #: The EVAL leaf-graph build's width, derived in the parent because the child has no
     #: `RunConfig`. `1` is the serial path and the exact-parity control.
@@ -165,31 +158,27 @@ class RoundSpec:
     #: The deploy head's MCTS leaf-batch width, so the eval child searches under the SAME regime
     #: the net's targets came from. NOT defaulted: a default silently restores the k=1 mismatch.
     leaf_batch_size: int
-    #: The run's `eval.max_plies` (its own row since 2026-09-15; before that a copy of
-    #: `selfplay.max_game_moves`, and before AUDIT-1 F-15 a hardcoded 128).
+    #: The run's `eval.max_plies`, its own row since 2026-09-15.
     max_plies: int
     #: The deploy head's completed-Q sigma terms — REQUIRED schema keys the eval head never
     #: received, so the deploy-matched bar searched at a regime nobody minted.
     c_visit: float
     c_scale: float
     q_rescale: bool
-    #: The run's `deploy.search.kind` and `selfplay.gumbel_m`. The deploy head used to run a regime in
-    #: NO config at all — a PUCT tree with a Gumbel-scored root pick — so the kind is resolved by
-    #: the SAME authority `SelfPlayHParams.from_config` reads. NOT defaulted.
+    #: The run's `deploy.search.kind` and `selfplay.gumbel_m`, resolved by the SAME authority
+    #: `SelfPlayHParams.from_config` reads. NOT defaulted.
     search_kind: str
     gumbel_m: int
-    #: The graph collector's batching geometry, resolved in the parent. These two knobs were
-    #: LITERALS in the child's hand-made server dict, and a literal wrong for the route cost 33%
-    #: of the eval path's ms/sim in the collector's own deadline.
+    #: The graph collector's batching geometry, resolved in the parent: a wrong child literal
+    #: cost 33% of the eval path's ms/sim in the collector's own deadline.
     inference_batching: InferenceBatchingSpec | None
-    #: The allocator REGIME the caps were fitted under, as the config's minted token: a posture
-    #: is a property of the PROCESS's environment, so the parent's assertion says nothing about
-    #: the child's. Its default is safe because the consumer REQUIRES a token under cuda.
     #: The gate-block concurrency. NOT defaulted: a spec silently carrying `1` while the config
     #: minted `4` is the silently-disabled-knob class.
     concurrency: int
-    #: A rung job's games in flight — the cell's own `concurrency` (no config row since R362(c)).
+    #: A rung job's games in flight — the cell's own `concurrency` (no config row).
     rung_concurrency: int
+    #: The minted allocator REGIME, asserted by the child for its own process; `None` is safe
+    #: because a cuda consumer REQUIRES a token.
     allocator_posture: str | None = None
     #: The candidate's sims against a strix rung (RUNG-2): `None` on every production round, set
     #: by the frontier tool's strix cells; a strix job without it is refused by name.
@@ -318,9 +307,8 @@ def build_round_result(
         result["worker_pid"] = worker_pid
     if candidate_snapshot_path is not None:
         result["candidate_snapshot_path"] = candidate_snapshot_path
-    # PRESENCE is the arming evidence, as on the worker payload this copies from: a disarmed
-    # round produces no key, and a key written unconditionally as `None` would report "armed, and
-    # it passed nothing".
+    # PRESENCE is the arming evidence: a disarmed round writes no key, since `None` would read
+    # "armed, and it passed nothing".
     if strength_floor is not None:
         result["strength_floor"] = dict(strength_floor)
     return result
