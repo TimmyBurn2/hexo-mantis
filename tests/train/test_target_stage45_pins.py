@@ -54,8 +54,8 @@ class _RecordingTrainer:
         return {"policy_loss": 0.0}
 
 
-#: The largest per-graph edge count this fixture can produce, MEASURED over 40 draws (3142 and
-#: 3316): setting `max_edges` to the LARGER forces `len(parts) >= 2` on a `batch_size=3` drive without any single graph over-capping alone.
+#: Larger of the fixture's per-graph edge counts (3142, 3316; MEASURED, 40 draws): one graph fits,
+#: any two over-cap, so batch_size=3 splits; `max_nodes` past the batch makes the split edge-driven.
 _S4_MAX_PER_GRAPH_EDGES = 3316
 _S4_CAPS = MicrobatchCapsSpec(max_edges=_S4_MAX_PER_GRAPH_EDGES, max_nodes=1_000_000)
 
@@ -80,8 +80,8 @@ def test_dispatch_forwards_policy_target_value_intact() -> None:
                             caps_provider=lambda: _S4_CAPS, sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0)
     assert len(rec.calls) == 1 and len(sampled) == 1
-    # After the micro-batch split the trainer receives a PARTITION, not a `policy_target` kwarg:
-    # the assertions below pin dtype per part and value ORDER across micro-batch boundaries.
+    # The trainer receives a PARTITION, not a `policy_target` kwarg: dtype per part and value ORDER
+    # across micro-batch boundaries, a claim `len(parts) >= 2` keeps from being vacuous.
     parts = [make() for make in rec.calls[0]["parts"]]
     assert len(parts) >= 2, (
         f"the caps did not bind — {len(parts)} micro-batch(es) from a batch_size=3 drive. "

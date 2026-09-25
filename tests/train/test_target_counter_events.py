@@ -43,8 +43,8 @@ from mantis.train.events import emit_iteration_complete_event, emit_training_ste
 from mantis.train.lifecycle.signals import ShutdownState
 
 
-#: The counters carried in the `target_integrity` block plus the denominator the rate is taken
-#: over, transcribed rather than derived so the oracle cannot be satisfied by a renaming.
+#: The `target_integrity` counters plus the rate's denominator, transcribed so no renaming satisfies
+#: the oracle; the crosswire proof below needs all three counters live.
 _COUNTERS = ("export_offwindow_mass_moves", "target_integrity_defects",
              "inference_failures_total")
 _DENOMINATOR = "positions_delta"

@@ -284,7 +284,7 @@ def test_guard_state_round_trips_through_json_and_tolerates_an_empty_one() -> No
     assert other.coord._consec_high_gn == 2 and other.coord._initial_policy_loss == 2.5
     assert other.trainer.skipped_steps == 4
     other.coord.restore_guard_state({})  # a pre-field sidecar: nothing to restore, nothing raised
-    # A pre-existing sidecar's sealbot ring is ignored, not refused.
+    # A sealbot ring in a sidecar from before the sealbot rung's removal is ignored, not refused.
     other.coord.restore_guard_state({"wr_history": [[3000, 0.4]], "wr_history_rung": "sealbot_d5"})
     assert not hasattr(other.coord, "_wr_history")
 
