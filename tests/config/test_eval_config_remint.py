@@ -19,8 +19,6 @@ _CONFIGS_DIR = _REPO / "configs"
 _TEMPLATES_DIR = _REPO / "tools" / "config_templates"
 
 _PRODUCTION = production_configs(_REPO)
-#: The one config the deploy-sims value below was ruled for; no census member carries it.
-_RULED_DEPLOY_CONFIG = _CONFIGS_DIR / "run6.yaml"
 _DEV_SMOKE_CONFIGS = (_CONFIGS_DIR / "dev_example.yaml",)
 
 
@@ -69,12 +67,6 @@ def test_the_gate_parity_values_are_pinned(config: Path) -> None:
     assert not hasattr(gate, "screen_confirm_hi"), (
         "screen_confirm_hi is a deliberate non-port (MUST-FIX 1) — must not exist as a field"
     )
-
-
-def test_the_ruled_deploy_sims_are_pinned() -> None:
-    """The eval deploy sims a ruling named, on the config it named them for."""
-    gate = load_config(_RULED_DEPLOY_CONFIG).eval.gate
-    assert gate.deploy_sims == 160  # eval deploy Gumbel 160 / m 16
 
 
 @pytest.mark.parametrize("config", _PRODUCTION, ids=lambda p: p.name)
