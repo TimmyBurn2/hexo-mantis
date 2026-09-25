@@ -498,7 +498,7 @@ scale on the box. Records: `docs/design/measurements/MEASUREMENT_OC7_2026-09-11.
 Four traps, each of which has already misled a reader:
 
 1. **`F-<number>` is five namespaces, not one.** The graves in `docs/governance/falsified.md`
-   (`F-01`..`F-52` at this writing; derive the last row from the file) · AUDIT-1's 52 findings · the session ledger's · a perf-ledger `F-10`
+   (derive the last row from the file, never transcribe it) · AUDIT-1's 52 findings · the session ledger's · a perf-ledger `F-10`
    corrected by R320 · R246's cross-language-parity `F-01`/`F-02`. **Three distinct `F-10`s
    exist.** Unpadded `F-1`..`F-6` are ADJ-13 / RED-TEAM findings closed as a class by R71/R72 and
    never mean `F-01`..`F-06`. Every `F-NN` here names its register. Graves are never cards.
@@ -604,7 +604,7 @@ nulls, two promotions. run6 minted `eval.concurrency = 8`. R343(a).
 | CARD-PROTOCOL-COMPLETE | complete protocol declarations, widen the AST conformance gate, LAW-16 sink/watchdog row | OPEN, pre-cutover, NOT mint-blocking |
 | CARD-DENSE-EVAL-ADAPTER | wire `infer_batch_per_cluster` into the deploy-head decode | OPEN — pre-Stage-0 BLOCKING, not mint-blocking |
 | CARD-LINT-TYPE | ruff/pyright advisory type-debt backlog | OPEN debt row, deliberately kept out of the gate by R98 |
-| CARD-PYRIGHT-STRICT | pyright strict-mode adoption as a post-cutover ratchet | OPEN; live marker at `pyproject.toml:92` |
+| CARD-PYRIGHT-STRICT | pyright strict-mode adoption as a post-cutover ratchet | OPEN; live marker in pyproject.toml's `[tool.pyright]` comment block |
 | CARD-TORCH-INDEX | conditional torch index / uv extra for the CPU-wheel parity regime | OPEN, post-mint |
 | CARD-EVAL-CORESIDENCY | characterize eval-child steady VRAM for the co-residency prereg row | OPEN. The founding 8.21 GiB figure was superseded by R229(1) (unbounded, to 13.5 GiB) without naming the card |
 | CARD-A10-CAP | whether an entropy term enters the graph loop at all | RECORDED, explicitly NOT executed. R335(b) makes entropy normalization a PRECONDITION on ever arming one |
