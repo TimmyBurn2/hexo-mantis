@@ -115,7 +115,7 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   `.wt/w6-configs` found with a pytest absent-configs check still running (run6-8 deleted uncommitted);
   waiting for it to go quiet before integrating 60cabe25..2aa476f4.
 - configs A LANDED 16e1a912..1a651436 (8 commits, **opus**; implementer SHAs 60cabe25..2aa476f4): src/tools prose
-  generic (armed_aborts owner text, pipeline comment, select_balanced_book, strength_frontier, probe1 `--run-id`
+  generic (armed_aborts owner text, later REVERTED by e57e52d9; pipeline comment, select_balanced_book, strength_frontier, probe1 `--run-id`
   required); tests/config, eval, train, selfplay, run, arena, encoding readers onto the census (sweeps on
   `discovered_config_paths`, production-only laws on `production_configs`); run-named symbols renamed
   (RUN5/_RUN5/_PRODUCTION, test_run3_parity_values_pinned -> test_the_gate_parity_values_are_pinned, the PZ-1
