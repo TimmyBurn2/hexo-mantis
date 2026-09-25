@@ -62,6 +62,17 @@ Both were found by running the gate set rather than by reading it, and both are 
 - **CARD-SEAM-2 — HELD (R368(j)): the seam for a kind that brings its own head, objective and config rows.**
   L-SEAM-01..04 fold into it; the design packet follows the SLIM-FIX phase; the implementation merges only
   after run10 STARTs.
+- **CARD-W5-RESIDUE — CARDED: small residues the W5 leg found and did not fix, each its own class.**
+  The graph drain goldens have no committed generator (the capture script was a scratch file; kept, it
+  should be a `tools/` generator). `ResolvedPoolEncoding.board_size`/`trunk_size`/`n_kept_planes`
+  (`src/mantis/selfplay/hparams.py`) have no `src/` reader but are golden-pinned. A supervisor
+  poll-sleep plant hangs `tests/monitor/test_supervisor.py` instead of redding it. `tests/_determinism.py`'s
+  context has no CPU witness. `disk_guard.keep_all`'s tombstone (`src/mantis/train/lifecycle/disk_guard.py`)
+  could become a "deliberately absent" CLAUDE.md row; `RegimeKey`'s (`src/mantis/arena/regime.py`) `==` leg
+  is not re-asserted. `test_coordinator_knobs_wiring.py::_real_graph_ring` duplicates
+  `tests/train/_graph_drive.py::filled_hexg`. L-STYLE-04 (subprocess `text=True` without `encoding=`, needs
+  a gate-16 widening ruling before it can be fixed). L-STYLE-10 (function-scope imports, fixed on contact,
+  no tracking needed).
 
 ## Opened by R367 (DESIGN STANDARD + REVIEW GATE; SIZE CONDITIONAL WITHDRAWN; PRICE LAW; 2026-09-21)
 
@@ -82,14 +93,20 @@ Both were found by running the gate set rather than by reading it, and both are 
   synthetic `"run9"` run ids; `crates/mantis-selfplay/tests/dirichlet_inert_on_gumbel.rs`'s run9 message;
   `tests/config/test_every_key_has_consumer.py`'s at_max_pairs note; the file-sha256 copies beside the one
   `sha256_file` (DONE, R368 W3: every src/ and tools/ file hash reads `mantis.util.hashing.sha256_file`, kept
-  apart only `tools/audit_bootstrap_corpus.py` (mantis-free by design) and `tools/ci_gates/preflight_mint_parent.py::_sha256`
-  (gate code, protected));
+  apart only `tools/audit_bootstrap_corpus.py` (mantis-free by design), `tools/ci_gates/preflight_mint_parent.py::_sha256`
+  (gate code, protected) and `src/mantis/diagnostics/worker_sweep.py::_sha256` (OPEN — a thin wrapper that
+  already delegates to `sha256_file`, so the fold is a call-site rename, not a re-implementation));
   the 21 remaining private `_Pool`/`_Buffer` fakes of the composition tests (the trainer stub is one since
   F2; the pool stub is one for the coordinator tests only) (DONE, R368 W5: the root composition, train
   wiring and config wiring pools are `tests/_drivable.py::DrivablePoolStub`, their buffers
   `tests/train/_graph_drive.py::GraphSampleBuffer` or `_drivable.BufferStub`; OPEN: the draw-rate
-  files' pools (PZ-1) and those of augment_sym_counter, quiescence_fires_producer and rates_are_measured); the nine full-config literal dicts whose
-  `model` line the fix leg left (each is a complete config a schema test owns); REVIEW-1's F5.6 (the
+  files' pools (PZ-1) and those of augment_sym_counter, quiescence_fires_producer and rates_are_measured);
+  the nine full-config literal dicts whose `model` line the fix leg left (each is a complete config a
+  schema test owns); the eight remaining bare `class _Trainer:` fakes NOT on the shared
+  `tests/_drivable.py::DrivableTrainerStub` (W5 folded most; re-grepped OPEN: test_abort_exit_signal.py,
+  test_anchor_wiring.py, test_bc_graph_reroute.py, test_clean_stop_save.py, test_cluster_stat_wiring.py,
+  test_gate_interval_decoupling.py, test_ply_cap_gate.py, test_policy_loss_trough_gate.py, all under
+  `tests/train/`); REVIEW-1's F5.6 (the
   frozen held-out slice's buffer allocated at the training ring's capacity rather than the file's own
   rows; the fix is a header-reading constructor in the Rust bridge). Applied ON
   CONTACT (R316(e)'s rule for comments, extended by R367(a)) — a leg that touches one of these files fixes
