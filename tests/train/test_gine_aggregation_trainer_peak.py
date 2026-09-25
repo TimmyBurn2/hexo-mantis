@@ -1,4 +1,4 @@
-"""The production aggregation costs the trainer no more peak memory than the pre-L2 `index_add_` path, at the minted caps."""
+"""The fused aggregation costs the trainer no more peak memory than the bf16 `index_add_` path it replaced, at the minted caps."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,7 +7,7 @@ import pytest
 import torch
 
 import _microbatch_harness as H
-from _gine_oracle import index_add_aggregation
+from _gine_oracle import aggregating_with, exact_sum, index_add_aggregation
 from mantis.config.census import production_configs
 from mantis.config.loader import load_config
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
@@ -16,7 +16,7 @@ from mantis.train.coordinator.dispatch import run_declared_train_step
 from mantis.train.trainer.core import Trainer, TrainHParams
 
 _MINTED = production_configs(Path(__file__).resolve().parents[2])[0]
-#: An fp32 [E, H] temporary at the 4.5 M-edge cap needs ~14 GiB, so a smaller card cannot tell the paths apart.
+#: One training step just under the minted caps peaks near 9 GiB, so a smaller card cannot run it.
 _MIN_DEVICE_GIB = 12
 
 
@@ -29,7 +29,7 @@ def _big_enough() -> bool:
 @pytest.mark.skipif(not _big_enough(),
                     reason=f"LOUD SKIP — the cap-regime step needs a CUDA card of >= {_MIN_DEVICE_GIB} GiB")
 def test_iii_the_trainer_peak_at_the_caps_does_not_rise(tmp_path: Path) -> None:
-    """Real steps just under both minted caps, the two paths alternated in one process: max(production) <= max(pre-L2)."""
+    """Real steps just under both minted caps, after a discarded warm-up, the two paths alternated: max(fused) <= max(old)."""
     config = load_config(_MINTED).model_dump()
     caps = resolve_microbatch_caps(config)
     probe = H.uniform_graph_buffer(8)
@@ -55,6 +55,7 @@ def test_iii_the_trainer_peak_at_the_caps_does_not_rise(tmp_path: Path) -> None:
         torch.cuda.empty_cache()
         return got
 
+    peak("warm-up")  # one-time cuBLAS and allocator growth would otherwise land on whichever path runs first
     # Alternated, because the allocator's state alone moves one path's peak by ~18 MiB between runs.
     old, new = [], []
     for i in range(2):
@@ -62,5 +63,13 @@ def test_iii_the_trainer_peak_at_the_caps_does_not_rise(tmp_path: Path) -> None:
             old.append(peak(f"index_add{i}"))
         new.append(peak(f"production{i}"))
     gib = [f"{x / 1024 ** 3:.3f}" for x in old + new]
-    print(f"L2 (iii): peak delta index_add_ {gib[:2]} GiB, production {gib[2:]} GiB")
-    assert max(new) <= max(old), f"the production aggregation raised the trainer peak: {new} > {old} bytes"
+    print(f"(iii): peak delta bf16 index_add_ {gib[:2]} GiB, fused {gib[2:]} GiB")
+    assert max(new) <= max(old), f"the fused aggregation raised the trainer peak: {new} > {old} bytes"
+    # PLANTED BREAK: an fp32 [E, H] message copy per layer must read as a rise, or the instrument is blind.
+    try:
+        with aggregating_with(exact_sum):
+            planted = peak("planted")
+    except torch.cuda.OutOfMemoryError:
+        planted = torch.cuda.get_device_properties(0).total_memory
+    print(f"(iii) control: fp32 [E, H] copy peak {planted / 1024 ** 3:.3f} GiB")
+    assert planted > max(old), "the planted fp32 message copy did not raise the peak: (iii) cannot see a rise"

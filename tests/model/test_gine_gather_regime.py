@@ -20,11 +20,10 @@ from torch.overrides import TorchFunctionMode
 
 from mantis.model.gine import RepresentationNetwork, _GINEConv
 
-# The ops whose RECEIVER dtype is the allocation fact; `to` shows the no-op where it happens.
-# RE-PINNED: the gather and the aggregation are the `mantis::gine_gather` / `gine_aggregate` ops.
-_GATHER = "gine_gather.default"
-_AGGREGATE = "gine_aggregate.default"
-_WATCHED = (_GATHER, _AGGREGATE, "new_zeros", "to")
+# RE-PINNED: gather, message and sum are ONE op, `mantis::gine_message_sum(xs, e, ...)`, receiver = the gathered
+# tensor, second argument = the edge tensor it is added to; `to` shows the no-op where it happens.
+_GATHER = _AGGREGATE = "gine_message_sum.default"
+_WATCHED = (_GATHER, "new_zeros", "to")
 
 _HIDDEN = 8
 _N_NODES = 10
@@ -37,6 +36,7 @@ class _Event:
     name: str
     receiver: Tensor
     returned_receiver: bool
+    args: tuple = ()
 
 
 class _OpRecorder(TorchFunctionMode):
@@ -52,7 +52,7 @@ class _OpRecorder(TorchFunctionMode):
         name = getattr(func, "__name__", "")
         if name in _WATCHED and args and isinstance(args[0], Tensor):
             self.events.append(
-                _Event(name=name, receiver=args[0], returned_receiver=result is args[0])
+                _Event(name=name, receiver=args[0], returned_receiver=result is args[0], args=tuple(args))
             )
         return result
 
@@ -114,6 +114,9 @@ def test_gather_receiver_and_agg_are_bf16_under_bf16_autocast() -> None:
         f"{gather.receiver.dtype}; the messages must be built from the SAME tensor "
         "the gather reads (MA-4)"
     )
+    assert scatter.args[1].dtype is gather.receiver.dtype, (
+        f"edge tensor dtype {scatter.args[1].dtype} != gathered dtype {gather.receiver.dtype}: the message add "
+        "would promote the [E, H] tensor")
     assert out.dtype is torch.bfloat16, f"conv output dtype {out.dtype} under bf16 autocast"
 
 

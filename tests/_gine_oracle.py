@@ -1,4 +1,4 @@
-"""The pre-L2 GINE aggregation (bf16 `index_add_`) and the exact controls, kept ONLY for L2's witnesses."""
+"""The bf16 `index_add_` GINE aggregation the fused op replaced, and the exact controls, kept ONLY as test oracles."""
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
@@ -16,7 +16,7 @@ SumFn = Callable[[Tensor, Tensor, int, "Tensor | None"], Tensor]
 def forward_with(sum_fn: SumFn) -> Callable[..., Tensor]:
     """`_GINEConv.forward` with its message, gather and update as at fc37f3f2 and the aggregation swapped for `sum_fn`."""
     def forward(self: _GINEConv, x: Tensor, edge_index: Tensor, edge_attr: Tensor,
-                agg_divisor: Tensor | None = None) -> Tensor:
+                agg_divisor: Tensor | None = None, rowptr: Tensor | None = None) -> Tensor:
         n = x.shape[0]
         if edge_index.shape[1] == 0:
             agg = x.new_zeros((n, x.shape[1]))
@@ -29,7 +29,7 @@ def forward_with(sum_fn: SumFn) -> Callable[..., Tensor]:
 
 
 def index_add_sum(msg: Tensor, dst: Tensor, n: int, divisor: Tensor | None) -> Tensor:
-    """The pre-L2 aggregation alone: a `msg`-dtype `index_add_`, divided in that dtype."""
+    """The bf16 `index_add_` aggregation alone: a `msg`-dtype `index_add_`, divided in that dtype."""
     agg = msg.new_zeros((n, msg.shape[1])).index_add_(0, dst, msg)
     return agg if divisor is None else agg / divisor.to(agg.dtype)
 
@@ -47,27 +47,41 @@ def fp64_sum(msg: Tensor, dst: Tensor, n: int, divisor: Tensor | None) -> Tensor
 
 
 @contextmanager
-def aggregating_with(sum_fn: SumFn) -> Iterator[None]:
-    """Every `_GINEConv` in the process aggregates through `sum_fn` inside the block."""
+def _patched(forward: Callable[..., Tensor]) -> Iterator[None]:
     current = _GINEConv.forward
-    _GINEConv.forward = forward_with(sum_fn)  # type: ignore[method-assign]
+    _GINEConv.forward = forward  # type: ignore[method-assign]
     try:
         yield
     finally:
         _GINEConv.forward = current  # type: ignore[method-assign]
 
 
+def aggregating_with(sum_fn: SumFn) -> AbstractContextManager[None]:
+    """Every `_GINEConv` in the process aggregates through `sum_fn` inside the block."""
+    return _patched(forward_with(sum_fn))
+
+
 def index_add_aggregation() -> AbstractContextManager[None]:
-    """Every `_GINEConv` aggregates the pre-L2 way inside the block."""
+    """Every `_GINEConv` aggregates the bf16 `index_add_` way inside the block."""
     return aggregating_with(index_add_sum)
 
 
-def capturing(into: list[tuple[Tensor, Tensor, int, Tensor | None]]) -> AbstractContextManager[None]:
-    """The pre-L2 aggregation, appending each layer's real `(msg, dst, n, divisor)` to `into` on the host."""
-    def record(msg: Tensor, dst: Tensor, n: int, divisor: Tensor | None) -> Tensor:
-        into.append((msg.detach().cpu(), dst.cpu(), n, None if divisor is None else divisor.detach().cpu()))
-        return index_add_sum(msg, dst, n, divisor)
-    return aggregating_with(record)
+def capturing(into: list[tuple[Tensor, Tensor, Tensor, Tensor, int, Tensor | None]]) -> AbstractContextManager[None]:
+    """The bf16 `index_add_` aggregation, appending each layer's real `(xs, e, src, dst, n, divisor)` to `into` on the host."""
+    def forward(self: _GINEConv, x: Tensor, edge_index: Tensor, edge_attr: Tensor,
+                agg_divisor: Tensor | None = None, rowptr: Tensor | None = None) -> Tensor:
+        if edge_index.shape[1] > 0:
+            e = self.lin(edge_attr)
+            into.append((x.to(e.dtype).detach().cpu(), e.detach().cpu(), edge_index[0].cpu(), edge_index[1].cpu(),
+                         x.shape[0], None if agg_divisor is None else agg_divisor.detach().cpu()))
+        return forward_with(index_add_sum)(self, x, edge_index, edge_attr, agg_divisor)
+
+    return _patched(forward)
+
+
+def message(xs: Tensor, e: Tensor, src: Tensor) -> Tensor:
+    """The per-edge message every aggregation sums: `relu(xs[src] + e)` in the inputs' dtype."""
+    return (xs.index_select(0, src) + e).relu()
 
 
 def synthetic_batch(device: str, *, n_graphs: int = 64, nodes: int = 780, degree: int = 16,

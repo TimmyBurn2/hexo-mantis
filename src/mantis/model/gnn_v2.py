@@ -16,7 +16,7 @@ import torch
 from torch import Tensor
 
 from mantis.model.arch import GnnArchV2, GnnArchV2SoftPolicy
-from mantis.model.gine import PolicyHead, RepresentationNetwork
+from mantis.model.gine import PolicyHead, RepresentationNetwork, csr_edges
 from mantis.model.gnn import GnnNet, _node_offsets_to_batch_vec, segment_mean_with_fallback
 
 __all__ = ["GnnNetV2", "GnnNetV2SoftPolicy", "RepresentationNetworkV2", "segment_max_with_fallback"]
@@ -82,13 +82,14 @@ class RepresentationNetworkV2(RepresentationNetwork):
                 normalize_mask, in_degree.clamp(min=1.0), torch.ones_like(in_degree)
             ).unsqueeze(-1)
 
+        edge_index, edge_attr, rowptr = csr_edges(edge_index, edge_attr, x.shape[0])
         x = self.input_proj(x)
         projected_edge_attr = self.edge_proj(edge_attr)
         hs: list[Tensor] = []
         for conv, norm in zip(self.convs, self.norms, strict=False):
             residual = x
             xn = norm(x)
-            xc = conv(xn, edge_index, projected_edge_attr, divisor)
+            xc = conv(xn, edge_index, projected_edge_attr, divisor, rowptr)
             x = xc + residual
             x = self.activation(x)
             hs.append(x)
