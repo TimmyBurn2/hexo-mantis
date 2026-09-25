@@ -64,8 +64,8 @@ before the bench):
 | L0 instrument (parent of L1) | 0 (tools and tests only) | — | `c9474c85` | 1 853 [1 768, 1 869]; repeat DIFFERS, max \|Δvalue\| 0.0657, \|Δp\| 0.0153 | — |
 | L1 `index_fill_` mask | +8 … +15 % (item 3: +12 %) | median < 0.97 × parent, or slower beyond the IQR | `a25183cd` | 2 101 [1 994, 2 106]; `launch` 31.4 → 8.9 ms; repeat DIFFERS 0.0671 / 0.0148 | **+13.4 %**, faster beyond the IQR |
 | L2 fp32 sorted aggregation (custom op) | +30 … +65 % over L1 (item 3 idxput + nosync: +87 % over base, but fp32 values and chunking cost more) | median < 0.97 × L1, or slower beyond the IQR | `6efa0c2e` | 1 934 [1 907, 2 003]; `launch` 8.9 → 11.4 ms, `gpu_wait` 25.3 → 26.6 ms; repeat: value EXACT, prob 1.2e-7 (the fp32 `segment_sum` of the served softmax) | **−7.9 %: PAST THE ABORT LINE (2 038) — HALT** |
-| B3 fixed-order readout sums (`segment_reduce`, fp32) | +2 … +8 % over L2 (the pools and served softmax sum ~2× faster than their atomics) | median < 0.97 × L2 (1 876), or slower beyond the IQR | | | |
-| L2′ fused CSR aggregation (B1) | +62 … +110 % over L1 (think agent INF from the box forward times) | median < 0.97 × L1 (2 038), or slower beyond the IQR; below +40 % (2 941) stop and profile | | | |
+| B3 fixed-order readout sums (`segment_reduce`, fp32) | +2 … +8 % over L2 (the pools and served softmax sum ~2× faster than their atomics) | median < 0.97 × L2 (1 876), or slower beyond the IQR | `d5605bf2` | 1 949 [1 902, 2 027]; repeat **EXACT** (value and prob) | +0.7 % (noise; below the expected band, above abort) |
+| L2′ fused CSR aggregation (B1) | +62 … +110 % over L1 (think agent INF from the box forward times) | median < 0.97 × L1 (2 038), or slower beyond the IQR; below +40 % (2 941) stop and profile | `c9392c95` | **3 881** [3 869, 3 905]; `gpu_wait` 25.3 → 7.4 ms, `launch` 12.3 ms (now the bound); repeat EXACT | **+84.7 % over L1** (2.09× L0) |
 
 The repeat probe reads DIFFERS on both rows by construction: the mask is bit-identical, and the non-determinism is the bf16 `index_add_` aggregation L2 replaces.
 
@@ -90,6 +90,13 @@ messages. Its prototype (desktop): 4-layer aggregation 3.3–3.9 ms vs 44.1 comm
 forward 21.6 ms vs 28.3 fp32 atomics; bitwise equal to the committed op. The operator's conditional on determinism
 (accept non-determinism only if no deterministic fp32 path comes within ~10 % of the fp32-atomic path) is decided
 by B1's box reading. The later levers are carded (CARDS.md, "Opened by the PERF-ADA packet").
+
+**B1 on the box (`c9392c95`):** (i) exact served and trained; (ii-a) 0 outputs past one ulp, max |Δ| 4 vs spread
+12–16; (ii-b) 0.045222 vs 0.051124; no-sync green. Trainer step A/B 543 → **381 ms (−30 %)**. **(iii) FAILS:** peak at
+the cap 8.939 → 9.103 GiB (+168 MiB), and OF2-10 leg 2 now exceeds its 8.897 GiB sizing budget (margin −2.3 %). The
+rise is the op saving `xs` (each layer's bf16 [N, H] input) for its backward: 169 904 × 128 × 2 B × 4 layers =
+166 MiB, which the bf16 path never saved (it saved the message, as B1 saves `e`). A HALT line of the packet; the
+remedy is the operator's call (see the exit record).
 
 **B1's box microbench (IDLE 4080S, one real B-64 batch of 1.09 M edges, compiled trunk, full served forward):**
 L1 bf16 `index_add_` 34.1 ms (not repeatable); committed L2 35.6 ms; fp32 atomics fused 17.6 ms (not repeatable);

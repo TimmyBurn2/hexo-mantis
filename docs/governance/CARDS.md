@@ -46,7 +46,12 @@ recommended one; each is its own leg with a LAW-09 bench.
   fp32 atomics 7.1), bitwise equal to the committed L2 op.
 - **CARD-PERF-EDGE-TABLE — the edge-code table (B2).** The edge embedding has 91 distinct raw rows, so each layer's
   `lin(edge_proj(·))` is a lookup; the table is bitwise equal to the per-edge GEMM when padded to M ≥ 1024 (sm_86;
-  sm_89 unverified). Desktop forward −41 % on top of B1. Reaches past R369(b)'s "aggregation": its own leg.
+  sm_89 unverified). Box forward 11.8 → 6.5 ms on top of B1. Reaches past R369(b)'s "aggregation": its own leg.
+  **DECIDED 2026-09-25 (dispatcher, on the operator's "think through if this should be done"): NOT in PERF-ADA.**
+  It couples the model to the encoding's 91-row edge vocabulary (needs a loud guard), its bitwise equality rests
+  on cuBLAS kernel choice at padded M (unverified on sm_89 and exposed to L3's torch move), its backward needs a
+  deterministic per-code reduction, and once B1 lands the serving bound is expected to move to the CPU collate
+  (CARD-PERF-4). Re-decide on the exit's real-loop reading: if the GPU is still the in-run bound, it is next.
 - **CARD-PERF-READOUT — the deterministic readout (B3), OPERATOR-ENDORSED 2026-09-25.** The served softmax's
   `segment_sum` and the value/mean pools sum by atomics (served probabilities jitter ~1e-7 on a repeat); a
   segment reduction over the CSR offsets makes them exact. A precondition for L4's bit-identity witness.
