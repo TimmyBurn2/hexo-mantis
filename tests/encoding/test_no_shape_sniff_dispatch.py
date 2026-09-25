@@ -1,4 +1,4 @@
-"""AUDIT-1 F-20 — no read surface executes pickle, and no DISPATCH path sniffs a shape.
+"""No read surface executes pickle, and no DISPATCH path sniffs a shape.
 
 TWO DEFECTS, one finding.
 
@@ -18,7 +18,7 @@ question is the duplicate-authority class.
 
 WHAT WAS KEPT AND WHY. The detector still exists for ONE caller: the audit CLI's §2
 declared-vs-inferred reconciliation, which REPORTS to an operator and selects no behaviour.
-Deleting it would remove a real diagnostic; letting it dispatch is what F-20 is about. This
+Deleting it would remove a real diagnostic; letting it dispatch is the defect. This
 file is the line between those.
 """
 from __future__ import annotations

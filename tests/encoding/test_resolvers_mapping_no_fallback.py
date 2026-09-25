@@ -1,4 +1,4 @@
-"""WPSC Phase 3 REVIEW-impl MUST-FIX pin (R28/LAW-11): the FIFTH silent-v6 arm.
+"""Phase 3 REVIEW-impl MUST-FIX pin: the FIFTH silent-v6 arm.
 
 `normalize_encoding_name`'s Mapping branch carried `enc.get("name",
 enc.get("version", "v6"))` — a never-enumerated fallback the SC-B2 caller census

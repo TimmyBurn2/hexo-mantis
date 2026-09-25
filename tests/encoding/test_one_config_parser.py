@@ -1,4 +1,4 @@
-"""AUDIT-1 F-45 — every config-shaped YAML read goes through ONE parser.
+"""Every config-shaped YAML read goes through ONE parser.
 
 THE DEFECT. Four readers of the same files disagreed. `config.loader.load_config` refused a
 duplicate key; `encoding.audit_sections` §4 — the section whose stated job is to report on

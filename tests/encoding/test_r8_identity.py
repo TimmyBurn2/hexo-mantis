@@ -1,7 +1,7 @@
-"""R328(b)(c) — the run6 graph identity `gnn_axis_r8`, and the marker branch it forced open.
+"""The run6 graph identity `gnn_axis_r8`, and the marker branch it forced open.
 
 WHY A NEW REGISTRY ROW AND NOT AN EDIT TO `gnn_axis_v1`. Committed configs name
-`gnn_axis_v1`, and R26 holds run5's radius registry-derived at 6 — so mutating that row would
+`gnn_axis_v1`, and hold run5's radius registry-derived at 6 — so mutating that row would
 move run5's radius to 8 while typing no `8` into any run5 file, and nothing could detect it:
 `CheckpointMetadata` stamps `encoding_name` and NOT the geometry. This suite pins the
 consequence rather than the intention: **the two rows differ in exactly one knob, in two
@@ -36,7 +36,7 @@ def test_r328b_01_the_r8_row_exists_and_carries_radius_8_at_BOTH_sites() -> None
 
 
 def test_r328b_02_the_v1_identity_is_untouched() -> None:
-    """The whole ground for a new row rather than an edit. If this reds, R26 is broken."""
+    """The whole ground for a new row rather than an edit. If this reds, run5's radius pin is broken."""
     v1 = _spec(V1)
     assert v1.legal_move_radius == 6
     assert v1.graph_radius == 6

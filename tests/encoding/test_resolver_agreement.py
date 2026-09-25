@@ -1,12 +1,12 @@
-"""WPTS Phase P oracles — agreement-or-raise on the ONE encoding resolver (ADJ-25 / R104).
+"""Phase P oracles — agreement-or-raise on the ONE encoding resolver.
 
 A config declaring an encoding in two shapes that DISAGREE is corrupt input, and
 `resolve_from_config` RAISES the named `EncodingDeclarationConflictError` rather than
 silently picking a winner (the operator rejected "precedence" as the question). The two
 remaining private name-lifter (`train/anchor.py::_resolve_declared_encoding`) converges
-onto the resolver, finishing the one-authority collapse WPBRIDGE started (the pretrain
-validator's `_config_encoding` went with the dense pretrain pipeline, R346(f)) — so the conflict raise holds through every former
-call site, and LAW-11's raise-arms are re-pinned at each (the TD-4 lesson: converging an
+onto the resolver, finishing the one-authority collapse (the pretrain
+validator's `_config_encoding` went with the dense pretrain pipeline) — so the conflict raise holds through every former
+call site, and the raise-arms are re-pinned at each (the TD-4 lesson: converging an
 accept-set re-proves no-fallback).
 """
 from __future__ import annotations
@@ -61,7 +61,7 @@ def test_single_shapes_resolve_unchanged() -> None:
     assert resolve_from_config({"encoding": {"version": "gnn_axis_r8"}}).name == "gnn_axis_r8"
 
 
-# LAW-11 raise-arms re-pinned at the resolver
+# The raise-arms, re-pinned at the resolver
 @pytest.mark.parametrize("cfg", [None, {}, {"identity": {}}, {"identity": "gnn_axis_v1"},
                                  {"identity": {"encoding": None}}])
 def test_absent_declarations_still_raise_missing(cfg) -> None:
@@ -76,7 +76,7 @@ def test_mapping_without_version_still_raises_missing() -> None:
 
 # the former call sites: ONE family member, same raise
 def test_anchor_lifter_is_a_veneer_absence_is_none_conflict_raises() -> None:
-    """The anchor's absence affordance survives (a WP10-only launch declares nothing), but a
+    """The anchor's absence affordance survives (a bare launch declares nothing), but a
     CONFLICT is corrupt input and must not degrade into 'no declaration'."""
     assert _resolve_declared_encoding({"identity": {"encoding": "gnn_axis_r8"}}) == "gnn_axis_r8"
     assert _resolve_declared_encoding({"encoding": "gnn_axis_v1"}) == "gnn_axis_v1"
@@ -96,7 +96,7 @@ def test_anchor_private_name_form_is_dead() -> None:
 
 
 def test_anchor_unregistered_name_now_raises_from_the_registry() -> None:
-    """The old private read returned ANY string; the one resolver cross-checks the registry
-    (LAW-11 posture). A narrowing, pinned deliberately."""
+    """The old private read returned ANY string; the one resolver cross-checks the registry.
+    A narrowing, pinned deliberately."""
     with pytest.raises(EncodingRegistryError):
         _resolve_declared_encoding({"identity": {"encoding": "not_a_registered_encoding"}})

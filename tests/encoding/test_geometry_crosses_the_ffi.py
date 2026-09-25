@@ -1,4 +1,4 @@
-"""AUDIT-1 F-42 — the geometry constants are ONE set on both sides of the FFI.
+"""The geometry constants are ONE set on both sides of the FFI.
 
 THE DEFECT. The three hex axes and the win length were each typed on BOTH sides with nothing
 pinning across: `env/game_state.py`, `selfplay/graph_collate.py` and
@@ -6,8 +6,8 @@ pinning across: `env/game_state.py`, `selfplay/graph_collate.py` and
 / `mantis_graph::WIN_AXES`. The audit's phrase for it: Python pins Python, Rust pins a
 literal, nothing pins across the FFI.
 
-The four dense SOURCE-PLANE rows this file also carried are RETIRED with the grid path
-(R346(f)): `_CUR_STONE_SRC_PLANE` .. `_PLY_PARITY_SRC_PLANE`, the
+The four dense SOURCE-PLANE rows this file also carried are RETIRED with the grid path:
+`_CUR_STONE_SRC_PLANE` .. `_PLY_PARITY_SRC_PLANE`, the
 `OPP_STONE_PLANE == HISTORY_LEN` relation and the `v6_live2_ls.kept_plane_indices` row all
 described an 18-plane wire format that no registered encoding produces. What remains is the
 axis table and the win length, which the GRAPH builder reads.

@@ -1,4 +1,4 @@
-"""AUDIT-1 F-36 — artifact pins have ONE authority, and it is the live one.
+"""Artifact pins have ONE authority, and it is the live one.
 
 THE DEFECT. `crates/mantis-encoding/src/manifests.{rs,toml}` carried corpus / anchor /
 held-out pins whose own header said they had been "moved out of the old Python resolver
@@ -46,7 +46,7 @@ def test_no_second_artifact_pin_manifest_lives_in_the_rust_tree() -> None:
 
 
 def test_the_live_authority_answers_for_every_encoding_it_claims() -> None:
-    """The pins are keyed by encoding NAME, so a pinned name the registry lacks is F-36's drift."""
+    """The pins are keyed by encoding NAME, so a pinned name the registry lacks is drift."""
     for name in _CORPUS_PATHS:
         assert lookup(name) is not None, f"{name!r} is pinned but not registered"
         assert resolve_corpus_path(lookup(name)).name, f"{name}: corpus path resolves"

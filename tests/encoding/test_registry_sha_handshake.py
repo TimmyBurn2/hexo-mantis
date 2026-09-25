@@ -2,7 +2,7 @@
 
 [WRITTEN-FIRST] NEW-BUILD contract. At `import mantis.encoding` the on-disk
 `registry.toml` is hashed and compared to the compiled `_engine.registry_sha()`;
-a drift HARD-ERRORS. LAW-07 mutation self-test: mutate the on-disk TOML (a tmp
+a drift HARD-ERRORS. Mutation self-test: mutate the on-disk TOML (a tmp
 copy) → the handshake raises; the unmutated file passes; a truly-absent TOML
 (installed-wheel layout) SKIPs with a logged reason — never a silent pass.
 """
@@ -40,7 +40,7 @@ def test_handshake_passes_on_unmutated_copy(tmp_path) -> None:
 
 
 def test_handshake_hard_errors_on_mutation(tmp_path) -> None:
-    """LAW-07 — the guard BITES: a mutated on-disk registry raises."""
+    """Mutation self-test — the guard BITES: a mutated on-disk registry raises."""
     src = _resolve_registry_toml()
     assert src is not None
     mutated = tmp_path / "registry.toml"

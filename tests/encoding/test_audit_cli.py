@@ -167,13 +167,11 @@ def test_section_checkpoints_declared_equals_inferred(tmp_path) -> None:
     import torch
 
     ck, co, va, root = _empty_dirs(tmp_path)
-    # THE RECONCILIATION NOW REPORTS `no-infer`, AND THAT IS THE FINDING. §2 compared the
-    # DECLARED stamp against an encoding INFERRED from the state dict. Both ways of inferring
-    # one are gone: the dense conv-width probe went with the grid path (R346(f)), and the
-    # graph marker says GRAPH without ever saying WHICH graph while two graph rows are
-    # registered (R328(c)) — so a state dict on its own no longer determines an encoding.
-    # §2 must say `no-infer` rather than pick one, and it must stay `info`: a stamped
-    # checkpoint the audit cannot second-guess is a clean read, not a defect.
+    # THE RECONCILIATION NOW REPORTS `no-infer`, AND THAT IS THE FINDING: both ways of inferring
+    # an encoding from a state dict are gone — the dense conv-width probe went with the grid
+    # path, and the graph marker never says WHICH graph while two graph rows are registered.
+    # §2 must say `no-infer` rather than pick one, and stay `info`: a stamped checkpoint the
+    # audit cannot second-guess is a clean read, not a defect.
     state = {"representation.input_proj.weight": torch.zeros(64, 11)}
     torch.save({"model_state": state, "metadata": {"encoding_name": "gnn_axis_v1"}},
                ck / "m.pt")

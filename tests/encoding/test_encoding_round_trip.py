@@ -6,7 +6,7 @@ Coverage per registered encoding:
   3. The UNIFIED `detect_encoding_from_state_dict` (LOCKED #7): marker/stamp beats
      shape/filename; the retired shape fallback stays refused; strict-raises.
 
-DEFERRED (tracked-not-silent → WP9/WP10): the HexTacToeNet-forward leg and the
+DEFERRED (tracked-not-silent): the HexTacToeNet-forward leg and the
 real-checkpoint torch-load leg need the unported `model`/`train` layers. The
 detector cases here are torch-free (a fake tensor exposes only `.shape`/`.dim`).
 """
@@ -79,7 +79,7 @@ def test_helper_parity_shim_vs_engine(name: str) -> None:
     assert tuple(py.kept_plane_indices) == tuple(rs.kept_plane_indices)
 
 
-# 3. Unified detector — the grid shape fallback is RETIRED (R346(f))
+# 3. Unified detector — the grid shape fallback is RETIRED
 
 
 def test_the_grid_shape_fallback_is_gone_and_an_unstamped_grid_shape_refuses() -> None:
@@ -90,7 +90,7 @@ def test_the_grid_shape_fallback_is_gone_and_an_unstamped_grid_shape_refuses() -
 
     This is the inverse of the rows it replaces. They asserted that a shape RESOLVED; this
     asserts that it no longer can — which is what stops a future reader re-deriving an
-    encoding from bytes that no longer determine one (LAW-11)."""
+    encoding from bytes that no longer determine one."""
     dense_shaped = {
         "trunk.input_conv.weight": _FakeTensor(64, 8, 3, 3),
         "policy_fc.weight": _FakeTensor(362, 64),
@@ -104,10 +104,10 @@ def test_the_grid_shape_fallback_is_gone_and_an_unstamped_grid_shape_refuses() -
 
 
 def test_detect_graph_marker_REFUSES_once_more_than_one_graph_encoding_is_registered() -> None:
-    """The marker says GRAPH; it has never said WHICH graph (R328(c)).
+    """The marker says GRAPH; it has never said WHICH graph.
 
     These two rows used to assert `gnn_axis_v1` outright, and they were right for exactly as
-    long as one graph row existed. R328(b) registered `gnn_axis_r8`, and the two differ ONLY in
+    long as one graph row existed. A second row, `gnn_axis_r8`, was registered, and the two differ ONLY in
     a geometry no checkpoint stamp records — so the branch now REFUSES by name rather than
     resolving an unstamped checkpoint to whichever graph row was written first.
     """
