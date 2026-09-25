@@ -1,6 +1,6 @@
-"""The gather's MATERIALIZATION regime.
+"""The gather's MATERIALIZATION regime: the fused `mantis::gine_message_sum` receives `xs` and `e` in one autocast dtype.
 
-`index_select` is dtype-PRESERVING: it materializes in its RECEIVER's dtype, not in the autocast
+The gather is dtype-PRESERVING: it materializes in its RECEIVER's dtype, not in the autocast
 dtype, so under the graph path's bf16 autocast the fp32 pre-norm receiver realizes the one
 tensor that scales with E at 2x the width the regime implies — the 8.94 GiB single allocation
 the run5 GPU OOM died on. No numeric oracle can distinguish the fix from casting AFTER the
@@ -22,7 +22,7 @@ from mantis.model.gine import RepresentationNetwork, _GINEConv
 
 # RE-PINNED: gather, message and sum are ONE op, `mantis::gine_message_sum(xs, e, ...)`, receiver = the gathered
 # tensor, second argument = the edge tensor it is added to; `to` shows the no-op where it happens.
-_GATHER = _AGGREGATE = "gine_message_sum.default"
+_GATHER = "gine_message_sum.default"
 _WATCHED = (_GATHER, "new_zeros", "to")
 
 _HIDDEN = 8
@@ -83,40 +83,28 @@ def _run(enabled: bool) -> tuple[_OpRecorder, Tensor, _GINEConv, Tensor, Tensor,
 
 def test_recorder_observes_exactly_one_gather_and_one_scatter_per_conv() -> None:
     """Without this the dtype assertions below are satisfiable by recording NOTHING: exactly one
-    `index_select` and one aggregation run per `_GINEConv.forward` with a non-empty edge set."""
+    fused gather-and-sum runs per `_GINEConv.forward` with a non-empty edge set."""
     for enabled in (False, True):
         rec, _out, *_ = _run(enabled=enabled)
         assert len(rec.named(_GATHER)) == 1, (
-            f"autocast={enabled}: expected exactly 1 index_select inside _GINEConv.forward, "
+            f"autocast={enabled}: expected exactly 1 {_GATHER} inside _GINEConv.forward, "
             f"got {len(rec.named(_GATHER))} — the instrument is not seeing the gather"
-        )
-        assert len(rec.named(_AGGREGATE)) == 1, (
-            f"autocast={enabled}: expected exactly 1 {_AGGREGATE}, "
-            f"got {len(rec.named(_AGGREGATE))}"
         )
 
 
 def test_gather_receiver_and_agg_are_bf16_under_bf16_autocast() -> None:
-    """Under bf16 autocast the gather's receiver — and so the `[E, H]` tensor `index_select`
-    materializes — must be bf16, and the accumulator it scatters into must match. RED at HEAD,
-    where `x.index_select(0, src)` receives the fp32 pre-norm tensor; also kills a cast placed
-    AFTER the gather, which has identical numerics and zero memory benefit."""
+    """Under bf16 autocast the fused op's gathered `xs` must be bf16, and the edge tensor `e` it is added to must
+    share that dtype; an fp32 `xs` would widen the per-edge work the regime sizes at bf16."""
     rec, out, *_ = _run(enabled=True)
     gather = rec.named(_GATHER)[0]
-    scatter = rec.named(_AGGREGATE)[0]
     assert gather.receiver.dtype is torch.bfloat16, (
         f"gather receiver dtype is {gather.receiver.dtype} under bf16 autocast; "
         "index_select preserves its receiver's dtype, so the [E, H] materialization is "
         "2x the width the bf16 regime implies (R179 / CARD-RUN5-GPU-OOM)"
     )
-    assert scatter.receiver.dtype is gather.receiver.dtype, (
-        f"aggregated message dtype {scatter.receiver.dtype} != gather receiver dtype "
-        f"{gather.receiver.dtype}; the messages must be built from the SAME tensor "
-        "the gather reads (MA-4)"
-    )
-    assert scatter.args[1].dtype is gather.receiver.dtype, (
-        f"edge tensor dtype {scatter.args[1].dtype} != gathered dtype {gather.receiver.dtype}: the message add "
-        "would promote the [E, H] tensor")
+    assert gather.args[1].dtype is gather.receiver.dtype, (
+        f"edge tensor dtype {gather.args[1].dtype} != gathered dtype {gather.receiver.dtype}: the message add "
+        "would promote the [E, H] tensor (MA-4)")
     assert out.dtype is torch.bfloat16, f"conv output dtype {out.dtype} under bf16 autocast"
 
 
@@ -149,12 +137,11 @@ def test_gather_receiver_and_agg_are_fp32_without_autocast() -> None:
     1e-6 forward-parity goldens depend on it. A hard-coded bf16 cast would fire in BOTH."""
     rec, out, *_ = _run(enabled=False)
     gather = rec.named(_GATHER)[0]
-    scatter = rec.named(_AGGREGATE)[0]
     assert gather.receiver.dtype is torch.float32, (
         f"gather receiver dtype is {gather.receiver.dtype} with autocast OFF — the cast "
         "became real in the fp32 regime, which is a silent precision change on deploy"
     )
-    assert scatter.receiver.dtype is torch.float32, f"aggregated message dtype {scatter.receiver.dtype}"
+    assert gather.args[1].dtype is torch.float32, f"edge tensor dtype {gather.args[1].dtype} with autocast off"
     assert out.dtype is torch.float32, f"conv output dtype {out.dtype} with autocast off"
 
 
