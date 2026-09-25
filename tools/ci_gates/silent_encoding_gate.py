@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-# >300 justify: the pattern table, the tamper-evident known-debt register and the logical-line
-# normaliser are one gate's single authority; splitting them would create a second place where
-# "what counts as a silent fallback" is decided.
+# >300 justify: the pattern table, the tamper-evident known-debt register and the logical-line normaliser
+# are one authority; splitting them creates a second place deciding "what counts as a silent fallback".
 """CI gate 11: no silent encoding-fallback arms.
 
 An encoding must never be *defaulted* into existence. An absent or unspecified encoding is an
@@ -40,9 +39,8 @@ SCAN_ROOTS = ("src", "crates")
 SUFFIXES = {".py", ".rs", ".pyi"}
 SKIP_DIR_PARTS = {"tests", "benches", "target", "__pycache__", "fixtures"}
 
-# A checkout can live anywhere — e.g. a worktree under a directory literally named `target` — so
-# skip decisions are made on the REPO-RELATIVE path only; matching the absolute path made the
-# whole gate vacuously green depending on where the repo sat.
+# Skip decisions use the REPO-RELATIVE path: a checkout under a directory named `target` made the
+# absolute-path match vacuously green.
 MIN_SCANNED_FILES = 80  # a floor, so "scanned nothing, found nothing" can never pass
 
 
@@ -70,9 +68,8 @@ _Q = f"(?:[frb]{{0,2}})['\"](?:{_ENC})['\"]"
 # In a FALLBACK position (`or`, `else`, a match arm) the literal may be wrapped in any call,
 # because the position itself is what makes it a fallback.
 _CALL = r"(?:[\w.]+\(\s*)?"
-# In an ASSIGNMENT position the wrapper must be an explicit default-DECLARATION helper: a general
-# `[\w.]+\(` would flag `spec = lookup("v6")`, affirmative dispatch and the opposite of a default,
-# so recall is traded for precision deliberately.
+# In an ASSIGNMENT position only a default-DECLARATION helper may wrap: a general `[\w.]+\(` would flag
+# `spec = lookup("v6")`, affirmative dispatch; recall is traded for precision deliberately.
 _DECL_CALL = r"(?:(?:Field|field|Argument|Query|Body|Option|Some)\(\s*)?"
 # Terminators that can follow a default value; without `;` every Rust `const ... = "v6";` walked
 # through.
@@ -110,16 +107,14 @@ PATTERNS: tuple[tuple[str, str], ...] = (
 )
 
 # Known, owned, still-open arms — NOT an escape hatch, matched on exact source text so a silent
-# rewrite cannot inherit the exemption. EMPTY: a returning ternary is now a hard VIOLATION rather
-# than a printed debt row.
+# rewrite cannot inherit the exemption.
 KNOWN_DEBT: tuple[tuple[str, str, str], ...] = ()
 
 ESCAPE = re.compile(r"silent-encoding-gate:\s*ok\s*--\s*\S")
 _COMPILED = tuple((re.compile(p), why) for p, why in PATTERNS)
 
-# Comment syntax is per-language, and getting it wrong is not cosmetic: treating any line starting
-# with `#` as a comment silently blanked every Rust `#[pyo3(...)]` ATTRIBUTE — exactly where the
-# pyo3 signature defaults live — and the gate reported green over two real arms.
+# Comment syntax is per-language: treating every `#` line as a comment blanks Rust `#[pyo3(...)]`
+# ATTRIBUTES, exactly where the pyo3 signature defaults live.
 _PY_COMMENT_ONLY = re.compile(r"^\s*#(?!\[)")
 _RS_COMMENT_ONLY = re.compile(r"^\s*//")
 _PY_STRIP = re.compile(r"(?<!['\"])\s+#(?!\[).*$")

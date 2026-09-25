@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
-# >300 justify: the pattern register, the reserved-domain carve-outs, the self-expiring exemption
-# table and the two scan modes are one gate's single authority for "what counts as host content".
-# The register and the carve-outs are only reviewable side by side, because every carve-out exists
-# to keep one named pattern honest.
+# >300 justify: the pattern register, reserved-domain carve-outs, self-expiring exemption table and two
+# scan modes are one authority on host content; each carve-out is reviewable only beside its pattern.
 """CI gate 17: no host content in the tracked tree (rule 7).
 
 rule7-gate: file-ok -- THIS FILE IS THE PATTERN REGISTER. Every host-shaped literal below is a
@@ -23,7 +21,7 @@ because a gate that fires on correct code gets disabled within a week.
 
 The escape hatch is `<comment> rule7-gate: ok -- <why>`, reason text mandatory, on the line or in
 the comment block above it. `--base <ref>` scans files added or modified relative to <ref> and
-`--full-tree` scans every tracked text file; binary files are skipped, and the LAW-07 self-test
+`--full-tree` scans every tracked text file; binary files are skipped, and the self-test
 runs on EVERY invocation.
 """
 from __future__ import annotations
@@ -38,22 +36,18 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-#: The escape token, COMPILED rather than a substring: `ESCAPE in line` accepted a bare
-#: `# rule7-gate: ok --` with nothing after it, while the reason text is MANDATORY. The `\S` after
-#: the dashes is what makes that sentence true.
+#: The escape token, COMPILED rather than a substring: the `\S` after the dashes makes the reason text
+#: MANDATORY, where a substring accepted a bare `# rule7-gate: ok --` with nothing after it.
 ESCAPE_TOKEN = "rule7-gate: ok --"
 ESCAPE = re.compile(re.escape("rule7-gate: ok") + r"\s*--\s*\S")
 
-#: FILE-LEVEL hatch, for a file that is definitionally made of patterns, declared in the first
-#: `FILE_ESCAPE_SCAN_LINES` lines. It hides a real leak in the file that carries it, so the gate
-#: REPORTS the count in its green line and the producer test asserts the EXACT set of files
-#: allowed to carry one.
+#: FILE-LEVEL hatch for a file made of patterns, in its first `FILE_ESCAPE_SCAN_LINES` lines. It can hide
+#: a real leak, so the green line REPORTS the count and the producer test pins the EXACT set of files.
 FILE_ESCAPE = "rule7-gate: file-ok --"
 FILE_ESCAPE_SCAN_LINES = 40
 
-#: Untracked local supplement: one regex per line, `#` comments ignored. Operator-identifying
-#: terms belong HERE and never in this file, and it is absent in CI by construction, so the
-#: tracked gate must stand on its own.
+#: Untracked local supplement, one regex per line: operator-identifying terms go HERE, never in this
+#: file. It is absent in CI by construction, so the tracked gate must stand on its own.
 LOCAL_TERMS = REPO_ROOT / "tools" / "ci_gates" / "rule7_local_terms.txt"
 
 #: THE REGISTER. name -> (regex, what a hit means). Every entry names a shape, never a person.
@@ -106,21 +100,16 @@ PATTERNS: dict[str, tuple[str, str]] = {
     ),
 }
 
-#: Registered, owned exemptions: (path, matched-substring, content_sha256, grounds). NOT an escape
-#: hatch — each asserts "this IS host content, it is tracked, and it cannot be removed here".
-#: SELF-EXPIRING TWO WAYS: an entry whose substring stops matching fails the gate, and so does one
-#: whose recorded sha no longer matches the file, so an exemption can never be inherited by
-#: whatever replaced the content it named. SHIPS EMPTY: the one known blob was sanitized rather
-#: than exempted, so this gate has never been green over a dirty tree.
+#: Registered, owned exemptions: (path, matched-substring, content_sha256, grounds), NOT an escape hatch.
+#: SELF-EXPIRING: a substring that stops matching, or a sha that no longer matches the file, fails the gate.
 EXEMPT: tuple[tuple[str, str, str, str], ...] = ()
 
 #: A lock's four-part package versions (`12.8.4.1` is a CUDA library) pass the octet ranges;
 #: its only host position is a URL host, so `ipv4` counts there only right after `://`.
 LOCK_FILES = frozenset({"uv.lock"})
 
-#: Non-vacuity floor for --full-tree: a gate that scans nothing finds nothing. Set well below the
-#: measured tracked-text count, but high enough that a broken `git ls-files` or a wrong REPO_ROOT
-#: cannot pass silently.
+#: Non-vacuity floor for --full-tree, well below the tracked-text count but high enough that a broken
+#: `git ls-files` or a wrong REPO_ROOT cannot pass silently.
 MIN_FULL_TREE_FILES = 400
 
 
@@ -210,7 +199,7 @@ def has_file_escape(text: str) -> bool:
 
 
 def scan_text(rel: str, text: str) -> list[tuple[str, int, str, str, str]]:
-    """THE DECISION. Both the scan and the LAW-07 self-test go through this one function.
+    """THE DECISION. Both the scan and the self-test go through this one function.
 
     Returns (rel, lineno, pattern_name, matched_text, why) per unjustified hit.
     """
@@ -333,7 +322,7 @@ def target_files(base: str | None) -> list[str]:
 
 
 def self_test() -> bool:
-    """LAW-07: the gate must be able to FIRE, on EVERY invocation.
+    """Prove the gate can FIRE, on EVERY invocation.
 
     Plants one violation per pattern class in a temp file and drives the REAL decision function.
     """
@@ -389,9 +378,8 @@ def self_test() -> bool:
         print(f"gate 17 SELF-TEST FAIL: registered pattern(s) with no planted proof: "
               f"{sorted(uncovered)}")
         ok = False
-    # The base-resolver arm: every degraded shape must resolve to full-tree (None) and a real ref
-    # must survive. A resolver that narrows instead of widening re-opens the crash as an
-    # under-scan, which is worse.
+    # The base-resolver arm: every degraded shape must widen to full-tree (None) and a real ref
+    # must survive; a resolver that narrows re-opens the crash as an under-scan.
     for degraded in (None, "", "0" * 40, "no-such-ref-xyzzy"):
         if resolve_base(degraded) is not None:
             print(f"gate 17 SELF-TEST FAIL: degraded base {degraded!r} did not widen to full-tree")
@@ -415,7 +403,7 @@ def self_test() -> bool:
 
 
 def _local_arm_fires() -> bool:
-    """LAW-07 for the UNTRACKED half: prove the supplement is WIRED, not merely parseable.
+    """Prove the UNTRACKED half's supplement is WIRED, not merely parseable.
 
     The operator's real supplement is `.gitignore`d, so in CI there is nothing to exercise and the
     loader would be dead code that still reports a count. This plants a synthetic supplement,
@@ -450,7 +438,7 @@ def _local_arm_fires() -> bool:
 
 
 def _operator_arm_banner_fires() -> bool:
-    """LAW-07 for the absent-supplement banner: prove it fires ABSENT and stays silent PRESENT.
+    """Prove the absent-supplement banner fires ABSENT and stays silent PRESENT.
 
     Without this control the banner could be wired to a condition that never holds, and every
     worktree run would keep reporting a floor-strength scan in a full-strength sentence.
@@ -494,9 +482,8 @@ def main() -> int:
               "degrading WIDE to the full-tree scan (leak gates fail toward over-scanning)")
         args.full_tree = True
     files = target_files(base)
-    # A diff-scoped run over ZERO files printed a green line, and "the diff touched no text file"
-    # is the same observable as "--base resolved to something with no delta". Same posture as the
-    # unresolvable-base arm above: a LEAK gate degrades WIDE.
+    # A diff over ZERO files is indistinguishable from a base with no delta, so, like the
+    # unresolvable-base arm above, a LEAK gate degrades WIDE.
     if not args.full_tree and not files:
         print(f"gate 17: the diff vs {base!r} names NO tracked text file -- degrading WIDE to "
               "the full-tree scan rather than reporting green over an empty scope")

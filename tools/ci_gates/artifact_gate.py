@@ -28,11 +28,8 @@ def _git(*args: str) -> str:
     ).stdout
 
 
-#: The widest base the fallback may take. AUDIT-1 F-26: `_resolve_base` returned `"HEAD~1"`
-#: for an empty, all-zeros or unresolvable candidate and PRINTED NOTHING, so a first push or a
-#: force-push — exactly when the candidate is `000…0` — inspected the LAST COMMIT ONLY while
-#: the line above it said the gate had run. `origin/dev` is tried first now, and whichever
-#: base is used is named on stdout.
+#: Tried in order when the base is empty, all-zeros (a first push or force-push) or unresolvable;
+#: a silent HEAD~1 once inspected the last commit only, so the base used is named on stdout.
 _WIDE_FALLBACKS: tuple[str, ...] = ("origin/dev", "dev", "HEAD~1")
 
 
@@ -47,8 +44,8 @@ def _resolve_base(candidate: str) -> tuple[str, str]:
     """`(base, why)` — the revision to diff against, and how it was chosen.
 
     The `why` is RETURNED rather than logged here so the caller prints it on the green path
-    too. A fallback nobody can see is the same as no fallback: F-26 measured this arm silently
-    narrowing a whole-branch scan to one commit.
+    too. A fallback nobody can see is the same as no fallback: this arm once silently narrowed a
+    whole-branch scan to one commit.
     """
     if candidate and set(candidate) != {"0"} and _resolves(candidate):
         return candidate, "given"
@@ -96,10 +93,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     fields = raw.split("\0")
-    # (status, path, arrives) — `arrives` marks a path whose CONTENT enters the tree at
-    # HEAD: an add, or the NEW side of a rename/copy. WP0 RED-TEAM row A measured that
-    # gating the size/jsonl checks on `status == "A"` alone let an R-status move carry an
-    # oversize or *.jsonl file OUT of tests/fixtures/ unexamined (WPCLEAN Phase RES).
+    # (status, path, arrives) — `arrives` marks content entering the tree at HEAD: an add, or the
+    # NEW side of a rename/copy, else a move carries an oversize file OUT of tests/fixtures/ unexamined.
     changed: list[tuple[str, str, bool]] = []
     i = 0
     while i < len(fields) and fields[i]:

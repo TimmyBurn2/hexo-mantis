@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
-# >300 justify (R8): the marker table, the cap-token stripper, the count detector and the two
-# scoped rules are one gate's single authority; splitting them would create a second place where
-# "what counts as a stated tally" is decided, which is the drift this gate exists to remove. The
-# self-test corpus stays in-file so the arms and the predicate they prove move together.
-# NOTE: the docstring below quotes banned header forms as EXAMPLES. They sit in later paragraphs,
-# outside this justification block, which is why the gate passes on itself — keep them there, and
-# keep this paragraph free of figures.
+# >300 justify (R8): the marker table, cap-token stripper, count detector and scoped rules are one
+# authority on "what counts as a stated tally"; the self-test corpus stays beside its predicate.
+# The docstring's banned-form EXAMPLES must stay outside this block, or the gate reds on itself.
 """CI gate 15: every oversized file carries an R8 justification, and none states a count.
 
 R8 asks a file over the soft cap to say WHY it is one unit. It never asked for a tally, and the
@@ -62,11 +58,8 @@ MARKER_WINDOW = 80
 #: How far a justification block runs from its marker. Terminated by a blank line first.
 BLOCK_MAX = 40
 
-#: Every phrasing that opens a justification in this tree. Deliberately tolerant: the corpus has
-#: six house styles and forcing one canonical spelling would be a 150-file rewrite that buys
-#: nothing. The `R8 justif` arm requires a following `:` or `(` — without it, prose that merely
-#: NAMES the rule reads as a header and silently satisfies the presence check, which was measured
-#: here rather than imagined.
+#: Every phrasing that opens a justification here, tolerant of the tree's house styles. The `R8 justif`
+#: arm needs a following `:` or `(`, or prose merely NAMING the rule satisfies the presence check.
 MARKER_RE = re.compile(
     r"(?:[>\u2265]=?\s*300"
     r"|R8[\s-]*justif\w*\s*[:(]"
@@ -76,33 +69,23 @@ MARKER_RE = re.compile(
     re.IGNORECASE,
 )
 
-#: The cap threshold itself, in every spelling. Stripped BEFORE the count scan, so ">300 lines"
-#: and "300-line soft cap" cannot be mistaken for a tally. Without this the marker would fail
-#: the rule it announces.
+#: The cap threshold in every spelling, stripped BEFORE the count scan so ">300 lines" and
+#: "300-line soft cap" are never read as a tally.
 CAP_TOKEN_RE = re.compile(r"[>\u2265]=?\s*300|\b300\s*\+|\b300(?=[-\s]line)", re.IGNORECASE)
 
-#: A number welded to a line unit is a tally. `-\s*` catches "a ~120-line harness"; the comma
-#: class catches "1,024 lines"; `\s*` spans a newline because these headers wrap mid-clause. The
-#: lookbehind is load-bearing and was measured: without it "a stale size in an R8 line" and "the
-#: r153 line-dispersal rule" both read as tallies. A digit glued to a letter is an identifier.
+#: A number welded to a line unit is a tally (`\s*` spans a wrapped header). The lookbehind keeps
+#: "an R8 line" and "the r153 line-dispersal rule" out: a digit glued to a letter is an identifier.
 COUNT_RE = re.compile(
     r"(?<![A-Za-z0-9_])\d[\d,]*\s*(?:-\s*)?(?:lines?|LOC|L)\b", re.IGNORECASE
 )
-#: The two idioms this repo uses to announce "I transcribed a measurement here", plus the marker
-#: parenthetical. They appear in the corpus ONLY inside count clauses, so they are banned
-#: outright: a header citing its own `wc -l` states a count even where it omits the digits, and
-#: `justify (697,` is a size with the unit word left off — the one shape a number-plus-unit rule
-#: cannot see. Case-SENSITIVE on `MEASURED` by design, because the shouted form is the
-#: transcription idiom while lower-case "measured" is ordinary prose in nine correct headers.
+#: Transcription idioms, banned outright: a header citing its own `wc -l` states a count without digits,
+#: and `justify (697,` is a size missing its unit. `MEASURED` is case-sensitive: "measured" is prose.
 IDIOM_RE = re.compile(
     r"\bwc\s*-\s*l\b|\bre-?measured\b|\bMEASURED\b|\bjustif\w*[^\n]{0,24}?\(\s*\d{2,5}\b"
 )
 
-#: Non-vacuity floors, PER ROOT. A gate that scans nothing finds nothing, and a single global
-#: floor is not enough: with one number a typo that dropped `src/` entirely still reported green,
-#: because the other three roots cleared it alone. That was mutation-tested here. Set below the
-#: measured file counts (src 148, tools 14, crates 134, tests 256) with room for deletion, high
-#: enough that losing any ONE root is fatal.
+#: Non-vacuity floors, PER ROOT: one global floor stays green with `src/` dropped, the other roots
+#: clearing it alone. Below the file counts with room for deletion; losing any ONE root is fatal.
 MIN_FILES = {"src": 120, "tools": 10, "crates": 110, "tests": 210}
 #: The corpus-wide floors stay too, as a second net: they catch a scope that shrank without any
 #: root vanishing (measured: 137 over the cap, 151 justifications).
@@ -133,9 +116,8 @@ def find_marker(lines: list[str]) -> int | None:
     return None
 
 
-#: Leading comment punctuation, stripped before a line is judged blank. A doc-comment paragraph
-#: break is `//!` or `#` alone, not an empty line, so without this a Rust module doc runs on for
-#: the whole `BLOCK_MAX` and drags unrelated prose into the justification.
+#: Leading comment punctuation, stripped before a line is judged blank: a doc-comment paragraph break
+#: is `//!` or `#` alone, or a Rust module doc drags unrelated prose into the justification.
 COMMENT_LEAD_RE = re.compile(r"^\s*(?:#+|/{2,}!?|\*)\s*")
 
 
@@ -147,12 +129,8 @@ def _is_break(line: str) -> bool:
     return not COMMENT_LEAD_RE.sub("", line).strip()
 
 
-#: The minimum number of WORDS a justification must carry, after the marker token and the cap
-#: spellings are stripped. `check_file` used to treat ANY marker match as a justification, so
-#: `# >300` and `# R8 justification:` — both empty of reason — passed, and "say WHY the file is
-#: one unit" was enforced as "the digits 300 appear near the top". FOUR is chosen against both
-#: ends: it refuses every probe input that was accepted, and it accepts the TERSEST real header
-#: in the tree's own house styles. A higher floor would demand verbosity, which R8 does not.
+#: The minimum WORDS a justification carries once marker and cap spellings are stripped: it refuses a
+#: reason-free `# R8 justification:` and accepts the TERSEST real header in the tree.
 MIN_REASON_WORDS = 4
 
 #: A word, for the count above: letters or digits, so punctuation and bare symbols do not pad

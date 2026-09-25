@@ -1,81 +1,16 @@
 #!/usr/bin/env bash
-# CI gate 3c: the collected-test count is non-decreasing, AND so is the floor itself.
-#
-# WHY THIS FILE WAS REWRITTEN (the defect, measured on branch `remediation`).
-# The predecessor resolved its comparison ref as `origin/main`, then `main`, then fell back
-# to `cat` of the floor file in the WORKING TREE. This repo has no `main` branch and never
-# had one -- `git branch -a` lists `dev`, `remediation`, `wppre-scratch`, and CLAUDE.md names
-# `dev` as the main branch ("Main branch (you will usually use this for PRs): dev").
-# `git rev-parse --verify -q origin/main` and `... main` therefore both exited 1 on EVERY
-# invocation since WP0, and the gate compared the collected count against the floor file
-# sitting next to it in the same tree. Two consequences:
-#   * the advertised "non-decreasing vs main" property never existed at all; and
-#   * a commit that LOWERED the floor passed trivially -- editing the floor down was, in
-#     practice, the way to turn this gate from red to green.
-#
-# THE TWO PROPERTIES NOW ENFORCED, both against a REAL ref:
-#   1. COUNT       collected >= floor(ref)   -- the original, now with a ref that resolves.
-#   2. MONOTONICITY floor(tree) >= floor(ref) -- the half that did not exist. Property 1
-#      alone is satisfiable by lowering the floor, so property 1 alone enforces nothing.
-# Each prints its own distinct, actionable message; both are checked on every run, so a
-# commit that trips both is told about both rather than one at a time.
-#
-# PRECEDENCE ORDER FOR THE REF, AND WHY IT IS THIS ORDER:
-#   1. `origin/dev` when the ref already exists locally. It is the branch a PR is merged
-#      into, so it is the thing "non-decreasing" is supposed to mean, and consulting an
-#      already-fetched ref costs no network.
-#   2. local `dev`. Used only when `origin/dev` is absent, so a stale local `dev` can never
-#      outrank a fetched remote one. This is the arm a clone with no remote uses, and this
-#      repo spent most of its life with no git remote at all.
-#   3. a shallow `git fetch origin dev` -> FETCH_HEAD. LAST, because it is the only arm with
-#      a side effect and the only one that can hang. It exists because `actions/checkout@v4`
-#      defaults to `fetch-depth: 1` + single-branch, which leaves a CI job with NEITHER
-#      `origin/dev` NOR local `dev` -- i.e. without this arm the CI run, the one run that
-#      matters, would take the bootstrap arm and enforce nothing. See the note at the foot
-#      of this comment.
-#   4. bootstrap: no ref exists. A genuine fresh clone of a repo whose history does not yet
-#      contain the main branch. It compares against the working-tree floor, monotonicity is
-#      VACUOUS (there is nothing to be monotone against), and it says so LOUDLY on both
-#      stdout and stderr, with `ref=<none:bootstrap>` in the summary line. The predecessor's
-#      failure was not that it had a bootstrap arm; it was that the bootstrap arm was silent
-#      and therefore indistinguishable from a real comparison in a CI log.
-#
-# NOTE for whoever owns `.github/workflows/ci.yml`: arm 3 is a repair, not a design. The
-# right fix is `fetch-depth: 0` (or an explicit `git fetch origin dev`) on the python job's
-# checkout step, after which arm 1 fires and this script never touches the network.
-#
-# THE SECOND DEFECT, F-816-33, fixed 2026-09-02 and measured on this tree before the fix.
-# The measuring line read
-#     collected=$(uv run pytest --collect-only -q 2>/dev/null | grep -Eo '...collected' ...) || true
-# and pytest, on a module that fails to IMPORT, prints `4414 tests collected, 1 error in 2.08s`
-# and exits 2. BOTH signals were discarded -- the status by the pipeline and the `|| true`, the
-# error text by `2>/dev/null` -- and the grep matched the count inside the very line saying the
-# collection was interrupted. The gate printed `collected=4414 ... GATE_RC=0`: a PASS on a tree
-# whose collection had died. The one case it caught was collection so broken it printed no
-# number at all, i.e. the loud one; the quiet one is the one that loses tests.
-# NOW: both streams go to a LOG, the exit status is captured, and `collection_verdict` refuses
-# a count taken from an interrupted collection. A count is only a count of the tree if the
-# collection that produced it finished.
-#
-# `--collected N` injects the count instead of measuring it, and `--pytest-cmd CMD` replaces
-# the collection command. Both exist so the producer test (tests/tools/test_test_count_gate.py,
-# LAW-07) can drive THIS script -- not a re-implemented copy of its decision -- inside throwaway
-# git repos: the first for the floor comparison, the second so the broken-collection arm can be
-# driven without breaking the real suite. Each announces itself on stdout so an injected value
-# can never be mistaken for a measured one in a log, and no CI step passes either (pinned by
-# tests/tools/test_test_count_gate.py's parse of every `run:` body).
+# CI gate 3c: COUNT collected >= floor(ref) and MONOTONICITY floor(tree) >= floor(ref), both every run;
+# the count alone is satisfiable by lowering the floor. A count from an interrupted collection is refused.
+# Ref order: origin/dev, local dev, a shallow fetch, then a LOUD bootstrap arm that enforces nothing.
+# `--collected N` / `--pytest-cmd CMD` let tests/tools/test_test_count_gate.py drive THIS script; each
+# announces itself, and no CI step passes either.
 set -euo pipefail
-# THE GATES NEVER RE-SYNC THE VENV (R348(a), B-5): `uv run` inherits uv's own `--no-sync`.
+# THE GATES NEVER RE-SYNC THE VENV: `uv run` inherits uv's own `--no-sync`.
 export UV_NO_SYNC=1
 
 FLOOR_FILE="tools/ci_gates/test_count_floor.txt"
-# The ONE sanctioned way the floor goes DOWN. Absent on a normal tree; when present it holds
-# exactly one record, `<from> -> <to> <grounds>`, and it authorises a decrease only when BOTH
-# numbers match the two floors actually in play AND the tree collects exactly `<to>`. It is
-# self-expiring by construction: the next commit moves the ref floor, so a record left behind
-# stops matching and the gate reds on the stale record BY NAME. It cannot launder a real
-# regression — a decrease with slack (`collected > to`) is refused, so the record can only
-# ever ratify a deletion whose new count is exactly stated.
+# The ONE sanctioned way the floor goes DOWN: one `<from> -> <to> <grounds>` record, valid only when both
+# numbers match the floors in play and the tree collects exactly `<to>`; a record left behind reds BY NAME.
 RATCHET_FILE="tools/ci_gates/test_count_ratchet_down.txt"
 MAIN_BRANCH="dev"
 PYTEST_CMD="uv run pytest"
@@ -89,10 +24,8 @@ LOG_TAIL=40
 die() { printf 'gate 3c: %s\n' "$*" >&2; exit 2; }
 is_uint() { [[ $1 =~ ^[0-9]+$ ]]; }
 
-# ---------------------------------------------------------------------------------------
 # The decision, isolated from every source of input so the self-test can drive it directly.
 # args: collected ref_floor tree_floor ref_label ; rc 0 = clean, 1 = violation.
-# ---------------------------------------------------------------------------------------
 verdict() {
   local count=$1 ref_floor=$2 tree_floor=$3 ref=$4 rc=0
   local sanctioned=${RATCHET_RECORD:-}
@@ -140,10 +73,8 @@ verdict() {
     printf '  deleting the evidence that anything was lost; that is the defect this arm closes.\n'
     rc=1
   fi
-  # AUDIT-1 F-12. The two arms above compare the count against the REF's floor and the two
-  # floors against each other; nothing compared the TREE's own floor against what this tree
-  # actually collects. A floor ratcheted past the collection is a claim about tests that do
-  # not exist, and it stays green for as long as the ref floor trails it.
+  # The tree's own floor above its collection claims tests that do not exist, and the two arms
+  # above stay green while the ref floor trails it.
   if [ "$tree_floor" -gt "$count" ]; then
     printf 'gate 3c FAIL (over-ratchet): %s is %s in this tree but only %s test(s) collected.\n' \
       "$FLOOR_FILE" "$tree_floor" "$count"
@@ -154,13 +85,8 @@ verdict() {
   return "$rc"
 }
 
-# ---------------------------------------------------------------------------------------
-# The COLLECTION decision, isolated from the collection the same way.
-# args: pytest_rc summary_line ; rc 0 = the count may be trusted, 1 = it may not.
-# Two independent arms on purpose: the exit status is the primary signal, and the summary
-# text catches the case where something between pytest and this script swallows the status
-# -- which is exactly what the predecessor's pipeline did.
-# ---------------------------------------------------------------------------------------
+# The COLLECTION decision, isolated the same way. args: pytest_rc summary_line ; rc 0 = trusted.
+# Two arms on purpose: the exit status, and the summary text for when a pipeline swallows it.
 collection_verdict() {
   local rc=$1 summary=$2 bad=0
   if [ "$rc" -ne 0 ]; then
@@ -181,11 +107,8 @@ collection_verdict() {
   return 0
 }
 
-# ---------------------------------------------------------------------------------------
-# LAW-07: the trigger proves it can fire, on every invocation, before its verdict is trusted.
-# Each arm is a shape the gate exists to catch, and arm 5 is the exact shape the predecessor
-# passed: a real regression laundered by editing the floor down to meet it.
-# ---------------------------------------------------------------------------------------
+# The trigger proves it can fire, on every invocation, before its verdict is trusted; arm 5 is
+# a real regression laundered by editing the floor down to meet it.
 self_test() {
   local failures=0 out
 
@@ -216,8 +139,8 @@ self_test() {
   # Against the working-tree floor that reads as green; against a real ref it is two faults.
   _expect_fail  "6 lost tests + lowered floor" 80 90 80 "FAIL (count)"
   _expect_fail  "7 lost tests + lowered floor" 80 90 80 "FAIL (monotonicity)"
-  # AUDIT-1 F-12: the tree's own floor ratcheted PAST what the tree collects. Both other
-  # arms stay quiet — the count clears the REF floor and the tree floor only went up.
+  # The tree's own floor ratcheted PAST what the tree collects. Both other arms stay quiet —
+  # the count clears the REF floor and the tree floor only went up.
   _expect_fail  "7b floor above the collection" 95 90 100 "FAIL (over-ratchet)"
   _expect_clean "7c floor equal to the collection" 95 90 95
 
@@ -233,9 +156,8 @@ self_test() {
   RATCHET_RECORD="not a record" _expect_fail \
     "7h malformed record" 80 90 80 "is not a"
 
-  # Arms 8-11 drive `collection_verdict`. Arm 9 is F-816-33 VERBATIM: the summary line this
-  # tree actually printed under a planted import break, beside the status pytest actually
-  # exited with.
+  # Arms 8-11 drive `collection_verdict`. Arm 9 is VERBATIM the summary line and exit status
+  # this tree printed under a planted import break.
   _collection_clean() {  # label rc summary
     if ! out=$(collection_verdict "$2" "$3" 2>&1); then
       printf '    arm %s: fired on a finished collection -- %s\n' "$1" "$out" >&2
@@ -262,9 +184,8 @@ self_test() {
   return 0
 }
 
-# ---------------------------------------------------------------------------------------
-# Ref resolution. Echoes a git revision usable as `git show <rev>:<path>`, or nothing.
-# ---------------------------------------------------------------------------------------
+# Echoes a git revision usable as `git show <rev>:<path>`, or nothing. A stale local dev never
+# outranks a fetched origin/dev; the fetch is last as the only arm with a side effect.
 resolve_ref() {
   if git rev-parse --verify -q "refs/remotes/origin/$MAIN_BRANCH^{commit}" >/dev/null; then
     printf 'origin/%s' "$MAIN_BRANCH"; return 0
@@ -272,8 +193,8 @@ resolve_ref() {
   if git rev-parse --verify -q "refs/heads/$MAIN_BRANCH^{commit}" >/dev/null; then
     printf '%s' "$MAIN_BRANCH"; return 0
   fi
-  # Arm 3 -- the shallow-checkout repair. Best effort and never fatal: an offline clone
-  # must fall through to the bootstrap arm rather than die here.
+  # Arm 3: a depth-1 CI checkout has neither ref (`fetch-depth: 0` in ci.yml would retire this).
+  # Best effort and never fatal: an offline clone falls through to the bootstrap arm.
   if git remote get-url origin >/dev/null 2>&1 \
      && git fetch --quiet --depth=1 origin "$MAIN_BRANCH" >/dev/null 2>&1 \
      && git rev-parse --verify -q 'FETCH_HEAD^{commit}' >/dev/null; then
@@ -296,13 +217,10 @@ main() {
 
   self_test || exit 1
   if [ "$self_test_only" -eq 1 ]; then
-    # DERIVED, never transcribed (R192(e)): the tally used to read "4 clean arms + 7 firing
-    # arms" as a literal, which is a count that goes wrong the first time an arm is added and
-    # is then read as evidence. The arms count themselves.
+    # The arms count themselves: a transcribed tally goes wrong the first time an arm is added.
     local clean fired
-    # `|| true`: `grep -c` exits 1 on a zero count and `set -e` would kill the run — which
-    # would report the SELF-TEST as failing because it found no arms, the very confusion a
-    # derived tally exists to avoid. A zero prints as a zero and is visibly wrong.
+    # `|| true`: `grep -c` exits 1 on a zero count and `set -e` would kill the run; a zero
+    # prints as a zero and is visibly wrong.
     clean=$(grep -cE '^ *_(expect|collection)_clean +"' "$0" || true)
     fired=$(grep -cE '^ *_(expect|collection)_fail +"' "$0" || true)
     echo "gate 3c self-test: $clean clean arms + $fired firing arms, all correct"
@@ -357,15 +275,11 @@ main() {
     is_uint "$collected" || die "--collected wants a non-negative integer, got '$collected'"
     echo "gate 3c: collected count INJECTED via --collected (test-harness path, not measured)"
   else
+    # BOTH streams into the log and the status kept: a count from a collection that died is not one.
     local log pytest_rc=0 summary
     log=$(mktemp) || die "could not create a temp file for the collection log"
-    # BOTH streams into the log, and the status kept. The predecessor sent stderr to
-    # /dev/null and lost the status to a pipeline; that is the whole of F-816-33.
     # shellcheck disable=SC2086  # PYTEST_CMD is a command line, deliberately word-split.
-    # `-m ''` CLEARS the default-tier marker expression pyproject's addopts now carries (R330(g)):
-    # this gate counts the WHOLE tree, and deselection is not collection. Without it the count
-    # would still parse right by regex accident (`N/M tests collected` matches on M) and be one
-    # summary-format change away from reading the filtered N.
+    # `-m ''` clears addopts' default-tier marker: the gate counts the WHOLE tree, not the tier.
     $PYTEST_CMD --collect-only -q -m '' >"$log" 2>&1 || pytest_rc=$?
     summary=$(grep -Ei '[0-9]+ (tests? collected|errors?)|no tests ran' "$log" | tail -1)
     if ! collection_verdict "$pytest_rc" "$summary"; then
@@ -381,13 +295,10 @@ collection itself is probably broken, which is a worse failure than this gate"
   fi
 
   echo "collected=$collected floor=$ref_floor ref=$ref tree_floor=$tree_floor"
+  # Both arms run even when the first reds, so one run reports both facts.
   local count_rc=0 census_rc=0
   verdict "$collected" "$ref_floor" "$tree_floor" "$ref" || count_rc=$?
-  # AUDIT-1 F-12's other half, and it rides HERE because it is the same gate's subject: this
-  # gate's whole claim is that no test was LOST, and a deselecting marker loses a test from
-  # every tier the repo runs while leaving it COLLECTED and therefore counted. Both arms run
-  # even when the first reds — a run that stops at the count reports one fact when two were
-  # asked about.
+  # The tier census rides here: a deselecting marker loses a test from every tier yet leaves it counted.
   # shellcheck disable=SC2086  # PYTHON_BIN is a command line, deliberately word-split.
   $PYTHON_BIN "$(dirname "$0")/tier_census.py" || census_rc=$?
   if [ "$count_rc" -ne 0 ] || [ "$census_rc" -ne 0 ]; then

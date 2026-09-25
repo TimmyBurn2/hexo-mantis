@@ -18,13 +18,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-#: (function, is_method) -> the index at which `encoding` appears POSITIONALLY. The builtin and
-#: the Path method differ by one because `Path.open` has no `file` parameter, so collapsing them
-#: into one table would flag correct binary code AND miss a positional encoding:
-#:   open(file, mode, buffering, encoding, ...)      -> encoding 3, mode 1
-#:   Path.open(mode, buffering, encoding, ...)       -> encoding 2, mode 0
-#:   Path.read_text(encoding, errors, newline)       -> encoding 0, no mode
-#:   Path.write_text(data, encoding, errors, ...)    -> encoding 1, no mode
+#: (function, is_method) -> the POSITIONAL index of `encoding`. `Path.open` has no `file` parameter, so
+#: builtin and method differ by one: open(file, mode, buffering, encoding), Path.open(mode, buffering, encoding).
 POSITIONAL_ENCODING: dict[tuple[str, bool], int | None] = {
     ("open", False): 3,
     ("open", True): 2,

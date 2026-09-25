@@ -17,10 +17,8 @@ TOKEN_RE = re.compile(
 GENERATED_WHITELIST = ("vendor/external", "target/", "dist/")
 SCOPE = ["Makefile", "README.md", "CLAUDE.md"]
 
-#: Glob directory -> its OWN floor. A combined floor let a dissolved directory contribute zero
-#: while another directory's files carried the total over the bar, so the gate reported green
-#: over a scope nobody chose — the AUDIT-1 F-26 class, one level up. R346(e) dissolved
-#: `docs/registers/` and this gate globbed it for a whole era without raising.
+#: Glob directory -> its OWN floor: under a combined floor a dissolved directory contributes zero
+#: while another carries the total, and the gate reports green over a scope nobody chose.
 GLOB_SCOPE: dict[str, int] = {"docs/contracts": 5, "docs/governance": 4}
 
 #: Scanned-file exemptions, by declaration and with grounds, the way `docs/design/` is exempt.
@@ -32,9 +30,8 @@ SCAN_EXEMPT: dict[str, str] = {
     ),
 }
 
-#: Paths this repository REMOVED. A doc that records the removal names the old path correctly, so
-#: the token is not drift. Self-expiring: if a dissolved path is tracked again the gate raises,
-#: because the whitelist would then be hiding live references.
+#: Paths this repository REMOVED, so a doc recording the removal is not drift. Self-expiring: a
+#: dissolved path tracked again raises, since the whitelist would then hide live references.
 DISSOLVED_PATHS: dict[str, str] = {
     "docs/registers/": "dissolved by R346(e); governance moved to docs/governance/",
     "configs/run9.yaml": "deleted by R367 §0(4): the mint stood as run10's base (R365(a)) and the base "
@@ -50,7 +47,7 @@ def _scope_files() -> list[Path]:
     Raises:
         FileNotFoundError: a named scope file is missing, an exempt file is missing, or a glob
             directory yielded fewer than its own floor — each means the scan is not looking where
-            it thinks it is, and a gate that inspects nothing must never report clean (LAW-07).
+            it thinks it is, and a gate that inspects nothing must never report clean.
     """
     files = [Path(p) for p in SCOPE]
     missing = [str(f) for f in files if not f.is_file()]

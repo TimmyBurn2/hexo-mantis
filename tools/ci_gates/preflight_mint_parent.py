@@ -1,6 +1,5 @@
-# >300 justify (R8): the PARENT-ONLY half of tools/ci_gates/preflight_mint.py — exactly the leaf
-# layers with NO dependency on the tool side: shared vocabulary and exit taxonomy, the (a)/(b)
-# evaluators, the report helpers, the child classifier and the segment/verdict/identity leaves.
+# >300 justify (R8): the PARENT-ONLY half of tools/ci_gates/preflight_mint.py — the leaf layers with NO
+# tool-side dependency: vocabulary, exit taxonomy, evaluators, report helpers, child classifier and leaves.
 """The parent-only half of the mint preflight (CI gate 12).
 
 LOADED ONLY by tools/ci_gates/preflight_mint.py, via `spec_from_file_location` on a
@@ -41,9 +40,8 @@ DRAW_RATE_FLOOR_KEY = "train.draw_rate_abort.min_step"
 TIER_NONE = "none"
 TIER_SYNC_LAG = "sync_lag"
 TIER_FULL = "full"
-#: BOTH are required for a mint, and `full` COVERS `sync_lag`, so one green `full` run discharges
-#: both. MEASURED: on a production config the short tier is unreachable, because an armed
-#: `draw_rate_collapse` row raises the floor past it. Two COVERAGE CLAIMS, not two runs.
+#: BOTH are required and `full` COVERS `sync_lag`: two COVERAGE CLAIMS, not two runs. On a production
+#: config the short tier is unreachable, as an armed `draw_rate_collapse` row raises the floor past it.
 MINT_REQUIRED_TIERS: tuple[str, ...] = (TIER_SYNC_LAG, TIER_FULL)
 #: What each tier does NOT prove. NO default: falling back would publish ANOTHER tier's disclaimer.
 TIER_NOT_PROVEN: dict[str, str] = {
@@ -79,9 +77,8 @@ PASS_THROUGH = range(10, 42)
 #: Reserved by the run's own machinery — `monitor/heartbeat.py`, `monitor/supervise.py:39`.
 WATCHDOG_CODES = (42, 43, 45)
 RELAUNCH_BUDGET_CODE = 44
-#: The cooperative half of the reserved band. NOT watchdog codes: RETURNED by the child after the
-#: run unwound through its own close-out. A code outside `PASS_THROUGH` and outside this set falls
-#: through every arm to `PreflightBootFailedError` and COLLAPSES TO 33, destroying the signal.
+#: The cooperative half of the reserved band, RETURNED by the child after its own close-out. A code
+#: outside `PASS_THROUGH` and this set COLLAPSES TO 33 via `PreflightBootFailedError`, destroying the signal.
 ARMED_ABORT_CODES = (DRAW_RATE_COLLAPSE_EXIT_CODE, DISK_SPACE_EXHAUSTED_EXIT_CODE,
                      TERMINAL_EVAL_BROKEN_EXIT_CODE)
 #: The reserved band, derived so no prose literal can outgrow the tuples (the contract test reads it).
@@ -132,7 +129,7 @@ class PreflightOutDirReusedError(PreflightError):
 
 
 class PreflightMirrorReceiptsError(PreflightError):
-    """The burst's bundle and first shard were not receipted off-box within the wait (R349(b)):
+    """The burst's bundle and first shard were not receipted off-box within the wait:
     a START HALT decided AFTER the boot, because it needs the boot's own artifacts."""
     rc = 16
 
@@ -382,9 +379,8 @@ def _evaluate_lag(events: list[dict], *, cadence_steps: int,
             block["sub_reason"] = sub_reason
             return block
 
-    # b5b — the inversion axis. `unproven` is a NON-GREEN outcome, never rc 0: at cadence 1 a
-    # swapped-operand wiring is indistinguishable from a healthy one. At cadence > 1 the learner is
-    # STRUCTURALLY ahead between syncs, so zero discriminating samples is frozen, not merely blind.
+    # b5b — the inversion axis; `unproven` is NON-GREEN: at cadence 1 a swapped-operand wiring looks
+    # healthy, and at cadence > 1 the learner leads between syncs, so zero discriminating samples is frozen.
     if block["inversion_discrimination"] == "unproven":
         block["verdict"] = "fail"
         if int(cadence_steps) == 1:
@@ -408,7 +404,7 @@ def _evaluate_lag(events: list[dict], *, cadence_steps: int,
 def evaluate_assertions(events: list[dict], *, cadence_steps: int, burst_steps: int,
                         poll_interval_sec: float) -> dict:
     """The two dynamic assertions over one JSONL segment, in the report shape. Pure over the event
-    stream, which is what makes (a) and (b) LAW-07-satisfiable while TD-1 blocks the composition:
+    stream, which is what makes (a) and (b) mutation-testable while TD-1 blocks the composition:
     the stream comes from the REAL collaborators, and this is what the mutation corpus drives."""
     ground = _step_ground_truth(events, _named(events, "actor_lag_sample"))
     return {
@@ -477,7 +473,7 @@ def _not_run_reason(report: dict) -> str:
 
 def _finalise_not_run(report: dict) -> dict:
     """Re-derive every still-`not_run` disclaimer from the report's OWN final state: the report is
-    built before the run and written in a `finally` (LAW-14), so construction-time text is a
+    built before the run and written in a `finally`, so construction-time text is a
     PREDICTION and this is where it is replaced by the measurement."""
     for name in ("a_sync", "b_lag"):
         block = report["assertions"][name]
@@ -587,7 +583,7 @@ def _report_name(report: dict) -> str:
 
 
 def _write_report(out_dir: Path, report: dict) -> None:
-    """Write the evidence report — in a `finally`, ALWAYS (LAW-14).
+    """Write the evidence report — in a `finally`, ALWAYS.
 
     The one case a `finally` cannot cover is the write itself failing, and that is rc 41. The
     finalisers run HERE, not at the call site, so their invariants hold for every write path
@@ -656,9 +652,8 @@ def _classify_child(child: dict) -> None:
             "legitimately be raised by a preflight child"
         )
     if rc in ARMED_ABORT_CODES:
-        # BEFORE the rc-0 arm and the generic tail sniff, for the same anti-evasion reason arm 4
-        # sits before arm 5: this rc is the child's own authored outcome, and it cannot reach the
-        # [10, 41] pass-through, so without this arm it fell to rc 33.
+        # BEFORE the rc-0 arm and the tail sniff, as arm 4 sits before arm 5: this rc is the child's
+        # authored outcome outside the [10, 41] pass-through, so without this arm it falls to rc 33.
         raise PreflightArmedAbortFiredError(
             rc, f"the run's own ARMED ABORT fired and stopped the run cooperatively: child "
                 f"rc {rc}, the exit code `mantis.config.armed_aborts.MANIFEST` authors for "
@@ -669,9 +664,8 @@ def _classify_child(child: dict) -> None:
         return
     tail = str(child.get("stderr_tail") or "")
     if rc in PASS_THROUGH:
-        # BEFORE the stderr sniff on purpose: the loader wrappers append the underlying exception
-        # text, so a pydantic/yaml `'X' object has no attribute 'y'` lands in the tail of a child
-        # that exited with its OWN named code, which sniffing first turned into rc 32.
+        # BEFORE the stderr sniff: the loader wrappers append exception text, so a child exiting with its
+        # OWN named code can carry `'X' object has no attribute 'y'`, which sniffing first turns into rc 32.
         raise PreflightChildOutcomeError(
             rc, f"child exited {rc} with its own named outcome:\n{tail}")
     if "object has no attribute" in tail:

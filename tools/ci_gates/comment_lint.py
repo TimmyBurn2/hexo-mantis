@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
-# >300 justify: the three measures, the language scanners that feed them and the verdict they
-# are compared against are one authority. Split them and "what counts as a comment line" gets
-# decided in two places, which is the drift the ratchet exists to remove. The self-test corpus
-# stays in-file so the arms and the predicate they prove move together.
+# >300 justify: the measures, the scanners that feed them and the verdict are one authority, so "what
+# counts as a comment line" is decided once; the self-test corpus stays beside the predicate it proves.
 """Comment-length lint: the measures may fall and may never rise.
 
 The comment rule is a ratchet, not a cap: a block longer than two lines is allowed when it states
@@ -16,7 +14,7 @@ MEASURES, over tracked files in the four code scopes (``src/``, ``tools/``, ``cr
   * ``private_docstring_excess_lines`` the same over PRIVATE symbols (`_name`, or nested in a def).
   * ``rust_doc_excess_lines`` lines beyond the first in every ``///``/``//!`` run (Rust's docstrings).
   * ``ruling_cite_lines``     lines carrying a ruling/law/finding/card token over comments,
-    docstrings, Rust docs and text-format comments; bare cites are R10-and-up so gate 15's ``R8`` stays out.
+    docstrings, Rust docs and text-format comments; bare cites are two-digit-and-up so gate 15's header token stays out.
   * ``textfile_comment_excess_lines`` lines beyond two in own-line ``#`` runs over ``tools/``
     text formats, ``Makefile`` and ``.github/workflows/*.yml``; ``tests/``'s fixture registers stay out.
 

@@ -1,47 +1,7 @@
 #!/usr/bin/env bash
-# THE LOCAL GATE SET. Every gate CLAUDE.md lists, with the arguments CI passes, in one place.
-#
-# WHY THIS EXISTS (AUDIT-1 F-09). R311(b) suspended remote CI and made LOCAL GREEN the gate.
-# But there was no local runner: `make test` runs the default tier plus `cargo test`, which
-# does NOT compile `[[bench]]` targets, and `make bench` compiles exactly one of the eight.
-# `cargo clippy --workspace --all-targets --locked -- -D clippy::all` existed ONLY in
-# `.github/workflows/ci.yml`. So every "full local gate set" since the suspension excluded
-# `-D clippy::all` — including `incompatible_msrv`, the guard on the 1.87 floor — and never
-# compiled the bench targets standing behind `tools/bench_floors.toml`'s floors.
-# CLAUDE.md's own rule is "nothing lives only in workflow YAML".
-#
-# THE WITNESS, measured 2026-09-03 with `clippy::len_zero` planted in
-# `crates/mantis-selfplay/benches/queue_fuse_bench.rs`:
-#     cargo clippy --workspace --locked -- -D clippy::all   rc 0   GREEN
-#     make bench                                            rc 0   GREEN
-#     cargo test --workspace --locked --no-run              rc 0   GREEN, and its target list
-#                                                                  names NO bench binary
-#     make lint.rust  (clippy --all-targets)                rc 2   RED, naming clippy::len_zero
-#                                                                  in bench "queue_fuse_bench"
-# So `--all-targets` is the ONLY thing in the repo that compiles seven of the eight bench
-# targets, and before this file nothing local passed it.
-#
-# WHAT IT IS NOT. It is not a second authority over what a gate CHECKS: every row below shells
-# out to the same script or make target CI invokes, with the same arguments. A gate's logic
-# lives in its own file; this file only says WHICH gates there are and RUNS them all.
-#
-# ORDER. Cheap and structural first, so a typo reds in seconds rather than after the tier.
-# NOTHING short-circuits: every gate runs even after one reds, because a run that stops at the
-# first failure tells you about one gate when you wanted to know about seventeen.
-#
-# GATE 1 IS DELIBERATELY NOT HERE by default. Its fresh-clone `uv sync` is the one check no
-# local run reproduces cheaply (CLAUDE.md records the accepted cost), and it takes minutes.
-# `--with-fresh-sync` opts into it.
-#
-# THE SLOW TIER IS THE OTHER OPT-IN, and R333(b) is why it exists here at all. A `slow`-marked
-# test is deselected from BOTH tiers — `pytest -m "not integration and not slow"` and
-# `pytest -m integration` — so before this flag those tests were executed by NO gate. REPAIR-2
-# shipped a red into its own exit run because a repair made a signature stricter and the one
-# call site that broke was integration-marked: 4 669 green tests could not see it. That is the
-# general shape, and the slow tier is the LAST place it can still hide. The rule R333(b) sets
-# is that a stricter signature is swept over the whole tree BY STRUCTURE; the instrument is
-# that the tier which no tier runs becomes runnable by one flag, and its omission is printed
-# on every run exactly as gate 1's is.
+# THE LOCAL GATE SET: every CLAUDE.md gate with CI's arguments; remote CI is suspended, so this is the gate.
+# Each row calls the gate's own script or make target (no second authority); nothing short-circuits.
+# Gate 1 (minutes) and the slow tier (deselected by BOTH pytest tiers) are opt-in; omission prints every run.
 set -uo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 2
@@ -78,10 +38,8 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-# THE GATES NEVER RE-SYNC THE VENV (R348(a)). A bare `uv run` re-syncs to the default groups,
-# which on a box swaps the `cuda` extra's +cu128 torch back to the CPU wheel in the middle of
-# the set and gates a torch nobody chose. `UV_NO_SYNC` is uv's own `--no-sync`, inherited by
-# every `uv run` below; syncing is the caller's step — `make build` or `make build.cuda`.
+# THE GATES NEVER RE-SYNC THE VENV: a bare `uv run` swaps a box's CUDA torch for the CPU wheel
+# mid-set. Syncing is the caller's step (`make build` or `make build.cuda`).
 export UV_NO_SYNC=1
 printf 'run_all: venv gated AS BUILT (UV_NO_SYNC=1): torch %s\n' \
     "$($UV run python -c 'import torch; print(torch.__version__)' 2>/dev/null || echo absent)"
@@ -116,9 +74,8 @@ run_gate() {
 
 run_gate "gate 2a: cargo test workspace" \
     cargo test --workspace --locked
-# `--all-targets` is the load-bearing flag: without it the seven non-smoke bench targets are
-# never compiled by ANY local command, and the floors in tools/bench_floors.toml stand
-# behind code nothing builds.
+# `--all-targets` is load-bearing: nothing else local compiles the non-smoke bench targets
+# that stand behind tools/bench_floors.toml's floors.
 run_gate "gate 2b: clippy (-D clippy::all, --all-targets)" \
     cargo clippy --workspace --all-targets --locked -- -D clippy::all
 run_gate "gate 4: wasm check (mantis-graph dep-free)" \

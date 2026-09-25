@@ -10,7 +10,7 @@ written there is readable by anyone with the run URL, dispatcher sessions includ
 Reads one junit xml (pytest --junitxml), writes: failed/errored test ids with the first
 lines of their message, pass/fail/skip counts, and the slowest cases. Exit code is ALWAYS 0
 unless the xml itself is unreadable — this tool reports on a gate, it is not the gate
-(the pytest step's own exit code remains the verdict; R4/LAW-07 unaffected).
+(the pytest step's own exit code remains the verdict).
 
 Second surface, added after the first digest run: the job summary itself turned out to be
 session-gated for anonymous readers (the summary_partial route 404s without a logged-in
@@ -22,10 +22,8 @@ the counts always ride the one notice).
 """
 from __future__ import annotations
 
-# stdlib ElementTree is acceptable here: the xml is written by pytest in the SAME job
-# (trusted, self-produced), xml.etree rejects external entities outright, and the 3.11
-# floor means expat >= 2.4 with billion-laughs amplification protection. Revisit only if
-# this tool ever reads xml it did not produce.
+# stdlib ElementTree is safe here: the xml is pytest's own from the SAME job, xml.etree rejects external
+# entities, and the 3.11 floor's expat >= 2.4 guards billion-laughs. Revisit if it ever reads foreign xml.
 import argparse
 import os
 import sys

@@ -30,9 +30,8 @@ _KEY_RE = re.compile(r"`([a-z_]+(?:\.[A-Za-z_][A-Za-z0-9_]*)+)`")
 #: A citation SHAPED like a config key: an all-lowercase root and snake_case tails.
 _KEY_SHAPED_RE = re.compile(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+")
 
-#: The dotted roots this doc may cite that are NOT `RunConfig` sections. A stale key and a
-#: module path are structurally identical (`train.gone_away` vs `torch.dtype`), so the
-#: legitimate non-config roots are DECLARED and any other unknown root is stale.
+#: Dotted roots this doc may cite that are NOT `RunConfig` sections: a stale key and a module path
+#: are structurally identical (`train.gone_away` vs `torch.dtype`), so any other unknown root is stale.
 _NON_CONFIG_ROOTS: frozenset[str] = frozenset({
     "mantis",  # the package; symbol citations are separately resolved by `_SYMBOL_RE`
     "torch",   # `torch.dtype` in the amp-dtype rows
@@ -149,9 +148,8 @@ def check(doc_path: Path) -> list[str]:
             key = match.group(1)
             root = key.split(".")[0]
             if root not in sections:
-                # A stale citation and a module path are structurally identical, so shape
-                # separates them: `a.b_c` with a snake_case tail is a config-key CITATION, and
-                # an unknown root then means the section is gone.
+                # Shape separates a stale citation from a module path: a snake_case-tailed
+                # `a.b_c` is a config-key CITATION, so an unknown root means the section is gone.
                 if _KEY_SHAPED_RE.fullmatch(key) and root not in _NON_CONFIG_ROOTS:
                     failures.append(
                         f"{doc_path}:{lineno}: cites `{key}`, whose root section `{root}` "

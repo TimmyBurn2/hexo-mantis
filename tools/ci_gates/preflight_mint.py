@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
-# >300 justify (R8): the parent re-execs ITSELF as the boot child by os.path.abspath(__file__),
-# so ONE FILE is the containment mechanism rather than a packaging preference; the frozen token
-# censuses sweep this file, and the audit read path must see THIS module's globals at call time
-# for the `TOOL.MANIFEST` monkeypatch seam. The parent-only leaves live in
-# `preflight_mint_parent.py` and are re-exported by plain assignment, so every oracle binding
-# `TOOL.<name>` still binds one object.
+# >300 justify (R8): the parent re-execs ITSELF as the boot child by os.path.abspath(__file__), so ONE FILE
+# is the containment mechanism, and the audit must see THIS module's globals for the `TOOL.MANIFEST` seam.
+# Parent-only leaves live in `preflight_mint_parent.py`, re-exported by plain assignment (one object each).
 """CI gate 12 — the mint preflight: one tool, two modes, one manifest.
 
 Mode AUDIT (`--audit-only`): no boot, no burst, no GPU. Reads the committed production configs
@@ -61,7 +58,7 @@ fired with NO authored code is rc 33 naming the rule.
 MINT TIERS. The report says what the burst it ran does and does not prove, in a `tier` block
 derived from `_burst_floors`: `none`, `sync_lag` and `full`, where `full` COVERS `sync_lag`. On a
 production config the shortest legal burst IS the `sync_lag` tier — a PREFIX of the run
-(`compose_run(burst_stop_step=)`, CARD-STAMP-FLOOR); the draw-rate row decides the tier and never
+(`compose_run(burst_stop_step=)`); the draw-rate row decides the tier and never
 refuses the burst, and `full` needs a burst past its `min_step` (25001 on run5/run6 — a lower
 bound of >= 1041.5 s of train-step compute at the recorded 41.66 ms/step, game-bound besides).
 """
@@ -100,9 +97,8 @@ from mantis.diagnostics.mirror_receipts import MirrorReceiptsMissingError, await
 REPO_ROOT = Path(os.path.abspath(__file__)).resolve().parents[2]
 
 
-#: The parent-only half loads off THIS file's own directory — never sys.path — and is re-exported
-#: by PLAIN assignment so every oracle binding `TOOL.<name>` binds one object. The sys.modules
-#: guard keys on the sibling's resolved path, so two trees each get their own sibling.
+#: The parent-only half loads off THIS file's directory — never sys.path — re-exported by PLAIN
+#: assignment; the sys.modules guard keys on its resolved path, so two trees get their own sibling.
 _PARENT_HALF_PATH = Path(__file__).resolve().with_name("preflight_mint_parent.py")
 _PARENT_HALF_MODULE = "_preflight_mint_parent"
 
@@ -210,9 +206,8 @@ child_config_identity = _parent_half.child_config_identity
 OVERRIDE_KEYS: tuple[str, ...] = ()
 
 REPORT_SCHEMA = "preflight-mint-v1"
-#: Printed at the TOP of `_run_audit`, before `_audit_manifest_and_configs` can raise, so it
-#: appears on rc-30 and rc-31 runs too. The pinned substring `rc 0 covers assertion (c) ONLY` is
-#: preserved verbatim: a BYTE-FROZEN oracle asserts it and rewording past it turned that red.
+#: Printed at the TOP of `_run_audit`, before anything can raise, so rc-30/31 runs carry it too. The
+#: substring `rc 0 covers assertion (c) ONLY` is BYTE-FROZEN: an oracle asserts it verbatim.
 AUDIT_STDOUT_LINE = (
     "preflight: mode=AUDIT — assertions (a) sync and (b) lag were NOT RUN (no boot, no "
     "burst). If this run is green, rc 0 covers assertion (c) ONLY."
@@ -241,7 +236,7 @@ def verify_source_pins(
 
 
 def _resolve_production_configs() -> list[Path]:
-    """The census (R367(a)): every config under `configs/` that no exempt row names — a config nobody
+    """The census: every config under `configs/` that no exempt row names — a config nobody
     classified is AUDITED, never forgotten; Raises: PreflightManifestError — a stale exemption or an
     empty census, the census's own words (rc 31)."""
     try:
@@ -361,9 +356,8 @@ def _print_deferred_rows(*, manifest: tuple[ArmedAbort, ...] = MANIFEST) -> None
           "closed:")
     for row in deferred:
         print(f"  {row.name}  owner={row.owner}")
-        # A row can be deferred because its arming surface is missing OR because nobody
-        # pre-registered a value; `surface` is hoisted out of the f-string because a replacement
-        # field spanning a line break is 3.12-only syntax, a SyntaxError on the 3.11 floor.
+        # Deferred for a missing arming surface OR an unregistered value. `surface` is hoisted out of
+        # the f-string: a replacement field spanning a line break is 3.12-only syntax.
         surface = "present" if row.ceiling_path is None else f"present, ceiling {row.ceiling_path}"
         print(f"    arming surface: {row.config_path} "
               f"({surface}) — NOT audited, so a mint does not gate on it")
@@ -388,10 +382,8 @@ def _print_deferred_rows(*, manifest: tuple[ArmedAbort, ...] = MANIFEST) -> None
         print(f"    why: {row.note}")
 
 
-#: Synthetic operands and PERIODS for `_cadence_self_test`, and the run length they are judged
-#: against: HEALTHY is run5's shape, VACUOUS a sampling period three orders of magnitude past the
-#: whole run. None is read from any config, and the period is separate from the operand tuple
-#: because a period belongs to the axis's SAMPLE CLOCK, not to a row.
+#: Synthetic operands, PERIODS and run length for `_cadence_self_test`, read from no config: HEALTHY is
+#: run5's shape, VACUOUS a period far past the run. A period belongs to the axis's SAMPLE CLOCK, not a row.
 _SELF_TEST_RUN_LENGTH = 1_000_000
 _SELF_TEST_HEALTHY_PERIOD = 1_000
 _SELF_TEST_VACUOUS_PERIOD = 1_000_000_000
@@ -436,7 +428,7 @@ def _cadence_self_test() -> list[str]:
             f"    arm C: the lag cadence computed {lag!r} for a threshold of 100, not 101 — "
             "member dispatch has collapsed and every row is being judged by one arithmetic"
         )
-    # (arm D, the EVAL-ROUND clock's own self-test, retired with its one row by R362(c).)
+    # (No arm D: the EVAL-ROUND clock's own self-test retired with its one row.)
     periods = {clock: clock.period_path for clock in SampleClock
                if clock.period_path is not None}
     if len(set(periods.values())) != len(periods):
@@ -477,9 +469,8 @@ def _audit_manifest_and_configs(paths: list[Path]) -> dict:
             "the armed-abort manifest is vacuous: an empty required set audits every config green"
         )
     _resolve_production_configs()
-    # The scan's RESULT is what the report publishes. `source_pins_ok` used to be the literal
-    # `True`, so deleting this call left the report claiming a scan that never ran, with the
-    # whole default tier green. Both report fields are derived from `broken` / `scanned`.
+    # The report publishes the scan's RESULT, both fields derived from `broken` / `scanned`: a literal
+    # `True` once claimed a scan that never ran.
     scanned = [row.name for row in MANIFEST if row.source_pin is not None]
     broken = verify_source_pins(MANIFEST, repo_root=REPO_ROOT)
     if broken:
@@ -495,9 +486,8 @@ def _audit_manifest_and_configs(paths: list[Path]) -> dict:
         try:
             config = _load(path)
             audit = audit_arming(config)
-            # The SECOND half of assertion (c), on the same loaded config so the two answers
-            # cannot be about different bytes. `fraction` is passed EXPLICITLY because the report
-            # block and the rc-30 message interpolate it as read HERE.
+            # The SECOND half of assertion (c), on the same loaded bytes. `fraction` is EXPLICIT
+            # because the report block and the rc-30 message interpolate it as read HERE.
             verdicts = audit_cadence(config, fraction=EARLIEST_FIRE_FRACTION)
         except ArmingSurfaceMissingError as exc:
             # The shipped module raises the NAMED error and the tool maps it onto its own
@@ -709,9 +699,8 @@ def _boot_main(args) -> int:
     from mantis.run import build_run_collaborators, compose_run
 
     collab = build_run_collaborators(config=config, out_dir=args.out_dir)
-    # A run RESUMED past its ceiling terminates having performed zero syncs, which looks
-    # EXACTLY like the frozen actor this preflight exists to find. The builder never passes
-    # `checkpoint_path`, and a nonzero step here is a named refusal, not a warning.
+    # A run RESUMED past its ceiling performs zero syncs, EXACTLY like the frozen actor this preflight
+    # hunts, so a nonzero step is a named refusal (the builder never passes `checkpoint_path`).
     if int(collab.trainer.step) != 0:
         raise PreflightResumedTrainerError(
             f"the freshly-built trainer reports step {int(collab.trainer.step)}, not 0: a "
@@ -756,9 +745,8 @@ def _run_child(args, report: dict) -> dict:
     started = time.monotonic()
     proc = subprocess.Popen(_child_argv(args), start_new_session=True,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    # `report["child"]` is assigned BEFORE the blocking `communicate` — the ordinary place for an
-    # interrupt to land — because `_not_run_reason` discriminates on `child is None` and would
-    # otherwise publish "NO boot was spawned" for a child that is running.
+    # Assigned BEFORE the blocking `communicate`, where an interrupt lands: `_not_run_reason` keys on
+    # `child is None` and would publish "NO boot was spawned" for a running child.
     child: dict = {"rc": None, "rc_convention": RC_CONVENTION, "raised_by": "parent",
                    "spawned": True, "pid": int(proc.pid), "wall_clock_sec": None,
                    "timed_out": False, "outcome": "in_flight"}
@@ -775,9 +763,8 @@ def _run_child(args, report: dict) -> dict:
             os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
             stdout, stderr = proc.communicate()
     rc = int(proc.returncode)
-    # The 4000-char tails were an invented budget AND the classifier's input, so a truncated
-    # traceback silently downgraded a tree defect from 32 to 33. The FULL streams spool beside the
-    # report; the classifier keeps reading the TAIL, where a wall's `AttributeError` line lands.
+    # The FULL streams spool beside the report, since a truncated traceback downgrades a tree defect
+    # from 32 to 33; the classifier reads the TAIL, where a wall's `AttributeError` line lands.
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)  # a child may die before creating it
     stdout_spool = out_dir / "child_stdout.log"
@@ -828,7 +815,7 @@ def _assert_cuda_build_halt(booted: RunConfig, report: dict) -> None:
 
 
 def _assert_mirror_receipts_halt(booted: RunConfig, out_dir: Path, args, report: dict) -> None:
-    """The START HALT decided AFTER the boot (R349(b)): the burst's bundle and first shard carry
+    """The START HALT decided AFTER the boot: the burst's bundle and first shard carry
     the puller's receipts, waited for up to `--receipt-wait-sec`.
 
     Raises:
@@ -842,7 +829,7 @@ def _assert_mirror_receipts_halt(booted: RunConfig, out_dir: Path, args, report:
 
 
 def _stamp_pass(config: RunConfig, path: Path, args, report: dict, out_dir: Path) -> None:
-    """Write the R348(c) stamp for a preflight that REACHED its verdict (after `_verdict_exit`)."""
+    """Write the stamp for a preflight that REACHED its verdict (after `_verdict_exit`)."""
     stamp_path = write_stamp(
         config=config, config_path=path, tree_root=REPO_ROOT,
         halts={"workspace": report["workspace"], "cuda_build": report["cuda_build"]},
@@ -895,9 +882,8 @@ def _run_preflight(args, report: dict, out_dir: Path) -> None:
         child["fired_reason"] = fired[-1].get("reason")
     report["events"] = _events_block(segments, events)
     _classify_child(child)  # the child's status is evaluated BEFORE the predicates
-    # F-B1 closure: copy the child's OWN published boot identity into the child block and
-    # Ordered AFTER _classify_child (a dead child is a child-status failure, not an identity
-    # one) and BEFORE the predicates (a burst on the wrong config proves nothing).
+    # The child's OWN boot identity: AFTER _classify_child (a dead child is a status failure, not an
+    # identity one) and BEFORE the predicates (a burst on the wrong config proves nothing).
     child["booted_config_sha256"], child["config_identity"] = child_config_identity(
         events, parent_sha=str(report["override"]["booted_config_sha256"]))
     if child["config_identity"] == "mismatch":
@@ -917,7 +903,7 @@ def _run_preflight(args, report: dict, out_dir: Path) -> None:
     report["assertions"]["b_lag"] = blocks["b_lag"]
     _verdict_exit(blocks)
     # The mirror halt comes LAST: a burst that did not pass leaves nothing worth mirroring, and
-    # a stamp must carry both readings (R348(c)).
+    # a stamp must carry both readings.
     _assert_mirror_receipts_halt(booted, out_dir, args, report)
     _stamp_pass(config, path, args, report, out_dir)
 
@@ -940,9 +926,8 @@ def _run_audit(args, report: dict) -> None:
 
     if named is not None:
         _publish(named)
-    # The manifest audit runs BEFORE anything indexes `paths`: it carries the vacuity guard,
-    # so an empty census is rc 31 by name rather than an `IndexError` collapsing into an
-    # unnamed rc 1.
+    # The manifest audit runs BEFORE anything indexes `paths`: its vacuity guard makes an empty
+    # census rc 31 by name, not an `IndexError` collapsing into an unnamed rc 1.
     report["manifest"] = _audit_manifest_and_configs(paths)
     if named is None:
         _publish(paths[0])
@@ -957,9 +942,8 @@ def main(argv: list[str] | None = None) -> int:
         try:
             return _boot_main(args)
         except PreflightError as exc:
-            # The child exits with its OWN named code so the parent can propagate it
-            # unchanged. A tree defect is deliberately NOT caught — its traceback is what the
-            # parent classifies into rc 32.
+            # The child exits with its OWN named code for the parent to propagate; a tree defect
+            # is NOT caught, because its traceback is what the parent classifies into rc 32.
             print(f"preflight child: rc {exc.rc} — {type(exc).__name__}: {exc}",
                   file=sys.stderr)
             return int(exc.rc)
@@ -988,11 +972,9 @@ def main(argv: list[str] | None = None) -> int:
         report.update(verdict="fail", rc=rc, failure="PreflightInternalError")
         print(f"PREFLIGHT NOT GREEN: rc {rc} — PreflightInternalError: {exc!r}",
               file=sys.stderr)
-    except BaseException as exc:  # noqa: BLE001 — AUDIT-1 F-03: stamp, then RE-RAISE
-        # A `KeyboardInterrupt` during a long burst, or a callee's `SystemExit`, used to
-        # unwind past both arms above and land an artifact still carrying the skeleton's
-        # `verdict: "pass", rc: 0`. Stamped here and RE-RAISED: this arm changes what the
-        # report says, never what the process does.
+    except BaseException as exc:  # noqa: BLE001 — stamp, then RE-RAISE
+        # A `KeyboardInterrupt` or `SystemExit` would leave the skeleton's `verdict: "pass", rc: 0`;
+        # stamped and RE-RAISED here, it changes what the report says, never what the process does.
         rc = PreflightInterruptedError.rc
         report.update(verdict="fail", rc=rc,
                       failure=PreflightInterruptedError.__name__,

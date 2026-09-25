@@ -1,50 +1,13 @@
 #!/usr/bin/env bash
-# lint_gate.sh — the curated lint/type gate (WPCLEAN Phase LG, executing CARD-LINT-GATE / R98).
-#
-# EXIT CODES (R289(u) made these distinct; before it there were only 0 and 1):
-#   0  every enforced rule is clean, and both tools actually RAN
-#   1  a rule is red — ruff findings, or pyright errorCount > 0. Something was measured.
-#   2  REFUSAL: a tool could not be run at all (the mise/node shim with no selected node
-#      version is the founding case), or pyright ran but emitted no readable summary.
-#      NOTHING was measured, so nothing may be reported — a refusal is deliberately not a
-#      red, because "the host lacks an interpreter" and "the code has type errors" are
-#      different facts and collapsing them is how a gate starts lying.
-#
-# EVERY rule this gate enforces is (i) ZERO at the adoption commit (R98's no-lying-gate law:
-# no gate over a known-dirty baseline) and (ii) tied to a NAMED defect class from THIS repo's
-# history — never the advisory backlog wholesale. The mapping:
-#
-#   rule / check            named defect class it would have caught here
-#   ---------------------   ------------------------------------------------------------------
-#   F (incl. F601)          the ca237d2 incident: a 20-key registry block duplicated verbatim
-#                           in test_every_key_has_consumer.py — the dict literal silently
-#                           collapsed, tests stayed green, ruff carried 20 F601 findings for
-#                           four commits while nothing read them (the incident that ratified
-#                           this card, R98).
-#   invalid-syntax @ py311  3.12-isms under the 3.11 floor: preflight_mint.py:952 could not
-#   (ruff parser +          PARSE on the pinned CI interpreter (gate 12 dead on 3.11) and
-#   pyright py 3.11)        test_armed_abort_manifest.py used 3.12-only tokenize attrs — both
-#                           live at the WPCLEAN census, both invisible on the 3.13 dev venv.
-#   PLE                     PLE0303: CorpusSource.__len__ -> int | None, a live TypeError-in-
-#                           waiting at census (fixed same-phase).
-#   E/W/B/BLE/I/UP          zeroed by the Phase LT burn-down and held at zero here so the
-#                           select list in pyproject stays an enforced claim, not advisory
-#                           fog. BLE is repo_design §11's own ban. E501 is dispositioned
-#                           NEVER and ignored in config (CENSUS_LT §7) — not enforced here.
-#   pyright (basic,         the None-flow / wrong-shape class: 57 basic-mode src findings at
-#   src+tools, ZERO)        census including reachable TypeErrors (see IMPL_NOTES_LT_PYRIGHT).
-#
-# The pyright UNDECLARED-MEMBER class (called-and-undeclared on a protocol seam — TD-1's
-# class) is deliberately NOT adopted here: the AST conformance gate
-# (tests/train/test_trainer_seam_conformance.py) covers it natively, seam-scoped and
-# mutation-tested (R106). Strict-mode pyright is CARDED adopt-later (CARD-PYRIGHT-STRICT),
-# not enforced: 71.6% of its output was measured config-artifact noise (CENSUS_LT §5b).
-#
-# Self-test (LAW-07: the gate must be able to fire): --self-test plants one violation per
-# arm through stdin/scratch fixtures and requires each arm to go RED, then re-runs the real
-# gate. A gate whose trigger cannot fire is a phantom input (LAW-07's own class).
+# The curated lint/type gate (CARD-LINT-GATE). rc 0 clean and both tools RAN; rc 1 a rule is red;
+# rc 2 REFUSAL, a tool could not run or gave no summary: a missing interpreter is not a type error.
+# Each rule is zero at adoption and names the defect class it would have caught here:
+#   F (F601) a duplicated dict key silently collapsed a test registry; py311 syntax could not parse
+#   on the pinned 3.11 interpreter; PLE0303 a `__len__ -> int | None`; E/W/B/BLE/I/UP held at zero;
+#   pyright basic the None-flow / wrong-shape class. Seam members and strict mode are not adopted:
+#   tests/train/test_trainer_seam_conformance.py covers the first; the second is carded (config noise).
 set -u
-# THE GATES NEVER RE-SYNC THE VENV (R348(a), B-5): `uv run` inherits uv's own `--no-sync`.
+# THE GATES NEVER RE-SYNC THE VENV: `uv run` inherits uv's own `--no-sync`.
 export UV_NO_SYNC=1
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -52,35 +15,19 @@ cd "$REPO_ROOT"
 
 run_ruff() { uv run ruff check . ; }
 run_pyright_count() {
-  # R313(c) PIPE-EXIT LAW. `pyright` is a VERIFIER sitting upstream of a pipe: without
-  # pipefail this function's status is the JSON reader's, so a pyright that dies while still
-  # emitting parseable JSON reports its errorCount and the gate reads green. Scoped to a
-  # SUBSHELL rather than set globally, because this file's `printf ... | grep -q` idioms
-  # deliberately want the DOWNSTREAM status and pipefail must not reach them.
+  # pipefail, or a pyright that dies mid-JSON reports the reader's status and reads green. Subshell-
+  # scoped: this file's `printf ... | grep -q` idioms want the DOWNSTREAM status.
   ( set -o pipefail
     uv run pyright --outputjson 2>/dev/null \
       | uv run python -c 'import json,sys; s=json.load(sys.stdin)["summary"]; print(s["errorCount"], s.get("filesAnalyzed", -1))' )
 }
 
-# AUDIT-1 F-26. The gate read `errorCount` ALONE. A pyright that analysed ZERO files reports
-# `errorCount: 0` — a perfect green over nothing analysed — and every way that happens is a
-# host or config condition, not a clean tree: a broken `include`, a pyproject edit that empties
-# the file set, a wrong CWD. The floor is deliberately generous; it exists to catch "nothing",
-# not to track the file count, so it does not need re-editing as the tree grows.
+# `errorCount: 0` over zero analysed files is a green over nothing. The floor catches "nothing",
+# not the file count, so it needs no re-editing as the tree grows.
 PYRIGHT_MIN_FILES=100
 
-# ── R289(u): a missing interpreter REFUSES; it is never reported as a failed fixture ──────
-# `uv run pyright` is a shim over node. When node has no selected version the shim writes to
-# stderr, prints NOTHING on stdout, and `--outputjson` therefore yields no JSON at all. The
-# previous code swallowed that stderr, let `json.load` raise, read the empty count as 0, and
-# announced "pyright fixture did not red" -- blaming this gate's own test for the HOST's
-# missing tool. A missing interpreter and a broken config are indistinguishable through
-# `--outputjson`, so the gate fails toward REFUSAL with a named cause (the gate-17
-# degrade-wide precedent), on its own exit code.
-#
-# `_classify_pyright_probe` is a PURE classifier over probe text so the self-test arm can
-# drive it with synthetic input -- the arm must fire on a healthy host, or it would only ever
-# run on the broken one it exists to describe.
+# A missing node behind the pyright shim yields no JSON, like a broken config, so it REFUSES with a
+# named cause. Pure over probe text, so the self-test drives it on a healthy host.
 PYRIGHT_REFUSED_RC=2
 
 _classify_pyright_probe() {
@@ -118,8 +65,7 @@ self_test() {
       | uv run ruff check --stdin-filename src/mantis/_lint_gate_selftest.py - >/dev/null 2>&1; then
     echo "lint_gate SELF-TEST FAIL: 3.12-only syntax did not red under the py311 floor" >&2; return 1
   fi
-  # Arm 4 — R289(u): a missing interpreter REFUSES with a named cause and is NOT reported as
-  # a failed fixture. Driven with synthetic probe text, so the arm fires on a healthy host.
+  # Arm 4 — a missing interpreter REFUSES with a named cause, not a failed fixture.
   if _classify_pyright_probe "mise ERROR No version is set for shim: node" 1 2>/dev/null; then
     echo "lint_gate SELF-TEST FAIL: missing-interpreter probe did not refuse" >&2; return 1
   fi
@@ -148,8 +94,7 @@ if [ "${1:-}" = "--self-test" ]; then
   self_test || exit 1
 fi
 
-# R368(g) comment ratchet. FIRST because it needs no node: a pyright refusal must not
-# take the comment measures down with it.
+# The comment ratchet runs FIRST because it needs no node: a pyright refusal must not take it down.
 echo "lint_gate: comment-length ratchet (R368(g))"
 uv run python tools/ci_gates/comment_lint.py \
   || { echo "lint_gate: COMMENT RATCHET RED" >&2; exit 1; }
@@ -168,9 +113,7 @@ if [ -z "${ERRS}" ]; then
   echo "  nothing is reported (R289(u)). rc ${PYRIGHT_REFUSED_RC}." >&2
   exit "$PYRIGHT_REFUSED_RC"
 fi
-# AUDIT-1 F-26: `filesAnalyzed` below the floor is a REFUSAL, not a green. `errorCount: 0`
-# over zero files is the most convincing green this gate can print and it means nothing was
-# checked — the same class as gate 17's empty scope and gate 10's empty glob.
+# `filesAnalyzed` below the floor is a REFUSAL, not a green: nothing was checked.
 if [ "${FILES}" -lt "${PYRIGHT_MIN_FILES}" ] 2>/dev/null; then
   echo "lint_gate: REFUSING -- pyright analysed ${FILES} file(s), below the floor of" >&2
   echo "  ${PYRIGHT_MIN_FILES}. errorCount ${ERRS} over that scope is a green over nothing:" >&2
