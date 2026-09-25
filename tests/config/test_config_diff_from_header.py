@@ -8,9 +8,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
-from mantis.config.loader import discover_configs
+from mantis.config.census import production_configs
+from mantis.config.loader import discover_configs, load_config
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MINT = REPO_ROOT / "tools" / "mint_config.py"
@@ -116,7 +118,7 @@ def test_invalid_config_exits_2(tmp_path):
 # ── F2 — arm --from-header structurally over the SHIPPED configs (CI test tier, gate 3) ──
 def test_every_committed_config_header_is_truthful():
     # ADJ-13 F-1 corrective pass (recheck R-5): the ONE discovery authority, not a
-    # sixth flat glob. A flat `*.yaml` census is blind to `configs/prod/run6.yaml`,
+    # sixth flat glob. A flat `*.yaml` census is blind to `configs/prod/<name>.yaml`,
     # which gate 7 and gate 12 both now make legal.
     configs = discover_configs(REPO_ROOT / "configs")
     assert configs, "no committed configs found"
@@ -126,12 +128,15 @@ def test_every_committed_config_header_is_truthful():
         assert "MATCH" in res.stdout
 
 
-def test_committed_config_body_lie_would_be_caught(tmp_path):
-    # A real mutation (not tautological): flip a run5 body key NOT listed in its header -> exit 1.
-    src = (REPO_ROOT / "configs" / "run6.yaml").read_text(encoding="utf-8")
-    assert "random_model_sims: 96" in src  # not in run5's header (only run_id + seed are)
-    lie = tmp_path / "run5_lie.yaml"
-    lie.write_text(src.replace("random_model_sims: 96", "random_model_sims: 64"), encoding="utf-8")
+@pytest.mark.parametrize("production", production_configs(REPO_ROOT), ids=lambda p: p.name)
+def test_committed_config_body_lie_would_be_caught(tmp_path, production):
+    # A real mutation (not tautological): flip a body key NOT listed in its header -> exit 1.
+    src = production.read_text(encoding="utf-8")
+    sims = load_config(production).eval.random_model_sims
+    line = f"random_model_sims: {sims}"
+    assert src.count(line) == 1 and "delta: eval.random_model_sims" not in src
+    lie = tmp_path / "lie.yaml"
+    lie.write_text(src.replace(line, f"random_model_sims: {sims + 1}"), encoding="utf-8")
     res = _from_header(lie)
     assert res.returncode == 1
     assert "random_model_sims" in res.stdout

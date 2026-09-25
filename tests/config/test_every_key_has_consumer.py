@@ -37,11 +37,11 @@ CONSUMER_REGISTRY = {
     "identity.encoding": "reconcile_encoding + encoding regime-parity (O11) + emit",
     "identity.representation": "resolve_amp_dtype + IdentityConfig runtime consistency guard (F1) + O11 + emit",
     "identity.arch_kind": "arch_from_spec_and_config via declared_arch_kind -> select_arch (the "
-                          "arch-selector ROW, R330(e); OPTIONAL, absent until run6's mint writes it "
+                          "arch-selector ROW, R330(e); OPTIONAL, absent until a mint writes it "
                           "per R323(b); absence resolves to the pinned incumbent)",
     "identity.warm_start.checkpoint": "resolve_bc_warm_start -> apply_bc_warm_start, called from "
                                       "init_trainer's FRESH branch (the BC warm-start ROW, R332(d) / "
-                                      "AUDIT-1 F-19; OPTIONAL, absent until run6's mint writes it)",
+                                      "AUDIT-1 F-19; OPTIONAL, absent until a mint writes it)",
     "identity.warm_start.net_hash": "resolve_bc_warm_start -> apply_bc_warm_start identity check: "
                                     "net_param_hash of the net rebuilt from the checkpoint's OWN "
                                     "stamp must equal this, else WarmStartIdentityError (R332(d))",

@@ -18,6 +18,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
+from mantis.config.census import discovered_config_paths
 from mantis.config.loader import load_config
 from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
 from mantis.config.resolve import resolve_monitor_config
@@ -41,7 +42,7 @@ eval_block, inference_block = _sb.eval_block, _sb.inference_block
 monitor_block, selfplay_block, train_block = _sb.monitor_block, _sb.selfplay_block, _sb.train_block
 
 _REPO = Path(__file__).resolve().parents[2]
-_CONFIGS = ("dev_example.yaml", "run6.yaml", "smoke_preflight_armed.yaml")
+_CONFIGS = discovered_config_paths(_REPO)
 
 _NEW_KEYS = (
     ("train", "actor_sync_cadence_steps"),
@@ -144,9 +145,9 @@ def test_runtime_monitor_config_carries_the_smoke_posture() -> None:
 # the minted configs carry all three keys (a hand-revert fails LOCALLY)
 @pytest.mark.parametrize("name", _CONFIGS)
 def test_minted_config_carries_all_three_keys(name: str) -> None:
-    data = yaml.safe_load((_REPO / "configs" / name).read_text(encoding="utf-8"))
+    data = yaml.safe_load((_REPO / name).read_text(encoding="utf-8"))
     for section, key in _NEW_KEYS:
         assert key in data.get(section, {}), (
-            f"configs/{name}: missing {section}.{key} — configs are minted complete (R1); "
+            f"{name}: missing {section}.{key} — configs are minted complete (R1); "
             "a hand-reverted file must fail here, not only in CI gate 7"
         )

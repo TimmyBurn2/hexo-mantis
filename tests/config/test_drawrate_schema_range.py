@@ -24,17 +24,19 @@ from mantis.util.constants import DRAW_RATE_WINDOW
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIGS_DIR = REPO_ROOT / "configs"
+#: Any census member: the arms vary the draw-rate block and read `n_workers` off the same file.
+PRODUCTION_CONFIG = production_configs(REPO_ROOT)[0]
 
 #: Pre-registered run-scoped constants. NOT tunables: mint prereg is the only place they may
 #: change, so they are written here as the pin that makes an in-place edit visible.
-RUN5_PREREG = {"threshold": 0.25, "min_step": 25000, "N_pool_min": 50, "consec": 3}
+DRAW_RATE_PREREG = {"threshold": 0.25, "min_step": 25000, "N_pool_min": 50, "consec": 3}
 
 
 #: The production evidence ceiling, `DRAW_RATE_WINDOW * selfplay.n_workers`, read off the live
 #: config. Derived once so every arm below follows a re-minted `n_workers` instead of asserting a
 #: literal that was only true at a particular pick.
-_RUN5_EVIDENCE_CEILING = DRAW_RATE_WINDOW * load_config(
-    CONFIGS_DIR / "run6.yaml").selfplay.n_workers
+_EVIDENCE_CEILING = DRAW_RATE_WINDOW * load_config(
+    PRODUCTION_CONFIG).selfplay.n_workers
 
 
 def _with_block(payload):
@@ -44,7 +46,7 @@ def _with_block(payload):
     block would silently inherit the missing key and the "the three are inseparable" arm would
     assert nothing. Everything else in the payload is the committed file's.
     """
-    dumped = load_config(CONFIGS_DIR / "run6.yaml").model_dump()
+    dumped = load_config(PRODUCTION_CONFIG).model_dump()
     dumped["train"]["draw_rate_abort"] = payload
     return RunConfig.model_validate(dumped)
 
@@ -62,7 +64,7 @@ def test_the_schema_cannot_express_a_value_OUTSIDE_the_metrics_own_range() -> No
     the block requires `1/N_pool_min < threshold`. Boundaries are asserted on both sides, so the
     bound is the arithmetic and not a literal.
     """
-    armed = dict(RUN5_PREREG)
+    armed = dict(DRAW_RATE_PREREG)
     assert _with_block(armed).train.draw_rate_abort.threshold == 0.25
     assert _with_block({**armed, "threshold": 1.0}).train.draw_rate_abort.threshold == 1.0, (
         "1.0 is IN range — `le=1` is a ceiling on the metric's own maximum, not an exclusion"
@@ -89,7 +91,7 @@ def test_the_schema_cannot_express_a_value_OUTSIDE_the_metrics_own_range() -> No
         # made 51 perfectly reachable. The ceiling comes off the LIVE config, so the arm follows
         # any future pick instead of going quietly green.
         "N_pool_min one above the pool's OWN ceiling — unreachable evidence (R92's 4th axis)":
-            ({**armed, "N_pool_min": _RUN5_EVIDENCE_CEILING + 1}, "N_pool_min"),
+            ({**armed, "N_pool_min": _EVIDENCE_CEILING + 1}, "N_pool_min"),
         "N_pool_min 0 — no pool ever banks fewer than zero games, so the bar is inert":
             ({**armed, "N_pool_min": 0}, "N_pool_min"),
         "min_step 0 — the ADJ-14 hair-trigger the R80 guards exist to close":
@@ -125,7 +127,7 @@ def test_the_schema_cannot_express_a_value_OUTSIDE_the_metrics_own_range() -> No
         f"{caught.value}"
     )
 
-    base = load_config(CONFIGS_DIR / "run6.yaml").model_dump()
+    base = load_config(PRODUCTION_CONFIG).model_dump()
     base["train"].pop("draw_rate_abort")
     with pytest.raises(ValidationError) as caught:
         RunConfig.model_validate(base)
@@ -149,26 +151,26 @@ def test_the_evidence_bar_must_be_reachable_within_the_pools_own_window() -> Non
     # THE PRECONDITION IS DERIVED, NOT PINNED. It used to assert a one-worker pool; a re-mint
     # changed that, so the arms move WITH the config. The property never depended on the pool
     # being one worker — only the literals did.
-    ceiling = _RUN5_EVIDENCE_CEILING
+    ceiling = _EVIDENCE_CEILING
     assert ceiling == DRAW_RATE_WINDOW * load_config(
-        CONFIGS_DIR / "run6.yaml").selfplay.n_workers, "the ceiling is derived, never assumed"
-    at_ceiling = _with_block({**RUN5_PREREG, "N_pool_min": ceiling})
+        PRODUCTION_CONFIG).selfplay.n_workers, "the ceiling is derived, never assumed"
+    at_ceiling = _with_block({**DRAW_RATE_PREREG, "N_pool_min": ceiling})
     assert at_ceiling.train.draw_rate_abort.N_pool_min == ceiling, (
         "AT the ceiling the bar is satisfiable (the deques saturate exactly there), so it "
         "must load — a bound that also forbade the reachable value would disarm the abort"
     )
 
     with pytest.raises(ValidationError) as caught:
-        _with_block({**RUN5_PREREG, "N_pool_min": ceiling + 1})
+        _with_block({**DRAW_RATE_PREREG, "N_pool_min": ceiling + 1})
     assert "N_pool_min" in str(caught.value) and "n_workers" in str(caught.value), (
         "one game above the ceiling must be REJECTED, and the message must name BOTH keys: "
         "the operator cannot act on 'too big' without knowing what it is too big FOR; got "
         f"{caught.value}"
     )
 
-    wider = load_config(CONFIGS_DIR / "run6.yaml").model_dump()
+    wider = load_config(PRODUCTION_CONFIG).model_dump()
     wider["selfplay"]["n_workers"] = wider["selfplay"]["n_workers"] + 1
-    wider["train"]["draw_rate_abort"] = {**RUN5_PREREG, "N_pool_min": ceiling + 1}
+    wider["train"]["draw_rate_abort"] = {**DRAW_RATE_PREREG, "N_pool_min": ceiling + 1}
     assert RunConfig.model_validate(wider).train.draw_rate_abort.N_pool_min == ceiling + 1, (
         "the SAME value must be accepted once the pool is ONE worker wider: the bound is the "
         "PRODUCT `DRAW_RATE_WINDOW * selfplay.n_workers`, not a re-spelled "
@@ -186,17 +188,17 @@ def test_the_evidence_bar_cannot_be_so_small_that_one_drawn_game_fires() -> None
     the rule is the arithmetic `1/N_pool_min < threshold` and not a literal floor.
     """
     with pytest.raises(ValidationError) as caught:
-        _with_block({**RUN5_PREREG, "N_pool_min": 4})
+        _with_block({**DRAW_RATE_PREREG, "N_pool_min": 4})
     assert "N_pool_min" in str(caught.value), (
         f"N_pool_min=4 at threshold 0.25 lets ONE drawn game in four fire a HARD ABORT — "
         f"1/4 = 0.25 >= 0.25. It must be rejected, naming the key; got {caught.value}"
     )
-    assert _with_block({**RUN5_PREREG, "N_pool_min": 5}).train.draw_rate_abort.N_pool_min == 5, (
+    assert _with_block({**DRAW_RATE_PREREG, "N_pool_min": 5}).train.draw_rate_abort.N_pool_min == 5, (
         "…and 5 must load: 1/5 = 0.2 < 0.25, so one drawn game is NOT enough. A floor that "
         "rejected both sides would be a policy number rather than the metric's arithmetic"
     )
-    assert 1.0 / RUN5_PREREG["N_pool_min"] < RUN5_PREREG["threshold"], (
-        "run5's own pre-registered pair must satisfy the rule with margin (0.02 vs 0.25) — "
+    assert 1.0 / DRAW_RATE_PREREG["N_pool_min"] < DRAW_RATE_PREREG["threshold"], (
+        "the production pre-registered pair must satisfy the rule with margin (0.02 vs 0.25) — "
         "if it ever did not, the armed production config would be unloadable"
     )
 
@@ -246,8 +248,8 @@ def test_every_config_states_its_draw_rate_posture_explicitly() -> None:
             "row — a disarmed production config is rc 30 at gate 12 (R59/R61)"
         )
         assert (armed.threshold, armed.min_step, armed.N_pool_min, armed.consec) == (
-            RUN5_PREREG["threshold"], RUN5_PREREG["min_step"], RUN5_PREREG["N_pool_min"],
-            RUN5_PREREG["consec"]), (
+            DRAW_RATE_PREREG["threshold"], DRAW_RATE_PREREG["min_step"], DRAW_RATE_PREREG["N_pool_min"],
+            DRAW_RATE_PREREG["consec"]), (
             f"{production} CARRIES the four pre-registered constants unchanged; got {armed}. They are "
             f"RUN-SCOPED CONSTANTS pre-registered at mint prereg — R82's threshold, R85's "
             f"min_step, R92's evidence bar and R92's consec — and a dispatcher authors none "
@@ -268,10 +270,10 @@ def test_every_config_states_its_draw_rate_posture_explicitly() -> None:
     )
     assert (armed_smoke.threshold, armed_smoke.min_step, armed_smoke.N_pool_min,
             armed_smoke.consec) != (
-        RUN5_PREREG["threshold"], RUN5_PREREG["min_step"], RUN5_PREREG["N_pool_min"],
-        RUN5_PREREG["consec"]), (
+        DRAW_RATE_PREREG["threshold"], DRAW_RATE_PREREG["min_step"], DRAW_RATE_PREREG["N_pool_min"],
+        DRAW_RATE_PREREG["consec"]), (
         "the armed smoke config must carry its OWN burst-scale guard values, never a copy of "
-        "run5's pre-registered constants — those are run-scoped (R82/R85/R92)"
+        "the production pre-registered constants — those are run-scoped (R82/R85/R92)"
     )
     assert others and all(block is None for block in others.values()), (
         "every remaining non-production config disarms DELIBERATELY (R59), and `null` is what "

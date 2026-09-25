@@ -8,8 +8,16 @@ at config validation. The boot guard is defense-in-depth, pinned Rust-side in
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
+
+from mantis.config.census import discovered_config_paths, production_configs
+
+_REPO = Path(__file__).resolve().parents[2]
+#: Any census member: each row varies the sims regime, and the base only has to be a real mint.
+_VEHICLE = production_configs(_REPO)[0]
 
 _PCR_600_75 = {
     "playout_cap": {
@@ -22,7 +30,7 @@ _PCR_600_75 = {
 
 def test_the_600_75_prereg_shape_validates_clean(smoke_run_config) -> None:
     """Prove a 600/75 sims regime on the graph arm validates clean."""
-    config = smoke_run_config("run6.yaml", selfplay=_PCR_600_75)
+    config = smoke_run_config(_VEHICLE, selfplay=_PCR_600_75)
     assert config.selfplay.playout_cap.n_sims_full == 600
 
 
@@ -36,7 +44,7 @@ def test_a_regime_over_the_record_format_ceiling_reds_at_mint(smoke_run_config) 
     """Prove a regime no capacity can honor is refused by validation, naming the ceiling."""
     with pytest.raises(ValidationError, match="65535"):
         smoke_run_config(
-            "run6.yaml",
+            _VEHICLE,
             # The ceiling under test is the FULL-vector row's; a sparse Gumbel row is bounded by
             # m instead, so the drive names the kind whose rows carry every visited action.
             deploy={"search": {"kind": "puct"}}, train={"policy_target": "raw_visit_distribution"},
@@ -56,7 +64,7 @@ def test_the_sims_axis_is_bounded_EARLIER_by_the_node_pool(smoke_run_config) -> 
     """Prove a wild sims regime reds against the node-pool bound, not the record format."""
     with pytest.raises(ValidationError) as excinfo:
         smoke_run_config(
-            "run6.yaml",
+            _VEHICLE,
             # The ceiling under test is the FULL-vector row's; a sparse Gumbel row is bounded by
             # m instead, so the drive names the kind whose rows carry every visited action.
             deploy={"search": {"kind": "puct"}}, train={"policy_target": "raw_visit_distribution"},
@@ -76,7 +84,7 @@ def test_the_refusal_names_the_governing_config_keys(smoke_run_config) -> None:
     """Prove the refusal names the config keys the capacity is derived from."""
     with pytest.raises(ValidationError, match="leaf_batch_size"):
         smoke_run_config(
-            "run6.yaml",
+            _VEHICLE,
             # The ceiling under test is the FULL-vector row's; a sparse Gumbel row is bounded by
             # m instead, so the drive names the kind whose rows carry every visited action.
             deploy={"search": {"kind": "puct"}}, train={"policy_target": "raw_visit_distribution"},
@@ -108,6 +116,6 @@ def test_the_relation_has_no_grid_arm_left_to_be_scoped_against() -> None:
 
 def test_every_minted_graph_config_satisfies_the_relation(smoke_run_config) -> None:
     """Prove every shipped graph config satisfies the derivation (50-sims/leaf-8 -> capacity 57)."""
-    for name in ("run6.yaml", "run6.yaml", "smoke_preflight_armed.yaml", "dev_example.yaml"):
-        config = smoke_run_config(name)
+    for rel in discovered_config_paths(_REPO):
+        config = smoke_run_config(_REPO / rel)
         assert config.identity.representation == "graph"

@@ -134,15 +134,16 @@ def test_f1_unknown_encoding_rejected_at_validate():
 
 def test_o16_every_committed_config_validates():
     # The ONE discovery authority, not a sixth flat glob: a flat `*.yaml` census is blind to
-    # `configs/prod/run6.yaml`, which both gates now make legal.
+    # `configs/prod/<name>.yaml`, which both gates now make legal.
     configs = discover_configs(REPO_ROOT / "configs")
     assert configs, "no committed configs found (gate 7 must never be vacuous)"
     for cfg_path in configs:
         load_config(cfg_path)  # raises on any failure
 
 
-def test_o16_schema_round_trip():
-    cfg = load_config(REPO_ROOT / "configs" / "run6.yaml")
+@pytest.mark.parametrize("cfg_path", discover_configs(REPO_ROOT / "configs"), ids=lambda p: p.name)
+def test_o16_schema_round_trip(cfg_path):
+    cfg = load_config(cfg_path)
     again = RunConfig.model_validate(cfg.model_dump())
     assert again == cfg
 

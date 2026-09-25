@@ -22,9 +22,12 @@ from mantis.config.armed_aborts import (
     Status,
     audit_cadence,
 )
+from mantis.config.census import production_configs
 from mantis.config.loader import load_config
 from mantis.config.schema import RunConfig
-from test_armed_abort_cadence import RUN5, _revalidated
+from test_armed_abort_cadence import _revalidated
+
+_PRODUCTION = production_configs(Path(__file__).resolve().parents[2])
 
 
 def _required_manifest() -> tuple[ArmedAbort, ...]:
@@ -46,11 +49,12 @@ def _judged(config: RunConfig, manifest: tuple[ArmedAbort, ...]) -> dict:
     return {v.row.name: v for v in audit_cadence(config, manifest=manifest)}
 
 
-def test_the_battery_baseline_is_green_or_every_kill_below_is_meaningless() -> None:
+@pytest.mark.parametrize("production", _PRODUCTION, ids=lambda p: p.name)
+def test_the_battery_baseline_is_green_or_every_kill_below_is_meaningless(production: Path) -> None:
     """Every mutation below claims "this key alone reds this row alone", which needs a green
     start and needs the draw-rate row to actually BE judged in its own clock."""
     manifest = _required_manifest()
-    armed = load_config(RUN5)
+    armed = load_config(production)
     judged = _judged(armed, manifest)
     assert "draw_rate_collapse" in judged, (
         "the draw-rate row must reach the cadence audit, or this file has no subject"
@@ -78,15 +82,16 @@ def test_the_battery_baseline_is_green_or_every_kill_below_is_meaningless() -> N
          900_000, "actor_lag"),
     ],
 )
+@pytest.mark.parametrize("production", _PRODUCTION, ids=lambda p: p.name)
 def test_ONE_key_reds_ONE_axis_in_that_axis_own_clock(
-    label: str, section: str, key: str, value: object, expected: str,
+    label: str, section: str, key: str, value: object, expected: str, production: Path,
 ) -> None:
     """The kill table, as code: each row makes exactly one axis unfireable and asserts the audit
     names THAT axis and no other — the property an all-rows assertion cannot give.
     `train.max_train_steps` moves the BOUND instead of a cadence key.
     """
     manifest = _required_manifest()
-    armed = load_config(RUN5)
+    armed = load_config(production)
     assert _out_of_bound(armed, manifest) == [], "premise: the unmutated config is green"
     mutated = _revalidated(armed, section, key, value)
     failed = _out_of_bound(mutated, manifest)

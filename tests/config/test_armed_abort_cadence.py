@@ -37,16 +37,17 @@ from mantis.config.armed_aborts import (
     Status,
     audit_cadence,
 )
+from mantis.config.census import production_configs
 from mantis.config.loader import load_config
 from mantis.config.schema import RunConfig
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-RUN5 = REPO_ROOT / "configs" / "run6.yaml"
 
 
-@pytest.fixture(scope="module")
-def run5() -> RunConfig:
-    return load_config(RUN5)
+@pytest.fixture(scope="module", params=production_configs(REPO_ROOT), ids=lambda p: p.name)
+def production(request: pytest.FixtureRequest) -> RunConfig:
+    """Each production config in turn: the cadence law binds every member of the census."""
+    return load_config(request.param)
 
 
 def _revalidated(config: RunConfig, section: str, key: str, value: object) -> RunConfig:
@@ -58,7 +59,7 @@ def _revalidated(config: RunConfig, section: str, key: str, value: object) -> Ru
     return RunConfig.model_validate(raw)
 
 
-def test_the_fraction_is_a_named_constant_and_a_config_can_never_set_it(run5) -> None:
+def test_the_fraction_is_a_named_constant_and_a_config_can_never_set_it(production) -> None:
     """The fraction is a schema constant with a live consumer and no code-side default. The
     NEGATIVE half is load-bearing and driven: minting `earliest_fire_fraction` into a config must
     be REFUSED, or the disarm this constant refuses is re-spellable as `1.0`."""
@@ -75,15 +76,15 @@ def test_the_fraction_is_a_named_constant_and_a_config_can_never_set_it(run5) ->
     )
     for section in ("train", "monitor"):
         with pytest.raises(ValidationError, match="earliest_fire_fraction"):
-            _revalidated(run5, section, "earliest_fire_fraction", 1.0)
+            _revalidated(production, section, "earliest_fire_fraction", 1.0)
 
 
-def test_the_run_length_the_bound_is_taken_from_is_a_real_key(run5) -> None:
+def test_the_run_length_the_bound_is_taken_from_is_a_real_key(production) -> None:
     """`RUN_LENGTH_PATH` is walked through the SAME `_dotted` every row's paths go through, so a
     rename of the run-length key is one loud `ArmingSurfaceMissingError` rather than a silent
     bound of 0. NOT SUFFICIENT ALONE: `train.total_steps` also resolves to a positive int, which
     is the one substitution that matters."""
-    obj: object = run5
+    obj: object = production
     for part in RUN_LENGTH_PATH.split("."):
         obj = getattr(obj, part)
     assert isinstance(obj, int) and obj > 0, (
@@ -115,7 +116,7 @@ def test_the_bound_follows_the_RUN_LENGTH_authority_never_the_scheduler_horizon(
         )
 
 
-def test_every_required_row_declares_a_cadence_whose_paths_all_resolve(run5) -> None:
+def test_every_required_row_declares_a_cadence_whose_paths_all_resolve(production) -> None:
     """LAW-07's phantom-input class on the new axis, both directions: a REQUIRED row with no
     cadence cannot be judged, and a `cadence_paths` entry that resolves to nothing is a claim
     the audit does not make."""
@@ -131,7 +132,7 @@ def test_every_required_row_declares_a_cadence_whose_paths_all_resolve(run5) -> 
             f"{row.cadence.value}, which consumes {row.cadence.arity}"
         )
         for path in row.cadence_paths:
-            obj: object = run5
+            obj: object = production
             for part in path.split("."):
                 obj = getattr(obj, part)
             assert obj is not None, (
@@ -149,7 +150,7 @@ def test_every_required_row_declares_a_cadence_whose_paths_all_resolve(run5) -> 
                 "cadence operand: the period belongs to the CLOCK so every row on an axis "
                 "reads one key and no row can name another axis's"
             )
-            probe: object = run5
+            probe: object = production
             for part in clock.period_path.split("."):
                 probe = getattr(probe, part)
             assert isinstance(probe, int) and probe >= 1, (
@@ -284,14 +285,14 @@ def test_an_underivable_clock_RAISES_and_never_falls_back_to_the_step_clock() ->
         SimpleNamespace(monitor=SimpleNamespace(gate_interval=250)), row="probe") == 250.0
 
 
-def test_the_verdict_publishes_the_clock_it_judged_each_row_in(run5) -> None:
+def test_the_verdict_publishes_the_clock_it_judged_each_row_in(production) -> None:
     """The vacuity half, on the field an operator needs to tell a green row from one green in the
     wrong units: `within` is decided in the row's OWN ticks, so samples x period must equal the
     published step and bound_samples x period the published bound."""
-    by_name = {v.row.name: v for v in audit_cadence(run5)}
+    by_name = {v.row.name: v for v in audit_cadence(production)}
     draw = by_name["draw_rate_collapse"]
     assert draw.clock is SampleClock.GATE_BOUNDARY
-    assert draw.period_steps == float(run5.monitor.gate_interval)
+    assert draw.period_steps == float(production.monitor.gate_interval)
     assert draw.earliest_samples is not None and draw.earliest_step is not None
     assert draw.earliest_samples * draw.period_steps == draw.earliest_step
     assert draw.bound_samples is not None
@@ -310,34 +311,34 @@ def test_the_verdict_publishes_the_clock_it_judged_each_row_in(run5) -> None:
     )
 
 
-def test_the_production_config_can_fire_every_armed_row_with_margin(run5) -> None:
+def test_the_production_config_can_fire_every_armed_row_with_margin(production) -> None:
     """R251's sanity anchor, RE-DERIVED here rather than transcribed: the verdicts are read
     off `audit_cadence`, and each is compared to the bound the constant actually implies."""
-    verdicts = audit_cadence(run5)
+    verdicts = audit_cadence(production)
     assert verdicts, "no verdict means the audit judged nothing"
     by_name = {verdict.row.name: verdict for verdict in verdicts}
     assert not [v for v in verdicts if not v.within], (
         "every armed row on the shipped production config must be able to fire inside the "
         f"bound: {[(v.row.name, v.earliest_step, v.bound) for v in verdicts if not v.within]}"
     )
-    bound = EARLIEST_FIRE_FRACTION * run5.train.max_train_steps
+    bound = EARLIEST_FIRE_FRACTION * production.train.max_train_steps
     assert by_name["draw_rate_collapse"].earliest_step == float(
-        run5.train.draw_rate_abort.min_step
-    ), "run5 mints min_step as a multiple of gate_interval, so the fire lands on it exactly"
+        production.train.draw_rate_abort.min_step
+    ), "the config mints min_step as a multiple of gate_interval, so the fire lands on it exactly"
     assert by_name["draw_rate_collapse"].earliest_step < bound / 4.0, (
         "the anchor must clear the bound with real margin, not squeak past it"
     )
     assert by_name["actor_lag"].earliest_step == float(
-        run5.monitor.actor_lag_threshold_steps + 1
+        production.monitor.actor_lag_threshold_steps + 1
     )
     assert by_name["terminal_eval_broken"].earliest_step is None
 
 
-def test_an_interval_that_outruns_the_run_is_CADENCE_DISARMED(run5) -> None:
+def test_an_interval_that_outruns_the_run_is_CADENCE_DISARMED(production) -> None:
     """ADJ-D22's own config, at the module layer. `gate_interval` stays schema-legal
     (`ge=1`) and the threshold stays armed — every check that existed before this ruling
     still reads this config as healthy."""
-    vacuous = _revalidated(run5, "monitor", "gate_interval", 1_000_000_000)
+    vacuous = _revalidated(production, "monitor", "gate_interval", 1_000_000_000)
     assert vacuous.train.draw_rate_abort is not None
     assert Mechanism.CONFIG_THRESHOLD_GT_ZERO.is_armed(
         vacuous.train.draw_rate_abort.threshold
@@ -354,13 +355,13 @@ def test_an_interval_that_outruns_the_run_is_CADENCE_DISARMED(run5) -> None:
     assert failed[0].bound == EARLIEST_FIRE_FRACTION * vacuous.train.max_train_steps
 
 
-def test_the_boundary_is_EXCEEDS_and_not_REACHES_in_both_directions(run5) -> None:
+def test_the_boundary_is_EXCEEDS_and_not_REACHES_in_both_directions(production) -> None:
     """A row whose earliest fire EXCEEDS the bound fails. Nothing else places a row EXACTLY on
     it, so `<=` against `<` was free to move with every test green — and it is not hypothetical,
-    since run5's own `min_step: 25000` sits exactly on the bound of a 100000-step run. Both
-    directions are driven off ONE construction so the pair cannot drift."""
-    on_the_bound = int(run5.train.draw_rate_abort.min_step / EARLIEST_FIRE_FRACTION)
-    exact = _revalidated(run5, "train", "max_train_steps", on_the_bound)
+    since the pre-registered `min_step: 25000` sits exactly on the bound of a 100000-step run.
+    Both directions are driven off ONE construction so the pair cannot drift."""
+    on_the_bound = int(production.train.draw_rate_abort.min_step / EARLIEST_FIRE_FRACTION)
+    exact = _revalidated(production, "train", "max_train_steps", on_the_bound)
     draw = {v.row.name: v for v in audit_cadence(exact)}["draw_rate_collapse"]
     assert draw.earliest_step == draw.bound, (
         f"this pin needs the row exactly ON the bound; got {draw.earliest_step} against "
@@ -371,7 +372,7 @@ def test_the_boundary_is_EXCEEDS_and_not_REACHES_in_both_directions(run5) -> Non
         "ruling's word is 'exceeds', and a strict comparison quietly reds a config it permits"
     )
 
-    just_short = _revalidated(run5, "train", "max_train_steps", on_the_bound - 1)
+    just_short = _revalidated(production, "train", "max_train_steps", on_the_bound - 1)
     one_over = {v.row.name: v for v in audit_cadence(just_short)}["draw_rate_collapse"]
     assert one_over.earliest_step > one_over.bound and not one_over.within, (
         "…and one step the other side of it must fail, or 'exceeds' has become 'never' — a "
@@ -379,7 +380,7 @@ def test_the_boundary_is_EXCEEDS_and_not_REACHES_in_both_directions(run5) -> Non
     )
 
 
-def test_a_required_row_that_declares_no_cadence_fails_toward_visibility(run5) -> None:
+def test_a_required_row_that_declares_no_cadence_fails_toward_visibility(production) -> None:
     """The undeclared arm: a required row nobody gave a cadence is UNJUDGEABLE, and an
     unjudgeable armed row must gate rather than pass, or "nobody declared it" and "it is fine"
     become the same observable."""
@@ -389,16 +390,16 @@ def test_a_required_row_that_declares_no_cadence_fails_toward_visibility(run5) -
         owner=None, source_pin=None, note="synthetic subject; not a shipped row.",
     )
     assert row.cadence is None
-    failed = [v for v in audit_cadence(run5, manifest=(row,)) if not v.within]
+    failed = [v for v in audit_cadence(production, manifest=(row,)) if not v.within]
     assert [v.row.name for v in failed] == [row.name]
     assert "cadence" in failed[0].detail
 
 
-def test_a_DISARMED_row_is_left_to_the_arming_audit_and_never_double_judged(run5) -> None:
+def test_a_DISARMED_row_is_left_to_the_arming_audit_and_never_double_judged(production) -> None:
     """Scope. `audit_cadence` judges ARMED rows only: a disarmed row is already rc 30 from
     assertion (c), and reporting it twice would make the operator chase a cadence question about
     an abort that is simply off."""
-    disarmed = run5.model_dump()
+    disarmed = production.model_dump()
     disarmed["train"]["draw_rate_abort"] = None
     judged = audit_cadence(RunConfig.model_validate(disarmed))
     assert "draw_rate_collapse" not in [verdict.row.name for verdict in judged]
@@ -408,18 +409,18 @@ def test_a_DISARMED_row_is_left_to_the_arming_audit_and_never_double_judged(run5
 
 
 def test_neutering_the_bound_flips_the_verdict_so_the_comparison_is_not_decoration(
-    run5,
+    production,
 ) -> None:
     """The audit's own mutation pin. If the fraction were read once and discarded, or the computed
     step ignored, a config refused at the shipped fraction would still be refused at
     `fraction=inf`; both directions are driven so a verdict constant in EITHER is caught."""
-    vacuous = _revalidated(run5, "monitor", "gate_interval", 1_000_000_000)
+    vacuous = _revalidated(production, "monitor", "gate_interval", 1_000_000_000)
     assert [v.row.name for v in audit_cadence(vacuous) if not v.within]
     assert not [v.row.name for v in audit_cadence(vacuous, fraction=math.inf) if not v.within], (
         "at an infinite bound nothing can be cadence-disarmed — a row still failing means "
         "the bound is not read"
     )
-    tightened = audit_cadence(run5, fraction=1e-12)
+    tightened = audit_cadence(production, fraction=1e-12)
     assert [v.row.name for v in tightened if not v.within], (
         "at a bound below every earliest-fire step the healthy config must fail — a row "
         "still passing means the computed step is not read"

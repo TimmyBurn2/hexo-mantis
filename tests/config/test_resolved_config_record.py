@@ -23,6 +23,7 @@ import yaml
 
 from mantis.config import load_config
 from mantis.config.emit import RESOLVED_CONFIG_FILENAME, write_resolved_config
+from mantis.config.census import production_configs
 from mantis.config.loader import discover_configs
 from mantis.config.schema import (
     ARCH_SCOPED_KEYS,
@@ -36,6 +37,7 @@ from mantis.train.warmstart import WARM_START_ROW
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIGS = REPO_ROOT / "configs"
+PRODUCTION = production_configs(REPO_ROOT)
 
 
 def _leaves(node: object, prefix: str = "") -> set[str]:
@@ -103,12 +105,13 @@ def test_the_record_states_every_leaf_the_shipped_file_left_to_a_default(
     )
 
 
+@pytest.mark.parametrize("production", PRODUCTION, ids=lambda p: p.name)
 def test_the_record_is_complete_against_the_LIVE_SCHEMA_not_against_the_file(
-    tmp_path: Path,
+    tmp_path: Path, production: Path,
 ) -> None:
     """Superset-of-the-file would still pass on a record missing a key BOTH omit. The floor is
     the schema's own leaf set, derived by the same walker gate 13 uses."""
-    config = load_config(CONFIGS / "run6.yaml")
+    config = load_config(production)
     written = _leaves(yaml.safe_load(
         write_resolved_config(config, tmp_path).read_text(encoding="utf-8")))
     # A leaf inside an OPTIONAL BLOCK this config left DISARMED is absent by construction —
@@ -120,15 +123,16 @@ def test_the_record_is_complete_against_the_LIVE_SCHEMA_not_against_the_file(
                if leaf not in written and not any(leaf.startswith(f"{n}.") for n in nulled)}
     assert not missing, f"the record omits live schema leaves: {sorted(missing)}"
     assert nulled, (
-        "run6 disarms at least one optional block, so an empty null set means the record is "
+        f"{production.name} disarms at least one optional block, so an empty null set means the record is "
         "not carrying the disarmed postures as explicit nulls"
     )
 
 
-def test_the_record_RE_VALIDATES_from_its_own_bytes(tmp_path: Path) -> None:
+@pytest.mark.parametrize("production", PRODUCTION, ids=lambda p: p.name)
+def test_the_record_RE_VALIDATES_from_its_own_bytes(tmp_path: Path, production: Path) -> None:
     """"Still strict" is a property of the FILE, not of the object it came from — so it is
     read back off disk and pushed through `RunConfig`, `extra="forbid"` and all."""
-    config = load_config(CONFIGS / "run6.yaml")
+    config = load_config(production)
     path = write_resolved_config(config, tmp_path)
     reloaded = RunConfig.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
     assert reloaded == config, "the record does not reconstruct the config it was written from"
@@ -139,7 +143,7 @@ def test_a_record_that_would_not_validate_is_a_REFUSAL_and_not_a_written_file(
 ) -> None:
     """The mutation self-test (LAW-07): drop the re-validation and this row goes green on a
     record nobody could load. A truncated dump must raise, not be written and forgotten."""
-    config = load_config(CONFIGS / "run6.yaml")
+    config = load_config(PRODUCTION[0])
     broken = config.model_dump()
     broken["train"].pop("lr")
     monkeypatch.setattr(type(config), "model_dump", lambda self, **_kw: broken, raising=False)

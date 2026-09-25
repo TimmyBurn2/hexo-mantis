@@ -35,6 +35,7 @@ from mantis.config.armed_aborts import (  # RED anchor #3 — ArmingSurfaceMissi
     audit_arming,
     exit_code_for_abort,
 )
+from mantis.config.census import production_configs
 from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
@@ -64,7 +65,7 @@ _MINTED_GATE_INTERVAL = load_config(
 
 #: Pre-registered run-scoped constants. NOT tunables: mint prereg is the only place they may
 #: change, so they are written here as the pin that makes an in-place edit visible.
-RUN5_PREREG = {"threshold": 0.25, "min_step": 25000, "N_pool_min": 50, "consec": 3}
+DRAW_RATE_PREREG = {"threshold": 0.25, "min_step": 25000, "N_pool_min": 50, "consec": 3}
 
 
 def _load_tool():
@@ -240,11 +241,12 @@ def test_the_coordinator_threshold_has_NO_default_authority_ANYWHERE_so_the_conf
         "deliberately off-prereg (N_pool_min 7 is under DESIGN_DS's 50, min_step 3 is under "
         "R82's 25000, consec 2 is under R92's 3) so a normaliser that clamps toward the "
         "pre-registered numbers is "
-        f"visible here rather than silently agreeing with run5; got {dataclasses.asdict(probe)}"
+        f"visible here rather than silently agreeing with the prereg; got {dataclasses.asdict(probe)}"
     )
 
 
-def test_the_required_row_is_audited_against_a_REAL_RunConfig(smoke_run_config) -> None:
+@pytest.mark.parametrize("production", production_configs(REPO_ROOT), ids=lambda p: p.name)
+def test_the_required_row_is_audited_against_a_REAL_RunConfig(smoke_run_config, production: Path) -> None:
     """The row is audited against a REAL `RunConfig`, in both directions.
 
     Flipping the row to REQUIRED once raised an `AttributeError` that `main` collapses to rc 1 —
@@ -275,10 +277,10 @@ def test_the_required_row_is_audited_against_a_REAL_RunConfig(smoke_run_config) 
         "if it can disagree with the manifest the manifest has stopped being the authority"
     )
 
-    cfg = load_config(CONFIGS_DIR / "run6.yaml")
+    cfg = load_config(production)
     audit = audit_arming(cfg)
     assert list(audit.disarmed) == [], (
-        "configs/run6.yaml arms every REQUIRED row (actor-lag since R59, draw-rate at R82's "
+        f"{production.name} arms every REQUIRED row (actor-lag since R59, draw-rate at R82's "
         f"0.25); got {[r.name for r in audit.disarmed]}"
     )
     assert ROW_NAME in [r.name for r in audit.required], (
@@ -296,8 +298,8 @@ def test_the_required_row_is_audited_against_a_REAL_RunConfig(smoke_run_config) 
     )
 
     value = _walk(cfg, row.config_path)
-    assert value == RUN5_PREREG["threshold"], (
-        f"the row's dotted path must resolve on a real RunConfig to run5's minted value; "
+    assert value == DRAW_RATE_PREREG["threshold"], (
+        f"the row's dotted path must resolve on a real RunConfig to its pre-registered minted value; "
         f"got {value!r}"
     )
     assert row.mechanism.is_armed(value) is True, (
@@ -305,9 +307,9 @@ def test_the_required_row_is_audited_against_a_REAL_RunConfig(smoke_run_config) 
         "of a schema field"
     )
 
-    disarmed_cfg = smoke_run_config("run6.yaml", train={"draw_rate_abort": None})
+    disarmed_cfg = smoke_run_config(production, train={"draw_rate_abort": None})
     assert [r.name for r in audit_arming(disarmed_cfg).disarmed] == [ROW_NAME], (
-        "run5 with the block explicitly disarmed must name THIS row and only this row — "
+        "a production config with the block explicitly disarmed must name THIS row and only this row — "
         "`Mechanism.CONFIG_THRESHOLD_GT_ZERO.is_armed(None)` is False through its "
         "non-numeric arm, with zero change to `Mechanism` (§1.1 reason 4)"
     )

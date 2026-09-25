@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from mantis.config.census import production_configs
 from mantis.config.loader import config_identity_sha256, load_config
 from mantis.config.preflight_stamp import (
     START_HALT_READINGS,
@@ -26,7 +27,9 @@ from mantis.config.preflight_stamp import (
 from mantis.util.git import head_sha
 
 _REPO = Path(__file__).resolve().parents[2]
-_CONFIG = _REPO / "configs" / "run6.yaml"
+#: Any census member: the stamp binds whichever config it is written for.
+_CONFIG = production_configs(_REPO)[0]
+_RUN_ID = load_config(_CONFIG).run_id
 _HALTS = {"workspace": {"verdict": "MIRRORED", "run_dir": "/x", "bundle": {"step": 1, "files": {}},
                         "shard": {"name": "s", "sha256": ""}},
           "cuda_build": {"verdict": "not_run"}}
@@ -148,8 +151,8 @@ def test_every_refusal_is_one_named_family() -> None:
 
 
 def _twin_of(tmp_path: Path, **edits: str) -> Path:
-    """run6.yaml with `run_id` changed and, per `edits`, a root leaf line rewritten."""
-    text = _CONFIG.read_text(encoding="utf-8").replace("run_id: run6\n", "run_id: run6-twin\n")
+    """`_CONFIG` with `run_id` changed and, per `edits`, a root leaf line rewritten."""
+    text = _CONFIG.read_text(encoding="utf-8").replace(f"run_id: {_RUN_ID}\n", f"run_id: {_RUN_ID}-twin\n")
     for key, value in edits.items():
         old = next(line for line in text.splitlines() if line.startswith(f"{key}: "))
         text = text.replace(old + "\n", f"{key}: {value}\n")
@@ -168,7 +171,7 @@ def test_a_twin_differing_in_run_id_alone_inherits_its_runs_vested_stamp(
     stamp = require_preflight_stamp(twin, tree_root=_REPO, inherit_from=_CONFIG)
     parent_sha = config_identity_sha256(parent)
     twin_sha = config_identity_sha256(twin)
-    assert stamp["config_sha256"] == twin_sha and stamp["run_id"] == "run6-twin"
+    assert stamp["config_sha256"] == twin_sha and stamp["run_id"] == f"{_RUN_ID}-twin"
     assert stamp["inherited_from"] == parent_sha
     assert stamp["inherited"] == f"preflight inherited from {parent_sha}"
     assert stamp["halts"] == _HALTS and stamp["tree_sha"] == head_sha(_REPO)

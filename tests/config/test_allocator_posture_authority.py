@@ -79,12 +79,13 @@ def test_ap03_every_committed_config_MINTS_A_MEASURED_POSTURE():
         )
 
 
-def test_ap01_a_config_missing_the_key_fails_to_load(tmp_path):
+@pytest.mark.parametrize("config", discover_configs(CONFIGS_DIR), ids=lambda p: p.name)
+def test_ap01_a_config_missing_the_key_fails_to_load(tmp_path, config):
     """PLANTED BREAK: delete the key from a real minted config -> ValueError at load, satisfied
     by the field being REQUIRED rather than by a hand-written check that could be skipped."""
     import yaml
 
-    raw = yaml.safe_load((CONFIGS_DIR / "run6.yaml").read_text(encoding="utf-8"))
+    raw = yaml.safe_load(config.read_text(encoding="utf-8"))
     del raw["allocator_posture"]
     victim = tmp_path / "no_posture.yaml"
     victim.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")

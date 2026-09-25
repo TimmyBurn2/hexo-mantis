@@ -43,6 +43,7 @@ _CONFIGS_DIR = REPO_ROOT / "configs"
 # configs that gates 7 and 12 both make legal; `discover_configs` is the ONE discovery
 # authority. Relative-posix, not `.name`, so a nested path survives the round trip below.
 CONFIG_PATHS = tuple(sorted(p.relative_to(_CONFIGS_DIR).as_posix() for p in discover_configs(_CONFIGS_DIR)))
+_PRODUCTION = production_configs(REPO_ROOT)
 
 
 def _load_tool():
@@ -74,7 +75,8 @@ def _deferred(manifest=MANIFEST):
     return [row for row in manifest if row.status is Status.DEFERRED]
 
 
-def test_arming_audit_fails_a_disarmed_production_config() -> None:
+@pytest.mark.parametrize("production", _PRODUCTION, ids=lambda p: p.name)
+def test_arming_audit_fails_a_disarmed_production_config(production: Path) -> None:
     """A real committed config ships `actor_lag_abort_enabled: false`, so this needs no
     mutation — the corpus row is the tree. The inverse arm is asserted in the same test,
     because a gate that only ever says FAIL is as useless as one that only ever says PASS."""
@@ -91,9 +93,9 @@ def test_arming_audit_fails_a_disarmed_production_config() -> None:
         "monitor.actor_lag_abort_enabled", "train.draw_rate_abort.threshold"
     ], "each disarmed row must carry its dotted arming surface, so the report can name it"
 
-    armed = audit_arming(load_config(REPO_ROOT / "configs" / "run6.yaml"))
+    armed = audit_arming(load_config(production))
     assert list(armed.disarmed) == [], (
-        "configs/run6.yaml arms the actor-lag abort (the R59 flip) — mode AUDIT "
+        f"{production.name} arms the actor-lag abort (the R59 flip) — mode AUDIT "
         f"must be GREEN on it today; got {[row.name for row in armed.disarmed]}"
     )
     assert [row.name for row in armed.required] == [row.name for row in _required()], (
@@ -102,12 +104,13 @@ def test_arming_audit_fails_a_disarmed_production_config() -> None:
     )
 
 
-def test_the_audit_reads_the_CONFIG_not_the_config_FILENAME(smoke_run_config) -> None:
+@pytest.mark.parametrize("production", _PRODUCTION, ids=lambda p: p.name)
+def test_the_audit_reads_the_CONFIG_not_the_config_FILENAME(smoke_run_config, production: Path) -> None:
     """The cheapest implementation that passes M1 is a filename check, and both arms are needed
     to kill it: the two configs swap verdicts when — and only when — the VALUE swaps. Driven
     through the blessed load/dump/validate factory, so both payloads are schema-valid."""
-    run5_disarmed = smoke_run_config("run6.yaml", monitor={"actor_lag_abort_enabled": False})
-    assert [row.name for row in audit_arming(run5_disarmed).disarmed] == ["actor_lag"], (
+    disarmed = smoke_run_config(production, monitor={"actor_lag_abort_enabled": False})
+    assert [row.name for row in audit_arming(disarmed).disarmed] == ["actor_lag"], (
         "a production config with the arming flipped OFF must fail the audit — the audit reads "
         "the validated config object, never the path it came from"
     )
@@ -186,13 +189,13 @@ def test_the_manifest_is_not_vacuous() -> None:
     assert all(path.is_file() for path in production)
     assert all(isinstance(row, ArmedAbort) for row in MANIFEST)
 
-    run5 = load_config(REPO_ROOT / "configs" / "run6.yaml")
-    for row in _required():
-        assert _dotted(run5, row.config_path) is not None, (
-            f"required row {row.name!r} names {row.config_path!r}, which does not resolve "
-            "on a real RunConfig — a manifest row whose arming surface does not exist is a "
-            "phantom gate input (R4 / LAW-07)"
-        )
+    for config in (load_config(path) for path in production):
+        for row in _required():
+            assert _dotted(config, row.config_path) is not None, (
+                f"required row {row.name!r} names {row.config_path!r}, which does not resolve "
+                "on a real RunConfig — a manifest row whose arming surface does not exist is a "
+                "phantom gate input (R4 / LAW-07)"
+            )
     # The deferred-row rules are asserted on the REAL manifest first, then on a synthetic row
     # through `_deferred`'s own `manifest` parameter — the only way to drive a row whose pinned
     # file is ABSENT. Membership, not identity, so a future deferred row does not red a test
@@ -393,7 +396,8 @@ def test_the_mechanisms_are_real_predicates_in_both_directions() -> None:
                ceiling_path="monitor.alert_grad_norm_max", **common)
 
 
-def test_the_grad_norm_row_reads_its_ceiling_off_the_real_config(smoke_run_config) -> None:
+@pytest.mark.parametrize("production", _PRODUCTION, ids=lambda p: p.name)
+def test_the_grad_norm_row_reads_its_ceiling_off_the_real_config(smoke_run_config, production: Path) -> None:
     """The DEFERRED grad-norm row, audited against a REAL RunConfig in both directions.
     `Mechanism.is_armed` is a pure predicate; this is the other half — `audit_arming` must
     RESOLVE the row's `ceiling_path` and hand it over, or the second operand is a claim nothing
@@ -402,7 +406,7 @@ def test_the_grad_norm_row_reads_its_ceiling_off_the_real_config(smoke_run_confi
            if candidate.name == "grad_norm_hard_abort"][0]
     assert row.status is Status.DEFERRED and row.exit_code is None, (
         "the row must stay DEFERRED with no invented exit code: flipping it REQUIRED would "
-        "gate run5's mint on a threshold nobody pre-registered (R84's class)"
+        "gate a mint on a threshold nobody pre-registered (R84's class)"
     )
     assert row.ceiling_path == "monitor.alert_grad_norm_max"
 
@@ -415,18 +419,18 @@ def test_the_grad_norm_row_reads_its_ceiling_off_the_real_config(smoke_run_confi
         )
 
     manifest = (_required(row),)
-    shipped = load_config(REPO_ROOT / "configs" / "run6.yaml")
+    shipped = load_config(production)
     assert [r.name for r in audit_arming(shipped, manifest=manifest).disarmed] == [row.name], (
         "as shipped (threshold 1e9 against alert_grad_norm_max 10.0) the gate is DISARMED — "
         "that is the finding the row exists to publish"
     )
 
-    reachable = smoke_run_config("run6.yaml", train={"hard_gn_threshold": 5.0})
+    reachable = smoke_run_config(production, train={"hard_gn_threshold": 5.0})
     assert list(audit_arming(reachable, manifest=manifest).disarmed) == [], (
         "a threshold at or below the warn line ARMS the row — the audit must read the CONFIG "
         "through both paths, not a constant"
     )
-    raised = smoke_run_config("run6.yaml", monitor={"alert_grad_norm_max": 1e10})
+    raised = smoke_run_config(production, monitor={"alert_grad_norm_max": 1e10})
     assert list(audit_arming(raised, manifest=manifest).disarmed) == [], (
         "and raising the CEILING alone must arm the SAME shipped threshold — the second "
         "operand really is resolved from `ceiling_path` and is not a literal"

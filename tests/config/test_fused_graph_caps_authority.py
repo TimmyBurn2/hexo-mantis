@@ -131,23 +131,30 @@ def test_fg5_02_production_configs_SHARING_A_FIT_carry_the_SAME_minted_pair() ->
     sized for neither. MUTATION THAT REDS IT: re-minting one config of a fit group and leaving
     its twin on the old pair — only the comparison sees it.
     """
+    rows = {name: (_fit_identity(name), _minted_pair(name)) for name in _PRODUCTION}
+    assert rows, "no production config was read, so this comparison asserts nothing"
+    disagreeing = _disagreeing_fits(rows)
+    assert not disagreeing, (
+        f"production configs sharing a fit disagree about the fused-graph bound: "
+        f"{disagreeing}. They partition the SAME card from the SAME sweep; a divergence means "
+        "one was minted without the other, which R281(d) rules is not a legal posture.")
+    # The census may hold one config per fit, so the comparison is proven to bite on a planted twin.
+    name, (fit, (edges, nodes)) = next(iter(rows.items()))
+    planted = {**rows, f"twin_of_{name}": (fit, (edges + 1, nodes))}
+    assert list(_disagreeing_fits(planted)) == [fit], "a re-minted twin on a stale pair went unseen"
+
+
+def _minted_pair(name: str) -> tuple:
+    block = load_config(_CONFIGS / name).inference.fused_graph_caps
+    return (block.max_fused_edges, block.max_fused_nodes)
+
+
+def _disagreeing_fits(rows: dict[str, tuple]) -> dict[tuple, dict[str, tuple]]:
+    """The fits whose configs carry more than one pair, from `{name: (fit, pair)}`."""
     groups: dict[tuple, dict[str, tuple]] = {}
-    for name in _PRODUCTION:
-        block = load_config(_CONFIGS / name).inference.fused_graph_caps
-        groups.setdefault(_fit_identity(name), {})[name] = (
-            block.max_fused_edges, block.max_fused_nodes)
-    assert groups, "no production config was read, so this comparison asserts nothing"
-    for fit, pairs in groups.items():
-        assert len(set(pairs.values())) == 1, (
-            f"production configs sharing the fit {fit} disagree about the fused-graph bound: "
-            f"{pairs}. They partition the SAME card from the SAME sweep; a divergence means "
-            "one was minted without the other, which R281(d) rules is not a legal posture.")
-    # THE COMPARISON HAS A SUBJECT AGAIN (run7 shares run6's fit and pair); held in this direction
-    # so a re-mint that leaves every group a singleton reds rather than passing over air.
-    assert any(len(pairs) > 1 for pairs in groups.values()), (
-        f"no two production configs share a fit ({ {k: sorted(v) for k, v in groups.items()} }); "
-        "the cross-file comparison above asserts nothing — restore the vacuity note if that is "
-        "deliberate")
+    for name, (fit, pair) in rows.items():
+        groups.setdefault(fit, {})[name] = pair
+    return {fit: pairs for fit, pairs in groups.items() if len(set(pairs.values())) > 1}
 
 
 def test_fg5_02_the_placeholder_is_schema_valid_so_gate_7_stays_green() -> None:
@@ -218,7 +225,8 @@ class _DummyBatcher:
         return None
 
 
-def test_fg5_05_an_uncalibrated_production_config_cannot_build_its_graph_server() -> None:
+@pytest.mark.parametrize("name", _PRODUCTION)
+def test_fg5_05_an_uncalibrated_production_config_cannot_build_its_graph_server(name: str) -> None:
     """An uncalibrated production config cannot build its graph server, through the REAL
     `InferenceServer.__init__`.
 
@@ -226,9 +234,9 @@ def test_fg5_05_an_uncalibrated_production_config_cannot_build_its_graph_server(
     in. The caps are NULLED IN THE DUMP rather than read as null from the file, which tests the
     REFUSAL rather than the current mint state and so survives every future re-mint.
     """
-    cfg = load_config(_CONFIGS / "run6.yaml")
+    cfg = load_config(_CONFIGS / name)
     assert cfg.identity.representation == "graph", (
-        "run5 no longer declares the graph representation — this row's premise is gone")
+        f"{name} no longer declares the graph representation — this row's premise is gone")
     dump = cfg.model_dump()
     dump["inference"]["fused_graph_caps"] = {"max_fused_edges": None, "max_fused_nodes": None}
     with pytest.raises(UncalibratedFusedGraphCapsError):
@@ -238,10 +246,11 @@ def test_fg5_05_an_uncalibrated_production_config_cannot_build_its_graph_server(
         )
 
 
-def test_fg5_05b_the_minted_production_config_DOES_build_its_graph_server() -> None:
-    """The other direction: run5's config AS COMMITTED constructs an `InferenceServer`. Without
+@pytest.mark.parametrize("name", _PRODUCTION)
+def test_fg5_05b_the_minted_production_config_DOES_build_its_graph_server(name: str) -> None:
+    """The other direction: each production config AS COMMITTED builds an `InferenceServer`. Without
     it the refusal row could pass forever on a config that had quietly regressed to `null`."""
-    cfg = load_config(_CONFIGS / "run6.yaml")
+    cfg = load_config(_CONFIGS / name)
     server = InferenceServer(
         torch.nn.Linear(1, 1), torch.device("cpu"), cfg.model_dump(),
         batcher=_DummyBatcher(), encoding_spec=lookup(cfg.identity.encoding),

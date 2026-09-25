@@ -7,23 +7,25 @@ from pathlib import Path
 
 import pytest
 
+from mantis.config.census import production_configs
 from mantis.config.loader import discover_configs, load_config
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-RUN5 = REPO_ROOT / "configs" / "run6.yaml"
+#: Any real config serves: every claim here is about the PATH a body sits at, never the body.
+REAL_CONFIG = production_configs(REPO_ROOT)[0]
 
 #: The complement of an enumeration plus the enumeration, each name planted as a byte-for-byte
 #: copy of a real config so every one of them really is loadable.
 _NAMES = (
-    "run6.yaml", "run6.yml",                     # the original two
-    "prod/run6.yaml", "prod/nested/run6.yml",    # at depth
-    "run6.txt", "run6.conf", "run6.json",        # a plain unknown suffix
-    "run6.YAML", "run6.YML", "run6.Yaml",        # a CASE variant of a known one
-    "run6", "run6.",                             # no suffix at all
-    "run6.yaml.bak", "run6.yml.orig",            # a known suffix that is not final
-    ".yaml", ".yml",                             # a dotfile NAMED like a suffix
-    ".hidden/run6.yaml",                         # a config under a HIDDEN directory
-    "run6.yamlx", "run6.xyaml",                  # a known suffix as a substring
+    "cfg.yaml", "cfg.yml",                   # the original two
+    "prod/cfg.yaml", "prod/nested/cfg.yml",  # at depth
+    "cfg.txt", "cfg.conf", "cfg.json",       # a plain unknown suffix
+    "cfg.YAML", "cfg.YML", "cfg.Yaml",       # a CASE variant of a known one
+    "cfg", "cfg.",                           # no suffix at all
+    "cfg.yaml.bak", "cfg.yml.orig",          # a known suffix that is not final
+    ".yaml", ".yml",                         # a dotfile NAMED like a suffix
+    ".hidden/cfg.yaml",                      # a config under a HIDDEN directory
+    "cfg.yamlx", "cfg.xyaml",                # a known suffix as a substring
 )
 
 
@@ -41,7 +43,7 @@ def _loadable(path: Path) -> bool:
 def planted(tmp_path: Path) -> Path:
     """Plant every name in `_NAMES` under one `configs/` directory as a real config."""
     configs = tmp_path / "configs"
-    body = RUN5.read_text(encoding="utf-8")
+    body = REAL_CONFIG.read_text(encoding="utf-8")
     for name in _NAMES:
         target = configs / name
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -102,7 +104,7 @@ def test_a_symlinked_DIRECTORY_is_enumerated_because_rglob_will_not_walk_it(tmp_
     configs.mkdir()
     outside = tmp_path / "outside"
     outside.mkdir()
-    (outside / "hidden_cfg.yaml").write_text(RUN5.read_text(encoding="utf-8"), encoding="utf-8")
+    (outside / "hidden_cfg.yaml").write_text(REAL_CONFIG.read_text(encoding="utf-8"), encoding="utf-8")
     (configs / "link").symlink_to(outside)
 
     assert "link/hidden_cfg.yaml" not in {
@@ -122,10 +124,11 @@ def test_the_loader_accepts_a_config_at_ANY_shape(tmp_path) -> None:
     import mantis.config as package
     import mantis.config.loader as loader
 
-    for name in ("run6.txt", "run6.YAML", "run6", "run6.yaml.bak", "run6.yamlx", ".yaml"):
+    real_id = load_config(REAL_CONFIG).run_id
+    for name in ("cfg.txt", "cfg.YAML", "cfg", "cfg.yaml.bak", "cfg.yamlx", ".yaml"):
         path = tmp_path / name
-        path.write_text(RUN5.read_text(encoding="utf-8"), encoding="utf-8")
-        assert load_config(path).run_id == "run6", f"{name} must load — R75 declined the refusal"
+        path.write_text(REAL_CONFIG.read_text(encoding="utf-8"), encoding="utf-8")
+        assert load_config(path).run_id == real_id, f"{name} must load — R75 declined the refusal"
 
     for dead in ("CONFIG_SUFFIXES", "ConfigSuffixError", "is_config_path"):
         assert not hasattr(loader, dead), (
@@ -139,10 +142,10 @@ def test_discovery_is_RECURSIVE_and_SORTED_and_does_not_skip_dotfiles(planted) -
     """Prove discovery recurses, sorts, and does not skip dotfiles — `glob.glob` skips them while
     `pathlib.rglob` does not, and order is pinned so two consumers cannot disagree."""
     found = [path.relative_to(planted).as_posix() for path in discover_configs(planted)]
-    assert "prod/run6.yaml" in found and "prod/nested/run6.yml" in found, (
+    assert "prod/cfg.yaml" in found and "prod/nested/cfg.yml" in found, (
         f"a config in a subdirectory must be discovered at any depth; got {found}"
     )
-    assert ".yaml" in found and ".hidden/run6.yaml" in found, (
+    assert ".yaml" in found and ".hidden/cfg.yaml" in found, (
         f"a dotfile config and a config under a hidden directory are both loadable; got {found}"
     )
     assert found == sorted(found), f"discovery must be ordered; got {found}"
@@ -155,7 +158,7 @@ def test_a_config_SHAPED_but_BROKEN_path_stays_INSIDE_the_answer_set(tmp_path) -
     configs.mkdir()
     (configs / "broken.yaml").symlink_to(tmp_path / "nowhere.yaml")
     (configs / "broken.txt").symlink_to(tmp_path / "nowhere.txt")
-    (configs / "real.yaml").write_text(RUN5.read_text(encoding="utf-8"), encoding="utf-8")
+    (configs / "real.yaml").write_text(REAL_CONFIG.read_text(encoding="utf-8"), encoding="utf-8")
 
     found = {path.name for path in discover_configs(configs)}
     assert found == {"broken.yaml", "broken.txt", "real.yaml"}, (
