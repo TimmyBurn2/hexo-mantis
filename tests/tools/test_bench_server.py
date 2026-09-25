@@ -77,16 +77,62 @@ def test_summary_derives_the_step1_columns_from_two_snapshots(bench) -> None:
     assert row["edges_per_graph"] == pytest.approx(1000.0)
 
 
-def test_a_cell_serves_every_leaf_its_workers_submitted(bench, tmp_path: Path) -> None:
-    """The budget witness: served leaves == Σ positions the workers submitted, on the real server."""
+def _cell(bench, tmp_path: Path, *, plant_noise: bool = False) -> dict:
     config = load_config(_CONFIG)
     spec = lookup(config.identity.encoding)
     net = build_net(arch_from_spec_and_config(spec, config.model_dump()))
+    if plant_noise:
+        forward = net.forward_batch
+
+        def noisy(*args, **kwargs):
+            logits, value, bins = forward(*args, **kwargs)
+            return logits, value + 1e-3 * torch.rand_like(value), bins
+
+        net.forward_batch = noisy
     positions = bench.positions_from_events(_events(tmp_path, [_GAME, _GAME[:7]]), config.identity.encoding, limit=None)
-    row = bench.run_cell(net, torch.device("cpu"), config.model_dump(), positions,
-                         batch_size=8, workers=2, leaf_batch=4, seconds=1.0, compile_trunk=False)
+    return bench.run_cell(net, torch.device("cpu"), config.model_dump(), positions, batch_size=8,
+                          workers=2, leaf_batch=4, seconds=1.0, compile_trunk=False, probe=6, windows=2)
+
+
+def test_a_cell_serves_every_leaf_its_workers_submitted(bench, tmp_path: Path) -> None:
+    """The budget witness: served leaves == Σ positions the workers submitted, on the real server."""
+    row = _cell(bench, tmp_path)
     assert row["batch_size"] == 8 and row["workers"] == 2 and row["leaf_batch"] == 4
     assert row["submitted"] > 0 and row["served"] == row["submitted"]
     assert 1 <= row["b_mean"] <= 8 and row["pops"] >= 1 and row["leaves"] <= row["served"]
-    assert len(row["probe_values"]) == 4
+    assert len(row["probe_values"]) == 6 and len(row["window_leaves_per_s"]) == 2
+    assert row["leaves_per_s_q1"] <= row["leaves_per_s_median"] <= row["leaves_per_s_q3"]
     assert row["device"] == "cpu" and row["wall_s"] >= 1.0
+
+
+def test_the_repeat_probe_reads_exact_on_a_deterministic_server(bench, tmp_path: Path) -> None:
+    """The CPU fp32 path is deterministic, so the same distinct positions served twice compare equal."""
+    rep = _cell(bench, tmp_path)["probe_repeat"]
+    assert rep == {"n": 6, "exact": True, "max_abs_value": 0.0, "max_abs_policy": 0.0}
+
+
+def test_the_repeat_probe_reds_on_a_planted_nondeterministic_net(bench, tmp_path: Path) -> None:
+    """PLANTED BREAK: a net whose value carries fresh noise per forward must read DIFFERS, or the probe is blind."""
+    rep = _cell(bench, tmp_path, plant_noise=True)["probe_repeat"]
+    assert rep["exact"] is False and rep["max_abs_value"] > 0.0
+
+
+def test_the_probe_positions_are_pairwise_distinct(bench) -> None:
+    """Duplicates collapse before the spread is taken; a pool short of `n` distinct positions is refused."""
+    a, b, c = ([(0, 0, 1)], -1, 1), ([(0, 0, 1), (1, 0, -1)], 1, 2), ([(1, 0, -1), (0, 0, 1)], 1, 2)
+    assert bench.distinct_positions([a, a, b, c, a], 2) == [a, b]
+    with pytest.raises(ValueError, match="2 distinct positions, the probe needs 3"):
+        bench.distinct_positions([a, b, c], 3)
+
+
+def test_the_iqr_reading_separates_only_on_non_overlapping_quartiles(bench) -> None:
+    """A change is faster only when its q1 clears the baseline's q3."""
+    assert bench.quartiles([1.0, 2.0, 3.0, 4.0, 5.0]) == (2.0, 3.0, 4.0)
+    base = {"batch_size": 64, "window_leaves_per_s": [100.0, 101.0, 102.0, 103.0, 104.0]}
+    fast = {"batch_size": 64, "window_leaves_per_s": [104.0, 105.0, 106.0, 107.0, 108.0]}
+    near = {"batch_size": 64, "window_leaves_per_s": [102.0, 103.0, 104.0, 105.0, 106.0]}
+    got = bench.compare_rows(base, fast)
+    assert got["faster_beyond_iqr"] and not got["slower_beyond_iqr"]
+    assert got["delta_pct"] == pytest.approx(100.0 * 4 / 102)
+    assert not bench.compare_rows(base, near)["faster_beyond_iqr"]
+    assert bench.compare_rows(fast, base)["slower_beyond_iqr"]

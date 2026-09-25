@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import statistics
 import sys
 import threading
 import time
@@ -24,6 +25,7 @@ from mantis.train.checkpoints import load_checkpoint
 from mantis.util.git import head_sha, is_dirty
 
 Position = tuple[list[tuple[int, int, int]], int, int]
+Served = tuple[list[float], list[tuple[tuple[int, int], float]], float]
 #: The curve: ms/batch for these batch sizes.
 DEFAULT_BATCH_SIZES = (16, 32, 64, 128, 256)
 _COLUMNS = ("batch_size", "pops_per_s", "b_mean", "full_share", "sat_share", "deadline_share",
@@ -49,6 +51,42 @@ def positions_from_events(path: Path, encoding: str, *, limit: int | None) -> li
                 q, r = (int(x) for x in move.strip("()").split(","))
                 board.apply_move(q, r)
     return out if limit is None else out[-limit:]
+
+
+def distinct_positions(positions: list[Position], n: int) -> list[Position]:
+    """`n` pairwise-distinct positions spread evenly over the pool; Raises: ValueError — fewer than `n` distinct."""
+    seen: dict[tuple, Position] = {}
+    for pos in positions:
+        seen.setdefault((tuple(sorted(pos[0])), pos[1], pos[2]), pos)
+    pool = list(seen.values())
+    if len(pool) < n:
+        raise ValueError(f"the pool holds {len(pool)} distinct positions, the probe needs {n}")
+    return [pool[i * len(pool) // n] for i in range(n)]
+
+
+def repeat_report(first: list[Served], second: list[Served]) -> dict[str, Any]:
+    """The same input served twice, compared EXACTLY: any difference is a non-deterministic server."""
+    pairs = list(zip(first, second, strict=True))
+    dv = max(abs(a[2] - b[2]) for a, b in pairs)
+    dp = max(abs(x - y) for a, b in pairs for x, y in zip(a[0] + [p for _m, p in a[1]], b[0] + [p for _m, p in b[1]], strict=True))
+    return {"n": len(first), "exact": first == second, "max_abs_value": dv, "max_abs_policy": dp}
+
+
+def quartiles(xs: list[float]) -> tuple[float, float, float]:
+    """`(q1, median, q3)` by linear interpolation over the sample; one reading is its own IQR of 0."""
+    if len(xs) == 1:
+        return xs[0], xs[0], xs[0]
+    q1, med, q3 = statistics.quantiles(xs, n=4, method="inclusive")
+    return q1, med, q3
+
+
+def compare_rows(base: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
+    """One B read against a baseline: the median's change and whether the IQRs separate."""
+    b1, bm, b3 = quartiles(base["window_leaves_per_s"])
+    n1, nm, n3 = quartiles(new["window_leaves_per_s"])
+    return {"batch_size": new["batch_size"], "base_median": bm, "new_median": nm,
+            "delta_pct": 100.0 * (nm - bm) / bm, "faster_beyond_iqr": n1 > b3,
+            "slower_beyond_iqr": n3 < b1}
 
 
 def _delta(after: dict[str, Any], before: dict[str, Any], *keys: str, field: str = "total_ms") -> float:
@@ -89,8 +127,8 @@ def summarize(before: dict[str, Any], after: dict[str, Any], *, wall_s: float) -
 def run_cell(model: torch.nn.Module, device: torch.device, config: dict[str, Any],
              positions: list[Position], *, batch_size: int, workers: int, leaf_batch: int,
              seconds: float, compile_trunk: bool, warmup_s: float = 0.0,
-             probe: int = 4) -> dict[str, Any]:
-    """One standalone cell: the server at `batch_size` fed by `workers` threads, `leaf_batch` leaves each."""
+             probe: int = 64, windows: int = 5) -> dict[str, Any]:
+    """One cell at `batch_size`, `workers` × `leaf_batch` leaves over `windows` sub-windows; the probe serves twice after the load."""
     cfg = copy.deepcopy(config)
     cfg["inference"]["inference_batch_size"] = int(batch_size)
     spec = lookup(cfg["identity"]["encoding"])
@@ -112,34 +150,41 @@ def run_cell(model: torch.nn.Module, device: torch.device, config: dict[str, Any
             submitted[idx] += len(chunk)
             served[idx] += len(batcher.submit_graphs_and_wait(chunk, 1))
 
+    probe_positions = distinct_positions(positions, probe)
     try:
-        # The probe: the same positions served alone, so a later B can be read against them.
-        probe_values = [float(v) for _d, _o, v in
-                        batcher.submit_graphs_and_wait(positions[:probe], 1)]
+        batcher.submit_graphs_and_wait(probe_positions, 1)  # every snapshot then has a sample
         threads = [threading.Thread(target=worker, args=(i,), daemon=True, name=f"bench-w{i}")
                    for i in range(workers)]
         for t in threads:
             t.start()
         if warmup_s > 0:
             time.sleep(warmup_s)
-        # The window is `seconds` from the first snapshot; the probe and warm-up sit outside it.
-        before = server.batch_timing_snapshot()
-        t_before = time.perf_counter()
-        time.sleep(seconds)
-        after = server.batch_timing_snapshot()
-        wall = time.perf_counter() - t_before
+        # The window is `seconds` from the first snapshot; the warm-up and the probe sit outside it.
+        snaps = [(server.batch_timing_snapshot(), time.perf_counter())]
+        for _ in range(windows):
+            time.sleep(seconds / windows)
+            snaps.append((server.batch_timing_snapshot(), time.perf_counter()))
         stop.set()
         for t in threads:
             t.join()
+        # Back to back on the same compiled state, so a difference is the kernels, never a recompile.
+        first = batcher.submit_graphs_and_wait(probe_positions, 1)
+        second = batcher.submit_graphs_and_wait(probe_positions, 1)
     finally:
         server.stop()
         server.join(timeout=10.0)
-    row = summarize(before, after, wall_s=wall)
+    (before, t_before), (after, t_after) = snaps[0], snaps[-1]
+    row = summarize(before, after, wall_s=t_after - t_before)
+    row["window_leaves_per_s"] = [summarize(a, b, wall_s=tb - ta)["leaves_per_s"]
+                                  for (a, ta), (b, tb) in zip(snaps, snaps[1:], strict=False)]
+    row.update(zip(("leaves_per_s_q1", "leaves_per_s_median", "leaves_per_s_q3"),
+                   quartiles(row["window_leaves_per_s"]), strict=True),
+               probe_repeat=repeat_report(first, second), probe_values=[float(v) for _d, _o, v in first])
     row.update({"batch_size": int(batch_size), "workers": workers, "leaf_batch": leaf_batch,
                 "warmup_s": warmup_s, "device": device.type, "compile_trunk": compile_trunk,
                 "edge_geometry_check": resolve_edge_geometry_check(cfg),
                 "max_wait_ms": int(cfg["inference"]["inference_max_wait_ms"]),
-                "submitted": sum(submitted), "served": sum(served), "probe_values": probe_values})
+                "submitted": sum(submitted), "served": sum(served)})
     return row
 
 
@@ -173,7 +218,12 @@ def _table(rows: list[dict[str, Any]], reference: int) -> str:
                      f"  leaves/s {r['leaves_per_s'] / ref['leaves_per_s']:.3f}")
     probe = [r["probe_values"] for r in rows]
     spread = max((abs(a - b) for row in probe[1:] for a, b in zip(probe[0], row, strict=True)), default=0.0)
-    lines.append(f"probe: max |Δvalue| across batch sizes on the same {len(probe[0])} positions = {spread:.6f}")
+    lines.append(f"probe: max |Δvalue| across batch sizes on the same {len(probe[0])} distinct positions = {spread:.6f}")
+    for r in rows:
+        rep, (q1, med, q3) = r["probe_repeat"], quartiles(r["window_leaves_per_s"])
+        lines.append(f"  B={r['batch_size']:4d}  leaves/s median {med:.0f} IQR [{q1:.0f}, {q3:.0f}]  repeat "
+                     f"{'EXACT' if rep['exact'] else 'DIFFERS'} (max |Δvalue| {rep['max_abs_value']:.3g}, "
+                     f"|Δp| {rep['max_abs_policy']:.3g})")
     return "\n".join(lines)
 
 
@@ -192,6 +242,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seconds", type=float, default=60.0, help="measured window per batch size")
     parser.add_argument("--warmup", type=float, default=10.0, help="seconds before the window opens")
     parser.add_argument("--limit-positions", type=int, default=20000)
+    parser.add_argument("--windows", type=int, default=5, help="sub-windows per cell: the IQR's sample")
+    parser.add_argument("--probe", type=int, default=64, help="distinct positions in the repeat probe")
+    parser.add_argument("--baseline", type=Path, default=None, help="an earlier --out record: each B is read against it")
     parser.add_argument("--no-compile", action="store_true",
                         help="eager trunk regardless of inference.compile_trunk")
     parser.add_argument("--out", type=Path, required=True)
@@ -210,7 +263,7 @@ def main(argv: list[str] | None = None) -> int:
     for batch in (int(b) for b in args.batch_sizes.split(",")):
         row = run_cell(net, device, config, positions, batch_size=batch, workers=workers,
                        leaf_batch=leaf_batch, seconds=args.seconds, compile_trunk=compile_trunk,
-                       warmup_s=args.warmup)
+                       warmup_s=args.warmup, probe=args.probe, windows=args.windows)
         rows.append(row)
         print(f"B={batch}: {row['leaves_per_s']:.0f} leaves/s at B {row['b_mean']:.1f}, cycle "
               f"{row['cycle_ms']:.2f} ms (launch {row['launch_ms']:.2f}, gpu_wait "
@@ -218,6 +271,14 @@ def main(argv: list[str] | None = None) -> int:
               flush=True)
     reference = int(config["inference"]["inference_batch_size"])
     print(_table(rows, reference))
+    comparisons = []
+    if args.baseline is not None:
+        base = {r["batch_size"]: r for r in json.loads(args.baseline.read_text(encoding="utf-8"))["rows"]}
+        comparisons = [compare_rows(base[r["batch_size"]], r) for r in rows if r["batch_size"] in base]
+        for c in comparisons:
+            print(f"vs baseline B={c['batch_size']}: median {c['base_median']:.0f} -> {c['new_median']:.0f} "
+                  f"({c['delta_pct']:+.1f} %), faster beyond IQR {c['faster_beyond_iqr']}, "
+                  f"slower beyond IQR {c['slower_beyond_iqr']}")
     repo = Path(__file__).resolve().parents[1]
     record = {
         "tool": "tools/bench_server.py", "config": str(args.config), "events": str(args.events),
@@ -226,6 +287,7 @@ def main(argv: list[str] | None = None) -> int:
         "tree_sha": head_sha(repo), "tree_dirty": is_dirty(repo), "positions": len(positions),
         "workers": workers, "leaf_batch": leaf_batch, "seconds": args.seconds,
         "warmup": args.warmup, "reference_batch_size": reference, "rows": rows,
+        "baseline": str(args.baseline) if args.baseline else None, "comparisons": comparisons,
     }
     args.out.write_text(json.dumps(record, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     print(f"wrote {args.out}")
