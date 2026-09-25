@@ -630,8 +630,8 @@ class EvalPipeline:
             # is only correct with a live exception, and the other call sites have none.
             detail = repr(exc)
             _LOG.exception(
-                "eval_round_completion_failed round_id=%s step=%s detail=%s",
-                inflight["round_id"], inflight["step"], detail,
+                "eval_round_completion_failed round_id=%s step=%s",
+                inflight["round_id"], inflight["step"],
             )
             result = self._broken_result(
                 inflight, reason=EvalBrokenReason.ROUND_COMPLETION_ERROR,

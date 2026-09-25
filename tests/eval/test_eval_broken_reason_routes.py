@@ -217,8 +217,8 @@ def test_the_round_completion_route_logs_a_traceback_and_the_detail(
     tmp_path, monkeypatch, caplog
 ) -> None:
     """O-30, arm 1 (round_completion_error). The route's contract is "never a swallowed
-    exception, NEVER A BARE LOG LINE": `repr(exc)` says WHAT was raised, only the traceback says
-    WHERE. The emitter it collapses into logs with `_LOG.error` and no traceback, so without
+    exception, NEVER A BARE LOG LINE": the traceback's exception is the payload's `repr(exc)` and
+    says WHERE. The emitter it collapses into logs with `_LOG.error` and no traceback, so without
     this oracle the collapse silently deletes the stack.
 
     MUTATION (M-O30a): downgrade the raising site's `_LOG.exception`. Every payload assertion
@@ -238,10 +238,15 @@ def test_the_round_completion_route_logs_a_traceback_and_the_detail(
         "the captured traceback must be THIS round's exception, not an unrelated live "
         f"context: {[repr(r.exc_info) for r in with_traceback]}"
     )
-    assert any("_InjectedCompletionError" in r.getMessage() for r in records), (
-        "…and the `repr(exc)` detail must still travel in the message text, so an operator "
-        f"grepping the log without a traceback reader still sees the class: "
-        f"{[r.getMessage() for r in records]}"
+    detail = drive.broken_event()["detail"]
+    assert any(
+        r.exc_info is not None and isinstance(r.exc_info[1], _InjectedCompletionError)
+        and repr(r.exc_info[1]) == detail and drive.result["eval_broken_detail"] == detail
+        for r in with_traceback
+    ), (
+        "…and the logged exception must be the one the payload reports: its repr must equal "
+        f"the emitted and routed `detail` {detail!r}: "
+        f"{[repr(r.exc_info[1]) for r in with_traceback if r.exc_info is not None]}"
     )
     assert any("eval_broken" in r.getMessage() for r in records), (
         "…AND the emitter's own `eval_broken …` ERROR line is still there: the two records "
