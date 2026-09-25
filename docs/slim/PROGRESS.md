@@ -68,6 +68,15 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   token text equal; text formats: own-line `#` lines dropped) before integration.
 - Launched in parallel, each in `.wt/w7-<leg>` from d18dc5bc: L1 crates/mantis-selfplay (**opus**), L2 crates/mantis-search
   + crates/mantis-encoding (**opus**), L3 tools/ci_gates (**opus**), L4 crates/mantis-core + -bridge + -graph (**sonnet**).
+- L1 LANDED 2ce26192, 39fa4868 (**opus**; one package split src | tests+benches): selfplay cite 78→3, comment_excess
+  871→701 (−260 lines net); rust_doc_excess fell 2486→2320 as a side effect. Kept: CARD-RING-SAMPLER-SEED, the
+  atomic.rs planted-break cite, queue_fuse_pin's LAW-07 self-test marker, the `rotation-free` text, R8 headers.
+  rustfmt's code reflow in 5 base-unformatted test files was reverted (comment edits only). Verifier comment-only.
+- L2 LANDED f0766683 (search), 6282b66f (encoding) (**opus**): search cite 9→0, comment_excess 559→446; encoding
+  13→0, 105→72. registry.toml untouched, registry gate ARMED+PASS; selection.rs's root comment corrected (it
+  claimed every node selects by PUCT, false under Gumbel). Verifier comment-only; run10 MATCH; gates 10/12/13/15/17 rc 0.
+- L5 tests/train+config+tools+selfplay (**sonnet**) and L6 the remaining tests/ packages (**sonnet**; tests/model/
+  conformance/** excluded under R368(h)) launched in the freed slots.
 
 ## W6 — docs + configs (EXITED 2026-09-25)
 
