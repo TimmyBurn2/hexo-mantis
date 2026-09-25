@@ -10,22 +10,25 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 **SLIM-FIX (R368)**, in progress on branch `claude/slim-fix-r368` (cut from the SLIM-SCOUT census at
 `1e8d6d6`, base `dev` `69e1532`), not yet on `dev`: waves W0–W5 exited, W6 (docs + configs) in
 progress, W7 (the style pass) and W8 (close) remain. Its resume point is `docs/slim/PROGRESS.md`;
-the per-wave facts live there and in the wave reviews under `docs/audits/`, not here.
+the per-wave facts live there and in the wave reviews under `docs/audits/`, not here. At packet
+exit, with the full gate set green including the slow tier, the branch fast-forwards `dev` (R368).
 
 ## The run
 
-- **No run is live.** run7 stopped at step 83 482 (2026-09-18) and run8 at 55 170 (2026-09-21);
-  run9 was never started and its config is deleted (R365(a), R367). The strength series and every
-  cell on record are in the measurement records named below.
+- **No run is live.** run7 stopped at step 83 482 on 2026-09-18
+  (`docs/design/measurements/EVAL_COST_2026-09-19.md` reads its rounds) and run8 at 55 170 on
+  2026-09-21 (R365); run9 was never started and its config is deleted (R365(a), R367). The strength
+  series and every cell on record are in the measurement records named below.
 - **run10 is ARMED, not started.** `configs/run10.yaml` is minted (R366, ratified by R367(c)); its
   order, witnesses and pre-registered reading are
   `docs/design/measurements/RUN10_PREREG_2026-09-21.md`, the box sequence its §6. `dev` `69e1532`
   is run10's validated base (R368(i)): until run10 STARTs no leg moves its resolved config, the
   stamp format or trainer/search/eval numerics, and run10 launches from a later `dev` tip only if
-  every merge since carried the full gate set green, slow tier included. Read a config's values from
-  the file itself and diff two with `tools/config_diff.py`; STATE does not restate minted rows.
-- **No box exists in the tree's record.** The last instance was destroyed on 2026-09-21 (R365,
-  annotated by R367(d)); the operator's mirror (`tools/mirror_pull.py`) holds run7's and run8's
+  every merge since carried the full gate set green, slow tier included. SEAM-2's implementation
+  merges only after run10 STARTs (R368(j)). Read a config's values from the file itself and diff
+  two with `tools/config_diff.py`; STATE does not restate minted rows.
+- **No box is rented as far as the tree records.** The last instance was destroyed on 2026-09-21
+  (R365, annotated by R367(d)); the operator's mirror (`tools/mirror_pull.py`) holds run7's and run8's
   artifacts, run10's parent and the ring its held-out slice reads. The run10 box criterion and its
   admission bench are R367(e), run with `tools/bench_server.py` per the prereg's §6; any admission
   reading taken since is not a tracked record. Renting, stopping or re-speccing a box is the
