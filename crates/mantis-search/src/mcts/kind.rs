@@ -2,11 +2,11 @@
 
 /// Which search this tree runs — PUCT, or Gumbel-Top-k with Sequential Halving.
 ///
-/// ONE closed key: the corrections that make Gumbel correct are what corrected Gumbel IS, so
-/// they travel as a kind rather than as independent switches.
+/// ONE closed key, replacing four switches (`gumbel_mcts`, `gumbel_variant`, and a
+/// `completed_q_values` flag in each of selfplay and train): the corrections that make Gumbel
+/// correct are what corrected Gumbel IS, so they travel as a kind.
 ///
-/// NO `Default`, deliberately: an absent search kind is an error at the config seam, never a
-/// silent PUCT.
+/// NO `Default`, deliberately: an absent search kind is a config-seam error, never a silent PUCT.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SearchKind {
     /// PUCT descent everywhere, Dirichlet root noise, visit-count targets.

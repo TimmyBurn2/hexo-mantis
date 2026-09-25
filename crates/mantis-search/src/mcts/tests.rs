@@ -752,9 +752,9 @@ fn test_cf1_stone2_win_still_scored_as_loss_to_mover() {
     );
 }
 
-// CF-6: FPU sign consistency in `puct_score`. A VISITED child's stored Q is mr-negated, an
-// UNVISITED child's `fpu_value` is already in the parent's frame and never negated.
-// `c_puct=0.0` zeroes the U term so `puct_score == q`; flipping either expected sign fails.
+// CF-6: FPU sign in `puct_score`. A VISITED child's stored Q is negated only at `mr==1` (the child
+// is the other player; at `mr==2` the same), an UNVISITED child's `fpu_value` (already in the
+// parent's frame) never. `c_puct=0.0` zeroes U so `puct_score == q`; flipping either sign fails.
 
 #[test]
 fn test_cf6_fpu_sign_consistent_with_visited_child_at_both_mr() {
