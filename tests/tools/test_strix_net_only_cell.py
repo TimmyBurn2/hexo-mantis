@@ -1,4 +1,4 @@
-"""The NET-ONLY cell (R358(a)): strix with its root VCF solver OFF, threaded from the follower's unit to the driver's load."""
+"""The NET-ONLY cell: strix with its root VCF solver OFF, threaded from the follower's unit to the driver's load."""
 from __future__ import annotations
 
 import importlib.util

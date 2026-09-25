@@ -101,7 +101,7 @@ def _run_dirs_under(base: Path) -> list[tuple[Path, str]]:
 
 @pytest.fixture(scope="module")
 def local_puller(tmp_path_factory) -> Iterator[Path]:
-    """The R349(b) loop in miniature: the REAL puller as a LOCAL loop over every preflight run dir under pytest's tmp base."""
+    """The puller loop in miniature: the REAL puller as a LOCAL loop over every preflight run dir under pytest's tmp base."""
     puller = _load_puller()
     base = Path(tmp_path_factory.getbasetemp())
     mirrors = tmp_path_factory.mktemp("mirror")

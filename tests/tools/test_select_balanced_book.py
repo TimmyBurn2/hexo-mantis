@@ -1,4 +1,4 @@
-"""`tools/select_balanced_book.py` (R354(d) BOOK_V2): an opening is kept only when a paired anchor-vs-itself result SPLITS by seat in at least one replay."""
+"""`tools/select_balanced_book.py` (BOOK_V2): an opening is kept only when a paired anchor-vs-itself result SPLITS by seat in at least one replay."""
 from __future__ import annotations
 
 import hashlib

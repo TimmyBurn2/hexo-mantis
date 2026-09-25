@@ -750,7 +750,7 @@ def test_the_parser_declares_no_defaults() -> None:
     """A `default=` in the parser is a code-side default authority for a run input, which is
     the defect this repo is arranged against."""
     calls = _add_argument_calls()
-    # `--device` DIED on both callers and R349(b) added `--receipt-wait-sec`, so the surface is
+    # `--device` DIED on both callers and `--receipt-wait-sec` was added, so the surface is
     # SIX documented inputs plus the suppressed `--_boot`. Pinned rather than floored: `>= 6`
     # kept passing NUMERICALLY across the removal. The device-flag BAN covers BOTH parsers.
     assert len(calls) == 7, (

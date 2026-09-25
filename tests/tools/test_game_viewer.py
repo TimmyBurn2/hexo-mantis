@@ -1,4 +1,4 @@
-"""The game viewer (VIEWER-1, R352(g)): index, derived hex facts, the page, per-shard data, the CLI."""
+"""The game viewer (VIEWER-1): index, derived hex facts, the page, per-shard data, the CLI."""
 from __future__ import annotations
 
 import importlib
@@ -127,7 +127,7 @@ def test_the_shard_data_carries_moves_the_win_line_and_stats_where_present(reade
 
 
 def test_the_shard_data_carries_each_moves_arm_and_the_arms_sims(reader, tmp_path):
-    """R353(d): one arm character per ply plus the sims per arm; a pre-producer record carries none."""
+    """One arm character per ply plus the sims per arm; a pre-producer record carries none."""
     d = tmp_path / "games"
     d.mkdir()
     shard = d / "games_t_seg0001_2026091400.jsonl"

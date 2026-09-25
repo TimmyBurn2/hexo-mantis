@@ -1,6 +1,6 @@
 """The two START HALTs, proven to fire and not to fire vacuously: the CUDA halt (rc 17) before
-the boot, keyed on what the RUN declares; the mirror-receipts halt (rc 16, R349(b)) after it,
-on the boot's own bundle and first shard — R347(d)'s volume arm is DELETED."""
+the boot, keyed on what the RUN declares; the mirror-receipts halt (rc 16) after it,
+on the boot's own bundle and first shard — the volume arm is DELETED."""
 from __future__ import annotations
 
 import importlib.util

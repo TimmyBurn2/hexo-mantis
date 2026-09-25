@@ -1,4 +1,4 @@
-"""LAW-13's second half has a check: `target-cpu` appears in no committed build config."""
+"""The FFI/build law's second half has a check: `target-cpu` appears in no committed build config."""
 from __future__ import annotations
 
 import re

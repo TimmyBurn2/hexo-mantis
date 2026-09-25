@@ -1,4 +1,4 @@
-"""`tools/ladder/session.py` (LADDER-1 §1.2): register (hold the stream) -> play every move request through the backend, the book's stones first (R363(c)) -> report one receipt per game; the challenger arm issues the paired challenges."""
+"""`tools/ladder/session.py` (LADDER-1 §1.2): register (hold the stream) -> play every move request through the backend, the book's stones first -> report one receipt per game; the challenger arm issues the paired challenges."""
 from __future__ import annotations
 
 import json
@@ -168,7 +168,7 @@ def _series(path: Path, opponents: list[str]) -> None:
 
 
 def test_pair_m_against_one_opponent_plays_opening_m_counted_per_opponent_from_the_offset(ladder, tmp_path: Path) -> None:
-    """R363(c): opening index = match (pair) index — games 2m and 2m+1 share opening m; another opponent's game advances nothing; `match_offset` names where a resumed series left off."""
+    """Opening index = match (pair) index — games 2m and 2m+1 share opening m; another opponent's game advances nothing; `match_offset` names where a resumed series left off."""
     from mantis.arena.books import book_openings
 
     book = book_openings("book_v1_s20260625_p4")

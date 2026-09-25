@@ -1,4 +1,4 @@
-"""`tools/bench_server.py` (R360(b) step 2): the real batcher and `InferenceServer`, positions replayed from a run's games, one row per B."""
+"""`tools/bench_server.py`: the real batcher and `InferenceServer`, positions replayed from a run's games, one row per B."""
 from __future__ import annotations
 
 import importlib.util
@@ -78,7 +78,7 @@ def test_summary_derives_the_step1_columns_from_two_snapshots(bench) -> None:
 
 
 def test_a_cell_serves_every_leaf_its_workers_submitted(bench, tmp_path: Path) -> None:
-    """The budget witness (R360(b)): served leaves == Σ positions the workers submitted, on the real server."""
+    """The budget witness: served leaves == Σ positions the workers submitted, on the real server."""
     config = load_config(_CONFIG)
     spec = lookup(config.identity.encoding)
     net = build_net(arch_from_spec_and_config(spec, config.model_dump()))

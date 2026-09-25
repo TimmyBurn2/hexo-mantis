@@ -1,4 +1,4 @@
-"""The comment-length lint's producer test (LAW-07): the measures must BITE.
+"""The comment-length lint's producer test: the measures must BITE.
 
 Every arm drives the SAME `measure_source` / `verdict` / `parse_floor` the gate itself calls,
 spec-loaded by path because `tools/` is not an importable package and R5 bars `sys.path` writes.

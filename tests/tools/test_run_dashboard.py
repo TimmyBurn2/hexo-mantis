@@ -301,7 +301,7 @@ def test_the_grad_norm_rule_is_drawn_when_the_ceiling_rides_resolved_config(html
 
 
 def test_the_quality_panel_draws_the_halts_windowed_cap_rate_from_game_zero(html, reader, tmp_path):
-    """R352(c): the fifth multiple is the ply-cap share over the halt's own window."""
+    """The fifth multiple is the ply-cap share over the halt's own window."""
     rows = BOOT + [{"event": "monitor_gates", "step": 1, "gates": {}, "ply_cap_abort_rate": 0.5,
                     "ply_cap_window_games": 4}]
     rows += [{"event": "game_complete", "winner": 0, "moves": 30, "terminal_reason": "six_in_a_row"}
@@ -330,7 +330,7 @@ def test_an_unarmed_record_draws_the_windowed_cap_rate_at_the_minted_window_and_
 
 
 def test_the_throughput_panel_carries_the_augmentation_draw_line_with_a_unit(html, reader, tmp_path):
-    """R358(b)/LAW-18: the D6 draw bins read as a share per element, cumulative since boot; absence is stated."""
+    """The D6 draw bins read as a share per element, cumulative since boot; absence is stated."""
     page = _page(html, reader, tmp_path, [
         {"event": "iteration_complete", "step": 0, "games_per_hour": 100.0,
          "sym_draws": {"bins": [0] * 12, "empty_skipped": 0}},

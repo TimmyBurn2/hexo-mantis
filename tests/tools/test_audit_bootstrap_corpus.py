@@ -3,10 +3,10 @@
 # SAME builder produced the clean baseline it is perturbed from — split the file and the
 # builder becomes a second authority on what "a conforming record" is, which is exactly the
 # drift the tool's DECLARED INPUT CONTRACT exists to prevent.
-"""Oracle for tools/audit_bootstrap_corpus.py (R247).
+"""Oracle for tools/audit_bootstrap_corpus.py.
 
 Every fixture is built inline in ``tmp_path`` — no committed data (R7). The two mutation
-self-tests (LAW-07) are ``test_a_flipped_byte_...`` and ``test_a_renamed_field_...``: each
+self-tests are ``test_a_flipped_byte_...`` and ``test_a_renamed_field_...``: each
 first proves the clean fixture passes, then perturbs exactly one thing and proves the leg
 bites. A gate whose trigger is never fired is a gate nobody can trust.
 """
@@ -28,7 +28,7 @@ TOOL_PATH = REPO_ROOT / "tools" / "audit_bootstrap_corpus.py"
 def _load_tool():
     """Load the audit tool by PATH.
 
-    R5/LAW-17 ban `sys.path` mutation and `tools/` is not an importable package, so the tool
+    No `sys.path` mutation and `tools/` is not an importable package, so the tool
     is spec-loaded from its file exactly as the other `tests/tools/` oracles do it.
     """
     return load_module_by_path("_audit_bootstrap_corpus", TOOL_PATH)
@@ -97,7 +97,7 @@ def _write_dataset(root: Path, records: list[dict[str, Any]]) -> Path:
 def _write_flat_dataset(
     root: Path, records: list[dict[str, Any]], *, declared_bytes: int | None = None
 ) -> Path:
-    """SHAPE B — the flat single-file manifest the R247 dataset actually ships (OPEN-2).
+    """SHAPE B — the flat single-file manifest the bootstrap dataset actually ships (OPEN-2).
 
     Field-for-field the observed shape: `file` / `bytes` / `sha256` plus provenance keys
     the tool must record and never parse for meaning.
@@ -168,7 +168,7 @@ def test_a_conforming_dataset_audits_clean(tmp_path: Path):
 
 
 def test_both_selection_biases_are_recorded_with_measurements(tmp_path: Path):
-    """R247 requires the biases in the OUTPUT, measured AND stated."""
+    """The audit requires the biases in the OUTPUT, measured AND stated."""
     ds = _write_dataset(tmp_path, [_decisive_p1_game(f"g{i}") for i in range(3)])
     out = tmp_path / "report.json"
     assert _run(ds, out) == EXIT_OK
@@ -237,7 +237,7 @@ def test_the_dedupe_leg_labels_a_supplied_reference_as_derived(tmp_path: Path):
     assert leg["overlapping_games"] == 1
 
 
-# MUTATION SELF-TEST 1 (LAW-07) — the sha leg bites
+# MUTATION SELF-TEST 1 — the sha leg bites
 
 def test_a_flipped_byte_in_a_data_file_is_caught_by_the_sha_leg(tmp_path: Path):
     recs = [_decisive_p1_game(f"g{i}") for i in range(3)]
@@ -280,7 +280,7 @@ def test_a_missing_listed_file_and_an_unlisted_record_file_both_bite(tmp_path: P
     assert _report(out)["sha256_verification"]["missing"] == ["games.jsonl"]
 
 
-# MUTATION SELF-TEST 2 (LAW-07) — the contract leg bites, naming the field
+# MUTATION SELF-TEST 2 — the contract leg bites, naming the field
 
 @pytest.mark.parametrize(
     ("field", "renamed"),
@@ -374,7 +374,7 @@ def test_a_manifest_without_a_files_array_is_refused_by_name(tmp_path: Path):
 # OPEN-2 (contract v2) — the manifest ships FLAT and SINGLE-FILE, not a files[] array
 
 def test_the_flat_single_file_manifest_is_accepted_as_shape_b(tmp_path: Path):
-    """The shape the R247 dataset actually ships: `file` + `sha256` + `bytes`."""
+    """The shape the bootstrap dataset actually ships: `file` + `sha256` + `bytes`."""
     ds = _write_flat_dataset(tmp_path, [_decisive_p1_game(f"g{i}") for i in range(3)])
     out = tmp_path / "report.json"
     assert _run(ds, out) == EXIT_OK
@@ -420,7 +420,7 @@ def test_a_manifest_carrying_both_shapes_is_refused_as_ambiguous(
 
 
 def test_a_declared_byte_length_that_disagrees_with_disk_is_a_pin_failure(tmp_path: Path):
-    """MUTATION (LAW-07): shape B's `bytes` is verified, not decoration."""
+    """MUTATION: shape B's `bytes` is verified, not decoration."""
     recs = [_decisive_p1_game("g0")]
     ds = _write_flat_dataset(tmp_path, recs)
     out = tmp_path / "report.json"
@@ -460,7 +460,7 @@ def test_the_elo_leg_reports_per_player_and_says_so(tmp_path: Path):
 def test_a_scalar_elo_is_refused_and_the_message_names_the_pair_shape(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ):
-    """MUTATION (LAW-07): v1's declared shape is now the failure, named as such."""
+    """MUTATION: v1's declared shape is now the failure, named as such."""
     rec = _decisive_p1_game("g0")
     rec["elo"] = 1234.0
     ds = _write_flat_dataset(tmp_path, [rec])
@@ -525,10 +525,10 @@ def test_a_present_game_id_rides_the_identity_alongside_the_hash(tmp_path: Path)
     assert named["game"] == f"uuid-42 ({rec['game_hash']})"
 
 
-# the certified distribution table (R278(d)) — plies AND turns, the ladder, truncation
+# the certified distribution table — plies AND turns, the ladder, truncation
 
 def test_turns_derive_from_plies_by_the_compound_turn_rule(tmp_path: Path):
-    """LAW-03: ply 0 places ONE stone, every later turn places two."""
+    """Ply 0 places ONE stone, every later turn places two."""
     assert turns_from_plies(1) == 1.0
     assert turns_from_plies(20) == 10.5     # the card's "20 moves ~ 10.5 turns"
     assert turns_from_plies(128) == 64.5
@@ -569,7 +569,7 @@ def test_truncation_is_measured_at_every_candidate_cap(tmp_path: Path):
     assert _run(ds, out) == EXIT_OK
     rows = {r["cap_plies"]: r for r in _report(out)["distributions"]["ply_length"]
             ["truncation_by_cap"]}
-    assert set(rows) == {128, 200}          # the declared pair: the live literal + R276(g)'s
+    assert set(rows) == {128, 200}          # the declared pair: the live literal + the prereg's
     assert rows[128]["games_exceeding"] == 1
     assert rows[128]["fraction_truncated"] == 0.5
     assert rows[128]["fraction_fitting"] == 0.5

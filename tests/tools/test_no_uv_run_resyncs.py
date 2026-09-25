@@ -1,4 +1,4 @@
-"""B-5 (R355(e)): no `uv run` in the Makefile or any tools/ script may re-sync the venv (CPU torch on the box)."""
+"""No `uv run` in the Makefile or any tools/ script may re-sync the venv (CPU torch on the box)."""
 from __future__ import annotations
 
 import re

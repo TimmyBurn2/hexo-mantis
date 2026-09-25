@@ -285,7 +285,7 @@ def test_v6_alternation_does_not_shadow_longer_names():
 
 
 def test_the_live_set_is_the_registrys_and_a_new_entry_is_covered(tmp_path: Path):
-    """B-19 (R355(e)): the tuple hardcoded three deleted names and no live one could join it."""
+    """The tuple hardcoded three deleted names and no live one could join it."""
     live = GATE.registry_encodings()
     assert set(live) >= {"gnn_axis_v1", "gnn_axis_r8"} and set(live) <= set(GATE.ENCODINGS)
     planted = tmp_path / "registry.toml"

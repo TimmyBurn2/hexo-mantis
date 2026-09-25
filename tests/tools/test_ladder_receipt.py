@@ -1,4 +1,4 @@
-"""`tools/ladder/receipt.py` (LADDER-1): one receipt per game, keyed by net hash, refused before it is written when it cannot be read back — the LAW-07 producer test with its planted break and the mutation self-test."""
+"""`tools/ladder/receipt.py` (LADDER-1): one receipt per game, keyed by net hash, refused before it is written when it cannot be read back — the producer test with its planted break and the mutation self-test."""
 from __future__ import annotations
 
 import json
@@ -110,7 +110,7 @@ def test_a_planted_break_is_refused_before_anything_reaches_disk(ladder, tmp_pat
 
 
 def test_the_validator_is_what_stops_the_planted_break(ladder, tmp_path: Path, monkeypatch) -> None:
-    """LAW-07 mutation self-test: with the validator disarmed the same break lands on disk, so the refusal above is the validator's."""
+    """Mutation self-test: with the validator disarmed the same break lands on disk, so the refusal above is the validator's."""
     monkeypatch.setattr(ladder.receipt, "validate_receipt", lambda _body: None)
     path = ladder.receipt.write_receipt(tmp_path, _body(ladder, schema_version=3))
     assert json.loads(path.read_text(encoding="utf-8"))["schema_version"] == 3

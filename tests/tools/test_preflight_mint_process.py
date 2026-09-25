@@ -54,7 +54,7 @@ _RUN5_BURST = 25001
 
 
 def _load_tool():
-    """Load the gate script by absolute path — ZERO `sys.path` mutation (R5 / LAW-17)."""
+    """Load the gate script by absolute path — ZERO `sys.path` mutation."""
     spec = importlib.util.spec_from_file_location("preflight_mint_process", TOOL_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -523,7 +523,7 @@ def test_the_real_boot_still_reaches_an_ARMED_loop_on_a_CALIBRATED_config(tmp_pa
            "which exists to keep the device false-clear dead on every CPU box in the fleet.",
 )
 def test_booting_run5_on_a_non_CUDA_box_fails_LOUD_in_init_trainer(tmp_path) -> None:
-    """A cuda-minted run6 on a non-CUDA host fails LOUD and BEFORE any boot: since R347(d) the
+    """A cuda-minted run6 on a non-CUDA host fails LOUD and BEFORE any boot: the
     START halt rc 17 (`PreflightCudaBuildError`) fires ahead of the child, where the old rc 33
     in `init_trainer` used to be the first wall. The device stays a config fact either way, so a
     cpu preflight can never false-clear the GPU memory wall."""
@@ -650,7 +650,7 @@ def test_the_report_publishes_the_pins_the_scan_ACTUALLY_covered(tmp_path) -> No
 
 def test_a_config_nobody_declared_is_production_and_AUDITED(tmp_path) -> None:
     """A config that lands under `configs/` with no declaration anywhere is production by the
-    census (R367(a)) and is audited: "forgotten" reads as "audited", never as "exempt"."""
+    census and is audited: "forgotten" reads as "audited", never as "exempt"."""
     root = _mini_tree(tmp_path)
     rel = f"{_F1_PLANT_STEM}.yaml"
     plant = root / "configs" / rel
@@ -689,7 +689,7 @@ def test_a_declaration_that_names_a_missing_config_fails_the_gate(tmp_path) -> N
 
 
 def test_the_census_holds_on_the_REAL_tree() -> None:
-    """Production is every config on disk minus the exempt rows (R367(a)); every exempt row is on
+    """Production is every config on disk minus the exempt rows; every exempt row is on
     disk and carries a written reason; the tool's scope is exactly the census."""
     production = census.production_configs(REPO_ROOT)
     present = set(census.discovered_config_paths(REPO_ROOT))
@@ -1710,7 +1710,7 @@ def test_the_LAUNCH_route_accepts_any_shape_and_the_gates_SEE_it(tmp_path) -> No
     odd = tmp_path / "run6.txt"
     odd.write_bytes(canonical.read_bytes())
     identity = config_identity_sha256(load_config(odd))
-    # R348(c): the launcher demands a stamp for this identity on this tree; one stamp covers
+    # The launcher demands a stamp for this identity on this tree; one stamp covers
     # both shapes because they are the same bytes.
     state_home = tmp_path / "state"
     env = {**os.environ, "XDG_STATE_HOME": str(state_home)}

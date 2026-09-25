@@ -1,6 +1,6 @@
-"""F-B1 closure — parent-side oracles (WPCLEAN Phase RES; LAW-07 both directions).
+"""Closure — parent-side oracles (both directions).
 
-The gap (WPMINT Phase B, carried as the preflight-report contract's named gap): parent and
+The gap (carried as the preflight-report contract's named gap): parent and
 child loaded the config independently and only the parent's identity was published, so a
 child that read a DIFFERENT file was invisible in the evidence artifact. The closure gives
 the parent three honest verdicts over the child's `run_boot_identity` event — match /

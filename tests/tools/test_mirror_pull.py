@@ -1,4 +1,4 @@
-"""R349(b): the puller as a LOCAL loop — a directory stands in for the ssh alias, the same
+"""The puller as a LOCAL loop — a directory stands in for the ssh alias, the same
 rsync and receipt writer the operator's machine runs against the box."""
 from __future__ import annotations
 

@@ -1,8 +1,8 @@
-"""Phase PFC card oracles (WPCLEAN): CARD-PREFLIGHT-OUTDIR-REUSE + CARD-PREFLIGHT-CHILD-
+"""Phase PFC card oracles: CARD-PREFLIGHT-OUTDIR-REUSE + CARD-PREFLIGHT-CHILD-
 STDERR-BUDGET, driven on the REAL tool (subprocess / in-process module load — never a
 stand-in). Deliberately NOT in the frozen set (the process-file precedent: non-frozen so
-process-half fixes stay editable). The two R43-gated cards (SPLIT-PARENT-HALF,
-ORACLE-OUTDIR-CLEANUP) are QUEUED, not tested here — see wp/WPCLEAN/ADJUDICATION_QUEUE.md.
+process-half fixes stay editable). Two gated cards (SPLIT-PARENT-HALF,
+ORACLE-OUTDIR-CLEANUP) are QUEUED, not tested here.
 """
 from __future__ import annotations
 
@@ -70,7 +70,7 @@ def test_a_foreign_run_ids_litter_does_not_trip_the_refusal(tmp_path, preflight_
     foreign litter proceeds to the boot (witnessed by the run reaching a real verdict,
     rc 0, exactly as on a clean dir).
 
-    The budget comes from `conftest.PREFLIGHT_BUDGET_SEC` (R46 loop under R284(f)) rather than
+    The budget comes from `conftest.PREFLIGHT_BUDGET_SEC` rather than
     from a literal here. It used to read `300`, which passes on this host with ~46% margin and
     went red on the migration box — the grounds, and the three measurements behind the value,
     are in the conftest beside the constant."""

@@ -84,9 +84,8 @@ def test_a_retired_resolver_symbol_reds_the_gate(tmp_path, doc_text):
 
 
 #: The doc's stated leaf count, derived from the live schema: a literal would go stale as a
-#: mutation anchor that matches nothing, which is the defect gate 13 exists to catch.
-#: The gate arrives through the `gate_module` fixture because `tools/` carries no `__init__.py`,
-#: so `from tools.ci_gates...` resolves only when the repo root happens to be on `sys.path`.
+#: mutation anchor that matches nothing. Arrives through the `gate_module` fixture because
+#: `tools/` carries no `__init__.py`, so `from tools.ci_gates...` needs the repo root on `sys.path`.
 def _live_count_claim(gate_module) -> str:
     """Return the count read through the same walker the gate uses, off `gate_module` itself."""
     from mantis.config.schema import RunConfig

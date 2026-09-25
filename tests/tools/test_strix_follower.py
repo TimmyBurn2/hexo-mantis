@@ -1,4 +1,4 @@
-"""`tools/strix_follower.py` (R356(a)): triggers off the event stream, one cell per receipt, the stamp untouched."""
+"""`tools/strix_follower.py`: triggers off the event stream, one cell per receipt, the stamp untouched."""
 from __future__ import annotations
 
 import hashlib
@@ -96,7 +96,7 @@ def test_triggers_are_cadence_multiples_and_promotions_only(follower_mod) -> Non
 
 
 def test_promotions_off_reads_the_cadence_points_only(follower_mod, tmp_path: Path) -> None:
-    """R361(a): with the promotion trigger OFF a promoted round fires nothing; the cadence save still does."""
+    """With the promotion trigger OFF a promoted round fires nothing; the cadence save still does."""
     rows = [{"event": "eval_round_complete", "step": 3000, "promoted": True},
             {"event": "periodic_checkpoint_save", "step": 15000, "path": "/x/a.ckpt"}]
     got = follower_mod.triggers_from_rows(iter(rows), 15_000, promotions=False)
@@ -141,7 +141,7 @@ def test_the_tail_reads_only_new_lines_and_follows_a_new_segment(follower_mod, t
     assert [r["step"] for r in tail.read_new()] == [45000]
 
 
-# the producer test (LAW-07): planted event -> fires once; planted duplicate -> not twice
+# the producer test: planted event -> fires once; planted duplicate -> not twice
 
 def test_a_planted_cadence_event_fires_one_cell_and_writes_the_sidecar(follower_mod, tmp_path: Path) -> None:
     run = _run_dir(tmp_path)

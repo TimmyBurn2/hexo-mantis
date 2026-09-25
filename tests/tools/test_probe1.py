@@ -1,4 +1,4 @@
-"""PROBE-1's instrument (R365(b)): the decomposer's exclusion and mr split, the gap table's pairing, the KL/calibration reductions."""
+"""PROBE-1's instrument: the decomposer's exclusion and mr split, the gap table's pairing, the KL/calibration reductions."""
 from __future__ import annotations
 
 import importlib

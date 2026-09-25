@@ -1,4 +1,4 @@
-"""AUDIT-1 F-12 — a deselecting marker cannot remove a test from every tier in silence.
+"""A deselecting marker cannot remove a test from every tier in silence.
 
 THE DEFECT. Gate 3c counts COLLECTED tests: `pytest --collect-only -q -m ''` walks the whole
 tree, and DESELECTION IS NOT COLLECTION. `make test` runs `-m "not integration and not slow"`;
@@ -36,7 +36,7 @@ TOOL = _load()
 # the census reads the tree
 
 def test_the_committed_tree_is_green_and_the_declaration_is_not_empty() -> None:
-    """R98: a gate is adopted only over a clean baseline — and an EMPTY declaration would
+    """A gate is adopted only over a clean baseline — and an EMPTY declaration would
     make every row below pass vacuously, which is the phantom-gate class one layer up."""
     observed = TOOL.census(REPO_ROOT / "tests")
     declared = TOOL.load_declaration(DECLARATION)
@@ -49,9 +49,8 @@ def test_both_marker_spellings_are_seen(tmp_path: Path) -> None:
     in one line and carries no decorator at all."""
     suite = tmp_path / "tests"
     suite.mkdir()
-    # The decorator is assembled rather than written inline: a literal "\n" immediately
-    # before "@pytest.mark" matches CI gate 17's `user@host` class, and a fixture that
-    # trips a gate teaches the next reader to add a hatch reflexively.
+    # Assembled rather than written inline: a literal "\n" immediately before "@pytest.mark"
+    # matches CI gate 17's `user@host` class, and a fixture that trips a gate teaches badly.
     mark = "@pytest.mark"
     (suite / "test_decorated.py").write_text(
         f"import pytest\n\n\n{mark}.slow\ndef test_a() -> None:\n    pass\n",
@@ -67,7 +66,7 @@ def test_both_marker_spellings_are_seen(tmp_path: Path) -> None:
 
 
 def test_a_body_level_skip_and_an_importorskip_are_censused(tmp_path: Path) -> None:
-    """B-9 (R355(e)): a body-level `pytest.skip(...)` or `importorskip` deselects like a decorator."""
+    """A body-level `pytest.skip(...)` or `importorskip` deselects like a decorator."""
     suite = tmp_path / "tests"
     suite.mkdir()
     (suite / "test_body.py").write_text(
@@ -98,9 +97,8 @@ def test_a_non_deselecting_marker_is_not_censused(tmp_path: Path) -> None:
     make the declaration a list of every marker in the repo and stop being reviewable."""
     suite = tmp_path / "tests"
     suite.mkdir()
-    # The decorator is assembled rather than written inline: `'n'@pytest.mark…` matches CI
-    # gate 17's `user@host` pattern class, and a fixture that trips a gate teaches the next
-    # reader to add a hatch (rule 7's own reasoning about reflexive escapes).
+    # Assembled rather than written inline: `'n'@pytest.mark…` matches CI gate 17's `user@host`
+    # pattern class, and a fixture that trips a gate teaches badly.
     mark = "@pytest.mark.parametrize"
     (suite / "test_p.py").write_text(
         f"import pytest\n\n\n{mark}(\"n\", [1])\n"
@@ -186,7 +184,7 @@ def test_gate_3c_runs_BOTH_arms_even_when_the_first_reds() -> None:
 
 
 def test_gate_3c_refuses_a_floor_ratcheted_PAST_the_collection() -> None:
-    """F-12's third arm. The two original arms compare the count against the REF floor and
+    """The third arm. The two original arms compare the count against the REF floor and
     the floors against each other; nothing compared the tree's own floor against what the
     tree collects, so a floor over tests that do not exist stayed green."""
     body = GATE.read_text(encoding="utf-8")
@@ -198,7 +196,7 @@ def test_gate_3c_refuses_a_floor_ratcheted_PAST_the_collection() -> None:
 
 
 def test_the_self_tests_arm_tally_is_DERIVED_not_transcribed() -> None:
-    """R192(e), derive-or-delete. The line read "4 clean arms + 7 firing arms" as a literal;
+    """Derive-or-delete. The line read "4 clean arms + 7 firing arms" as a literal;
     adding an arm made it wrong, and a wrong tally is read as evidence."""
     body = GATE.read_text(encoding="utf-8")
     assert "4 clean arms + 7 firing arms" not in body

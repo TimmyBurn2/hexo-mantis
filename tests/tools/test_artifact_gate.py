@@ -1,4 +1,4 @@
-"""Test the tester: gate 6's size thresholds must arm (LAW-07 mutation self-test).
+"""Test the tester: gate 6's size thresholds must arm (mutation self-test).
 
 Runs the REAL tools/ci_gates/artifact_gate.py via subprocess against a throwaway git repo
 built in tmp. Pins BOTH sides of the R8 ruling: the tests/fixtures/ carve-out is a raised
@@ -77,7 +77,7 @@ def test_artifact_dirs_rejected_at_any_size(tmp_path):
     assert "VIOLATION artifact-dir: checkpoints/tiny.pt" in res.stdout
 
 
-# WP0 RED-TEAM row A closure (WPCLEAN Phase RES): renames and case arrive too
+# RED-TEAM row closure: renames and case arrive too
 
 def _run_gate_rename(tree: Path, old_rel: str, new_rel: str, blob: bytes) -> subprocess.CompletedProcess:
     """Base commit CONTAINS old_rel; the commit under test `git mv`s it to new_rel — an
@@ -120,7 +120,7 @@ def test_an_uppercase_jsonl_outside_fixtures_is_rejected(tmp_path):
     assert "VIOLATION jsonl-outside-fixtures: docs/probe.JSONL" in res.stdout
 
 
-# ── B-6 (R355(e)): modified files are sized, and an empty diff widens ──
+# ── modified files are sized, and an empty diff widens ──
 
 def _repo_with(tree: Path, commits: list[dict[str, bytes]]) -> dict[str, str]:
     """A repo with one commit per dict of files (the first is the base); returns the git env."""

@@ -99,7 +99,7 @@ def test_a_replay_that_reproduces_every_move_at_the_configured_budget_passes(bot
 
 
 def test_the_replay_derives_the_book_stones_from_the_receipts_opening_and_names_a_disagreement(bot_mod, ladder, tmp_path: Path) -> None:
-    """R363(c): the forced stones are re-derived from (opening, position), never trusted from the recorded placements."""
+    """The forced stones are re-derived from (opening, position), never trusted from the recorded placements."""
     body = ladder.receipt.read_receipt(_receipt(ladder, tmp_path))
     body["opening"]["relative"][3] = [5, 5]
     report = bot_mod.replay_receipt(body, _ReplayBackend())

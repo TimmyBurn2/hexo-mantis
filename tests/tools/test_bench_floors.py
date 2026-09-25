@@ -1,13 +1,13 @@
-"""tools/bench_floors.toml — schema, provenance and liveness validation (WPBOX CB-3).
+"""tools/bench_floors.toml — schema, provenance and liveness validation.
 
-The floors file is the R29/R18 production baseline: criterion mid estimates measured
-serialized on the production box. Its RATE consumer is LAW-09's bench discipline (a
+The floors file is the production baseline: criterion mid estimates measured
+serialized on the production box. Its RATE consumer is the bench discipline (a
 hot-path change re-runs the named bench and compares against the floor, IQR-gated);
 THIS test is the structural consumer that keeps the file from rotting: every floor row
 names a bench target that exists in the workspace, provenance is complete and carries
 no host identifiers beyond the four permitted fields, and the numbers are sane
 (low <= mid <= high, all positive). A floors file no gate or test reads would be the
-phantom-input class (LAW-07) — this is the producer-side pin.
+phantom-input class — this is the producer-side pin.
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def test_floors_file_exists_and_parses() -> None:
 
 
 def test_provenance_is_complete_and_bounded() -> None:
-    """Exactly the four permitted fields (R112: interpreter/numpy/rustc/CPU-model ONLY —
+    """Exactly the four permitted fields (interpreter/numpy/rustc/CPU-model ONLY —
     a host identifier here would leak the box into the repo)."""
     prov = _load().get("provenance", {})
     assert sorted(prov) == sorted(REQUIRED_PROVENANCE), (

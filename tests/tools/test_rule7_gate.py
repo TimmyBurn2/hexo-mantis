@@ -23,7 +23,7 @@ GATE_PATH = REPO_ROOT / "tools" / "ci_gates" / "rule7_gate.py"
 
 
 def _load_gate():
-    """Load the gate by PATH (R5/LAW-17 ban `sys.path` mutation; `tools/` is not a package)."""
+    """Load the gate by PATH (no `sys.path` mutation; `tools/` is not a package)."""
     return load_module_by_path("_rule7_gate", GATE_PATH)
 
 

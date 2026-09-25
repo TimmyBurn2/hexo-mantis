@@ -1,4 +1,4 @@
-"""`tools/ladder/openings.py` (R363(c)): the ladder's unit is `book_v1_s20260625_p4` PAIRED, opening index = match index, both bots playing the same book prefix from the server's auto-placed origin — a convention between OUR bots, since the server's challenge carries no opening field."""
+"""`tools/ladder/openings.py`: the ladder's unit is `book_v1_s20260625_p4` PAIRED, opening index = match index, both bots playing the same book prefix from the server's auto-placed origin — a convention between OUR bots, since the server's challenge carries no opening field."""
 from __future__ import annotations
 
 import pytest

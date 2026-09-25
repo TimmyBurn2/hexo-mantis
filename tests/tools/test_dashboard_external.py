@@ -1,4 +1,4 @@
-"""R356(d): the strix sidecars draw as a series per unit with CIs and regime, the gap is a number, and the throughput panel carries a unit on every label."""
+"""The strix sidecars draw as a series per unit with CIs and regime, the gap is a number, and the throughput panel carries a unit on every label."""
 from __future__ import annotations
 
 import importlib

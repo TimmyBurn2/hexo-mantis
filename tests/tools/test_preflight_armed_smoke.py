@@ -36,7 +36,7 @@ BURST_STEPS = 16
 def test_armed_smoke_config_completes_a_bounded_burst_through_the_real_preflight(
     tmp_path, monkeypatch, preflight_budget_sec, preflight_harness_ceiling_sec
 ):
-    # The R348(c) stamp store is redirected so a test burst never stamps the host's real store.
+    # The stamp store is redirected so a test burst never stamps the host's real store.
     state_home = tmp_path / "state"
     monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
     proc = subprocess.run(
@@ -59,7 +59,7 @@ def test_armed_smoke_config_completes_a_bounded_burst_through_the_real_preflight
     assert report["config"]["representation"] == "graph", (
         "the proof must run run5's representation — the graph route is TD-1's subject"
     )
-    # (c) both REQUIRED abort rows ARMED on a non-run5 config — the R103 grant, audited.
+    # (c) both REQUIRED abort rows ARMED on a non-run5 config, audited.
     assert report["assertions"]["c_arming"]["verdict"] == "pass"
     # (a) the burst COMPLETED: the independent witness (terminal_eval / shutdown_save —
     # never the actor_sync stream auditing itself) saw exactly BURST_STEPS learner steps.
@@ -73,7 +73,7 @@ def test_armed_smoke_config_completes_a_bounded_burst_through_the_real_preflight
     assert report["tier"]["tier"] == "full"
     assert report["tier"]["covered"] == ["sync_lag", "full"]
     assert report["child"]["rc"] == 0 and report["child"]["timed_out"] is False
-    # R348(c): a green preflight leaves a stamp carrying the halts' readings; R349(b): the local
+    # A green preflight leaves a stamp carrying the halts' readings; the local
     # puller receipted the burst's bundle and first shard, so `mantis.run` accepts the stamp.
     config = load_config(CONFIG)
     stamp = read_stamp(config_identity_sha256(config))
@@ -82,7 +82,7 @@ def test_armed_smoke_config_completes_a_bounded_burst_through_the_real_preflight
     assert stamp["halts"]["cuda_build"] == report["cuda_build"]
     workspace = stamp["halts"]["workspace"]
     assert workspace["verdict"] == "MIRRORED"
-    # A clean completion writes a checkpoint and NO bundle (R137's third leg), so the artefact
+    # A clean completion writes a checkpoint and NO bundle, so the artefact
     # the loop was proven on is the burst's checkpoint of record, at the burst's own step.
     assert "bundle" not in workspace, workspace
     assert workspace["checkpoint"]["name"].startswith(

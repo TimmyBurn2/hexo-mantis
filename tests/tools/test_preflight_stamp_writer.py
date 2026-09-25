@@ -1,4 +1,4 @@
-"""R348(c): the preflight is the ONE stamp writer, and it writes only after its verdict."""
+"""The preflight is the ONE stamp writer, and it writes only after its verdict."""
 from __future__ import annotations
 
 import ast
@@ -85,7 +85,7 @@ def _statement_index(body: list[ast.stmt], callee: str) -> int:
 
 def test_the_stamp_is_written_after_the_verdict_and_cleared_before_the_boot() -> None:
     """Source order in `_run_preflight`: clear < cuda halt < child < verdict < mirror halt <
-    stamp — a stamp can never precede the receipts it certifies (R349(b))."""
+    stamp — a stamp can never precede the receipts it certifies."""
     tree = ast.parse(TOOL_PATH.read_text(encoding="utf-8"))
     fn = next(n for n in ast.walk(tree)
               if isinstance(n, ast.FunctionDef) and n.name == "_run_preflight")

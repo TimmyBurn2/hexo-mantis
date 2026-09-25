@@ -1,4 +1,4 @@
-"""Test the tester: the import-DAG gate must bite on planted cycles (LAW-07 pattern)."""
+"""Test the tester: the import-DAG gate must bite on planted cycles."""
 import subprocess
 import sys
 from pathlib import Path

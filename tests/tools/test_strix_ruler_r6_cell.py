@@ -1,4 +1,4 @@
-"""The RULER-R6 cell (R365 E1): strix at its trained placement_radius 6, threaded from the follower's unit to the driver's load."""
+"""The RULER-R6 cell: strix at its trained placement_radius 6, threaded from the follower's unit to the driver's load."""
 from __future__ import annotations
 
 import importlib.util

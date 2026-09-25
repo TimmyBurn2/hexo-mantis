@@ -25,7 +25,7 @@ def _clean_rows() -> list[dict]:
         {"event": "run_segment_started", "segment": 1, "run_id": "t", "ts": 1.0},
         {"event": "heartbeat_watchdog_armed", "enabled": True},
         {"event": "selfplay_stall_watchdog_armed", "enabled": True},
-        # R352(c)'s terms armed at window 4 ride the one monitor_gates row.
+        # The ply-cap terms armed at window 4 ride the one monitor_gates row.
         {"event": "monitor_gates", "step": 1000, "ply_cap_abort_rate": 0.5, "ply_cap_window_games": 4,
          "gates": {"grad_norm_hard_abort": {"checks": 1000, "fires": 0, "skips": 0, "warns": 0}}},
         {"event": "resume_state_persisted", "step": 1000, "unreceipted_bundles": [1000]},
