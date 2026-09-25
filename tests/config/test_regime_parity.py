@@ -1,6 +1,6 @@
 """O9–O11 — regime-parity per LAW knob (repo_design §8).
 
-Each asserts *suite default == production default* over production_config() (configs/run6.yaml):
+Each asserts *suite default == production default* over production_config() (each census member):
 the suite expectation is DERIVED from the shipped config, never a hardcoded regime knob
 (CONTEXT bug-class #5). Three §8 knobs remain here: sims (O9), amp=bf16 (O10), encoding
 (O11). O12 (radius schedule) is RETIRED (WPSC Phase 2 SC-A2 forced-fallout: DESIGN_P2.md §5
@@ -23,7 +23,7 @@ def test_representation_matches_registry_for_every_config():
     # identity-key consistency (LAW-11): a config's representation must equal the registry's for
     # its encoding. This is the representation-consistency consumer named in O15's registry.
     # ADJ-13 F-1 corrective pass (recheck R-5): the ONE discovery authority, not a
-    # sixth flat glob. A flat `*.yaml` census is blind to `configs/prod/run6.yaml`,
+    # sixth flat glob. A flat `*.yaml` census is blind to `configs/prod/<name>.yaml`,
     # which gate 7 and gate 12 both now make legal.
     configs = discover_configs(REPO_ROOT / "configs")
     assert configs
@@ -39,9 +39,9 @@ def test_o9_sims_regime_parity(production_config):
     AUDIT-1 F-49. This asserted `== 96` and `== 128` — run5's MINTED values — beside a
     docstring claiming to derive. Re-pointing `production_config` at run6 would have reddened
     four tests with "96 != N" and no line anywhere saying 96 was run5's. The PROVENANCE pin for
-    those two numbers lives in ONE place with its grounds:
-    `tests/config/test_eval_config_remint.py::test_run3_parity_values_pinned`, against a NAMED
-    config. What THIS test is about is the relation, and the relation is what it now asserts.
+    those two numbers lives in ONE place with its grounds, against every production config:
+    `tests/config/test_eval_config_remint.py::test_the_gate_parity_values_are_pinned`.
+    What THIS test is about is the relation, and the relation is what it now asserts.
     """
     # ONE config arm since R362(c) deleted `eval.sealbot_model_sims` with the sealbot rung; the
     # strix cells' sims are the frontier tool's cell rows, not a config leaf.

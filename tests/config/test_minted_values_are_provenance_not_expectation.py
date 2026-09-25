@@ -7,8 +7,8 @@ latter deleted with the sealbot rung, R362(c)) were asserted as literals in four
 saying 96 was run5's.
 
 The one legitimate provenance pin survives with its grounds:
-`tests/config/test_eval_config_remint.py::test_run3_parity_values_pinned`, which asserts the
-numbers against a NAMED config and cites the adjudication that chose them. Everywhere else now
+`tests/config/test_eval_config_remint.py::test_the_gate_parity_values_are_pinned`, which
+asserts the numbers against every production config and cites the adjudication that chose them. Everywhere else now
 asserts what the test is actually about — that the resolver hands back the shipped value.
 
 WHAT THE AUDIT'S PIN ASKED FOR, AND WHAT IS EXECUTABLE. The audit named "a delta config with
@@ -21,17 +21,23 @@ repaired sites do and what arm 3 samples.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
+from mantis.config.census import production_configs
 from mantis.config.resolve.nsims import resolve_eval_model_sims
 from mantis.encoding.registry import all_specs, lookup
+
+#: Any census member: each arm needs a real mint as its base, never a particular one.
+_VEHICLE = production_configs(Path(__file__).resolve().parents[2])[0]
 
 
 def test_a_REMINTED_sims_value_passes_the_relation_that_a_literal_would_have_reddened(
     smoke_run_config,
 ):
     """Arm 1 — the audit's pin. A config that mints a DIFFERENT value is not a test failure."""
-    remint = smoke_run_config("run6.yaml", eval={"random_model_sims": 97})
+    remint = smoke_run_config(_VEHICLE, eval={"random_model_sims": 97})
     assert remint.eval.random_model_sims == 97
     value = remint.eval.random_model_sims
     assert resolve_eval_model_sims("random", value) == value, (
@@ -53,7 +59,7 @@ def test_the_registry_owned_quantities_are_read_from_the_registry(smoke_run_conf
         spec = lookup(name)
         assert _engine.Board.with_encoding_name(name).size == spec.board_size, name
         assert _engine.RegistrySpec.from_registry(name).policy_stride == spec.policy_logit_count
-    cfg = smoke_run_config("run6.yaml")
+    cfg = smoke_run_config(_VEHICLE)
     assert cfg.identity.encoding in {s.name for s in all_specs()}
 
 
@@ -65,8 +71,8 @@ def test_the_one_provenance_pin_still_exists_and_still_names_its_grounds():
     source = (Path(__file__).resolve().parent / "test_eval_config_remint.py").read_text(
         encoding="utf-8"
     )
-    assert "def test_run3_parity_values_pinned" in source, (
-        "the ONE provenance pin for run5's minted sims is gone. The relation-form assertions "
+    assert "def test_the_gate_parity_values_are_pinned" in source, (
+        "the ONE provenance pin for the minted gate sims is gone. The relation-form assertions "
         "elsewhere deliberately do NOT restate those numbers, so nothing else records them"
     )
     assert "adjudication A-3" in source, (

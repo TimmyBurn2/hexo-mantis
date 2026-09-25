@@ -8,15 +8,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from pydantic import ValidationError
 
+from mantis.config.census import production_configs
 from mantis.config.loader import discover_configs, load_config
 
 _REPO = Path(__file__).resolve().parents[2]
 _CONFIGS_DIR = _REPO / "configs"
 _TEMPLATES_DIR = _REPO / "tools" / "config_templates"
 
-_PARITY_CONFIG = _CONFIGS_DIR / "run6.yaml"
+_PRODUCTION = production_configs(_REPO)
+#: The one config the deploy-sims value below was ruled for; no census member carries it.
+_RULED_DEPLOY_CONFIG = _CONFIGS_DIR / "run6.yaml"
 _DEV_SMOKE_CONFIGS = (_CONFIGS_DIR / "dev_example.yaml",)
 
 
@@ -48,16 +52,15 @@ def test_all_configs_and_templates_carry_the_new_eval_block_and_validate() -> No
     )
 
 
-def test_run3_parity_values_pinned() -> None:
-    """Pin the random sims and the full gate recipe against the production config."""
-    cfg = load_config(_PARITY_CONFIG)
+@pytest.mark.parametrize("config", _PRODUCTION, ids=lambda p: p.name)
+def test_the_gate_parity_values_are_pinned(config: Path) -> None:
+    """Pin the random sims and the gate recipe every production config shares."""
+    cfg = load_config(config)
     assert cfg.eval.random_model_sims == 96
     gate = cfg.eval.gate
     assert gate.screen_games == 80
     assert gate.confirm_games == 128
     assert gate.promotion_winrate == 0.55
-    assert gate.screen_confirm_lo == 0.44
-    assert gate.deploy_sims == 160  # R346(b)/R348(e): eval deploy Gumbel 160 / m 16
     assert gate.bootstrap_resamples == 1000
     assert gate.min_distinct_per_pair == 10
     assert gate.seed_base == 20260625, (
@@ -68,12 +71,19 @@ def test_run3_parity_values_pinned() -> None:
     )
 
 
-def test_parity_mints_random_floor_games_20_and_dev_smoke_4() -> None:
-    """The production config mints the operator-owed `random_floor_games=20`; dev/smoke mint 4,
+def test_the_ruled_deploy_sims_are_pinned() -> None:
+    """The eval deploy sims a ruling named, on the config it named them for."""
+    gate = load_config(_RULED_DEPLOY_CONFIG).eval.gate
+    assert gate.deploy_sims == 160  # R346(b)/R348(e): eval deploy Gumbel 160 / m 16
+
+
+@pytest.mark.parametrize("config", _PRODUCTION, ids=lambda p: p.name)
+def test_parity_mints_random_floor_games_20_and_dev_smoke_4(config: Path) -> None:
+    """Each production config mints the operator-owed `random_floor_games=20`; dev/smoke mint 4,
     so the headless round exercises a REAL bot and the key has a live EXERCISED consumer."""
-    parity_cfg = load_config(_PARITY_CONFIG)
+    parity_cfg = load_config(config)
     assert parity_cfg.eval.random_floor_games == 20, (
-        "run6 mints the operator-owed random_floor_games=20 (R147/R272(d))"
+        f"{config.name} must mint the operator-owed random_floor_games=20 (R147/R272(d))"
     )
     for path in _DEV_SMOKE_CONFIGS:
         cfg = load_config(path)

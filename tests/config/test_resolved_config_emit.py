@@ -51,7 +51,7 @@ def test_payload_pins_production_values(path):
     with no provenance line. What this test is for is that `to_event_payload` does not transform
     or drop a value on the way out, so it compares the payload to the LOADED CONFIG — every
     production config, not one named file. The one provenance pin for a specific minted value's
-    grounds is `tests/config/test_eval_config_remint.py::test_run3_parity_values_pinned`.
+    grounds is `tests/config/test_eval_config_remint.py::test_the_gate_parity_values_are_pinned`.
     """
     cfg = load_config(path)
     knobs = _resolved(path).to_event_payload()["knobs"]
