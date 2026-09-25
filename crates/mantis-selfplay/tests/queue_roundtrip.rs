@@ -359,7 +359,7 @@ fn a_reachable_threshold_returns_before_the_deadline() {
 
 #[test]
 fn an_unreachable_threshold_still_serves_on_the_deadline() {
-    // The pre-fix behaviour must NOT be deleted: a starved queue still serves what it
+    // The deadline serve must stay: a starved queue still serves what it
     // has when the deadline expires. Losing this would turn a slow run into a hung one.
     let q = GraphQueue::new();
     let qc = q.clone();

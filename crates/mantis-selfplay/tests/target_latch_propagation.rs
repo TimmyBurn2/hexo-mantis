@@ -1,8 +1,7 @@
-//! The END-TO-END latch propagation oracle: the LAW-14 Err edge from a PRODUCTION store site in
+//! The END-TO-END latch propagation oracle: the run-fatal Err edge from a PRODUCTION store site in
 //! `search_drive.rs` `play_one_move` to the drain-face read (`SelfPlayRunner::fatal_defect()`,
 //! the exact read the bridge's `collect_graph_data` raises from). The latch MECHANISM is pinned
-//! elsewhere by mocking at the runner API; the call-site glue that hands a `TargetIntegrityError`
-//! to the latch had no killing oracle, so swallowing that Err left the whole frozen bank green.
+//! elsewhere by mocking at the runner API; this pins the call-site glue that hands it the Err.
 //!
 //! Drive: a 1-worker gnn runner at sims=1 / leaf_batch=1, so the single sim is consumed by the
 //! root expansion, every child carries 0 visits, and `records::refuse_zero_visit_export` raises
@@ -45,7 +44,7 @@ fn latch_carries_the_variant_name_from_the_production_store_site_to_the_drain_fa
     })
     .expect("gnn runner must construct");
 
-    // LAW-18 idle posture: the latch surface is VISIBLE at rest.
+    // Idle posture: the latch surface is VISIBLE at rest.
     assert!(
         runner.fatal_defect().is_none(),
         "fresh runner carries no defect"

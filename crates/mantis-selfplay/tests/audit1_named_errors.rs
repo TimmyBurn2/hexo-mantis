@@ -1,27 +1,13 @@
-//! AUDIT-1 P3 — the FFI-reachable panics that now return named errors.
-//!
-//! Each row here drives a surface that used to reach Python as a `PanicException`, or as
-//! nothing at all. `panic = "unwind"` (R2/LAW-13) is what made those panics catchable rather
-//! than process-fatal — a guarantee about the WORST case, not a design. The house rule is the
-//! one CLAUDE.md states: fail-loud means a NAMED error type that propagates, never a panic.
-//!
-//! * **F-21** — the MCTS node pool overflows from `n_simulations` alone past
-//!   `MAX_ARMED_SIMS`, because
-//!   `select_leaves` expands TT-hit leaves without counting them against the batch (bounded
-//!   only by `max_attempts = 4n`). The schema said `Field(ge=1)` with no ceiling and
-//!   `SelfPlayRunner::new` checked only `effective_standard == 0`.
-//! * **F-38** — `HexgBuffer::new` resolved the encoding through `lookup_or_panic` while its
-//!   siblings returned the sorted known list, and took an unbounded capacity.
-//!
-//! F-23's row (the HEXB loader's wrapping `to_skip * entry_bytes`, and the single-pass
-//! guarantee that it errs before writing) went with the dense ring at R346(f). The HEXG
-//! ring's own persist/load refusals live in `replay_hexg.rs`.
+//! FFI-reachable surfaces that return NAMED errors, never a panic: the MCTS node-pool bound
+//! (`select_leaves` expands TT-hit leaves outside the batch count, so `n_simulations` alone can
+//! overflow the pool past `MAX_ARMED_SIMS`) and `HexgBuffer::new`'s encoding and capacity
+//! refusals. The HEXG ring's persist/load refusals live in `replay_hexg.rs`.
 
 use mantis_search::{MAX_ARMED_SIMS, MAX_CHILDREN_PER_NODE, MAX_NODES};
 use mantis_selfplay::replay::hexg::{HexgBuffer, HEXG_CAPACITY_CEILING};
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
-// F-21: the pool bound is derived, and checked at boot
+// The pool bound is derived, and checked at boot
 
 #[test]
 fn max_armed_sims_is_derived_from_the_pools_own_two_constants() {
@@ -29,7 +15,7 @@ fn max_armed_sims_is_derived_from_the_pools_own_two_constants() {
     // with it — which is the whole reason the bound is not a literal in the schema.
     assert_eq!(MAX_ARMED_SIMS, MAX_NODES / (4 * MAX_CHILDREN_PER_NODE));
     // Printed, not transcribed into a second assert: the value is what a re-mint reads, and
-    // an asserted tally has to be re-edited every time either constant moves (R192(e)).
+    // an asserted tally has to be re-edited every time either constant moves.
     println!(
         "MAX_ARMED_SIMS = {MAX_ARMED_SIMS} from MAX_NODES {MAX_NODES} / (4 * \
          MAX_CHILDREN_PER_NODE {MAX_CHILDREN_PER_NODE})"
@@ -37,7 +23,7 @@ fn max_armed_sims_is_derived_from_the_pools_own_two_constants() {
 }
 
 fn config_with(sims: usize) -> SelfPlayRunnerConfig {
-    // `encoding_name` is REQUIRED (LAW-11): an absent registry spec is an error, not a v6
+    // `encoding_name` is REQUIRED: an absent registry spec is an error, not a v6
     // default. Every row below is about a DIFFERENT refusal, so the identity is supplied.
     SelfPlayRunnerConfig {
         n_simulations: sims,
@@ -74,8 +60,7 @@ fn the_boundary_is_exactly_the_derived_value() {
 
 #[test]
 fn the_shipped_sims_regimes_are_all_inside_the_bound() {
-    // The control, and the R98 clean-baseline half: run5 mints 50, and the pre-registered
-    // PCR arms are in the hundreds. The bound refuses nothing this repo actually runs.
+    // The control: the bound refuses no sims regime this repo actually runs.
     for sims in [2usize, 50, 150, 320, 600] {
         assert!(
             SelfPlayRunner::new(config_with(sims)).is_ok(),
@@ -111,7 +96,7 @@ fn a_zero_or_negative_dirichlet_alpha_is_refused_when_the_noise_is_armed() {
     );
 }
 
-// F-38: the buffer constructor
+// The buffer constructor
 
 #[test]
 fn an_unknown_encoding_is_an_err_naming_the_registered_set() {

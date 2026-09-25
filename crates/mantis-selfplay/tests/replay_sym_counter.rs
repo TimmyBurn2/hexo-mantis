@@ -1,4 +1,4 @@
-//! R358(b)/R266: the LAW-18 draw counter; the control is `augment = false` putting EVERY draw in bin 0.
+//! The in-run D6 draw counter; the control is `augment = false` putting EVERY draw in bin 0.
 
 use mantis_selfplay::replay::hexg::{GraphRecord, HexgBuffer};
 use mantis_selfplay::replay::sym::N_SYMS;
@@ -134,7 +134,7 @@ fn the_counters_are_cumulative_across_batches() {
 
 #[test]
 fn the_ring_counts_the_rows_it_hands_to_the_trainer() {
-    // R358(c): the replay ratio's numerator is what the sampler handed out, since boot.
+    // The replay ratio's numerator is what the sampler handed out, since boot.
     let mut buf = filled_graph_ring(false);
     assert_eq!(buf.samples_consumed_total, 0);
     buf.sample_graph_batch_impl(BATCH, false, 0.0, 1)

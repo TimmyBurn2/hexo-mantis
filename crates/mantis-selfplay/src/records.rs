@@ -706,8 +706,7 @@ mod gnn_assemble_tests {
 
     #[test]
     fn record_position_graph_refuses_over_cap_with_the_typed_error() {
-        // This test formerly pinned the SILENT top-k truncation; it is DELETED, and an over-cap
-        // target is now a typed refusal.
+        // An over-cap target is a typed refusal, never a silent top-k truncation.
         let b = small_board();
         let (bcq, bcr) = b.window_center();
         let (trunk, half) = (19i32, 9i32);

@@ -6,8 +6,7 @@
 //! over a fixed 64-leaf corpus drawn deterministically from `LEAF_CORPUS_SEED`, so
 //! it reproduces on every box with no model and no entropy.
 //!
-//! There is no capturable old/new pair — the old wrapper was crate-private — so this
-//! is a new-side regression anchor. Kernel parity is inherited from the committed
+//! A regression anchor: kernel parity is inherited from the committed
 //! byte-parity goldens, and build-once-per-leaf is gated structurally by
 //! `assert_one_build_per_leaf`, never by wall-clock.
 

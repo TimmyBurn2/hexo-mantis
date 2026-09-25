@@ -1,15 +1,11 @@
-//! P-09 ⊕ — the multi-graph GraphWire block-diagonal fuse pin (written FIRST).
+//! The multi-graph `GraphWire` block-diagonal fuse pin.
 //!
-//! Recovers the O-24 multi-graph offset-accumulation coverage WP5 shed (WP5
-//! re-anchored O-24 to a single-graph `Vec`, so local == global there). Loads the
-//! 3 dispatcher-frozen fuse-INPUT `AxisGraph`s (`graphwire_multigraph_input.bin`,
-//! CAPTURE_LOG §A.2/§C g8 — the fuse is `pub(crate)` old-side, so the INPUTS are
-//! pinned and P-09 RECONSTRUCTS), runs `GraphWire::from_axis_graphs`, and asserts
-//! the block-diagonal reconstruction EXACTLY: offsets are running prefix sums;
-//! `edge_index` src/dst = local + `node_off`; `legal_node_gather` = local +
-//! `node_off`; `policy_dst_slot` = verbatim concat incl. the `-1` off-window
-//! sentinel. Plus the single-graph degenerate case (local == global), the
-//! single-read `take()` guard, and the mandatory LAW-07 mutation self-test.
+//! Loads 3 frozen fuse-INPUT `AxisGraph`s (`graphwire_multigraph_input.bin`), runs
+//! `GraphWire::from_axis_graphs`, and asserts the block-diagonal reconstruction EXACTLY: offsets
+//! are running prefix sums; `edge_index` src/dst = local + `node_off`; `legal_node_gather` =
+//! local + `node_off`; `policy_dst_slot` = verbatim concat incl. the `-1` off-window sentinel.
+//! Plus the single-graph degenerate case (local == global), the single-read `take()` guard, and
+//! the mandatory mutation self-test.
 
 use mantis_graph::{AxisGraph, EdgeAttr, EdgeIndex, NodeFeat, PolicyScatterIndex, BUILDER_IMPL_NATIVE};
 use mantis_selfplay::queues::{GraphWire, GraphWireArrays, WireAlreadyConsumed};

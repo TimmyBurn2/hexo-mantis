@@ -1,4 +1,4 @@
-//! R359(d): the `dirichlet_*` rows are inert on the Gumbel arm BY CODE — witnessed by the drive's own fire counter (`dirichlet_root_fires`, LAW-18): 0 under Gumbel with the rows ARMED over a fully served search, > 0 under PUCT with the same rows, which is what makes the 0 a reading and not a gap.
+//! The `dirichlet_*` rows are inert on the Gumbel arm BY CODE — witnessed by the drive's own fire counter (`dirichlet_root_fires`): 0 under Gumbel with the rows ARMED over a fully served search, > 0 under PUCT with the same rows, which is what makes the 0 a reading and not a gap.
 
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;

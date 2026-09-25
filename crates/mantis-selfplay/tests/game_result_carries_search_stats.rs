@@ -1,4 +1,4 @@
-//! R355(d): a 1-in-N game's result row carries, per searched ply, the root as the search left
+//! A 1-in-N game's result row carries, per searched ply, the root as the search left
 //! it — the record the forced-move census could not read from the ring.
 
 use std::sync::atomic::AtomicUsize;

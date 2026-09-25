@@ -1,19 +1,14 @@
 //! A search serves EXACTLY `n_simulations` leaves, never more and never fewer.
 //!
-//! The finding this exists for: 53.46 served sims/move against `n_simulations: 50`, because the
-//! PUCT loop requested a full `leaf_batch_size` while fewer than that remained in the budget.
-//! Gumbel had the opposite defect, a phase allocator dropping its integer-division remainder,
-//! at 49 of 50 and 599 of 600. `N` now means `N leaves of network work` on both arms, root
-//! evaluation included: a fixed-node witness is unstatable while the served count disagrees
-//! with the config, and every quantity derived from `n_simulations` is wrong by that factor.
+//! `N` means `N leaves of network work` on both arms, root evaluation included: a fixed-node
+//! witness is unstatable while the served count disagrees with the config.
 //!
 //! The budget arms hold the KIND fixed and vary the radius; the run6-regime arms hold the
 //! ENCODING fixed and vary the kind, so that comparison is of searches and nothing else.
 //!
 //! The primary assertion is `max_sims_per_search`, not the served tally: the tally is an
 //! AGGREGATE, and a worker that has begun the next game when `stop()` lands has already served
-//! leaves no record accounts for — 401 against an expected 400 after the clamp. The max is
-//! exact because it advances with the search it measures.
+//! leaves no record accounts for. The max is exact because it advances with the search it measures.
 //!
 //! Killer / PLANTED BREAK: revert the PUCT clamp in `search_drive::run_mcts_search` and the
 //! PUCT arms red — before the fix they read 56 served against 50 at `leaf_batch_size 8`.

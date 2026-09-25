@@ -1,14 +1,9 @@
-//! The ply-cap coverage the tiers lacked.
+//! Complete games driven to the ply cap at production self-play parameters, through the
+//! PRODUCTION record path, served by a healthy mock graph producer.
 //!
-//! Every CI gate was green while the run could not complete one iteration: no tier plays a game
-//! anywhere near the ply cap, so the ply > ~120 regime, where all five replicates died, was
-//! STRUCTURALLY UNOBSERVED. This drives complete games at run5's production self-play parameters
-//! through the PRODUCTION record path, served by a healthy mock graph producer.
-//!
-//! The accelerator is disclosed, not buried: `random_opening_plies` is set HERE, in the harness,
-//! never in a config file, and it skips MCTS *and* recording for the opening, so it reaches the
-//! deep regime without touching a single SEARCH parameter. Measured: a full 128-ply game at 50
-//! sims in a DEBUG build did not complete in 600 s. Asserted: the cap is genuinely reached;
+//! The accelerator: `random_opening_plies` is set HERE, in the harness, never in a config file,
+//! and it skips MCTS *and* recording for the opening, so it reaches the deep regime without
+//! touching a single SEARCH parameter. Asserted: the cap is genuinely reached;
 //! every recorded position's support fits the capacity as computed by the production derivation
 //! rather than transcribed; and no fatal defect with both counters at 0 — the negative control,
 //! since a pin firing on healthy play is worse than the defect it replaces.

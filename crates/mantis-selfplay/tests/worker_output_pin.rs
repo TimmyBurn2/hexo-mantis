@@ -5,9 +5,8 @@
 //! pinned splitmix64 inputs. Each golden carries a mutation self-test: flipping ONE
 //! load-bearing input element must DIVERGE the serialized output from the golden.
 //!
-//! g1–g4 pinned the four dense cluster-aggregation producers, which went with the grid path;
-//! their goldens are orphaned and no producer can regenerate them. g5–g7 — graph assemble,
-//! graph record, outcome finalizer — are what remains.
+//! g5–g7 pin graph assemble, graph record and the outcome finalizer; the g1–g4 dense goldens have
+//! no producer left.
 
 use fxhash::FxHashMap;
 use mantis_core::{Board, Player};
@@ -301,8 +300,7 @@ fn pin_g5_assemble_ls_from_gnn_probs() {
 }
 #[test]
 fn pin_g6_record_position_graph() {
-    // The in-fn asserts ARE the pin: there is no golden file, because the old one encoded the
-    // pre-fix arbitrary-mass acceptance and was deleted with its manifest row.
+    // The in-fn asserts ARE the pin: there is no golden file.
     let (refusal_sum, ok_bytes) = produce_g6(false);
     assert!(
         refusal_sum > 1.0,

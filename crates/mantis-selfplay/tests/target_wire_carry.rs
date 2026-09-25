@@ -3,8 +3,7 @@
 //! Drive: a REAL 1-worker graph runner (gnn_axis_v1) with a mock graph producer (uniform
 //! legal-node probs through the production `assemble_ls_from_gnn_probs`) and a 40-ply random
 //! opening, so recorded positions carry off-window visit mass. The game ply-caps within a few
-//! moves and `drain_graph_records` returns the finalized records. Measured on this generator:
-//! 8 of 8 records carry off-window visit coords (20 coords) at 8 sims.
+//! moves and `drain_graph_records` returns the finalized records.
 //!
 //! Asserts, per drained record: the visit target is a full-mass distribution (Σ == 1 ± 1e-4 —
 //! finalize stamps outcome/value_valid/game_length ONLY and must not touch `visits`), coords

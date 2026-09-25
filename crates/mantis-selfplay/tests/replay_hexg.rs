@@ -354,9 +354,6 @@ fn load_rejects_dense_hexb_magic() {
     let _ = std::fs::remove_file(path);
 }
 
-// The other direction — a HEXG file offered to the dense loader — went with that loader; the
-// magic pin above is the half that still guards a live reader.
-
 #[test]
 fn sample_wire_matches_direct_builder_unaugmented() {
     let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();

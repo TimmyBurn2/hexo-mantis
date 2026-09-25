@@ -1,9 +1,4 @@
-//! NIGHTRUN-1 E1 — the parallel leaf-graph build is BIT-IDENTICAL to the serial one.
-//!
-//! `submit_graphs_and_wait_ls` built its leaves in a serial loop on the calling thread while
-//! holding the GIL. The NIGHTRUN-1 Leg 1 profile puts **95.3 % of the whole eval game loop**
-//! inside that call, and an N-sweep at a real 64-move board separates it into a 5.2 ms/leaf
-//! slope against a 2.4 ms round-trip intercept — so the eval path IS this loop.
+//! The parallel leaf-graph build is BIT-IDENTICAL to the serial one.
 //!
 //! WHAT MUST NOT MOVE, and why each half is here:
 //!
@@ -14,7 +9,7 @@
 //!    leaf's window centre (`inference.rs`), and `MCTSTree.expand_and_backup_ls_graph`
 //!    cross-checks priors in that frame. Results returned in COMPLETION order rather than
 //!    index order would mis-pair every leaf against its policy while every length still
-//!    checked out — the same failure mode B1's parity test exists for, one layer up.
+//!    checked out.
 //! 3. **The error, and WHICH error.** The serial path returns the first failure in index
 //!    order. A chunked build that surfaced whichever worker failed first would name a
 //!    different position on a bad input, and a build error is a diagnostic.

@@ -163,10 +163,9 @@ fn strip_comments(src: &str) -> String {
 
 /// The graph inference must pass NO `sym_idx` to the builder.
 ///
-/// Read as an ARGUMENT LIST, not as a source line: a one-line `contains` is a hostage to
-/// rustfmt, which once split the call across seven lines and reported the property BROKEN while
-/// the call was unchanged. `call_args` is insensitive to whitespace and to nothing else — a
-/// seventh argument, a renamed argument or a reordering all still red.
+/// Read as an ARGUMENT LIST, not as a source line, so a rustfmt re-wrap cannot fake a break:
+/// `call_args` is insensitive to whitespace and to nothing else — a seventh argument, a renamed
+/// argument or a reordering all still red.
 #[test]
 fn graph_build_call_passes_no_sym_idx() {
     let search = strip_comments(SEARCH);

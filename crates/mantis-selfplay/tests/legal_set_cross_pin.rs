@@ -1,19 +1,10 @@
-//! AUDIT-1 F-18 — the graph's legal nodes and the board's legal set are ONE set, at BOTH radii.
+//! The graph's legal nodes and the board's legal set are ONE set, at BOTH radii.
 //!
-//! THE DEFECT. `mantis-graph` is dep-free by contract, so it re-implements the geometry
-//! `mantis-core` owns: `legal_moves_from_stones` twins `Board::legal_moves_set`, `window_center`
-//! twins `Board::window_center`, and the empty-board `-2..=2` region is hand-copied on both
-//! sides. Nothing compared them. The MCTS legal set is built at `spec.legal_move_radius`
-//! (`runner::game`) and the graph's legal nodes at `spec.graph_radius`
-//! (`runner::search_drive`, `replay::hexg`); the registry now REFUSES the two typed apart
-//! (`mantis_encoding::spec::validate`, pinned by
-//! `registry_census.rs::the_two_radii_typed_APART_are_refused_at_parse`), but equal NUMBERS on
-//! two independent implementations is not the same claim as one cell set. This file makes it one.
+//! `mantis-graph` is dep-free, so it twins `mantis-core`'s geometry: `legal_moves_from_stones` /
+//! `Board::legal_moves_set`, both `window_center`s and the empty-board `-2..=2` region. Equal
+//! radius NUMBERS on two implementations is not one cell set; this file makes it one.
 //!
-//! WHY BOTH RADII. Leg 3 moves the shipped identity from `gnn_axis_v1` (r6) to `gnn_axis_r8`
-//! (r8). A pin at one radius proves the copies agree at one number, which is exactly the state
-//! `graph_child_parity.rs` was already in: it pins both sides against the SAME frozen r6 fixture,
-//! never against each other.
+//! Both radii, because a pin at one radius proves the copies agree at one number only.
 
 use mantis_core::{Board, Cell, Player};
 use mantis_graph::{build_axis_graph, BuildParams, StoneList};

@@ -287,8 +287,7 @@ fn o1r_buffer_roundtrip_preserves_pairs() {
     }
 }
 
-// Compiles only under the `phase_t_postfix` feature: the pre-fix `record_position_graph`
-// signature makes this leg non-compilable, so the gate is loud rather than a silent skip.
+// Compiles only under the `phase_t_postfix` feature: a loud gate, not a silent skip.
 #[cfg(feature = "phase_t_postfix")]
 #[test]
 fn o1r_record_chain_full_mass() {

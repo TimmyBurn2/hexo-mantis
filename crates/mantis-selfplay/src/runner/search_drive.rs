@@ -594,7 +594,7 @@ pub(crate) fn play_one_move(
 
     let record_full_search = move_is_full_search;
 
-    // The restored-mass fire-rate: this population used to be truncated by the coverage gate.
+    // The restored-mass fire-rate: moves whose exported target keeps off-window mass.
     if target_policy.overflow.values().any(|&p| p > 0.0) {
         accumulators
             .export_offwindow_mass_moves

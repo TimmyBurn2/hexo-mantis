@@ -1,11 +1,10 @@
-//! R344(a) — the replay rings' sampler is reproducible from a declared seed.
+//! The replay ring's sampler is reproducible from a declared seed.
 //!
 //! The HEXG ring seeds its `StdRng` from OS entropy at construction, so two launches of the
 //! same config never drew the same batch sequence and no Python-side `seed_everything` could
 //! reach the field. `seed_sampler` is the one way to declare a stream. What it does NOT buy
 //! is stop/resume continuity — `CARD-RING-SAMPLER-SEED` records why that is refused rather
 //! than deferred — so the tests below assert run-to-run reproducibility and nothing wider.
-//! The dense ring carried the identical contract and its arm went with it at R346(f).
 //!
 //! THE CONTROL IS THE POINT. Asserting "same seed, same indices" alone would pass on a ring
 //! whose sampler ignored the seed entirely and happened to be deterministic. Each arm

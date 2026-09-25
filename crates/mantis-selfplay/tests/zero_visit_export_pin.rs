@@ -1,10 +1,8 @@
 //! The EXPORTER conjunct pin over `records::refuse_zero_visit_export`.
 //!
-//! A search that backed up ZERO child visits has no visit distribution to export: every exporter
-//! falls back to the ε-noise-mixed priors, and the replay buffer cannot tell the result from a
-//! real target. That prior dump busts the derived visit slot only where capacity is small
-//! enough — at the prereg 600/75 regime capacity is 674 and 192 < 674, so the SAME corrupt
-//! target is RECORDED SILENTLY. This refusal does not depend on capacity at all.
+//! A search that backed up ZERO child visits has no visit distribution: every exporter falls back
+//! to the ε-noise-mixed priors, which a large enough visit slot records SILENTLY. This refusal
+//! does not depend on capacity at all.
 //!
 //! Handing a zero-visit result DIRECTLY to the exporter bypasses the seam, which proves the pin
 //! bites ALONE; `sims = 1` then reaches the same state with every inference HEALTHY. But
@@ -248,6 +246,3 @@ fn the_exporter_pin_stops_a_zero_visit_run_with_the_seam_never_firing() {
         drained.len()
     );
 }
-
-// The dense arm's leg went with the dense recorder; with one arm left the arm-independence
-// claim has nothing to be independent OF.

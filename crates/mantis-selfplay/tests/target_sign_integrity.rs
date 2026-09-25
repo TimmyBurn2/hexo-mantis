@@ -1,10 +1,8 @@
 //! Sign-coverage oracles for `record_position_graph`'s guarded-quantity == shipped-quantity
 //! check.
 //!
-//! A sign-cancelling ls ({+1.5, −0.5}: pre-filter scan sum 1, stored mass 1.5) once constructed
-//! a non-distribution record and shipped it to the loss at 1.5× weight — unconstructibility
-//! defeated by cancellation. Negative mass reaches the ls in production only through the
-//! sign-unchecked GNN seam, so this is defence in depth, not a live-softmax defect.
+//! A sign-cancelling ls ({+1.5, −0.5}: pre-filter scan sum 1, stored mass 1.5) must not construct
+//! a record. Negative mass reaches the ls only through the sign-unchecked GNN seam: defence in depth.
 //!
 //! Cases: (1) the reproducer at the direct constructor, whose error carries the SHIPPED sum,
 //! not the cancelled scan sum; (2)+(3) the same through both production expands; (4) over-unity

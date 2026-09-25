@@ -1,21 +1,17 @@
-//! P-03 — inv26 re-anchor: `ply_cap_value` distinct from `draw_reward` (§178),
-//! driven end-to-end through the native `start()/drain_game_results()/stop()`
-//! (RE-ANCHOR of `inv26_ply_cap_value.rs`).
+//! `ply_cap_value` distinct from `draw_reward`, driven end-to-end through the native
+//! `start()/drain_game_results()/stop()`.
 //!
 //! This file drives the runner in RANDOM-ONLY mode (`random_opening_plies ==
 //! max_moves_per_game`) so every move is a random opening pick — no MCTS, no
-//! inference producer needed (the frozen strategy). `max_moves = 10` makes the
+//! inference producer needed. `max_moves = 10` makes the
 //! ply-cap DETERMINISTIC: a player's 6th stone lands no earlier than ply 10 (the
 //! opening single-stone turn then 2-stone compound turns), so with ≤ 5 stones per
 //! player a 6-in-a-row is STRUCTURALLY impossible → `winner()` is always `None` →
 //! every completed game terminates at the ply-cap (`terminal_reason == 2`). No
 //! reliance on the unseeded worker RNG avoiding a lucky win.
 //!
-//! The drain tuple exposes `terminal_reason` but NOT the per-row `outcome`, so the
-//! §178 VALUE branch (`outcome == ply_cap_value`) is not visible here. Its in-src pin was
-//! `runner/finalize.rs`'s `inv26_finalize_outcome_tests`, which went with `finalize_game`
-//! at R346(f); `finalize_game_graph` is the surviving finalizer and
-//! `worker_output_pin.rs`'s g7 arm drives its outcome table.
+//! The drain tuple exposes `terminal_reason` but NOT the per-row `outcome`; the VALUE branch
+//! (`outcome == ply_cap_value`) is driven by `worker_output_pin.rs`'s g7 arm.
 
 use std::time::{Duration, Instant};
 

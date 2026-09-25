@@ -1,4 +1,4 @@
-//! R353(d): the per-game result row carries every move's `(sims, is_full_search)` beside
+//! The per-game result row carries every move's `(sims, is_full_search)` beside
 //! `move_history` — the graph rows' flag reaches the replay ring, not the game record.
 
 use std::sync::atomic::AtomicUsize;

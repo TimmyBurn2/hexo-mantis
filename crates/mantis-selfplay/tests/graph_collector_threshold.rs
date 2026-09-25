@@ -1,12 +1,5 @@
-//! PERF-TRANCHE-1 G-1 — the collector's saturation threshold is DERIVED from the run's
-//! achievable supply, so it can never sit above what the workers can ever put in flight.
-//!
-//! Ledger F-1: `pop_graph_batch_blocking` returned early only at `batch_size / 2`, a number
-//! with no relation to `n_workers x leaf_batch_size`. At `dev`'s minted supply of 8 against
-//! a threshold of 32 the early return was structurally unreachable and every pop ran to the
-//! `inference_max_wait_ms` deadline — measured at a mean of 10.064 ms over 8 116 pops. This
-//! is R263's mechanism one level up; R263 made the threshold REACHABLE from a worker's
-//! batch, and this makes it reachable from the run's whole supply.
+//! The collector's saturation threshold is DERIVED from the run's achievable supply, so it can
+//! never sit above what the workers can put in flight and send every pop to its deadline.
 //!
 //! The planted break each test names is the FROZEN rule, `batch_size / 2` alone.
 
@@ -65,8 +58,8 @@ fn one_graph() -> mantis_graph::AxisGraph {
 }
 
 /// The mechanism, end to end: with the supply declared, a pop whose queue holds exactly the
-/// supply returns WELL INSIDE its deadline. Under the frozen rule the same pop would have
-/// blocked for the whole `max_wait_ms`, which is what F-1 measured.
+/// supply returns WELL INSIDE its deadline. Under the frozen rule the same pop would block for
+/// the whole `max_wait_ms`.
 #[test]
 fn a_pop_at_the_declared_supply_returns_before_its_deadline() {
     const SUPPLY: usize = 8;

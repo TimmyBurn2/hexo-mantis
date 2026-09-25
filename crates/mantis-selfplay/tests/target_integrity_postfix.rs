@@ -2,8 +2,8 @@
 // feature gate; scattering it would scatter the gate IMPL must wire and the freeze audit.
 //! Target-integrity oracle bank, POST-FIX only.
 //!
-//! GATE (LOUD, enumerated — never a silent skip). The whole file compiles ONLY under the crate
-//! feature `phase_t_postfix`, because it binds a contract that does not exist before the fix:
+//! GATE: the file compiles ONLY under `phase_t_postfix`, a DEFAULT feature of mantis-selfplay, so
+//! `cargo test` runs it with no invocation change. It binds:
 //!   * `records::TargetIntegrityError` — MassNotUnity { sum, ply_index, n_cells }, EmptyTarget
 //!     { ply_index, n_legal }, VisitSlotsExceeded { n, max, ply_index }, Display carrying every
 //!     field;
@@ -12,10 +12,6 @@
 //!     Option<String>` (store-then-running=false; the bridge's drain face raises from this read);
 //!   * the `RunnerStatsSnapshot` counters `export_offwindow_mass_moves` and
 //!     `target_integrity_defects`.
-//!
-//! The gate is wired by declaring `phase_t_postfix = []` a DEFAULT feature of mantis-selfplay,
-//! so `cargo test --workspace --locked` runs this bank with no invocation change; before that,
-//! cargo emits an `unexpected_cfgs` warning naming this exact feature.
 //!
 //! Killers: DEG — M-C; S2a — M-J; S2b record-level — M-D; O4b — M-N.
 #![cfg(feature = "phase_t_postfix")]
