@@ -34,9 +34,8 @@ SCHEMA_VERSION = 1
 #: the one table, read by the schema's pairing validator and the trainer's cross-check.
 SOFT_POLICY_ARCH_KINDS: frozenset[str] = frozenset({"GnnArchV2SoftPolicy"})
 
-#: A finite ceiling for a timeout float that feeds `proc.join(timeout)` arithmetic:
-#: `multiprocessing.Process.join` raises `OverflowError` on `float("inf")`, so a floor-only
-#: bound is not a bound here. One day (86400.0 s) bounds one eval round or kill-grace.
+#: A finite ceiling for a `proc.join(timeout)` float (`join` raises `OverflowError` on inf);
+#: one day (86400.0 s) bounds one eval round or kill-grace.
 _EVAL_TIMEOUT_CEILING_SEC = 86400.0
 
 
@@ -88,9 +87,8 @@ ARCH_SCOPED_KEYS: tuple[ArchScopedKey, ...] = (
 )
 
 
-#: The OPERATIONAL-CONSTANT half of the schema partition — the ONE authority for which keys carry a
-#: schema default and therefore leave the YAML. A key defaults when it names how the PROCESS is
-#: operated and no run has ever decided it differently; ARMING keys stay REQUIRED.
+#: The ONE authority for which keys carry a schema default and leave the YAML: how the PROCESS
+#: is operated, never decided differently by a run; ARMING keys stay REQUIRED.
 OPERATIONAL_DEFAULT_KEYS: tuple[tuple[str, str], ...] = (
     ("eval.round_timeout_sec", "a round's wall-clock bound — how long the eval process may "
                                "run, not what the round measures"),
@@ -169,7 +167,7 @@ class WarmStartConfig(StrictModel):
 
     checkpoint: str = Field(min_length=1)
     net_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
-    # The heads put back to their fresh initialisation AFTER every tensor is copied (R350(b)(i)).
+    # The heads put back to their fresh initialisation AFTER every tensor is copied.
     # REQUIRED and empty for a full transfer: a config that carries the row states what it drops.
     reinit: list[str]
 
@@ -225,7 +223,7 @@ class SequentialGateConfig(StrictModel):
     min_pairs: int = Field(ge=1)
     max_pairs: int = Field(ge=1)
     # At `max_pairs` undecided: `sign` reads the LLR's sign (run7/run8's rule); `promote` promotes
-    # (R364(c) — the anchor follows the run unless the candidate is clearly worse, i.e. a reject).
+    # (the anchor follows the run unless the candidate is clearly worse, i.e. a reject).
     at_max_pairs: Literal["sign", "promote"]
 
     @model_validator(mode="after")
@@ -302,14 +300,12 @@ class EvalConfig(StrictModel):
         default=3600.0, gt=0, le=_EVAL_TIMEOUT_CEILING_SEC, allow_inf_nan=False)
     worker_kill_grace_sec: float = Field(
         default=10.0, ge=0, le=_EVAL_TIMEOUT_CEILING_SEC, allow_inf_nan=False)
-    #: `default=...` is this schema's no-terminal-default idiom: the key is REQUIRED and an absent
-    #: one is an error naming it, while `None` is a real, explicit posture. Both blocks below ship
-    #: `null` in every committed config, and arming either is a mint event.
+    #: `default=...`: REQUIRED, an absent key is an error naming it, and `None` is a real posture;
+    #: both blocks ship `null` in every committed config, so arming either is a mint event.
     ply_cap_adjudication: PlyCapAdjudicationConfig | None = Field(default=...)
     strength_floor: StrengthFloorConfig | None = Field(default=...)
-    #: The gate-block concurrency row: how many gate games run IN FLIGHT, one thread each, sharing
-    #: the round's two inference engines. `1` is byte-exact the serial loop that ran before the
-    #: parameter existed; the floor probe and random floor stay serial deliberately.
+    #: Gate games IN FLIGHT, one thread each, sharing the round's two engines; `1` is the serial
+    #: loop byte-exact, and the floor probe and random floor stay serial.
     concurrency: int = Field(ge=1, default=1)
     #: Every eval game's ply cap, its OWN row (2026-09-15): the self-play cap serves the attractor
     #: halt and was raised to 256, and the gate's games ran to it. A capped game is a draw.
@@ -340,8 +336,7 @@ class RunConfig(StrictModel):
     schema_version: int
     run_id: str = Field(pattern=r"^[a-z0-9][a-z0-9_\-]*$")
     seed: int
-    # The run's eval posture is a CONFIG FACT, not a `compose_run` parameter: the parameter is
-    # deleted, so no caller can override it. TOP-LEVEL because it spans the eval and monitor
+    # A CONFIG FACT no caller can override; TOP-LEVEL because it spans the eval and monitor
     # wired-source surfaces.
     eval_enabled: bool
     # The CUDA caching allocator's REGIME, as a closed token set or the `null` placeholder;
@@ -354,7 +349,7 @@ class RunConfig(StrictModel):
     identity: IdentityConfig
     # The net's declared shape (v35): the trunk widths were dataclass defaults no config could move.
     model: ModelConfig
-    # The deploy head's regime, split from the workers' by R351(c): the bar plays what will be deployed.
+    # The deploy head's regime, split from the workers': the bar plays what will be deployed.
     deploy: DeployConfig
     eval: EvalConfig
     train: TrainConfig
@@ -544,7 +539,7 @@ class RunConfig(StrictModel):
                 f"({total}): a threshold the run never reaches is an invariant that can "
                 f"never fire — armed in the config, absent in effect"
             )
-        # The held-out witness's cadence must be reachable too (R366(c)): armed and never read is
+        # The held-out witness's cadence must be reachable too: armed and never read is
         # the phantom-input shape. `None` is the explicit OFF and is skipped.
         heldout = self.train.heldout_gap
         if heldout is not None and heldout.interval >= total:
@@ -552,9 +547,8 @@ class RunConfig(StrictModel):
                 f"train.heldout_gap.interval ({heldout.interval}) must be < train.max_train_steps "
                 f"({total}): a cadence the run never reaches is a witness that never reads"
             )
-        # The TWIN of the rule above, on the draw-rate abort's own step floor: `min_step >=
-        # max_train_steps` audits ARMED while the abort can never fire. `None` is the EXPLICIT
-        # disarmed posture and is skipped.
+        # The draw-rate twin: `min_step >= max_train_steps` audits ARMED but can never fire;
+        # `None` is the EXPLICIT disarmed posture and is skipped.
         block = self.train.draw_rate_abort
         if block is not None and block.min_step >= total:
             raise ValueError(

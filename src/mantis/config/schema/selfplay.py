@@ -2,7 +2,7 @@
 
 `legal_move_radius` / `legal_move_radius_schedule` are DELIBERATELY ABSENT: the encoding registry
 alone is the radius authority, and nothing in the build path reads a config-level override, so a
-schema field for it would be a consumer-less knob (R1/LAW-08).
+schema field for it would be a consumer-less knob.
 """
 
 from typing import Literal
@@ -13,16 +13,13 @@ from mantis._engine import mcts_max_armed_sims, mcts_max_armed_sims_gumbel
 from mantis.config.schema._base import StrictModel
 from mantis.config.schema.search import SearchConfig
 
-#: The largest sim budget the MCTS node pool can serve, READ FROM THE ENGINE. `finish_expansion`
-#: panics on pool overflow and `select_leaves` expands TT-hit leaves without counting them, so one
-#: move can add up to `4 * sims * MAX_CHILDREN_PER_NODE` children. Derived across the bridge rather
-#: than re-typed: a literal would be a second authority for a bound only the pool knows.
+#: The largest sim budget the MCTS node pool can serve, READ FROM THE ENGINE (only the pool knows
+#: it): uncounted TT-hit expansions let one move add `4 * sims * MAX_CHILDREN_PER_NODE` children,
+#: and `finish_expansion` panics on overflow.
 MAX_ARMED_SIMS: int = mcts_max_armed_sims()
 
-#: The same bound under `search.kind: gumbel`, which spends `MAX_ROOT_CHILDREN` pool slots on its
-#: root. It is LOWER, and it is a second constant rather than a smaller shared one so the ceiling a
-#: PUCT config validates against does not move. The field bounds below keep the LOOSE value —
-#: a `Field(le=...)` cannot see a key in another SECTION — and `RunConfig` applies the tighter one.
+#: The LOWER bound under `search.kind: gumbel` (its root holds `MAX_ROOT_CHILDREN` slots); field
+#: bounds keep the loose one, blind to other SECTIONs, and `RunConfig` applies this one.
 MAX_ARMED_SIMS_GUMBEL: int = mcts_max_armed_sims_gumbel()
 
 
@@ -100,7 +97,7 @@ class SelfplayConfig(StrictModel):
     class, and ``q_rescale`` is Mctx's ``rescale_values``: the completed Q is min-max mapped
     onto [0, 1] before σ scales it (Mctx's default, paired there with 0.1) or left raw in
     [−1, 1] (the paper's Go/chess arm, paired with 1.0). ALL THREE ARE REQUIRED WITH NO
-    DEFAULT: rescale × 1.0 is the pair that read run6 24 pp below PUCT (F-50), and which pair a
+    DEFAULT: rescale × 1.0 is the pair that read run6 24 pp below PUCT, and which pair a
     run arms changes how peaked every exported target is.
 
     ``gumbel_m`` is Mctx's ``max_num_considered_actions`` and ``gumbel_explore_moves`` the span of
@@ -164,8 +161,8 @@ class InferenceConfig(StrictModel):
 
     inference_batch_size: int = Field(ge=1)
     inference_max_wait_ms: int = Field(ge=0)
-    # R347(e)'s lever: check 14 (`verify_edge_geometry`) runs inline on the server's critical path
-    # or on a checker thread after the batch is served; it runs on EVERY batch either way.
+    # The edge-geometry lever: check 14 (`verify_edge_geometry`) runs inline on the server's
+    # critical path or on a checker thread after the batch is served; it runs on EVERY batch.
     edge_geometry_check: Literal["inline", "checker_thread"] = Field(default="inline")
     # A4-3: the SERVING trunk runs through `torch.compile(dynamic=True)`; the trainer and the eval
     # child stay eager. Off is the shipped numerics; on is eager-to-bf16-noise, never bit-exact.

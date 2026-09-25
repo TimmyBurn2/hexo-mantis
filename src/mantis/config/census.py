@@ -1,4 +1,4 @@
-"""Which configs are PRODUCTION (R367(a)): every file `discover_configs` finds under `configs/` that no `EXEMPT_CONFIGS` row names — a census taken at point of use, never a list edited per mint."""
+"""Which configs are PRODUCTION: every file `discover_configs` finds under `configs/` that no `EXEMPT_CONFIGS` row names — a census taken at point of use, never a list edited per mint."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,9 +8,8 @@ from mantis.config.loader import discover_configs
 #: The directory the census walks, repo-relative; the exempt rows are spelled from the repo root.
 CONFIG_DIR_REL = "configs"
 
-#: The ONE by-name list: `(repo-relative path, why it is exempt)`. A config under `configs/` is
-#: production unless a row here excuses it, so "forgotten" reads as "audited", never as "exempt";
-#: the reason is data the gate prints, so an exemption cannot be a bare path nobody can justify.
+#: The ONE by-name list `(repo-relative path, why exempt)`: unlisted means production, so
+#: "forgotten" reads as "audited", and the gate prints the reason, so no exemption is bare.
 EXEMPT_CONFIGS: tuple[tuple[str, str], ...] = (
     (
         "configs/dev_example.yaml",

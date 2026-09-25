@@ -1,9 +1,9 @@
 """`SearchConfig` — a search regime as one closed key — and `DeployConfig`, the deploy head's.
 
-Two homes (R351(c)): `selfplay.search.kind` is what the workers run and what the exported targets
+Two homes: `selfplay.search.kind` is what the workers run and what the exported targets
 MEAN; `deploy.search.kind` is what the bar plays, matched to what will be deployed.
 One key per regime rather than four, so the root, the interior selector and the target cannot
-disagree; no default anywhere — an absent `kind` is a mint error, not a silent PUCT (LAW-11).
+disagree; no default anywhere — an absent `kind` is a mint error, not a silent PUCT.
 """
 from typing import Literal
 

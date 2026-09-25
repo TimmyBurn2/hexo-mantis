@@ -1,4 +1,4 @@
-"""THE one read path for R347(e)'s lever: where check 14 runs; absence is a named raise."""
+"""THE one read path for the edge-geometry lever: where check 14 runs; absence is a named raise."""
 from collections.abc import Mapping
 from typing import Any
 

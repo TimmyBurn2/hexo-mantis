@@ -1,4 +1,4 @@
-"""`train.ply_cap_abort` -> a frozen spec, or `None` on the explicit OFF (R352(c))."""
+"""`train.ply_cap_abort` -> a frozen spec, or `None` on the explicit OFF."""
 from __future__ import annotations
 
 from dataclasses import dataclass

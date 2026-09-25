@@ -1,9 +1,5 @@
-# >300 justify (R8). NO LINE COUNT is stated (derive-or-delete). This module is ONE claim with
-# three faces that cannot be separated without creating a second authority over the same fact:
-# what the config MINTED, what the process is ACTUALLY RUNNING UNDER (the environment pair, in
-# c10's own precedence order), and the comparison between them. Splitting the reader out would
-# put "which variable does torch read" in one module and "which posture was minted" in another,
-# which is exactly the drift this exists to close.
+# >300 justify (R8): ONE claim with three faces — what the config MINTED, what the process RUNS
+# UNDER (c10's env pair) and their comparison; splitting them makes a second authority.
 """`allocator_posture` — THE one authority over the CUDA caching allocator's REGIME.
 
 WHY THIS KNOB EXISTS, measured: the 2026-08-22 sitting measured a card high-water of 14.98 GiB
@@ -40,8 +36,7 @@ from typing import Any
 _KEY = "allocator_posture"
 
 #: The two environment variables c10 reads, IN C10'S OWN PRECEDENCE ORDER, taken from the
-#: pinned wheel's source and NOT from torch's prose, which states the reverse. A one-direction
-#: test cannot see it: with only one variable set, both orders agree.
+#: pinned wheel's source and NOT from torch's prose, which states the reverse.
 ALLOC_CONF_VARS: tuple[str, str] = ("PYTORCH_CUDA_ALLOC_CONF", "PYTORCH_ALLOC_CONF")
 
 #: The entry point that PRODUCES the value, named in every refusal so an operator is never
@@ -56,9 +51,8 @@ class AllocatorPosture(StrEnum):
     EXPANDABLE_SEGMENTS = "expandable_segments"
 
 
-#: token -> the allocator conf that posture REQUIRES, as a parsed mapping. DEFAULT requires
-#: the EMPTY conf — no allocator configuration at all — which is what the sitting's provenance
-#: stamped and what every banked oracle and bench side was taken under.
+#: token -> the conf that posture REQUIRES, parsed. DEFAULT requires the EMPTY conf, under which
+#: every banked oracle and bench side was taken.
 _REQUIRED_CONF: dict[AllocatorPosture, dict[str, str]] = {
     AllocatorPosture.DEFAULT: {},
     AllocatorPosture.EXPANDABLE_SEGMENTS: {"expandable_segments": "True"},
@@ -112,10 +106,8 @@ class LiveAllocatorConf:
     source_var: str | None
     raw: str
     parsed: dict[str, str]
-    #: BOTH variables set to confs that disagree, in the one case where c10's precedence could
-    #: not be verified from the shipped headers. A separate flag rather than a sentinel inside
-    #: `parsed`, so no caller can mistake "cannot be told what it is running under" for
-    #: "running under nothing".
+    #: BOTH variables set to disagreeing confs where c10's precedence is unverified; a flag, not a
+    #: sentinel in `parsed`, so "cannot tell" never reads as "running under nothing".
     ambiguous: bool = False
 
 
@@ -178,9 +170,8 @@ def device_type_of(device: str) -> str:
     return str(device).split(":", 1)[0].strip().lower()
 
 
-#: The one device type the posture governs, held HERE once and never spelled at a call site: a
-#: test bans a device string literal in `mantis.run` outright, and `governs_device` below is
-#: the predicate the composition root asks instead.
+#: The one device type the posture governs, held HERE once: a test bans a device literal in
+#: `mantis.run`, which asks `governs_device` instead.
 _GOVERNED_DEVICE_TYPE = "cuda"
 
 

@@ -1,8 +1,5 @@
-# R8 >300 justify: the manifest ROWS are data and their `note` text IS the row — a field
-# gate 12 prints on every run, not a comment. The walkers (`_dotted`, `audit_arming`,
-# `audit_cadence`), the exit-code resolver and the cadence/clock axes each answer a question
-# the rows themselves hold the operands for; splitting any of them out would put "which
-# aborts must arm" and the predicates that read it on opposite sides of an import.
+# R8 >300 justify: the manifest ROWS are data gate 12 prints, and the walkers, exit-code resolver
+# and cadence/clock axes read their operands; splitting would part the rows from their predicates.
 """The armed-abort manifest — WHICH aborts a production config MUST arm.
 
 ONE authority, and it is DATA: a typed frozen dataclass read by `import`, carrying its
@@ -10,7 +7,7 @@ invariant in `__post_init__`, with no doc twin to drift from.
 
 THE LAYER BOUNDARY. This module makes ZERO filesystem calls. WHICH configs the rows bind is
 `mantis.config.census.production_configs` — every config on disk that no exempt row names
-(R367(a)) — taken by `tools/ci_gates/preflight_mint.py` at point of use. Pinned by
+— taken by `tools/ci_gates/preflight_mint.py` at point of use. Pinned by
 `tests/config/test_armed_abort_manifest.py`.
 
 A DEFERRED row prints loudly on every gate-12 run, gates nothing, and makes the flip to
@@ -35,18 +32,16 @@ from mantis.monitor.heartbeat import (
     TERMINAL_EVAL_BROKEN_EXIT_CODE,
 )
 
-#: The disk-guard abort's RULE NAME — one spelling, exported. It has TWO readers, the row
-#: below and `mantis.run.compose_run`, because `mantis.train` may not import this module; a
-#: bare literal at each would let a rename leave the resolver answering `None`.
+#: The disk-guard abort's RULE NAME, one spelling for its TWO readers (the row below and
+#: `mantis.run.compose_run`), so a rename cannot leave the resolver answering `None`.
 DISK_SPACE_ABORT_RULE: str = "disk_space_exhausted"
 
 #: The broken-terminal-eval RULE NAME — one spelling, exported, same shape and grounds as
 #: `DISK_SPACE_ABORT_RULE`: the row below and `mantis.run.compose_run` are its two readers.
 TERMINAL_EVAL_BROKEN_ABORT_RULE: str = "terminal_eval_broken"
 
-#: The disk guard's LIVENESS PROBE NAME. Two readers — the row below and
-#: `mantis.run.compose_run`, which owns the running guard — and a rename fails LOUDLY:
-#: `audit_arming_live` raises `ProducerProbeMissingError` naming both sides.
+#: The disk guard's LIVENESS PROBE NAME, read by the row below and `mantis.run.compose_run`;
+#: a rename fails LOUDLY (`audit_arming_live` raises `ProducerProbeMissingError`).
 DISK_GUARD_LIVENESS_PROBE: str = "disk_guard_checks_completed"
 
 

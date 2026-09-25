@@ -1,4 +1,4 @@
-"""The preflight stamp: written per passing preflight, demanded by `mantis.run` (R348(c))."""
+"""The preflight stamp: written per passing preflight, demanded by `mantis.run`."""
 from __future__ import annotations
 
 import json
@@ -15,7 +15,7 @@ from mantis.util.mirror_receipts import MIRRORED_VERDICT
 STAMP_SCHEMA_VERSION = 1
 #: The two START halts a stamp must carry a reading for; a stamp missing either is refused.
 START_HALT_READINGS = ("workspace", "cuda_build")
-#: R360(c): the leaves a shakedown twin may differ from its run in and still inherit its stamp.
+#: The leaves a shakedown twin may differ from its run in and still inherit its stamp.
 #: Run PATHS are `--out-dir` and what derives from it, never a config leaf, so the set is one.
 TWIN_LEAVES = frozenset({"run_id"})
 
@@ -149,7 +149,7 @@ def flat_leaves(doc: dict[str, Any], prefix: str = "") -> dict[str, Any]:
 def _inherit_preflight_stamp(
     twin: RunConfig, *, parent_config_path: Path, tree_root: Path,
 ) -> dict[str, Any]:
-    """R360(c): write and return `twin`'s stamp from its run's VESTED one, differing in `run_id` alone."""
+    """Write and return `twin`'s stamp from its run's VESTED one, differing in `run_id` alone."""
     parent = load_config(parent_config_path)
     parent_stamp = require_preflight_stamp(parent, tree_root=tree_root)
     parent_leaves = flat_leaves(parent.model_dump())
@@ -185,13 +185,13 @@ def require_preflight_stamp(
     config: RunConfig, *, tree_root: Path, inherit_from: Path | None = None,
 ) -> dict[str, Any]:
     """The launch-time trap: the passing stamp for `config` on THIS tree, or a refusal; with
-    `inherit_from` (its run's config) a stampless twin differing in `run_id` alone inherits it (R360(c)).
+    `inherit_from` (its run's config) a stampless twin differing in `run_id` alone inherits it.
 
     Raises:
         PreflightStampMissingError: no stamp exists for this config identity (nor the parent's).
         PreflightStampMalformedError: the stamp does not carry what a stamp must carry.
         PreflightStampTreeMismatchError: the stamp names another HEAD, or this HEAD is unreadable.
-        PreflightStampUnmirroredError: the workspace verdict is not `MIRRORED` (R349(b)).
+        PreflightStampUnmirroredError: the workspace verdict is not `MIRRORED`.
         PreflightStampTwinMismatchError: `config` differs from `inherit_from`'s run beyond `run_id`.
         OSError: the parent config cannot be read, or the inherited stamp cannot be written.
     """

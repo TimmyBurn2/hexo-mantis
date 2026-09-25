@@ -1,4 +1,4 @@
-"""`train.policy_loss_trough_abort` -> a frozen spec, or `None` on the explicit OFF (R350(b)(iv))."""
+"""`train.policy_loss_trough_abort` -> a frozen spec, or `None` on the explicit OFF."""
 from __future__ import annotations
 
 from dataclasses import dataclass

@@ -9,10 +9,8 @@ from pydantic import Field, model_validator
 
 from mantis.config.schema._base import StrictModel
 
-#: The OPERATIONAL CONSTANTS here carry schema defaults and leave the YAML: a key defaults when
-#: it names how the PROCESS is operated and no run has ever decided it differently. It stays
-#: REQUIRED where a run really chooses it — `gate_interval`, the actor-lag pair,
-#: `supervisor_kill_grace_sec`, the axis/warn family — because those are ARMING.
+#: OPERATIONAL CONSTANTS carry schema defaults; ARMING keys a run really chooses stay REQUIRED —
+#: `gate_interval`, the actor-lag pair, `supervisor_kill_grace_sec`, the axis/warn family.
 
 
 class DiskGuardConfig(StrictModel):
@@ -56,10 +54,8 @@ class MonitorSchemaConfig(StrictModel):
     `gate_interval`, `drain` and `disk_guard` are schema-only, which is what legitimates
     `resolve_monitor_config`'s three enumerated drops."""
 
-    # The stride, in TRAINING STEPS, at which the live hard-abort gates run and `monitor_gates`
-    # is published — a `monitor.*` key because it times the SAFETY machinery, not the trainer.
-    # `ge=1`: at `<= 0` the hard-abort family stops being evaluated AND the event that would
-    # make the deadness readable stops emitting, while gate 12 still audits the row ARMED.
+    # The hard-abort gates' stride in TRAINING STEPS (a SAFETY timing, hence `monitor.*`); `ge=1`:
+    # at `<= 0` the gates and their event go silent while gate 12 still audits the row ARMED.
     gate_interval: int = Field(ge=1)
 
     # the 4 training-step WARN rules (monitor/rules.py)

@@ -1,4 +1,4 @@
-"""Run-config schema package (contract run-config-schema v1) — WPSC Phase 2 §10 split; it re-exports
+"""Run-config schema package (contract run-config-schema v1), split into modules; it re-exports
 the full pre-split public surface, so every `from mantis.config.schema import X` site is unaffected."""
 from mantis.config.schema.core import (
     _EVAL_TIMEOUT_CEILING_SEC,

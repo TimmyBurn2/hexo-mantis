@@ -1,8 +1,3 @@
-# >300 justify (R8). One class per config block, plus the per-field GROUNDS the house style
-# requires: what each bound is a bound ON (the mechanism's own range, never policy), which
-# defect it makes inexpressible, and the ONE resolver that reads it. Splitting a class out
-# would put a field and its grounds on opposite sides of an import, and splitting the classes
-# apart would separate `train.draw_rate_abort.consec` from the terms that travel with it.
 """`TrainConfig` — training hyperparameters as first-class schema fields.
 
 This schema field IS the sole default authority; `TrainHParams` (a frozen dataclass in
@@ -137,7 +132,7 @@ class EmaConfig(StrictModel):
 
 
 class PolicyLossTroughAbortConfig(StrictModel):
-    """R350(b)(iv)'s trough halt: `consec` gate windows each `delta_nats` above the FIRST window's
+    """The policy-loss trough halt: `consec` gate windows each `delta_nats` above the FIRST window's
     mean policy loss, at or before `max_step`, halt; `null` on the parent is the explicit OFF."""
 
     delta_nats: float = Field(gt=0)
@@ -146,7 +141,7 @@ class PolicyLossTroughAbortConfig(StrictModel):
 
 
 class PlyCapAbortConfig(StrictModel):
-    """R352(c)'s ply-cap halt: the last `window_games` games' cap fraction STRICTLY above `rate` at or past `min_step` halts; `null` is OFF."""
+    """The ply-cap halt: the last `window_games` games' cap fraction STRICTLY above `rate` at or past `min_step` halts; `null` is OFF."""
 
     rate: float = Field(gt=0, le=1)
     window_games: int = Field(ge=1)
@@ -176,7 +171,7 @@ class HeldoutGapConfig(StrictModel):
 
 
 class PolicyLossWeightScheduleConfig(StrictModel):
-    """R350(b)(iii)'s value warm-up: policy weight 0 for the first `warmup_steps`, then 1; 0 is OFF."""
+    """The value warm-up: policy weight 0 for the first `warmup_steps`, then 1; 0 is OFF."""
 
     warmup_steps: int = Field(ge=0)
 
@@ -190,9 +185,8 @@ class TrainConfig(StrictModel):
     lr: float = Field(gt=0)
     weight_decay: float = Field(ge=0)
     grad_clip: float = Field(gt=0)
-    # The run DEVICE is a CONFIG FACT, not a CLI flag: `--device` let a preflight point a
-    # CUDA-minted run at the CPU. CLOSED vocabulary, narrower than the dead flag — device
-    # indices (`cuda:1`) are unrepresentable, and widening the enum is a named design act.
+    # A CONFIG FACT, not a CLI flag, so a preflight cannot point a CUDA-minted run at the CPU;
+    # CLOSED vocabulary: device indices (`cuda:1`) are unrepresentable.
     device: Literal["cpu", "cuda"]
     lr_schedule: Literal["cosine", "none"]
     total_steps: int = Field(ge=1)
@@ -202,51 +196,37 @@ class TrainConfig(StrictModel):
     # Continuous actor-sync cadence in coordinator training steps. `ge=1` means NO disabled
     # value exists. Resolved only by `mantis.config.resolve.actor_sync`.
     actor_sync_cadence_steps: int = Field(ge=1)
-    # The EMA lever's arming block, REQUIRED so every config states its posture explicitly:
-    # `resolve_ema_config` used to read four names no schema had, so the lever was unreachable.
+    # The EMA lever's arming block, REQUIRED so every config states its posture explicitly.
     ema: EmaConfig
     # The value warm-up's one knob, consumed by `TrainHParams.from_config` -> the graph step.
     policy_loss_weight_schedule: PolicyLossWeightScheduleConfig
-    # The RUN-LENGTH authority, in coordinator training steps, consumed by
-    # `resolve_max_train_steps` -> `StepCoordinatorConfig.stop_step`; distinct from
-    # `total_steps`, the LR-scheduler horizon. ABSOLUTE, not per-process: a run resumed past
-    # this ceiling terminates immediately, which is correct but looks like a frozen actor.
+    # The RUN-LENGTH authority (`resolve_max_train_steps` -> `stop_step`), not the LR horizon;
+    # ABSOLUTE, so a run resumed past it stops at once, which looks like a frozen actor.
     max_train_steps: int = Field(ge=1)
-    # The draw-rate collapse hard abort's ARMING SURFACE. `None` is EXPLICITLY OFF, and there
-    # is no boolean enable beside it, which would be a second authority over one fact.
-    # `default=...` is this class's no-terminal-default idiom: absence names the key.
+    # The draw-rate abort's ARMING SURFACE: `None` is EXPLICITLY OFF, with no second boolean
+    # authority; `default=...` is the no-terminal-default idiom, so absence names the key.
     draw_rate_abort: DrawRateAbortConfig | None = Field(default=...)
     # The policy-loss trough halt's ARMING SURFACE, the same idiom: `None` is EXPLICITLY OFF.
     policy_loss_trough_abort: PolicyLossTroughAbortConfig | None = Field(default=...)
-    # The ply-cap attractor halt's ARMING SURFACE (R352(c)), the same idiom.
+    # The ply-cap attractor halt's ARMING SURFACE, the same idiom.
     ply_cap_abort: PlyCapAbortConfig | None = Field(default=...)
-    # The held-out gap witness's ARMING SURFACE (R366(c), v37), the same idiom: `null` is OFF.
+    # The held-out gap witness's ARMING SURFACE, the same idiom: `null` is OFF.
     heldout_gap: HeldoutGapConfig | None = Field(default=...)
 
-    # The step-coordinator knobs: builder literals and dataclass terminal defaults that decided
-    # what the run IS while the minted config said nothing. FLAT `train.*` keys and NOT a
-    # `train.coordinator` block — naming a config block after a dataclass was ruled against.
-    # Six sibling fields were DELETED rather than authored: they had no reader in `src/`.
-    #
-    # `eval_interval` — the promotion-decision cadence. `ge=1`: at `<= 0` the whole
-    # eval/promotion pipeline is off while nothing says so. The off posture is the typed
-    # `eval_enabled: false` key, which IS the fact rather than a number that happens to disable.
+    # The step-coordinator knobs, FLAT `train.*` keys (no block named after a dataclass).
+    # `eval_interval` — the promotion cadence. `ge=1`: `<= 0` silently kills promotion; the
+    # off posture is the typed `eval_enabled: false`.
     eval_interval: int = Field(ge=1)
-    # `log_interval` — NARRATION ONLY, and it runs NO gate: the hard-abort family moved to
-    # `monitor.gate_interval`, because at a minted 1000 no draw-rate abort could fire before
-    # training step 1000. `ge=1` because there is no legitimate "never narrate" posture.
+    # `log_interval` — NARRATION ONLY; the gates run on `monitor.gate_interval`. `ge=1`: there
+    # is no legitimate "never narrate" posture.
     log_interval: int = Field(ge=1)
-    # `buffer_save_interval` is DELETED: the replay-BUFFER save cadence, measured
-    # production-dead. `train.checkpoint_interval` above is the TRAINER's periodic save.
     # `min_buf_size` — the warmup floor, below which `step()` returns `in_warmup`. `ge=1`
     # because a floor of 0 means "train on an empty buffer", which the sampler cannot satisfy.
     min_buf_size: int = Field(ge=1)
     # `replay_capacity` — the replay window, i.e. the distribution the learner trains on.
-    # Renamed from the dataclass field `capacity`, which names nothing as `train.capacity`.
     replay_capacity: int = Field(ge=1)
-    # `replay_capacity_schedule` — the step-keyed ramp; `[]` means "no ramp", not an off
-    # switch. `_schedule_idx` never rewinds, so `_stages_are_strictly_increasing` below makes a
-    # non-increasing schedule (which would silently skip stages) unrepresentable.
+    # `replay_capacity_schedule` — the step-keyed ramp; `[]` means "no ramp". The cursor never
+    # rewinds, so the validator below makes a stage-skipping schedule unrepresentable.
     replay_capacity_schedule: list[ReplayCapacityStage]
     # `training_steps_per_game` — the sample-reuse ratio. `gt=0` because `_steps_budget` floors
     # its result at 1, so `0` means "one step per round" while reading as an off switch.
@@ -254,13 +234,10 @@ class TrainConfig(StrictModel):
     # `max_train_burst` — the ceiling of that budget. `ge=1` because the `max(1, ...)` floor is
     # INSIDE the `min(...)`, so `0` clamps the budget to 0 and stops the learner silently.
     max_train_burst: int = Field(ge=1)
-    # `batch_size` — the training batch, AUTHORED HERE AND NOWHERE ELSE. It used to be a dict
-    # lookup whose two levels both miss on the production path, so the size was unconditionally
-    # a literal 256; the minted value is 256, so only the authority moved.
+    # `batch_size` — the training batch, AUTHORED HERE AND NOWHERE ELSE.
     batch_size: int = Field(ge=1)
-    # `microbatch_caps` — the GRAPH step's memory bound, which `batch_size` does not give.
-    # ARCH-SCOPED: `None` here is the ABSENCE of the key, never a value, and presence is read
-    # off `model_fields_set` so an explicit `null` is refused on a graph config too.
+    # `microbatch_caps` — the GRAPH step's memory bound. ARCH-SCOPED: `None` is the key's
+    # ABSENCE, read off `model_fields_set`, so an explicit `null` is refused on a graph config.
     microbatch_caps: MicrobatchCapsConfig | None = None
     # `augment` — 12-fold hex-symmetry augmentation of every sampled batch. It multiplies the
     # effective dataset, so two runs that differ only here are not comparable.
@@ -268,22 +245,18 @@ class TrainConfig(StrictModel):
     # `recency_weight` — the fraction of each batch drawn from the recency window. `ge=0, le=1`
     # is that fraction's own range: above 1 the sampler clamps and the difference is unreal.
     recency_weight: float = Field(ge=0, le=1)
-    # `hard_gn_threshold` / `hard_gn_min_steps` — the `grad_norm_hard_abort` gate. `gt=0`
-    # because a threshold of 0 fires on every finite step; `allow_inf_nan=False` because the
-    # gate guards on `math.isfinite`, so an infinite threshold reads ARMED and can never be met.
-    # DISCLOSED: the shipped `1e9` is finite and unreachable, so this bound still admits an
-    # effectively-disarmed abort; the derivable ceiling lives in the armed-abort manifest.
+    # `hard_gn_*` — the `grad_norm_hard_abort` gate. `gt=0`: 0 fires on every finite step; no
+    # inf, which reads ARMED and is never met. DISCLOSED: the shipped finite `1e9` is unreachable
+    # too; the derivable ceiling lives in the armed-abort manifest.
     hard_gn_threshold: float = Field(gt=0, allow_inf_nan=False)
     # `ge=1`: at `0` the gate fires the FIRST time the threshold is exceeded, the opposite of
     # sustained instability. DISCLOSED: a very large value disarms the abort just as quietly.
     hard_gn_min_steps: int = Field(ge=1)
     # `terminal_eval_enabled` — whether close-out runs a terminal eval round, i.e. whether the
-    # run gets its LAST promotion opportunity. A REGIME fact that once had three authorities.
+    # run gets its LAST promotion opportunity.
     terminal_eval_enabled: bool
-    # `selfplay_stall_timeout_sec` — the stall watchdog's wall-clock budget. `gt=0` and
-    # `allow_inf_nan=False` because the watchdog is ALWAYS ARMED, while `watchdog.py` lets
-    # `timeout_sec <= 0` disable the fire while the arm-log still emits. An OPERATIONAL
-    # CONSTANT, which is why it alone carries a default.
+    # `selfplay_stall_timeout_sec` — the ALWAYS-ARMED stall watchdog's budget (`<= 0` would
+    # silently disable its fire); an OPERATIONAL CONSTANT, hence its default.
     selfplay_stall_timeout_sec: float = Field(default=1800.0, gt=0, allow_inf_nan=False)
 
     # loss selection + targets. `completed_q_values` is DELETED here and on `selfplay`: which
@@ -292,11 +265,9 @@ class TrainConfig(StrictModel):
     policy_target: Literal["raw_visit_distribution", "completed_improved_policy"]
     draw_reward: float
     ply_cap_value: float
-    #: The POLICY weight a fast-arm (`is_full_search == 0`) row carries; value is always
-    #: supervised on those rows, and this replaces a gate that discarded the fast arm's policy
-    #: outright. `ge=0` and not `gt=0` BECAUSE 0.0 is the shipped value, which reproduces that
-    #: gate. Read once per step via `fast_policy_weight_provider`, the same provider shape
-    #: `train.microbatch_caps` carries: a grid `full_config` has no `train` section at all.
+    #: The POLICY weight a fast-arm (`is_full_search == 0`) row carries (value is always
+    #: supervised); `ge=0` because the shipped 0.0 discards the fast arm's policy outright.
+    #: Read once per step via `fast_policy_weight_provider`, the `microbatch_caps` provider shape.
     fast_policy_weight: float = Field(ge=0)
 
     @model_validator(mode="after")

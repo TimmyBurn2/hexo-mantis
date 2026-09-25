@@ -1,9 +1,8 @@
 """The two `search.kind` resolvers — ONE reader per key, and each wire reads its own.
 
 Each returns its key unchanged; they exist so "the workers run `selfplay.search.kind`" and "the
-deploy head runs `deploy.search.kind`" are true BY CONSTRUCTION, not by call sites agreeing
-(AUDIT-1 F-39 found the drift class; R351(c) split the one key that fed both wires).
-NO DEFAULT (R1/LAW-11): a bar that cannot say which search it ran is not a bar.
+deploy head runs `deploy.search.kind`" are true BY CONSTRUCTION, not by call sites agreeing.
+NO DEFAULT: a bar that cannot say which search it ran is not a bar.
 """
 from __future__ import annotations
 
@@ -64,6 +63,6 @@ def resolve_deploy_search_kind(config: Mapping[str, Any] | Any) -> str:
     Raises:
         MissingSearchKindError: the key is absent or not a kind this build implements — never
             defaulted, and never read from the self-play key (the bar is matched to what will
-            be deployed, R351(c)).
+            be deployed).
     """
     return _resolve(config, "deploy")

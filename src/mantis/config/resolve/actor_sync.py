@@ -3,7 +3,7 @@
 `train.actor_sync_cadence_steps` is read HERE and nowhere else; the composition root
 (`mantis.run.compose_run`) threads the resolved value into `ActorSync.maybe_sync`.
 The schema bound (`Field(ge=1)`) is the sole authority: no representable "off" value
-exists (R49 at the type level), so this resolver carries no disable sentinel and no
+exists at the type level, so this resolver carries no disable sentinel and no
 code-side default (R1) — a missing key never reaches here (pydantic rejects it at
 load, naming the key).
 """

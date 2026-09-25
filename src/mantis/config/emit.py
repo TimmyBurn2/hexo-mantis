@@ -39,7 +39,7 @@ def write_resolved_config(config: RunConfig, out_dir: str | Path) -> Path:
         The path written.
 
     Raises:
-        OSError: the record could not be written or read back — persistence-fatal (LAW-14).
+        OSError: the record could not be written or read back — persistence-fatal.
         ValidationError: the written document does not re-validate, which means the record is
             not a config and the run must not proceed believing it wrote one.
     """
