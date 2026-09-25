@@ -122,6 +122,11 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   Kept: tools/bench_floors.toml's 4 cites (the LAW-09 floor register, same class as the floor files);
   CARD-SEALBOT-TT-SEAT and CARD-SELFPLAY-SEARCH-STATS. CARD-LADDER-RUNG was dropped: it has its own CARDS row.
   make lint GREEN; it ran unsandboxed after the sandbox refused its uv-cache probe.
+- L6 LANDED (**sonnet**): c7ea737b tests/eval (cite 53→2, the two restored CARD tokens; comment_excess 44→4),
+  c4b3a0fb tests/model (8 files, conformance/** untouched), 8269dce4 tests/bridge (24→0, 31→4), 15e73d3a tests/ root
+  (26→0, 28→10; CARD-CS2 kept, inside an assertion string), e0896f13 tests/diagnostics (29→0), 8663c766 tests/monitor
+  (16→0), 384b127a tests/encoding (27→0), 5d23cdce tests/util (4→0), daadf9f5 tests/arena (8→0), 178c795a tests/data
+  (2→0). Each package's tests green; make lint GREEN. Cites inside assertion messages and parametrize needles stay.
 - Floors after L7+L8: cite 993→298, comment_excess 2675→2180, textfile 252→228; collected 4928; gates
   10/12/13/15/17 rc 0.
 
