@@ -18,6 +18,7 @@ from typing import Any
 
 import torch
 
+from mantis.config.retired import split_retired
 from mantis.config.schema import ARCH_SCOPED_KEYS, RunConfig
 from mantis.encoding import lookup
 from mantis.model import (
@@ -636,40 +637,27 @@ def load_checkpoint(
     )
 
 
-#: Dotted paths the schema RETIRED after runs stamped them: the one `extra_forbidden` a stamp can
-#: carry, since a stamp is written from a validated config.
-RETIRED_STAMP_PATHS: frozenset[str] = frozenset({
-    "search",
-    "eval.ladder", "eval.sealbot_model_sims", "eval.rung_concurrency",
-    "monitor.wr_hard_abort_enabled", "monitor.wr_rolling_consecutive_evals",
-    "monitor.wr_rolling_threshold", "monitor.wr_rolling_min_step",
-    "monitor.wr_collapse_from_peak_ratio", "monitor.wr_collapse_min_step",
-    "monitor.wr_collapse_consecutive_evals", "monitor.wr_early_death_threshold",
-    "monitor.wr_early_death_min_step",
-})
-
-
 def _validate_stamped_config(path: Path, config: dict[str, Any]) -> None:
     """Schema-validate the stamped config as PROVENANCE: a leaf the schema grew, or a path it
     RETIRED, after the stamp is logged, not refused; anything else refuses, the payload untouched.
 
     Raises:
-        pydantic.ValidationError: any error that is not a missing newer leaf or a retired path.
+        pydantic.ValidationError: any error that is not a missing newer leaf.
     """
     from pydantic import ValidationError  # noqa: PLC0415 — the one exception type this reads
 
+    kept, retired = split_retired(config)
+    newer: list[str] = []
     try:
-        RunConfig.model_validate(config)
+        RunConfig.model_validate(kept)
     except ValidationError as exc:
         newer = [".".join(str(loc) for loc in err["loc"]) for err in exc.errors()
                  if err["type"] == "missing"]
-        retired = [".".join(str(loc) for loc in err["loc"]) for err in exc.errors()
-                   if err["type"] == "extra_forbidden"
-                   and ".".join(str(loc) for loc in err["loc"]) in RETIRED_STAMP_PATHS]
-        if len(newer) + len(retired) != len(exc.errors()):
+        if len(newer) != len(exc.errors()):
             raise
+    if newer or retired:
         _LOG.info("checkpoint_config_predates_schema checkpoint=%s missing=%s retired=%s",
-                  path.name, newer, retired)
+                  path.name, newer, sorted(retired))
 
 
 # The read path for the THREE real pre-v2 shapes.

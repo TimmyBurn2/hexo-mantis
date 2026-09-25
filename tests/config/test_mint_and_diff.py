@@ -141,3 +141,31 @@ def test_diff_exit_1_when_claimed_key_identical(tmp_path):
     res = _run(str(DIFF), str(TEMPLATE), str(out), "--expect", "run_id", "--expect", "seed")
     assert res.returncode == 1
     assert "expected diff on seed but values are identical" in res.stdout
+
+
+def _with_leaf(src: Path, dst: Path, section: str, leaf: str, value: str) -> Path:
+    """Copy a config with one extra `leaf: value` row appended under top-level `section`."""
+    lines = src.read_text(encoding="utf-8").splitlines()
+    at = lines.index(f"{section}:") + 1
+    dst.write_text("\n".join([*lines[:at], f"  {leaf}: {value}", *lines[at:]]) + "\n",
+                   encoding="utf-8")
+    return dst
+
+
+def test_diff_across_a_retirement_names_the_retired_leaf_and_nothing_else(tmp_path):
+    """A config minted before a leaf was RETIRED still diffs: the retired leaf is the one delta."""
+    base, proc = _mint(tmp_path, "base.yaml", "run_id=retire_check")
+    assert proc.returncode == 0, proc.stderr
+    older = _with_leaf(base, tmp_path / "older.yaml", "monitor", "wr_hard_abort_enabled", "false")
+    diff = _run(str(DIFF), str(older), str(base), "--expect", "monitor.wr_hard_abort_enabled")
+    assert diff.returncode == 0, diff.stdout + diff.stderr
+    assert "MATCH: monitor.wr_hard_abort_enabled" in diff.stdout
+
+
+def test_diff_still_refuses_a_leaf_the_schema_never_had(tmp_path):
+    """Only a RETIRED path is tolerated; an unknown leaf is still a load error, rc 2."""
+    base, proc = _mint(tmp_path, "base.yaml", "run_id=retire_check")
+    assert proc.returncode == 0, proc.stderr
+    bogus = _with_leaf(base, tmp_path / "bogus.yaml", "monitor", "not_a_leaf", "false")
+    diff = _run(str(DIFF), str(bogus), str(base), "--expect", "monitor.not_a_leaf")
+    assert diff.returncode == 2, diff.stdout + diff.stderr

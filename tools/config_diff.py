@@ -11,7 +11,7 @@ Lying-header mode:
   Exit 0 MATCH; exit 1 naming the lie (an omitted real diff OR a claimed-but-unchanged key); exit 2
   on load/parse error (missing template, unparseable header, invalid config).
 
-Both configs must schema-validate (an invalid config can't be diff-asserted).
+Both configs must schema-validate, but a RETIRED path (`mantis.config.retired`) reads as a leaf.
 """
 import argparse
 import sys
@@ -20,8 +20,10 @@ from pathlib import Path
 import yaml
 from pydantic import ValidationError
 
-from mantis.config.loader import load_config
+from mantis.config.loader import load_config, parse_config_yaml
 from mantis.config.preflight_stamp import flat_leaves
+from mantis.config.retired import split_retired
+from mantis.config.schema import RunConfig
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "config_templates"
 
@@ -97,11 +99,23 @@ def _run_from_header(config_path: str) -> int:
     return 1
 
 
+def _flat_across_retirement(config_path: str) -> dict[str, object]:
+    """The validated config's dotted leaves plus any RETIRED path it still carries, so a re-mint across a retirement diffs to that path."""
+    raw = parse_config_yaml(config_path)
+    if not isinstance(raw, dict):
+        raise TypeError(f"{config_path}: config root must be a mapping")
+    kept, retired = split_retired(raw)
+    flat = flat_leaves(RunConfig.model_validate(kept).model_dump())
+    for dotted, value in retired.items():
+        flat.update(flat_leaves(value, dotted) if isinstance(value, dict) else {dotted: value})
+    return flat
+
+
 def _run_expect(config_a: str, config_b: str, expect: list[str]) -> int:
     try:
-        flat_a = flat_leaves(load_config(config_a).model_dump())
-        flat_b = flat_leaves(load_config(config_b).model_dump())
-    except (ValidationError, yaml.YAMLError, OSError, TypeError) as exc:
+        flat_a = _flat_across_retirement(config_a)
+        flat_b = _flat_across_retirement(config_b)
+    except (ValueError, yaml.YAMLError, OSError, TypeError) as exc:
         print(f"load/validation error: {exc}", file=sys.stderr)
         return 2
     diff_keys = _diff_keys(flat_a, flat_b)
