@@ -1,4 +1,4 @@
-"""The held-out gap witness (R366(c)): a FROZEN slice of an older ring the run never trains on, read forward-only every `interval` steps against the train loss since the last read."""
+"""The held-out gap witness: a FROZEN slice of an older ring the run never trains on, read forward-only every `interval` steps against the train loss since the last read."""
 from __future__ import annotations
 
 from collections.abc import Callable

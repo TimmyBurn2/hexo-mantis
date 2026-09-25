@@ -1,8 +1,5 @@
-# R8 >300 justify: the file builds and emits BOTH per-boundary payloads (`training_step` and
-# `iteration_complete`), split so the two halves can live on different cadences — training_step
-# stays `log_interval`-gated, iteration_complete emits per coordinator step. The WARN rules run
-# on the `training_step` payload that was actually emitted, so a rule can never fire on a shape
-# the event stream does not carry: the alert and its producer are the same object.
+# R8 >300 justify: ONE file builds and emits both per-boundary payloads on their two cadences,
+# and the WARN rules read the emitted `training_step` payload, so an alert is its producer.
 """Training-loop event BUILDERS — every payload routes through the injected `EventSink`.
 
 Nothing imports the monitor package, so the DAG keeps no `train -> monitor` hard edge; the
@@ -34,25 +31,21 @@ class PoolTelemetryLike(Protocol):
     avg_game_length: float
     x_winrate: float
     o_winrate: float
-    # The payload reads the SHARE, computed by the pool under its own lock against the same
-    # `games_completed` the two win rates use. Declaring the raw count while consuming a
-    # coordinator-side denominator is what let the two drift into a fraction above 1.
+    # The SHARE, computed by the pool under its lock against the same `games_completed` the two
+    # win rates use, so the three shares cannot drift above 1.
     draw_rate: float
     sims_per_sec: float
     batch_fill_pct: float
-    # The batching instrument behind `batch_fill_pct`'s single ratio. Optional on the SOURCE,
-    # not on the payload: a source that does not produce it publishes `None`, which means "no
-    # producer" and which a consumer must never read as zero.
+    # The batching instrument behind `batch_fill_pct`; `None` means "no producer", never zero.
     inference_batch_timing: Mapping[str, Any] | None
-    # R349(c): `{rows, graph_rows, per_1000}` — the alpha = 1.0 count over graph rows pushed.
+    # `{rows, graph_rows, per_1000}` — the alpha = 1.0 count over graph rows pushed.
     alpha_full: Mapping[str, Any]
     recent_move_histories: list[list[tuple[int, int]]]
 
     def runner_stats(self) -> Any: ...  # RunnerStats — Any keeps the no-`train → selfplay` edge
 
 
-#: The `trainer_step` key R347(a)'s per-row tail mass alpha travels under. One spelling
-#: authority for the key.
+#: The `trainer_step` key the per-row tail mass alpha travels under; the one spelling authority.
 GUMBEL_TAIL_MASS_KEY = "gumbel_tail_mass"
 
 
@@ -132,11 +125,8 @@ def emit_axis_distribution(
     axis_alert = float(monitor_cfg.axis_alert)
     max_frac = max(axis_q, axis_r, axis_s)
 
-    # DEMOTED TO A METRIC on alert-fatigue grounds: the burst fired this on 193 of 193
-    # emissions, and a warning that fires every time trains its reader to skip the channel. The
-    # THRESHOLD is what is wrong (a minted 0.5 against a ~0.33 pigeonhole floor over three
-    # axes), so the comparison is still MADE and PUBLISHED and only the log level moves —
-    # deleting it would throw away the measurement the re-derivation needs.
+    # A METRIC, not a warning: the minted threshold sits near the ~0.33 three-axis floor, so the
+    # band is still computed and published for its re-derivation, only never logged loud.
     band = "alert" if max_frac >= axis_alert else ("warn" if max_frac >= axis_warn else "ok")
     if band != "ok":
         _LOG.info(
@@ -243,9 +233,8 @@ def emit_iteration_complete_event(
 ) -> None:
     """Build and emit `iteration_complete`, the per-coordinator-step counter payload (NOT `log_interval`-gated);
     `rstats` is passed IN so every block reads the ONE snapshot and cannot straddle a game boundary."""
-    # Each of the three is `None` when its inputs were not measured: a rate over zero elapsed
-    # time, a mean over zero completed games, and a product of either are all absences, and
-    # each used to be published as a hard `0.0`, which reads as a measured stall.
+    # Each is `None` when unmeasured (zero elapsed time, zero completed games): a `0.0` would
+    # read as a measured stall.
     gph = games_per_hour_fn()
     avg_gl = getattr(pool, "avg_game_length", None)
     pph = (gph * avg_gl) if (gph is not None and avg_gl is not None and avg_gl > 0) else None
@@ -264,41 +253,33 @@ def emit_iteration_complete_event(
         "avg_game_length": round(avg_gl, 1) if avg_gl is not None else None,
         "win_rate_p0": round(float(pool.x_winrate), 4),
         "win_rate_p1": round(float(pool.o_winrate), 4),
-        # Read the SHARE off the pool, not `pool.draws / games_played`: the old form paired a
-        # live numerator with a snapshot frozen near the top of `step()` while the feeder kept
-        # draining, and emitted 1.3333 / 1.5 / 1.125 on the shakedown burn — a fraction above 1.
-        # The three outcome shares now share a denominator and sum to 1.
+        # The SHARE off the pool, never a live numerator over a snapshot denominator: the three
+        # outcome shares share one denominator and sum to 1.
         "draw_rate": round(float(pool.draw_rate), 4),
-        # `or 0.0` turned the not-yet-measured `None` into a measured zero, which is the whole
-        # finding in one operator.
+        # No `or 0.0`: a not-yet-measured `None` must not become a measured zero.
         "sims_per_sec": pool.sims_per_sec,
         "buffer_size": buffer.size,
         "buffer_capacity": buffer.capacity,
         "batch_fill_pct": pool.batch_fill_pct,
-        # The inference batching instrument — the collector wait, the collate cost and the
-        # served-batch occupancy DISTRIBUTION that `batch_fill_pct`'s single ratio cannot
-        # resolve. Rides `iteration_complete` because that is already the seam for
-        # inference-server stats and because it emits on neither interval knob. `None` = the
-        # source has no producer for it, never a fabricated zero block.
+        # Collector wait, collate cost and served-batch occupancy DISTRIBUTION; rides the
+        # inference-server stats seam. `None` = no producer, never a fabricated zero block.
         "inference_batching": getattr(pool, "inference_batch_timing", None),
-        # R349(c): rows whose explicit entries carry no target mass, per 1,000 graph rows
+        # Rows whose explicit entries carry no target mass, per 1,000 graph rows
         # pushed since boot. `None` = the source has no producer for it, never a zero.
         "gumbel_alpha_full": getattr(pool, "alpha_full", None),
         "mcts_mean_depth": rstats.mcts_mean_depth,
-        # LAW-18 for A-2 (R355(a)): the runner's cumulative count of backups on which
+        # The quiescence lever's in-run fire-rate: the runner's cumulative count of backups on which
         # `apply_quiescence` returned a verdict, since boot; a reader diffs consecutive rows.
         "mcts_quiescence_fires": getattr(rstats, "mcts_quiescence_fires", None),
-        # R358(c): the replay ratio's pair on ONE row, both cumulative since boot — rows the
+        # The replay ratio's pair on ONE row, both cumulative since boot — rows the
         # ring handed the trainer beside positions the runner produced; a reader diffs rows.
         "samples_consumed_total": _samples_consumed_total(buffer),
         "positions_produced_total": getattr(rstats, "positions_generated", None),
-        # LAW-18 for `train.augment` (R266/R358(b)): the ring's per-element D6 draw bins and the
+        # `train.augment`'s in-run fire-rate: the ring's per-element D6 draw bins and the
         # empty-board skips since boot; `None` on a ring with no producer, never twelve zeros.
         "sym_draws": _sym_draws(buffer),
-        # The target-integrity counters plus the SEAM conjunct of the same class reach the ONE
-        # channel here, each as {total, delta, per_position} beside the `positions_delta`
-        # denominator. Nested so they travel together and cannot crosswire; built by the
-        # coordinator, which owns the previous boundary's readings.
+        # Target-integrity counters + the SEAM conjunct, each {total, delta, per_position} over
+        # `positions_delta`, nested so they cannot crosswire; built by the coordinator.
         "target_integrity": dict(target_integrity),
         # The playout-cap draw and the Gumbel round width, in the same {total, delta,
         # per_position} shape: a lever under test logs its own fire rate in-run.
@@ -308,12 +289,6 @@ def emit_iteration_complete_event(
     emit_via(sink, iteration_complete_event)
 
 
-# THE PRE-SPLIT WRAPPER IS DELETED. `emit_training_events` stood here, kept as a thin wrapper
-# only to satisfy one test's `inspect.signature` assertion — a signature pin on a shape
-# production does not produce, which kept a second entry to the event stream alive. The pin
-# moved to `emit_iteration_complete_event`, where `target_integrity` actually lives.
-
-
 
 HELDOUT_GAP_EVENT = "heldout_gap"
 
@@ -321,7 +296,7 @@ HELDOUT_GAP_EVENT = "heldout_gap"
 def heldout_gap_event(*, step: int, slice_: Any, heldout: dict[str, float],
                       train_policy: float | None, train_value: float | None, train_steps: int,
                       wall_ms: float) -> dict[str, Any]:
-    """R366(c)'s `heldout_gap` row: the frozen slice's forward-only losses, the mean train losses of the taken steps since the last read, and their gaps (`None` where no step fed the window)."""
+    """The `heldout_gap` row: the frozen slice's forward-only losses, the mean train losses of the taken steps since the last read, and their gaps (`None` where no step fed the window)."""
     gap_policy = None if train_policy is None else heldout["policy_loss"] - train_policy
     gap_value = None if train_value is None else heldout["value_loss"] - train_value
     return {

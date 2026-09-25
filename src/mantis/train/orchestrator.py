@@ -90,8 +90,7 @@ def build_resume_config_overrides(
             overrides[key] = val
     if owned_launch:
         overrides[RESUME_OWNED_LAUNCH_VALUES_KEY] = owned_launch
-    # No `torch_compile[_mode]` injection: a LEGACY key with no consumer poisoned the carried
-    # config, and write-time validation correctly rejected the first post-resume save.
+    # No `torch_compile[_mode]` injection: a key with no consumer fails write-time validation.
     # Scheduler-horizon gate: only --override-scheduler-horizon re-horizons the LR anneal.
     if override_scheduler_horizon:
         for horizon in ("total_steps", "scheduler_t_max"):
@@ -162,9 +161,8 @@ def init_trainer(
     trainer = Trainer(model, dict(config), arch=arch, checkpoint_dir=checkpoint_dir,
                       device=device, sink=sink)
 
-    # The fresh branch's anchor pin source: `verify_launch_anchor_pin` FAILS CLOSED when a pin is
-    # set and no `checkpoint_source` is readable, and the step-0 anchor IS the warm-start
-    # artifact. Reading the row through the same resolver is a second READ, not a second authority.
+    # The anchor pin source: `verify_launch_anchor_pin` FAILS CLOSED with a pin and no readable
+    # `checkpoint_source`, and the step-0 anchor IS the warm-start artifact (a second READ only).
     declared = resolve_bc_warm_start(cfg)
     trainer.checkpoint_source = None if declared is None else declared.checkpoint
     return trainer

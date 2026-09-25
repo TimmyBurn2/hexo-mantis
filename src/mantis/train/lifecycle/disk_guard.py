@@ -49,9 +49,8 @@ class DiskGuard:
         self._sink = sink
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
-        # A FACT this guard produced, not a config proxy. Written only in `check_once` and read
-        # by the composition root after `stop()` joined that thread, so no cross-thread write to
-        # the run's stop state exists here; the two counters below follow the same rule.
+        # A FACT this guard produced: written only in `check_once`, read after `stop()` joined
+        # that thread, so no cross-thread write exists; the two counters follow the same rule.
         self._critical_fired = False
         self._errors_total = 0
         self._checks_total = 0

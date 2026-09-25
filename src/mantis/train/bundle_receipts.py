@@ -1,4 +1,4 @@
-"""Which resume bundles the mirror has receipted (R349(b)); under `train` because the
+"""Which resume bundles the mirror has receipted; under `train` because the
 coordinator publishes the reading and cannot import diagnostics without a package cycle."""
 from __future__ import annotations
 

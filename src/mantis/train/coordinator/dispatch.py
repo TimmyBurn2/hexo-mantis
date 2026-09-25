@@ -1,6 +1,5 @@
-# Exceeds the 300-line soft cap (R8): the declared route, the graph arm's batch build and its
-# dump-on-fire are ONE unit — the collate contract failure and the dump that records it must sit
-# beside the build that raised it.
+# Exceeds the 300-line soft cap (R8): the route, the graph batch build and its dump-on-fire are
+# ONE unit — a collate failure's dump must sit beside the build that raised it.
 """The DECLARED training-step dispatcher: a replay buffer to ONE gradient update.
 
 Dispatch is keyed on the RESOLVED `EncodingSpec.representation` — the operator's declaration,
@@ -171,16 +170,13 @@ def _build_graph_parts(
         graph_policy_row_weights,
     )
 
-    # ONE read of each member, into a local. Not a style choice: `train.microbatch_caps` has
-    # exactly one authority and the reader census is frozen at two reads here, so a second read
-    # anywhere — including a convenience re-read for the event payload — is a census failure, and
-    # the census's own planted break (a THIRD read) is what proves that check still reds.
+    # ONE read of each member, into a local: the `train.microbatch_caps` reader census is frozen
+    # at these two reads, so any further read (even for the event payload) is a census failure.
     caps = caps_provider()
     max_edges = caps.max_edges
     max_nodes = caps.max_nodes
-    # The rebuild's width, DERIVED from the run's own keys: the cores the self-play workers and the
-    # inference-server thread are not already holding. `sample_ring` is 1 386 ms of a 2 769 ms step
-    # and 88 % of that is a serial loop over independent items.
+    # Width DERIVED from the run's keys: the cores self-play and the server thread do not hold;
+    # `sample_ring` measured ~half of a step, mostly a serial loop over independent items.
     wire, targets = sampler(batch_size, augment=augment, recent_frac=recency_weight,
                             n_threads=sample_threads_provider())
     payload = graph_wire_from_rust(wire)
@@ -188,13 +184,12 @@ def _build_graph_parts(
                              max_edges, max_nodes)
     device = trainer.device
     n_graphs = int(payload.n_graphs)
-    # ONE evaluation of the weight rule, over the WHOLE batch, so the per-part numerator and the
-    # whole-step denominator below cannot be computed from two different vectors. `hp` is the
-    # trainer's own resolved hyper-parameters and nothing here supplies a fallback.
+    # ONE evaluation over the WHOLE batch, so the per-part numerator and the whole-step
+    # denominator cannot come from two different vectors; no fallback is supplied here.
     policy_row_weight = graph_policy_row_weights(
         np.asarray(targets.is_full_search), float(fast_policy_weight_provider())
     )
-    # R350(e): an alpha = 1.0 row leaves the policy loss here, BEFORE the denominator reads
+    # An alpha = 1.0 row leaves the policy loss here, BEFORE the denominator reads
     # this vector, so it is out of the numerator and the mean alike; the count rides the step event.
     policy_row_weight, alpha_full_excluded = exclude_alpha_full_rows(
         policy_row_weight, np.asarray(targets.tail_mass, dtype=np.float32)
@@ -204,10 +199,8 @@ def _build_graph_parts(
         def _materialise():
             sub = slice_graph_wire(payload, g0, g1)
             tsl = slice_targets(targets, payload.legal_offsets, g0, g1)
-            # Parameterization = the production collate call, at trainer cadence:
-            # semantic="full" on EVERY batch and on every PART, so each micro-batch passes the
-            # full structural and semantic contract on its own rather than inheriting the whole
-            # batch's verdict.
+            # semantic="full" on EVERY part, so each micro-batch passes the full contract on its
+            # own rather than inheriting the whole batch's verdict.
             try:
                 batch = collate_graph_batch(
                     sub,
@@ -248,9 +241,8 @@ def _build_graph_parts(
 
         return _materialise
 
-    # The denominators are the WHOLE step's, computed ONCE from the FULL target arrays, so every
-    # micro-batch divides by the quantity the un-split batch would have divided by and the parts
-    # sum to the un-split loss exactly. They are NOT `1/M` and NOT `B_m/B`.
+    # The WHOLE step's denominators, computed ONCE, so the micro-batch parts sum to the un-split
+    # loss exactly — NOT `1/M` and NOT `B_m/B`.
     policy_denominator, value_denominator = graph_loss_denominators(
         policy_row_weight, np.asarray(targets.value_valid), n_graphs)
     return {

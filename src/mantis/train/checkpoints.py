@@ -99,7 +99,7 @@ class Checkpoint:
     optimizer_state: dict | None = None
     scaler_state: dict | None = None
     scheduler_state: dict | None = None
-    #: The EMA shadow (R366(b), CARD-SERVER-OWNED-COPY): the DEPLOY weights when EMA is on, `None`
+    #: The EMA shadow (CARD-SERVER-OWNED-COPY): the DEPLOY weights when EMA is on, `None`
     #: on a run with EMA off or a stamp written before the shadow rode the envelope.
     ema_state: dict[str, torch.Tensor] | None = None
 
@@ -454,7 +454,7 @@ def save_checkpoint(
 ) -> Path:
     """Write an envelope-v2 checkpoint `{run_id}_{step:08d}_{sha8}.ckpt`: schema-validates
     `config`, stamps metadata ONCE, content-hashes and persist-fatally writes. A weights save
-    carries model_state + metadata only; `ema_state` rides either kind when EMA is on (R366(b))."""
+    carries model_state + metadata only; `ema_state` rides either kind when EMA is on."""
     base_model = getattr(model, "_orig_mod", model)
     model_state = base_model.state_dict()
     if kind == "full":
@@ -636,9 +636,8 @@ def load_checkpoint(
     )
 
 
-#: Dotted paths the schema RETIRED after runs stamped them — the one `extra_forbidden` a stamp can
-#: carry (a stamp is written from a validated config): `search` was split by R351(c); the sealbot
-#: rung's rows and the WR-trajectory family were deleted by R362(c) (run7/run8 stamps carry them).
+#: Dotted paths the schema RETIRED after runs stamped them: the one `extra_forbidden` a stamp can
+#: carry, since a stamp is written from a validated config.
 RETIRED_STAMP_PATHS: frozenset[str] = frozenset({
     "search",
     "eval.ladder", "eval.sealbot_model_sims", "eval.rung_concurrency",
@@ -728,9 +727,8 @@ def load_legacy_weights(
             f"the artifact's stamp resolves to {kind!r}; a legacy artifact's arch is its stamp's, "
             "and a config that says otherwise describes a different artifact."
         )
-    # A stamp carrying the WHOLE dataclass is rehydrated verbatim. Load-bearing for the ANCHOR,
-    # whose embedded config is empty: `select_arch` would there yield the field DEFAULTS, so an
-    # anchor from a run with non-default widths would rebuild at the wrong shape.
+    # Rehydrated verbatim: an ANCHOR's embedded config is empty, so `select_arch` would yield the
+    # field defaults and rebuild a non-default-width anchor at the wrong shape.
     stamped_arch = meta.get("arch")
     if isinstance(stamped_arch, Mapping) and _ARCH_KIND_KEY in stamped_arch:
         arch = _arch_from_dict(stamped_arch)
@@ -917,9 +915,8 @@ def strip_and_restamp(
             "disk_guard": {"interval_sec": 60.0, "warn_gb": 10.0, "fail_gb": 5.0},
         },
     }
-    # `ARCH_SCOPED_KEYS` is the ONE authority on which blocks belong to which representation, so
-    # RENAMING one breaks loudly at the `_SYNTH_ARCH_SCOPED` lookup rather than silently writing
-    # a config the schema then refuses.
+    # `ARCH_SCOPED_KEYS` is the ONE authority, so a renamed key breaks loudly at the
+    # `_SYNTH_ARCH_SCOPED` lookup rather than writing a config the schema refuses.
     for key in ARCH_SCOPED_KEYS:
         if new_spec.representation == key.arch:
             synth_config[key.section][key.field] = _SYNTH_ARCH_SCOPED[(key.section, key.field)](arch)
@@ -1053,7 +1050,7 @@ _IDENTITY_LEAVES = ("encoding", "representation", "arch_kind")
 
 #: The dotted paths that decide what a STORED replay row MEANS (not identity keys: no net moves,
 #: no stamp to fall back on). `selfplay.search.kind` decides the other; the DEPLOY kind is not
-#: here — it plays games nobody trains on, and a resume may re-take it (R351(c)).
+#: here — it plays games nobody trains on, and a resume may re-take it.
 _TARGET_SEMANTICS_LEAVES: tuple[tuple[str, ...], ...] = (
     ("train", "policy_target"),
     ("selfplay", "search", "kind"),
@@ -1179,10 +1176,8 @@ def resume_trainer(
     if arch is None:
         raise CheckpointStampError(f"{path.name}: no arch on the loaded metadata — cannot rebuild the net.")
     model = build_net(arch)
-    # STRICTNESS IS KEYED ON THE KIND. A bare ANCHOR is a genuine SUBSET of the `build_net` key
-    # set, so `strict=True` would reject a healthy one; on a FULL checkpoint a missing key means
-    # the stamped arch and the rebuilt net disagree, and a blanket `strict=False` then trained a
-    # partly random model while optimizer, scheduler and step all reported a continuation.
+    # Strict on the kind: a bare ANCHOR is a genuine SUBSET of the `build_net` keys, while on a
+    # FULL checkpoint a missing key means the stamped arch and the rebuilt net disagree.
     strict = ck.kind == "full"
     incompatible = model.load_state_dict(ck.model_state, strict=strict)
     if not strict and (incompatible.missing_keys or incompatible.unexpected_keys):

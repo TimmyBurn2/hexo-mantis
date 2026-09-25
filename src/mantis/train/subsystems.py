@@ -89,9 +89,8 @@ def build_run_safety(
             saver(str(snapshot_target))
 
     def _persist_errors_total() -> int:
-        # LIVE module-attribute read, re-read on EVERY poll: a `from … import` here would bind
-        # a frozen 0 and silently exempt checkpoint persist failures. The ignore is for the
-        # type checker only, never a licence to bind the value.
+        # LIVE module-attribute read on EVERY poll: a `from … import` would bind a frozen 0 and
+        # silently exempt checkpoint persist failures.
         checkpoint_errors = int(
             _checkpoints.persist_errors_total  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
         )

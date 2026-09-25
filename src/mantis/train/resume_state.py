@@ -212,7 +212,7 @@ class ResumeState:
                 checkpoint_filename=payload["checkpoint_filename"],
                 ring=ring,
                 round_counter=int(payload["round_counter"]),
-                # A pre-R362 sidecar also carries `last_p_hat` (the ladder's BT reading); with
+                # An older sidecar also carries `last_p_hat` (the ladder's BT reading); with
                 # no ladder it is read by nothing and tolerated here as provenance.
                 anchor_sha256=payload["anchor_sha256"],
                 rng={str(k): v for k, v in payload["rng"].items()},

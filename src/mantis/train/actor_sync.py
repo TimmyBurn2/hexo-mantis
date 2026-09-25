@@ -1,4 +1,4 @@
-"""ActorSync — continuous, unconditional actor weight sync (WP-UNFREEZE, R49).
+"""ActorSync — continuous, unconditional actor weight sync.
 
 Pushes the learner's current inference weights into the injected sync target on a
 step-modulo cadence, unconditionally: nothing else participates in the decision to
@@ -6,7 +6,7 @@ sync. Owns THE ONE readable ``actor_ckpt_step`` field — ``maybe_sync``'s succe
 is its single producer. Holds no reference to any other subsystem; the no-cross-read
 law is enforced structurally by tests/train/test_actor_sync_isolation.py.
 
-Write discipline (producer honesty, R4/LAW-14): ``_actor_step`` advances ONLY after
+Write discipline (producer honesty): ``_actor_step`` advances ONLY after
 both target calls return. A raising target leaves the recorded step untouched — the
 lag invariant then reports the truth (the actor did not get the weights) — and the
 exception travels straight up to the coordinator step (fail loud, no swallow).
@@ -15,7 +15,7 @@ Thread-safety: ``_actor_step`` is a plain int written by the coordinator thread 
 read by the watchdog thread; each write is a single reference assignment under the
 GIL, so no lock is needed.
 
-LAW-18: the cadence is a lever under test — every sync emits an ``actor_sync`` event
+The cadence is a lever under test, so every sync emits an ``actor_sync`` event
 carrying the lever's own fire-rate fields through the injected sink.
 """
 from __future__ import annotations
@@ -65,9 +65,8 @@ class ActorSync:
             return False
         started = time.monotonic()
         lag_pre = int(self._step_fn()) - self._actor_step
-        # One sync = weights, then step, then record — in that order. The target's
-        # weight swap is synchronous, so post-call the actor IS running these weights
-        # and the recorded step is honest by construction.
+        # Weights, then step, then record: the swap is synchronous, so post-call the actor
+        # IS running these weights and the recorded step is honest by construction.
         self._target.sync_inference_weights(self._state_dict_fn())
         self._target.update_checkpoint_step(step)
         self._actor_step = step

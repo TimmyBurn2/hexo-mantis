@@ -109,8 +109,7 @@ class StallWatchdog:
             stalled_for,
             self._timeout,
         )
-        # MODEL FIRST, then buffer: the weights are the expensive half to regenerate, so they
-        # are written before the buffer can consume the remaining time or disk. Both are
+        # MODEL FIRST, then buffer: the weights are the expensive half to regenerate. Both are
         # best-effort but COUNTED, never swallowed.
         if self._save_model is not None:
             best_effort("watchdog_model_save", self._save_model, counters=self._counters)

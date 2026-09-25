@@ -66,7 +66,7 @@ class EmaModel:
         return dict(self._shadow)
 
     def load_state_dict(self, state: Mapping[str, torch.Tensor]) -> None:
-        """Overwrite the shadow IN PLACE from a stamped `ema_state` (a resume, R366(b)); Raises: KeyError — the key sets differ (another net's shadow)."""
+        """Overwrite the shadow IN PLACE from a stamped `ema_state` (a resume); Raises: KeyError — the key sets differ (another net's shadow)."""
         if set(state) != set(self._shadow):
             raise KeyError(f"ema_state key set differs from the shadow's: missing={sorted(set(self._shadow) - set(state))} unexpected={sorted(set(state) - set(self._shadow))}")
         with torch.no_grad():

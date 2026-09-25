@@ -38,7 +38,7 @@ CANONICAL_ANCHOR_FILENAME = "best_model.pt"
 
 
 def canonical_anchor_path(checkpoint_dir: str | Path) -> Path:
-    """The run's anchor path, derived from ITS checkpoint directory (R98)."""
+    """The run's anchor path, derived from ITS checkpoint directory."""
     return Path(checkpoint_dir) / CANONICAL_ANCHOR_FILENAME
 
 
@@ -131,10 +131,8 @@ def _write_provenance_sidecar(
     atomic_write(path.with_name(path.name + ".provenance.json"), lambda handle: handle.write(payload))
 
 
-# `state_dict_sha256` USED TO LIVE HERE — canonicalised keys plus raw bytes, no shape and no
-# dtype — a SECOND parameter identity beside `mantis.model.identity.net_param_hash`. The two
-# disagreed BY CONSTRUCTION, so a run's `expected_anchor_sha256` was never comparable with any
-# recorded `net_param_hash`. `state_dict_param_hash` is now the one denomination.
+# `state_dict_param_hash` is the ONE parameter identity: a second hash here would never
+# compare equal to a recorded `net_param_hash`.
 def _extract_stored_state(raw: Any) -> dict[str, Any]:
     """The MODEL weights stored in a loaded anchor payload — a bare `state_dict` or a
     `{model_state: …}` provenance wrapper."""
@@ -153,10 +151,8 @@ def checkpoint_state_sha256(path: Path) -> str:
     return state_dict_param_hash(_extract_stored_state(raw))
 
 
-#: THE ARMING HALF IS BANKED, on the record. The hash duplication is repaired, so this pin and
-#: every reported `net_param_hash` are the same currency — but nothing ever passes a value:
-#: there is no schema key and no CLI flag, so `verify_launch_anchor_pin` is a refusal nobody
-#: can reach.
+#: Unarmed: no schema key or CLI flag passes `expected_anchor_sha256`, so no caller reaches
+#: this refusal; its pin and `net_param_hash` share one currency.
 def verify_launch_anchor_pin(
     *,
     expected_anchor_sha256: str | None,
@@ -189,11 +185,8 @@ def verify_launch_anchor_pin(
         )
 
 
-#: The corrupt-or-unreadable-ARTIFACT family, and nothing wider: `torch.load` raises these on a
-#: truncated zip, a non-archive file or an unpicklable payload, and quarantining is only ever
-#: right for a file that is actually broken. `RuntimeError` is deliberately NOT here —
-#: `load_state_dict` raises it for a SHAPE MISMATCH, where the artifact is fine and the arch is
-#: wrong.
+#: The corrupt-ARTIFACT family only, since quarantine is right only for a broken file.
+#: `RuntimeError` is excluded: `load_state_dict` raises it for a shape mismatch on a good file.
 _CORRUPT_ARTIFACT_ERRORS: tuple[type[BaseException], ...] = (
     OSError, EOFError, zipfile.BadZipFile, pickle.UnpicklingError, ValueError, KeyError,
 )
@@ -278,9 +271,8 @@ def _try_load_anchor(
 
     try:
         model, ck = _build_anchor_model(candidate, declared_encoding=declared_encoding, device=device)
-        # Attribute access, no default: `_build_anchor_model` RAISES when the stamp resolves no
-        # arch, and a `"grid"` default would make an unresolvable legacy artifact read as grid
-        # at the one site that decides the anchor's lineage.
+        # No default: `_build_anchor_model` raises on an unresolvable arch, and a default here
+        # would mislabel the anchor's lineage.
         representation = ck.metadata.arch.representation
         step = ck.metadata.step if ck.metadata.step else None
         return (model, candidate, step, representation)
@@ -302,9 +294,8 @@ def _try_load_anchor(
         # recoverable corruption — never silently quarantine a valid anchor.
         raise
     except _CORRUPT_ARTIFACT_ERRORS as exc:
-        # This was a bare `except Exception`, which made the defect silent: a `RuntimeError`
-        # from `load_state_dict` — a shape mismatch — landed here beside genuine disk corruption
-        # and the caller QUARANTINED a good file. Anything outside the named family propagates.
+        # Only the named corruption family: a shape-mismatch `RuntimeError` must propagate,
+        # never quarantine a good file.
         _LOG.warning(
             "anchor_load_failed path=%s error=%s error_type=%s",
             str(candidate), exc, type(exc).__name__,
@@ -400,10 +391,8 @@ def resolve_anchor(
     )
     if declared_encoding is None:
         declared_encoding = _resolve_declared_encoding(config)
-    # NO CWD FALLBACK. This used to default to a CWD-relative path while the promotion WRITE
-    # side got the run's real out-dir, so read and write named DIFFERENT FILES for any run not
-    # launched from the repo root — every round scored against a stale incumbent and promotions
-    # landed where the next round would not look, all of it silently.
+    # No CWD fallback: read and write must name the same file as the promotion write side,
+    # whatever directory the run was launched from.
     if best_model_path is None:
         raise ValueError(
             "resolve_anchor requires an explicit best_model_path. There is no default: the "
@@ -412,9 +401,8 @@ def resolve_anchor(
             "`mantis.train.anchor.canonical_anchor_path(checkpoint_dir)`."
         )
     bmp = Path(best_model_path)
-    # The trainer's DECLARED arch, not a defaulted read: a `getattr(..., "grid")` made the
-    # cross-representation check below quietly compare grid to grid. Read here rather than at
-    # the top so the missing-path refusal stays the first thing a caller sees.
+    # The trainer's DECLARED arch, never defaulted; read after the missing-path refusal so
+    # that refusal stays the first thing a caller sees.
     inf_representation = trainer.arch.representation
 
     if eval_pipeline is None:

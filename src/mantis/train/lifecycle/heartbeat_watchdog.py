@@ -1,8 +1,7 @@
-"""The INDEPENDENT heartbeat watchdog thread — L-B (repo_design §11 amendment; WP13-A §c.4).
+"""The INDEPENDENT heartbeat watchdog thread — L-B (repo_design §11 amendment).
 
-The run3 lesson: the WP10 `StallWatchdog` is `tick()`-driven from the MAIN loop, so a
-thread wedged INSIDE an eval call can never fire it — a 45 h livelock looked exactly like
-a busy run. This watchdog owns its OWN daemon thread and reads heartbeat STALENESS, so a
+The `StallWatchdog` is `tick()`-driven from the MAIN loop, so a thread wedged INSIDE an
+eval call can never fire it and a livelock looks exactly like a busy run. This watchdog owns its OWN daemon thread and reads heartbeat STALENESS, so a
 wedge anywhere in the pipeline trips it with ZERO main-thread cooperation.
 
 Three fire classes, two exit codes (the supervisor's restart key):
@@ -149,9 +148,8 @@ class HeartbeatWatchdog:
         self._exit_fn = exit_fn
         self._close_out_deadline = float(close_out_deadline_sec)
         self._snapshot_timeout = float(snapshot_timeout_sec)
-        # The default is `()` and not the required-with-no-default posture `wired_sources` takes:
-        # an undeclared heartbeat source makes a HEALTHY run fire 42, while an undeclared monitor
-        # only costs an observable — and the empty tuple still emits `monitor_liveness_unwired`.
+        # Default `()`, unlike `wired_sources`: an undeclared monitor only costs an observable, and
+        # the empty tuple still emits `monitor_liveness_unwired`.
         self._monitor_liveness = tuple(monitor_liveness)
         #: name -> (clock at the last OBSERVED advance, checks_total at that advance).
         self._monitor_seen: dict[str, tuple[float, int]] = {}
@@ -169,10 +167,8 @@ class HeartbeatWatchdog:
                 f"every registry source needs an explicit deadline "
                 f"(use <= 0 to disable that source's staleness fire)"
             )
-        # The composition root DECLARES which sources it handed `registry.beat` to. A declared
-        # source is staleness-eligible from arm time, so a stage that dies before its FIRST beat is
-        # caught; an UNDECLARED source that never beat is a wiring gap and gets a loud
-        # `heartbeat_source_unwired` instead of a 42. Default None = "every source is wired".
+        # DECLARED sources are staleness-eligible from arm time (a death before the FIRST beat is
+        # caught); an undeclared silent one is `heartbeat_source_unwired`, not a 42. None = all.
         self._wired: frozenset[str] = (
             frozenset(self._sources) if wired_sources is None else frozenset(wired_sources)
         )
@@ -193,7 +189,7 @@ class HeartbeatWatchdog:
         self._fired = False
         self._seq = 0
         self._last_file_write: float | None = None
-        # LAW-18: the lag SAMPLE's own gate, derived from `_file_interval` so one config fact never
+        # The lag SAMPLE's own gate, derived from `_file_interval` so one config fact never
         # enters this constructor twice under two names and no construction site changes.
         self._last_lag_sample: float | None = None
         self._stop = threading.Event()
@@ -295,10 +291,8 @@ class HeartbeatWatchdog:
                        detail={"persist_errors_total": count})
             return
         if self._staleness_armed:
-            # Gated on `_staleness_armed`, INSIDE the armed branch: a run tearing down closes its
-            # sink, `JsonlEventSink` COUNTS a failed write rather than raising, and that counter is
-            # `counters_fn` — the first thing `poll_once` reads and answers with `os._exit(43)`. A
-            # periodic diagnostic emitted from this thread after close-out is self-fatal, measured.
+            # INSIDE the armed branch: after close-out a failed sink write is COUNTED into
+            # `counters_fn`, which `poll_once` answers with `os._exit(43)` — self-fatal.
             self._check_monitor_liveness()
             if self._check_actor_lag():
                 return
@@ -314,7 +308,7 @@ class HeartbeatWatchdog:
         Making the disk guard a fifth `HEARTBEAT_SOURCES` member would put a monitor thread on an
         instrument whose stall code is 42, the TRANSIENT class the supervisor RELAUNCHES on — a
         crash loop into a filling volume. This reads the counters the guard already publishes.
-        The reading is emitted on a healthy run too (LAW-18) and the stall event is LATCHED per
+        The reading is emitted on a healthy run too and the stall event is LATCHED per
         monitor, so a long outage is one event and a recovery is visible.
         """
         if not self._monitor_liveness:
@@ -382,10 +376,8 @@ class HeartbeatWatchdog:
         lag = learner_step - actor_step
         detail = {"learner_step": learner_step, "actor_ckpt_step": actor_step,
                   "lag_steps": lag, "threshold_steps": int(spec.threshold_steps)}
-        # LAW-18: the lever logs its own reading in-run, not only when it fires, using the SAME
-        # `detail` dict the fire path uses so a sample cannot disagree with the reading that fires.
-        # Emitted BEFORE the `lag < 0` arm on purpose, or it is silenced on exactly the wiring
-        # defect it exists to expose, and bounded by the interval already in this object.
+        # Sampled in-run from the SAME `detail` the fire path uses, and BEFORE the `lag < 0` arm,
+        # or it is silenced on exactly the wiring defect it exists to expose.
         now = float(self._clock())
         if (self._last_lag_sample is None
                 or (now - self._last_lag_sample) >= self._file_interval):
@@ -577,7 +569,7 @@ class HeartbeatWatchdog:
     @property
     def counters(self) -> BestEffortCounters:
         """The fire path's best-effort counter registry (published in
-        `heartbeat_watchdog_fire_complete`, readable by a LAW-18 summary)."""
+        `heartbeat_watchdog_fire_complete`, readable by an in-run summary)."""
         return self._counters
 
     def _safe_ages(self) -> dict[str, float]:

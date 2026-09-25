@@ -51,7 +51,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 
 
 def _resolve_encoding_name(args: argparse.Namespace) -> str:
-    """Resolve the encoding from `--encoding`; there is no second branch and no default (LAW-11).
+    """Resolve the encoding from `--encoding`; there is no second branch and no default.
 
     Raises:
         MissingEncodingError: `--encoding` was not given, raised as the class error rather than

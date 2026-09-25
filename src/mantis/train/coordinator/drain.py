@@ -17,7 +17,7 @@ _LOG = logging.getLogger(__name__)
 
 def _route_eval_result(coord: Any, result: Any) -> Any:
     """Route completed eval-round result(s) to their promotion decision — the ONE consumer a
-    routed round has since R362(c) retired the sealbot-WR gate.
+    routed round has.
 
     A `Mapping` is ONE round, a list/tuple a BATCH, and any other shape is recorded loud rather
     than raised: a raise here escapes into `close_out` and skips `on_drained` (`pool.stop`) and
@@ -96,9 +96,8 @@ def run_terminal_eval(coord: Any, *, resumable_stop: bool = False) -> Any:
     # second default authority beside the schema field, and an absent key must raise.
     if pipeline is None or not cfg.terminal_eval_enabled:
         return None
-    # A resumable stop is PASSED IN, never re-derived here: the disk guard stops a run by
-    # SIGTERMing its own process and its abort rule is recorded after `close_out`, so no state
-    # visible here separates an operator stop from an abort. The default is False.
+    # PASSED IN, never re-derived: the disk guard SIGTERMs its own process and records its rule
+    # after `close_out`, so nothing visible here separates an operator stop from an abort.
     if resumable_stop:
         _LOG.info(
             "terminal_eval_skipped_on_signal_stop step=%s — this stop is an interruption, not "

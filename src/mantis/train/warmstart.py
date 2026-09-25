@@ -1,6 +1,6 @@
 """Launch-time BC warm start: the `identity.warm_start` row, its one reader, and the seam that
 copies EVERY tensor of the declared checkpoint onto a fresh net, re-initialises only the heads
-`reinit` names, and refuses a live step-0 net whose hash is not the source's (R350(b)(i))."""
+`reinit` names, and refuses a live step-0 net whose hash is not the source's."""
 from __future__ import annotations
 
 import logging

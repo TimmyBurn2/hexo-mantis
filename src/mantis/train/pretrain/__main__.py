@@ -1,4 +1,4 @@
-"""`python -m mantis.train.pretrain` entry point (WP10 §a.7)."""
+"""`python -m mantis.train.pretrain` entry point."""
 from __future__ import annotations
 
 from mantis.train.pretrain.cli import pretrain

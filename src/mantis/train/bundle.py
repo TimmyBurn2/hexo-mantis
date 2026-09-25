@@ -1,6 +1,5 @@
-# >300 justify (R8): one subject — what makes a set of files a resume point — whose parts are
-# inseparable. Splitting them would put the hash that is written in one file and the hash that is
-# checked in another, the shape LAW-07 calls a phantom gate.
+# >300 justify (R8): one subject — what makes a set of files a resume point; splitting it would
+# write a hash in one file and check it in another, a phantom gate.
 """The resume BUNDLE — checkpoint + ring + sidecar, published by a manifest last.
 
 The manifest is written LAST, so a bundle either has one, with all members present and hashing as

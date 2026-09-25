@@ -34,9 +34,8 @@ from mantis.util.hashing import sha256_file
 
 _LOG = logging.getLogger(__name__)
 
-#: The BC ring carries no time ordering, so it has no "recent window" for the engine's
-#: `recent_frac` to mean anything over. Structural, and NOT `train.recency_weight`, which is
-#: the self-play loop's knob over a loop-written ring.
+#: Structural, NOT `train.recency_weight`: the BC ring has no time ordering, so `recent_frac`
+#: has no recent window to mean anything over.
 BC_RECENCY_WEIGHT = 0.0
 
 
@@ -195,9 +194,8 @@ def run_graph_pretrain(
         int(prov["plies"]), batch_size=knobs.batch_size, steps=steps, epochs=epochs
     )
 
-    # The NESTED dump, which is what `Trainer._derive_arch` and `train.orchestrator` pass; the
-    # CLI's flat term dict is the DENSE arm's shape and would resolve a different arch the day
-    # a `gnn_*` width key is minted.
+    # The NESTED dump `Trainer._derive_arch` and `train.orchestrator` pass; a flat term dict
+    # would resolve a different arch once a `gnn_*` width key is minted.
     arch = arch_from_spec_and_config(spec, full_config)
     model = build_net(arch)
     trainer = Trainer(
@@ -219,10 +217,8 @@ def run_graph_pretrain(
         total_steps, knobs.batch_size, knobs.augment, prov["plies"],
     )
     if monitor is not None:
-        # THE ESTIMATOR'S OWN NOISE, MEASURED BEFORE THE FIRST OPTIMIZER STEP: any difference
-        # between two readings is the sampler's, because nothing moved in between. A patience
-        # rule whose `min_delta` sits inside that spread cannot distinguish progress from
-        # resampling.
+        # The estimator's own noise, BEFORE the first optimizer step (nothing moved in between):
+        # a `min_delta` inside that spread cannot tell progress from resampling.
         noise = monitor.measure_noise(trainer)
         if monitor.stop.min_delta < noise:
             raise GraphPretrainError(
@@ -249,7 +245,7 @@ def run_graph_pretrain(
                 stopped_early = True
                 break
     if monitor is not None:
-        # LAW-18: the lever under test reports its own state in-run, so a run that hit its
+        # The lever under test reports its own state in-run, so a run that hit its
         # ceiling and one that stopped early are not distinguishable only by arithmetic.
         _LOG.info("bc_graph_pretrain_stop steps_run=%d budget=%d stopped_early=%s %s",
                   steps_run, total_steps, stopped_early, monitor.stop.counters())

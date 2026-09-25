@@ -45,8 +45,7 @@ class ReplayBufferLike(Protocol):
     #: The last sampled batch's rows-per-game and age quantiles, on the SHARED protocol because
     #: it is a fact about a ring, not about which sampler it carries.
     def last_batch_composition(self) -> dict[str, int]: ...
-    #: R358(b)/(c): the D6 draw bins + empty-board skips and the rows handed out, since boot; the
-    #: graph ring's own counters (the dense arm's `symmetry_draws` left with it at R346(f)).
+    #: The graph ring's D6 draw bins + empty-board skips and the rows handed out, since boot.
     def sym_draw_counts(self) -> tuple[list[int], int]: ...
     def samples_consumed_total(self) -> int: ...
 
@@ -76,7 +75,7 @@ class DrawRateAbortLike(Protocol):
 
 
 class PolicyLossTroughAbortLike(Protocol):
-    """The RESOLVED trough halt's terms (R350(b)(iv)); `None` is the EXPLICIT disarmed posture."""
+    """The RESOLVED trough halt's terms; `None` is the EXPLICIT disarmed posture."""
 
     @property
     def delta_nats(self) -> float: ...
@@ -87,7 +86,7 @@ class PolicyLossTroughAbortLike(Protocol):
 
 
 class PlyCapAbortLike(Protocol):
-    """The RESOLVED ply-cap halt's terms (R352(c)); `None` is the EXPLICIT disarmed posture."""
+    """The RESOLVED ply-cap halt's terms; `None` is the EXPLICIT disarmed posture."""
 
     @property
     def rate(self) -> float: ...
@@ -110,9 +109,8 @@ class WorkerPoolLike(Protocol):
     def current_stride5_p90(self) -> int: ...
     def check_producer_health(self) -> None: ...
     def update_checkpoint_step(self, step: int) -> None: ...
-    # The coordinator READS the runner snapshot itself to build the target-integrity block. It is
-    # the one member shared with `PoolTelemetryLike`, declared here because the conformance gate
-    # measures `step.py`'s pool accesses against THIS protocol. `Any` keeps the DAG one-way.
+    # Shared with `PoolTelemetryLike`; declared here because the conformance gate measures
+    # `step.py`'s pool accesses against THIS protocol. `Any` keeps the DAG one-way.
     def runner_stats(self) -> Any: ...
 
 
@@ -153,11 +151,6 @@ class RealClock:
         time.sleep(seconds)
 
 
-# The four drain/terminal-eval cap constants that stood here are GONE: `monitor.drain.*` is the
-# authority, and one of the four had already rotted into a dead twin of a bare literal with no
-# reader at all.
-
-
 def pooled_draw_rate(counts: tuple[int, int], *, N_pool_min: int) -> float | None:
     """Return the draw-rate abort's gated statistic: the POOLED COUNT-WEIGHTED rate
     `draws / completed` over the UNION of the pool's per-worker windows.
@@ -194,10 +187,8 @@ class StepCoordinatorConfig:
     #: The NARRATION cadence: the `training_step` payload, the four WARN rules and the axis
     #: distribution. It decides nothing about arming — see `gate_interval` below.
     log_interval: int
-    #: The ARMING cadence: the stride at which the LIVE hard-abort gates run and the
-    #: `monitor_gates` summary is published. A separate field and not a reuse of `log_interval`
-    #: because the defect is precisely that the two were one knob: at a minted `log_interval:
-    #: 1000` no draw-rate abort could fire before training step 1000.
+    #: The ARMING cadence of the live hard-abort gates and the `monitor_gates` summary; separate
+    #: from `log_interval` so a large log stride cannot delay a gate's first observation.
     gate_interval: int
     min_buf_size: int
     capacity: int
@@ -210,24 +201,19 @@ class StepCoordinatorConfig:
     hard_gn_threshold: float
     hard_gn_min_steps: int
     stop_step: int | None
-    # NO default, and it sits beside `stop_step` because these are the two facts the CONFIG
-    # authors on this dataclass. `None` is EXPLICITLY OFF, never an inherited posture: a literal
-    # the caller always replaces is still a second default authority.
+    # CONFIG-authored like `stop_step`, NO default: `None` is EXPLICITLY OFF, never inherited,
+    # since a literal the caller always replaces is still a second default authority.
     draw_rate_abort: DrawRateAbortLike | None
     # The policy-loss trough halt, the same idiom: `None` is EXPLICITLY OFF, never inherited.
     policy_loss_trough_abort: PolicyLossTroughAbortLike | None
-    # The ply-cap attractor halt (R352(c)), the same idiom.
+    # The ply-cap attractor halt, the same idiom.
     ply_cap_abort: PlyCapAbortLike | None
-    # The four drain/terminal-eval caps are CONFIG-AUTHORED and lose their code-side defaults for
-    # `stop_step`'s reason: `monitor.drain.*` had been minted and validated while the resolver
-    # popped the block and threw it away, so the defaults were what the run actually used.
+    # The drain/terminal-eval caps are CONFIG-authored (`monitor.drain.*`), no code-side default.
     final_eval_drain_timeout_sec: float
     eval_final_drain_safety_factor: float
     eval_final_drain_hard_cap_sec: float
     terminal_eval_hard_cap_sec: float
-    # The last three terminal defaults are GONE; each was a second authority that would have
-    # survived the schema key beside it, and `selfplay_stall_timeout_sec` sat beside a watchdog
-    # whose own contract lets `<= 0` disable the fire while still emitting the arm-log.
+    # No defaults: each would be a second authority beside its schema key.
     terminal_eval_enabled: bool
     # Self-play stall watchdog (2026-07-11 run2 eval-boundary wedge).
     selfplay_stall_timeout_sec: float

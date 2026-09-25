@@ -1,5 +1,5 @@
-"""Held-out policy-loss monitoring and the patience stop for BC pretrain (R328(d)), with the
-held-out VALUE loss read on the same pass (BC-3, R350(b)(ii)) — reported, never a stop term.
+"""Held-out policy-loss monitoring and the patience stop for BC pretrain, with the
+held-out VALUE loss read on the same pass (BC-3) — reported, never a stop term.
 A module of its own because the stop is the one stated over-fit bound on bootstrap posture (A)
 and must be provable with planted breaks before a pretrain consumes it. The estimator is
 `ceil(plies / batch_size)` SAMPLED batches (no seed on `sample_graph_batch`), so its own noise
@@ -48,7 +48,7 @@ class PatienceStop:
         return self.fired
 
     def counters(self) -> dict[str, Any]:
-        """LAW-18: the lever under test reports its own state in-run."""
+        """The lever under test reports its own state in-run."""
         return {
             "heldout_evaluations": self.evaluations,
             "heldout_best_policy_loss": None if self.best == math.inf else self.best,
@@ -80,7 +80,7 @@ class HeldOutMonitor:
     eval_batches: int = 0
     plies: int = 0
     history: list[tuple[int, float]] = field(default_factory=list)
-    #: BC-3's line: the held-out VALUE loss from the SAME pass; the stop reads policy only (R328(d)).
+    #: BC-3's line: the held-out VALUE loss from the SAME pass; the stop reads policy only.
     value_history: list[tuple[int, float]] = field(default_factory=list)
     last_value_loss: float | None = None
 

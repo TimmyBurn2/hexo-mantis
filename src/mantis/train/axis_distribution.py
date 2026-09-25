@@ -1,4 +1,4 @@
-"""Selfplay axis-distribution metric (WP10 §a.3 PORT — behaviour-exact).
+"""Selfplay axis-distribution metric (a behaviour-exact port).
 
 For each hex axis, computes the fraction of adjacent stone pairs that share the same color.
 Values near 0.5 = balanced opponent interleaving; near 1.0 = same-color clustering along

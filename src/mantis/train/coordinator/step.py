@@ -81,9 +81,8 @@ GATE_NAMES: tuple[str, ...] = (
     "draw_rate_collapse", "grad_norm_hard_abort", "policy_loss_trough", "ply_cap_attractor",
 )
 
-#: The target-integrity counters plus the RECORDED-POSITION counter their fire rate is taken
-#: over, all read off the one `RunnerStats` snapshot. `inference_failures_total` (the seam
-#: conjunct) and `positions_dropped` (rows the queue cap discarded) ride here as data-loss rates.
+#: The target-integrity counters and the RECORDED-POSITION counter their rate is over, off one
+#: `RunnerStats` snapshot; `inference_failures_total` and `positions_dropped` are data-loss rates.
 _TARGET_INTEGRITY_COUNTERS: tuple[str, ...] = (
     "export_offwindow_mass_moves", "target_integrity_defects", "inference_failures_total",
     "positions_dropped",
@@ -95,9 +94,8 @@ _SEARCH_LEVER_COUNTERS: tuple[str, ...] = (
     "pcr_full_moves", "pcr_quick_moves", "gumbel_round_leaves", "gumbel_rounds",
 )
 
-# The draw-rate ring has no depth constant: a literal clipped every schema-legal `consec` above
-# it into unfireable-in-effect, so capacity is derived at the point of use. Plain `#` — this
-# documents an ABSENCE and must attach to no assignment.
+# The draw-rate ring has no depth constant: capacity is derived at the point of use, so no
+# schema-legal `consec` is unfireable.
 
 
 def _snapshot_counter(rstats: Any, name: str) -> int | None:
@@ -169,9 +167,8 @@ class StepCoordinator:
         # operator minted. `MonitorConfig` is no longer constructible from this module.
         self.monitor_cfg = monitor_cfg
         self.heartbeat_watchdog = heartbeat_watchdog
-        # The clean-completion latch, PUBLIC because `train/loop.py`'s post-loop guard is its
-        # one consumer. Set AFTER the leg-3 write, and carrying no set-once guard: exactly-once
-        # is a property of the driver, not of a branch only a test can reach.
+        # PUBLIC: `train/loop.py`'s post-loop guard is its one consumer. Set AFTER the leg-3
+        # write, with no set-once guard: exactly-once is a property of the driver.
         self.clean_stop_saved = False
         # Set by EITHER save leg: the loop's guard (B-8); `clean_stop_saved` says WHICH leg.
         self.final_save_done = False
@@ -180,9 +177,8 @@ class StepCoordinator:
         self.actor_sync = actor_sync
         self.heldout = heldout
         self._heldout_train_sums = [0.0, 0.0, 0]
-        # Every PERIODIC checkpoint becomes a full resume bundle: the cadence stays the
-        # trainer's, the ring and sidecar come from here because the trainer holds neither, and
-        # one publisher keeps the stop legs from drifting. `trainer=None` is a test affordance.
+        # Every PERIODIC checkpoint becomes a full resume bundle via ONE publisher, since the
+        # trainer holds neither ring nor sidecar; `trainer=None` is a test affordance.
         if self.trainer is not None:
             self.trainer.bundle_publisher = (
                 lambda path, _step: self.persist_resume_state(path)
@@ -214,12 +210,12 @@ class StepCoordinator:
         # Gate state — every ring is caller-owned (the rules are stateless).
         self._draw_rate_history: list[float] = []
         self._loss_window: list[float] = []
-        # The trough halt's producer state (R350(b)(iv)): every step's policy loss since the last
+        # The trough halt's producer state: every step's policy loss since the last
         # gate boundary, the FIRST boundary's mean as the reference, later means as the history.
         self._policy_loss_window: list[float] = []
         self._policy_loss_reference: float | None = None
         self._policy_loss_window_means: list[float] = []
-        # The ply-cap halt's last windowed reading (R352(c)); `None` until the window fills.
+        # The ply-cap halt's last windowed reading; `None` until the window fills.
         self._ply_cap_rate: float | None = None
         self._last_iter_games = 0
         # The previous `iteration_complete` boundary's counter readings, so the payload can
@@ -237,9 +233,8 @@ class StepCoordinator:
             name: {"checks": 0, "fires": 0, "skips": 0, "warns": 0} for name in GATE_NAMES
         }
 
-        # Self-play stall watchdog — always armed; fires to a DISTINCT snapshot path + exit. No
-        # code-side default for that path: it is derived from the trainer's own checkpoint dir
-        # and resolved at FIRE time, so construction needs no trainer attribute.
+        # Self-play stall watchdog, always armed: its DISTINCT snapshot path derives from the
+        # trainer's checkpoint dir at FIRE time, so construction needs no trainer attribute.
         def _snapshot_target() -> Path:
             return watchdog_snapshot_path(
                 _buffer_persist.canonical_buffer_path(self.trainer.checkpoint_dir))
@@ -300,9 +295,8 @@ class StepCoordinator:
         # The ring is named for ITS OWN checkpoint rather than one canonical path every save
         # overwrote — that made "keep the previous bundle" impossible in principle.
         ring_path = _bundle.ring_path_for(checkpoint_path)
-        # THE STEP COMES FROM THE CHECKPOINT, not `self._train_step`: the counter is refreshed
-        # after `_run_training_step` returns while the periodic seam fires inside it, so at a
-        # periodic publication it is one behind. The counter is the unparsable-name fallback.
+        # From the CHECKPOINT: the periodic seam fires inside `_run_training_step`, before the
+        # counter is refreshed, so the counter is one behind and only the unparsable-name fallback.
         bundle_step = _bundle.step_of(checkpoint_path)
         if bundle_step is None:
             bundle_step = int(self._train_step)
@@ -360,7 +354,7 @@ class StepCoordinator:
             "ring_sha256": "" if loaded.ring is None else loaded.ring.sha256,
             "round_counter": state.round_counter,
             "manifest": str(manifest), "pruned_members": len(pruned),
-            # R349(b): every retained complete bundle (this one included) without receipts on all
+            # Every retained complete bundle (this one included) without receipts on all
             # its files — the mirror's lag; two is the dashboard's warning, nothing halts.
             "unreceipted_bundles": _bundle_receipts.unreceipted_bundle_steps(
                 self.trainer.checkpoint_dir),
@@ -423,10 +417,8 @@ class StepCoordinator:
             instrumentation_emitted=[], pool_overflow_delta=0,
         )
 
-        # O2: iteration-limit reached — CLEAN COMPLETION, and the third save leg. The one
-        # OUTER-loop site that ACTS on the completion predicate (the inner burst-break only
-        # ends the burst), so the save must sit here; it runs before `running = False`, and
-        # clean-vs-aborted is carried by `ShutdownState.abort_rule`, never by a file.
+        # O2: CLEAN COMPLETION, the third save leg, at the one OUTER-loop site that ACTS on the
+        # predicate; before `running = False`, and clean-vs-aborted rides `abort_rule`, not a file.
         if cfg.stop_step is not None and self._train_step >= cfg.stop_step:
             self._clean_stop_save(cfg)
             self.shutdown.running = False
@@ -536,16 +528,14 @@ class StepCoordinator:
             # There is no checkpoint-cadence buffer save on this leg: `checkpoint_saved` stays
             # `False` for the whole burst path, and the O2/O3 legs above announce a real write.
 
-            # The cadence boundaries are tested PER TRAINING STEP: once per burst would skip
-            # every boundary the post-burst step misses, stretching the draw-rate gate's
-            # `consec` window. Two knobs — narration (`log`) and arming (`gate`).
+            # Tested PER TRAINING STEP, since once per burst stretches the draw-rate `consec`
+            # window. Two knobs: narration (`log`) and arming (`gate`).
             axis_emitted = self._run_log_interval(cfg, loss_info) or axis_emitted
             hard_abort_fired = self._run_gate_interval(cfg) or hard_abort_fired
             self._run_heldout_gap(loss_info)
 
-            # Kicked INSIDE the burst: run once after the whole burst, a burst that stepped over
-            # the exact multiple never satisfied the modulo and the round was SILENTLY SKIPPED.
-            # The kick return is never consumed for WR; rounds arrive via the drain.
+            # INSIDE the burst, so a burst stepping over the exact multiple still kicks the round;
+            # the kick return is never consumed, rounds arrive via the drain.
             kicked_step, skipped_step = self._maybe_kick_eval(cfg)
             eval_kicked_off = eval_kicked_off or kicked_step
             eval_skipped_busy = eval_skipped_busy or skipped_step
@@ -611,7 +601,7 @@ class StepCoordinator:
         return axis is not None
 
     def _run_heldout_gap(self, loss_info: dict[str, float]) -> bool:
-        """R366(c)'s witness at its own `interval` boundary: the frozen slice's forward-only loss against the mean train loss of the taken steps since the last read; `True` iff it read."""
+        """The held-out gap witness at its own `interval` boundary: the frozen slice's forward-only loss against the mean train loss of the taken steps since the last read; `True` iff it read."""
         if self.heldout is None:
             return False
         sums = self._heldout_train_sums
@@ -657,7 +647,7 @@ class StepCoordinator:
         return fired
 
     def _run_policy_loss_trough_gate(self, cfg: StepCoordinatorConfig) -> bool:
-        """R350(b)(iv)'s trough halt: one policy-loss mean per gate window, the FIRST the reference."""
+        """The policy-loss trough halt: one policy-loss mean per gate window, the FIRST the reference."""
         spec = cfg.policy_loss_trough_abort
         window = self._policy_loss_window
         self._policy_loss_window = []
@@ -683,7 +673,7 @@ class StepCoordinator:
         return self._fire_hard_abort("policy_loss_trough", message)
 
     def _run_ply_cap_gate(self, cfg: StepCoordinatorConfig) -> bool:
-        """R352(c)'s ply-cap halt, read EVERY training step; `min_step` gates the fire only."""
+        """The ply-cap halt, read EVERY training step; `min_step` gates the fire only."""
         spec = cfg.ply_cap_abort
         counts_fn = getattr(self.pool, "ply_cap_window_counts", None)
         stats = self._gate_stats["ply_cap_attractor"]
@@ -777,23 +767,20 @@ class StepCoordinator:
         """
         counts_fn = getattr(self.pool, "pooled_draw_counts", None)
         spec = cfg.draw_rate_abort
-        # `is not None`, NOT `> 0`: `draw_rate_abort` is `None` on every disarmed run and
-        # `None > 0` raises. Both absences route through `_sample` with a `None` producer,
-        # which is the one site that SKIP-counts them.
+        # `is not None`, NOT `> 0` (`None > 0` raises); both absences route through `_sample`,
+        # the one site that SKIP-counts them.
         if spec is None or counts_fn is None:
             self._sample("draw_rate_collapse", self._draw_rate_history, None)
             return False
-        # Branching on the return is required, not tidy: `pooled_draw_rate` returns `None` below
-        # `N_pool_min` (insufficient evidence, not a fabricated healthy 0.0), and `consec` counts
+        # Branch on the return: below `N_pool_min` there is no observation, and `consec` counts
         # OBSERVATIONS, so running the rule with nothing appended re-decides on a stale tail.
         if not self._sample(
             "draw_rate_collapse", self._draw_rate_history,
             lambda: pooled_draw_rate(counts_fn(), N_pool_min=spec.N_pool_min),
         ):
             return False
-        # The ring's capacity IS the minted `consec`, derived from the one authority
-        # `check_draw_rate_collapse` also gates on, so no schema-legal `consec` is unfireable.
-        # The trim sits AFTER a True `_sample` return, the one place `spec` is narrowed.
+        # Capacity IS the minted `consec` that `check_draw_rate_collapse` gates on; trimmed after
+        # a True `_sample` return, the one place `spec` is narrowed.
         del self._draw_rate_history[:-spec.consec]
         message = check_draw_rate_collapse(self._draw_rate_history, self._train_step,
                                            threshold=spec.threshold,
@@ -873,7 +860,7 @@ class StepCoordinator:
                 else cfg.policy_loss_trough_abort.delta_nats),
             "policy_loss_reference": self._policy_loss_reference,
             "policy_loss_window_means": list(self._policy_loss_window_means),
-            # The ply-cap halt's live terms and last windowed reading (R352(c)): `None` on the
+            # The ply-cap halt's live terms and last windowed reading: `None` on the
             # explicit OFF, and `None` while the window is still filling, never a 0.0.
             "ply_cap_abort_rate": None if cfg.ply_cap_abort is None else cfg.ply_cap_abort.rate,
             "ply_cap_window_games": (
@@ -1024,7 +1011,7 @@ class StepCoordinator:
     def _restore_guard_fields(self, state: Mapping[str, Any]) -> None:
         if "draw_rate_history" in state:
             self._draw_rate_history = [float(v) for v in state["draw_rate_history"]]
-        # A pre-R362 sidecar's `wr_history` / `wr_history_rung` (the sealbot ring) are ignored.
+        # An older sidecar's `wr_history` / `wr_history_rung` (the sealbot ring) are ignored.
         if "consec_high_gn" in state:
             self._consec_high_gn = int(state["consec_high_gn"])
         if "initial_policy_loss" in state:

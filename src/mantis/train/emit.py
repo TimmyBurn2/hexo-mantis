@@ -1,4 +1,4 @@
-"""The injected event-emit seam (repo_design §11 / WP10 §c.4).
+"""The injected event-emit seam (repo_design §11).
 
 The trainer/coordinator/lifecycle emit through a LOCAL structural `EventSink` Protocol (single
 `emit(event)` method) with an explicit `NullEventSink` no-op default; the composition root

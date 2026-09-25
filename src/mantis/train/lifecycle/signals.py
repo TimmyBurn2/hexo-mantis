@@ -43,9 +43,8 @@ _children: set[Any] = set()
 #: THREAD dies — the one teardown that does not require the parent to execute anything.
 _PR_SET_PDEATHSIG = 1
 
-#: `PARENT_VANISHED_EXIT_CODE` is defined in `monitor/heartbeat.py` and imported above by
-#: design: it became a code the SUPERVISOR reads, so it needs ONE spelling that `monitor/**`
-#: can name without importing `train/**`, which is an illegal edge.
+#: `PARENT_VANISHED_EXIT_CODE` lives in `monitor/heartbeat.py`: the SUPERVISOR reads it, and
+#: `monitor/**` must not import `train/**`.
 
 
 @dataclass(frozen=True)
@@ -65,9 +64,8 @@ class ParentDeathDecision:
     signal_name: str | None
 
 
-#: The carrier. Set ONCE by the gate and never cleared: module scope IS the lifetime of "this
-#: process's arming decision". A latch and not a signature change, because the alternative
-#: threads the decision through `launch_run`, whose caller is a frozen oracle.
+#: Set ONCE by the gate, never cleared: module scope IS this process's arming decision. A latch,
+#: since a signature change would thread it through `launch_run`, whose caller is a frozen oracle.
 _LAST_DECISION: ParentDeathDecision | None = None
 
 
@@ -106,10 +104,8 @@ def arm_parent_death_signal(sig: int = signal.SIGKILL) -> bool:
     """
     if not sys.platform.startswith("linux"):
         return False
-    # CAPTURED BEFORE THE PRCTL, and comparing against the captured value is the ONLY correct
-    # form. `getppid() == 1` is a FALSE NEGATIVE under a subreaper (on this host an orphan
-    # reparents to `systemd --user`, never to PID 1) and a FALSE POSITIVE inside a PID namespace
-    # whose shell IS PID 1, where the parent is alive and well.
+    # Compare against the ppid CAPTURED BEFORE THE PRCTL: `getppid() == 1` is wrong under a
+    # subreaper and inside a PID namespace whose shell IS PID 1.
     ppid_before = os.getppid()
     try:
         import ctypes
@@ -123,9 +119,7 @@ def arm_parent_death_signal(sig: int = signal.SIGKILL) -> bool:
     except (OSError, AttributeError):  # no loadable libc, or a libc without prctl
         _LOG.debug("arm_parent_death_signal: prctl unavailable", exc_info=True)
         return False
-    # THE RACE, closed: if the parent died between our fork and the prctl above, the death
-    # signal was already delivered-and-missed. A CHANGED ppid says exactly that happened, on
-    # every host and in every namespace.
+    # A CHANGED ppid means the parent died between fork and prctl: its death signal was missed.
     if os.getppid() != ppid_before:
         _LOG.warning(
             "arm_parent_death_signal: parent %d vanished during arming (now %d); exiting %d",

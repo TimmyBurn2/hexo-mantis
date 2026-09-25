@@ -11,7 +11,7 @@ CANONICAL_BUFFER_FILENAME = "replay_buffer.bin"
 def canonical_buffer_path(checkpoint_dir: str | Path) -> Path:
     """The run's canonical replay-buffer path, derived from ITS checkpoint directory.
 
-    Derived at point of use from a directory the caller owns (R98), never defaulted. The
+    Derived at point of use from a directory the caller owns, never defaulted. The
     watchdog snapshot is a separate path on top of this one — see `watchdog_snapshot_path`,
     which appends `.watchdog` so an abnormal-exit save can never truncate the resume buffer.
     """

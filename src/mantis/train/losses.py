@@ -21,7 +21,7 @@ def sparse_tail(
     tail_mass: torch.Tensor,
     legal_offsets: torch.Tensor,
 ) -> torch.Tensor:
-    """The SPARSE row's tail (R347(a)): `tail_mass` spread over the non-explicit legal nodes in proportion to the DETACHED prior — the ONE construction the CE, the soft target and the KL row share; an all-explicit graph has an empty tail."""
+    """The SPARSE row's tail: `tail_mass` spread over the non-explicit legal nodes in proportion to the DETACHED prior — the ONE construction the CE, the soft target and the KL row share; an all-explicit graph has an empty tail."""
     b = int(legal_offsets.shape[0]) - 1
     seg = segment_ids(legal_offsets, total=int(prior_probs.shape[0]))
     tail_prior = prior_probs.detach() * (1.0 - explicit_mask.reshape(-1).to(prior_probs.dtype))
@@ -60,7 +60,7 @@ def graph_policy_row_weights(
 
 
 def exclude_alpha_full_rows(policy_row_weight: torch.Tensor, tail_mass: Any) -> tuple[torch.Tensor, int]:
-    """Zero the policy weight of every row at alpha = 1.0 (R350(e): "play none of the searched
+    """Zero the policy weight of every row at alpha = 1.0 ("play none of the searched
     moves" is not a target), BEFORE the denominator reads the vector; returns `(weights, n_excluded)`.
     Raises ValueError when the two vectors disagree in length.
     """
@@ -75,7 +75,7 @@ def exclude_alpha_full_rows(policy_row_weight: torch.Tensor, tail_mass: Any) -> 
 
 
 def policy_loss_weight_at(step: int, warmup_steps: int) -> float:
-    """R350(b)(iii): 0.0 while `step < warmup_steps` (0-based, the step about to be taken), else 1.0.
+    """The policy-loss warm-up weight: 0.0 while `step < warmup_steps` (0-based, the step about to be taken), else 1.0.
 
     Raises:
         ValueError: a negative step or warm-up length.
@@ -134,7 +134,7 @@ def ragged_policy_ce_and_entropies(
     tail_mass: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Ragged per-legal-node policy CE for the GNN graph branch and — reduced the SAME way, DETACHED —
-    the target's entropy (`CE - H` is KL(target || policy), R350(b)(iv)) and the model's own (B-4).
+    the target's entropy (`CE - H` is KL(target || policy)) and the model's own (B-4).
 
     Per graph: log_softmax over its legal segment, `-Σ target·logp`, masked by `full_search_mask`;
     `denominator` makes ONE micro-batch divide by the WHOLE step's so the parts sum to the un-split
@@ -231,11 +231,9 @@ def clip_and_step(
         scaler.unscale_(optimizer)
     grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm).item()
     if not math.isfinite(grad_norm):
-        # The pre-clip norm is a COMPLETE detector for a non-finite gradient: it is
-        # `sqrt(sum of squares)`, so a finite norm means every entry is finite.
-        # `clip_grad_norm_` has already multiplied the gradients by a non-finite clip coefficient
-        # by the time we read it, so the refusal must be here: those gradients are discarded and
-        # `optimizer.step()` is the one thing that does not run.
+        # The pre-clip norm is a COMPLETE detector (`sqrt(sum of squares)`: finite means every
+        # entry is finite). `clip_grad_norm_` has already scaled the gradients by a non-finite
+        # coefficient, so the refusal is here: they are discarded and `optimizer.step()` skipped.
         optimizer.zero_grad(set_to_none=True)
         if fp16:
             # The scaler still gets its update, so its inf-driven backoff keeps working;
