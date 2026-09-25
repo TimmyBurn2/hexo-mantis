@@ -108,7 +108,7 @@ fn miri_nested_shared_borrows() {
 
 /// The legal-move count around ONE stone at the given radius: the hex ball minus the stone.
 ///
-/// AUDIT-1 F-49: this file asserted `90` five times under comments spelling out `91 - 1`, so the
+/// This file asserted `90` five times under comments spelling out `91 - 1`, so the
 /// formula lived only in prose and every assertion would red with a false message if the engine
 /// default moved. `mantis_core::board::hex_ball_cells` is the one home for the arithmetic.
 fn one_stone_legal_count(radius: i32) -> usize {

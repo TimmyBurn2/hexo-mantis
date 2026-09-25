@@ -1,5 +1,4 @@
-//! CI gate 5's smoke bench — a REAL hot-path floor since WPBOX CB-3 (R29: "replace
-//! smoke_bench CI stub with a real hot-path floor"). The body is the self-play inner
+//! CI gate 5's smoke bench — a REAL hot-path floor. The body is the self-play inner
 //! loop's per-move core: clone + legal-move pick + apply_move (inline Zobrist XOR) +
 //! last-move-anchored check_win on a mid-game board — the same subjects board_bench
 //! floors in depth; this is the 1-second smoke cut of them, so gate 5 exercises

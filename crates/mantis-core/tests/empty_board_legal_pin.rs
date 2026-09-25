@@ -32,9 +32,8 @@ fn empty_board_legal_moves_are_5x5_axial_rect() {
         "fresh-board legal set must be the exact 5×5 axial rectangle"
     );
 
-    // After a full undo of a random game the same exact set must be restored
-    // (exercises the rebuild path, not the ctor-seeded cache: undo marks the
-    // cache dirty, so this hits the cells-empty rebuild branch).
+    // A full undo of a random game must restore the same exact set: undo marks the cache
+    // dirty (not the ctor-seeded cache), exercising the cells-empty rebuild branch.
     let mut b = Board::new();
     let mut diffs = Vec::new();
     let mut s = 0x5eed_0000_0000_0001u64;

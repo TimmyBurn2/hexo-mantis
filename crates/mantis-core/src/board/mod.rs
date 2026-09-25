@@ -273,9 +273,8 @@ mod tests {
         b.apply_move(0, 0).unwrap();
         let r = DEFAULT_LEGAL_MOVE_RADIUS;
         assert_eq!(b.legal_move_count(), hex_ball_cells(r) - 1);
-        // Two balls of radius r whose centres are r apart, minus the r-lens overlap, minus the
-        // two occupied cells: at r = 5 that is 91+91-36-2 = 144. Kept a literal because
-        // deriving the lens count here would re-implement the set under test.
+        // Two balls of radius r apart, minus the r-lens overlap and the 2 occupied cells: at
+        // r=5 that is 91+91-36-2=144, kept literal (deriving it here duplicates the tested set).
         b.apply_move(r, 0).unwrap();
         assert_eq!(
             b.legal_move_count(),

@@ -82,10 +82,8 @@ impl ZobristTable {
     /// the same key regardless of board history or window position.
     #[inline]
     pub fn get_for_pos(q: i32, r: i32, player: usize) -> u128 {
-        // AUDIT-1 F-42. These were LOCAL `const HALF: i32 = 9` / `const BOARD_SIZE: i32 = 19`
-        // shadowing the crate constants — while the key table below is sized by the real
-        // `TOTAL_CELLS`. Move the board and the index arithmetic desynchronises from the
-        // table it indexes, silently, with no compile error anywhere.
+        // This index arithmetic must track the crate's real HALF/BOARD_SIZE/TOTAL_CELLS: a
+        // local constant shadowing them would desync it from the key table, silently.
         if (-HALF..=HALF).contains(&q) && (-HALF..=HALF).contains(&r) {
             let cell = ((q + HALF) as usize) * BOARD_SIZE + ((r + HALF) as usize);
             Self::get(cell, player)
@@ -193,7 +191,7 @@ mod prop_tests {
             prop_assert_eq!(key ^ key, 0u128, "key XOR itself must be zero (self-inverse)");
         }
 
-        /// AUDIT-1 F-42. `get_for_pos`'s in-table branch indexes a table sized by
+        /// `get_for_pos`'s in-table branch indexes a table sized by
         /// `TOTAL_CELLS`, and it used to compute that index from LOCAL `HALF = 9` /
         /// `BOARD_SIZE = 19` constants shadowing the crate's. This drives the index the way
         /// `get_for_pos` must, from the crate constants, over the WHOLE table: if the two

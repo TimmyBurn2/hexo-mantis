@@ -159,9 +159,8 @@ impl Board {
     /// Create an empty board ready for the first move. The baked constants (radius 5,
     /// threshold 5, window 19) are game-rules constants, not config defaults.
     pub fn new() -> Self {
-        // Pre-populated with the 5x5 region at (0,0), restricting the first move to 25 cells
-        // so branching stays ~24 for the whole game. The rules make every cell legal on an
-        // empty board, but hundreds of root children cost evaluation for no strategic gain.
+        // Pre-populated with the 5x5 region at (0,0): every cell is legal on an empty board,
+        // but bounding the first move to 25 cells keeps branching ~24 for the whole game.
         let mut init_cache = FxHashSet::default();
         init_cache.reserve(50);
         for dq in -2i32..=2 {
@@ -523,9 +522,8 @@ impl Clone for Board {
 // while it stays auto-Send. The crate's three `unsafe` expressions each rest on INV-1..INV-4;
 // a fourth touching the cache is a review failure.
 
-// Test-fixture builder: this crate's own tests get it free via `cfg(test)`; downstream
-// test/bench targets opt in with feature `test-fixtures`. Neither cfg holds in a release
-// build, so production behaviour is byte-untouched.
+// Test-fixture builder, gated so a release build is byte-untouched: this crate's own tests
+// get it via `cfg(test)`; downstream test/bench targets opt in via feature `test-fixtures`.
 #[cfg(any(test, feature = "test-fixtures"))]
 impl Board {
     /// Test-only static-position builder: plants `stones`, recomputes the bbox, marks the

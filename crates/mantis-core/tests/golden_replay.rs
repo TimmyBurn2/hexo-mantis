@@ -6,7 +6,7 @@
 //! move surfaces, forced-win probes, and terminal outcome.
 //!
 //! The fixture also records `cluster_centers` and `threat_anchors` columns. They are NOT
-//! replayed: `get_cluster_views` / `get_threat_anchors` went with the dense path (R346(f)),
+//! replayed: `get_cluster_views` / `get_threat_anchors` went with the dense path,
 //! so there is no producer to compare against. The columns stay in the capture rather than
 //! being regenerated away.
 //!

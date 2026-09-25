@@ -60,9 +60,8 @@ impl Board {
                 // For every placed stone, emit all empty cells within `legal_move_radius`.
                 // The hex ball in axial coords: |dq| ≤ R, |dr| ≤ R, |dq + dr| ≤ R.
                 let r = self.legal_move_radius;
-                // Bbox-based upper bound on the legal-move set size: the min of the axial
-                // bbox area (tight late-game) and cells.len() × hex-ball area (tight early).
-                // A proven bound lets the insert loop grow the table in ONE allocation.
+                // Proven upper bound on the legal-move set size: min of the axial bbox area
+                // and cells.len() × hex-ball area, letting the insert loop grow in ONE allocation.
                 let ru = r.max(0) as usize;
                 let w_q = (self.max_q.saturating_sub(self.min_q) as usize)
                     .saturating_add(1)
@@ -814,9 +813,8 @@ mod tests {
             fast, reference,
             "fast and ref must agree on 4-in-a-row position"
         );
-        // The threat cells are those that extend to 5 stones with 1 open end:
-        // placing at q=-1 → 4 player +1 more = window (-1,0..4,0) if open, etc.
-        // Just verify equivalence here; exact cells depend on legal set.
+        // Threat cells extend 4-in-a-row to 5 with 1 open end; exact cells depend on the
+        // legal set, so this asserts equivalence rather than a specific set.
         assert!(!fast.is_empty(), "4-in-a-row should produce threat moves");
     }
 
