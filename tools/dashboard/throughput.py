@@ -1,4 +1,4 @@
-"""Throughput (R356(d)): games/h, plies/h, turns/h, leaves/s and steps/h side by side, a unit on every label and axis (LAW-03)."""
+"""Throughput: games/h, plies/h, turns/h, leaves/s and steps/h side by side, a unit on every label and axis."""
 from __future__ import annotations
 
 from typing import Any
@@ -65,7 +65,7 @@ def _rate_chart(rec: Record, key: str, label: str, cls: str, gaps: Gaps) -> str:
 
 
 def sym_draw_line(rec: Record, gaps: Gaps) -> str:
-    """R358(b)/LAW-18: the D6 draw bins off the last `iteration_complete.sym_draws`, as a share per element."""
+    """The D6 draw bins off the last `iteration_complete.sym_draws`, as a share per element."""
     rows = [r for r in rec.rows("iteration_complete") if isinstance(r.get("sym_draws"), dict)]
     block: dict[str, Any] = rows[-1]["sym_draws"] if rows else {}
     bins = block.get("bins")

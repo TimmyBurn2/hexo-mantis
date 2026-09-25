@@ -14,5 +14,5 @@ rust_doc_excess_lines 2235
 # class (bare R-tokens and docstrings now included) and the narrative runs in the text-format
 # files the .py/.rs scopes never saw. Down-only, like the rest. The narrower ungated
 # ruling_cite_comment_lines counter is retired with the same edit.
-ruling_cite_lines 334
+ruling_cite_lines 318
 textfile_comment_excess_lines 228

@@ -1,1 +1,1 @@
-"""The run dashboard package behind `tools/run_dashboard.py` (R333(d))."""
+"""The run dashboard package behind `tools/run_dashboard.py`."""

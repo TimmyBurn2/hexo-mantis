@@ -50,7 +50,7 @@ def _ci(row: dict[str, Any]) -> tuple[float, float] | None:
     return (lo, hi) if lo is not None and hi is not None else None
 
 
-#: R362(c): the sealbot rung, its ladder file and `wr_sealbot` have no producer at HEAD; a record
+#: The sealbot rung, its ladder file and `wr_sealbot` have no producer at HEAD; a record
 #: without a single reading is drawn as this stated gap, never as a zero.
 RUNG_RETIRED_NOTE = ("the sealbot rung was deleted by R362(c) — no round row carries "
                      "<code>wr_sealbot</code> and no ladder file exists for a run minted after it; "
@@ -58,7 +58,7 @@ RUNG_RETIRED_NOTE = ("the sealbot rung was deleted by R362(c) — no round row c
 
 
 def sealbot_readings_present(rec: Record) -> bool:
-    """True iff some round row or ladder history carries a sealbot reading (a pre-R362 record)."""
+    """True iff some round row or ladder history carries a sealbot reading (a record from before the rung was deleted)."""
     if rec.rungs():
         return True
     return any(_num(r.get("wr_sealbot")) is not None for r in rec.rows("eval_round_complete"))

@@ -14,18 +14,18 @@ from mantis.diagnostics.f816_37_rate_bar import (
 
 from .reader import Record
 
-#: R349(b): this many retained bundles without receipts is the mirror WARNING (never a halt).
+#: This many retained bundles without receipts is the mirror WARNING (never a halt).
 MIRROR_LAG_WARN_BUNDLES = 2
 
 _RANK = {"bad": 3, "warn": 2, "unmeasured": 1, "ok": 0}
 
-#: The trough signature run7's prereg armed as a halt, DEMOTED by R351(d) to this warning: policy
+#: The trough signature run7's prereg armed as a halt, DEMOTED to this warning: policy
 #: loss >= its first reading + delta on `consec` consecutive `trainer_step` rows by `max_step`.
 TROUGH_DELTA_NATS = 0.2
 TROUGH_CONSEC = 3
 TROUGH_MAX_STEP = 5000
 
-#: R352(c)'s minted ply-cap halt terms, read when the record's `monitor_gates` rows carry none
+#: The minted ply-cap halt terms, read when the record's `monitor_gates` rows carry none
 #: (a run that did not arm the halt is still read for the attractor at these terms).
 PLY_CAP_RATE = 0.5
 PLY_CAP_WINDOW_GAMES = 600
@@ -176,7 +176,7 @@ def _policy_loss_trough(rec: Record) -> HealthInput:
 
 
 def ply_cap_terms(rec: Record) -> tuple[float, int, bool]:
-    """`(rate, window_games, armed)`: the run's own terms off `monitor_gates`, else R352(c)'s minted."""
+    """`(rate, window_games, armed)`: the run's own terms off `monitor_gates`, else the minted ones."""
     for row in reversed(rec.rows("monitor_gates")):
         rate, window = row.get("ply_cap_abort_rate"), row.get("ply_cap_window_games")
         if isinstance(rate, (int, float)) and isinstance(window, int) and not isinstance(rate, bool) \

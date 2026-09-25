@@ -19,7 +19,7 @@ class UnknownPanel(RuntimeError):
     """A dropped panel was named that the roster does not declare."""
 
 
-#: Panels dropped from the default view, each row naming what would fill it (R333(d): a gap
+#: Panels dropped from the default view, each row naming what would fill it (a gap
 #: with no owner is a complaint, not a finding).
 DROPPED: dict[str, str] = {
     "average sims/move":

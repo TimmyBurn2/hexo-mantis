@@ -30,7 +30,7 @@ class Record:
     record_dir: Path | None = None
     dropped_fields: dict[str, int] = field(default_factory=dict)
     by: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
-    #: R356(d): the strix follower's sidecars, read beside the record, never from the stream.
+    #: The strix follower's sidecars, read beside the record, never from the stream.
     external: list[Any] = field(default_factory=list)
     external_note: str = "no --external-points given"
 

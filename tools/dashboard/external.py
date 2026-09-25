@@ -1,4 +1,4 @@
-"""External points (R356(d)): the strix follower's sidecars as a series with CIs, unit and regime on the axis, the gap to strix as a number."""
+"""External points: the strix follower's sidecars as a series with CIs, unit and regime on the axis, the gap to strix as a number."""
 from __future__ import annotations
 
 import json
@@ -37,9 +37,9 @@ class ExternalPoint:
     net_hash: str
     checkpoint: str
     path: str
-    #: `"off"` when the sidecar says strix's root VCF solver was disabled (R358(a)'s net-only cell).
+    #: `"off"` when the sidecar says strix's root VCF solver was disabled (the net-only cell).
     solver: str = "on"
-    #: strix's placement_radius when the sidecar names one (R365 E1's ruler-r6 cell); None = the driver's 8.
+    #: strix's placement_radius when the sidecar names one (the ruler-r6 cell); None = the driver's 8.
     radius: int | None = None
 
     @property

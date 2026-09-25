@@ -25,7 +25,7 @@ _LOSS_KEYS = (("value_loss", "value loss", "s3"), ("policy_loss", "policy loss",
               ("loss", "total loss", "s1"), ("grad_norm", "grad norm", "s4"), ("lr", "learning rate", "s6"))
 
 
-#: R353(b): the record carries no witness of which adapter played its rung, so the A/B's finding
+#: The record carries no witness of which adapter played its rung, so the A/B's finding
 #: is stated on every record (docs/design/measurements/SEALBOT_TT_AB_2026-09-14.md).
 SEALBOT_TT_NOTE = (
     "Sealbot readings through the pre-748f5c47 adapter (its transposition table persisted across "
@@ -134,7 +134,7 @@ def quality(rec: Record, gaps: Gaps) -> Panel:
 
 
 def _ply_cap_window(rec: Record, games: list[dict], gaps: Gaps) -> str:
-    """R352(c)'s halt as the record reads it: the cap share over the halt's OWN window."""
+    """The ply-cap halt as the record reads it: the cap share over the halt's OWN window."""
     rate, window, armed = ply_cap_terms(rec)
     title = f"ply-cap share, {num(window)}-game window"
     terms = (f"halt rate {rate:g}" + ("" if armed else
