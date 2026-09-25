@@ -39,7 +39,7 @@ class AmbiguousGraphMarkerError(EncodingRegistryError):
 
 
 class MissingEncodingError(EncodingRegistryError):
-    """Raised when an encoding value is absent (LAW-11). A subclass of `EncodingRegistryError`, so
+    """Raised when an encoding value is absent. A subclass of `EncodingRegistryError`, so
     a caller wanting to distinguish "never specified" from "unknown to the registry" can catch
     this one; the retired default arm is dead and an absent encoding is always an error."""
 
@@ -49,7 +49,7 @@ def normalize_encoding_name(enc: Any) -> str:
     ``version``/``name``, or an object with ``.name``.
 
     Raises:
-        MissingEncodingError: if ``enc`` is ``None`` — an explicit encoding is required (LAW-11).
+        MissingEncodingError: if ``enc`` is ``None`` — an explicit encoding is required.
     """
     if enc is None:
         raise MissingEncodingError(
@@ -227,7 +227,7 @@ def resolve_from_config(cfg: Mapping[str, Any] | None) -> EncodingSpec:
     precedence between them: a config carrying BOTH must carry the SAME name, and a disagreement
     raises `EncodingDeclarationConflictError` rather than picking a side. The nested shape is not a
     fallback — an absent declaration still raises, and a caller-side injection of one shape into
-    the other would be the code-side default authority LAW-11 forbids.
+    the other would be the code-side default authority forbidden here.
 
     Raises:
         MissingEncodingError: if `cfg` is `None`, declares an encoding in NONE of the three
