@@ -19,9 +19,8 @@ import pytest
 
 from mantis import _engine
 
-# Five positions with DELIBERATELY different legal-set widths (measured: 126 / 138 / 156 / 230 /
-# 196 legal cells); equal widths would hide a segment-offset bug, and `test_ragged_widths_...`
-# asserts the fixture disagrees with itself.
+# Five positions with DELIBERATELY different legal-set widths — equal widths would hide a
+# segment-offset bug; `test_ragged_widths_...` asserts the fixture disagrees with itself.
 _POSITIONS: list[tuple[list[tuple[int, int, int]], int, int]] = [
     ([(0, 0, 1)], -1, 2),
     ([(0, 0, 1), (1, 0, -1)], 1, 1),
@@ -82,9 +81,8 @@ def _round_trip(
 
     pops = 0
     served = 0
-    # BUDGETED BY WALL TIME, NOT BY ITERATION COUNT: a fixed count worked only while the submit
-    # held the GIL through the enqueue. With the leaf BUILD inside `py.detach`, empty pops
-    # return immediately and every iteration burns while the submitter is still building.
+    # BUDGETED BY WALL TIME, NOT ITERATION COUNT: a fixed count worked only while submit held
+    # the GIL through the enqueue; with the leaf build inside `py.detach`, empty pops return fast.
     deadline = time.monotonic() + 30.0
     while served < len(positions) and time.monotonic() < deadline:
         ids, wire = batcher.next_graph_batch(len(positions), 200)

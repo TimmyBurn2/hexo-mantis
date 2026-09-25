@@ -2,7 +2,7 @@
 
 Every class with no Python consumer until WP8+ gets a pymethod round-trip here (the interim
 live consumer): HexgBuffer, GraphTargets, TacticalSolver, SelfPlayRunner(Config), MCTSTree,
-InferenceBatcher. `ReplayBuffer` was the seventh and went with the dense path (R346(f)).
+InferenceBatcher. `ReplayBuffer` was the seventh and went with the dense path.
 MCTSTree + InferenceBatcher get their DEPTH coverage in test_mcts_inference_roundtrip.py
 (O20); here they get a construction/round-trip smoke so no consumer-less class is
 registered-but-unexercised.
@@ -44,7 +44,7 @@ def test_tactical_solver_prove_round_trip():
 def test_selfplay_runner_config_field_round_trip():
     cfg = _engine.SelfPlayRunnerConfig(n_workers=2, q_rescale=True, search_stats_every=0, encoding_name="gnn_axis_v1")
     # The post-ctor get/set knobs round-trip. Nine of the ten went with the solver, forced-win
-    # and seed-corpus levers the dense path carried (R346(f)); `search_kind` is what is left.
+    # and seed-corpus levers the dense path carried; `search_kind` is what is left.
     cfg.search_kind = "gumbel"
     assert cfg.search_kind == "gumbel"
 

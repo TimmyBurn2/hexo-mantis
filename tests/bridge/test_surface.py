@@ -1,13 +1,13 @@
 """WP7 surface-presence oracle: the full assembled `mantis._engine` face.
 
 Pins the WP0 close-out re-prove (O16) inventory — the pyclasses, free fns and module fns the
-extension exports, plus the `WireAlreadyConsumed` exception — the F-42 `__module__` decision
+extension exports, plus the `WireAlreadyConsumed` exception — the `__module__` decision
 (O12, pinned: every pyclass reports `mantis._engine`, never `builtins`), and the NEW-BUILD
 `all_specs()` binding (O7).
 
-The inventories below are LISTS, not counts: R346(f) deleted `ReplayBuffer` and
-`apply_symmetries_batch` with the dense path, and a count in a test name would have to be
-re-edited every time the surface moves and would eventually be wrong (R192(e)).
+The inventories below are LISTS, not counts: `ReplayBuffer` and `apply_symmetries_batch` left
+with the dense path, and a count in a test name would have to be re-edited every time the
+surface moves and would eventually be wrong.
 """
 from mantis import _engine
 
@@ -52,7 +52,7 @@ def test_wire_already_consumed_exception_present():
 
 
 def test_f42_every_pyclass_module_is_engine():
-    """F-42 (pinned): explicit `module = "mantis._engine"` on every pyclass —
+    """Pinned: explicit `module = "mantis._engine"` on every pyclass —
     never the pyo3 default `builtins`."""
     wrong = {
         c: getattr(_engine, c).__module__

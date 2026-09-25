@@ -13,9 +13,8 @@ import pytest
 from mantis import _engine
 from mantis.encoding.registry import lookup
 
-#: These dims were once typed here by hand, in a suite whose subject is that the bridge REFUSES
-#: wrong geometry. `node_feat_dim`/`edge_feat_dim` come off the registry row; `win_length` comes
-#: off the ENGINE, which owns it, and the registry's copy is checked against it at parse.
+#: These dims were once typed here by hand, in a suite about the bridge REFUSING wrong geometry.
+#: `node_feat_dim`/`edge_feat_dim` come off the registry row; `win_length` comes off the ENGINE.
 _SPEC = lookup("gnn_axis_v1")
 NODE_FEAT_DIM = _SPEC.node_feat_dim
 EDGE_FEAT_DIM = _SPEC.edge_feat_dim
@@ -135,10 +134,8 @@ def test_builder_impl_native_handshake():
     assert wire.n_graphs == 1
 
 
-# The shape guard must cover every offset the body reads: `verify_edge_geometry_impl` guarded
-# `node_feat_dim == 0`, then read channel 1 of every node, so a dim of ONE passed the guard and
-# indexed one past the end of the last row. `panic = "unwind"` is what kept that from being
-# process-fatal — a property of the worst case, not a design.
+# The shape guard must cover every offset the body reads — a dim of ONE once passed the
+# `node_feat_dim == 0` guard, then indexed one past the end of the last row.
 
 @pytest.mark.parametrize("dim", [1, 0], ids=["one-channel", "zero-channel"])
 def test_adv8_a_node_feat_dim_the_body_cannot_index_is_REFUSED(dim: int) -> None:
@@ -220,7 +217,7 @@ def _longest_stall_while(call) -> tuple[float, float]:
 
 
 def test_verify_edge_geometry_releases_the_gil_while_it_runs() -> None:
-    """THE PIN for the detached verifier (F-46); the control is a C call that HOLDS the GIL."""
+    """THE PIN for the detached verifier; the control is a C call that HOLDS the GIL."""
     wire = _long_axis_wire(300_000)
     assert _call(wire) is None
     held_stall, held_wall = _longest_stall_while(lambda: pow(7, 2_000_000))

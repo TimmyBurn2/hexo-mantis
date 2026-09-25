@@ -1,7 +1,6 @@
-"""R255/ADJ-D34 — producer + mutation self-tests for the capacity derivation's FFI face.
+"""Producer + mutation self-tests for the capacity derivation's FFI face.
 
-``mantis._engine.derived_hexg_visit_capacity`` is the schema validator's INPUT
-(LAW-07: every gate input cites a live producer with a mutation self-test), and
+``mantis._engine.derived_hexg_visit_capacity`` is the schema validator's INPUT, and
 it is the SAME Rust authority the boot guard calls — so these pins hold the two
 surfaces to one formula. The ``HexgBuffer`` ctor leg pins that the composed
 buffer's slot geometry really is the derived value, not a 128 literal: a
@@ -25,9 +24,8 @@ def _derive(**over):
         n_sims_quick=0,
         n_sims_full=0,
         leaf_batch_size=8,
-        # The slot count depends on the SEARCH KIND, so a derivation that did not state one
-        # would be measuring an unstated regime: under `puct` it is the sims regime's
-        # formula, under `gumbel` it is the minted m (R347(a)) and the sims regime is inert.
+        # The slot count depends on the SEARCH KIND: under `puct` it is the sims regime's
+        # formula, under `gumbel` it is the minted m and the sims regime is inert.
         gumbel_m=16,
         search_kind="puct",
     )
@@ -53,7 +51,7 @@ def test_a_regime_over_the_ceiling_raises_naming_it() -> None:
 
 
 def test_the_gumbel_slot_count_is_the_minted_m_and_the_sims_regime_is_inert() -> None:
-    """R347(a) — the sparse row's slot count IS `selfplay.gumbel_m`.
+    """The sparse row's slot count IS `selfplay.gumbel_m`.
 
     Under `puct` the exported target is the visit distribution and the sims regime bounds
     its support. Under `gumbel` the target covers the LEGAL SET, which is not a constant —
@@ -87,7 +85,7 @@ def test_an_unknown_kind_is_refused_rather_than_defaulted() -> None:
 
 
 def test_buffer_ctor_requires_an_explicit_visit_capacity() -> None:
-    """No default (R255: 'no literal, no default') — the two-arg form is gone."""
+    """No default ('no literal, no default') — the two-arg form is gone."""
     with pytest.raises(TypeError):
         _engine.HexgBuffer(8, "gnn_axis_v1")
 
@@ -100,12 +98,9 @@ def _hex_dist(q: int, r: int, q2: int, r2: int) -> int:
 def test_buffer_carries_and_honors_the_composed_capacity() -> None:
     hb = _engine.HexgBuffer(8, "gnn_axis_v1", 607)
     assert hb.visit_capacity == 607
-    # 130 visit cells — over the deleted 128 literal — push AND sample intact.
-    # The cells are drawn from the legal set (within `legal_move_radius` of a stone,
-    # unoccupied). AUDIT-1 F-41: that radius was typed `<= 6` here under a comment naming the
-    # registry as the authority, so the premise restated the very fact it cited. It is READ
-    # off the row this buffer is built for, and the search box is derived from it, so a row
-    # whose radius moves moves this test instead of leaving it asserting a stale disk.
+    # 130 visit cells — over the deleted 128 literal — push AND sample intact. Cells are
+    # drawn from the legal set (within `legal_move_radius` of a stone, unoccupied), radius
+    # READ off the row this buffer is built for, so a row whose radius moves moves this test.
     radius = lookup("gnn_axis_v1").legal_move_radius
     stones = [(0, 0, 1), (1, 0, -1)]
     occupied = {(0, 0), (1, 0)}

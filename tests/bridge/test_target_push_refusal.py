@@ -1,9 +1,9 @@
-"""⊕ WP12-R Phase T (TARGET INTEGRITY) — T-3 loop-2 addition (RED_TEAM_T F-RT-2/F-RT-3;
+"""⊕ Phase T (TARGET INTEGRITY) — T-3 loop-2 addition (RED_TEAM_T F-RT-2/F-RT-3;
 dispatcher freeze addition FA-3): the FFI-side non-distribution push refusal, PYTHON leg
 (the Rust leg is the in-src bank in `crates/mantis-bridge/src/hexg.rs`).
 
 `HexgBuffer.push_graph_position` is the SECOND public graph-record constructor (the
-production Python route, pool_drain → pool_push) — R161 unconstructibility is
+production Python route, pool_drain → pool_push) — unconstructibility is
 constructor-quantified, so it refuses non-distribution rows with the SAME typed
 semantics as `record_position_graph`: the `TargetIntegrityError` Display (variant name
 first) mapped to `ValueError`; `panic="unwind"` untouched. Census grounds for refusing

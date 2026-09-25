@@ -120,10 +120,8 @@ def test_next_graph_batch_fuse_releases_the_gil() -> None:
     )
 
 
-# `_Observer` never touches the ring, so it is blind to what the release exposed: a
-# `PyRefMut` held across the GIL-free window refused any other thread with "Already mutably
-# borrowed" (measured 2026-08-30: one `.size` read, then the refusal, killing the producer).
-# Exclusion is now a mutex with every pymethod on `&self`, so a contender waits.
+# `_Observer` never touches the ring, so it never saw the fix: exclusion is now a mutex on
+# every pymethod, so a second thread that touches the ring simply waits.
 
 
 class _RingToucher(threading.Thread):

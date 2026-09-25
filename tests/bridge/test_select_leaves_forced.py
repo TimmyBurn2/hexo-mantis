@@ -1,4 +1,4 @@
-"""`MCTSTree.select_leaves_forced` returns one leaf per forced child even on a transposition (A-1, R355(b))."""
+"""`MCTSTree.select_leaves_forced` returns one leaf per forced child even on a transposition (A-1)."""
 from __future__ import annotations
 
 import pytest
