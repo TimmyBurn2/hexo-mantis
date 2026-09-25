@@ -28,6 +28,7 @@ dev = [
     "pytest>=8",
     "ruff>=0.6",
     "pyright>=1.1.380",
+    "pytest-xdist>=3.8.0",
 ]
 
 [tool.uv]
