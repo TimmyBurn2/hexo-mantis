@@ -88,6 +88,22 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   112→71. SAFETY blocks and the `!Sync` invariant kept; rustfmt skipped on base-unformatted files; check.wasm green.
 - L7 src train+config+eval+root (**opus**) and L8 the remaining src packages, tools/ root + dashboard/ladder/probe1/
   viewer and the Makefile (**sonnet**) launched.
+- CUT OFF: the dispatcher and L5–L8 were stopped by a usage limit mid-edit. RESUMED 2026-09-25 by a second W7
+  dispatcher at b4559073. Stock: L5 0 commits/49 dirty (tests/train); L6 1/8 (tests/model); L7 1/20
+  (src/mantis/config); L8 1/4 (src/mantis/monitor). The verifier printed comment-only on every committed and
+  dirty file. The CARD-set check (each token in CARDS' in-source section, counted base vs worktree) found the
+  inherited edits had dropped three listed markers: CARD-SERVER-OWNED-COPY (L5 1, L7 2), CARD-A4-MINT and
+  CARD-EVAL-GATE-FIELDS-IN-STREAM (L6). Each was restored in its own leg. L7's inherited armed_aborts.py
+  hunks inside the MANIFEST literal are reverted (PZ-6, REVIEW-W6 #3). Each leg was resumed in its own
+  worktree with the same model and ordered to commit after EACH package.
+- TRAP: `refs/stash` is SHARED by every worktree. L7's `stash pop` took L6's stash (12235a77). The
+  dispatcher restored both sides by sha, with `git stash apply <sha>` and the content compared equal.
+  Nothing was lost. The legs were told never to stash again.
+- L7 train LANDED e2c0ca7a (**opus**): cite 73→2 (the two kept CARD-SERVER-OWNED-COPY markers),
+  comment_excess 110→10. tests/train 851 passed; run10 MATCH. L6 tests/eval LANDED c7ea737b (**sonnet**,
+  the two CARD tokens restored). L8 src/mantis/selfplay LANDED dd08abb8 (**sonnet**). Floors folded:
+  cite 993→851, comment_excess 2675→2535. Gates 10/12/13/15/17 rc 0.
+- L7's first resume HALTED on the stash trap. It was re-launched (**opus**) for config, eval and root.
 
 ## W6 — docs + configs (EXITED 2026-09-25)
 
