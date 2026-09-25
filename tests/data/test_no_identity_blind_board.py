@@ -1,4 +1,4 @@
-"""AUDIT-1 F-34 — no production path builds a `Board()` that ignores the run's identity.
+"""No production path builds a `Board()` that ignores the run's identity.
 
 THE DEFECT. `mantis._engine.Board()` calls `Board::new()`, which takes
 `DEFAULT_LEGAL_MOVE_RADIUS = 5` and `DEFAULT_CLUSTER_THRESHOLD = 5` — the ENGINE's defaults,
@@ -55,7 +55,7 @@ def test_no_production_module_builds_an_identity_blind_board() -> None:
 
 
 def test_the_census_can_see_a_planted_one(tmp_path: Path) -> None:
-    """LAW-07 self-test — a census that matches nothing would pass forever."""
+    """Mutation self-test — a census that matches nothing would pass forever."""
     planted = tmp_path / "mut.py"
     planted.write_text("def f():\n    return Board()\n", encoding="utf-8")
     tree = ast.parse(planted.read_text(encoding="utf-8"))
