@@ -511,6 +511,27 @@ scale on the box. Records: `docs/design/measurements/MEASUREMENT_OC7_2026-09-11.
   the PERF-3b re-measure. The per-1,000 count rides `iteration_complete.gumbel_alpha_full` and
   the dashboard from step 0.
 
+## Open cards whose in-source markers are gone
+
+Both were in-source markers until the 2026-09-11 style pass (`2649e0b9`) stripped the marker text.
+The debt did not move with the text, so both are carried here as ordinary rows.
+
+- **CARD-BUDGET-AUTHORITY-CONSOLIDATION — CARDED as debt by R327(d): two `_SIZING_BUDGET_*`
+  authorities for one nominal quantity.** `tests/train/test_graph_microbatch_authority.py`'s
+  `_SIZING_BUDGET_BYTES` bounds the sizing frontier's MODELLED per-micro-batch peak;
+  `tests/train/test_graph_microbatch_bound.py`'s `_SIZING_BUDGET_GIB` bounds a MEASURED
+  `max_memory_allocated` delta plus an allowance, and was re-sized by R326(b) and R338(c) while the
+  first did not move. R327(d) ruled the first STAYS UNMOVED: moving it to the sibling's value reds the
+  shipped, measured-green pair and demands a cap re-fit, which is circular. The debt closes only by
+  RE-FITTING the frontier on current code, never by moving that constant.
+- **CARD-CONFIG-DISCOVERY-ROOT — CARDED at ADJ-13's close (R71, R72; `4d11147d`): discovery binds
+  `configs/` and nothing outside it.** `mantis.config.loader.discover_configs` sees every loadable
+  file under `configs/`, but a loadable config in a scratch directory is still launchable by
+  `python -m mantis.run --config` and is never discovered by gates 7 and 12. Deliberate:
+  preflighting a candidate from a scratch directory is the normal case, and every `--config` route
+  depends on it. The mint path is covered instead: `preflight_mint.py --config <path>` unions any
+  named path into the audit set (`_audit_paths`).
+
 ## Reading the identifiers
 
 Four traps, each of which has already misled a reader:
