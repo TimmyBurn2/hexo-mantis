@@ -1,6 +1,6 @@
 # Contract: eval instrument
 
-- version: v3
+- version: v4
 - owner: mantis.arena
 - status: LIVE. <!-- AUDIT-1 F-52: this read "SKELETON — contract text lands with the
   subsystem port" over a filled contract, beside a shipped eval subsystem. The label is
@@ -23,6 +23,8 @@ rung machinery (`RoundSpec.rung_jobs`, `worker._play_rung_block`) survives for t
 v2: the sealbot adapter, its fixed-depth receipt and its refusal classes are DELETED (R368(e)).
 v3: the sealbot vendor side — build script, patch, pin, `vendor.sealbot` target and both pin
 tests — is DELETED (R368(e)).
+v4: the strix cell's regime is the load of the host that PLAYS it, not the run's mirrored heartbeat
+(PERF-ADA H7): off the box that heartbeat is always live and labelled every cell CONTENDED.
 
 The run5 decision document carried that run's choices and is DELETED with its config
 (R346(f)): a decision document whose subject config is not in the tree
@@ -68,9 +70,11 @@ and are folded in here, because a reader of any ladder reading needs them:
   (`periodic_checkpoint_save`, `eval_round_complete.promoted`), never off filenames; its receipt
   is a sidecar beside the checkpoint (`<ckpt>.strix256.json`: the checkpoint's sha256 and the
   net's `net_param_hash`, strix's pinned commit and checkpoint sha256, the unit's two sims, the
-  trigger, the regime — CONTENDED when ANY run's heartbeat under the runs root is live at cell
-  start (a twin or a parent shares the card as much as this run), IDLE otherwise, with the
-  heartbeat ages as evidence — and the pair-level readout: games, eff_n, wins, losses,
+  trigger, the regime — CONTENDED when the host playing the cell is busy at cell start (any GPU at
+  or above `GPU_BUSY_PCT` by nvidia-smi, or its 1-minute load per logical CPU at or above
+  `LOAD_BUSY_PER_CPU`), IDLE otherwise, with that host's load (`regime_evidence.host`: `load_1m`,
+  `cpu_count`, `load_per_cpu`, `gpu_util_pct`, `null` without nvidia-smi) and every run's heartbeat
+  age under the runs root (`live` names a live twin or parent) as evidence — and the pair-level readout: games, eff_n, wins, losses,
   draws, wr and its CI). The sidecar is the receipt: an existing one is never re-read, the stamp
   is never touched (LAW-12), and a failed cell writes `<ckpt>.strix256.failed.json`, which is
   not a receipt. The as-shipped cell reads at block ends only (`--once --unit as_shipped`,

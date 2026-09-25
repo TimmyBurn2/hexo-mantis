@@ -8,6 +8,8 @@ import importlib.util
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 import time
 from collections.abc import Callable, Iterator, Mapping
@@ -29,8 +31,12 @@ UNITS: dict[str, tuple[int, int, str]] = {EQUAL_WORK: (256, 256, "strix256"),
 SOLVER_OFF_UNITS = frozenset({NET_ONLY})  # every other unit is the rung on record
 RADIUS_UNITS: dict[str, int] = {RULER_R6: 6}  # every other unit rides the driver's default radius
 TRIGGER_EVENTS = ("periodic_checkpoint_save", "eval_round_complete")
-#: A heartbeat younger than this at cell start means a live trainer shares the card: CONTENDED.
+#: A heartbeat younger than this at cell start names a live run in the evidence.
 HEARTBEAT_LIVE_SEC = 300.0
+#: The playing host is CONTENDED when any GPU's utilisation is at or above this (an idle desktop reads single digits).
+GPU_BUSY_PCT = 10
+#: ... or when its 1-minute load per logical CPU is at or above this (a quarter of the cores already busy).
+LOAD_BUSY_PER_CPU = 0.25
 SIDECAR_SCHEMA_VERSION = 1
 _REPO = Path(__file__).resolve().parents[1]
 _STEP_IN_NAME = re.compile(r"_(\d{8})_[0-9a-f]{8}\.ckpt$")
@@ -103,9 +109,34 @@ def sidecar_path(checkpoint: Path, unit: str) -> Path:
     return checkpoint.with_name(f"{checkpoint.name}.{UNITS[unit][2]}.json")
 
 
-def regime(run_dir: Path, run_id: str, now: float) -> tuple[str, dict[str, Any]]:
-    """CONTENDED when ANY run's heartbeat under the runs root is live at cell start, IDLE otherwise."""
-    # A shakedown twin or the parent run shares the card as much as this run's own trainer does.
+@dataclass(frozen=True)
+class HostLoad:
+    """The load of the host that plays the cell, read at cell start; `gpu_util_pct` is `None` without nvidia-smi."""
+
+    load_1m: float
+    cpu_count: int
+    gpu_util_pct: tuple[int, ...] | None
+
+
+def _gpu_util_pct() -> tuple[int, ...] | None:
+    exe = shutil.which("nvidia-smi")
+    if exe is None:
+        return None
+    try:
+        out = subprocess.run([exe, "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
+                             capture_output=True, text=True, encoding="utf-8", timeout=10, check=True).stdout
+        return tuple(int(line) for line in out.split())
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+
+
+def read_host_load() -> HostLoad:
+    """This machine's 1-minute load average, logical CPU count and per-GPU utilisation."""
+    return HostLoad(load_1m=os.getloadavg()[0], cpu_count=os.cpu_count() or 1, gpu_util_pct=_gpu_util_pct())
+
+
+def regime(run_dir: Path, run_id: str, now: float, host: HostLoad) -> tuple[str, dict[str, Any]]:
+    """CONTENDED when the host playing the cell is busy at cell start (a GPU or the CPUs at their line); a mirrored heartbeat is evidence, never the label."""
     own = run_dir / "logs" / f"heartbeat_{run_id}.json"
     ages: dict[str, float | None] = {}
     for beat in sorted({own, *run_dir.parent.glob("*/logs/heartbeat_*.json")}):
@@ -115,8 +146,13 @@ def regime(run_dir: Path, run_id: str, now: float) -> tuple[str, dict[str, Any]]
         except (OSError, ValueError, TypeError, KeyError):
             ages[key] = None
     live = sorted(name for name, age in ages.items() if age is not None and age < HEARTBEAT_LIVE_SEC)
-    return ("CONTENDED" if live else "IDLE"), {"heartbeat_age_sec": ages, "live": live,
-                                               "heartbeat_age_sec_self": ages.get("/".join(own.parts[-3:]))}
+    per_cpu = host.load_1m / max(host.cpu_count, 1)
+    busy = per_cpu >= LOAD_BUSY_PER_CPU or any(pct >= GPU_BUSY_PCT for pct in host.gpu_util_pct or ())
+    gpus = None if host.gpu_util_pct is None else list(host.gpu_util_pct)
+    return ("CONTENDED" if busy else "IDLE"), {
+        "heartbeat_age_sec": ages, "live": live, "heartbeat_age_sec_self": ages.get("/".join(own.parts[-3:])),
+        "host": {"load_1m": host.load_1m, "cpu_count": host.cpu_count, "load_per_cpu": round(per_cpu, 4),
+                 "gpu_util_pct": gpus}}
 
 
 def compose_cell(checkpoint: Path, *, unit: str, step: int, games: int, concurrency: int,
@@ -177,12 +213,13 @@ class Follower:
     def __init__(self, *, run_dir: Path, run_id: str, run_cell: RunCell, unit: str = EQUAL_WORK,
                  cadence: int = 15_000, promotions: bool = True, games: int = 288,
                  concurrency: int = 8, strix_pin: Mapping[str, Any] | None = None,
-                 clock: Callable[[], float] = time.time, log: Callable[[str], None] = print) -> None:
+                 clock: Callable[[], float] = time.time, log: Callable[[str], None] = print,
+                 host_load: Callable[[], HostLoad] = read_host_load) -> None:
         self.run_dir, self.run_id, self.run_cell = run_dir, run_id, run_cell
         self.unit, self.cadence, self.promotions = unit, cadence, promotions
         self.games, self.concurrency = games, concurrency
         self.strix_pin = dict(strix_pin) if strix_pin is not None else {}
-        self.clock, self.log = clock, log
+        self.clock, self.log, self.host_load = clock, log, host_load
         self.tail = EventTail(run_dir, run_id)
         self.pending: dict[int, Trigger] = {}
         self.fired: list[Path] = []
@@ -199,7 +236,7 @@ class Follower:
         cell = compose_cell(checkpoint, unit=self.unit, step=step, games=self.games,
                             concurrency=self.concurrency, label=label)
         started = self.clock()
-        regime_name, evidence = regime(self.run_dir, self.run_id, started)
+        regime_name, evidence = regime(self.run_dir, self.run_id, started, self.host_load())
         self.log(f"follower: {trigger} → {checkpoint.name} in {self.unit} ({regime_name})")
         record = self.run_cell(cell)
         finished = self.clock()

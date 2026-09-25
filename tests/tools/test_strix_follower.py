@@ -1,3 +1,4 @@
+# >300 justify (R8): one contract — triggers, tail, cell, receipt and regime share one planted run dir and its fakes.
 """`tools/strix_follower.py`: triggers off the event stream, one cell per receipt, the stamp untouched."""
 from __future__ import annotations
 
@@ -72,7 +73,13 @@ class _FakeCells:
         return record
 
 
+def _host(mod, load_1m: float = 0.5, cpus: int = 16, gpu: tuple[int, ...] | None = (2,)):
+    """A faked local-host load source: idle by default (0.03 load per CPU, GPU at 2 %)."""
+    return lambda: mod.HostLoad(load_1m=load_1m, cpu_count=cpus, gpu_util_pct=gpu)
+
+
 def _follower(mod, run: Path, cells: _FakeCells, **kw):
+    kw.setdefault("host_load", _host(mod))
     return mod.Follower(run_dir=run, run_id=_RUN, run_cell=cells, strix_pin={"commit": "abc",
                         "checkpoint": "ck.pt", "checkpoint_sha256": "f" * 64},
                         clock=lambda: 1_000.0, log=lambda _s: None, **kw)
@@ -150,7 +157,7 @@ def test_a_planted_cadence_event_fires_one_cell_and_writes_the_sidecar(follower_
     _heartbeat(run, wall_ts=1_000.0 - 30.0)
     _plant(run, [{"event": "periodic_checkpoint_save", "step": 15000, "path": str(ckpt)}])
     cells = _FakeCells()
-    f = _follower(follower_mod, run, cells)
+    f = _follower(follower_mod, run, cells, host_load=_host(follower_mod, gpu=(97,)))
     written = f.poll()
     assert len(cells.calls) == 1
     cell = cells.calls[0]
@@ -163,6 +170,7 @@ def test_a_planted_cadence_event_fires_one_cell_and_writes_the_sidecar(follower_
     assert body["trigger"] == "cadence" and body["regime"] == "CONTENDED"
     assert body["regime_evidence"]["heartbeat_age_sec_self"] == 30.0
     assert body["regime_evidence"]["live"] == [f"{_RUN}/logs/heartbeat_{_RUN}.json"]
+    assert body["regime_evidence"]["host"]["gpu_util_pct"] == [97]
     assert body["net_hash"] == "net" + "0" * 61
     assert body["checkpoint_sha256"] == hashlib.sha256(before).hexdigest()
     assert body["strix"]["checkpoint_sha256"] == "f" * 64
@@ -244,8 +252,8 @@ def test_the_equal_work_cell_composes_through_the_frontier_as_the_256_256_rung(
     assert frontier.cell_channel(cell) == "external"
 
 
-def test_a_sibling_runs_live_heartbeat_makes_the_cell_contended(follower_mod, tmp_path: Path) -> None:
-    """The parent run or a shakedown twin shares the card as much as this run does."""
+def test_a_sibling_runs_live_heartbeat_is_recorded_as_evidence(follower_mod, tmp_path: Path) -> None:
+    """The parent run or a shakedown twin is named in the evidence; the label is the playing host's load."""
     run = _run_dir(tmp_path)
     twin = tmp_path / "runs" / "runx-shakedown" / "logs"
     twin.mkdir(parents=True)
@@ -253,7 +261,7 @@ def test_a_sibling_runs_live_heartbeat_makes_the_cell_contended(follower_mod, tm
                                                         encoding="utf-8")
     ckpt = _checkpoint(run, 15000)
     _plant(run, [{"event": "periodic_checkpoint_save", "step": 15000, "path": str(ckpt)}])
-    f = _follower(follower_mod, run, _FakeCells())
+    f = _follower(follower_mod, run, _FakeCells(), host_load=_host(follower_mod, load_1m=12.0))
     body = json.loads(f.poll()[0].read_text(encoding="utf-8"))
     assert body["regime"] == "CONTENDED"
     assert body["regime_evidence"]["live"] == ["runx-shakedown/logs/heartbeat_runx-shakedown.json"]
@@ -267,8 +275,59 @@ def test_a_stale_preflight_heartbeat_with_the_same_filename_cannot_hide_the_live
     stale = tmp_path / "runs" / "runx-preflight" / "logs"
     stale.mkdir(parents=True)
     (stale / "heartbeat_runx.json").write_text(json.dumps({"wall_ts": 1_000.0 - 18_000.0}), encoding="utf-8")
-    name, evidence = follower_mod.regime(run, _RUN, 1_000.0)
+    name, evidence = follower_mod.regime(run, _RUN, 1_000.0, _host(follower_mod, gpu=(60,))())
     assert name == "CONTENDED", evidence
     assert evidence["heartbeat_age_sec_self"] == 2.0
     assert "runx/logs/heartbeat_runx.json" in evidence["live"] and len(evidence["live"]) == 1
     assert evidence["heartbeat_age_sec"]["runx-preflight/logs/heartbeat_runx.json"] == 18_000.0
+
+
+def test_a_live_mirrored_heartbeat_on_an_idle_host_reads_IDLE(follower_mod, tmp_path: Path) -> None:
+    """Off the box the mirror's heartbeat is always live; the label describes the host that played the cell."""
+    run = _run_dir(tmp_path)
+    _heartbeat(run, 1_000.0 - 3.0)
+    ckpt = _checkpoint(run, 15000)
+    _plant(run, [{"event": "periodic_checkpoint_save", "step": 15000, "path": str(ckpt)}])
+    f = _follower(follower_mod, run, _FakeCells(), host_load=_host(follower_mod, load_1m=1.0, cpus=16, gpu=(3,)))
+    body = json.loads(f.poll()[0].read_text(encoding="utf-8"))
+    assert body["regime"] == "IDLE", body["regime_evidence"]
+    assert body["regime_evidence"]["live"] == [f"{_RUN}/logs/heartbeat_{_RUN}.json"], "the run's liveness stays evidence"
+    assert body["regime_evidence"]["host"] == {"load_1m": 1.0, "cpu_count": 16, "load_per_cpu": 0.0625,
+                                               "gpu_util_pct": [3]}
+
+
+@pytest.mark.parametrize(("load_1m", "cpus", "gpu", "want"), [
+    (0.5, 16, (2,), "IDLE"),
+    (0.5, 16, None, "IDLE"),
+    (0.5, 16, (2, 55), "CONTENDED"),
+    (8.0, 16, None, "CONTENDED"),
+    (3.9, 16, (9,), "IDLE"),
+    (4.0, 16, None, "CONTENDED"),
+    (0.5, 16, (10,), "CONTENDED"),
+])
+def test_the_label_is_the_local_host_load_at_cell_start(follower_mod, tmp_path: Path, load_1m: float,
+                                                        cpus: int, gpu: tuple[int, ...] | None, want: str) -> None:
+    """Any GPU at or above the busy line, or the CPUs at or above theirs, is CONTENDED; below both is IDLE."""
+    run = _run_dir(tmp_path)
+    name, evidence = follower_mod.regime(run, _RUN, 1_000.0, _host(follower_mod, load_1m, cpus, gpu)())
+    assert name == want, evidence
+
+
+def test_the_host_load_reader_reads_nvidia_smi_and_survives_its_absence(follower_mod, monkeypatch) -> None:
+    """One utilisation per GPU from nvidia-smi; no binary, or a failing one, is `None`, never a zero."""
+    import subprocess
+
+    monkeypatch.setattr(follower_mod.os, "getloadavg", lambda: (2.0, 1.0, 0.5))
+    monkeypatch.setattr(follower_mod.os, "cpu_count", lambda: 8)
+    monkeypatch.setattr(follower_mod.shutil, "which", lambda _name: "/usr/bin/nvidia-smi")
+    monkeypatch.setattr(follower_mod.subprocess, "run",
+                        lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout="37\n5\n", stderr=""))
+    assert follower_mod.read_host_load() == follower_mod.HostLoad(load_1m=2.0, cpu_count=8, gpu_util_pct=(37, 5))
+
+    def _fails(*_a, **_k):
+        raise subprocess.CalledProcessError(9, "nvidia-smi")
+
+    monkeypatch.setattr(follower_mod.subprocess, "run", _fails)
+    assert follower_mod.read_host_load().gpu_util_pct is None
+    monkeypatch.setattr(follower_mod.shutil, "which", lambda _name: None)
+    assert follower_mod.read_host_load() == follower_mod.HostLoad(load_1m=2.0, cpu_count=8, gpu_util_pct=None)

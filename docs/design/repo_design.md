@@ -759,6 +759,14 @@ input is a deviation from the amendment's text and lands here in the same commit
 
 ---
 
+### AMENDMENT — PERF-ADA H7: a strix cell's regime is the PLAYING host's load
+
+The R356(d) amendment above states each point's regime as read "from every run's heartbeat under
+the runs root at cell start". That held while the follower ran on the box; on another host the
+mirrored heartbeat is always live and labelled every cell CONTENDED. The label is now the load of
+the host that plays the cell (`tools/strix_follower.py` `regime`, contract #9 v4); the heartbeat ages
+stay in the receipt as evidence. The panel's rule — every point carries its regime — is unchanged.
+
 ### AMENDMENT — contract #11 ADDED: the game record
 
 **R344(b).** A run's games are now WRITTEN. Under §4's own clause — *"each has
