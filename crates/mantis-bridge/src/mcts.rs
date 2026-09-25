@@ -451,6 +451,7 @@ mod tests {
 
         let seed = PyBoard::new();
         t.new_game(&seed);
+        Python::initialize();
         Python::attach(|py| {
             let _leaves = t.select_leaves(py, 1).expect("a fresh root selects itself");
             let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
