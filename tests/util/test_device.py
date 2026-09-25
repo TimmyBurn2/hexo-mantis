@@ -62,8 +62,8 @@ def test_best_device_falls_back_to_cpu(monkeypatch):
 # The card-level sink and the per-round boundary — two readings the caching-allocator counters
 # do not carry, added HERE because `mantis.util.device` owns `torch.cuda` for the paths
 # `tests/eval/test_pipeline_isolation.py` fences off, not for the whole repo. The card-level
-# one is the sink that measured against the allocator's own figure at matched config; where
-# the two disagree the LARGER governs.
+# one is the sink that measured 15 342 MiB against the allocator's own figure at matched config
+# (2026-08-22 host); where the two disagree the LARGER governs.
 
 
 def test_cuda_device_used_bytes_is_total_minus_free(monkeypatch):
