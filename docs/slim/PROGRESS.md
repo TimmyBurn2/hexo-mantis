@@ -96,6 +96,15 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   That needs a grant (R43/R310). Operator: grant it, then delete run6.yaml. The implementer's
   oracle-body commit ad29e624 was DROPPED, and so was 3334eda1's test_preflight_mint.py half (also
   R310-frozen). With run6 kept, neither is needed.
+- cards LANDED 33e32a16..5edc954a (9 commits, **sonnet**): RULINGS_ACTIVE.md deleted after its F-816-34/35/36
+  text was carried into CARDS and the remaining `A:` coordinate cites were dropped (each paragraph names its
+  ruling). CARDS 1028 -> 730 lines: the closed, landed and spent cards are removed, and half-open ones are
+  condensed to their residue. DOCS-1-04: the markers section was re-derived, 11 real markers. DOCS-1-05:
+  OC7 DISCHARGED, MAX_CHILDREN 1024, the pyright cite. REVIEW-W4 N3: measures named from the floor file.
+  Defect 48 (MINPIN) done. Defect 51 plus W5's residue: CARD-MECHANISM-SWEEP members and CARD-W5-RESIDUE.
+  Gates 10/13/17 green.
+  - Kept, with grounds: CARD-GUMBEL-HEAD-RESIDUE (still carded), CARD-WARMSTART-CONTROL (unread),
+    CARD-E1-RULER-R6 (self-retaining).
 - Queued: leg 6, the STATE rewrite (**opus**), then
   REVIEW-W6 (**opus**).
 
