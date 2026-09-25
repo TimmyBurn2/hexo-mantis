@@ -447,6 +447,8 @@ pub fn build_leaf_graphs_batch(
 #[cfg(test)]
 mod poison_tests {
     use std::sync::{Arc, Mutex};
+    use std::thread::JoinHandle;
+    use std::time::{Duration, Instant};
 
     use super::{build_leaf_graph, GraphQueue, GraphWaiter};
 
@@ -468,29 +470,39 @@ mod poison_tests {
         build_leaf_graph(&[], 1, 2, 6, 3, 19).expect("the empty board builds")
     }
 
-    /// With the queue and waiter-map locks poisoned, a batch still round-trips and close wakes.
+    /// Serve `want` requests with an `Err("served <id>")` reply each; gives up after two seconds.
+    fn serve(q: &GraphQueue, want: usize) -> JoinHandle<usize> {
+        let producer = q.clone();
+        std::thread::spawn(move || {
+            let (deadline, mut served) = (Instant::now() + Duration::from_secs(2), 0);
+            while served < want && Instant::now() < deadline {
+                let ids: Vec<u64> = producer
+                    .pop_graph_batch(8, 20)
+                    .iter()
+                    .map(|r| r.0)
+                    .collect();
+                let replies = ids.iter().map(|id| Err(format!("served {id}"))).collect();
+                producer.submit_graph_results(&ids, replies);
+                served += ids.len();
+            }
+            served
+        })
+    }
+
+    /// With the queue and waiter-map locks poisoned, both submit paths round-trip and close wakes.
     #[test]
-    fn a_poisoned_queue_still_serves_a_batch_and_closes() {
+    fn a_poisoned_queue_still_serves_both_submit_paths_and_closes() {
         let q = GraphQueue::new();
         poison(&q.inner.queue);
         poison(&q.inner.waiters);
-        let producer = q.clone();
-        let served = std::thread::spawn(move || loop {
-            let batch = producer.pop_graph_batch(8, 50);
-            if !batch.is_empty() {
-                let ids: Vec<u64> = batch.iter().map(|(id, _)| *id).collect();
-                let replies = ids.iter().map(|id| Err(format!("served {id}"))).collect();
-                producer.submit_graph_results(&ids, replies);
-                return ids.len();
-            }
-        });
-        let results = q.submit_graphs_and_wait(vec![empty_graph(), empty_graph()]);
-        assert_eq!(served.join().expect("the producer thread"), 2);
-        for res in &results {
+        let producer = serve(&q, 3);
+        let batch = q.submit_graphs_and_wait(vec![empty_graph(), empty_graph()]);
+        let single = q.submit_graph_and_wait(empty_graph());
+        assert_eq!(producer.join().expect("the producer thread"), 3);
+        for res in batch.iter().chain(std::iter::once(&single)) {
             let reason = res.as_ref().expect_err("the test producer replies Err");
             assert!(reason.starts_with("served "), "{reason}");
         }
-        q.fail_remaining(&[u64::MAX], "no such id");
         q.close();
         assert!(q.is_closed());
         let after = q.submit_graph_and_wait(empty_graph());
@@ -500,9 +512,9 @@ mod poison_tests {
         );
     }
 
-    /// A poisoned waiter lock still delivers the payload it is handed.
+    /// A waiter blocked on a poisoned result lock still wakes to the payload it is handed late.
     #[test]
-    fn a_poisoned_waiter_still_delivers_its_payload() {
+    fn a_poisoned_waiter_still_blocks_and_delivers_its_payload() {
         let q = GraphQueue::new();
         let waiter = Arc::new(GraphWaiter::default());
         poison(&waiter.result);
@@ -511,10 +523,31 @@ mod poison_tests {
             .lock()
             .expect("unpoisoned in this test")
             .insert(7, waiter.clone());
-        q.submit_graph_results(&[7], vec![Err("payload".to_string())]);
+        let producer = q.clone();
+        let late = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(50));
+            producer.submit_graph_results(&[7], vec![Err("payload".to_string())]);
+        });
+        let got = q.wait_for(&waiter);
+        late.join().expect("the late producer");
+        assert_eq!(got.expect_err("the payload is an Err"), "payload");
+    }
+
+    /// `fail_remaining` still fails a live waiter whose result lock is poisoned.
+    #[test]
+    fn fail_remaining_reaches_a_poisoned_waiter() {
+        let q = GraphQueue::new();
+        let waiter = Arc::new(GraphWaiter::default());
+        poison(&waiter.result);
+        q.inner
+            .waiters
+            .lock()
+            .expect("unpoisoned in this test")
+            .insert(9, waiter.clone());
+        q.fail_remaining(&[9], "failed by the producer");
         assert_eq!(
-            q.wait_for(&waiter).expect_err("the payload is an Err"),
-            "payload"
+            q.wait_for(&waiter).expect_err("fail_remaining set an Err"),
+            "failed by the producer"
         );
     }
 }
