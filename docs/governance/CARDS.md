@@ -587,25 +587,11 @@ nulls, two promotions. run6 minted `eval.concurrency = 8`. R343(a).
   they are NOT filled agent-side; it is load-bearing because it discharges R56/R133/R138. R267 has
   no section at all — the only record is a STATE digest line, deliberately not reconstructed
   because a digest line is not the ruling.
-- **run5 prereg values — SPENT.** R137 leg (b) `checkpoint_interval` and R147
-  `eval.random_floor_games` were owed against run5's config, which minted them at `0`. R346(f)
-  pruned that config out of the tree, so the rows have no subject; run6 mints `1000` and `20`.
 - **R226 / R229 / R243 — prereg rows owed:** two flagged at dispatch 8C, three 8B findings.
 - **R349(c) / R350(e) — the three-row α = 1.0 reconstruction is OWED with its finding.** Three
   rows from the game record: `v_mix` vs max visited Q, which stone of the turn, the perspective
   sign at the root; a perspective error at the intermediate stone is the first hypothesis. The
   START-path measurement (§B, F-45) read 25 rows from a burst; the block's rows are not yet read.
-- **R359(e) — the twin's inherited preflight: DISCHARGED 2026-09-18 by R360(c).**
-  `require_preflight_stamp(config, tree_root=, inherit_from=<run config>)` — `mantis.run
-  --inherit-preflight <run>.yaml` — accepts the run's VESTED stamp for a config that differs from it
-  in `run_id` alone (`TWIN_LEAVES`; run paths are `--out-dir`'s, never a leaf), writes the twin's
-  stamp with `inherited_from` and "preflight inherited from <sha>", and refuses any further
-  difference by name (`PreflightStampTwinMismatchError`; `tests/config/test_preflight_stamp.py`
-  plants a `seed`). A stamp of the twin's own always wins; the parent's own refusals propagate.
-- **R245(c) — the LAW-18 augmentation-group counter: DISCHARGED 2026-09-18 (R358(b)).**
-  `iteration_complete.sym_draws` (12 bins + empty-board skips off the ring's `draw_syms`), read by
-  `ring_audit --events` as `sym_bin0_over_mean` and by the dashboard's throughput panel; producer-tested
-  with a stuck-RNG mutation (`tests/train/test_augment_sym_counter.py`).
 
 ## CARD-* named in governance
 
