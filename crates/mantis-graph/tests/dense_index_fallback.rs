@@ -135,8 +135,8 @@ fn a_scattered_position_has_no_dense_index_to_probe() {
 
 #[test]
 fn the_two_arms_build_the_same_graph() {
-    // A scattered (hash-arm) position and the same stones translated into a compact (dense-arm)
-    // frame must agree field for field: one position just inside the budget, one just outside.
+    // Not a translated pair compared field for field: one two-stone position just inside the
+    // budget (dense arm) and one just outside (hash arm), differing only in the span.
     let inside = build_axis_graph(&scattered_stones(4), &params());
     let outside = build_axis_graph(&scattered_stones(4000), &params());
     let n_in = inside.num_nodes() - 1;
@@ -149,8 +149,8 @@ fn the_two_arms_build_the_same_graph() {
         !axis_index_is_dense(&outside.node_coords, n_out),
         "the far pair must not be"
     );
-    // Two far-apart stones have disjoint radius-balls, contributing the same local structure
-    // as a near pair: the fallback arm changes the LOOKUP only, never the edge count per node.
+    // Far-apart stones have disjoint radius-balls, each adding what a near pair's stone adds when
+    // far enough not to overlap: the arm changes the LOOKUP, never the edge pairing.
     assert_eq!(
         inside.edge_index.src.len() % 2,
         outside.edge_index.src.len() % 2,
