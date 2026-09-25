@@ -3,22 +3,9 @@
 //! Run with:
 //!   cargo bench -p mantis-search --bench mcts_bench
 //!
-//! (The `bench_win_detection` micro-bench that lived beside this in the old tree
-//! times `Board::check_win` — a core primitive — and belongs with mantis-core;
-//! it is excluded here.)
-//!
-//! `expand_leaf` is a RECORDED CHARACTERISATION with **no abort attached**
-//! (WP12-R Phase EVALDECODE, LAW-09 rider R-2). It times the two leaf-expand
-//! rules against each other — `expand_and_backup` (dense: ≤ trunk² candidates by
-//! array index) vs `expand_and_backup_ls_at` (legal-set: the FULL legal set, with
-//! a hash lookup per off-window cell). Both functions already exist and
-//! `mcts/backup.rs` is untouched by that card, so this group measures a
-//! **pre-existing structural differential**, identical before and after it — a
-//! measured floor is a finding, not a failure. Its purpose is to BOUND the
-//! explainable component of the eval-round wall-clock move, so that whatever is
-//! left over is attributable to the only new work that card adds: per-leaf FFI
-//! marshalling of the ragged overflow, which lives in the bridge and which no
-//! `mantis-search` criterion bench can reach (no pyo3 here).
+//! `expand_leaf` is a recorded characterisation with **no abort attached**: it times the dense
+//! expand rule against the legal-set rule (a hash lookup per off-window cell), a structural
+//! differential that bounds the explainable part of the eval-round wall-clock move.
 
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 use mantis_core::board::Board;
@@ -79,11 +66,8 @@ fn bench_expand_leaf(c: &mut Criterion) {
         let n_legal = legal.len();
         let center = board.window_center();
 
-        // Uniform priors on both sides: this group times the two EXPAND RULES, not
-        // a net. The ls half carries EVERY off-window legal cell, which is what the
-        // graph producer's overflow contains at these positions (measured: 0 absent
-        // coords at 4/4, the P-2e oracle) — so the hash-lookup count is realistic
-        // rather than best-case.
+        // Uniform priors: this group times the EXPAND RULES, not a net. The ls half carries every
+        // off-window legal cell, as the graph producer's overflow does here (0 absent coords at 4/4).
         let dense: Vec<f32> = vec![1.0 / POLICY_STRIDE as f32; POLICY_STRIDE];
         let mut ls = LegalSetPolicy {
             dense: dense.clone(),

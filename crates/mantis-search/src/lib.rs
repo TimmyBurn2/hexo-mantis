@@ -5,9 +5,7 @@
 //! takes `n_actions` as a caller parameter and the Board carries plain geometry, so no
 //! encoding/spec resolution happens here.
 
-// The ported doc comments use markdown list-continuation lines that clippy's
-// `doc_lazy_continuation` (a rendering nicety) flags; suppressed crate-wide to
-// keep the verbatim doc structure. Logic-affecting lints are handled per-site.
+// Doc comments use markdown list-continuation lines, which `doc_lazy_continuation` flags.
 #![allow(clippy::doc_lazy_continuation)]
 
 pub mod legal_set;

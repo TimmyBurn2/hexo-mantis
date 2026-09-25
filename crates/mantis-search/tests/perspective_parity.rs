@@ -4,8 +4,6 @@
 //! Each node stores w_value in its own player-to-move perspective (backup.rs
 //! negamax). When root has moves_remaining==1, children belong to the opponent,
 //! so their w_value must be negated before use as Q targets.
-//! puct_score already handled this; three sibling sites did not, inverting
-//! training targets at ~50% of positions.
 
 use mantis_core::board::{Board, BOARD_SIZE};
 use mantis_search::MCTSTree;
@@ -106,10 +104,8 @@ mod perspective_parity {
 
     /// `root_completed_qvalues` must negate the child Q when root_mr==1.
     ///
-    /// REPLACES the deleted `GumbelSearchState::score` arm of this file. The legacy
-    /// dialect's per-candidate score is gone; the surviving surface that reads a child's
-    /// `w_value` and has to put it in ROOT perspective is the completion, which both the
-    /// root selector and the exported target run through. Same property, live subject.
+    /// The completion is the surface that puts a child's `w_value` in ROOT perspective, for
+    /// both the root selector and the exported target.
     #[test]
     fn test_completed_qvalues_flip_at_intermediate_ply() {
         // mr==2: the children are the root's own, no negation.

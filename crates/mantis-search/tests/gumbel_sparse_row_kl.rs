@@ -15,7 +15,7 @@ mod common;
 use common::{gumbel_search, r8_board, stub_policy, C_VISIT, N_ACTIONS};
 use mantis_search::{MCTSTree, QSigma};
 
-/// The minted candidate count (R347(b)); it is also the sparse row's slot bound.
+/// The minted candidate count; it is also the sparse row's slot bound.
 const GUMBEL_M: usize = 16;
 /// Small on purpose: the divergence does not depend on the budget.
 const SIMS: usize = 64;

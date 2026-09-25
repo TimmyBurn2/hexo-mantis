@@ -2,16 +2,11 @@
 
 /// Which search this tree runs — PUCT, or Gumbel-Top-k with Sequential Halving.
 ///
-/// ONE key, and a CLOSED one. The predecessor surface carried four independent
-/// switches (`gumbel_mcts`, `gumbel_variant`, and a `completed_q_values` flag on each
-/// of the self-play and train sections), which spelled sixteen regimes of which two
-/// were ever run and none of the other fourteen was ever measured. The corrections
-/// that made Gumbel correct are not independently meaningful — they are what corrected
-/// Gumbel IS — so they travel as a kind rather than as a lattice.
+/// ONE closed key: the corrections that make Gumbel correct are what corrected Gumbel IS, so
+/// they travel as a kind rather than as independent switches.
 ///
-/// NO `Default`, deliberately (LAW-11). An absent search kind is an error at the config
-/// seam, never a silent PUCT; a `Default` impl here would be the code-side default that
-/// makes the schema's requirement unenforceable.
+/// NO `Default`, deliberately: an absent search kind is an error at the config seam, never a
+/// silent PUCT.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SearchKind {
     /// PUCT descent everywhere, Dirichlet root noise, visit-count targets.
@@ -44,20 +39,17 @@ impl SearchKind {
     }
 
     /// Whether this kind exports the completed-Q improved policy as its training
-    /// target. THE one authority: the target semantics used to be a second pair of
-    /// config flags that could disagree with the search that produced them.
+    /// target; the one authority, so the target cannot disagree with the search.
     #[must_use]
     pub fn completed_q_target(self) -> bool {
         matches!(self, SearchKind::Gumbel)
     }
 
-    /// R347(a) — whether this kind's graph rows are stored SPARSE: the m visited candidates'
+    /// Whether this kind's graph rows are stored SPARSE: the m visited candidates'
     /// exact entries plus one tail mass α, rather than a slot per legal action.
     ///
-    /// It is the same predicate as `completed_q_target` today and is deliberately a SECOND
-    /// method rather than a reuse of the first: they answer different questions (what the
-    /// target MEANS versus how the row is LAID OUT), and a kind that completed its Q-values
-    /// but visited every action would want the first and not the second.
+    /// Same predicate as `completed_q_target` today but a separate question: that one says what
+    /// the target MEANS, this one how the row is LAID OUT.
     #[must_use]
     pub fn stores_sparse_rows(self) -> bool {
         matches!(self, SearchKind::Gumbel)

@@ -1,20 +1,10 @@
 //! Regression test: top-K leaf cap eliminates pool overflow at any board state.
 //!
-//! Background — `mcts::backup::expand_and_backup_single` previously created one
-//! child per legal move. On a sparse board with 100+ stones the legal-move set
-//! can balloon past 1k cells (radius-8 hex ball per stone), so
-//! `n_simulations × leaf_batch × n_legal` overflowed `MAX_NODES`. The earlier
-//! mitigation marked the leaf terminal with a fabricated value and silently
-//! corrupted training targets.
+//! Leaf expansion creates at most `MAX_CHILDREN_PER_NODE` children whatever the legal set's size,
+//! so `pool_overflow_count()` stays zero on a normal-sized pool and no node exceeds K children.
 //!
-//! After the top-K change, leaf expansion creates at most
-//! `MAX_CHILDREN_PER_NODE` children regardless of `legal_moves.len()`, so
-//! `pool_overflow_count()` must stay at zero across a normal-sized pool, and
-//! no node in the tree may exceed K children.
-//!
-//! These tests drive a pure-Rust self-play loop with uniform priors (no NN
-//! server required), advancing 200 plies with `n_simulations=400`,
-//! `leaf_batch=8` per move — well past the regime where the old code blew up.
+//! A pure-Rust self-play loop with uniform priors (no NN server): 200 plies at
+//! `n_simulations=400`, `leaf_batch=8`, where an uncapped radius-8 legal set overflows `MAX_NODES`.
 
 use mantis_core::board::{Board, BOARD_SIZE};
 use mantis_search::{MCTSTree, MAX_CHILDREN_PER_NODE, pool_overflow_count, take_pool_overflow_count};

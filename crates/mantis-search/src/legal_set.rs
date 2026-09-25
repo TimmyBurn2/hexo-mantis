@@ -18,14 +18,11 @@ pub struct LegalSetPolicy {
 }
 
 impl LegalSetPolicy {
-    /// Read the prior/target mass for board coord `(q, r)`. In-global-window
-    /// cells read `dense` (identical to the dense path); any off-window cell
-    /// present in `overflow` reads its entry — on the EXPORT path (WP12-R
-    /// Phase T no-drop law) uncovered off-window cells carry overflow entries
-    /// too, so coverage no longer bounds the overflow key set; an off-window
-    /// cell ABSENT from `overflow` reads `floor` (the no-coverage prior, a
-    /// prior-producer convention). `(bcq, bcr)` is the global window centre,
-    /// `trunk_sz`/`half` the spec-derived geometry.
+    /// Read the prior/target mass for board coord `(q, r)`. In-global-window cells read `dense`;
+    /// an off-window cell present in `overflow` reads its entry (on the export path uncovered
+    /// off-window cells carry entries too, so coverage does not bound the key set); an absent
+    /// off-window cell reads `floor`, the no-coverage prior. `(bcq, bcr)` is the global window
+    /// centre, `trunk_sz`/`half` the spec-derived geometry.
     #[inline]
     #[allow(clippy::too_many_arguments)] // VERBATIM signature (scalar coord + geometry + floor)
     pub fn get(

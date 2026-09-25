@@ -16,8 +16,7 @@
 //! Eviction is sound by construction: a bucket collision is resolved by full-key comparison, and
 //! evicting a proven-LOSS entry only forces a re-proof later. The replacement policy ranks
 //! `is_proof` above any non-proof entry, so a heuristic bound can never evict a proof from the
-//! depth-preferred slot. The byte-level `#[repr(C)]` packing is deferred to the perf box; the
-//! algorithmic wins are all present.
+//! depth-preferred slot.
 
 use super::{MATE, WIN_THRESHOLD};
 
@@ -133,12 +132,9 @@ impl ProofTt {
     /// Bump the generation (deploy-time reuse across `prove` calls): entries from the prior
     /// generation become preferentially replaceable.
     ///
-    /// Currently ZERO callers, and NOT deletable on its own: `prove`/`prove_in_place` construct
-    /// a FRESH `ProofTt` per call, so no table survives to be aged, and the bump, the
-    /// `generation` comparison in the replacement rule and the staleness test are ONE mechanism
-    /// with ONE switch — the solver owning its table. That switch is a PERF DECISION, banked as
-    /// one: the per-call construction is an 8 MiB alloc-and-fill ahead of a node budget in the
-    /// tens of thousands, which wants a pre-registered gain bracket and an IQR-gated bench.
+    /// Zero callers while `prove` builds a fresh `ProofTt` per call (an 8 MiB alloc, a
+    /// bench-gated perf decision); the bump, the replacement rule's `generation` check and the
+    /// staleness test are one mechanism with that one switch, so none is deletable alone.
     #[cfg(test)]
     pub fn new_generation(&mut self) {
         self.generation = self.generation.wrapping_add(1);
@@ -301,11 +297,8 @@ mod tests {
 
     #[test]
     fn heuristic_score_clamps_into_int16_band_never_a_proof() {
-        // A heuristic (sub-threshold, non-mate) score must clamp strictly inside the i16 mate
-        // band so a decoded value can NEVER read as a proof magnitude; the boundary values just
-        // inside the proof region exercise the clamp. Inputs at or over the mate magnitude are
-        // genuine mate scores and correctly encode to the band, and the search never feeds an
-        // out-of-band heuristic because leaves are pre-clamped.
+        // A heuristic score must clamp strictly inside the i16 mate band so a decoded value never
+        // reads as a proof magnitude; these values just inside the proof region exercise the clamp.
         for &v in &[-WIN_THRESHOLD + 1, -123, 0, 77, WIN_THRESHOLD - 1] {
             assert!(
                 v.abs() < WIN_THRESHOLD,

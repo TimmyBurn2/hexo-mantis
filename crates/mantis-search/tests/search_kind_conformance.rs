@@ -17,9 +17,7 @@ use mantis_search::{
 const N_ACTIONS: usize = 19 * 19 + 1;
 
 /// A radius-8 board whose legal set clears the per-node cap, so the two kinds are
-/// DISTINGUISHABLE at the root. GROWN UNTIL IT CLEARS THE CAP rather than tuned to one: two
-/// adjacent stones put 232 moves in the legal set, over a 192-wide cap but under the 1024-wide
-/// one, so the fixture stopped telling the kinds apart the moment the constant moved.
+/// DISTINGUISHABLE at the root; GROWN UNTIL IT CLEARS THE CAP so it survives the constant moving.
 fn wide_board() -> Board {
     let mut board = Board::new();
     board.set_legal_move_radius(8);
@@ -43,8 +41,7 @@ fn wide_board() -> Board {
 }
 
 /// Expand the root once with a uniform policy and a stated leaf value; no serialising lock,
-/// because the omitted-prior counters are per-`MCTSTree` rather than process-global (as globals
-/// they once made the witness read "2 truncating expansions" for one).
+/// because the omitted-prior counters are per-`MCTSTree` rather than process-global.
 fn expand_root(kind: SearchKind, value: f32) -> (MCTSTree, Board) {
     expand_root_unlocked(kind, value)
 }
@@ -130,8 +127,8 @@ fn the_config_spelling_round_trips_and_an_unknown_kind_is_refused() {
     for k in [SearchKind::Puct, SearchKind::Gumbel] {
         assert_eq!(SearchKind::from_config_str(k.as_config_str()), Some(k));
     }
-    // REFUSED, not defaulted: a kind that falls back to `puct` on a typo is the silent-fallback
-    // class LAW-11 closes, and the four keys this one replaces must not parse either.
+    // REFUSED, not defaulted: a kind that falls back to `puct` on a typo is a silent fallback,
+    // and the four keys this one replaces must not parse either.
     for bad in [
         "",
         "PUCT",
@@ -269,7 +266,7 @@ fn only_the_gumbel_kind_keeps_a_raw_root_value() {
 
 #[test]
 fn the_kind_states_its_pool_envelope() {
-    // Both bounds DERIVED from the pool's own constants, never transcribed (R98).
+    // Both bounds DERIVED from the pool's own constants, never transcribed.
     assert_eq!(MAX_ARMED_SIMS, MAX_NODES / (4 * MAX_CHILDREN_PER_NODE));
     assert_eq!(
         MAX_ARMED_SIMS_GUMBEL,

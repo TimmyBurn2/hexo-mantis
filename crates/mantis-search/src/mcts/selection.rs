@@ -9,12 +9,8 @@ use mantis_core::board::{Board, MoveDiff};
 
 /// The selected child's stored `action_idx` decoded to a cell the board cannot play.
 ///
-/// This was an `.expect(...)` and it FIRED in production: the self-play worker matched the exact
-/// text `Board::apply_move` returns and restarted the tree at root. `apply_move` errs only on
-/// OCCUPANCY, so the panic means the tree and the board have desynchronised. An `Err` rather than
-/// a panic because on the self-play arm the unwind halts the run with no reason latched, on the
-/// eval arm it surfaced as a `PanicException` recoverable only by a string match, and a panic
-/// crossing the FFI is convertible only because the profile sets `panic = "unwind"`.
+/// `apply_move` errs only on OCCUPANCY, so this means the tree and the board have
+/// desynchronised. An `Err` rather than a panic, so every caller latches a named reason.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SelectionDesync {
     /// Pool index of the node whose child was selected.
@@ -143,11 +139,8 @@ impl MCTSTree {
         let parent = &self.pool[parent_idx as usize];
 
         let q = if child.n_visits == 0 && child.virtual_loss_count == 0 {
-            // Unvisited node: use the dynamic FPU value. It is computed by the caller from
-            // the parent's own Q, so it is ALREADY in the parent's to-move perspective — the
-            // one the visited branches resolve to. A visited child's stored Q is in the CHILD's
-            // perspective and must be negated when the turn flips; fpu_value needs no such
-            // negation because it never left the parent's perspective.
+            // Unvisited: `fpu_value` is computed from the parent's own Q, so it is ALREADY in the
+            // parent's to-move perspective and, unlike a visited child's Q, is never negated.
             fpu_value
         } else if parent.moves_remaining == 1 {
             -child.q_value_vl(self.virtual_loss)
@@ -205,10 +198,8 @@ impl MCTSTree {
                 0.0
             };
 
-            // Gumbel MCTS root mechanism: at root with a `forced_root_child` set, descend
-            // directly to it (Sequential Halving forces sims into one candidate subtree).
-            // Otherwise, and at every interior node, selection is PUCT — the override is
-            // Gumbel's ROOT mechanism and is orthogonal to interior selection.
+            // At the root a set `forced_root_child` (Sequential Halving) is descended directly;
+            // otherwise the root selects by PUCT.
             let best = if cur == 0 {
                 if let Some(forced) = self.forced_root_child {
                     forced
@@ -216,10 +207,8 @@ impl MCTSTree {
                     pick_best_puct(self, first, n_ch, cur, parent_n, fpu_value)
                 }
             } else if self.kind == crate::mcts::SearchKind::Gumbel {
-                // Below the root the Gumbel kind selects by the improved policy with the
-                // visit-count correction, not by PUCT. `None` only when the node has no
-                // children, which the loop above already excluded, so the PUCT fallback is
-                // unreachable rather than a silent second policy.
+                // Gumbel interior: improved policy with the visit-count correction. `None` only on
+                // a childless node, excluded above, so the PUCT fallback is unreachable.
                 self.pick_best_mctx_interior(cur)
                     .unwrap_or_else(|| pick_best_puct(self, first, n_ch, cur, parent_n, fpu_value))
             } else {
@@ -244,9 +233,7 @@ impl MCTSTree {
     /// `softmax(log_prior + completed_q) - visits / (1 + sum_visits)`. The subtracted term makes
     /// repeated argmaxes APPROXIMATE the improved policy's visitation frequencies rather than
     /// piling every visit on one child; without it the interior of the tree stops sampling.
-    /// Returns `None` when the node has no children. The `completed_q` vector is allocated per
-    /// call and is not pooled — stated rather than optimised, since a perf change wants a
-    /// measurement first.
+    /// Returns `None` when the node has no children. Allocates `completed_q` per call.
     #[allow(clippy::cast_possible_truncation)] // j indexes children, itself a u16 count
     pub(crate) fn pick_best_mctx_interior(&self, node_idx: u32) -> Option<u32> {
         let completed = self.node_completed_qvalues(node_idx, self.q_sigma);
@@ -279,9 +266,7 @@ impl MCTSTree {
     pub fn select_leaves(&mut self, n: usize) -> Result<Vec<Board>, SelectionDesync> {
         self.pending.clear();
         let mut boards = Vec::with_capacity(n);
-        // O(1) overlap dedup on leaf pool indices; the prior code scanned `self.pending`
-        // linearly for every selected leaf, O(N^2) in batch size. The set lives only for this
-        // call.
+        // O(1) overlap dedup on leaf pool indices; the set lives only for this call.
         let mut pending_ids: FxHashSet<u32> = FxHashSet::default();
         pending_ids.reserve(n);
         let mut board = self.root_board.clone();
@@ -297,10 +282,8 @@ impl MCTSTree {
             let (leaf_idx, leaf_depth) = match self.select_one_leaf(&mut board, &mut diffs) {
                 Ok(pair) => pair,
                 Err(desync) => {
-                    // Unwind this descent before propagating: the nodes on the path already
-                    // took their virtual loss, and leaving it applied would permanently
-                    // penalise them for a walk that never produced a leaf. The board is rewound
-                    // too, so `self.root_board` invariants hold for any retry.
+                    // Unwind before propagating, or the path keeps a virtual loss for a walk that
+                    // produced no leaf; the board rewinds too, so `root_board` holds for a retry.
                     self.undo_virtual_loss(desync.node);
                     while let Some(diff) = diffs.pop() {
                         board.undo_move(diff);
@@ -319,9 +302,8 @@ impl MCTSTree {
                 continue;
             }
 
-            // Clone the cached policy (an `Arc` refcount bump, not a 1448 B copy) and value,
-            // dropping the immutable TT borrow before the `&mut self` expand call. Dispatch on
-            // the dense vs ragged legal-set variant.
+            // An `Arc` refcount bump, not a 1448 B copy; the TT borrow drops before the
+            // `&mut self` expand. Dispatch on the dense vs ragged legal-set variant.
             let cached = self
                 .transposition_table
                 .get(&board.zobrist_hash)
@@ -341,10 +323,8 @@ impl MCTSTree {
                 continue;
             }
 
-            // `pending` owns the fully-replayed leaf `Board` rather than a `Vec<MoveDiff>`, so
-            // `expand_and_backup` no longer clones `root_board` and replays per leaf — roughly
-            // depth board mutations saved per leaf. The pending clone is a sibling of the
-            // NN-input board and skips the `legal_cache` copy.
+            // `pending` owns the fully-replayed leaf `Board`, so expansion never re-replays from
+            // `root_board`; this sibling of the NN-input board skips the `legal_cache` copy.
             boards.push(board.clone());
             self.pending.push((leaf_idx, board.clone()));
             pending_ids.insert(leaf_idx);
@@ -420,10 +400,8 @@ impl MCTSTree {
                 continue;
             }
 
-            // The TT fast path is DELIBERATELY absent here. `select_leaves` expands a TT-hit
-            // leaf inline without counting it against the batch, which is what makes its worst
-            // case `4n` expansions; a Gumbel round has an exact leaf count per round trip, and
-            // that is the quantity this call exists to make measurable.
+            // No TT fast path here: a Gumbel round needs an exact leaf count per round trip,
+            // which `select_leaves`' uncounted TT-hit expansions would break.
             boards.push(board.clone());
             self.pending.push((leaf_idx, board.clone()));
             pending_ids.insert(leaf_idx);

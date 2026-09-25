@@ -6,17 +6,11 @@
 //! regression is sub-ULP but nonzero, so `==` on bits catches it and `abs()<1e-6` would
 //! not.
 //!
-//! S1/S2/S3 ARE GONE WITH THEIR SUBJECT. They pinned the LEGACY completed-Q exporters
-//! and the legacy `GumbelSearchState::score`, all three of which the search-kind
-//! collapse deletes; a golden over a deleted arm is not a guard, it is a fixture nobody
-//! can re-derive. Their rows stay in the golden FILE, which is manifest-sha-pinned and
-//! therefore not editable here — `parse_golden` reads by key, so the unread rows are
-//! inert. S4 is untouched and its bits still hold, which is the property that matters:
-//! the deletion did not perturb the PUCT path.
+//! The golden file's other rows are inert: `parse_golden` reads by key, and the file is
+//! manifest-sha-pinned, so rows no test reads stay rather than being edited out here.
 
-// The seeded RNG constant (`0x5_4D_1_5EED`) is FROZEN — the golden was captured with
-// this exact seed. Its underscore grouping is preserved verbatim; suppress the cosmetic
-// `unusual_byte_groupings` lint.
+// The seeded RNG constant (`0x5_4D_1_5EED`) is FROZEN — the golden was captured with this exact
+// seed, so its grouping stays verbatim and `unusual_byte_groupings` is suppressed.
 #![allow(clippy::unusual_byte_groupings)]
 
 use super::*;

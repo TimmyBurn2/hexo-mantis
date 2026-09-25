@@ -1,8 +1,6 @@
 // Exceeds the 300-line soft cap: the shared mcts unit suite and its setup helpers port as one
 // in-src module because they reach pool/next_free internals.
-//
-// VERBATIM-ported unit fixtures — the action-index encodings, the range-membership assertion
-// and the `&vec![0.0; n]` calls — trip cosmetic style lints that are suppressed below.
+// The action-index encodings, range assertion and `&vec![0.0; n]` calls trip the lints below.
 #![allow(
     clippy::identity_op,
     clippy::manual_range_contains,
@@ -678,12 +676,8 @@ fn test_no_forced_win_short_circuit_in_expansion() {
     );
 }
 
-// CF-1: compound-turn terminal sign. The leaf's side-to-move (== `board.moves_remaining`)
-// decides the sign of a `check_win` leaf's terminal value, NOT a hardcoded -1.0: a turn-final
-// win leaves `mr==2` (loser to move) -> -1.0, while a stone-1 win keeps the player and leaves
-// `mr==1` (winner to move) -> +1.0. The pre-fix hardcode scored the stone-1 win as -1.0 and
-// dragged its parent's Q toward a loss, so PUCT avoided completing on the first stone. These
-// exercise `expand_and_backup_single` on a non-legal-cadence fixture from `Board::from_stones`.
+// CF-1: compound-turn terminal sign. The leaf's side-to-move (`board.moves_remaining`) decides a
+// `check_win` leaf's sign: a turn-final win leaves `mr==2` -> -1.0, a stone-1 win `mr==1` -> +1.0.
 
 /// Build a P1 6-in-a-row along the E/W axis with `last_move` on the line.
 /// `mr`/`player` are set by the caller to model stone-1 vs stone-2 wins.
@@ -758,11 +752,9 @@ fn test_cf1_stone2_win_still_scored_as_loss_to_mover() {
     );
 }
 
-// CF-6: FPU sign consistency, pinning a verified no-bug invariant in `puct_score`. A VISITED
-// child's stored Q is mr-negated (at `mr==1` the child is the other player, at `mr==2` the
-// same), while an UNVISITED child's `fpu_value` arrives ALREADY in the parent's to-move frame
-// and is NEVER negated. `c_puct=0.0` zeroes the U term so `puct_score == q`; flipping either
-// expected sign fails.
+// CF-6: FPU sign consistency in `puct_score`. A VISITED child's stored Q is mr-negated, an
+// UNVISITED child's `fpu_value` is already in the parent's frame and never negated.
+// `c_puct=0.0` zeroes the U term so `puct_score == q`; flipping either expected sign fails.
 
 #[test]
 fn test_cf6_fpu_sign_consistent_with_visited_child_at_both_mr() {
@@ -818,9 +810,8 @@ pub(super) fn setup_expanded_root() -> MCTSTree {
 
 #[test]
 fn test_wp6_driver_setters_roundtrip() {
-    // The two narrow public setters for the separate-crate selfplay driver; the in-crate test
-    // reads the `pub(crate)` fields directly. The setter validates against the ROOT's child
-    // range, so this round-trip needs a root that HAS children.
+    // The two narrow public setters for the separate-crate selfplay driver; the setter validates
+    // against the ROOT's child range, so this round-trip needs a root that HAS children.
     let mut tree = setup_expanded_root();
     let first = tree.pool[0].first_child;
     tree.set_forced_root_child(Some(first))
@@ -1221,9 +1212,8 @@ fn test_topk_tie_break_by_flat_idx() {
     use fxhash::FxHashSet;
     use mantis_core::board::HALF;
 
-    // CAP + 1 cells inside the window at identical priors, so exactly one is dropped and the
-    // flat_idx-ascending tie-break drops the largest flat_idx. CAP is a local for the sibling's
-    // reason: the window bounds the fixture, the production constant does not.
+    // CAP + 1 in-window cells at identical priors: exactly one is dropped, and the flat_idx
+    // tie-break drops the largest. CAP is a local because the window bounds the fixture.
     const CAP: usize = 128;
     let target = CAP + 1;
     let mut cells: FxHashSet<(i32, i32)> = FxHashSet::default();
@@ -1304,9 +1294,8 @@ fn test_topk_fast_path_keeps_all_when_under_cap() {
 
 #[test]
 fn test_topk_child_order_independent_of_hashset_capacity() {
-    // Regression guard: `pick_topk_children` must emit a canonical order independent of the
-    // `FxHashSet`'s capacity or iteration order. A `legal_moves_set` capacity-reserve changed
-    // the hashbrown layout, and the `n_legal <= K` path leaked it into MCTS.
+    // `pick_topk_children` must emit a canonical order independent of the `FxHashSet`'s capacity
+    // or iteration order, which the `n_legal <= K` path would otherwise leak into MCTS.
     use super::backup::pick_topk_children;
     use fxhash::FxHashSet;
     use mantis_core::board::HALF;
@@ -1362,15 +1351,11 @@ fn test_topk_child_order_independent_of_hashset_capacity() {
     );
 }
 
-// The desync is a NAMED error, and the forced child is bounded. `select_one_leaf` used
-// `expect("selected move should always be legal")`, and `Board::apply_move` errs ONLY on
-// occupancy, so it fired exactly when a child's stored `action_idx` decoded to an occupied
-// cell — tree and board desynchronised. It fired in production: `selfplay/worker.py` matched
-// the panic's message text to restart the tree at root.
+// The desync is a NAMED error and the forced child is bounded. `Board::apply_move` errs ONLY on
+// occupancy, so a child decoding to an occupied cell means tree and board desynchronised.
 
 /// A tree whose root has ONE child pointing at a cell the root board already holds: the stone
-/// is played BEFORE `new_game` and the child's `action_idx` is overwritten to decode back to
-/// it — exactly the state the production `expect` fired on.
+/// is played BEFORE `new_game` and the child's `action_idx` is overwritten to decode back to it.
 fn desynchronised_root() -> MCTSTree {
     let mut tree = MCTSTree::new(1.5);
     let mut board = Board::new();
@@ -1426,10 +1411,8 @@ fn a_healthy_tree_still_selects_leaves() {
 
 #[test]
 fn a_forced_root_child_outside_the_roots_range_is_refused() {
-    // The second trigger. `u32::MAX` index-panicked on the next descent, and any other foreign
-    // index descended into a node the root does not own — an uninitialised slot's
-    // `action_idx = u32::MAX` decodes to (32767, 32767), which an UNBOUNDED board accepts, so
-    // that arm produced neither a panic nor an error.
+    // `u32::MAX` would index-panic; any other foreign index reaches an unowned node, and an
+    // uninitialised slot decodes to (32767, 32767), which an UNBOUNDED board accepts.
     let mut tree = setup_expanded_root();
     let err = tree
         .set_forced_root_child(Some(u32::MAX))
@@ -1497,10 +1480,8 @@ fn a_root_with_no_children_accepts_no_forced_child_at_all() {
     assert!(tree.set_forced_root_child(None).is_ok());
 }
 
-// A short batch degrades the BATCH, not the TREE. `expand_and_backup` took
-// `n = pending.len().min(policies.len()).min(values.len())` and dropped the rest of an already
-// `mem::take`n `pending`, so every node on those descents kept a virtual loss nothing would
-// ever back up — permanently depressing their PUCT score, on the deploy-strength path.
+// A short batch degrades the BATCH, not the TREE: the dropped leaves must get their virtual
+// loss back, or those nodes stay penalised with nothing left to back them up.
 
 #[test]
 fn a_short_policy_batch_gives_the_dropped_leaves_their_virtual_loss_back() {

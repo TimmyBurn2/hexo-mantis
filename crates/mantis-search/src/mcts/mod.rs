@@ -186,11 +186,8 @@ impl MCTSTree {
     /// # Errors
     /// `ForcedChildOutOfRange` — `child` is not a pool index inside the ROOT's child range.
     ///
-    /// This used to be an unchecked store, and the value is read straight into
-    /// `self.pool[best as usize]` on the next descent: an index past `MAX_NODES` index-panics,
-    /// and any other in-range index descends into a node the root does not own — including an
-    /// uninitialised slot, whose `action_idx` decodes to a cell an unbounded board ACCEPTS. That
-    /// arm produced no panic and no error: it silently searched a subtree belonging to nothing.
+    /// An unchecked store would let the next descent index-panic past `MAX_NODES`, or silently
+    /// search a subtree the root does not own (an uninitialised slot decodes to an accepted cell).
     pub fn set_forced_root_child(
         &mut self,
         child: Option<u32>,
@@ -217,8 +214,7 @@ impl MCTSTree {
         Ok(())
     }
 
-    /// Configure quiescence once per worker from run config (mirrors the old worker's
-    /// post-construction set). Pure state set — no search logic.
+    /// Configure quiescence once per worker from run config. Pure state set — no search logic.
     pub fn configure_quiescence(&mut self, enabled: bool, blend_2: f32) {
         self.quiescence_enabled = enabled;
         self.quiescence_blend_2 = blend_2;
@@ -233,9 +229,8 @@ impl MCTSTree {
 
     /// Select the search kind once per worker. Pure state set, surviving `new_game`.
     ///
-    /// ONE setter and ONE stored kind: every surface that used to branch on a `gumbel_mcts` bool
-    /// AND a dialect name AND a `completed_q_values` flag now reads this field, so the four
-    /// cannot disagree about which search ran.
+    /// The one stored kind every surface reads, so no two surfaces can disagree about which
+    /// search ran.
     pub fn configure_search(&mut self, kind: SearchKind, sigma: QSigma) {
         self.kind = kind;
         self.q_sigma = sigma;
@@ -343,15 +338,13 @@ impl MCTSTree {
         let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
         let uniform_prior = 1.0 / n_actions as f32;
         let uniform_policy = vec![uniform_prior; n_actions];
-        // Bench-fidelity: hoist the policies/values slot vecs ONCE outside the outer loop and
-        // resize per iteration, removing bench-loop allocation noise. Bit-equivalent algorithm,
-        // and production self-play does NOT enter this path.
+        // Slot vecs hoisted out of the loop to keep allocation noise out of the bench;
+        // production self-play never enters this path.
         let mut policies: Vec<Vec<f32>> = Vec::with_capacity(1);
         let mut values: Vec<f32> = Vec::with_capacity(1);
         for _ in 0..n {
-            // A desync ENDS the bench loop rather than being retried: the bench measures a healthy
-            // search. `run_simulations_cpu_only` has no production caller, so this is the one place
-            // the error is legitimately dropped instead of propagated.
+            // A desync ENDS the bench loop: this path has no production caller, so it is the one
+            // place the error is dropped instead of propagated.
             let Ok(boards) = self.select_leaves(1) else {
                 return;
             };

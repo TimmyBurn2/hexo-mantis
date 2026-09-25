@@ -1,9 +1,7 @@
 //! Quarter-cosine self-play temperature schedule (pure std math).
 //!
-//! Ported from the self-play worker loop's inline temperature helper. It carries
-//! NONE of the loop's coupling — the symmetry/rotation helpers stay in the
-//! self-play layer; only this pure `f32` math lives here so the cross-language
-//! CSV golden (`tests/temperature_parity_golden.rs`) can pin it inside this crate.
+//! Only the pure `f32` math lives here, none of the worker loop's coupling, so the CSV golden
+//! (`tests/temperature_parity_golden.rs`) can pin it inside this crate.
 
 /// Quarter-cosine temperature schedule used by the self-play worker loop.
 ///

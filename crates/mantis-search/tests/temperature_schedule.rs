@@ -7,9 +7,6 @@
 //! The `(TEMP_THRESHOLD=15, TEMP_MIN=0.05)` constants below are illustrative
 //! FORMULA parameters, NOT the production default (the shipped default is
 //! `0 / 0.5`, schedule OFF).
-//!
-//! `compute_move_temperature` was extracted so this integration test can pin the
-//! formula without a full self-play smoke run.
 
 use mantis_search::compute_move_temperature;
 

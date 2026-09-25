@@ -43,9 +43,7 @@ pub(crate) fn mass_micros(mass: f32) -> u64 {
 /// whether the Top-K cap truncated.
 ///
 /// Children are ALWAYS ordered by `(prior desc, window_flat_idx asc)`, independent of
-/// `FxHashSet` iteration order — a hashbrown table-layout artifact that leaked into
-/// `pick_best_puct`'s "first equal score wins" tie-breaking, where a capacity-reserve once
-/// shifted search silently (mcts_mean_depth 3.4 -> 2.5 from the bootstrap anchor).
+/// `FxHashSet` iteration order, which would otherwise leak into `pick_best_puct`'s tie-break.
 ///
 /// Out-of-window cells get sort prior `0.0` on the slow path and the `1/n_ch` fallback on the
 /// fast one. `trunk_sz`/`half` are the NN-input frame geometry: 19 / 9, or 25 / 12.

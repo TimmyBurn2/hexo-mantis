@@ -35,7 +35,7 @@ pub(super) fn prior_fallback_masses(children: &[CqChild]) -> Vec<f32> {
 }
 
 /// σ(q̂) = `(c_visit + max_n) · c_scale · (rescale ? minmax(q̂) : q̂)` — Mctx's `maxvisit_init`,
-/// `value_scale` and `rescale_values` as ONE value, so no two surfaces can hold two σs (R351(b)).
+/// `value_scale` and `rescale_values` as ONE value, so no two surfaces can hold two σs.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct QSigma {
     pub c_visit: f32,
