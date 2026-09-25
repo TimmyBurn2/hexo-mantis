@@ -7,11 +7,8 @@
 //! here; the helpers `leak_str` and `parse_int_or_none` stay in `super`
 //! (`registry/mod.rs`).
 //!
-//! Two sanctioned behavior changes vs the ported original (each oracle-gated):
-//!   - UNKNOWN-KEY rejection: any key not in the recognized set is a parse error
-//!     (collected, not short-circuited). Kills the old "silently ignore extras".
-//!   - `representation` REQUIRED: an absent `representation` is a named parse
-//!     error, never a grid/dense default (LAW-11).
+//! An unknown key is a parse error (collected, not short-circuited), and an absent
+//! `representation` is a named parse error, never a grid/dense default.
 
 use toml::Value;
 
@@ -128,9 +125,8 @@ pub(super) fn parse_one(name: &str, body: &Value) -> Result<RegistrySpec, String
         };
     }
 
-    // UNKNOWN-KEY rejection (sanctioned change): iterate every present key and
-    // flag any outside the recognized set. Runs in the SAME collect-all pass so
-    // a smuggled unknown key AND a co-present missing key both report.
+    // UNKNOWN-KEY rejection runs in the SAME collect-all pass, so a smuggled unknown key AND a
+    // co-present missing key both report.
     for key in table.keys() {
         if !KNOWN_KEYS.contains(&key.as_str()) {
             errs.push(format!("[encodings.{name}]: unknown key {key:?}"));
@@ -213,9 +209,8 @@ pub(super) fn parse_one(name: &str, body: &Value) -> Result<RegistrySpec, String
     let n_source_planes = get_int!("n_source_planes").map(|v| v as usize);
     let k_max = get_int!("k_max").map(|v| v as u32);
 
-    // `representation` is REQUIRED (sanctioned change, LAW-11): an absent key is
-    // a named parse error, NOT a Grid/dense default. The graph-only fields stay
-    // `None` for grid and are required-when-graph by `validate()`.
+    // `representation` is REQUIRED: absent is a named parse error, NOT a Grid/dense default.
+    // The graph-only fields stay `None` for grid and are required-when-graph by `validate()`.
     let representation = match table.get("representation") {
         None => {
             errs.push(format!(

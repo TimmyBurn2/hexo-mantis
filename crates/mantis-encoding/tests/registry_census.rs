@@ -1,8 +1,8 @@
 //! O-4..O-10, O-13 — registry census (pruned set), per-field pins on the two graph rows, and
 //! the derived field-diff that keeps `gnn_axis_r8` a one-knob edit of `gnn_axis_v1`.
 //!
-//! The three grid rows (`v6`, `v6w25`, `v6_live2_ls`) went with the dense path (R346(f)); they
-//! are pinned here as ABSENT so a resurrected row fails the census rather than the encoder.
+//! The three grid rows (`v6`, `v6w25`, `v6_live2_ls`) are pinned here as ABSENT, so a
+//! resurrected row fails the census rather than the encoder.
 
 use mantis_encoding::{all_specs, lookup, PolicyPool, Representation, ValuePool};
 
@@ -43,7 +43,7 @@ fn census_exact_n_and_names() {
     }
 }
 
-/// `representation` is the identity key (LAW-11) and `"grid"` is refused BY NAME rather than
+/// `representation` is the identity key and `"grid"` is refused BY NAME rather than
 /// falling through as unknown, so a stale row says what happened to it.
 #[test]
 fn representation_parse_refuses_grid_by_name() {
@@ -95,10 +95,8 @@ fn per_field_pins_gnn_axis_v1() {
     assert_eq!(s.legal_move_radius, 6);
 }
 
-/// AUDIT-1 F-41. `gnn_axis_r8` — run6's own identity row — appeared ONLY in this file's name
-/// lists; every per-field pin covered the other four rows. A row with no per-field pin is a row
-/// whose geometry can be edited without a single assertion moving, and this is the row the next
-/// mint runs on.
+/// `gnn_axis_r8`'s own per-field pin: a row with no per-field pin can have its geometry edited
+/// without a single assertion moving.
 #[test]
 fn per_field_pins_gnn_axis_r8() {
     let s = lookup("gnn_axis_r8").expect("gnn_axis_r8 is a registered row");
@@ -142,16 +140,13 @@ fn per_field_pins_gnn_axis_r8() {
     );
 }
 
-/// The Rust port of `tests/encoding/test_r8_identity.py::test_r328b_03` (AUDIT-1 F-41's repair
-/// line, "port the field-diff to Rust"). The two graph rows must differ in EXACTLY the radius
-/// pair and their identifying strings — `gnn_axis_r8` exists to move ONE knob, so a stray
-/// `win_length` or `policy_logit_count` difference makes the r6/r8 comparison two comparisons.
+/// Rust twin of `tests/encoding/test_r8_identity.py::test_r328b_03`: the two graph rows must
+/// differ in EXACTLY the radius pair and their identifying strings — `gnn_axis_r8` exists to move
+/// ONE knob, so a stray `win_length` or `policy_logit_count` difference makes the r6/r8
+/// comparison two comparisons.
 ///
-/// DERIVED, not a typed field list. Rust has no reflection, so the walk is over the `{:#?}`
-/// dump `#[derive(Debug)]` generates from the struct definition: a field ADDED to
-/// `RegistrySpec` joins both dumps automatically, which is the property the Python original
-/// has and a hand-enumerated comparison does not — a typed list is edited in the same commit
-/// as the drift it would have caught.
+/// DERIVED, not a typed field list: the walk is over the `{:#?}` dump `#[derive(Debug)]`
+/// generates, so a field ADDED to `RegistrySpec` joins both dumps automatically.
 #[test]
 fn the_two_graph_rows_differ_in_exactly_the_radius_pair() {
     let v1 = format!(
@@ -201,7 +196,7 @@ fn the_two_graph_rows_differ_in_exactly_the_radius_pair() {
     );
 }
 
-/// LAW-07 for the field-diff above: the extractor must ATTRIBUTE a difference to the field that
+/// The field-diff's mutation self-test: the extractor must ATTRIBUTE a difference to the field that
 /// owns it, including one buried inside a multi-line `Option`. Driven on two hand-built dumps so
 /// the control does not need a mutated registry.
 #[test]

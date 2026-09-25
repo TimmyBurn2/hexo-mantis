@@ -5,10 +5,8 @@ use std::collections::BTreeSet;
 
 use super::{PolicyPool, RegistrySpec, Representation, ValuePool};
 
-// The graph invariants are single-sourced against the axis-graph builder's own
-// schema constants (mantis-encoding → mantis-graph rlib dep) so
-// `node_feat_dim`/`edge_feat_dim`/`win_axes`/`builder_impl_required` can never
-// drift from what `build_axis_graph` emits.
+// Graph invariants are single-sourced against the axis-graph builder's own schema constants,
+// so the graph dims, `win_axes` and `builder_impl_required` cannot drift from its output.
 use mantis_core::board::WIN_LENGTH;
 use mantis_graph::{BUILDER_IMPL_NATIVE, EDGE_FEAT_DIM, NODE_FEAT_DIM, WIN_AXES};
 
@@ -31,9 +29,8 @@ impl RegistrySpec {
     pub fn validate(&self) -> Result<(), String> {
         let mut errs: Vec<String> = Vec::new();
 
-        // Action space = board_size² + (pass?1:0). Load-bearing for BOTH
-        // representations (a graph plays the identical 19×19+pass board — the
-        // policy_logit_count STAYS 362).
+        // Action space = board_size² + (pass?1:0), for BOTH representations: a graph plays
+        // the identical 19×19+pass board, so policy_logit_count STAYS 362.
         let expected_logits = self.board_size * self.board_size + usize::from(self.has_pass_slot);
 
         let cw_some = self.cluster_window_size.is_some();
@@ -129,18 +126,10 @@ impl RegistrySpec {
             errs.push("n_chain_planes must be >= 1".to_string());
         }
 
-        // AUDIT-1 F-37. `mantis_selfplay::replay::sym::sym_tables_for` asserts
-        // `n_chain_planes == N_CHAIN_PLANES` and matches `(sym_table_id, n_planes)` against
-        // `("size_19", _) | ("size_25", 8)`, PANICKING on anything else — and it is reached
-        // from `SelfPlayRunner::start()`, including on a GRAPH run where the tables are never
-        // read. So a registry row with a new `sym_table_id` failed at the first runner start,
-        // in a worker thread, rather than at `parse_encoding_toml` or gate 8. Both conditions
-        // are pinned HERE, where the registry `LazyLock` refuses at load.
-        //
-        // The values are duplicated rather than imported because `mantis-encoding` sits BELOW
-        // `mantis-selfplay` in the DAG and may not depend on it; the two are held equal by
-        // `registry_census.rs`, which asserts this validator refuses exactly what
-        // `sym_tables_for` would have panicked on.
+        // `mantis_selfplay`'s `sym_tables_for` PANICS at runner start (graph runs included) on
+        // any other `(sym_table_id, n_chain_planes)`, so the registry refuses it here, at load.
+        // Duplicated rather than imported: this crate sits BELOW mantis-selfplay in the DAG, and
+        // `registry_census.rs` holds the two equal.
         const SYM_TABLE_IDS: [&str; 2] = ["size_19", "size_25"];
         const SYM_CHAIN_PLANES: usize = 6;
         if !SYM_TABLE_IDS.contains(&self.sym_table_id) {
@@ -177,9 +166,8 @@ impl RegistrySpec {
             }
         }
 
-        // representation-gated invariants
-        // The axis-graph geometry invariants are gated on Graph. The multi-window /
-        // legal_move_radius / k_max / n_chain_planes checks above stay universal.
+        // Representation-gated: the axis-graph geometry invariants apply to Graph only; the
+        // multi-window / legal_move_radius / k_max / n_chain_planes checks above are universal.
         match self.representation {
             Representation::Graph => {
                 // action space UNCHANGED (identical 19×19+pass board).
@@ -207,23 +195,17 @@ impl RegistrySpec {
                     EDGE_FEAT_DIM,
                 );
                 require_graph_eq(&mut errs, "win_axes", self.win_axes, WIN_AXES.len());
-                // AUDIT-1 F-42. `win_length` is the GAME'S rule, not a free registry number:
-                // `mantis_core::board::WIN_LENGTH` owns it and five copies read it. The check
-                // was "present + positive", which accepts a 7 that no engine path honours.
+                // `win_length` is the GAME'S rule (`mantis_core::board::WIN_LENGTH`), not a free
+                // registry number: "present + positive" would accept a 7 no engine path honours.
                 require_graph_eq(&mut errs, "win_length", self.win_length, WIN_LENGTH);
                 match self.graph_radius {
                     Some(r) if r >= 1 => {}
                     Some(r) => errs.push(format!("graph_radius={r} must be >= 1")),
                     None => errs.push("representation=graph requires graph_radius".to_string()),
                 }
-                // AUDIT-1 F-18. THE RELATION, not two independent positivity checks. The MCTS
-                // legal set is built at `legal_move_radius` (`runner::game`) and the graph's
-                // legal nodes at `graph_radius` (`runner::search_drive`, `replay::hexg`). If
-                // they disagree the ragged policy covers a different cell set than the tree
-                // expands - the `EmptyLegalSet` / dropped-mass family. Until this line the
-                // only thing holding them equal was a COMMENT in registry.toml
-                // ("legal_move_radius = 8   # matches graph_radius"), and Leg 3 edits exactly
-                // these two keys.
+                // THE RELATION, not two positivity checks: the MCTS legal set is built at
+                // `legal_move_radius` and the graph's legal nodes at `graph_radius`; if they
+                // disagree the ragged policy covers a different cell set than the tree expands.
                 if let Some(r) = self.graph_radius {
                     if r != self.legal_move_radius {
                         errs.push(format!(
