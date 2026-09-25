@@ -332,8 +332,8 @@ def build_run_collaborators(
     # regime differed by 3.62 GiB of card high-water (measured 2026-08-22); non-cuda is exempt.
     _assert_allocator_posture(config.model_dump(), device_type=device.type)
     with _seam("init_trainer"):
-        # The SAME late-binding sink adapter the WorkerPool gets; pre-bind emissions (resume-time
-        # events fired in this builder) still drop, per the adapter's semantics.
+        # The WorkerPool's late-binding adapter: without the bind every trainer emission drops in a
+        # production run; pre-bind ones (resume-time events in this builder) still drop, by design.
         trainer = init_trainer(config=config.model_dump(), checkpoint_dir=str(checkpoint_dir),
                                device=device, sink=_DeferredSink(),
                                checkpoint_path=checkpoint_path)
