@@ -27,12 +27,29 @@ the idle warm server after the load, and compares every output EXACTLY (`probe_r
 planted `.item()` that must red; on the desktop 3070 at L0 it catches exactly `real[legal_index] = True`, and
 `index_fill_` clears it.
 
-**L2's error criterion, pre-stated before the new path was measured.** On the same captured batches (≥ 8 real
-B-64 batches of distinct positions, the 45k parent, eager), the new path's max |Δ| against the fp32 no-autocast
-reference, pooled over the set, must not exceed the CURRENT path's pooled repeat spread (max over outputs of the
-range across 5 bf16 repeats), for value and for legal logits separately. The current path on the desktop 3070
-(8 batches, 0.96–1.09 M edges each): spread **0.114 value / 1.19 logit**; its own error vs fp32 reaches 0.108 /
-1.03 (max), 0.0053–0.0095 value (mean). The box figures are read on the box at L2 against the box's own spread.
+**L2's error criterion: v1 was pre-stated, failed its own control, and was replaced by E before the new path was
+measured.** v1 (pooled max |Δ| vs fp32 over 8 real batches ≤ the current path's pooled repeat spread) fails on the
+CURRENT path itself: desktop 3070 logit 1.40 > 1.0; box 4080S 4 of 10 single draws; the literal L0 form on the box
+(64 probe positions, served compiled) value 0.0962 > 0.0657 and prob 0.0191 > 0.0153. Today's error vs fp32 is
+mostly systematic (the other bf16 ops), so an error-vs-jitter band at the output is unsatisfiable. A red-team review
+selected **E** (the session adopts it; UNRATIFIED by the operator):
+- **(ii-a) gate, at the aggregation**: on every GINE layer's real `(msg, dst, n, divisor)` captured from the
+  parent's 8 real B-64 batches (eager bf16 forward), the production aggregation, eager and compiled, returns bf16,
+  is exactly 0 where the fp64 sum is 0, is within one bf16 ulp (`2^(e−8)`, `frexp` of the fp64 sum) of it
+  elsewhere, and its pooled max |Δ| vs fp64 is ≤ the pre-L2 sum's pooled range over 5 repeats.
+- **(ii-b) guard, end to end**: pooled mean |Δlogit| vs the fp32 forward ≤ the pre-L2 path's worst of 5 repeats.
+- **Controls first**: the pre-L2 sum must break the ulp bound and jitter (the instrument is live); an exact fp32
+  oracle must pass (ii-a) eager and compiled and (ii-b). Both hosts. HALT if production fails (i), (ii-a) or (ii-b).
+
+**Finding 5 is corrected (repaired in place, R311(c)).** On bf16, `index_put_(accumulate=True)` rounds after every
+add in a fixed order: op-level max |Δ| vs fp64 on the desktop 3070 is 586.6, identical to bf16 `index_add_`; only an
+fp32 buffer cast once stays within one bf16 ulp (4.0). The box's `agg_micro.json` shows the same (185.6 vs 179.6).
+L2 therefore implements R369(b) as ONE custom op, `mantis::gine_aggregate`: an fp32 buffer summed by the
+deterministic sorted `index_put_` in bounded edge chunks, divided in fp32, rounded once; its backward is the bf16
+gather; opaque to Inductor, so the compiled server cannot lower it to fp32 atomics (non-deterministic, item 3).
+
+**(iii), re-stated before L2 was measured.** Two runs of the same path at the cap differ by 18 MiB (allocator state),
+so the two paths are alternated twice in one process and max(production) ≤ max(pre-L2) is the rule.
 
 **LAW-09 bench ledger** (bench_server, B 64, IDLE box, `--windows 5`; expected gain and abort threshold stated
 before the bench):
@@ -41,6 +58,7 @@ before the bench):
 |---|---|---|---|---|---|
 | L0 instrument (parent of L1) | 0 (tools and tests only) | — | `c9474c85` | 1 853 [1 768, 1 869]; repeat DIFFERS, max \|Δvalue\| 0.0657, \|Δp\| 0.0153 | — |
 | L1 `index_fill_` mask | +8 … +15 % (item 3: +12 %) | median < 0.97 × parent, or slower beyond the IQR | `a25183cd` | 2 101 [1 994, 2 106]; `launch` 31.4 → 8.9 ms; repeat DIFFERS 0.0671 / 0.0148 | **+13.4 %**, faster beyond the IQR |
+| L2 fp32 sorted aggregation (custom op) | +30 … +65 % over L1 (item 3 idxput + nosync: +87 % over base, but fp32 values and chunking cost more) | median < 0.97 × L1, or slower beyond the IQR | | | |
 
 The repeat probe reads DIFFERS on both rows by construction: the mask is bit-identical, and the non-determinism is the bf16 `index_add_` aggregation L2 replaces.
 
@@ -67,7 +85,7 @@ The repeat probe reads DIFFERS on both rows by construction: the mask is bit-ide
    **1.4 cores** (base) and 2.7 cores (fixed) of 16.
 5. **`index_put_(accumulate=True)` is the deterministic twin of fp32acc.** It serves at **2 824 leaves/s alone and
    3 381 with the sync fix**, with **exactly 0** run-to-run difference on real batches. It uses PyTorch's sort-based
-   path, which accumulates in fp32 and rounds once. It also speeds the trainer: **469 vs 523 ms/step** (−10 %),
+   path, which accumulates in fp32 and rounds once [CORRECTED: on bf16 it rounds after every add; see the R369 ledger]. It also speeds the trainer: **469 vs 523 ms/step** (−10 %),
    CUDA kernels 269 vs 321 ms, same 8.81 GiB peak.
 6. **Today's production bf16 path is not run-to-run deterministic.** The same 9 real batches forwarded 3× give a
    max |Δvalue| of **0.105–0.115** and a max |Δlogit| of **0.75–0.875**, eager and compiled. The bench's own
