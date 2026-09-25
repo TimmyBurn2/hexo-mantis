@@ -142,6 +142,21 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
   armed_aborts.py policy_loss_trough owner text "run7's mint" (PZ-6 row, needs a ruling-named re-point).
 - REVIEW-W6 (**opus**, fresh, read-only) LAUNCHED over 4e8c663a..8eec45a9. W7_ADDENDUM committed 8e5eab3e
   (exit step 5 taken early so a stop cannot lose it; its measures are derived at 8eec45a9).
+- REVIEW-W6 FILED 56e90642 (`docs/audits/REVIEW_W6_2026-09-25.md`): 1 MUST-FIX, 7 SHOULD-FIX, 10 NOTE.
+- Fix loop 1 LANDED caeaaf85..80cc7779 (8 commits, **opus**): #1 the two open cards restored; #2+#11 STATE's
+  pointer rows re-pointed to the commits that hold each leg's facts (verified per commit, several reviewer
+  candidates corrected), wave status left to PROGRESS; #3 armed_aborts.py REVERTED to its 4e8c663a bytes (the
+  wave's reword touched a PZ-6 manifest row without a ruling and stated a false ground); #4 six CLOSED marker
+  rows plus CARD-GAME-RECORD-STATUS-DRIFT; #5 three condensed rows' meaning restored; #6 profiling recipe adds
+  `CARGO_PROFILE_RELEASE_STRIP=none`, amendments re-keyed `AMENDMENT (R368, 2026-09-25)`; #8 the D-15 pairs are one
+  constant (node ids identical; a fifth-pair plant reds the census row); #14 F-816-34/35 name R338. #7, #9, #10
+  recorded at 2ac9a886. Measures unchanged; collected 4928.
+- REVIEW-W6 notes left with grounds: #12 (R368's Amends line vs R336(e), operator annotation), #13 and #15
+  (on contact), #16 (acceptable), #17 (none), #18 (DISSOLVED_PATHS run9 reason stale; tools/ci_gates off-limits,
+  next ruling-named gate edit).
+- OPERATOR ASKS from W6: (1) the run6 grant (HALT 1 + HALT 2; the diff narrows, see above); (2) ONE ruling for
+  armed_aborts.py MANIFEST text: policy_loss_trough's note/owner ("run7's mint"; three mints since kept it null),
+  ply_cap_attractor's owner/note, terminal_eval_broken's RESIDUAL cite of the missing test file; (3) REVIEW-W6 #12.
 
 ## W5 — tests + fixtures (EXITED 2026-09-25)
 
