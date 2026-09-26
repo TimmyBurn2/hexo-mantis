@@ -85,11 +85,7 @@ def _symbol_rows() -> list[tuple[str, str]]:
 
 
 def _orphans(rows: list[tuple[str, str]], production_calls: set[str]) -> set[str]:
-    """Rows whose symbol does not resolve, or resolves to a callable no production code calls.
-
-    A value producer (an instance attribute, a property, a constant) is read, never called, so
-    only callables are held to a caller.
-    """
+    """Rows whose symbol does not resolve, or resolves to a callable (never a read value) no production code calls."""
     orphans: set[str] = set()
     for row_id, symbol in rows:
         try:
@@ -140,14 +136,13 @@ def test_the_census_FIRES_on_a_producer_whose_only_caller_is_a_test(tmp_path: Pa
     (tmp_path / "src").mkdir()
     (tmp_path / "tests").mkdir()
     (tmp_path / "src" / "prod.py").write_text(
-        "def a_dead_producer():\n    return 1\n", encoding="utf-8")
+        "def unrelated():\n    return 1\n", encoding="utf-8")
     (tmp_path / "tests" / "test_it.py").write_text(
-        "from prod import a_dead_producer\n\n\ndef test_x():\n    a_dead_producer()\n",
+        "from mantis.monitor.manifest import load_manifest\n\n\ndef test_x():\n    load_manifest()\n",
         encoding="utf-8")
-    prod = _called_names(tmp_path / "src")
-    tests = _called_names(tmp_path / "tests")
-    assert "a_dead_producer" not in prod
-    assert "a_dead_producer" in tests, "the control's own fixture does not have the shape"
+    assert "load_manifest" in _called_names(tmp_path / "tests"), "the control's fixture lost its shape"
+    row = [("r", "mantis.monitor.manifest.load_manifest")]
+    assert _orphans(row, _called_names(tmp_path / "src")) == {"r: mantis.monitor.manifest.load_manifest"}
 
 
 def test_the_census_does_NOT_fire_on_a_producer_with_a_real_caller(tmp_path: Path):
