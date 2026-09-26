@@ -867,8 +867,10 @@ mod forced_round_tests {
                 served_leaves: &AtomicU64::new(0),
                 gpu_evals: &AtomicU64::new(0),
             };
-            infer_and_expand_graph(&mut tree, LeafSelection::Batch(1), 19, infer)
-                .expect("the root leaf is served");
+            if let Err(err) = infer_and_expand_graph(&mut tree, LeafSelection::Batch(1), 19, infer)
+            {
+                panic!("the root leaf is served: {err}");
+            }
             producer.join().expect("the producer answers once");
             assert_eq!(
                 queue.eval_cache().len(),
