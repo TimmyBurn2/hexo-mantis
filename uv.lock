@@ -184,6 +184,7 @@ analysis = [
 ]
 cuda = [
     { name = "torch", version = "2.11.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" } },
+    { name = "triton", marker = "sys_platform == 'linux'" },
 ]
 
 [package.dev-dependencies]
@@ -205,6 +206,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "scipy", marker = "extra == 'analysis'" },
     { name = "torch", marker = "extra == 'cuda'", specifier = "==2.11.0", index = "https://download.pytorch.org/whl/cu128", conflict = { package = "mantis", extra = "cuda" } },
+    { name = "triton", marker = "sys_platform == 'linux' and extra == 'cuda'", specifier = "==3.6.0" },
 ]
 provides-extras = ["analysis", "cuda"]
 

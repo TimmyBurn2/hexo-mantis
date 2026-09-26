@@ -18,7 +18,7 @@ analysis = ["scipy"]
 # (the WP9 parity regime); `uv sync --extra cuda` swaps the same pin to the cu128 index. The
 # box's declared-device halt (preflight rc 17) is the authority that a CUDA run got a CUDA
 # torch — no host sniffing here.
-cuda = ["torch==2.11.0"]
+cuda = ["torch==2.11.0", "triton==3.6.0; sys_platform == 'linux'"]
 
 [dependency-groups]
 # The CPU torch wheel is a DEFAULT group rather than a base dependency because uv refuses one
