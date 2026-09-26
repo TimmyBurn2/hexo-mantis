@@ -50,9 +50,9 @@ _LAUNCHER_REQUIRED_OPTIONS = {"--config", "--out-dir"}
 _LAUNCHER_OPTIONAL_OPTIONS = {"--resume-from", "--inherit-preflight"}
 _LAUNCHER_OPTIONS = _LAUNCHER_REQUIRED_OPTIONS | _LAUNCHER_OPTIONAL_OPTIONS
 
-#: The armed-smoke config is the one minted config with a burst-scale posture on CPU; 16 is its
-#: minimum legal burst plus headroom, the same number `test_preflight_armed_smoke.py` drives.
-_SMOKE_CONFIG = "smoke_preflight_armed.yaml"
+#: The wiring config is the armed smoke with only its compute shrunk; 16 is its minimum legal
+#: burst plus headroom, the same number `test_preflight_armed_smoke.py` drives.
+_WIRING_CONFIG = "smoke_wiring.yaml"
 _BURST_STEPS = 16
 
 
@@ -222,12 +222,12 @@ def test_launch_run_boots_a_minted_config_into_the_live_loop_and_stops_clean(
     """A minted config boots through the one composer into the live loop and stops clean.
 
     Everything on the RUN is real (trainer, CPU self-play pool, graph replay, run safety) on the
-    armed smoke config, bounded to a 16-step burst. The checkpoint clause is EXACTLY ONE: 0 is the
+    wiring config, bounded to a 16-step burst. The checkpoint clause is EXACTLY ONE: 0 is the
     clean-completion leg absent, 2 a second write authority. The positive truths carry the row so
     an empty run dir cannot pass. The ONE fake: the rc assertion re-enters `main` with
     `launch_run` patched to hand back these handles, so no second boot reads one integer.
     """
-    config = smoke_run_config(_SMOKE_CONFIG, train={"max_train_steps": _BURST_STEPS})
+    config = smoke_run_config(_WIRING_CONFIG, train={"max_train_steps": _BURST_STEPS})
     assert int(config.train.checkpoint_interval) == 0, (
         "PREMISE CHECK, reason 1 of 2, for the EXACTNESS arm below (R129's own instruction, "
         "applied to this config rather than to run5): the periodic save is guarded by "
@@ -266,9 +266,9 @@ def test_launch_run_boots_a_minted_config_into_the_live_loop_and_stops_clean(
     )
 
     # The clean-vs-aborted distinction, on the REAL handles.
-    preflight_stamped(_CONFIGS / _SMOKE_CONFIG)
+    preflight_stamped(_CONFIGS / _WIRING_CONFIG)
     monkeypatch.setattr(mantis_run, "launch_run", lambda **_kw: handles)
-    rc = mantis_run.main(["--config", str(_CONFIGS / _SMOKE_CONFIG), "--out-dir", str(tmp_path)])
+    rc = mantis_run.main(["--config", str(_CONFIGS / _WIRING_CONFIG), "--out-dir", str(tmp_path)])
     assert rc == 0, (
         "a run that completed its burst with no abort fired is a CLEAN run and exits 0; an "
         f"aborted one exits the manifest's code (O-B3 arm 2, 46). got {rc}"
@@ -353,7 +353,7 @@ def test_a_periodic_cadence_burst_streams_periodic_checkpoint_save(
     BOTH directions, so a fabricated event REDs the same run a dropped event does.
     """
     config = smoke_run_config(
-        _SMOKE_CONFIG,
+        _WIRING_CONFIG,
         train={"max_train_steps": _BURST_STEPS, "checkpoint_interval": 5},
     )
     handles = launch_run(config=config, out_dir=tmp_path)
