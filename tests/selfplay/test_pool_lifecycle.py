@@ -22,6 +22,8 @@ from mantis.selfplay.buffers import BufferKind
 from mantis.selfplay.pool import WorkerPool
 
 _INTEGRATION_TIMEOUT_S = 60.0
+#: A hang bound, not a speed bar: the smoke returns on its first position, so load costs time, never a red.
+_FIRST_POSITION_DEADLINE_S = 900.0
 
 
 class _StubRunner:
@@ -277,7 +279,7 @@ def test_worker_pool_produces_positions_threaded_smoke() -> None:
     pool = graph_pool()
     pool.start()
     try:
-        deadline = time.monotonic() + _INTEGRATION_TIMEOUT_S
+        deadline = time.monotonic() + _FIRST_POSITION_DEADLINE_S
         while time.monotonic() < deadline and pool.positions_pushed == 0:
             pool.check_producer_health()
             time.sleep(0.2)
