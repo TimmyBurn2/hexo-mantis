@@ -61,14 +61,9 @@ _ABORT_RULE = "draw_rate_collapse"
 #: value on the event, not a path it re-derives from the checkpoint dir.
 _SAVED_PATH = Path("/checkpoints/oracle_00000007_deadbeef.ckpt")
 
-#: The booted config's OWN minted `train.max_train_steps`, the armed smoke's. Asserted as a PREMISE,
-#: never used as a drive: measured at 474.6 s against the 300 s tier ceiling on the armed smoke.
+#: The booted config's OWN minted `train.max_train_steps`, which the clean-stop row drives as minted.
 _WIRING_CONFIG = "smoke_wiring.yaml"
 _MINTED_BOUND = 200
-#: The drive bound, fixed by a PRE-REGISTERED measurement and its binding decision rule — the
-#: largest member of {200, 100, 50, 32, 16} measuring <= 300 s on the dev box. Measured, single
-#: run each, with the leg absent: 200 -> 474.6 s, 100 -> 319.5 s, 50 -> 240.2 s.
-_OC7_BOUND = 50
 
 
 class _Trainer:
@@ -471,42 +466,24 @@ def test_a_clean_run_at_the_minted_bound_leaves_one_stamped_checkpoint(
 ) -> None:
     """A clean run at the minted bound leaves exactly ONE stamped checkpoint.
 
-    DEVIATION, pre-registered and measured, not chosen after a red: the armed smoke's own minted
-    bound of 200 measured 474.6 s against the tier's 300 s ceiling, 100 at 319.5 s, 50 at 240.2 s.
-    The binding rule takes the largest member of {200, 100, 50, 32, 16} measuring <= 300 s, which
-    is 50, and the property under test is BOUND-INDEPENDENT. The measurements were taken BEFORE
-    this row existed, so the bound could not be lowered to make a red go away.
+    The drive boots the wiring config as minted, its 200 steps, with no override. Nothing
+    about the RUN is routed around, and the artefact is read back through THE loader. NOT asserted,
+    deliberately: that this checkpoint proves the run was clean — it does not (Class B).
 
-    Nothing about the RUN is routed around, and the artefact is read back through THE loader. NOT
-    asserted, deliberately: that this checkpoint proves the run was clean — it does not (Class B).
-
-    The drive boots the wiring config; the 50 is the armed smoke's measurement, not re-measured.
-
-    DISARMED IN THIS DRIVE, disclosed: the wiring config mints `train.draw_rate_abort` null, so the
-    override and its premise below are kept verbatim and can no longer red. A 50-step drive is below the rule's jurisdiction, so on a slow host the early 100%-ply-cap-draw
-    regime (an UNTRAINED net, not a collapsed one) crosses the evidence bar and aborts a healthy
-    run. The schema permits no armed-but-unfireable posture.
+    DISARMED IN THIS DRIVE, disclosed: the wiring config mints `train.draw_rate_abort` null. At 200
+    steps the drive is inside the rule's jurisdiction, and on a slow host the early 100%-ply-cap-draw
+    regime (an UNTRAINED net, not a collapsed one) crosses the evidence bar and aborts a healthy run.
     """
-    minted = smoke_run_config(_WIRING_CONFIG)
-    assert int(minted.train.max_train_steps) == _MINTED_BOUND, (
-        "premise: R137's literal 200 IS this config's minted bound, so the deviation below is "
-        "a wall-clock one and nothing else. If the mint moves this number, M-0 must be "
-        f"re-measured — not this assertion re-aimed; got {minted.train.max_train_steps!r}"
-    )
-    config = smoke_run_config(
-        _WIRING_CONFIG, train={"max_train_steps": _OC7_BOUND, "draw_rate_abort": None}
-    )
-    assert int(config.train.max_train_steps) == _OC7_BOUND, (
-        "premise: the M-0 bound really reached the coordinator's `stop_step` authority — a "
-        f"section override that silently failed would drive 200 and blow the tier; got "
-        f"{config.train.max_train_steps!r}"
+    config = smoke_run_config(_WIRING_CONFIG)
+    assert int(config.train.max_train_steps) == _MINTED_BOUND, (
+        "premise: R137's literal 200 IS this config's minted bound, and the drive below reaches "
+        f"it with no override; got {config.train.max_train_steps!r}"
     )
     assert config.train.draw_rate_abort is None, (
-        "premise: the disarm above really REACHED the coordinator — the same section-merge "
-        "check the bound gets, on the other override. A silently-failed merge would leave the "
-        "rule armed and this drive would red on a slow host with rule='draw_rate_collapse', "
-        "which is the exact failure this test's disclosure block exists to prevent being read "
-        f"as a real collapse; got {config.train.draw_rate_abort!r} (RQ-20 / R288(c) grant)"
+        "premise: the mint's disarm really REACHED the coordinator. An armed rule would red this "
+        "drive on a slow host with rule='draw_rate_collapse', which is the exact failure this "
+        "test's disclosure block exists to prevent being read as a real collapse; got "
+        f"{config.train.draw_rate_abort!r} (RQ-20 / R288(c) grant)"
     )
 
     handles = launch_run(config=config, out_dir=tmp_path)
@@ -515,7 +492,7 @@ def test_a_clean_run_at_the_minted_bound_leaves_one_stamped_checkpoint(
         "premise: a CLEAN completion — the run reached its terminus and fired no abort; got "
         f"running={handles.shutdown.running} rule={handles.shutdown.abort_rule!r}"
     )
-    assert int(handles.coordinator.trainer.step) == _OC7_BOUND, (
+    assert int(handles.coordinator.trainer.step) == _MINTED_BOUND, (
         f"…and the learner reached the bound EXACTLY; got {handles.coordinator.trainer.step!r}"
     )
 
@@ -534,7 +511,7 @@ def test_a_clean_run_at_the_minted_bound_leaves_one_stamped_checkpoint(
     )
 
     ckpt = checkpoints.load_checkpoint(residents[0], expected_run_id=config.run_id)
-    assert ckpt.metadata.step == _OC7_BOUND, (
+    assert ckpt.metadata.step == _MINTED_BOUND, (
         "the artefact is stamped at the TERMINUS, which is what makes it the run's product "
         f"rather than a mid-run resumption point; got {ckpt.metadata.step!r}"
     )

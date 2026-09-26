@@ -34,7 +34,7 @@ def _leaves(node: Any, prefix: str = "") -> dict[str, Any]:
 
 
 def test_the_wiring_config_moves_only_the_shrunk_leaves_off_the_armed_smoke() -> None:
-    """A wiring row boots the armed smoke's composition; draw-rate alone is disarmed (the tree ships ONE armed non-production config; the 16-step rows cannot reach its step-30 earliest fire and the 50-step row disarms it itself)."""
+    """A wiring row boots the armed smoke's composition; draw-rate alone is disarmed (the tree ships ONE armed non-production config; the 16-step rows cannot reach its step-30 earliest fire, and the 200-step clean-stop row sits inside it, where an untrained net's ply-cap draws would abort a healthy run on a slow host)."""
     smoke_dump = load_config(_CONFIGS / _ARMED_SMOKE).model_dump()
     assert smoke_dump["train"]["draw_rate_abort"] is not None
     smoke_dump["train"]["draw_rate_abort"] = None
