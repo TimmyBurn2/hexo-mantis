@@ -18,7 +18,8 @@ EXEMPT_CONFIGS: tuple[tuple[str, str], ...] = (
         "the ground is LAW-07: ADJ-13 N-3 makes it the mutation corpus's M1 row, the one real "
         "committed config that demonstrates gate 12 going RED on the real `configs/` tree. "
         "With run5, the shakedown and the plain smoke gone it is the only disarmed config "
-        "left, so deleting it would leave the gate with no red-capability demonstration on "
+        "kept as that audit subject (smoke_wiring.yaml disarms draw-rate as a boot target), so "
+        "deleting it would leave the gate with no red-capability demonstration on "
         "the tree it audits. Pinned by "
         "`test_naming_a_DISARMED_config_is_AUDITED_and_never_ignored`.",
     ),
