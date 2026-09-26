@@ -61,3 +61,10 @@ def test_an_empty_range_says_so_and_passes(repo: Path) -> None:
 
 def test_an_unresolvable_base_is_an_error_never_a_green(repo: Path) -> None:
     assert _run(repo, "no-such-ref").returncode == 2
+
+
+def test_an_all_zeros_base_widens_to_origin_dev(repo: Path) -> None:
+    _git(repo, "update-ref", "refs/remotes/origin/dev", "base")
+    _commit(repo, "fix(x): one line")
+    proc = _run(repo, "0" * 40)
+    assert proc.returncode == 0 and "origin/dev" in proc.stdout, proc.stdout + proc.stderr

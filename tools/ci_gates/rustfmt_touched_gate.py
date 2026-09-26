@@ -1,53 +1,60 @@
-"""CI gate 18: every Rust file touched since the base is rustfmt-clean; nothing else is swept.
-
-CLI: rustfmt_touched_gate.py [--base REF] (default origin/dev). Scope: `.rs` files added, copied,
-modified or renamed between merge-base(REF, HEAD) and the WORKING TREE, so an uncommitted edit
-counts. Exit 1 on any unformatted file, 0 clean (the scope size is printed either way), 2 when the
-base does not resolve or rustfmt cannot run.
-"""
+"""CI gate 18: every Rust file touched since the base is rustfmt-clean, and no other file is read."""
 import argparse
 import subprocess
 import sys
+from pathlib import Path
+
+#: Every `.rs` path from the repository top, whatever directory the gate runs in.
+_RUST = ":(top,glob)**/*.rs"
 
 
 def _git(*args: str) -> str:
     return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
 
 
-def touched_rust_files(base: str) -> list[str]:
-    """The existing `.rs` files that differ between merge-base(base, HEAD) and the working tree.
+def _widen(base: str) -> str:
+    """An empty or all-zeros base (a first push) widens to origin/dev; any other base is kept."""
+    return "origin/dev" if not base or set(base) == {"0"} else base
 
-    Raises:
-        subprocess.CalledProcessError: the base does not resolve.
-    """
-    merge_base = _git("merge-base", base, "HEAD").strip()
-    names = _git("diff", "--name-only", "--diff-filter=ACMR", merge_base, "--", "*.rs")
-    return sorted(line for line in names.splitlines() if line)
+
+def _touched_rust_files(top: Path, base: str) -> list[str]:
+    """Top-relative `.rs` paths changed from merge-base(base, HEAD) to the working tree, untracked ones included."""
+    merge_base = _git("-C", str(top), "merge-base", base, "HEAD").strip()
+    changed = _git("-C", str(top), "diff", "--name-only", "--diff-filter=ACMR", merge_base, "--", _RUST)
+    untracked = _git("-C", str(top), "ls-files", "--others", "--exclude-standard", "--", _RUST)
+    return sorted({line for line in (changed + untracked).splitlines() if line})
+
+
+def _unformatted(top: Path, path: str) -> bool:
+    """Whether `path` differs from its rustfmt form, formatted through stdin so no `mod` child is visited."""
+    source = (top / path).read_text(encoding="utf-8")
+    proc = subprocess.run(["rustfmt", "--edition", "2021", "--emit", "stdout"], cwd=top,
+                          capture_output=True, text=True, input=source)
+    if proc.returncode != 0 or proc.stderr.strip():
+        raise RuntimeError(f"{path}: rustfmt rc {proc.returncode}: {proc.stderr.strip()}")
+    return proc.stdout != source
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description="gate 18: rustfmt on the Rust files touched since base")
     parser.add_argument("--base", default="origin/dev")
-    base = parser.parse_args().base
+    base = _widen(parser.parse_args().base)
     try:
-        files = touched_rust_files(base)
+        top = Path(_git("rev-parse", "--show-toplevel").strip())
+        files = _touched_rust_files(top, base)
     except subprocess.CalledProcessError as exc:
         print(f"gate 18: base {base!r} does not resolve: {exc.stderr.strip()}", file=sys.stderr)
         return 2
     noun = "file" if len(files) == 1 else "files"
     print(f"gate 18: {len(files)} touched Rust {noun} since merge-base with {base}")
-    if not files:
-        return 0
-    proc = subprocess.run(["rustfmt", "--edition", "2021", "--check", "-l", *files],
-                          capture_output=True, text=True)
-    if proc.returncode not in (0, 1):
-        print(f"gate 18: rustfmt could not run (rc {proc.returncode}): {proc.stderr.strip()}",
-              file=sys.stderr)
+    try:
+        bad = [path for path in files if _unformatted(top, path)]
+    except (RuntimeError, FileNotFoundError) as exc:
+        print(f"gate 18: rustfmt gave no verdict: {exc}", file=sys.stderr)
         return 2
-    unformatted = [line for line in proc.stdout.splitlines() if line.strip().endswith(".rs")]
-    for path in unformatted:
-        print(f"UNFORMATTED {path} (run `rustfmt --edition 2021 {path}`)")
-    return 1 if unformatted else 0
+    for path in bad:
+        print(f"UNFORMATTED {path} (rustfmt --edition 2021 --emit stdout < {path} > {path}.fmt, then move it back)")
+    return 1 if bad else 0
 
 
 if __name__ == "__main__":
