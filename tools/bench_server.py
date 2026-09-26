@@ -32,6 +32,8 @@ Served = tuple[list[float], list[tuple[tuple[int, int], float]], float]
 DEFAULT_BATCH_SIZES = (16, 32, 64, 128, 256)
 #: The same B-64 cell's run-to-run spread on one host (four base cells, ±4 %): one run's sub-windows understate it.
 RUN_SPREAD = 0.04
+#: A sub-window with no pop this long past its nominal end means a hung server, not a slow one.
+WINDOW_HANG_SEC = 60.0
 #: The row fields that shape the load; a baseline that differs in any of them measured another cell.
 _COMPARABLE = ("workers", "leaf_batch", "device", "compile_trunk", "max_wait_ms", "edge_geometry_check")
 _COLUMNS = ("batch_size", "pops_per_s", "b_mean", "full_share", "sat_share", "deadline_share",
@@ -90,6 +92,22 @@ class BaselineMismatch(ValueError):
     """A baseline record that cannot be read against this one: another load shape, a missing B, or no sub-windows."""
 
 
+class ServerHung(RuntimeError):
+    """No pop reached the server's counters within the hang bound after a sub-window's nominal end."""
+
+
+def snapshot_with_a_pop(server: InferenceServer, prev: dict[str, Any], hang_s: float) -> tuple[dict[str, Any], float]:
+    """The first snapshot counting a pop past `prev`, polled until `hang_s`; Raises: ServerHung."""
+    deadline = time.monotonic() + hang_s
+    while True:
+        snap, at = server.batch_timing_snapshot(), time.perf_counter()
+        if int(snap["occupancy"]["count"]) > int(prev["occupancy"]["count"]):
+            return snap, at
+        if time.monotonic() >= deadline:
+            raise ServerHung(f"no pop within {hang_s:.1f} s past the sub-window's nominal end")
+        time.sleep(0.005)
+
+
 def compare_rows(base: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
     """One B against a baseline: faster or slower only past both the IQR and RUN_SPREAD; Raises: BaselineMismatch."""
     if "window_leaves_per_s" not in base:
@@ -142,8 +160,12 @@ def summarize(before: dict[str, Any], after: dict[str, Any], *, wall_s: float) -
 def run_cell(model: torch.nn.Module, device: torch.device, config: dict[str, Any],
              positions: list[Position], *, batch_size: int, workers: int, leaf_batch: int,
              seconds: float, compile_trunk: bool, warmup_s: float = 0.0,
-             probe: int = 64, windows: int = 5) -> dict[str, Any]:
-    """One cell at `batch_size`, `workers` × `leaf_batch` leaves over `windows` sub-windows; the probe serves twice after the load."""
+             probe: int = 64, windows: int = 5, window_hang_s: float = WINDOW_HANG_SEC) -> dict[str, Any]:
+    """One cell at `batch_size`, `workers` × `leaf_batch` leaves over `windows` sub-windows; the probe serves twice after the load.
+
+    Raises:
+        ServerHung: a sub-window saw no pop within `window_hang_s` of its nominal end.
+        ValueError: the batcher refused a probe submit (a seam guard, or a closed batcher)."""
     cfg = copy.deepcopy(config)
     cfg["inference"]["inference_batch_size"] = int(batch_size)
     spec = lookup(cfg["identity"]["encoding"])
@@ -166,6 +188,7 @@ def run_cell(model: torch.nn.Module, device: torch.device, config: dict[str, Any
             served[idx] += len(batcher.submit_graphs_and_wait(chunk, 1))
 
     probe_positions = distinct_positions(positions, probe)
+    threads: list[threading.Thread] = []
     try:
         batcher.submit_graphs_and_wait(probe_positions, 1)  # every snapshot then has a sample
         threads = [threading.Thread(target=worker, args=(i,), daemon=True, name=f"bench-w{i}")
@@ -174,11 +197,11 @@ def run_cell(model: torch.nn.Module, device: torch.device, config: dict[str, Any
             t.start()
         if warmup_s > 0:
             time.sleep(warmup_s)
-        # The window is `seconds` from the first snapshot; the warm-up and the probe sit outside it.
+        # An empty sub-window extends to its first pop; the warm-up and the probe sit outside the window.
         snaps = [(server.batch_timing_snapshot(), time.perf_counter())]
         for _ in range(windows):
             time.sleep(seconds / windows)
-            snaps.append((server.batch_timing_snapshot(), time.perf_counter()))
+            snaps.append(snapshot_with_a_pop(server, snaps[-1][0], window_hang_s))
         stop.set()
         for t in threads:
             t.join()
@@ -186,6 +209,11 @@ def run_cell(model: torch.nn.Module, device: torch.device, config: dict[str, Any
         first = batcher.submit_graphs_and_wait(probe_positions, 1)
         second = batcher.submit_graphs_and_wait(probe_positions, 1)
     finally:
+        # One short shared grace for in-flight submits; the close then wakes any worker a hung server holds.
+        stop.set()
+        grace = time.monotonic() + 2.0
+        for t in threads:
+            t.join(timeout=max(0.0, grace - time.monotonic()))
         server.stop()
         server.join(timeout=10.0)
     (before, t_before), (after, t_after) = snaps[0], snaps[-1]

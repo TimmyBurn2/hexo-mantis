@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 import torch
@@ -77,7 +78,7 @@ def test_summary_derives_the_step1_columns_from_two_snapshots(bench) -> None:
     assert row["edges_per_graph"] == pytest.approx(1000.0)
 
 
-def _cell(bench, tmp_path: Path, *, plant_noise: bool = False) -> dict:
+def _cell(bench, tmp_path: Path, *, plant_noise: bool = False, **cell: Any) -> dict:
     config = load_config(_CONFIG)
     spec = lookup(config.identity.encoding)
     net = build_net(arch_from_spec_and_config(spec, config.model_dump()))
@@ -91,7 +92,20 @@ def _cell(bench, tmp_path: Path, *, plant_noise: bool = False) -> dict:
         net.forward_batch = noisy
     positions = bench.positions_from_events(_events(tmp_path, [_GAME, _GAME[:7]]), config.identity.encoding, limit=None)
     return bench.run_cell(net, torch.device("cpu"), config.model_dump(), positions, batch_size=8,
-                          workers=2, leaf_batch=4, seconds=1.0, compile_trunk=False, probe=6, windows=2)
+                          workers=2, leaf_batch=4, seconds=1.0, compile_trunk=False, probe=6, windows=2, **cell)
+
+
+def _stall_snapshots(bench, monkeypatch: pytest.MonkeyPatch, stale_reads: int) -> None:
+    """Every snapshot after the first repeats the first for `stale_reads` reads: a server that has not popped yet."""
+    class Stalled(bench.InferenceServer):
+        reads: list[dict] = []
+
+        def batch_timing_snapshot(self) -> dict:
+            snap = super().batch_timing_snapshot()
+            Stalled.reads.append(snap)
+            return Stalled.reads[0] if 1 < len(Stalled.reads) <= 1 + stale_reads else snap
+
+    monkeypatch.setattr(bench, "InferenceServer", Stalled)
 
 
 def test_a_cell_serves_every_leaf_its_workers_submitted(bench, tmp_path: Path) -> None:
@@ -103,6 +117,24 @@ def test_a_cell_serves_every_leaf_its_workers_submitted(bench, tmp_path: Path) -
     assert len(row["probe_values"]) == 6 and len(row["window_leaves_per_s"]) == 2
     assert row["leaves_per_s_q1"] <= row["leaves_per_s_median"] <= row["leaves_per_s_q3"]
     assert row["device"] == "cpu" and row["wall_s"] >= 1.0
+
+
+def test_a_sub_window_waits_for_its_first_pop_instead_of_reading_an_empty_window(
+    bench, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A loaded host can close a sub-window before any pop; the window extends to its first pop. Killer: a fixed-sleep window."""
+    _stall_snapshots(bench, monkeypatch, stale_reads=3)
+    row = _cell(bench, tmp_path)
+    assert all(rate > 0 for rate in row["window_leaves_per_s"]) and row["served"] == row["submitted"]
+
+
+def test_a_server_with_no_pop_past_the_hang_bound_is_named_hung(
+    bench, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The count-based wait is bounded: a server that never pops again raises ServerHung, never waits forever."""
+    _stall_snapshots(bench, monkeypatch, stale_reads=10**9)
+    with pytest.raises(bench.ServerHung, match="no pop within 0.2 s"):
+        _cell(bench, tmp_path, window_hang_s=0.2)
 
 
 def test_the_repeat_probe_reads_exact_on_a_deterministic_server(bench, tmp_path: Path) -> None:
