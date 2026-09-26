@@ -85,10 +85,7 @@ gine_message_sum.register_autograd(_gine_message_sum_backward, setup_context=_gi
 
 
 class _GINEConv(nn.Module):
-    """GINEConv (sum aggregation, edge-feature injection) over `gine_message_sum`, state-dict keys mirroring
-    the reference GINEConv. `edge_in` is the width of the edge tensor handed to `forward` — the
-    representation applies `edge_proj` (5→128) ONCE, so each conv's own `lin` is Linear(128→128),
-    matching the checkpoint shapes."""
+    """GINEConv over `gine_message_sum`, keys mirroring the reference; `edge_in` is the already-projected edge width (`lin` is 128→128)."""
 
     eps: Tensor
 

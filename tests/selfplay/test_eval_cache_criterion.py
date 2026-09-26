@@ -1,12 +1,4 @@
-"""The eval cache's criterion, controls first: a replay deviates from a fresh forward by no more than
-the uncached path's own batch-size spread, and a known-bad key and a stale net both fail it.
-
-The spread is measured here, on fixed positions served at every batch size 1..64 through the real
-server. The correct design is the real key (`InferenceBatcher.eval_cache_keys`) under the net version
-that computed the entry. The known-bad paths are a board key blind to the side to move (the classic
-transposition-table bug), fed side-swapped twins that encode differently, and an entry replayed to a
-newer net.
-"""
+"""The cache criterion, controls first: a replay stays inside the served path's own batch-size spread; a side-blind key and a stale net fail it."""
 from __future__ import annotations
 
 import copy

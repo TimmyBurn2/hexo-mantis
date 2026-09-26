@@ -1,12 +1,4 @@
-//! The per-net evaluation cache: a leaf whose ENCODED INPUT the same net version already evaluated
-//! replays that evaluation instead of queueing a GPU forward.
-//!
-//! The key is the net version plus a 128-bit digest of every field of the built `AxisGraph`, the
-//! exact input the net reads, so two leaves share an entry only when the net would see identical
-//! tensors; a replay then differs from a fresh forward by no more than the served path's own
-//! batch-size spread (the entry was computed in another pop). Bounded by an entry count AND a byte
-//! budget, both enforced at insert and evicted first-in first-out; a shard seeing a newer version
-//! drops everything it holds.
+//! The per-net eval cache: a leaf whose hashed `AxisGraph` this net version already evaluated replays it.
 
 use std::collections::VecDeque;
 use std::sync::Mutex;
@@ -153,8 +145,7 @@ impl EvalCache {
         shard.map.get(&key).cloned()
     }
 
-    /// Stores `eval` for `key` under net `version`; a newer version clears the shard first, and an
-    /// entry larger than a shard's whole budget is never stored.
+    /// Stores `eval` under `version`; a newer version clears the shard, an entry past its budget is refused.
     pub fn put(&self, key: GraphKey, version: u64, eval: CachedEval) {
         let size = eval.bytes();
         if self.off() || size > self.per_shard_bytes {
@@ -237,8 +228,7 @@ mod tests {
         assert_eq!(GraphKey::of(&a), GraphKey::of(&b));
     }
 
-    /// The planted-incomplete-key control: a key that skipped any one field would pass the arm
-    /// that perturbs it, so every field of the encoded input must move the key.
+    /// The planted-incomplete-key control: every field of the encoded input must move the key.
     #[test]
     fn every_field_of_the_encoded_input_moves_the_key() {
         let base = graph(&[(0, 0, 1), (1, 0, -1), (0, 1, -1)], 1, 2);

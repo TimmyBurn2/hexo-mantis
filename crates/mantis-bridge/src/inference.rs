@@ -516,11 +516,7 @@ impl PyInferenceBatcher {
             .collect())
     }
 
-    /// The exact eval cache's key for each position under this batcher's builder geometry, as
-    /// hex: the one route from Python to the key self-play serves by.
-    ///
-    /// # Errors
-    /// `PyValueError` when a position fails the builder's seam guards.
+    /// The eval cache's key per position under this batcher's geometry, as hex (`PyValueError` on a seam guard).
     #[allow(clippy::type_complexity)]
     #[pyo3(signature = (positions, n_threads = 1))]
     pub fn eval_cache_keys(
