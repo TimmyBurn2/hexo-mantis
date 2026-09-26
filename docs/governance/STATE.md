@@ -14,6 +14,12 @@ the parent's strix @ r8 equal-work cell IDLE at **0.191 [0.146, 0.236]** (55 of 
 preflight and sent run10's bars and the EMA conditional to the operator. No preflight, stamp or twin ran;
 CARD-F5-LOOP-WITH-TRAINER stays open. The earlier FINISH exit readings are in the local records.
 
+**DEV-SPEED EXITED beside it (2026-09-26).** The integration tier's real boots were compute, not waits:
+three preflight rows now read one module-scoped boot and the four in-process wiring rows boot
+`configs/smoke_wiring.yaml` (census-exempt; the exemption's ruling is owed). On the desktop CUDA venv,
+back to back: the integration tier 2 922 -> 466 s, `make gates.exit` 3 076 -> 627 s, ALL GREEN at the
+tip (the base's one red was the pre-existing bench-server window, carded). Records are local.
+
 ## The run
 
 - **No run is live.** run7 stopped at step 83 482 on 2026-09-18 (the stop is recorded by commit
