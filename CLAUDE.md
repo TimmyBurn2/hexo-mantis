@@ -1,272 +1,86 @@
 # CLAUDE.md — mantis
 
-mantis is an AlphaZero-style self-play bot for Hex Tac Toe: hex grid, 6-in-a-row to win,
-compound 2-stone turns, unbounded board. Rust engine (cargo workspace) + Python
-training/eval (uv, src-layout), PyO3 bridge, GNN-first. Read docs/design/repo_design.md
-(the structural contract) before structural work. Read docs/governance/falsified.md
-before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.md.
+mantis is an AlphaZero-style self-play bot for Hex Tac Toe (hex grid, 6-in-a-row, compound
+2-stone turns, unbounded board): a Rust cargo workspace, Python training/eval (uv, src-layout),
+one PyO3 bridge, GNN-first. This file holds what an agent must know that no gate enforces. Each
+rule is stated once, here or in docs/governance/LAWS.md.
+
+## Read first
+
+- docs/governance/LAWS.md — the laws and the protected set with its pinning tests. They govern.
+- docs/governance/STATE.md — where the run is; docs/governance/CARDS.md — the open work;
+  docs/governance/RULINGS.md — the rulings, newest first (grep it; nobody reads it whole).
+- docs/design/repo_design.md — the structural contract, before any structural work.
 
 ## Map
 
-- Cargo.toml + pyproject.toml — cargo workspace and uv project root (src-layout).
-- crates/mantis-core — board, hex geometry, rules, the Ply vocabulary type.
-- crates/mantis-graph — dep-free axis-graph builder (native + wasm32), sits below
-  mantis-encoding in the DAG; `make check.wasm` targets it (and mantis-encoding if it
-  becomes wasm-targeted).
-- crates/mantis-encoding — crates/mantis-encoding/src/registry.toml (THE encoding registry,
-  single source of truth) + spec + validators. Cite that path WHOLE,
-  `src/` segment included: this line used to say a bare `registry.toml`, and a landed
-  ruling was twice mis-cited from it to a crate-root path that does not exist (R309(b),
-  ANNOTATION 7 — which carries the full account, and names the wrong string so this file
-  does not have to).
-- crates/mantis-search — MCTS (PUCT + Gumbel), completed-Q, tactics solver.
-- crates/mantis-selfplay — runner, worker loop, inference queues, replay buffers.
-- crates/mantis-bridge — ALL PyO3 lives here; maturin builds mantis._engine (abi3).
-- src/mantis/ — the ONE Python package: encoding, config, data, model, train,
-  selfplay, eval, arena, bots, monitor (HEADLESS ONLY), diagnostics, util, deploy
-  (RESERVED, empty until post-cutover).
-- tests/ — SINGLE collection root, mirrors src/mantis + crates; tests/fixtures carries
-  the fixtures manifest. configs/ — minted, complete, schema-validated. docs/ — design +
-  contracts + governance: docs/governance/STATE.md (where the run IS; rewritten in place by
-  run-ops, repaired in place by whoever finds it stale), docs/governance/RULINGS.md (the
-  canonical ruling entries, R23 onward), docs/governance/CARDS.md (the open work), plus
-  LAWS.md and falsified.md as named under Hard rules. tools/ — dev-only tooling + CI gate
-  scripts. vendor/ — pins.toml + `make vendor` fetcher.
+- crates/: mantis-core (board, geometry, rules, Ply), mantis-graph (dep-free axis-graph builder,
+  wasm32-clean), mantis-encoding, mantis-search (MCTS, Gumbel, tactics solver), mantis-selfplay
+  (runner, inference queues, replay), mantis-bridge (ALL PyO3; maturin builds mantis._engine).
+- The encoding registry is crates/mantis-encoding/src/registry.toml. Cite that path whole, `src/`
+  included: a bare `registry.toml` was twice mis-cited to a crate-root path that does not exist.
+- src/mantis/ is the one Python package (monitor is headless; deploy/ is reserved-empty until
+  post-cutover). tests/ is the one collection root. configs/ are minted. tools/ holds dev tooling
+  and the gate scripts. vendor/ is pins.toml plus `make vendor`.
 
-## Hard rules
+## Rules no gate enforces
 
-1. **R1 config.** Every config file is explicit + complete; schema `extra="forbid"`;
-   missing key = error, unknown key = error; NO code-side defaults — a default lives only
-   in the schema field; configs are minted (tools/mint_config.py), never hand-varied;
-   identity keys (encoding/representation) have no terminal defaults; every config key
-   has a live consumer.
-   Reason: kills the silently-disabled-opponent and duplicated-default-authority classes.
-2. **R2 build/FFI.** The extension profile uses `panic = "unwind"` — panics cross the FFI
-   as PanicException, never a process abort; no `target-cpu=native` in committed build
-   config — native builds go through `make build.native` (env-only).
-   Reason: a process abort loses runs; host-pinned artifacts are not portable.
-3. **R3 artifacts.** Checkpoint stamps are written once, immutable; artifact filenames
-   carry run-id + content hash; an artifact that cannot be stamped cannot be written.
-   Reason: re-stamping and unstamped saves destroyed provenance once (see LAW-12).
-4. **R4 gates.** No gate/monitor input without a producer test; every registered encoding
-   has a live consumer.
-   Reason: a phantom gate input once armed an abort chain no producer ever fed (LAW-07).
-5. **R5 tests + imports.** Single collection root `tests/`; no package named `tests` below
-   it; ZERO `sys.path` mutation anywhere in the repo.
-   Reason: collection shadowing and path hacks made failures unreproducible before.
-6. **R6 FFI surface.** No `#[pyclass]`/`#[pymethods]`/`#[pyfunction]` outside
-   crates/mantis-bridge; core crates compile without pyo3.
-   Reason: keeps every crate but one Python-free and the DAG one-way.
-7. **R7 artifact hygiene.** reports/, checkpoints/, logs/, benchmarks/ are never tracked;
-   files >1 MB and `*.jsonl` only under tests/fixtures/, and even there a 10 MB per-file
-   ceiling holds — the carve-out is a raised ceiling, not an exemption (CI gate 6 enforces).
-   Reason: run outputs in git history are unremovable and poison clones.
-8. **R8 file size.** 300-line soft cap; exceeding is fine WITH a justification in the
-   file's opening comment or module docstring saying WHY the file is one unit. It states a
-   reason, NEVER a line count: a transcribed tally must be re-edited on every edit, will
-   eventually be wrong, and is then read as evidence (ratified G-DFIX-4 / R192(e),
-   derive-or-delete). Sizes are derived by `wc -l`, never asserted. A file AT OR UNDER the cap
-   carries NO justification: a header left behind after a file shrank is a size claim a reader
-   trusts (C-13, 2026-09-17: 63 of them). Gate 15 enforces all three — present over the cap,
-   stating no count, absent under it.
-   Reason: keeps the audit greppable; unjustified growth hides structure drift.
-9. **R9 registers.** docs/governance/falsified.md is read-before-optimizing;
-   docs/governance/LAWS.md governs; deviations from docs/design/repo_design.md require an
-   amendment commit, never silent drift. A NON-canonical working doc that disagrees with
-   verified repo state is repaired in place by whoever finds it, noted in one line, no loop
-   (R311(c)); register text still corrects only by annotation.
-   Reason: re-litigating falsified work and silent contract drift burned weeks before.
-10. **R10 design standard + review gate (R367(a)/(b)).** Code and tests are keyed to MECHANISMS,
-    never to a run: no `runN` in a symbol, test, pin or tool; production pins are a CENSUS of
-    `configs/` (discovered minus the exempt set), never a list edited per mint; one implementation
-    per thing; a comment states what code cannot; no compatibility shim for a state the tree no
-    longer has. Every implementation leg ends with a FRESH read-only review agent against this
-    rule plus correctness (budget, determinism, seam contracts, LAW-07 breaks); its findings are
-    fixed before merge, its report is a local record outside the public tree (R369(f)), and the
-    dispatcher never reviews its own leg. A leg that violates either half is not done.
-    Reason: the run10 mint edited seven by-name pin sets and left a run-named schedule test
-    (R367 packet, 2026-09-21); the leg that wrote them ran its own exit sweep and no review.
-11. **R11 price law (R367(d)).** Renting, stopping, destroying or re-speccing the box is the
-    OPERATOR'S act. A session recommends it with the cost and the alternative stated; it never
-    orders or performs it (R365(a)'s "released" was the breach, annotated).
-    Reason: a destroyed instance is a fresh instance's full setup, paid again.
+- Configs are minted with tools/mint_config.py, never hand-edited.
+- Design standard: code and tests are keyed to mechanisms, never to a run (no `runN` in a symbol,
+  test, pin or tool); production pins are a census of configs/, never a hand-kept list; one
+  implementation per thing; no compatibility shim for a state the tree no longer has.
+- Review gate: every implementation leg ends with a FRESH read-only review agent against the
+  design standard plus correctness (budget, determinism, seam contracts, LAW-07 breaks). Its
+  findings are fixed before merge, its report is a local record outside the public tree, and the
+  dispatcher never reviews its own leg. A leg that skips either half is not done.
+- Registers: a non-canonical working doc that disagrees with verified repo state is repaired in
+  place by whoever finds it, noted in one line. RULINGS, LAWS and falsified correct only by
+  annotation. A deviation from repo_design.md takes an amendment commit, never silent drift.
+- Price law: renting, stopping, destroying or re-speccing the box is the operator's act. A session
+  recommends it with the cost and the alternative stated, and never orders or performs it.
 
-## Laws digest (full text: docs/governance/LAWS.md)
+## Code
 
-- LAW-01 prime directive — context first, measurement mandatory.
-- LAW-02 re-validation discipline — never drop a driver on an un-re-validated prior.
-- LAW-03 measurement-unit — verify turn-vs-ply and the completing cell before framing.
-- LAW-04 effective-n — strength CIs count DISTINCT games (trajectory-hash dedupe).
-- LAW-05 falsified-register-first — read the register before proposing experiments.
-- LAW-06 bf16-graph — bf16 storage + GEMMs, fp32 deterministic aggregation in one implementation (R369(b)).
-- LAW-07 producer-test — every gate/monitor input cites a live producer + mutation self-test.
-- LAW-08 live-consumer — every config key / registered encoding has a live consumer.
-- LAW-09 bench discipline — prereg hotspots, one change = one commit = one IQR-gated bench.
-- LAW-11 identity-keys — no dense-by-default; absent encoding/representation = error.
-- LAW-12 checkpoint-stamp — stamps immutable; one loader; weights-only strip is the one path.
-- LAW-13 FFI/build — panic="unwind" across FFI; no target-cpu in committed config.
-- LAW-14 persistence-fatal — persistence failures are run-fatal; no silent excepts.
-- LAW-15 eval-instrument — deploy-matched promotion bar; reproducible fixed-depth bars.
-- LAW-16 lifecycle — signals save-then-exit; stall watchdog always armed; disk guard.
-- LAW-17 structure — zero sys.path writes; one tests/ root; pyo3 only in the bridge.
-- LAW-18 in-run observability — a lever under test logs its own fire-rate in-run.
-- LAW-19 controls first — a criterion gates work only after a correct design passes it and the known-bad path fails it.
+- Python: type hints on new or changed code; a public API has a docstring whose `Raises:` names
+  every catchable exception; imports at the top of the file, a lazily loaded optional dep the one
+  exception; a top-level `except Exception:` handler logs through `logger.exception` and does not
+  repeat the exception in its message.
+- Comments: a comment or docstring states what the code cannot, in one line, more only for an
+  invariant; no ruling, card or finding numbers outside carve-out markers (pinned bands,
+  planted-break markers, armed-value provenance, licence attribution). Gate 14 ratchets the
+  measures; docstring length and `Raises:` are fixed on contact.
+- Rust: no `unwrap()`/`expect()` on production paths; fail loud through a named error type that
+  propagates. `expect()` is for tests and for startup invariants whose message names the
+  invariant. Format a file with `rustfmt --edition 2021 <file>`; `cargo fmt`, even with `-p`,
+  sweeps a whole crate.
 
-## Code style
+## Build, test, gates, commits
 
-- **Python.** Type hints on all new/changed code. Public APIs carry a docstring, and every
-  catchable exception is named in a `Raises:` section. Imports at top of file — lazy-loading
-  an optional dep is the ONE exception. Text-mode IO always passes `encoding=` (gate 16
-  enforces ZERO across the tree).
-  Catch specific exceptions; bare `except Exception:` only in a top-level handler, which
-  logs through `logger.exception` and does NOT repeat the exception in the message.
-- **Comments (R368(g), replacing R316(e), R346(f)'s comment clause and R336(e)'s on-contact
-  clause).** A comment or docstring states what the code cannot: ONE line, more only for an
-  invariant. No ruling, card or finding numbers except in carve-out markers (pinned bands,
-  planted-break markers, armed-value provenance, licence-required attribution). ONE sanctioned
-  pass covers exactly two classes, cites and narrative runs, measured by gate 14 (floors that
-  only fall). Docstring length, missing docstrings and `Raises:` stay on contact.
-- **Rust.** No `unwrap()`/`expect()` on production paths — fail-loud means a NAMED error type
-  that propagates, never a panic (R2/LAW-13 is about what crosses the FFI; this is about not
-  reaching for the panic in the first place). `expect()` is fine in tests and in startup
-  invariants when its message names the invariant. clippy rides gate 2 (`-D clippy::all`);
-  **rustfmt runs on TOUCHED FILES** and is NOT gated anywhere — run it yourself on what you
-  edited, do not assume a gate caught it, and do NOT sweep the tree (R336(e)'s formatting
-  clause, standards on contact).
-  `rustfmt.toml` is committed with defaults so the style has a definition rather than living
-  in whichever toolchain happens to run.
-
-## Build & test
-
-- `uv sync` — the ONE bootstrap: builds mantis._engine via maturin, installs everything.
-- `make build` — alias for `uv sync`. `make build.native` — local perf build (env-only
-  native flags; artifacts host-specific, never distributed).
-- `make build.cuda` — the BOX's build (`uv sync --extra cuda --no-group cpu`). A bare
-  `uv sync` on a box silently reverts the venv to the CPU torch wheel (R348(a)); this is the
-  one route that does not.
-- `make test` — pytest default tier + `cargo test --workspace --locked`.
-- `make test.integration` — the CI integration tier (`-m integration`).
-- A bare `pytest` IS the default tier: pyproject's `addopts` carries
-  `-m 'not integration and not slow'`, a later `-m` overrides it, and `-m ''` runs or counts
-  the whole tree (gate 3c does). The header prints `TIER:` on every run — read it, never
-  assume the tier from the command typed (R330(g); measured 2026-09-11: the default tier
-  ~5 min, the integration tier ~20–25 min on the box and UNBOUNDED on an AVX2 host, where
-  LAW-06's bf16 CPU trainer is emulated — see CARD-OC7-OVERRUN).
-- Cadence (R311(b)): targeted tests, smallest relevant first, while iterating; the FULL local
-  gate set at leg exit and before any push, never per edit. **At a PACKET exit that means
-  `make gates.exit` (`run_all.sh --with-slow`), not `make gates`** — a `slow`-marked test is
-  deselected from BOTH pytest tiers, so nothing else in the repo executes it (R333(b); the
-  runner prints which of the two opt-ins ran on every invocation, so a log says whether the
-  tier was covered). **The full local gate set is the gate; remote CI is suspended by
-  operator decision** (R348(a)) until the operator re-enables it — no push or merge waits on
-  it. Doc/governance-only commits need no gates at all. The accepted cost
-  is on the record: gate 1's fresh-clone `uv sync` is the one check no local run reproduces.
-  This sets WHEN gates run, never WHAT they check.
-- `make bench` / `make bench.baseline` — criterion smoke bench (baseline saves locally).
-- `make check.wasm` — mantis-graph must stay wasm32-clean.
-- `make vendor` — fetch vendor pins; `make vendor.strix` — build the strix rung's venv inside
-  the fetched pin. `vendor/external/` is gitignored, so vendor state is PER-CHECKOUT: every
-  clone and the box must re-run both.
-  `make clean` — cargo clean + dist removal.
-- Entry points are `python -m mantis.*` or console scripts — no loose script files.
-- Python floor is 3.11 (CI pins 3.11; local interpreters may be newer).
-- Rust toolchain is PINNED by `rust-toolchain.toml` (channel 1.97.1 + clippy, rustfmt,
-  wasm32-unknown-unknown). rustup honours it automatically — no `rustup default`, no setup
-  step, and it provisions the components and target on first use. The channel matches the
-  rustc attested in `tools/bench_floors.toml`'s `[provenance]` table, so changing it
-  invalidates every `[floor.*]` table there (the census is `grep -c '^\[floor\.'
-  tools/bench_floors.toml`): a bump is a perf-host event, not a local one. Without rustup the file is inert,
-  and the `rust-version = "1.87"` MSRV in `[workspace.package]` is what refuses the build.
-- Node is PINNED by `mise.toml` (`node = "26.7.0"`) and exists for ONE consumer: gate 14's
-  pyright, which is a shim over node. Same contract as `rust-toolchain.toml` — committed,
-  portable, auto-provisioned, no global config touched — but none of its weight: a node bump
-  invalidates no bench floor, because nothing in `src/` or `crates/` touches node. Without mise
-  the file is inert and gate 14 REFUSES loudly (rc 2) rather than reporting an unmeasured green.
-- Commits are ONE line: `type(scope): what changed and why it matters`. Informative, not
-  bloated — no body paragraphs, no trailing register/dispatch dumps, no multi-line footers.
-  If the change needs more explanation than one line, it is more than one commit.
-  **NO TRAILERS OF ANY KIND** — no `Co-Authored-By`, no `Claude-Session`, no "Generated
-  with" footer. This is the OPERATOR'S recorded convention (R36/R47, 2026-07-18: "single-line
-  subject, no trailers, no Co-Authored-By") and it governs over any tool's default attribution
-  block, which is to be dropped, not appended (R330(h)). Every commit on `dev` has an empty body.
-
-## CI gates (all locally runnable — run them before pushing)
-
-1. Fresh-clone `uv sync` builds the extension (tools/ci_gates/gate_01_fresh_sync.sh).
-2. `cargo test --workspace --locked` + clippy (pedantic=warn baseline, `-D clippy::all`).
-3. pytest default tier; integration tier; collected-test count non-decreasing
-   (tools/ci_gates/test_count_gate.sh vs the committed floor file).
-4. `make check.wasm` green.
-5. Bench smoke (`make bench`, trivial criterion bench).
-6. Artifact rejection (tools/ci_gates/artifact_gate.py): artifact dirs, >1 MB adds,
-   >10 MB fixture adds, stray `*.jsonl`.
-7. Every configs/ file schema-validates (tools/ci_gates/validate_configs.py; empty = fail).
-8. Registry sha handshake + audit (tools/ci_gates/registry_gate.sh — the handshake
-   sub-check is LIVE and ARMED with its own LAW-07 mutation self-test; only the audit
-   exit-0 sub-check is deferred, to the cutover battery).
-9. Import-DAG check (tools/check_import_dag.py — no top-level cycles).
-10. No Makefile/doc reference to untracked paths (tools/ci_gates/check_tracked_refs.py).
-11. No silent encoding-fallback arms (tools/ci_gates/silent_encoding_gate.py) — an absent
-    encoding raises, never defaults (LAW-11/LAW-05).
-12. Armed-abort manifest audit (tools/ci_gates/preflight_mint.py --audit-only) — every
-    `required` row of src/mantis/config/armed_aborts.py is armed in every production
-    config (the census: every configs/ file minus src/mantis/config/census.py's EXEMPT rows);
-    deferred rows print loud and do not gate. The same tool's full mint preflight
-    (a real boot + burst) is MANUAL, invoked by no CI step.
-13. Contract-doc drift (tools/ci_gates/contract_doc_gate.py) — docs/contracts/run_config_schema.md
-    may not cite a config key or a `mantis.*` symbol the shipped schema lacks, and its stated
-    leaf-count must equal the live one. Every check is derived from `RunConfig` itself, never a
-    transcribed key list; the "deliberately absent" section is checked in REVERSE.
-14. Curated lint/type gate (tools/ci_gates/lint_gate.sh; `make lint`) — the pyproject ruff
-    select + pyright (basic, src+tools) held at ZERO, plus the R368(g) COMMENT RATCHET
-    (tools/ci_gates/comment_lint.py against tools/ci_gates/comment_length_floor.txt): the five
-    run/banner/docstring measures plus `ruling_cite_lines` (ruling/law/finding/card tokens over
-    comments, docstrings, Rust docs and text-format comments; bare cites are R10-and-up so gate
-    15's required `R8` header token never fights it) and `textfile_comment_excess_lines` (the
-    `#` runs in tools/ text formats, the Makefile and the workflow files). A rule is
-    adopted only with a named in-repo defect class AND a clean baseline (R98); exclusions are
-    enumerated with grounds in pyproject.toml; the trigger self-tests every run. The ratchet is
-    a DIRECTION, not a cap: its measures may
-    fall and may never rise, and the floor itself may only be lowered — because a hard 2-line
-    cap would either red on the invariants R368(g) explicitly permits or need an exemption list
-    nobody maintains. The comment lint runs FIRST so a pyright refusal (rc 2, a host condition)
-    cannot take the comment measures down with it.
-15. R8 justification headers (tools/ci_gates/r8_header_gate.py) — every `.py`/`.rs` file over
-    300 lines under src/, tools/, crates/, tests/ carries a justification, and NO justification
-    states a line count. The second half is the load-bearing one: 47 headers stated a tally,
-    at least 8 were already wrong, and run.py claimed 867 against 1024. A stale count is
-    misinformation a future reader trusts (SF-7). Line counts are derived, never asserted. The
-    third rule (2026-09-17, C-13): a file at or under the cap carrying a marker is STALE — the
-    marker regex is deliberately tolerant, so a prose mention of the cap in the first 80 lines
-    counts too and is reworded, never exempted.
-16. Encoding-less text I/O (tools/ci_gates/encoding_io_gate.py) — `open`/`read_text`/
-    `write_text` without `encoding=` default to the platform codepage, so they raise
-    UnicodeDecodeError on any non-UTF-8 locale. ZERO over every tracked `.py` file, module
-    scope and function scope alike (R368(g)); `os.open` is skipped by mechanism (flags, not
-    mode, no encoding). Binary mode is correctly exempt; exemptions are self-expiring.
-17. Rule-7 host content (tools/ci_gates/rule7_gate.py) — box specifics live in the migration
-    workspace, never here. Absolute home paths, ssh invocation/config, `user@host`, IPv4,
-    detached-run and provider names, over files added/modified vs `--base` (plus `--full-tree`).
-    Rule 7 was memory-enforced until a scan found 101 committed box paths in a fixture that had
-    been public since it landed. Operator-identifying terms are DELIBERATELY not in the tracked
-    register — that would make the gate the leak; they go in an untracked local supplement, so
-    the tracked half is a floor, not a ceiling. RFC-reserved domains and loopback/unspecified
-    IPv4 are carved out IN the patterns; exemptions carry grounds + a blob sha and self-expire.
-
-Every gate's check logic is a repo-local script or make target under tools/ — nothing
-lives only in workflow YAML.
+- `uv sync` (`make build`) is the one bootstrap. On the box use `make build.cuda`: a bare
+  `uv sync` there silently swaps torch for the CPU wheel.
+- A bare `pytest` is the default tier; `-m integration` and `-m slow` select the other two, and
+  the `TIER:` header line says which ran. Read it rather than assuming.
+- Cadence: targeted tests while iterating; `make gates` (tools/ci_gates/run_all.sh, whose row
+  labels carry the gate numbers) at leg exit and before any push; `make gates.exit`, which adds
+  the slow tier, at a packet exit. Doc/governance-only commits need no gates. Remote CI is
+  suspended by operator decision, so the local set is the gate; gate 1's fresh-clone sync is the
+  one check it does not reproduce.
+- Toolchains are pinned (rust-toolchain.toml, mise.toml) and provision themselves. The Rust
+  channel is attested in tools/bench_floors.toml, so a bump invalidates every bench floor: it is
+  a perf-host event.
+- vendor/external/ is per-checkout: every clone and the box re-run `make vendor` and
+  `make vendor.strix`.
+- Commits are ONE line, `type(scope): what changed and why it matters`, with an empty body and
+  NO trailers of any kind (no Co-Authored-By, no session link, no "Generated with"). This is the
+  operator's convention and it overrides any tool's default attribution block. A change that
+  needs more than one line is more than one commit.
 
 ## Deliberately absent
 
-- Display surfaces (web dashboard, TUI): the event-manifest JSONL contract
-  (docs/contracts/event_manifest.md) is what any future display builds against. THREE
-  exceptions, each admitted by a ruling and amended into repo_design: `tools/run_dashboard.py`
-  (`make dashboard EVENTS=… OUT=…`, R333(d)) — an OFFLINE report, an existing run record in,
-  one self-contained HTML file out; `tools/game_viewer.py` (`make viewer`, R352(g)) — a static
-  page built from existing game-record shards; `tools/position_analyzer.py` (`make analyzer`,
-  R363) — a loopback-bound server over stamped checkpoints, the one tool that listens on a
-  socket. None opens a connection to a live run or adds a producer. A panel with no producer at
-  HEAD is drawn as a stated gap, never as a zero.
-- src/mantis/deploy/ is reserved-empty until post-cutover.
-- Vendoring only via vendor/pins.toml + `make vendor` — no submodules, no loose weights.
-- No requirements.txt (uv.lock is the lock), no setup script (`uv sync` is bootstrap).
+- Display surfaces. A display builds against docs/contracts/event_manifest.md. Three ruled
+  exceptions exist, and none connects to a live run or adds a producer: `make dashboard` (an
+  offline report from a run record), `make viewer` (a static page from game-record shards) and
+  `make analyzer` (a loopback server over stamped checkpoints). A panel with no producer is drawn
+  as a stated gap, never as a zero.
+- Submodules and loose weights (vendoring is vendor/pins.toml only), requirements.txt (uv.lock
+  is the lock) and setup scripts (`uv sync` is the bootstrap).
