@@ -36,14 +36,48 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by the RUN10-AUX-PROBE packet (R373; 2026-09-27) — no suspect is needed: every net trained from the parent reads below it
+
+- **CARD-RUN10-START-DAMAGE — the reading the design packet starts from (R373(c)).** Offline, on the launch tree,
+  101 production steps from the parent on its own ring (minus the prereg's slice) read at strix @ r8: 0.069
+  [0.042, 0.101] with the aux head at weight 4 (A1); 0.083 [0.049, 0.118] with no aux loss (A2); 0.115 [0.076,
+  0.156] with the aux's trunk gradient stopped (A5); 0.066 [0.038, 0.094] with no aux loss and the parent's
+  AdamW moments (A6). The parent reads 0.191 [0.146, 0.236], the preflight's online 101-step net 0.0625 [0.035,
+  0.094]. None of the packet's three suspects is needed: not the online data (offline reproduces it), not the
+  aux head (A2, A6), not the fresh optimizer (A6). Six of six nets read after the parent read below it (the four
+  arms, the online net, the twin's 12k 0.118). Two readings remain and these cells cannot split them: run10's
+  step loses a strength run8's own training kept, or the parent's 0.191 tops a noisy series (run7's neighbours
+  3k apart read 0.142 → 0.094 → 0.163; the parent read 0.142 on the old tree). The split costs no training:
+  run8's own neighbours (42k, 48k, in the mirror) at the prereg instrument on the launch tree. Beside it: every
+  warm start in this lineage dipped early (run7 from the BC net's 0.083 to 0.045 at 15k; run8, no aux head, from
+  run7@42k's 0.111–0.142 to 0.056 / 0.062 at 3k / 6k). The aux's trunk pull is second-order: at 1 000 offline
+  steps it costs value fit in proportion to its weight (train value loss 0.467 at w 4, 0.455 at w 2, 0.438–0.441
+  with no trunk path); zero-init does not remove it, a stopped gradient does. Records:
+  `mantis-records/run10-aux-probe/`; the arms' checkpoints and the cells' games are in the mirror.
+- **CARD-WARM-START-DROPS-MOMENTS — the warm start copies weights only; not the lever at 101 steps.** The parent
+  checkpoint carries its AdamW state (46 tensors, Adam step 45 000, lr 9.975e-4); `apply_bc_warm_start` copies
+  the tensors and `Trainer.__init__` builds a fresh AdamW. A6 prices the moments: 0.066 [0.038, 0.094] with
+  them, A2 0.083 [0.049, 0.118] without — no measurable difference.
+- **CARD-HELDOUT-PROXY-BLIND — the frozen-slice readings do not see the start's damage (R373(d): no stand-in).**
+  On the prereg's slice, A1, A2 and A6 @ 101 read beside the parent (own value loss 0.528 / 0.509 / 0.508 vs
+  0.516; value MSE vs the parent 0.065 / 0.045 / 0.046, the online net 0.234) while strix reads them beside the
+  online net; no reading (policy KL, value MSE, own policy or value loss) orders the known nets as strix does.
+  Two facts for any successor: the slice's 3 031 rows touch 1 109 of the ring's 1 239 games, so an offline arm
+  trained on that ring is partly in-sample on it; and a candidate must order the online net, A1/A2/A5/A6 @ 101,
+  the twin's 12k, the SWA net and the parent before it stands in. Untested candidate: the same readings on
+  positions from the strix cells' own games.
+
 ## Opened by the RUN10-REPICK packet (R372; 2026-09-26) — the aux start is not recovered
 
-- **CARD-RUN10-AUX-START-DESIGN — BLOCKING run10's START (R372(c)).** At strix @ r8 on the launch tree the
+- **CARD-RUN10-AUX-START-DESIGN — BLOCKING run10's START (R372(c)); RE-AIMED 2026-09-27 by RUN10-AUX-PROBE (R373(c)): no aux start is shown to matter at 101 steps; the design waits on CARD-RUN10-START-DAMAGE's next reading.** At strix @ r8 on the launch tree the
   twin's last save (step 12 000, weight 4) reads 0.118 [0.083, 0.153] against the pooled parent 0.191 (576
   games; 0.194 [0.150, 0.244] on 304 distinct) — above the preflight's 101-step control 0.0625 [0.035,
   0.094], below the parent it warm-started from. The fresh aux head's early clipped updates cost strength that
   12 000 steps did not return. A design packet decides how the aux head starts; the weight re-pick waits on it.
-- **CARD-STRIX-CELL-REPLAY — a second cell at the same seed is not a second sample.** The equal-work cell's
+  R373(a): the pooling is void (a same-seed cell replays its games); the parent reads 0.191 [0.146, 0.236].
+  RUN10-AUX-PROBE: offline, the 101-step cost needs no aux head (A2, no aux loss, 0.083) and survives the
+  parent's optimizer moments (A6, 0.066), so the attribution above to the head's clipped updates does not hold.
+- **CARD-STRIX-CELL-REPLAY — SPENT 2026-09-26 by R373(a)(b): a same-seed cell witnesses determinism and adds no sample; the §4 instrument keeps its seed.** The equal-work cell's
   `seed_base` is fixed (20260625), and on an IDLE box its play is near-deterministic: the parent's second cell
   replayed 272 of S1's 288 games byte for byte and read 55/233 again. Its CI is the book's opening spread, not
   run-to-run noise; a cell that must tighten a point needs a different `seed_base` (or book slice), which is a
@@ -51,13 +85,15 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by the RUN10-PRESTART packet (R371; 2026-09-26) — run10 halted at the witness
 
-- **CARD-RUN10-AUX-WEIGHT-REPICK — the §1a rule fires; HELD on CARD-RUN10-AUX-START-DESIGN (R372(c): C not recovered).** Over the twin's settled half (steps 7 188–14 375)
+- **CARD-RUN10-AUX-WEIGHT-REPICK — the §1a rule fires; HELD on CARD-RUN10-AUX-START-DESIGN (R372(c): C not recovered; R373(c): the re-pick follows RUN10-AUX-PROBE's reading).** Over the twin's settled half (steps 7 188–14 375)
   `aux_policy_head_grad_norm / policy_head_grad_norm` reads a median 2.92 (p10–p90 2.24–3.83; by quarter
   3.22 → 2.99 → 2.90 → 2.93, flat), outside [0.5, 2]. The rule re-picks inside [2, 8] by re-mint with its own
   preflight; weight 2 predicts ≈ 1.46 (the head norm scales with the weight, prereg §8's foreseen case). The
   re-mint, the new launch tree and a fresh twin are the operator's word. Beside it: the preflight's terminal
   regression guard read the 101-step burst net at 0.234 vs its anchor (16 pairs, reject) — the fresh head's
-  early clipped updates cost strength; the re-picked weight's twin should read it again.
+  early clipped updates cost strength; the re-picked weight's twin should read it again. RUN10-AUX-PROBE: the
+  101-step cost needs no aux head (CARD-RUN10-START-DAMAGE); offline, weight 2 halves the head's pull on the
+  trunk (settled aux/main head-norm ratio 1.8 at w 2 vs 3.5 at w 4, steps 11–101).
 - **CARD-RUN10-ONE-HOT-3K — the pre-START audit misses on the step-3 000 ring.** `one_hot_share_full`
   0.3151 (< 0.30) and `_mr1` 0.4002 (< 0.40); `_mr2` 0.2276 passes. Reported beside it, not a substitute
   witness: 6k 0.305 / 0.387, 9k 0.297 / 0.379, 12k 0.290 / 0.373 — falling, no collapse. Whether the 3k
@@ -65,6 +101,8 @@ Both were found by running the gate set rather than by reading it, and both are 
 - **CARD-RUN10-PARENT-BARS — the parent re-read moved.** strix @ r8 on the launch tree, IDLE: 0.191 [0.146,
   0.236] (55/288) against the recorded 0.142 [0.104, 0.181] (CONTENDED, the old box, pre-PERF-ADA). R371(c)
   sends run10's bars and the EMA conditional to the operator; the EMA cell read 0.149 (waits under either).
+  RUN10-AUX-PROBE: six of six nets read after the parent on this tree read below it; whether 0.191 tops a noisy
+  series is CARD-RUN10-START-DAMAGE's next reading.
 - **CARD-PREFLIGHT-CHILD-LOGGING — CLOSED 2026-09-26 (RUN10-REPICK, `d158d27e`): the child configures logging; a boot row reads `run_safety_built` in `child_stderr.log` and reds without it.** The preflight child's boot narration was lost. `preflight_mint.py
   --_boot` never calls `configure_logging`, so its INFO lines (`heldout_slice_opened`, the prereg §6 boot
   witness) reach no file; the twin's `mantis.run` boot logged it (ring, 100 000 rows, 12 batches, 3 000).

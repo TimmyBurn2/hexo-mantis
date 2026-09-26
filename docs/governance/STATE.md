@@ -7,12 +7,24 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
+**RUN10-AUX-PROBE EXITED (2026-09-27, R373): none of the three suspects is needed for the strength run10's
+start loses; run10 is NOT ready for START.** Offline, on the launch tree, 101 production steps from the parent on
+its own ring read at strix @ r8: 0.069 [0.042, 0.101] with the aux head at weight 4, 0.083 [0.049, 0.118] with no
+aux loss, 0.115 [0.076, 0.156] with the aux's trunk gradient stopped, 0.066 [0.038, 0.094] with no aux loss and
+the parent's AdamW moments — against the parent's 0.191 [0.146, 0.236] and the preflight's online 101-step net
+0.0625. Not the online data, not the aux head, not the fresh optimizer: six of six nets read after the parent
+read below it. Whether run10's step loses what run8's own training kept, or the parent's 0.191 tops a noisy
+series, is the next reading (run8's neighbours on this tree, no training; CARD-RUN10-START-DAMAGE). The warm
+start drops the parent's AdamW state (not the lever at 101 steps). The frozen-slice drift proxy does not see the
+damage and stands in for nothing (R373(d)). The design packet and the weight re-pick are the architect's;
+records are local.
+
 **RUN10-REPICK HALTED AT C (2026-09-26): the aux start is NOT recovered, so no re-mint; run10 is NOT ready
 for START and its aux start goes to a design packet (R372(c)).** strix @ r8, 288 paired games each, on the
 launch tree `451d23f9`: the parent's second cell B1 0.191 [0.146, 0.236] is a near-replay of S1 (fixed
-`seed_base`: 272 of 288 games byte-identical), so the pooled parent is 0.191 on 576 games, 0.194 [0.150,
-0.244] on its 304 distinct ones; the control, the preflight's 101-step net, 0.0625 [0.035, 0.094] fails the
-test as it must; the twin's last save (step 12 000) 0.118 [0.083, 0.153] does not reach the pooled point.
+`seed_base`: 272 of 288 games byte-identical), which R373(a) rules a determinism witness, not a sample, so
+the parent reads 0.191 [0.146, 0.236]; the control, the preflight's 101-step net, 0.0625 [0.035, 0.094] fails
+the test as it must; the twin's last save (step 12 000) 0.118 [0.083, 0.153] does not reach the parent's point.
 Leg A (the preflight child's logging, the bench window, the OC-7 re-aim) is pushed at `c9fe9fcd`, gates.exit
 green. No operator line came with the packet, so only A and B ran. Records are local.
 
@@ -66,7 +78,7 @@ run6's by R369's packet (W0).
 ## Where things live
 
 - Open work: `docs/governance/CARDS.md` (swept in W6; derived there, never enumerated here).
-- Rulings: `docs/governance/RULINGS.md`; the latest is R371.
+- Rulings: `docs/governance/RULINGS.md`; the latest is R373.
 - Laws and the protected set: `docs/governance/LAWS.md`, whose protected set names each
   invariant's pinning tests (R370(f)); `tests/test_protected_set_pins.py` fails if one is gone.
   Falsified work: `docs/governance/falsified.md`.
