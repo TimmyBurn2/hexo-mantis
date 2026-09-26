@@ -40,7 +40,7 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 Grounds and numbers: the R369 ledger in `docs/design/measurements/PERF_ADA_PROFILE_2026-09-24.md`. Order is the
 recommended one; each is its own leg with a LAW-09 bench.
-- **CARD-PERF-CSR — the fused CSR aggregation (B1): IN PROGRESS as L2's replacement.** One Triton op over
+- **CARD-PERF-CSR — the fused CSR aggregation (B1): CLOSED 2026-09-26 (R370(a), FINISH sweep) — DONE at `c9392c95` (src/mantis/model/_gine_triton.py), box 3 881 leaves/s, repeat exact.** One Triton op over
   dst-sorted edges: gather + edge add + relu fused, fp32 register sum, one rounding, no atomics, no fp32 [E, H];
   its backward the same sum over src order. Desktop prototype: 3.3–3.9 ms per 4 layers (committed L2 44.1,
   fp32 atomics 7.1), bitwise equal to the committed L2 op.
@@ -52,7 +52,7 @@ recommended one; each is its own leg with a LAW-09 bench.
   on cuBLAS kernel choice at padded M (unverified on sm_89 and exposed to L3's torch move), its backward needs a
   deterministic per-code reduction, and once B1 lands the serving bound is expected to move to the CPU collate
   (CARD-PERF-4). Re-decide on the exit's real-loop reading: if the GPU is still the in-run bound, it is next.
-- **CARD-PERF-READOUT — the deterministic readout (B3), OPERATOR-ENDORSED 2026-09-25.** The served softmax's
+- **CARD-PERF-READOUT — the deterministic readout (B3), OPERATOR-ENDORSED 2026-09-25. CLOSED 2026-09-26 (R370(a), FINISH sweep) — DONE at `d5605bf2` + `12f829f9`: fixed-order fp32 `segment_reduce`, repeat exact.** The served softmax's
   `segment_sum` and the value/mean pools sum by atomics (served probabilities jitter ~1e-7 on a repeat); a
   segment reduction over the CSR offsets makes them exact. A precondition for L4's bit-identity witness.
 - **CARD-PERF-BATCH-INVARIANCE — served outputs that do not depend on the pop's size; then the eval cache.**
@@ -125,7 +125,8 @@ recommended one; each is its own leg with a LAW-09 bench.
   and is recorded before the row is armed. Not run10's; nothing perf rides it (R366(e)).
 - **CARD-MECHANISM-SWEEP — the PRE-EXISTING inventory R367(a) now names, out of the R366 range and out of
   the fix leg's scope (REVIEW-1 F1.6, F4.2, F2.1).** Measured by REVIEW-1 at `19e8351d`: a `RUN5`
-  constant bound to a different run's config (a name that lies about its file) in four test modules;
+  constant bound to a different run's config (a name that lies about its file) in four test modules
+  (gone by 2026-09-26: no `RUN5` symbol remains);
   32 test functions carrying a `runN` token in 16
   files; ≈ 800 `run5`/`run6` identifier tokens across `src`/`tests`/`tools`; the analyzer tests' (under `tests/tools/`)
   synthetic `"run9"` run ids; `crates/mantis-selfplay/tests/dirichlet_inert_on_gumbel.rs`'s run9 message;
@@ -443,6 +444,8 @@ recommended one; each is its own leg with a LAW-09 bench.
 ## Opened by R350 (the block verdict)
 
 - **CARD-STOP-DRAIN-VS-GRACE — a stop during an eval round is a SIGKILL after the save.**
+  Repaired 2026-09-26: legs 1–2 landed at `49b7740d` (`abandon_pending`), so the headline no longer
+  holds for a resumable stop; leg 3 (a mint relation between grace and teardown) is still open.
   Witnessed at run6's stop (2026-09-13 08:15:12 UTC, one SIGTERM to the supervisor): `shutdown_save`
   at +0.5 s, `resume_state_persisted` (the 35 084 bundle, complete) and `flush_pending_eval` at
   +1.4 s — then 30 s of `game_complete` events while `close_out` waited on the in-flight round-35
@@ -468,7 +471,7 @@ recommended one; each is its own leg with a LAW-09 bench.
   a 1-in-~5 flake of `tests/eval/test_eval_broken.py::test_killed_worker_yields_eval_broken_and_clean_drain`
   on 2026-09-13 (the fake process is flipped dead just before the drain). Fix shape: the second
   finaliser WAITS (bounded by the kill grace) for `_result` rather than returning `None`.
-- **CARD-WARMSTART-CONTROL — the R340 control's head set, read from the tree.** R350(a) states
+- **CARD-WARMSTART-CONTROL — the R340 control's head set, read from the tree. CLOSED 2026-09-26 (R370(a), FINISH sweep) — DONE: the bc_tp/bc_full pair is read in STRENGTH_FRONTIER_1 §D; `identity.warm_start.reinit` landed at `bd94dd96`.** R350(a) states
   the burst copied ALL heads; `run6-mint` at `d3ba75e` carries the same trunk+policy seam run6
   booted with (the burst's log died with the box, archive v3.54). The frontier measures the head
   set as its own cell pair (`bc_tp` vs `bc_full`); the card closes on that reading.
@@ -625,14 +628,14 @@ below 8 re-opens this row. R343(a).
 | F-816-27 | supervisor kill-grace CEILING absent (schema is `Field(ge=0)` only) | RULED; rides prereg row 19 to the operator | R338(c) |
 | F-816-34 | vacuous knee band | RULED by R338(a)/(b): the halt ratified, and the widening's noise term corrected by mechanism to the noise-floor drive's rel-SE, never a within-round spread, the widening VOID for a ladder it still swallows. Filed 2026-09-04: PICK = 2 from `adjusted_threshold` 54.9167, widened below every rung's throughput (min passing 89.600; unwidened the rule picks 16); a pre-statable vacuity test is `adjusted_threshold < min passing throughput` | R338(a)/(b) |
 | F-816-35 | r8 trainer need is a DISTRIBUTION | RULED by R338(c): the allowance is taken over the MAX (8.6381 GiB), not p95; `test_graph_microbatch_bound.py`'s `_SIZING_BUDGET_GIB` carries the re-sized value. Measured p50 7.9072 / p95 8.3581 / max 8.6381 GiB over 60 steps, exceeding both the minted `_SIZING_BUDGET_GIB = 8.40` and R330(b)'s armed 3% over FINISH-1's single-draw point (8.3341); not a halt alone — the peak is cap-bound and STEP 3 re-fits the caps — but which statistic the allowance is taken over is worth 0.75 GiB | R338(c) |
-| F-816-36 | an unplayable rung sets every ring's composed visit capacity | FILED, never adjudicated. The retained `strix_256` rung can never play a game (only sealbot is pinned), so it sets the composed `visit_capacity` of every ring the run writes and refuses the corpus fit | none |
+| F-816-36 | an unplayable rung sets every ring's composed visit capacity | CLOSED 2026-09-26 (R370(a), FINISH sweep) — GONE: `strix_256` and `eval.ladder` were deleted by R362(c) at `94b8286a`; `derived_visit_capacity` composes only from self-play sims | none |
 | F-816-15 | `freeze_verify.py` red on 39 of 64 paths; audit-before-rebaseline | ORDERED as its own packet, never dispatched | R285(g)/R286(c) |
 | F-816-19 | the run's own process is spawned unparented (PDEATHSIG class) | ORDERED PRE-MINT, no close | R285(h) |
 | F-816-21 | test de-triplication — one stub in three files across two registers | RE-SEQUENCED behind RQ-1; owed inside the freeze packet | R288(d) |
 | F-816-26 | parent/child config binding; a mismatch is a NAMED REFUSAL | RULED, queued behind Q3/Q4 | R306(d) |
 | F-816-28 | preserve BOTH invariants or the primitive does not move | RULED BY PRINCIPLE, queued behind Q3/Q4 | R306(d) |
 | F-816-30 | a skip guard must detect the MECHANISM, never a proxy | RULED; carried by PACKET_CI_RUNTIME, which forwards first | R306(d) |
-| F-816-11 | arena/eval ply cap as an unconfigurable literal | LIVE precondition, discharged IN FACT at HEAD but never closed | R338(d) |
+| F-816-11 | arena/eval ply cap as an unconfigurable literal | CLOSED 2026-09-26 (R370(a), FINISH sweep) — DONE: `eval.max_plies` is a minted row (`79d832cd`) and `arena/match.py` takes it as a required argument | R338(d) |
 | F-816-14 | the eval child survives its parent's SIGTERM holding 458 MiB | HALF-OPEN — the SIGKILL leg closed, the SIGTERM leg re-worded as F-Q6-8 | R300(d) |
 | F-816-17 | dead `legal_mask` build | routing RATIFIED AS FILED, no close | R286(f) |
 | F-816-1 | run5 death was a host event with no software error line | no close ever recorded | R268 |
@@ -658,7 +661,7 @@ below 8 re-opens this row. R343(a).
 | PERF-TRANCHE-1 residual | the 7.2% pre-control/ledger disagreement | OPEN as instrument hygiene; ledger absolute levels are not quotable without re-measurement | R320 |
 | PERF-TRANCHE-2 | six items T2-1..T2-6 | EXECUTED — its findings are cited as landed evidence by R335 — but NO ratifying clause exists in either archive file | R334(e) |
 | WP-AXIS2 | Phase 2 axis-graph arch, then a shakedown | LAST ORDERED, NEVER CONFIRMED. Neither the shakedown nor the R339 mint is ever labelled WP-AXIS2, so completion would be an inference, not a record | R335(g) |
-| DASH-1 banked panels | average sims/move, held-out loss | 2 BANKED with no producer at HEAD; drawn as stated gaps, never as zeros | R334(a) |
+| DASH-1 banked panels | average sims/move, held-out loss | 2 BANKED; drawn as stated gaps, never as zeros. Repaired 2026-09-26: held-out loss now HAS a producer (the `heldout_gap` event, event_manifest.md) — its panel is unwired, not producerless | R334(a) |
 | R317(c)(ii) diagnostic | move-sequence-hash diagnostic | accepted as NON-BLOCKING DEBT, never shipped | R318 |
 | AUDIT-1 P10 | lane-C design input, explicitly "not a packet" | still the architect's, undispatched | R331(d) |
 
@@ -679,18 +682,18 @@ below 8 re-opens this row. R343(a).
 | card | subject | status |
 |---|---|---|
 | CARD-RUN5-GPU-OOM | GPU-OOM defect CLASS; the site set now includes the GNN training forward | OPEN as a class. Instance F-816-12 closed at the joint mint; the class row never closed. ANNOTATION 4 / R302(c) rider |
-| CARD-CLEANSTOP-SAVE leg (b) | the `checkpoint_interval` prereg row (leg (a) discharged) | LIVE, pinned to the operator's prereg batch. AMBIGUOUS: run6 mints `checkpoint_interval: 1000` and the derived index was never updated |
-| CARD-RESUME-LAUNCHER-FLAG | supervisor auto-resume / `--resume-from` launcher surface | BUILT IN CODE: `python -m mantis.run --resume-from <bundle>` is the ONE optional launcher flag (`resolve_bootstrap` fails a stale one at launch); run7 resumed through it on 2026-09-15. Supervisor AUTO-resume is not built and not ordered; the governance row closes when a ruling names it |
+| CARD-CLEANSTOP-SAVE leg (b) | the `checkpoint_interval` prereg row (leg (a) discharged) | CLOSED 2026-09-26 (R370(a), FINISH sweep) — GONE: its RUN5_MINT_PREREG row has no document to land in, and the one production config mints `checkpoint_interval: 3000` |
+| CARD-RESUME-LAUNCHER-FLAG | supervisor auto-resume / `--resume-from` launcher surface | BUILT IN CODE: `python -m mantis.run --resume-from <bundle>` is the ONE optional launcher flag (`resolve_bootstrap` fails a stale one at launch); run7 resumed through it on 2026-09-15. Supervisor AUTO-resume is not built; it was asked for by R343(c) (carded at `8d69cf69`), so it is not "not ordered" (repaired 2026-09-26); the row closes when a ruling names it |
 | CARD-EVAL-CHANNEL-SPLIT | split the promotion and external eval cadences | OPEN, narrowed. R343(b)(v)'s conditional FIRED; R345(c) moved `gate.stride` to 3 and ledgered "the split that was already a key"; superseded for run7 — the gate runs at stride 1 on the 3 000-step cadence (R350(d), CARD-EVAL-CADENCE) |
 | CARD-PROTOCOL-COMPLETE | complete protocol declarations, widen the AST conformance gate, LAW-16 sink/watchdog row | OPEN, pre-cutover, NOT mint-blocking |
-| CARD-DENSE-EVAL-ADAPTER | wire `infer_batch_per_cluster` into the deploy-head decode | OPEN — pre-Stage-0 BLOCKING, not mint-blocking |
+| CARD-DENSE-EVAL-ADAPTER | wire `infer_batch_per_cluster` into the deploy-head decode | CLOSED 2026-09-26 (R370(a), FINISH sweep) — GONE: the function went with the grid path at `3dd20b49`; its control arm `v6_live2_ls` is pinned ABSENT in registry_census.rs |
 | CARD-LINT-TYPE | ruff/pyright advisory type-debt backlog | OPEN debt row, deliberately kept out of the gate by R98 |
 | CARD-PYRIGHT-STRICT | pyright strict-mode adoption as a post-cutover ratchet | OPEN; live marker in pyproject.toml's `[tool.pyright]` comment block |
-| CARD-TORCH-INDEX | conditional torch index / uv extra for the CPU-wheel parity regime | OPEN, post-mint |
+| CARD-TORCH-INDEX | conditional torch index / uv extra for the CPU-wheel parity regime | CLOSED 2026-09-26 (R370(a), FINISH sweep) — DONE at `669b6008`: the `cuda` extra on pytorch-cu128, the `cpu` default group, `make build.cuda` |
 | CARD-EVAL-CORESIDENCY | characterize eval-child steady VRAM for the co-residency prereg row | OPEN. The founding 8.21 GiB figure was superseded by R229(1) (unbounded, to 13.5 GiB) without naming the card |
 | CARD-A10-CAP | whether an entropy term enters the graph loop at all | RECORDED, explicitly NOT executed. R335(b) makes entropy normalization a PRECONDITION on ever arming one |
 | CARD-SEALBOT-BRANCHES | evaluate ramora0 branches (nnue) as a higher ladder rung | DEFERRED, not mint-relevant |
-| CARD-MINPIN | the K-cluster min/max asymmetry, pending the matched-FLOP dense arm | OPEN — no in-tree pin exists (`aggregate_cluster_values_min` has zero hits; both registry rows read `value_pool = "none"`); the asymmetry stays a flagged defect. See falsified.md F-04 |
+| CARD-MINPIN | the K-cluster min/max asymmetry, pending the matched-FLOP dense arm | CLOSED 2026-09-26 (R370(a), FINISH sweep) — GONE: no K-cluster aggregation exists (both registry rows `value_pool = "none"`, `is_multi_window = false`); the multi-window rows and the dense arm it waited on left with the grid path at `3dd20b49` |
 | CARD-CHECK14-EDGE-GEOMETRY | the `verify_edge_geometry` collate check ("check 14", NOT CI gate 14) | NO STATUS EVER RULED. R336(e) separately CARDS check 14's 41.4 ms/part, not ordered |
 | CARD-FRESHSYNC | gate 1 fresh-clone sync broken since WP7 | OPEN in governance, REPAIRED IN CODE — the gate pins `registry_sha_hex()` and describes the failure in the past tense |
 
