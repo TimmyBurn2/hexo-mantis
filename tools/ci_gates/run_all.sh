@@ -101,7 +101,7 @@ trap 'trap - INT TERM; kill -TERM -- -"$RUST_PID" 2>/dev/null; exit 130' INT TER
 run_gate "gate 3a: pytest default tier" \
     $UV run pytest -m "not integration and not slow" -n 8
 run_gate "gate 3b: pytest integration tier" \
-    $UV run pytest -m integration
+    $UV run pytest -m integration -n 4 --dist loadfile
 # Not numbered: it is not one of the numbered gates. It is the tier those gates do
 # not reach, and it says so in the summary whether or not it ran.
 [ $WITH_SLOW -eq 1 ] && \

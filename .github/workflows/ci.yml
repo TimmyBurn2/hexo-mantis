@@ -73,7 +73,7 @@ jobs:
         if: always()
         run: uv run python tools/ci_gates/pytest_step_summary.py /tmp/junit-default.xml --title "gate 3a default tier"
       - name: "gate 3b: pytest integration tier"
-        run: uv run pytest -m integration --junitxml=/tmp/junit-integration.xml
+        run: uv run pytest -m integration -n 4 --dist loadfile --junitxml=/tmp/junit-integration.xml
       - name: "summary: integration tier digest (public)"
         if: always()
         run: uv run python tools/ci_gates/pytest_step_summary.py /tmp/junit-integration.xml --title "gate 3b integration tier"

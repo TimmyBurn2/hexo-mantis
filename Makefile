@@ -20,7 +20,7 @@ test:
 	cargo test --workspace --locked
 
 test.integration:
-	UV_NO_SYNC=1 $(UV) run pytest -m integration
+	UV_NO_SYNC=1 $(UV) run pytest -m integration -n 4 --dist loadfile
 
 # CI gate 14: curated lint/type gate — zero-error baseline, self-tested trigger.
 lint:
