@@ -253,8 +253,7 @@ ADDED (v7 → v8). `docs/contracts/run_config_schema.md` is the version authorit
   to the representation's pinned incumbent kind and a present one is refused by name if unknown.
 - Rust crossing: `SelfPlayRunnerConfig` is a versioned builder struct; field set pinned
   by a byte-equivalence test; every field maps to exactly one runner slot.
-- Every config key must have a live consumer (test-enforced); dead knobs are deleted
-  with their freeze-tests in one commit.
+- Live consumers for every key: LAW-08 (amendment R370(a): stated once, there).
 
 ## 6. Checkpoint envelope v2 (ONE format, ONE loader)
 
@@ -276,11 +275,10 @@ ADDED (v7 → v8). `docs/contracts/run_config_schema.md` is the version authorit
        declared arch (`mantis.selfplay.pool.served_copy`), written by ActorSync from the LEARNER's
        weights and never read by the learner, so the actors serve the learner while deploy, gate
        and follower read the shadow (`docs/contracts/checkpoint_envelope.md`). -->
-- Stamps are written once at creation and are IMMUTABLE — no re-stamping from a loaded
-  config, ever. An artifact that cannot be stamped cannot be written (save fails loud;
-  quarantine path if the run must survive).
-- Exactly one loader, shared by train / eval / bots. `torch.load(weights_only=True)` on
-  every surface. Declared-encoding is an assertion (mismatch raises); decode-override is
+- Stamp immutability, the one envelope format and the one loader are LAW-12 (amendment
+  R370(a): stated once, there). Mechanics: a save that cannot stamp fails loud, with a
+  quarantine path if the run must survive; the loader is shared by train / eval / bots and
+  uses `torch.load(weights_only=True)` on every surface. Declared-encoding is an assertion (mismatch raises); decode-override is
   a deliberate, loudly-logged cross-decode; both together is an error.
 - Resume precedence: launch config wins EXCEPT the checkpoint-owned key set (encoding
   pins, arch, optimizer/scheduler state) — the set is a single frozen constant with its
@@ -309,12 +307,12 @@ ADDED (v7 → v8). `docs/contracts/run_config_schema.md` is the version authorit
 
 ## 8. Testing doctrine
 
-- Single collection root `tests/`, mirroring `src/mantis` and `crates/`. Behavior-named
+- The one collection root is LAW-17; `tests/` mirrors `src/mantis` and `crates/`. Behavior-named
   tests; contracts over implementation; private-attr assertions only as documented
   wiring pins paired to an invariant file.
-- Tiers: default (fast unit), `integration` (runs in CI, includes at least one launch-
-  path smoke), `slow` (on-demand). A meta-test asserts every `integration`-marked file
-  is reachable from a CI/make target.
+- Tiers and their cadence are gate 3 (tools/ci_gates/run_all.sh) and CLAUDE.md's cadence
+  (amendment R370(a)); the `integration` tier includes at least one launch-path smoke, and a
+  meta-test asserts every `integration`-marked file is reachable from a make target.
 - Fixtures: a fixtures-manifest test FAILS (not skips) when the canonical dev fixture
   set is absent — suite shrinkage is loud. Large optional artifacts may skip but are
   counted and reported.
@@ -326,14 +324,9 @@ ADDED (v7 → v8). `docs/contracts/run_config_schema.md` is the version authorit
        so there is no radius arm for a regime-parity test to assert. -->
 - Census pins (grep-gate tests) guard classes the type system can't reach; each names
   its bug class and its triage protocol.
-- AMENDMENT (R367(a)/(b), 2026-09-21), the DESIGN STANDARD: code and tests are keyed to
-  mechanisms, never to a run — no `runN` in a symbol, test, pin or tool; "production configs" is
-  a CENSUS (discovered `configs/` minus the exempt set, each exemption carrying its reason as
-  data), never a list edited per mint; one implementation per thing; a comment states what code
-  cannot; no compatibility shim for a state the tree no longer has. Every implementation leg
-  ends with a fresh read-only review against this bullet plus correctness (budget, determinism,
-  seam contracts, LAW-07 breaks); the report is a local record outside the public tree
-  (R369(f)); findings are fixed before merge; the dispatcher does not review its own leg.
+- AMENDMENT (R367(a)/(b), 2026-09-21; moved by R370(a)): the DESIGN STANDARD and the review
+  gate are stated once, in CLAUDE.md. The production-config census is `mantis.config.census`
+  (discovered `configs/` minus the exempt set, each exemption carrying its reason as data).
 - Rust: inline unit tests near code; invariant pins and cross-language goldens under
   `crates/*/tests/`; proptest for board invariants; goldens are f32-bit-exact where the
   contract is numeric identity.
