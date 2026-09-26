@@ -19,7 +19,7 @@ if triton is not None:
     def _message_sum_fwd(xs_ptr, e_ptr, src_ptr, rowptr_ptr, div_ptr, out_ptr, H,
                          BLOCK_H: tl.constexpr, BLOCK_E: tl.constexpr, ROUND_BF16: tl.constexpr,
                          HAS_DIV: tl.constexpr):
-        v = tl.program_id(0)
+        v = tl.program_id(0).to(tl.int64)
         start = tl.load(rowptr_ptr + v)
         end = tl.load(rowptr_ptr + v + 1)
         h = tl.arange(0, BLOCK_H)
@@ -45,7 +45,7 @@ if triton is not None:
     def _message_grad(grad_ptr, xs_ptr, e_ptr, src_ptr, rowptr_ptr, div_ptr, gpre_ptr, H,
                       BLOCK_H: tl.constexpr, BLOCK_E: tl.constexpr, ROUND_BF16: tl.constexpr,
                       HAS_DIV: tl.constexpr):
-        v = tl.program_id(0)
+        v = tl.program_id(0).to(tl.int64)
         start = tl.load(rowptr_ptr + v)
         end = tl.load(rowptr_ptr + v + 1)
         h = tl.arange(0, BLOCK_H)
@@ -71,7 +71,7 @@ if triton is not None:
     @triton.jit
     def _gathered_sum(val_ptr, perm_ptr, rowptr_ptr, out_ptr, H,
                       BLOCK_H: tl.constexpr, BLOCK_E: tl.constexpr):
-        u = tl.program_id(0)
+        u = tl.program_id(0).to(tl.int64)
         start = tl.load(rowptr_ptr + u)
         end = tl.load(rowptr_ptr + u + 1)
         h = tl.arange(0, BLOCK_H)
