@@ -22,7 +22,9 @@ amendment commit and operator sign-off.
   dtype pin), pinned by its own parity test; it applies to no production path.
 - LAW-07 Producer-test. No gate or monitor input without a live producer test, and the checker
   carries a mutation self-test proving it bites.
-- LAW-08 Live-consumer. Every config key and every registered encoding has a live consumer; a dead knob dies with its freeze-tests in one commit.
+- LAW-08 Live-consumer. Every config key and every registered encoding has a live consumer; a
+  dead knob dies with its freeze-tests in one commit. Pinned by
+  tests/config/test_every_key_has_consumer.py and, for encodings, gate 11.
 - LAW-09 Bench discipline. Pre-registered hotspots + expected-gain bracket + abort threshold;
   one change = one commit = one IQR-gated bench; profile first; a measured floor is a finding.
 - LAW-10 DELETED by R347(d) — grid-era, no producer, gating nothing. The number is retired, not
@@ -30,8 +32,12 @@ amendment commit and operator sign-off.
 - LAW-11 Identity-keys. No dense-by-default anywhere. An absent encoding/representation is an
   error, never a default; representation is a closed enum on both sides of the FFI.
 - LAW-12 Checkpoint-stamp. Stamps are written once and immutable, never re-stamped from a
-  loaded config; one loader; weights-only strip is the one sanctioned encoding-change path.
-- LAW-13 FFI/build. panic = "unwind" so a panic crosses the FFI catchable, never as a process abort; no target-cpu in committed build config.
+  loaded config; one envelope format (docs/contracts/checkpoint_envelope.md) and one loader;
+  weights-only strip is the one sanctioned encoding-change path. Artifact filenames carry the
+  run id and a content hash, and an artifact that cannot be stamped cannot be written.
+- LAW-13 FFI/build. panic = "unwind" so a panic crosses the FFI catchable, never as a process
+  abort; no target-cpu in committed build config — a native build is `make build.native`,
+  env-only, and its artifacts are host-specific and never distributed.
 - LAW-14 Persistence-fatal. Persistence failures are run-fatal; `except Exception: pass` is
   lint-banned; an optional effect goes through best_effort() and requires a counter.
   ANNOTATION (2026-09-17, INVESTIGATION-1 C-11): the lint ban is ruff `BLE` over `src/` and
@@ -40,7 +46,8 @@ amendment commit and operator sign-off.
 - LAW-15 Eval-instrument. Deploy-matched eval is the DEFAULT promotion bar and a missing deploy
   decision blocks promotion; strength bars are fixed-depth instruments, never wall-clock.
 - LAW-16 Lifecycle. One subsystem, contract-tested: signals save-then-exit, self-play stall watchdog ALWAYS armed, disk guard.
-- LAW-17 Structure. Zero sys.path writes; one tests/ collection root; pyo3 only in the bridge;
+- LAW-17 Structure. Zero sys.path writes; one tests/ collection root with no package named
+  `tests` below it; pyo3 only in crates/mantis-bridge, so every other crate compiles without it;
   configs explicit and complete; a >300-line file justifies itself and states no line count.
 - LAW-18 In-run observability. A lever under test logs its own fire-rate in-run — a post-hoc probe cannot tell "starved" from "ineffective".
 - LAW-19 Controls first (R370(b)). Before a pre-registered criterion gates work, a correct design
