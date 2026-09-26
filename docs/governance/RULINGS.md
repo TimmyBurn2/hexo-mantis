@@ -1,4 +1,4 @@
-# RULINGS — R23 to R370
+# RULINGS — R23 to R371
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R371.
+- Numbering continues from R346. The next ruling is R372.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,27 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R371 — FINISH CLOSED
+Decision: verbatim below.
+
+> R371 — FINISH CLOSED.
+> (a) FINISH is accepted and merges; F5's reading is owed by run10's own twin, not a
+> measurement mint.
+> (b) R370(d) means "no gate enforces it at the moment of action": CLAUDE.md keeps the
+> one-line commit pointer beside gate 19.
+> (c) PERF-ADA's strix waiver does not carry: the parent is re-read at strix @ r8 on the
+> launch tree before its preflight; a reading outside [0.104, 0.181] stops the sequence and
+> sends run10's bars and the EMA conditional to the operator.
+> (d) run10's launch tree is the commit the box preflights; dev may move on meanwhile.
+> (e) PERF-2 is decided on the twin's with-trainer reading: a single lever worth ≥ 20 %
+> in-run comes before START as its own packet; anything smaller follows run10.
+> (f) Test-speed work keeps every assertion; only setup is shared or shrunk, and each changed
+> test keeps a control that reds.
+
+Status: standing. Construes R370(d) by (b); the operator's 2026-09-25 strix waiver ends at PERF-ADA's tip by (c).
+
+---
 
 ### R370 — FINISH
 Decision: verbatim below.
