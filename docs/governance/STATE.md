@@ -7,6 +7,15 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
+**RUN10-REPICK HALTED AT C (2026-09-26): the aux start is NOT recovered, so no re-mint; run10 is NOT ready
+for START and its aux start goes to a design packet (R372(c)).** strix @ r8, 288 paired games each, on the
+launch tree `451d23f9`: the parent's second cell B1 0.191 [0.146, 0.236] is a near-replay of S1 (fixed
+`seed_base`: 272 of 288 games byte-identical), so the pooled parent is 0.191 on 576 games, 0.194 [0.150,
+0.244] on its 304 distinct ones; the control, the preflight's 101-step net, 0.0625 [0.035, 0.094] fails the
+test as it must; the twin's last save (step 12 000) 0.118 [0.083, 0.153] does not reach the pooled point.
+Leg A (the preflight child's logging, the bench window, the OC-7 re-aim) is pushed at `c9fe9fcd`, gates.exit
+green. No operator line came with the packet, so only A and B ran. Records are local.
+
 **RUN10-PRESTART HALTED AT S6 (2026-09-26); run10 is NOT ready for START.** FINISH is merged and pushed
 with R371 (`451d23f9`, run10's launch tree, R371(d)). On that tree, on the box: admission IDLE 3 955 leaves/s at
 B 64 (PASS, 1.60x); the parent's strix @ r8 cell IDLE **0.191 [0.146, 0.236]** — outside [0.104, 0.181], the
@@ -19,7 +28,7 @@ cards, the operator's rulings owed and the numbers are CARDS' RUN10-PRESTART sec
 
 **DEV-SPEED EXITED beside it (2026-09-26).** The integration tier's real boots were compute, not waits:
 three preflight rows now read one module-scoped boot and the four in-process wiring rows boot
-`configs/smoke_wiring.yaml` (census-exempt; the exemption's ruling is owed). On the desktop CUDA venv,
+`configs/smoke_wiring.yaml` (census-exempt, ruled by R372(a)). On the desktop CUDA venv,
 back to back: the integration tier 2 922 -> 466 s, `make gates.exit` 3 076 -> 627 s, ALL GREEN at the
 tip (the base's one red was the pre-existing bench-server window, carded). Records are local.
 

@@ -36,9 +36,22 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by the RUN10-REPICK packet (R372; 2026-09-26) — the aux start is not recovered
+
+- **CARD-RUN10-AUX-START-DESIGN — BLOCKING run10's START (R372(c)).** At strix @ r8 on the launch tree the
+  twin's last save (step 12 000, weight 4) reads 0.118 [0.083, 0.153] against the pooled parent 0.191 (576
+  games; 0.194 [0.150, 0.244] on 304 distinct) — above the preflight's 101-step control 0.0625 [0.035,
+  0.094], below the parent it warm-started from. The fresh aux head's early clipped updates cost strength that
+  12 000 steps did not return. A design packet decides how the aux head starts; the weight re-pick waits on it.
+- **CARD-STRIX-CELL-REPLAY — a second cell at the same seed is not a second sample.** The equal-work cell's
+  `seed_base` is fixed (20260625), and on an IDLE box its play is near-deterministic: the parent's second cell
+  replayed 272 of S1's 288 games byte for byte and read 55/233 again. Its CI is the book's opening spread, not
+  run-to-run noise; a cell that must tighten a point needs a different `seed_base` (or book slice), which is a
+  change to the §4 instrument and the operator's.
+
 ## Opened by the RUN10-PRESTART packet (R371; 2026-09-26) — run10 halted at the witness
 
-- **CARD-RUN10-AUX-WEIGHT-REPICK — the §1a rule fires.** Over the twin's settled half (steps 7 188–14 375)
+- **CARD-RUN10-AUX-WEIGHT-REPICK — the §1a rule fires; HELD on CARD-RUN10-AUX-START-DESIGN (R372(c): C not recovered).** Over the twin's settled half (steps 7 188–14 375)
   `aux_policy_head_grad_norm / policy_head_grad_norm` reads a median 2.92 (p10–p90 2.24–3.83; by quarter
   3.22 → 2.99 → 2.90 → 2.93, flat), outside [0.5, 2]. The rule re-picks inside [2, 8] by re-mint with its own
   preflight; weight 2 predicts ≈ 1.46 (the head norm scales with the weight, prereg §8's foreseen case). The
