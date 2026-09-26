@@ -172,7 +172,7 @@ def test_a_real_boot_writes_the_arming_event_into_the_runs_own_jsonl(
     monkeypatch.delenv(PARENT_DEATH_PPID_ENV, raising=False)
     assert arm_parent_death_if_supervised() is False
 
-    config = smoke_run_config("smoke_preflight_armed.yaml", train={"max_train_steps": 16})
+    config = smoke_run_config("smoke_wiring.yaml", train={"max_train_steps": 16})
     mantis_run.launch_run(config=config, out_dir=tmp_path)
 
     rows = [json.loads(line)
