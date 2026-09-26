@@ -7,16 +7,12 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
-**FINISH (R370) COMPLETE 2026-09-26 on branch `finish`; its fast-forward into `dev` and the push wait on the
-operator** because F5 HALTED (CARD-F5-LOOP-WITH-TRAINER: the launcher refuses a throwaway run id without a
-preflight stamp, and the grant excluded stamping). At the tip: `make gates.exit` + gate 1 ALL GREEN, 3 320 s
-on the CPU venv and 2 891 s on the desktop's CUDA venv (the adopted gate host; PERF-ADA's exit sweep was
-≈ 4 991 s serial by GOV-ECON's measure); admission re-read IDLE on the box at the tip: 3 984 leaves/s at B 64
-(PASS, 1.62x). Landed: the isolation fixes, levers 1–5 (test opt-level 2, the Rust arm beside the Python arm,
-xdist on both tiers, the CUDA gate host; nextest measured and not landed), GOV-ECON's merge and move-to-test
-rows (gates 18 and 19), the CLAUDE.md cut, the protected set's pins, the eval cache under R370(c) (box loop
-+16–21 % positions/s at a 35 % hit rate), the trainer's segment-sum memory lever (−0.19 GiB at the caps).
-The records (timing, reviews, the CLAUDE.md cut list) are local, outside the tree.
+**RUN10-PRESTART HALTED AT S1 (2026-09-26).** FINISH is merged and pushed with R371 (`451d23f9`, run10's
+launch tree, R371(d)). On that tree the box re-read admission IDLE at 3 955 leaves/s at B 64 (PASS, 1.60x), then
+the parent's strix @ r8 equal-work cell IDLE at **0.191 [0.146, 0.236]** (55 of 288; the recorded 0.142 [0.104,
+0.181] was CONTENDED on the old box) — outside [0.104, 0.181], so R371(c) stopped the sequence before the
+preflight and sent run10's bars and the EMA conditional to the operator. No preflight, stamp or twin ran;
+CARD-F5-LOOP-WITH-TRAINER stays open. The earlier FINISH exit readings are in the local records.
 
 ## The run
 
@@ -52,7 +48,7 @@ run6's by R369's packet (W0).
 ## Where things live
 
 - Open work: `docs/governance/CARDS.md` (swept in W6; derived there, never enumerated here).
-- Rulings: `docs/governance/RULINGS.md`; the latest is R370.
+- Rulings: `docs/governance/RULINGS.md`; the latest is R371.
 - Laws and the protected set: `docs/governance/LAWS.md`, whose protected set names each
   invariant's pinning tests (R370(f)); `tests/test_protected_set_pins.py` fails if one is gone.
   Falsified work: `docs/governance/falsified.md`.
