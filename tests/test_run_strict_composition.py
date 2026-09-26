@@ -466,7 +466,7 @@ def test_a_bounded_real_config_drive_syncs_every_step_on_the_declared_representa
 ):
     """A bounded drive on a REAL minted config — the behavioural half of the axis.
 
-    `smoke_preflight_armed.yaml` is the only CPU config in the committed set; a `device: cuda`
+    `smoke_preflight_armed.yaml` is a CPU config in the committed set; a `device: cuda`
     config does not terminate on a CPU box. The step counts below depend on the production
     builder's other hardcoded knobs (`max_train_burst=1`, `min_buf_size=1`,
     `eval_interval=1000`), which have no config authority.

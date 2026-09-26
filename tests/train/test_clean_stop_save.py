@@ -480,7 +480,7 @@ def test_a_clean_run_at_the_minted_bound_leaves_one_stamped_checkpoint(
     Nothing about the RUN is routed around, and the artefact is read back through THE loader. NOT
     asserted, deliberately: that this checkpoint proves the run was clean — it does not (Class B).
 
-    The drive boots the wiring config, the armed smoke with only its compute shrunk.
+    The drive boots the wiring config; the 50 is the armed smoke's measurement, not re-measured.
 
     DISARMED IN THIS DRIVE, disclosed: `train.draw_rate_abort` is `None` for THIS config only. A
     50-step drive is below the rule's jurisdiction, so on a slow host the early 100%-ply-cap-draw
