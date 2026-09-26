@@ -1,0 +1,162 @@
+# minted-by: tools/mint_config.py
+# template: dev
+# delta: run_id: template_dev -> smoke_wiring
+# delta: train.max_train_steps: 1000000 -> 200
+# delta: train.draw_rate_abort: null -> {threshold: 0.5, min_step: 10, N_pool_min: 50, consec: 3}
+# delta: monitor.actor_lag_abort_enabled: false -> true
+# delta: monitor.actor_lag_threshold_steps: 100 -> 14
+# delta: train.actor_sync_cadence_steps: 1 -> 2
+# delta: train.log_interval: 1000 -> 10
+# delta: monitor.gate_interval: 1000 -> 10
+# delta: train.batch_size: 256 -> 8
+# delta: train.training_steps_per_game: 1.0 -> 4.0
+# delta: train.max_train_burst: 1 -> 4
+# delta: selfplay.mcts.n_simulations: 50 -> 2
+# delta: selfplay.playout_cap.fast_sims: 50 -> 2
+# delta: selfplay.max_game_moves: 128 -> 24
+# delta: eval.worker_device: cuda -> cpu
+# delta: eval.random_model_sims: 96 -> 1
+# delta: eval.gate.screen_games: 80 -> 1
+# delta: eval.gate.confirm_games: 128 -> 1
+# delta: eval.gate.deploy_sims: 150 -> 1
+# delta: eval.gate.min_distinct_per_pair: 10 -> 1
+# delta: train.device: cuda -> cpu
+# delta: allocator_posture: null -> expandable_segments
+# delta: selfplay.n_workers: 1 -> 2
+# delta: model.gnn.hidden: 128 -> 8
+# delta: model.gnn.num_layers: 4 -> 1
+# delta: eval.max_plies: 128 -> 24
+# delta: eval.random_floor_games: 4 -> 2
+# delta: monitor.heartbeat_poll_interval_sec: 5.0 -> 0.5
+# delta: monitor.heartbeat_file_interval_sec: 15.0 -> 0.5
+schema_version: 1
+run_id: smoke_wiring
+seed: 20260716
+eval_enabled: true
+allocator_posture: expandable_segments
+identity:
+  encoding: gnn_axis_v1
+  representation: graph
+model:
+  gnn:
+    hidden: 8
+    num_layers: 1
+  aux_soft_policy: null
+deploy:
+  search:
+    kind: puct
+eval:
+  random_model_sims: 1
+  random_floor_games: 2
+  worker_device: cpu
+  ply_cap_adjudication: null
+  strength_floor: null
+  max_plies: 24
+  gate:
+    stride: 1
+    screen_games: 1
+    confirm_games: 1
+    promotion_winrate: 0.55
+    screen_confirm_lo: 0.44
+    deploy_sims: 1
+    opening_book: book_v1_s20260625_p4
+    bootstrap_resamples: 1000
+    min_distinct_per_pair: 1
+    seed_base: 20260625
+    sequential: null
+train:
+  lr: 0.001
+  weight_decay: 0.0001
+  grad_clip: 1.0
+  device: cpu
+  lr_schedule: cosine
+  total_steps: 1000000
+  scheduler_t_max: null
+  eta_min: 0.0005
+  checkpoint_interval: 0
+  actor_sync_cadence_steps: 2
+  ema:
+    enabled: false
+    decay: 0.999
+    update_every: 10
+  policy_loss_weight_schedule:
+    warmup_steps: 0
+  max_train_steps: 200
+  draw_rate_abort:
+    threshold: 0.5
+    min_step: 10
+    N_pool_min: 50
+    consec: 3
+  policy_loss_trough_abort: null
+  ply_cap_abort: null
+  heldout_gap: null
+  eval_interval: 1000
+  log_interval: 10
+  min_buf_size: 1
+  replay_capacity: 100000
+  replay_capacity_schedule: []
+  training_steps_per_game: 4.0
+  max_train_burst: 4
+  batch_size: 8
+  microbatch_caps:
+    max_edges: 100000000
+    max_nodes: 4000000
+  augment: false
+  recency_weight: 0.0
+  hard_gn_threshold: 1000000000.0
+  hard_gn_min_steps: 3
+  terminal_eval_enabled: true
+  policy_target: raw_visit_distribution
+  draw_reward: -0.5
+  ply_cap_value: -0.5
+  fast_policy_weight: 0.0
+selfplay:
+  search:
+    kind: puct
+  n_workers: 2
+  leaf_batch_size: 8
+  max_game_moves: 24
+  c_visit: 50.0
+  c_scale: 1.0
+  q_rescale: true
+  gumbel_m: 16
+  gumbel_explore_moves: 10
+  search_stats_every: 8
+  random_opening_plies: 0
+  mcts:
+    n_simulations: 2
+    c_puct: 1.5
+    fpu_reduction: 0.25
+    quiescence_enabled: true
+    quiescence_blend_2: 0.3
+    dirichlet_alpha: 0.3
+    dirichlet_epsilon: 0.25
+    dirichlet_enabled: true
+  playout_cap:
+    fast_sims: 2
+    fast_prob: 0.0
+    standard_sims: 0
+    full_search_prob: 0.0
+    n_sims_quick: 0
+    n_sims_full: 0
+    temperature_threshold_compound_moves: 0
+    temp_min: 0.5
+inference:
+  inference_batch_size: 64
+  inference_max_wait_ms: 10
+  fused_graph_caps:
+    max_fused_edges: 57149441
+    max_fused_nodes: 1785921
+monitor:
+  gate_interval: 10
+  alert_entropy_min: 1.0
+  collapse_threshold_nats: 1.5
+  alert_grad_norm_max: 10.0
+  alert_loss_increase_window: 3
+  axis_warn: 0.45
+  axis_alert: 0.5
+  actor_lag_threshold_steps: 14
+  actor_lag_abort_enabled: true
+  supervisor_kill_grace_sec: 30.0
+  heartbeat_poll_interval_sec: 0.5
+  heartbeat_file_interval_sec: 0.5
