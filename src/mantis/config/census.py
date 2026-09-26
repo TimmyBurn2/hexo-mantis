@@ -33,15 +33,15 @@ EXEMPT_CONFIGS: tuple[tuple[str, str], ...] = (
     ),
     (
         "configs/smoke_wiring.yaml",
-        "wiring config: the armed smoke with only its compute shrunk (trunk 8 x 1, 2 self-play "
-        "workers, learner batch 8, eval games of 24 plies with 2 floor games), for the "
-        "integration rows whose subject is WIRING — a real boot reaching its events and "
-        "artefacts — never a strength, a timing or a run's shape. NOT a production run. Its "
-        "equality with the armed smoke outside those leaves is pinned by "
-        "tests/config/test_smoke_wiring_config.py; its live consumers are the in-process "
-        "real-boot rows in tests/test_run_launcher.py, tests/train/test_clean_stop_save.py and "
-        "tests/train/test_parent_death_event.py. Measured on the desktop: a 16-step boot "
-        "takes 6 s here against ~350 s on the armed smoke.",
+        "wiring config: the armed smoke with its compute shrunk (trunk 8 x 1, 4 self-play "
+        "workers, learner batch 8, eval games of 24 plies with 2 floor games) and its "
+        "draw-rate row disarmed, since the tree ships exactly one armed non-production config "
+        "and no wiring drive reaches that rule's step-30 jurisdiction. For the integration "
+        "rows whose subject is WIRING — a real boot reaching its events and artefacts — never "
+        "a strength, a timing or a run's shape. NOT a production run. Its equality with the "
+        "armed smoke outside those leaves is pinned by tests/config/test_smoke_wiring_config.py; "
+        "its live consumers are the in-process real-boot rows in tests/test_run_launcher.py, "
+        "tests/train/test_clean_stop_save.py and tests/train/test_parent_death_event.py.",
     ),
 )
 
