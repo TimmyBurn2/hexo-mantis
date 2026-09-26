@@ -514,6 +514,7 @@ dependencies = [
  "mantis-graph",
  "mantis-search",
  "rand 0.10.2",
+ "sha2",
 ]
 
 [[package]]
