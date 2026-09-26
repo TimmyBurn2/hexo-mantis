@@ -18,7 +18,7 @@ _HAVE_TORCH = importlib.util.find_spec("torch") is not None
 _SEEDED_LIBS = ["random"] + (["numpy"] if _HAVE_NUMPY else []) + (["torch"] if _HAVE_TORCH else [])
 
 
-def pytest_configure(config):
+def pytest_configure(config: pytest.Config) -> None:
     """Size an xdist worker's thread pools to its share of the cores before anything spawns."""
     share = apply_thread_share(os.environ)
     if share is not None and _HAVE_TORCH:

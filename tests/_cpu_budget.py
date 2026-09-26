@@ -1,4 +1,4 @@
-"""CPU thread budget detection + per-library env defaults — TEST-TREE, NOT WIRED.
+"""CPU thread budget detection + per-library env defaults — TEST-TREE; the xdist worker share reads its detection.
 
 Relocated out of ``src/mantis/util/``: an AST census found ZERO consumers outside this module
 and its own test. The code is preserved because the failure mode it addresses is real and

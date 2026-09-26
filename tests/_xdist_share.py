@@ -1,11 +1,9 @@
 """Per-worker resources under pytest-xdist: a share of the cores, and repo probe paths of its own."""
 from __future__ import annotations
 
-import os
 from collections.abc import MutableMapping
 
-#: The pools a real boot's children size from the environment: torch/OpenMP, MKL, and rayon.
-_POOL_VARS = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "RAYON_NUM_THREADS")
+from _cpu_budget import _THREAD_ENV_VARS, detect_cpu_budget
 
 
 def thread_share(workers: int | None, cpus: int) -> int | None:
@@ -16,11 +14,11 @@ def thread_share(workers: int | None, cpus: int) -> int | None:
 
 
 def apply_thread_share(env: MutableMapping[str, str], cpus: int | None = None) -> int | None:
-    """Export this worker's share to every pool its children read, never over an explicit value."""
+    """Export this worker's share of the container-aware CPU budget to the BLAS/OpenMP pools, never over an explicit value."""
     count = env.get("PYTEST_XDIST_WORKER_COUNT")
-    share = thread_share(int(count) if count else None, cpus or os.cpu_count() or 1)
+    share = thread_share(int(count) if count else None, cpus or detect_cpu_budget())
     if share is not None:
-        for var in _POOL_VARS:
+        for var in _THREAD_ENV_VARS:
             env.setdefault(var, str(share))
     return share
 

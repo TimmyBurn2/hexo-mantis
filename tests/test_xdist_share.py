@@ -16,7 +16,7 @@ def test_the_share_divides_the_cores_among_the_workers(workers, cpus, share) -> 
 def test_a_worker_exports_its_share_to_every_pool_its_children_read() -> None:
     env: dict[str, str] = {"PYTEST_XDIST_WORKER_COUNT": "8"}
     assert apply_thread_share(env, cpus=16) == 2
-    for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "RAYON_NUM_THREADS"):
+    for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "TORCH_INTEROP_THREADS"):
         assert env[var] == "2", var
 
 
