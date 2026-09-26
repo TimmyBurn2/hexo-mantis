@@ -9,8 +9,11 @@ steps and every one must have an invocation in `tools/ci_gates/run_all.sh`.
 """
 from __future__ import annotations
 
+import os
 import re
+import signal
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -194,3 +197,43 @@ def test_the_summary_states_the_slow_tier_either_way() -> None:
         )
         assert proc.returncode == 0, proc.stdout[-2000:]
         assert expected in proc.stdout, f"{args or 'default'}: summary did not say {expected!r}"
+
+
+def _runner_with_cargo(tmp_path: Path, body: str, *args: str) -> subprocess.Popen[str]:
+    """The production runner with a stand-in `cargo` first on PATH."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    cargo = bin_dir / "cargo"
+    cargo.write_text(f"#!/usr/bin/env bash\n{body}\n", encoding="utf-8")
+    cargo.chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+    return subprocess.Popen(["bash", str(RUNNER), *args], cwd=REPO_ROOT, env=env, text=True,
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+
+def test_a_red_rust_gate_reaches_the_summary(tmp_path: Path) -> None:
+    proc = _runner_with_cargo(tmp_path, "exit 1", "--only", "gate 2a")
+    out, _ = proc.communicate(timeout=300)
+    assert proc.returncode == 1, out[-3000:]
+    assert "- gate 2a: cargo test workspace (rc 1)" in out
+
+
+def test_a_rust_arm_that_dies_is_a_red_row_never_a_silent_gap(tmp_path: Path) -> None:
+    proc = _runner_with_cargo(tmp_path, "kill -KILL $PPID", "--only", "gate 2a")
+    out, _ = proc.communicate(timeout=300)
+    assert proc.returncode == 1, out[-3000:]
+    assert "rust arm (exit" in out and "ALL GREEN" not in out
+
+
+def test_a_terminated_runner_stops_its_rust_arm_and_never_reports_green(tmp_path: Path) -> None:
+    pidfile = tmp_path / "cargo.pid"
+    proc = _runner_with_cargo(tmp_path, f"echo $$ > {pidfile}; sleep 120", "--only", "gate 2a")
+    deadline = time.monotonic() + 120
+    while not pidfile.exists() and time.monotonic() < deadline:
+        time.sleep(0.2)
+    proc.send_signal(signal.SIGTERM)
+    out, _ = proc.communicate(timeout=60)
+    assert proc.returncode == 130, out[-3000:]
+    assert "ALL GREEN" not in out
+    time.sleep(0.5)
+    assert not Path(f"/proc/{pidfile.read_text(encoding='utf-8').strip()}").exists(), "cargo outlived the runner"

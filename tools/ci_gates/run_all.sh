@@ -68,9 +68,10 @@ run_gate() {
 }
 
 # ── rust arm: runs BESIDE the python arm, its log printed whole once both finish ──────────
-RUST_LOG=$(mktemp)
-RUST_PASSED=$(mktemp)
-RUST_FAILED=$(mktemp)
+RUST_ARM=$(mktemp -d) || exit 2
+trap 'rm -rf "$RUST_ARM"' EXIT
+# Job control gives the arm its own process group, so a signal can take down cargo and its tests.
+set -m
 (
     PASSED=()
     FAILED=()
@@ -88,11 +89,13 @@ RUST_FAILED=$(mktemp)
         make check.wasm
     run_gate "gate 5: bench smoke (stub criterion bench)" \
         make bench
-    printf '%s\n' "${PASSED[@]}" > "$RUST_PASSED"
-    printf '%s\n' "${FAILED[@]}" > "$RUST_FAILED"
-) > "$RUST_LOG" 2>&1 &
+    printf '%s\n' "${PASSED[@]}" > "$RUST_ARM/passed"
+    printf '%s\n' "${FAILED[@]}" > "$RUST_ARM/failed"
+    : > "$RUST_ARM/done"
+) > "$RUST_ARM/log" 2>&1 &
 RUST_PID=$!
-trap 'kill "$RUST_PID" 2>/dev/null' INT TERM
+set +m
+trap 'trap - INT TERM; kill -TERM -- -"$RUST_PID" 2>/dev/null; exit 130' INT TERM
 
 # ── python ────────────────────────────────────────────────────────────────────────────
 run_gate "gate 3a: pytest default tier" \
@@ -126,12 +129,18 @@ run_gate "gate 16: no encoding-less text I/O" \
     $UV run python tools/ci_gates/encoding_io_gate.py
 
 wait "$RUST_PID"
+RUST_RC=$?
 trap - INT TERM
-printf '\n\033[1m══ rust arm (ran beside the python arm) ══\033[0m\n'
-cat "$RUST_LOG"
-while IFS= read -r row; do [ -n "$row" ] && PASSED+=("$row"); done < "$RUST_PASSED"
-while IFS= read -r row; do [ -n "$row" ] && FAILED+=("$row"); done < "$RUST_FAILED"
-rm -f "$RUST_LOG" "$RUST_PASSED" "$RUST_FAILED"
+if [ -s "$RUST_ARM/log" ]; then
+    printf '\n\033[1m══ rust arm (ran beside the python arm) ══\033[0m\n'
+    cat "$RUST_ARM/log"
+fi
+if [ -e "$RUST_ARM/done" ]; then
+    while IFS= read -r row; do [ -n "$row" ] && PASSED+=("$row"); done < "$RUST_ARM/passed"
+    while IFS= read -r row; do [ -n "$row" ] && FAILED+=("$row"); done < "$RUST_ARM/failed"
+else
+    FAILED+=("rust arm (exit $RUST_RC before its gates finished)")
+fi
 
 # ── hygiene (diff-scoped) ─────────────────────────────────────────────────────────────
 run_gate "gate 6: artifact rejection" \
