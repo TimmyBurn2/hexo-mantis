@@ -235,9 +235,8 @@ fn select_for(
     }
 }
 
-/// Builds ONE axis graph per evaluated leaf (no reuse, no patching), submits
-/// the batch in ONE `submit_graphs_and_wait`, and expands against the BUILDER's per-leaf
-/// `window_center`. Rotation-free at inference.
+/// Builds ONE axis graph per evaluated leaf, replays the eval cache's hits, submits the misses in
+/// ONE `submit_graphs_and_wait`, and expands against the BUILDER's per-leaf `window_center`.
 ///
 /// # Errors
 /// A selection refusal, a build-guard trip or a leaf inference that FAILS on an OPEN queue is a
@@ -806,6 +805,77 @@ mod forced_round_tests {
             msg.contains("failed at selection") && msg.contains("4294967295"),
             "{msg}"
         );
+    }
+
+    /// A net swap during the wait serves the batch but stores none of it: its forwards may straddle two nets.
+    #[test]
+    fn a_version_bump_during_the_wait_stores_nothing() {
+        use std::sync::atomic::Ordering;
+        use std::sync::Arc;
+
+        let spec = mantis_encoding::lookup_or_panic("gnn_axis_v1");
+        let geometry = crate::runner::params::resolve_geometry(spec).expect("a registry spec");
+        for bump in [false, true] {
+            let mut tree = MCTSTree::new_full(1.5, VIRTUAL_LOSS_PENALTY, 0.25);
+            tree.new_game(Board::new());
+            let queue = GraphQueue::with_eval_cache(1, 8, crate::queues::EVAL_CACHE_CAPACITY);
+            let (version, running) = (Arc::new(AtomicU64::new(0)), AtomicBool::new(true));
+            let producer = {
+                let (queue, version) = (queue.clone(), Arc::clone(&version));
+                std::thread::spawn(move || loop {
+                    let batch = queue.pop_graph_batch(8, 5);
+                    if batch.is_empty() {
+                        continue;
+                    }
+                    if bump {
+                        version.fetch_add(1, Ordering::AcqRel);
+                    }
+                    let (ids, results): (Vec<u64>, Vec<_>) = batch
+                        .into_iter()
+                        .map(|(id, g)| {
+                            let coords: Vec<(i32, i32)> = g
+                                .legal_node_gather
+                                .iter()
+                                .map(|&r| {
+                                    (
+                                        g.node_coords[r as usize * 2],
+                                        g.node_coords[r as usize * 2 + 1],
+                                    )
+                                })
+                                .collect();
+                            let probs = vec![1.0 / coords.len().max(1) as f32; coords.len()];
+                            let ls = crate::records::assemble_ls_from_gnn_probs(
+                                spec.policy_logit_count,
+                                &probs,
+                                &g.policy_scatter_index.0,
+                                &coords,
+                            );
+                            (id, ls.map(|ls| (ls, 0.0f32)))
+                        })
+                        .unzip();
+                    queue.submit_graph_results(&ids, results);
+                    break;
+                })
+            };
+            let infer = InferContext {
+                graph_queue: &queue,
+                spec,
+                model_version: &version,
+                running: &running,
+                win_length: geometry.win_length,
+                graph_radius: geometry.graph_radius,
+                served_leaves: &AtomicU64::new(0),
+                gpu_evals: &AtomicU64::new(0),
+            };
+            infer_and_expand_graph(&mut tree, LeafSelection::Batch(1), 19, infer)
+                .expect("the root leaf is served");
+            producer.join().expect("the producer answers once");
+            assert_eq!(
+                queue.eval_cache().len(),
+                usize::from(!bump),
+                "bump={bump}: a batch that straddled a net swap was cached, or a clean one was not"
+            );
+        }
     }
 }
 

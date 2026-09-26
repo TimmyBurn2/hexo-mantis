@@ -60,8 +60,11 @@ class _Pool:
         return runner_stats(self)
 
 
+_ANSWERED = [0]
+
+
 def _answer_uniformly(batcher: Any, stop: threading.Event) -> None:
-    """Serve every graph request a uniform prior over its legal cells and a zero value."""
+    """Serve every graph request a uniform prior over its legal cells and a zero value, counting them."""
     while not stop.is_set():
         ids, wire = batcher.next_graph_batch(8, 5)
         ids = list(ids)
@@ -75,6 +78,7 @@ def _answer_uniformly(batcher: Any, stop: threading.Event) -> None:
                 probs[start:end] = 1.0 / (end - start)
         batcher.submit_graph_inference_results(
             ids, probs, offsets, np.zeros((len(ids),), dtype=np.float32))
+        _ANSWERED[0] += len(ids)
 
 
 @pytest.fixture(scope="module")
@@ -139,6 +143,9 @@ def test_the_real_runner_publishes_the_eval_cache_fire_rate(drive: _Drive) -> No
     assert 0 < st.gpu_evals_total < st.served_leaves_total, (
         f"{st.gpu_evals_total} GPU evaluations for {st.served_leaves_total} served leaves: the "
         "cache never fired, or its hits are not counted"
+    )
+    assert st.gpu_evals_total <= _ANSWERED[0] < st.gpu_evals_total + _N_SIMS_FULL, (
+        f"the consumer answered {_ANSWERED[0]} graphs but {st.gpu_evals_total} GPU evaluations were counted"
     )
 
 

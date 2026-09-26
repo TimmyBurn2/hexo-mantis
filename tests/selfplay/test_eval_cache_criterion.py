@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import random
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
@@ -23,7 +24,6 @@ _REPO = Path(__file__).resolve().parents[2]
 _GAMES = [[(-2, 2), (1, 2), (3, 1), (-2, 1), (-2, 0), (-2, -2), (-2, -1), (-1, 1), (-1, 0), (0, 0), (-3, 2)],
           [(0, 0), (1, 0), (0, 1), (2, -1), (-1, 1), (3, -2), (-2, 2), (1, 1), (4, -2), (-1, 2), (0, 2), (2, 0)],
           [(0, 0), (-1, 1), (1, -1), (2, -2), (-2, 2), (0, 1), (0, -1), (1, 1), (-1, -1), (3, -3), (-3, 3)]]
-_BATCH_SIZES = range(1, 65)
 #: Where the measured spread and the three verdicts are written when set (a records path, never the tree).
 _RECORD_ENV = "MANTIS_EVAL_CACHE_CRITERION_RECORD"
 
@@ -56,6 +56,22 @@ def _serve(batcher: InferenceBatcher, positions: Sequence[Position], size: int) 
         for dense, _overflow, value in batcher.submit_graphs_and_wait(list(positions[i:i + size]), 1):
             out.append((list(dense), float(value)))
     return out
+
+
+def _serve_shuffled(batcher: InferenceBatcher, positions: Sequence[Position], top: int) -> list[Served]:
+    """Each position served once from a shuffled order in pops of random size up to `top`: an out-of-sample store."""
+    rng = random.Random(20260926)
+    order = list(range(len(positions)))
+    rng.shuffle(order)
+    out: dict[int, Served] = {}
+    i = 0
+    while i < len(order):
+        chunk = order[i:i + rng.randint(1, top)]
+        for p, (dense, _overflow, value) in zip(chunk, batcher.submit_graphs_and_wait([positions[p] for p in chunk], 1),
+                                               strict=True):
+            out[p] = (list(dense), float(value))
+        i += len(chunk)
+    return [out[p] for p in range(len(positions))]
 
 
 def _spread(by_size: dict[int, list[Served]], n: int) -> list[tuple[float, float]]:
@@ -125,19 +141,24 @@ def test_the_criterion_passes_the_real_key_and_fails_both_known_bad_paths() -> N
     encoding = config["identity"]["encoding"]
     spec = lookup(encoding)
     positions = _positions(encoding)
+    top = int(config["inference"]["inference_batch_size"])
+    sizes = range(1, top + 1)
 
-    def measure(batcher: InferenceBatcher) -> tuple[dict[int, list[Served]], list[str]]:
-        return {b: _serve(batcher, positions, b) for b in _BATCH_SIZES}, batcher.eval_cache_keys(positions)
+    def measure(batcher: InferenceBatcher) -> tuple[dict[int, list[Served]], list[Served], list[str]]:
+        return ({b: _serve(batcher, positions, b) for b in sizes}, _serve_shuffled(batcher, positions, top),
+                batcher.eval_cache_keys(positions))
 
     base = _base_net(config, spec)
-    by_size, keys = _with_server(config, spec, base, measure)  # type: ignore[misc]
-    newer = _with_server(config, spec, _drifted(base, 1e-3), lambda b: _serve(b, positions, 64))
+    by_size, stored, keys = _with_server(config, spec, base, measure)  # type: ignore[misc]
+    same = _with_server(config, spec, base, lambda b: _serve(b, positions, top))
+    newer = _with_server(config, spec, _drifted(base, 1e-3), lambda b: _serve(b, positions, top))
     spread = _spread(by_size, len(positions))
     board_keys = [repr(sorted(stones)) for stones, _player, _left in positions]
 
-    correct = {b: _violations(keys, by_size[64], by_size[b], spread) for b in _BATCH_SIZES}
-    incomplete = _violations(board_keys, by_size[64], by_size[1], spread)
-    stale = _violations(keys, by_size[64], newer, spread)  # type: ignore[arg-type]
+    correct = {b: _violations(keys, stored, by_size[b], spread) for b in sizes}
+    incomplete = _violations(board_keys, stored, by_size[1], spread)
+    stale_null = _violations(keys, stored, same, spread)  # type: ignore[arg-type]
+    stale = _violations(keys, stored, newer, spread)  # type: ignore[arg-type]
 
     record = os.environ.get(_RECORD_ENV)
     if record:
@@ -148,6 +169,7 @@ def test_the_criterion_passes_the_real_key_and_fails_both_known_bad_paths() -> N
             "policy_spread_max": max(s[1] for s in spread),
             "correct_violations": sum(len(v) for v in correct.values()),
             "incomplete_key_violations": len(incomplete),
+            "second_server_same_net_violations": len(stale_null),
             "stale_net_violations": len(stale),
         }, indent=1), encoding="utf-8")
 
@@ -155,5 +177,6 @@ def test_the_criterion_passes_the_real_key_and_fails_both_known_bad_paths() -> N
     assert len(set(keys)) == len(distinct), "the real key conflates two distinct positions"
     assert len(set(board_keys)) < len(distinct), "the control's premise: twins share a board key"
     assert incomplete, "the criterion cannot see a key blind to the side to move: it is void"
+    assert not stale_null, f"a second server with the SAME net reads as stale: {stale_null}"
     assert stale, "the criterion cannot see a replay to a newer net: it is void"
     assert not any(correct.values()), f"the real key leaves the spread: {correct}"
