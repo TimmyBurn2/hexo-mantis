@@ -39,8 +39,8 @@ CARD-F5-LOOP-WITH-TRAINER stays open. The earlier FINISH exit readings are in th
 
 ## Configs
 
-The committed configs are `configs/run10.yaml`, `configs/dev_example.yaml` and
-`configs/smoke_preflight_armed.yaml`. Production is a CENSUS, never a
+The committed configs are `configs/run10.yaml`, `configs/dev_example.yaml`,
+`configs/smoke_preflight_armed.yaml` and `configs/smoke_wiring.yaml`. Production is a CENSUS, never a
 list: `mantis.config.census.production_configs` (every `configs/` file minus its `EXEMPT_CONFIGS`
 rows, which carry their grounds). run7's and run8's configs were deleted at `8b00b4dd` (R368(e)),
 run6's by R369's packet (W0).
