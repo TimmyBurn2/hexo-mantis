@@ -1,4 +1,4 @@
-# RULINGS — R23 to R373
+# RULINGS — R23 to R374
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R374.
+- Numbering continues from R346. The next ruling is R375.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,25 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R374 — CONTROLS BEFORE CAUSE
+Decision: verbatim below.
+
+> R374 — CONTROLS BEFORE CAUSE.
+> (a) A claim that training damages a net needs its null control: the same net through the
+> same warm start, save and serve with zero steps, read on the same instrument.
+> RUN10-AUX-PROBE lacked it; RUN10-CONTROLS reads it, the train step against run8's tree, two
+> LR-scaled arms and run8's neighbours. START stays blocked until it reports.
+> (b) An external engine becomes a ruler only after rules parity on shared games, a measured
+> replay rate at fixed work, its cost per game, and a calibration that places the parent in
+> [0.3, 0.7] at some setting. Six (MIT, code and networks) is scouted against that bar; it
+> enters by pin and hash and is never tracked.
+> (c) RESEARCH-FORGE produces proposals. None enters a run without a pre-registered probe
+> that passes LAW-19; values stay the operator's.
+
+Status: standing.
+
+---
 
 ### R373 — AUX START, FIRST MEASURE
 Decision: verbatim below.
