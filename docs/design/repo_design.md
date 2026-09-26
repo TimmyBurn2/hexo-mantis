@@ -3,8 +3,8 @@
 AlphaZero-style self-play bot for Hex Tac Toe (6-in-a-row, unbounded hex grid, 2-stone
 compound turns). Rust engine (cargo workspace) + Python training/eval (uv, src-layout),
 PyO3 bridge. GNN-first, representation-extensible. This document is the structural
-contract of the repository; CLAUDE.md carries the operating laws; docs/governance/ carries
-law text, ruling texts, live state and the falsified register. Deviations from this document
+contract of the repository; CLAUDE.md carries what an agent must know that no gate enforces;
+docs/governance/ carries law text, ruling texts, live state and the falsified register. Deviations from this document
 require an amendment commit to this file — never a silent drift.
 
 AMENDMENT (R346, 2026-09-09): `docs/registers/` is dissolved. `laws.md` and the two rulings
@@ -336,8 +336,9 @@ ADDED (v7 → v8). `docs/contracts/run_config_schema.md` is the version authorit
 <!-- AUDIT-1 F-52: this heading read "PR → dev, and dev → main; main is merge-gated only".
      There is no `main` branch — `tools/ci_gates/test_count_gate.sh` sets `MAIN_BRANCH="dev"`
      and `dev` is what every gate compares against. The enumeration below listed gates 1-14;
-     15, 16 and 17 exist (R8 headers, encoding-less text I/O, rule-7 host content) and are
-     described in CLAUDE.md, which is the roster of record. Item 8's audit sub-check is
+     15 to 19 exist too. AMENDMENT (R370(d)): the roster of record is
+     tools/ci_gates/run_all.sh, whose labelled rows carry the numbers; CLAUDE.md no longer lists
+     the gates. Item 8's audit sub-check is
      described here as live; it is an `echo ... DEFERRED` and only the sha HANDSHAKE
      sub-check is armed. -->
 
