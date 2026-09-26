@@ -39,17 +39,17 @@ Both were found by running the gate set rather than by reading it, and both are 
 ## Opened by the FINISH packet (R370; 2026-09-26)
 
 Grounds and numbers: the FINISH records (timing, reviews) outside the tree; STATE names the tip.
-- **CARD-DEV-SPEED — the integration tier is the development loop's cost.** Seven real-boot tests are
-  ~2 900 s of the tier's ~3 350 s serial (clean-stop-save 692, parent-death 424, two launcher boots ~365
-  each, three preflight children 348–361); every other integration test is under 50 s. In order: (1)
-  MEASURE one boot's phase split from its own event stream before changing anything — the suspicion is
-  fixed waits (`--receipt-wait-sec 120`, terminal rounds, warm-ups), not compute; (2) SHARE boots —
-  several of the seven assert different facts about the same run shape and could read one module- or
-  session-scoped boot, the way `preflight_child` already does; (3) a plumbing-sized config (tiny net,
-  few steps) for tests that check wiring only, the minted-config tests unchanged; (4) impact selection
-  while iterating (pytest-testmon or an area map), gates.exit staying the full set; (5) hardware — the
-  CUDA venv's gate reading (STATE) and, while no run is live, the box as a remote gate host. Each lands
-  as its own measured lever (R370(g)).
+- **CARD-DEV-SPEED — levers (1)-(3) LANDED 2026-09-26 by the DEV-SPEED packet (its ruling is owed);
+  (4) and (5) stay CARDED.** On the desktop CUDA venv, back to back with the load logged: the integration
+  tier 2 922 -> 466 s and `make gates.exit` 3 076 -> 627 s; three tip runs of the tier 435 / 443 / 539 s,
+  zero failures. (1) The phase split: every fixed wait between phases is <= 2 s (the 120 s receipt wait
+  clears on its first poll), so the seven boots were compute — a ~9 s/step CPU burst and a 190-290 s
+  terminal eval round — and no wait was converted. (2) The armed-smoke, boot-convergence and
+  foreign-litter rows read ONE module-scoped preflight boot (`tests/tools/test_preflight_armed_smoke.py`).
+  (3) The four in-process wiring rows boot `configs/smoke_wiring.yaml` (census-exempt; pinned
+  leaf-for-leaf to the armed smoke by `tests/config/test_smoke_wiring_config.py`): 355-768 -> 8-13 s
+  each. The tier's long pole is now that one preflight boot (~430 s in-tier). Open: (4) impact selection
+  while iterating, gates.exit staying the full set; (5) the box as a remote gate host.
 - **CARD-F5-LOOP-WITH-TRAINER — FINISH F5 HALTED.** `python -m mantis.run` refuses a run10-derived
   config with a throwaway run id (`PreflightStampMissingError`, also with `--inherit-preflight
   configs/run10.yaml`: the box holds no preflight stamp at all), and the grant excluded minting and
@@ -61,6 +61,21 @@ Grounds and numbers: the FINISH records (timing, reviews) outside the tree; STAT
   went GPU-bound → CPU-bound (GPU 91 → 72–76 %). Whether the hash is part of the CPU bound is
   unmeasured: bench `GraphKey::of` or profile the workers, then try streaming the fields into the hasher
   or a 128-bit non-cryptographic hash (both still hash the encoded input, R370(c)).
+- **CARD-OC7-REAIM — OWED (operator).** `tests/train/test_clean_stop_save.py`'s real-boot row drives 50
+  steps because the armed smoke's minted 200 measured over the tier ceiling; on `smoke_wiring` the
+  50-step drive takes ~13 s, so the row could drive its minted 200 with no deviation. Re-aiming moves
+  `_OC7_BOUND`, which its assertions compare against — a change to what the test asserts, so it is the
+  operator's.
+- **CARD-LIVE-AUDIT-WORDING — CARDED.** `armed_abort_live_audit`'s ERROR log ("the config armed them and
+  the producer did not run") fires for a row the config itself disarms (`draw_rate_collapse` on
+  `smoke_wiring`) and for `disk_space_exhausted` on a run shorter than the disk guard's first sample;
+  every wiring boot logs it. The event is right to list the rows; the sentence claims an arming the
+  config does not carry.
+- **CARD-BENCH-SERVER-WINDOW — CARDED.** `tests/tools/test_bench_server.py::test_a_cell_serves_every_leaf_its_workers_submitted`
+  went red on the UNTOUCHED base in DEV-SPEED's before-sweep (`no pops in the window (pops=0, wall=0.503
+  s)`, gate 3a beside the Rust arm): a 0.5 s window that a loaded host can pass with no pop. Green at
+  the tip and in every other sweep on record; a timing-window flake, pre-existing.
+
 
 ## Opened by the PERF-ADA packet (R369; 2026-09-25) — the levers after L2
 
