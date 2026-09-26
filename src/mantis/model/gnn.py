@@ -5,7 +5,7 @@ changes accumulation order by ~5e-7.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from typing import TypedDict
+from typing import Any, TypedDict, cast
 
 import torch
 import torch.nn as nn
@@ -44,9 +44,26 @@ def _node_offsets_to_batch_vec(node_offsets: Tensor, n_total: int) -> Tensor:
     )
 
 
+class _SegmentSums(torch.autograd.Function):
+    """`segment_reduce`'s sum with a backward that keeps only the offsets, where autograd's keeps the input and output."""
+
+    @staticmethod
+    def forward(ctx: Any, values: Tensor, offsets: Tensor) -> Tensor:
+        ctx.save_for_backward(offsets)
+        ctx.rows = values.shape[0]
+        return torch.segment_reduce(values.float(), "sum", offsets=offsets, axis=0).to(values.dtype)
+
+    @staticmethod
+    def backward(ctx: Any, *grads: Tensor) -> tuple[Tensor, None]:
+        (offsets,) = ctx.saved_tensors
+        segments = torch.arange(offsets.shape[0] - 1, device=offsets.device)
+        rows = torch.repeat_interleave(segments, offsets.diff(), output_size=ctx.rows)
+        return grads[0].float().index_select(0, rows).to(grads[0].dtype), None
+
+
 def segment_sums(values: Tensor, offsets: Tensor) -> Tensor:
     """Fixed-order fp32 sums along dim 0 of the `[B+1]` CSR segments; offsets because `lengths=` syncs, fp32 because it sums in the input dtype."""
-    return torch.segment_reduce(values.float(), "sum", offsets=offsets, axis=0).to(values.dtype)
+    return cast(Tensor, _SegmentSums.apply(values, offsets))
 
 
 def segment_mean_with_fallback(emb: Tensor, mask: Tensor, node_offsets: Tensor) -> Tensor:
