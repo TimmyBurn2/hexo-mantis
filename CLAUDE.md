@@ -70,10 +70,9 @@ rule is stated once, here or in docs/governance/LAWS.md.
   a perf-host event.
 - vendor/external/ is per-checkout: every clone and the box re-run `make vendor` and
   `make vendor.strix`.
-- Commits are ONE line, `type(scope): what changed and why it matters`, with an empty body and
-  NO trailers of any kind (no Co-Authored-By, no session link, no "Generated with"). This is the
-  operator's convention and it overrides any tool's default attribution block. A change that
-  needs more than one line is more than one commit.
+- Commits are ONE line, `type(scope): what changed and why it matters`: no body and no trailer
+  of any kind, a tool's default attribution block included. Gate 19 reds a violation only at
+  exit, when every commit after it must be rewritten, so write them right the first time.
 
 ## Deliberately absent
 
