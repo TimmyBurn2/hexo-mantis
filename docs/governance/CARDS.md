@@ -55,7 +55,7 @@ recommended one; each is its own leg with a LAW-09 bench.
 - **CARD-PERF-READOUT — the deterministic readout (B3), OPERATOR-ENDORSED 2026-09-25. CLOSED 2026-09-26 (R370(a), FINISH sweep) — DONE at `d5605bf2` + `12f829f9`: fixed-order fp32 `segment_reduce`, repeat exact.** The served softmax's
   `segment_sum` and the value/mean pools sum by atomics (served probabilities jitter ~1e-7 on a repeat); a
   segment reduction over the CSR offsets makes them exact. A precondition for L4's bit-identity witness.
-- **CARD-PERF-BATCH-INVARIANCE — served outputs that do not depend on the pop's size; then the eval cache.**
+- **CARD-PERF-BATCH-INVARIANCE — served outputs that do not depend on the pop's size; then the eval cache. CLOSED 2026-09-26 (R370(c)) — the cache's precondition is now a replay inside the served path's own batch-size spread, not bit-identity; the cache landed under it at `373c31d1` (box loop +16–21 % positions/s, 35 % hits). Batch invariance itself stays unbuilt and is no longer anything's precondition.**
   R369(d)'s precondition failed: the value head's bf16 GEMM runs over the batch dimension and its kernel
   varies with B (a single-position pop serves |Δvalue| up to 0.0076 from the same position in a full pop).
   A fixed-M head (pad to one tile) or a batch-invariant kernel set makes it exact; the cache itself is built
