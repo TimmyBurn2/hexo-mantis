@@ -15,7 +15,12 @@ from pathlib import Path
 
 import pytest
 
-from mantis.monitor.manifest import DEFAULT_MANIFEST_PATH, load_manifest
+from mantis.monitor.manifest import (
+    DEFAULT_MANIFEST_PATH,
+    ManifestError,
+    _resolve_dotted,
+    load_manifest,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -66,17 +71,35 @@ def _called_names(root: Path) -> set[str]:
 
 
 def _symbol_rows() -> list[tuple[str, str]]:
-    """Return `(row id, dotted symbol)` for every `kind: symbol` producer in the manifest."""
+    """Return `(row id, module-qualified symbol)` for every `kind: symbol` producer in the manifest."""
     doc = load_manifest(DEFAULT_MANIFEST_PATH)
     rows: list[tuple[str, str]] = []
     for gate in doc.get("gates") or []:
         for key in ("producer", "also"):
             producer = gate.get(key)
             if isinstance(producer, dict) and producer.get("kind") == "symbol":
-                symbol = producer.get("symbol")
-                if isinstance(symbol, str):
-                    rows.append((str(gate.get("id")), symbol))
+                module, symbol = producer.get("module"), producer.get("symbol")
+                if isinstance(module, str) and isinstance(symbol, str):
+                    rows.append((str(gate.get("id")), f"{module}.{symbol}"))
     return rows
+
+
+def _orphans(rows: list[tuple[str, str]], production_calls: set[str]) -> set[str]:
+    """Rows whose symbol does not resolve, or resolves to a callable no production code calls.
+
+    A value producer (an instance attribute, a property, a constant) is read, never called, so
+    only callables are held to a caller.
+    """
+    orphans: set[str] = set()
+    for row_id, symbol in rows:
+        try:
+            obj = _resolve_dotted(row_id, symbol)
+        except ManifestError:
+            orphans.add(f"{row_id}: {symbol} (does not resolve)")
+            continue
+        if callable(obj) and _leaf_name(symbol) not in production_calls:
+            orphans.add(f"{row_id}: {symbol}")
+    return orphans
 
 
 def test_every_symbol_producer_has_a_caller_outside_tests():
@@ -88,16 +111,9 @@ def test_every_symbol_producer_has_a_caller_outside_tests():
     production_calls = _called_names(REPO_ROOT / "src") | _called_names(REPO_ROOT / "tools")
     assert len(production_calls) > 100, "the call census returned almost nothing; it is broken"
 
-    orphans = {
-        f"{row_id}: {symbol}"
-        for row_id, symbol in rows
-        # An attribute producer (`self.x`) is a value, not a callable, so never "called".
-        if _leaf_name(symbol) not in production_calls
-        and _leaf_name(symbol) in _called_names(REPO_ROOT / "tests")
-    }
-    orphans -= set(DECLARED_CALLERLESS)
+    orphans = _orphans(rows, production_calls) - set(DECLARED_CALLERLESS)
     assert orphans == set(), (
-        f"manifest producer(s) called ONLY from tests: {sorted(orphans)}. A monitor input whose "
+        f"manifest producer(s) with no production caller: {sorted(orphans)}. A monitor input whose "
         "producer cannot run in production is LAW-07's phantom-input class in the event stream: "
         "the row resolves, the mutation self-test calls the producer directly, and the field is "
         "published for a value nothing can move (AUDIT-1 F-33). Re-wire the caller, retire the "
@@ -105,6 +121,18 @@ def test_every_symbol_producer_has_a_caller_outside_tests():
     )
     stale = set(DECLARED_CALLERLESS) - {f"{i}: {s}" for i, s in rows}
     assert stale == set(), f"DECLARED_CALLERLESS names rows the manifest no longer has: {stale}"
+
+
+def test_the_census_FIRES_on_a_dead_symbol_and_on_a_callable_nothing_calls():
+    """A renamed producer and one no code calls at all both fire; a value producer does not."""
+    rows = [("dead", "mantis.monitor.manifest.no_such_producer_zz"),
+            ("uncalled", "mantis.monitor.manifest.load_manifest"),
+            ("value", "mantis.monitor.manifest.DEFAULT_MANIFEST_PATH")]
+    assert _orphans(rows, set()) == {
+        "dead: mantis.monitor.manifest.no_such_producer_zz (does not resolve)",
+        "uncalled: mantis.monitor.manifest.load_manifest",
+    }
+    assert _orphans(rows[1:], {"load_manifest"}) == set()
 
 
 def test_the_census_FIRES_on_a_producer_whose_only_caller_is_a_test(tmp_path: Path):
