@@ -1,6 +1,7 @@
 """Gate 19: every commit since the base is one subject line with an empty body and no trailer."""
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -9,9 +10,13 @@ import pytest
 GATE = Path(__file__).resolve().parents[2] / "tools" / "ci_gates" / "commit_convention_gate.py"
 
 
+#: The host's git config (signing, hooks, showSignature) must not reach the fixture or the gate.
+_ENV = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull}
+
+
 def _git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True,
-                          text=True).stdout
+                          text=True, env=_ENV).stdout
 
 
 @pytest.fixture
@@ -30,7 +35,7 @@ def _commit(repo: Path, message: str) -> None:
 
 def _run(repo: Path, base: str = "base") -> subprocess.CompletedProcess[str]:
     return subprocess.run(["python3", str(GATE), "--base", base], cwd=repo, capture_output=True,
-                          text=True)
+                          text=True, env=_ENV)
 
 
 def test_one_line_commits_pass_and_the_base_itself_is_not_judged(repo: Path) -> None:

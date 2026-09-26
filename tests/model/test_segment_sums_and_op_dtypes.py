@@ -46,10 +46,17 @@ def test_the_backward_keeps_only_the_offsets() -> None:
     assert _saved_bytes(_plain, values, offsets) > values.numel() * 4, "the control no longer saves values"
 
 
-def test_an_fp64_input_is_summed_in_fp64_on_cpu() -> None:
+@pytest.mark.parametrize("with_div", [False, True], ids=["no-div", "div"])
+def test_an_fp64_input_is_summed_and_differentiated_in_fp64_on_cpu(with_div: bool) -> None:
     gen = torch.Generator().manual_seed(5)
-    xs, e = torch.randn(30, 8, generator=gen, dtype=torch.float64), torch.randn(90, 8, generator=gen, dtype=torch.float64)
+    xs = torch.randn(30, 8, generator=gen, dtype=torch.float64, requires_grad=True)
+    e = torch.randn(90, 8, generator=gen, dtype=torch.float64, requires_grad=True)
     src, dst = torch.randint(0, 30, (90,), generator=gen), torch.randint(0, 30, (90,), generator=gen)
-    got = gine_message_sum(xs, e, src, dst, None, None)
-    want = torch.zeros_like(xs).index_add_(0, dst, (xs.index_select(0, src) + e).relu())
+    div = torch.randint(1, 9, (30, 1), generator=gen).double() if with_div else None
+    grad = torch.randn(30, 8, generator=gen, dtype=torch.float64)
+    got = gine_message_sum(xs, e, src, dst, None, div)
+    want = torch.zeros(30, 8, dtype=torch.float64).index_add(0, dst, (xs.index_select(0, src) + e).relu())
+    want = want if div is None else want / div
     assert got.dtype == torch.float64 and torch.equal(got, want)
+    for a, b in zip(torch.autograd.grad(got, (xs, e), grad), torch.autograd.grad(want, (xs, e), grad), strict=True):
+        assert torch.equal(a, b)

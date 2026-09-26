@@ -56,8 +56,7 @@ class _SegmentSums(torch.autograd.Function):
     @staticmethod
     def backward(ctx: Any, *grads: Tensor) -> tuple[Tensor, None]:
         (offsets,) = ctx.saved_tensors
-        segments = torch.arange(offsets.shape[0] - 1, device=offsets.device)
-        rows = torch.repeat_interleave(segments, offsets.diff(), output_size=ctx.rows)
+        rows = _node_offsets_to_batch_vec(offsets, ctx.rows)
         return grads[0].float().index_select(0, rows).to(grads[0].dtype), None
 
 
