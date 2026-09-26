@@ -4878,6 +4878,25 @@ PRODUCER and therefore gates nothing; the numbers are grid history and a graph-e
 would re-anchor all four before the law binds again.
 Ordered by: R345(e)
 
+### ANNOTATION on the standing census (A1) — 141 STANDING ENTRIES ARE CITED BY NOTHING LIVE
+Corrects: the `standing` Status of the entries listed here, read as one class; no entry's text changes
+Fact: on 2026-09-26 no file in src/, tools/, tests/, crates/, CLAUDE.md, LAWS.md, STATE.md, CARDS.md,
+falsified.md, docs/contracts/, repo_design.md, the Makefile or pyproject.toml cites these standing
+entries (derived by grepping those files for `R<n>`, not transcribed):
+R24, R31, R32, R37, R38, R39, R40, R41, R42, R43, R46, R47, R48, R51, R52, R54, R60, R62, R63, R66,
+R67, R70, R74, R76, R77, R86, R88, R90, R91, R93, R94, R97, R100, R108, R110, R115, R117, R124,
+R125, R127, R128, R131, R134, R135, R136, R139, R140, R141, R142, R144, R145, R148, R149, R151,
+R154, R155, R156, R158, R160, R161, R162, R163, R165, R166, R167, R168, R169, R170, R171, R172,
+R174, R175, R176, R177, R180, R182, R184, R186, R188, R189, R190, R191, R193, R194, R195, R196,
+R197, R198, R202, R203, R205, R211, R213, R217, R219, R221, R222, R223, R224, R225, R232, R233,
+R234, R235, R236, R237, R238, R239, R240, R241, R244, R248, R252, R253, R254, R258, R259, R260,
+R261, R262, R263, R264, R270, R271, R273, R278, R280, R290, R293, R294, R295, R296, R298, R299,
+R301, R303, R305, R310, R313, R314, R329.
+An entry in this class whose subject is dissolved is a dead letter and directs nothing; a session
+that would apply one first checks that its subject still exists. R357 is not in the class: its
+ring_audit pre-START gate is live code and it stays standing.
+Ordered by: R370(a) (GOV-ECON merge row P4), appended 2026-09-26 by the FINISH leg
+
 ### Note — annotations ordered by rulings in range that live OUTSIDE the register
 Not inventoried above because they are not register text: the append-only ANNOTATION under
 `F-R-P2B-1`'s foot in `plan/ADJUDICATION_QUEUE.md` (cited by R303(a)); the F-43 ANNOTATION and the
