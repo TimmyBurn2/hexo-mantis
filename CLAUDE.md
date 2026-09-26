@@ -8,6 +8,7 @@ rule is stated once, here or in docs/governance/LAWS.md.
 ## Read first
 
 - docs/governance/LAWS.md — the laws and the protected set with its pinning tests. They govern.
+- docs/governance/falsified.md — the falsified register; LAW-05 says when it must be read.
 - docs/governance/STATE.md — where the run is; docs/governance/CARDS.md — the open work;
   docs/governance/RULINGS.md — the rulings, newest first (grep it; nobody reads it whole).
 - docs/design/repo_design.md — the structural contract, before any structural work.
@@ -51,8 +52,8 @@ rule is stated once, here or in docs/governance/LAWS.md.
   measures; docstring length and `Raises:` are fixed on contact.
 - Rust: no `unwrap()`/`expect()` on production paths; fail loud through a named error type that
   propagates. `expect()` is for tests and for startup invariants whose message names the
-  invariant. Format a file with `rustfmt --edition 2021 <file>`; `cargo fmt`, even with `-p`,
-  sweeps a whole crate.
+  invariant. `rustfmt <file>` also formats that file's `mod` children and `cargo fmt` (even
+  with `-p`) a whole crate; format a touched file through stdin, as gate 18 checks it.
 
 ## Build, test, gates, commits
 
