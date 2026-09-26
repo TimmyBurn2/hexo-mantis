@@ -2,7 +2,8 @@
 STDERR-BUDGET, driven on the REAL tool (subprocess / in-process module load — never a
 stand-in). Deliberately NOT in the frozen set (the process-file precedent: non-frozen so
 process-half fixes stay editable). Two gated cards (SPLIT-PARENT-HALF,
-ORACLE-OUTDIR-CLEANUP) are QUEUED, not tested here.
+ORACLE-OUTDIR-CLEANUP) are QUEUED, not tested here. The foreign-litter negative reads the
+shared armed-smoke boot in test_preflight_armed_smoke.py.
 """
 from __future__ import annotations
 
@@ -61,30 +62,6 @@ def test_a_dirty_same_run_id_out_dir_is_refused_before_the_boot(tmp_path):
     assert res.returncode == 15, res.stdout + res.stderr
     assert SMOKE_RUN_ID in res.stdout + res.stderr
     assert "seg0000" in res.stdout + res.stderr
-
-
-@pytest.mark.integration
-@pytest.mark.usefixtures("local_puller")
-def test_a_foreign_run_ids_litter_does_not_trip_the_refusal(tmp_path, preflight_budget_sec):
-    """The discriminating negative: the refusal is scoped to THIS run_id's segments —
-    foreign litter proceeds to the boot (witnessed by the run reaching a real verdict,
-    rc 0, exactly as on a clean dir).
-
-    The budget comes from `conftest.PREFLIGHT_BUDGET_SEC` rather than
-    from a literal here. It used to read `300`, which passes on this host with ~46% margin and
-    went red on the migration box — the grounds, and the three measurements behind the value,
-    are in the conftest beside the constant."""
-    out = tmp_path / "littered"
-    (out / "logs").mkdir(parents=True)
-    (out / "logs" / "events_some_other_run_seg0000.jsonl").write_text('{"event":"x"}\n', encoding="utf-8")
-    res = _run_tool("--config", str(SMOKE_CONFIG), "--burst-steps", "16",
-                    "--out-dir", str(out), "--timeout-sec", str(preflight_budget_sec),
-                    "--receipt-wait-sec", "120")
-    assert res.returncode == 0, res.stdout + res.stderr
-    report = json.loads(sorted(out.glob("preflight_*.json"))[-1].read_text(encoding="utf-8"))
-    assert Path(report["preflight_stamp"]).is_relative_to(tmp_path), (
-        f"the green burst stamped {report['preflight_stamp']}, outside tmp_path: the host's store"
-    )
 
 
 @pytest.mark.integration
