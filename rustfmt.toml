@@ -1,6 +1,5 @@
-# The house Rust style has a DEFINITION rather than living in whichever toolchain runs
-# (R336(e)). rustfmt is deliberately NOT gated (CLAUDE.md, Rust section) — it is applied ON
-# CONTACT, never as a tree-wide pass.
+# The house Rust style has a DEFINITION rather than living in whichever toolchain runs.
+# Gate 18 holds every file a branch touches to it; it is never applied as a tree-wide pass.
 #
 # max_width IS rustfmt's default and is restated so the file names the style rather than
 # inheriting it silently. edition is NOT: rustfmt defaults to 2015, and a bare `rustfmt
