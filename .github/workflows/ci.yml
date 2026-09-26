@@ -68,7 +68,7 @@ jobs:
       # said only "exit code 1"). Job summaries render on the PUBLIC run page. The digest
       # tool reports on the gate and never gates itself — pytest's own rc is the verdict.
       - name: "gate 3a: pytest default tier"
-        run: uv run pytest -m "not integration and not slow" --junitxml=/tmp/junit-default.xml
+        run: uv run pytest -m "not integration and not slow" -n 8 --junitxml=/tmp/junit-default.xml
       - name: "summary: default tier digest (public)"
         if: always()
         run: uv run python tools/ci_gates/pytest_step_summary.py /tmp/junit-default.xml --title "gate 3a default tier"

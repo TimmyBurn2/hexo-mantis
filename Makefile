@@ -16,7 +16,7 @@ build.native:
 	RUSTFLAGS="-C target-cpu=native" $(UV) sync --reinstall-package mantis-engine
 
 test:
-	UV_NO_SYNC=1 $(UV) run pytest -m "not integration and not slow"
+	UV_NO_SYNC=1 $(UV) run pytest -m "not integration and not slow" -n 8
 	cargo test --workspace --locked
 
 test.integration:
