@@ -1,4 +1,4 @@
-# RULINGS — R23 to R371
+# RULINGS — R23 to R372
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R372.
+- Numbering continues from R346. The next ruling is R373.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,24 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R372 — AFTER THE HALT
+Decision: verbatim below.
+
+> R372 — AFTER THE HALT.
+> (a) DEV-SPEED is accepted: configs/smoke_wiring.yaml joins the census exemptions on its
+> stated grounds, and the clean-stop test drives the minted 200-step bound (CARD-OC7-REAIM).
+> (b) A new launch tree always re-reads admission; it re-reads the parent and EMA cells only
+> if it changes the served path (search, serving, model, encoding).
+> (c) The aux start is judged before any re-mint. The twin's final checkpoint is read at
+> strix @ r8 beside a second parent cell, with the preflight's 101-step checkpoint as the
+> known-bad control (LAW-19). Recovered means the twin's CI reaches the pooled parent's
+> point, and the control must fail that test. Not recovered sends the aux start to a design
+> packet.
+
+Status: standing.
+
+---
 
 ### R371 — FINISH CLOSED
 Decision: verbatim below.
