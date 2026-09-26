@@ -57,16 +57,51 @@ amendment commit and operator sign-off.
 
 R346 §1(d): this list is the whole of what ruling-protected code means from now on. Each item
 exists because a measured failure bought it. None may be weakened, disarmed, narrowed or
-deleted except by a ruling that names it.
+deleted except by a ruling that names it. Each is held by the tests named beside it (R370(f));
+tests/test_protected_set_pins.py fails if a named test stops existing.
 
-- net-param hash on the warm-start
-- served-sims exactness
-- the suite's conformance sections
-- 1-in-1 collate checks
-- arena legality
-- finite-gradient guard
-- resume bundle round-trip
-- gate pair statistics
-- F-816-37 dump-on-fire
-- strength_floor
-- draw-rate abort
+- net-param hash on the warm-start —
+  `tests/train/test_bc_warm_start_entry.py::test_a_checkpoint_that_is_NOT_the_declared_net_is_REFUSED`,
+  `tests/train/test_bc_warm_start_entry.py::test_a_row_missing_its_hash_is_REFUSED_not_defaulted`,
+  `tests/train/test_f32_launch_pin_wiring.py::test_a_SWAPPED_artifact_at_the_pinned_path_REFUSES`
+- served-sims exactness —
+  `crates/mantis-selfplay/tests/served_sims_exact.rs::both_kinds_serve_exactly_sixty_four`,
+  `crates/mantis-selfplay/tests/served_sims_exact.rs::r8_at_fifty_sims_serves_exactly_fifty_per_search`,
+  `tests/arena/test_deploy_head_budget_spent.py::test_every_kind_spends_exactly_its_budget`
+- the suite's conformance sections (tests/model/conformance/ and the search-kind suite) —
+  `tests/model/conformance/test_conformance_roster_guard.py::test_a_SHRUNKEN_roster_is_refused`,
+  `crates/mantis-search/tests/search_kind_conformance.rs::a_gumbel_round_is_exactly_the_halving_phase_wide`
+- 1-in-1 collate checks —
+  `tests/eval/test_f816_37_instrument.py::test_every_collate_path_asks_for_one_in_one`,
+  `tests/eval/test_f816_37_instrument.py::test_period_one_runs_the_semantic_layer_on_every_batch`
+- arena legality —
+  `tests/arena/test_legality_boundary.py::test_a_candidate_playing_off_the_legal_set_forfeits_and_the_move_is_not_applied`,
+  `tests/arena/test_legality_boundary.py::test_an_opening_that_does_not_replay_is_a_fatal_corpus_error`
+- finite-gradient guard —
+  `tests/train/test_finite_gradient_guard.py::test_a_nonfinite_gradient_from_a_finite_loss_never_reaches_the_optimizer`,
+  `tests/train/test_nonfinite_guard.py::test_a_nonfinite_microbatch_loss_is_skipped_and_counted`
+- resume bundle round-trip —
+  `tests/train/test_resume_ring_roundtrip.py::test_the_ring_comes_back_and_it_is_the_same_ring`,
+  `tests/train/test_resume_bundle.py::test_a_bundle_whose_member_changed_underneath_is_refused`,
+  `tests/train/test_resume_semantics.py::test_full_save_resume_roundtrip_restores_state`
+- gate pair statistics —
+  `tests/eval/test_gate_pair_statistics.py::test_the_two_legs_of_an_opening_are_one_unit`,
+  `tests/eval/test_gate_pair_statistics.py::test_the_gate_ci_and_eff_n_are_both_over_pairs`
+- F-816-37 dump-on-fire —
+  `tests/eval/test_f816_37_instrument.py::test_a_planted_corruption_DUMPS_and_REDS`,
+  `tests/train/test_f816_37_train_path_dump.py::test_the_dump_never_replaces_the_raise`
+- strength_floor —
+  `tests/eval/test_strength_floor_refuses_the_round.py::test_a_no_signal_round_REFUSES_before_the_gate_block_ever_runs`,
+  `tests/eval/test_strength_floor_gate.py::test_both_bars_are_reported_even_when_both_fail`
+- draw-rate abort —
+  `tests/selfplay/test_drawrate_pooled_statistic.py::test_a_true_pool_draw_rate_of_0968_fires_the_abort`,
+  `tests/train/test_drawrate_gate_branch_flipset.py::test_every_branch_of_the_draw_rate_gate_has_an_input_that_takes_it`
+
+## Rule numbers R1–R11
+
+Comments and docs across the tree cite CLAUDE.md's former hard rules by number. Each now lives
+in one place:
+R1 config — LAW-08, LAW-11, LAW-17, docs/design/repo_design.md §5, gates 7 and 12, and CLAUDE.md
+(minted, never hand-edited); R2 — LAW-13; R3 — LAW-12; R4 — LAW-07, LAW-08; R5 — LAW-17;
+R6 — LAW-17; R7 — gate 6 (tools/ci_gates/artifact_gate.py); R8 — LAW-17 and gate 15
+(tools/ci_gates/r8_header_gate.py); R9, R10, R11 — CLAUDE.md.
