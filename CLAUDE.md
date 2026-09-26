@@ -57,8 +57,8 @@ rule is stated once, here or in docs/governance/LAWS.md.
 
 ## Build, test, gates, commits
 
-- `uv sync` (`make build`) is the one bootstrap. On the box use `make build.cuda`: a bare
-  `uv sync` there silently swaps torch for the CPU wheel.
+- `uv sync` (`make build`) is the one bootstrap. On the box, and on a CUDA desktop that gates (faster, and
+  it runs the CUDA-gated rows), use `make build.cuda`: a bare `uv sync` silently swaps torch for the CPU wheel.
 - A bare `pytest` is the default tier; `-m integration` and `-m slow` select the other two, and
   the `TIER:` header line says which ran. Read it rather than assuming.
 - Cadence: targeted tests while iterating; `make gates` (tools/ci_gates/run_all.sh, whose row

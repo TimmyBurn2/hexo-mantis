@@ -7,13 +7,16 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
-**PERF-ADA (R369) EXITED 2026-09-25**, fast-forwarded into `dev`: the rented 4080S box is the run box. Serving
-at B 64 reads 3 984 leaves/s IDLE (admission PASS, 1.62x the reference box's 2 466; it read 0.74x before the
-packet), the real self-play loop 1 710 games/h (2.46x), the trainer step at the cap −25 % at 4.69 GiB peak. The
-legs, benches, halts and decisions are the R369 ledger in
-`docs/design/measurements/PERF_ADA_PROFILE_2026-09-24.md`; the reviews and the exit record are local records
-outside the tree (R369(f)). Not landed, and why, is in the ledger and carded: the torch/CUDA bump (L3, not
-faster), the exact eval cache (L4, on branch `perf-ada-l4`: the served path is not batch-invariant, R369(d)).
+**FINISH (R370) COMPLETE 2026-09-26 on branch `finish`; its fast-forward into `dev` and the push wait on the
+operator** because F5 HALTED (CARD-F5-LOOP-WITH-TRAINER: the launcher refuses a throwaway run id without a
+preflight stamp, and the grant excluded stamping). At the tip: `make gates.exit` + gate 1 ALL GREEN, 3 320 s
+on the CPU venv and 2 891 s on the desktop's CUDA venv (the adopted gate host; PERF-ADA's exit sweep was
+≈ 4 991 s serial by GOV-ECON's measure); admission re-read IDLE on the box at the tip: 3 984 leaves/s at B 64
+(PASS, 1.62x). Landed: the isolation fixes, levers 1–5 (test opt-level 2, the Rust arm beside the Python arm,
+xdist on both tiers, the CUDA gate host; nextest measured and not landed), GOV-ECON's merge and move-to-test
+rows (gates 18 and 19), the CLAUDE.md cut, the protected set's pins, the eval cache under R370(c) (box loop
++16–21 % positions/s at a 35 % hit rate), the trainer's segment-sum memory lever (−0.19 GiB at the caps).
+The records (timing, reviews, the CLAUDE.md cut list) are local, outside the tree.
 
 ## The run
 
