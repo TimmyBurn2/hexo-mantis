@@ -139,3 +139,5 @@ jobs:
       # baseline (R98). The LAW-07 self-test runs inside every invocation.
       - name: "gate 17: no host content in the tree (rule 7)"
         run: python3 tools/ci_gates/rule7_gate.py --base "${{ github.event.pull_request.base.sha || github.event.before }}"
+      - name: "gate 18: rustfmt on the Rust files touched since base"
+        run: python3 tools/ci_gates/rustfmt_touched_gate.py --base "${{ github.event.pull_request.base.sha || github.event.before }}"
