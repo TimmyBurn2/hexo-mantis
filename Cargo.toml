@@ -34,7 +34,7 @@ criterion = "0.5"
 [workspace.lints.clippy]
 pedantic = "warn"
 
-# Two search tests took 85 % of the Rust gate at the dev profile's opt-level 0; debug assertions and
+# Two search tests dominated the Rust gate at the dev profile's opt-level 0; debug assertions and
 # overflow checks stay on, only the code is optimised.
 [profile.test]
 opt-level = 2
