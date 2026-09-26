@@ -23,6 +23,7 @@ INFERENCE_METHODS = [
     "has_pending_graph_requests",
     "completed_graph_games",
     "check_graph_request",
+    "eval_cache_keys",
     "spawn_mock_graph_games",
     "next_graph_batch",
     "submit_graph_inference_results",
