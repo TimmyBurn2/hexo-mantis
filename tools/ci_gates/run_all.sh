@@ -67,21 +67,32 @@ run_gate() {
     fi
 }
 
-# ── rust ──────────────────────────────────────────────────────────────────────────────
-[ $WITH_FRESH_SYNC -eq 1 ] && \
-    run_gate "gate 1: fresh-clone uv sync builds the extension" \
-        bash tools/ci_gates/gate_01_fresh_sync.sh
+# ── rust arm: runs BESIDE the python arm, its log printed whole once both finish ──────────
+RUST_LOG=$(mktemp)
+RUST_PASSED=$(mktemp)
+RUST_FAILED=$(mktemp)
+(
+    PASSED=()
+    FAILED=()
+    [ $WITH_FRESH_SYNC -eq 1 ] && \
+        run_gate "gate 1: fresh-clone uv sync builds the extension" \
+            bash tools/ci_gates/gate_01_fresh_sync.sh
 
-run_gate "gate 2a: cargo test workspace" \
-    cargo test --workspace --locked
-# `--all-targets` is load-bearing: nothing else local compiles the non-smoke bench targets
-# that stand behind tools/bench_floors.toml's floors.
-run_gate "gate 2b: clippy (-D clippy::all, --all-targets)" \
-    cargo clippy --workspace --all-targets --locked -- -D clippy::all
-run_gate "gate 4: wasm check (mantis-graph dep-free)" \
-    make check.wasm
-run_gate "gate 5: bench smoke (stub criterion bench)" \
-    make bench
+    run_gate "gate 2a: cargo test workspace" \
+        cargo test --workspace --locked
+    # `--all-targets` is load-bearing: nothing else local compiles the non-smoke bench targets
+    # that stand behind tools/bench_floors.toml's floors.
+    run_gate "gate 2b: clippy (-D clippy::all, --all-targets)" \
+        cargo clippy --workspace --all-targets --locked -- -D clippy::all
+    run_gate "gate 4: wasm check (mantis-graph dep-free)" \
+        make check.wasm
+    run_gate "gate 5: bench smoke (stub criterion bench)" \
+        make bench
+    printf '%s\n' "${PASSED[@]}" > "$RUST_PASSED"
+    printf '%s\n' "${FAILED[@]}" > "$RUST_FAILED"
+) > "$RUST_LOG" 2>&1 &
+RUST_PID=$!
+trap 'kill "$RUST_PID" 2>/dev/null' INT TERM
 
 # ── python ────────────────────────────────────────────────────────────────────────────
 run_gate "gate 3a: pytest default tier" \
@@ -114,6 +125,14 @@ run_gate "gate 15: R8 justification headers" \
 run_gate "gate 16: no encoding-less text I/O" \
     $UV run python tools/ci_gates/encoding_io_gate.py
 
+wait "$RUST_PID"
+trap - INT TERM
+printf '\n\033[1m══ rust arm (ran beside the python arm) ══\033[0m\n'
+cat "$RUST_LOG"
+while IFS= read -r row; do [ -n "$row" ] && PASSED+=("$row"); done < "$RUST_PASSED"
+while IFS= read -r row; do [ -n "$row" ] && FAILED+=("$row"); done < "$RUST_FAILED"
+rm -f "$RUST_LOG" "$RUST_PASSED" "$RUST_FAILED"
+
 # ── hygiene (diff-scoped) ─────────────────────────────────────────────────────────────
 run_gate "gate 6: artifact rejection" \
     python3 tools/ci_gates/artifact_gate.py --base "$BASE_REF"
@@ -140,6 +159,7 @@ else
     printf '   slow tier RAN (--with-slow) — the tier both pytest tiers deselect.\n'
 fi
 printf '   green: %s\n' "${#PASSED[@]}"
+printf '   wall: %ss\n' "$SECONDS"
 if [ ${#FAILED[@]} -eq 0 ]; then
     printf '   \033[32mALL GREEN\033[0m\n'
     exit 0
