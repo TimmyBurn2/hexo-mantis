@@ -69,3 +69,9 @@ def test_a_planted_wrong_divisor_is_caught() -> None:
     c = _case(128, torch.bfloat16, True)
     cuda, cpu = _run(c, "cuda", divisor_scale=2.0), _run(c, "cpu")
     assert not torch.equal(cuda[2], cpu[2]) and _ulps(cuda[1], cpu[1]) > 1.0
+
+
+def test_an_input_wider_than_fp32_is_refused_rather_than_narrowed() -> None:
+    c = _case(24, torch.float64, False)
+    with pytest.raises(TypeError, match="float64"):
+        _run(c, "cuda")

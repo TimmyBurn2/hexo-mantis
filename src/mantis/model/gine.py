@@ -37,20 +37,24 @@ def csr_edges(edge_index: Tensor, edge_attr: Tensor, n: int) -> tuple[Tensor, Te
 @torch.library.custom_op("mantis::gine_message_sum", mutates_args=())
 def gine_message_sum(xs: Tensor, e: Tensor, src: Tensor, dst: Tensor, rowptr: Tensor | None,
                      divisor: Tensor | None) -> Tensor:
-    """Per-node fp32 Σ relu(xs[src] + e) / divisor, rounded once, atomic-free: a fused kernel over `csr_edges` on CUDA, `index_add_` on CPU.
+    """Per-node Σ relu(xs[src] + e) / divisor in at least fp32, rounded once, atomic-free: a fused kernel over `csr_edges` on CUDA, `index_add_` on CPU.
 
     Raises:
         ValueError: CUDA inputs without `csr_edges`' row pointer.
+        TypeError: CUDA inputs wider than fp32, which the kernels would narrow.
     """
     if xs.is_cuda:
         from mantis.model import _gine_triton
 
         if rowptr is None:
             raise ValueError("gine_message_sum on CUDA needs csr_edges' row pointer and destination-sorted edges")
+        if xs.dtype not in (torch.bfloat16, torch.float16, torch.float32):
+            raise TypeError(f"gine_message_sum's CUDA kernels sum bf16/fp16/fp32 in fp32; {xs.dtype} would narrow")
         return _gine_triton.message_sum(xs, e, src, rowptr, divisor)
+    acc = torch.promote_types(torch.float32, xs.dtype)
     msg = (xs.index_select(0, src) + e).relu()
-    agg = torch.zeros((xs.shape[0], xs.shape[1]), dtype=torch.float32).index_add_(0, dst, msg.float())
-    return (agg if divisor is None else agg / divisor.float()).to(xs.dtype)
+    agg = torch.zeros((xs.shape[0], xs.shape[1]), dtype=acc).index_add_(0, dst, msg.to(acc))
+    return (agg if divisor is None else agg / divisor.to(acc)).to(xs.dtype)
 
 
 @gine_message_sum.register_fake
@@ -70,9 +74,10 @@ def _gine_message_sum_backward(ctx: torch.autograd.function.FunctionCtx, grad: T
 
         grad_xs, grad_e = _gine_triton.message_grads(grad, xs, e, src, rowptr, divisor)
         return grad_xs, grad_e, None, None, None, None
-    g = grad if divisor is None else (grad.float() / divisor.float()).to(grad.dtype)
+    acc = torch.promote_types(torch.float32, xs.dtype)
+    g = grad if divisor is None else (grad.to(acc) / divisor.to(acc)).to(grad.dtype)
     grad_e = torch.where((xs.index_select(0, src) + e) > 0, g.index_select(0, dst), 0).to(e.dtype)
-    grad_xs = torch.zeros(xs.shape, dtype=torch.float32).index_add_(0, src, grad_e.float()).to(xs.dtype)
+    grad_xs = torch.zeros(xs.shape, dtype=acc).index_add_(0, src, grad_e.to(acc)).to(xs.dtype)
     return grad_xs, grad_e, None, None, None, None
 
 
