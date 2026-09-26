@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# THE LOCAL GATE SET: every CLAUDE.md gate with CI's arguments; remote CI is suspended, so this is the gate.
+# THE LOCAL GATE SET: every gate with CI's arguments; remote CI is suspended, so this is the gate.
 # Each row calls the gate's own script or make target (no second authority); nothing short-circuits.
 # Gate 1 (minutes) and the slow tier (deselected by BOTH pytest tiers) are opt-in; omission prints every run.
 set -uo pipefail
@@ -88,7 +88,7 @@ run_gate "gate 3a: pytest default tier" \
     $UV run pytest -m "not integration and not slow"
 run_gate "gate 3b: pytest integration tier" \
     $UV run pytest -m integration
-# Not numbered: it is not one of CLAUDE.md's seventeen gates. It is the tier those gates do
+# Not numbered: it is not one of the numbered gates. It is the tier those gates do
 # not reach, and it says so in the summary whether or not it ran.
 [ $WITH_SLOW -eq 1 ] && \
     run_gate "slow tier (opt-in, --with-slow): the tests BOTH tiers deselect" \

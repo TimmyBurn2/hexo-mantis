@@ -5,7 +5,7 @@ an all-zeros/invalid base falls back to HEAD~1. Violations over merge-base(BASE,
 .. HEAD:
   (1) any changed path under reports/, checkpoints/, logs/, benchmarks/;
   (2) any ADDED file whose blob size is > 1,000,000 bytes outside tests/fixtures/
-      (CLAUDE.md R7: >1 MB oracle banks live under tests/fixtures/ — same carve-out as (3));
+      (>1 MB oracle banks live under tests/fixtures/ — same carve-out as (3));
   (3) any ADDED file under tests/fixtures/ whose blob size is > 10,000,000 bytes — the
       carve-out in (2) is a raised ceiling, NOT an exemption (R8);
   (4) any ADDED *.jsonl outside tests/fixtures/.

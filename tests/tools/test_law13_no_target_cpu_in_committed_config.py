@@ -17,8 +17,8 @@ BUILD_CONFIG = (
 )
 
 _TARGET_CPU = re.compile(r"target-cpu")
-#: The ONE sanctioned site: `make build.native` sets it in an opt-in local build's environment
-#: (CLAUDE.md R2). Comments are stripped before the scan so the rule's own prose cannot trip it.
+#: The ONE sanctioned site: `make build.native` sets it in an opt-in local build's environment.
+#: Comments are stripped before the scan so the rule's own prose cannot trip it.
 _NATIVE_RECIPE = re.compile(r'^\tRUSTFLAGS="-C target-cpu=native" ')
 
 

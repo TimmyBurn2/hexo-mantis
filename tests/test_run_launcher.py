@@ -4,8 +4,8 @@
 """`python -m mantis.run` is a real launcher, not a config validator.
 
 The audit headline this file retires: `main()` validated a config and exited, and nothing in the
-repo executed `mantis.run.main()` at all, so the entry point named by CLAUDE.md's own
-`python -m mantis.*` law had never had a behavioural producer.
+repo executed `mantis.run.main()` at all, so the `python -m mantis.*` launch surface had never
+had a behavioural producer.
 
 The defect each oracle is the only witness to: the launcher that composes but never RUNS; a
 code-side default sneaking onto a RUN INPUT at the CLI boundary (`--out-dir` with a default is a
