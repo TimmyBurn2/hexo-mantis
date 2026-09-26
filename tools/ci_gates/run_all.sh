@@ -123,6 +123,8 @@ run_gate "gate 17: no host content in the tree (rule 7)" \
     python3 tools/ci_gates/rule7_gate.py --base "$BASE_REF"
 run_gate "gate 18: rustfmt on the Rust files touched since base" \
     python3 tools/ci_gates/rustfmt_touched_gate.py --base "$BASE_REF"
+run_gate "gate 19: every commit since base is one line, no body, no trailer" \
+    python3 tools/ci_gates/commit_convention_gate.py --base "$BASE_REF"
 
 # ── the screen ────────────────────────────────────────────────────────────────────────
 printf '\n\033[1m══ LOCAL GATE SET ══\033[0m\n'
