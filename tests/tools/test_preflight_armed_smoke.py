@@ -5,7 +5,7 @@ runs a real 16-step burst; rc 0 with `tier.covered == ["sync_lag", "full"]` is t
 half executing. It is the one non-run config that arms BOTH required abort rows, which is what
 makes a fast preflight rehearsal target exist. Integration tier.
 
-Every row here reads ONE module-scoped boot. The child's own log directory is evidence no AST
+Every boot row here reads ONE module-scoped boot. The child's own log directory is evidence no AST
 census can forge: `run_boot_identity` and `resolved_config` are emitted by `compose_run` and by
 nothing else, and what the re-exec'd interpreter did is observable only from what it left behind.
 """
@@ -47,8 +47,9 @@ _FOREIGN_SEGMENT = "events_some_other_run_seg0000.jsonl"
 
 
 @pytest.fixture(scope="module")
-def armed_preflight(local_puller, tmp_path_factory, preflight_budget_sec,
-                    preflight_harness_ceiling_sec) -> SimpleNamespace:
+def armed_preflight(local_puller: Path, tmp_path_factory: pytest.TempPathFactory,
+                    preflight_budget_sec: float,
+                    preflight_harness_ceiling_sec: float) -> SimpleNamespace:
     """Spawn ONE real preflight over an out-dir holding a foreign run's segment, shared by every row below."""
     root = tmp_path_factory.mktemp("armed_preflight")
     out_dir = root / "out"
@@ -82,8 +83,8 @@ def _child_events(out_dir: Path) -> list[dict]:
 
 
 def test_armed_smoke_config_completes_a_bounded_burst_through_the_real_preflight(
-    armed_preflight, monkeypatch
-):
+    armed_preflight: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
     state_home = armed_preflight.state_home
     monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
     proc = armed_preflight.proc
@@ -132,7 +133,7 @@ def test_armed_smoke_config_completes_a_bounded_burst_through_the_real_preflight
     assert accepted["config_sha256"] == stamp["config_sha256"]
 
 
-def test_a_foreign_run_ids_litter_does_not_trip_the_refusal(armed_preflight):
+def test_a_foreign_run_ids_litter_does_not_trip_the_refusal(armed_preflight: SimpleNamespace) -> None:
     """The discriminating negative: the refusal is scoped to THIS run_id's segments —
     foreign litter proceeds to the boot (witnessed by the run reaching a real verdict,
     rc 0, exactly as on a clean dir).
@@ -151,7 +152,7 @@ def test_a_foreign_run_ids_litter_does_not_trip_the_refusal(armed_preflight):
 
 
 def test_the_child_boots_green_with_no_device_flag_on_the_argv(
-    armed_preflight, tmp_path_factory
+    armed_preflight: SimpleNamespace, tmp_path_factory: pytest.TempPathFactory
 ) -> None:
     """The child boots the CONFIG's own device, with no `--device` flag on the argv.
 
@@ -173,7 +174,9 @@ def test_the_child_boots_green_with_no_device_flag_on_the_argv(
     )
 
 
-def test_the_child_process_left_the_composition_roots_own_boot_events(armed_preflight) -> None:
+def test_the_child_process_left_the_composition_roots_own_boot_events(
+    armed_preflight: SimpleNamespace,
+) -> None:
     """The child's segment carries the composition root's own boot events, exactly once each.
 
     Killer: re-point the child at a shim that rebuilds the composition inline — rc stays 0
@@ -188,7 +191,7 @@ def test_the_child_process_left_the_composition_roots_own_boot_events(armed_pref
 
 
 def test_the_childs_published_identity_is_the_config_it_actually_composed(
-    armed_preflight,
+    armed_preflight: SimpleNamespace,
 ) -> None:
     """The identity the child publishes is the MINTED config's own — the burst is a stop bound
     over it, never a mutation (CARD-STAMP-FLOOR) — so a child that read a different file, or a
