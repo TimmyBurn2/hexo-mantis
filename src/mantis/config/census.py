@@ -15,12 +15,11 @@ EXEMPT_CONFIGS: tuple[tuple[str, str], ...] = (
         "configs/dev_example.yaml",
         "developer template, never minted for a run; DISARMED by design (R59). R346(f) pruned "
         "configs/ to run6 plus one smoke and this file was cut with the rest — it is BACK, and "
-        "the ground is LAW-07: ADJ-13 N-3 makes it the mutation corpus's M1 row, the one real "
-        "committed config that demonstrates gate 12 going RED on the real `configs/` tree. "
-        "With run5, the shakedown and the plain smoke gone it is the only disarmed config "
-        "kept as that audit subject (smoke_wiring.yaml disarms draw-rate as a boot target), so "
-        "deleting it would leave the gate with no red-capability demonstration on "
-        "the tree it audits. Pinned by "
+        "the ground is LAW-07: ADJ-13 N-3 makes it the mutation corpus's M1 row, the committed "
+        "config that row names to demonstrate gate 12 going RED on the real `configs/` tree, "
+        "kept deliberately disarmed as that subject (smoke_wiring.yaml's draw-rate disarm is a "
+        "boot target's, incidental to the audit), so deleting it would leave the M1 row with "
+        "no committed subject on the tree it audits. Pinned by "
         "`test_naming_a_DISARMED_config_is_AUDITED_and_never_ignored`.",
     ),
     (
@@ -36,8 +35,9 @@ EXEMPT_CONFIGS: tuple[tuple[str, str], ...] = (
         "configs/smoke_wiring.yaml",
         "wiring config: the armed smoke with its compute shrunk (trunk 8 x 1, 4 self-play "
         "workers, learner batch 8, eval games of 24 plies with 2 floor games) and its "
-        "draw-rate row disarmed, since the tree ships exactly one armed non-production config "
-        "and no wiring drive reaches that rule's step-30 jurisdiction. For the integration "
+        "draw-rate row disarmed, since the tree ships exactly one armed non-production config; "
+        "its 16-step rows cannot reach that rule's step-30 jurisdiction and its 50-step row "
+        "disarms it by its own override. For the integration "
         "rows whose subject is WIRING — a real boot reaching its events and artefacts — never "
         "a strength, a timing or a run's shape. NOT a production run. Its equality with the "
         "armed smoke outside those leaves is pinned by tests/config/test_smoke_wiring_config.py; "

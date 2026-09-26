@@ -11,8 +11,8 @@ _CONFIGS = Path(__file__).resolve().parents[2] / "configs"
 _WIRING = "smoke_wiring.yaml"
 _ARMED_SMOKE = "smoke_preflight_armed.yaml"
 
-#: The ONLY leaves the wiring config moves off the armed smoke: the trunk, the self-play fan-out
-#: (4 x leaf batch 8 still reaches the collector threshold), the learner batch and the eval games.
+#: The compute leaves the wiring config moves off the armed smoke (its draw-rate disarm is nulled out
+#: below): trunk, self-play fan-out (4 x leaf batch 8 reaches the collector threshold), batch, eval.
 SHRUNK = {
     "run_id": "smoke_wiring",
     "model.gnn.hidden": 8,
@@ -34,7 +34,7 @@ def _leaves(node: Any, prefix: str = "") -> dict[str, Any]:
 
 
 def test_the_wiring_config_moves_only_the_shrunk_leaves_off_the_armed_smoke() -> None:
-    """A wiring row boots the armed smoke's composition; draw-rate alone is disarmed (the tree ships ONE armed non-production config, and its earliest fire, step 30, is past every wiring drive)."""
+    """A wiring row boots the armed smoke's composition; draw-rate alone is disarmed (the tree ships ONE armed non-production config; the 16-step rows cannot reach its step-30 earliest fire and the 50-step row disarms it itself)."""
     smoke_dump = load_config(_CONFIGS / _ARMED_SMOKE).model_dump()
     assert smoke_dump["train"]["draw_rate_abort"] is not None
     smoke_dump["train"]["draw_rate_abort"] = None

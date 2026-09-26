@@ -482,8 +482,8 @@ def test_a_clean_run_at_the_minted_bound_leaves_one_stamped_checkpoint(
 
     The drive boots the wiring config; the 50 is the armed smoke's measurement, not re-measured.
 
-    DISARMED IN THIS DRIVE, disclosed: `train.draw_rate_abort` is `None` for THIS config only. A
-    50-step drive is below the rule's jurisdiction, so on a slow host the early 100%-ply-cap-draw
+    DISARMED IN THIS DRIVE, disclosed: the wiring config mints `train.draw_rate_abort` null, so the
+    override and its premise below are kept verbatim and can no longer red. A 50-step drive is below the rule's jurisdiction, so on a slow host the early 100%-ply-cap-draw
     regime (an UNTRAINED net, not a collapsed one) crosses the evidence bar and aborts a healthy
     run. The schema permits no armed-but-unfireable posture.
     """

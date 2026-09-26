@@ -50,8 +50,8 @@ _LAUNCHER_REQUIRED_OPTIONS = {"--config", "--out-dir"}
 _LAUNCHER_OPTIONAL_OPTIONS = {"--resume-from", "--inherit-preflight"}
 _LAUNCHER_OPTIONS = _LAUNCHER_REQUIRED_OPTIONS | _LAUNCHER_OPTIONAL_OPTIONS
 
-#: The wiring config is the armed smoke with only its compute shrunk; 16 is its minimum legal
-#: burst plus headroom, the same number `test_preflight_armed_smoke.py` drives.
+#: The wiring config is the armed smoke with its compute shrunk and draw-rate disarmed; 16 is its
+#: minimum legal burst plus headroom, the same number `test_preflight_armed_smoke.py` drives.
 _WIRING_CONFIG = "smoke_wiring.yaml"
 _BURST_STEPS = 16
 
