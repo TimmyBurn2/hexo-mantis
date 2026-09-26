@@ -1,4 +1,4 @@
-# RULINGS — R23 to R372
+# RULINGS — R23 to R373
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R373.
+- Numbering continues from R346. The next ruling is R374.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -36,6 +36,24 @@ still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register 
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
 
+### R373 — AUX START, FIRST MEASURE
+Decision: verbatim below.
+
+> R373 — AUX START, FIRST MEASURE.
+> (a) A strix cell of the same net on the same instrument replays its games: it witnesses
+> determinism and adds no sample. R372(c)'s pooling is void; the parent reads 0.191
+> [0.146, 0.236] on the launch tree.
+> (b) The prereg instrument keeps its seed.
+> (c) The aux start is attributed before it is designed: RUN10-AUX-PROBE measures offline
+> arms from the parent and changes nothing; the design and the weight re-pick follow its
+> reading.
+> (d) A drift proxy stands in for strix only after it orders the known nets as strix does
+> (LAW-19).
+
+Status: standing. Voids R372(c)'s pooling by (a).
+
+---
+
 ### R372 — AFTER THE HALT
 Decision: verbatim below.
 
@@ -50,7 +68,8 @@ Decision: verbatim below.
 > point, and the control must fail that test. Not recovered sends the aux start to a design
 > packet.
 
-Status: standing.
+Status: standing — (c)'s pooling VOIDED by R373(a): a second cell at the fixed seed replays the first, so the
+parent reads 0.191 [0.146, 0.236] on the launch tree, unpooled.
 
 ---
 
