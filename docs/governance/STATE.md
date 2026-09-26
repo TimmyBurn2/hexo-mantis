@@ -7,12 +7,15 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
-**RUN10-PRESTART HALTED AT S1 (2026-09-26).** FINISH is merged and pushed with R371 (`451d23f9`, run10's
-launch tree, R371(d)). On that tree the box re-read admission IDLE at 3 955 leaves/s at B 64 (PASS, 1.60x), then
-the parent's strix @ r8 equal-work cell IDLE at **0.191 [0.146, 0.236]** (55 of 288; the recorded 0.142 [0.104,
-0.181] was CONTENDED on the old box) — outside [0.104, 0.181], so R371(c) stopped the sequence before the
-preflight and sent run10's bars and the EMA conditional to the operator. No preflight, stamp or twin ran;
-CARD-F5-LOOP-WITH-TRAINER stays open. The earlier FINISH exit readings are in the local records.
+**RUN10-PRESTART HALTED AT S6 (2026-09-26); run10 is NOT ready for START.** FINISH is merged and pushed
+with R371 (`451d23f9`, run10's launch tree, R371(d)). On that tree, on the box: admission IDLE 3 955 leaves/s at
+B 64 (PASS, 1.60x); the parent's strix @ r8 cell IDLE **0.191 [0.146, 0.236]** — outside [0.104, 0.181], the
+operator ordered the sequence on; preflight PASS (stamp `3df6dd3b…`, MIRRORED; the terminal regression guard
+rejected, the 101-step burst net 0.234 vs its anchor at 16 pairs); the EMA cell 0.149 [0.108, 0.194] → EMA waits;
+the 4 h twin (`shakedown10`, inherited stamp) → F5 READ. The witness HALTS on two rows: the aux-weight ratio
+settled at 2.92 (band [0.5, 2] → the §1a re-pick is a re-mint) and the step-3 000 ring's one-hot shares
+(pooled 0.3151 vs < 0.30, mr1 0.4002 vs < 0.40; the 9k and 12k rings pass). Every other witness passes; the
+cards, the operator's rulings owed and the numbers are CARDS' RUN10-PRESTART section and the local records.
 
 **DEV-SPEED EXITED beside it (2026-09-26).** The integration tier's real boots were compute, not waits:
 three preflight rows now read one module-scoped boot and the four in-process wiring rows boot

@@ -36,6 +36,34 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by the RUN10-PRESTART packet (R371; 2026-09-26) — run10 halted at the witness
+
+- **CARD-RUN10-AUX-WEIGHT-REPICK — the §1a rule fires.** Over the twin's settled half (steps 7 188–14 375)
+  `aux_policy_head_grad_norm / policy_head_grad_norm` reads a median 2.92 (p10–p90 2.24–3.83; by quarter
+  3.22 → 2.99 → 2.90 → 2.93, flat), outside [0.5, 2]. The rule re-picks inside [2, 8] by re-mint with its own
+  preflight; weight 2 predicts ≈ 1.46 (the head norm scales with the weight, prereg §8's foreseen case). The
+  re-mint, the new launch tree and a fresh twin are the operator's word. Beside it: the preflight's terminal
+  regression guard read the 101-step burst net at 0.234 vs its anchor (16 pairs, reject) — the fresh head's
+  early clipped updates cost strength; the re-picked weight's twin should read it again.
+- **CARD-RUN10-ONE-HOT-3K — the pre-START audit misses on the step-3 000 ring.** `one_hot_share_full`
+  0.3151 (< 0.30) and `_mr1` 0.4002 (< 0.40); `_mr2` 0.2276 passes. Reported beside it, not a substitute
+  witness: 6k 0.305 / 0.387, 9k 0.297 / 0.379, 12k 0.290 / 0.373 — falling, no collapse. Whether the 3k
+  ring is the right witness for a run whose head starts fresh is the operator's reading.
+- **CARD-RUN10-PARENT-BARS — the parent re-read moved.** strix @ r8 on the launch tree, IDLE: 0.191 [0.146,
+  0.236] (55/288) against the recorded 0.142 [0.104, 0.181] (CONTENDED, the old box, pre-PERF-ADA). R371(c)
+  sends run10's bars and the EMA conditional to the operator; the EMA cell read 0.149 (waits under either).
+- **CARD-PREFLIGHT-CHILD-LOGGING — the preflight child's boot narration is lost.** `preflight_mint.py
+  --_boot` never calls `configure_logging`, so its INFO lines (`heldout_slice_opened`, the prereg §6 boot
+  witness) reach no file; the twin's `mantis.run` boot logged it (ring, 100 000 rows, 12 batches, 3 000).
+- **The F5 reading (closes CARD-F5-LOOP-WITH-TRAINER).** run10's twin, 4 h on the 4080S box, window 3.71 h
+  after 15 min: 1 512 games/h, 3 623 steps/h, 4 048 served leaves/s (3 067 GPU evals), cache hits 24.2 %,
+  replay_ratio 8.16; GPU 81 % — inference ≈ 36 % duty at the idle bench's 0.118 ms per eval, the trainer ≈ 45 %
+  (derived, one process); card peak 6.35 GiB, run-tree RSS 10.0 GiB, box used 13.1 GiB, load 13.2 of 30.7 CPUs.
+  CPU, offline × in-run rate: leaf build + key 646 µs per leaf ≈ 2.6 cores, of which SHA-256 126–215 µs ≈
+  0.5–0.9 cores (CARD-PERF-CACHE-KEY-HASH's share); server launch 0.57, collate 0.29 core-s/s; ≈ 9 cores
+  unattributed (search, trainer host side — no in-run timer; no profiler attaches on the box). No single
+  lever is shown ≥ 20 % in-run (R371(e)): PERF-2 follows run10.
+
 ## Opened by the FINISH packet (R370; 2026-09-26)
 
 Grounds and numbers: the FINISH records (timing, reviews) outside the tree; STATE names the tip.
@@ -50,7 +78,7 @@ Grounds and numbers: the FINISH records (timing, reviews) outside the tree; STAT
   leaf-for-leaf to the armed smoke by `tests/config/test_smoke_wiring_config.py`): 355-768 -> 8-13 s
   each. The tier's long pole is now that one preflight boot (~430 s in-tier). Open: (4) impact selection
   while iterating, gates.exit staying the full set; (5) the box as a remote gate host.
-- **CARD-F5-LOOP-WITH-TRAINER — FINISH F5 HALTED.** `python -m mantis.run` refuses a run10-derived
+- **CARD-F5-LOOP-WITH-TRAINER — CLOSED 2026-09-26 by run10's twin (RUN10-PRESTART section).** FINISH F5 HALTED. `python -m mantis.run` refuses a run10-derived
   config with a throwaway run id (`PreflightStampMissingError`, also with `--inherit-preflight
   configs/run10.yaml`: the box holds no preflight stamp at all), and the grant excluded minting and
   stamping. The loop-with-trainer reading (games/h, trainer steps/h, GPU split, peaks, one profile)
