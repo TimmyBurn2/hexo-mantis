@@ -27,6 +27,7 @@ mantis-search = { path = "../mantis-search" }
 half = "2"
 # HEXG sample vmap (FxHashMap over rotated visit-map keys).
 fxhash = "0.2"
+sha2 = "0.10"
 # HARD pin: major MUST match mantis-search (StdRng via chacha20 + rand_core 0.10).
 # A silent resolve to rand 0.9 breaks the fixed-seed sample streams the bench +
 # O-31 depend on.

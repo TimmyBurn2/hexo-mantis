@@ -13,6 +13,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 use mantis_search::SearchKind;
+use mantis_selfplay::queues::EVAL_CACHE_CAPACITY;
 use mantis_selfplay::runner::config::SelfPlayRunnerConfig;
 use mantis_selfplay::runner::{DrainPoisoned, GameResultRow, RunnerStatsSnapshot, SelfPlayRunner};
 
@@ -232,7 +233,11 @@ impl PySelfPlayRunner {
     /// (absent or unknown -> `ValueError`) before building a runner-linked batcher.
     #[new]
     pub fn new(config: &PySelfPlayRunnerConfig) -> PyResult<Self> {
-        let rust_config = config.to_rust();
+        // Every production runner serves through the exact eval cache; the Rust default is off.
+        let rust_config = SelfPlayRunnerConfig {
+            eval_cache_capacity: EVAL_CACHE_CAPACITY,
+            ..config.to_rust()
+        };
         let encoding_name = rust_config.encoding_name.clone();
         let runner = SelfPlayRunner::new(rust_config).map_err(PyValueError::new_err)?;
         let spec = encoding_name
@@ -394,6 +399,18 @@ impl PySelfPlayRunner {
     #[getter]
     pub fn inference_failures_total(&self) -> u64 {
         self.snapshot().inference_failures_total
+    }
+
+    /// Leaves the search expanded, every one a served simulation whether cached or not.
+    #[getter]
+    pub fn served_leaves_total(&self) -> u64 {
+        self.snapshot().served_leaves_total
+    }
+
+    /// Leaves the GPU evaluated: `served_leaves_total` less the exact eval cache's hits.
+    #[getter]
+    pub fn gpu_evals_total(&self) -> u64 {
+        self.snapshot().gpu_evals_total
     }
 
     /// Worker threads that died by panic — 0 in a healthy run. Before this the panic sat in the

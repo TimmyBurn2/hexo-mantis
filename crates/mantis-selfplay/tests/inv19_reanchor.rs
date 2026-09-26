@@ -53,6 +53,7 @@ fn distinct_sentinels() -> SelfPlayRunnerConfig {
         random_opening_plies: 3,
         search_stats_every: 5,
         encoding_name: Some("gnn_axis_r8".to_string()),
+        eval_cache_capacity: 4096,
     }
 }
 
@@ -97,6 +98,7 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
         random_opening_plies,
         search_stats_every,
         encoding_name,
+        eval_cache_capacity,
     } = cfg;
 
     assert_eq!(n_workers, 7);
@@ -130,6 +132,7 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
     assert_eq!(random_opening_plies, 3);
     assert_eq!(search_stats_every, 5);
     assert_eq!(encoding_name, Some("gnn_axis_r8".to_string()));
+    assert_eq!(eval_cache_capacity, 4096);
 }
 
 /// Prove the ctor accepts the sentinel config and exposes spec-derived shapes.

@@ -21,7 +21,7 @@ use mantis_graph::{AxisGraph, BUILDER_IMPL_NATIVE};
 use mantis_search::LegalSetPolicy;
 use mantis_selfplay::poison::lock_or_recover;
 use mantis_selfplay::queues::{
-    build_leaf_graph, build_leaf_graphs_batch, GraphQueue, GraphWire, GraphWireArrays,
+    build_leaf_graph, build_leaf_graphs_batch, GraphKey, GraphQueue, GraphWire, GraphWireArrays,
     WireAlreadyConsumed as WireConsumedGuard,
 };
 use mantis_selfplay::records::assemble_ls_from_gnn_probs;
@@ -514,6 +514,32 @@ impl PyInferenceBatcher {
             .into_iter()
             .map(|(dense, overflow, value, _center)| (dense, overflow, value))
             .collect())
+    }
+
+    /// The exact eval cache's key for each position under this batcher's builder geometry, as
+    /// hex: the one route from Python to the key self-play serves by.
+    ///
+    /// # Errors
+    /// `PyValueError` when a position fails the builder's seam guards.
+    #[allow(clippy::type_complexity)]
+    #[pyo3(signature = (positions, n_threads = 1))]
+    pub fn eval_cache_keys(
+        &self,
+        py: Python<'_>,
+        positions: Vec<(Vec<(i64, i64, i64)>, i64, i64)>,
+        n_threads: usize,
+    ) -> PyResult<Vec<String>> {
+        let (win_length, radius, trunk_size) = (
+            self.graph_win_length,
+            self.graph_radius,
+            self.graph_trunk_size,
+        );
+        let graphs = py
+            .detach(|| {
+                build_leaf_graphs_batch(&positions, win_length, radius, trunk_size, n_threads)
+            })
+            .map_err(PyValueError::new_err)?;
+        Ok(graphs.iter().map(|g| GraphKey::of(g).hex()).collect())
     }
 
     /// Graph submit-and-wait carrying the BUILDER's frame, returning per-position

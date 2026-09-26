@@ -20,6 +20,9 @@ pub(crate) struct WorkerAtomics {
     /// `fatal_defect`'s slot and store-then-halt ordering but keeps its OWN count, so the
     /// two conjuncts stay distinguishable in the event stream.
     pub(crate) inference_failures_total: Arc<AtomicU64>,
+    /// Leaves expanded, and of those the ones the GPU served: the eval cache's fire-rate pair.
+    pub(crate) served_leaves_total: Arc<AtomicU64>,
+    pub(crate) gpu_evals_total: Arc<AtomicU64>,
     /// The runner-wide monotonic GAME id, one `fetch_add` per completed graph game. Its own
     /// counter, not `games_completed`: that STAT may be reset, and an id derived from it collides.
     pub(crate) graph_game_seq: Arc<AtomicU64>,

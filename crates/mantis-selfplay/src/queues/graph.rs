@@ -17,6 +17,7 @@ use fxhash::FxBuildHasher;
 use mantis_graph::{build_axis_graph, AxisGraph, BuildParams, StoneList, BUILDER_IMPL_NATIVE};
 use mantis_search::LegalSetPolicy;
 
+use super::eval_cache::{EvalCache, EVAL_CACHE_BYTES};
 use crate::poison::lock_or_recover;
 
 /// One queued graph inference request (the once-per-leaf `AxisGraph` payload).
@@ -47,6 +48,8 @@ struct GraphInner {
     /// because a worker blocks on its whole submitted batch. `0` means "not declared" and
     /// leaves the threshold at the raw half-batch — see [`saturation_threshold`].
     max_in_flight: usize,
+    /// The exact per-net evaluation cache every worker of the run shares.
+    eval_cache: EvalCache,
 }
 
 /// The queue depth at which [`GraphInner::pop_graph_batch_blocking`] returns BEFORE its
@@ -65,7 +68,7 @@ pub fn saturation_threshold(batch_size: usize, max_in_flight: usize) -> usize {
 }
 
 impl GraphInner {
-    fn new(contract_version: u32, max_in_flight: usize) -> Self {
+    fn new(contract_version: u32, max_in_flight: usize, eval_cache_capacity: usize) -> Self {
         Self {
             queue: Mutex::new(VecDeque::new()),
             queue_cv: Condvar::new(),
@@ -74,6 +77,7 @@ impl GraphInner {
             closed: AtomicBool::new(false),
             contract_version,
             max_in_flight,
+            eval_cache: EvalCache::new(eval_cache_capacity, EVAL_CACHE_BYTES),
         }
     }
 
@@ -137,9 +141,21 @@ impl GraphQueue {
     /// no supply and keeps the raw half-batch threshold; the production runner always declares one.
     #[must_use]
     pub fn with_contract_version_and_supply(contract_version: u32, max_in_flight: usize) -> Self {
+        Self::with_eval_cache(contract_version, max_in_flight, 0)
+    }
+
+    /// As [`Self::with_contract_version_and_supply`] with an explicit cache size; `0` turns it off.
+    #[must_use]
+    pub fn with_eval_cache(contract_version: u32, max_in_flight: usize, capacity: usize) -> Self {
         Self {
-            inner: Arc::new(GraphInner::new(contract_version, max_in_flight)),
+            inner: Arc::new(GraphInner::new(contract_version, max_in_flight, capacity)),
         }
+    }
+
+    /// The run's shared exact evaluation cache.
+    #[must_use]
+    pub fn eval_cache(&self) -> &EvalCache {
+        &self.inner.eval_cache
     }
 
     /// The supply this queue was told about (`0` = undeclared). Read by the seam tests and

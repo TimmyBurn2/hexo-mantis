@@ -1,4 +1,4 @@
-"""The playout-cap and Gumbel round counters reach `iteration_complete` from a REAL runner."""
+"""The playout-cap, Gumbel round and eval-cache counters reach `iteration_complete` from a REAL runner."""
 from __future__ import annotations
 
 import threading
@@ -30,7 +30,8 @@ _N_SIMS_FULL = 24
 _WANT_POSITIONS = 48
 _TIMEOUT_S = 120.0
 #: Transcribed, not read off the subject: a consistent rename must not satisfy the oracle.
-_LEVERS = ("pcr_full_moves", "pcr_quick_moves", "gumbel_round_leaves", "gumbel_rounds")
+_LEVERS = ("pcr_full_moves", "pcr_quick_moves", "gumbel_round_leaves", "gumbel_rounds",
+           "served_leaves_total", "gpu_evals_total")
 _REPO = Path(__file__).resolve().parents[2]
 
 
@@ -128,6 +129,16 @@ def test_the_real_runner_publishes_the_gumbel_round_width(drive: _Drive) -> None
     assert st.gumbel_rounds <= st.gumbel_round_leaves <= drawn * _N_SIMS_FULL, (
         f"round width terms out of range: {st.gumbel_round_leaves} leaves / "
         f"{st.gumbel_rounds} rounds over {drawn} searches"
+    )
+
+
+def test_the_real_runner_publishes_the_eval_cache_fire_rate(drive: _Drive) -> None:
+    """Every expanded leaf is served; the GPU sees only the misses, and a drive this long repeats leaves."""
+    st = drive.stats
+    assert st.served_leaves_total >= st.positions_generated > 0, f"no leaf counted: {st}"
+    assert 0 < st.gpu_evals_total < st.served_leaves_total, (
+        f"{st.gpu_evals_total} GPU evaluations for {st.served_leaves_total} served leaves: the "
+        "cache never fired, or its hits are not counted"
     )
 
 
