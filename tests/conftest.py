@@ -10,11 +10,21 @@ from pathlib import Path
 
 import pytest
 from _drivable import FakeClock
+from _xdist_share import apply_thread_share
 
 PYTEST_SEED = int(os.environ.get("PYTEST_SEED", "20260716"))
 _HAVE_NUMPY = importlib.util.find_spec("numpy") is not None
 _HAVE_TORCH = importlib.util.find_spec("torch") is not None
 _SEEDED_LIBS = ["random"] + (["numpy"] if _HAVE_NUMPY else []) + (["torch"] if _HAVE_TORCH else [])
+
+
+def pytest_configure(config):
+    """Size an xdist worker's thread pools to its share of the cores before anything spawns."""
+    share = apply_thread_share(os.environ)
+    if share is not None and _HAVE_TORCH:
+        import torch  # pyright: ignore[reportMissingImports] — guarded: arms when installed
+
+        torch.set_num_threads(share)
 
 
 def pytest_report_header(config):
