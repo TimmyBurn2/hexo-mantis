@@ -34,6 +34,11 @@ criterion = "0.5"
 [workspace.lints.clippy]
 pedantic = "warn"
 
+# Two search tests took 85 % of the Rust gate at the dev profile's opt-level 0; debug assertions and
+# overflow checks stay on, only the code is optimised.
+[profile.test]
+opt-level = 2
+
 # Portable by default: no target-cpu anywhere in committed config (make build.native
 # opt-in via env). panic="unwind" is a hard rule: Rust panics cross the FFI boundary
 # as PanicException, never a process abort (repo_design §7).
