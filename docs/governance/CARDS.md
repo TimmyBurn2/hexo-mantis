@@ -52,7 +52,7 @@ Both were found by running the gate set rather than by reading it, and both are 
 - **CARD-RUN10-PARENT-BARS — the parent re-read moved.** strix @ r8 on the launch tree, IDLE: 0.191 [0.146,
   0.236] (55/288) against the recorded 0.142 [0.104, 0.181] (CONTENDED, the old box, pre-PERF-ADA). R371(c)
   sends run10's bars and the EMA conditional to the operator; the EMA cell read 0.149 (waits under either).
-- **CARD-PREFLIGHT-CHILD-LOGGING — the preflight child's boot narration is lost.** `preflight_mint.py
+- **CARD-PREFLIGHT-CHILD-LOGGING — CLOSED 2026-09-26 (RUN10-REPICK, `d158d27e`): the child configures logging; a boot row reads `run_safety_built` in `child_stderr.log` and reds without it.** The preflight child's boot narration was lost. `preflight_mint.py
   --_boot` never calls `configure_logging`, so its INFO lines (`heldout_slice_opened`, the prereg §6 boot
   witness) reach no file; the twin's `mantis.run` boot logged it (ring, 100 000 rows, 12 batches, 3 000).
 - **The F5 reading (closes CARD-F5-LOOP-WITH-TRAINER).** run10's twin, 4 h on the 4080S box, window 3.71 h
@@ -89,7 +89,7 @@ Grounds and numbers: the FINISH records (timing, reviews) outside the tree; STAT
   went GPU-bound → CPU-bound (GPU 91 → 72–76 %). Whether the hash is part of the CPU bound is
   unmeasured: bench `GraphKey::of` or profile the workers, then try streaming the fields into the hasher
   or a 128-bit non-cryptographic hash (both still hash the encoded input, R370(c)).
-- **CARD-OC7-REAIM — OWED (operator).** `tests/train/test_clean_stop_save.py`'s real-boot row drives 50
+- **CARD-OC7-REAIM — CLOSED 2026-09-26 (R372(a), `164fd10e`): the row drives the minted 200 with no override, 32.0 s on the desktop; a planted no-terminal-write break reds it.** Was OWED (operator). `tests/train/test_clean_stop_save.py`'s real-boot row drives 50
   steps because the armed smoke's minted 200 measured over the tier ceiling; on `smoke_wiring` the
   50-step drive takes ~13 s, so the row could drive its minted 200 with no deviation. Re-aiming moves
   `_OC7_BOUND`, which its assertions compare against — a change to what the test asserts, so it is the
@@ -99,7 +99,7 @@ Grounds and numbers: the FINISH records (timing, reviews) outside the tree; STAT
   `smoke_wiring`) and for `disk_space_exhausted` on a run shorter than the disk guard's first sample;
   every wiring boot logs it. The event is right to list the rows; the sentence claims an arming the
   config does not carry.
-- **CARD-BENCH-SERVER-WINDOW — CARDED.** `tests/tools/test_bench_server.py::test_a_cell_serves_every_leaf_its_workers_submitted`
+- **CARD-BENCH-SERVER-WINDOW — CLOSED 2026-09-26 (RUN10-REPICK, `b95715b5`): an empty sub-window waits for its first pop under a 60 s hang bound; a stalled-snapshot row reds the old window with this error.** Was CARDED. `tests/tools/test_bench_server.py::test_a_cell_serves_every_leaf_its_workers_submitted`
   went red on the UNTOUCHED base in DEV-SPEED's before-sweep (`no pops in the window (pops=0, wall=0.503
   s)`, gate 3a beside the Rust arm): a 0.5 s window that a loaded host can pass with no pop. Green at
   the tip and in every other sweep on record; a timing-window flake, pre-existing.
