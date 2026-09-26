@@ -36,6 +36,32 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by the FINISH packet (R370; 2026-09-26)
+
+Grounds and numbers: the FINISH records (timing, reviews) outside the tree; STATE names the tip.
+- **CARD-DEV-SPEED — the integration tier is the development loop's cost.** Seven real-boot tests are
+  ~2 900 s of the tier's ~3 350 s serial (clean-stop-save 692, parent-death 424, two launcher boots ~365
+  each, three preflight children 348–361); every other integration test is under 50 s. In order: (1)
+  MEASURE one boot's phase split from its own event stream before changing anything — the suspicion is
+  fixed waits (`--receipt-wait-sec 120`, terminal rounds, warm-ups), not compute; (2) SHARE boots —
+  several of the seven assert different facts about the same run shape and could read one module- or
+  session-scoped boot, the way `preflight_child` already does; (3) a plumbing-sized config (tiny net,
+  few steps) for tests that check wiring only, the minted-config tests unchanged; (4) impact selection
+  while iterating (pytest-testmon or an area map), gates.exit staying the full set; (5) hardware — the
+  CUDA venv's gate reading (STATE) and, while no run is live, the box as a remote gate host. Each lands
+  as its own measured lever (R370(g)).
+- **CARD-F5-LOOP-WITH-TRAINER — FINISH F5 HALTED.** `python -m mantis.run` refuses a run10-derived
+  config with a throwaway run id (`PreflightStampMissingError`, also with `--inherit-preflight
+  configs/run10.yaml`: the box holds no preflight stamp at all), and the grant excluded minting and
+  stamping. The loop-with-trainer reading (games/h, trainer steps/h, GPU split, peaks, one profile)
+  is owed; it needs either run10's own preflight (which vests a stamp a twin can inherit) or a ruling
+  on a stampless measurement path.
+- **CARD-PERF-CACHE-KEY-HASH — the eval cache's key cost.** The key is SHA-256 over the whole encoded
+  graph (~0.35–0.6 MB per mid-game leaf, copied into one buffer first); with the cache on, the box loop
+  went GPU-bound → CPU-bound (GPU 91 → 72–76 %). Whether the hash is part of the CPU bound is
+  unmeasured: bench `GraphKey::of` or profile the workers, then try streaming the fields into the hasher
+  or a 128-bit non-cryptographic hash (both still hash the encoded input, R370(c)).
+
 ## Opened by the PERF-ADA packet (R369; 2026-09-25) — the levers after L2
 
 Grounds and numbers: the R369 ledger in `docs/design/measurements/PERF_ADA_PROFILE_2026-09-24.md`. Order is the
