@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -188,6 +189,17 @@ def test_the_child_process_left_the_composition_roots_own_boot_events(
             f"the child's segment must carry exactly one {event} — the composition root's "
             f"own boot record; got {names.count(event)} in {sorted(set(names))}"
         )
+
+
+def test_the_childs_boot_narration_reaches_the_out_dirs_stderr_spool(
+    armed_preflight: SimpleNamespace,
+) -> None:
+    """The child's INFO boot lines land in `child_stderr.log`. Killer: drop its `configure_logging`."""
+    spool = (armed_preflight.out_dir / "child_stderr.log").read_text(encoding="utf-8")
+    assert re.search(r" INFO +mantis\.\S+ run_safety_built ", spool), (
+        "the child's boot narration never reached its stderr spool — no handler was installed, "
+        f"so every INFO line (heldout_slice_opened among them) went nowhere:\n{spool[-2000:]}"
+    )
 
 
 def test_the_childs_published_identity_is_the_config_it_actually_composed(

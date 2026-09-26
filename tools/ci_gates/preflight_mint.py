@@ -92,6 +92,7 @@ from mantis.config.loader import config_identity_sha256, load_config
 from mantis.config.preflight_stamp import clear_stamp, write_stamp
 from mantis.config.schema import RunConfig
 from mantis.diagnostics.mirror_receipts import MirrorReceiptsMissingError, await_mirror_receipts
+from mantis.monitor.logging_setup import configure_logging
 
 #: Every repo-root resolution lives HERE, never in the shipped package.
 REPO_ROOT = Path(os.path.abspath(__file__)).resolve().parents[2]
@@ -693,6 +694,8 @@ def _boot_main(args) -> int:
     from mantis.train.lifecycle.signals import arm_parent_death_signal
 
     arm_parent_death_signal()
+    # The boot's narration goes to stderr, which the parent spools into the out-dir.
+    configure_logging()
 
     config = _load(_resolve_config_path(args.config))
     bound = _burst_bound(config, args.burst_steps)
