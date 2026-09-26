@@ -36,7 +36,7 @@ faster), the exact eval cache (L4, on branch `perf-ada-l4`: the served path is n
   artifacts, run10's parent and the ring its held-out slice reads. The run10 box criterion and its
   admission bench are R367(e), run with `tools/bench_server.py` per the prereg's §6; any admission
   reading taken since is not a tracked record. Renting, stopping or re-speccing a box is the
-  OPERATOR'S act (R367(d), CLAUDE.md R11).
+  OPERATOR'S act (R367(d); CLAUDE.md's price law).
 
 ## Configs
 
@@ -49,11 +49,12 @@ run6's by R369's packet (W0).
 ## Where things live
 
 - Open work: `docs/governance/CARDS.md` (swept in W6; derived there, never enumerated here).
-- Rulings: `docs/governance/RULINGS.md`; the latest is R368.
-- Laws and the protected set: `docs/governance/LAWS.md`; R368(b) reads it as invariants held by
-  symbols and pinning tests, mapped in `docs/slim/00_MAP.md` §3. Falsified work:
-  `docs/governance/falsified.md`.
-- Build, test tiers, the gate set and when it runs: `CLAUDE.md`. The test-count floor is
+- Rulings: `docs/governance/RULINGS.md`; the latest is R370.
+- Laws and the protected set: `docs/governance/LAWS.md`, whose protected set names each
+  invariant's pinning tests (R370(f)); `tests/test_protected_set_pins.py` fails if one is gone.
+  Falsified work: `docs/governance/falsified.md`.
+- Build, test tiers and when gates run: `CLAUDE.md`; the gate set itself: `tools/ci_gates/run_all.sh`
+  (`make gates`, `make gates.exit`). The test-count floor is
   `tools/ci_gates/test_count_floor.txt`; the comment ratchet's floors are
   `tools/ci_gates/comment_length_floor.txt`.
 - The instruments at HEAD: `tools/strix_follower.py` (the strength series, strix @ r8, R366),
@@ -75,7 +76,7 @@ The pre-rewrite text is `git show 029adc0a:docs/governance/STATE.md`; history is
 | Hold 2, completed-Q in decided positions | R350(e); the owed α = 1.0 reconstruction is its CARDS row (R349(c) / R350(e)) |
 | The mirror arm; the integration tier's CUDA carve-out | R349(b); R349(a) |
 | run7's minted values and delta counts | R362(c), R364 (the re-mints); commit `ce0a8ff6`; the file's `# delta:` header in history |
-| The protected-set / laws / cards line | `docs/governance/LAWS.md`, `docs/slim/00_MAP.md` §3, `docs/governance/CARDS.md` |
+| The protected-set / laws / cards line | `docs/governance/LAWS.md` (the protected set with its pins), `docs/governance/CARDS.md` |
 | Dispatcher items 1–8: run7's rounds and strix cadence, the observatory decision, REPAIR-A4, run8's mint, the witness correction, run7's stop | R355, R356, R357; `docs/design/measurements/STRIX_RUN7_60K_2026-09-17.md`, `docs/design/measurements/RUN8_PREREG_2026-09-17.md` |
 | Items 9–12: run8's re-mint, shakedown, witness, audit, START, the follower chain, PERF-3 steps 1–2, twin inheritance | R358, R359, R360; `docs/design/measurements/PERF3_2026-09-18.md`; commits `86308bc7` (the re-mint leg's exit), `be863f16` (the START, the shakedown's witness and the audit), `f06c3234` (the re-mint), `5e25e40c` (the follower fix), `ee6e7abe` (twin inheritance) |
 | Items 13–15: the eval census, the sealbot rung's deletion, the 15k/30k/45k cells, the ladder unit, the CPU-head profile | R361, R362, R363; `docs/design/measurements/EVAL_COST_2026-09-19.md`, `docs/design/measurements/CPU_HEAD_PROFILE_2026-09-20.md`, `docs/design/measurements/RUN9_PREREG_2026-09-19.md`; commits `0d6ee0ee` (the follower's promotion switch), `94b8286a` (the rung's deletion) |
