@@ -38,6 +38,7 @@ from mantis.config.armed_aborts import (
 from mantis.config.loader import config_identity_sha256, discover_configs, load_config
 from mantis.config.preflight_stamp import flat_leaves, write_stamp
 from mantis.monitor.sink import JsonlEventSink
+from _xdist_share import worker_suffix
 from mantis.train.actor_sync import ActorSync
 from mantis.train.lifecycle.heartbeat_watchdog import ActorLagSpec, HeartbeatWatchdog
 
@@ -2018,6 +2019,8 @@ def test_the_probe_sweep_survives_a_SYMLINK_and_never_takes_the_suite_with_it(tm
     )
 
 
+_SYMLINK_PROBE = f"_preflight_symlink_probe{worker_suffix(os.environ)}"
+
 #: The class boundary. `abspath` normalises `..` and makes absolute TEXTUALLY, so rows 1-3 were
 #: always refused; rows 4-6 need the filesystem and every one of them escaped.
 _F2_INSIDE = ("absolute", "dotdot", "toplevel_itself", "symlink", "symlink_two_hops",
@@ -2025,11 +2028,11 @@ _F2_INSIDE = ("absolute", "dotdot", "toplevel_itself", "symlink", "symlink_two_h
 
 
 def _f2_inside_path(kind: str, tmp_path: Path) -> str:
-    target = REPO_ROOT / "_preflight_symlink_probe"
+    target = REPO_ROOT / _SYMLINK_PROBE
     if kind == "absolute":
         return str(target)
     if kind == "dotdot":
-        return str(REPO_ROOT / "configs" / ".." / "_preflight_symlink_probe")
+        return str(REPO_ROOT / "configs" / ".." / _SYMLINK_PROBE)
     if kind == "toplevel_itself":
         return str(REPO_ROOT)
     if kind == "symlink":
@@ -2051,7 +2054,7 @@ def _f2_inside_path(kind: str, tmp_path: Path) -> str:
 def test_an_out_dir_that_reaches_the_repo_BY_ANY_ROUTE_is_refused(tmp_path, kind) -> None:
     """An out-dir reaching the repo BY ANY ROUTE is refused, and refused BEFORE anything is
     created — through a symlink the tool went on to `mkdir` inside the working tree."""
-    probe = REPO_ROOT / "_preflight_symlink_probe"
+    probe = REPO_ROOT / _SYMLINK_PROBE
     raw = _f2_inside_path(kind, tmp_path)
     try:
         with pytest.raises(TOOL.PreflightOutDirInsideRepoError) as caught:
@@ -2089,7 +2092,7 @@ def test_an_out_dir_reached_through_a_symlink_OUTSIDE_the_repo_is_still_ALLOWED(
 def test_the_symlink_refusal_is_reached_by_the_REAL_CLI_and_writes_nothing(tmp_path) -> None:
     """The symlink refusal is reached by the REAL CLI and writes nothing; `--audit-only` keeps it
     cheap, since the out-dir is checked before either mode runs."""
-    probe = REPO_ROOT / "_preflight_symlink_probe"
+    probe = REPO_ROOT / _SYMLINK_PROBE
     link = tmp_path / "outlink"
     link.symlink_to(probe)
     try:

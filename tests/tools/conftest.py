@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import shutil
 import threading
 from collections.abc import Iterator
@@ -12,12 +13,13 @@ import pytest
 
 from mantis.util.loadpkg import load_tools_package
 from _toolpath import load_module_by_path
+from _xdist_share import worker_suffix
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 #: The probe paths from the out-dir and symlink oracles, kept as literals rather than imported
 #: so this file is not a consumer of a frozen oracle's internals.
-PROBES = (REPO_ROOT / "_preflight_oracle_outdir",
-          REPO_ROOT / "_preflight_symlink_probe")
+PROBES = (REPO_ROOT / f"_preflight_oracle_outdir{worker_suffix(os.environ)}",
+          REPO_ROOT / f"_preflight_symlink_probe{worker_suffix(os.environ)}")
 
 
 def _sweep() -> None:

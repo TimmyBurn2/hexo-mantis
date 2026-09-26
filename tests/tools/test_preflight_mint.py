@@ -20,6 +20,7 @@ from __future__ import annotations
 import ast
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -33,6 +34,7 @@ from mantis.config.loader import load_config
 from mantis.monitor.sink import JsonlEventSink
 from mantis.train.actor_sync import ActorSync
 from mantis.train.lifecycle.heartbeat_watchdog import ActorLagSpec, HeartbeatWatchdog
+from _xdist_share import worker_suffix
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
@@ -610,7 +612,7 @@ def _run_tool(*args, timeout: int = 300):
 def test_an_out_dir_inside_the_repo_is_refused(tmp_path) -> None:
     """An `--out-dir` inside the repo is REFUSED before anything is created: the child writes
     `*.jsonl` and gate 6 rejects those, so the gate would manufacture its own violation."""
-    inside = REPO_ROOT / "_preflight_oracle_outdir"
+    inside = REPO_ROOT / f"_preflight_oracle_outdir{worker_suffix(os.environ)}"
     assert not inside.exists(), "the oracle's probe path must not pre-exist"
     # When the guard under test FAILS, the tool creates this path inside the repo; the finally
     # removes what the failure created so one red assertion does not also litter the tree.
