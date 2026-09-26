@@ -61,9 +61,9 @@ _ABORT_RULE = "draw_rate_collapse"
 #: value on the event, not a path it re-derives from the checkpoint dir.
 _SAVED_PATH = Path("/checkpoints/oracle_00000007_deadbeef.ckpt")
 
-#: The armed smoke's OWN minted `train.max_train_steps`. Asserted as a PREMISE, never used as a
-#: drive: measured at 474.6 s against the 300 s tier ceiling.
-_SMOKE_CONFIG = "smoke_preflight_armed.yaml"
+#: The booted config's OWN minted `train.max_train_steps`, the armed smoke's. Asserted as a PREMISE,
+#: never used as a drive: measured at 474.6 s against the 300 s tier ceiling on the armed smoke.
+_WIRING_CONFIG = "smoke_wiring.yaml"
 _MINTED_BOUND = 200
 #: The drive bound, fixed by a PRE-REGISTERED measurement and its binding decision rule — the
 #: largest member of {200, 100, 50, 32, 16} measuring <= 300 s on the dev box. Measured, single
@@ -480,19 +480,21 @@ def test_a_clean_run_at_the_minted_bound_leaves_one_stamped_checkpoint(
     Nothing about the RUN is routed around, and the artefact is read back through THE loader. NOT
     asserted, deliberately: that this checkpoint proves the run was clean — it does not (Class B).
 
+    The drive boots the wiring config, the armed smoke with only its compute shrunk.
+
     DISARMED IN THIS DRIVE, disclosed: `train.draw_rate_abort` is `None` for THIS config only. A
     50-step drive is below the rule's jurisdiction, so on a slow host the early 100%-ply-cap-draw
     regime (an UNTRAINED net, not a collapsed one) crosses the evidence bar and aborts a healthy
     run. The schema permits no armed-but-unfireable posture.
     """
-    minted = smoke_run_config(_SMOKE_CONFIG)
+    minted = smoke_run_config(_WIRING_CONFIG)
     assert int(minted.train.max_train_steps) == _MINTED_BOUND, (
         "premise: R137's literal 200 IS this config's minted bound, so the deviation below is "
         "a wall-clock one and nothing else. If the mint moves this number, M-0 must be "
         f"re-measured — not this assertion re-aimed; got {minted.train.max_train_steps!r}"
     )
     config = smoke_run_config(
-        _SMOKE_CONFIG, train={"max_train_steps": _OC7_BOUND, "draw_rate_abort": None}
+        _WIRING_CONFIG, train={"max_train_steps": _OC7_BOUND, "draw_rate_abort": None}
     )
     assert int(config.train.max_train_steps) == _OC7_BOUND, (
         "premise: the M-0 bound really reached the coordinator's `stop_step` authority — a "
