@@ -24,10 +24,10 @@ faster), the exact eval cache (L4, on branch `perf-ada-l4`: the served path is n
 - **run10 is ARMED, not started.** `configs/run10.yaml` is minted (R366, ratified by R367(c)); its
   order, witnesses and pre-registered reading are
   `docs/design/measurements/RUN10_PREREG_2026-09-21.md`, the box sequence its §6. run10 launches
-  from PERF-ADA's exit tip, the `dev` commit that merged it (R369(a), amending R368(i)): the full gate set
-  incl. the slow tier is green there, its resolved config matches its mint by value except the retired
-  `train.value_target` (`config_diff --expect` MATCH), admission was re-read IDLE (3 984), and the parent's
-  strix @ r8 re-read was WAIVED by the operator on 2026-09-25 (no reading exists for this tip). A re-read
+  from FINISH's exit tip (R370(i), moving R369(a) off PERF-ADA's tip): the full gate set incl. the
+  slow tier green there, its resolved config matching its mint by value except retired leaves,
+  admission re-read IDLE there under R367(e), and the parent's strix @ r8 cell re-read there (the
+  operator waived that re-read for PERF-ADA's tip on 2026-09-25). A re-read
   outside the parent's recorded CI would send the bar to the operator. SEAM-2's implementation
   merges only after run10 STARTs (R368(j)). Read a config's values from the file itself and diff
   two with `tools/config_diff.py`; STATE does not restate minted rows.
