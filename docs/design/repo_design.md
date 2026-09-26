@@ -960,13 +960,12 @@ document and nothing needs to be.
    `census.production_configs` (run10.yaml today; run6.yaml left with R369's packet, W0);
    `smoke_preflight_armed.yaml` is what R346(f) names; `dev_example.yaml` is KEPT on LAW-07
    grounds and its `EXEMPT_CONFIGS` row says so — ADJ-13 N-3 makes it gate 12's M1 mutation
-   row, the only real committed config that demonstrates the audit going RED on the real
-   `configs/` tree, and with run5, the shakedown and the plain smoke gone it is the only
-   DISARMED config kept as that audit subject. AMENDMENT (DEV-SPEED packet L4, 2026-09-26; its
+   row, the committed config that row names to demonstrate the audit going RED on the real
+   `configs/` tree, kept deliberately DISARMED as that subject. AMENDMENT (DEV-SPEED packet L4, 2026-09-26; its
    ruling is owed): `smoke_wiring.yaml` is the armed smoke with its compute shrunk and its
    draw-rate row disarmed, booted by the in-process wiring rows and pinned leaf-for-leaf to the
    armed smoke by `tests/config/test_smoke_wiring_config.py`; named to gate 12 it refuses (rc 30),
-   as a disarmed config must. All four are re-minted from `tools/config_templates/dev.yaml`, so
+   as a disarmed config must, incidentally to the audit. All four are re-minted from `tools/config_templates/dev.yaml`, so
    their `# delta:` headers replay. `configs/run5.yaml` left the tree with
    `docs/contracts/eval_decision_run5.md`, whose drift gate derived every expectation from it;
    the two durable properties of that document — a one-lineage Bradley-Terry fit, and eff_n
