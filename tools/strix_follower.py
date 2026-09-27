@@ -1,4 +1,4 @@
-"""The strix follower: the equal-work strix cell on every 15 000-step checkpoint and every promotion."""
+"""The strix follower: the equal-work strix cell (or the Six ruler's) on every 15 000-step checkpoint and every promotion."""
 # >300 justify (R8): one unit — the triggers (the EVENT STREAM, never polled filenames), the tail, the regime
 # read, the cell (`tools/strength_frontier.py`'s) and the sidecar receipt (the stamp never touched) are one contract.
 from __future__ import annotations
@@ -17,19 +17,26 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from mantis.bots.six import CACHE_ENTRIES as SIX_CACHE_ENTRIES
+from mantis.bots.six import pin_record as six_pin_record
+from mantis.bots.strix import _pin as strix_pin_record
 from mantis.util.hashing import sha256_file
 
 EQUAL_WORK = "equal_work"
 AS_SHIPPED = "as_shipped"
 NET_ONLY = "net_only"  # equal work with strix's root VCF solver OFF
 RULER_R6 = "ruler_r6"  # equal work with strix at its TRAINED placement_radius 6 (the driver's default is 8)
-#: unit -> (our sims, strix sims, sidecar suffix). The suffix names OUR sims: the 256 series.
+SIX30_16 = "six30_16"  # ours PUCT-256 vs the Six ruler, gen 30 at 16 nodes
+#: unit -> (our sims, the opponent's sims or nodes, sidecar suffix). A strix suffix names OUR sims: the 256 series.
 UNITS: dict[str, tuple[int, int, str]] = {EQUAL_WORK: (256, 256, "strix256"),
                                           AS_SHIPPED: (512, 128, "strix512"),
                                           NET_ONLY: (256, 256, "strix256_nosolver"),
-                                          RULER_R6: (256, 256, "strix256_r6")}
+                                          RULER_R6: (256, 256, "strix256_r6"),
+                                          SIX30_16: (256, 16, "six30_16")}
 SOLVER_OFF_UNITS = frozenset({NET_ONLY})  # every other unit is the rung on record
 RADIUS_UNITS: dict[str, int] = {RULER_R6: 6}  # every other unit rides the driver's default radius
+SIX_UNITS: dict[str, tuple[str, int]] = {SIX30_16: ("gen0030", 30)}  # unit -> (the pinned network, its generation)
+FOLLOW_UNITS = (EQUAL_WORK, SIX30_16)  # the rulers; every other unit is a --once cell
 TRIGGER_EVENTS = ("periodic_checkpoint_save", "eval_round_complete")
 #: A heartbeat younger than this at cell start names a live run in the evidence.
 HEARTBEAT_LIVE_SEC = 300.0
@@ -163,8 +170,12 @@ def regime(run_dir: Path, run_id: str, now: float, host: HostLoad) -> tuple[str,
 
 def compose_cell(checkpoint: Path, *, unit: str, step: int, games: int, concurrency: int,
                  label: str) -> dict[str, Any]:
-    """The frontier cell for one checkpoint in one unit: PUCT ours, strix at its sims, paired games."""
+    """The frontier cell for one checkpoint in one unit: PUCT ours, strix at its sims or Six at its nodes, paired games."""
     ours, theirs, _suffix = UNITS[unit]
+    if unit in SIX_UNITS:
+        return {"label": label, "candidate": str(checkpoint), "search_kind": "puct", "sims": ours, "opponent": "six",
+                "six_net": SIX_UNITS[unit][0], "six_nodes": theirs, "games": games, "step": step,
+                "concurrency": concurrency}
     cell = {"label": label, "candidate": str(checkpoint), "search_kind": "puct", "sims": ours,
             "opponent": "strix", "strix_sims": theirs, "games": games, "step": step,
             "concurrency": concurrency}
@@ -174,29 +185,38 @@ def compose_cell(checkpoint: Path, *, unit: str, step: int, games: int, concurre
     return {**cell, "strix_radius": RADIUS_UNITS[unit]} if unit in RADIUS_UNITS else cell
 
 
-def _strix_pin() -> dict[str, Any]:
-    from mantis.bots.strix import _pin
-
-    pin = _pin() or {}
+def opponent_pin(unit: str) -> dict[str, Any]:
+    """The unit's opponent as its pin declares it: strix's commit and checkpoint, or Six's commit, engine and network."""
+    if unit in SIX_UNITS:
+        return six_pin_record(SIX_UNITS[unit][0])
+    pin = strix_pin_record() or {}
     return {"commit": pin.get("sha"), "checkpoint": pin.get("checkpoint"),
             "checkpoint_sha256": pin.get("checkpoint_sha256")}
 
 
 def sidecar_record(checkpoint: Path, *, unit: str, trigger: str, record: Mapping[str, Any],
                    regime_name: str, regime_evidence: Mapping[str, Any], run_id: str,
-                   started: float, finished: float, strix_pin: Mapping[str, Any]) -> dict[str, Any]:
+                   started: float, finished: float, pin: Mapping[str, Any]) -> dict[str, Any]:
     """The receipt: what was read, in which unit and regime, by which net, and what it read."""
     ours, theirs, _suffix = UNITS[unit]
     readout = dict(record.get("readout") or {})
     candidate = dict((record.get("provenance") or {}).get("candidate") or {})
     cell = dict(record.get("cell") or {})
+    if unit in SIX_UNITS:
+        engines = dict(record.get("six_engine") or {})
+        opponent: dict[str, Any] = {"six": {**dict(pin), "generation": SIX_UNITS[unit][1], "nodes": theirs,
+                                            "cache_entries": SIX_CACHE_ENTRIES, "provider": engines.get("provider"),
+                                            "engine_starts": engines.get("starts")},
+                                    "six_findings": record.get("six_findings")}
+    else:
+        opponent = {"strix": {**dict(pin), "sims": theirs, "solver": "off" if unit in SOLVER_OFF_UNITS else "on",
+                              **({"radius": RADIUS_UNITS[unit]} if unit in RADIUS_UNITS else {})},
+                    "strix_findings": record.get("strix_findings")}
     return {
         "schema_version": SIDECAR_SCHEMA_VERSION,
         "run_id": run_id, "checkpoint": checkpoint.name, "checkpoint_sha256": sha256_file(checkpoint),
         "step": cell.get("step"), "net_hash": candidate.get("net_hash"),
-        "unit": unit, "ours": {"search_kind": "puct", "sims": ours},
-        "strix": {**dict(strix_pin), "sims": theirs, "solver": "off" if unit in SOLVER_OFF_UNITS else "on",
-                  **({"radius": RADIUS_UNITS[unit]} if unit in RADIUS_UNITS else {})},
+        "unit": unit, "ours": {"search_kind": "puct", "sims": ours}, **opponent,
         "trigger": trigger, "regime": regime_name, "regime_evidence": dict(regime_evidence),
         "games": readout.get("games"), "eff_n": readout.get("eff_n"), "pairs": readout.get("pairs"),
         "wins": readout.get("wins"), "losses": readout.get("losses"), "draws": readout.get("draws"),
@@ -206,7 +226,6 @@ def sidecar_record(checkpoint: Path, *, unit: str, trigger: str, record: Mapping
         "started_utc": time.strftime("%FT%TZ", time.gmtime(started)),
         "finished_utc": time.strftime("%FT%TZ", time.gmtime(finished)),
         "concurrency": cell.get("concurrency"), "label": record.get("label"), "rc": record.get("rc"),
-        "strix_findings": record.get("strix_findings"),
     }
 
 
@@ -218,13 +237,13 @@ class Follower:
 
     def __init__(self, *, run_dir: Path, run_id: str, run_cell: RunCell, unit: str = EQUAL_WORK,
                  cadence: int = 15_000, promotions: bool = True, games: int = 288,
-                 concurrency: int = 8, strix_pin: Mapping[str, Any] | None = None,
+                 concurrency: int = 8, pin: Mapping[str, Any] | None = None,
                  clock: Callable[[], float] = time.time, log: Callable[[str], None] = print,
                  host_load: Callable[[], HostLoad] = read_host_load) -> None:
         self.run_dir, self.run_id, self.run_cell = run_dir, run_id, run_cell
         self.unit, self.cadence, self.promotions = unit, cadence, promotions
         self.games, self.concurrency = games, concurrency
-        self.strix_pin = dict(strix_pin) if strix_pin is not None else {}
+        self.pin = dict(pin) if pin is not None else {}
         self.clock, self.log, self.host_load = clock, log, host_load
         self.tail = EventTail(run_dir, run_id)
         self.pending: dict[int, Trigger] = {}
@@ -248,7 +267,7 @@ class Follower:
         finished = self.clock()
         body = sidecar_record(checkpoint, unit=self.unit, trigger=trigger, record=record,
                               regime_name=regime_name, regime_evidence=evidence, run_id=self.run_id,
-                              started=started, finished=finished, strix_pin=self.strix_pin)
+                              started=started, finished=finished, pin=self.pin)
         if record.get("rc") != 0 or "readout" not in record:
             failed = out.with_name(out.name.replace(".json", ".failed.json"))
             failed.write_text(json.dumps({**body, "error": record.get("error")}, indent=1),
@@ -326,7 +345,8 @@ def main(argv: list[str] | None = None) -> int:
     mode = ap.add_mutually_exclusive_group(required=True)
     mode.add_argument("--follow", action="store_true")
     mode.add_argument("--once", type=Path, metavar="CKPT")
-    ap.add_argument("--unit", choices=sorted(UNITS), default=EQUAL_WORK, help="--once only; --follow reads equal_work")
+    ap.add_argument("--unit", choices=sorted(UNITS), default=EQUAL_WORK,
+                    help=f"--follow reads a ruler unit ({', '.join(FOLLOW_UNITS)}); every unit plays --once")
     ap.add_argument("--cadence", type=int, default=15_000)
     ap.add_argument("--promotions", action=argparse.BooleanOptionalAction, default=True,
                     help="--follow: a cell on every promoted round too (R356(a)); "
@@ -335,12 +355,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--concurrency", type=int, default=8)
     ap.add_argument("--poll-sec", type=float, default=300.0)
     args = ap.parse_args(argv)
-    if args.follow and args.unit != EQUAL_WORK:
-        ap.error("--follow reads the equal-work unit only; the as-shipped and net-only cells are --once")
+    if args.follow and args.unit not in FOLLOW_UNITS:
+        ap.error(f"--follow reads the ruler units {list(FOLLOW_UNITS)} only; every other unit is a --once cell")
     follower = Follower(run_dir=args.run_dir, run_id=args.run_id,
                         run_cell=_real_run_cell(args.config, args.work_dir), unit=args.unit,
                         cadence=args.cadence, promotions=args.promotions, games=args.games,
-                        concurrency=args.concurrency, strix_pin=_strix_pin())
+                        concurrency=args.concurrency, pin=opponent_pin(args.unit))
     if args.once is not None:
         status, _path = follower.read_one(args.once.resolve(), trigger="once")
         return 1 if status == "failed" else 0

@@ -97,7 +97,13 @@ and are folded in here, because a reader of any ladder reading needs them:
   provider refuses the rung by name. A failed answer (`bestmove none`, an `error` line, a failed
   search's fallback) returns an occupied cell and an illegal stone returns itself, both for the arena
   to FORFEIT, each counted and logged under `six_forfeit_finding`. Its regime key reads
-  `six:gen0030@16`.
+  `six:gen0030@16`. `tools/strix_follower.py` plays it as the `six30_16` unit (ours PUCT-256; `--once`,
+  or `--follow` on the same triggers as the equal-work unit, which with it are the two ruler units),
+  through `tools/strength_frontier.py`'s `six` cell (`six_net`, `six_nodes`). Its receipt is
+  `<ckpt>.six30_16.json`, the strix receipt's fields with a `six` block in place of `strix` — the
+  pin's commit, engine and network with their sha256s, the generation, the nodes, `cache_entries`,
+  the provider and the engine starts, both read off the child's log — and `six_findings`, the
+  forfeits.
 - **Vendoring.** External engines are pinned by commit sha in `vendor/pins.toml` and fetched
   by `make vendor`, which CLONES and does not build. A pin's release assets (each a url and a
   sha256; an archive with `unpack`, a member of one with `from`) are fetched only by
@@ -162,4 +168,5 @@ row says so and names what does run.
 | a six job reads the candidate's sims on `rung_model_sims` and resolves at its own nodes on the round's worker device | `tests/eval/test_strix_rung_sims.py` | yes |
 | the follower fires ONE equal-work cell per cadence checkpoint and per promotion read off the event stream, a planted duplicate fires nothing, a promotion waits for its checkpoint, a failed cell leaves no receipt, the sidecar carries unit + regime + the net's hash and the checkpoint bytes are untouched | `tests/tools/test_strix_follower.py` | yes (the cell runner is a recording double; the unit's RoundSpec is composed through the real frontier) |
 | a strix cell composes the rung at the pinned checkpoint with its own sims and the candidate's on `rung_model_sims`; a production round refuses a strix job by name | `tests/tools/test_strength_frontier.py`, `tests/eval/test_strix_rung_sims.py` | yes |
+| the six30_16 unit composes the six cell, its receipt carries the generation, the nodes, the provider and the forfeits, and `--follow` reads the two ruler units only | `tests/tools/test_six_ruler_cell.py` | yes (the cell runner is not run; the child log is a fixture) |
 | the REAL vendored strix plays 20 legal games end to end at the pinned commit | `tests/bots/test_strix_adapter.py::test_the_live_driver_plays_twenty_legal_games_end_to_end` | **no** — `@pytest.mark.integration`; LOUD SKIP naming the missing step without the vendored venv and checkpoint |

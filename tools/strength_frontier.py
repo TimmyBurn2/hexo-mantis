@@ -5,8 +5,8 @@ composition mirroring `mantis.run`'s eval seam, the parallel child runner, the p
 — are only checkable against each other; every game goes through `python -m mantis.eval.worker`.
 A cell: `label`, `candidate` (a checkpoint path, `bc_full` = every head of the BC checkpoint, or
 `bc_tp` = the BC net through the config's `identity.warm_start` seam), `search_kind`, `sims`, `games`,
-`opponent` (`strix` at its own `strix_sims` — RUNG-2; or a snapshot source played through the GATE
-block; the sealbot cell went with the sealbot rung, since deleted), `gumbel_m`, `c_scale`/`q_rescale` (the
+`opponent` (`strix` at its own `strix_sims` — RUNG-2; `six` at `six_nodes` on the pinned network `six_net`;
+or a snapshot source played through the GATE block; the sealbot cell went with the sealbot rung), `gumbel_m`, `c_scale`/`q_rescale` (the
 deploy head's σ), `concurrency` (games in flight; 1 = the arena's serial loop), `opening_book` (a
 manifest id) and `seed_base` — all the config's when absent; BOOK_V2's replays vary the last two. No
 random floor, one rung, `round_index` 0; a refused floor probe is a FAILED cell.
@@ -28,6 +28,8 @@ from typing import Any
 
 import numpy as np
 
+from mantis.bots.six import FINDING_LOG_MARKER as SIX_FINDING_LOG_MARKER
+from mantis.bots.six import PROVIDER_LOG_MARKER as SIX_PROVIDER_LOG_MARKER
 from mantis.config.loader import load_config
 from mantis.config.resolve.allocator_posture import declared_allocator_posture, governs_device
 from mantis.config.resolve.eval_posture import resolve_ply_cap_adjudication, resolve_strength_floor
@@ -48,8 +50,9 @@ from mantis.util.determinism import seed_everything
 BC_FULL = "bc_full"
 BC_TP = "bc_tp"
 STRIX = "strix"
-#: The one opponent played through the RUNG block; anything else is a snapshot through the gate.
-_RUNG_OPPONENTS = (STRIX,)
+SIX = "six"
+#: The opponents played through the RUNG block; anything else is a snapshot through the gate.
+_RUNG_OPPONENTS = (STRIX, SIX)
 _RUN_ID = "frontier1"
 _BOOTSTRAP_RESAMPLES = 2000
 _CI_LEVEL = 0.95
@@ -163,7 +166,12 @@ def _strix_rung(config: Any, games: int, strix_sims: int, *, solver: bool = True
         raise FrontierCellError("a strix cell names strix_radius or strix_solver false, not both (no such variant)")
     variant = stem + (f"{_strix.RADIUS_SUFFIX}{int(radius)}" if radius is not None
                       else "" if solver else _strix.NET_ONLY_SUFFIX)
-    return RungJob(name=STRIX, bot=STRIX, variant=variant, opponent_sims=strix_sims,
+    return _rung_job(config, STRIX, variant, strix_sims, games)
+
+
+def _rung_job(config: Any, bot: str, variant: str, opponent_sims: int, games: int) -> RungJob:
+    """An external rung on the gate's book, at its own sims, under the tool's pinned pair-bootstrap terms."""
+    return RungJob(name=bot, bot=bot, variant=variant, opponent_sims=opponent_sims,
                    opening_book=config.eval.gate.opening_book, deploy_matched=True, games=games,
                    bootstrap_resamples=_RUNG_BOOTSTRAP_RESAMPLES, bootstrap_ci_level=_CI_LEVEL,
                    bootstrap_seed=_BOOTSTRAP_SEED)
@@ -188,7 +196,7 @@ def cell_channel(cell: Mapping[str, Any]) -> str:
 
 
 def cell_spec(cell: Mapping[str, Any], base: RoundSpec, *, cell_dir: Path, config: Any) -> RoundSpec:
-    """One cell's RoundSpec: the rung at `sims` vs strix, or the gate SCREEN vs a model."""
+    """One cell's RoundSpec: the rung at `sims` vs strix or six, or the gate SCREEN vs a model."""
     games = int(cell["games"])
     kind = str(cell["search_kind"])
     sims = int(cell["sims"])
@@ -215,6 +223,13 @@ def cell_spec(cell: Mapping[str, Any], base: RoundSpec, *, cell_dir: Path, confi
             raise FrontierCellError(f"{cell['label']}: a strix cell names strix_sims (its sims per move)")
         job = _strix_rung(config, games, int(cell["strix_sims"]), solver=bool(cell.get("strix_solver", True)),
                           radius=None if cell.get("strix_radius") is None else int(cell["strix_radius"]))
+        return replace(base, **common, rung_model_sims=sims, rung_jobs=[_rung_on_cell_book(job, cell)])
+    if opponent == SIX:
+        for key in ("six_net", "six_nodes"):
+            if key not in cell:
+                raise FrontierCellError(f"{cell['label']}: a six cell names {key} (six_net: the pinned network, "
+                                        "six_nodes: its nodes per turn)")
+        job = _rung_job(config, SIX, str(cell["six_net"]), int(cell["six_nodes"]), games)
         return replace(base, **common, rung_model_sims=sims, rung_jobs=[_rung_on_cell_book(job, cell)])
     gate = replace(base.gate, run_gate=True, screen_games=games, confirm_games=0,
                    deploy_sims=sims, screen_confirm_lo=2.0, seed_base=seed_base,
@@ -304,6 +319,8 @@ def run_cell(cell: Mapping[str, Any], *, config: Any, base: RoundSpec, work_dir:
         lines = [ln.strip() for ln in (cell_dir / "child.log").read_text(encoding="utf-8").splitlines()
                  if FINDING_LOG_MARKER in ln]
         record["strix_findings"] = {"count": len(lines), "first": lines[:5]}
+    if opponent == SIX:
+        record.update(six_log_record((cell_dir / "child.log").read_text(encoding="utf-8")))
     if proc.returncode == 0:
         result = json.loads(Path(spec.result_path).read_text(encoding="utf-8"))
         record["worker_result"] = {"rungs": result.get("rungs"), "gate": result.get("gate"),
@@ -323,11 +340,23 @@ def run_cell(cell: Mapping[str, Any], *, config: Any, base: RoundSpec, work_dir:
     return record
 
 
+def six_log_record(log: str) -> dict[str, Any]:
+    """The six engines' starts, provider and hashes, and their forfeits, read off the child's log lines."""
+    starts = [dict(tok.split("=", 1) for tok in ln.split(SIX_PROVIDER_LOG_MARKER, 1)[1].split() if "=" in tok)
+              for ln in log.splitlines() if SIX_PROVIDER_LOG_MARKER in ln]
+    findings = [ln.strip() for ln in log.splitlines() if SIX_FINDING_LOG_MARKER in ln]
+    providers = sorted({s.get("provider", "?") for s in starts})
+    return {"six_engine": {"starts": len(starts), "provider": "+".join(providers) or None,
+                           "engine_sha256": sorted({s.get("engine_sha256", "?") for s in starts}),
+                           "net_sha256": sorted({s.get("net_sha256", "?") for s in starts})},
+            "six_findings": {"count": len(findings), "first": findings[:5]}}
+
+
 def format_row(record: Mapping[str, Any]) -> str:
     """One summary line per cell."""
     cell = record["cell"]
-    sigma = "".join(f" {k}={cell[k]}" for k in ("c_scale", "q_rescale", "strix_sims", "strix_solver", "strix_radius")
-                    if k in cell)
+    sigma = "".join(f" {k}={cell[k]}" for k in ("c_scale", "q_rescale", "strix_sims", "strix_solver", "strix_radius",
+                                                 "six_net", "six_nodes") if k in cell)
     head = f"{record['label']:<28} {cell['search_kind']:<6} {int(cell['sims']):>4}{sigma}"
     if record["rc"] != 0 or "readout" not in record:
         return f"{head}  FAILED rc={record['rc']} ({record['wall_sec']} s) {record.get('error', '')}"
@@ -335,6 +364,8 @@ def format_row(record: Mapping[str, Any]) -> str:
     med = "-" if r["median_plies"] is None else f"{r['median_plies']:.0f}"
     findings = record.get("strix_findings")
     tail = "" if findings is None else f"  strix findings {findings['count']}"
+    forfeits = record.get("six_findings")
+    tail += "" if forfeits is None else f"  six forfeits {forfeits['count']}"
     return (f"{head}  WR {r['wr']:.3f} [{r['wr_ci_lower']:.3f}, {r['wr_ci_upper']:.3f}]  "
             f"{r['wins']}-{r['losses']}-{r['draws']} n={r['games']} eff_n={r['eff_n']}  "
             f"{r['sec_per_game']} s/game  med {med} plies{tail}")

@@ -80,7 +80,7 @@ def _host(mod, load_1m: float = 0.5, cpus: int = 16, gpu: tuple[int, ...] | None
 
 def _follower(mod, run: Path, cells: _FakeCells, **kw):
     kw.setdefault("host_load", _host(mod))
-    return mod.Follower(run_dir=run, run_id=_RUN, run_cell=cells, strix_pin={"commit": "abc",
+    return mod.Follower(run_dir=run, run_id=_RUN, run_cell=cells, pin={"commit": "abc",
                         "checkpoint": "ck.pt", "checkpoint_sha256": "f" * 64},
                         clock=lambda: 1_000.0, log=lambda _s: None, **kw)
 
@@ -122,7 +122,7 @@ def test_promotions_off_reads_the_cadence_points_only(follower_mod, tmp_path: Pa
 def test_the_cli_default_is_promotions_on_and_no_promotions_switches_it_off(follower_mod, monkeypatch, tmp_path: Path) -> None:
     seen: list[bool] = []
     monkeypatch.setattr(follower_mod, "_real_run_cell", lambda _config, _work: _FakeCells())
-    monkeypatch.setattr(follower_mod, "_strix_pin", lambda: {})
+    monkeypatch.setattr(follower_mod, "opponent_pin", lambda _unit: {})
     monkeypatch.setattr(follower_mod.Follower, "follow", lambda self, _poll: seen.append(self.promotions))
     base = ["--config", "c.yaml", "--run-dir", str(tmp_path), "--run-id", _RUN, "--work-dir", str(tmp_path / "w")]
     assert follower_mod.main([*base, "--follow"]) == 0

@@ -80,10 +80,10 @@ def test_the_sidecar_records_the_radius_and_the_dashboard_labels_it(follower, ex
               "provenance": {"candidate": {"net_hash": "n"}}, "readout": {"wr": 0.2, "wr_ci_lower": 0.1,
                                                                             "wr_ci_upper": 0.3, "games": 288, "eff_n": 288}}
     body = follower.sidecar_record(ckpt, unit="ruler_r6", trigger="once", record=record, regime_name="IDLE",
-                                   regime_evidence={}, run_id="run8", started=0.0, finished=1.0, strix_pin={})
+                                   regime_evidence={}, run_id="run8", started=0.0, finished=1.0, pin={})
     assert body["strix"] == {"sims": 256, "solver": "on", "radius": 6}
     on = follower.sidecar_record(ckpt, unit="equal_work", trigger="once", record=record, regime_name="IDLE",
-                                 regime_evidence={}, run_id="run8", started=0.0, finished=1.0, strix_pin={})
+                                 regime_evidence={}, run_id="run8", started=0.0, finished=1.0, pin={})
     assert "radius" not in on["strix"]
     point = external.parse_sidecar(Path("x.json"), json.loads(json.dumps(body)))
     assert point is not None and point.radius == 6

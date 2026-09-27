@@ -96,10 +96,10 @@ def test_the_sidecar_records_the_solver_state_and_the_dashboard_labels_it(follow
               "provenance": {"candidate": {"net_hash": "n"}}, "readout": {"wr": 0.2, "wr_ci_lower": 0.1,
                                                                             "wr_ci_upper": 0.3, "games": 288, "eff_n": 288}}
     body = follower.sidecar_record(ckpt, unit="net_only", trigger="once", record=record, regime_name="CONTENDED",
-                                   regime_evidence={}, run_id="run8", started=0.0, finished=1.0, strix_pin={})
+                                   regime_evidence={}, run_id="run8", started=0.0, finished=1.0, pin={})
     assert body["strix"]["solver"] == "off" and body["strix"]["sims"] == 256
     on = follower.sidecar_record(ckpt, unit="equal_work", trigger="once", record=record, regime_name="IDLE",
-                                 regime_evidence={}, run_id="run8", started=0.0, finished=1.0, strix_pin={})
+                                 regime_evidence={}, run_id="run8", started=0.0, finished=1.0, pin={})
     assert on["strix"]["solver"] == "on"
     point = external.parse_sidecar(Path("x.json"), json.loads(json.dumps(body)))
     assert point is not None and point.unit_label == "run8 · net_only: ours PUCT-256 vs strix 256 sims, solver OFF"

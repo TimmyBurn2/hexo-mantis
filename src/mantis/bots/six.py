@@ -96,12 +96,25 @@ def _asset(root: Path, pin: dict[str, Any], name: str) -> tuple[Path, str]:
     return path, digest
 
 
+def _pin(vendor_root: Path) -> dict[str, Any] | None:
+    return tomllib.loads((vendor_root / "pins.toml").read_text(encoding="utf-8")).get("pins", {}).get(PIN_NAME)
+
+
+def pin_record(variant: str) -> dict[str, str | None]:
+    """What the pin declares for the engine and the `variant` network (a receipt's provenance), `None` where it declares nothing."""
+    root = find_vendor_root()
+    pin = (None if root is None else _pin(root)) or {}
+    engine, net = (pin.get("assets", {}).get(name, {}) for name in (ENGINE_ASSET, variant))
+    return {"commit": pin.get("sha"), "engine_sha256": engine.get("sha256"),
+            "net": Path(net["path"]).name if "path" in net else None, "net_sha256": net.get("sha256")}
+
+
 def locate_six(vendor_root: Path | None, variant: str) -> SixAssets:
     """The engine and the `variant` network, both re-hashed against the pin; Raises: RungUnresolvable on no root or pin, an unpinned network, an unfetched asset or a sha256 mismatch."""
     if vendor_root is None:
         raise RungUnresolvable(rung="six", reason=(
             f"{VENDOR_ABSENT_MARKER}: no ancestor of the installed package holds vendor/pins.toml"))
-    pin = tomllib.loads((vendor_root / "pins.toml").read_text(encoding="utf-8")).get("pins", {}).get(PIN_NAME)
+    pin = _pin(vendor_root)
     if pin is None:
         raise RungUnresolvable(rung="six", reason=f"{PIN_ABSENT_MARKER}: vendor/pins.toml declares no [pins.{PIN_NAME}]")
     networks = sorted(n for n, a in pin.get("assets", {}).items() if str(a.get("path", "")).endswith(".onnx"))
@@ -327,6 +340,6 @@ def resolve_six(*, opponent_sims: int | None, variant: str, device: str | None,
 __all__ = [
     "CACHE_ENTRIES", "ENGINE_ASSET", "FINDING_LOG_MARKER", "PIN_ABSENT_MARKER", "PIN_NAME", "PROVIDER_LOG_MARKER",
     "PROVIDER_MARKER", "SHA_MISMATCH_MARKER", "VENDOR_ABSENT_MARKER", "Engine", "SixAssets", "SixBot", "SixEngine",
-    "SixEngineError", "SixReply", "SixSyncError", "cuda_library_path", "locate_six", "parse_reply", "provider_of",
-    "resolve_six", "six_availability",
+    "SixEngineError", "SixReply", "SixSyncError", "cuda_library_path", "locate_six", "parse_reply", "pin_record",
+    "provider_of", "resolve_six", "six_availability",
 ]
