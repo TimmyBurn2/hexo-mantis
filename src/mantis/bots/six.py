@@ -19,6 +19,8 @@ from mantis.util.hashing import sha256_file
 
 PIN_NAME = "six"
 ENGINE_ASSET = "engine"
+#: Every pinned asset named with this prefix is the engine's ONNX Runtime, re-hashed with it at every start.
+RUNTIME_PREFIX = "runtime"
 #: Six's expansion cache survives `newgame`, so play could depend on earlier games; the ruler runs it off.
 CACHE_ENTRIES = 0
 
@@ -120,7 +122,7 @@ def pin_record(variant: str) -> dict[str, str | None]:
 
 
 def locate_six(vendor_root: Path | None, variant: str) -> SixAssets:
-    """The engine and the `variant` network, both re-hashed against the pin; Raises: RungUnresolvable on no root or pin, an unpinned network, an unfetched asset or a sha256 mismatch."""
+    """The engine, its pinned runtime and the `variant` network, re-hashed against the pin; Raises: RungUnresolvable on no root or pin, an unpinned network, an unfetched asset or a sha256 mismatch."""
     if vendor_root is None:
         raise RungUnresolvable(rung="six", reason=(
             f"{VENDOR_ABSENT_MARKER}: no ancestor of the installed package holds vendor/pins.toml"))
@@ -131,6 +133,8 @@ def locate_six(vendor_root: Path | None, variant: str) -> SixAssets:
     if variant not in networks:
         raise RungUnresolvable(rung=f"six:{variant}", reason=f"the pin names the networks {networks}; not {variant!r}")
     engine, engine_sha = _asset(vendor_root, pin, ENGINE_ASSET)
+    for name in sorted(n for n in pin.get("assets", {}) if n.startswith(RUNTIME_PREFIX)):
+        _asset(vendor_root, pin, name)
     net, net_sha = _asset(vendor_root, pin, variant)
     return SixAssets(engine=engine, engine_sha256=engine_sha, net=net, net_sha256=net_sha, variant=variant,
                      commit=str(pin["sha"]))
@@ -376,7 +380,7 @@ def resolve_six(*, opponent_sims: int | None, variant: str, device: str | None,
 
 
 __all__ = [
-    "CACHE_ENTRIES", "CLOSE_LOG_MARKER", "ENGINE_ASSET", "FINDING_LOG_MARKER", "NET_IDENT", "PIN_ABSENT_MARKER", "PIN_NAME", "PROVIDER_LOG_MARKER",
+    "CACHE_ENTRIES", "CLOSE_LOG_MARKER", "ENGINE_ASSET", "FINDING_LOG_MARKER", "NET_IDENT", "RUNTIME_PREFIX", "PIN_ABSENT_MARKER", "PIN_NAME", "PROVIDER_LOG_MARKER",
     "PROVIDER_MARKER", "SHA_MISMATCH_MARKER", "VENDOR_ABSENT_MARKER", "Engine", "SixAssets", "SixBot", "SixEngine",
     "SixEngineError", "SixReply", "SixSyncError", "cuda_library_path", "locate_six", "parse_reply", "pin_record",
     "provider_of", "resolve_six", "six_availability",

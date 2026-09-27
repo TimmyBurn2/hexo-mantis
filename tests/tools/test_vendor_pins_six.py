@@ -18,6 +18,9 @@ _EXPECTED = {
     "engine": "7d06548be5e55c0f07b56736cbf18190255e99a74c4799ecfa98b03a805cf26a",
     "gen0030": "4afcbb113f18ecfd602b28e8da080c71e91f576dea939b68590f255e60cb5a92",
     "gen0455": "a934a8b171cd9a715fcd54ffc3e192c24901f0a7d40caa4216ea9fbc0b074687",
+    "runtime": "1aacefdf0b4afa145d410b2381bbc3db3d978c485fb182c42a2b0b09f91f5310",
+    "runtime_cuda": "1defa2f82f2195a0667f2003e14c6715107af7d2716364cfdfa1a8c5e708ddaa",
+    "runtime_shared": "c6a12593396095f5670160e284c35d1700b7708cf3037b7042e2a5200ccae772",
 }
 
 
@@ -43,10 +46,18 @@ def test_every_asset_is_named_by_url_and_sha256() -> None:
 def test_the_engine_and_the_release_network_are_members_of_the_v120_linux_asset() -> None:
     assets = _pin()["assets"]
     assert assets["release"]["url"] == _RELEASE_URL and "unpack" in assets["release"]
-    for member in ("engine", "gen0455"):
+    for member in ("engine", "gen0455", "runtime", "runtime_cuda", "runtime_shared"):
         assert assets[member]["from"] == "release" and assets[member]["url"] == _RELEASE_URL
         assert PurePosixPath(assets[member]["path"]).is_relative_to(assets["release"]["unpack"])
     assert assets["gen0030"]["url"].endswith("/networks/gen-0030.onnx") and "from" not in assets["gen0030"]
+
+
+def test_the_runtime_pinned_is_the_one_the_engine_loads() -> None:
+    """The engine's NEEDED entry is `libonnxruntime.so.1`; the release also ships two identical copies under other names."""
+    assets = _pin()["assets"]
+    assert PurePosixPath(assets["runtime"]["path"]).name == "libonnxruntime.so.1"
+    assert PurePosixPath(assets["runtime_cuda"]["path"]).name == "libonnxruntime_providers_cuda.so"
+    assert PurePosixPath(assets["runtime_shared"]["path"]).name == "libonnxruntime_providers_shared.so"
 
 
 def test_every_asset_path_stays_inside_the_pins_own_asset_directory() -> None:

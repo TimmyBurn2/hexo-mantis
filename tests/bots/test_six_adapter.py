@@ -1,6 +1,7 @@
 """The Six rung adapter: the protocol parsed, the position sent in order, forfeits counted, the pin and provider refused."""
 from __future__ import annotations
 
+import hashlib
 import logging
 from collections.abc import Sequence
 from pathlib import Path
@@ -34,6 +35,10 @@ from mantis.bots.six import (
 _ENCODING = "gnn_axis_r8"
 _OPENING = [(0, 0), (1, 0), (0, 1), (2, -1)]  # X single, O pair, X's first: X to move, 1 left
 _FALLBACK = ["CUDA is not available: libcudnn.so.9: cannot open shared object file", "using the CPU"]
+
+
+def sha256_of_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
 
 
 def _board_after(moves: Sequence[tuple[int, int]]) -> Any:
@@ -189,6 +194,13 @@ def test_a_planted_wrong_network_hash_is_REFUSED(tmp_path: Path) -> None:
     with pytest.raises(RungUnresolvable) as exc:
         locate_six(root, "gen0030")
     assert SHA_MISMATCH_MARKER in exc.value.reason and "gen-0030.onnx" in exc.value.reason
+
+
+def test_a_pinned_runtime_is_re_hashed_at_load(tmp_path: Path) -> None:
+    runtime = sha256_of_bytes(b"a runtime")
+    assert locate_six(fake_vendor(tmp_path / "a", runtime_sha=runtime), "gen0030").net.is_file()
+    with pytest.raises(RungUnresolvable, match="libonnxruntime.so.1"):
+        locate_six(fake_vendor(tmp_path / "b", runtime_sha="0" * 64), "gen0030")
 
 
 def test_an_unfetched_asset_names_make_vendor_six(tmp_path: Path) -> None:

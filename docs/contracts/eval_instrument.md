@@ -85,8 +85,9 @@ and are folded in here, because a reader of any ladder reading needs them:
   from the as-shipped series and that run's baseline.
 - **The Six ruler (R374(b)) is a second FIXED external reference: `CixMango/Six`'s `sixengine`** —
   the v1.2.0 Linux release, built from engine sources identical to the pinned commit — playing a
-  pinned network, gen 30 at 16 nodes. Every asset is pinned by url and sha256 in `vendor/pins.toml`
-  and the engine and the network are re-hashed at every engine start (`mantis.bots.six`). ONE engine
+  pinned network, gen 30 at 16 nodes, tactics as shipped, search cache off (R375(a)). Every asset is
+  pinned by url and sha256 in `vendor/pins.toml`, and the engine, its ONNX Runtime (the library it
+  loads and the CUDA provider's) and the network are re-hashed at every engine start (`mantis.bots.six`). ONE engine
   process per concurrent game (the rung block's first opponent resolves the rung before any game and,
   under concurrency, is closed at once; every opponent is closed when the block ends) speaks the Six protocol: `position radius R moves …` with R the
   board's `legal_move_radius`, `go nodes N`, `bestmove`; `setoption cacheEntries 0`, because Six's
@@ -160,7 +161,7 @@ row says so and names what does run.
 | eff_n is trajectory-hash-distinct; the low-power guard is per pair; an empty sample degenerates rather than raising | `tests/eval/test_aggregate_regime.py` | yes |
 | a pin is a commit sha | `tests/tools/test_vendor_pins_strix.py` | yes |
 | a release asset becomes its file only once its sha256 is the pin's; a planted wrong sha256, a stale member and a directory that is not a clone each refuse; a bare `make vendor` fetches no asset | `tests/tools/test_vendor_fetch_assets.py` | yes (offline, `file://` assets) |
-| the Six pin names the repo at its commit and the v1.2.0 Linux release, its engine and the gen 30 and gen 455 networks, each by url and sha256 | `tests/tools/test_vendor_pins_six.py` | yes |
+| the Six pin names the repo at its commit and the v1.2.0 Linux release, its engine, the ONNX Runtime it loads and the gen 30 and gen 455 networks, each by url and sha256 | `tests/tools/test_vendor_pins_six.py` | yes |
 | a player that reads the move order hears every applied stone in order, the opening's included, and never a forfeited one | `tests/arena/test_move_observer.py` | yes |
 | the refusal reasons name exactly their own missing step, and no environment key | `tests/bots/test_strix_adapter.py`, `tests/bots/test_protocol.py` | yes |
 | the gate's rule fields ride `eval_round_complete.gate`, `null` when no gate ran; the A-3 partial carries them on a broken route | `tests/eval/test_gate_fields_ride_the_round_complete_row.py` | yes |

@@ -40,8 +40,8 @@ def sha256_of(path: Path) -> str:
 
 
 def fake_vendor(tmp_path: Path, *, stderr: Sequence[str] = (), net_sha: str | None = None,
-                ident: str = "HexBot Net", dies: bool = False) -> Path:
-    """The vendor root; `dies` makes the engine exit 1 after its stderr lines, before `sixok`."""
+                ident: str = "HexBot Net", dies: bool = False, runtime_sha: str | None = None) -> Path:
+    """The vendor root; `dies` makes the engine exit 1 after its stderr lines, before `sixok`; `runtime_sha` pins a runtime."""
     root = tmp_path / "vendor"
     engine = root / "external" / "six-assets" / "release" / "engine" / "sixengine"
     net = root / "external" / "six-assets" / "gen-0030.onnx"
@@ -50,9 +50,13 @@ def fake_vendor(tmp_path: Path, *, stderr: Sequence[str] = (), net_sha: str | No
                       encoding="utf-8")
     engine.chmod(0o755)
     net.write_bytes(b"a network")
+    runtime = engine.parent / "libonnxruntime.so.1"
+    runtime.write_bytes(b"a runtime")
+    runtime_pin = ("" if runtime_sha is None else
+                   f"[pins.six.assets.runtime]\nsha256 = \"{runtime_sha}\"\npath = \"six-assets/release/engine/libonnxruntime.so.1\"\n")
     (root / "pins.toml").write_text(
         "[pins.six]\nurl = \"https://example.invalid/six.git\"\nsha = \"" + "a" * 40 + "\"\n"
         f"[pins.six.assets.engine]\nsha256 = \"{sha256_of(engine)}\"\npath = \"six-assets/release/engine/sixengine\"\n"
-        f"[pins.six.assets.gen0030]\nsha256 = \"{net_sha or sha256_of(net)}\"\npath = \"six-assets/gen-0030.onnx\"\n",
-        encoding="utf-8")
+        f"[pins.six.assets.gen0030]\nsha256 = \"{net_sha or sha256_of(net)}\"\npath = \"six-assets/gen-0030.onnx\"\n"
+        + runtime_pin, encoding="utf-8")
     return root

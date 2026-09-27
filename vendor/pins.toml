@@ -37,7 +37,8 @@ config_sha256          = "8f2f07096db501ed2ed32252c4041298e75d5d575ceaec009f5dbd
 # The Six rung (R374(b); SIX-SCOUT scouted it): CixMango/Six, MIT "including the network". The PIN is
 # the repo at the commit below; the RUNG is the v1.2.0 Linux release's `sixengine`, built from engine
 # sources identical to this commit's, and a network. `make vendor.six` fetches the release and the
-# networks, each verified by sha256 on arrival; `mantis.bots.six` re-verifies the engine and the
+# networks, each verified by sha256 on arrival; `mantis.bots.six` re-verifies the engine, its ONNX
+# Runtime (the `runtime*` members: the library the engine loads and the CUDA provider's) and the
 # network at every load. Nothing here is tracked (R7). gen 455 is the release's own network and has
 # no asset of its own, so its URL is the release's.
 url   = "https://github.com/CixMango/Six.git"
@@ -55,6 +56,24 @@ url    = "https://github.com/CixMango/Six/releases/download/v1.2.0/Six-1.2.0-lin
 from   = "release"
 sha256 = "7d06548be5e55c0f07b56736cbf18190255e99a74c4799ecfa98b03a805cf26a"
 path   = "six-assets/release/Six/engine/sixengine"
+
+[pins.six.assets.runtime]
+url    = "https://github.com/CixMango/Six/releases/download/v1.2.0/Six-1.2.0-linux-x64.tar.gz"
+from   = "release"
+sha256 = "1aacefdf0b4afa145d410b2381bbc3db3d978c485fb182c42a2b0b09f91f5310"
+path   = "six-assets/release/Six/engine/libonnxruntime.so.1"
+
+[pins.six.assets.runtime_cuda]
+url    = "https://github.com/CixMango/Six/releases/download/v1.2.0/Six-1.2.0-linux-x64.tar.gz"
+from   = "release"
+sha256 = "1defa2f82f2195a0667f2003e14c6715107af7d2716364cfdfa1a8c5e708ddaa"
+path   = "six-assets/release/Six/engine/libonnxruntime_providers_cuda.so"
+
+[pins.six.assets.runtime_shared]
+url    = "https://github.com/CixMango/Six/releases/download/v1.2.0/Six-1.2.0-linux-x64.tar.gz"
+from   = "release"
+sha256 = "c6a12593396095f5670160e284c35d1700b7708cf3037b7042e2a5200ccae772"
+path   = "six-assets/release/Six/engine/libonnxruntime_providers_shared.so"
 
 [pins.six.assets.gen0455]
 url    = "https://github.com/CixMango/Six/releases/download/v1.2.0/Six-1.2.0-linux-x64.tar.gz"
