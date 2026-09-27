@@ -8,6 +8,10 @@ def test_random_reads_config_value():
     assert resolve_eval_model_sims("random", 96) == 96
 
 
+def test_the_six_rung_reads_its_nodes():
+    assert resolve_eval_model_sims("six", 16) == 16
+
+
 def test_the_retired_sealbot_opponent_is_unknown():
     with pytest.raises(ValueError, match="unknown eval opponent 'sealbot'"):
         resolve_eval_model_sims("sealbot", 128)

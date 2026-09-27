@@ -16,9 +16,10 @@ from mantis.bots import BotProtocol, RandomBot, RungUnresolvable, resolve_bot
 
 _SRC = Path(__file__).resolve().parents[2] / "src" / "mantis" / "bots"
 
-_KNOWN_KINDS = ("random", "strix")
+_KNOWN_KINDS = ("random", "six", "strix")
 #: Names a refusal reason may never speak: no env key locates a vendored engine.
 _ENV_KEYS = {
+    "six": "MANTIS_BOT_SIX",
     "strix": "MANTIS_BOT_STRIX",
 }
 
@@ -109,3 +110,8 @@ def test_unknown_bot_kind_raises_valueerror():
     msg = str(exc.value)
     for kind in _KNOWN_KINDS:
         assert kind in msg, f"ValueError should name the known kind set, missing {kind!r}"
+
+
+def test_the_six_kind_routes_to_its_adapter_with_the_rounds_device():
+    with pytest.raises(RungUnresolvable, match="mps"):
+        resolve_bot("six", opponent_sims=16, variant="gen0030", device="mps")

@@ -1,27 +1,24 @@
-"""resolve_bot — the ONE rung -> bot resolver: `random` in-repo; `strix` through its vendored tree,
-or a refusal naming the ONE missing step. NO env-key channel: `vendor/pins.toml` + `make vendor` is
-the one authority for where an engine lives. The sims routing runs BEFORE any refusal."""
+"""resolve_bot — the ONE rung -> bot resolver: `random` in-repo; `strix` and `six` through their vendored
+pins, or a refusal naming the ONE missing step. NO env-key channel: `vendor/pins.toml` is the one
+authority for where an engine lives. The sims routing runs BEFORE any refusal."""
 from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
 
+import mantis.bots.six as _six_mod
 import mantis.bots.strix as _strix_mod
 import mantis.config.resolve.nsims as _nsims_mod
 from mantis.bots.random_bot import RandomBot
 
 BotFactory = Callable[..., Any]
 
-_KNOWN_KINDS: tuple[str, ...] = ("random", "strix")
+_KNOWN_KINDS: tuple[str, ...] = ("random", "six", "strix")
 
 
 def resolve_bot(kind: str, *, opponent_sims: int | None,
-                variant: str = _strix_mod.PIN_NAME) -> BotFactory:
-    """Resolve `kind` to a `BotFactory`, or raise.
-
-    Unknown kind -> `ValueError` naming the known set. A known kind that cannot be resolved
-    here -> `RungUnresolvable` (never fatal to a round — the caller catches it per rung);
-    `variant` is read by the strix kind only (the pinned checkpoint's stem)."""
+                variant: str = _strix_mod.PIN_NAME, device: str | None = None) -> BotFactory:
+    """`kind`'s factory (`variant`: strix's stem or six's network; `device`: six's, the round's); Raises: ValueError on an unknown kind, RungUnresolvable per rung."""
     if kind not in _KNOWN_KINDS:
         raise ValueError(f"unknown bot kind {kind!r}; known kinds: {sorted(_KNOWN_KINDS)}")
 
@@ -34,6 +31,8 @@ def resolve_bot(kind: str, *, opponent_sims: int | None,
 
         return _factory
 
+    if kind == "six":
+        return _six_mod.resolve_six(opponent_sims=opponent_sims, variant=variant, device=device)
     return _strix_mod.resolve_strix(opponent_sims=opponent_sims, variant=variant)
 
 

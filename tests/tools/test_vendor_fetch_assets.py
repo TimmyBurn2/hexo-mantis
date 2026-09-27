@@ -1,8 +1,4 @@
-"""`tools/vendor_fetch.sh <pin>` fetches the pin's release assets, each verified by sha256 on arrival.
-
-Driven against a SYNTHETIC root with `file://` assets and a local `git init`ed source, so every row
-runs offline. A bare `make vendor` still only clones: the assets are the named pin's fetch step.
-"""
+"""`vendor_fetch.sh <pin>` fetches the pin's release assets verified by sha256; offline, over `file://` assets and a local repo."""
 from __future__ import annotations
 
 import hashlib

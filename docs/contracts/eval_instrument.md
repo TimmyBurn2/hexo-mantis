@@ -83,6 +83,21 @@ and are folded in here, because a reader of any ladder reading needs them:
   not a receipt. The as-shipped cell reads at block ends only (`--once --unit as_shipped`,
   `<ckpt>.strix512.json`). The 256/256 reading of a run's parent, taken once, is both the bridge
   from the as-shipped series and that run's baseline.
+- **The Six ruler (R374(b)) is a second FIXED external reference: `CixMango/Six`'s `sixengine`** —
+  the v1.2.0 Linux release, built from engine sources identical to the pinned commit — playing a
+  pinned network, gen 30 at 16 nodes. Every asset is pinned by url and sha256 in `vendor/pins.toml`
+  and the engine and the network are re-hashed at every engine start (`mantis.bots.six`). ONE engine
+  process per concurrent game speaks the Six protocol: `position radius R moves …` with R the
+  board's `legal_move_radius`, `go nodes N`, `bestmove`; `setoption cacheEntries 0`, because Six's
+  expansion cache survives `newgame` and would make a game depend on earlier ones. Six answers a
+  whole compound turn; the second stone is played only on exactly the board it was chosen for. It
+  reads the stone ORDER, which the arena reports (`observe_move`); a log that is not the board's
+  stones is refused. The execution provider is read off the engine's stderr and logged: a cuda
+  worker requires CUDA (the engine's CUDA libraries are the venv's NVIDIA wheels) and any other
+  provider refuses the rung by name. A failed answer (`bestmove none`, an `error` line, a failed
+  search's fallback) returns an occupied cell and an illegal stone returns itself, both for the arena
+  to FORFEIT, each counted and logged under `six_forfeit_finding`. Its regime key reads
+  `six:gen0030@16`.
 - **Vendoring.** External engines are pinned by commit sha in `vendor/pins.toml` and fetched
   by `make vendor`, which CLONES and does not build. A pin's release assets (each a url and a
   sha256; an archive with `unpack`, a member of one with `from`) are fetched only by
@@ -142,6 +157,9 @@ row says so and names what does run.
 | a strength-floor refusal is a third thing on the routed mapping and the stream | `tests/eval/test_strength_floor_verdict_on_the_routed_mapping.py` | yes |
 | the strix pin names the commit, the checkpoint and both sha256s, and discloses the unsupplied config | `tests/tools/test_vendor_pins_strix.py` | yes |
 | the strix adapter sends the position, counts fence disagreements, returns an out-of-fence move for the forfeit, verifies the pinned sha, and answers the opening single itself | `tests/bots/test_strix_adapter.py` | yes (against a recording double) |
+| the six adapter parses the protocol, sends the observed order at the board's radius, plays the turn's second stone from one search, forfeits a failed or illegal answer through the arena and counts it, refuses a planted wrong network hash and refuses a cuda rung whose engine fell back | `tests/bots/test_six_adapter.py` | yes (a recording double and a fake engine process) |
+| the vendored Six plays two games on CUDA | `tests/bots/test_six_adapter.py::test_the_vendored_engine_plays_two_games_on_cuda` | where CUDA is; LOUD SKIP without it or without `make vendor.six` |
+| a six job reads the candidate's sims on `rung_model_sims` and resolves at its own nodes on the round's worker device | `tests/eval/test_strix_rung_sims.py` | yes |
 | the follower fires ONE equal-work cell per cadence checkpoint and per promotion read off the event stream, a planted duplicate fires nothing, a promotion waits for its checkpoint, a failed cell leaves no receipt, the sidecar carries unit + regime + the net's hash and the checkpoint bytes are untouched | `tests/tools/test_strix_follower.py` | yes (the cell runner is a recording double; the unit's RoundSpec is composed through the real frontier) |
 | a strix cell composes the rung at the pinned checkpoint with its own sims and the candidate's on `rung_model_sims`; a production round refuses a strix job by name | `tests/tools/test_strength_frontier.py`, `tests/eval/test_strix_rung_sims.py` | yes |
 | the REAL vendored strix plays 20 legal games end to end at the pinned commit | `tests/bots/test_strix_adapter.py::test_the_live_driver_plays_twenty_legal_games_end_to_end` | **no** — `@pytest.mark.integration`; LOUD SKIP naming the missing step without the vendored venv and checkpoint |

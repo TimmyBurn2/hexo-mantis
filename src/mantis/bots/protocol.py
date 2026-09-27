@@ -11,13 +11,7 @@ from typing import Any, Protocol, runtime_checkable
 
 @runtime_checkable
 class BotProtocol(Protocol):
-    """ONE half-ply per `select_move` call.
-
-    `board` is a `mantis._engine.Board` in production; tests may hand a minimal
-    duck-typed stand-in exposing `legal_moves()` (and `apply_move()` where relevant).
-    A bot that reads the move ORDER also defines `observe_move(q, r)`; the arena calls it for
-    every stone it applies, the opening's included.
-    """
+    """ONE half-ply per `select_move` on a Board (or a duck-typed stand-in); a bot reading the move ORDER also defines `observe_move(q, r)`."""
 
     def name(self) -> str: ...
 

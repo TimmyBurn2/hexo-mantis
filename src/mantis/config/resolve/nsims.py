@@ -3,7 +3,7 @@ from __future__ import annotations
 
 # The known eval opponents (name authority; NOT a value default — the values live in the config).
 # (design §a.4) — semantics unchanged: the config value always wins, None still raises.
-_KNOWN_OPPONENTS = ("random", "strix")
+_KNOWN_OPPONENTS = ("random", "six", "strix")
 
 
 def resolve_eval_model_sims(opponent: str, cfg_value: int | None) -> int:

@@ -1203,3 +1203,8 @@ commit that makes it (R9).
    stones) and its tree reuse walks it. `mantis.arena.match` calls a player's `observe_move(q, r)`,
    when it defines one, for every stone it applies, the opening's included; a forfeited stone is
    never applied and never reported. The legality boundary is unchanged.
+3. **§1 `bots/`: `six` joins `strix` and `random`.** `mantis.bots.six` plays the pinned engine and
+   network (the contract's Six paragraph); `resolve_bot` gains the six kind and a `device` only it
+   reads, the round's worker device, which the engine's provider must match. The worker's rung
+   block plays it like strix, at the job's own nodes; `RoundSpec.strix_model_sims` becomes
+   `rung_model_sims`, the candidate's sims against any external rung.

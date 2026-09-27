@@ -1,6 +1,6 @@
 """mantis.eval.worker — CHILD-ONLY: `python -m mantis.eval.worker <spec.json> <result.json>`
 loads the snapshots, builds the nets on `spec.worker_device`, plays the floor probe, the gate
-block, any rung job the spec carries (a strix cell's; a `RungUnresolvable` is RECORDED,
+block, any rung job the spec carries (a strix or six cell's; a `RungUnresolvable` is RECORDED,
 never fatal) and the random floor, and writes the sidecar result ATOMICALLY.
 
 >300 justify (R8): one entry point owning all four blocks, which share the candidate player,
@@ -228,12 +228,16 @@ def _agg_record(game_record: Any) -> dict[str, Any]:
     }
 
 
+#: The external rungs: each plays at its job's own `opponent_sims`, the candidate at `rung_model_sims`.
+_EXTERNAL_KINDS = ("six", "strix")
+
+
 def _model_sims_for_kind(spec: RoundSpec, kind: str) -> int:
-    """The candidate's sims per opponent KIND; a strix job on a round without `rung_model_sims` is refused by name."""
-    if kind == "strix":
+    """The candidate's sims per opponent KIND; an external job on a round without `rung_model_sims` is refused by name."""
+    if kind in _EXTERNAL_KINDS:
         if spec.rung_model_sims is None:
-            raise ValueError("a strix rung job needs RoundSpec.rung_model_sims; production rounds "
-                             "carry None because strix cells are the frontier tool's (R352(e))")
+            raise ValueError(f"a {kind} rung job needs RoundSpec.rung_model_sims; production rounds "
+                             "carry None because external cells are the frontier tool's")
         return int(spec.rung_model_sims)
     if kind == "random":
         return spec.random_model_sims
@@ -471,9 +475,9 @@ def _play_rung_block(
 ) -> list[dict[str, Any]]:
     bot_factory = resolve_bot(
         rung_job.bot,
-        opponent_sims=(rung_job.opponent_sims if rung_job.bot == "strix"
+        opponent_sims=(rung_job.opponent_sims if rung_job.bot in _EXTERNAL_KINDS
                        else _model_sims_for_kind(spec, rung_job.bot)),
-        variant=rung_job.variant,
+        variant=rung_job.variant, device=spec.worker_device,
     )
     # Rung games play at the resolved PER-KIND *_model_sims the RegimeKey stamps, never at
     # gate.deploy_sims, which is reserved for the deploy-matched GATE block.

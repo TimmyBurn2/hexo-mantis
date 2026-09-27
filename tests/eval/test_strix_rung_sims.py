@@ -1,11 +1,13 @@
-"""The strix rung's sims row (RUNG-2): `None` on production rounds, a named refusal for a strix job there."""
+"""The external rungs' sims row: `None` on production rounds, a named refusal for a strix or six job there."""
 from __future__ import annotations
 
 import dataclasses
 
 import pytest
 
-from mantis.eval.rounds import GateSpec, RoundSpec
+from mantis.bots.protocol import RungUnresolvable
+from mantis.eval import worker
+from mantis.eval.rounds import GateSpec, RoundSpec, RungJob
 from mantis.eval.worker import _model_sims_for_kind
 
 
@@ -42,3 +44,25 @@ def test_the_strix_rung_tool_threads_its_sims_through_the_same_lookup():
     assert _model_sims_for_kind(spec, "strix") == 256
     assert RoundSpec.from_dict(spec.to_dict()).rung_model_sims == 256, "the child reads it back"
     assert dataclasses.replace(spec, rung_model_sims=128).rung_model_sims == 128
+
+
+def test_a_six_job_reads_the_same_candidate_sims_and_is_refused_on_a_production_round():
+    with pytest.raises(ValueError, match="rung_model_sims"):
+        _model_sims_for_kind(_spec(), "six")
+    assert _model_sims_for_kind(_spec(rung_model_sims=256), "six") == 256
+
+
+def test_a_six_job_resolves_at_its_own_nodes_on_the_rounds_worker_device(monkeypatch):
+    seen: dict = {}
+
+    def _capture(kind, **kw):
+        seen.update(kind=kind, **kw)
+        raise RungUnresolvable(rung=kind, reason="captured")
+
+    monkeypatch.setattr(worker, "resolve_bot", _capture)
+    job = RungJob(name="six", bot="six", variant="gen0030", opponent_sims=16, opening_book="b",
+                  deploy_matched=True, games=2, bootstrap_resamples=1, bootstrap_ci_level=0.95, bootstrap_seed=1)
+    with pytest.raises(RungUnresolvable):
+        worker._play_rung_block(_spec(rung_model_sims=256, worker_device="cuda"), job, None, None,
+                                encoding_spec=None, adjudicator=None, progress=None, games=None)
+    assert seen == {"kind": "six", "opponent_sims": 16, "variant": "gen0030", "device": "cuda"}

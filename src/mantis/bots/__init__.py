@@ -1,4 +1,4 @@
-"""mantis.bots — BotProtocol, the in-repo random bot, the strix adapter and the ONE rung resolver."""
+"""mantis.bots — BotProtocol, the in-repo random bot, the strix and six adapters and the ONE rung resolver."""
 from __future__ import annotations
 
 from mantis.bots.protocol import BotProtocol, RungUnresolvable
