@@ -86,7 +86,7 @@ _REHYDRATED_SPEC_FIELDS: tuple[tuple[str, Any], ...] = (
 @dataclass(frozen=True)
 class RungJob:
     """One external-opponent block the child plays beside the gate. No production round
-    carries one; the strix cells compose theirs in `tools/strength_frontier.py`, so the
+    carries one; the strix and six cells compose theirs in `tools/strength_frontier.py`, so the
     block's pair-bootstrap terms ride the job."""
 
     name: str

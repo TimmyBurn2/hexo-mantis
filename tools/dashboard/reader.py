@@ -30,7 +30,7 @@ class Record:
     record_dir: Path | None = None
     dropped_fields: dict[str, int] = field(default_factory=dict)
     by: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
-    #: The strix follower's sidecars, read beside the record, never from the stream.
+    #: The follower's strix and Six sidecars, read beside the record, never from the stream.
     external: list[Any] = field(default_factory=list)
     external_note: str = "no --external-points given"
 
@@ -78,7 +78,7 @@ def _finite(value: Any) -> float | None:
 def load_record(events_path: Path, ladder_path: Path | None = None,
                 record_dir: Path | None = None,
                 external_points: list[Path] | None = None) -> Record:
-    """Parse the event stream line by line, the ladder file and the strix sidecars when given.
+    """Parse the event stream line by line, the ladder file and the external sidecars when given.
 
     Raises:
         EmptyRunRecord: the stream parsed to zero events.
