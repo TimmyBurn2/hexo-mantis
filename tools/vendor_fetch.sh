@@ -76,7 +76,7 @@ def download(url: str, path: Path, expected: str) -> None:
     part = path.with_name(path.name + ".part")
     digest = hashlib.sha256()
     try:
-        with urllib.request.urlopen(url) as src, part.open("wb") as out:
+        with urllib.request.urlopen(url, timeout=120) as src, part.open("wb") as out:
             for block in iter(lambda: src.read(1 << 20), b""):
                 digest.update(block)
                 out.write(block)
@@ -102,12 +102,18 @@ def fetch_assets(pin: str, assets: dict) -> None:
             print(f"vendor: {pin}.{name} fetched and verified")
         if "unpack" in spec:
             target = EXTERNAL / spec["unpack"]
+            if not target.resolve().is_relative_to(EXTERNAL.resolve()):
+                raise SystemExit(f"vendor: {pin}.{name} unpacks to {target}, outside vendor/external")
             members = [m for m in assets.values() if m.get("from") == name]
-            if not all((EXTERNAL / m["path"]).is_file() for m in members):
-                shutil.rmtree(target, ignore_errors=True)
-                target.mkdir(parents=True)
+            # Extracted beside the target and renamed into place whole: a leftover part is never trusted.
+            part = target.with_name(target.name + ".part")
+            shutil.rmtree(part, ignore_errors=True)
+            if not target.is_dir() or not all((EXTERNAL / m["path"]).is_file() for m in members):
+                part.mkdir(parents=True)
                 with tarfile.open(path) as tar:
-                    tar.extractall(target, filter="data")
+                    tar.extractall(part, filter="data")
+                shutil.rmtree(target, ignore_errors=True)
+                part.rename(target)
                 print(f"vendor: {pin}.{name} unpacked")
     for name, spec in assets.items():
         if "from" not in spec:

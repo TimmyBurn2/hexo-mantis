@@ -111,8 +111,8 @@ and are folded in here, because a reader of any ladder reading needs them:
   by `make vendor`, which CLONES and does not build. A pin's release assets (each a url and a
   sha256; an archive with `unpack`, a member of one with `from`) are fetched only by
   `tools/vendor_fetch.sh <pin>` — `make vendor.six` — and each is verified on arrival: a download
-  becomes its file only once its sha256 is the pin's, and a warm file that no longer verifies is
-  refused, never re-fetched over. The one build step is the strix rung's
+  becomes its file only once its sha256 is the pin's, an archive is extracted beside its directory and
+  renamed into place whole, and a warm file that no longer verifies is refused, never re-fetched over. The one build step is the strix rung's
   venv: `make vendor.strix` (`tools/vendor_build_strix.sh`) syncs strix's OWN venv inside
   the fetched tree — its torch is the CPU wheel and its `hexo_rs` engine builds by maturin,
   apart from the mantis environment — and refuses before building on a missing tree or a

@@ -160,3 +160,25 @@ def test_a_directory_at_the_clone_path_that_is_not_a_clone_is_REFUSED(world: _Wo
     (world.external("eng") / "stray").write_text("scratch", encoding="utf-8")
     out = world.fetch()
     assert out.returncode != 0 and "not a clone" in out.stderr, out.stderr
+
+
+def test_an_interrupted_unpack_is_redone_never_trusted(world: _World) -> None:
+    """An archive extracts into `<unpack>.part` and is renamed into place whole, so a leftover part is discarded."""
+    stale = world.external("eng-assets/release.part")
+    stale.mkdir(parents=True)
+    (stale / "half-written").write_bytes(b"x")
+    out = world.fetch("eng")
+    assert out.returncode == 0, out.stderr
+    assert not stale.exists() and world.external("eng-assets/release/Rel/engine/bin").is_file()
+
+
+def test_an_unpack_directory_outside_vendor_external_is_REFUSED(world: _World) -> None:
+    outside = world.root / "precious"
+    outside.mkdir()
+    (outside / "keep").write_text("mine", encoding="utf-8")
+    pins = world.root / "vendor" / "pins.toml"
+    pins.write_text(pins.read_text(encoding="utf-8").replace('unpack = "eng-assets/release"', 'unpack = "../../precious"'),
+                    encoding="utf-8")
+    out = world.fetch("eng")
+    assert out.returncode != 0 and "outside vendor/external" in out.stderr, out.stderr
+    assert (outside / "keep").read_text(encoding="utf-8") == "mine"
