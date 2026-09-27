@@ -1187,8 +1187,8 @@ The ruling number is R363(d) (2026-09-20), which admitted the tool on these term
 
 **The SIX-RUNG packet, 2026-09-27.** R374(b) admits an external engine as a ruler after rules parity,
 a measured replay rate, its cost per game and a calibration; SIX-SCOUT met all four for Six gen 30 at
-16 nodes (`mantis-records/six-scout/EXIT.md`, outside the tree). Each deviation below lands in the
-commit that makes it (R9).
+16 nodes (`mantis-records/six-scout/EXIT.md`, outside the tree), and R375(a) admitted it, tactics as
+shipped and search cache off. Each deviation below lands in the commit that makes it (R9).
 
 1. **§7 vendoring: a pin may name release ASSETS.** A pin stays url + commit sha + optional patch,
    and may add `[pins.<name>.assets.<asset>]` rows, each a `url` and a `sha256` with its `path` under
