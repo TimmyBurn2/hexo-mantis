@@ -494,9 +494,9 @@ def _play_rung_block(
     opponents: list[Any] = []
 
     def _pair() -> tuple[DeployHeadPlayer, Any]:
-        candidate = _candidate()
-        opponents.append(bot_factory())
-        return candidate, opponents[-1]
+        candidate, opponent = _candidate(), bot_factory()
+        opponents.append(opponent)
+        return candidate, opponent
 
     # The first pair resolves the opponent before any game; under concurrency it never plays, so its
     # process (an engine's GPU context) is released at once.
@@ -518,7 +518,7 @@ def _close_bot(bot: Any) -> None:
 
 
 def _play_rung_games(spec: RoundSpec, rung_job: RungJob, candidate: DeployHeadPlayer, opponent: Any,
-                     pair: Callable[[], tuple[DeployHeadPlayer, Any]], board_factory, *,
+                     pair: Callable[[], tuple[DeployHeadPlayer, Any]], board_factory: Callable[[], Any], *,
                      adjudicator: PlyCapAdjudicator | None, progress: _RoundProgress,
                      games: _RoundGameRecords) -> list[dict[str, Any]]:
     regime_key = RegimeKey(

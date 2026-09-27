@@ -76,7 +76,6 @@ def test_the_rung_block_probes_its_opponent_first_and_closes_every_one_it_made(m
 
     class _Bot:
         def __init__(self) -> None:
-            self.closed_while_playing = None
             self.closed = False
             bots.append(self)
 
