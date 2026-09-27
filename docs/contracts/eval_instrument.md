@@ -105,7 +105,7 @@ and are folded in here, because a reader of any ladder reading needs them:
   or `--follow` on the same triggers as the equal-work unit, which with it are the two ruler units),
   through `tools/strength_frontier.py`'s `six` cell (`six_net`, `six_nodes`). Its receipt is
   `<ckpt>.six30_16.json`, the strix receipt's fields with a `six` block in place of `strix` — the
-  pin's commit, the engine and network sha256s the engines re-verified at start, the generation, the
+  pin's commit, the engine, network and runtime sha256s the engines re-verified at start, the generation, the
   nodes, `cache_entries`, the provider, the engine starts, the searches and the stale second stones,
   all read off the child's log — and `six_findings`, the forfeits. A cell whose engines played any
   other bytes than the pin's, or more than one engine or network, writes `.failed.json`, not a receipt. The dashboard draws it as its own series beside strix's (the R356(d) amendment).
@@ -160,7 +160,7 @@ row says so and names what does run.
 | an unimplemented declared pooling is REFUSED, never a fallthrough | `tests/eval/test_value_pool_guard.py`, `tests/eval/test_eval_decode_guard_ordering.py`, `tests/eval/test_graph_round_encoding.py` | yes |
 | eff_n is trajectory-hash-distinct; the low-power guard is per pair; an empty sample degenerates rather than raising | `tests/eval/test_aggregate_regime.py` | yes |
 | a pin is a commit sha | `tests/tools/test_vendor_pins_strix.py` | yes |
-| a release asset becomes its file only once its sha256 is the pin's; a planted wrong sha256, a stale member and a directory that is not a clone each refuse; a bare `make vendor` fetches no asset | `tests/tools/test_vendor_fetch_assets.py` | yes (offline, `file://` assets) |
+| a release asset becomes its file only once its sha256 is the pin's; a planted wrong sha256, a stale member, a directory that is not a clone and an unpack away from its archive's directory each refuse; an interrupted unpack is redone, never trusted; a bare `make vendor` fetches no asset | `tests/tools/test_vendor_fetch_assets.py` | yes (offline, `file://` assets) |
 | the Six pin names the repo at its commit and the v1.2.0 Linux release, its engine, the ONNX Runtime it loads and the gen 30 and gen 455 networks, each by url and sha256 | `tests/tools/test_vendor_pins_six.py` | yes |
 | a player that reads the move order hears every applied stone in order, the opening's included, and never a forfeited one | `tests/arena/test_move_observer.py` | yes |
 | the refusal reasons name exactly their own missing step, and no environment key | `tests/bots/test_strix_adapter.py`, `tests/bots/test_protocol.py` | yes |
@@ -168,9 +168,9 @@ row says so and names what does run.
 | a strength-floor refusal is a third thing on the routed mapping and the stream | `tests/eval/test_strength_floor_verdict_on_the_routed_mapping.py` | yes |
 | the strix pin names the commit, the checkpoint and both sha256s, and discloses the unsupplied config | `tests/tools/test_vendor_pins_strix.py` | yes |
 | the strix adapter sends the position, counts fence disagreements, returns an out-of-fence move for the forfeit, verifies the pinned sha, and answers the opening single itself | `tests/bots/test_strix_adapter.py` | yes (against a recording double) |
-| the six adapter parses the protocol, sends the observed order at the board's radius, plays the turn's second stone from one search, forfeits a failed or illegal answer through the arena and counts it, refuses a planted wrong network hash and refuses a cuda rung whose engine fell back | `tests/bots/test_six_adapter.py` | yes (a recording double and a fake engine process) |
+| the six adapter parses the protocol, sends the observed order at the board's radius, plays the turn's second stone only on the board it was chosen for, forfeits a failed, malformed or illegal answer through the arena and counts it, refuses a planted wrong network or runtime hash, an engine that cannot start or loads no network and a cuda rung whose engine fell back, puts the release's own runtime first on the library path, and logs its counters when it closes | `tests/bots/test_six_adapter.py` | yes (a recording double and a fake engine process) |
 | the vendored Six plays two games on CUDA | `tests/bots/test_six_adapter.py::test_the_vendored_engine_plays_two_games_on_cuda` | where CUDA is; LOUD SKIP without it or without `make vendor.six` |
-| a six job reads the candidate's sims on `rung_model_sims` and resolves at its own nodes on the round's worker device | `tests/eval/test_strix_rung_sims.py` | yes |
+| a six job reads the candidate's sims on `rung_model_sims` and resolves at its own nodes on the round's worker device; the rung block closes its probe opponent before concurrent games and every opponent it made at the end | `tests/eval/test_strix_rung_sims.py` | yes |
 | the follower fires ONE equal-work cell per cadence checkpoint and per promotion read off the event stream, a planted duplicate fires nothing, a promotion waits for its checkpoint, a failed cell leaves no receipt, the sidecar carries unit + regime + the net's hash and the checkpoint bytes are untouched | `tests/tools/test_strix_follower.py` | yes (the cell runner is a recording double; the unit's RoundSpec is composed through the real frontier) |
 | a strix cell composes the rung at the pinned checkpoint with its own sims and the candidate's on `rung_model_sims`; a production round refuses a strix job by name | `tests/tools/test_strength_frontier.py`, `tests/eval/test_strix_rung_sims.py` | yes |
 | the six30_16 unit composes the six cell, its receipt carries the generation, the nodes, the provider and the forfeits, `--follow` reads the two ruler units only, and the dashboard draws the rung as its own series | `tests/tools/test_six_ruler_cell.py` | yes (the cell runner is not run; the child log is a fixture) |

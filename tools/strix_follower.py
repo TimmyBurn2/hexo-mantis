@@ -37,6 +37,7 @@ SOLVER_OFF_UNITS = frozenset({NET_ONLY})  # every other unit is the rung on reco
 RADIUS_UNITS: dict[str, int] = {RULER_R6: 6}  # every other unit rides the driver's default radius
 SIX_UNITS: dict[str, tuple[str, int]] = {SIX30_16: ("gen0030", 30)}  # unit -> (the pinned network, its generation)
 FOLLOW_UNITS = (EQUAL_WORK, SIX30_16)  # the rulers; every other unit is a --once cell
+_PLAYED_BYTES = ("engine_sha256", "net_sha256", "runtime_sha256")  # what a six receipt names as played
 TRIGGER_EVENTS = ("periodic_checkpoint_save", "eval_round_complete")
 #: A heartbeat younger than this at cell start names a live run in the evidence.
 HEARTBEAT_LIVE_SEC = 300.0
@@ -197,7 +198,7 @@ def opponent_pin(unit: str) -> dict[str, Any]:
 def played_bytes_error(record: Mapping[str, Any], pin: Mapping[str, Any]) -> str | None:
     """Why a six cell's engines did not all play the pin's engine and network, or None when they did."""
     engines = dict(record.get("six_engine") or {})
-    for key in ("engine_sha256", "net_sha256"):
+    for key in _PLAYED_BYTES:
         if engines.get(key) != [pin.get(key)]:
             return f"the engines played {key} {engines.get(key)}, the pin says {pin.get(key)}"
     return None
@@ -214,7 +215,7 @@ def sidecar_record(checkpoint: Path, *, unit: str, trigger: str, record: Mapping
     if unit in SIX_UNITS:
         engines = dict(record.get("six_engine") or {})
         # The hashes the engines re-verified at start, when they are one pair; `played_bytes_error` says otherwise.
-        played = {k: v[0] for k in ("engine_sha256", "net_sha256") if len(v := engines.get(k) or []) == 1}
+        played = {k: v[0] for k in _PLAYED_BYTES if len(v := engines.get(k) or []) == 1}
         opponent: dict[str, Any] = {"six": {**dict(pin), **played, "generation": SIX_UNITS[unit][1], "nodes": theirs,
                                             "cache_entries": SIX_CACHE_ENTRIES, "provider": engines.get("provider"),
                                             "engine_starts": engines.get("starts"),
@@ -288,7 +289,7 @@ class Follower:
             failed = out.with_name(out.name.replace(".json", ".failed.json"))
             failed.write_text(json.dumps({**body, "error": error}, indent=1),
                               encoding="utf-8")
-            self.log(f"follower: FAILED rc={record.get('rc')} — {failed.name}, no receipt")
+            self.log(f"follower: FAILED rc={record.get('rc')} — {failed.name}, no receipt: {error}")
             return "failed", failed
         out.write_text(json.dumps(body, indent=1), encoding="utf-8")
         self.fired.append(out)

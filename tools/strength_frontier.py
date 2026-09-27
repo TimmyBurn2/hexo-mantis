@@ -347,13 +347,14 @@ def _marked(log: str, marker: str) -> list[dict[str, str]]:
 
 
 def six_log_record(log: str) -> dict[str, Any]:
-    """The six engines' starts, provider, hashes and counters, and their forfeits, read off the child's log lines."""
+    """The six engines' starts, provider, hashes and counters, and their forfeits, read off the child's log lines; Raises: ValueError on a non-integer counter."""
     starts, closes = _marked(log, SIX_PROVIDER_LOG_MARKER), _marked(log, SIX_CLOSE_LOG_MARKER)
     findings = [ln.strip() for ln in log.splitlines() if SIX_FINDING_LOG_MARKER in ln]
     providers = sorted({s.get("provider", "?") for s in starts})
     return {"six_engine": {"starts": len(starts), "provider": "+".join(providers) or None,
                            "engine_sha256": sorted({s.get("engine_sha256", "?") for s in starts}),
                            "net_sha256": sorted({s.get("net_sha256", "?") for s in starts}),
+                           "runtime_sha256": sorted({s.get("runtime_sha256", "?") for s in starts}),
                            "searches": sum(int(c.get("searches", 0)) for c in closes),
                            "stale_pending": sum(int(c.get("stale_pending", 0)) for c in closes)},
             "six_findings": {"count": len(findings), "first": findings[:5]}}
