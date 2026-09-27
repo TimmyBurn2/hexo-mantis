@@ -48,7 +48,7 @@ def _rung_round_spec() -> SimpleNamespace:
     carries a DIFFERENT value: a seat reading it would be visible rather than coincidental.
     """
     return SimpleNamespace(
-        random_model_sims=4, strix_model_sims=4,
+        random_model_sims=4, rung_model_sims=4,
         gate=SimpleNamespace(deploy_sims=150),
     )
 
@@ -61,7 +61,7 @@ def test_rung_seat_head_plays_an_off_window_move_against_a_full_legal_set_oppone
     engine, spec = graph_engine
     round_spec = _rung_round_spec()
     rung_sims = worker._model_sims_for_kind(round_spec, "strix")
-    assert rung_sims == round_spec.strix_model_sims, (
+    assert rung_sims == round_spec.rung_model_sims, (
         "the rung seat must read the PER-KIND sims authority (M-3); reading "
         f"gate.deploy_sims here would stamp a regime the rung did not play — got {rung_sims}"
     )

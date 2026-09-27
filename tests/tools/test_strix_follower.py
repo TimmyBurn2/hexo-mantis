@@ -245,7 +245,7 @@ def test_the_equal_work_cell_composes_through_the_frontier_as_the_256_256_rung(
                                      step=15000, games=288, concurrency=8, label="equal_work_run8_15000")
     round_spec = frontier.cell_spec(cell, base, cell_dir=tmp_path / "c", config=config)
     job = round_spec.rung_jobs[0]
-    assert (round_spec.search_kind, round_spec.strix_model_sims, job.bot, job.opponent_sims, job.games) == (
+    assert (round_spec.search_kind, round_spec.rung_model_sims, job.bot, job.opponent_sims, job.games) == (
         "puct", 256, "strix", 256, 288)
     assert round_spec.rung_concurrency == 8 and round_spec.step == 15000
     assert job.opening_book == config.eval.gate.opening_book

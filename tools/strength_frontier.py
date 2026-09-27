@@ -215,7 +215,7 @@ def cell_spec(cell: Mapping[str, Any], base: RoundSpec, *, cell_dir: Path, confi
             raise FrontierCellError(f"{cell['label']}: a strix cell names strix_sims (its sims per move)")
         job = _strix_rung(config, games, int(cell["strix_sims"]), solver=bool(cell.get("strix_solver", True)),
                           radius=None if cell.get("strix_radius") is None else int(cell["strix_radius"]))
-        return replace(base, **common, strix_model_sims=sims, rung_jobs=[_rung_on_cell_book(job, cell)])
+        return replace(base, **common, rung_model_sims=sims, rung_jobs=[_rung_on_cell_book(job, cell)])
     gate = replace(base.gate, run_gate=True, screen_games=games, confirm_games=0,
                    deploy_sims=sims, screen_confirm_lo=2.0, seed_base=seed_base,
                    opening_book=str(cell.get("opening_book", base.gate.opening_book)))

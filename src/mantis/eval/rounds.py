@@ -180,9 +180,9 @@ class RoundSpec:
     #: The minted allocator REGIME, asserted by the child for its own process; `None` is safe
     #: because a cuda consumer REQUIRES a token.
     allocator_posture: str | None = None
-    #: The candidate's sims against a strix rung (RUNG-2): `None` on every production round, set
-    #: by the frontier tool's strix cells; a strix job without it is refused by name.
-    strix_model_sims: int | None = None
+    #: The candidate's sims against an external rung: `None` on every production round, set by the
+    #: frontier tool's cells; an external job without it is refused by name.
+    rung_model_sims: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return dataclasses.asdict(self)

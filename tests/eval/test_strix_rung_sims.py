@@ -29,16 +29,16 @@ def _spec(**over):
 
 def test_a_production_round_carries_no_strix_sims_and_a_strix_rung_on_it_is_a_named_refusal():
     spec = _spec()
-    assert spec.strix_model_sims is None
+    assert spec.rung_model_sims is None
     assert _model_sims_for_kind(spec, "random") == 96
-    with pytest.raises(ValueError, match="strix_model_sims"):
+    with pytest.raises(ValueError, match="rung_model_sims"):
         _model_sims_for_kind(spec, "strix")
     with pytest.raises(ValueError, match="sealbot rung was deleted"):
         _model_sims_for_kind(spec, "sealbot")
 
 
 def test_the_strix_rung_tool_threads_its_sims_through_the_same_lookup():
-    spec = _spec(strix_model_sims=256)
+    spec = _spec(rung_model_sims=256)
     assert _model_sims_for_kind(spec, "strix") == 256
-    assert RoundSpec.from_dict(spec.to_dict()).strix_model_sims == 256, "the child reads it back"
-    assert dataclasses.replace(spec, strix_model_sims=128).strix_model_sims == 128
+    assert RoundSpec.from_dict(spec.to_dict()).rung_model_sims == 256, "the child reads it back"
+    assert dataclasses.replace(spec, rung_model_sims=128).rung_model_sims == 128

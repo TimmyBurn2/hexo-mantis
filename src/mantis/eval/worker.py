@@ -229,12 +229,12 @@ def _agg_record(game_record: Any) -> dict[str, Any]:
 
 
 def _model_sims_for_kind(spec: RoundSpec, kind: str) -> int:
-    """The candidate's sims per opponent KIND; a strix job on a round without `strix_model_sims` is refused by name."""
+    """The candidate's sims per opponent KIND; a strix job on a round without `rung_model_sims` is refused by name."""
     if kind == "strix":
-        if spec.strix_model_sims is None:
-            raise ValueError("a strix rung job needs RoundSpec.strix_model_sims; production rounds "
+        if spec.rung_model_sims is None:
+            raise ValueError("a strix rung job needs RoundSpec.rung_model_sims; production rounds "
                              "carry None because strix cells are the frontier tool's (R352(e))")
-        return int(spec.strix_model_sims)
+        return int(spec.rung_model_sims)
     if kind == "random":
         return spec.random_model_sims
     raise ValueError(f"no candidate sims for opponent kind {kind!r}: the sealbot rung was deleted "
