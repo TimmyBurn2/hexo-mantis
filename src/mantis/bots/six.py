@@ -31,6 +31,12 @@ PROVIDER_MARKER = "six execution provider refused"
 FINDING_LOG_MARKER = "six_forfeit_finding"
 #: Every engine start logs its provider under this marker, which the frontier reads into the receipt.
 PROVIDER_LOG_MARKER = "six_engine_provider"
+#: Every bot logs its counters under this marker when it closes.
+CLOSE_LOG_MARKER = "six_engine_closed"
+#: The engine's `id name` when it loaded a network; without one it plays alpha-beta, which is not the rung.
+NET_IDENT = "id name HexBot Net"
+#: An empty board's forfeit cell: outside every legal ball, so the arena refuses it.
+_OFF_BOARD = (1 << 20, 1 << 20)
 _DEVICES = ("cuda", "cpu")
 _LOG = logging.getLogger(__name__)
 
@@ -52,13 +58,17 @@ class SixReply:
 
 
 def parse_reply(lines: Sequence[str]) -> SixReply:
-    """The stones of the `bestmove` line; an `error` line, a failed search or `bestmove none` is a failure."""
+    """The stones of the `bestmove` line; an `error` line, a failed search, `bestmove none` or a malformed answer is a failure."""
     failures = [ln for ln in lines if ln.startswith(("error", "info string search failed"))]
     words = lines[-1].split()[1:] if lines and lines[-1].startswith("bestmove") else ["none"]
+    stones: tuple[tuple[int, int], ...] = ()
     if words == ["none"]:
         failures.append("bestmove none")
-    stones: tuple[tuple[int, int], ...] = () if words == ["none"] else tuple((int(words[i]), int(words[i + 1])) for i in range(0, len(words), 2))
-    return SixReply(stones=stones, failure="; ".join(failures) or None)
+    elif len(words) % 2 or not all(w.lstrip("-").isdigit() for w in words):
+        failures.append(f"malformed answer {lines[-1]!r}")
+    else:
+        stones = tuple((int(words[i]), int(words[i + 1])) for i in range(0, len(words), 2))
+    return SixReply(stones=stones if not failures else (), failure="; ".join(failures) or None)
 
 
 def provider_of(stderr_lines: Sequence[str], device: str) -> str:
@@ -162,14 +172,21 @@ class SixEngine:
     def __init__(self, assets: SixAssets, *, device: str) -> None:
         cmd = [str(assets.engine), "--net", str(assets.net.resolve())] + (["--cpu"] if device == "cpu" else [])
         env = dict(os.environ)
-        libs = cuda_library_path() if device == "cuda" else None
-        if libs:
-            env["LD_LIBRARY_PATH"] = libs + (":" + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
-        self._stderr = tempfile.NamedTemporaryFile(prefix="sixengine-", suffix=".stderr")  # noqa: SIM115
-        self._proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self._stderr,
-                                      text=True, encoding="utf-8", bufsize=1, cwd=str(assets.engine.parent), env=env)
+        # The release's own ONNX Runtime first, so no library on the inherited path shadows it.
+        libs = [str(assets.engine.parent)] + ([cuda_library_path() or ""] if device == "cuda" else [])
+        env["LD_LIBRARY_PATH"] = ":".join(x for x in [*libs, env.get("LD_LIBRARY_PATH", "")] if x)
+        self._stderr = tempfile.NamedTemporaryFile(prefix="sixengine-", suffix=".stderr")
+        try:
+            self._proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self._stderr,
+                                          text=True, encoding="utf-8", bufsize=1, cwd=str(assets.engine.parent),
+                                          env=env)
+        except OSError as exc:
+            self._stderr.close()
+            raise SixEngineError(f"sixengine did not start: {exc}") from exc
         try:
             self.ident = self._ask("six", "sixok")
+            if NET_IDENT not in self.ident:
+                raise SixEngineError(f"sixengine loaded no network: it answers {self.ident[:2]}")
             errors = [ln for ln in self._ask(f"setoption cacheEntries {CACHE_ENTRIES}\nisready", "readyok")
                       if ln.startswith("error")]
             if errors:
@@ -191,7 +208,8 @@ class SixEngine:
             self._proc.stdin.write(command + "\n")
             self._proc.stdin.flush()
         except (BrokenPipeError, OSError) as exc:
-            raise SixEngineError(f"sixengine is gone (rc {self._proc.poll()}): {exc}") from exc
+            raise SixEngineError(f"sixengine is gone (rc {self._proc.poll()}): {exc}; stderr tail "
+                                 f"{self._read_stderr()[-3:]}") from exc
         lines: list[str] = []
         while True:
             line = self._proc.stdout.readline()
@@ -218,6 +236,7 @@ class SixEngine:
         return self._ask(f"{position}\ngo nodes {nodes}", "bestmove")
 
     def close(self) -> None:
+        """Ask the engine to quit, killing it after 20 s; idempotent."""
         if self._proc.poll() is None:
             try:
                 assert self._proc.stdin is not None
@@ -227,6 +246,12 @@ class SixEngine:
             except (BrokenPipeError, OSError, subprocess.TimeoutExpired):
                 self._proc.kill()
                 self._proc.wait()
+        for pipe in (self._proc.stdin, self._proc.stdout):
+            try:
+                if pipe is not None:
+                    pipe.close()
+            except (BrokenPipeError, OSError):
+                pass  # a dead engine's stdin cannot flush the buffered `quit`
         self._stderr.close()
 
 
@@ -244,6 +269,7 @@ class SixBot:
         self.stale_pending = 0
         self.forfeits = {"failed": 0, "illegal": 0}
         self.findings: list[str] = []
+        self._closed = False
 
     @property
     def provider(self) -> str:
@@ -253,11 +279,13 @@ class SixBot:
         return self._name
 
     def new_game(self) -> None:
+        """Forget the game's stones and the pending stone; Raises: SixEngineError when the engine is gone."""
         self._moves = []
         self._pending = None
         self._engine.new_game()
 
     def observe_move(self, q: int, r: int) -> None:
+        """One stone the arena applied, in order."""
         self._moves.append((int(q), int(r)))
 
     def select_move(self, board: Any) -> tuple[int, int]:
@@ -292,7 +320,7 @@ class SixBot:
 
     def _forfeit(self, kind: str, text: str) -> tuple[int, int]:
         self._finding(kind, text)
-        return self._moves[-1]
+        return self._moves[-1] if self._moves else _OFF_BOARD
 
     def _finding(self, kind: str, text: str) -> None:
         self.forfeits[kind] += 1
@@ -300,13 +328,20 @@ class SixBot:
         _LOG.warning("%s %s %s", FINDING_LOG_MARKER, kind, text)
 
     def close(self) -> None:
+        """Log the counters and close the engine; idempotent."""
+        if not self._closed:
+            self._closed = True
+            _LOG.info("%s searches=%d seconds=%.1f stale_pending=%d forfeits_failed=%d forfeits_illegal=%d",
+                      CLOSE_LOG_MARKER, self.searches, self.seconds, self.stale_pending, self.forfeits["failed"],
+                      self.forfeits["illegal"])
         self._engine.close()
 
 
 def _device_kind(device: str | None) -> str:
-    kind = None if device is None else str(device).split(":", 1)[0]
-    if kind not in _DEVICES:
-        raise RungUnresolvable(rung="six", reason=f"a six rung plays on one of {list(_DEVICES)}; got device {device!r}")
+    kind, _, index = (None, "", "") if device is None else str(device).partition(":")
+    # The engine takes no device index: ONNX Runtime plays on device 0.
+    if kind not in _DEVICES or index not in ("", "0"):
+        raise RungUnresolvable(rung="six", reason=f"a six rung plays on one of {list(_DEVICES)} (device 0); got device {device!r}")
     return kind
 
 
@@ -323,7 +358,10 @@ def resolve_six(*, opponent_sims: int | None, variant: str, device: str | None,
 
     def _factory() -> SixBot:
         assets = locate_six(root, variant)
-        engine = SixEngine(assets, device=kind)
+        try:
+            engine = SixEngine(assets, device=kind)
+        except SixEngineError as exc:
+            raise RungUnresolvable(rung="six", reason=f"six engine failed to start: {exc}") from exc
         if engine.provider != kind:
             engine.close()
             raise RungUnresolvable(rung="six", reason=(
@@ -338,7 +376,7 @@ def resolve_six(*, opponent_sims: int | None, variant: str, device: str | None,
 
 
 __all__ = [
-    "CACHE_ENTRIES", "ENGINE_ASSET", "FINDING_LOG_MARKER", "PIN_ABSENT_MARKER", "PIN_NAME", "PROVIDER_LOG_MARKER",
+    "CACHE_ENTRIES", "CLOSE_LOG_MARKER", "ENGINE_ASSET", "FINDING_LOG_MARKER", "NET_IDENT", "PIN_ABSENT_MARKER", "PIN_NAME", "PROVIDER_LOG_MARKER",
     "PROVIDER_MARKER", "SHA_MISMATCH_MARKER", "VENDOR_ABSENT_MARKER", "Engine", "SixAssets", "SixBot", "SixEngine",
     "SixEngineError", "SixReply", "SixSyncError", "cuda_library_path", "locate_six", "parse_reply", "pin_record",
     "provider_of", "resolve_six", "six_availability",

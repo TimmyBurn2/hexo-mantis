@@ -94,9 +94,11 @@ and are folded in here, because a reader of any ladder reading needs them:
   reads the stone ORDER, which the arena reports (`observe_move`); a log that is not the board's
   stones is refused. The execution provider is read off the engine's stderr and logged: a cuda
   worker requires CUDA (the engine's CUDA libraries are the venv's NVIDIA wheels) and any other
-  provider refuses the rung by name. A failed answer (`bestmove none`, an `error` line, a failed
-  search's fallback) returns an occupied cell and an illegal stone returns itself, both for the arena
-  to FORFEIT, each counted and logged under `six_forfeit_finding`. Its regime key reads
+  provider refuses the rung by name, as does an engine that fails to start or answers without a
+  network (`id name HexBot Net`). A failed answer (`bestmove none`, an `error` line, a failed
+  search's fallback, a malformed `bestmove`) returns an occupied cell and an illegal stone returns
+  itself, both for the arena to FORFEIT, each counted and logged under `six_forfeit_finding`; a bot
+  logs its searches and stale second stones under `six_engine_closed` when it closes. Its regime key reads
   `six:gen0030@16`. `tools/strix_follower.py` plays it as the `six30_16` unit (ours PUCT-256; `--once`,
   or `--follow` on the same triggers as the equal-work unit, which with it are the two ruler units),
   through `tools/strength_frontier.py`'s `six` cell (`six_net`, `six_nodes`). Its receipt is
