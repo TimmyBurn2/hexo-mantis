@@ -52,6 +52,10 @@ amendment commit and operator sign-off.
 - LAW-18 In-run observability. A lever under test logs its own fire-rate in-run — a post-hoc probe cannot tell "starved" from "ineffective".
 - LAW-19 Controls first (R370(b)). Before a pre-registered criterion gates work, a correct design
   must pass it and the known-bad path must fail it; a criterion no correct design can pass is void.
+  It extends to power (R375(d)): a pre-registered reading states its power at the effect it claims
+  and its false-pass rate at zero effect, at the measured spread between nets; below 0.8 power it
+  is void. Strength claims read panels or averaged nets, and a fine-tune is judged against an
+  equal-recipe control fine-tune.
 
 ## The protected set
 

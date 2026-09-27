@@ -1,4 +1,4 @@
-# RULINGS — R23 to R374
+# RULINGS — R23 to R375
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R375.
+- Numbering continues from R346. The next ruling is R376.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -36,6 +36,30 @@ still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register 
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
 
+### R375 — READ THE PROCESS, NOT THE PEAK
+Decision: verbatim below.
+
+> R375 — READ THE PROCESS, NOT THE PEAK.
+> (a) Six generation 30 at 16 nodes (tactics as shipped, search cache off) is admitted as
+> a second ruler beside strix @ r8 (R374(b)); the parent reads 0.351 [0.295, 0.406] on it.
+> SIX-RUNG lands it by pin and hash.
+> (b) RUN10-CONTROLS stands: the pipeline and the train step are cleared, and going past
+> C1's letter-HALT is ratified, since that rule failed its own floor (LAW-19). The parent's
+> 0.191 is a high point; its neighbours read 0.085 and 0.094.
+> (c) run10 does not START on its minted reading. DECIDE-1 reads damage vs luck, a panel of
+> run8's saves, an averaged net, a cooldown screen and Six's tactics share; its readings
+> choose between an amended run10 and a run11 design.
+> (d) LAW-19 extends to power: a pre-registered reading states its power at the effect it
+> claims and its false-pass rate at zero effect, at the measured spread between nets; below
+> 0.8 power it is void. Strength claims read panels or averaged nets, and a fine-tune is
+> judged against an equal-recipe control fine-tune.
+> (e) R368(j)'s hold is lifted: SEAM-2 may merge before any run starts.
+> (f) No run trains on Six's labels until the operator rules on provenance.
+
+Status: standing. Admits a second ruler under R374(b) by (a); extends LAW-19 by (d); lifts R368(j)'s merge hold by (e).
+
+---
+
 ### R374 — CONTROLS BEFORE CAUSE
 Decision: verbatim below.
 
@@ -51,7 +75,7 @@ Decision: verbatim below.
 > (c) RESEARCH-FORGE produces proposals. None enters a run without a pre-registered probe
 > that passes LAW-19; values stay the operator's.
 
-Status: standing.
+Status: standing — (b)'s bar is met by Six generation 30 at 16 nodes, admitted as a second ruler by R375(a).
 
 ---
 
@@ -137,7 +161,7 @@ Decision: verbatim below.
 > (h) A RULINGS entry is its title, its decision and its status.
 > (i) R369(a)'s launch conditions apply to FINISH's exit tip.
 
-Status: standing. Adds LAW-19 by (b); amends R369(d) by (c) and R369(a)'s tip by (i).
+Status: standing. Adds LAW-19 by (b), extended to power by R375(d); amends R369(d) by (c) and R369(a)'s tip by (i).
 
 ---
 
@@ -307,7 +331,7 @@ AQ-POOL-HPARAMS — one of the two killed-knob tests survives; R334's RUN6 SUCCE
 the census's AQ-STYLE names (R316(e), R346(f)'s comment clause, R336(e)'s on-contact clause) are REPLACED
 by (g)'s one rule and its one sanctioned pass; the protected set of R346(d) is READ by (b) as invariants
 held by symbols and pinning tests, never as whole files.
-Status: standing.
+Status: standing — (j)'s merge hold LIFTED by R375(e): SEAM-2 may merge before any run starts.
 
 ---
 

@@ -36,6 +36,29 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R375 (DECIDE-1's forward; 2026-09-27) — read the process, not the peak
+
+- **CARD-STRIX-SEED-LUCK — OWNED by DECIDE-1 (R375(c)); opened in RUN10-CONTROLS' exit record.** At the fixed
+  seed a perturbation of KL 0.0067 (C4, the parent at LR ×0.01 for 101 steps) re-draws 255 of 288 games and a
+  neighbour re-draws all of them. On the re-drawn games S1's wins fall from 42 to 22 (C4), 53 to 22 (42k) and
+  55 to 27 (48k). Training damage and a lucky parent draw predict the same thing there. DECIDE-1 separates them
+  with seeded weight noise on the parent at C4's and A6's distances (KL ≈ 0.007 and ≈ 0.09, with a KL ≈ 1
+  known-bad), read on both rulers; the §4 instrument keeps its seed (R373(b)).
+- **CARD-SIX-RUNG — ORDERED (R375(a)): Six generation 30 at 16 nodes lands as a second ruler by pin and hash.**
+  Tactics as shipped, search cache off (`cacheEntries 0`). The engine, its runtime and the network enter
+  through `vendor/pins.toml` with the hashes SIX-SCOUT verified (release 1.2.0, repo `f2b5ec2`), as a bot beside
+  strix, never tracked (R374(b)). Until it lands, cells use SIX-SCOUT's scratch driver and pins. Upstream has
+  since tagged 1.2.1 (`ba101e6`), which changes `engine/src/threats.cpp`; R375(a) admitted 1.2.0.
+- **CARD-RANDOM-OPENINGS — CARDED: self-play draws no opening plies, while both rulers' books are random
+  scatter.** `configs/run10.yaml` mints `selfplay.random_opening_plies: 0`, so every self-play game starts from
+  the empty board. Both rulers' cells open from `book_v1_s20260625_p4`: four uniform-random plies from the
+  empty board (`tools/mint_opening_book.py`).
+- **CARD-COMPLETED-Q-DEFAULT — CARDED, latent: a node with no raw value completes against a silent 0.0.**
+  `node_completed_qvalues` (`crates/mantis-search/src/mcts/policy.rs`) reads the node's raw value with
+  `unwrap_or(0.0)`. The PUCT kind allocates no raw-value slots, and a Gumbel slot that was never written keeps
+  its 0.0 initialisation; neither case is signalled. Latent: today's callers are the Gumbel kind's
+  (`gumbel_mctx.rs`, `pick_best_mctx_interior`).
+
 ## Opened by the RUN10-AUX-PROBE packet (R373; 2026-09-27) — no suspect is needed: every net trained from the parent reads below it
 
 - **CARD-RUN10-START-DAMAGE — the reading the design packet starts from (R373(c)).** Offline, on the launch tree,
@@ -69,7 +92,7 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by the RUN10-REPICK packet (R372; 2026-09-26) — the aux start is not recovered
 
-- **CARD-RUN10-AUX-START-DESIGN — BLOCKING run10's START (R372(c)); RE-AIMED 2026-09-27 by RUN10-AUX-PROBE (R373(c)): no aux start is shown to matter at 101 steps; the design waits on CARD-RUN10-START-DAMAGE's next reading.** At strix @ r8 on the launch tree the
+- **CARD-RUN10-AUX-START-DESIGN — CLOSED 2026-09-27 (R375(b), DECIDE-1's forward): not implicated — RUN10-CONTROLS read every 101-step arm, with or without the aux, at or near run8's neighbourhood. Was BLOCKING run10's START (R372(c)); RE-AIMED 2026-09-27 by RUN10-AUX-PROBE (R373(c)).** At strix @ r8 on the launch tree the
   twin's last save (step 12 000, weight 4) reads 0.118 [0.083, 0.153] against the pooled parent 0.191 (576
   games; 0.194 [0.150, 0.244] on 304 distinct) — above the preflight's 101-step control 0.0625 [0.035,
   0.094], below the parent it warm-started from. The fresh aux head's early clipped updates cost strength that
@@ -85,7 +108,7 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by the RUN10-PRESTART packet (R371; 2026-09-26) — run10 halted at the witness
 
-- **CARD-RUN10-AUX-WEIGHT-REPICK — the §1a rule fires; HELD on CARD-RUN10-AUX-START-DESIGN (R372(c): C not recovered; R373(c): the re-pick follows RUN10-AUX-PROBE's reading).** Over the twin's settled half (steps 7 188–14 375)
+- **CARD-RUN10-AUX-WEIGHT-REPICK — the §1a rule fires; HELD on CARD-RUN10-AUX-START-DESIGN (R372(c): C not recovered; R373(c): the re-pick follows RUN10-AUX-PROBE's reading). That card CLOSED 2026-09-27; run10 is held by R375(c), and the re-pick follows DECIDE-1.** Over the twin's settled half (steps 7 188–14 375)
   `aux_policy_head_grad_norm / policy_head_grad_norm` reads a median 2.92 (p10–p90 2.24–3.83; by quarter
   3.22 → 2.99 → 2.90 → 2.93, flat), outside [0.5, 2]. The rule re-picks inside [2, 8] by re-mint with its own
   preflight; weight 2 predicts ≈ 1.46 (the head norm scales with the weight, prereg §8's foreseen case). The
@@ -210,9 +233,9 @@ recommended one; each is its own leg with a LAW-09 bench.
 - **CARD-CLUSTER-THRESHOLD-RESIDUE — CLOSED by PERF-ADA H6 (177d11df; the golden fixture keeps the field as capture provenance): `Board.cluster_threshold` is write-only since the cluster BFS
   went (R368 W2).** Plumbed from the registry (bridge `board.rs`, selfplay `game.rs`) into `BoardGeometry` and
   the golden-replay fixture's geometry, read by nothing; removal touches `BoardGeometry` and that fixture's field.
-- **CARD-SEAM-2 — HELD (R368(j)): the seam for a kind that brings its own head, objective and config rows.**
-  L-SEAM-01..04 fold into it; the design packet follows the SLIM-FIX phase; the implementation merges only
-  after run10 STARTs.
+- **CARD-SEAM-2 — HOLD LIFTED 2026-09-27 by R375(e): may merge before any run starts. Was HELD (R368(j)): the seam for a kind that brings its own head, objective and config rows.**
+  L-SEAM-01..04 fold into it; the design packet follows the SLIM-FIX phase; R368(j) merged the implementation
+  only after run10 STARTs, and R375(e) lifts that hold.
 - **CARD-W5-RESIDUE — CARDED: small residues the W5 leg found and did not fix, each its own class.**
   The graph drain goldens have no committed generator (the capture script was a scratch file; kept, it
   should be a `tools/` generator). `ResolvedPoolEncoding.board_size`/`trunk_size`/`n_kept_planes`
