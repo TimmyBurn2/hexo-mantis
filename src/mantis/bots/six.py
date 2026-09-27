@@ -1,4 +1,6 @@
 """The Six rung adapter: the pinned `sixengine` release and a pinned network over the Six protocol, one process per concurrent game."""
+# >300 justify (R8): one seam — the pin and its hashes, the engine process and its provider, and the bot that plays a
+# whole-turn answer as single stones; each refusal is only checkable against the others it guards.
 from __future__ import annotations
 
 import importlib.util

@@ -1,4 +1,6 @@
 """The Six rung adapter: the protocol parsed, the position sent in order, forfeits counted, the pin and provider refused."""
+# >300 justify (R8): one adapter pinned three ways — its protocol parser, the bot over a recording double, the bot over
+# a fake engine process; split, a refusal's test would drift from the move path it guards.
 from __future__ import annotations
 
 import hashlib
