@@ -69,8 +69,8 @@ rule is stated once, here or in docs/governance/LAWS.md.
 - Toolchains are pinned (rust-toolchain.toml, mise.toml) and provision themselves. The Rust
   channel is attested in tools/bench_floors.toml, so a bump invalidates every bench floor: it is
   a perf-host event.
-- vendor/external/ is per-checkout: every clone and the box re-run `make vendor` and
-  `make vendor.strix`.
+- vendor/external/ is per-checkout: every clone and the box re-run `make vendor`,
+  `make vendor.strix` and `make vendor.six`.
 - Commits are ONE line, `type(scope): what changed and why it matters`: no body and no trailer
   of any kind, a tool's default attribution block included. Gate 19 reds a violation only at
   exit, when every commit after it must be rewritten, so write them right the first time.

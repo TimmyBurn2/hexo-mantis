@@ -4,9 +4,14 @@
 #   url   = "https://..."        # public git URL
 #   sha   = "<40-hex commit>"    # exact commit
 #   patch = "vendor/patches/<name>.patch"   # optional, tracked
+#   [pins.<name>.assets.<asset>]            # optional release assets
+#   url = "https://..."  sha256 = "<64-hex>"  path = "<under vendor/external>"
+#   unpack = "<dir under vendor/external>"  # an archive, extracted there
+#   from = "<asset>"                        # a member of that unpacked archive (same url)
 # `make vendor` (tools/vendor_fetch.sh) clones each pin into vendor/external/<name>
-# (gitignored) at its sha and applies the patch. Features that need an unfetched
-# vendor must skip loudly and name `make vendor`.
+# (gitignored) at its sha and applies the patch; `tools/vendor_fetch.sh <name>` also
+# fetches that pin's assets, each verified by sha256 on arrival. Features that need an
+# unfetched vendor must skip loudly and name the target that fetches it.
 [pins]
 
 [pins.hexo-strix]
@@ -27,3 +32,37 @@ checkpoint_sha256      = "351ed562065bed55528bf4a4bcc7da7bf48f36aec47c60ab108014
 checkpoint_train_steps = 237000
 config                 = "embedded in the checkpoint (model_config, game_config, training_config); no config.toml was supplied"
 config_sha256          = "8f2f07096db501ed2ed32252c4041298e75d5d575ceaec009f5dbd05c52add02"
+
+[pins.six]
+# The Six rung (R374(b); SIX-SCOUT scouted it): CixMango/Six, MIT "including the network". The PIN is
+# the repo at the commit below; the RUNG is the v1.2.0 Linux release's `sixengine`, built from engine
+# sources identical to this commit's, and a network. `make vendor.six` fetches the release and the
+# networks, each verified by sha256 on arrival; `mantis.bots.six` re-verifies the engine and the
+# network at every load. Nothing here is tracked (R7). gen 455 is the release's own network and has
+# no asset of its own, so its URL is the release's.
+url   = "https://github.com/CixMango/Six.git"
+sha   = "f2b5ec2d4d7ec42e8b655f739e65821808e03698"
+as_of = "2026-09-27"
+
+[pins.six.assets.release]
+url    = "https://github.com/CixMango/Six/releases/download/v1.2.0/Six-1.2.0-linux-x64.tar.gz"
+sha256 = "a5803df2edea482504804804be676a35762435b55cce555697f91347be814f7e"
+path   = "six-assets/Six-1.2.0-linux-x64.tar.gz"
+unpack = "six-assets/release"
+
+[pins.six.assets.engine]
+url    = "https://github.com/CixMango/Six/releases/download/v1.2.0/Six-1.2.0-linux-x64.tar.gz"
+from   = "release"
+sha256 = "7d06548be5e55c0f07b56736cbf18190255e99a74c4799ecfa98b03a805cf26a"
+path   = "six-assets/release/Six/engine/sixengine"
+
+[pins.six.assets.gen0455]
+url    = "https://github.com/CixMango/Six/releases/download/v1.2.0/Six-1.2.0-linux-x64.tar.gz"
+from   = "release"
+sha256 = "a934a8b171cd9a715fcd54ffc3e192c24901f0a7d40caa4216ea9fbc0b074687"
+path   = "six-assets/release/Six/runs/rl/gen-0455/net.onnx"
+
+[pins.six.assets.gen0030]
+url    = "https://github.com/CixMango/Six/releases/download/networks/gen-0030.onnx"
+sha256 = "4afcbb113f18ecfd602b28e8da080c71e91f576dea939b68590f255e60cb5a92"
+path   = "six-assets/gen-0030.onnx"

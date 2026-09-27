@@ -26,7 +26,8 @@ tests — is DELETED (R368(e)).
 v4: the strix cell's regime is the load of the host that PLAYS it, not the run's mirrored heartbeat
 (PERF-ADA H7): off the box that heartbeat is always live and labelled every cell CONTENDED. The
 receipt's `schema_version` moves 1 → 2 with it, so a v1 receipt's regime reads under the heartbeat rule.
-v5: a pin may name release assets by url and sha256, fetched and verified by `tools/vendor_fetch.sh <pin>`.
+v5: the SIX ruler (R374(b), SIX-RUNG) lands beside strix: a pin may name release assets by url and
+sha256 (`make vendor.six`).
 
 The run5 decision document carried that run's choices and is DELETED with its config
 (R346(f)): a decision document whose subject config is not in the tree
@@ -85,7 +86,7 @@ and are folded in here, because a reader of any ladder reading needs them:
 - **Vendoring.** External engines are pinned by commit sha in `vendor/pins.toml` and fetched
   by `make vendor`, which CLONES and does not build. A pin's release assets (each a url and a
   sha256; an archive with `unpack`, a member of one with `from`) are fetched only by
-  `tools/vendor_fetch.sh <pin>`, and each is verified on arrival: a download
+  `tools/vendor_fetch.sh <pin>` — `make vendor.six` — and each is verified on arrival: a download
   becomes its file only once its sha256 is the pin's, and a warm file that no longer verifies is
   refused, never re-fetched over. The one build step is the strix rung's
   venv: `make vendor.strix` (`tools/vendor_build_strix.sh`) syncs strix's OWN venv inside
@@ -134,6 +135,7 @@ row says so and names what does run.
 | eff_n is trajectory-hash-distinct; the low-power guard is per pair; an empty sample degenerates rather than raising | `tests/eval/test_aggregate_regime.py` | yes |
 | a pin is a commit sha | `tests/tools/test_vendor_pins_strix.py` | yes |
 | a release asset becomes its file only once its sha256 is the pin's; a planted wrong sha256, a stale member and a directory that is not a clone each refuse; a bare `make vendor` fetches no asset | `tests/tools/test_vendor_fetch_assets.py` | yes (offline, `file://` assets) |
+| the Six pin names the repo at its commit and the v1.2.0 Linux release, its engine and the gen 30 and gen 455 networks, each by url and sha256 | `tests/tools/test_vendor_pins_six.py` | yes |
 | the refusal reasons name exactly their own missing step, and no environment key | `tests/bots/test_strix_adapter.py`, `tests/bots/test_protocol.py` | yes |
 | the gate's rule fields ride `eval_round_complete.gate`, `null` when no gate ran; the A-3 partial carries them on a broken route | `tests/eval/test_gate_fields_ride_the_round_complete_row.py` | yes |
 | a strength-floor refusal is a third thing on the routed mapping and the stream | `tests/eval/test_strength_floor_verdict_on_the_routed_mapping.py` | yes |
