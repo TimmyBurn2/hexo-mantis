@@ -77,7 +77,7 @@ def test_the_panel_draws_one_series_per_unit_with_whiskers_regime_and_axis_label
     assert 'class="marker point' in panel and 'class="marker idle' in panel
     assert "run8 · equal_work: ours PUCT-256 vs strix 256 sims" in panel
     assert "run8 · as_shipped: ours PUCT-512 vs strix 128 sims" in panel
-    assert "y = WR vs strix in the unit the legend names" in panel and "x = step" in panel
+    assert "y = WR vs the opponent in the unit the legend names" in panel and "x = step" in panel
     assert "30.0 pp below parity" in panel and "36.0 pp below parity" in panel
     assert "not measured" not in panel
     assert "the host playing the cell was busy" in panel, "the legend states the receipt's regime rule"

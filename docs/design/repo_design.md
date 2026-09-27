@@ -1208,3 +1208,9 @@ commit that makes it (R9).
    reads, the round's worker device, which the engine's provider must match. The worker's rung
    block plays it like strix, at the job's own nodes; `RoundSpec.strix_model_sims` becomes
    `rung_model_sims`, the candidate's sims against any external rung.
+4. **The R356(d) external-points input admits the Six receipt.** `--external-points` also reads
+   `<ckpt>.six30_16.json`, which `tools/strix_follower.py` writes for its `six30_16` unit; it is a
+   unit of its own, drawn as its own series and never merged with a strix unit, and its gap is
+   stated against "Six gen 30". The panel is "External anchors: strix and Six". The follower's
+   `--follow` reads the two ruler units (equal-work strix and Six); every other unit stays `--once`.
+   Nothing is added to §4.7: the receipt is a dev-only tool's artifact, like strix's.

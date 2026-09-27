@@ -1,4 +1,4 @@
-"""External points: the strix follower's sidecars as a series with CIs, unit and regime on the axis, the gap to strix as a number."""
+"""External points: the follower's strix and Six sidecars as series with CIs, unit and regime on the axis, each gap as a number."""
 from __future__ import annotations
 
 import json
@@ -11,12 +11,12 @@ from .model import Gaps, Panel, table
 from .stats import elo_of_wr
 from .svg import PAD, WIDTH, Scale, figure
 
-#: The sidecar suffixes the follower writes: `<ckpt>.strix256.json` (equal-work), `.strix512.json`, `.strix256_nosolver.json`.
-SIDECAR_GLOB = "*.strix*.json"
+#: The sidecar suffixes the follower writes: `<ckpt>.strix256.json` (equal-work), `.strix512.json`, `.six30_16.json`, ...
+SIDECAR_GLOBS = ("*.strix*.json", "*.six*.json")
 _HEIGHT = 200.0
 _CLASSES = ("s2", "s3", "s4", "s5", "s6", "s1")
 PRODUCER = ("tools/strix_follower.py sidecars (<ckpt>.strix256.json per cadence checkpoint and "
-            "promotion; .strix512.json for the as-shipped cell)")
+            "promotion; .strix512.json for the as-shipped cell; .six30_16.json for the Six ruler)")
 
 
 @dataclass(frozen=True)
@@ -27,7 +27,10 @@ class ExternalPoint:
     step: int
     unit: str
     ours_sims: int
-    strix_sims: int
+    #: `strix`, or `Six gen <g>`; the gap is stated against it.
+    opponent: str
+    #: the opponent's work per move as the unit states it: `256 sims`, `@ 16 nodes`.
+    opponent_budget: str
     regime: str
     trigger: str
     wr: float
@@ -44,7 +47,7 @@ class ExternalPoint:
 
     @property
     def unit_label(self) -> str:
-        label = f"{self.run_id} · {self.unit}: ours PUCT-{self.ours_sims} vs strix {self.strix_sims} sims"
+        label = f"{self.run_id} · {self.unit}: ours PUCT-{self.ours_sims} vs {self.opponent} {self.opponent_budget}"
         label += ", solver OFF" if self.solver == "off" else ""
         return label + ("" if self.radius is None else f", strix @ r{self.radius}")
 
@@ -62,14 +65,20 @@ def parse_sidecar(path: Path, raw: Any) -> ExternalPoint | None:
     if not isinstance(raw, dict):
         return None
     step, wr = _int(raw.get("step")), _num(raw.get("wr"))
-    ours, strix = raw.get("ours") or {}, raw.get("strix") or {}
-    ours_sims, strix_sims = _int(ours.get("sims")), _int(strix.get("sims"))
-    if step is None or wr is None or ours_sims is None or strix_sims is None:
+    ours, strix, six = raw.get("ours") or {}, raw.get("strix") or {}, raw.get("six")
+    ours_sims = _int(ours.get("sims"))
+    if isinstance(six, dict):
+        generation, work = _int(six.get("generation")), _int(six.get("nodes"))
+        opponent, budget = f"Six gen {generation}", f"@ {work} nodes"
+    else:
+        generation, work = 0, _int(strix.get("sims"))
+        opponent, budget = "strix", f"{work} sims"
+    if step is None or wr is None or ours_sims is None or work is None or generation is None:
         return None
     lo, hi = _num(raw.get("wr_ci_lower")), _num(raw.get("wr_ci_upper"))
     return ExternalPoint(
         run_id=str(raw.get("run_id", "?")), step=step, unit=str(raw.get("unit", "?")),
-        ours_sims=ours_sims, strix_sims=strix_sims,
+        ours_sims=ours_sims, opponent=opponent, opponent_budget=budget,
         regime=str(raw.get("regime", "?")), trigger=str(raw.get("trigger", "?")), wr=wr,
         ci=(lo, hi) if lo is not None and hi is not None else None,
         eff_n=_int(raw.get("eff_n")), games=_int(raw.get("games")),
@@ -84,9 +93,10 @@ def load_external_points(specs: list[Path] | None) -> tuple[list[ExternalPoint],
         return [], "no --external-points given"
     paths: list[Path] = []
     for spec in specs:
-        paths += sorted(spec.rglob(SIDECAR_GLOB)) if spec.is_dir() else [spec] if spec.is_file() else []
+        found = {p for glob in SIDECAR_GLOBS for p in spec.rglob(glob)} if spec.is_dir() else set()
+        paths += sorted(found) if spec.is_dir() else [spec] if spec.is_file() else []
     if not paths:
-        return [], f"{', '.join(str(s) for s in specs)} holds no {SIDECAR_GLOB} sidecar"
+        return [], f"{', '.join(str(s) for s in specs)} holds no {' or '.join(SIDECAR_GLOBS)} sidecar"
     points: list[ExternalPoint] = []
     skipped: list[str] = []
     for path in paths:
@@ -118,11 +128,11 @@ def series_by_unit(points: list[ExternalPoint]) -> dict[str, list[ExternalPoint]
 
 
 def gap_statement(p: ExternalPoint) -> str:
-    """The gap to strix as a NUMBER: percentage points below parity and the Elo it implies."""
+    """The gap to the unit's opponent as a NUMBER: percentage points below parity and the Elo it implies."""
     below = (0.5 - p.wr) * 100.0
     sign = "below" if below >= 0 else "above"
     ci = f", CI {pct(p.ci[0])}–{pct(p.ci[1])}" if p.ci else ""
-    return (f"step {num(p.step)}: WR {pct(p.wr)} vs strix{ci} — {abs(below):.1f} pp {sign} parity "
+    return (f"step {num(p.step)}: WR {pct(p.wr)} vs {p.opponent}{ci} — {abs(below):.1f} pp {sign} parity "
             f"(≈ {num(round(elo_of_wr(p.wr)))} Elo), {p.regime}, n = {num(p.eff_n)}")
 
 
@@ -131,7 +141,7 @@ def external_chart(units: dict[str, list[ExternalPoint]]) -> str:
     points = [p for pts in units.values() for p in pts]
     xs = [float(p.step) for p in points]
     tops = [p.wr for p in points] + [p.ci[1] for p in points if p.ci]
-    # Parity stays on the chart: the gap to strix is the distance to the dashed rule.
+    # Parity stays on the chart: each gap is the distance to the dashed rule.
     y_top = min(1.0, max(0.55, round(max(tops) + 0.05, 1)))
     sc = Scale(min(xs), max(xs), 0.0, y_top, _HEIGHT)
     if sc.x0 == sc.x1:
@@ -154,7 +164,7 @@ def external_chart(units: dict[str, list[ExternalPoint]]) -> str:
     legend.append('<li><i class="swatch"></i>filled = CONTENDED (the host playing the cell was busy; a v1 receipt: a live heartbeat) · '
                   '<i class="swatch idle"></i>hollow = IDLE</li>')
     latest = max(points, key=lambda p: p.step)
-    caption = ("y = WR vs strix in the unit the legend names · x = step · the dashed rule is parity "
+    caption = ("y = WR vs the opponent in the unit the legend names · x = step · the dashed rule is parity "
                f"(50 %) · latest: {esc(gap_statement(latest))}")
     return figure("".join(body), sc, height=_HEIGHT, x_label="step", caption=caption,
                   legend=f'<ul class="legend">{"".join(legend)}</ul>')
@@ -162,12 +172,12 @@ def external_chart(units: dict[str, list[ExternalPoint]]) -> str:
 
 def external_panel(points: list[ExternalPoint], note: str, gaps: Gaps) -> Panel:
     """The tier-2 panel: a chart per unit, the gap table, and a stated gap when no sidecar was given."""
-    reads = f"{PRODUCER}: step, unit (ours.sims, strix.sims), regime, wr, wr_ci_lower/upper, eff_n"
-    title = "External anchor: strix"
+    reads = f"{PRODUCER}: step, unit (ours.sims, strix.sims or six.generation and six.nodes), regime, wr, wr_ci_lower/upper, eff_n"
+    title = "External anchors: strix and Six"
     if not points:
-        body = ('<p class="absent">No external point in this record: the strix series is read from '
+        body = ('<p class="absent">No external point in this record: the strix and Six series are read from '
                 "the follower's sidecars, not from the event stream, and none was given.</p>"
-                + gaps.mark(title, f"no strix sidecar read ({esc(note)}); the producer is "
+                + gaps.mark(title, f"no external sidecar read ({esc(note)}); the producer is "
                             f"<code>{esc(PRODUCER)}</code>"))
         return Panel(title, reads, body, "external")
     units = series_by_unit(points)
@@ -176,7 +186,7 @@ def external_panel(points: list[ExternalPoint], note: str, gaps: Gaps) -> Panel:
              f"{(0.5 - p.wr) * 100:.1f} pp", p.net_hash[:12], p.checkpoint]
             for p in sorted(points, key=lambda p: (p.step, p.unit))]
     body = external_chart(units) + table(
-        ["run", "step", "unit", "regime", "trigger", "WR vs strix", "95 % CI (pairs)", "eff_n",
+        ["run", "step", "unit", "regime", "trigger", "WR vs opponent", "95 % CI (pairs)", "eff_n",
          "gap to parity", "net hash", "checkpoint"], rows)
     gap_lines = "".join(f"<li>{esc(label)} — {esc(gap_statement(pts[-1]))}</li>"
                         for label, pts in units.items())
@@ -185,6 +195,6 @@ def external_panel(points: list[ExternalPoint], note: str, gaps: Gaps) -> Panel:
                  "two sims pairs are never one series; another run's point — a parent's bridge cell — sits "
                  "on THAT run's step axis); "
                  "a point's regime travels with it because the wall changes with it and the WR did "
-                 "not (STRIX_RUN7_60K_2026-09-17.md). Strix's absolute level is not stated: it is a "
-                 "fixed external reference (R352(e)).")
+                 "not (STRIX_RUN7_60K_2026-09-17.md). Neither opponent's absolute level is stated: each "
+                 "is a fixed external reference (R352(e), R374(b)).")
     return Panel(title, reads, body, "external", note_text)

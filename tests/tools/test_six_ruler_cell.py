@@ -111,3 +111,25 @@ def test_the_six_pin_is_read_off_the_pin_file(follower) -> None:
     assert pin["net_sha256"].startswith("4afcbb11") and pin["engine_sha256"].startswith("7d06548b")
     assert follower.opponent_pin("equal_work")["checkpoint"] == "checkpoint_00237000.pt"
 
+
+def test_the_dashboard_draws_the_six_rung_as_its_own_series(follower, external, tmp_path: Path) -> None:
+    ck = tmp_path / "checkpoints"
+    ck.mkdir()
+    ckpt = ck / "run8_00045000_deadbeef.ckpt"
+    ckpt.write_bytes(b"w")
+    pin = {"commit": "f2b5ec2", "engine_sha256": "e", "net": "gen-0030.onnx", "net_sha256": "n"}
+    six = follower.sidecar_record(ckpt, unit="six30_16", trigger="once", record=_record(), regime_name="IDLE",
+                                  regime_evidence={}, run_id="run8", started=0.0, finished=1.0, pin=pin)
+    strix = follower.sidecar_record(ckpt, unit="equal_work", trigger="once", record=_record(wall_sec=2.0),
+                                    regime_name="IDLE", regime_evidence={}, run_id="run8", started=0.0,
+                                    finished=1.0, pin={})
+    (ck / f"{ckpt.name}.six30_16.json").write_text(json.dumps(six), encoding="utf-8")
+    (ck / f"{ckpt.name}.strix256.json").write_text(json.dumps(strix), encoding="utf-8")
+    (ck / f"{ckpt.name}.six30_16.failed.json").write_text("{}", encoding="utf-8")
+    points, note = external.load_external_points([ck])
+    labels = sorted(external.series_by_unit(points))
+    assert labels == ["run8 · equal_work: ours PUCT-256 vs strix 256 sims",
+                      "run8 · six30_16: ours PUCT-256 vs Six gen 30 @ 16 nodes"]
+    assert "2 sidecar(s) read" in note and "failed cell, not a receipt" in note
+    six_point = next(p for p in points if p.unit == "six30_16")
+    assert six_point.opponent == "Six gen 30" and "vs Six gen 30" in external.gap_statement(six_point)
