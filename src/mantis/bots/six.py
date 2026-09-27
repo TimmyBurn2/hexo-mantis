@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib.util
 import logging
 import os
+import re
 import subprocess
 import tempfile
 import time
@@ -40,6 +41,7 @@ NET_IDENT = "id name HexBot Net"
 #: An empty board's forfeit cell: outside every legal ball, so the arena refuses it.
 _OFF_BOARD = (1 << 20, 1 << 20)
 _DEVICES = ("cuda", "cpu")
+_COORD = re.compile(r"-?[0-9]+")
 _LOG = logging.getLogger(__name__)
 
 
@@ -66,7 +68,7 @@ def parse_reply(lines: Sequence[str]) -> SixReply:
     stones: tuple[tuple[int, int], ...] = ()
     if words == ["none"]:
         failures.append("bestmove none")
-    elif len(words) % 2 or not all(w.lstrip("-").isdigit() for w in words):
+    elif len(words) % 2 or not all(_COORD.fullmatch(w) for w in words):
         failures.append(f"malformed answer {lines[-1]!r}")
     else:
         stones = tuple((int(words[i]), int(words[i + 1])) for i in range(0, len(words), 2))
@@ -92,6 +94,8 @@ class SixAssets:
     net_sha256: str
     variant: str
     commit: str
+    #: the pinned runtime members' sha256s in asset-name order, comma-joined; "" when the pin names none.
+    runtime_sha256: str = ""
 
 
 def _asset(root: Path, pin: dict[str, Any], name: str) -> tuple[Path, str]:
@@ -116,9 +120,15 @@ def pin_record(variant: str) -> dict[str, str | None]:
     """What the pin declares for the engine and the `variant` network (a receipt's provenance), `None` where it declares nothing."""
     root = find_vendor_root()
     pin = (None if root is None else _pin(root)) or {}
-    engine, net = (pin.get("assets", {}).get(name, {}) for name in (ENGINE_ASSET, variant))
+    assets = pin.get("assets", {})
+    engine, net = (assets.get(name, {}) for name in (ENGINE_ASSET, variant))
     return {"commit": pin.get("sha"), "engine_sha256": engine.get("sha256"),
-            "net": Path(net["path"]).name if "path" in net else None, "net_sha256": net.get("sha256")}
+            "net": Path(net["path"]).name if "path" in net else None, "net_sha256": net.get("sha256"),
+            "runtime_sha256": ",".join(assets[n]["sha256"] for n in _runtime_names(assets))}
+
+
+def _runtime_names(assets: dict[str, Any]) -> list[str]:
+    return sorted(n for n in assets if n.startswith(RUNTIME_PREFIX))
 
 
 def locate_six(vendor_root: Path | None, variant: str) -> SixAssets:
@@ -133,11 +143,10 @@ def locate_six(vendor_root: Path | None, variant: str) -> SixAssets:
     if variant not in networks:
         raise RungUnresolvable(rung=f"six:{variant}", reason=f"the pin names the networks {networks}; not {variant!r}")
     engine, engine_sha = _asset(vendor_root, pin, ENGINE_ASSET)
-    for name in sorted(n for n in pin.get("assets", {}) if n.startswith(RUNTIME_PREFIX)):
-        _asset(vendor_root, pin, name)
+    runtime = [_asset(vendor_root, pin, name)[1] for name in _runtime_names(pin.get("assets", {}))]
     net, net_sha = _asset(vendor_root, pin, variant)
     return SixAssets(engine=engine, engine_sha256=engine_sha, net=net, net_sha256=net_sha, variant=variant,
-                     commit=str(pin["sha"]))
+                     commit=str(pin["sha"]), runtime_sha256=",".join(runtime))
 
 
 def six_availability(variant: str) -> tuple[bool, str]:
@@ -171,7 +180,7 @@ class Engine(Protocol):
 
 
 class SixEngine:
-    """One `sixengine` process: the net passed absolute (it runs from its own directory), the cache off."""
+    """One `sixengine` process, the net passed absolute (it runs from its own directory), the cache off; Raises: SixEngineError when it does not start, loads no network or refuses a setting."""
 
     def __init__(self, assets: SixAssets, *, device: str) -> None:
         cmd = [str(assets.engine), "--net", str(assets.net.resolve())] + (["--cpu"] if device == "cpu" else [])
@@ -351,7 +360,7 @@ def _device_kind(device: str | None) -> str:
 
 def resolve_six(*, opponent_sims: int | None, variant: str, device: str | None,
                 vendor_root: Path | None = None) -> Callable[[], SixBot]:
-    """A factory over a fresh engine per call, re-hashed at every start (`vendor_root` None = the repo's own); Raises: RungUnresolvable, also from the factory on a provider that is not the device's."""
+    """A factory over a fresh engine per call, re-hashed at every start (`vendor_root` None = the repo's own); Raises: RungUnresolvable, also from the factory on a failed start, a netless engine or a provider that is not the device's."""
     if opponent_sims is None:
         raise RungUnresolvable(rung="six", reason="six rung declares no nodes")
     kind = _device_kind(device)
@@ -372,8 +381,9 @@ def resolve_six(*, opponent_sims: int | None, variant: str, device: str | None,
                 f"{PROVIDER_MARKER}: the rung plays on {kind}, the engine reports {engine.provider} "
                 f"({[ln for ln in engine.stderr_lines if 'available' in ln or 'using' in ln][:2]}); "
                 "a CUDA engine needs the venv's NVIDIA libraries: `make build.cuda`"))
-        _LOG.info("%s provider=%s variant=%s nodes=%d engine_sha256=%s net_sha256=%s", PROVIDER_LOG_MARKER,
-                  engine.provider, variant, nodes, assets.engine_sha256, assets.net_sha256)
+        _LOG.info("%s provider=%s variant=%s nodes=%d engine_sha256=%s net_sha256=%s runtime_sha256=%s",
+                  PROVIDER_LOG_MARKER, engine.provider, variant, nodes, assets.engine_sha256, assets.net_sha256,
+                  assets.runtime_sha256)
         return SixBot(engine, name=name, nodes=nodes)
 
     return _factory

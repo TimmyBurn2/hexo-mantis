@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 import torch
-from _six_fake import fake_vendor, sha256_of
+from _six_fake import fake_vendor
 
 from mantis._engine import Board
 from mantis.arena.adjudicate import TERMINAL_FORFEIT
@@ -31,14 +31,11 @@ from mantis.bots.six import (
     resolve_six,
     six_availability,
 )
+from mantis.util.hashing import sha256_file
 
 _ENCODING = "gnn_axis_r8"
 _OPENING = [(0, 0), (1, 0), (0, 1), (2, -1)]  # X single, O pair, X's first: X to move, 1 left
 _FALLBACK = ["CUDA is not available: libcudnn.so.9: cannot open shared object file", "using the CPU"]
-
-
-def sha256_of_bytes(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
 
 
 def _board_after(moves: Sequence[tuple[int, int]]) -> Any:
@@ -136,11 +133,13 @@ def test_the_position_goes_in_observed_order_at_the_boards_radius_and_the_turn_i
 
 
 def test_the_second_stone_waits_for_exactly_the_board_it_was_chosen_for() -> None:
-    """MUTATION THAT REDS IT: dropping the stone-count guard, so a call on the unchanged board replays the stale stone."""
-    bot, engine = _bot([["bestmove 3 3 4 4"], ["bestmove 5 5 6 6"]])
-    board = _observed(bot, _OPENING[:3])
-    assert bot.select_move(board) == (3, 3)
-    assert bot.select_move(board) == (5, 5), "the first stone was never applied: the cached one is stale"
+    """MUTATION THAT REDS IT: dropping the stone-count guard, so a later board with one stone left replays the stale stone."""
+    bot, engine = _bot([["bestmove 3 3 4 4"], ["bestmove 5 5"]])
+    assert bot.select_move(_observed(bot, _OPENING[:3])) == (3, 3)
+    later = [*_OPENING[:3], (3, 3), (-3, 3), (-2, 2)]  # the cached stone's board has passed: 6 stones, 1 left
+    for q, r in later[3:]:
+        bot.observe_move(q, r)
+    assert bot.select_move(_board_after(later)) == (5, 5), "the cached stone was chosen for 4 stones, not 6"
     assert len(engine.searches) == 2 and bot.stale_pending == 1
 
 
@@ -185,7 +184,7 @@ def test_the_located_assets_are_the_pins_engine_and_network(tmp_path: Path) -> N
     root = fake_vendor(tmp_path)
     assets = locate_six(root, "gen0030")
     assert assets.engine.name == "sixengine" and assets.net.name == "gen-0030.onnx"
-    assert assets.net_sha256 == sha256_of(assets.net) and assets.commit == "a" * 40
+    assert assets.net_sha256 == sha256_file(assets.net) and assets.commit == "a" * 40
 
 
 def test_a_planted_wrong_network_hash_is_REFUSED(tmp_path: Path) -> None:
@@ -197,8 +196,8 @@ def test_a_planted_wrong_network_hash_is_REFUSED(tmp_path: Path) -> None:
 
 
 def test_a_pinned_runtime_is_re_hashed_at_load(tmp_path: Path) -> None:
-    runtime = sha256_of_bytes(b"a runtime")
-    assert locate_six(fake_vendor(tmp_path / "a", runtime_sha=runtime), "gen0030").net.is_file()
+    runtime = hashlib.sha256(b"a runtime").hexdigest()
+    assert locate_six(fake_vendor(tmp_path / "a", runtime_sha=runtime), "gen0030").runtime_sha256 == runtime
     with pytest.raises(RungUnresolvable, match="libonnxruntime.so.1"):
         locate_six(fake_vendor(tmp_path / "b", runtime_sha="0" * 64), "gen0030")
 
@@ -264,6 +263,29 @@ def test_an_engine_that_cannot_start_is_a_recorded_refusal(tmp_path: Path) -> No
                           vendor_root=fake_vendor(tmp_path, stderr=["could not load the network: bad"], dies=True))
     with pytest.raises(RungUnresolvable, match="could not load the network"):
         factory()
+
+
+def test_an_engine_that_cannot_be_executed_is_a_recorded_refusal(tmp_path: Path) -> None:
+    root = fake_vendor(tmp_path)
+    engine = root / "external" / "six-assets" / "release" / "engine" / "sixengine"
+    engine.chmod(0o644)
+    factory = resolve_six(opponent_sims=16, variant="gen0030", device="cpu", vendor_root=root)
+    with pytest.raises(RungUnresolvable, match="did not start"):
+        factory()
+
+
+def test_a_failed_search_on_an_empty_board_forfeits_off_the_board() -> None:
+    bot, _ = _bot([["bestmove none"]])
+    board = _observed(bot, [])
+    move = bot.select_move(board)
+    assert not board.is_legal(*move) and bot.forfeits == {"failed": 1, "illegal": 0}
+
+
+def test_the_engine_finds_the_releases_own_runtime_first(tmp_path: Path) -> None:
+    assets = locate_six(fake_vendor(tmp_path), "gen0030")
+    SixEngine(assets, device="cpu").close()
+    env = (assets.engine.parent / "env.txt").read_text(encoding="utf-8").split(":")
+    assert env[0] == str(assets.engine.parent)
 
 
 def test_an_engine_playing_without_a_network_is_refused(tmp_path: Path) -> None:
