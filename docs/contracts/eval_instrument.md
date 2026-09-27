@@ -1,6 +1,6 @@
 # Contract: eval instrument
 
-- version: v4
+- version: v5
 - owner: mantis.arena
 - status: LIVE. <!-- AUDIT-1 F-52: this read "SKELETON — contract text lands with the
   subsystem port" over a filled contract, beside a shipped eval subsystem. The label is
@@ -26,6 +26,7 @@ tests — is DELETED (R368(e)).
 v4: the strix cell's regime is the load of the host that PLAYS it, not the run's mirrored heartbeat
 (PERF-ADA H7): off the box that heartbeat is always live and labelled every cell CONTENDED. The
 receipt's `schema_version` moves 1 → 2 with it, so a v1 receipt's regime reads under the heartbeat rule.
+v5: a pin may name release assets by url and sha256, fetched and verified by `tools/vendor_fetch.sh <pin>`.
 
 The run5 decision document carried that run's choices and is DELETED with its config
 (R346(f)): a decision document whose subject config is not in the tree
@@ -82,7 +83,11 @@ and are folded in here, because a reader of any ladder reading needs them:
   `<ckpt>.strix512.json`). The 256/256 reading of a run's parent, taken once, is both the bridge
   from the as-shipped series and that run's baseline.
 - **Vendoring.** External engines are pinned by commit sha in `vendor/pins.toml` and fetched
-  by `make vendor`, which CLONES and does not build. The one build step is the strix rung's
+  by `make vendor`, which CLONES and does not build. A pin's release assets (each a url and a
+  sha256; an archive with `unpack`, a member of one with `from`) are fetched only by
+  `tools/vendor_fetch.sh <pin>`, and each is verified on arrival: a download
+  becomes its file only once its sha256 is the pin's, and a warm file that no longer verifies is
+  refused, never re-fetched over. The one build step is the strix rung's
   venv: `make vendor.strix` (`tools/vendor_build_strix.sh`) syncs strix's OWN venv inside
   the fetched tree — its torch is the CPU wheel and its `hexo_rs` engine builds by maturin,
   apart from the mantis environment — and refuses before building on a missing tree or a
@@ -128,6 +133,7 @@ row says so and names what does run.
 | an unimplemented declared pooling is REFUSED, never a fallthrough | `tests/eval/test_value_pool_guard.py`, `tests/eval/test_eval_decode_guard_ordering.py`, `tests/eval/test_graph_round_encoding.py` | yes |
 | eff_n is trajectory-hash-distinct; the low-power guard is per pair; an empty sample degenerates rather than raising | `tests/eval/test_aggregate_regime.py` | yes |
 | a pin is a commit sha | `tests/tools/test_vendor_pins_strix.py` | yes |
+| a release asset becomes its file only once its sha256 is the pin's; a planted wrong sha256, a stale member and a directory that is not a clone each refuse; a bare `make vendor` fetches no asset | `tests/tools/test_vendor_fetch_assets.py` | yes (offline, `file://` assets) |
 | the refusal reasons name exactly their own missing step, and no environment key | `tests/bots/test_strix_adapter.py`, `tests/bots/test_protocol.py` | yes |
 | the gate's rule fields ride `eval_round_complete.gate`, `null` when no gate ran; the A-3 partial carries them on a broken route | `tests/eval/test_gate_fields_ride_the_round_complete_row.py` | yes |
 | a strength-floor refusal is a third thing on the routed mapping and the stream | `tests/eval/test_strength_floor_verdict_on_the_routed_mapping.py` | yes |

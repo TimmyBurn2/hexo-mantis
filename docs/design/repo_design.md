@@ -1180,3 +1180,21 @@ are `docs/design/analyzer_design.md`.
 5. **Contracts #11 and §4.7 are unchanged.** Nothing is emitted; nothing is read from a record.
 
 The ruling number is R363(d) (2026-09-20), which admitted the tool on these terms.
+
+---
+
+### AMENDMENT — SIX-RUNG: Six gen 30 @ 16 nodes lands as a ruler beside strix (R374(b))
+
+**The SIX-RUNG packet, 2026-09-27.** R374(b) admits an external engine as a ruler after rules parity,
+a measured replay rate, its cost per game and a calibration; SIX-SCOUT met all four for Six gen 30 at
+16 nodes (`mantis-records/six-scout/EXIT.md`, outside the tree). Each deviation below lands in the
+commit that makes it (R9).
+
+1. **§7 vendoring: a pin may name release ASSETS.** A pin stays url + commit sha + optional patch,
+   and may add `[pins.<name>.assets.<asset>]` rows, each a `url` and a `sha256` with its `path` under
+   `vendor/external/`: an archive names `unpack` (the directory it is extracted into), and a member of
+   one names `from` (that archive, same `url`) and is verified after extraction. `make vendor` still
+   only clones; `tools/vendor_fetch.sh <pin>` (`make vendor.six`) also fetches the named pin's
+   assets, streaming each to a `.part` that becomes the file only once its sha256 is the pin's. A
+   warm file that no longer verifies is refused, never re-fetched over. Nothing fetched is tracked
+   (R7). The single mechanism is unchanged: `vendor/pins.toml` stays the one authority.
