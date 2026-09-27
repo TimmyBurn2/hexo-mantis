@@ -87,7 +87,8 @@ and are folded in here, because a reader of any ladder reading needs them:
   the v1.2.0 Linux release, built from engine sources identical to the pinned commit — playing a
   pinned network, gen 30 at 16 nodes. Every asset is pinned by url and sha256 in `vendor/pins.toml`
   and the engine and the network are re-hashed at every engine start (`mantis.bots.six`). ONE engine
-  process per concurrent game speaks the Six protocol: `position radius R moves …` with R the
+  process per concurrent game (the rung block's first opponent resolves the rung before any game and,
+  under concurrency, is closed at once; every opponent is closed when the block ends) speaks the Six protocol: `position radius R moves …` with R the
   board's `legal_move_radius`, `go nodes N`, `bestmove`; `setoption cacheEntries 0`, because Six's
   expansion cache survives `newgame` and would make a game depend on earlier ones. Six answers a
   whole compound turn; the second stone is played only on exactly the board it was chosen for. It

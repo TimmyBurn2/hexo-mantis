@@ -491,10 +491,36 @@ def _play_rung_block(
 
     # One (candidate, opponent) pair per game thread under `rung_concurrency` > 1: both carry
     # per-game state, and the bot factory builds a fresh opponent per call.
-    def _pair() -> tuple[DeployHeadPlayer, Any]:
-        return _candidate(), bot_factory()
+    opponents: list[Any] = []
 
+    def _pair() -> tuple[DeployHeadPlayer, Any]:
+        candidate = _candidate()
+        opponents.append(bot_factory())
+        return candidate, opponents[-1]
+
+    # The first pair resolves the opponent before any game; under concurrency it never plays, so its
+    # process (an engine's GPU context) is released at once.
     candidate, opponent = _pair()
+    try:
+        if spec.rung_concurrency > 1:
+            _close_bot(opponents.pop())
+        return _play_rung_games(spec, rung_job, candidate, opponent, _pair, board_factory,
+                                adjudicator=adjudicator, progress=progress, games=games)
+    finally:
+        for bot in opponents:
+            _close_bot(bot)
+
+
+def _close_bot(bot: Any) -> None:
+    close = getattr(bot, "close", None)
+    if close is not None:
+        close()
+
+
+def _play_rung_games(spec: RoundSpec, rung_job: RungJob, candidate: DeployHeadPlayer, opponent: Any,
+                     pair: Callable[[], tuple[DeployHeadPlayer, Any]], board_factory, *,
+                     adjudicator: PlyCapAdjudicator | None, progress: _RoundProgress,
+                     games: _RoundGameRecords) -> list[dict[str, Any]]:
     regime_key = RegimeKey(
         bot=rung_job.bot, variant=rung_job.variant, model_sims=_model_sims_for_kind(spec, rung_job.bot),
         # A model opponent's own sims are part of the instrument's identity (a strix rung at 128
@@ -511,7 +537,7 @@ def _play_rung_block(
     records = play_paired_match(
         candidate, opponent, openings, regime_key=regime_key,
         board_factory=board_factory, record_sink=_both(progress.sink("rung"), games.sink("rung", channel="external", rung=rung_job.name, served_sims=_model_sims_for_kind(spec, rung_job.bot), seed=spec.seed_base)), adjudicator=adjudicator, max_plies=spec.max_plies,
-        player_factory=_pair, concurrency=spec.rung_concurrency,
+        player_factory=pair, concurrency=spec.rung_concurrency,
     )
     return [_agg_record(r) for r in records[: rung_job.games]]
 

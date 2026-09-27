@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import dataclasses
+from types import SimpleNamespace
 
 import pytest
 
@@ -66,3 +67,37 @@ def test_a_six_job_resolves_at_its_own_nodes_on_the_rounds_worker_device(monkeyp
         worker._play_rung_block(_spec(rung_model_sims=256, worker_device="cuda"), job, None, None,
                                 encoding_spec=None, adjudicator=None, progress=None, games=None)
     assert seen == {"kind": "six", "opponent_sims": 16, "variant": "gen0030", "device": "cuda"}
+
+
+@pytest.mark.parametrize("concurrency, made", [(1, 1), (8, 9)])
+def test_the_rung_block_probes_its_opponent_first_and_closes_every_one_it_made(monkeypatch, concurrency, made):
+    """The eager pair resolves the opponent before any game; under concurrency it never plays, so it closes at once."""
+    bots: list = []
+
+    class _Bot:
+        def __init__(self) -> None:
+            self.closed_while_playing = None
+            self.closed = False
+            bots.append(self)
+
+        def close(self) -> None:
+            self.closed = True
+
+    def _match(candidate, opponent, openings, *, player_factory, concurrency, **_kw):
+        if concurrency > 1:
+            assert bots[0].closed, "the probe's opponent is released before the games start"
+            for _ in range(concurrency):
+                player_factory()
+        assert not any(b.closed for b in bots[1:]) and (concurrency > 1 or not bots[0].closed)
+        return []
+
+    sink = SimpleNamespace(sink=lambda *a, **k: (lambda record: None))
+    monkeypatch.setattr(worker, "resolve_bot", lambda kind, **kw: _Bot)
+    monkeypatch.setattr(worker, "build_candidate_player", lambda *a, **k: object())
+    monkeypatch.setattr(worker, "round_openings", lambda *a, **k: [])
+    monkeypatch.setattr(worker, "play_paired_match", _match)
+    job = RungJob(name="six", bot="six", variant="gen0030", opponent_sims=16, opening_book="b",
+                  deploy_matched=True, games=2, bootstrap_resamples=1, bootstrap_ci_level=0.95, bootstrap_seed=1)
+    worker._play_rung_block(_spec(rung_model_sims=256, rung_concurrency=concurrency), job, None, None,
+                            encoding_spec=None, adjudicator=None, progress=sink, games=sink)
+    assert len(bots) == made and all(b.closed for b in bots)
