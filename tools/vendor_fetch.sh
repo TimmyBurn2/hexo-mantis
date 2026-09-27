@@ -102,8 +102,10 @@ def fetch_assets(pin: str, assets: dict) -> None:
             print(f"vendor: {pin}.{name} fetched and verified")
         if "unpack" in spec:
             target = EXTERNAL / spec["unpack"]
-            if not target.resolve().is_relative_to(EXTERNAL.resolve()):
-                raise SystemExit(f"vendor: {pin}.{name} unpacks to {target}, outside vendor/external")
+            if target.resolve().parent != (EXTERNAL / spec["path"]).resolve().parent \
+                    or not target.resolve().is_relative_to(EXTERNAL.resolve()):
+                raise SystemExit(f"vendor: {pin}.{name} unpacks to {target}, outside vendor/external or "
+                                 "away from its archive's directory")
             members = [m for m in assets.values() if m.get("from") == name]
             # Extracted beside the target and renamed into place whole: a leftover part is never trusted.
             part = target.with_name(target.name + ".part")
@@ -112,8 +114,12 @@ def fetch_assets(pin: str, assets: dict) -> None:
                 part.mkdir(parents=True)
                 with tarfile.open(path) as tar:
                     tar.extractall(part, filter="data")
-                shutil.rmtree(target, ignore_errors=True)
+                old = target.with_name(target.name + ".old")
+                shutil.rmtree(old, ignore_errors=True)
+                if target.exists():
+                    target.rename(old)
                 part.rename(target)
+                shutil.rmtree(old, ignore_errors=True)
                 print(f"vendor: {pin}.{name} unpacked")
     for name, spec in assets.items():
         if "from" not in spec:
