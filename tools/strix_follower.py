@@ -194,6 +194,15 @@ def opponent_pin(unit: str) -> dict[str, Any]:
             "checkpoint_sha256": pin.get("checkpoint_sha256")}
 
 
+def played_bytes_error(record: Mapping[str, Any], pin: Mapping[str, Any]) -> str | None:
+    """Why a six cell's engines did not all play the pin's engine and network, or None when they did."""
+    engines = dict(record.get("six_engine") or {})
+    for key in ("engine_sha256", "net_sha256"):
+        if engines.get(key) != [pin.get(key)]:
+            return f"the engines played {key} {engines.get(key)}, the pin says {pin.get(key)}"
+    return None
+
+
 def sidecar_record(checkpoint: Path, *, unit: str, trigger: str, record: Mapping[str, Any],
                    regime_name: str, regime_evidence: Mapping[str, Any], run_id: str,
                    started: float, finished: float, pin: Mapping[str, Any]) -> dict[str, Any]:
@@ -204,9 +213,13 @@ def sidecar_record(checkpoint: Path, *, unit: str, trigger: str, record: Mapping
     cell = dict(record.get("cell") or {})
     if unit in SIX_UNITS:
         engines = dict(record.get("six_engine") or {})
-        opponent: dict[str, Any] = {"six": {**dict(pin), "generation": SIX_UNITS[unit][1], "nodes": theirs,
+        # The hashes the engines re-verified at start, when they are one pair; `played_bytes_error` says otherwise.
+        played = {k: v[0] for k in ("engine_sha256", "net_sha256") if len(v := engines.get(k) or []) == 1}
+        opponent: dict[str, Any] = {"six": {**dict(pin), **played, "generation": SIX_UNITS[unit][1], "nodes": theirs,
                                             "cache_entries": SIX_CACHE_ENTRIES, "provider": engines.get("provider"),
-                                            "engine_starts": engines.get("starts")},
+                                            "engine_starts": engines.get("starts"),
+                                            "searches": engines.get("searches"),
+                                            "stale_pending": engines.get("stale_pending")},
                                     "six_findings": record.get("six_findings")}
     else:
         opponent = {"strix": {**dict(pin), "sims": theirs, "solver": "off" if unit in SOLVER_OFF_UNITS else "on",
@@ -268,9 +281,12 @@ class Follower:
         body = sidecar_record(checkpoint, unit=self.unit, trigger=trigger, record=record,
                               regime_name=regime_name, regime_evidence=evidence, run_id=self.run_id,
                               started=started, finished=finished, pin=self.pin)
-        if record.get("rc") != 0 or "readout" not in record:
+        error = record.get("error")
+        if self.unit in SIX_UNITS and record.get("rc") == 0 and "readout" in record:
+            error = played_bytes_error(record, self.pin)
+        if record.get("rc") != 0 or "readout" not in record or error is not None:
             failed = out.with_name(out.name.replace(".json", ".failed.json"))
-            failed.write_text(json.dumps({**body, "error": record.get("error")}, indent=1),
+            failed.write_text(json.dumps({**body, "error": error}, indent=1),
                               encoding="utf-8")
             self.log(f"follower: FAILED rc={record.get('rc')} — {failed.name}, no receipt")
             return "failed", failed

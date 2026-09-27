@@ -28,6 +28,7 @@ from typing import Any
 
 import numpy as np
 
+from mantis.bots.six import CLOSE_LOG_MARKER as SIX_CLOSE_LOG_MARKER
 from mantis.bots.six import FINDING_LOG_MARKER as SIX_FINDING_LOG_MARKER
 from mantis.bots.six import PROVIDER_LOG_MARKER as SIX_PROVIDER_LOG_MARKER
 from mantis.config.loader import load_config
@@ -185,7 +186,7 @@ def _rung_on_cell_book(job: RungJob, cell: Mapping[str, Any]) -> RungJob:
 def cell_opponent(cell: Mapping[str, Any]) -> str:
     """The cell's `opponent`, REQUIRED: the old default (`sealbot_d5`) went with the rung."""
     if "opponent" not in cell:
-        raise FrontierCellError(f"{cell.get('label')}: a cell names its opponent ({STRIX!r} or a "
+        raise FrontierCellError(f"{cell.get('label')}: a cell names its opponent ({STRIX!r}, {SIX!r} or a "
                                 "snapshot source); the sealbot rung is deleted and there is no default")
     return str(cell["opponent"])
 
@@ -340,15 +341,21 @@ def run_cell(cell: Mapping[str, Any], *, config: Any, base: RoundSpec, work_dir:
     return record
 
 
+def _marked(log: str, marker: str) -> list[dict[str, str]]:
+    return [dict(tok.split("=", 1) for tok in ln.split(marker, 1)[1].split() if "=" in tok)
+            for ln in log.splitlines() if marker in ln]
+
+
 def six_log_record(log: str) -> dict[str, Any]:
-    """The six engines' starts, provider and hashes, and their forfeits, read off the child's log lines."""
-    starts = [dict(tok.split("=", 1) for tok in ln.split(SIX_PROVIDER_LOG_MARKER, 1)[1].split() if "=" in tok)
-              for ln in log.splitlines() if SIX_PROVIDER_LOG_MARKER in ln]
+    """The six engines' starts, provider, hashes and counters, and their forfeits, read off the child's log lines."""
+    starts, closes = _marked(log, SIX_PROVIDER_LOG_MARKER), _marked(log, SIX_CLOSE_LOG_MARKER)
     findings = [ln.strip() for ln in log.splitlines() if SIX_FINDING_LOG_MARKER in ln]
     providers = sorted({s.get("provider", "?") for s in starts})
     return {"six_engine": {"starts": len(starts), "provider": "+".join(providers) or None,
                            "engine_sha256": sorted({s.get("engine_sha256", "?") for s in starts}),
-                           "net_sha256": sorted({s.get("net_sha256", "?") for s in starts})},
+                           "net_sha256": sorted({s.get("net_sha256", "?") for s in starts}),
+                           "searches": sum(int(c.get("searches", 0)) for c in closes),
+                           "stale_pending": sum(int(c.get("stale_pending", 0)) for c in closes)},
             "six_findings": {"count": len(findings), "first": findings[:5]}}
 
 

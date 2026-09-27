@@ -104,9 +104,10 @@ and are folded in here, because a reader of any ladder reading needs them:
   or `--follow` on the same triggers as the equal-work unit, which with it are the two ruler units),
   through `tools/strength_frontier.py`'s `six` cell (`six_net`, `six_nodes`). Its receipt is
   `<ckpt>.six30_16.json`, the strix receipt's fields with a `six` block in place of `strix` — the
-  pin's commit, engine and network with their sha256s, the generation, the nodes, `cache_entries`,
-  the provider and the engine starts, both read off the child's log — and `six_findings`, the
-  forfeits. The dashboard draws it as its own series beside strix's (the R356(d) amendment).
+  pin's commit, the engine and network sha256s the engines re-verified at start, the generation, the
+  nodes, `cache_entries`, the provider, the engine starts, the searches and the stale second stones,
+  all read off the child's log — and `six_findings`, the forfeits. A cell whose engines played any
+  other bytes than the pin's, or more than one engine or network, writes `.failed.json`, not a receipt. The dashboard draws it as its own series beside strix's (the R356(d) amendment).
 - **Vendoring.** External engines are pinned by commit sha in `vendor/pins.toml` and fetched
   by `make vendor`, which CLONES and does not build. A pin's release assets (each a url and a
   sha256; an archive with `unpack`, a member of one with `from`) are fetched only by

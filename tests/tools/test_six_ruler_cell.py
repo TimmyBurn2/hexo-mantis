@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 import pytest
+from _six_fake import fake_vendor, sha256_of
 from _toolpath import load_module_by_path
 
-from mantis.bots.six import FINDING_LOG_MARKER, PROVIDER_LOG_MARKER
+from mantis.bots.six import FINDING_LOG_MARKER, PROVIDER_LOG_MARKER, resolve_six
+from mantis.monitor.logging_setup import _FORMAT
 from mantis.config.census import production_configs
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -60,10 +63,11 @@ def test_the_child_log_yields_the_forfeits_and_the_provider(frontier) -> None:
         "2026 INFO unrelated line provider=cpu",
     ])
     record = frontier.six_log_record(log)
-    assert record["six_engine"] == {"starts": 2, "provider": "cuda", "engine_sha256": ["e"], "net_sha256": ["n"]}
+    assert record["six_engine"] == {"starts": 2, "provider": "cuda", "engine_sha256": ["e"], "net_sha256": ["n"],
+                                    "searches": 0, "stale_pending": 0}
     assert record["six_findings"]["count"] == 1 and "bestmove none" in record["six_findings"]["first"][0]
     assert frontier.six_log_record("")["six_engine"] == {"starts": 0, "provider": None, "engine_sha256": [],
-                                                         "net_sha256": []}
+                                                         "net_sha256": [], "searches": 0, "stale_pending": 0}
 
 
 def test_the_follower_unit_composes_the_cell_and_names_its_receipt(follower) -> None:
@@ -80,7 +84,8 @@ def _record(**over) -> dict:
     record = {"label": "l", "cell": {"step": 45000, "concurrency": 8}, "rc": 0, "wall_sec": 1.0,
               "provenance": {"candidate": {"net_hash": "n"}},
               "readout": {"wr": 0.35, "wr_ci_lower": 0.3, "wr_ci_upper": 0.4, "games": 288, "eff_n": 288},
-              "six_engine": {"starts": 8, "provider": "cuda", "engine_sha256": ["e"], "net_sha256": ["n"]},
+              "six_engine": {"starts": 8, "provider": "cuda", "engine_sha256": ["e"], "net_sha256": ["n"],
+                             "searches": 100, "stale_pending": 0},
               "six_findings": {"count": 0, "first": []}}
     record.update(over)
     return record
@@ -94,7 +99,7 @@ def test_the_receipt_is_labelled_with_the_generation_the_nodes_and_the_provider(
                                    regime_evidence={}, run_id="run8", started=0.0, finished=1.0, pin=pin)
     assert "strix" not in body and body["unit"] == "six30_16"
     assert body["six"] == {**pin, "generation": 30, "nodes": 16, "cache_entries": 0, "provider": "cuda",
-                           "engine_starts": 8}
+                           "engine_starts": 8, "searches": 100, "stale_pending": 0}
     assert body["six_findings"] == {"count": 0, "first": []} and body["wr"] == 0.35
 
 
@@ -133,3 +138,46 @@ def test_the_dashboard_draws_the_six_rung_as_its_own_series(follower, external, 
     assert "2 sidecar(s) read" in note and "failed cell, not a receipt" in note
     six_point = next(p for p in points if p.unit == "six30_16")
     assert six_point.opponent == "Six gen 30" and "vs Six gen 30" in external.gap_statement(six_point)
+
+
+def test_the_real_producers_lines_read_back_through_the_frontier(frontier, tmp_path: Path,
+                                                                   caplog: pytest.LogCaptureFixture) -> None:
+    """The producer test: the lines `mantis.bots.six` logs, in the child's own format, are what `six_log_record` reads."""
+    caplog.set_level(logging.INFO)
+    root = fake_vendor(tmp_path)
+    bot = resolve_six(opponent_sims=16, variant="gen0030", device="cuda", vendor_root=root)()
+    bot.close()
+    formatter = logging.Formatter(_FORMAT)
+    record = frontier.six_log_record("\n".join(formatter.format(r) for r in caplog.records))
+    engine = sha256_of(root / "external" / "six-assets" / "release" / "engine" / "sixengine")
+    assert record["six_engine"] == {"starts": 1, "provider": "cuda", "engine_sha256": [engine],
+                                    "net_sha256": [sha256_of(root / "external" / "six-assets" / "gen-0030.onnx")],
+                                    "searches": 0, "stale_pending": 0}
+
+
+def test_follow_accepts_the_six_unit(follower, monkeypatch, tmp_path: Path) -> None:
+    seen: list[str] = []
+    monkeypatch.setattr(follower, "_real_run_cell", lambda _config, _work: (lambda cell: {}))
+    monkeypatch.setattr(follower.Follower, "follow", lambda self, _poll: seen.append(self.unit))
+    assert follower.main(["--config", "c", "--run-dir", str(tmp_path), "--run-id", "r", "--work-dir",
+                          str(tmp_path / "w"), "--follow", "--unit", "six30_16"]) == 0
+    assert seen == ["six30_16"]
+
+
+@pytest.mark.parametrize("nets, status", [(["n"], "written"), (["n", "m"], "failed"), (["m"], "failed"), ([], "failed")])
+def test_the_receipt_names_the_bytes_played_and_refuses_anything_but_the_pins(follower, tmp_path: Path,
+                                                                              nets: list[str], status: str) -> None:
+    ckpt = tmp_path / "run8_00045000_deadbeef.ckpt"
+    ckpt.write_bytes(b"w")
+    pin = {"commit": "f2b5ec2", "engine_sha256": "e", "net": "gen-0030.onnx", "net_sha256": "n"}
+    record = _record(six_engine={"starts": 9, "provider": "cuda", "engine_sha256": ["e"], "net_sha256": nets,
+                                 "searches": 10, "stale_pending": 0})
+    run = follower.Follower(run_dir=tmp_path, run_id="run8", run_cell=lambda cell: record, unit="six30_16", pin=pin,
+                            clock=lambda: 0.0, log=lambda _s: None,
+                            host_load=lambda: follower.HostLoad(load_1m=0.0, cpu_count=16, gpu_util_pct=(0,)))
+    got, path = run.read_one(ckpt, trigger="once")
+    assert got == status
+    if status == "written":
+        assert json.loads(path.read_text(encoding="utf-8"))["six"]["net_sha256"] == "n"
+    else:
+        assert "sha256" in json.loads(path.read_text(encoding="utf-8"))["error"]
