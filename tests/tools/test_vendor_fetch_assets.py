@@ -35,7 +35,7 @@ def _source_repo(tmp_path: Path) -> tuple[Path, str]:
 
 def _archive(tmp_path: Path, members: dict[str, bytes]) -> Path:
     path = tmp_path / "release.tar.gz"
-    with tarfile.open(path, "w:gz") as tar:
+    with tarfile.open(path, "w:gz") as tar:  # encoding-gate: ok -- a gzip archive, not text
         for name, data in members.items():
             info = tarfile.TarInfo(name)
             info.size = len(data)
