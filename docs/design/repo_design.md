@@ -1198,3 +1198,8 @@ commit that makes it (R9).
    assets, streaming each to a `.part` that becomes the file only once its sha256 is the pin's. A
    warm file that no longer verifies is refused, never re-fetched over. Nothing fetched is tracked
    (R7). The single mechanism is unchanged: `vendor/pins.toml` stays the one authority.
+2. **The arena reports the move ORDER.** Our Board keeps no history, and Six's network reads the
+   stone order (the first stone of the turn, the opponent's last turn, a crop on the last four
+   stones) and its tree reuse walks it. `mantis.arena.match` calls a player's `observe_move(q, r)`,
+   when it defines one, for every stone it applies, the opening's included; a forfeited stone is
+   never applied and never reported. The legality boundary is unchanged.

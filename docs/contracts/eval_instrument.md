@@ -136,6 +136,7 @@ row says so and names what does run.
 | a pin is a commit sha | `tests/tools/test_vendor_pins_strix.py` | yes |
 | a release asset becomes its file only once its sha256 is the pin's; a planted wrong sha256, a stale member and a directory that is not a clone each refuse; a bare `make vendor` fetches no asset | `tests/tools/test_vendor_fetch_assets.py` | yes (offline, `file://` assets) |
 | the Six pin names the repo at its commit and the v1.2.0 Linux release, its engine and the gen 30 and gen 455 networks, each by url and sha256 | `tests/tools/test_vendor_pins_six.py` | yes |
+| a player that reads the move order hears every applied stone in order, the opening's included, and never a forfeited one | `tests/arena/test_move_observer.py` | yes |
 | the refusal reasons name exactly their own missing step, and no environment key | `tests/bots/test_strix_adapter.py`, `tests/bots/test_protocol.py` | yes |
 | the gate's rule fields ride `eval_round_complete.gate`, `null` when no gate ran; the A-3 partial carries them on a broken route | `tests/eval/test_gate_fields_ride_the_round_complete_row.py` | yes |
 | a strength-floor refusal is a third thing on the routed mapping and the stream | `tests/eval/test_strength_floor_verdict_on_the_routed_mapping.py` | yes |

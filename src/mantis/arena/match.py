@@ -107,6 +107,9 @@ def _play_one_game(
     board = board_factory()
     candidate_player.new_game()
     opponent_bot.new_game()
+    #: A player that reads the move ORDER, which the Board does not keep, hears every applied stone.
+    observers = [f for f in (getattr(p, "observe_move", None) for p in (candidate_player, opponent_bot))
+                 if f is not None]
 
     moves: list[tuple[int, int]] = []
     for q, r in opening_moves:
@@ -120,6 +123,8 @@ def _play_one_game(
             )
         board.apply_move(q, r)
         moves.append((q, r))
+        for observe in observers:
+            observe(q, r)
 
     #: Collected iff a mover EXPOSES a root — structural, not a flag: a knob here would be a
     #: way to silently turn the record's stats half off. A bot that cannot produce them yields
@@ -162,6 +167,8 @@ def _play_one_game(
             })
         board.apply_move(q, r)
         moves.append((q, r))
+        for observe in observers:
+            observe(q, r)
 
     plies = len(moves)
     adjudication: PlyCapVerdict | None = None
