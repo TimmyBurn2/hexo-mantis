@@ -85,7 +85,7 @@ def pipeline_kwargs(
         ),
         encoding="gnn_axis_v1",
         max_plies=128,
-        c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16,
+        c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, tactics=None,
         run_id=run_id,
         spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
         promotion=promotion_hooks(tmp_path, run_id=run_id),

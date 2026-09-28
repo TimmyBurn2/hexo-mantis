@@ -148,7 +148,7 @@ class MantisBackend:
         self._head = build_candidate_player(
             self._engine, self.sims, spec=self._spec, leaf_batch_size=self._leaf_batch_size, c_visit=self._c_visit,
             c_scale=self._c_scale, q_rescale=self._q_rescale, search_kind=self._search_kind, gumbel_m=self._gumbel_m,
-            gumbel_seed=self.seed)
+            gumbel_seed=self.seed, tactics=None)
         self._head.new_game()
 
     def select_turn(self, board: Any, forced: tuple[Cell, ...] = ()) -> TurnResult:

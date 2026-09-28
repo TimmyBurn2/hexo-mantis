@@ -293,8 +293,8 @@ def _coordinator(*, trainer=None, eval_pipeline=None, **knob_over):
             # own `train` section, and a `train`-less full_config is a NAMED refusal.
             "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
                       "fast_policy_weight": 0.0},
-            "deploy": {"search": {"kind": "puct"}},
-            "selfplay": {"search": {"kind": "puct"}, "n_workers": 1},
+            "deploy": {"search": {"kind": "puct", "tactics": None}},
+            "selfplay": {"search": {"kind": "puct", "tactics": None}, "n_workers": 1},
         },
         sink=sink,
         monitor_cfg=monitor_config(),

@@ -818,7 +818,7 @@ def strip_and_restamp(
         "model": {"aux_soft_policy": None},
         # `puct` is the value that agrees with this payload's own
         # `train.policy_target: raw_visit_distribution` — the two are one decision.
-        "deploy": {"search": {"kind": "puct"}},
+        "deploy": {"search": {"kind": "puct", "tactics": None}},
         "eval": {
             "random_model_sims": 1,
             "random_floor_games": 0, "worker_device": "cpu",
@@ -861,7 +861,7 @@ def strip_and_restamp(
             "fast_policy_weight": 0.0,
         },
         "selfplay": {
-            "search": {"kind": "puct"},
+            "search": {"kind": "puct", "tactics": None},
             "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
             "c_visit": 50.0, "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16,
             "gumbel_explore_moves": 10, "search_stats_every": 0,

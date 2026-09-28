@@ -24,7 +24,12 @@ from mantis.config.schema.monitor import (
     DrainCapsConfig,
     MonitorSchemaConfig,
 )
-from mantis.config.schema.search import DeployConfig, SearchConfig
+from mantis.config.schema.search import (
+    DeployConfig,
+    SearchConfig,
+    TacticsAuditConfig,
+    TacticsConfig,
+)
 from mantis.config.schema.selfplay import (
     InferenceConfig,
     MctsConfig,
@@ -55,6 +60,8 @@ __all__ = [
     "RunConfig",
     "DeployConfig",
     "SearchConfig",
+    "TacticsAuditConfig",
+    "TacticsConfig",
     "SelfplayConfig",
     "StrengthFloorConfig",
     "StrictModel",

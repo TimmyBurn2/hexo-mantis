@@ -61,7 +61,7 @@ def _payload(*, train_over: dict | None = None, monitor_over: dict | None = None
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
         "model": {"gnn": {"hidden": 128, "num_layers": 4}, "aux_soft_policy": None},
         "eval": eval_block(), "train": train_block(**(train_over or {})),
-        "deploy": {"search": {"kind": "puct"}},
+        "deploy": {"search": {"kind": "puct", "tactics": None}},
         "selfplay": selfplay_block(), "inference": inference_block(),
         "monitor": monitor_block(**(monitor_over or {})),
     }

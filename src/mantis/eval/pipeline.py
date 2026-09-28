@@ -255,6 +255,7 @@ class EvalPipeline:
         q_rescale: bool,
         search_kind: str,
         gumbel_m: int,
+        tactics: dict[str, Any] | None,
         leaf_build_threads: int = 1,
         run_id: str,
         spool_dir: str | Path,
@@ -301,6 +302,8 @@ class EvalPipeline:
         #: regime used to come from `DeployHeadPlayer`'s body, which the config never stated.
         self._search_kind = str(search_kind)
         self._gumbel_m = int(gumbel_m)
+        #: The run's resolved `deploy.search.tactics` for the candidate head. NOT defaulted, for the same reason.
+        self._tactics = tactics
         #: The graph collector's batching geometry. NOT defaulted: these two were LITERALS in
         #: the child's hand-made server dict, and a default would put them back.
         self._inference_batching = inference_batching
@@ -486,7 +489,7 @@ class EvalPipeline:
             # Same seam and same reason: two REQUIRED schema keys the deploy head was never
             # given, so it searched at its own signature defaults.
             c_visit=self._c_visit, c_scale=self._c_scale, q_rescale=self._q_rescale,
-            search_kind=self._search_kind, gumbel_m=self._gumbel_m,
+            search_kind=self._search_kind, gumbel_m=self._gumbel_m, tactics=self._tactics,
             # Same seam: the child's graph server wrote its pop width and pop deadline as
             # literals, and 33 % of the eval path's ms/sim was the deadline one of them set.
             inference_batching=self._inference_batching,
@@ -840,6 +843,7 @@ def build_eval_pipeline(
     q_rescale: bool,
     search_kind: str,
     gumbel_m: int,
+    tactics: dict[str, Any] | None,
     run_id: str,
     spool_dir: str | Path,
     game_record_dir: str | Path,
@@ -858,7 +862,7 @@ def build_eval_pipeline(
         fused_graph_caps=fused_graph_caps, inference_batching=inference_batching,
         leaf_batch_size=leaf_batch_size, max_plies=max_plies,
         c_visit=c_visit, c_scale=c_scale, q_rescale=q_rescale,
-        search_kind=search_kind, gumbel_m=gumbel_m,
+        search_kind=search_kind, gumbel_m=gumbel_m, tactics=tactics,
         leaf_build_threads=leaf_build_threads,
         run_id=run_id,
         allocator_posture=allocator_posture,

@@ -47,7 +47,7 @@ def _valid_payload() -> dict:
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
         "eval": eval_block(),
         "train": train_block(),
-        "deploy": {"search": {"kind": "puct"}},
+        "deploy": {"search": {"kind": "puct", "tactics": None}},
         "selfplay": selfplay_block(),
         "inference": inference_block(),
         "monitor": monitor_block(),

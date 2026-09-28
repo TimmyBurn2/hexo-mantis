@@ -200,7 +200,7 @@ class MantisEngine:
         player = build_candidate_player(self.engine, int(sims), spec=self.spec, search_kind=self.search_kind,
                                         gumbel_seed=ANALYZER_GUMBEL_SEED, leaf_batch_size=hp.leaf_batch_size,
                                         c_visit=hp.c_visit, c_scale=hp.c_scale, q_rescale=hp.q_rescale,
-                                        gumbel_m=hp.gumbel_m)
+                                        gumbel_m=hp.gumbel_m, tactics=None)
         player.new_game()
         t0 = time.perf_counter()
         move = player.select_move(board)

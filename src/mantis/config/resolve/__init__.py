@@ -81,11 +81,24 @@ from mantis.config.resolve.search import (
     resolve_selfplay_search_kind,
 )
 
+from mantis.config.resolve.tactics import (
+    AUDIT_HOLD,
+    AUDIT_INVERTED,
+    MissingTacticsError,
+    resolve_deploy_tactics,
+    tactics_block,
+)
+
 __all__ = [
     "SEARCH_KINDS",
     "MissingSearchKindError",
     "resolve_deploy_search_kind",
     "resolve_selfplay_search_kind",
+    "AUDIT_HOLD",
+    "AUDIT_INVERTED",
+    "MissingTacticsError",
+    "resolve_deploy_tactics",
+    "tactics_block",
     "AbsentEncodingError",
     "AllocatorPosture",
     "AllocatorPostureMismatchError",

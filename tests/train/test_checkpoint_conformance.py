@@ -686,9 +686,9 @@ def test_reads_full_v1_envelope_via_field_map(tmp_path, full_graph_net, full_gra
         "train": load_config(
             Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml"
         ).train.model_dump(),
-        "deploy": {"search": {"kind": "puct"}},
+        "deploy": {"search": {"kind": "puct", "tactics": None}},
         "selfplay": {
-            "search": {"kind": "puct"}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
+            "search": {"kind": "puct", "tactics": None}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
             "c_visit": 50.0,
             "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_explore_moves": 10, "search_stats_every": 8,
             "results_queue_cap": 10_000, "random_opening_plies": 0,

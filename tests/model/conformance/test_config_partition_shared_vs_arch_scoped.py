@@ -150,6 +150,11 @@ SHARED_DESPITE_THE_NAME: dict[str, str] = {
                                      "check 14 runs, not what it checks; it carries the "
                                      "check's name, not a graph-only quantity, and defaults "
                                      "on every arch (R347(e), OPERATIONAL_DEFAULT_KEYS)",
+    **{f"{home}.search.tactics.{leaf}": "a tactics SOLVER budget counted in attacker turn starts, "
+                                        "not a graph's node count; the solver reads stones, so "
+                                        "every arch's search runs the same one"
+       for home in ("deploy", "selfplay")
+       for leaf in ("leaf_nodes", "root_nodes", "audit.nodes", "audit.total_nodes")},
 }
 
 #: THE RED ROWS. EMPTY, and emptied BY THE REPAIR — B1's eight rows are all green now, so the

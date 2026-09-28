@@ -38,7 +38,7 @@ def test_poller_thread_beats_eval_round(tmp_path) -> None:
         real_beat(source)
 
     pipeline = mantis.eval.pipeline.build_eval_pipeline(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, max_plies=128,
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, tactics=None, max_plies=128,
         eval_cfg=object(), coordinator_cfg_caps=object(), encoding="gnn_axis_v1",
         run_id="test-run", spool_dir=str(tmp_path / "spool"), game_record_dir=str(tmp_path / "games"),
         promotion=object(), sink=None, heartbeat=_spy_beat,

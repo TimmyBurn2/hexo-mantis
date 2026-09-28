@@ -25,7 +25,7 @@ def _valid_payload() -> dict:
         "model": {"gnn": {"hidden": 128, "num_layers": 4}, "aux_soft_policy": None},
         "eval": eval_block(),
         "train": train_block(),
-        "deploy": {"search": {"kind": "puct"}},
+        "deploy": {"search": {"kind": "puct", "tactics": None}},
         "selfplay": selfplay_block(),
         "inference": inference_block(),
         "monitor": monitor_block(),

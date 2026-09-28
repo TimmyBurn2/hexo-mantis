@@ -44,6 +44,7 @@ model:
 deploy:
   search:
     kind: puct
+    tactics: null
 eval:
   random_model_sims: 1
   random_floor_games: 2
@@ -108,6 +109,7 @@ train:
 selfplay:
   search:
     kind: puct
+    tactics: null
   n_workers: 4
   leaf_batch_size: 8
   max_game_moves: 24

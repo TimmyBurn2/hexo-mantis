@@ -76,7 +76,7 @@ def _selfplay_block():
     # `selfplay:` is now the expanded nested shape (DESIGN_P2.md §3);
     # `legal_move_radius_schedule` is gone (DESIGN_P2.md §5).
     return {
-        "search": {"kind": "puct"}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
+        "search": {"kind": "puct", "tactics": None}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
         "c_visit": 50.0,
         "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_explore_moves": 10, "search_stats_every": 8,
         "results_queue_cap": 10_000, "random_opening_plies": 0,
@@ -133,7 +133,7 @@ def _config():
         "model": {"gnn": {"hidden": 16, "num_layers": 1}, "aux_soft_policy": None},
         "eval": _eval_block(),
         "train": _train_block(),
-        "deploy": {"search": {"kind": "puct"}},
+        "deploy": {"search": {"kind": "puct", "tactics": None}},
         "selfplay": _selfplay_block(),
         "inference": _inference_block(),
         "monitor": _monitor_block(),

@@ -52,7 +52,7 @@ def cfg(
     sp.update(selfplay or {})
     sp["mcts"] = dict(BASE_MCTS, **(mcts or {}))
     sp["playout_cap"] = dict(BASE_PLAYOUT_CAP, **(playout_cap or {}))
-    sp["search"] = dict({"kind": "puct"}, **(search or {}))
+    sp["search"] = dict({"kind": "puct", "tactics": None}, **(search or {}))
     return {
         "encoding": encoding,
         "selfplay": sp,
@@ -153,7 +153,7 @@ def test_ply_cap_value_wire(assemble, train_over, expected_draw, expected_ply) -
 def test_search_kind_property_reads_live_config() -> None:
     """`search_kind` reflects a config mutated AFTER construction and REFUSES an absent one."""
     holder = type("H", (), {"search_kind": WorkerPool.search_kind})()
-    holder.config = {"selfplay": {"search": {"kind": "puct"}}}
+    holder.config = {"selfplay": {"search": {"kind": "puct", "tactics": None}}}
     assert holder.search_kind == "puct"
 
     holder.config["selfplay"]["search"]["kind"] = "gumbel"
@@ -165,7 +165,7 @@ def test_search_kind_property_reads_live_config() -> None:
     with pytest.raises(MissingSearchKindError):
         _ = holder.search_kind
 
-    hp = SelfPlayHParams.from_config(cfg(search={"kind": "gumbel"}))
+    hp = SelfPlayHParams.from_config(cfg(search={"kind": "gumbel", "tactics": None}))
     assert hp.search_kind == "gumbel", "the frozen ctor-time snapshot still records the kind"
 
 

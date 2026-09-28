@@ -32,6 +32,8 @@ model:
 deploy:
   search:
     kind: puct
+    # The tactics module's block (v39): REQUIRED, `null` is the explicit OFF.
+    tactics: null
 eval:
   random_model_sims: 96
   # adjudication A-2: dev/smoke templates mint a small non-zero floor so the headless
@@ -156,6 +158,8 @@ train:
 selfplay:
   search:
     kind: puct
+    # REQUIRED and `null`: the self-play runner arms no tactics block, and the schema refuses one here.
+    tactics: null
   n_workers: 1
   leaf_batch_size: 8
   max_game_moves: 128

@@ -47,9 +47,9 @@ def test_a_regime_over_the_record_format_ceiling_reds_at_mint(smoke_run_config) 
             _VEHICLE,
             # The ceiling under test is the FULL-vector row's; a sparse Gumbel row is bounded by
             # m instead, so the drive names the kind whose rows carry every visited action.
-            deploy={"search": {"kind": "puct"}}, train={"policy_target": "raw_visit_distribution"},
+            deploy={"search": {"kind": "puct", "tactics": None}}, train={"policy_target": "raw_visit_distribution"},
             selfplay={
-                "search": {"kind": "puct"},
+                "search": {"kind": "puct", "tactics": None},
                 "playout_cap": {
                     "full_search_prob": 0.10,
                     "n_sims_quick": 75,
@@ -67,9 +67,9 @@ def test_the_sims_axis_is_bounded_EARLIER_by_the_node_pool(smoke_run_config) -> 
             _VEHICLE,
             # The ceiling under test is the FULL-vector row's; a sparse Gumbel row is bounded by
             # m instead, so the drive names the kind whose rows carry every visited action.
-            deploy={"search": {"kind": "puct"}}, train={"policy_target": "raw_visit_distribution"},
+            deploy={"search": {"kind": "puct", "tactics": None}}, train={"policy_target": "raw_visit_distribution"},
             selfplay={
-                "search": {"kind": "puct"},
+                "search": {"kind": "puct", "tactics": None},
                 "playout_cap": {
                     "full_search_prob": 0.10,
                     "n_sims_quick": 75,
@@ -87,9 +87,9 @@ def test_the_refusal_names_the_governing_config_keys(smoke_run_config) -> None:
             _VEHICLE,
             # The ceiling under test is the FULL-vector row's; a sparse Gumbel row is bounded by
             # m instead, so the drive names the kind whose rows carry every visited action.
-            deploy={"search": {"kind": "puct"}}, train={"policy_target": "raw_visit_distribution"},
+            deploy={"search": {"kind": "puct", "tactics": None}}, train={"policy_target": "raw_visit_distribution"},
             selfplay={
-                "search": {"kind": "puct"},
+                "search": {"kind": "puct", "tactics": None},
                 "playout_cap": {
                     "full_search_prob": 0.10,
                     "n_sims_quick": 75,

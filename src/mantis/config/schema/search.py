@@ -1,4 +1,4 @@
-"""`SearchConfig` — a search regime as one closed key — and `DeployConfig`, the deploy head's.
+"""`SearchConfig` — a search regime: its kind and its tactics block — and `DeployConfig`, the deploy head's.
 
 Two homes: `selfplay.search.kind` is what the workers run and what the exported targets
 MEAN; `deploy.search.kind` is what the bar plays, matched to what will be deployed.
@@ -7,7 +7,30 @@ disagree; no default anywhere — an absent `kind` is a mint error, not a silent
 """
 from typing import Literal
 
+from pydantic import Field
+
 from mantis.config.schema._base import StrictModel
+
+
+class TacticsAuditConfig(StrictModel):
+    """The defence audit's budgets: a call's `turns` and `nodes`, `k` alternatives, `m` second stones, one move's total."""
+
+    turns: int = Field(ge=1, le=40)
+    nodes: int = Field(ge=1)
+    k: int = Field(ge=1, le=1024)
+    m: int = Field(ge=1, le=1024)
+    total_nodes: int = Field(ge=1)
+
+
+class TacticsConfig(StrictModel):
+    """The tactics module (v39): the strict turn solver's leaf and root budgets and the audit, `null` the explicit off."""
+
+    kind: Literal["strict_turn"]
+    leaf_turns: int = Field(ge=1, le=40)
+    leaf_nodes: int = Field(ge=0)
+    root_turns: int = Field(ge=1, le=40)
+    root_nodes: int = Field(ge=0)
+    audit: TacticsAuditConfig | None = Field(default=...)
 
 
 class SearchConfig(StrictModel):
@@ -28,6 +51,7 @@ class SearchConfig(StrictModel):
     """
 
     kind: Literal["puct", "gumbel"]
+    tactics: TacticsConfig | None = Field(default=...)
 
 
 class DeployConfig(StrictModel):

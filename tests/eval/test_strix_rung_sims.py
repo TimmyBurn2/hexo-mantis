@@ -23,7 +23,7 @@ def _spec(**over):
         result_path="", progress_path="",
         game_record=None, ply_cap_adjudication=None, strength_floor=None,
         fused_graph_caps=None, leaf_batch_size=8, max_plies=256, c_visit=50.0, c_scale=1.0,
-        q_rescale=True, search_kind="puct", gumbel_m=16, inference_batching=None, leaf_build_threads=1,
+        q_rescale=True, search_kind="puct", gumbel_m=16, tactics=None, inference_batching=None, leaf_build_threads=1,
         concurrency=1, rung_concurrency=1,
     )
     base.update(over)

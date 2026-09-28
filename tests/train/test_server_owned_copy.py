@@ -25,7 +25,7 @@ _ENCODING = "gnn_axis_v1"
 
 def _pool_cfg() -> dict[str, Any]:
     selfplay: dict[str, Any] = {
-        "search": {"kind": "puct"}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 32,
+        "search": {"kind": "puct", "tactics": None}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 32,
         "c_visit": 50.0, "c_scale": 1.0, "q_rescale": True, "gumbel_m": 4, "gumbel_explore_moves": 10,
         "search_stats_every": 8, "results_queue_cap": 10_000, "random_opening_plies": 0,
         "log_investigation_metrics": False,
@@ -36,7 +36,7 @@ def _pool_cfg() -> dict[str, Any]:
     }
     inference = {"inference_batch_size": 4, "inference_max_wait_ms": 10, "edge_geometry_check": "inline",
                  "compile_trunk": False, "fused_graph_caps": CAPS_DICT}
-    return {"encoding": _ENCODING, "deploy": {"search": {"kind": "puct"}}, "selfplay": selfplay,
+    return {"encoding": _ENCODING, "deploy": {"search": {"kind": "puct", "tactics": None}}, "selfplay": selfplay,
             "inference": inference, "train": {"draw_reward": -0.5, "ply_cap_value": -0.5}}
 
 

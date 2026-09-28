@@ -169,6 +169,9 @@ class RoundSpec:
     #: `SelfPlayHParams.from_config` reads. NOT defaulted.
     search_kind: str
     gumbel_m: int
+    #: The candidate's resolved `deploy.search.tactics` as the bridge arms it, `None` the explicit off. NOT
+    #: defaulted, and the candidate's alone: the gate's best side plays without it.
+    tactics: dict[str, Any] | None
     #: The graph collector's batching geometry, resolved in the parent: a wrong child literal
     #: cost 33% of the eval path's ms/sim in the collector's own deadline.
     inference_batching: InferenceBatchingSpec | None

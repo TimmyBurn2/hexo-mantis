@@ -19,7 +19,7 @@ def pool_cfg(
     # `selfplay`/`inference`/`train` are nested schema-shaped sections, so the `from_config`
     # readers take no flat dict with a top-level fallback. `over` still layers onto `selfplay`.
     selfplay: dict[str, Any] = {
-        "search": {"kind": "puct"}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
+        "search": {"kind": "puct", "tactics": None}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
         "c_visit": 50.0,
         "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_explore_moves": 10, "search_stats_every": 8,
         "results_queue_cap": 10_000, "random_opening_plies": 0,
@@ -40,7 +40,7 @@ def pool_cfg(
         "fused_graph_caps": CAPS_DICT,
     }
     train = {"draw_reward": -0.5, "ply_cap_value": -0.5}
-    return {"encoding": encoding, "deploy": {"search": {"kind": "puct"}}, "selfplay": selfplay,
+    return {"encoding": encoding, "deploy": {"search": {"kind": "puct", "tactics": None}}, "selfplay": selfplay,
             "inference": inference, "train": train}
 
 

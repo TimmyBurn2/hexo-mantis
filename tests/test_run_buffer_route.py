@@ -118,9 +118,9 @@ def test_the_graph_buffer_is_composed_with_the_derived_visit_capacity(
     """
     # Under the minted Gumbel kind a sparse row's capacity is m whatever the sims, so the two
     # shapes that must DIFFER drive the full-vector puct kind; the minted config is the third.
-    full_vector = {"deploy": {"search": {"kind": "puct"}},
+    full_vector = {"deploy": {"search": {"kind": "puct", "tactics": None}},
                    "train": {"policy_target": "raw_visit_distribution"}}
-    puct_selfplay = {"search": {"kind": "puct"}}
+    puct_selfplay = {"search": {"kind": "puct", "tactics": None}}
     pcr = smoke_run_config(
         _MINTED,
         selfplay={

@@ -30,7 +30,7 @@ def test_the_head_built_for_a_round_holds_the_round_sigma(rescale: bool) -> None
     spec = lookup("gnn_axis_v1")
     player = worker.build_candidate_player(
         object(), 1, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=0.1,
-        q_rescale=rescale, search_kind="gumbel", gumbel_m=4, gumbel_seed=0,
+        q_rescale=rescale, search_kind="gumbel", gumbel_m=4, gumbel_seed=0, tactics=None
     )
     assert isinstance(player, DeployHeadPlayer)
     player.new_game()
