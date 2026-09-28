@@ -35,6 +35,18 @@ pub fn gumbel_search(
     m: usize,
     c_scale: f32,
 ) -> MCTSTree {
+    gumbel_search_with_state(board, policy, seed, sims, m, c_scale).0
+}
+
+/// `gumbel_search` with the search's root state, for a reader of its halving.
+pub fn gumbel_search_with_state(
+    board: &Board,
+    policy: &[f32],
+    seed: u64,
+    sims: usize,
+    m: usize,
+    c_scale: f32,
+) -> (MCTSTree, MctxRootState) {
     let sigma = QSigma {
         c_visit: C_VISIT,
         c_scale,
@@ -73,5 +85,5 @@ pub fn gumbel_search(
         tree.expand_and_backup(&policies, &values);
         spent += leaves.len();
     }
-    tree
+    (tree, state)
 }

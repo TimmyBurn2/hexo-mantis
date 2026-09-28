@@ -151,6 +151,29 @@ impl MctxRootState {
         self.argmax_at(tree, max_visits, &completed)
     }
 
+    /// Every root child in Sequential Halving's final order (visits, then the score at its own level); `best_action` leads.
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn ranking(&self, tree: &MCTSTree, sigma: QSigma) -> Vec<u32> {
+        let completed = tree.root_completed_qvalues(sigma);
+        let mut rows: Vec<(u32, f32, u32)> = completed
+            .iter()
+            .zip(&self.gumbel_values)
+            .zip(&self.log_priors)
+            .enumerate()
+            .map(|(j, ((&q, &gumbel), &log_prior))| {
+                let idx = self.first_child + j as u32;
+                let visits = tree.pool[idx as usize].n_visits;
+                // A child is at its own level, so it always scores.
+                let score = score_considered(visits, visits, gumbel, log_prior, self.max_logit, q)
+                    .unwrap_or(f32::NEG_INFINITY);
+                (visits, score, idx)
+            })
+            .collect();
+        rows.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.total_cmp(&a.1)).then(a.2.cmp(&b.2)));
+        rows.into_iter().map(|(_, _, idx)| idx).collect()
+    }
+
     #[allow(clippy::cast_possible_truncation)]
     fn argmax_at(&self, tree: &MCTSTree, considered: u32, completed: &[f32]) -> Option<u32> {
         let mut best: Option<(u32, f32)> = None;
