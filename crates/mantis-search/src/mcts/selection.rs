@@ -3,7 +3,9 @@
 //! declared elsewhere drifts from the code that raises it.
 //! PUCT selection and tree traversal.
 
-use super::{CachedPolicy, MCTSTree};
+use super::tactics_wiring::LeafCall;
+use super::{CachedPolicy, MCTSTree, Pending};
+use crate::tactics::LeafTactics;
 use fxhash::FxHashSet;
 use mantis_core::board::{Board, MoveDiff};
 
@@ -292,7 +294,7 @@ impl MCTSTree {
         Ok(Some(leaf_idx))
     }
 
-    /// Queue the leaf `board` sits on for evaluation, then rewind `board` to the root.
+    /// Queue the leaf `board` sits on for evaluation with its tactics facts, then rewind `board` to the root.
     #[inline]
     fn queue_leaf(
         &mut self,
@@ -301,16 +303,30 @@ impl MCTSTree {
         diffs: &mut Vec<MoveDiff>,
         boards: &mut Vec<Board>,
         pending_ids: &mut FxHashSet<u32>,
+        facts: Option<LeafTactics>,
     ) {
         // `pending` owns the fully-replayed leaf `Board`, so expansion never re-replays from
         // `root_board`; this sibling of the NN-input board skips the `legal_cache` copy.
         boards.push(board.clone());
-        self.pending.push((leaf_idx, board.clone()));
+        self.pending.push(Pending {
+            leaf: leaf_idx,
+            board: board.clone(),
+            facts,
+        });
         pending_ids.insert(leaf_idx);
         rewind(board, diffs);
     }
 
-    /// Select up to `n` distinct leaves for evaluation.
+    /// Count one select call's descents into this search's tactics rows.
+    fn count_descents(&mut self, served: usize) {
+        let inline = self.inline_descents as u64;
+        if let Some(t) = self.tactics.as_deref_mut() {
+            t.counters.descents += served as u64 + inline;
+            t.counters.served_leaves += served as u64;
+        }
+    }
+
+    /// Select up to `n` distinct leaves; returned boards plus inline descents (tactics armed) never exceed `n`.
     ///
     /// # Errors
     /// `SelectionDesync` — a selected child's `action_idx` decodes to a cell the board refuses.
@@ -318,6 +334,7 @@ impl MCTSTree {
     /// recovers does not leave the tree permanently penalising the path it walked.
     pub fn select_leaves(&mut self, n: usize) -> Result<Vec<Board>, SelectionDesync> {
         self.pending.clear();
+        self.inline_descents = 0;
         let mut boards = Vec::with_capacity(n);
         // O(1) overlap dedup on leaf pool indices; the set lives only for this call.
         let mut pending_ids: FxHashSet<u32> = FxHashSet::default();
@@ -334,6 +351,15 @@ impl MCTSTree {
             let Some(leaf_idx) = self.descend(&mut board, &mut diffs, &pending_ids)? else {
                 continue;
             };
+            let facts = match self.tactics_leaf(leaf_idx, &board) {
+                LeafCall::Inline => {
+                    self.inline_descents += 1;
+                    rewind(&mut board, &mut diffs);
+                    i += 1;
+                    continue;
+                }
+                LeafCall::Evaluate(facts) => facts,
+            };
 
             // An `Arc` refcount bump, not a 1448 B copy; the TT borrow drops before the
             // `&mut self` expand. Dispatch on the dense vs ragged legal-set variant.
@@ -344,11 +370,15 @@ impl MCTSTree {
             if let Some((policy, value)) = cached {
                 match policy {
                     CachedPolicy::Dense(p) => {
-                        self.expand_and_backup_single(leaf_idx, &board, &p, value)
+                        self.expand_and_backup_single(leaf_idx, &board, &p, value, facts.as_ref())
                     }
-                    CachedPolicy::Ls(ls) => {
-                        self.expand_and_backup_single_ls(leaf_idx, &board, &ls, value)
-                    }
+                    CachedPolicy::Ls(ls) => self.expand_and_backup_single_ls(
+                        leaf_idx,
+                        &board,
+                        &ls,
+                        value,
+                        facts.as_ref(),
+                    ),
                 }
                 rewind(&mut board, &mut diffs);
                 continue;
@@ -360,6 +390,7 @@ impl MCTSTree {
                 &mut diffs,
                 &mut boards,
                 &mut pending_ids,
+                facts,
             );
             i += 1;
         }
@@ -367,6 +398,7 @@ impl MCTSTree {
         debug_assert_eq!(board.zobrist_hash, self.root_board.zobrist_hash);
         debug_assert_eq!(board.ply, self.root_board.ply);
 
+        self.count_descents(boards.len());
         Ok(boards)
     }
 
@@ -396,6 +428,7 @@ impl MCTSTree {
             }
         }
         self.pending.clear();
+        self.inline_descents = 0;
         let mut boards = Vec::with_capacity(forced.len());
         let mut pending_ids: FxHashSet<u32> = FxHashSet::default();
         pending_ids.reserve(forced.len());
@@ -413,14 +446,22 @@ impl MCTSTree {
             };
             // No TT fast path here: a Gumbel round needs an exact leaf count per round trip,
             // which `select_leaves`' uncounted TT-hit expansions would break.
-            if let Some(leaf_idx) = leaf {
-                self.queue_leaf(
+            let Some(leaf_idx) = leaf else {
+                continue;
+            };
+            match self.tactics_leaf(leaf_idx, &board) {
+                LeafCall::Inline => {
+                    self.inline_descents += 1;
+                    rewind(&mut board, &mut diffs);
+                }
+                LeafCall::Evaluate(facts) => self.queue_leaf(
                     leaf_idx,
                     &mut board,
                     &mut diffs,
                     &mut boards,
                     &mut pending_ids,
-                );
+                    facts,
+                ),
             }
         }
         self.forced_root_child = None;
@@ -428,6 +469,7 @@ impl MCTSTree {
         debug_assert_eq!(board.zobrist_hash, self.root_board.zobrist_hash);
         debug_assert_eq!(board.ply, self.root_board.ply);
 
+        self.count_descents(boards.len());
         Ok(boards)
     }
 

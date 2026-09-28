@@ -709,7 +709,7 @@ fn run_terminal_leaf(parent_mr: u8, leaf_mr: u8, board: &Board) -> (f32, f32) {
         terminal_value: 0.0,
         virtual_loss_count: 0,
     };
-    tree.expand_and_backup_single(1, board, &[], 0.0);
+    tree.expand_and_backup_single(1, board, &[], 0.0, None);
     (tree.pool[1].terminal_value, tree.pool[0].w_value)
 }
 
@@ -1490,7 +1490,7 @@ fn a_short_policy_batch_gives_the_dropped_leaves_their_virtual_loss_back() {
 
     let leaves = tree.select_leaves(2).expect("no desync");
     assert_eq!(leaves.len(), 2, "the fixture needs two distinct leaves");
-    let dropped: Vec<u32> = tree.pending.iter().skip(1).map(|(idx, _)| *idx).collect();
+    let dropped: Vec<u32> = tree.pending.iter().skip(1).map(|p| p.leaf).collect();
     assert_eq!(dropped.len(), 1);
 
     tree.expand_and_backup(&[vec![1.0 / n_actions as f32; n_actions]], &[0.0]);

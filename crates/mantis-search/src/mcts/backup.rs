@@ -3,7 +3,7 @@
 //! Expansion and backup for the MCTS tree.
 
 use super::node::{pack_cell, CachedPolicy, Node};
-use super::{MCTSTree, MAX_CHILDREN_PER_NODE};
+use super::{MCTSTree, Pending, MAX_CHILDREN_PER_NODE};
 use crate::legal_set::LegalSetPolicy;
 use crate::tactics::analyze::{analyze, LeafTactics, Terminal};
 use fxhash::FxHashSet;
@@ -154,6 +154,15 @@ pub(crate) fn pick_topk_children_ls(
     }
 }
 
+/// Scale the chosen children's priors to sum to one; uniform when they carry no mass.
+fn renormalise(children: &mut [((i32, i32), f32)]) {
+    let total: f32 = children.iter().map(|c| c.1).sum();
+    let uniform = 1.0 / children.len().max(1) as f32;
+    for c in children.iter_mut() {
+        c.1 = if total > 0.0 { c.1 / total } else { uniform };
+    }
+}
+
 /// The per-search OMITTED PRIOR MASS the Top-K cap dropped, how many expansions dropped any, and
 /// the expansion total. MASS AND NOT A COUNT: what decides whether the cap costs anything is how
 /// much PRIOR the dropped moves held.
@@ -253,8 +262,9 @@ impl MCTSTree {
         board: &Board,
         policy: &[f32],
         value: f32,
+        facts: Option<&LeafTactics>,
     ) {
-        self.expand_leaf_with(leaf_idx, board, value, |legal_moves, cap| {
+        self.expand_leaf_with(leaf_idx, board, value, facts, |legal_moves, cap| {
             // `trunk_sz` is Board's cached `cluster_window_size`.
             let (cq, cr) = board.window_center();
             let trunk_sz = board.cluster_window_size() as i32;
@@ -263,11 +273,27 @@ impl MCTSTree {
         });
     }
 
-    /// The one expansion body: the non-expandable arms back up directly, else `pick` takes the
-    /// Top-K under this leaf's cap. Generic over `pick`, so each caller stays monomorphic.
+    /// The value a leaf backs up after quiescence: from its carried tactics facts, else read afresh.
+    fn quiesce(&self, board: &Board, value: f32, facts: Option<&LeafTactics>) -> f32 {
+        match facts {
+            Some(f) if self.quiescence_enabled => {
+                self.quiescence_from(f, board.moves_remaining, value)
+            }
+            _ => self.apply_quiescence(board, value),
+        }
+    }
+
+    /// The one expansion body: the non-expandable arms back up directly, else `pick` takes the Top-K under
+    /// this leaf's cap, over `facts`' forced set when it has one (priors renormalised), else the legal set.
     #[inline]
-    fn expand_leaf_with<P>(&mut self, leaf_idx: u32, board: &Board, value: f32, pick: P)
-    where
+    fn expand_leaf_with<P>(
+        &mut self,
+        leaf_idx: u32,
+        board: &Board,
+        value: f32,
+        facts: Option<&LeafTactics>,
+        pick: P,
+    ) where
         P: FnOnce(&FxHashSet<(i32, i32)>, usize) -> TopKPick,
     {
         if self.pool[leaf_idx as usize].is_terminal {
@@ -277,7 +303,7 @@ impl MCTSTree {
         }
         if self.pool[leaf_idx as usize].is_expanded() {
             // TT-hit: already expanded, but still quiesce so repeated TT values are corrected.
-            let corrected = self.apply_quiescence(board, value);
+            let corrected = self.quiesce(board, value, facts);
             self.backup(leaf_idx, corrected);
             return;
         }
@@ -307,9 +333,25 @@ impl MCTSTree {
         // The ROOT's cap is the dialect's; `leaf_idx == 0` IS the root, since slot 0 is never
         // reallocated.
         let cap = self.expansion_cap(leaf_idx);
-        let pick = pick(legal_moves, cap);
+        let forced: Option<FxHashSet<(i32, i32)>> = facts
+            .filter(|f| !f.forced.is_empty())
+            .map(|f| {
+                f.forced
+                    .iter()
+                    .copied()
+                    .filter(|c| legal_moves.contains(c))
+                    .collect()
+            })
+            .filter(|set: &FxHashSet<(i32, i32)>| !set.is_empty());
+        let mut pick = pick(forced.as_ref().unwrap_or(legal_moves), cap);
+        if forced.is_some() {
+            renormalise(&mut pick.children);
+            if let Some(t) = self.tactics.as_deref_mut() {
+                t.counters.forced_restrictions += 1;
+            }
+        }
         self.record_omitted_prior(pick.dropped_prior_mass);
-        self.finish_expansion(leaf_idx, board, pick.children, value);
+        self.finish_expansion(leaf_idx, board, pick.children, value, facts);
     }
 
     /// Tail of `expand_leaf_with`: materialise the children, quiesce and backup.
@@ -319,6 +361,7 @@ impl MCTSTree {
         board: &Board,
         chosen: Vec<((i32, i32), f32)>,
         value: f32,
+        facts: Option<&LeafTactics>,
     ) {
         let n_ch = chosen.len();
         let first_child = self.next_free;
@@ -364,7 +407,7 @@ impl MCTSTree {
             };
         }
 
-        let corrected = self.apply_quiescence(board, value);
+        let corrected = self.quiesce(board, value, facts);
         // Mctx's `raw_values[node]`, captured HERE because `backup` folds it into the mean.
         if let Some(slot) = self.raw_values.get_mut(leaf_idx as usize) {
             *slot = corrected;
@@ -379,28 +422,29 @@ impl MCTSTree {
         board: &Board,
         ls: &LegalSetPolicy,
         value: f32,
+        facts: Option<&LeafTactics>,
     ) {
         // Board-frame variant: read the priors in the frame the producer indexed `ls.dense` with.
         let (cq, cr) = board.window_center();
         let trunk_sz = board.cluster_window_size() as i32;
-        self.expand_and_backup_single_ls_framed(leaf_idx, board, ls, value, cq, cr, trunk_sz);
+        let frame = (cq, cr, trunk_sz);
+        self.expand_and_backup_single_ls_framed(leaf_idx, board, ls, value, frame, facts);
     }
 
     /// Frame-explicit `expand_and_backup_single_ls`: the caller supplies the window centre and
-    /// `trunk_sz` that `ls.dense` was BAKED against, so the read frame is the SAME object the
-    /// slots were baked with rather than a coincident re-derivation.
-    #[allow(clippy::too_many_arguments)] // frame (cq, cr, trunk_sz) is passed by value on the expand path (a struct bundle would re-pack per leaf)
+    /// `trunk_sz` (`frame`) that `ls.dense` was BAKED against, so the read frame is the SAME object
+    /// the slots were baked with rather than a coincident re-derivation.
     pub(crate) fn expand_and_backup_single_ls_framed(
         &mut self,
         leaf_idx: u32,
         board: &Board,
         ls: &LegalSetPolicy,
         value: f32,
-        cq: i32,
-        cr: i32,
-        trunk_sz: i32,
+        frame: (i32, i32, i32),
+        facts: Option<&LeafTactics>,
     ) {
-        self.expand_leaf_with(leaf_idx, board, value, |legal_moves, cap| {
+        let (cq, cr, trunk_sz) = frame;
+        self.expand_leaf_with(leaf_idx, board, value, facts, |legal_moves, cap| {
             let half = (trunk_sz - 1) / 2;
             pick_topk_children_ls(legal_moves, cq, cr, ls, trunk_sz, half, cap)
         });
@@ -409,29 +453,28 @@ impl MCTSTree {
     /// Expand all pending leaves and backup values to the root.
     pub fn expand_and_backup(&mut self, policies: &[Vec<f32>], values: &[f32]) {
         // `pending` owns the leaf `Board`, so each leaf board is consumed without a re-walk.
-        let pending: Vec<(u32, Board)> = std::mem::take(&mut self.pending);
+        let pending: Vec<Pending> = std::mem::take(&mut self.pending);
         let n = pending.len().min(policies.len()).min(values.len());
         // `pending` is already `mem::take`n, so any leaf past `n` is DROPPED carrying the
         // virtual loss `select_one_leaf` added. Returning it degrades the BATCH, not the TREE.
-        for (leaf_idx, _board) in &pending[n..] {
-            self.undo_virtual_loss(*leaf_idx);
+        for p in &pending[n..] {
+            self.undo_virtual_loss(p.leaf);
         }
 
         // One `Arc<Vec<f32>>` per first-touch insertion, cheaper than a per-hit clone.
-        for i in 0..n {
-            let (leaf_idx, board) = &pending[i];
+        for (i, p) in pending.iter().enumerate().take(n) {
             let policy = &policies[i];
             let value = values[i];
 
             self.transposition_table.insert(
-                board.zobrist_hash,
+                p.board.zobrist_hash,
                 super::node::TTEntry {
                     policy: CachedPolicy::Dense(std::sync::Arc::new(policy.clone())),
                     value,
                 },
             );
 
-            self.expand_and_backup_single(*leaf_idx, board, policy, value);
+            self.expand_and_backup_single(p.leaf, &p.board, policy, value, p.facts.as_ref());
         }
     }
 
@@ -444,33 +487,40 @@ impl MCTSTree {
         centers: &[(i32, i32)],
         trunk_sz: i32,
     ) {
-        let pending: Vec<(u32, Board)> = std::mem::take(&mut self.pending);
+        let pending: Vec<Pending> = std::mem::take(&mut self.pending);
         let n = pending
             .len()
             .min(policies.len())
             .min(values.len())
             .min(centers.len());
-        for i in 0..n {
-            let (leaf_idx, board) = &pending[i];
+        for (i, p) in pending.iter().enumerate().take(n) {
             let ls = &policies[i];
             let value = values[i];
             let (cq, cr) = centers[i];
             // Guard the centre invariant the TT-hit re-read path also relies on.
             debug_assert_eq!(
-                board.window_center(),
+                p.board.window_center(),
                 (cq, cr),
                 "builder window_center != Board::window_center (coord/slot drift)"
             );
 
             self.transposition_table.insert(
-                board.zobrist_hash,
+                p.board.zobrist_hash,
                 super::node::TTEntry {
                     policy: CachedPolicy::Ls(std::sync::Arc::new(ls.clone())),
                     value,
                 },
             );
 
-            self.expand_and_backup_single_ls_framed(*leaf_idx, board, ls, value, cq, cr, trunk_sz);
+            let frame = (cq, cr, trunk_sz);
+            self.expand_and_backup_single_ls_framed(
+                p.leaf,
+                &p.board,
+                ls,
+                value,
+                frame,
+                p.facts.as_ref(),
+            );
         }
     }
 

@@ -21,6 +21,7 @@ pub mod node;
 pub mod policy;
 mod selection;
 pub mod seq_halving;
+pub mod tactics_wiring;
 
 pub(crate) use backup::OmittedPriorStats;
 pub use backup::{pool_overflow_count, take_pool_overflow_count};
@@ -29,6 +30,10 @@ pub use gumbel_mctx::MctxRootState;
 pub use kind::SearchKind;
 pub use node::{pack_cell, CachedPolicy, Node, TTEntry, MAX_NODES, VIRTUAL_LOSS_PENALTY};
 pub use selection::{ForcedChildOutOfRange, ForcedSelectionError, SelectionDesync};
+pub use tactics_wiring::{
+    AuditConfig, AuditMode, TacticsConfig, TacticsCounters, TacticsError, MIN_TACTICS_RADIUS,
+    TACTICS_TABLE_ENTRIES,
+};
 
 /// Maximum children created per leaf expansion: past this many legal moves only the top-K by NN
 /// policy prior are expanded, tie-broken by `window_flat_idx` for determinism. What K costs is the
@@ -56,6 +61,7 @@ pub const MAX_ROOT_CHILDREN: usize = u16::MAX as usize;
 pub const MAX_ARMED_SIMS_GUMBEL: usize =
     (MAX_NODES - MAX_ROOT_CHILDREN) / (4 * MAX_CHILDREN_PER_NODE);
 
+use crate::tactics::LeafTactics;
 use fxhash::FxHashMap;
 use mantis_core::board::{Board, BOARD_SIZE};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -72,7 +78,7 @@ pub struct MCTSTree {
     pub(crate) fpu_reduction: f32,
     /// Pending leaves carry the fully-replayed leaf `Board` itself, captured at `select_one_leaf`
     /// exit, eliminating the per-leaf `root_board.clone() + N × apply_move` re-walk.
-    pub(crate) pending: Vec<(u32, Board)>,
+    pub(crate) pending: Vec<Pending>,
     pub transposition_table: FxHashMap<u128, TTEntry>,
     /// Enable the quiescence value override at leaf nodes: an own open window completable
     /// within the side's remaining stones is +1.0, an opponent threat set the remaining stones
@@ -113,6 +119,17 @@ pub struct MCTSTree {
     /// `MAX_CHILDREN_PER_NODE`. Set by `configure_search`; `MAX_CHILDREN_PER_NODE`
     /// under `SearchKind::Puct`, whose root is an ordinary PUCT node.
     pub(crate) root_children_cap: usize,
+    /// The tactics block and its solver; `None` searches exactly as before the module existed.
+    pub(crate) tactics: Option<Box<tactics_wiring::TacticsState>>,
+    /// Descents the last select call backed up inline (`last_inline_descents`).
+    pub(crate) inline_descents: usize,
+}
+
+/// A leaf queued for the net: its node, its board, and the tactics facts its expansion reads (`None` off).
+pub(crate) struct Pending {
+    pub(crate) leaf: u32,
+    pub(crate) board: Board,
+    pub(crate) facts: Option<LeafTactics>,
 }
 
 impl MCTSTree {
@@ -148,6 +165,8 @@ impl MCTSTree {
                 rescale: true,
             },
             root_children_cap: MAX_CHILDREN_PER_NODE,
+            tactics: None,
+            inline_descents: 0,
         }
     }
 
@@ -169,6 +188,8 @@ impl MCTSTree {
         // Clear TT between games: positions do not repeat across games, and the `Vec<f32>` policy
         // entries accumulate unboundedly without this.
         self.transposition_table.clear();
+        self.inline_descents = 0;
+        self.reset_tactics_search();
     }
 
     pub fn root_visits(&self) -> u32 {
