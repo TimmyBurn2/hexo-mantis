@@ -39,7 +39,11 @@ Both were found by running the gate set rather than by reading it, and both are 
 ## Opened by R376 (DECIDE-1 accepted; 2026-09-28) — the tactics lane
 
 - **CARD-TACTICS-LANE — ORDERED (R376(d)); it goes first, and run11 is designed after its deploy read
-  (R376(c)).** ONE exact tactics module in Rust on the search path, used identically at deploy and in self-play
+  (R376(c)). RE-AIMED 2026-09-28 to the TACTICS-DESIGN packet. It measures before designing: a census of
+  both solvers, the two run head to head on the same positions, D1's specificity check and a baselined
+  starvation witness. Its exit commits `TACTICS_DESIGN_2026-09-28.md` in docs/design/ and scopes two packets:
+  TACTICS-DEPLOY (the module and its A/B on S and X) and TACTICS-SELFPLAY (a twin read by the witness).**
+  ONE exact tactics module in Rust on the search path, used identically at deploy and in self-play
   (LAW-15). The search crate already carries a net-free `TacticalSolver` (`crates/mantis-search/src/tactics/`,
   the solver F-53 read); one implementation per thing, so the lane's module is that one or replaces it.
   - Deploy lands first, read as an A/B against the plain parent on both rulers, at equal work, with its own
@@ -65,9 +69,15 @@ Both were found by running the gate set rather than by reading it, and both are 
   - Learning from Six's outputs only as a means (R376(f)): probes first, a run only on a pass, and a net that
     learned from Six carries it in its lineage. The standing goal is to surpass Six by self-play with exact
     tactics.
-- **CARD-PACKET-POWER-LINE — CARDED (process; DECIDE-1's exit): a packet carries each band's power line when it
-  is issued.** Three of DECIDE-1's banded rules were void by R375(d) before any reading (B1-N2, B3, the S
+- **CARD-PACKET-POWER-LINE — LANDED 2026-09-28 in the packet rule (`docs/governance/COMMS_STYLE.md` item 4): a
+  packet carries each band's power line and sets known-bad bars against the ruler's measured floor. Was CARDED
+  (process; DECIDE-1's exit).** Three of DECIDE-1's banded rules were void by R375(d) before any reading (B1-N2, B3, the S
   confirmation as written), and B1-N1 needed a spread between nets that the panel then showed was absent.
+- **CARD-DESKTOP-TMP-QUOTA — CARDED (ops; DECIDE-1's exit).** The desktop's `/tmp` is a RAM tmpfs with a per-user
+  quota shared by every session. On 2026-09-27 a finished leg's 9.6 GB scratch filled it mid-leg. Four training
+  arms died with EDQUOT, a staging copy stopped short, and every shell call lost its output. The note: leg data
+  (nets, arms, games) lives in the mirror (`mantis-mirror/<leg>-<date>/`) from the start, and records in
+  `mantis-records/<leg>/`. A session deletes its own scratch at exit, once the records name the copies.
 
 ## Opened by R375 (DECIDE-1's forward; 2026-09-27) — read the process, not the peak
 

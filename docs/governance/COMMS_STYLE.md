@@ -12,6 +12,7 @@ edited here like any other governance doc.
    not to prove work happened.
 4. Packets: state the goal in one sentence at the top. Then only what the executor
    needs. Reference code by symbol (R311(d)). Cut anything that would not cause a
-   mistake if removed.
+   mistake if removed. A packet carries each band's power line and sets known-bad
+   bars against the ruler's measured floor (CARD-PACKET-POWER-LINE).
 5. Never restate state that lives in a file the reader has. Point at it.
 6. Bad news first, plainly. A halt is a success; report it like one.

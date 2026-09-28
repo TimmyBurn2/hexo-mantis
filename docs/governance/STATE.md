@@ -15,7 +15,10 @@ the tactics lane's deploy read (CARD-RUN11-DESIGN).
   identically at deploy and in self-play (LAW-15). Deploy lands first, read as an A/B against the plain parent
   on both rulers. Self-play follows only with a pre-registered starvation witness, and with F-15, F-39, F-53
   and R239 re-validated under LAW-02 first. A solver terminal counts as a simulation, GPU evaluations are
-  their own LAW-18 row, and served-sims exactness pins descents (R376(e)).
+  their own LAW-18 row, and served-sims exactness pins descents (R376(e)). The TACTICS-DESIGN packet
+  (2026-09-28) runs our solver and Six's on the same positions, then writes the lane's design,
+  `TACTICS_DESIGN_2026-09-28.md` in docs/design/, at its exit. It changes nothing else in the tree, and its
+  records are local.
 - **Two rulers (R376(a)).** Six gen 30 @16, cache off, is X; strix @ r8 is S. Recipe decisions read X;
   milestones read X and S. SIX-RUNG landed X by pin and hash (`mantis.bots.six`, the follower's `six30_16`
   unit); it re-reads the parent 0.351 [0.295, 0.406], SIX-SCOUT's reading exactly.
