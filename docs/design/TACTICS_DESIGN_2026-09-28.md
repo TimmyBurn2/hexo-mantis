@@ -417,6 +417,10 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
   TT path).
   - This design keeps it uncounted in both modes. Counting it would change the tactics-off search wherever PUCT
     transposes, and void the replay witness TACTICS-DEPLOY's plain arm relies on (§11).
+  - Amended in place (TACTICS-DEPLOY, L2's review): the deviation also STARVES. A select call whose 4n attempts are
+    all TT hits returns nothing, and the budget loops stop short, tactics on or off. It is counted, not fixed: the
+    runner's `starved_searches` / `starved_descents` rows and the head's `last_sims`, and the witness's tactics-on
+    cases pin served + inline + starved == N a search (CARD-TT-HIT-STARVATION). A ruling on Q5 removes it.
 - Rows per search, summed per worker into the runner's stats snapshot and emitted as manifest rows; per
   `select_move` on the head as `last_tactics`:
   - `descents`, `gpu_evals`, `solver_terminals` (split `win1`, `lost_on_cover`, `strict_win`), `terminal_revisits`;

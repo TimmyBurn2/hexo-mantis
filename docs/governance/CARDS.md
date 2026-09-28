@@ -86,6 +86,15 @@ Both were found by running the gate set rather than by reading it, and both are 
 - **CARD-TACTICS-PLY-HORIZON — CARDED: a proof's turns are not capped by the plies a game has left.** A leaf or root
   proof whose six lands after the game's ply cap is not a win in that game. Deploy games rarely reach the cap;
   self-play's `max_moves_per_game` makes it a TACTICS-SELFPLAY question.
+- **CARD-TT-HIT-STARVATION — CARDED: a PUCT search can end short of its budget, tactics on or off.** A TT-hit
+  expansion is an uncounted descent (the design's §12 Q5, unruled), and when every attempt of a `select_leaves`
+  call (4n) is one, the call returns nothing and the budget loops (`run_mcts_search`, `_drive_puct`) stop. Found by
+  TACTICS-DEPLOY's L2 review: a compact producer under-spent 8 of 8 tactics-off trials, and the witness's tactics-on
+  case read short in 2 of 8 runs. It is now COUNTED, not fixed: the runner's `starved_searches` / `starved_descents`
+  rows (Rust snapshot; not yet bridged or in the event manifest) and the deploy head's `last_sims`, and the
+  witness's tactics-on cases assert served + inline + starved == N a search. Ruling Q5 by R376(e)'s letter (a TT hit
+  is a counted descent) removes it; a loop that simply continued past a starved call would break `MAX_ARMED_SIMS`,
+  which is derived from the 4n attempt cap.
 
 ## Opened by R376 (DECIDE-1 accepted; 2026-09-28) — the tactics lane
 
