@@ -8,6 +8,7 @@
 //! legal set and its exported target sums to 1. FLOOR/ENVELOPE: derived, never transcribed.
 
 use mantis_core::Board;
+use mantis_search::mcts::TacticsConfig;
 use mantis_search::{
     MCTSTree, MctxRootState, QSigma, SearchKind, MAX_ARMED_SIMS, MAX_ARMED_SIMS_GUMBEL,
     MAX_CHILDREN_PER_NODE, MAX_NODES, MAX_ROOT_CHILDREN,
@@ -445,4 +446,81 @@ fn a_gumbel_round_is_exactly_the_halving_phase_wide() {
         "the second round is still the full candidate set — Sequential Halving does not \
          halve until the schedule's considered level advances past a whole pass"
     );
+    tactics_on_rounds_spend_their_width();
+}
+
+/// Tactics on: a round's queued boards plus inline terminals are exactly its width, clamped at a forced root.
+fn tactics_on_rounds_spend_their_width() {
+    const M: usize = 8;
+    let sigma = QSigma {
+        c_visit: 50.0,
+        c_scale: 0.1,
+        rescale: true,
+    };
+    let armed = TacticsConfig {
+        leaf_turns: 2,
+        leaf_nodes: 64,
+        root_turns: 8,
+        root_nodes: 0,
+        audit: None,
+    };
+    let played = |seq: &[(i32, i32)]| {
+        let mut b = Board::new();
+        b.set_legal_move_radius(8);
+        for &(q, r) in seq {
+            b.apply_move(q, r)
+                .expect("a test sequence places on empty cells");
+        }
+        b
+    };
+    // P1 to move with two stones and the four (0..3, 0): its finishing cells hold nearly all the prior.
+    let finish = played(&[
+        (0, 0),
+        (0, 3),
+        (3, 3),
+        (1, 0),
+        (2, 0),
+        (-3, -3),
+        (5, -4),
+        (3, 0),
+        (-5, 5),
+        (8, 3),
+        (-6, 4),
+    ]);
+    // P1 to move with two stones against P2's open four at (10..13, 5): four forced children.
+    let forced = played(&[(0, 0), (10, 5), (11, 5), (1, 0), (2, 0), (12, 5), (13, 5)]);
+    for (board, width) in [(finish, M), (forced, 4)] {
+        let mut tree = MCTSTree::new(1.5);
+        tree.configure_search(SearchKind::Gumbel, sigma);
+        tree.configure_tactics(Some(armed));
+        tree.new_game(board.clone());
+        let mut policy = vec![1e-4f32; N_ACTIONS];
+        for (q, r) in [(-2, 0), (-1, 0), (4, 0), (5, 0)] {
+            let flat = board.window_flat_idx(q, r);
+            assert!(flat < N_ACTIONS, "({q}, {r}) sits in the window");
+            policy[flat] = 0.2;
+        }
+        assert_eq!(tree.select_leaves(1).expect("the root").len(), 1);
+        tree.expand_and_backup(std::slice::from_ref(&policy), &[0.0]);
+        let state = MctxRootState::new_seeded(&tree, M, 64, 20260928);
+        let round = state.round_batch(&tree, sigma);
+        assert_eq!(
+            round.len(),
+            width,
+            "the round's width, m clamped to the root's children"
+        );
+        let boards = tree.select_leaves_forced(&round).expect("no desync");
+        let inline = tree.last_inline_descents();
+        assert_eq!(
+            boards.len() + inline,
+            width,
+            "a round spends exactly its width in descents"
+        );
+        if width == M {
+            assert!(
+                inline > 0,
+                "the finishing candidates end the descent inline"
+            );
+        }
+    }
 }
