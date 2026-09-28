@@ -1,5 +1,6 @@
 //! The two-stone-turn threat unit: pure length-6 windows a side completes within a stone budget.
 
+use super::moves::WIN_LENGTH;
 use super::state::{Board, Cell, Player, HEX_AXES};
 
 /// A pure length-6 window (only `player`'s stones and empties) with `n_empty` (1 or 2) legal
@@ -64,7 +65,10 @@ impl Board {
             Player::Two => Cell::P2,
         };
         let max_empty = max_empty.min(2);
-        let legal = self.legal_moves_set();
+        // From radius 5 every empty of a window holding a stone lies within 5 of it, so it is legal: no read, and a
+        // leaf board's lazily dirty legal set is not rebuilt here.
+        let legal =
+            (self.legal_move_radius < WIN_LENGTH as i32 - 1).then(|| self.legal_moves_set());
         let mut out = Vec::new();
         for (&(sq, sr), &c) in &self.cells {
             if c != pcell {
@@ -107,10 +111,11 @@ impl Board {
                     if dead || n_empty == 0 || n_empty > max_empty {
                         continue;
                     }
-                    if !empties[..n_empty as usize]
-                        .iter()
-                        .all(|e| legal.contains(e))
-                    {
+                    if legal.is_some_and(|legal| {
+                        !empties[..n_empty as usize]
+                            .iter()
+                            .all(|e| legal.contains(e))
+                    }) {
                         continue;
                     }
                     out.push(OpenWindow { empties, n_empty });
@@ -285,5 +290,68 @@ mod tests {
         );
         let threats = b.open_windows(Player::Two, 2);
         assert_eq!(min_hitting_stones(&threats), Some(2));
+    }
+
+    /// Clustered random play at `radius`: stones within distance 2 of one of the last six, so windows fill.
+    fn clustered(seed: u64, stones: usize, radius: i32) -> Board {
+        let mut state = seed;
+        let mut b = Board::new();
+        b.set_legal_move_radius(radius);
+        let mut placed: Vec<(i32, i32)> = Vec::new();
+        let mut tries = 0;
+        while placed.len() < stones && tries < 4000 {
+            tries += 1;
+            let (q, r) = if placed.is_empty() {
+                (0, 0)
+            } else {
+                let tail = &placed[placed.len().saturating_sub(6)..];
+                let n = crate::board::zobrist::splitmix64_next(&mut state);
+                let (aq, ar) = tail[n as usize % tail.len()];
+                let d = crate::board::zobrist::splitmix64_next(&mut state);
+                (aq + (d % 5) as i32 - 2, ar + ((d >> 8) % 5) as i32 - 2)
+            };
+            if b.get(q, r) == Cell::Empty && b.apply_move(q, r).is_ok() {
+                if b.check_win() {
+                    break;
+                }
+                placed.push((q, r));
+            }
+        }
+        b
+    }
+
+    #[test]
+    fn from_radius_five_every_reported_empty_is_legal_so_no_legal_read_can_filter() {
+        let mut windows = 0;
+        for radius in 5..=8 {
+            for seed in 0..150u64 {
+                let b = clustered(0x0e17_0000 + seed, 10 + (seed as usize % 40), radius);
+                let legal = b.legal_moves_set().clone();
+                for player in [Player::One, Player::Two] {
+                    for w in b.open_windows(player, 2) {
+                        windows += 1;
+                        assert!(
+                            w.empties().iter().all(|e| legal.contains(e)),
+                            "radius {radius}: {w:?}"
+                        );
+                    }
+                }
+            }
+        }
+        assert!(windows > 500, "only {windows} windows read: a vacuous pin");
+    }
+
+    #[test]
+    fn below_radius_five_an_illegal_empty_still_drops_its_window() {
+        // P1's five (0..4, 0) with P2 far off; at radius 1 the gap at (-1, 0) and (5, 0) stay legal, and the window
+        // two cells out is refused because (-2, 0) is beyond one of every stone.
+        let mut b = played(&FIVE);
+        b.set_legal_move_radius(1);
+        let twos = sorted_empties(&b.open_windows(Player::One, 2));
+        assert!(
+            !twos.contains(&vec![(-2, 0), (-1, 0)]),
+            "an illegal empty's window is refused: {twos:?}"
+        );
+        assert!(twos.contains(&vec![(-1, 0)]));
     }
 }
