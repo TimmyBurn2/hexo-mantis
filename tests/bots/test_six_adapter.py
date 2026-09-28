@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -100,7 +101,8 @@ def test_a_reply_that_is_not_the_engines_own_search_is_a_failure(lines: list[str
     assert reply.failure is not None and why in reply.failure
 
 
-@pytest.mark.parametrize("lines", [["bestmove 1 2 3"], ["bestmove a b"], ["info depth 1"]])
+@pytest.mark.parametrize("lines", [["bestmove 1 2 3"], ["bestmove a b"], ["info depth 1"], ["bestmove --1 2"],
+                                   ["bestmove 99999999999 0"]])
 def test_a_malformed_answer_is_a_failure_not_a_crash(lines: list[str]) -> None:
     reply = parse_reply(lines)
     assert reply.failure is not None and reply.stones == ()
@@ -283,11 +285,19 @@ def test_a_failed_search_on_an_empty_board_forfeits_off_the_board() -> None:
     assert not board.is_legal(*move) and bot.forfeits == {"failed": 1, "illegal": 0}
 
 
-def test_the_engine_finds_the_releases_own_runtime_first(tmp_path: Path) -> None:
+def test_the_engine_finds_the_releases_own_runtime_first(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/planted/inherited")
     assets = locate_six(fake_vendor(tmp_path), "gen0030")
     SixEngine(assets, device="cpu").close()
     env = (assets.engine.parent / "env.txt").read_text(encoding="utf-8").split(":")
-    assert env[0] == str(assets.engine.parent)
+    assert env == [str(assets.engine.parent), "/planted/inherited"]
+
+
+def test_an_unwritable_temp_dir_is_a_recorded_refusal(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    factory = resolve_six(opponent_sims=16, variant="gen0030", device="cpu", vendor_root=fake_vendor(tmp_path))
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path / "no-such-dir"))
+    with pytest.raises(RungUnresolvable, match="did not start"):
+        factory()
 
 
 def test_an_engine_playing_without_a_network_is_refused(tmp_path: Path) -> None:

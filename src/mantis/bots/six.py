@@ -43,7 +43,8 @@ NET_IDENT = "id name HexBot Net"
 #: An empty board's forfeit cell: outside every legal ball, so the arena refuses it.
 _OFF_BOARD = (1 << 20, 1 << 20)
 _DEVICES = ("cuda", "cpu")
-_COORD = re.compile(r"-?[0-9]+")
+#: A coordinate the board's i32 cells can hold; a longer one is a malformed answer, never an overflow.
+_COORD = re.compile(r"-?[0-9]{1,9}")
 _LOG = logging.getLogger(__name__)
 
 
@@ -97,7 +98,7 @@ class SixAssets:
     variant: str
     commit: str
     #: the pinned runtime members' sha256s in asset-name order, comma-joined; "" when the pin names none.
-    runtime_sha256: str = ""
+    runtime_sha256: str
 
 
 def _asset(root: Path, pin: dict[str, Any], name: str) -> tuple[Path, str]:
@@ -119,7 +120,7 @@ def _pin(vendor_root: Path) -> dict[str, Any] | None:
 
 
 def pin_record(variant: str) -> dict[str, str | None]:
-    """What the pin declares for the engine and the `variant` network (a receipt's provenance), `None` where it declares nothing."""
+    """What the pin declares for the engine, its runtime and the `variant` network (a receipt's provenance); `None` (the runtime: "") where it declares nothing."""
     root = find_vendor_root()
     pin = (None if root is None else _pin(root)) or {}
     assets = pin.get("assets", {})
@@ -190,7 +191,10 @@ class SixEngine:
         # The release's own ONNX Runtime first, so no library on the inherited path shadows it.
         libs = [str(assets.engine.parent)] + ([cuda_library_path() or ""] if device == "cuda" else [])
         env["LD_LIBRARY_PATH"] = ":".join(x for x in [*libs, env.get("LD_LIBRARY_PATH", "")] if x)
-        self._stderr = tempfile.NamedTemporaryFile(prefix="sixengine-", suffix=".stderr")
+        try:
+            self._stderr = tempfile.NamedTemporaryFile(prefix="sixengine-", suffix=".stderr")
+        except OSError as exc:
+            raise SixEngineError(f"sixengine did not start: no stderr file ({exc})") from exc
         try:
             self._proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self._stderr,
                                           text=True, encoding="utf-8", bufsize=1, cwd=str(assets.engine.parent),
