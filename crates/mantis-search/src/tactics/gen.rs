@@ -1,6 +1,5 @@
-//! Six's strictly forcing move generator, ported: the attacker's double threats and the defender's covering pairs.
-//!
-//! Cells are grid indices, whose order is `(q, r)` order, so Six's tie-breaks carry over exactly.
+// >300 justify (R8): doubleThreats, coveringPairs and the scratch and tie-breaks they share port as one unit.
+//! Six's strictly forcing move generator on grid indices (`(q, r)` order, so its tie-breaks carry over exactly).
 
 use super::grid::{Grid, Kind, Side};
 
@@ -166,7 +165,7 @@ pub(crate) fn double_threats(grid: &Grid, me: Side, s: &mut GenScratch, out: &mu
             }
         }
     }
-    s.two_pairs.sort_by_key(|p| p.key);
+    s.two_pairs.sort_unstable_by_key(|p| p.key);
 
     // Candidates: every new four had three stones and gains one, or had two and gains both.
     s.candidates.clear();

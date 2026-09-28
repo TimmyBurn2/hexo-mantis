@@ -1,8 +1,6 @@
+// >300 justify (R8): the window layout, its list protocol and their brute-force parity tests are one unit.
 //! The solver's dense board: Six's window layout, per-side window lists with O(1) removal, a 128-bit key.
-//!
-//! A cell's index is `(q - oq + 128) * 256 + (r - or + 128)`, so index order is `(q, r)` order.
 
-use mantis_core::board::zobrist::ZobristTable;
 use mantis_core::board::{Board, Cell};
 
 /// Cells per grid side (Six's width).
@@ -36,10 +34,25 @@ impl Side {
             mantis_core::Player::Two => Side::P2,
         }
     }
+}
 
-    fn zobrist_index(self) -> usize {
-        self as usize
-    }
+/// splitmix64's finaliser: each xorshift and each odd multiply is invertible, so this is a bijection on u64.
+const fn mix64(mut z: u64) -> u64 {
+    z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    z ^ (z >> 31)
+}
+
+/// Per-side salts of the low half, and the high half's stream offset.
+const SALT: [u64; 2] = [0x6a09_e667_f3bc_c908, 0xbb67_ae85_84ca_a73b];
+const HIGH: u64 = 0x3c6e_f372_fe94_f82b;
+
+/// A stone's key, injective per cell and side by bijective mixes (core's out-of-table keys are not).
+pub(crate) fn stone_key(q: i32, r: i32, side: Side) -> u128 {
+    let cell = (u64::from(q as u32) << 32) | u64::from(r as u32);
+    let lo = mix64(mix64(cell) ^ SALT[side as usize]);
+    let hi = mix64(mix64(cell ^ HIGH) ^ SALT[side as usize].rotate_left(17));
+    (u128::from(hi) << 64) | u128::from(lo)
 }
 
 /// Which list a pure window sits in: four or more of a side's stones, exactly three, exactly two.
@@ -156,7 +169,7 @@ impl Grid {
         }
     }
 
-    /// The index of `(q, r)`, or `None` within `EDGE_MARGIN` of the edge.
+    /// `(q - oq + 128) * 256 + (r - or + 128)`, so index order is `(q, r)` order; `None` near the edge.
     pub(crate) fn index_of(&self, q: i32, r: i32) -> Option<u32> {
         let lq = q - self.origin.0 + SIZE / 2;
         let lr = r - self.origin.1 + SIZE / 2;
@@ -207,7 +220,7 @@ impl Grid {
         self.cells[idx as usize] = side as u8 + 1;
         self.placed.push(idx);
         let (q, r) = self.cell_at(idx);
-        self.key ^= ZobristTable::get_for_pos(q, r, side.zobrist_index());
+        self.key ^= stone_key(q, r, side);
         self.shift_windows(idx, side, true);
     }
 
@@ -223,7 +236,7 @@ impl Grid {
         };
         self.cells[idx as usize] = 0;
         let (q, r) = self.cell_at(idx);
-        self.key ^= ZobristTable::get_for_pos(q, r, side.zobrist_index());
+        self.key ^= stone_key(q, r, side);
         self.shift_windows(idx, side, false);
     }
 
@@ -360,11 +373,12 @@ mod tests {
                     "seed {seed} side {side:?}"
                 );
             }
-            assert_eq!(
-                grid.key(),
-                board.zobrist_hash,
-                "the key is the board's own Zobrist hash"
-            );
+            let want = board.cells_iter().fold(0u128, |k, (&(q, r), &c)| match c {
+                Cell::P1 => k ^ stone_key(q, r, Side::P1),
+                Cell::P2 => k ^ stone_key(q, r, Side::P2),
+                Cell::Empty => k,
+            });
+            assert_eq!(grid.key(), want, "the key is the XOR of the stones' keys");
             grid.unload();
         }
     }
@@ -410,6 +424,25 @@ mod tests {
             .flatten()
             .all(|l| l.ids.is_empty() && l.pos.iter().all(|&p| p == ABSENT)));
         assert_eq!(grid.key(), 0);
+    }
+
+    #[test]
+    fn every_stone_key_within_256_is_distinct_and_a_reflection_never_shares_one() {
+        let mut seen = std::collections::HashSet::new();
+        for q in -256..=256 {
+            for r in -256..=256 {
+                for side in [Side::P1, Side::P2] {
+                    assert!(
+                        seen.insert(stone_key(q, r, side)),
+                        "({q}, {r}, {side:?}) repeats a key"
+                    );
+                }
+            }
+        }
+        // The reflections core's keys conflate (outside ±9, `tz(r) == tz(q) + 1`) are distinct here.
+        for &(q, r) in &[(-10, 4), (-9, 10), (-7, 10), (11, 2), (13, -6)] {
+            assert_ne!(stone_key(q, r, Side::P1), stone_key(-q, -r, Side::P1));
+        }
     }
 
     #[test]

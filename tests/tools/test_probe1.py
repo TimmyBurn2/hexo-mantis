@@ -64,15 +64,8 @@ def test_the_decomposer_reads_the_audit_number_then_drops_tail_only_rows_and_spl
     assert d["by_moves_remaining"]["2"]["excl_tail_only"] == {"n": 2, "one_hot_share": pytest.approx(1 / 2)}
 
 
-def test_row_selectors_draw_full_arm_rows_and_rebuild_them(probe1, ring: R.Ring) -> None:
+def test_spread_positions_draw_rebuildable_turn_rows(probe1, ring: R.Ring) -> None:
     rings, _readings = probe1
-    picked = rings.full_arm_rows(ring, seed=1, n=10)
-    assert picked.tolist() == [0, 1, 2, 3, 4], "the quick row is never a root"
-    assert rings.full_arm_rows(ring, seed=1, n=10, moves_remaining=2).tolist() == [3, 4]
-    rebuilt = rings.reconstructed(ring, picked)
-    assert [i for i, _b, _m in rebuilt] == [0, 1, 2, 3, 4]
-    assert all(b.moves_remaining == ring.moves_remaining[i] for i, b, _m in rebuilt)
-    assert rings.target_argmax(ring, 1) == (5, 5) and rings.target_argmax(ring, 2) == (5, 5)
     positions = rings.spread_positions(ring, seed=1, n=4)
     assert {p["row"] for p in positions} == {3, 4} and all(len(p["moves"]) == 7 for p in positions)
 

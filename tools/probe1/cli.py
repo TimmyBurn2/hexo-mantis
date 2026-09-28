@@ -102,7 +102,7 @@ def cmd_swa(a: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """The five dev-side readings and reading 7's averaged net; the EMA CELL itself is the box's."""
+    """The dev-side readings and reading 7's averaged net; the EMA CELL itself is the box's."""
     ap = argparse.ArgumentParser(prog="python tools/probe1.py", description=__doc__)
     ap.add_argument("--seed", type=int, default=DEFAULT_SEED)
     ap.add_argument("--threads", type=int, default=8)

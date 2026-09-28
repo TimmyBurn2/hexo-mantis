@@ -74,6 +74,19 @@ Both were found by running the gate set rather than by reading it, and both are 
 - **CARD-NATURAL-BOOK — OPENED for the RUN11-PREP packet (R377(h)): a policy-drawn natural book becomes a second
   reading.** The ruler's book (`book_v1_s20260625_p4`) stays for the series.
 
+## Opened by the TACTICS-DEPLOY packet (2026-09-28)
+
+- **CARD-ZOBRIST-REFLECTION — CARDED: core's Zobrist keys a cell and its reflection through the origin alike, in
+  1 of 8 cells beyond ±9.** `ZobristTable::get_for_pos` seeds an out-of-table cell with `q*M1 ^ r*M2 ^ p*M3`, and
+  negating a number flips every bit above its lowest set one, so `(q, r)` and `(-q, -r)` collide whenever
+  `tz(r) == tz(q) + 1` (2 680 pairs within ±64; L1's review). `Board::zobrist_hash` keys the MCTS transposition
+  table with it. The tactics solver no longer does: it keys stones by its own injective `grid::stone_key`, after a
+  table keyed by core's carried a proven win to a reflected position. Fixing core re-mints the pinned values of
+  `crates/mantis-core/tests/golden_replay.rs`.
+- **CARD-TACTICS-PLY-HORIZON — CARDED: a proof's turns are not capped by the plies a game has left.** A leaf or root
+  proof whose six lands after the game's ply cap is not a win in that game. Deploy games rarely reach the cap;
+  self-play's `max_moves_per_game` makes it a TACTICS-SELFPLAY question.
+
 ## Opened by R376 (DECIDE-1 accepted; 2026-09-28) — the tactics lane
 
 - **CARD-TACTICS-LANE — ORDERED (R376(d)); it goes first, and run11 is designed after its deploy read

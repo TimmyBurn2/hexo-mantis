@@ -1,5 +1,5 @@
+// >300 justify (R8): one invariant's witness across budgets, encodings, kinds and tactics, read as one.
 //! A search spends EXACTLY `n_simulations` descents, never more and never fewer.
-//!
 //! `N` means `N descents` on both arms, root evaluation included: a solver terminal is a descent and
 //! network leaves are their own row, so served leaves plus inline descents are the descents.
 //!

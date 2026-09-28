@@ -1,8 +1,5 @@
-//! Soundness: every win `TurnSolver` claims survives every non-losing defence (CHECK 1, independent of the
-//! generator), on the goldens and on random quiet positions; and at one turn the solver misses no cover-3 pair.
-//!
-//! PLANTED BREAK: cut `gen::covering_pairs` to its first pair and both CHECK 1 tests red — the defender
-//! then has replies the solver never tried (TACTICS-DESIGN's control refuted 87 of 87 such claims).
+//! Soundness: every win `TurnSolver` claims survives every non-losing defence (CHECK 1, not the generator's).
+//! PLANTED BREAK: `gen::covering_pairs` cut to its first pair reds both CHECK 1 tests (untried defender replies).
 
 mod tactics_common;
 
@@ -28,14 +25,18 @@ fn verify_all(positions: &[(String, Board)], configs: &[(u8, u64)]) -> Tally {
     let mut checker_solver = TurnSolver::new(TABLE);
     let mut tally = Tally::default();
     for (label, board) in positions {
+        // A claim another budget already made here replays identically: checked once.
+        let mut checked: Vec<(Vec<(i32, i32)>, u8)> = Vec::new();
         for &(t, n) in configs {
             solver.clear();
             let Verdict::Win { first, turns } = solver.solve(board, t, n).verdict else {
                 continue;
             };
-            if turns == 0 {
+            let claim = (first.stones().to_vec(), turns);
+            if turns == 0 || checked.contains(&claim) {
                 continue;
             }
+            checked.push(claim);
             tally.claims += 1;
             let mut check = StrictCheck {
                 solver: &mut checker_solver,
@@ -70,8 +71,8 @@ fn every_win_the_port_claims_on_the_goldens_survives_every_defence() {
         tally.refuted.join("\n")
     );
     assert!(
-        tally.claims > 500,
-        "only {} claims: a vacuous check",
+        tally.claims > 200,
+        "only {} distinct claims: a vacuous check",
         tally.claims
     );
     assert!(
@@ -206,5 +207,93 @@ fn at_one_turn_the_solver_misses_no_cover_three_pair() {
     assert!(
         with_pair >= 20,
         "only {with_pair} positions with a cover-3 pair: a vacuous check"
+    );
+}
+
+/// P, a strict win; Q reflects its twelfth stone (9, -18) to (-9, 18), a pair core's out-of-table keys conflate.
+const P_REFLECTED: [(i32, i32); 23] = [
+    (6, -12),
+    (7, -12),
+    (9, -14),
+    (4, -11),
+    (6, -13),
+    (8, -10),
+    (8, -16),
+    (10, -12),
+    (8, -15),
+    (10, -15),
+    (9, -12),
+    (9, -18),
+    (7, -17),
+    (7, -18),
+    (8, -17),
+    (6, -16),
+    (5, -17),
+    (5, -18),
+    (6, -15),
+    (9, -17),
+    (4, -20),
+    (4, -17),
+    (6, -17),
+];
+
+#[test]
+fn a_root_with_a_four_or_a_small_radius_is_refused_not_searched() {
+    // P1 to move with two stones and its own four (0..3, 0); then P1 against P2's open four at (10..13, 5).
+    let own_four = [
+        (0, 0),
+        (20, 20),
+        (22, 20),
+        (1, 0),
+        (2, 0),
+        (20, 24),
+        (22, 24),
+        (3, 0),
+        (-9, 9),
+        (30, 30),
+        (32, 30),
+    ];
+    let their_four = [(0, 0), (10, 5), (11, 5), (1, 0), (2, 0), (12, 5), (13, 5)];
+    let mut solver = TurnSolver::new(TABLE);
+    for seq in [&own_four[..], &their_four[..]] {
+        let board = tactics_common::replay(seq, 8);
+        let got = solver.search_quiet(&board, 2, 2000);
+        assert_eq!(
+            got.verdict,
+            Verdict::Unknown { exhausted: false },
+            "{seq:?}: a four is no quiet root"
+        );
+    }
+    let mut narrow = tactics_common::replay(&P_REFLECTED, 8);
+    narrow.set_legal_move_radius(4);
+    assert_eq!(
+        solver.solve(&narrow, 4, 2000).verdict,
+        Verdict::Unknown { exhausted: false }
+    );
+    assert_eq!(
+        solver.search_quiet(&narrow, 4, 2000).verdict,
+        Verdict::Unknown { exhausted: false }
+    );
+}
+
+#[test]
+fn a_warm_table_never_carries_a_win_across_a_reflected_stone() {
+    let mut reflected = P_REFLECTED;
+    reflected[11] = (-9, 18);
+    let (p, q) = (
+        tactics_common::replay(&P_REFLECTED, 8),
+        tactics_common::replay(&reflected, 8),
+    );
+    let mut solver = TurnSolver::new(TABLE);
+    assert!(
+        matches!(solver.solve(&p, 4, 2000).verdict, Verdict::Win { .. }),
+        "P is a strict win"
+    );
+    let warm = solver.solve(&q, 4, 2000);
+    solver.clear();
+    let cold = solver.solve(&q, 4, 2000);
+    assert_eq!(
+        warm, cold,
+        "Q's verdict must not depend on P having been solved first"
     );
 }

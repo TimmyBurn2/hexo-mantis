@@ -1,3 +1,4 @@
+// >300 justify (R8): the leaf decision, its block and rows, and the tests that need pool internals are one unit.
 //! The tactics module on the search path: a decided leaf is a terminal backed up inline, a counted descent.
 
 use mantis_core::board::Board;
@@ -8,8 +9,7 @@ use crate::tactics::{analyze, LeafTactics, Terminal, TurnSolver, Verdict};
 /// Every tree's solver table: 2^18 slots, as Six's 8 MiB.
 pub const TACTICS_TABLE_ENTRIES: usize = 1 << 18;
 
-/// The smallest legal-move radius at which every empty of a window holding a stone is a legal cell.
-pub const MIN_TACTICS_RADIUS: i32 = 5;
+pub use crate::tactics::solver::MIN_TACTICS_RADIUS;
 
 /// What the defence audit does with a proven opponent win: hold (the lever), or the known-bad that plays into it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

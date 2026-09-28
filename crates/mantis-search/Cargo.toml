@@ -21,11 +21,11 @@ rand_distr = "0.6"
 [dev-dependencies]
 mantis-encoding = { path = "../mantis-encoding" }
 # Feature-unifies `test-fixtures` ON for mantis-search test/bench targets (enables
-# the mantis-core `Board::from_stones` builder the in-src tactics/mcts suites need);
+# the mantis-core `Board::from_stones` builder the in-src mcts suites need);
 # OFF for `cargo build -p mantis-search` (the lib never references from_stones).
 mantis-core = { path = "../mantis-core", features = ["test-fixtures"] }
 criterion = { workspace = true }
-# Reads the frozen Mctx parity fixture. TEST-ONLY: the shipped crate has no JSON
+# Reads the frozen Mctx parity and tactics goldens fixtures. TEST-ONLY: the shipped crate has no JSON
 # surface and this edge never reaches the wasm target or the bridge.
 serde_json = "1"
 

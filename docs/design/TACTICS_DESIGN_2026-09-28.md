@@ -213,6 +213,11 @@ pub enum Terminal { Win, Loss }                        // for the side to move
     whole. strix's 2026-07-14 soundness bug was a non-injective key derivation: 2 732 single-key collisions
     within ±64 (strix `docs/research/2026-07-14-solver-zobrist-collision-and-wl4-guard.md`). The key derivation
     is part of what the goldens pin.
+    - Amended in place (TACTICS-DEPLOY, L1's review): core's out-of-table `ZobristTable::get_for_pos` is that bug's
+      class — a cell and its reflection through the origin share a key in 1 of 8 cells beyond ±9 (2 680 pairs within
+      ±64), and a table keyed by it carried a proven win to the reflected position. The solver keys stones by its
+      own injective derivation (`tactics::grid::stone_key`), pinned by a distinctness test over ±256 and a
+      reflected-pair regression test. Core's `Board::zobrist_hash` keeps the defect (CARD-ZOBRIST-REFLECTION).
   - `clear` bumps a generation, so a stale entry reads as empty.
   - Same board, same budgets, same table state: the same `Solved`, nodes included.
 - **The table.** Proven entries carry `proven <= turns_left`; "searched without a proof" entries carry the depth.

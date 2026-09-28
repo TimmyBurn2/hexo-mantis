@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 
 from mantis._engine import Board
-from mantis.diagnostics.ring_audit import ONE_HOT_H, reconstruct_moves
+from mantis.diagnostics.ring_audit import ONE_HOT_H
 from mantis.diagnostics.ring_reader import Ring, explicit_entropy, load_ring
 from mantis.util.constants import is_alpha_full
 
@@ -46,35 +46,6 @@ def decompose(ring: Ring) -> dict[str, Any]:
 def decompose_rings(paths: list[Path]) -> list[dict[str, Any]]:
     """`decompose` per ring, newest-independent: each row names its file."""
     return [{"ring": p.name, **decompose(load_ring(p))} for p in paths]
-
-
-def full_arm_rows(ring: Ring, *, seed: int, n: int, moves_remaining: int | None = None) -> np.ndarray:
-    """`n` full-search row indices drawn without replacement (fewer if the arm is smaller), optionally at one `mr`."""
-    mask = ring.is_full_search != 0
-    if moves_remaining is not None:
-        mask &= ring.moves_remaining == moves_remaining
-    idx = np.flatnonzero(mask)
-    rng = np.random.default_rng(seed)
-    return np.sort(rng.choice(idx, size=min(n, idx.size), replace=False))
-
-
-def target_argmax(ring: Ring, i: int) -> tuple[int, int] | None:
-    """The row's max-mass explicit child, or None on a tail-only row."""
-    visits = ring.row_visits(i)
-    if visits.size == 0:
-        return None
-    j = int(np.argmax(visits["prob"]))
-    return int(visits["q"][j]), int(visits["r"][j])
-
-
-def reconstructed(ring: Ring, rows: np.ndarray) -> list[tuple[int, Any, list[tuple[int, int]]]]:
-    """`(row, Board, moves)` for every row the cadence search rebuilds; the rows it cannot are counted by the caller."""
-    out = []
-    for i in rows.tolist():
-        found = reconstruct_moves(ring, int(i))
-        if found is not None:
-            out.append((int(i), found[0], found[1]))
-    return out
 
 
 def fence_legal_moves(ring: Ring, i: int) -> list[tuple[int, int]] | None:
@@ -133,5 +104,4 @@ def spread_positions(ring: Ring, *, seed: int, n: int, ply_bins: int = 6) -> lis
     return out
 
 
-__all__ = ["decompose", "decompose_rings", "fence_legal_moves", "full_arm_rows", "reconstructed", "spread_positions",
-           "target_argmax"]
+__all__ = ["decompose", "decompose_rings", "fence_legal_moves", "spread_positions"]

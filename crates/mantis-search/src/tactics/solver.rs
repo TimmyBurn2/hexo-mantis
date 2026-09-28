@@ -1,7 +1,5 @@
-//! `TurnSolver`: Six's turn-level strictly forcing search, by iterative deepening in attacking turns.
-//!
-//! Every attacking turn needs both defender stones to block, so the defender never gets a free stone and every win
-//! found is sound. Deterministic: same board, budgets and table state give the same `Solved`, nodes included.
+// >300 justify (R8): the attack recursion, its table protocol, the line walk and the guards port as one unit.
+//! `TurnSolver`: Six's strictly forcing search (every attacking turn takes both defender stones), deterministic.
 
 use mantis_core::board::Board;
 
@@ -9,6 +7,9 @@ use super::analyze::{analyze, Terminal};
 use super::gen::{covering_pairs, double_threats, GenScratch, ThreatTurn};
 use super::grid::{Grid, Kind, Side};
 use super::table::{Stored, Table};
+
+/// The smallest legal-move radius at which every empty of a window holding a stone is a legal cell.
+pub const MIN_TACTICS_RADIUS: i32 = 5;
 
 /// Mixed into the table key by the attacker's side, so two stages can never share an entry.
 const STAGE: [u128; 2] = [
@@ -130,7 +131,7 @@ impl TurnSolver {
             verdict: Verdict::Unknown { exhausted },
             nodes: 0,
         };
-        if board.check_win() {
+        if board.check_win() || board.legal_move_radius() < MIN_TACTICS_RADIUS {
             return unknown(false);
         }
         let facts = analyze(board);
@@ -164,14 +165,26 @@ impl TurnSolver {
             verdict: Verdict::Unknown { exhausted },
             nodes: 0,
         };
-        if board.moves_remaining != 2 || turns == 0 || nodes == 0 {
+        if board.moves_remaining != 2
+            || turns == 0
+            || nodes == 0
+            || board.legal_move_radius() < MIN_TACTICS_RADIUS
+        {
             return unknown(false);
         }
         if self.grid.load(board).is_err() {
             self.grid_overflows += 1;
             return unknown(false);
         }
-        self.attacker = Side::of(board.current_player);
+        // A threat window on either side (a four, or a six on the board) is not a quiet root: refused, not searched.
+        let mover = Side::of(board.current_player);
+        if !self.grid.list(mover, Kind::Threat).is_empty()
+            || !self.grid.list(mover.other(), Kind::Threat).is_empty()
+        {
+            self.grid.unload();
+            return unknown(false);
+        }
+        self.attacker = mover;
         self.nodes = 0;
         self.budget = nodes;
         self.aborted = false;
@@ -241,6 +254,9 @@ impl TurnSolver {
             let Some(&(x, y)) = replies.first() else {
                 break;
             };
+            if !(Grid::placeable(x) && Grid::placeable(y)) {
+                break;
+            }
             out.extend([self.grid.cell_at(x), self.grid.cell_at(y)]);
             self.grid.place(x, me.other());
             self.grid.place(y, me.other());
