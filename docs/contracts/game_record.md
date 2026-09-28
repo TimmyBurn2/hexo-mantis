@@ -155,3 +155,5 @@ into a log flood.
 | a real eval round writes every game it played | `tests/eval/test_game_record_eval_channel.py::test_a_real_round_writes_every_game_it_played` |
 | eval games carry per-position search stats | `::test_the_gate_block_carries_PER_POSITION_SEARCH_STATS` |
 | production rounds always get a record target | `::test_the_pipeline_ALWAYS_gives_its_rounds_a_record_target` |
+| an armed round arms the candidate's head alone across the child's JSON seam and every record carries its rows, `stones` = its searched plies + its decided ones; an unarmed record has no key | `::test_an_armed_round_arms_the_candidate_alone_and_every_record_carries_its_rows`, `::test_every_eval_record_carries_what_a_viewer_needs` |
+| the run composes its rounds' candidate head with the config's deploy block, none when it is null | `tests/test_run_strict_composition.py::test_the_composed_candidate_head_arms_the_configs_deploy_block`, `::test_the_composed_encoding_is_the_declared_and_REGISTERED_one` |

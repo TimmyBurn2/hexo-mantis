@@ -7,7 +7,10 @@ per-position stats need no engine change is worth nothing unless a REAL round pr
 """
 from __future__ import annotations
 
+import json
+from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import torch
 
@@ -15,10 +18,12 @@ from _fused_caps import CAPS
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from _pipeline_harness import seeded_net
 
+from mantis.config.resolve.tactics import arm_block
 from mantis.encoding import lookup
 from mantis.eval import worker
 from mantis.eval.rounds import GameRecordTarget, GateSpec, RoundSpec
 from mantis.eval.snapshot import write_model_snapshot
+from mantis.model.identity import net_param_hash
 from mantis.monitor.game_record import iter_run_games
 
 #: `book_v1_s20260625_p4` is minted against `gnn_axis_v1` and 292 of its 512 openings need
@@ -27,6 +32,10 @@ _ENC = "gnn_axis_v1"
 _BOOK = "book_v1_s20260625_p4"
 _SEED = 20260625
 _RUN_ID = "grec-eval"
+_TACTICS: dict[str, Any] = {
+    "kind": "strict_turn", "leaf_turns": 2, "leaf_nodes": 64, "root_turns": 2, "root_nodes": 200,
+    "audit": {"turns": 2, "nodes": 200, "k": 2, "m": 2, "total_nodes": 800},
+}
 
 
 def _round_spec(tmp_path: Path, target: GameRecordTarget | None) -> RoundSpec:
@@ -97,6 +106,7 @@ def test_every_eval_record_carries_what_a_viewer_needs(tmp_path: Path) -> None:
         assert all(len(move) == 2 for move in record["moves"]), "moves are axial (q, r) pairs"
         assert record["served_sims"] >= 1
         assert isinstance(record["termination"], str) and record["termination"]
+        assert "candidate_tactics" not in record, "an unarmed head writes no rows key"
 
 
 def test_the_gate_block_carries_PER_POSITION_SEARCH_STATS(tmp_path: Path) -> None:
@@ -189,3 +199,32 @@ def test_an_unwritable_record_dir_does_NOT_break_the_round(tmp_path: Path, capsy
     assert "DISABLED" in capsys.readouterr().err, (
         "the loss must be reported once and loudly, not swallowed"
     )
+
+
+def test_an_armed_round_arms_the_candidate_alone_and_every_record_carries_its_rows(tmp_path: Path,
+                                                                                  monkeypatch) -> None:
+    """Reds if `_pair` arms the best side or the sink drops `candidate_tactics`: the block crosses the JSON seam."""
+    armed = arm_block("full", _TACTICS)
+    calls: list[tuple[Any, Any]] = []
+    real = worker.build_candidate_player
+
+    def spy(engine: Any, n_sims: int, **kw: Any) -> Any:
+        calls.append((engine, kw["tactics"]))
+        return real(engine, n_sims, **kw)
+
+    monkeypatch.setattr(worker, "build_candidate_player", spy)
+    records_dir = tmp_path / "games"
+    spec = replace(_round_spec(tmp_path, GameRecordTarget(record_dir=str(records_dir), run_id=_RUN_ID)),
+                   tactics=armed)
+    worker.run_round(RoundSpec.from_dict(json.loads(json.dumps(spec.to_dict()))))
+    candidate = net_param_hash(seeded_net(seed=1))
+    assert {tactics is None for _engine, tactics in calls} == {True, False}, "both sides built, one armed"
+    for engine, tactics in calls:
+        assert (tactics == armed) == (net_param_hash(engine.model) == candidate), "the candidate alone is armed"
+    records = list(iter_run_games(records_dir, _RUN_ID))
+    assert records and all("candidate_tactics" in r for r in records)
+    for r in records:
+        rows = r["candidate_tactics"]
+        searched = sum(1 for s in r.get("search_stats") or [] if s["by"] == "candidate")
+        assert rows["stones"] == searched + rows["root_proofs_found"] + rows["proof_stones_played"] + \
+            rows["finishes_played"], (rows, searched)

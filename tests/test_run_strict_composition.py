@@ -32,6 +32,7 @@ from mantis.config.resolve.composition import (
 from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
 from mantis.config.resolve.disk_guard import resolve_disk_guard
 from mantis.config.resolve.monitor import resolve_monitor_config
+from mantis.config.resolve.tactics import tactics_block
 from mantis.config.resolve.run_length import (
     resolve_max_train_steps,
 )
@@ -90,7 +91,7 @@ _no_terminal_eval_config = with_deltas(_PRODUCTION_BUILDER, terminal_eval_enable
 
 
 def _bounded(name: str = "smoke_preflight_armed.yaml", factory=None, steps: int = _DRIVE_STEPS,
-             eval_enabled: bool = False):
+             eval_enabled: bool = False, **sections: Any):
     """Load a real minted config, bounded so a drive terminates.
 
     The three step-clock knobs are co-overridden together because the reachability validator
@@ -102,7 +103,7 @@ def _bounded(name: str = "smoke_preflight_armed.yaml", factory=None, steps: int 
                           # graph drives run the real route; 256 batch is drag.
                           "batch_size": 8, "draw_rate_abort": None},
                    monitor={"actor_lag_threshold_steps": steps - 1},
-                   eval_enabled=eval_enabled)
+                   eval_enabled=eval_enabled, **sections)
 
 
 def _evasion_corpus(cfg: RunConfig) -> dict[str, Any]:
@@ -319,19 +320,10 @@ def test_the_config_gate_is_compose_runs_FIRST_statement():
     )
 
 
-def test_the_composed_encoding_is_the_declared_and_REGISTERED_one(
-    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
-):
-    """The composed encoding is the declared, REGISTERED one.
-
-    The retired arm substituted the literal `"unknown"`, and one of its two sites is permanent:
-    `DeployTagHooks.encoding` is stamped unvalidated into the promoted anchor and its
-    `.provenance.json` sidecar. The `lookup()` assertion is mandatory rather than decorative,
-    because CI gate 11 carries no `"unknown"` pattern.
-    """
+def _compose_capturing(cfg: RunConfig, tmp_path, monkeypatch, mk_graph_buffer) -> dict[str, Any]:
+    """`compose_run` over `cfg` with the eval pipeline replaced by a spy; returns the kwargs it was composed with."""
     import mantis.train.anchor as _anchor
 
-    cfg = _bounded(factory=smoke_run_config, eval_enabled=True)
     captured: dict[str, Any] = {}
 
     def _spy_build_eval_pipeline(**kwargs):
@@ -357,6 +349,21 @@ def test_the_composed_encoding_is_the_declared_and_REGISTERED_one(
         config=cfg, trainer=DrivableTrainerStub(), pool=DrivablePoolStub(game_per_read=True), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
+    return captured
+
+
+def test_the_composed_encoding_is_the_declared_and_REGISTERED_one(
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
+):
+    """The composed encoding is the declared, REGISTERED one.
+
+    The retired arm substituted the literal `"unknown"`, and one of its two sites is permanent:
+    `DeployTagHooks.encoding` is stamped unvalidated into the promoted anchor and its
+    `.provenance.json` sidecar. The `lookup()` assertion is mandatory rather than decorative,
+    because CI gate 11 carries no `"unknown"` pattern.
+    """
+    cfg = _bounded(factory=smoke_run_config, eval_enabled=True)
+    captured = _compose_capturing(cfg, tmp_path, monkeypatch, mk_graph_buffer)
 
     assert captured["encoding"] == cfg.identity.encoding, (
         f"the eval pipeline was composed with encoding {captured.get('encoding')!r}, not "
@@ -370,6 +377,18 @@ def test_the_composed_encoding_is_the_declared_and_REGISTERED_one(
         "DeployTagHooks carries a different encoding from the eval pipeline; this is the "
         "value stamped into the promoted anchor payload and its .provenance.json sidecar"
     )
+    assert captured["tactics"] is None, "a minted config's null deploy block composes no block"
+
+
+def test_the_composed_candidate_head_arms_the_configs_deploy_block(
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
+):
+    """Reds on `tactics=None` in `compose_run`'s pipeline call, which would gate a plain head as the configured one."""
+    block = {"kind": "strict_turn", "leaf_turns": 2, "leaf_nodes": 64, "root_turns": 8, "root_nodes": 20000,
+             "audit": {"turns": 8, "nodes": 2000, "k": 4, "m": 4, "total_nodes": 40000}}
+    cfg = _bounded(factory=smoke_run_config, eval_enabled=True, deploy={"search": {"tactics": block}})
+    captured = _compose_capturing(cfg, tmp_path, monkeypatch, mk_graph_buffer)
+    assert captured["tactics"] == tactics_block(block) and captured["tactics"]["audit"]["mode"] == "hold"
 
 
 def test_full_config_carries_the_real_config_not_an_empty_dict(
