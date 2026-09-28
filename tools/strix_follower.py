@@ -20,7 +20,7 @@ from typing import Any
 from mantis.bots.six import CACHE_ENTRIES as SIX_CACHE_ENTRIES
 from mantis.bots.six import pin_record as six_pin_record
 from mantis.bots.strix import _pin as strix_pin_record
-from mantis.config.resolve.tactics import ARMS, arm_block
+from mantis.config.resolve.tactics import ARMS, arm_from_file
 from mantis.util.hashing import sha256_file
 
 EQUAL_WORK = "equal_work"
@@ -270,9 +270,13 @@ class Follower:
         self.fired: list[Path] = []
 
     def read_one(self, checkpoint: Path, *, trigger: str) -> tuple[str, Path]:
-        """Play the cell on `checkpoint` unless its receipt exists: `(receipted|written|failed, path)`."""
+        """Play the cell unless its receipt exists: `(receipted|written|failed, path)`; Raises: ValueError — see below."""
         out = sidecar_path(checkpoint, self.unit, self.arm)
         if out.exists():
+            prior = json.loads(out.read_text(encoding="utf-8")).get("tactics") or {}
+            if self.arm is not None and prior.get("block") != self.tactics:
+                raise ValueError(f"{out.name} was read with another tactics block: another block is another arm, "
+                                 "never a re-read of this one")
             self.log(f"follower: {out.name} exists — receipted, not re-read")
             return "receipted", out
         m = _STEP_IN_NAME.search(checkpoint.name)
@@ -281,7 +285,7 @@ class Follower:
         cell = compose_cell(checkpoint, unit=self.unit, step=step, games=self.games,
                             concurrency=self.concurrency, label=label)
         if self.arm is not None:
-            cell = {**cell, "tactics": self.tactics}
+            cell = {**cell, "tactics": self.tactics, "tactics_arm": self.arm}
         started = self.clock()
         regime_name, evidence = regime(self.run_dir, self.run_id, started, self.host_load())
         self.log(f"follower: {trigger} → {checkpoint.name} in {self.unit} ({regime_name})")
@@ -392,9 +396,8 @@ def main(argv: list[str] | None = None) -> int:
     armed = None
     if args.arm is not None:
         try:
-            armed = arm_block(args.arm, None if args.tactics_block is None
-                              else json.loads(args.tactics_block.read_text(encoding="utf-8")))
-        except ValueError as exc:
+            armed = arm_from_file(args.arm, args.tactics_block)
+        except (ValueError, OSError) as exc:
             ap.error(f"--arm {args.arm}: {exc}")
     elif args.tactics_block is not None:
         ap.error("--tactics-block names the block an --arm overlays; give the arm")

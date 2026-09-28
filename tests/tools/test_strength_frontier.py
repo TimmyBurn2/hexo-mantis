@@ -137,14 +137,15 @@ def test_the_readout_sums_the_candidates_rows_and_names_the_proofs_a_game_did_no
     def game(index: int, result: str, seat: int, **rows: int) -> dict[str, Any]:
         return {"game_index": index, "result": result, "colors": {"candidate": seat}, "candidate_tactics": rows}
 
-    records = [game(0, "p1", 1, root_proofs_found=2, descents=10, moves=5),
-               game(1, "p1", 2, root_proofs_found=1, descents=6, moves=4),
-               game(2, "draw", 1, root_proofs_found=1, moves=3),
-               game(3, "p2", 1, descents=4, moves=2),
+    records = [game(0, "p1", 1, root_proofs_found=2, descents=10, stones=5),
+               {**game(1, "p1", 2, root_proofs_found=1, descents=6, stones=4), "termination": "six_in_a_row"},
+               {**game(2, "draw", 1, root_proofs_found=1, stones=3), "termination": "ply_cap"},
+               game(3, "p2", 1, descents=4, stones=2),
                {"game_index": 4, "result": "p1", "colors": {"candidate": 1}}]
     assert frontier.tactics_readout(records) == {
-        "rows": {"root_proofs_found": 4, "descents": 20, "moves": 14},
-        "proof_games_lost": [1], "proof_games_drawn": [2]}
+        "rows": {"root_proofs_found": 4, "descents": 20, "stones": 14},
+        "proof_games_lost": [{"game_index": 1, "termination": "six_in_a_row"}],
+        "proof_games_drawn": [{"game_index": 2, "termination": "ply_cap"}]}
 
 
 def test_the_module_hash_moves_with_a_tactics_source_byte_and_with_no_other(frontier, tmp_path) -> None:
@@ -156,6 +157,39 @@ def test_the_module_hash_moves_with_a_tactics_source_byte_and_with_no_other(fron
     first = frontier.tactics_module_sha256(tmp_path)
     (src / "mcts" / "puct.rs").write_text("another search", encoding="utf-8")
     assert frontier.tactics_module_sha256(tmp_path) == first
+    (src / "mcts" / "tactics_new.rs").write_text("a new wiring file", encoding="utf-8")
+    second = frontier.tactics_module_sha256(tmp_path)
+    assert second != first, "a new mcts/tactics_*.rs joins the hash"
     (src / "tactics" / "grid.rs").write_text("another grid", encoding="utf-8")
-    assert frontier.tactics_module_sha256(tmp_path) != first
-    assert len(frontier.tactics_module_sha256(_REPO)) == 64, "every named source exists in the tree"
+    assert frontier.tactics_module_sha256(tmp_path) != second
+    for rel in ("mcts/tactics_wiring.rs", "mcts/tactics_root.rs", "mcts/tactics_new.rs"):
+        (src / rel).unlink()
+    with pytest.raises(frontier.FrontierCellError, match="no tactics sources"):
+        frontier.tactics_module_sha256(tmp_path)
+    assert len(frontier.tactics_module_sha256(_REPO)) == 64, "the tree's sources are where the hash reads them"
+
+
+def test_main_arms_every_cell_under_its_own_label_and_a_cells_file_names_no_block(frontier, monkeypatch,
+                                                                                    tmp_path) -> None:
+    """Reds without the label suffix, which gives two arms' games one directory; a raw block has no way in."""
+    from types import SimpleNamespace
+
+    seen: list[dict[str, Any]] = []
+    monkeypatch.setattr(frontier, "run_cell", lambda cell, **_kw: seen.append(dict(cell)) or {"label": cell["label"],
+                                                                                              "rc": 0})
+    monkeypatch.setattr(frontier, "format_row", lambda _record: "")
+    monkeypatch.setattr(frontier, "base_round_spec", lambda _config, work_dir: SimpleNamespace(allocator_posture=None))
+    block, cells, raw = tmp_path / "block.json", tmp_path / "cells.json", tmp_path / "raw.json"
+    block.write_text(json.dumps(_TACTICS), encoding="utf-8")
+    cells.write_text(json.dumps([_cell(label="a"), _cell(label="b")]), encoding="utf-8")
+    raw.write_text(json.dumps([_cell(label="c", tactics=_TACTICS)]), encoding="utf-8")
+    config = str(production_configs(_REPO)[0])
+    run = ["--config", config, "--work-dir", str(tmp_path / "w")]
+    assert frontier.main([*run, "--cells", str(cells), "--arm", "known-bad", "--tactics-block", str(block)]) == 0
+    assert [c["label"] for c in seen] == ["a_known-bad", "b_known-bad"]
+    assert all(c["tactics_arm"] == "known-bad" and c["tactics"]["audit"]["mode"] == "inverted" for c in seen)
+    with pytest.raises(frontier.FrontierCellError, match="one way in"):
+        frontier.main([*run, "--cells", str(raw)])
+    with pytest.raises(SystemExit):
+        frontier.main([*run, "--cells", str(cells), "--tactics-block", str(block)])
+    assert len(seen) == 2

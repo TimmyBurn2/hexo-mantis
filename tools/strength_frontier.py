@@ -29,6 +29,7 @@ from typing import Any
 
 import numpy as np
 
+from mantis import _engine as mantis_engine
 from mantis.bots.six import CLOSE_LOG_MARKER as SIX_CLOSE_LOG_MARKER
 from mantis.bots.six import FINDING_LOG_MARKER as SIX_FINDING_LOG_MARKER
 from mantis.bots.six import PROVIDER_LOG_MARKER as SIX_PROVIDER_LOG_MARKER
@@ -38,7 +39,7 @@ from mantis.config.resolve.eval_posture import resolve_ply_cap_adjudication, res
 from mantis.config.resolve.fused_graph_caps import resolve_fused_graph_caps
 from mantis.config.resolve.inference_batching import resolve_inference_batching
 from mantis.config.resolve.leaf_build_threads import resolve_leaf_build_threads
-from mantis.config.resolve.tactics import ARMS, arm_block, resolve_deploy_tactics
+from mantis.config.resolve.tactics import ARMS, arm_from_file, resolve_deploy_tactics
 from mantis.encoding import lookup
 from mantis.eval.aggregate import pair_bootstrap_wr_ci
 from mantis.eval.rounds import GameRecordTarget, GateSpec, RoundSpec, RungJob
@@ -49,6 +50,7 @@ from mantis.monitor.game_record import iter_run_games
 from mantis.train.checkpoints import deploy_state, load_checkpoint
 from mantis.train.warmstart import apply_bc_warm_start, resolve_bc_warm_start
 from mantis.util.determinism import seed_everything
+from mantis.util.hashing import sha256_file
 
 BC_FULL = "bc_full"
 BC_TP = "bc_tp"
@@ -288,48 +290,41 @@ def pair_readout(records: Sequence[Mapping[str, Any]], *, seed: int) -> dict[str
     }
 
 
-#: The sources whose bytes are the tactics module a record names.
-_TACTICS_SOURCES = ("crates/mantis-search/src/tactics", "crates/mantis-search/src/mcts/tactics_wiring.rs",
-                    "crates/mantis-search/src/mcts/tactics_root.rs")
-
-
 def tactics_module_sha256(repo: Path) -> str:
-    """One hash over the tactics module's sources, each file's path and bytes in path order."""
-    files: list[Path] = []
-    for src in _TACTICS_SOURCES:
-        root = repo / src
-        files.extend(root.rglob("*.rs") if root.is_dir() else [root])
+    """The tree's tactics sources (`tactics/**`, `mcts/tactics_*.rs`) hashed in path order; Raises: FrontierCellError, OSError."""
+    src = repo / "crates" / "mantis-search" / "src"
+    module, wiring = sorted((src / "tactics").rglob("*.rs")), sorted((src / "mcts").glob("tactics_*.rs"))
+    if not module or not wiring:
+        raise FrontierCellError(f"{src}: no tactics sources where the module hash reads them")
     h = hashlib.sha256()
-    for path in sorted(files):
+    for path in [*module, *wiring]:
         h.update(str(path.relative_to(repo)).encode() + b"\0" + path.read_bytes() + b"\0")
     return h.hexdigest()
 
 
 def load_arm(arm: str, block_path: Path | None) -> dict[str, Any] | None:
-    """The bridge block `arm` arms from a `search.tactics` JSON file; Raises: FrontierCellError — see `arm_block`."""
+    """`arm_from_file` for this tool; Raises: FrontierCellError — the arm, the block or its file refused."""
     try:
-        return arm_block(arm, None if block_path is None else json.loads(block_path.read_text(encoding="utf-8")))
-    except ValueError as exc:
+        return arm_from_file(arm, block_path)
+    except (ValueError, OSError) as exc:
         raise FrontierCellError(f"--arm {arm}: {exc}") from exc
 
 
 def tactics_readout(records: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """The candidate's tactics rows summed over the cell's games, and the games a found proof then lost or drew."""
+    """The candidate's rows summed over the cell's games, and each game a found root proof did not win, with its end."""
     rows: dict[str, int] = {}
-    lost: list[int] = []
-    drawn: list[int] = []
+    lost: list[dict[str, Any]] = []
+    drawn: list[dict[str, Any]] = []
     for record in records:
         game = record.get("candidate_tactics")
         if game is None:
             continue
         for key, value in game.items():
             rows[key] = rows.get(key, 0) + int(value)
-        if game.get("root_proofs_found", 0) > 0:
-            outcome = _candidate_outcome(record)
-            if outcome == 0.0:
-                lost.append(int(record["game_index"]))
-            elif outcome == 0.5:
-                drawn.append(int(record["game_index"]))
+        outcome = _candidate_outcome(record)
+        if game.get("root_proofs_found", 0) > 0 and outcome < 1.0:
+            entry = {"game_index": int(record["game_index"]), "termination": record.get("termination")}
+            (lost if outcome == 0.0 else drawn).append(entry)
     return {"rows": rows, "proof_games_lost": lost, "proof_games_drawn": drawn}
 
 
@@ -353,6 +348,10 @@ def run_cell(cell: Mapping[str, Any], *, config: Any, base: RoundSpec, work_dir:
     spec = cell_spec(cell, base, cell_dir=cell_dir, config=config)
     spec_path = cell_dir / "spec.json"
     spec_path.write_text(json.dumps(spec.to_dict(), indent=1), encoding="utf-8")
+    # Named before the child plays: the tree's tactics sources, and the engine bytes the child loads.
+    tactics = None if spec.tactics is None and cell.get("tactics_arm") is None else {
+        "arm": cell.get("tactics_arm"), "block": spec.tactics, "module_sha256": tactics_module_sha256(_REPO),
+        "engine_sha256": sha256_file(Path(mantis_engine.__file__))}
     started = time.time()
     with (cell_dir / "child.log").open("w", encoding="utf-8") as log:
         proc = subprocess.run(
@@ -364,6 +363,8 @@ def run_cell(cell: Mapping[str, Any], *, config: Any, base: RoundSpec, work_dir:
         "label": label, "cell": dict(cell), "provenance": provenance, "rc": proc.returncode,
         "wall_sec": round(wall, 1), "started_utc": time.strftime("%FT%TZ", time.gmtime(started)),
     }
+    if tactics is not None:
+        record["tactics"] = tactics
     if opponent == STRIX:
         from mantis.bots.strix import FINDING_LOG_MARKER
 
@@ -378,9 +379,8 @@ def run_cell(cell: Mapping[str, Any], *, config: Any, base: RoundSpec, work_dir:
                                    "skipped_rungs": result.get("skipped_rungs")}
         games = list(_records_for(cell_dir, cell_channel(cell)))
         readout = pair_readout(games, seed=_BOOTSTRAP_SEED)
-        if spec.tactics is not None:
-            record["tactics"] = {"block": spec.tactics, "module_sha256": tactics_module_sha256(_REPO),
-                                 **tactics_readout(games)}
+        if tactics is not None:
+            tactics.update(tactics_readout(games))
         if readout["eff_n"] == 0:
             # A skipped rung or a refused floor probe exits 0 with no games of the cell's own:
             # a failed cell, never a 0-game reading.
@@ -459,9 +459,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     labels = [c["label"] for c in cells]
     if len(set(labels)) != len(labels):
         raise FrontierCellError(f"duplicate cell labels: {labels}")
+    if any("tactics" in c or "tactics_arm" in c for c in cells):
+        raise FrontierCellError("a cells file names no tactics block: --arm over --tactics-block is the one way in")
     if args.arm is not None:
         armed = load_arm(args.arm, args.tactics_block)
-        cells = [{**c, "tactics": armed} for c in cells]
+        # An arm's cells are its own: their label, and so their games' directory, carry the arm.
+        cells = [{**c, "label": f"{c['label']}_{args.arm}", "tactics": armed, "tactics_arm": args.arm} for c in cells]
     base = base_round_spec(config, work_dir=work_dir)
     env = dict(os.environ)
     if governs_device(config.eval.worker_device) and base.allocator_posture == "expandable_segments":

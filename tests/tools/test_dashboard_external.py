@@ -143,7 +143,10 @@ def test_a_tactics_arm_is_its_own_series_beside_the_reading_without_one(external
     plain = _sidecar(45000, 0.30)
     armed = {**_sidecar(45000, 0.34), "tactics": {"arm": "full", "block": {}, "module_sha256": "m" * 64}}
     config = {**_sidecar(45000, 0.33), "tactics": {"arm": None, "block": {}}}
-    points = [external.parse_sidecar(Path(n), s) for n, s in (("a", plain), ("b", armed), ("c", config))]
-    assert [p.tactics for p in points] == [None, "full", "config"]
-    assert len(external.series_by_unit(points)) == 3, "an arm is its own instrument, never merged"
-    assert points[1].unit_label == "run8 · equal_work: ours PUCT-256 vs strix 256 sims, tactics full"
+    other = {**_sidecar(51000, 0.31), "tactics": {"arm": "full", "block": {"leaf_nodes": 64}}}
+    plain_arm = {**_sidecar(45000, 0.30), "tactics": {"arm": "plain", "block": None}}
+    pairs = (("a", plain), ("b", armed), ("c", config), ("d", other), ("e", plain_arm))
+    points = [external.parse_sidecar(Path(n), s) for n, s in pairs]
+    assert [p.tactics for p in points] == [None, "full 44136fa3", "config 44136fa3", "full ed0b067d", "plain"]
+    assert len(external.series_by_unit(points)) == 5, "an arm, and a block under it, is its own instrument"
+    assert points[1].unit_label == "run8 · equal_work: ours PUCT-256 vs strix 256 sims, tactics full 44136fa3"

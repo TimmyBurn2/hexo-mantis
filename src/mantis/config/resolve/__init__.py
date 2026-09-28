@@ -86,6 +86,7 @@ from mantis.config.resolve.tactics import (
     AUDIT_INVERTED,
     MissingTacticsError,
     arm_block,
+    arm_from_file,
     resolve_deploy_tactics,
     tactics_block,
 )
@@ -100,6 +101,7 @@ __all__ = [
     "AUDIT_INVERTED",
     "MissingTacticsError",
     "arm_block",
+    "arm_from_file",
     "resolve_deploy_tactics",
     "tactics_block",
     "AbsentEncodingError",

@@ -30,12 +30,19 @@ v5: the SIX ruler (R374(b), SIX-RUNG) lands beside strix: a pin may name release
 sha256 (`make vendor.six`).
 v6: the cell tools' tactics arms (TACTICS-DEPLOY): `--arm plain|full|audit-off|known-bad` over a
 `search.tactics` block (`--tactics-block`, JSON) arms the CANDIDATE side only, through
-`mantis.config.resolve.tactics.arm_block`; with no arm the config's own `deploy.search.tactics` plays.
-An arm's receipt is `<ckpt>.<unit>.<arm>.json`, beside and never shadowing the config's, and a
-receipt's `tactics` section (present iff an arm was named or the block was non-null) carries the arm,
-the resolved block, `module_sha256` (the tactics sources, `tools/strength_frontier.py`), the rows the
-candidate's games summed and the games a found root proof then lost (`proof_games_lost`, a refuted win
-claim) or drew. The dashboard draws each arm as its own series.
+`mantis.config.resolve.tactics.arm_from_file` (the one reader); with no arm the config's own
+`deploy.search.tactics` plays, and a cells file naming a block is refused. An arm's cells are its own: the
+frontier labels them `<label>_<arm>` (so their games' directory), and the follower's receipt is
+`<ckpt>.<unit>.<arm>.json`, beside and never shadowing the config's; a re-read of that receipt under another block
+is refused (another block is another arm). A record's `tactics` section (present iff an arm was named or the block
+was non-null) carries the arm, the resolved block, `module_sha256` (the TREE's tactics sources,
+`crates/mantis-search/src/tactics/**` and `mcts/tactics_*.rs`) and `engine_sha256` (the BYTES of the `mantis._engine`
+the child loaded), both read before the child plays; then the candidate's rows summed over the cell's games, and
+`proof_games_lost` / `proof_games_drawn`: each game in which the candidate found a root proof and did not win, with
+its termination. Such a game is a refuted claim, a continuation the search lost after the proof's turn, or a ply-cap
+draw, and is read game by game. The engine hash names what played; the module hash names the tree it was meant to
+be built from (a build-time hash is `CARD-TACTICS-BUILD-HASH`). The dashboard draws each arm, and each block under it
+(its hash's first 8 hex), as its own series.
 
 The run5 decision document carried that run's choices and is DELETED with its config
 (R346(f)): a decision document whose subject config is not in the tree

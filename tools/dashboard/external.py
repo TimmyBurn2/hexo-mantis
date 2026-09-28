@@ -1,6 +1,7 @@
 """External points: the follower's strix and Six sidecars as series with CIs, unit and regime on the axis, each gap as a number."""
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -44,7 +45,7 @@ class ExternalPoint:
     solver: str = "on"
     #: strix's placement_radius when the sidecar names one (the ruler-r6 cell); None = the driver's 8.
     radius: int | None = None
-    #: the candidate's tactics arm the sidecar names (`config`: the config's own block); None = no tactics section.
+    #: the candidate's tactics arm (`config`: the config's own block) and its block's hash; None = no tactics section.
     tactics: str | None = None
 
     @property
@@ -61,6 +62,13 @@ def _num(value: Any) -> float | None:
 
 def _int(value: Any) -> int | None:
     return int(value) if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _tactics_label(section: dict[str, Any]) -> str:
+    """The arm, and the first 8 hex of its block's hash: two blocks under one arm name are two instruments."""
+    block = section.get("block")
+    digest = "" if block is None else " " + hashlib.sha256(json.dumps(block, sort_keys=True).encode()).hexdigest()[:8]
+    return f"{section.get('arm') or 'config'}{digest}"
 
 
 def parse_sidecar(path: Path, raw: Any) -> ExternalPoint | None:
@@ -87,7 +95,7 @@ def parse_sidecar(path: Path, raw: Any) -> ExternalPoint | None:
         eff_n=_int(raw.get("eff_n")), games=_int(raw.get("games")),
         net_hash=str(raw.get("net_hash", "?")), checkpoint=str(raw.get("checkpoint", path.name)),
         path=str(path), solver=str(strix.get("solver", "on")), radius=_int(strix.get("radius")),
-        tactics=str(tactics.get("arm") or "config") if isinstance(tactics, dict) else None,
+        tactics=_tactics_label(tactics) if isinstance(tactics, dict) else None,
     )
 
 

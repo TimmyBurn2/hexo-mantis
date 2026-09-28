@@ -1,7 +1,9 @@
 """`resolve_deploy_tactics` — THE read path for `deploy.search.tactics` (v39): the block as the bridge arms it, or `None`."""
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from mantis.config.schema import TacticsConfig
@@ -50,6 +52,11 @@ def arm_block(arm: str, block: Mapping[str, Any] | None) -> dict[str, Any] | Non
     if valid["audit"] is None:
         raise ValueError(f"arm {arm!r} arms the block's audit, which is null")
     return tactics_block(valid, audit_mode=AUDIT_INVERTED if arm == "known-bad" else AUDIT_HOLD)
+
+
+def arm_from_file(arm: str, path: Path | None) -> dict[str, Any] | None:
+    """`arm_block` over the JSON `search.tactics` block at `path`; Raises: ValueError — as `arm_block`; OSError."""
+    return arm_block(arm, None if path is None else json.loads(path.read_text(encoding="utf-8")))
 
 
 def resolve_deploy_tactics(full_config: Any) -> dict[str, Any] | None:

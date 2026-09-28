@@ -83,6 +83,10 @@ Both were found by running the gate set rather than by reading it, and both are 
   table with it. The tactics solver no longer does: it keys stones by its own injective `grid::stone_key`, after a
   table keyed by core's carried a proven win to a reflected position. Fixing core re-mints the pinned values of
   `crates/mantis-core/tests/golden_replay.rs`.
+- **CARD-TACTICS-BUILD-HASH — CARDED: the engine does not carry the hash of the sources it was built from.** A
+  receipt names the tree's tactics sources (`module_sha256`) and the engine's bytes (`engine_sha256`), read before a
+  cell plays, but nothing ties the two: a build-time hash embedded in `mantis._engine` (a `build.rs`), compared at
+  cell start with a refusal on mismatch, would. Found by TACTICS-DEPLOY's L4 review.
 - **CARD-TACTICS-PLY-HORIZON — CARDED: a proof's turns are not capped by the plies a game has left.** A leaf or root
   proof whose six lands after the game's ply cap is not a win in that game. Deploy games rarely reach the cap;
   self-play's `max_moves_per_game` makes it a TACTICS-SELFPLAY question.

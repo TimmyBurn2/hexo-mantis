@@ -70,9 +70,10 @@ class _FakeCells:
                                  "sec_per_game": 0.04}
         else:
             record["error"] = "planted failure"
-        if self.rc == 0 and cell.get("tactics") is not None:
-            record["tactics"] = {"block": cell["tactics"], "module_sha256": "m" * 64,
-                                 "rows": {"root_proofs_found": 1}, "proof_games_lost": [], "proof_games_drawn": []}
+        if self.rc == 0 and cell.get("tactics_arm") is not None:
+            record["tactics"] = {"arm": cell["tactics_arm"], "block": cell["tactics"], "module_sha256": "m" * 64,
+                                 "engine_sha256": "e" * 64, "rows": {"root_proofs_found": 1},
+                                 "proof_games_lost": [], "proof_games_drawn": []}
         return record
 
 
@@ -349,13 +350,19 @@ def test_an_arm_plays_its_block_and_writes_its_own_receipt_beside_the_configs(fo
     assert status == "written" and out.name == ckpt.name + ".strix256.full.json", "the config's receipt shadows no arm"
     assert "tactics" not in cells.calls[0], "no arm: the frontier plays the config's own block"
     assert cells.calls[1]["tactics"] == _ARMED and cells.calls[1]["label"].endswith("_full")
+    assert cells.calls[1]["tactics_arm"] == "full"
     body = json.loads(out.read_text(encoding="utf-8"))
-    assert body["tactics"] == {"arm": "full", "block": _ARMED, "module_sha256": "m" * 64,
+    assert body["tactics"] == {"arm": "full", "block": _ARMED, "module_sha256": "m" * 64, "engine_sha256": "e" * 64,
                                "rows": {"root_proofs_found": 1}, "proof_games_lost": [], "proof_games_drawn": []}
     assert "tactics" not in json.loads(ckpt.with_name(ckpt.name + ".strix256.json").read_text(encoding="utf-8"))
     status, out = _follower(follower_mod, run, cells, arm="plain").read_one(ckpt, trigger="once")
     assert out.name.endswith(".strix256.plain.json") and cells.calls[2]["tactics"] is None
-    assert json.loads(out.read_text(encoding="utf-8"))["tactics"] == {"arm": "plain", "block": None}
+    assert json.loads(out.read_text(encoding="utf-8"))["tactics"]["arm"] == "plain"
+    other = {**_ARMED, "leaf_nodes": 64}
+    with pytest.raises(ValueError, match="another tactics block"):
+        _follower(follower_mod, run, cells, arm="full", tactics=other).read_one(ckpt, trigger="once")
+    assert _follower(follower_mod, run, cells, arm="full", tactics=_ARMED).read_one(ckpt, trigger="once")[0] == \
+        "receipted" and len(cells.calls) == 3, "the same block under the same arm is receipted, never re-read"
 
 
 def test_the_cli_arm_resolves_its_block_file_and_a_block_without_an_arm_is_refused(
@@ -377,7 +384,8 @@ def test_the_cli_arm_resolves_its_block_file_and_a_block_without_an_arm_is_refus
     assert follower_mod.main([*base, "--arm", "known-bad", "--tactics-block", str(block)]) == 0
     assert seen[-1] == ("known-bad", {**_ARMED, "audit": {**_ARMED["audit"], "mode": "inverted"}})
     assert follower_mod.main(base) == 0 and seen[-1] == (None, None)
-    for bad in (["--arm", "full"], ["--tactics-block", str(block)]):
+    for bad in (["--arm", "full"], ["--tactics-block", str(block)],
+                ["--arm", "full", "--tactics-block", str(tmp_path / "absent.json")]):
         with pytest.raises(SystemExit):
             follower_mod.main([*base, *bad])
     assert len(seen) == 2
