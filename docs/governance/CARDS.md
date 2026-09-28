@@ -44,11 +44,18 @@ Both were found by running the gate set rather than by reading it, and both are 
   55 to 27 (48k). Training damage and a lucky parent draw predict the same thing there. DECIDE-1 separates them
   with seeded weight noise on the parent at C4's and A6's distances (KL ≈ 0.007 and ≈ 0.09, with a KL ≈ 1
   known-bad), read on both rulers; the §4 instrument keeps its seed (R373(b)).
-- **CARD-SIX-RUNG — ORDERED (R375(a)): Six generation 30 at 16 nodes lands as a second ruler by pin and hash.**
-  Tactics as shipped, search cache off (`cacheEntries 0`). The engine, its runtime and the network enter
-  through `vendor/pins.toml` with the hashes SIX-SCOUT verified (release 1.2.0, repo `f2b5ec2`), as a bot beside
-  strix, never tracked (R374(b)). Until it lands, cells use SIX-SCOUT's scratch driver and pins. Upstream has
-  since tagged 1.2.1 (`ba101e6`), which changes `engine/src/threats.cpp`; R375(a) admitted 1.2.0.
+- **CARD-SIX-RUNG — LANDED 2026-09-28 by the SIX-RUNG packet (R375(a); its ruling is owed).** Six generation 30
+  at 16 nodes, tactics as shipped, search cache off (`cacheEntries 0`), plays as `mantis.bots.six` beside strix.
+  The repo `f2b5ec2`, release 1.2.0's engine and ONNX Runtime and the gen 30 and gen 455 networks are pinned by
+  url and sha256 in `vendor/pins.toml` (`make vendor.six`), never tracked, and re-hashed at every engine start;
+  the follower's `six30_16` unit writes `<ckpt>.six30_16.json`. The witness on the box (tree `46387ad0`)
+  re-read the parent 0.351 [0.295, 0.406], SIX-SCOUT's reading exactly (101–187). The cache setting moves Six's
+  turns in 12 of SIX-SCOUT's 288 games (CPU provider), so the operator restated the replay bar before the cell
+  ran: 256 of the 276 cache-invariant games replayed (bar 249); 258 of 288 overall (the pre-stated bar was 260).
+  Each of the 30 non-replays first diverges on our stone in a cache-invariant game (20) or on Six's in a
+  cache-sensitive one (10). SIX-SCOUT's scratch at `vendor/external/six` (the desktop main checkout, the box)
+  sits on the pin's clone path: `make vendor` refuses there until it is moved aside. Upstream has since tagged
+  1.2.1 (`ba101e6`), which changes `engine/src/threats.cpp`; R375(a) admitted 1.2.0.
 - **CARD-RANDOM-OPENINGS — CARDED: self-play draws no opening plies, while both rulers' books are random
   scatter.** `configs/run10.yaml` mints `selfplay.random_opening_plies: 0`, so every self-play game starts from
   the empty board. Both rulers' cells open from `book_v1_s20260625_p4`: four uniform-random plies from the

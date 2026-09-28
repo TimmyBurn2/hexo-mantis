@@ -27,8 +27,9 @@ its records are local. Three exits fed R375:
     shipped, search cache off. It meets the bar: rules parity on shared games (two out-of-domain cases ruled
     in-session), 269 of 288 games replayed at fixed work, and 3.15 s a game against strix's 8.55.
   - The parent reads 0.351 [0.295, 0.406] on it. Six's release network reads 0.885 against the parent at 16
-    nodes. SIX-RUNG lands the ruler by pin and hash (CARD-SIX-RUNG). No run trains on Six's labels until the
-    operator rules on provenance (R375(f)).
+    nodes. SIX-RUNG LANDED it by pin and hash 2026-09-28 (CARD-SIX-RUNG): the landed rung re-reads the parent
+    0.351 [0.295, 0.406], SIX-SCOUT's reading exactly, and replays 256 of the 276 games whose Six turns the
+    cache setting leaves unmoved. No run trains on Six's labels until the operator rules on provenance (R375(f)).
 - **RESEARCH-FORGE (R374(c)): proposals only, on two boards, at 0 box-h.** The measurement cards it funded run
   in DECIDE-1. R375(d) extends LAW-19 to power: a pre-registered reading states its power and false-pass rate
   at the measured spread between nets, and is void below 0.8 power.
