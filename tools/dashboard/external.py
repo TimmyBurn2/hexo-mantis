@@ -44,12 +44,15 @@ class ExternalPoint:
     solver: str = "on"
     #: strix's placement_radius when the sidecar names one (the ruler-r6 cell); None = the driver's 8.
     radius: int | None = None
+    #: the candidate's tactics arm the sidecar names (`config`: the config's own block); None = no tactics section.
+    tactics: str | None = None
 
     @property
     def unit_label(self) -> str:
         label = f"{self.run_id} · {self.unit}: ours PUCT-{self.ours_sims} vs {self.opponent} {self.opponent_budget}"
         label += ", solver OFF" if self.solver == "off" else ""
-        return label + ("" if self.radius is None else f", strix @ r{self.radius}")
+        label += "" if self.radius is None else f", strix @ r{self.radius}"
+        return label + ("" if self.tactics is None else f", tactics {self.tactics}")
 
 
 def _num(value: Any) -> float | None:
@@ -65,7 +68,7 @@ def parse_sidecar(path: Path, raw: Any) -> ExternalPoint | None:
     if not isinstance(raw, dict):
         return None
     step, wr = _int(raw.get("step")), _num(raw.get("wr"))
-    ours, strix, six = raw.get("ours") or {}, raw.get("strix") or {}, raw.get("six")
+    ours, strix, six, tactics = raw.get("ours") or {}, raw.get("strix") or {}, raw.get("six"), raw.get("tactics")
     ours_sims = _int(ours.get("sims"))
     if isinstance(six, dict):
         generation, work = _int(six.get("generation")), _int(six.get("nodes"))
@@ -84,6 +87,7 @@ def parse_sidecar(path: Path, raw: Any) -> ExternalPoint | None:
         eff_n=_int(raw.get("eff_n")), games=_int(raw.get("games")),
         net_hash=str(raw.get("net_hash", "?")), checkpoint=str(raw.get("checkpoint", path.name)),
         path=str(path), solver=str(strix.get("solver", "on")), radius=_int(strix.get("radius")),
+        tactics=str(tactics.get("arm") or "config") if isinstance(tactics, dict) else None,
     )
 
 

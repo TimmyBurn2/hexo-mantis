@@ -137,3 +137,13 @@ def test_a_parents_bridge_cell_in_a_second_directory_is_its_own_series(external,
     assert list(external.series_by_unit(points)) == ["run7 · equal_work: ours PUCT-256 vs strix 256 sims",
                                                      "run8 · equal_work: ours PUCT-256 vs strix 256 sims"]
     assert "2 sidecar(s) read" in note
+
+
+def test_a_tactics_arm_is_its_own_series_beside_the_reading_without_one(external) -> None:
+    plain = _sidecar(45000, 0.30)
+    armed = {**_sidecar(45000, 0.34), "tactics": {"arm": "full", "block": {}, "module_sha256": "m" * 64}}
+    config = {**_sidecar(45000, 0.33), "tactics": {"arm": None, "block": {}}}
+    points = [external.parse_sidecar(Path(n), s) for n, s in (("a", plain), ("b", armed), ("c", config))]
+    assert [p.tactics for p in points] == [None, "full", "config"]
+    assert len(external.series_by_unit(points)) == 3, "an arm is its own instrument, never merged"
+    assert points[1].unit_label == "run8 · equal_work: ours PUCT-256 vs strix 256 sims, tactics full"
