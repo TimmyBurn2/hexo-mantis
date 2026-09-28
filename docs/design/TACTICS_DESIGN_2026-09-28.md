@@ -468,6 +468,10 @@ Every hotspot is pre-registered with its expected bracket and its abort line. Th
 - **In-run.** Descents/s and GPU evaluations/s are read beside each other: solver terminals are descents that
   cost no GPU. The box baseline is PERF-ADA's loop (4 505 leaves/s, GPU 89 %). The expected band for descents/s
   is [0.9x, 1.1x] of tactics-off.
+- Amended in place (TACTICS-DEPLOY, L5): H2's named instrument cannot read H2. `tools/bench_server.py` benches the
+  inference server alone and runs no search. L5 read H2 on the REAL self-play pool at the run's settings instead,
+  with the runner's leaf block armed through a scratch-only bridge patch (the self-play path stays unarmed in the
+  tree). It read descents/s 1.080x and GPU evaluations/s 0.928x at 64/2.
 
 ## 10. Tests
 - **Goldens from T2.** A fixture of ~600 positions stratified over A, C and D and over verdicts, each with Six's
