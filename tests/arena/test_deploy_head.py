@@ -48,6 +48,7 @@ def _head(kind: str, **over):
         search_kind=kind,
         gumbel_m=4,
         gumbel_seed=20260909,
+        tactics=None,
     )
     kwargs.update(over)
     return DeployHeadPlayer(**kwargs)

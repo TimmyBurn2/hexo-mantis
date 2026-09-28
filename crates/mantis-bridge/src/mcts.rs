@@ -9,10 +9,11 @@
 use numpy::{IntoPyArray, PyArray1};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 
 use mantis_core::board::BOARD_SIZE;
 use mantis_core::Board;
-use mantis_search::mcts::ForcedSelectionError;
+use mantis_search::mcts::{AuditConfig, AuditMode, ForcedSelectionError, TacticsConfig};
 use mantis_search::{LegalSetPolicy, MCTSTree, MctxRootState, QSigma, SearchKind};
 
 use crate::board::PyBoard;
@@ -167,13 +168,66 @@ impl PyMCTSTree {
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    /// Reset the tree for a new game starting from `board`, re-using the pre-allocated pool.
-    pub fn new_game(&mut self, board: &PyBoard) {
+    /// Reset the tree for `board`, re-using the pool. Raises: ValueError when armed tactics meet a radius below 5.
+    pub fn new_game(&mut self, board: &PyBoard) -> PyResult<()> {
+        self.inner
+            .check_tactics_board(board.inner_ref())
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
         self.board_size = BOARD_SIZE;
         self.pending_boards.clear();
         self.forced_root_child = None;
         self.gumbel_root = None;
         self.inner.new_game(board.inner_ref().clone());
+        Ok(())
+    }
+
+    /// Arm the resolved tactics block (`tactics_config_of`) or disarm with None. Raises: ValueError on a bad key or kind.
+    pub fn configure_tactics(&mut self, block: Option<&Bound<'_, PyDict>>) -> PyResult<()> {
+        let config = block.map(tactics_config_of).transpose()?;
+        self.inner.configure_tactics(config);
+        Ok(())
+    }
+
+    /// Whether a tactics block is armed.
+    #[getter]
+    pub fn tactics_armed(&self) -> bool {
+        self.inner.tactics_config().is_some()
+    }
+
+    /// Descents the last `select_leaves` / `select_leaves_forced` call backed up inline, no board returned.
+    pub fn last_inline_descents(&self) -> usize {
+        self.inner.last_inline_descents()
+    }
+
+    /// This search's tactics rows by name; every row 0 with tactics off.
+    pub fn tactics_counters<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let c = self.inner.tactics_counters();
+        let d = PyDict::new(py);
+        for (name, value) in [
+            ("descents", c.descents),
+            ("served_leaves", c.served_leaves),
+            ("terminal_win1", c.terminal_win1),
+            ("terminal_lost_on_cover", c.terminal_lost_on_cover),
+            ("terminal_strict_win", c.terminal_strict_win),
+            ("terminal_six", c.terminal_six),
+            ("terminal_revisits", c.terminal_revisits),
+            ("forced_restrictions", c.forced_restrictions),
+            ("leaf_solver_calls", c.leaf_solver_calls),
+            ("leaf_solver_exhausted", c.leaf_solver_exhausted),
+            ("root_proofs_found", c.root_proofs_found),
+            ("proof_stones_played", c.proof_stones_played),
+            ("finishes_played", c.finishes_played),
+            ("root_solver_exhausted", c.root_solver_exhausted),
+            ("decided_lost", c.decided_lost),
+            ("root_vetoes", c.root_vetoes),
+            ("best_holds", c.best_holds),
+            ("audit_calls", c.audit_calls),
+            ("audit_exhausted", c.audit_exhausted),
+            ("proof_stone_illegal", c.proof_stone_illegal),
+        ] {
+            d.set_item(name, value)?;
+        }
+        Ok(d)
     }
 
     /// Select up to `n` distinct leaves for evaluation, one Board per unique leaf; always call
@@ -425,6 +479,114 @@ impl PyMCTSTree {
     }
 }
 
+/// The one tactics kind this build runs: the turn-level strictly forcing solver.
+const TACTICS_KIND: &str = "strict_turn";
+
+/// Refuse a dict whose keys are not exactly `want`, naming the difference.
+fn exact_keys(d: &Bound<'_, PyDict>, what: &str, want: &[&str]) -> PyResult<()> {
+    let mut got: Vec<String> = d
+        .keys()
+        .iter()
+        .map(|k| k.extract::<String>())
+        .collect::<PyResult<_>>()?;
+    got.sort();
+    let mut expected: Vec<String> = want.iter().map(|s| (*s).to_string()).collect();
+    expected.sort();
+    if got != expected {
+        return Err(PyValueError::new_err(format!(
+            "{what}: keys {got:?}, expected exactly {expected:?}"
+        )));
+    }
+    Ok(())
+}
+
+/// An integer leaf of `d` within `[lo, hi]`, refused by name otherwise.
+fn int_leaf(d: &Bound<'_, PyDict>, what: &str, key: &str, lo: i64, hi: i64) -> PyResult<i64> {
+    let value = d
+        .get_item(key)?
+        .ok_or_else(|| PyValueError::new_err(format!("{what}: {key} is missing")))?;
+    let n: i64 = value
+        .extract()
+        .map_err(|_| PyValueError::new_err(format!("{what}: {key} is not an integer")))?;
+    if !(lo..=hi).contains(&n) {
+        return Err(PyValueError::new_err(format!(
+            "{what}: {key}={n} is outside [{lo}, {hi}]"
+        )));
+    }
+    Ok(n)
+}
+
+/// The block's `kind`, `leaf_*`, `root_*` and `audit` (None, or `turns nodes k m total_nodes mode`), each checked.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // each leaf is range-checked first
+fn tactics_config_of(d: &Bound<'_, PyDict>) -> PyResult<TacticsConfig> {
+    let what = "tactics block";
+    exact_keys(
+        d,
+        what,
+        &[
+            "kind",
+            "leaf_turns",
+            "leaf_nodes",
+            "root_turns",
+            "root_nodes",
+            "audit",
+        ],
+    )?;
+    let kind: String = d
+        .get_item("kind")?
+        .map(|k| k.extract::<String>())
+        .transpose()?
+        .unwrap_or_default();
+    if kind != TACTICS_KIND {
+        return Err(PyValueError::new_err(format!(
+            "{what}: kind {kind:?} is not one this build runs ({TACTICS_KIND:?})"
+        )));
+    }
+    let audit = match d.get_item("audit")? {
+        Some(a) if !a.is_none() => {
+            let a = a
+                .cast_into::<PyDict>()
+                .map_err(|_| PyValueError::new_err(format!("{what}: audit is not a dict")))?;
+            let what = "tactics audit";
+            exact_keys(
+                &a,
+                what,
+                &["turns", "nodes", "k", "m", "total_nodes", "mode"],
+            )?;
+            let mode: String = a
+                .get_item("mode")?
+                .map(|m| m.extract::<String>())
+                .transpose()?
+                .unwrap_or_default();
+            let mode = match mode.as_str() {
+                "hold" => AuditMode::Hold,
+                "inverted" => AuditMode::Inverted,
+                other => {
+                    return Err(PyValueError::new_err(format!(
+                        "{what}: mode {other:?} is neither \"hold\" nor \"inverted\""
+                    )))
+                }
+            };
+            Some(AuditConfig {
+                turns: int_leaf(&a, what, "turns", 1, 40)? as u8,
+                nodes: int_leaf(&a, what, "nodes", 1, i64::MAX)? as u64,
+                k: int_leaf(&a, what, "k", 1, 1024)? as u32,
+                m: int_leaf(&a, what, "m", 1, 1024)? as u32,
+                total_nodes: int_leaf(&a, what, "total_nodes", 1, i64::MAX)? as u64,
+                mode,
+            })
+        }
+        _ => None,
+    };
+    Ok(TacticsConfig {
+        leaf_turns: int_leaf(d, what, "leaf_turns", 1, 40)? as u8,
+        leaf_nodes: int_leaf(d, what, "leaf_nodes", 0, i64::MAX)? as u64,
+        root_turns: int_leaf(d, what, "root_turns", 1, 40)? as u8,
+        root_nodes: int_leaf(d, what, "root_nodes", 0, i64::MAX)? as u64,
+        audit,
+    })
+}
+
 /// Register the `MCTSTree` pyclass into `_engine`. Called by Slice ASM.
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyMCTSTree>()?;
@@ -450,7 +612,7 @@ mod tests {
         );
 
         let seed = PyBoard::new();
-        t.new_game(&seed);
+        t.new_game(&seed).expect("an unarmed tree takes any board");
         Python::initialize();
         Python::attach(|py| {
             let _leaves = t.select_leaves(py, 1).expect("a fresh root selects itself");
@@ -464,7 +626,7 @@ mod tests {
         assert_eq!(t.forced_root_child(), Some(first));
         // new_game resets the mirror (matches the tree's internal reset).
         let board = PyBoard::new();
-        t.new_game(&board);
+        t.new_game(&board).expect("an unarmed tree takes any board");
         assert_eq!(t.forced_root_child(), None);
     }
 
@@ -482,7 +644,7 @@ mod tests {
         Python::attach(|py| {
             let mut t = PyMCTSTree::new(1.5, 1.0, 0.25, false, 0.3);
             let board = PyBoard::new();
-            t.new_game(&board);
+            t.new_game(&board).expect("an unarmed tree takes any board");
             let leaves = t.select_leaves(py, 1).expect("select");
             assert_eq!(leaves.len(), 1);
             assert_eq!(

@@ -433,7 +433,7 @@ def test_expand_ls_graph_refuses_a_dense_half_of_the_wrong_stride(graph_engine) 
 def test_deploy_head_requires_its_expand_collaborator() -> None:
     """`expand_fn=` has no default: a head without its decode+expand collaborator is a TypeError."""
     with pytest.raises(TypeError, match="expand_fn"):
-        DeployHeadPlayer(n_sims=1, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0)  # type: ignore[call-arg]
+        DeployHeadPlayer(n_sims=1, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None)  # type: ignore[call-arg]
 
 
 def test_build_candidate_player_closed_match_refuses_an_unknown_representation() -> None:

@@ -269,7 +269,7 @@ def build_candidate_player(
                                 leaf_batch_size=leaf_batch_size,
                                 c_visit=c_visit, c_scale=c_scale, q_rescale=q_rescale,
                                 search_kind=search_kind, gumbel_m=gumbel_m,
-                                gumbel_seed=gumbel_seed)
+                                gumbel_seed=gumbel_seed, tactics=None)
     raise EvalDecodeUnsupportedError(
         f"encoding {spec.name!r} declares representation={spec.representation!r}, which "
         f"this eval worker's decode entrance does not implement. The implemented arm is "

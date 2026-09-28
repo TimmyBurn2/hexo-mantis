@@ -1,4 +1,4 @@
-"""EVERY search kind spends EXACTLY `n_sims` leaves (the old Gumbel driver served 0.19–0.42 of 512, A-1)."""
+"""EVERY search kind spends EXACTLY `n_sims` descents, tactics off or on (the old Gumbel driver served 0.19–0.42 of 512)."""
 from __future__ import annotations
 
 import math
@@ -13,6 +13,13 @@ from _dense_expand import InferStub, dense_expand
 
 _STRIDE = 362
 
+#: The leaf wiring alone, the design's leaf budgets: no root offence, no audit.
+_LEAF_TACTICS = {"kind": "strict_turn", "leaf_turns": 2, "leaf_nodes": 64, "root_turns": 8, "root_nodes": 0,
+                 "audit": None}
+
+#: The solver terminals by kind, as `MCTSTree.tactics_counters` names them.
+_TERMINALS = ("terminal_win1", "terminal_lost_on_cover", "terminal_strict_win", "terminal_six")
+
 
 def _mid_game_board(n_stones: int, seed: int) -> Board:
     """A random legal position of `n_stones` stones under the real cadence (the red team's)."""
@@ -23,6 +30,14 @@ def _mid_game_board(n_stones: int, seed: int) -> Board:
             break
         legal = board.legal_moves()
         q, r = legal[rng.randrange(len(legal))]
+        board.apply_move(q, r)
+    return board
+
+
+def _open_four_board() -> Board:
+    """P1 to move with two stones against P2's open four: forced children, then decided leaves below them."""
+    board = Board()
+    for q, r in [(0, 0), (10, 5), (11, 5), (1, 0), (2, 0), (12, 5), (13, 5)]:
         board.apply_move(q, r)
     return board
 
@@ -50,19 +65,30 @@ def _peaked_infer(calls: list[int]) -> InferStub:
     return _infer
 
 
+@pytest.mark.parametrize("tactics", [None, _LEAF_TACTICS], ids=["tactics-off", "tactics-on"])
 @pytest.mark.parametrize("kind", ["puct", "gumbel"])
 @pytest.mark.parametrize("n_sims", [64, 512])
-def test_every_kind_spends_exactly_its_budget(kind: str, n_sims: int) -> None:
+def test_every_kind_spends_exactly_its_budget(kind: str, n_sims: int, tactics: dict | None) -> None:
     calls: list[int] = []
     player = DeployHeadPlayer(
         expand_fn=dense_expand(_peaked_infer(calls)), n_sims=n_sims, leaf_batch_size=8, c_visit=50.0,
-        c_scale=1.0, q_rescale=True, search_kind=kind, gumbel_m=16, gumbel_seed=7,
+        c_scale=1.0, q_rescale=True, search_kind=kind, gumbel_m=16, gumbel_seed=7, tactics=tactics,
     )
     player.new_game()
-    player.select_move(_mid_game_board(40, seed=3))
-    assert len(calls) == n_sims, (
-        f"{kind} at {n_sims}: served {len(calls)} leaves against a budget of {n_sims}"
-    )
+    if tactics is None:
+        player.select_move(_mid_game_board(40, seed=3))
+        assert len(calls) == n_sims, (
+            f"{kind} at {n_sims}: served {len(calls)} leaves against a budget of {n_sims}"
+        )
+        return
+    player.select_move(_open_four_board())
+    rows = player.last_tactics
+    assert rows is not None
+    inline = sum(rows[k] for k in _TERMINALS) + rows["terminal_revisits"]
+    assert player.last_sims == rows["descents"] == n_sims, f"{kind} at {n_sims}: {rows}"
+    assert rows["served_leaves"] == len(calls), "every served leaf is one net call"
+    assert rows["served_leaves"] + inline == rows["descents"], f"{kind} at {n_sims}: the rows do not add up: {rows}"
+    assert inline > 0, f"{kind} at {n_sims}: no decided leaf, so the tactics-on case proves nothing: {rows}"
 
 
 def test_the_gumbel_head_spends_its_budget_on_a_second_board_too() -> None:
@@ -70,7 +96,7 @@ def test_the_gumbel_head_spends_its_budget_on_a_second_board_too() -> None:
     calls: list[int] = []
     player = DeployHeadPlayer(
         expand_fn=dense_expand(_peaked_infer(calls)), n_sims=256, leaf_batch_size=1, c_visit=50.0,
-        c_scale=1.0, q_rescale=False, search_kind="gumbel", gumbel_m=16, gumbel_seed=11,
+        c_scale=1.0, q_rescale=False, search_kind="gumbel", gumbel_m=16, gumbel_seed=11, tactics=None,
     )
     player.new_game()
     player.select_move(_mid_game_board(12, seed=5))
@@ -83,7 +109,7 @@ def test_the_head_reports_the_leaves_it_spent_as_its_own_counter(kind: str) -> N
     calls: list[int] = []
     player = DeployHeadPlayer(
         expand_fn=dense_expand(_peaked_infer(calls)), n_sims=96, leaf_batch_size=8, c_visit=50.0,
-        c_scale=1.0, q_rescale=True, search_kind=kind, gumbel_m=16, gumbel_seed=7,
+        c_scale=1.0, q_rescale=True, search_kind=kind, gumbel_m=16, gumbel_seed=7, tactics=None,
     )
     player.new_game()
     assert player.last_sims is None

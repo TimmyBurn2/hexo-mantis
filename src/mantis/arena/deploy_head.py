@@ -33,7 +33,7 @@ class DeployHeadPlayer:
 
     Raises:
         ValueError: `leaf_batch_size < 1`; `gumbel_m < 1`; `search_kind` is not a kind the
-            engine implements (raised by `MCTSTree.configure_search` on the first `new_game`).
+            engine implements, or `tactics` a block it cannot arm (raised by `MCTSTree` on the first `new_game`).
     """
 
     def __init__(
@@ -48,6 +48,7 @@ class DeployHeadPlayer:
         search_kind: str,
         gumbel_m: int,
         gumbel_seed: int,
+        tactics: dict[str, Any] | None,
     ) -> None:
         # `c_visit`, `c_scale`, `q_rescale`, `leaf_batch_size` and `gumbel_m` are REQUIRED schema
         # keys, never defaulted: a default equal to today's minted value is still a second authority.
@@ -73,14 +74,18 @@ class DeployHeadPlayer:
         self._search_kind = str(search_kind)
         self._gumbel_m = int(gumbel_m)
         self._gumbel_seed = int(gumbel_seed) & _SEED_MASK
+        #: The resolved `deploy.search.tactics` block the tree arms, or `None` (the module off).
+        self._tactics = tactics
         self._game_index = 0
         self._move_index = 0
         self._tree: MCTSTree | None = None
         #: The LAST search's root for the game record, `(root_value, children)` from rows this
         #: head already computes. A plain attribute: the consumer reads it once per ply.
         self.last_root: tuple[float, list[ChildInfo]] | None = None
-        #: The LAST search's leaves spent, the head's own count (LADDER-1's budget witness reads it).
+        #: The LAST search's descents, the head's own count (LADDER-1's budget witness reads it).
         self.last_sims: int | None = None
+        #: The LAST search's tactics rows (`MCTSTree.tactics_counters`), `None` with the module off.
+        self.last_tactics: dict[str, int] | None = None
 
     def name(self) -> str:
         return "deploy_head"
@@ -96,6 +101,7 @@ class DeployHeadPlayer:
         self._move_index = 0
         self.last_root = None
         self.last_sims = None
+        self.last_tactics = None
 
     def _fresh_tree(self) -> MCTSTree:
         """A tree configured with the RUN's search kind and σ. `configure_search` runs ONCE per
@@ -103,6 +109,7 @@ class DeployHeadPlayer:
         ply, and the root calls below read the σ it set (one σ per tree)."""
         tree = MCTSTree()
         tree.configure_search(self._search_kind, self._c_visit, self._c_scale, self._q_rescale)
+        tree.configure_tactics(self._tactics)
         return tree
 
     def _move_seed(self) -> int:
@@ -113,11 +120,11 @@ class DeployHeadPlayer:
         ) & _SEED_MASK
 
     def select_move(self, board: Any) -> tuple[int, int]:
-        """Search `n_sims` LEAVES and return the move this run's search kind picks.
+        """Search `n_sims` DESCENTS and return the move this run's search kind picks.
 
         The root's own evaluation is one of the N on both arms, and the budget advances by leaves
-        RETURNED rather than requested — `select_leaves(k)` yields fewer than k on a cold tree, so
-        crediting the request would let a throughput knob change deploy strength.
+        RETURNED plus descents backed up inline rather than by the request, so a throughput knob
+        cannot change deploy strength.
 
         Raises:
             ValueError: the search produced no root children, so there is no move to pick.
@@ -143,6 +150,7 @@ class DeployHeadPlayer:
         else:
             move, spent = self._drive_puct(tree, sims_done)
         self.last_sims = spent
+        self.last_tactics = tree.tactics_counters() if self._tactics is not None else None
 
         children_info = tree.get_root_children_info()
         # Captured from the tree the decision read, so a recorded root always matches its move.
@@ -161,10 +169,12 @@ class DeployHeadPlayer:
         while sims_done < self._n_sims:
             current_batch = min(self._leaf_batch_size, self._n_sims - sims_done)
             leaves = tree.select_leaves(current_batch)
-            if not leaves:
+            inline = tree.last_inline_descents()
+            if not leaves and not inline:
                 break
-            self._expand_fn(tree, leaves)
-            sims_done += len(leaves)
+            if leaves:
+                self._expand_fn(tree, leaves)
+            sims_done += len(leaves) + inline
         top = tree.get_top_visits(1)
         return (top[0][0] if top else None), sims_done
 
@@ -181,10 +191,12 @@ class DeployHeadPlayer:
             # The FORCED descent, not `select_leaves(1)`: the batch path expands a transposition
             # hit inline and returns nothing, which this loop read as exhaustion (A-1).
             leaves = tree.select_leaves_forced([child])
-            if not leaves:
+            inline = tree.last_inline_descents()
+            if not leaves and not inline:
                 break
-            self._expand_fn(tree, leaves)
-            spent += len(leaves)
+            if leaves:
+                self._expand_fn(tree, leaves)
+            spent += len(leaves) + inline
         return tree.gumbel_root_best_move(), sims_done + spent
 
 
