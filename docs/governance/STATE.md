@@ -7,18 +7,32 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
-**R376 (2026-09-28): THE TACTICS LANE goes first; run10 will not START (R376(c)).** `configs/run10.yaml`
-stays the production config the instruments read until run11's mint replaces it, and run11 is designed after
-the tactics lane's deploy read (CARD-RUN11-DESIGN).
+**R377 (2026-09-28): THE TACTICS MODULE. TACTICS-DESIGN is accepted, and TACTICS-DEPLOY is the next packet
+(CARD-TACTICS-DEPLOY).** The tactics lane still goes first and run10 will not START (R376(c)).
+`configs/run10.yaml` stays the production config the instruments read until run11's mint replaces it, and run11
+is designed after TACTICS-DEPLOY's read (CARD-RUN11-DESIGN).
 
 - **The tactics lane (R376(d), CARD-TACTICS-LANE).** ONE exact tactics module in Rust on the search path, used
   identically at deploy and in self-play (LAW-15). Deploy lands first, read as an A/B against the plain parent
   on both rulers. Self-play follows only with a pre-registered starvation witness, and with F-15, F-39, F-53
   and R239 re-validated under LAW-02 first. A solver terminal counts as a simulation, GPU evaluations are
-  their own LAW-18 row, and served-sims exactness pins descents (R376(e)). The TACTICS-DESIGN packet
-  (2026-09-28) runs our solver and Six's on the same positions, then writes the lane's design,
-  `TACTICS_DESIGN_2026-09-28.md` in docs/design/, at its exit. It changes nothing else in the tree, and its
-  records are local.
+  their own LAW-18 row, and served-sims exactness pins descents (R376(e)); a descent that ends at a proven
+  terminal is one (R377(c)).
+- **TACTICS-DESIGN exited 2026-09-28; R377(a) accepts it.** Its design is
+  `docs/design/TACTICS_DESIGN_2026-09-28.md`, and its records are local.
+  - On 8 966 quiet positions, Six's kind (a turn-level, strictly forcing threat-space search) proves 2 119–3 506
+    and our per-stone `TacticalSolver` proves 0; none of the 7 473 WIN claims is refuted.
+  - R377 makes Six's kind the core and retires our solver when the module lands. v1 proves wins and can't-cover
+    losses. The quiescence override and its blend stay behind the shared analysis function.
+  - TACTICS-DEPLOY reads the full module and an audit-off arm against the plain parent on both rulers, X's floor
+    first. The defence audit lands only if its arm earns its cost: of 20 of D1's "safe" alternatives played out
+    with Six on both seats (T3), 16 were still lost.
+  - TACTICS-SELFPLAY follows (CARD-TACTICS-SELFPLAY): proof as the target, a plain twin as the control, and
+    T4's starvation band at the panel's mean − 3 SD.
+- **The first stone is the origin (R377(g), CARD-ORIGIN-1).** The empty board's legal set becomes {origin},
+  records and books are canonicalised by translation on load, and the frozen fixtures are re-pinned under grant.
+  It lands in RUN11-PREP. The ruler's book stays for the series; a random-opening share in self-play is a run11
+  arm (R377(h)).
 - **Two rulers (R376(a)).** Six gen 30 @16, cache off, is X; strix @ r8 is S. Recipe decisions read X;
   milestones read X and S. SIX-RUNG landed X by pin and hash (`mantis.bots.six`, the follower's `six30_16`
   unit); it re-reads the parent 0.351 [0.295, 0.406], SIX-SCOUT's reading exactly.
@@ -67,7 +81,7 @@ run6's by R369's packet (W0).
 ## Where things live
 
 - Open work: `docs/governance/CARDS.md` (swept in W6; derived there, never enumerated here).
-- Rulings: `docs/governance/RULINGS.md`; the latest is R376.
+- Rulings: `docs/governance/RULINGS.md`; the latest is R377.
 - Laws and the protected set: `docs/governance/LAWS.md`, whose protected set names each
   invariant's pinning tests (R370(f)); `tests/test_protected_set_pins.py` fails if one is gone.
   Falsified work: `docs/governance/falsified.md`.
@@ -112,4 +126,5 @@ Derived 2026-09-25 at the PERF-ADA exit from the tree and the R369 ledger in
 The configs and "where things live" sections below the run were carried from the SLIM-FIX rewrite and
 re-checked against `configs/` and `census.py` at this tip.
 The current phase was rewritten 2026-09-28 at R376 from the DECIDE-1 and SIX-RUNG exit records (local); the
-run, box and instrument lines were re-checked at `3e3fd263`.
+run, box and instrument lines were re-checked at `3e3fd263`. The tactics lines were updated at R377 from the
+TACTICS-DESIGN design doc (`d17dfdcd`).

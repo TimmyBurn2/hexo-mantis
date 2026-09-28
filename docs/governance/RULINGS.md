@@ -1,4 +1,4 @@
-# RULINGS — R23 to R376
+# RULINGS — R23 to R377
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R377.
+- Numbering continues from R346. The next ruling is R378.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -36,6 +36,39 @@ still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register 
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
 
+### R377 — THE TACTICS MODULE
+Decision: verbatim below.
+
+> R377 — THE TACTICS MODULE.
+> (a) TACTICS-DESIGN is accepted. The head-to-head's null configuration is "no solver"; a
+> solver with zero reach is dominated at any cost. Six's kind — a turn-level, strictly
+> forcing threat-space search — is the core; our per-stone solver is retired when the
+> module lands.
+> (b) Version 1 proves wins and can't-cover losses (Six's set); deeper loss proofs are a
+> later lever.
+> (c) A descent that ends at a proven terminal is a simulation (R376(e)); the served-sims
+> witness counts it.
+> (d) The quiescence override and its blend stay in v1 behind the shared analysis function;
+> retiring the blend is its own leg.
+> (e) TACTICS-DEPLOY reads the full module and an audit-off arm against the plain parent
+> on both rulers, X's floor first; the defence audit lands only if its arm earns its cost.
+> (f) TACTICS-SELFPLAY uses proof-as-target: a proven root plays and records its proof, a
+> vetoed move gets zero target mass, a lost root records no policy target; F-53's novelty
+> check runs before arming; a plain twin is the control; T4's band reads at mean − 3 SD.
+> (g) The first stone is the origin, as in the official rule and Six: the empty board's
+> legal set is {origin}, records and books are canonicalised by translation on load, and
+> the frozen fixtures are re-pinned under grant. "Arena legality" is named. ORIGIN-1 lands
+> in RUN11-PREP.
+> (h) The ruler's book stays for the series; a policy-drawn natural book becomes a second
+> reading; a random-opening share in self-play is a run11 arm, not a default.
+
+Status: standing. Accepts `docs/design/TACTICS_DESIGN_2026-09-28.md` and rules its §12 questions: Q1 by (a), Q4 by
+(b), Q6 by (d), Q2 by (e), Q3 and Q7 by (f); construes R376(e) for proven terminals by (c); names the protected
+set's arena legality by (g); rules on CARD-RANDOM-OPENINGS by (h). §12 Q5 (the design's TT-hit deviation) is not
+among its items.
+
+---
+
 ### R376 — THE TACTICS LANE
 Decision: verbatim below.
 
@@ -60,6 +93,8 @@ Decision: verbatim below.
 > screened levers with power lines.
 
 Status: standing. Ratifies SIX-RUNG under R375(a) by (a); makes R375(c)'s choice by (c); construes the protected set's served-sims exactness by (e); rules on R375(f)'s provenance by (f).
+(d)'s lane: TACTICS-DESIGN ACCEPTED by R377(a), and the lane continues as TACTICS-DEPLOY then TACTICS-SELFPLAY;
+(e) CONSTRUED by R377(c): a descent that ends at a proven terminal is a simulation, and the served-sims witness counts it.
 
 ---
 

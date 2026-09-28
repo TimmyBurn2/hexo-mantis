@@ -36,13 +36,47 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R377 (TACTICS-DESIGN accepted; 2026-09-28) — the tactics module
+
+- **CARD-TACTICS-DEPLOY — ORDERED (R377(e)); the lane's next packet.** It builds the module to
+  `docs/design/TACTICS_DESIGN_2026-09-28.md` §4–§10, as R377 rules it:
+  - Six's kind, a turn-level strictly forcing threat-space search, is the core. Our per-stone `TacticalSolver`
+    is retired when the module lands (R377(a)).
+  - v1 proves wins and can't-cover losses, Six's set (R377(b)); deeper loss proofs are CARD-TACTICS-DEEP-LOSS.
+  - A descent that ends at a proven terminal is a simulation, and the served-sims witness counts it (R377(c)).
+  - `apply_quiescence`'s override and its blend stay in v1 behind the shared analysis function (R377(d)).
+  - The A/B reads the full module AND an audit-off arm against the plain parent on both rulers, X's floor first.
+    The defence audit lands only if its arm earns its cost (R377(e)). The design prices the bundle at ≈ 5.5
+    box-h and the audit-off arm at ≈ +3.2 (§11, §12 Q2).
+  - §12 Q5 (TT-hit expansions stay uncounted, the design's named deviation from R376(e)) is not among R377's
+    items.
+- **CARD-TACTICS-SELFPLAY — HELD on CARD-TACTICS-DEPLOY's read.** The twin's targets are proof-as-target
+  (R377(f)): a proven root plays and records its proof, a vetoed move gets zero target mass, and a lost root
+  records no policy target.
+  - F-53's novelty check, re-run with the new kind, runs before `selfplay.search.tactics` is armed.
+  - A plain twin of equal length is the control: ≈ 9.5 box-h with it (design §11).
+  - T4's band reads at the panel's mean − 3 SD on the frozen exam (sha256 `2b2eb7f5…`): mean prior < 0.154 or
+    mean value < 0.255 at a save is a starvation signal.
+- **CARD-ORIGIN-1 — CARDED; lands in the RUN11-PREP packet (R377(g)).** The first stone is the origin, as in the
+  official rule and Six: the empty board's legal set is {origin}. Records and books are canonicalised by
+  translation on load, and the frozen fixtures are re-pinned under grant. It touches the protected set's arena
+  legality, which R377(g) names.
+- **CARD-TACTICS-DEEP-LOSS — CARDED, a later lever (R377(b)).** Loss proofs beyond can't-cover, e.g. the design's
+  §12 Q4: a cover-2 position where every covering reply loses to a strict opponent win.
+- **CARD-QUIESCENCE-BLEND-RETIRE — CARDED, its own leg (R377(d)).** Retire `apply_quiescence`'s heuristic blend
+  (−0.3 for two fives against a two-stone turn), which is not exact.
+- **CARD-NATURAL-BOOK — CARDED (R377(h)): a policy-drawn natural book becomes a second reading.** The ruler's book
+  (`book_v1_s20260625_p4`) stays for the series.
+
 ## Opened by R376 (DECIDE-1 accepted; 2026-09-28) — the tactics lane
 
 - **CARD-TACTICS-LANE — ORDERED (R376(d)); it goes first, and run11 is designed after its deploy read
   (R376(c)). RE-AIMED 2026-09-28 to the TACTICS-DESIGN packet. It measures before designing: a census of
   both solvers, the two run head to head on the same positions, D1's specificity check and a baselined
   starvation witness. Its exit commits `TACTICS_DESIGN_2026-09-28.md` in docs/design/ and scopes two packets:
-  TACTICS-DEPLOY (the module and its A/B on S and X) and TACTICS-SELFPLAY (a twin read by the witness).**
+  TACTICS-DEPLOY (the module and its A/B on S and X) and TACTICS-SELFPLAY (a twin read by the witness).
+  TACTICS-DESIGN EXITED 2026-09-28 and is ACCEPTED by R377(a): Six's kind is the core, and the lane continues
+  as CARD-TACTICS-DEPLOY, then CARD-TACTICS-SELFPLAY.**
   ONE exact tactics module in Rust on the search path, used identically at deploy and in self-play
   (LAW-15). The search crate already carries a net-free `TacticalSolver` (`crates/mantis-search/src/tactics/`,
   the solver F-53 read); one implementation per thing, so the lane's module is that one or replaces it.
@@ -57,8 +91,10 @@ Both were found by running the gate set rather than by reading it, and both are 
     threat solver off moves the parent 0.351 → 0.594 against gen 30 and 0.115 → 0.286 against gen 455
     (≈ 1 logit at both).
   - Owed before f is taken at face value: a specificity check of D1's "safe" alternatives (a sample re-checked
-    at a deeper budget, or played out).
-- **CARD-RUN11-DESIGN — HELD on CARD-TACTICS-LANE's deploy read (R376(c)).** Until run11's mint replaces it,
+    at a deeper budget, or played out). DISCHARGED by TACTICS-DESIGN's T3: 39 of 40 alternatives stay safe at
+    12 turns / 60 000 nodes (f_corr 0.455 [0.385, 0.515]), but 16 of 20 played out with Six on both seats are
+    still lost within 13 opponent turns.
+- **CARD-RUN11-DESIGN — HELD on CARD-TACTICS-LANE's deploy read (R376(c)), now CARD-TACTICS-DEPLOY's (R377).** Until run11's mint replaces it,
   `configs/run10.yaml` stays the production config the instruments read; run10 will not START. The design
   carries:
   - Cooldown and EMA as screened levers with power lines (R376(g)): neither is shown nor excluded. DECIDE-1's
@@ -69,6 +105,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   - Learning from Six's outputs only as a means (R376(f)): probes first, a run only on a pass, and a net that
     learned from Six carries it in its lineage. The standing goal is to surpass Six by self-play with exact
     tactics.
+  - A random-opening share in self-play, as an arm, not a default (R377(h)).
+  - CARD-ORIGIN-1, which lands in RUN11-PREP (R377(g)).
 - **CARD-PACKET-POWER-LINE — LANDED 2026-09-28 in the packet rule (`docs/governance/COMMS_STYLE.md` item 4): a
   packet carries each band's power line and sets known-bad bars against the ruler's measured floor. Was CARDED
   (process; DECIDE-1's exit).** Three of DECIDE-1's banded rules were void by R375(d) before any reading (B1-N2, B3, the S
@@ -104,7 +142,9 @@ Both were found by running the gate set rather than by reading it, and both are 
   cache-sensitive one (10). SIX-SCOUT's scratch at `vendor/external/six` (the desktop main checkout, the box)
   sits on the pin's clone path: `make vendor` refuses there until it is moved aside. Upstream has since tagged
   1.2.1 (`ba101e6`), which changes `engine/src/threats.cpp`; R375(a) admitted 1.2.0.
-- **CARD-RANDOM-OPENINGS — CARDED: self-play draws no opening plies, while both rulers' books are random
+- **CARD-RANDOM-OPENINGS — RULED by R377(h): the ruler's book stays for the series, a policy-drawn natural book
+  is a second reading (CARD-NATURAL-BOOK), and a random-opening share in self-play is a run11 arm, not a default
+  (CARD-RUN11-DESIGN). Was CARDED: self-play draws no opening plies, while both rulers' books are random
   scatter.** `configs/run10.yaml` mints `selfplay.random_opening_plies: 0`, so every self-play game starts from
   the empty board. Both rulers' cells open from `book_v1_s20260625_p4`: four uniform-random plies from the
   empty board (`tools/mint_opening_book.py`).

@@ -1,6 +1,8 @@
 # TACTICS — the solver's kind and its wiring: measured, then designed (2026-09-28)
 
-Status: **DESIGN** (the TACTICS-DESIGN packet under R376(d); CARD-TACTICS-LANE re-aimed to it). No code, config
+Status: **ACCEPTED by R377** (2026-09-28), which rules §12's questions; where its entry in
+`docs/governance/RULINGS.md` and this text differ, the ruling governs.
+Was: **DESIGN** (the TACTICS-DESIGN packet under R376(d); CARD-TACTICS-LANE re-aimed to it). No code, config
 or mint change rides this document. It chooses the kind of the ONE exact tactics module, specifies its API and
 its wiring at deploy and in self-play, and scopes TACTICS-DEPLOY and TACTICS-SELFPLAY. The readings it stands on
 were measured on the desktop (CPU and the 3070) against Six's pinned source and run8's mirrored saves. Their
