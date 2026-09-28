@@ -10,6 +10,7 @@
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 use mantis_core::board::Board;
 use mantis_core::BoardGeometry;
+use mantis_search::mcts::TacticsConfig;
 use mantis_search::{LegalSetPolicy, MCTSTree};
 
 /// `gnn_axis_v1`'s geometry (crates/mantis-encoding/src/registry.toml): radius 6, trunk 19,
@@ -112,5 +113,80 @@ fn bench_expand_leaf(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_mcts_simulations, bench_expand_leaf);
+/// The goldens' real positions (a leaf corpus of game states), at their recorded radius.
+fn goldens_corpus() -> Vec<Board> {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/tactics/turn_solver_goldens.jsonl"
+    );
+    let text = std::fs::read_to_string(path).expect("the goldens fixture is tracked");
+    text.lines()
+        .map(|line| {
+            let v: serde_json::Value = serde_json::from_str(line).expect("a fixture row is JSON");
+            let mut b = Board::new();
+            b.set_legal_move_radius(v["radius"].as_i64().expect("radius") as i32);
+            for s in v["stones"].as_array().expect("stones") {
+                let (q, r) = (
+                    s[0].as_i64().expect("q") as i32,
+                    s[1].as_i64().expect("r") as i32,
+                );
+                b.apply_move(q, r).expect("a recorded stone is placeable");
+            }
+            b
+        })
+        .collect()
+}
+
+/// 64 descents per corpus position with a uniform net: off, the wiring without the solver (H1) and with it (H1 + H2).
+fn bench_tactics_leaf(c: &mut Criterion) {
+    let boards = goldens_corpus();
+    let dense: Vec<f32> = vec![1.0 / POLICY_STRIDE as f32; POLICY_STRIDE];
+    let leaf = TacticsConfig {
+        leaf_turns: 2,
+        leaf_nodes: 64,
+        root_turns: 8,
+        root_nodes: 0,
+        audit: None,
+    };
+    let mut group = c.benchmark_group("tactics_leaf");
+    group.sample_size(10);
+    let no_solver = TacticsConfig {
+        leaf_nodes: 0,
+        ..leaf
+    };
+    for (name, armed) in [
+        ("off", None),
+        ("on_no_solver", Some(no_solver)),
+        ("on", Some(leaf)),
+    ] {
+        let mut tree = MCTSTree::new(1.5);
+        tree.configure_tactics(armed);
+        group.bench_function(name, |b| {
+            b.iter(|| {
+                for board in &boards {
+                    tree.new_game(board.clone());
+                    let mut done = 0;
+                    while done < 64 {
+                        let leaves = tree.select_leaves(8.min(64 - done)).expect("no desync");
+                        let inline = tree.last_inline_descents();
+                        if leaves.is_empty() && inline == 0 {
+                            break;
+                        }
+                        let policies = vec![dense.clone(); leaves.len()];
+                        tree.expand_and_backup(&policies, &vec![0.0; leaves.len()]);
+                        done += leaves.len() + inline;
+                    }
+                }
+            });
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    bench_mcts_simulations,
+    bench_expand_leaf,
+    bench_tactics_leaf
+);
 criterion_main!(benches);
