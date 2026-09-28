@@ -184,6 +184,14 @@ class MCTSTree:
     def tactics_armed(self) -> bool: ...
     def last_inline_descents(self) -> int: ...
     def tactics_counters(self) -> dict[str, int]: ...
+    def root_offence(self) -> tuple[int, int] | None:
+        """Before the search: the stone the armed block decides at the root, played with no search, or None.
+
+        Raises:
+            RuntimeError: a tactics refusal other than an illegal decided stone (that one is counted and None).
+        """
+    def root_audit(self, chosen: tuple[int, int]) -> tuple[int, int]:
+        """After the search: `chosen`, or the armed audit's substitute when its turn allows a proven opponent win."""
     def select_leaves(self, n: int) -> list[Board]:
         """Raises:
         SelectionDesync: the tree and the board disagree about what has been played.

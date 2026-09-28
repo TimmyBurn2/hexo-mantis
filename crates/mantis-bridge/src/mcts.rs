@@ -13,7 +13,9 @@ use pyo3::types::{PyBool, PyDict};
 
 use mantis_core::board::BOARD_SIZE;
 use mantis_core::Board;
-use mantis_search::mcts::{AuditConfig, AuditMode, ForcedSelectionError, TacticsConfig};
+use mantis_search::mcts::{
+    AuditConfig, AuditMode, ForcedSelectionError, TacticsConfig, TacticsError,
+};
 use mantis_search::{LegalSetPolicy, MCTSTree, MctxRootState, QSigma, SearchKind};
 
 use crate::board::PyBoard;
@@ -230,6 +232,26 @@ impl PyMCTSTree {
             d.set_item(name, value)?;
         }
         Ok(d)
+    }
+
+    /// Before the search: the decided root stone (an illegal one counted), or None to search. Raises: RuntimeError.
+    pub fn root_offence(&mut self, py: Python<'_>) -> PyResult<Option<(i32, i32)>> {
+        match py.detach(|| self.inner.root_offence()) {
+            Ok(stone) => Ok(stone),
+            Err(TacticsError::ProofStoneIllegal { .. }) => Ok(None),
+            Err(e) => Err(PyRuntimeError::new_err(e.to_string())),
+        }
+    }
+
+    /// After the search: `chosen`, or the armed audit's substitute, walking this kind's own ranking of the root.
+    pub fn root_audit(&mut self, py: Python<'_>, chosen: (i32, i32)) -> (i32, i32) {
+        let order = match (self.inner.search_kind(), self.gumbel_root.as_ref()) {
+            (SearchKind::Gumbel, Some(state)) => {
+                Some(state.ranking(&self.inner, self.inner.q_sigma()))
+            }
+            _ => None,
+        };
+        py.detach(|| self.inner.root_audit(chosen, order.as_deref()))
     }
 
     /// Select up to `n` distinct leaves for evaluation, one Board per unique leaf; always call

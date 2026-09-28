@@ -122,9 +122,9 @@ class DeployHeadPlayer:
     def select_move(self, board: Any) -> tuple[int, int]:
         """Search `n_sims` DESCENTS and return the move this run's search kind picks.
 
-        The root's own evaluation is one of the N on both arms, and the budget advances by leaves
-        RETURNED plus descents backed up inline rather than by the request, so a throughput knob
-        cannot change deploy strength.
+        The root's own evaluation is one of the N, and the budget advances by leaves RETURNED plus
+        descents backed up inline, so a throughput knob cannot change deploy strength. Armed tactics
+        play a decided root stone with no search, and the audit may swap the searched move for a hold.
 
         Raises:
             ValueError: the search produced no root children, so there is no move to pick.
@@ -132,10 +132,19 @@ class DeployHeadPlayer:
         tree = self._tree if self._tree is not None else self._fresh_tree()
         self._tree = tree
         tree.new_game(board)
+        decided = tree.root_offence() if self._tactics is not None else None
+        if decided is not None:
+            self.last_root, self.last_sims = None, 0
+            self.last_tactics = tree.tactics_counters()
+            self._move_index += 1
+            return decided
         try:
             move = self._search(tree)
         finally:
             release_cuda_cache()
+        if self._tactics is not None:
+            move = tree.root_audit(move)
+            self.last_tactics = tree.tactics_counters()
         self._move_index += 1
         return move
 
@@ -150,7 +159,6 @@ class DeployHeadPlayer:
         else:
             move, spent = self._drive_puct(tree, sims_done)
         self.last_sims = spent
-        self.last_tactics = tree.tactics_counters() if self._tactics is not None else None
 
         children_info = tree.get_root_children_info()
         # Captured from the tree the decision read, so a recorded root always matches its move.
