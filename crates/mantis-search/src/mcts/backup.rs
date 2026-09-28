@@ -5,8 +5,9 @@
 use super::node::{pack_cell, CachedPolicy, Node};
 use super::{MCTSTree, MAX_CHILDREN_PER_NODE};
 use crate::legal_set::LegalSetPolicy;
+use crate::tactics::analyze::{analyze, LeafTactics, Terminal};
 use fxhash::FxHashSet;
-use mantis_core::board::{min_hitting_stones, Board};
+use mantis_core::board::Board;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// One expansion's Top-K pick: the children and the PRIOR MASS the cap dropped. The mass is
@@ -207,58 +208,31 @@ impl MCTSTree {
         self.omitted_prior.record(dropped_mass);
     }
 
-    /// Quiescence value override at a non-terminal leaf on the two-stone-turn unit: an own open
-    /// window completable within the k remaining stones is +1, an opponent threat set k stones
-    /// cannot all hit is -1, two opponent fives against a 2-stone turn blend toward -1. Value
-    /// correction ONLY — the NN policy still drives expansion.
+    /// Quiescence value override at a non-terminal leaf, read from `tactics::analyze`: a mover's
+    /// finish is +1, a lost cover -1, two opponent fives against a 2-stone turn blend toward -1.
+    /// Value correction ONLY — the NN policy still drives expansion.
     #[inline]
     pub(crate) fn apply_quiescence(&self, board: &Board, value: f32) -> f32 {
         if !self.quiescence_enabled {
             return value;
         }
-        // An open window needs 4 stones of one colour, which P2 first holds after 7 half-moves.
-        if board.ply.index() < 7 {
-            return value;
-        }
-        let mover = board.current_player;
-        let k = board.moves_remaining;
-        let mut fired = false;
-        let result = if !board.open_windows(mover, k).is_empty() {
-            fired = true;
-            1.0
-        } else {
-            let threats = board.open_windows(mover.other(), 2);
-            match min_hitting_stones(&threats) {
-                Some(0) => value,
-                Some(n) if n > k => {
-                    fired = true;
-                    -1.0
-                }
-                None => {
-                    fired = true;
-                    -1.0
-                }
-                Some(_) => {
-                    // Blockable; the blend keeps its pre-A-2 scope (an open four at k = 2 is
-                    // the net's call — 6.6 % of leaves, not a correctness fix's to move).
-                    let fives: Vec<_> = threats
-                        .iter()
-                        .copied()
-                        .filter(|w| w.empties().len() == 1)
-                        .collect();
-                    if k == 2 && min_hitting_stones(&fives) == Some(2) {
-                        fired = true;
-                        (value - self.quiescence_blend_2).max(-1.0)
-                    } else {
-                        value
-                    }
-                }
+        self.quiescence_from(&analyze(board), board.moves_remaining, value)
+    }
+
+    /// `apply_quiescence` on facts already read for this leaf; `k` is its mover's stones left.
+    #[inline]
+    pub(crate) fn quiescence_from(&self, facts: &LeafTactics, k: u8, value: f32) -> f32 {
+        let result = match facts.terminal {
+            Some(Terminal::Win) => 1.0,
+            Some(Terminal::Loss) => -1.0,
+            // Blockable; the blend keeps its pre-A-2 scope (an open four at k = 2 is the net's call).
+            None if k == 2 && facts.fives_cover == Some(2) => {
+                (value - self.quiescence_blend_2).max(-1.0)
             }
+            None => return value,
         };
-        if fired {
-            self.quiescence_fire_count
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        }
+        self.quiescence_fire_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         result
     }
 
@@ -553,5 +527,125 @@ mod ls_prior_tests {
         );
         assert_eq!(chosen[1], ((1, 0), 0.3));
         assert_eq!(chosen[2], ((0, 0), 0.2));
+    }
+}
+
+#[cfg(test)]
+mod quiescence_parity_tests {
+    //! The rebase onto `tactics::analyze` holds today's quiescence value for value (design §4.2).
+    use super::MCTSTree;
+    use mantis_core::board::zobrist::splitmix64_next;
+    use mantis_core::board::{min_hitting_stones, Board};
+    use mantis_core::Cell;
+    use std::sync::atomic::Ordering;
+
+    /// The quiescence this rebase replaced, verbatim: the oracle the parity pin reads.
+    fn oracle(blend: f32, board: &Board, value: f32) -> (f32, bool) {
+        if board.ply.index() < 7 {
+            return (value, false);
+        }
+        let mover = board.current_player;
+        let k = board.moves_remaining;
+        if !board.open_windows(mover, k).is_empty() {
+            return (1.0, true);
+        }
+        let threats = board.open_windows(mover.other(), 2);
+        match min_hitting_stones(&threats) {
+            Some(0) => (value, false),
+            Some(n) if n > k => (-1.0, true),
+            None => (-1.0, true),
+            Some(_) => {
+                let fives: Vec<_> = threats
+                    .iter()
+                    .copied()
+                    .filter(|w| w.empties().len() == 1)
+                    .collect();
+                if k == 2 && min_hitting_stones(&fives) == Some(2) {
+                    ((value - blend).max(-1.0), true)
+                } else {
+                    (value, false)
+                }
+            }
+        }
+    }
+
+    /// Clustered random play: each stone within distance 2 of one of the last six, so lines form.
+    pub(crate) fn leaf_corpus(seed: u64, games: usize, radius: i32) -> Vec<Board> {
+        let mut state = seed;
+        let mut out = Vec::new();
+        for _ in 0..games {
+            let mut b = Board::new();
+            b.set_legal_move_radius(radius);
+            let mut placed: Vec<(i32, i32)> = Vec::new();
+            for _ in 0..70 {
+                let (q, r) = if placed.is_empty() {
+                    (0, 0)
+                } else {
+                    let tail = &placed[placed.len().saturating_sub(6)..];
+                    let (aq, ar) = tail[(splitmix64_next(&mut state) as usize) % tail.len()];
+                    let dq = (splitmix64_next(&mut state) % 5) as i32 - 2;
+                    let dr = (splitmix64_next(&mut state) % 5) as i32 - 2;
+                    (aq + dq, ar + dr)
+                };
+                if b.get(q, r) != Cell::Empty || b.apply_move(q, r).is_err() {
+                    continue;
+                }
+                if b.check_win() {
+                    break;
+                }
+                placed.push((q, r));
+                out.push(b.clone());
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn the_rebased_quiescence_is_todays_bit_for_bit_on_every_branch() {
+        let values = [-0.95f32, -0.31, 0.0, 0.42, 0.97];
+        let mut tree = MCTSTree::new(1.5);
+        tree.configure_quiescence(true, 0.3);
+        // win, loss, blend, threats present with the value unchanged
+        let mut branch = [0usize; 4];
+        let mut boards = 0usize;
+        for (seed, radius) in [(0x51ed_0001u64, 8), (0x51ed_0002, 5), (0x51ed_0003, 6)] {
+            for board in leaf_corpus(seed, 120, radius) {
+                boards += 1;
+                for &v in &values {
+                    let before = tree.quiescence_fire_count.load(Ordering::Relaxed);
+                    let got = tree.apply_quiescence(&board, v);
+                    let fired = tree.quiescence_fire_count.load(Ordering::Relaxed) != before;
+                    let (want, want_fired) = oracle(0.3, &board, v);
+                    assert_eq!(
+                        (got.to_bits(), fired),
+                        (want.to_bits(), want_fired),
+                        "value {v} at ply {} ({:?} to move, {} left)",
+                        board.ply.index(),
+                        board.current_player,
+                        board.moves_remaining
+                    );
+                }
+                let (w, fired) = oracle(0.3, &board, 0.42);
+                let threatened = !board
+                    .open_windows(board.current_player.other(), 2)
+                    .is_empty();
+                let slot = if !fired {
+                    threatened.then_some(3)
+                } else if w >= 1.0 {
+                    Some(0)
+                } else if w <= -1.0 {
+                    Some(1)
+                } else {
+                    Some(2)
+                };
+                if let Some(i) = slot {
+                    branch[i] += 1;
+                }
+            }
+        }
+        assert!(
+            branch.iter().all(|&n| n > 0),
+            "a branch the pin never reached reads green vacuously: {branch:?} over {boards} boards"
+        );
     }
 }

@@ -10,6 +10,7 @@
 //! independent exhaustive `brute_solve`. The quiet-move alpha-beta body is deferred; the proof
 //! core is threat-based.
 
+pub mod analyze;
 pub mod eval;
 pub(crate) mod ordering;
 pub(crate) mod search;
