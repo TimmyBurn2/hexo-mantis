@@ -92,12 +92,12 @@ fn drive_graph(
         thread::sleep(Duration::from_millis(5));
     }
     let defect = runner.fatal_defect();
-    let snap = runner.stats_snapshot();
     runner.stop();
-    // The producer keeps serving until the queue closes, so both halves are read AFTER the
+    // The producer keeps serving until the queue closes, so every count is read AFTER the
     // join or the ratio is taken across a moving denominator.
     producer.join().expect("producer exits");
     records.extend(runner.drain_graph_records().expect("unpoisoned"));
+    let snap = runner.stats_snapshot();
 
     assert!(
         defect.is_none(),
