@@ -1,3 +1,4 @@
+// >300 justify (R8): the window scan, its hitting-set cover and the checked scans that pin both are one unit.
 //! The two-stone-turn threat unit: pure length-6 windows a side completes within a stone budget.
 
 use super::moves::WIN_LENGTH;
