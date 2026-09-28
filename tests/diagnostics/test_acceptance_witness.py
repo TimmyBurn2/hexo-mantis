@@ -223,3 +223,30 @@ def test_a_malformed_arm_is_refused(raw: str) -> None:
 def test_the_witness_board_carries_the_declared_geometry(encoding: str, radius: int) -> None:
     """Prove `replay_board` builds at the named encoding's geometry, asserted by radius not name."""
     assert replay_board([], encoding_name=encoding).legal_move_radius() == radius
+
+
+def test_the_witness_head_arms_the_configs_deploy_block_as_the_floor_probe_does(monkeypatch, smoke_run_config) -> None:
+    """Reds on a hardcoded `tactics=None`: the production floor probe this witness stands for arms the block."""
+    from types import SimpleNamespace
+
+    import mantis.diagnostics.acceptance_witness as aw
+    from mantis.config.resolve.tactics import tactics_block
+
+    block = {"kind": "strict_turn", "leaf_turns": 2, "leaf_nodes": 64, "root_turns": 2, "root_nodes": 200,
+             "audit": None}
+    config = smoke_run_config("dev_example.yaml", deploy={"search": {"tactics": block}})
+    seen: dict[str, object] = {}
+
+    class _Stop(Exception):
+        pass
+
+    def spy(_engine, _sims, **kw):
+        seen.update(kw)
+        raise _Stop
+
+    monkeypatch.setattr(aw, "load_config", lambda _path: config)
+    monkeypatch.setattr(aw, "_arm_engine", lambda *_a, **_k: SimpleNamespace(close=lambda: None))
+    monkeypatch.setattr(aw, "build_candidate_player", spy)
+    with pytest.raises(_Stop):
+        aw.run_witness(Path("c.yaml"), [aw.ArmSpec.parse("control=CONTROL")], games=2, device=torch.device("cpu"))
+    assert seen["tactics"] == tactics_block(block)

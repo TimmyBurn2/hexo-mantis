@@ -35,6 +35,7 @@ from mantis.config.resolve.eval_posture import resolve_strength_floor
 from mantis.config.resolve.fused_graph_caps import resolve_fused_graph_caps
 from mantis.config.resolve.inference_batching import resolve_inference_batching
 from mantis.config.resolve.search import resolve_deploy_search_kind
+from mantis.config.resolve.tactics import resolve_deploy_tactics
 from mantis.encoding import lookup
 from mantis.eval.floor_gate import evaluate_strength_floor, probe_measurements
 from mantis.eval.worker import build_candidate_player
@@ -294,7 +295,8 @@ def run_witness(config_path: Path, arms: Sequence[ArmSpec], *, games: int,
                                        # The deploy head's own key.
                                        search_kind=resolve_deploy_search_kind(cfg),
                                        gumbel_m=cfg.selfplay.gumbel_m,
-                                       gumbel_seed=cfg.seed, tactics=None),
+                                       # As the round's floor probe arms it.
+                                       gumbel_seed=cfg.seed, tactics=resolve_deploy_tactics(dump)),
                 resolve_bot("random", opponent_sims=sims)(
                     seed=cfg.eval.gate.seed_base),
                 paired_openings(cfg.eval.gate.opening_book, n_pairs=max(games // 2, 1),

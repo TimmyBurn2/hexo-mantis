@@ -70,6 +70,7 @@ def test_the_mantis_backend_is_named_by_its_net_hash_and_plays_at_the_configs_de
     assert backend.sims == 12
     assert backend.encoding == _ENC
     assert backend.search["kind"] == "puct"
+    assert backend.search["tactics"] is None, "the minted null deploy block is reported, and played, as none"
 
 
 def test_a_turn_is_two_distinct_legal_cells_and_the_heads_own_sims_count(ladder, mantis_backend) -> None:
@@ -195,5 +196,24 @@ def test_the_strix_backend_plays_at_the_pin_with_the_drivers_own_sims(ladder) ->
         for q, r in [(0, 0), (1, 0), (0, 1)]:
             board2.apply_move(q, r)
         assert backend.select_turn(board2).placements == turn.placements
+    finally:
+        backend.close()
+
+
+def test_the_mantis_backend_plays_and_reports_the_configs_deploy_block(ladder, smoke_run_config, tmp_path: Path) -> None:
+    """Reds on a hardcoded `tactics=None`: the ladder would report the configured regime and play another."""
+    from mantis.config.resolve.tactics import tactics_block
+
+    block = {"kind": "strict_turn", "leaf_turns": 2, "leaf_nodes": 64, "root_turns": 2, "root_nodes": 200,
+             "audit": {"turns": 2, "nodes": 200, "k": 2, "m": 2, "total_nodes": 800}}
+    checkpoint, _net_hash = _tiny_checkpoint(tmp_path)
+    config = smoke_run_config("dev_example.yaml", eval={"gate": {"deploy_sims": 12}, "worker_device": "cpu"},
+                              deploy={"search": {"tactics": block}})
+    backend = ladder.backends.open_mantis(config, checkpoint, threads=2)
+    try:
+        assert backend.search["tactics"] == tactics_block(block)
+        backend.new_game("g_1")
+        backend.select_turn(_mid_game())
+        assert backend._head.last_tactics is not None, "the head ran the block the receipt names"
     finally:
         backend.close()
