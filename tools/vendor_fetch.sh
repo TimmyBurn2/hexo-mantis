@@ -102,20 +102,19 @@ def fetch_assets(pin: str, assets: dict) -> None:
             print(f"vendor: {pin}.{name} fetched and verified")
         if "unpack" in spec:
             target = EXTERNAL / spec["unpack"]
-            if target.resolve().parent != (EXTERNAL / spec["path"]).resolve().parent \
-                    or not target.resolve().is_relative_to(EXTERNAL.resolve()):
+            home = target.parent.resolve()
+            if home != (EXTERNAL / spec["path"]).parent.resolve() or not home.is_relative_to(EXTERNAL.resolve()):
                 raise SystemExit(f"vendor: {pin}.{name} unpacks to {target}, outside vendor/external or "
                                  "away from its archive's directory")
             members = [m for m in assets.values() if m.get("from") == name]
-            # Extracted beside the target and renamed into place whole: a leftover part is never trusted.
-            part = target.with_name(target.name + ".part")
+            # Extracted beside the target and swapped in whole: a leftover part or old tree is never trusted.
+            part, old = target.with_name(target.name + ".part"), target.with_name(target.name + ".old")
             shutil.rmtree(part, ignore_errors=True)
+            shutil.rmtree(old, ignore_errors=True)
             if not target.is_dir() or not all((EXTERNAL / m["path"]).is_file() for m in members):
                 part.mkdir(parents=True)
                 with tarfile.open(path) as tar:
                     tar.extractall(part, filter="data")
-                old = target.with_name(target.name + ".old")
-                shutil.rmtree(old, ignore_errors=True)
                 if target.exists():
                     target.rename(old)
                 part.rename(target)

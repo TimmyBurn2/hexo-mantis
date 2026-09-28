@@ -182,3 +182,55 @@ def test_an_unpack_directory_outside_vendor_external_is_REFUSED(world: _World) -
     out = world.fetch("eng")
     assert out.returncode != 0 and "outside vendor/external" in out.stderr, out.stderr
     assert (outside / "keep").read_text(encoding="utf-8") == "mine"
+
+
+def test_an_unpack_that_is_not_beside_its_archive_is_REFUSED_and_deletes_nothing(world: _World) -> None:
+    """MUTATION THAT REDS IT: dropping the sibling rule, which let an unpack of the archive's own directory rmtree it."""
+    keep = world.external("eng-assets/keep")
+    keep.parent.mkdir(parents=True)
+    keep.write_text("mine", encoding="utf-8")
+    pins = world.root / "vendor" / "pins.toml"
+    pins.write_text(pins.read_text(encoding="utf-8").replace('unpack = "eng-assets/release"', 'unpack = "eng-assets"'),
+                    encoding="utf-8")
+    out = world.fetch("eng")
+    assert out.returncode != 0 and "away from its archive" in out.stderr, out.stderr
+    assert keep.read_text(encoding="utf-8") == "mine"
+
+
+def test_a_re_extraction_swaps_the_whole_tree_and_leaves_no_old_or_part(world: _World) -> None:
+    """MUTATION THAT REDS IT: renaming the part over a non-empty tree without moving the old one aside first."""
+    assert world.fetch("eng").returncode == 0
+    world.external("eng-assets/release/Rel/engine/bin").unlink()
+    world.external("eng-assets/release/stray").write_text("left over", encoding="utf-8")
+    stale = world.external("eng-assets/release.old")
+    stale.mkdir()
+    (stale / "x").write_bytes(b"x")
+    out = world.fetch("eng")
+    assert out.returncode == 0, out.stderr
+    assert world.external("eng-assets/release/Rel/engine/bin").read_bytes() == world.engine
+    assert not world.external("eng-assets/release/stray").exists()
+    assert not stale.exists() and not world.external("eng-assets/release.part").exists()
+
+
+def test_a_warm_run_clears_an_old_tree_an_interrupt_left(world: _World) -> None:
+    assert world.fetch("eng").returncode == 0
+    stale = world.external("eng-assets/release.old")
+    stale.mkdir()
+    (stale / "x").write_bytes(b"x")
+    out = world.fetch("eng")
+    assert out.returncode == 0 and "unpacked" not in out.stdout, out.stdout
+    assert not stale.exists()
+
+
+def test_an_archive_linked_in_from_a_shared_cache_is_accepted(world: _World) -> None:
+    """The sibling rule compares directories, so a symlinked archive file is not taken for one elsewhere."""
+    cache = world.tmp / "cache"
+    cache.mkdir()
+    cached = cache / "release.tar.gz"
+    cached.write_bytes(world.archive.read_bytes())
+    link = world.external("eng-assets/release.tar.gz")
+    link.parent.mkdir(parents=True)
+    link.symlink_to(cached)
+    out = world.fetch("eng")
+    assert out.returncode == 0, out.stderr
+    assert world.external("eng-assets/release/Rel/engine/bin").read_bytes() == world.engine
