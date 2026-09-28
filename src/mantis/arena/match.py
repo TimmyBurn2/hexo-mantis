@@ -63,9 +63,9 @@ class GameRecord:
     #: and `()` are different facts that both occur: `None` is "nobody could produce these", `()`
     #: is "nobody who could, moved".
     search_stats: tuple[dict[str, Any], ...] | None
-    #: The candidate's tactics rows summed over its moves, with `moves` and `decided_moves` (played with no search);
-    #: `None` when the candidate exposes none (tactics off, or no deploy head).
-    candidate_tactics: dict[str, int] | None = None
+    #: The candidate's tactics rows summed over the stones it chose, with `stones` their count; `None` when the
+    #: candidate exposes none (tactics off, or no deploy head).
+    candidate_tactics: dict[str, int] | None
 
 
 def _trajectory_hash(moves: Iterable[tuple[int, int]]) -> str:
@@ -91,8 +91,7 @@ def _add_tactics(total: dict[str, int] | None, player: Any) -> dict[str, int] | 
     out = dict(total or {})
     for key, value in rows.items():
         out[key] = out.get(key, 0) + int(value)
-    out["moves"] = out.get("moves", 0) + 1
-    out["decided_moves"] = out.get("decided_moves", 0) + int(getattr(player, "last_sims", 0) == 0)
+    out["stones"] = out.get("stones", 0) + 1
     return out
 
 

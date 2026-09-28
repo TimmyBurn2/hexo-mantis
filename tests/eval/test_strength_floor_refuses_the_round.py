@@ -88,7 +88,7 @@ def _record(regime_key: RegimeKey, *, winner: str, terminal: str, idx: int) -> G
         regime_key=regime_key, opening_id=f"synthetic_{idx}",
         colors={"candidate": 1, "opponent": -1},
         trajectory_hash=f"{idx:064x}", winner=winner, plies=128, moves=(),
-        terminal=terminal, adjudication=None, search_stats=None,
+        terminal=terminal, adjudication=None, search_stats=None, candidate_tactics=None,
     )
 
 
