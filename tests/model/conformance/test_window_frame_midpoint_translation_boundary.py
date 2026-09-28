@@ -493,6 +493,9 @@ _THE_MIDPOINT_CONSTRUCTIONS: tuple[tuple[str, str, int], ...] = (
     # graph arm — mantis-graph's own fn window_center
     ("mantis-graph/src/lib.rs", "( min_q + max_q ) / 2", 1),
     ("mantis-graph/src/lib.rs", "( min_r + max_r ) / 2", 1),
+    # NOT A WINDOW ORIGIN — the tactics solver's own dense grid, centred on its stones by Six's truncating rule.
+    ("mantis-search/src/tactics/grid.rs", "( lq + hq ) / 2", 1),
+    ("mantis-search/src/tactics/grid.rs", "( lr + hr ) / 2", 1),
 )
 
 

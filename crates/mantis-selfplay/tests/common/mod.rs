@@ -47,7 +47,8 @@ pub fn spawn_compact_producer(
             .iter()
             .map(|&(q, r)| {
                 let (dq, dr) = (q as f32 - cq, r as f32 - cr);
-                let d = (dq.abs() + dr.abs() + (dq + dr).abs()) / 2.0;
+                // Axial hex distance in its max form: the halved-sum form is a midpoint construction to the census.
+                let d = dq.abs().max(dr.abs()).max((dq + dr).abs());
                 (-1.5 * d).exp()
             })
             .collect();
