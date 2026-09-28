@@ -289,12 +289,10 @@ impl SelfPlayRunner {
 
         let geometry =
             params::resolve_geometry(spec).map_err(|e| format!("SelfPlayRunner: {e}"))?;
-        let radius = spec.legal_move_radius as i32;
-        if config.tactics.is_some() && radius < mantis_search::mcts::MIN_TACTICS_RADIUS {
-            return Err(format!(
-                "SelfPlayRunner: {}",
-                mantis_search::mcts::TacticsError::RadiusBelowFive { radius }
-            ));
+        if let Some(tactics) = &config.tactics {
+            tactics
+                .check_radius(spec.legal_move_radius as i32)
+                .map_err(|e| format!("SelfPlayRunner: {e}"))?;
         }
 
         // Bake the resolved budget so the workers read the effective value.

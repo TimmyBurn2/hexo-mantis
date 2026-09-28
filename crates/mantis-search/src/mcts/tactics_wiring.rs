@@ -67,6 +67,16 @@ impl std::fmt::Display for TacticsError {
 
 impl std::error::Error for TacticsError {}
 
+impl TacticsConfig {
+    /// Refuse, as `TacticsError::RadiusBelowFive`, a legal-move radius this block cannot run on.
+    pub fn check_radius(&self, radius: i32) -> Result<(), TacticsError> {
+        if radius < MIN_TACTICS_RADIUS {
+            return Err(TacticsError::RadiusBelowFive { radius });
+        }
+        Ok(())
+    }
+}
+
 /// One search's in-run rows, reset by `new_game`; the select calls count the descents.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TacticsCounters {
@@ -158,11 +168,10 @@ impl MCTSTree {
 
     /// Refuse, as `TacticsError::RadiusBelowFive`, a board whose legal-move radius the armed block cannot run on.
     pub fn check_tactics_board(&self, board: &Board) -> Result<(), TacticsError> {
-        let radius = board.legal_move_radius();
-        if self.tactics.is_some() && radius < MIN_TACTICS_RADIUS {
-            return Err(TacticsError::RadiusBelowFive { radius });
+        match &self.tactics {
+            Some(t) => t.config.check_radius(board.legal_move_radius()),
+            None => Ok(()),
         }
-        Ok(())
     }
 
     /// The per-search reset `new_game` runs: this search's rows, and the solver's table.
@@ -182,13 +191,7 @@ impl MCTSTree {
         let decided = if node.is_terminal {
             Decided::Revisit(node.terminal_value)
         } else if board.check_win() {
-            // CF-1: `mr == 1` means the side that made six is still to move.
-            let tv = if board.moves_remaining == 1 {
-                1.0
-            } else {
-                -1.0
-            };
-            Decided::Terminal(tv, |c| c.terminal_six += 1)
+            Decided::Terminal(board.terminal_value_to_move(), |c| c.terminal_six += 1)
         } else {
             let facts = analyze(board);
             match facts.terminal {
@@ -573,6 +576,23 @@ mod tests {
         let mass: f32 = children.iter().map(|c| c.1).sum();
         assert!((mass - 1.0).abs() < 1e-5, "renormalised: {mass}");
         assert_eq!(tree.tactics_counters().forced_restrictions, 1);
+    }
+
+    #[test]
+    fn a_radius_below_five_is_refused_by_name_where_a_block_is_armed() {
+        let four = TacticsError::RadiusBelowFive { radius: 4 };
+        assert_eq!(LEAF_ONLY.check_radius(4), Err(four));
+        assert_eq!(LEAF_ONLY.check_radius(MIN_TACTICS_RADIUS), Ok(()));
+        let mut board = Board::new();
+        board.set_legal_move_radius(4);
+        let mut tree = MCTSTree::new(1.5);
+        assert_eq!(
+            tree.check_tactics_board(&board),
+            Ok(()),
+            "off runs any radius"
+        );
+        tree.configure_tactics(Some(LEAF_ONLY));
+        assert_eq!(tree.check_tactics_board(&board), Err(four));
     }
 
     #[test]

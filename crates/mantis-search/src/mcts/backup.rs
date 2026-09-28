@@ -309,13 +309,7 @@ impl MCTSTree {
         }
 
         if board.check_win() {
-            // CF-1: the terminal sign comes from the leaf's side-to-move — `mr==1` means the
-            // winner is still to move (+1.0), `mr==2` that the player flipped to the loser.
-            let tv = if board.moves_remaining == 1 {
-                1.0
-            } else {
-                -1.0
-            };
+            let tv = board.terminal_value_to_move();
             self.pool[leaf_idx as usize].is_terminal = true;
             self.pool[leaf_idx as usize].terminal_value = tv;
             self.backup(leaf_idx, tv);
