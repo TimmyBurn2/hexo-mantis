@@ -36,15 +36,53 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R376 (DECIDE-1 accepted; 2026-09-28) — the tactics lane
+
+- **CARD-TACTICS-LANE — ORDERED (R376(d)); it goes first, and run11 is designed after its deploy read
+  (R376(c)).** ONE exact tactics module in Rust on the search path, used identically at deploy and in self-play
+  (LAW-15). The search crate already carries a net-free `TacticalSolver` (`crates/mantis-search/src/tactics/`,
+  the solver F-53 read); one implementation per thing, so the lane's module is that one or replaces it.
+  - Deploy lands first, read as an A/B against the plain parent on both rulers, at equal work, with its own
+    known-bad and a power line (LAW-19). Counting (R376(e)): a solver terminal is a simulation, GPU
+    evaluations are their own LAW-18 row, and served-sims exactness pins descents.
+  - Self-play follows only with a pre-registered starvation witness, and with F-15, F-39, F-53 and R239
+    re-validated under LAW-02 first.
+  - Evidence (DECIDE-1): in 106 of S1's 233 losses, f 0.455 [0.392, 0.519], one of our turns allowed the
+    opponent a strict ≤ 8-turn forced win where a safe turn existed (Six's `ThreatSolver`, 20 000 nodes); 100
+    of them at our last turn before that run. f is an upper bound against false safes only. Switching Six's
+    threat solver off moves the parent 0.351 → 0.594 against gen 30 and 0.115 → 0.286 against gen 455
+    (≈ 1 logit at both).
+  - Owed before f is taken at face value: a specificity check of D1's "safe" alternatives (a sample re-checked
+    at a deeper budget, or played out).
+- **CARD-RUN11-DESIGN — HELD on CARD-TACTICS-LANE's deploy read (R376(c)).** Until run11's mint replaces it,
+  `configs/run10.yaml` stays the production config the instruments read; run10 will not START. The design
+  carries:
+  - Cooldown and EMA as screened levers with power lines (R376(g)): neither is shown nor excluded. DECIDE-1's
+    cooldown screen read COOL 0.301 vs CTRL 0.266 on X over 4 origins (≈ +0.20 ± 0.30 logit), the S pair +0.009,
+    and COOL − REV +0.025 (inconclusive: the lead is not attributed to the cool end); EMA5 read −0.020 against
+    its members on X (void by power).
+  - CARD-NET-EXPAND (run11's build, R367(c)).
+  - Learning from Six's outputs only as a means (R376(f)): probes first, a run only on a pass, and a net that
+    learned from Six carries it in its lineage. The standing goal is to surpass Six by self-play with exact
+    tactics.
+- **CARD-PACKET-POWER-LINE — CARDED (process; DECIDE-1's exit): a packet carries each band's power line when it
+  is issued.** Three of DECIDE-1's banded rules were void by R375(d) before any reading (B1-N2, B3, the S
+  confirmation as written), and B1-N1 needed a spread between nets that the panel then showed was absent.
+
 ## Opened by R375 (DECIDE-1's forward; 2026-09-27) — read the process, not the peak
 
-- **CARD-STRIX-SEED-LUCK — OWNED by DECIDE-1 (R375(c)); opened in RUN10-CONTROLS' exit record.** At the fixed
+- **CARD-STRIX-SEED-LUCK — CLOSED 2026-09-28, SUPERSEDED by R376(b): not separated, and no longer needed. DECIDE-1's
+  noise nets were void (the KL-1.0 known-bad read 0.12 on X against a ≤ 0.05 bar); its panel reads the parent's
+  0.191 as an outlier, and every bar prices from a panel. Was OWNED by DECIDE-1 (R375(c)); opened in
+  RUN10-CONTROLS' exit record.** At the fixed
   seed a perturbation of KL 0.0067 (C4, the parent at LR ×0.01 for 101 steps) re-draws 255 of 288 games and a
   neighbour re-draws all of them. On the re-drawn games S1's wins fall from 42 to 22 (C4), 53 to 22 (42k) and
   55 to 27 (48k). Training damage and a lucky parent draw predict the same thing there. DECIDE-1 separates them
   with seeded weight noise on the parent at C4's and A6's distances (KL ≈ 0.007 and ≈ 0.09, with a KL ≈ 1
   known-bad), read on both rulers; the §4 instrument keeps its seed (R373(b)).
-- **CARD-SIX-RUNG — LANDED 2026-09-28 by the SIX-RUNG packet (R375(a); its ruling is owed).** Six generation 30
+- **CARD-SIX-RUNG — LANDED 2026-09-28 by the SIX-RUNG packet (R375(a)); RATIFIED by R376(a): X, the second ruler.
+  Recipe decisions read X; milestones read X and S. X's floor (a random-init net) is unmeasured; DECIDE-1's
+  KL-1.0 noise net read 0.12 on it.** Six generation 30
   at 16 nodes, tactics as shipped, search cache off (`cacheEntries 0`), plays as `mantis.bots.six` beside strix.
   The repo `f2b5ec2`, release 1.2.0's engine and ONNX Runtime and the gen 30 and gen 455 networks are pinned by
   url and sha256 in `vendor/pins.toml` (`make vendor.six`), never tracked, and re-hashed at every engine start;
@@ -68,7 +106,8 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by the RUN10-AUX-PROBE packet (R373; 2026-09-27) — no suspect is needed: every net trained from the parent reads below it
 
-- **CARD-RUN10-START-DAMAGE — the reading the design packet starts from (R373(c)).** Offline, on the launch tree,
+- **CARD-RUN10-START-DAMAGE — the reading the design packet starts from (R373(c)). R376(b): the parent's 0.191 is
+  an outlier (DECIDE-1's panel of run8's saves); run10 will not START (R376(c)).** Offline, on the launch tree,
   101 production steps from the parent on its own ring (minus the prereg's slice) read at strix @ r8: 0.069
   [0.042, 0.101] with the aux head at weight 4 (A1); 0.083 [0.049, 0.118] with no aux loss (A2); 0.115 [0.076,
   0.156] with the aux's trunk gradient stopped (A5); 0.066 [0.038, 0.094] with no aux loss and the parent's
@@ -115,7 +154,8 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by the RUN10-PRESTART packet (R371; 2026-09-26) — run10 halted at the witness
 
-- **CARD-RUN10-AUX-WEIGHT-REPICK — the §1a rule fires; HELD on CARD-RUN10-AUX-START-DESIGN (R372(c): C not recovered; R373(c): the re-pick follows RUN10-AUX-PROBE's reading). That card CLOSED 2026-09-27; run10 is held by R375(c), and the re-pick follows DECIDE-1.** Over the twin's settled half (steps 7 188–14 375)
+- **CARD-RUN10-AUX-WEIGHT-REPICK — the §1a rule fires; HELD on CARD-RUN10-AUX-START-DESIGN (R372(c): C not recovered; R373(c): the re-pick follows RUN10-AUX-PROBE's reading). That card CLOSED 2026-09-27; run10 is held by R375(c), and the re-pick follows DECIDE-1. run10 will not START
+  (R376(c)), so no run10 re-mint follows.** Over the twin's settled half (steps 7 188–14 375)
   `aux_policy_head_grad_norm / policy_head_grad_norm` reads a median 2.92 (p10–p90 2.24–3.83; by quarter
   3.22 → 2.99 → 2.90 → 2.93, flat), outside [0.5, 2]. The rule re-picks inside [2, 8] by re-mint with its own
   preflight; weight 2 predicts ≈ 1.46 (the head norm scales with the weight, prereg §8's foreseen case). The
@@ -128,7 +168,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   0.3151 (< 0.30) and `_mr1` 0.4002 (< 0.40); `_mr2` 0.2276 passes. Reported beside it, not a substitute
   witness: 6k 0.305 / 0.387, 9k 0.297 / 0.379, 12k 0.290 / 0.373 — falling, no collapse. Whether the 3k
   ring is the right witness for a run whose head starts fresh is the operator's reading.
-- **CARD-RUN10-PARENT-BARS — the parent re-read moved.** strix @ r8 on the launch tree, IDLE: 0.191 [0.146,
+- **CARD-RUN10-PARENT-BARS — CLOSED 2026-09-28, SUPERSEDED by R376(b): the process level is ≈ 0.11 on S and ≈ 0.29
+  on X (DECIDE-1's panel, run8 36k–54k), and every bar prices from a panel. Was: the parent re-read moved.** strix @ r8 on the launch tree, IDLE: 0.191 [0.146,
   0.236] (55/288) against the recorded 0.142 [0.104, 0.181] (CONTENDED, the old box, pre-PERF-ADA). R371(c)
   sends run10's bars and the EMA conditional to the operator; the EMA cell read 0.149 (waits under either).
   RUN10-AUX-PROBE: six of six nets read after the parent on this tree read below it; whether 0.191 tops a noisy

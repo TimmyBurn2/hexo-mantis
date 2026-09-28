@@ -7,35 +7,31 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
-**DECIDE-1 (R375, 2026-09-27): run10 does NOT START on its minted reading (R375(c)).** DECIDE-1 measures and
-changes nothing in the tree. On two rulers it reads damage vs luck, a panel of run8's saves, an averaged net, a
-cooldown screen and Six's tactics share. Its readings choose between an amended run10 and a run11 design, and
-its records are local. Three exits fed R375:
+**R376 (2026-09-28): THE TACTICS LANE goes first; run10 will not START (R376(c)).** `configs/run10.yaml`
+stays the production config the instruments read until run11's mint replaces it, and run11 is designed after
+the tactics lane's deploy read (CARD-RUN11-DESIGN).
 
-- **RUN10-CONTROLS (R374(a)): the pipeline and the train step are cleared (R375(b)).**
-  - The zero-step warm start, saved and served, reads 0.194 [0.149, 0.243] at strix @ r8 and replays 270 of
-    the parent's 288 games.
-  - The train step is one function on run8's tree and the launch tree: CPU fp32 step 1 is bit-identical, and
-    the CUDA difference is the fixed-order fp32 readout sums from `d5605bf2` on. C1's letter-HALT failed its
-    own floor, and going past it is ratified.
-  - run8's neighbours read 0.085 [0.054, 0.120] (42k) and 0.094 [0.059, 0.128] (48k), so the parent's 0.191
-    is a high point.
-  - The parent after 101 steps at LR ×0.01 and ×0.1 reads 0.122 and 0.135. Damage and a lucky parent draw
-    are not yet separated (CARD-STRIX-SEED-LUCK). The aux start is not implicated.
-- **SIX-SCOUT (R374(b)): Six is admitted as a second ruler (R375(a)).**
-  - The ruler is Six (MIT, CixMango/Six `f2b5ec2`, release 1.2.0), generation 30 at 16 nodes, tactics as
-    shipped, search cache off. It meets the bar: rules parity on shared games (two out-of-domain cases ruled
-    in-session), 269 of 288 games replayed at fixed work, and 3.15 s a game against strix's 8.55.
-  - The parent reads 0.351 [0.295, 0.406] on it. Six's release network reads 0.885 against the parent at 16
-    nodes. SIX-RUNG LANDED it by pin and hash 2026-09-28 (CARD-SIX-RUNG): the landed rung re-reads the parent
-    0.351 [0.295, 0.406], SIX-SCOUT's reading exactly, and replays 256 of the 276 games whose Six turns the
-    cache setting leaves unmoved. No run trains on Six's labels until the operator rules on provenance (R375(f)).
-- **RESEARCH-FORGE (R374(c)): proposals only, on two boards, at 0 box-h.** The measurement cards it funded run
-  in DECIDE-1. R375(d) extends LAW-19 to power: a pre-registered reading states its power and false-pass rate
-  at the measured spread between nets, and is void below 0.8 power.
+- **The tactics lane (R376(d), CARD-TACTICS-LANE).** ONE exact tactics module in Rust on the search path, used
+  identically at deploy and in self-play (LAW-15). Deploy lands first, read as an A/B against the plain parent
+  on both rulers. Self-play follows only with a pre-registered starvation witness, and with F-15, F-39, F-53
+  and R239 re-validated under LAW-02 first. A solver terminal counts as a simulation, GPU evaluations are
+  their own LAW-18 row, and served-sims exactness pins descents (R376(e)).
+- **Two rulers (R376(a)).** Six gen 30 @16, cache off, is X; strix @ r8 is S. Recipe decisions read X;
+  milestones read X and S. SIX-RUNG landed X by pin and hash (`mantis.bots.six`, the follower's `six30_16`
+  unit); it re-reads the parent 0.351 [0.295, 0.406], SIX-SCOUT's reading exactly.
+- **DECIDE-1 is accepted (R376(b)).** Over run8's saves 36k–54k the process level is ≈ 0.11 on S and ≈ 0.29
+  on X; the parent's 0.191 on S is an outlier, and every bar prices from a panel. In 106 of S1's 233 losses
+  (0.455) one of our turns allowed the opponent a proven forced win where a safe turn existed, 100 of them our
+  last turn before that run; Six's threat solver is worth ≈ 1 logit against the parent. That is the tactics
+  lane's evidence. The damage-vs-luck noise nets were void (the
+  KL-1.0 known-bad read 0.12 on X), and cooldown and EMA are neither shown nor excluded: they enter run11's
+  design as screened levers with power lines (R376(g)). Records are local.
+- **Six's outputs (R376(f)).** Learning from them is permitted as a means, never the end: probes first, a run
+  only on a pass, and a net that learned from Six carries it in its lineage. The standing goal is to surpass
+  Six by self-play with exact tactics.
 
-The earlier phase paragraphs (RUN10-PRESTART, DEV-SPEED, RUN10-REPICK, RUN10-AUX-PROBE) are
-`git show f24d3ea8:docs/governance/STATE.md`.
+The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEARCH-FORGE) are
+`git show 3e3fd263:docs/governance/STATE.md`; the ones before them are `git show f24d3ea8:docs/governance/STATE.md`.
 
 ## The run
 
@@ -43,19 +39,14 @@ The earlier phase paragraphs (RUN10-PRESTART, DEV-SPEED, RUN10-REPICK, RUN10-AUX
   `8cb5ca6a`; `docs/design/measurements/EVAL_COST_2026-09-19.md` reads its rounds) and run8 at 55 170 on
   2026-09-21 (R365); run9 was never started and its config is deleted (R365(a), R367). The strength
   series and every cell on record are in the measurement records named below.
-- **run10 is ARMED, not started.** `configs/run10.yaml` is minted (R366, ratified by R367(c)); its
-  order, witnesses and pre-registered reading are
-  `docs/design/measurements/RUN10_PREREG_2026-09-21.md`, the box sequence its §6. run10 launches
-  from FINISH's exit tip (R370(i), moving R369(a) off PERF-ADA's tip): the full gate set incl. the
-  slow tier green there, its resolved config matching its mint by value except retired leaves,
-  admission re-read IDLE there under R367(e), and the parent's strix @ r8 cell re-read there (the
-  operator waived that re-read for PERF-ADA's tip on 2026-09-25). A re-read
-  outside the parent's recorded CI would send the bar to the operator. run10 does not START on
-  its minted reading (R375(c)). SEAM-2 may merge before any run starts (R375(e) lifts R368(j)'s
-  hold). Read a config's values from the file itself and diff two with `tools/config_diff.py`;
-  STATE does not restate minted rows.
-- **A box is still rented** (2026-09-24: an RTX 4080 SUPER host, the operator's, R11; PERF-ADA made it the run box; idle at the
-  launch tree `451d23f9` when DECIDE-1 began); the previous instance was
+- **run10 will not START (R376(c)).** `configs/run10.yaml` stays the production config the instruments
+  read until run11's mint replaces it. It was minted by R366 and ratified by R367(c); its order, witnesses
+  and pre-registered reading are `docs/design/measurements/RUN10_PREREG_2026-09-21.md`, and its launch
+  conditions were R370(i)'s and R371(c)'s. R376(b) prices every bar from a panel. SEAM-2 may merge before
+  any run starts (R375(e) lifts R368(j)'s hold). Read a config's values from the file itself and diff two
+  with `tools/config_diff.py`; STATE does not restate minted rows.
+- **A box is still rented** (2026-09-24: an RTX 4080 SUPER host, the operator's, R11; PERF-ADA made it the run box; DECIDE-1 and
+  SIX-RUNG's witness ran there, and SIX-RUNG left it idle and clean at the launch tree `451d23f9`); the previous instance was
   destroyed on 2026-09-21 (R365, annotated by R367(d)); the operator's mirror (`tools/mirror_pull.py`) holds run7's and run8's
   artifacts, run10's parent and the ring its held-out slice reads. The run10 box criterion and its
   admission bench are R367(e), run with `tools/bench_server.py` per the prereg's §6; any admission
@@ -73,7 +64,7 @@ run6's by R369's packet (W0).
 ## Where things live
 
 - Open work: `docs/governance/CARDS.md` (swept in W6; derived there, never enumerated here).
-- Rulings: `docs/governance/RULINGS.md`; the latest is R375.
+- Rulings: `docs/governance/RULINGS.md`; the latest is R376.
 - Laws and the protected set: `docs/governance/LAWS.md`, whose protected set names each
   invariant's pinning tests (R370(f)); `tests/test_protected_set_pins.py` fails if one is gone.
   Falsified work: `docs/governance/falsified.md`.
@@ -81,7 +72,8 @@ run6's by R369's packet (W0).
   (`make gates`, `make gates.exit`). The test-count floor is
   `tools/ci_gates/test_count_floor.txt`; the comment ratchet's floors are
   `tools/ci_gates/comment_length_floor.txt`.
-- The instruments at HEAD: `tools/strix_follower.py` (the strength series, strix @ r8, R366),
+- The instruments at HEAD: `tools/strix_follower.py` (the strength series: strix @ r8, R366, and Six gen 30
+  @16 by its `six30_16` unit, R376(a)),
   `mantis.diagnostics.ring_audit` (the ring bands a prereg declares), `tools/ci_gates/preflight_mint.py`
   (the MANUAL mint preflight), `tools/mint_config.py` + `tools/config_diff.py` (mint and diff),
   `tools/probe1.py`, and the display tools `CLAUDE.md` admits under "Deliberately absent".
@@ -116,5 +108,5 @@ Derived 2026-09-25 at the PERF-ADA exit from the tree and the R369 ledger in
 `docs/design/measurements/PERF_ADA_PROFILE_2026-09-24.md` (every reading there names its benched sha).
 The configs and "where things live" sections below the run were carried from the SLIM-FIX rewrite and
 re-checked against `configs/` and `census.py` at this tip.
-The current phase was rewritten 2026-09-27 at R375 from the RUN10-CONTROLS, SIX-SCOUT and RESEARCH-FORGE
-exit records (local); the run and box lines were re-checked at `3a2cdae3`.
+The current phase was rewritten 2026-09-28 at R376 from the DECIDE-1 and SIX-RUNG exit records (local); the
+run, box and instrument lines were re-checked at `3e3fd263`.

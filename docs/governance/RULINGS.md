@@ -1,4 +1,4 @@
-# RULINGS — R23 to R375
+# RULINGS — R23 to R376
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R376.
+- Numbering continues from R346. The next ruling is R377.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -36,6 +36,33 @@ still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register 
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
 
+### R376 — THE TACTICS LANE
+Decision: verbatim below.
+
+> R376 — THE TACTICS LANE.
+> (a) SIX-RUNG is ratified: Six gen 30 @16, cache off, is the second ruler (X). Recipe
+> decisions read X; milestones read X and S.
+> (b) DECIDE-1 is accepted. The parent's 0.191 is an outlier; the process level is ≈0.11 on S
+> and ≈0.29 on X; every bar prices from a panel. CARD-STRIX-SEED-LUCK and
+> CARD-RUN10-PARENT-BARS close as superseded.
+> (c) run10 will not START. Its config stays the production config the instruments read
+> until run11's mint replaces it. run11 is designed after the tactics lane's deploy read.
+> (d) The tactics lane goes first: ONE exact tactics module in Rust on the search path, used
+> identically at deploy and in self-play (LAW-15). Deploy lands first, read as an A/B against
+> the plain parent on both rulers; self-play follows only with a pre-registered starvation
+> witness, F-15, F-39, F-53 and R239 re-validated under LAW-02 first.
+> (e) A simulation is a descent that backs up a value; a solver terminal is a simulation; GPU
+> evaluations are their own LAW-18 row. "Served-sims exactness" pins descents.
+> (f) Learning from Six's outputs is permitted as a means, never the end: probes first, a run
+> only on a pass, and a net that learned from Six carries it in its lineage. The standing goal
+> is to surpass Six by self-play with exact tactics.
+> (g) Cooldown and EMA are neither shown nor excluded; they enter the run11 design as
+> screened levers with power lines.
+
+Status: standing. Ratifies SIX-RUNG under R375(a) by (a); makes R375(c)'s choice by (c); construes the protected set's served-sims exactness by (e); rules on R375(f)'s provenance by (f).
+
+---
+
 ### R375 — READ THE PROCESS, NOT THE PEAK
 Decision: verbatim below.
 
@@ -57,6 +84,9 @@ Decision: verbatim below.
 > (f) No run trains on Six's labels until the operator rules on provenance.
 
 Status: standing. Admits a second ruler under R374(b) by (a); extends LAW-19 by (d); lifts R368(j)'s merge hold by (e).
+(a)'s landing RATIFIED by R376(a); (c)'s choice MADE by R376(c): run10 will not START, and run11 is designed after the
+tactics lane's deploy read; (f)'s provenance RULED by R376(f): learning from Six's outputs is a means, probes first,
+a run only on a pass, and the net carries Six in its lineage.
 
 ---
 
@@ -134,6 +164,7 @@ Decision: verbatim below.
 > test keeps a control that reds.
 
 Status: standing. Construes R370(d) by (b); the operator's 2026-09-25 strix waiver ends at PERF-ADA's tip by (c).
+(c)'s single-cell parent bar is SUPERSEDED by R376(b): every bar prices from a panel; run10 will not START (R376(c)).
 
 ---
 
@@ -484,7 +515,8 @@ a copy) is DISCHARGED — the copy is built; CARD-STRIX-NET-ONLY's A1 is CLOSED 
 Status: standing — (b)'s net 6×192 conditional and §0(2)'s size row WITHDRAWN by R367(c) (no shape-compatible
 parent exists; run11's build is a function-preserving expansion, CARD-NET-EXPAND); the soft-target
 construction, the weight envelope and the held-out witness as landed RATIFIED by R367 §0(3); the leg is
-not DONE under R367(a) until REVIEW-1's findings are fixed (R367(b), §0(5)).
+not DONE under R367(a) until REVIEW-1's findings are fixed (R367(b), §0(5)). run10 will not START (R376(c)):
+its config stays the production config the instruments read until run11's mint replaces it.
 
 ---
 

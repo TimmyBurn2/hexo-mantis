@@ -68,7 +68,8 @@ tests/test_protected_set_pins.py fails if a named test stops existing.
   `tests/train/test_bc_warm_start_entry.py::test_a_checkpoint_that_is_NOT_the_declared_net_is_REFUSED`,
   `tests/train/test_bc_warm_start_entry.py::test_a_row_missing_its_hash_is_REFUSED_not_defaulted`,
   `tests/train/test_f32_launch_pin_wiring.py::test_a_SWAPPED_artifact_at_the_pinned_path_REFUSES`
-- served-sims exactness —
+- served-sims exactness, which pins descents (R376(e): a simulation is a descent that backs up a
+  value, a solver terminal is one, and GPU evaluations are their own LAW-18 row) —
   `crates/mantis-selfplay/tests/served_sims_exact.rs::both_kinds_serve_exactly_sixty_four`,
   `crates/mantis-selfplay/tests/served_sims_exact.rs::r8_at_fifty_sims_serves_exactly_fifty_per_search`,
   `tests/arena/test_deploy_head_budget_spent.py::test_every_kind_spends_exactly_its_budget`
