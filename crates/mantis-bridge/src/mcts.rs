@@ -224,6 +224,8 @@ impl PyMCTSTree {
             ("audit_calls", c.audit_calls),
             ("audit_exhausted", c.audit_exhausted),
             ("proof_stone_illegal", c.proof_stone_illegal),
+            ("grid_overflows", c.grid_overflows),
+            ("three_cells_capped", c.three_cells_capped),
         ] {
             d.set_item(name, value)?;
         }

@@ -100,6 +100,8 @@ pub struct TacticsCounters {
     pub audit_calls: u64,
     pub audit_exhausted: u64,
     pub proof_stone_illegal: u64,
+    pub grid_overflows: u64,
+    pub three_cells_capped: u64,
 }
 
 impl TacticsCounters {
@@ -118,6 +120,8 @@ pub(crate) struct TacticsState {
     pub(crate) config: TacticsConfig,
     pub(crate) solver: TurnSolver,
     pub(crate) counters: TacticsCounters,
+    /// The solver's cumulative edge and cap rows when this search began.
+    pub(crate) solver_base: (u64, u64),
 }
 
 /// How a descent's leaf is spent: backed up inline, or evaluated by the net with the facts its expansion reads.
@@ -141,6 +145,7 @@ impl MCTSTree {
                 config,
                 solver: TurnSolver::new(TACTICS_TABLE_ENTRIES),
                 counters: TacticsCounters::default(),
+                solver_base: (0, 0),
             })
         });
     }
@@ -156,7 +161,11 @@ impl MCTSTree {
     pub fn tactics_counters(&self) -> TacticsCounters {
         self.tactics
             .as_ref()
-            .map(|t| t.counters)
+            .map(|t| TacticsCounters {
+                grid_overflows: t.solver.grid_overflows() - t.solver_base.0,
+                three_cells_capped: t.solver.three_cells_capped() - t.solver_base.1,
+                ..t.counters
+            })
             .unwrap_or_default()
     }
 
@@ -178,6 +187,7 @@ impl MCTSTree {
     pub(crate) fn reset_tactics_search(&mut self) {
         if let Some(t) = self.tactics.as_deref_mut() {
             t.counters = TacticsCounters::default();
+            t.solver_base = (t.solver.grid_overflows(), t.solver.three_cells_capped());
             t.solver.clear();
         }
     }
@@ -593,6 +603,59 @@ mod tests {
         );
         tree.configure_tactics(Some(LEAF_ONLY));
         assert_eq!(tree.check_tactics_board(&board), Err(four));
+    }
+
+    /// P2 to move with two holding `n` threes ten apart on r = 0; P1's stones six apart, so it holds no window of two.
+    fn p2_threes(n: i32) -> Vec<(i32, i32)> {
+        let mut p2: Vec<(i32, i32)> = (0..n)
+            .flat_map(|i| [(10 * i, 0), (10 * i + 1, 0), (10 * i + 2, 0)])
+            .collect();
+        if p2.len() % 2 == 1 {
+            p2.push((-40, -40));
+        }
+        let turns = p2.len() / 2;
+        let p1: Vec<(i32, i32)> = (0..=2 * turns as i32)
+            .map(|j| (6 * (j / 2), 40 + 6 * (j % 2)))
+            .collect();
+        let mut seq = vec![p1[0]];
+        for t in 0..turns {
+            seq.extend([p2[2 * t], p2[2 * t + 1], p1[1 + 2 * t], p1[2 + 2 * t]]);
+        }
+        seq
+    }
+
+    #[test]
+    fn a_generation_past_forty_eight_three_cells_is_a_capped_row_and_one_at_it_is_not() {
+        for (threes, capped) in [(9, true), (8, false)] {
+            let seq = p2_threes(threes);
+            let (mut tree, leaf, board) = path_to_leaf(&seq, seq.len() - 2, LEAF_ONLY);
+            assert_eq!(board.current_player, mantis_core::Player::Two);
+            tree.tactics_leaf(leaf, &board);
+            let c = tree.tactics_counters();
+            assert_eq!(
+                c.leaf_solver_calls, 1,
+                "{threes} threes: a quiet leaf is solved"
+            );
+            assert_eq!(c.three_cells_capped > 0, capped, "{threes} threes: {c:?}");
+            tree.new_game(board);
+            assert_eq!(
+                tree.tactics_counters().three_cells_capped,
+                0,
+                "a search's own row"
+            );
+        }
+    }
+
+    #[test]
+    fn a_leaf_too_wide_for_the_grid_is_an_overflow_row_and_evaluated() {
+        let seq = [(0, 0), (230, 0), (0, 10), (0, 20), (0, 30)];
+        let (mut tree, leaf, board) = path_to_leaf(&seq, 3, LEAF_ONLY);
+        assert!(matches!(
+            tree.tactics_leaf(leaf, &board),
+            LeafCall::Evaluate(Some(_))
+        ));
+        let c = tree.tactics_counters();
+        assert_eq!((c.leaf_solver_calls, c.grid_overflows), (1, 1));
     }
 
     #[test]
