@@ -104,6 +104,8 @@ impl SelfPlayRunner {
             mcts_stat_count: self.mcts_stat_count.clone(),
             mcts_quiescence_fires: self.mcts_quiescence_fires.clone(),
             max_sims_per_search: self.max_sims_per_search.clone(),
+            starved_searches: self.starved_searches.clone(),
+            starved_descents: self.starved_descents.clone(),
             pcr_full_moves: self.pcr_full_moves.clone(),
             pcr_quick_moves: self.pcr_quick_moves.clone(),
             gumbel_round_leaves: self.gumbel_round_leaves.clone(),

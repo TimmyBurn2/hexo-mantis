@@ -56,6 +56,9 @@ pub(crate) struct MoveAccumulators<'a> {
     pub(crate) mcts_quiescence_fires: &'a AtomicU64,
     /// `fetch_max`ed with each search's served-leaf count.
     pub(crate) max_sims_per_search: &'a AtomicU64,
+    /// Searches that completed short of their budget, and the descents short; see `record_shortfall`.
+    pub(crate) starved_searches: &'a AtomicU64,
+    pub(crate) starved_descents: &'a AtomicU64,
     /// The playout-cap arm as DRAWN, counted at the draw itself.
     pub(crate) pcr_full_moves: &'a AtomicU64,
     pub(crate) pcr_quick_moves: &'a AtomicU64,
@@ -519,6 +522,14 @@ fn run_mcts_search(
     }
 }
 
+/// Count a completed search that spent fewer descents than its budget, and by how many.
+fn record_shortfall(searches: &AtomicU64, descents: &AtomicU64, budget: usize, spent: usize) {
+    if spent < budget {
+        searches.fetch_add(1, Ordering::Relaxed);
+        descents.fetch_add((budget - spent) as u64, Ordering::Relaxed);
+    }
+}
+
 /// Orchestrate one full move: playout-cap selection, MCTS search, stat accumulation,
 /// target-policy build, sampling, position recording (BEFORE apply), and apply-move.
 #[allow(clippy::too_many_arguments)]
@@ -562,7 +573,7 @@ pub(crate) fn play_one_move(
     // ── MCTS Search ──
     tree.new_game(board.clone());
 
-    let gumbel_state = match run_mcts_search(
+    let (gumbel_state, sims_served) = match run_mcts_search(
         tree,
         board,
         move_sims,
@@ -588,7 +599,7 @@ pub(crate) fn play_one_move(
             accumulators
                 .max_sims_per_search
                 .fetch_max(sims_served as u64, Ordering::Relaxed);
-            gs
+            (gs, sims_served)
         }
         McTSSearchResult::RootExpansionFailed => return MoveOutcome::Continue,
         // Store-then-halt on its OWN counter, so the supervisor reads the inference failure
@@ -602,6 +613,13 @@ pub(crate) fn play_one_move(
     if !running.load(Ordering::Relaxed) {
         return MoveOutcome::Break;
     }
+    // After the stop check: `stop()` flips `running` before it closes the queue, so a search it cut is never counted.
+    record_shortfall(
+        accumulators.starved_searches,
+        accumulators.starved_descents,
+        move_sims,
+        sims_served,
+    );
 
     // No visits, no target — BEFORE any exporter runs and arm-independent. `policy` below feeds
     // BOTH the recorded target and the move played, so a zero-visit search would otherwise also
@@ -890,6 +908,29 @@ mod forced_round_tests {
                 "bump={bump}: a batch that straddled a net swap was cached, or a clean one was not"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod shortfall_tests {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    use super::record_shortfall;
+
+    #[test]
+    fn a_search_short_of_its_budget_is_counted_with_its_shortfall_and_a_full_one_is_not() {
+        let (searches, descents) = (AtomicU64::new(0), AtomicU64::new(0));
+        let read = || {
+            (
+                searches.load(Ordering::Relaxed),
+                descents.load(Ordering::Relaxed),
+            )
+        };
+        record_shortfall(&searches, &descents, 50, 50);
+        assert_eq!(read(), (0, 0));
+        record_shortfall(&searches, &descents, 50, 47);
+        record_shortfall(&searches, &descents, 64, 63);
+        assert_eq!(read(), (2, 4));
     }
 }
 

@@ -1,5 +1,5 @@
 // >300 justify (R8): one invariant's witness across budgets, encodings, kinds and tactics, read as one.
-//! A search spends EXACTLY `n_simulations` descents, never more and never fewer.
+//! A search spends EXACTLY `n_simulations` descents, never more, and never fewer unless the runner counts it starved.
 //! `N` means `N descents` on both arms, root evaluation included: a solver terminal is a descent and
 //! network leaves are their own row, so served leaves plus inline descents are the descents.
 //!
@@ -36,12 +36,14 @@ const LEAF_TACTICS: TacticsConfig = TacticsConfig {
     audit: None,
 };
 
-/// What one drive read: producer-served leaves, searched plies, the widest search, inline descents.
+/// What one drive read: producer-served leaves, searched plies, the widest search, inline descents, starved rows.
 struct Drive {
     served: usize,
     records: usize,
     max_sims: u64,
     inline: u64,
+    starved: u64,
+    shortfall: u64,
 }
 
 /// Drive one worker on the GRAPH path until `want_records` searched plies are recorded.
@@ -114,6 +116,8 @@ fn drive_graph(
         records: records.len(),
         max_sims: snap.max_sims_per_search,
         inline: snap.inline_descents_total,
+        starved: snap.starved_searches,
+        shortfall: snap.starved_descents,
     }
 }
 
@@ -169,10 +173,10 @@ fn drive_kind(
         thread::sleep(Duration::from_millis(5));
     }
     let defect = runner.fatal_defect();
-    let snap = runner.stats_snapshot();
     runner.stop();
     producer.join().expect("producer exits");
     records.extend(runner.drain_graph_records().expect("unpoisoned"));
+    let snap = runner.stats_snapshot();
 
     assert!(
         defect.is_none(),
@@ -189,6 +193,8 @@ fn drive_kind(
         records: records.len(),
         max_sims: snap.max_sims_per_search,
         inline: snap.inline_descents_total,
+        starved: snap.starved_searches,
+        shortfall: snap.starved_descents,
     }
 }
 
@@ -197,8 +203,13 @@ fn assert_exact_graph(encoding: &str, n_simulations: usize, ply_cap: usize, want
         served,
         records,
         max_sims,
+        starved,
         ..
     } = drive_graph(encoding, n_simulations, ply_cap, want_records, None);
+    assert_eq!(
+        starved, 0,
+        "{encoding} @ {n_simulations}: this regime never starves a search"
+    );
     println!(
         "{encoding} @ {n_simulations}: served {served} leaves over {records} searches, widest \
          search {max_sims}"
@@ -232,15 +243,20 @@ fn r6_at_fifty_sims_serves_exactly_fifty_per_search() {
     assert_exact_graph("gnn_axis_v1", 50, 4, 8);
 }
 
-/// The tactics-on case: exactly `n` descents a search, served plus inline adding up, and the tactics fired.
+/// The tactics-on case: `n` descents a search, served plus inline plus any counted starvation, and the tactics fired.
 fn assert_exact_with_tactics(label: &str, drive: Drive, n_simulations: usize) {
     let Drive {
         served,
         records,
         max_sims,
         inline,
+        starved,
+        shortfall,
     } = drive;
-    println!("{label} @ {n_simulations} tactics on: served {served} + inline {inline} over {records} searches");
+    println!(
+        "{label} @ {n_simulations} tactics on: served {served} + inline {inline} over {records} searches, \
+         {starved} starved short by {shortfall}"
+    );
     assert_eq!(
         max_sims, n_simulations as u64,
         "{label} @ {n_simulations} tactics on: the widest search spent {max_sims} descents"
@@ -249,12 +265,17 @@ fn assert_exact_with_tactics(label: &str, drive: Drive, n_simulations: usize) {
         inline > 0,
         "{label}: no descent ended at a decided leaf, so the case proves nothing"
     );
-    let descents = served + inline as usize;
+    assert_eq!(
+        starved > 0,
+        shortfall > 0,
+        "{label}: a starved search is short by at least one descent"
+    );
+    let descents = served + inline as usize + shortfall as usize;
     let expected = records * n_simulations;
     assert!(
         descents >= expected && descents < expected + n_simulations,
-        "{label} @ {n_simulations} tactics on: {served} served + {inline} inline over {records} \
-         searches; expected [{expected}, {}) with one search in flight",
+        "{label} @ {n_simulations} tactics on: {served} served + {inline} inline + {shortfall} starved \
+         over {records} searches; expected [{expected}, {}) with one search in flight",
         expected + n_simulations
     );
 }
@@ -288,9 +309,14 @@ fn both_kinds_serve_exactly_sixty_four() {
             served,
             records,
             max_sims,
+            starved,
             ..
         } = drive_kind(kind, 64, 3, 4, None);
         println!("{kind:?} @ 64: served {served} over {records} searches, widest {max_sims}");
+        assert_eq!(
+            starved, 0,
+            "{kind:?} @ 64: this regime never starves a search"
+        );
         assert_eq!(
             max_sims, 64,
             "{kind:?} @ 64: the widest search served {max_sims} leaves. The root's own \

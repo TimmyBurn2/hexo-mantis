@@ -87,6 +87,9 @@ pub struct RunnerStatsSnapshot {
     pub mcts_quiescence_fires: u64,
     /// The largest leaf count ANY one search served; must never exceed the search budget.
     pub max_sims_per_search: u64,
+    /// Searches uncounted TT hits starved and the descents short: with served and inline, every budgeted descent.
+    pub starved_searches: u64,
+    pub starved_descents: u64,
     /// Playout-cap randomization's fire rate, counted at the DRAW; at `full_search_prob == 0`
     /// every move counts `full`.
     pub pcr_full_moves: u64,
@@ -154,6 +157,8 @@ pub struct SelfPlayRunner {
     mcts_stat_count: Arc<AtomicU64>,
     mcts_quiescence_fires: Arc<AtomicU64>,
     max_sims_per_search: Arc<AtomicU64>,
+    starved_searches: Arc<AtomicU64>,
+    starved_descents: Arc<AtomicU64>,
     pcr_full_moves: Arc<AtomicU64>,
     pcr_quick_moves: Arc<AtomicU64>,
     gumbel_round_leaves: Arc<AtomicU64>,
@@ -330,6 +335,8 @@ impl SelfPlayRunner {
             mcts_stat_count: Arc::new(AtomicU64::new(0)),
             mcts_quiescence_fires: Arc::new(AtomicU64::new(0)),
             max_sims_per_search: Arc::new(AtomicU64::new(0)),
+            starved_searches: Arc::new(AtomicU64::new(0)),
+            starved_descents: Arc::new(AtomicU64::new(0)),
             pcr_full_moves: Arc::new(AtomicU64::new(0)),
             pcr_quick_moves: Arc::new(AtomicU64::new(0)),
             gumbel_round_leaves: Arc::new(AtomicU64::new(0)),
@@ -445,6 +452,8 @@ impl SelfPlayRunner {
             mcts_stat_count: self.mcts_stat_count.load(Ordering::Relaxed),
             mcts_quiescence_fires: self.mcts_quiescence_fires.load(Ordering::Relaxed),
             max_sims_per_search: self.max_sims_per_search.load(Ordering::Relaxed),
+            starved_searches: self.starved_searches.load(Ordering::Relaxed),
+            starved_descents: self.starved_descents.load(Ordering::Relaxed),
             pcr_full_moves: self.pcr_full_moves.load(Ordering::Relaxed),
             pcr_quick_moves: self.pcr_quick_moves.load(Ordering::Relaxed),
             gumbel_round_leaves: self.gumbel_round_leaves.load(Ordering::Relaxed),
@@ -656,6 +665,8 @@ mod seam_roundtrip {
         r.mcts_stat_count.store(9, Ordering::Relaxed);
         r.mcts_quiescence_fires.store(10, Ordering::Relaxed);
         r.max_sims_per_search.store(50, Ordering::Relaxed);
+        r.starved_searches.store(45, Ordering::Relaxed);
+        r.starved_descents.store(46, Ordering::Relaxed);
         r.pcr_full_moves.store(37, Ordering::Relaxed);
         r.pcr_quick_moves.store(38, Ordering::Relaxed);
         r.gumbel_round_leaves.store(39, Ordering::Relaxed);
@@ -681,6 +692,8 @@ mod seam_roundtrip {
             mcts_stat_count: 9,
             mcts_quiescence_fires: 10,
             max_sims_per_search: 50,
+            starved_searches: 45,
+            starved_descents: 46,
             pcr_full_moves: 37,
             pcr_quick_moves: 38,
             gumbel_round_leaves: 39,
