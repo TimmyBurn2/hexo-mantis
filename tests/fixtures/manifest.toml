@@ -291,3 +291,9 @@ added_by = "LADDER-1"
 path = "ladder/recorded_two_games.ndjson"
 sha256 = "8c711d5098829767b8c843544dd7c61d77e40caaa07012c6ca4c601cb958b3ff"
 added_by = "LADDER-1"
+
+[[required]]
+path = "tactics/turn_solver_goldens.jsonl"
+# Six's ThreatSolver (f2b5ec2) at 64 / 2, 2 000 / 8 and 20 000 / 8 on 551 of TACTICS-DESIGN's T2 positions.
+sha256 = "f6609f0ff7c7e93f7fc04c089d48e406bb5c8cefc9e8b33219c0f26bc90bde64"
+added_by = "TACTICS-DEPLOY"

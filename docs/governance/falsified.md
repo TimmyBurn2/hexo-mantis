@@ -176,3 +176,9 @@ Each note names the ruling that authorised it; none of them re-opens its row.
   the grid path at `3dd20b49`. No test pins the min/max asymmetry today, and the graph encodings aggregate no clusters,
   so the "flagged defect preserved" has no live subject. A multi-window min-vs-learned-pooling question
   re-starts from `3dd20b49^`, under LAW-02.
+- **F-38, F-39, F-53 — THE INSTRUMENT IS RETIRED, per R377(a) (2026-09-28); the rows stand.** Each was measured
+  with the per-stone `TacticalSolver` (`crates/mantis-search/src/tactics/`), F-53 through its bridge pyclass and
+  `tools/probe1.py proofs`. TACTICS-DEPLOY replaces that module with the turn-level strictly forcing solver R377(a)
+  names; the old solver, its pyclass and PROBE-1's reading 4 lived through `bd7bcde9`. A re-reading with the
+  old instrument starts from that commit, under LAW-02; TACTICS-SELFPLAY re-runs F-53's reading with the new kind
+  (the design doc's §2 states what transfers). Nothing in the rows is re-opened.

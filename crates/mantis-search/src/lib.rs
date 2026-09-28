@@ -22,5 +22,5 @@ pub use mcts::{
     MAX_ARMED_SIMS, MAX_ARMED_SIMS_GUMBEL, MAX_CHILDREN_PER_NODE, MAX_NODES, MAX_ROOT_CHILDREN,
     VIRTUAL_LOSS_PENALTY,
 };
-pub use tactics::{Budget, Outcome, ProofResult, TacticalConfig, TacticalSolver};
+pub use tactics::{analyze, LeafTactics, Solved, Terminal, Turn, TurnSolver, Verdict};
 pub use temperature::{compute_move_temperature, ply_to_compound_move};

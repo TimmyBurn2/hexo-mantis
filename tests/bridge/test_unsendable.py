@@ -48,8 +48,6 @@ def test_send_safe_classes_cross_thread_ok():
     """The send-safe pyclasses (Arc/atomic-backed) are usable off-thread."""
     hb = _engine.HexgBuffer(8, "gnn_axis_v1", 128)
     assert _access_on_new_thread(lambda: hb.size) == "ok"
-    ts = _engine.TacticalSolver()
-    assert _access_on_new_thread(lambda: ts.__class__) == "ok"
 
 
 def test_no_unsafe_impl_sync_for_board():

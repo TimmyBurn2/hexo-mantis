@@ -57,7 +57,8 @@ Both were found by running the gate set rather than by reading it, and both are 
 - **CARD-TACTICS-SELFPLAY — HELD on CARD-TACTICS-DEPLOY's read.** The twin's targets are proof-as-target
   (R377(f)): a proven root plays and records its proof, a vetoed move gets zero target mass, and a lost root
   records no policy target.
-  - F-53's novelty check, re-run with the new kind, runs before `selfplay.search.tactics` is armed.
+  - F-53's novelty check, re-run with the new kind, runs before `selfplay.search.tactics` is armed. Its instrument,
+    PROBE-1's reading 4, left with the per-stone solver (`bd7bcde9`): the packet rebuilds it for the turn level.
   - A plain twin of equal length is the control: ≈ 9.5 box-h with it (design §11).
   - T4's band reads at the panel's mean − 3 SD on the frozen exam (sha256 `2b2eb7f5…`): mean prior < 0.154 or
     mean value < 0.255 at a save is a starvation signal.
@@ -84,8 +85,9 @@ Both were found by running the gate set rather than by reading it, and both are 
   as CARD-TACTICS-DEPLOY, then CARD-TACTICS-SELFPLAY. The lane is now carried by the TACTICS-DEPLOY packet
   (2026-09-28, in progress).**
   ONE exact tactics module in Rust on the search path, used identically at deploy and in self-play
-  (LAW-15). The search crate already carries a net-free `TacticalSolver` (`crates/mantis-search/src/tactics/`,
-  the solver F-53 read); one implementation per thing, so the lane's module is that one or replaces it.
+  (LAW-15). The search crate carried a net-free per-stone `TacticalSolver` (`crates/mantis-search/src/tactics/`,
+  the solver F-53 read); one implementation per thing, so the lane's module replaces it (done in TACTICS-DEPLOY:
+  the old solver lived through `bd7bcde9`).
   - Deploy lands first, read as an A/B against the plain parent on both rulers, at equal work, with its own
     known-bad and a power line (LAW-19). Counting (R376(e)): a solver terminal is a simulation, GPU
     evaluations are their own LAW-18 row, and served-sims exactness pins descents.

@@ -212,20 +212,6 @@ class MCTSTree:
     def get_improved_policy(self, board_size: int | None = None) -> numpy.ndarray: ...
 
 # --------------------------------------------------------------------------- #
-# TacticalSolver
-# --------------------------------------------------------------------------- #
-class TacticalSolver:
-    def __init__(
-        self,
-        window_half: int | None = 9,
-        cand_cap: int = 40,
-        neighbor_dist: int | None = None,
-    ) -> None: ...
-    def prove(
-        self, board: Board, depth: int, node_budget: int
-    ) -> tuple[int, list[tuple[int, int]], int]: ...
-
-# --------------------------------------------------------------------------- #
 # InferenceBatcher (the fused-model NN face over the graph queue)
 # --------------------------------------------------------------------------- #
 class InferenceBatcher:

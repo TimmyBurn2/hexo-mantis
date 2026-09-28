@@ -15,7 +15,6 @@ from mantis.diagnostics.ring_reader import load_ring
 from mantis.util.git import head_sha, is_dirty
 
 from .nets import load_net, open_ring, read_ring
-from .proofs import proof_rate
 from .readings import calibration, gap_table, kl_summary
 from .rings import decompose_rings, spread_positions
 from .spread import spread_series
@@ -87,16 +86,6 @@ def cmd_gap(a: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_proofs(a: argparse.Namespace) -> int:
-    ring = load_ring(a.ring)
-    body: dict[str, Any] = {"reading": "4 proofs", "ring": a.ring.name, "ring_rows": ring.header.size, "seed": a.seed, "arms": []}
-    for depth in a.depths:
-        _log(f"depth {depth} plies, budget {a.budget}, rows {a.rows}")
-        body["arms"].append(proof_rate(ring, rows=a.rows, seed=a.seed, depth=depth, node_budget=a.budget))
-        _write(a.out, body)
-    return 0
-
-
 def cmd_spread(a: argparse.Namespace) -> int:
     ring = load_ring(a.ring)
     positions = spread_positions(ring, seed=a.seed, n=a.positions)
@@ -136,13 +125,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--batch-size", type=int, default=256)
     p.add_argument("--out", type=Path, required=True)
     p.set_defaults(fn=cmd_gap)
-    p = sub.add_parser("proofs", help="reading 4: the tactics solver over ring roots")
-    p.add_argument("--ring", type=Path, required=True)
-    p.add_argument("--rows", type=int, default=5000)
-    p.add_argument("--depths", type=int, nargs="+", default=[6])
-    p.add_argument("--budget", type=int, default=2000)
-    p.add_argument("--out", type=Path, required=True)
-    p.set_defaults(fn=cmd_proofs)
     p = sub.add_parser("spread", help="reading 6: the symmetry spread over fixed positions per checkpoint")
     p.add_argument("--checkpoints", type=Path, required=True)
     p.add_argument("--ring", type=Path, required=True, help="the ring the positions are drawn from")

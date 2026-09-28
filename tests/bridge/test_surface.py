@@ -15,7 +15,6 @@ PYCLASSES = [
     "Board",
     "RegistrySpec",
     "MCTSTree",
-    "TacticalSolver",
     "InferenceBatcher",
     "GraphWire",
     "SelfPlayRunnerConfig",

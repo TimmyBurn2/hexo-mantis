@@ -11,7 +11,6 @@ mod hexg;
 mod inference;
 mod mcts;
 mod runner;
-mod tactics;
 mod utils;
 
 /// Compiled mantis engine bridge (PyO3). All Python-facing Rust lives here.
@@ -21,7 +20,6 @@ fn _engine(m: &Bound<'_, PyModule>) -> PyResult<()> {
     encoding::register(m)?; // RegistrySpec + all_specs/registry_sha/registry_sha_hex
     graph_contract::register(m)?; // verify_edge_geometry
     mcts::register(m)?; // MCTSTree + SelectionDesync
-    tactics::register(m)?; // TacticalSolver
     utils::register(m)?; // pool-overflow counters, armed-sims ceilings, graph_row_outcome
     inference::register(m)?; // InferenceBatcher + GraphWire + WireAlreadyConsumed
     runner::register(m)?; // SelfPlayRunnerConfig + SelfPlayRunner + RunnerDrainPoisoned

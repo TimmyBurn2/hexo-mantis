@@ -1,7 +1,7 @@
 """Consumer-less pyclass round-trips (O10, LOCKED #1).
 
 Every class with no Python consumer until WP8+ gets a pymethod round-trip here (the interim
-live consumer): HexgBuffer, GraphTargets, TacticalSolver, SelfPlayRunner(Config), MCTSTree,
+live consumer): HexgBuffer, GraphTargets, SelfPlayRunner(Config), MCTSTree,
 InferenceBatcher. `ReplayBuffer` was the seventh and went with the dense path.
 MCTSTree + InferenceBatcher get their DEPTH coverage in test_mcts_inference_roundtrip.py
 (O20); here they get a construction/round-trip smoke so no consumer-less class is
@@ -28,17 +28,6 @@ def test_hexg_buffer_and_graph_targets_round_trip():
     # GraphWire round-trips its scalar getters.
     assert wire.n_graphs == 1
     assert isinstance(wire.contract_version, int)
-
-
-def test_tactical_solver_prove_round_trip():
-    ts = _engine.TacticalSolver()
-    board = _engine.Board.with_encoding_name("gnn_axis_v1")
-    for q, r in [(0, 0), (1, 0), (0, 1), (2, 0), (0, 2)]:
-        board.apply_move(q, r)
-    result, moves, nodes = ts.prove(board, 3, 10_000)
-    assert isinstance(result, int)
-    assert isinstance(moves, list)
-    assert isinstance(nodes, int) and nodes >= 1
 
 
 def test_selfplay_runner_config_field_round_trip():

@@ -1214,3 +1214,20 @@ shipped and search cache off. Each deviation below lands in the commit that make
    stated against "Six gen 30". The panel is "External anchors: strix and Six". The follower's
    `--follow` reads the two ruler units (equal-work strix and Six); every other unit stays `--once`.
    Nothing is added to §4.7: the receipt is a dev-only tool's artifact, like strix's.
+
+### AMENDMENT — R377(a): the tactics module is REPLACED by the turn-level strictly forcing solver
+
+**The TACTICS-DEPLOY packet, 2026-09-28.** The grid/dense amendment's clause 5 kept
+`crates/mantis-search/src/tactics/`, the per-stone bounded minimax prover, as the instrument F-38 and
+F-39 were measured with. R377(a) makes Six's kind — a turn-level, strictly forcing threat-space
+search — the core and retires the per-stone solver when the module lands; TACTICS-DESIGN's T2 read it
+proving 0 of 8 966 quiet positions (`docs/design/TACTICS_DESIGN_2026-09-28.md` §0).
+
+1. **One module.** `mantis_search::tactics` is `analyze` (one turn's facts from window counts, which
+   `MCTSTree::apply_quiescence` reads) and `TurnSolver` (the strictly forcing search over its own
+   256 x 256 grid and a 128-bit-keyed table), pinned against Six's verdicts
+   (`tests/fixtures/tactics/turn_solver_goldens.jsonl`) and by an independent defence checker.
+2. **The old instrument leaves.** The per-stone solver, its bridge pyclass `TacticalSolver` and PROBE-1's
+   reading 4 (`tools/probe1.py proofs`, F-53's instrument) lived through `bd7bcde9`; a re-reading of any of
+   F-38, F-39 or F-53 with that instrument starts from that commit, under LAW-02. The turn-level reading 4
+   is TACTICS-SELFPLAY's (CARD-TACTICS-SELFPLAY).
