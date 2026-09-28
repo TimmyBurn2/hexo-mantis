@@ -11,6 +11,7 @@ use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criteri
 use mantis_core::board::Board;
 use mantis_core::BoardGeometry;
 use mantis_search::mcts::TacticsConfig;
+use mantis_search::tactics::analyze;
 use mantis_search::{LegalSetPolicy, MCTSTree};
 
 /// `gnn_axis_v1`'s geometry (crates/mantis-encoding/src/registry.toml): radius 6, trunk 19,
@@ -137,10 +138,38 @@ fn goldens_corpus() -> Vec<Board> {
         .collect()
 }
 
-/// 64 descents per corpus position with a uniform net: off, the wiring without the solver (H1) and with it (H1 + H2).
+/// H1 at equal work: each quiet corpus position selected and expanded once as a first leaf, tactics off and on.
 fn bench_tactics_leaf(c: &mut Criterion) {
-    let boards = goldens_corpus();
+    let quiet: Vec<Board> = goldens_corpus()
+        .into_iter()
+        .filter(|b| {
+            let facts = analyze(b);
+            !b.check_win() && facts.terminal.is_none() && facts.forced.is_empty()
+        })
+        .collect();
     let dense: Vec<f32> = vec![1.0 / POLICY_STRIDE as f32; POLICY_STRIDE];
+    // The ls half carries every off-window legal cell, as `expand_leaf`'s does; built untimed.
+    let leaves: Vec<(Board, LegalSetPolicy)> = quiet
+        .into_iter()
+        .map(|board| {
+            let legal = board.legal_moves();
+            let mut ls = LegalSetPolicy {
+                dense: dense.clone(),
+                ..LegalSetPolicy::default()
+            };
+            for &(q, r) in &legal {
+                if board.window_flat_idx(q, r) >= OFF_WINDOW_FLAT {
+                    ls.overflow.insert((q, r), 1.0 / legal.len() as f32);
+                }
+            }
+            (board, ls)
+        })
+        .collect();
+    let wide: Vec<(Board, LegalSetPolicy)> = leaves
+        .iter()
+        .filter(|(b, _)| b.ply.index() >= 80)
+        .cloned()
+        .collect();
     let leaf = TacticsConfig {
         leaf_turns: 2,
         leaf_nodes: 64,
@@ -149,36 +178,29 @@ fn bench_tactics_leaf(c: &mut Criterion) {
         audit: None,
     };
     let mut group = c.benchmark_group("tactics_leaf");
-    group.sample_size(10);
-    let no_solver = TacticsConfig {
-        leaf_nodes: 0,
-        ..leaf
-    };
-    for (name, armed) in [
-        ("off", None),
-        ("on_no_solver", Some(no_solver)),
-        ("on", Some(leaf)),
-    ] {
-        let mut tree = MCTSTree::new(1.5);
-        tree.configure_tactics(armed);
-        group.bench_function(name, |b| {
-            b.iter(|| {
-                for board in &boards {
-                    tree.new_game(board.clone());
-                    let mut done = 0;
-                    while done < 64 {
-                        let leaves = tree.select_leaves(8.min(64 - done)).expect("no desync");
-                        let inline = tree.last_inline_descents();
-                        if leaves.is_empty() && inline == 0 {
-                            break;
-                        }
-                        let policies = vec![dense.clone(); leaves.len()];
-                        tree.expand_and_backup(&policies, &vec![0.0; leaves.len()]);
-                        done += leaves.len() + inline;
+    group.sample_size(20);
+    for (set, corpus) in [("quiet", &leaves), ("quiet_ge80", &wide)] {
+        for (arm, armed) in [("off", None), ("on", Some(leaf))] {
+            let mut tree = MCTSTree::new(1.5);
+            tree.configure_tactics(armed);
+            let id = BenchmarkId::new(format!("{arm}/{set}"), corpus.len());
+            group.bench_with_input(id, corpus, |b, corpus| {
+                b.iter(|| {
+                    for (board, ls) in corpus.iter() {
+                        tree.new_game(board.clone());
+                        let picked = tree.select_leaves(1).expect("a root selects itself");
+                        assert_eq!(picked.len(), 1, "a quiet root goes to the net");
+                        let trunk = board.cluster_window_size() as i32;
+                        tree.expand_and_backup_ls_at(
+                            std::slice::from_ref(ls),
+                            &[0.0],
+                            &[board.window_center()],
+                            trunk,
+                        );
                     }
-                }
+                });
             });
-        });
+        }
     }
     group.finish();
 }
