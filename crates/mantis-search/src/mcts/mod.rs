@@ -21,6 +21,9 @@ pub mod node;
 pub mod policy;
 mod selection;
 pub mod seq_halving;
+#[cfg(test)]
+mod tactics_fixtures;
+mod tactics_root;
 pub mod tactics_wiring;
 
 pub(crate) use backup::OmittedPriorStats;

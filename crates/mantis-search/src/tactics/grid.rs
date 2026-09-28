@@ -55,6 +55,20 @@ pub(crate) fn stone_key(q: i32, r: i32, side: Side) -> u128 {
     (u128::from(hi) << 64) | u128::from(lo)
 }
 
+/// A position's key: its stones' `stone_key`s XORed, so a stone moves it by its own key.
+pub(crate) fn position_key(board: &Board) -> u128 {
+    board.cells_iter().fold(0, |k, (&(q, r), &c)| match c {
+        Cell::P1 => k ^ stone_key(q, r, Side::P1),
+        Cell::P2 => k ^ stone_key(q, r, Side::P2),
+        Cell::Empty => k,
+    })
+}
+
+/// `key` with `player`'s stone at `cell` added.
+pub(crate) fn with_stone(key: u128, (q, r): (i32, i32), player: mantis_core::Player) -> u128 {
+    key ^ stone_key(q, r, Side::of(player))
+}
+
 /// Which list a pure window sits in: four or more of a side's stones, exactly three, exactly two.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Kind {
@@ -373,12 +387,11 @@ mod tests {
                     "seed {seed} side {side:?}"
                 );
             }
-            let want = board.cells_iter().fold(0u128, |k, (&(q, r), &c)| match c {
-                Cell::P1 => k ^ stone_key(q, r, Side::P1),
-                Cell::P2 => k ^ stone_key(q, r, Side::P2),
-                Cell::Empty => k,
-            });
-            assert_eq!(grid.key(), want, "the key is the XOR of the stones' keys");
+            assert_eq!(
+                grid.key(),
+                position_key(&board),
+                "the grid's key is the position's"
+            );
             grid.unload();
         }
     }
@@ -443,6 +456,17 @@ mod tests {
         for &(q, r) in &[(-10, 4), (-9, 10), (-7, 10), (11, 2), (13, -6)] {
             assert_ne!(stone_key(q, r, Side::P1), stone_key(-q, -r, Side::P1));
         }
+    }
+
+    #[test]
+    fn a_stone_moves_the_position_key_by_its_own_key() {
+        let mut board = position(0xabc, 20);
+        let key = position_key(&board);
+        let mover = board.current_player;
+        let cell = *board.legal_moves_set().iter().min().expect("a legal cell");
+        board.apply_move(cell.0, cell.1).expect("legal");
+        assert_eq!(with_stone(key, cell, mover), position_key(&board));
+        assert_ne!(key, position_key(&board));
     }
 
     #[test]

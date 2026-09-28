@@ -8,4 +8,5 @@ pub mod solver;
 pub(crate) mod table;
 
 pub use analyze::{analyze, LeafTactics, Terminal};
+pub(crate) use grid::{position_key, with_stone};
 pub use solver::{Solved, Turn, TurnSolver, Verdict};

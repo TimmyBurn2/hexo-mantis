@@ -122,6 +122,10 @@ pub(crate) struct TacticsState {
     pub(crate) counters: TacticsCounters,
     /// The solver's cumulative edge and cap rows when this search began.
     pub(crate) solver_base: (u64, u64),
+    /// The proof's second stone the offence owes the next call, on the key of the position after its first.
+    pub(crate) next_proof_stone: Option<(u128, (i32, i32))>,
+    /// The second stone that held for the audit's first stone, tried first by the next call on that key.
+    pub(crate) next_hold_stone: Option<(u128, (i32, i32))>,
 }
 
 /// How a descent's leaf is spent: backed up inline, or evaluated by the net with the facts its expansion reads.
@@ -146,6 +150,8 @@ impl MCTSTree {
                 solver: TurnSolver::new(TACTICS_TABLE_ENTRIES),
                 counters: TacticsCounters::default(),
                 solver_base: (0, 0),
+                next_proof_stone: None,
+                next_hold_stone: None,
             })
         });
     }
@@ -253,6 +259,7 @@ impl MCTSTree {
 mod tests {
     use super::*;
     use crate::mcts::node::{pack_cell, Node};
+    use crate::mcts::tactics_fixtures::{played, FIX219, P1_FOUR, P2_FOUR_ONE_LEFT};
     use crate::tactics::Terminal;
 
     /// The design's leaf budgets with no root offence or audit: what the leaf wiring alone reads.
@@ -263,64 +270,6 @@ mod tests {
         root_nodes: 0,
         audit: None,
     };
-
-    /// T2's `fix219@17`: P2 to move with two stones holds a one-turn strict win at (-4, -11), (-4, -10).
-    const FIX219: [(i32, i32); 17] = [
-        (-1, -8),
-        (-4, -8),
-        (-4, -9),
-        (-5, -8),
-        (0, -10),
-        (1, -13),
-        (-6, -9),
-        (-5, -7),
-        (3, -13),
-        (-6, -12),
-        (-5, -10),
-        (-6, -15),
-        (4, -16),
-        (-1, -14),
-        (2, -15),
-        (-13, 0),
-        (-10, 0),
-    ];
-
-    /// P1's four (0..3, 0) and P2's scatter; P1 is to move with two stones after the last.
-    const P1_FOUR: [(i32, i32); 11] = [
-        (0, 0),
-        (20, 20),
-        (22, 20),
-        (1, 0),
-        (2, 0),
-        (20, 24),
-        (22, 24),
-        (3, 0),
-        (-9, 9),
-        (30, 30),
-        (32, 30),
-    ];
-
-    /// P2's open four at (10..13, 5); after the last stone P1 is to move with ONE stone.
-    const P2_FOUR_ONE_LEFT: [(i32, i32); 8] = [
-        (0, 0),
-        (10, 5),
-        (11, 5),
-        (1, 0),
-        (2, 0),
-        (12, 5),
-        (13, 5),
-        (-5, 0),
-    ];
-
-    fn played(seq: &[(i32, i32)]) -> Board {
-        let mut b = Board::new();
-        b.set_legal_move_radius(8);
-        for &(q, r) in seq {
-            b.apply_move(q, r)
-                .expect("a test sequence places on empty cells");
-        }
-        b
-    }
 
     /// A tactics-armed tree at `seq[..root]` with one node path down the rest: the tree, its leaf and the leaf's board.
     fn path_to_leaf(
