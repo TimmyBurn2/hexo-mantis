@@ -191,6 +191,7 @@ class _RoundGameRecords:
                 candidate_color=colour, seed=seed, served_sims=served_sims,
                 trajectory_hash=getattr(game_record, "trajectory_hash", None),
                 search_stats=getattr(game_record, "search_stats", None),
+                candidate_tactics=getattr(game_record, "candidate_tactics", None),
             ))
         return _record
 

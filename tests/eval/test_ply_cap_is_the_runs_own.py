@@ -50,7 +50,7 @@ def _board_factory() -> Any:
 def test_a_game_ends_at_the_cap_it_was_given(cap: int) -> None:
     """The audit's own pin, generalised to three values. ONE value would pass against a
     surviving 128-literal if it happened to be 128; three cannot."""
-    winner, plies, moves, terminal, _adj, stats = _play_one_game(
+    winner, plies, moves, terminal, _adj, stats, tactics = _play_one_game(
         _FirstLegalBot(), _FirstLegalBot(), [],
         candidate_color=1, board_factory=_board_factory, max_plies=cap,
         opening_id="<no opening>",
@@ -60,6 +60,7 @@ def test_a_game_ends_at_the_cap_it_was_given(cap: int) -> None:
         "an empty tuple would say the candidate played no plies, which is a different fact "
         "(R344(b))"
     )
+    assert tactics is None, "neither bot exposes tactics rows"
     assert plies == cap, f"asked for a {cap}-ply cap, played {plies}"
     assert len(moves) == cap
     assert winner == "draw" and terminal == "ply_cap", (

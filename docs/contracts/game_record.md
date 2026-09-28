@@ -70,6 +70,9 @@ absence rather than guessing.
 Eval only: `rung`, `phase`, `game_index`, `colors` (`{candidate, opponent}` seats) and
 `trajectory_hash`. `search_stats` appears on BOTH channels since R355(d): on eval when the
 candidate's search exposed its root, on self-play for a SAMPLED game (the shape is below).
+`candidate_tactics` (eval, TACTICS-DEPLOY) is present iff the candidate's head ran a tactics block: its
+`MCTSTree.tactics_counters` rows summed over the game, plus `moves` and `decided_moves` (stones played with
+no search); a record without it is a game the module did not play in.
 
 **`game_index` JOINS a record to its progress row.** The round's progress writer and this one
 are fed from ONE fan-out in loop order, so their per-round counters advance in lockstep and a

@@ -63,6 +63,9 @@ class GameRecord:
     #: and `()` are different facts that both occur: `None` is "nobody could produce these", `()`
     #: is "nobody who could, moved".
     search_stats: tuple[dict[str, Any], ...] | None
+    #: The candidate's tactics rows summed over its moves, with `moves` and `decided_moves` (played with no search);
+    #: `None` when the candidate exposes none (tactics off, or no deploy head).
+    candidate_tactics: dict[str, int] | None = None
 
 
 def _trajectory_hash(moves: Iterable[tuple[int, int]]) -> str:
@@ -80,6 +83,19 @@ def _trajectory_hash(moves: Iterable[tuple[int, int]]) -> str:
 DEFAULT_MAX_PLIES = 128
 
 
+def _add_tactics(total: dict[str, int] | None, player: Any) -> dict[str, int] | None:
+    """`total` plus `player`'s last move's tactics rows; `None` while the player exposes none."""
+    rows = getattr(player, "last_tactics", None)
+    if rows is None:
+        return total
+    out = dict(total or {})
+    for key, value in rows.items():
+        out[key] = out.get(key, 0) + int(value)
+    out["moves"] = out.get("moves", 0) + 1
+    out["decided_moves"] = out.get("decided_moves", 0) + int(getattr(player, "last_sims", 0) == 0)
+    return out
+
+
 def _play_one_game(
     candidate_player: Any,
     opponent_bot: Any,
@@ -90,9 +106,10 @@ def _play_one_game(
     max_plies: int,
     opening_id: str,
     adjudicator: PlyCapAdjudicator | None = None,
-) -> tuple[str, int, tuple[tuple[int, int], ...], str, PlyCapVerdict | None, tuple[dict[str, Any], ...] | None]:
+) -> tuple[str, int, tuple[tuple[int, int], ...], str, PlyCapVerdict | None, tuple[dict[str, Any], ...] | None,
+           dict[str, int] | None]:
     """Play one game from `opening_moves`; return
-    `(winner, plies, all_moves, terminal, adjudication, search_stats)`.
+    `(winner, plies, all_moves, terminal, adjudication, search_stats, candidate_tactics)`.
 
     Both players' `new_game()` fire before the opening is replayed; play then alternates argmax
     move selection. A game reaching `max_plies` without a winner ends a draw when `adjudicator is
@@ -131,6 +148,7 @@ def _play_one_game(
     #: `None`, which says so.
     stats: list[dict[str, Any]] = []
     saw_a_root = False
+    tactics: dict[str, int] | None = None
     while (
         not board.check_win()
         and board.legal_move_count() > 0
@@ -139,6 +157,8 @@ def _play_one_game(
         current = board.current_player
         mover = candidate_player if current == candidate_color else opponent_bot
         q, r = mover.select_move(board)
+        if mover is candidate_player:
+            tactics = _add_tactics(tactics, candidate_player)
         # THE LEGALITY BOUNDARY, checked BEFORE `apply_move`, because `apply_move` refuses an
         # occupied cell and nothing else: an off-radius coordinate was accepted, played on and
         # scored. Cheap here and only here — the `while` condition has just rebuilt the engine's
@@ -147,7 +167,7 @@ def _play_one_game(
             forfeiting = "candidate" if mover is candidate_player else "opponent"
             winner = "opponent" if forfeiting == "candidate" else "candidate"
             return (winner, len(moves), tuple(moves), TERMINAL_FORFEIT, None,
-                    tuple(stats) if saw_a_root else None)
+                    tuple(stats) if saw_a_root else None, tactics)
         root = getattr(mover, "last_root", None)
         if root is not None:
             saw_a_root = True
@@ -192,7 +212,7 @@ def _play_one_game(
         winner = "draw"
         terminal = TERMINAL_EXHAUSTED
     return (winner, plies, tuple(moves), terminal, adjudication,
-            tuple(stats) if saw_a_root else None)
+            tuple(stats) if saw_a_root else None, tactics)
 
 
 def _record_one(
@@ -213,7 +233,7 @@ def _record_one(
         Exception: whatever the players' `select_move` or the board raises; nothing is caught
             here, so a defect in one game is not converted into a silently missing record.
     """
-    winner, plies, moves, terminal, adjudication, stats = _play_one_game(
+    winner, plies, moves, terminal, adjudication, stats, tactics = _play_one_game(
         candidate_player, opponent_bot, list(opening.moves),
         candidate_color=candidate_color, board_factory=board_factory,
         max_plies=max_plies, opening_id=str(opening.opening_id), adjudicator=adjudicator,
@@ -229,6 +249,7 @@ def _record_one(
         terminal=terminal,
         adjudication=adjudication,
         search_stats=stats,
+        candidate_tactics=tactics,
     )
 
 
