@@ -272,8 +272,7 @@ impl TacticsState {
 }
 
 impl MCTSTree {
-    /// Before the search: a finish, the last call's proof stone or a new proof's first stone, played unsearched;
-    /// `None` searches. A decided stone off the legal set is `TacticsError::ProofStoneIllegal`, counted.
+    /// Before the search: a finish, the last call's proof stone or a new proof's first stone (unsearched), else `None`.
     pub fn root_offence(&mut self) -> Result<Option<(i32, i32)>, TacticsError> {
         let root = &self.root_board;
         let Some(t) = self.tactics.as_deref_mut() else {
