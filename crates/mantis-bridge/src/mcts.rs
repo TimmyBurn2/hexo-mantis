@@ -9,7 +9,7 @@
 use numpy::{IntoPyArray, PyArray1};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use pyo3::types::{PyBool, PyDict};
 
 use mantis_core::board::BOARD_SIZE;
 use mantis_core::Board;
@@ -181,7 +181,7 @@ impl PyMCTSTree {
         Ok(())
     }
 
-    /// Arm the resolved tactics block (`tactics_config_of`) or disarm with None. Raises: ValueError on a bad key or kind.
+    /// Arm the resolved tactics block or disarm with None. Raises: TypeError (not a dict), ValueError (a bad key or leaf).
     pub fn configure_tactics(&mut self, block: Option<&Bound<'_, PyDict>>) -> PyResult<()> {
         let config = block.map(tactics_config_of).transpose()?;
         self.inner.configure_tactics(config);
@@ -487,7 +487,10 @@ fn exact_keys(d: &Bound<'_, PyDict>, what: &str, want: &[&str]) -> PyResult<()> 
     let mut got: Vec<String> = d
         .keys()
         .iter()
-        .map(|k| k.extract::<String>())
+        .map(|k| {
+            k.extract::<String>()
+                .map_err(|_| PyValueError::new_err(format!("{what}: a key is not a string")))
+        })
         .collect::<PyResult<_>>()?;
     got.sort();
     let mut expected: Vec<String> = want.iter().map(|s| (*s).to_string()).collect();
@@ -505,15 +508,24 @@ fn int_leaf(d: &Bound<'_, PyDict>, what: &str, key: &str, lo: i64, hi: i64) -> P
     let value = d
         .get_item(key)?
         .ok_or_else(|| PyValueError::new_err(format!("{what}: {key} is missing")))?;
-    let n: i64 = value
-        .extract()
-        .map_err(|_| PyValueError::new_err(format!("{what}: {key} is not an integer")))?;
+    // A bool is an int to Python; a block that says `True` for a count is refused, not read as 1.
+    let n: i64 = (!value.is_instance_of::<PyBool>())
+        .then(|| value.extract().ok())
+        .flatten()
+        .ok_or_else(|| PyValueError::new_err(format!("{what}: {key} is not an integer")))?;
     if !(lo..=hi).contains(&n) {
         return Err(PyValueError::new_err(format!(
             "{what}: {key}={n} is outside [{lo}, {hi}]"
         )));
     }
     Ok(n)
+}
+
+/// A string leaf of `d`, refused by name when absent or not a string.
+fn str_leaf(d: &Bound<'_, PyDict>, what: &str, key: &str) -> PyResult<String> {
+    d.get_item(key)?
+        .and_then(|v| v.extract::<String>().ok())
+        .ok_or_else(|| PyValueError::new_err(format!("{what}: {key} is not a string")))
 }
 
 /// The block's `kind`, `leaf_*`, `root_*` and `audit` (None, or `turns nodes k m total_nodes mode`), each checked.
@@ -532,11 +544,7 @@ fn tactics_config_of(d: &Bound<'_, PyDict>) -> PyResult<TacticsConfig> {
             "audit",
         ],
     )?;
-    let kind: String = d
-        .get_item("kind")?
-        .map(|k| k.extract::<String>())
-        .transpose()?
-        .unwrap_or_default();
+    let kind = str_leaf(d, what, "kind")?;
     if kind != TACTICS_KIND {
         return Err(PyValueError::new_err(format!(
             "{what}: kind {kind:?} is not one this build runs ({TACTICS_KIND:?})"
@@ -553,11 +561,7 @@ fn tactics_config_of(d: &Bound<'_, PyDict>) -> PyResult<TacticsConfig> {
                 what,
                 &["turns", "nodes", "k", "m", "total_nodes", "mode"],
             )?;
-            let mode: String = a
-                .get_item("mode")?
-                .map(|m| m.extract::<String>())
-                .transpose()?
-                .unwrap_or_default();
+            let mode = str_leaf(&a, what, "mode")?;
             let mode = match mode.as_str() {
                 "hold" => AuditMode::Hold,
                 "inverted" => AuditMode::Inverted,

@@ -174,7 +174,12 @@ class MCTSTree:
     def new_game(self, board: Board) -> None:
         """Raises ValueError when tactics are armed and the board's legal-move radius is below 5."""
     def configure_tactics(self, block: dict[str, Any] | None) -> None:
-        """Arm the resolved tactics block, or disarm with None. Raises ValueError on a bad key."""
+        """Arm the resolved tactics block, or disarm with None.
+
+        Raises:
+            TypeError: `block` is neither a dict nor None.
+            ValueError: a key, kind, mode or leaf the block may not carry.
+        """
     @property
     def tactics_armed(self) -> bool: ...
     def last_inline_descents(self) -> int: ...
