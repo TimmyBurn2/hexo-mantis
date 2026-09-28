@@ -206,3 +206,13 @@ def test_a_cell_that_played_another_runtime_is_a_failed_cell(follower) -> None:
     played = {"engine_sha256": ["e"], "net_sha256": ["n"], "runtime_sha256": ["other"]}
     assert "runtime_sha256" in follower.played_bytes_error({"six_engine": played}, pin)
     assert follower.played_bytes_error({"six_engine": {**played, "runtime_sha256": ["r"]}}, pin) is None
+
+
+def test_a_cell_that_exits_without_an_error_names_its_rc(follower, tmp_path: Path) -> None:
+    ckpt = tmp_path / "run8_00045000_deadbeef.ckpt"
+    ckpt.write_bytes(b"w")
+    run = follower.Follower(run_dir=tmp_path, run_id="run8", run_cell=lambda cell: {"label": "l", "rc": 1, "wall_sec": 1.0},
+                            unit="six30_16", pin={}, clock=lambda: 0.0, log=lambda _s: None,
+                            host_load=lambda: follower.HostLoad(load_1m=0.0, cpu_count=16, gpu_util_pct=(0,)))
+    status, path = run.read_one(ckpt, trigger="once")
+    assert status == "failed" and "rc 1" in json.loads(path.read_text(encoding="utf-8"))["error"]
