@@ -141,6 +141,8 @@ pub(crate) struct WorkerParams {
     pub(crate) registry_spec: &'static RegistrySpec,
     pub(crate) search_flags: SearchFlags,
     pub(crate) exploration_flags: ExplorationFlags,
+    /// The tactics block the worker's tree runs; `None` is off.
+    pub(crate) tactics: Option<mantis_search::mcts::TacticsConfig>,
 }
 
 #[cfg(test)]

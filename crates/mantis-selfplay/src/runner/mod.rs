@@ -108,6 +108,8 @@ pub struct RunnerStatsSnapshot {
     pub served_leaves_total: u64,
     /// Leaves that went to the GPU: `served_leaves_total` less the exact eval cache's hits.
     pub gpu_evals_total: u64,
+    /// Descents the tactics wiring backed up inline, no leaf served: with `served_leaves_total`, every descent.
+    pub inline_descents_total: u64,
     /// Worker threads that died by panic (must read 0 in a healthy run).
     pub worker_panics: u64,
 }
@@ -164,6 +166,7 @@ pub struct SelfPlayRunner {
     inference_failures_total: Arc<AtomicU64>,
     served_leaves_total: Arc<AtomicU64>,
     gpu_evals_total: Arc<AtomicU64>,
+    inline_descents_total: Arc<AtomicU64>,
     /// The monotonic graph-game id source. See `WorkerAtomics::graph_game_seq`.
     graph_game_seq: Arc<AtomicU64>,
     /// The fatal-defect latch: a worker panic is NOT loud, since `stop()` swallows join results,
@@ -286,6 +289,13 @@ impl SelfPlayRunner {
 
         let geometry =
             params::resolve_geometry(spec).map_err(|e| format!("SelfPlayRunner: {e}"))?;
+        let radius = spec.legal_move_radius as i32;
+        if config.tactics.is_some() && radius < mantis_search::mcts::MIN_TACTICS_RADIUS {
+            return Err(format!(
+                "SelfPlayRunner: {}",
+                mantis_search::mcts::TacticsError::RadiusBelowFive { radius }
+            ));
+        }
 
         // Bake the resolved budget so the workers read the effective value.
         config.standard_sims = effective_standard;
@@ -332,6 +342,7 @@ impl SelfPlayRunner {
             inference_failures_total: Arc::new(AtomicU64::new(0)),
             served_leaves_total: Arc::new(AtomicU64::new(0)),
             gpu_evals_total: Arc::new(AtomicU64::new(0)),
+            inline_descents_total: Arc::new(AtomicU64::new(0)),
             graph_game_seq: Arc::new(AtomicU64::new(0)),
             fatal_defect: Arc::new(Mutex::new(None)),
         })
@@ -446,6 +457,7 @@ impl SelfPlayRunner {
             inference_failures_total: self.inference_failures_total.load(Ordering::Relaxed),
             served_leaves_total: self.served_leaves_total.load(Ordering::Relaxed),
             gpu_evals_total: self.gpu_evals_total.load(Ordering::Relaxed),
+            inline_descents_total: self.inline_descents_total.load(Ordering::Relaxed),
             worker_panics: self.worker_panics.load(Ordering::Relaxed),
         }
     }
@@ -657,6 +669,7 @@ mod seam_roundtrip {
         r.inference_failures_total.store(36, Ordering::Relaxed);
         r.served_leaves_total.store(42, Ordering::Relaxed);
         r.gpu_evals_total.store(43, Ordering::Relaxed);
+        r.inline_descents_total.store(44, Ordering::Relaxed);
 
         let expected = RunnerStatsSnapshot {
             games_completed: 1,
@@ -680,6 +693,7 @@ mod seam_roundtrip {
             inference_failures_total: 36,
             served_leaves_total: 42,
             gpu_evals_total: 43,
+            inline_descents_total: 44,
             worker_panics: 25,
         };
         assert_eq!(

@@ -7,6 +7,7 @@
 //! can write `..Default::default()`. It is NOT a config default-authority: the sole
 //! authoritative defaults live in the Python schema.
 
+use mantis_search::mcts::TacticsConfig;
 use mantis_search::SearchKind;
 
 /// Configuration for [`super::SelfPlayRunner`], pyo3-free.
@@ -57,6 +58,8 @@ pub struct SelfPlayRunnerConfig {
     pub encoding_name: Option<String>,
     /// Entries of the exact per-net eval cache the workers share; `0` turns it off.
     pub eval_cache_capacity: usize,
+    /// The tactics block each worker's tree runs; `None` is off, and the bridge sets `None` (TACTICS-SELFPLAY arms it).
+    pub tactics: Option<TacticsConfig>,
 }
 
 /// **TEST-SCAFFOLDING ONLY**, not a config default-authority. Manual rather than derived: a
@@ -98,6 +101,7 @@ impl Default for SelfPlayRunnerConfig {
             search_stats_every: 0,
             encoding_name: None,
             eval_cache_capacity: 0,
+            tactics: None,
         }
     }
 }

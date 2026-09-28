@@ -42,6 +42,8 @@ pub(crate) struct InferContext<'a> {
     /// Leaves expanded, and the ones of those the GPU served (the rest were exact cache hits).
     pub(crate) served_leaves: &'a AtomicU64,
     pub(crate) gpu_evals: &'a AtomicU64,
+    /// Descents the tactics wiring backed up inline: no leaf, no inference.
+    pub(crate) inline_descents: &'a AtomicU64,
 }
 
 /// Per-move MCTS accumulators. `export_offwindow_mass_moves` fires once per move whose
@@ -237,23 +239,27 @@ fn select_for(
 
 /// Builds ONE axis graph per evaluated leaf, replays the eval cache's hits, submits the misses in
 /// ONE `submit_graphs_and_wait`, and expands against the BUILDER's per-leaf `window_center`.
+/// Returns `(served leaves, inline descents)`: with tactics armed a descent can end at a decided leaf.
 ///
 /// # Errors
 /// A selection refusal, a build-guard trip or a leaf inference that FAILS on an OPEN queue is a
-/// named [`InferenceSeamFailure`]; an empty leaf set, or a failure after our own `stop()`, is
-/// `Ok(0)`.
+/// named [`InferenceSeamFailure`]; an empty leaf set, or a failure after our own `stop()`, serves 0.
 // No `#[cold]`: this is the only inference path there is.
 fn infer_and_expand_graph(
     tree: &mut MCTSTree,
     selection: LeafSelection<'_>,
     agg_trunk_sz: i32,
     infer: InferContext,
-) -> Result<usize, InferenceSeamFailure> {
+) -> Result<(usize, usize), InferenceSeamFailure> {
     // A tree/board desync or a foreign forced child is a NAMED run-fatal seam failure, not a panic.
     let leaves = select_for(tree, selection)
         .map_err(|err| InferenceSeamFailure::new("graph", "selection", err.to_string()))?;
+    let inline = tree.last_inline_descents();
+    infer
+        .inline_descents
+        .fetch_add(inline as u64, Ordering::Relaxed);
     if leaves.is_empty() {
-        return Ok(0);
+        return Ok((0, inline));
     }
 
     let (win_length, radius) = (infer.win_length, infer.graph_radius);
@@ -318,6 +324,7 @@ fn infer_and_expand_graph(
             Ok(pair) => fresh.push(pair),
             Err(reason) => {
                 return seam_or_shutdown(infer.running, "graph", "submit_graphs_and_wait", reason)
+                    .map(|served| (served, inline))
             }
         }
     }
@@ -331,7 +338,8 @@ fn infer_and_expand_graph(
                 fresh.len(),
                 n_misses
             ),
-        );
+        )
+        .map(|served| (served, inline));
     }
     // A bump during the wait means these forwards may straddle two nets: serve them, store none.
     let storable = infer.model_version.load(Ordering::Acquire) == version;
@@ -366,7 +374,8 @@ fn infer_and_expand_graph(
                 aggregated_ls.len(),
                 leaves.len()
             ),
-        );
+        )
+        .map(|served| (served, inline));
     }
     infer
         .served_leaves
@@ -383,7 +392,7 @@ fn infer_and_expand_graph(
         "graph trunk mismatch: spec agg_trunk_sz vs spec graph trunk_size"
     );
     tree.expand_and_backup_ls_at(&aggregated_ls, &aggregated_values, &centers, agg_trunk_sz);
-    Ok(n)
+    Ok((n, inline))
 }
 
 /// Two-branch dispatcher on the ONE search kind: Gumbel (Gumbel-Top-k root sampling +
@@ -409,10 +418,11 @@ fn run_mcts_search(
     infer: InferContext,
     rounds: GumbelRoundCounters,
 ) -> McTSSearchResult {
-    // Both kinds open with ONE leaf, the root itself, charged against the budget on both arms.
+    // Both kinds open with ONE leaf, the root itself, charged against the budget on both arms; the
+    // root is never decided inline, so this descent is always served.
     let root_sims = match infer_and_expand_graph(tree, LeafSelection::Batch(1), agg_trunk_sz, infer)
     {
-        Ok(n) => n,
+        Ok((served, inline)) => served + inline,
         Err(e) => return McTSSearchResult::InferenceFailed(e),
     };
     if root_sims == 0 || !tree.pool[0].is_expanded() {
@@ -443,7 +453,7 @@ fn run_mcts_search(
                     agg_trunk_sz,
                     infer,
                 ) {
-                    Ok(n) => n,
+                    Ok((served, inline)) => served + inline,
                     Err(e) => return McTSSearchResult::InferenceFailed(e),
                 };
                 if n == 0 {
@@ -496,7 +506,7 @@ fn run_mcts_search(
                     agg_trunk_sz,
                     infer,
                 ) {
-                    Ok(n) => n,
+                    Ok((served, inline)) => served + inline,
                     Err(e) => return McTSSearchResult::InferenceFailed(e),
                 };
                 if n == 0 {
@@ -797,6 +807,7 @@ mod forced_round_tests {
             graph_radius: geometry.graph_radius,
             served_leaves: &AtomicU64::new(0),
             gpu_evals: &AtomicU64::new(0),
+            inline_descents: &AtomicU64::new(0),
         };
         let err = infer_and_expand_graph(&mut tree, LeafSelection::Round(&[u32::MAX]), 19, infer)
             .expect_err("a foreign forced child must be refused");
@@ -866,6 +877,7 @@ mod forced_round_tests {
                 graph_radius: geometry.graph_radius,
                 served_leaves: &AtomicU64::new(0),
                 gpu_evals: &AtomicU64::new(0),
+                inline_descents: &AtomicU64::new(0),
             };
             if let Err(err) = infer_and_expand_graph(&mut tree, LeafSelection::Batch(1), 19, infer)
             {

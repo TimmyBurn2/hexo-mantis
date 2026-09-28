@@ -8,6 +8,7 @@
 //!   3. The `Default` impl is test scaffolding, not the config authority: a bare `Default`
 //!      leaves the identity key unset and cannot construct a runner.
 
+use mantis_search::mcts::{AuditConfig, AuditMode, TacticsConfig};
 use mantis_search::SearchKind;
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
@@ -54,8 +55,25 @@ fn distinct_sentinels() -> SelfPlayRunnerConfig {
         search_stats_every: 5,
         encoding_name: Some("gnn_axis_r8".to_string()),
         eval_cache_capacity: 4096,
+        tactics: Some(SENTINEL_TACTICS),
     }
 }
+
+/// Every leaf a distinct value, the audit armed, so a dropped or crossed tactics leaf shows.
+const SENTINEL_TACTICS: TacticsConfig = TacticsConfig {
+    leaf_turns: 3,
+    leaf_nodes: 65,
+    root_turns: 7,
+    root_nodes: 20_001,
+    audit: Some(AuditConfig {
+        turns: 5,
+        nodes: 999,
+        k: 4,
+        m: 2,
+        total_nodes: 12_345,
+        mode: AuditMode::Hold,
+    }),
+};
 
 /// Prove every field maps to exactly one slot and no killed field is back.
 ///
@@ -99,6 +117,7 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
         search_stats_every,
         encoding_name,
         eval_cache_capacity,
+        tactics,
     } = cfg;
 
     assert_eq!(n_workers, 7);
@@ -133,6 +152,7 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
     assert_eq!(search_stats_every, 5);
     assert_eq!(encoding_name, Some("gnn_axis_r8".to_string()));
     assert_eq!(eval_cache_capacity, 4096);
+    assert_eq!(tactics, Some(SENTINEL_TACTICS));
 }
 
 /// Prove the ctor accepts the sentinel config and exposes spec-derived shapes.

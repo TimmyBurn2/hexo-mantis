@@ -119,6 +119,7 @@ impl SelfPlayRunner {
             inference_failures_total: self.inference_failures_total.clone(),
             served_leaves_total: self.served_leaves_total.clone(),
             gpu_evals_total: self.gpu_evals_total.clone(),
+            inline_descents_total: self.inline_descents_total.clone(),
             graph_game_seq: self.graph_game_seq.clone(),
         };
         let channels_proto = WorkerChannels {
@@ -163,6 +164,7 @@ impl SelfPlayRunner {
             exploration_flags: ExplorationFlags {
                 dirichlet_enabled: c.dirichlet_enabled,
             },
+            tactics: c.tactics,
         };
         (stats_proto, atomics_proto, channels_proto, params_proto)
     }

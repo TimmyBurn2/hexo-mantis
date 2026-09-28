@@ -236,6 +236,8 @@ impl PySelfPlayRunner {
         // Every production runner serves through the exact eval cache; the Rust default is off.
         let rust_config = SelfPlayRunnerConfig {
             eval_cache_capacity: EVAL_CACHE_CAPACITY,
+            // The self-play path's tactics are TACTICS-SELFPLAY's to arm, with the proof targets.
+            tactics: None,
             ..config.to_rust()
         };
         let encoding_name = rust_config.encoding_name.clone();

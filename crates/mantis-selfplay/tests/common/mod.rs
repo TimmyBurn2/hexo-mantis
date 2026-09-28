@@ -27,6 +27,42 @@ pub fn spawn_uniform_producer(
     served: Arc<AtomicUsize>,
     pop_max: usize,
 ) -> JoinHandle<()> {
+    spawn_producer(queue, n_actions, served, pop_max, |coords| {
+        vec![1.0f32 / coords.len().max(1) as f32; coords.len()]
+    })
+}
+
+/// A compact-play mock server: its prior decays from the legal region's centroid, so decided positions come fast.
+pub fn spawn_compact_producer(
+    queue: GraphQueue,
+    n_actions: usize,
+    served: Arc<AtomicUsize>,
+    pop_max: usize,
+) -> JoinHandle<()> {
+    spawn_producer(queue, n_actions, served, pop_max, |coords| {
+        let n = coords.len().max(1) as f32;
+        let cq = coords.iter().map(|c| c.0 as f32).sum::<f32>() / n;
+        let cr = coords.iter().map(|c| c.1 as f32).sum::<f32>() / n;
+        let raw: Vec<f32> = coords
+            .iter()
+            .map(|&(q, r)| {
+                let (dq, dr) = (q as f32 - cq, r as f32 - cr);
+                let d = (dq.abs() + dr.abs() + (dq + dr).abs()) / 2.0;
+                (-1.5 * d).exp()
+            })
+            .collect();
+        let total: f32 = raw.iter().sum();
+        raw.into_iter().map(|x| x / total).collect()
+    })
+}
+
+fn spawn_producer(
+    queue: GraphQueue,
+    n_actions: usize,
+    served: Arc<AtomicUsize>,
+    pop_max: usize,
+    prior: fn(&[(i32, i32)]) -> Vec<f32>,
+) -> JoinHandle<()> {
     thread::spawn(move || loop {
         let batch = queue.pop_graph_batch(pop_max, 5);
         if batch.is_empty() {
@@ -48,8 +84,7 @@ pub fn spawn_uniform_producer(
                     )
                 })
                 .collect();
-            let n = coords.len();
-            let probs = vec![1.0f32 / n.max(1) as f32; n];
+            let probs = prior(&coords);
             ids.push(id);
             results.push(
                 assemble_ls_from_gnn_probs(n_actions, &probs, &g.policy_scatter_index.0, &coords)

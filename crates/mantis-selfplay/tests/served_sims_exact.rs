@@ -1,7 +1,7 @@
-//! A search serves EXACTLY `n_simulations` leaves, never more and never fewer.
+//! A search spends EXACTLY `n_simulations` descents, never more and never fewer.
 //!
-//! `N` means `N leaves of network work` on both arms, root evaluation included: a fixed-node
-//! witness is unstatable while the served count disagrees with the config.
+//! `N` means `N descents` on both arms, root evaluation included: a solver terminal is a descent and
+//! network leaves are their own row, so served leaves plus inline descents are the descents.
 //!
 //! The budget arms hold the KIND fixed and vary the radius; the run6-regime arms hold the
 //! ENCODING fixed and vary the kind, so that comparison is of searches and nothing else.
@@ -19,6 +19,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use mantis_encoding::lookup_or_panic;
+use mantis_search::mcts::TacticsConfig;
 use mantis_search::SearchKind;
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
@@ -26,13 +27,31 @@ mod common;
 
 const LEAF_BATCH: usize = 8;
 
+/// The design's leaf budgets, the wiring the self-play runner shares with the deploy head.
+const LEAF_TACTICS: TacticsConfig = TacticsConfig {
+    leaf_turns: 2,
+    leaf_nodes: 64,
+    root_turns: 8,
+    root_nodes: 20_000,
+    audit: None,
+};
+
+/// What one drive read: producer-served leaves, searched plies, the widest search, inline descents.
+struct Drive {
+    served: usize,
+    records: usize,
+    max_sims: u64,
+    inline: u64,
+}
+
 /// Drive one worker on the GRAPH path until `want_records` searched plies are recorded.
 fn drive_graph(
     encoding: &str,
     n_simulations: usize,
     ply_cap: usize,
     want_records: usize,
-) -> (usize, usize, u64) {
+    tactics: Option<TacticsConfig>,
+) -> Drive {
     let spec = lookup_or_panic(encoding);
     let runner = SelfPlayRunner::new(SelfPlayRunnerConfig {
         n_workers: 1,
@@ -43,12 +62,19 @@ fn drive_graph(
         dirichlet_enabled: true,
         search_kind: SearchKind::Puct,
         encoding_name: Some(encoding.to_string()),
+        tactics,
         ..Default::default()
     })
     .expect("runner constructs at the drive's parameters");
 
     let served = Arc::new(AtomicUsize::new(0));
-    let producer = common::spawn_uniform_producer(
+    // With tactics on, compact play reaches decided positions within a short game.
+    let spawn = if tactics.is_some() {
+        common::spawn_compact_producer
+    } else {
+        common::spawn_uniform_producer
+    };
+    let producer = spawn(
         runner.graph_producer(),
         spec.policy_logit_count,
         served.clone(),
@@ -83,11 +109,12 @@ fn drive_graph(
          that records nothing cannot speak about served sims at all",
         records.len()
     );
-    (
-        served.load(Ordering::Relaxed),
-        records.len(),
-        snap.max_sims_per_search,
-    )
+    Drive {
+        served: served.load(Ordering::Relaxed),
+        records: records.len(),
+        max_sims: snap.max_sims_per_search,
+        inline: snap.inline_descents_total,
+    }
 }
 
 /// Drive one worker under `kind` at the run6 identity row, ENCODING held fixed.
@@ -96,7 +123,8 @@ fn drive_kind(
     n_simulations: usize,
     ply_cap: usize,
     want_records: usize,
-) -> (usize, usize, u64) {
+    tactics: Option<TacticsConfig>,
+) -> Drive {
     const ENCODING: &str = "gnn_axis_r8";
     let spec = lookup_or_panic(ENCODING);
     let runner = SelfPlayRunner::new(SelfPlayRunnerConfig {
@@ -111,12 +139,19 @@ fn drive_kind(
         search_kind: kind,
         quiescence_enabled: false,
         encoding_name: Some(ENCODING.to_string()),
+        tactics,
         ..Default::default()
     })
     .expect("runner constructs at the drive's parameters");
 
     let served = Arc::new(AtomicUsize::new(0));
-    let producer = common::spawn_uniform_producer(
+    // With tactics on, compact play reaches decided positions within a short game.
+    let spawn = if tactics.is_some() {
+        common::spawn_compact_producer
+    } else {
+        common::spawn_uniform_producer
+    };
+    let producer = spawn(
         runner.graph_producer(),
         spec.policy_logit_count,
         served.clone(),
@@ -149,15 +184,21 @@ fn drive_kind(
          records nothing cannot speak about served sims at all",
         records.len()
     );
-    (
-        served.load(Ordering::Relaxed),
-        records.len(),
-        snap.max_sims_per_search,
-    )
+    Drive {
+        served: served.load(Ordering::Relaxed),
+        records: records.len(),
+        max_sims: snap.max_sims_per_search,
+        inline: snap.inline_descents_total,
+    }
 }
 
 fn assert_exact_graph(encoding: &str, n_simulations: usize, ply_cap: usize, want_records: usize) {
-    let (served, records, max_sims) = drive_graph(encoding, n_simulations, ply_cap, want_records);
+    let Drive {
+        served,
+        records,
+        max_sims,
+        ..
+    } = drive_graph(encoding, n_simulations, ply_cap, want_records, None);
     println!(
         "{encoding} @ {n_simulations}: served {served} leaves over {records} searches, widest \
          search {max_sims}"
@@ -191,9 +232,38 @@ fn r6_at_fifty_sims_serves_exactly_fifty_per_search() {
     assert_exact_graph("gnn_axis_v1", 50, 4, 8);
 }
 
+/// The tactics-on case: exactly `n` descents a search, served plus inline adding up, and the tactics fired.
+fn assert_exact_with_tactics(label: &str, drive: Drive, n_simulations: usize) {
+    let Drive {
+        served,
+        records,
+        max_sims,
+        inline,
+    } = drive;
+    println!("{label} @ {n_simulations} tactics on: served {served} + inline {inline} over {records} searches");
+    assert_eq!(
+        max_sims, n_simulations as u64,
+        "{label} @ {n_simulations} tactics on: the widest search spent {max_sims} descents"
+    );
+    assert!(
+        inline > 0,
+        "{label}: no descent ended at a decided leaf, so the case proves nothing"
+    );
+    let descents = served + inline as usize;
+    let expected = records * n_simulations;
+    assert!(
+        descents >= expected && descents < expected + n_simulations,
+        "{label} @ {n_simulations} tactics on: {served} served + {inline} inline over {records} \
+         searches; expected [{expected}, {}) with one search in flight",
+        expected + n_simulations
+    );
+}
+
 #[test]
 fn r8_at_fifty_sims_serves_exactly_fifty_per_search() {
     assert_exact_graph("gnn_axis_r8", 50, 4, 8);
+    let drive = drive_graph("gnn_axis_r8", 50, 60, 60, Some(LEAF_TACTICS));
+    assert_exact_with_tactics("gnn_axis_r8", drive, 50);
 }
 
 #[test]
@@ -212,7 +282,14 @@ fn r8_at_six_hundred_sims_serves_exactly_six_hundred_per_search() {
 #[test]
 fn both_kinds_serve_exactly_sixty_four() {
     for kind in [SearchKind::Puct, SearchKind::Gumbel] {
-        let (served, records, max_sims) = drive_kind(kind, 64, 3, 4);
+        let drive = drive_kind(kind, 64, 60, 60, Some(LEAF_TACTICS));
+        assert_exact_with_tactics(&format!("{kind:?}"), drive, 64);
+        let Drive {
+            served,
+            records,
+            max_sims,
+            ..
+        } = drive_kind(kind, 64, 3, 4, None);
         println!("{kind:?} @ 64: served {served} over {records} searches, widest {max_sims}");
         assert_eq!(
             max_sims, 64,
@@ -227,7 +304,12 @@ fn both_kinds_serve_exactly_sixty_four() {
 #[test]
 fn both_kinds_serve_exactly_three_hundred_and_twenty() {
     for kind in [SearchKind::Puct, SearchKind::Gumbel] {
-        let (served, records, max_sims) = drive_kind(kind, 320, 2, 2);
+        let Drive {
+            served,
+            records,
+            max_sims,
+            ..
+        } = drive_kind(kind, 320, 2, 2, None);
         println!("{kind:?} @ 320: served {served} over {records} searches, widest {max_sims}");
         assert_eq!(
             max_sims, 320,

@@ -23,6 +23,8 @@ pub(crate) struct WorkerAtomics {
     /// Leaves expanded, and of those the ones the GPU served: the eval cache's fire-rate pair.
     pub(crate) served_leaves_total: Arc<AtomicU64>,
     pub(crate) gpu_evals_total: Arc<AtomicU64>,
+    /// Descents backed up inline by the tactics wiring: with the served leaves, every descent.
+    pub(crate) inline_descents_total: Arc<AtomicU64>,
     /// The runner-wide monotonic GAME id, one `fetch_add` per completed graph game. Its own
     /// counter, not `games_completed`: that STAT may be reset, and an id derived from it collides.
     pub(crate) graph_game_seq: Arc<AtomicU64>,

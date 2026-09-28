@@ -132,6 +132,7 @@ pub(crate) fn run_worker_thread(
         inference_failures_total,
         served_leaves_total,
         gpu_evals_total,
+        inline_descents_total,
         graph_game_seq,
     } = atomics;
     let WorkerChannels {
@@ -171,6 +172,7 @@ pub(crate) fn run_worker_thread(
                 search_kind,
             },
         exploration_flags: ExplorationFlags { dirichlet_enabled },
+        tactics,
     } = params;
 
     let mut tree = MCTSTree::new_full(c_puct, VIRTUAL_LOSS_PENALTY, fpu_reduction);
@@ -178,6 +180,7 @@ pub(crate) fn run_worker_thread(
     tree.configure_quiescence(quiescence_enabled, quiescence_blend_2);
     // Same posture as quiescence: per-WORKER configuration, set once, survives `new_game`.
     tree.configure_search(search_kind, sigma);
+    tree.configure_tactics(tactics);
     let mut rng = rng();
     // Per-move model-version snapshot: each `play_one_move` dedup-pushes `model_version`, so a
     // played-out game's drain tuple `(mv_min, mv_max, mv_distinct)` is (0, 0, 1) until it moves.
@@ -213,6 +216,7 @@ pub(crate) fn run_worker_thread(
         graph_radius,
         served_leaves: &served_leaves_total,
         gpu_evals: &gpu_evals_total,
+        inline_descents: &inline_descents_total,
     };
     let fatal_latch = FatalDefectLatch {
         slot: &fatal_defect,
