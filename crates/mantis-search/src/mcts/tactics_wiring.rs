@@ -508,6 +508,73 @@ mod tests {
         );
     }
 
+    /// P1's five (0..4, 0) and P2's scatter; P1 is to move with two stones after the last.
+    const P1_FIVE: [(i32, i32); 11] = [
+        (0, 0),
+        (20, 20),
+        (22, 20),
+        (1, 0),
+        (2, 0),
+        (20, 24),
+        (22, 24),
+        (3, 0),
+        (4, 0),
+        (30, 30),
+        (32, 30),
+    ];
+
+    #[test]
+    fn a_six_is_plus_one_while_its_maker_holds_a_stone_and_minus_one_once_the_turn_has_passed() {
+        let first: Vec<(i32, i32)> = P1_FIVE.iter().copied().chain([(5, 0)]).collect();
+        let second: Vec<(i32, i32)> = P1_FIVE.iter().copied().chain([(-9, 9), (5, 0)]).collect();
+        for (seq, want) in [(first, 1.0), (second, -1.0)] {
+            let (mut tree, leaf, board) = path_to_leaf(&seq, P1_FIVE.len(), LEAF_ONLY);
+            assert!(matches!(tree.tactics_leaf(leaf, &board), LeafCall::Inline));
+            assert_eq!(tree.pool[leaf as usize].terminal_value, want);
+            assert_eq!(tree.tactics_counters().terminal_six, 1);
+            // P1 made the six from the root: a win from the root's side, whichever stone made it.
+            assert_eq!((tree.pool[0].n_visits, tree.pool[0].w_value), (1, 1.0));
+        }
+    }
+
+    #[test]
+    fn a_leaf_solve_out_of_nodes_is_counted_and_the_leaf_evaluated() {
+        let config = TacticsConfig {
+            leaf_nodes: 1,
+            ..LEAF_ONLY
+        };
+        let (mut tree, leaf, board) = path_to_leaf(&FIX219[..15], 13, config);
+        assert!(matches!(
+            tree.tactics_leaf(leaf, &board),
+            LeafCall::Evaluate(Some(_))
+        ));
+        let c = tree.tactics_counters();
+        assert_eq!((c.leaf_solver_calls, c.leaf_solver_exhausted), (1, 1));
+        assert!(!tree.pool[leaf as usize].is_terminal);
+    }
+
+    #[test]
+    fn the_legal_set_path_restricts_a_forced_leaf_to_its_blocks_as_the_dense_path_does() {
+        let root = played(&P2_FOUR_ONE_LEFT[..7]);
+        let mut tree = MCTSTree::new(1.5);
+        tree.configure_tactics(Some(LEAF_ONLY));
+        tree.new_game(root.clone());
+        assert_eq!(tree.select_leaves(1).expect("no desync").len(), 1);
+        let ls = crate::LegalSetPolicy {
+            dense: uniform(),
+            ..crate::LegalSetPolicy::default()
+        };
+        let trunk = root.cluster_window_size() as i32;
+        tree.expand_and_backup_ls_at(&[ls], &[0.0], &[root.window_center()], trunk);
+        let children = root_children(&tree);
+        let mut cells: Vec<(i32, i32)> = children.iter().map(|c| c.0).collect();
+        cells.sort_unstable();
+        assert_eq!(cells, vec![(8, 5), (9, 5), (14, 5), (15, 5)]);
+        let mass: f32 = children.iter().map(|c| c.1).sum();
+        assert!((mass - 1.0).abs() < 1e-5, "renormalised: {mass}");
+        assert_eq!(tree.tactics_counters().forced_restrictions, 1);
+    }
+
     #[test]
     fn with_tactics_off_a_decided_leaf_goes_to_the_net_as_before() {
         let (mut tree, leaf, board) = path_to_leaf(&FIX219, 15, LEAF_ONLY);
