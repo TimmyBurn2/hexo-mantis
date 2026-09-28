@@ -152,7 +152,19 @@ impl TurnSolver {
             }
             None => {}
         }
-        if !facts.forced.is_empty() || board.moves_remaining != 2 || turns == 0 || nodes == 0 {
+        if !facts.forced.is_empty() {
+            return unknown(false);
+        }
+        self.search_quiet(board, turns, nodes)
+    }
+
+    /// `solve` less its `analyze`, for a caller that has read `board` quiet already (the leaf wiring).
+    pub fn search_quiet(&mut self, board: &Board, turns: u8, nodes: u64) -> Solved {
+        let unknown = |exhausted| Solved {
+            verdict: Verdict::Unknown { exhausted },
+            nodes: 0,
+        };
+        if board.moves_remaining != 2 || turns == 0 || nodes == 0 {
             return unknown(false);
         }
         if self.grid.load(board).is_err() {
