@@ -7,8 +7,8 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
-**R377 (2026-09-28): THE TACTICS MODULE. TACTICS-DESIGN is accepted, and TACTICS-DEPLOY is the next packet
-(CARD-TACTICS-DEPLOY).** The tactics lane still goes first and run10 will not START (R376(c)).
+**R377 (2026-09-28): THE TACTICS MODULE. TACTICS-DESIGN is accepted, and the TACTICS-DEPLOY packet is in
+progress (2026-09-28, CARD-TACTICS-DEPLOY).** The tactics lane still goes first and run10 will not START (R376(c)).
 `configs/run10.yaml` stays the production config the instruments read until run11's mint replaces it, and run11
 is designed after TACTICS-DEPLOY's read (CARD-RUN11-DESIGN).
 
@@ -27,9 +27,11 @@ is designed after TACTICS-DEPLOY's read (CARD-RUN11-DESIGN).
   - TACTICS-DEPLOY reads the full module and an audit-off arm against the plain parent on both rulers, X's floor
     first. The defence audit lands only if its arm earns its cost: of 20 of D1's "safe" alternatives played out
     with Six on both seats (T3), 16 were still lost.
+  - The packet (2026-09-28) builds the module, wires it at deploy with `search.tactics` null in both homes (the
+    self-play path unchanged), and runs X's floor and the A/B on the box within a grant of ≤ 12 box-h.
   - TACTICS-SELFPLAY follows (CARD-TACTICS-SELFPLAY): proof as the target, a plain twin as the control, and
     T4's starvation band at the panel's mean − 3 SD.
-- **The first stone is the origin (R377(g), CARD-ORIGIN-1).** The empty board's legal set becomes {origin},
+- **The first stone is the origin (R377(g), CARD-ORIGIN-RULE).** The empty board's legal set becomes {origin},
   records and books are canonicalised by translation on load, and the frozen fixtures are re-pinned under grant.
   It lands in RUN11-PREP. The ruler's book stays for the series; a random-opening share in self-play is a run11
   arm (R377(h)).
@@ -127,4 +129,4 @@ The configs and "where things live" sections below the run were carried from the
 re-checked against `configs/` and `census.py` at this tip.
 The current phase was rewritten 2026-09-28 at R376 from the DECIDE-1 and SIX-RUNG exit records (local); the
 run, box and instrument lines were re-checked at `3e3fd263`. The tactics lines were updated at R377 from the
-TACTICS-DESIGN design doc (`d17dfdcd`).
+TACTICS-DESIGN design doc (`d17dfdcd`), and at the TACTICS-DEPLOY packet's first commit.

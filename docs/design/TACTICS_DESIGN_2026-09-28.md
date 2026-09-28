@@ -490,12 +490,16 @@ Every hotspot is pre-registered with its expected bracket and its abort line. Th
 
 ## 11. The follow-up packets
 
+Amended in place 2026-09-28 per R377, which ruled §12: the A/B gains an audit-off arm and reads X's floor first
+(R377(e)), and TACTICS-SELFPLAY's targets, control and band are ruled (R377(f)).
+
 **TACTICS-DEPLOY: the implementation and the A/B.**
 - **Build.** On the desktop: §4–§8, the goldens and the fuzz, then the benches H1–H4, every tactics row null
   except in the A/B's composition. One leg per hotspot commit, each closed by a fresh review.
-- **The A/B.** At equal descents (`deploy_sims` 256, PUCT, the stamp's own config), the parent plus
-  `deploy.search.tactics` against the plain parent, on X (Six gen 30 @16, cache 0) and S (strix @ r8), over three
-  panel saves (39k, 45k, 51k), so the read is of the lever and not of one net (R375(d)).
+- **The A/B.** At equal descents (`deploy_sims` 256, PUCT, the stamp's own config), THREE arms of the parent on X
+  (Six gen 30 @16, cache 0) and S (strix @ r8), over three panel saves (39k, 45k, 51k), so the read is of the
+  lever and not of one net (R375(d)): the plain parent, the full module (`deploy.search.tactics` with the audit)
+  and the audit-off module (the same block with the audit off), R377(e). X's floor is read first.
   - The tactics-off tree must replay DECIDE-1's panel cells: a replay witness of one cell per ruler, >= 90 % of
     games identical. Then the plain arm is the panel's own readings, and only the tactics-on cells run.
 - **Criteria and power lines** (R376(d) reads both rulers). Each packet restates them with its bands
@@ -514,6 +518,9 @@ Every hotspot is pre-registered with its expected bracket and its abort line. Th
     - S is read with its own criterion and reported PASS or FAIL.
     - X passing with S's three-net point estimate at or below zero goes to the architect as a ruler
       disagreement.
+  - **The audit's own share** (R377(e)): full − audit-off on X. The defence audit lands only if its arm earns its
+    cost; otherwise the module ships with the audit off by default and the audit is carded. The packet states
+    this rule, its power and its false-pass rate before the first cell.
 - **Known-bad** (LAW-19). Against the ruler's measured floor: the audit INVERTED (it keeps only candidates that
   ALLOW a proven opponent win when one exists), one X cell on the parent.
   - It must read below the plain parent's X by more than 0.298 logit (one-sided α 0.05 on one paired cell).
@@ -527,14 +534,16 @@ Every hotspot is pre-registered with its expected bracket and its abort line. Th
   |---|---|
   | tactics-on X cells (3 x ≈ 0.33) | ≈ 1.0 |
   | tactics-on S cells (3 x ≈ 0.74) | ≈ 2.2 |
+  | audit-off X and S cells (R377(e); 3 x ≈ 0.33 + 3 x ≈ 0.74) | ≈ 3.2 |
   | replay witnesses (one per ruler) | ≈ 1.1 |
   | known-bad + X floor | ≈ 0.7 |
   | build + bench_server on the box | ≈ 0.5 |
-  | **total** | **≈ 5.5** |
+  | **total** | **≈ 8.7** (was ≈ 5.5 before the audit-off arm) |
 
 **TACTICS-SELFPLAY: the twin with the witness.**
 - **Twin.** A 4 h twin from the parent, `selfplay.search.tactics` armed as TACTICS-DEPLOY's read sets it, proof as
-  the target (§6), audit vetoes as zeros.
+  the target (§6), audit vetoes as zeros. R377(f) rules the targets: a proven root plays and records its proof, a
+  vetoed move gets zero target mass, and a lost root records no policy target.
 - **Before it runs.**
   - F-53's reading re-run with the new kind (proof rate, strict novelty, ms per root), with a pre-stated line.
   - The T4 exam and the panel's numbers carried over from this packet, unchanged; the starvation rule below is a
@@ -542,38 +551,52 @@ Every hotspot is pre-registered with its expected bracket and its abort line. Th
 - **During the run.**
   - LAW-18 rows for every §7 counter.
   - The witness read at every save: mean prior on the winning first turn, mean value.
-  - Starvation, as PROPOSED for TACTICS-SELFPLAY's own pre-registration: a save below the panel's mean − 3 SD,
-    i.e. mean prior < 0.154 or mean value < 0.255.
+  - Starvation, RULED by R377(f) (was PROPOSED for TACTICS-SELFPLAY's own pre-registration): a save below the
+    panel's mean − 3 SD, i.e. mean prior < 0.154 or mean value < 0.255.
     - False alarm ≈ 0.13 % per row per save at the panel's spread.
     - A true drop of 0.08 / 0.10 / 0.12 in mean prior is flagged with probability 0.45 / 0.73 / 0.91 per save.
     - This departs from RULES §7, which named "below the panel's minimum". That rule's false-alarm rate, ≈ 7 %
       (prior) and ≈ 6 % (value) per row per save, was computed after T4's reading. The exam and the panel's
       numbers carry over unchanged; the rule is the twin packet's to pre-register.
-- **Its strength read.** At its 4 h save, on X, against a plain twin of the same length? That is the architect's
-  (§12, Q7): a plain twin doubles the cost, and a panel prior is the alternative.
-- **Box-h.** ≈ 4 (twin) + 0.5 (preflight) + ≈ 0.7 (two X cells) ≈ 5.2. With a plain twin control, ≈ 9.5.
+- **Its strength read.** At its 4 h save, on X, against a plain twin of the same length: R377(f) makes the plain
+  twin the control. Was the architect's question (§12, Q7): a plain twin doubles the cost, and a panel prior was
+  the alternative.
+- **Box-h.** ≈ 4 (twin) + 0.5 (preflight) + ≈ 0.7 (two X cells) ≈ 5.2, and ≈ 9.5 with the plain twin R377(f)
+  orders.
 
-## 12. Open questions for the architect
-1. **The verdict's letter.** RULES §4(b) returns NO VERDICT because a zero-reach config at a lower table floor
-   blocks dominance (§3). The packet's sentence ("higher reach at equal cost") is met by Six's kind: 2 119–3 506
-   proofs against 0, with 0 refuted claims on either side. Rule on the letter, or confirm Six's kind as the core.
-2. **T3 and the audit's value.** Against a deeper strict search, D1's "safe" turns are safe (0 of 40 unsafe; f
-   stays 0.455). Played out with Six on both seats, 16 of 20 still lose within 13 opponent turns (f read that way
-   is 0.273 [0.196, 0.351], or 0.091 [0.032, 0.188] on the 20 played alone). Does the lane go first on the
-   offence and the leaves (S1's 24 missed proven wins)? The rows give fire rates, not strength. Reading the
-   audit's own share needs a second tactics arm with the audit off (≈ +3.2 box-h). Buy it, or read the bundle?
-3. **The self-play targets.**
+## 12. Open questions for the architect — ruled by R377 except Q5
+
+Amended in place 2026-09-28: each ruled question leads with its ruling and keeps its question as "Was".
+1. **The verdict's letter.** RULED by R377(a): TACTICS-DESIGN is accepted. The head-to-head's null configuration
+   is "no solver", and a solver with zero reach is dominated at any cost; Six's kind is the core, and our per-stone
+   solver is retired when the module lands. Was: RULES §4(b) returns NO VERDICT because a zero-reach config at a
+   lower table floor blocks dominance (§3). The packet's sentence ("higher reach at equal cost") is met by Six's
+   kind: 2 119–3 506 proofs against 0, with 0 refuted claims on either side. Rule on the letter, or confirm Six's
+   kind as the core.
+2. **T3 and the audit's value.** RULED by R377(e): TACTICS-DEPLOY reads the full module and an audit-off arm
+   against the plain parent on both rulers, X's floor first; the defence audit lands only if its arm earns its
+   cost (§11). Was: against a deeper strict search, D1's "safe" turns are safe (0 of 40 unsafe; f stays 0.455).
+   Played out with Six on both seats, 16 of 20 still lose within 13 opponent turns (f read that way is 0.273
+   [0.196, 0.351], or 0.091 [0.032, 0.188] on the 20 played alone). Does the lane go first on the offence and the
+   leaves (S1's 24 missed proven wins)? The rows give fire rates, not strength. Reading the audit's own share needs
+   a second tactics arm with the audit off (≈ +3.2 box-h). Buy it, or read the bundle?
+3. **The self-play targets.** RULED by R377(f), proof as the target: a proven root plays and records its proof, a
+   vetoed move gets zero target mass, and a lost root records no policy target. Was:
    - Proven roots: strix's two-hot proof target (this design), or Six's no-target `decided` rows?
    - Lost-on-cover roots: no policy target (Six's rule; this design), or the searched target over children that
      all lose?
    - Do audit vetoes zero the vetoed moves' target mass?
-4. **A strict Loss in v1?** At cover-2 positions, every covering reply losing to a strict opponent win is a proof
-   of Loss at bounded cost. It would make BLOCK leaves terminal too. In v1 or later?
-5. **TT-hit descents: a named deviation.** R376(e)'s letter counts a TT-hit expansion, a descent that backs up
-   a value; today's PUCT code does not. This design keeps it uncounted (§7), because counting it changes the
-   tactics-off search wherever PUCT transposes and voids the replay witness the A/B's plain arm relies on. Rule
-   the deviation, or order the change and re-read the plain arm: its six cells replace the two replay witnesses,
-   ≈ +2.1 box-h net.
-6. **`apply_quiescence`'s blend.** The −0.3 heuristic for two fives against a two-stone turn is not exact. Keep
-   it with tactics on, or retire it with the exact branches?
-7. **TACTICS-SELFPLAY's control.** A plain twin of equal length (≈ +4.3 box-h), or the panel as the prior?
+4. **A strict Loss in v1?** RULED by R377(b): v1 proves wins and can't-cover losses, Six's set; deeper loss proofs
+   are a later lever (CARD-TACTICS-DEEP-LOSS). Was: at cover-2 positions, every covering reply losing to a strict
+   opponent win is a proof of Loss at bounded cost. It would make BLOCK leaves terminal too. In v1 or later?
+5. **TT-hit descents: a named deviation. NOT RULED: R377 names no item for it, so it stays open.** R376(e)'s letter
+   counts a TT-hit expansion, a descent that backs up a value; today's PUCT code does not. This design keeps it
+   uncounted (§7), because counting it changes the tactics-off search wherever PUCT transposes and voids the
+   replay witness the A/B's plain arm relies on. Rule the deviation, or order the change and re-read the plain
+   arm: its six cells replace the two replay witnesses, ≈ +2.1 box-h net.
+6. **`apply_quiescence`'s blend.** RULED by R377(d): the quiescence override and its blend stay in v1 behind the
+   shared analysis function; retiring the blend is its own leg (CARD-QUIESCENCE-BLEND-RETIRE). Was: the −0.3
+   heuristic for two fives against a two-stone turn is not exact. Keep it with tactics on, or retire it with the
+   exact branches?
+7. **TACTICS-SELFPLAY's control.** RULED by R377(f): a plain twin is the control. Was: a plain twin of equal
+   length (≈ +4.3 box-h), or the panel as the prior?

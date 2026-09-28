@@ -38,8 +38,12 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by R377 (TACTICS-DESIGN accepted; 2026-09-28) — the tactics module
 
-- **CARD-TACTICS-DEPLOY — ORDERED (R377(e)); the lane's next packet.** It builds the module to
-  `docs/design/TACTICS_DESIGN_2026-09-28.md` §4–§10, as R377 rules it:
+- **CARD-TACTICS-DEPLOY — IN PROGRESS: the TACTICS-DEPLOY packet (2026-09-28). ORDERED by R377(e); the lane's
+  next packet.** The packet reads X's floor first (one random-init net, 288 games), builds and benches the module,
+  wires it at deploy with `search.tactics` null in both homes (the self-play path unchanged), and reads plain,
+  full and audit-off at 39k, 45k and 51k on X then S, with the inverted audit on 45k as its known-bad, on the box
+  within a grant of ≤ 12 box-h. It builds the module to `docs/design/TACTICS_DESIGN_2026-09-28.md` §4–§10, as
+  R377 rules it (the doc's §11 and §12 are amended in place per R377):
   - Six's kind, a turn-level strictly forcing threat-space search, is the core. Our per-stone `TacticalSolver`
     is retired when the module lands (R377(a)).
   - v1 proves wins and can't-cover losses, Six's set (R377(b)); deeper loss proofs are CARD-TACTICS-DEEP-LOSS.
@@ -57,7 +61,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   - A plain twin of equal length is the control: ≈ 9.5 box-h with it (design §11).
   - T4's band reads at the panel's mean − 3 SD on the frozen exam (sha256 `2b2eb7f5…`): mean prior < 0.154 or
     mean value < 0.255 at a save is a starvation signal.
-- **CARD-ORIGIN-1 — CARDED; lands in the RUN11-PREP packet (R377(g)).** The first stone is the origin, as in the
+- **CARD-ORIGIN-RULE — OPENED for the RUN11-PREP packet, whose leg ORIGIN-1 lands it (R377(g)).** The first stone
+  is the origin, as in the
   official rule and Six: the empty board's legal set is {origin}. Records and books are canonicalised by
   translation on load, and the frozen fixtures are re-pinned under grant. It touches the protected set's arena
   legality, which R377(g) names.
@@ -65,8 +70,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   §12 Q4: a cover-2 position where every covering reply loses to a strict opponent win.
 - **CARD-QUIESCENCE-BLEND-RETIRE — CARDED, its own leg (R377(d)).** Retire `apply_quiescence`'s heuristic blend
   (−0.3 for two fives against a two-stone turn), which is not exact.
-- **CARD-NATURAL-BOOK — CARDED (R377(h)): a policy-drawn natural book becomes a second reading.** The ruler's book
-  (`book_v1_s20260625_p4`) stays for the series.
+- **CARD-NATURAL-BOOK — OPENED for the RUN11-PREP packet (R377(h)): a policy-drawn natural book becomes a second
+  reading.** The ruler's book (`book_v1_s20260625_p4`) stays for the series.
 
 ## Opened by R376 (DECIDE-1 accepted; 2026-09-28) — the tactics lane
 
@@ -76,7 +81,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   starvation witness. Its exit commits `TACTICS_DESIGN_2026-09-28.md` in docs/design/ and scopes two packets:
   TACTICS-DEPLOY (the module and its A/B on S and X) and TACTICS-SELFPLAY (a twin read by the witness).
   TACTICS-DESIGN EXITED 2026-09-28 and is ACCEPTED by R377(a): Six's kind is the core, and the lane continues
-  as CARD-TACTICS-DEPLOY, then CARD-TACTICS-SELFPLAY.**
+  as CARD-TACTICS-DEPLOY, then CARD-TACTICS-SELFPLAY. The lane is now carried by the TACTICS-DEPLOY packet
+  (2026-09-28, in progress).**
   ONE exact tactics module in Rust on the search path, used identically at deploy and in self-play
   (LAW-15). The search crate already carries a net-free `TacticalSolver` (`crates/mantis-search/src/tactics/`,
   the solver F-53 read); one implementation per thing, so the lane's module is that one or replaces it.
@@ -106,7 +112,7 @@ Both were found by running the gate set rather than by reading it, and both are 
     learned from Six carries it in its lineage. The standing goal is to surpass Six by self-play with exact
     tactics.
   - A random-opening share in self-play, as an arm, not a default (R377(h)).
-  - CARD-ORIGIN-1, which lands in RUN11-PREP (R377(g)).
+  - CARD-ORIGIN-RULE, which lands in RUN11-PREP (R377(g)).
 - **CARD-PACKET-POWER-LINE — LANDED 2026-09-28 in the packet rule (`docs/governance/COMMS_STYLE.md` item 4): a
   packet carries each band's power line and sets known-bad bars against the ruler's measured floor. Was CARDED
   (process; DECIDE-1's exit).** Three of DECIDE-1's banded rules were void by R375(d) before any reading (B1-N2, B3, the S
