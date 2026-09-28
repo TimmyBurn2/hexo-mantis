@@ -358,6 +358,9 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
     hold.
   - D1: 100 of 106 avoidable losses turned on our LAST turn before the opponent's run, and a pair decides it, so
     the audit must see both stones.
+  - Amended in place (TACTICS-DEPLOY, L3): a first stone's top `audit_m` second stones are its children in the
+    tree's own order (visits, then prior), then the forced blocks after it; one with nothing to try (unexpanded, no
+    forced block) holds unproven, as an `Unknown` post does.
 - **Cost bounds.**
   - The audit's calls share one total budget, `audit_total_nodes`. At exhaustion the kind's own choice stands,
     counted.
