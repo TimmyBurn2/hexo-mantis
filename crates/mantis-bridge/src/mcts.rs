@@ -225,6 +225,8 @@ impl PyMCTSTree {
             ("best_holds", c.best_holds),
             ("audit_calls", c.audit_calls),
             ("audit_exhausted", c.audit_exhausted),
+            ("audit_swaps", c.audit_swaps),
+            ("audit_unvetted", c.audit_unvetted),
             ("proof_stone_illegal", c.proof_stone_illegal),
             ("grid_overflows", c.grid_overflows),
             ("three_cells_capped", c.three_cells_capped),

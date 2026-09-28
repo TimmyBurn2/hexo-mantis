@@ -358,9 +358,12 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
     hold.
   - D1: 100 of 106 avoidable losses turned on our LAST turn before the opponent's run, and a pair decides it, so
     the audit must see both stones.
-  - Amended in place (TACTICS-DEPLOY, L3): a first stone's top `audit_m` second stones are its children in the
-    tree's own order (visits, then prior), then the forced blocks after it; one with nothing to try (unexpanded, no
-    forced block) holds unproven, as an `Unknown` post does.
+  - Amended in place (TACTICS-DEPLOY, L3, corrected after its review): the position after a first stone is decided
+    by `analyze` first — a finish holds on its stone, a lost cover is a loss in 0 turns (no second stone helps).
+    Otherwise its top `audit_m` second stones are its children in the tree's own order (visits, then prior), then
+    the forced blocks after it. One with nothing to try (unexpanded, quiet after it) holds unproven, as an `Unknown`
+    post does, and an alternative returned that way is counted (`audit_unvetted`). The first text read an
+    unexpanded lost-cover first stone as "nothing to try" and let it hold.
 - **Cost bounds.**
   - The audit's calls share one total budget, `audit_total_nodes`. At exhaustion the kind's own choice stands,
     counted.
@@ -429,7 +432,8 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
   - `descents`, `gpu_evals`, `solver_terminals` (split `win1`, `lost_on_cover`, `strict_win`), `terminal_revisits`;
   - `forced_restrictions`, `leaf_solver_calls`, `leaf_solver_exhausted`;
   - `root_proofs_found`, `proof_stones_played`, `finishes_played`, `root_solver_exhausted`, `decided_lost`;
-  - `root_vetoes`, `best_holds`, `audit_calls`, `audit_exhausted`;
+  - `root_vetoes` (the chosen turn allowed a proven opponent win), `audit_swaps` (the audit changed the move),
+    `best_holds`, `audit_unvetted`, `audit_calls`, `audit_exhausted`;
   - `proven_root_targets` (self-play).
 - The served-sims witness pins DESCENTS per SEARCHED root: `descents == n_sims`, tactics on or off.
   - With tactics on: `served_leaves + solver_terminals + terminal_revisits == descents`, and
@@ -446,7 +450,7 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
 |---|---|---|---|
 | served-sims exactness, which pins descents (R376(e)) | `served_sims_exact.rs::both_kinds_serve_exactly_sixty_four`, `::r8_at_fifty_sims_serves_exactly_fifty_per_search`, `test_deploy_head_budget_spent.py::test_every_kind_spends_exactly_its_budget` | the budget loops count descents; solver terminals are descents without a GPU call | tactics off is the default and leaves every count as it is. Each test gains a tactics-on case asserting descents == n_sims and the §7 identity. The names stay; the module doc's "N leaves of network work" becomes "N descents; network leaves are their own row", citing R376(e) |
 | the search-kind conformance | `search_kind_conformance.rs::a_gumbel_round_is_exactly_the_halving_phase_wide` | a Gumbel round may hold solver terminals, and a forced root shrinks the child set | a round still spends exactly its width in descents. The test gains a tactics-on case; `m` clamps as today |
-| arena legality | `test_legality_boundary.py::test_a_candidate_playing_off_the_legal_set_forfeits_and_the_move_is_not_applied`, `::test_an_opening_that_does_not_replay_is_a_fatal_corpus_error` | the audit substitutes a root child; the restriction narrows children; the offence returns a proof stone, the next proof stone or a finishing cell, which are NOT root children | root children are legal. The three solver-supplied stones are checked against the legal set before return, with `TacticsError::ProofStoneIllegal` counted and the search's move played; a new test plants an illegal proof stone and asserts the refusal. The arena's own check is untouched |
+| arena legality | `test_legality_boundary.py::test_a_candidate_playing_off_the_legal_set_forfeits_and_the_move_is_not_applied`, `::test_an_opening_that_does_not_replay_is_a_fatal_corpus_error` | the audit substitutes a root child; the restriction narrows children; the offence returns a proof stone, the next proof stone or a finishing cell, which are NOT root children | root children are legal. The three solver-supplied stones (and the audit's stored hold stone, a second stone the first call tried, checked against the legal set and dropped if not in it) are checked against the legal set before return, with `TacticsError::ProofStoneIllegal` counted and the search's move played; a new test plants an illegal proof stone and asserts the refusal. The arena's own check is untouched |
 | gate pair statistics | `test_gate_pair_statistics.py::test_the_two_legs_of_an_opening_are_one_unit`, `::test_the_gate_ci_and_eff_n_are_both_over_pairs` | TACTICS-DEPLOY's A/B reads paired openings | untouched |
 | every other item (warm-start hash, conformance roster, 1-in-1 collate, finite-gradient guard, resume bundle, F-816-37, strength_floor, draw-rate abort) | as listed in LAWS.md | not touched | — |
 

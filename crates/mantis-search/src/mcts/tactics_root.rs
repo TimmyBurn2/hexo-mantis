@@ -16,12 +16,12 @@ enum Proof {
     Exhausted,
 }
 
-/// A first stone's audit: a second stone that holds, none to try, its longest-resisting loss, or no budget left.
+/// A first stone's audit: held (by its second stone, if any), nothing to try, lost (`None`: on cover), out of budget.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum FirstStone {
-    HeldBy((i32, i32)),
+    HeldBy(Option<(i32, i32)>),
     Untried,
-    Lost(u8, (i32, i32)),
+    Lost(u8, Option<(i32, i32)>),
     Exhausted,
 }
 
@@ -110,11 +110,21 @@ impl TacticsState {
         let Some(after_c) = after(root, &[pool[c as usize].cell()]) else {
             return FirstStone::Untried;
         };
+        if after_c.check_win() {
+            return FirstStone::HeldBy(None);
+        }
+        // The turn's second stone decided first: a finish holds, a lost cover loses to the opponent's next turn.
+        let facts = analyze(&after_c);
+        match facts.terminal {
+            Some(Terminal::Win) => return FirstStone::HeldBy(facts.finish.first().copied()),
+            Some(Terminal::Loss) => return FirstStone::Lost(0, None),
+            None => {}
+        }
         let mut seconds: Vec<(i32, i32)> = ranked_children(pool, c)
             .into_iter()
             .map(|i| pool[i as usize].cell())
             .collect();
-        for cell in analyze(&after_c).forced {
+        for cell in facts.forced {
             if !seconds.contains(&cell) {
                 seconds.push(cell);
             }
@@ -126,12 +136,12 @@ impl TacticsState {
                 continue;
             };
             match self.opponent_proof(audit, &post, left) {
-                Proof::Holds => return FirstStone::HeldBy(d2),
+                Proof::Holds => return FirstStone::HeldBy(Some(d2)),
                 Proof::Exhausted => return FirstStone::Exhausted,
                 Proof::Lost(n) => lost.push((n, (n, d2))),
             }
         }
-        best_hold(&lost).map_or(FirstStone::Untried, |(n, d2)| FirstStone::Lost(n, d2))
+        best_hold(&lost).map_or(FirstStone::Untried, |(n, d2)| FirstStone::Lost(n, Some(d2)))
     }
 
     /// One stone left: `chosen`, or on its proven loss the stored hold stone, the alternatives, then the best hold.
@@ -200,10 +210,15 @@ impl TacticsState {
             let cell = pool[c as usize].cell();
             match self.first_stone(audit, root, pool, c, left) {
                 FirstStone::HeldBy(d2) => {
-                    self.next_hold_stone = Some((with_stone(key, cell, mover), d2));
+                    self.next_hold_stone = d2.map(|d2| (with_stone(key, cell, mover), d2));
                     return cell;
                 }
-                FirstStone::Untried => return cell,
+                FirstStone::Untried => {
+                    if i > 0 {
+                        self.counters.audit_unvetted += 1;
+                    }
+                    return cell;
+                }
                 FirstStone::Exhausted => {
                     self.counters.audit_exhausted += 1;
                     return chosen;
@@ -220,7 +235,7 @@ impl TacticsState {
         let Some((cell, d2)) = best_hold(&lost) else {
             return chosen;
         };
-        self.next_hold_stone = Some((with_stone(key, cell, mover), d2));
+        self.next_hold_stone = d2.map(|d2| (with_stone(key, cell, mover), d2));
         cell
     }
 
@@ -255,7 +270,7 @@ impl TacticsState {
             };
             match allows {
                 Some(true) => {
-                    if i > 0 {
+                    if i == 0 {
                         self.counters.root_vetoes += 1;
                     }
                     return cell;
@@ -366,7 +381,7 @@ impl MCTSTree {
             .take(audit.k as usize)
             .collect();
         let mut left = audit.total_nodes;
-        match (audit.mode, root.moves_remaining) {
+        let played = match (audit.mode, root.moves_remaining) {
             (AuditMode::Inverted, _) => t.invert(audit, root, pool, (first, &rest), &mut left),
             (AuditMode::Hold, 1) => {
                 let cells: Vec<(i32, i32)> =
@@ -376,7 +391,11 @@ impl MCTSTree {
             (AuditMode::Hold, _) => {
                 t.hold_first_stone(audit, root, pool, (first, &rest), &mut left)
             }
+        };
+        if played != chosen {
+            t.counters.audit_swaps += 1;
         }
+        played
     }
 }
 
@@ -614,9 +633,20 @@ mod tests {
         let mut tree = armed(&root, inverted);
         expand(&mut tree, 0, &[HOLDS_16[0], HOLDS_16[1], (-20, 0)], 20);
         assert_eq!(tree.root_audit(HOLDS_16[0], None), (-20, 0));
-        assert_eq!(counters(&tree).root_vetoes, 1);
+        let c = counters(&tree);
+        assert_eq!(
+            (c.audit_swaps, c.root_vetoes),
+            (1, 0),
+            "a swap into the loss, the chosen held"
+        );
         let mut tree = last_stone_root(&[HOLDS_16[0]], inverted);
         assert_eq!(tree.root_audit((-10, 0), None), (-10, 0));
+        let c = counters(&tree);
+        assert_eq!(
+            (c.audit_swaps, c.root_vetoes),
+            (0, 1),
+            "the chosen allows: kept"
+        );
     }
 
     #[test]
@@ -632,5 +662,170 @@ mod tests {
         off.new_game(played(&FIX219[..16]));
         assert_eq!(off.root_audit((-10, 0), None), (-10, 0));
         assert_eq!(off.root_offence(), Ok(None));
+    }
+
+    /// `FIX219[..15]` and five rounds on: P1 to move with two, forced over (25, 10), (25, 20), (26, 10) by P2's two fives.
+    fn forced_root() -> Board {
+        let p1 = [
+            (19, 10),
+            (19, 20),
+            (26, 20),
+            (-40, 30),
+            (-30, 30),
+            (-20, 30),
+            (-40, 40),
+            (-30, 40),
+            (-20, 40),
+            (-10, 40),
+        ];
+        let p2 = [
+            (20, 10),
+            (21, 10),
+            (22, 10),
+            (23, 10),
+            (24, 10),
+            (20, 20),
+            (21, 20),
+            (22, 20),
+            (23, 20),
+            (24, 20),
+        ];
+        let mut seq = FIX219[..15].to_vec();
+        for r in 0..5 {
+            seq.extend([p1[2 * r], p1[2 * r + 1], p2[2 * r], p2[2 * r + 1]]);
+        }
+        played(&seq)
+    }
+
+    #[test]
+    fn a_first_stone_that_leaves_its_mover_lost_on_cover_is_the_fastest_loss_never_a_hold() {
+        let root = forced_root();
+        assert_eq!(analyze(&root).forced, vec![(25, 10), (25, 20), (26, 10)]);
+        // (26, 10) leaves P1 lost on cover; the block (25, 10) + (25, 20) still allows FIX219's one-turn win.
+        for (chosen, swaps) in [((26, 10), 1), ((25, 10), 0)] {
+            let mut tree = armed(&root, ARMED);
+            let firsts = expand(
+                &mut tree,
+                0,
+                &[
+                    chosen,
+                    if chosen == (26, 10) {
+                        (25, 10)
+                    } else {
+                        (26, 10)
+                    },
+                ],
+                10,
+            );
+            let block = if chosen == (25, 10) {
+                firsts[0]
+            } else {
+                firsts[1]
+            };
+            expand(&mut tree, block, &[(25, 20)], 3);
+            assert_eq!(
+                tree.root_audit(chosen, None),
+                (25, 10),
+                "chosen {chosen:?}: the slower loss is the hold"
+            );
+            let c = counters(&tree);
+            assert_eq!(
+                (c.root_vetoes, c.audit_swaps, c.best_holds),
+                (1, swaps, 1),
+                "chosen {chosen:?}"
+            );
+            let mut after_block = root.clone();
+            after_block.apply_move(25, 10).expect("empty");
+            let stored = tree.tactics.as_deref().and_then(|t| t.next_hold_stone);
+            assert_eq!(stored, Some((position_key(&after_block), (25, 20))));
+        }
+    }
+
+    #[test]
+    fn an_opponents_four_after_the_first_stone_supplies_its_second_stones() {
+        let root = forced_root();
+        let mut tree = armed(&root, ARMED);
+        expand(&mut tree, 0, &[(25, 20)], 10);
+        // (25, 20) is unexpanded: its seconds are the forced blocks (25, 10), (26, 10); only the first needs a solve.
+        assert_eq!(tree.root_audit((25, 20), None), (25, 20));
+        let c = counters(&tree);
+        assert_eq!((c.root_vetoes, c.best_holds, c.audit_calls), (1, 1, 1));
+        let mut after_first = root.clone();
+        after_first.apply_move(25, 20).expect("empty");
+        let stored = tree.tactics.as_deref().and_then(|t| t.next_hold_stone);
+        assert_eq!(stored, Some((position_key(&after_first), (25, 10))));
+    }
+
+    #[test]
+    fn a_call_out_of_its_own_nodes_holds_and_one_the_total_cut_short_is_exhaustion() {
+        // P2 to move with one stone; its (2, -15) leaves P1 a quiet turn start no two-node search decides.
+        let root = played(&FIX219[..14]);
+        for (audit, exhausted) in [
+            (AuditConfig { nodes: 1, ..AUDIT }, 0),
+            (
+                AuditConfig {
+                    total_nodes: 1,
+                    ..AUDIT
+                },
+                1,
+            ),
+        ] {
+            let mut tree = armed(&root, with_audit(audit));
+            expand(&mut tree, 0, &[(2, -15)], 5);
+            assert_eq!(tree.root_audit((2, -15), None), (2, -15));
+            let c = counters(&tree);
+            assert_eq!(
+                (c.audit_exhausted, c.root_vetoes, c.audit_calls),
+                (exhausted, 0, 1),
+                "{audit:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn at_two_stones_left_the_total_spent_leaves_the_chosen_stone_and_the_inverse_swaps_into_the_loss(
+    ) {
+        let root = played(&FIX219[..15]);
+        let tight = with_audit(AuditConfig {
+            total_nodes: 1,
+            ..AUDIT
+        });
+        let mut tree = armed(&root, tight);
+        let firsts = expand(&mut tree, 0, &[(-13, 0)], 10);
+        expand(&mut tree, firsts[0], &[(-10, 0), (-12, 1)], 3);
+        assert_eq!(tree.root_audit((-13, 0), None), (-13, 0));
+        assert_eq!(counters(&tree).audit_exhausted, 1);
+        let inverted = with_audit(AuditConfig {
+            mode: AuditMode::Inverted,
+            ..AUDIT
+        });
+        let mut tree = armed(&root, inverted);
+        let firsts = expand(&mut tree, 0, &[(-4, -11), (-13, 0)], 10);
+        expand(&mut tree, firsts[0], &[(-10, 0)], 3);
+        expand(&mut tree, firsts[1], &[(-10, 0), (-12, 1)], 2);
+        assert_eq!(tree.root_audit((-4, -11), None), (-13, 0));
+        let c = counters(&tree);
+        assert_eq!((c.audit_swaps, c.root_vetoes), (1, 0));
+    }
+
+    #[test]
+    fn a_stored_stone_is_dropped_off_its_key_or_off_the_legal_set_even_where_it_would_be_legal() {
+        let root = played(&FIX219[..16]);
+        let mut tree = armed(&root, ARMED);
+        // A proof stone keyed to another position, though legal here, is not played.
+        let elsewhere = position_key(&played(&FIX219[..15]));
+        if let Some(t) = tree.tactics.as_deref_mut() {
+            t.next_proof_stone = Some((elsewhere, (-4, -11)));
+        }
+        assert_eq!(tree.root_offence(), Ok(None));
+        // A hold stone off its key, or on its key but occupied, is not tried: the walk's own hold is.
+        let key = position_key(&root);
+        for planted in [(elsewhere, (-4, -10)), (key, (-13, 0))] {
+            let mut tree = last_stone_root(&[(-20, 0), HOLDS_16[0]], ARMED);
+            if let Some(t) = tree.tactics.as_deref_mut() {
+                t.next_hold_stone = Some(planted);
+            }
+            assert_eq!(tree.root_audit((-10, 0), None), HOLDS_16[0], "{planted:?}");
+        }
     }
 }

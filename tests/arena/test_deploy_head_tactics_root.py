@@ -98,4 +98,21 @@ def test_the_inverted_known_bad_plays_into_a_proven_win() -> None:
     assert plain.select_move(board) == (-4, -11)
     head = _head(_block(root_nodes=0, audit={**_AUDIT, "mode": "inverted"}), infer, n_sims=2)
     assert head.select_move(board) not in _HOLDS
-    assert head.last_tactics is not None and head.last_tactics["root_vetoes"] == 1
+    assert head.last_tactics is not None and head.last_tactics["audit_swaps"] == 1
+
+
+#: P1 filler first; P2 builds a five (0..4, 0) capped at (-1, 0), whose window (1..6, 0) also needs (6, 0), and a
+#: five (0..4, 6) capped at both ends; P1 then moves with two against the forced cells (5, 0), (5, 6), (6, 0).
+_FORCED = [(0, -6), (0, 0), (1, 0), (-1, 0), (-1, 6), (2, 0), (3, 0), (6, 6), (-6, -6), (4, 0), (0, 6), (6, -6),
+           (-6, 12), (1, 6), (2, 6), (0, 12), (6, 12), (3, 6), (4, 6)]
+
+
+@pytest.mark.parametrize("kind", ["puct", "gumbel"])
+def test_a_first_stone_that_leaves_the_head_lost_on_cover_is_swapped_for_the_block_that_holds(kind: str) -> None:
+    calls: list[int] = []
+    infer = _peaked_on([(6, 0), (5, 0), (5, 6)], calls)
+    plain = _head(_block(root_nodes=0, audit=None), infer, kind, n_sims=2)
+    assert plain.select_move(_played(_FORCED)) == (6, 0), "after (6, 0) no second stone covers both fives"
+    head = _head(_block(root_nodes=0, audit=_AUDIT), infer, kind, n_sims=2)
+    assert head.select_move(_played(_FORCED)) in {(5, 0), (5, 6)}
+    assert head.last_tactics is not None and head.last_tactics["audit_swaps"] == 1

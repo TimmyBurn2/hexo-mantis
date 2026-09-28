@@ -153,7 +153,7 @@ impl MctxRootState {
 
     /// Every root child in Sequential Halving's final order (visits, then the score at its own level); `best_action` leads.
     #[must_use]
-    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_possible_truncation)] // a root child's index fits the pool's u32 by construction
     pub fn ranking(&self, tree: &MCTSTree, sigma: QSigma) -> Vec<u32> {
         let completed = tree.root_completed_qvalues(sigma);
         let mut rows: Vec<(u32, f32, u32)> = completed

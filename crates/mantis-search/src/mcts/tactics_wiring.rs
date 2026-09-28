@@ -99,6 +99,8 @@ pub struct TacticsCounters {
     pub best_holds: u64,
     pub audit_calls: u64,
     pub audit_exhausted: u64,
+    pub audit_swaps: u64,
+    pub audit_unvetted: u64,
     pub proof_stone_illegal: u64,
     pub grid_overflows: u64,
     pub three_cells_capped: u64,
