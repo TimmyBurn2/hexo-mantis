@@ -9,7 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from mantis._engine import MCTSTree
-from mantis.config.loader import load_config
+from mantis.config.loader import discover_configs, load_config
 from mantis.config.resolve.tactics import (
     ARMS,
     AUDIT_INVERTED,
@@ -20,7 +20,7 @@ from mantis.config.resolve.tactics import (
 )
 from mantis.config.schema import RunConfig
 
-_CONFIGS = sorted(Path(__file__).resolve().parents[2].joinpath("configs").glob("*.yaml"))
+_CONFIGS = discover_configs(Path(__file__).resolve().parents[2] / "configs")
 _BLOCK: dict[str, Any] = {
     "kind": "strict_turn", "leaf_turns": 3, "leaf_nodes": 256, "root_turns": 8, "root_nodes": 20000,
     "audit": {"turns": 8, "nodes": 2000, "k": 4, "m": 4, "total_nodes": 40000},
@@ -78,6 +78,7 @@ def test_a_selfplay_block_is_refused_by_name() -> None:
 
 @pytest.mark.parametrize("bad", [
     {"kind": "per_stone"}, {"leaf_turns": 0}, {"root_turns": 41}, {"leaf_nodes": -1}, {"root_nodes": True},
+    {"root_nodes": 2**63}, {"audit": {**_BLOCK["audit"], "total_nodes": 2**63}},
     {"audit": {**_BLOCK["audit"], "k": 0}}, {"audit": {**_BLOCK["audit"], "total_nodes": 0}},
 ])
 def test_a_block_outside_the_bridge_bounds_does_not_mint(bad: dict[str, Any]) -> None:

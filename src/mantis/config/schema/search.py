@@ -11,15 +11,18 @@ from pydantic import Field
 
 from mantis.config.schema._base import StrictModel
 
+#: The bridge parses a node budget as an `i64`; a larger minted value would validate and then fail to arm.
+_MAX_NODES = 2**63 - 1
+
 
 class TacticsAuditConfig(StrictModel):
     """The defence audit's budgets: a call's `turns` and `nodes`, `k` alternatives, `m` second stones, one move's total."""
 
     turns: int = Field(ge=1, le=40)
-    nodes: int = Field(ge=1)
+    nodes: int = Field(ge=1, le=_MAX_NODES)
     k: int = Field(ge=1, le=1024)
     m: int = Field(ge=1, le=1024)
-    total_nodes: int = Field(ge=1)
+    total_nodes: int = Field(ge=1, le=_MAX_NODES)
 
 
 class TacticsConfig(StrictModel):
@@ -27,9 +30,9 @@ class TacticsConfig(StrictModel):
 
     kind: Literal["strict_turn"]
     leaf_turns: int = Field(ge=1, le=40)
-    leaf_nodes: int = Field(ge=0)
+    leaf_nodes: int = Field(ge=0, le=_MAX_NODES)
     root_turns: int = Field(ge=1, le=40)
-    root_nodes: int = Field(ge=0)
+    root_nodes: int = Field(ge=0, le=_MAX_NODES)
     audit: TacticsAuditConfig | None = Field(default=...)
 
 
@@ -47,7 +50,7 @@ class SearchConfig(StrictModel):
       by ``crates/mantis-search/tests/mctx_parity.rs``.
 
     The σ the kind spends (``selfplay.{c_visit, c_scale, q_rescale}``) is ONE key set shared
-    by both homes; only the ``kind`` may differ between them.
+    by both homes; the ``kind`` and the ``tactics`` block may differ between them.
     """
 
     kind: Literal["puct", "gumbel"]
