@@ -70,6 +70,9 @@ class _FakeCells:
                                  "sec_per_game": 0.04}
         else:
             record["error"] = "planted failure"
+        if self.rc == 0 and cell.get("tactics") is not None:
+            record["tactics"] = {"block": cell["tactics"], "module_sha256": "m" * 64,
+                                 "rows": {"root_proofs_found": 1}, "proof_games_lost": [], "proof_games_drawn": []}
         return record
 
 
@@ -331,3 +334,50 @@ def test_the_host_load_reader_reads_nvidia_smi_and_survives_its_absence(follower
     assert follower_mod.read_host_load().gpu_util_pct is None
     monkeypatch.setattr(follower_mod.shutil, "which", lambda _name: None)
     assert follower_mod.read_host_load() == follower_mod.HostLoad(load_1m=2.0, cpu_count=8, gpu_util_pct=None)
+
+
+_ARMED = {"kind": "strict_turn", "leaf_turns": 3, "leaf_nodes": 256, "root_turns": 8, "root_nodes": 20000,
+          "audit": {"turns": 8, "nodes": 2000, "k": 4, "m": 4, "total_nodes": 40000, "mode": "hold"}}
+
+
+def test_an_arm_plays_its_block_and_writes_its_own_receipt_beside_the_configs(follower_mod, tmp_path: Path) -> None:
+    run = _run_dir(tmp_path)
+    ckpt = _checkpoint(run, 45000)
+    cells = _FakeCells()
+    assert _follower(follower_mod, run, cells).read_one(ckpt, trigger="once")[0] == "written"
+    status, out = _follower(follower_mod, run, cells, arm="full", tactics=_ARMED).read_one(ckpt, trigger="once")
+    assert status == "written" and out.name == ckpt.name + ".strix256.full.json", "the config's receipt shadows no arm"
+    assert "tactics" not in cells.calls[0], "no arm: the frontier plays the config's own block"
+    assert cells.calls[1]["tactics"] == _ARMED and cells.calls[1]["label"].endswith("_full")
+    body = json.loads(out.read_text(encoding="utf-8"))
+    assert body["tactics"] == {"arm": "full", "block": _ARMED, "module_sha256": "m" * 64,
+                               "rows": {"root_proofs_found": 1}, "proof_games_lost": [], "proof_games_drawn": []}
+    assert "tactics" not in json.loads(ckpt.with_name(ckpt.name + ".strix256.json").read_text(encoding="utf-8"))
+    status, out = _follower(follower_mod, run, cells, arm="plain").read_one(ckpt, trigger="once")
+    assert out.name.endswith(".strix256.plain.json") and cells.calls[2]["tactics"] is None
+    assert json.loads(out.read_text(encoding="utf-8"))["tactics"] == {"arm": "plain", "block": None}
+
+
+def test_the_cli_arm_resolves_its_block_file_and_a_block_without_an_arm_is_refused(
+        follower_mod, monkeypatch, tmp_path: Path) -> None:
+    seen: list[tuple[Any, Any]] = []
+
+    def _read(self, checkpoint: Path, *, trigger: str) -> tuple[str, Path]:
+        seen.append((self.arm, self.tactics))
+        return "written", checkpoint
+
+    monkeypatch.setattr(follower_mod, "_real_run_cell", lambda _config, _work: _FakeCells())
+    monkeypatch.setattr(follower_mod, "opponent_pin", lambda _unit: {})
+    monkeypatch.setattr(follower_mod.Follower, "read_one", _read)
+    block = tmp_path / "block.json"
+    block.write_text(json.dumps({**_ARMED, "audit": {k: v for k, v in _ARMED["audit"].items() if k != "mode"}}),
+                     encoding="utf-8")
+    base = ["--config", "c.yaml", "--run-dir", str(tmp_path), "--run-id", _RUN, "--work-dir", str(tmp_path / "w"),
+            "--once", str(tmp_path / "x.ckpt")]
+    assert follower_mod.main([*base, "--arm", "known-bad", "--tactics-block", str(block)]) == 0
+    assert seen[-1] == ("known-bad", {**_ARMED, "audit": {**_ARMED["audit"], "mode": "inverted"}})
+    assert follower_mod.main(base) == 0 and seen[-1] == (None, None)
+    for bad in (["--arm", "full"], ["--tactics-block", str(block)]):
+        with pytest.raises(SystemExit):
+            follower_mod.main([*base, *bad])
+    assert len(seen) == 2

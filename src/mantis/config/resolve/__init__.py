@@ -80,11 +80,12 @@ from mantis.config.resolve.search import (
     resolve_deploy_search_kind,
     resolve_selfplay_search_kind,
 )
-
 from mantis.config.resolve.tactics import (
+    ARMS,
     AUDIT_HOLD,
     AUDIT_INVERTED,
     MissingTacticsError,
+    arm_block,
     resolve_deploy_tactics,
     tactics_block,
 )
@@ -94,9 +95,11 @@ __all__ = [
     "MissingSearchKindError",
     "resolve_deploy_search_kind",
     "resolve_selfplay_search_kind",
+    "ARMS",
     "AUDIT_HOLD",
     "AUDIT_INVERTED",
     "MissingTacticsError",
+    "arm_block",
     "resolve_deploy_tactics",
     "tactics_block",
     "AbsentEncodingError",

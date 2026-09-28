@@ -20,6 +20,7 @@ from typing import Any
 from mantis.bots.six import CACHE_ENTRIES as SIX_CACHE_ENTRIES
 from mantis.bots.six import pin_record as six_pin_record
 from mantis.bots.strix import _pin as strix_pin_record
+from mantis.config.resolve.tactics import ARMS, arm_block
 from mantis.util.hashing import sha256_file
 
 EQUAL_WORK = "equal_work"
@@ -114,8 +115,10 @@ def resolve_checkpoint(run_dir: Path, run_id: str, trigger: Trigger) -> Path | N
     return found[0] if found else None
 
 
-def sidecar_path(checkpoint: Path, unit: str) -> Path:
-    return checkpoint.with_name(f"{checkpoint.name}.{UNITS[unit][2]}.json")
+def sidecar_path(checkpoint: Path, unit: str, arm: str | None = None) -> Path:
+    """The receipt beside the checkpoint; an A/B arm's names the arm, so no arm shadows another or the config's."""
+    tag = "" if arm is None else f".{arm}"
+    return checkpoint.with_name(f"{checkpoint.name}.{UNITS[unit][2]}{tag}.json")
 
 
 @dataclass(frozen=True)
@@ -253,27 +256,32 @@ class Follower:
                  cadence: int = 15_000, promotions: bool = True, games: int = 288,
                  concurrency: int = 8, pin: Mapping[str, Any] | None = None,
                  clock: Callable[[], float] = time.time, log: Callable[[str], None] = print,
-                 host_load: Callable[[], HostLoad] = read_host_load) -> None:
+                 host_load: Callable[[], HostLoad] = read_host_load, arm: str | None = None,
+                 tactics: Mapping[str, Any] | None = None) -> None:
         self.run_dir, self.run_id, self.run_cell = run_dir, run_id, run_cell
         self.unit, self.cadence, self.promotions = unit, cadence, promotions
         self.games, self.concurrency = games, concurrency
         self.pin = dict(pin) if pin is not None else {}
         self.clock, self.log, self.host_load = clock, log, host_load
+        #: The candidate's A/B arm (`None`: the config's own block) and the bridge block it resolved to.
+        self.arm, self.tactics = arm, None if tactics is None else dict(tactics)
         self.tail = EventTail(run_dir, run_id)
         self.pending: dict[int, Trigger] = {}
         self.fired: list[Path] = []
 
     def read_one(self, checkpoint: Path, *, trigger: str) -> tuple[str, Path]:
         """Play the cell on `checkpoint` unless its receipt exists: `(receipted|written|failed, path)`."""
-        out = sidecar_path(checkpoint, self.unit)
+        out = sidecar_path(checkpoint, self.unit, self.arm)
         if out.exists():
             self.log(f"follower: {out.name} exists — receipted, not re-read")
             return "receipted", out
         m = _STEP_IN_NAME.search(checkpoint.name)
         step = int(m.group(1)) if m else 0
-        label = f"{self.unit}_{self.run_id}_{step}"
+        label = f"{self.unit}_{self.run_id}_{step}" + ("" if self.arm is None else f"_{self.arm}")
         cell = compose_cell(checkpoint, unit=self.unit, step=step, games=self.games,
                             concurrency=self.concurrency, label=label)
+        if self.arm is not None:
+            cell = {**cell, "tactics": self.tactics}
         started = self.clock()
         regime_name, evidence = regime(self.run_dir, self.run_id, started, self.host_load())
         self.log(f"follower: {trigger} → {checkpoint.name} in {self.unit} ({regime_name})")
@@ -282,6 +290,8 @@ class Follower:
         body = sidecar_record(checkpoint, unit=self.unit, trigger=trigger, record=record,
                               regime_name=regime_name, regime_evidence=evidence, run_id=self.run_id,
                               started=started, finished=finished, pin=self.pin)
+        if self.arm is not None or "tactics" in record:
+            body["tactics"] = {"arm": self.arm, "block": self.tactics, **(record.get("tactics") or {})}
         error = record.get("error")
         if self.unit in SIX_UNITS and record.get("rc") == 0 and "readout" in record:
             error = played_bytes_error(record, self.pin)
@@ -373,13 +383,25 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--games", type=int, default=288)
     ap.add_argument("--concurrency", type=int, default=8)
     ap.add_argument("--poll-sec", type=float, default=300.0)
+    ap.add_argument("--arm", choices=ARMS, default=None,
+                    help="the candidate's A/B arm over --tactics-block, named in the receipt; absent, the config's own")
+    ap.add_argument("--tactics-block", type=Path, default=None, help="a search.tactics block (JSON)")
     args = ap.parse_args(argv)
     if args.follow and args.unit not in FOLLOW_UNITS:
         ap.error(f"--follow reads the ruler units {list(FOLLOW_UNITS)} only; every other unit is a --once cell")
+    armed = None
+    if args.arm is not None:
+        try:
+            armed = arm_block(args.arm, None if args.tactics_block is None
+                              else json.loads(args.tactics_block.read_text(encoding="utf-8")))
+        except ValueError as exc:
+            ap.error(f"--arm {args.arm}: {exc}")
+    elif args.tactics_block is not None:
+        ap.error("--tactics-block names the block an --arm overlays; give the arm")
     follower = Follower(run_dir=args.run_dir, run_id=args.run_id,
                         run_cell=_real_run_cell(args.config, args.work_dir), unit=args.unit,
                         cadence=args.cadence, promotions=args.promotions, games=args.games,
-                        concurrency=args.concurrency, pin=opponent_pin(args.unit))
+                        concurrency=args.concurrency, pin=opponent_pin(args.unit), arm=args.arm, tactics=armed)
     if args.once is not None:
         status, _path = follower.read_one(args.once.resolve(), trigger="once")
         return 1 if status == "failed" else 0

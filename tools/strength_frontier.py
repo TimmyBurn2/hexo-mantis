@@ -14,6 +14,7 @@ random floor, one rung, `round_index` 0; a refused floor probe is a FAILED cell.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -37,7 +38,7 @@ from mantis.config.resolve.eval_posture import resolve_ply_cap_adjudication, res
 from mantis.config.resolve.fused_graph_caps import resolve_fused_graph_caps
 from mantis.config.resolve.inference_batching import resolve_inference_batching
 from mantis.config.resolve.leaf_build_threads import resolve_leaf_build_threads
-from mantis.config.resolve.tactics import resolve_deploy_tactics
+from mantis.config.resolve.tactics import ARMS, arm_block, resolve_deploy_tactics
 from mantis.encoding import lookup
 from mantis.eval.aggregate import pair_bootstrap_wr_ci
 from mantis.eval.rounds import GameRecordTarget, GateSpec, RoundSpec, RungJob
@@ -56,6 +57,7 @@ SIX = "six"
 #: The opponents played through the RUNG block; anything else is a snapshot through the gate.
 _RUNG_OPPONENTS = (STRIX, SIX)
 _RUN_ID = "frontier1"
+_REPO = Path(__file__).resolve().parents[1]
 _BOOTSTRAP_RESAMPLES = 2000
 _CI_LEVEL = 0.95
 #: The rung block's own pair-bootstrap terms, the values every receipt on record was aggregated
@@ -219,6 +221,8 @@ def cell_spec(cell: Mapping[str, Any], base: RoundSpec, *, cell_dir: Path, confi
         game_record=GameRecordTarget(record_dir=str(cell_dir / "games"), run_id=_RUN_ID),
         concurrency=int(cell.get("concurrency", 1)),
         rung_concurrency=int(cell.get("concurrency", 1)),
+        # The candidate's side only: the worker's gate pair gives the best side no block.
+        tactics=cell.get("tactics", base.tactics),
     )
     if opponent == STRIX:
         if "strix_sims" not in cell:
@@ -284,6 +288,51 @@ def pair_readout(records: Sequence[Mapping[str, Any]], *, seed: int) -> dict[str
     }
 
 
+#: The sources whose bytes are the tactics module a record names.
+_TACTICS_SOURCES = ("crates/mantis-search/src/tactics", "crates/mantis-search/src/mcts/tactics_wiring.rs",
+                    "crates/mantis-search/src/mcts/tactics_root.rs")
+
+
+def tactics_module_sha256(repo: Path) -> str:
+    """One hash over the tactics module's sources, each file's path and bytes in path order."""
+    files: list[Path] = []
+    for src in _TACTICS_SOURCES:
+        root = repo / src
+        files.extend(root.rglob("*.rs") if root.is_dir() else [root])
+    h = hashlib.sha256()
+    for path in sorted(files):
+        h.update(str(path.relative_to(repo)).encode() + b"\0" + path.read_bytes() + b"\0")
+    return h.hexdigest()
+
+
+def load_arm(arm: str, block_path: Path | None) -> dict[str, Any] | None:
+    """The bridge block `arm` arms from a `search.tactics` JSON file; Raises: FrontierCellError — see `arm_block`."""
+    try:
+        return arm_block(arm, None if block_path is None else json.loads(block_path.read_text(encoding="utf-8")))
+    except ValueError as exc:
+        raise FrontierCellError(f"--arm {arm}: {exc}") from exc
+
+
+def tactics_readout(records: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """The candidate's tactics rows summed over the cell's games, and the games a found proof then lost or drew."""
+    rows: dict[str, int] = {}
+    lost: list[int] = []
+    drawn: list[int] = []
+    for record in records:
+        game = record.get("candidate_tactics")
+        if game is None:
+            continue
+        for key, value in game.items():
+            rows[key] = rows.get(key, 0) + int(value)
+        if game.get("root_proofs_found", 0) > 0:
+            outcome = _candidate_outcome(record)
+            if outcome == 0.0:
+                lost.append(int(record["game_index"]))
+            elif outcome == 0.5:
+                drawn.append(int(record["game_index"]))
+    return {"rows": rows, "proof_games_lost": lost, "proof_games_drawn": drawn}
+
+
 def _records_for(cell_dir: Path, channel: str) -> Iterator[dict[str, Any]]:
     """The cell's OWN games; the floor probe's `random_floor` records are posture, not reading."""
     for record in iter_run_games(cell_dir / "games", _RUN_ID):
@@ -327,8 +376,11 @@ def run_cell(cell: Mapping[str, Any], *, config: Any, base: RoundSpec, work_dir:
         result = json.loads(Path(spec.result_path).read_text(encoding="utf-8"))
         record["worker_result"] = {"rungs": result.get("rungs"), "gate": result.get("gate"),
                                    "skipped_rungs": result.get("skipped_rungs")}
-        readout = pair_readout(list(_records_for(cell_dir, cell_channel(cell))),
-                               seed=_BOOTSTRAP_SEED)
+        games = list(_records_for(cell_dir, cell_channel(cell)))
+        readout = pair_readout(games, seed=_BOOTSTRAP_SEED)
+        if spec.tactics is not None:
+            record["tactics"] = {"block": spec.tactics, "module_sha256": tactics_module_sha256(_REPO),
+                                 **tactics_readout(games)}
         if readout["eff_n"] == 0:
             # A skipped rung or a refused floor probe exits 0 with no games of the cell's own:
             # a failed cell, never a 0-game reading.
@@ -388,7 +440,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--work-dir", required=True)
     parser.add_argument("--parallel", type=int, default=1)
     parser.add_argument("--only", default=None, help="comma-separated labels to run")
+    parser.add_argument("--arm", choices=ARMS, default=None,
+                        help="the candidate's tactics arm for every cell; absent, the config's own block")
+    parser.add_argument("--tactics-block", type=Path, default=None, help="a search.tactics block (JSON) the arm overlays")
     args = parser.parse_args(argv)
+    if args.tactics_block is not None and args.arm is None:
+        parser.error("--tactics-block names the block an --arm overlays; give the arm")
 
     config = load_config(args.config)
     work_dir = Path(args.work_dir)
@@ -402,6 +459,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     labels = [c["label"] for c in cells]
     if len(set(labels)) != len(labels):
         raise FrontierCellError(f"duplicate cell labels: {labels}")
+    if args.arm is not None:
+        armed = load_arm(args.arm, args.tactics_block)
+        cells = [{**c, "tactics": armed} for c in cells]
     base = base_round_spec(config, work_dir=work_dir)
     env = dict(os.environ)
     if governs_device(config.eval.worker_device) and base.allocator_posture == "expandable_segments":

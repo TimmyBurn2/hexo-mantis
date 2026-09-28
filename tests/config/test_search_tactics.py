@@ -11,8 +11,10 @@ from pydantic import ValidationError
 from mantis._engine import MCTSTree
 from mantis.config.loader import load_config
 from mantis.config.resolve.tactics import (
+    ARMS,
     AUDIT_INVERTED,
     MissingTacticsError,
+    arm_block,
     resolve_deploy_tactics,
     tactics_block,
 )
@@ -81,3 +83,23 @@ def test_a_selfplay_block_is_refused_by_name() -> None:
 def test_a_block_outside_the_bridge_bounds_does_not_mint(bad: dict[str, Any]) -> None:
     with pytest.raises(ValidationError):
         RunConfig.model_validate(_with("deploy", {**_BLOCK, **bad}))
+
+
+def test_each_arm_resolves_the_one_block_and_the_bridge_arms_every_one() -> None:
+    assert arm_block("plain", _BLOCK) is None and arm_block("plain", None) is None
+    assert arm_block("full", _BLOCK) == tactics_block(_BLOCK)
+    assert arm_block("audit-off", _BLOCK) == tactics_block({**_BLOCK, "audit": None})
+    assert arm_block("known-bad", _BLOCK) == tactics_block(_BLOCK, audit_mode=AUDIT_INVERTED)
+    for arm in ("full", "audit-off", "known-bad"):
+        MCTSTree().configure_tactics(arm_block(arm, _BLOCK))
+    assert set(ARMS) == {"plain", "full", "audit-off", "known-bad"}
+
+
+@pytest.mark.parametrize(("arm", "block", "match"), [
+    ("inverted", _BLOCK, "not one of"), ("full", None, "none was given"),
+    ("known-bad", {**_BLOCK, "audit": None}, "null"), ("full", {**_BLOCK, "leaf_turns": 0}, "leaf_turns"),
+    ("audit-off", {**_BLOCK, "mode": "hold"}, "mode"),
+])
+def test_an_arm_that_cannot_resolve_is_refused_by_name(arm: str, block: Any, match: str) -> None:
+    with pytest.raises(ValueError, match=match):
+        arm_block(arm, block)

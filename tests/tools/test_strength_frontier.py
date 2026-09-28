@@ -1,7 +1,9 @@
 """tools/strength_frontier.py cell composition: one module for the one tool's three families."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 from _toolpath import load_module_by_path
@@ -9,6 +11,10 @@ from _toolpath import load_module_by_path
 from mantis.config.census import production_configs
 
 _REPO = Path(__file__).resolve().parents[2]
+_TACTICS: dict[str, Any] = {
+    "kind": "strict_turn", "leaf_turns": 3, "leaf_nodes": 256, "root_turns": 8, "root_nodes": 20000,
+    "audit": {"turns": 8, "nodes": 2000, "k": 4, "m": 4, "total_nodes": 40000},
+}
 
 
 @pytest.fixture(scope="module")
@@ -112,3 +118,44 @@ def test_a_strix_cell_without_strix_sims_is_refused(frontier, base, tmp_path) ->
             "opponent": "strix", "games": 4}
     with pytest.raises(frontier.FrontierCellError, match="strix_sims"):
         frontier.cell_spec(cell, base_spec, cell_dir=tmp_path, config=config)
+
+
+def test_a_cell_tactics_row_arms_the_candidate_and_without_one_the_configs_block_plays(frontier, base, tmp_path) -> None:
+    config, base_spec = base
+    assert frontier.cell_spec(_cell(), base_spec, cell_dir=tmp_path, config=config).tactics == base_spec.tactics
+    block = tmp_path / "block.json"
+    block.write_text(json.dumps(_TACTICS), encoding="utf-8")
+    armed = frontier.load_arm("known-bad", block)
+    spec = frontier.cell_spec(_cell(tactics=armed), base_spec, cell_dir=tmp_path, config=config)
+    assert spec.tactics == armed and armed["audit"]["mode"] == "inverted"
+    assert frontier.cell_spec(_cell(tactics=None), base_spec, cell_dir=tmp_path, config=config).tactics is None
+    with pytest.raises(frontier.FrontierCellError, match="--arm full: .*none was given"):
+        frontier.load_arm("full", None)
+
+
+def test_the_readout_sums_the_candidates_rows_and_names_the_proofs_a_game_did_not_bear_out(frontier) -> None:
+    def game(index: int, result: str, seat: int, **rows: int) -> dict[str, Any]:
+        return {"game_index": index, "result": result, "colors": {"candidate": seat}, "candidate_tactics": rows}
+
+    records = [game(0, "p1", 1, root_proofs_found=2, descents=10, moves=5),
+               game(1, "p1", 2, root_proofs_found=1, descents=6, moves=4),
+               game(2, "draw", 1, root_proofs_found=1, moves=3),
+               game(3, "p2", 1, descents=4, moves=2),
+               {"game_index": 4, "result": "p1", "colors": {"candidate": 1}}]
+    assert frontier.tactics_readout(records) == {
+        "rows": {"root_proofs_found": 4, "descents": 20, "moves": 14},
+        "proof_games_lost": [1], "proof_games_drawn": [2]}
+
+
+def test_the_module_hash_moves_with_a_tactics_source_byte_and_with_no_other(frontier, tmp_path) -> None:
+    src = tmp_path / "crates" / "mantis-search" / "src"
+    (src / "tactics").mkdir(parents=True)
+    (src / "mcts").mkdir()
+    for rel in ("tactics/mod.rs", "tactics/grid.rs", "mcts/tactics_wiring.rs", "mcts/tactics_root.rs", "mcts/puct.rs"):
+        (src / rel).write_text(rel, encoding="utf-8")
+    first = frontier.tactics_module_sha256(tmp_path)
+    (src / "mcts" / "puct.rs").write_text("another search", encoding="utf-8")
+    assert frontier.tactics_module_sha256(tmp_path) == first
+    (src / "tactics" / "grid.rs").write_text("another grid", encoding="utf-8")
+    assert frontier.tactics_module_sha256(tmp_path) != first
+    assert len(frontier.tactics_module_sha256(_REPO)) == 64, "every named source exists in the tree"
