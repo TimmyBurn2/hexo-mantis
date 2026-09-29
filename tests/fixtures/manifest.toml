@@ -184,7 +184,9 @@ path = "selfplay/pool/runner_config_goldens.json"
 # and `deploy.search.kind`; the capture carries both, the self-play one still `gumbel` in `full_config`.
 # Re-pinned 2026-09-16: R355(d)'s `search_stats_every` is a REQUIRED leaf the ctor kwargs carry.
 # Re-pinned 2026-09-24: the unread `pool_derived` block deleted with the dense-arm pool attributes.
-sha256 = "29b8624c1e40e5b5ffee5338aed08e34c7c3e4ceb6afaa5c49145d4c54cb4aff"
+# Re-cut by TACTICS-SELFPLAY (contract v40): the self-play home's `tactics` is read by `from_config`, so the
+# capture carries `tactics: null` in both homes and records the `configure_tactics` call beside `search_kind`.
+sha256 = "80340d46d74688aeb2a1ba8b28b1d578f452c25ea972f9ff870ebbebf03e1449"
 added_by = "WP-SP"
 
 [[required]]
