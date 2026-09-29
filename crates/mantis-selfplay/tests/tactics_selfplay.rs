@@ -34,8 +34,28 @@ const BLOCK: TacticsConfig = TacticsConfig {
     }),
 };
 
-/// One worker under `kind` and the block over compact play: its rows, widest search, plies and no-policy rows.
-fn drive(kind: SearchKind, want: usize) -> (HashMap<&'static str, u64>, u64, usize, u64) {
+/// The block with an audit as wide as Gumbel's candidates: its walk reaches cells the search never visited.
+const WIDE: TacticsConfig = TacticsConfig {
+    audit: Some(AuditConfig {
+        k: 16,
+        turns: 4,
+        nodes: 256,
+        m: 4,
+        total_nodes: 8_000,
+        mode: AuditMode::Hold,
+    }),
+    ..BLOCK
+};
+
+type Rows = HashMap<&'static str, u64>;
+
+/// One worker under `kind` and `block` over compact play for `want` plies, then until `more` is false or the deadline.
+fn drive(
+    kind: SearchKind,
+    block: TacticsConfig,
+    want: usize,
+    more: fn(&Rows) -> bool,
+) -> (Rows, u64, usize, u64) {
     let spec = lookup_or_panic(ENCODING);
     let runner = SelfPlayRunner::new(SelfPlayRunnerConfig {
         n_workers: 1,
@@ -46,7 +66,7 @@ fn drive(kind: SearchKind, want: usize) -> (HashMap<&'static str, u64>, u64, usi
         search_kind: kind,
         quiescence_enabled: false,
         encoding_name: Some(ENCODING.to_string()),
-        tactics: Some(BLOCK),
+        tactics: Some(block),
         ..Default::default()
     })
     .expect("runner constructs at the drive's parameters");
@@ -59,7 +79,11 @@ fn drive(kind: SearchKind, want: usize) -> (HashMap<&'static str, u64>, u64, usi
     runner.start();
     let deadline = Instant::now() + Duration::from_secs(600);
     let mut drained: Vec<GraphRecord> = Vec::new();
-    while Instant::now() < deadline && drained.len() < want && runner.fatal_defect().is_none() {
+    let totals = |r: &SelfPlayRunner| -> Rows { r.tactics_totals().into_iter().collect() };
+    while Instant::now() < deadline
+        && (drained.len() < want || more(&totals(&runner)))
+        && runner.fatal_defect().is_none()
+    {
         drained.extend(runner.drain_graph_records().expect("unpoisoned"));
         thread::sleep(Duration::from_millis(5));
     }
@@ -76,7 +100,7 @@ fn drive(kind: SearchKind, want: usize) -> (HashMap<&'static str, u64>, u64, usi
         "{kind:?} latched a fatal defect: {defect:?}"
     );
     assert!(records >= want, "{kind:?}: only {records} searched plies");
-    let rows = runner.tactics_totals().into_iter().collect();
+    let rows = totals(&runner);
     (
         rows,
         runner.stats_snapshot().max_sims_per_search,
@@ -89,7 +113,12 @@ fn drive(kind: SearchKind, want: usize) -> (HashMap<&'static str, u64>, u64, usi
 #[test]
 fn a_decided_root_is_searched_then_plays_its_stone_and_the_owed_stone_follows() {
     for kind in [SearchKind::Puct, SearchKind::Gumbel] {
-        let (rows, max_sims, records, no_policy) = drive(kind, 300);
+        // PUCT drives on until a zeroed-veto row lands: a short drive can meet none.
+        let more: fn(&Rows) -> bool = match kind {
+            SearchKind::Puct => |r| r["vetoed_target_rows"] == 0,
+            _ => |_| false,
+        };
+        let (rows, max_sims, records, no_policy) = drive(kind, BLOCK, 300, more);
         println!("{kind:?} over {records} plies: {rows:?}");
         assert_eq!(
             max_sims, SIMS as u64,
@@ -116,10 +145,10 @@ fn a_decided_root_is_searched_then_plays_its_stone_and_the_owed_stone_follows() 
             rows["decided_lost_rows"], rows["decided_lost"],
             "{kind:?}: every lost root records no policy target"
         );
-        assert_eq!(
-            no_policy,
-            rows["decided_lost_rows"] + rows["emptied_target_rows"],
-            "{kind:?}: the rows recorded with no policy are the lost and the emptied ones (every move is a full draw)"
+        // A game in flight at `stop()` drops its records, so the drained rows can only fall short of the count.
+        assert!(
+            no_policy <= rows["decided_lost_rows"] + rows["emptied_target_rows"] && no_policy > 0,
+            "{kind:?}: {no_policy} no-policy rows drained against the lost and emptied ones: {rows:?}"
         );
         // Every edit needs a veto; under Gumbel a vetoed move can carry no target mass, so not every veto edits.
         let edits = rows["vetoed_target_rows"] + rows["emptied_target_rows"];
@@ -139,6 +168,17 @@ fn a_decided_root_is_searched_then_plays_its_stone_and_the_owed_stone_follows() 
             "{kind:?}: the rows are summed: {rows:?}"
         );
     }
+}
+
+/// PLANTED BREAK: store vetoed cells in the sparse support; an unvisited veto overflows `gumbel_m` and latches.
+#[test]
+fn a_gumbel_audit_wider_than_its_candidates_records_within_the_rows_slots() {
+    let (rows, _, records, _) = drive(SearchKind::Gumbel, WIDE, 300, |r| r["root_vetoes"] < 8);
+    println!("Gumbel wide audit over {records} plies: {rows:?}");
+    assert!(
+        rows["root_vetoes"] >= 8,
+        "too few vetoes to reach an unvisited cell: {rows:?}"
+    );
 }
 
 #[test]

@@ -148,6 +148,12 @@ def test_the_readout_sums_the_candidates_rows_and_names_the_proofs_a_game_did_no
         "proof_games_drawn": [{"game_index": 2, "termination": "ply_cap"}]}
 
 
+def test_a_ruler_cell_arms_our_head_alone_and_a_snapshot_cell_arms_both(frontier) -> None:
+    """The receipt names the sides a block armed: a snapshot opponent plays through the deploy-matched gate pair."""
+    assert frontier.armed_sides({"opponent": "strix"}) == frontier.armed_sides({"opponent": "six"}) == "candidate"
+    assert frontier.armed_sides({"opponent": "anchor_self"}) == "both"
+
+
 def test_the_module_hash_moves_with_a_tactics_source_byte_and_with_no_other(frontier, tmp_path) -> None:
     src = tmp_path / "crates" / "mantis-search" / "src"
     (src / "tactics").mkdir(parents=True)

@@ -29,7 +29,8 @@ receipt's `schema_version` moves 1 → 2 with it, so a v1 receipt's regime reads
 v5: the SIX ruler (R374(b), SIX-RUNG) lands beside strix: a pin may name release assets by url and
 sha256 (`make vendor.six`).
 v6: the cell tools' tactics arms (TACTICS-DEPLOY): `--arm plain|full|audit-off|known-bad` over a
-`search.tactics` block (`--tactics-block`, JSON) arms the CANDIDATE side only, through
+`search.tactics` block (`--tactics-block`, JSON) arms the CANDIDATE side of a ruler cell (and, since the gate became
+deploy-matched under R378(d), both heads of a snapshot-opponent cell, stamped `sides: both` in its receipt), through
 `mantis.config.resolve.tactics.arm_from_file` (the one reader); with no arm the config's own
 `deploy.search.tactics` plays, and a cells file naming a block is refused. An arm's cells are its own: the
 frontier labels them `<label>_<arm>` (so their games' directory), and the follower's receipt is
@@ -59,7 +60,7 @@ and are folded in here, because a reader of any ladder reading needs them:
   sha-pinned rather than merely named.
 
 - **Deploy-matched** means both sides of a comparison are built by the SAME player
-  constructor at the SAME simulation count. `mantis.eval.worker` builds the candidate and the
+  constructor at the SAME simulation count, with the SAME tactics block (R378(d)). `mantis.eval.worker` builds the candidate and the
   best snapshot through one `_build_candidate_player` call site at `eval.gate.deploy_sims`,
   and the `RegimeKey` stamped on each record carries the value that was actually used. A
   rung job (a strix cell's) is deploy-matched to its own per-kind simulation count, never to
@@ -188,6 +189,6 @@ row says so and names what does run.
 | a six job reads the candidate's sims on `rung_model_sims` and resolves at its own nodes on the round's worker device; the rung block closes its probe opponent before concurrent games and every opponent it made at the end | `tests/eval/test_strix_rung_sims.py` | yes |
 | the follower fires ONE equal-work cell per cadence checkpoint and per promotion read off the event stream, a planted duplicate fires nothing, a promotion waits for its checkpoint, a failed cell leaves no receipt, the sidecar carries unit + regime + the net's hash and the checkpoint bytes are untouched | `tests/tools/test_strix_follower.py` | yes (the cell runner is a recording double; the unit's RoundSpec is composed through the real frontier) |
 | a strix cell composes the rung at the pinned checkpoint with its own sims and the candidate's on `rung_model_sims`; a production round refuses a strix job by name | `tests/tools/test_strength_frontier.py`, `tests/eval/test_strix_rung_sims.py` | yes |
-| each tactics arm resolves the one block or is refused by name; an arm's cell arms the candidate only and writes its own receipt, whose `tactics` section carries the arm, the block, the module hash and the summed rows with the proofs a game did not bear out; the dashboard draws an arm as its own series | `tests/config/test_search_tactics.py`, `tests/tools/test_strength_frontier.py`, `tests/tools/test_strix_follower.py`, `tests/tools/test_dashboard_external.py`; the candidate-only arming through the real worker, `tests/eval/test_game_record_eval_channel.py::test_an_armed_round_arms_the_candidate_alone_and_every_record_carries_its_rows` | yes (the cell runner is a recording double; the worker round is real) |
+| each tactics arm resolves the one block or is refused by name; an arm's ruler cell arms the candidate only and writes its own receipt, whose `tactics` section carries the arm, the block, the sides it armed, the module hash and the summed rows with the proofs a game did not bear out; the dashboard draws an arm as its own series | `tests/config/test_search_tactics.py`, `tests/tools/test_strength_frontier.py`, `tests/tools/test_strix_follower.py`, `tests/tools/test_dashboard_external.py`; the gate pair's deploy-matched arming through the real worker, `tests/eval/test_game_record_eval_channel.py::test_an_armed_round_arms_both_gate_sides_and_every_record_carries_the_candidates_rows` | yes (the cell runner is a recording double; the worker round is real) |
 | the six30_16 unit composes the six cell; its receipt carries the generation, the nodes, the provider, the counters, the forfeits and the engine, network and runtime bytes the engines verified, and a cell that played other bytes is a failed cell; the real producer's log lines read back through the frontier; `--follow` reads the two ruler units only; the dashboard draws the rung as its own series | `tests/tools/test_six_ruler_cell.py` | yes (the cell runner is a double; the producer round trip runs the real `mantis.bots.six` against a fake engine) |
 | the REAL vendored strix plays 20 legal games end to end at the pinned commit | `tests/bots/test_strix_adapter.py::test_the_live_driver_plays_twenty_legal_games_end_to_end` | **no** — `@pytest.mark.integration`; LOUD SKIP naming the missing step without the vendored venv and checkpoint |

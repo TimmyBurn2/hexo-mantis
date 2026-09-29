@@ -147,7 +147,7 @@ def test_the_puct_arm_plays_the_most_visited_child():
     assert move == top[0][0]
 
 
-def test_the_budget_is_leaves_and_the_root_is_one_of_them():
+def test_the_budget_is_descents_and_the_root_is_one_of_them():
     """`n_sims` means N DESCENTS on both arms, root included.
 
     The stub counts its own calls, which is the net's share of the descents, observable

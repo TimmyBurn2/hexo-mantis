@@ -201,6 +201,11 @@ def cell_channel(cell: Mapping[str, Any]) -> str:
     return "external" if cell_opponent(cell) in _RUNG_OPPONENTS else "promotion"
 
 
+def armed_sides(cell: Mapping[str, Any]) -> str:
+    """The heads a cell's block arms: ours against a ruler, both against a snapshot (the deploy-matched gate pair)."""
+    return "candidate" if cell_opponent(cell) in _RUNG_OPPONENTS else "both"
+
+
 def cell_spec(cell: Mapping[str, Any], base: RoundSpec, *, cell_dir: Path, config: Any) -> RoundSpec:
     """One cell's RoundSpec: the rung at `sims` vs strix or six, or the gate SCREEN vs a model."""
     games = int(cell["games"])
@@ -223,7 +228,7 @@ def cell_spec(cell: Mapping[str, Any], base: RoundSpec, *, cell_dir: Path, confi
         game_record=GameRecordTarget(record_dir=str(cell_dir / "games"), run_id=_RUN_ID),
         concurrency=int(cell.get("concurrency", 1)),
         rung_concurrency=int(cell.get("concurrency", 1)),
-        # Our head's block: a cell's opponent is a ruler, an external bot no block reaches.
+        # Against a ruler our head alone plays it; a snapshot opponent is our net's gate pair, armed alike.
         tactics=cell.get("tactics", base.tactics),
     )
     if opponent == STRIX:
@@ -351,6 +356,7 @@ def run_cell(cell: Mapping[str, Any], *, config: Any, base: RoundSpec, work_dir:
     # Named before the child plays: the tree's tactics sources, and the engine bytes the child loads.
     tactics = None if spec.tactics is None and cell.get("tactics_arm") is None else {
         "arm": cell.get("tactics_arm"), "block": spec.tactics, "module_sha256": tactics_module_sha256(_REPO),
+        "sides": armed_sides(cell),
         "engine_sha256": sha256_file(Path(mantis_engine.__file__))}
     started = time.time()
     with (cell_dir / "child.log").open("w", encoding="utf-8") as log:
@@ -441,7 +447,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--parallel", type=int, default=1)
     parser.add_argument("--only", default=None, help="comma-separated labels to run")
     parser.add_argument("--arm", choices=ARMS, default=None,
-                        help="the candidate's tactics arm for every cell; absent, the config's own block")
+                        help="every cell's tactics arm, our head's against a ruler and both heads' against a snapshot; "
+                             "absent, the config's own block")
     parser.add_argument("--tactics-block", type=Path, default=None, help="a search.tactics block (JSON) the arm overlays")
     args = parser.parse_args(argv)
     if args.tactics_block is not None and args.arm is None:

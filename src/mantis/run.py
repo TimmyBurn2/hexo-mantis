@@ -667,7 +667,7 @@ def compose_run(
                     # will be deployed, not to the training search.
                     search_kind=resolve_deploy_search_kind(config),
                     gumbel_m=config.selfplay.gumbel_m,
-                    # The candidate head's tactics block: the deploy key's, never the self-play one.
+                    # Both gate heads' tactics block: the deploy key's, never the self-play one.
                     tactics=resolve_deploy_tactics(config.model_dump()),
                     run_id=run_id, spool_dir=log_dir / "eval_spool",
                     # The SAME directory the self-play recorder writes into, named once

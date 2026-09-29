@@ -400,6 +400,9 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
   - AMENDED by R378(e), in form, not rule: the target at a proven self-play root follows A9's reading. It is the
     searched target where its proof-set mass reads ≥ 0.7 at the median, else the α = 0.5 mixture; never the bare
     two-hot above.
+- **A vetoed cell outside the searched candidates (as built).** A Gumbel row stores its searched candidates only
+  (`gumbel_m` slots), so such a cell is zeroed in the target but keeps its training-tail share; `vetoed_target_rows`
+  counts only rows whose every veto holds no mass.
 - **All-vetoed roots (added as built).** When every unit of the searched target sits on vetoed moves, the target is
   left as searched and the row records no policy target, as a lost root's does (`emptied_target_rows`).
 - **Lost roots in self-play.** A lost-on-cover root is searched (the root is always expanded), but every child

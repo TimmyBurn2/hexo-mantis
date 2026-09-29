@@ -98,6 +98,9 @@ def test_an_armed_selfplay_block_refuses_a_quick_arm_that_trains_policy() -> Non
         RunConfig.model_validate(dump)
     dump["train"]["fast_policy_weight"] = 0.0
     RunConfig.model_validate(dump)
+    unarmed = _with("selfplay", None)
+    unarmed["train"]["fast_policy_weight"] = 0.5
+    RunConfig.model_validate(unarmed)
 
 
 @pytest.mark.parametrize("bad", [

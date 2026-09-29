@@ -690,7 +690,10 @@ pub(crate) fn play_one_move(
     };
 
     // ── Sample and apply move: the decided stone, else the search's, vetted by the audit in the kind's order ──
-    let order = tree.audit_order(gumbel_state.as_ref());
+    let order = match decided {
+        None if tree.tactics_config().is_some() => tree.audit_order(gumbel_state.as_ref()),
+        _ => None,
+    };
     let move_idx = match decided {
         Some(stone) => stone,
         None => {
@@ -741,13 +744,12 @@ pub(crate) fn play_one_move(
 
     // ── Record position (BEFORE apply_move) ──
     {
-        // The sparse row's support: the search's OWN visited set (under Gumbel it can carry LESS mass
-        // than an unvisited cell), and each vetoed cell at zero, where the training tail cannot reach.
+        // The sparse row's support is the search's OWN visited-candidate set, read from the
+        // tree: under Gumbel a visited candidate can carry LESS mass than an unvisited one.
         let explicit_support = if ctx.search_kind.stores_sparse_rows() {
             Some(
                 tree.visited_root_child_cells()
                     .into_iter()
-                    .chain(vetoes.iter().copied())
                     .collect::<fxhash::FxHashSet<(i32, i32)>>(),
             )
         } else {

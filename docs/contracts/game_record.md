@@ -87,7 +87,8 @@ that true at `concurrency > 1` as well.
 entry per ply whose MOVER exposed a search root.
 
 **`by` is load-bearing, not decoration.** On the PROMOTION channel both players are deploy heads
-(candidate net vs anchor net), so the list covers every ply from BOTH sides; on a rung or the
+(candidate net vs anchor net), so the list covers every searched ply from BOTH sides (an armed head's decided
+plies expose no root and have no entry); on a rung or the
 random floor the opponent is a plain bot with no root and only the candidate's plies appear. The
 two are otherwise indistinguishable, and a reader would take a two-sided list for a one-sided
 one — halving every per-move statistic it computed.
