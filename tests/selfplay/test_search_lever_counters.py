@@ -1,4 +1,4 @@
-"""Every search-lever counter reaches `iteration_complete` from a REAL runner."""
+"""Every search-lever counter, the tactics rows among them, reaches `iteration_complete` from a REAL runner."""
 from __future__ import annotations
 
 import threading
@@ -178,6 +178,75 @@ def test_the_counters_reach_iteration_complete(drive: _Drive) -> None:
             f"{name} did not thread 1:1 into the stream: {block[name]} against {want}"
         )
         assert block[name]["per_position"] == pytest.approx(want / st.positions_generated)
+
+
+#: The armed drive's block: the leaves, the root offence and the audit at small budgets.
+_ARMED_BLOCK = {"kind": "strict_turn", "leaf_turns": 2, "leaf_nodes": 64, "root_turns": 2, "root_nodes": 256,
+                "audit": {"turns": 2, "nodes": 128, "k": 2, "m": 2, "total_nodes": 1024, "mode": "hold"}}
+
+
+@pytest.fixture(scope="module")
+def armed_drive() -> Iterator[_Drive]:
+    """One PUCT self-play drive with a tactics block armed in every worker's tree."""
+    cfg = _engine.SelfPlayRunnerConfig(
+        n_workers=_N_WORKERS, max_moves_per_game=8, n_simulations=_N_SIMS_QUICK, leaf_batch_size=4,
+        quiescence_enabled=False, q_rescale=True, search_stats_every=0, random_opening_plies=0,
+        encoding_name="gnn_axis_r8",
+    )
+    cfg.search_kind = "puct"
+    cfg.configure_tactics(_ARMED_BLOCK)
+    runner = _engine.SelfPlayRunner(cfg)
+    stop = threading.Event()
+    consumer = threading.Thread(target=_answer_uniformly, args=(runner.batcher, stop), daemon=True)
+    consumer.start()
+    runner.start()
+    try:
+        deadline = time.monotonic() + _TIMEOUT_S
+        while time.monotonic() < deadline and runner.positions_generated < _WANT_POSITIONS:
+            time.sleep(0.01)
+    finally:
+        runner.stop()
+        stop.set()
+        consumer.join(timeout=10)
+    yield _Drive(stats=_Pool(runner).runner_stats(), runner=runner)
+
+
+def test_an_armed_runners_tactics_rows_reach_iteration_complete(armed_drive: _Drive) -> None:
+    """Every tactics row the runner names threads 1:1 into `search_levers.tactics`; its served leaves are the runner's."""
+    st = armed_drive.stats
+    rows = st.tactics_totals
+    assert rows["descents"] > 0 and rows["audit_calls"] > 0, f"the armed drive summed nothing: {rows}"
+    # A search `stop()` cuts short counts its leaves in the runner's total only: one per worker at most.
+    assert 0 <= st.served_leaves_total - rows["served_leaves"] <= _N_SIMS_QUICK * _N_WORKERS, (
+        f"the tree counted {rows['served_leaves']} served leaves and the runner {st.served_leaves_total}"
+    )
+    dev = load_config(_REPO / "configs" / "dev_example.yaml")
+    config = _step_coordinator_config(
+        stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
+        drain_caps=resolve_drain_caps(dev.monitor), gate_interval=dev.monitor.gate_interval,
+        knobs=resolve_coordinator_knobs(dev.train))
+    events: list[dict[str, Any]] = []
+    coord = StepCoordinator(
+        trainer=None, buffer=SimpleNamespace(size=0, capacity=1),
+        pool=_Pool(armed_drive.runner), eval_pipeline=None,
+        subsystems=SimpleNamespace(gpu_monitor=None),
+        anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
+        shutdown=ShutdownState(), eval_model=object(), config=config,
+        full_config={}, sink=SimpleNamespace(emit=lambda e: events.append(dict(e))),
+        monitor_cfg=monitor_config(),
+    )
+    coord._emit_iteration_complete(config)
+    (payload,) = [e for e in events if e["event"] == "iteration_complete"]
+    block = payload["search_levers"]["tactics"]
+    assert set(block) == set(rows), f"rows missing from the stream: {sorted(set(rows) - set(block))}"
+    for name, want in rows.items():
+        assert block[name]["total"] == want and block[name]["delta"] == want, (name, block[name], want)
+
+
+def test_a_runner_without_the_tactics_totals_getter_is_refused_not_published_as_zero() -> None:
+    runner = SimpleNamespace(**{name: 1 for name in _LEVERS}, positions_dropped=0)
+    with pytest.raises(AttributeError, match="tactics_totals"):
+        runner_stats(_Pool(runner))
 
 
 @pytest.mark.parametrize("missing", _LEVERS)

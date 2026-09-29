@@ -741,6 +741,14 @@ class StepCoordinator:
                                "per_position": _fire_rate(delta, positions_delta)}
                 if total is not None:
                     self._last_target_counters[name] = total
+        # The tactics rows ride the lever block by the runner's own names, each seeded at 0 on first sight.
+        tactics: dict[str, Any] = {}
+        for name, total in (getattr(rstats, "tactics_totals", None) or {}).items():
+            key = f"tactics.{name}"
+            delta = total - self._last_target_counters.get(key, 0)
+            tactics[name] = {"total": total, "delta": delta, "per_position": _fire_rate(delta, positions_delta)}
+            self._last_target_counters[key] = total
+        levers["tactics"] = tactics
         if positions is not None:
             self._last_target_counters[_POSITIONS_COUNTER] = positions
         return report, levers, rstats

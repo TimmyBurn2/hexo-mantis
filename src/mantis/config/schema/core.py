@@ -485,17 +485,6 @@ class RunConfig(StrictModel):
         return self
 
     @model_validator(mode="after")
-    def _selfplay_runs_no_tactics(self) -> "RunConfig":
-        """`selfplay.search.tactics` stays null until the self-play path records proof targets; Raises: ValueError — a block."""
-        if self.selfplay.search.tactics is not None:
-            raise ValueError(
-                "selfplay.search.tactics is set, but the self-play runner arms no tactics block: it "
-                "would read armed while nothing consumes it (LAW-08). The self-play home opens with the "
-                "proof-target recording its targets need; until then only deploy.search.tactics arms."
-            )
-        return self
-
-    @model_validator(mode="after")
     def _soft_policy_rows_pair_with_their_head(self) -> "RunConfig":
         """`model.aux_soft_policy` is armed iff `identity.arch_kind` carries the head (v36): rows without a head read armed unconsumed, a head without rows trains at unstated values; Raises: ValueError — either way."""
         carries_head = self.identity.arch_kind in SOFT_POLICY_ARCH_KINDS

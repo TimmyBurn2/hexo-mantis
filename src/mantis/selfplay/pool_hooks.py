@@ -10,7 +10,7 @@ Free functions taking the pool instance, so `pool.py` imports this module and ne
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
 # Injection Protocols — every one has an explicit no-op default at the pool ctor.
@@ -131,6 +131,8 @@ class RunnerStats:
     gpu_evals_total: int = 0
     # Descents a PUCT select backed up from the in-search TT, never served; 0 under Gumbel.
     tt_hits_total: int = 0
+    # The tactics block's rows over every search and the rows its moves recorded, by name; all 0 unarmed.
+    tactics_totals: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -145,7 +147,7 @@ class InferenceStats:
 def runner_stats(pool: Any) -> RunnerStats:
     """Snapshot the runner's counters; the search levers and the drop count have no `getattr` default.
 
-    Raises: AttributeError: the runner has no search-lever, `positions_dropped` or leaf-count getter.
+    Raises: AttributeError: the runner has no search-lever, `positions_dropped`, leaf-count or tactics-totals getter.
     """
     r = pool._runner
     return RunnerStats(
@@ -172,6 +174,7 @@ def runner_stats(pool: Any) -> RunnerStats:
         inference_failures_total=int(getattr(r, "inference_failures_total", 0)),
         positions_dropped=int(r.positions_dropped),
         worker_panics=int(getattr(r, "worker_panics", 0)),
+        tactics_totals={str(k): int(v) for k, v in r.tactics_totals().items()},
     )
 
 

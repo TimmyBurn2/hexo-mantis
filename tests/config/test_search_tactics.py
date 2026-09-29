@@ -1,4 +1,4 @@
-"""`search.tactics` (v39): REQUIRED in both homes with `null` the explicit off, refused under self-play, one resolver."""
+"""`search.tactics` (v39): REQUIRED in both homes with `null` the explicit off, each home armed through one resolver."""
 from __future__ import annotations
 
 import copy
@@ -16,9 +16,11 @@ from mantis.config.resolve.tactics import (
     MissingTacticsError,
     arm_block,
     resolve_deploy_tactics,
+    resolve_selfplay_tactics,
     tactics_block,
 )
 from mantis.config.schema import RunConfig
+from mantis.selfplay.hparams import SelfPlayHParams, build_runner_config, resolve_pool_encoding
 
 _CONFIGS = discover_configs(Path(__file__).resolve().parents[2] / "configs")
 _BLOCK: dict[str, Any] = {
@@ -71,9 +73,21 @@ def test_the_inverted_audit_is_a_resolver_argument_never_a_schema_leaf() -> None
         RunConfig.model_validate(_with("deploy", {**_BLOCK, "audit": {**_BLOCK["audit"], "mode": "inverted"}}))
 
 
-def test_a_selfplay_block_is_refused_by_name() -> None:
-    with pytest.raises(ValidationError, match="selfplay.search.tactics is set"):
-        RunConfig.model_validate(_with("selfplay", _BLOCK))
+def test_a_selfplay_block_validates_and_every_worker_tree_arms_what_the_resolver_hands_it() -> None:
+    config = RunConfig.model_validate(_with("selfplay", _BLOCK))
+    armed = resolve_selfplay_tactics(config.model_dump())
+    assert armed == {**_BLOCK, "audit": {**_BLOCK["audit"], "mode": "hold"}}
+    assert resolve_deploy_tactics(config.model_dump()) is None, "the homes are read apart"
+    hp = SelfPlayHParams.from_config(config.model_dump())
+    assert hp.tactics == armed
+    dump = config.model_dump()
+    runner_config = build_runner_config(hp, spec_dims=resolve_pool_encoding(dump),
+                                        encoding_name=dump["identity"]["encoding"])
+    assert runner_config.tactics_armed
+    with pytest.raises(MissingTacticsError, match="selfplay.search.tactics is absent"):
+        dump = config.model_dump()
+        del dump["selfplay"]["search"]["tactics"]
+        resolve_selfplay_tactics(dump)
 
 
 @pytest.mark.parametrize("bad", [

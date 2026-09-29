@@ -16,12 +16,14 @@
     "encoding": "gnn_axis_r8",
     "deploy": {
      "search": {
-      "kind": "gumbel"
+      "kind": "gumbel",
+      "tactics": null
      }
     },
     "selfplay": {
      "search": {
-      "kind": "gumbel"
+      "kind": "gumbel",
+      "tactics": null
      },
      "n_workers": 7,
      "leaf_batch_size": 12,
@@ -94,7 +96,8 @@
     "search_stats_every": 8
    },
    "post_ctor_attrs": {
-    "search_kind": "gumbel"
+    "search_kind": "gumbel",
+    "tactics": null
    }
   },
   "minimal_config": {
@@ -102,12 +105,14 @@
     "encoding": "gnn_axis_v1",
     "deploy": {
      "search": {
-      "kind": "puct"
+      "kind": "puct",
+      "tactics": null
      }
     },
     "selfplay": {
      "search": {
-      "kind": "puct"
+      "kind": "puct",
+      "tactics": null
      },
      "n_workers": 1,
      "leaf_batch_size": 8,
@@ -180,7 +185,8 @@
     "search_stats_every": 8
    },
    "post_ctor_attrs": {
-    "search_kind": "puct"
+    "search_kind": "puct",
+    "tactics": null
    }
   }
  }

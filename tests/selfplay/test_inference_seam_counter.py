@@ -22,7 +22,8 @@ from types import SimpleNamespace
 from mantis.selfplay.pool_hooks import RunnerStats, runner_stats
 from mantis.train.coordinator.step import _SEARCH_LEVER_COUNTERS
 
-_LEVERS = dict.fromkeys((*_SEARCH_LEVER_COUNTERS, "positions_dropped"), 0)
+#: The getters `runner_stats` reads with no default; `tactics_totals` is a call, so its stand-in is `dict`.
+_LEVERS = {**dict.fromkeys((*_SEARCH_LEVER_COUNTERS, "positions_dropped"), 0), "tactics_totals": dict}
 
 
 class _Pool:

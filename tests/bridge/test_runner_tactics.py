@@ -1,5 +1,4 @@
-"""The self-play runner's tactics block crosses the bridge: a well-formed one arms, None disarms, a malformed one is refused
-by name, and the runner's totals name every row, zero before any search."""
+"""The self-play runner config arms a tactics block, None disarms, a bad one is refused, and the totals name every row."""
 from __future__ import annotations
 
 import pytest

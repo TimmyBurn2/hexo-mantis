@@ -49,6 +49,11 @@ class RecordingRunnerConfig:
     def __getattr__(self, name: str) -> Any:
         return getattr(object.__getattribute__(self, "real"), name)
 
+    def configure_tactics(self, block: dict[str, Any] | None) -> None:
+        """The one post-ctor write that is a call, recorded under `tactics` beside the attribute sets."""
+        self.recorded_attrs["tactics"] = block
+        self.real.configure_tactics(block)
+
 
 def record_runner_config_factory(monkeypatch) -> Callable[[dict[str, Any]], RecordingRunnerConfig]:
     """Patch `hparams` to build the recording proxy; return the one-config assembly factory."""

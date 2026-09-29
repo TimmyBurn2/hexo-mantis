@@ -1,4 +1,4 @@
-"""`resolve_deploy_tactics` — THE read path for `deploy.search.tactics` (v39): the block as the bridge arms it, or `None`."""
+"""The read path for `search.tactics` in both homes (v39): the block as the bridge arms it, or `None`."""
 from __future__ import annotations
 
 import json
@@ -8,7 +8,6 @@ from typing import Any
 
 from mantis.config.schema import TacticsConfig
 
-_KEY = "deploy.search.tactics"
 _AUDIT_MEMBERS: tuple[str, ...] = ("turns", "nodes", "k", "m", "total_nodes")
 #: The mode a minted block's audit arms; the inverted known-bad is a cell tool's arm, never a config's.
 AUDIT_HOLD = "hold"
@@ -20,7 +19,7 @@ ARMS: tuple[str, ...] = ("plain", "full", "audit-off", "known-bad")
 
 
 class MissingTacticsError(ValueError):
-    """`deploy.search.tactics` is absent (not `null`) at some named level."""
+    """`<home>.search.tactics` is absent (not `null`) at some named level."""
 
 
 def tactics_block(block: Mapping[str, Any] | None, *, audit_mode: str = AUDIT_HOLD) -> dict[str, Any] | None:
@@ -59,13 +58,23 @@ def arm_from_file(arm: str, path: Path | None) -> dict[str, Any] | None:
     return arm_block(arm, None if path is None else json.loads(path.read_text(encoding="utf-8")))
 
 
-def resolve_deploy_tactics(full_config: Any) -> dict[str, Any] | None:
-    """The deploy head's block from a config dump, or `None` for `null`; Raises: MissingTacticsError — the key absent."""
-    deploy = full_config.get("deploy") if isinstance(full_config, Mapping) else None
-    search = deploy.get("search") if isinstance(deploy, Mapping) else None
+def _resolve_home(full_config: Any, home: str) -> dict[str, Any] | None:
+    """`<home>.search.tactics` from a config dump as the bridge arms it; Raises: MissingTacticsError — the key absent."""
+    section = full_config.get(home) if isinstance(full_config, Mapping) else None
+    search = section.get("search") if isinstance(section, Mapping) else None
     if not isinstance(search, Mapping) or "tactics" not in search:
         raise MissingTacticsError(
-            f"{_KEY} is absent. The key is REQUIRED (`null` is the explicit OFF), so a config reaching "
-            "here without it was not built through the one loader; a code-side OFF would report as configured"
+            f"{home}.search.tactics is absent. The key is REQUIRED (`null` is the explicit OFF), so a config "
+            "reaching here without it was not built through the one loader; a code-side OFF would report as configured"
         )
     return tactics_block(search["tactics"])
+
+
+def resolve_deploy_tactics(full_config: Any) -> dict[str, Any] | None:
+    """The deploy head's block from a config dump, or `None` for `null`; Raises: MissingTacticsError — the key absent."""
+    return _resolve_home(full_config, "deploy")
+
+
+def resolve_selfplay_tactics(full_config: Any) -> dict[str, Any] | None:
+    """The self-play workers' block from a config dump, or `None`; Raises: MissingTacticsError — the key absent."""
+    return _resolve_home(full_config, "selfplay")

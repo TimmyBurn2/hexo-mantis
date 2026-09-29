@@ -62,6 +62,8 @@ RUNNER_STATS_FIELDS = {
     "served_leaves_total", "gpu_evals_total",
     # Descents backed up from the in-search TT, never served.
     "tt_hits_total",
+    # The tactics block's rows by name, one getter for all of them.
+    "tactics_totals",
 }
 INFERENCE_STATS_FIELDS = {"forward_count", "total_requests", "encoding_spec"}
 

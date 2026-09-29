@@ -9,6 +9,7 @@ from typing import Any
 
 from mantis._engine import SelfPlayRunnerConfig
 from mantis.config.resolve.search import resolve_selfplay_search_kind
+from mantis.config.resolve.tactics import resolve_selfplay_tactics
 from mantis.encoding import EncodingSpec, resolve_from_config
 from mantis.model import RepresentationMismatch
 
@@ -90,6 +91,8 @@ class SelfPlayHParams:
     #: `selfplay.search.kind`, REQUIRED with no default: it selects the root mechanism, the interior
     #: selector AND the exported target's semantics, so a default would boot an undeclared regime.
     search_kind: str
+    #: `selfplay.search.tactics` as the bridge arms it, `None` the explicit off: every worker tree's block.
+    tactics: dict[str, Any] | None
     c_visit: float
     c_scale: float
     #: `selfplay.q_rescale`, REQUIRED with no default: the σ's rescale switch.
@@ -138,8 +141,8 @@ class SelfPlayHParams:
         cls, config: dict[str, Any], n_workers: int | None = None
     ) -> SelfPlayHParams:
         """Resolve every ctor-time knob off a validated mapping's `selfplay`/`train` sections.
-        `effective_sims_per_move == 0` has no schema equivalent, since it spans
-        `mcts.n_simulations` AND `playout_cap.*`, so it stays the one runtime hard error here."""
+        `effective_sims_per_move == 0` spans `mcts.n_simulations` AND `playout_cap.*`, so it is checked here.
+        Raises: ValueError — no effective per-move sim count; `MissingTacticsError`, no `selfplay.search.tactics`."""
         sp = config["selfplay"]
         mcts_cfg = sp["mcts"]
         pc = sp["playout_cap"]
@@ -151,6 +154,7 @@ class SelfPlayHParams:
             max_moves_per_game=int(sp["max_game_moves"]),
             # THE self-play selector; the deploy head reads its own key.
             search_kind=resolve_selfplay_search_kind(config),
+            tactics=resolve_selfplay_tactics(config),
             c_visit=float(sp["c_visit"]),
             c_scale=float(sp["c_scale"]),
             q_rescale=bool(sp["q_rescale"]),
@@ -220,7 +224,7 @@ def build_runner_config(
 
     Raises:
         RepresentationMismatch: the resolved spec is not a graph encoding.
-        ValueError: the Rust config refuses a knob, including an unknown search kind.
+        ValueError: the Rust config refuses a knob, including an unknown search kind or a malformed tactics block.
     """
     spec = spec_dims.registry_spec
     is_graph_representation(spec)
@@ -259,6 +263,7 @@ def build_runner_config(
     )
     # The Rust setter REFUSES an unknown search kind, so a typo is a boot error, not a PUCT search.
     cfg.search_kind = hp.search_kind
+    cfg.configure_tactics(hp.tactics)
     return cfg
 
 
