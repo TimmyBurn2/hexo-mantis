@@ -188,8 +188,8 @@ impl MCTSTree {
         if let Some(root) = self.raw_values.first_mut() {
             *root = 0.0;
         }
-        // Clear TT between games: positions do not repeat across games, and the `Vec<f32>` policy
-        // entries accumulate unboundedly without this.
+        // Clear the TT per search: every driver calls this before each search, not once a game,
+        // and the `Vec<f32>` policy entries accumulate unboundedly without this.
         self.transposition_table.clear();
         self.inline_descents = 0;
         self.reset_tactics_search();

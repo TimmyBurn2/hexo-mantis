@@ -1,7 +1,7 @@
 //! Finalize phase — `finalize_game_graph`.
 //!
 //! The `winner == None` arm pays `ply_cap_value` when `terminal_reason == 2` else `draw_reward`;
-//! `value_valid` is the DRAW-MASK (`terminal_reason != 2`). The per-game push loop holds the
+//! `value_valid` is the PLY-CAP mask (`terminal_reason != 2`); a draw trains. The loop holds the
 //! results-queue lock ONCE across the whole game so every game's rows are CONTIGUOUS in the shared
 //! queue (observable only multi-worker). The terminal reason / outcome are read from
 //! `board.winner()` + `terminal_reason`, never re-derived from ply parity. Drop-oldest past
