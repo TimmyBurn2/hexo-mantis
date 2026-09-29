@@ -58,7 +58,7 @@ pub struct SelfPlayRunnerConfig {
     pub encoding_name: Option<String>,
     /// Entries of the exact per-net eval cache the workers share; `0` turns it off.
     pub eval_cache_capacity: usize,
-    /// The tactics block each worker's tree runs; `None` is off, and the bridge always sets `None`.
+    /// The tactics block each worker's tree runs: its leaves, root offence and audit; `None` is off.
     pub tactics: Option<TacticsConfig>,
 }
 

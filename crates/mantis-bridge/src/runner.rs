@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 
 use mantis_search::SearchKind;
 use mantis_selfplay::queues::EVAL_CACHE_CAPACITY;
@@ -18,6 +19,7 @@ use mantis_selfplay::runner::config::SelfPlayRunnerConfig;
 use mantis_selfplay::runner::{DrainPoisoned, GameResultRow, RunnerStatsSnapshot, SelfPlayRunner};
 
 use crate::inference::PyInferenceBatcher;
+use crate::mcts::tactics_config_of;
 
 pyo3::create_exception!(
     mantis_engine,
@@ -212,6 +214,22 @@ impl PySelfPlayRunnerConfig {
         self.inner.search_kind = parsed;
         Ok(())
     }
+
+    /// Whether a tactics block arms the workers' trees.
+    #[getter]
+    pub fn tactics_armed(&self) -> bool {
+        self.inner.tactics.is_some()
+    }
+
+    /// Arm every worker's tree with the tactics block `MCTSTree.configure_tactics` takes, or disarm with `None`.
+    ///
+    /// # Errors
+    /// `ValueError` — a key, kind, mode or leaf the block may not carry.
+    #[pyo3(signature = (block))]
+    pub fn configure_tactics(&mut self, block: Option<&Bound<'_, PyDict>>) -> PyResult<()> {
+        self.inner.tactics = block.map(tactics_config_of).transpose()?;
+        Ok(())
+    }
 }
 
 /// The ONE supervisor-facing wording for a latched run-fatal self-play defect. The prefix names
@@ -236,8 +254,6 @@ impl PySelfPlayRunner {
         // Every production runner serves through the exact eval cache; the Rust default is off.
         let rust_config = SelfPlayRunnerConfig {
             eval_cache_capacity: EVAL_CACHE_CAPACITY,
-            // The self-play path runs no tactics until the proof targets that arm it exist.
-            tactics: None,
             ..config.to_rust()
         };
         let encoding_name = rust_config.encoding_name.clone();
@@ -419,6 +435,15 @@ impl PySelfPlayRunner {
     #[getter]
     pub fn tt_hits_total(&self) -> u64 {
         self.snapshot().tt_hits_total
+    }
+
+    /// The tactics block's rows summed over every search, then the rows its moves recorded, by name; all 0 off.
+    pub fn tactics_totals<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let d = PyDict::new(py);
+        for (name, value) in self.inner.tactics_totals() {
+            d.set_item(name, value)?;
+        }
+        Ok(d)
     }
 
     /// Worker threads that died by panic — 0 in a healthy run. Before this the panic sat in the

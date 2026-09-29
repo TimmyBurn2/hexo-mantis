@@ -535,7 +535,7 @@ fn str_leaf(d: &Bound<'_, PyDict>, what: &str, key: &str) -> PyResult<String> {
 
 /// The block's `kind`, `leaf_*`, `root_*` and `audit` (None, or `turns nodes k m total_nodes mode`), each checked.
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // each leaf is range-checked first
-fn tactics_config_of(d: &Bound<'_, PyDict>) -> PyResult<TacticsConfig> {
+pub(crate) fn tactics_config_of(d: &Bound<'_, PyDict>) -> PyResult<TacticsConfig> {
     let what = "tactics block";
     exact_keys(
         d,
