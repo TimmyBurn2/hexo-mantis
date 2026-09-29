@@ -44,6 +44,8 @@ pub(crate) struct InferContext<'a> {
     pub(crate) gpu_evals: &'a AtomicU64,
     /// Descents the tactics wiring backed up inline: no leaf, no inference.
     pub(crate) inline_descents: &'a AtomicU64,
+    /// Descents a PUCT select backed up from the in-search TT: counted, never served.
+    pub(crate) tt_hits: &'a AtomicU64,
 }
 
 /// Per-move MCTS accumulators. `export_offwindow_mass_moves` fires once per move whose
@@ -261,6 +263,9 @@ fn infer_and_expand_graph(
     infer
         .inline_descents
         .fetch_add(inline as u64, Ordering::Relaxed);
+    infer
+        .tt_hits
+        .fetch_add(tree.last_tt_hits() as u64, Ordering::Relaxed);
     if leaves.is_empty() {
         return Ok((0, inline));
     }
@@ -826,6 +831,7 @@ mod forced_round_tests {
             served_leaves: &AtomicU64::new(0),
             gpu_evals: &AtomicU64::new(0),
             inline_descents: &AtomicU64::new(0),
+            tt_hits: &AtomicU64::new(0),
         };
         let err = infer_and_expand_graph(&mut tree, LeafSelection::Round(&[u32::MAX]), 19, infer)
             .expect_err("a foreign forced child must be refused");
@@ -896,6 +902,7 @@ mod forced_round_tests {
                 served_leaves: &AtomicU64::new(0),
                 gpu_evals: &AtomicU64::new(0),
                 inline_descents: &AtomicU64::new(0),
+                tt_hits: &AtomicU64::new(0),
             };
             if let Err(err) = infer_and_expand_graph(&mut tree, LeafSelection::Batch(1), 19, infer)
             {

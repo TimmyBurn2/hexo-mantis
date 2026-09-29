@@ -135,6 +135,7 @@ pub(crate) fn run_worker_thread(
         served_leaves_total,
         gpu_evals_total,
         inline_descents_total,
+        tt_hits_total,
         graph_game_seq,
     } = atomics;
     let WorkerChannels {
@@ -221,6 +222,7 @@ pub(crate) fn run_worker_thread(
         served_leaves: &served_leaves_total,
         gpu_evals: &gpu_evals_total,
         inline_descents: &inline_descents_total,
+        tt_hits: &tt_hits_total,
     };
     let fatal_latch = FatalDefectLatch {
         slot: &fatal_defect,

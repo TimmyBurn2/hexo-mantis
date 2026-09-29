@@ -113,6 +113,8 @@ pub struct RunnerStatsSnapshot {
     pub gpu_evals_total: u64,
     /// Descents the tactics wiring backed up inline, no leaf served: with `served_leaves_total`, every descent.
     pub inline_descents_total: u64,
+    /// Descents a PUCT select backed up from the in-search TT, no leaf served; 0 under Gumbel.
+    pub tt_hits_total: u64,
     /// Worker threads that died by panic (must read 0 in a healthy run).
     pub worker_panics: u64,
 }
@@ -172,6 +174,7 @@ pub struct SelfPlayRunner {
     served_leaves_total: Arc<AtomicU64>,
     gpu_evals_total: Arc<AtomicU64>,
     inline_descents_total: Arc<AtomicU64>,
+    tt_hits_total: Arc<AtomicU64>,
     /// The monotonic graph-game id source. See `WorkerAtomics::graph_game_seq`.
     graph_game_seq: Arc<AtomicU64>,
     /// The fatal-defect latch: a worker panic is NOT loud, since `stop()` swallows join results,
@@ -348,6 +351,7 @@ impl SelfPlayRunner {
             served_leaves_total: Arc::new(AtomicU64::new(0)),
             gpu_evals_total: Arc::new(AtomicU64::new(0)),
             inline_descents_total: Arc::new(AtomicU64::new(0)),
+            tt_hits_total: Arc::new(AtomicU64::new(0)),
             graph_game_seq: Arc::new(AtomicU64::new(0)),
             fatal_defect: Arc::new(Mutex::new(None)),
         })
@@ -465,6 +469,7 @@ impl SelfPlayRunner {
             served_leaves_total: self.served_leaves_total.load(Ordering::Relaxed),
             gpu_evals_total: self.gpu_evals_total.load(Ordering::Relaxed),
             inline_descents_total: self.inline_descents_total.load(Ordering::Relaxed),
+            tt_hits_total: self.tt_hits_total.load(Ordering::Relaxed),
             worker_panics: self.worker_panics.load(Ordering::Relaxed),
         }
     }
@@ -679,6 +684,7 @@ mod seam_roundtrip {
         r.served_leaves_total.store(42, Ordering::Relaxed);
         r.gpu_evals_total.store(43, Ordering::Relaxed);
         r.inline_descents_total.store(44, Ordering::Relaxed);
+        r.tt_hits_total.store(48, Ordering::Relaxed);
 
         let expected = RunnerStatsSnapshot {
             games_completed: 1,
@@ -705,6 +711,7 @@ mod seam_roundtrip {
             served_leaves_total: 42,
             gpu_evals_total: 43,
             inline_descents_total: 44,
+            tt_hits_total: 48,
             worker_panics: 25,
         };
         assert_eq!(

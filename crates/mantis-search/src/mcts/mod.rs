@@ -126,6 +126,8 @@ pub struct MCTSTree {
     pub(crate) tactics: Option<Box<tactics_wiring::TacticsState>>,
     /// Descents the last select call backed up inline (`last_inline_descents`).
     pub(crate) inline_descents: usize,
+    /// Descents the last select call backed up from the TT, unserved (`last_tt_hits`).
+    pub(crate) tt_hits: usize,
 }
 
 /// A leaf queued for the net: its node, its board, and the tactics facts its expansion reads (`None` off).
@@ -170,6 +172,7 @@ impl MCTSTree {
             root_children_cap: MAX_CHILDREN_PER_NODE,
             tactics: None,
             inline_descents: 0,
+            tt_hits: 0,
         }
     }
 
@@ -192,11 +195,18 @@ impl MCTSTree {
         // and the `Vec<f32>` policy entries accumulate unboundedly without this.
         self.transposition_table.clear();
         self.inline_descents = 0;
+        self.tt_hits = 0;
         self.reset_tactics_search();
     }
 
     pub fn root_visits(&self) -> u32 {
         self.pool[0].n_visits
+    }
+
+    /// Descents the last select call backed up from the TT; 0 after `select_leaves_forced`.
+    #[must_use]
+    pub fn last_tt_hits(&self) -> usize {
+        self.tt_hits
     }
 
     /// First unallocated pool slot, so a test or audit can scan only the live portion of the pool.

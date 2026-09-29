@@ -1,4 +1,4 @@
-"""The playout-cap, Gumbel round and eval-cache counters reach `iteration_complete` from a REAL runner."""
+"""Every search-lever counter reaches `iteration_complete` from a REAL runner."""
 from __future__ import annotations
 
 import threading
@@ -31,7 +31,7 @@ _WANT_POSITIONS = 48
 _TIMEOUT_S = 120.0
 #: Transcribed, not read off the subject: a consistent rename must not satisfy the oracle.
 _LEVERS = ("pcr_full_moves", "pcr_quick_moves", "gumbel_round_leaves", "gumbel_rounds",
-           "served_leaves_total", "gpu_evals_total")
+           "served_leaves_total", "gpu_evals_total", "tt_hits_total")
 _REPO = Path(__file__).resolve().parents[2]
 
 

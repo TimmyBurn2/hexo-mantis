@@ -60,6 +60,8 @@ RUNNER_STATS_FIELDS = {
     "worker_panics",
     # Leaves expanded and the GPU's share of them: the exact eval cache's hits are the gap.
     "served_leaves_total", "gpu_evals_total",
+    # Descents backed up from the in-search TT, never served.
+    "tt_hits_total",
 }
 INFERENCE_STATS_FIELDS = {"forward_count", "total_requests", "encoding_spec"}
 

@@ -201,6 +201,11 @@ impl PyMCTSTree {
         self.inner.last_inline_descents()
     }
 
+    /// Descents the last `select_leaves` call backed up from the TT, no board returned.
+    pub fn last_tt_hits(&self) -> usize {
+        self.inner.last_tt_hits()
+    }
+
     /// This search's tactics rows by name; every row 0 with tactics off.
     pub fn tactics_counters<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let c = self.inner.tactics_counters();

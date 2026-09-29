@@ -335,6 +335,7 @@ impl MCTSTree {
     pub fn select_leaves(&mut self, n: usize) -> Result<Vec<Board>, SelectionDesync> {
         self.pending.clear();
         self.inline_descents = 0;
+        self.tt_hits = 0;
         let mut boards = Vec::with_capacity(n);
         // O(1) overlap dedup on leaf pool indices; the set lives only for this call.
         let mut pending_ids: FxHashSet<u32> = FxHashSet::default();
@@ -368,6 +369,7 @@ impl MCTSTree {
                 .get(&board.zobrist_hash)
                 .map(|e| (e.policy.clone(), e.value));
             if let Some((policy, value)) = cached {
+                self.tt_hits += 1;
                 match policy {
                     CachedPolicy::Dense(p) => {
                         self.expand_and_backup_single(leaf_idx, &board, &p, value, facts.as_ref())
@@ -429,6 +431,7 @@ impl MCTSTree {
         }
         self.pending.clear();
         self.inline_descents = 0;
+        self.tt_hits = 0;
         let mut boards = Vec::with_capacity(forced.len());
         let mut pending_ids: FxHashSet<u32> = FxHashSet::default();
         pending_ids.reserve(forced.len());

@@ -122,6 +122,7 @@ impl SelfPlayRunner {
             served_leaves_total: self.served_leaves_total.clone(),
             gpu_evals_total: self.gpu_evals_total.clone(),
             inline_descents_total: self.inline_descents_total.clone(),
+            tt_hits_total: self.tt_hits_total.clone(),
             graph_game_seq: self.graph_game_seq.clone(),
         };
         let channels_proto = WorkerChannels {

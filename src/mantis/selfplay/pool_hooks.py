@@ -129,6 +129,8 @@ class RunnerStats:
     # Leaves expanded, and the ones the GPU served: their gap is the exact eval cache's hits.
     served_leaves_total: int = 0
     gpu_evals_total: int = 0
+    # Descents a PUCT select backed up from the in-search TT, never served; 0 under Gumbel.
+    tt_hits_total: int = 0
 
 
 @dataclass(frozen=True)
@@ -164,6 +166,7 @@ def runner_stats(pool: Any) -> RunnerStats:
         gumbel_rounds=int(r.gumbel_rounds),
         served_leaves_total=int(r.served_leaves_total),
         gpu_evals_total=int(r.gpu_evals_total),
+        tt_hits_total=int(r.tt_hits_total),
         export_offwindow_mass_moves=int(getattr(r, "export_offwindow_mass_moves", 0)),
         target_integrity_defects=int(getattr(r, "target_integrity_defects", 0)),
         inference_failures_total=int(getattr(r, "inference_failures_total", 0)),

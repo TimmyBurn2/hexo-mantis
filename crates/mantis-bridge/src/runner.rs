@@ -415,6 +415,12 @@ impl PySelfPlayRunner {
         self.snapshot().gpu_evals_total
     }
 
+    /// Descents a PUCT select backed up from the in-search TT, no leaf served; 0 under Gumbel.
+    #[getter]
+    pub fn tt_hits_total(&self) -> u64 {
+        self.snapshot().tt_hits_total
+    }
+
     /// Worker threads that died by panic — 0 in a healthy run. Before this the panic sat in the
     /// `JoinHandle`, `stop()` discarded it, and the pool reported healthy while producing nothing.
     #[getter]
