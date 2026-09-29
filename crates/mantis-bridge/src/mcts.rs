@@ -226,12 +226,7 @@ impl PyMCTSTree {
 
     /// After the search: `chosen`, or the armed audit's substitute, walking this kind's own ranking of the root.
     pub fn root_audit(&mut self, py: Python<'_>, chosen: (i32, i32)) -> (i32, i32) {
-        let order = match (self.inner.search_kind(), self.gumbel_root.as_ref()) {
-            (SearchKind::Gumbel, Some(state)) => {
-                Some(state.ranking(&self.inner, self.inner.q_sigma()))
-            }
-            _ => None,
-        };
+        let order = self.inner.audit_order(self.gumbel_root.as_ref());
         py.detach(|| self.inner.root_audit(chosen, order.as_deref()))
     }
 

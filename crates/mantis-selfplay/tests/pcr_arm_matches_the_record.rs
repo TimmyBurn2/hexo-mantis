@@ -1,4 +1,4 @@
-//! PCR under BOTH search kinds: the recorded `is_full_search` is the arm that was DRAWN.
+//! PCR under BOTH search kinds: the recorded `is_full_search` is the arm DRAWN (armed: a lost root's row reads quick).
 //!
 //! Downstream reads that boolean as "this row was searched at the full budget", and the draw
 //! itself carries a counter so the flag can be compared against what actually fired.

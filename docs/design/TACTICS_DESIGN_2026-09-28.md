@@ -333,7 +333,8 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
   - `solve(root, root_turns, root_nodes)`; a Win plays `first`'s first stone WITHOUT a search.
   - With two stones in `first`, the tree stores `next_proof_stone = (key after it, the second)`. It is named apart
     from `MCTSTree::pending`, the leaf queue `new_game` clears. It survives `new_game` and is valid only on that
-    exact key; the runner clears it at a game's start, so no state crosses games.
+    exact key; the runner clears it at a game's start, so no state crosses games. Amended in place 2026-09-29:
+    nothing clears it between games; it is taken at its next use and filtered by key, so a stale one is dropped.
   - A proof stone, the next proof stone and a finishing cell are NOT root children. Each is checked against the
     board's legal set before it is returned. An illegal one is a named error (`TacticsError::ProofStoneIllegal`),
     counted, and the search's own move is played instead (§8).
@@ -342,7 +343,8 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
   - **Self-play's branch point.** `play_one_move` calls `root_offence` before `run_mcts_search`. A decided root
     skips the search AND `records::refuse_zero_visit_export`, which would latch an unexpanded root run-fatal. It
     writes the proof target (§6) through its own record branch, with its own test. The guard stays on every
-    searched root.
+    searched root. Amended in place 2026-09-29 (R378(e)): a decided self-play root IS searched, plays its stone and
+    records the search's own target, so there is no separate branch and the guard covers it.
 - **Defence at one stone left** (the turn completes):
   - After the search picks d, audit `post = root + d` (the opponent to move with two stones).
   - `analyze(post)` Win for the opponent (we left a finishable window) → veto. On QUIET, `solve(post,
@@ -390,13 +392,16 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
   proof:
   - two-hot 0.5 / 0.5 when `first` holds two stones, one-hot when it holds one, and one-hot on the stored stone at
     the next call (strix's form);
-  - the row is marked `proven_root`, with a LAW-18 fire rate;
+  - the row is marked `proven_root`, with a LAW-18 fire rate (as built: no row marker; the runner's
+    `proven_root_rows` counts it);
   - the value target stays the game's z.
   - Six records no policy target at such a root (`decided`). This design takes strix's form, because R239 makes
     injection mandatory and the target is what trains. §12 Q3 asks the architect.
   - AMENDED by R378(e), in form, not rule: the target at a proven self-play root follows A9's reading. It is the
     searched target where its proof-set mass reads ≥ 0.7 at the median, else the α = 0.5 mixture; never the bare
     two-hot above.
+- **All-vetoed roots (added as built).** When every unit of the searched target sits on vetoed moves, the target is
+  left as searched and the row records no policy target, as a lost root's does (`emptied_target_rows`).
 - **Lost roots in self-play.** A lost-on-cover root is searched (the root is always expanded), but every child
   loses. Following Six (`searchStone` marks it `decided`), its row carries NO policy target: counted as
   `decided_lost`, value target z. §12 Q3.

@@ -26,9 +26,10 @@ def test_a_block_arms_the_runner_config_and_none_disarms_it() -> None:
 def test_a_malformed_block_is_refused_by_name() -> None:
     assert _BLOCK is not None
     cfg = _config()
+    cfg.configure_tactics(_BLOCK)
     with pytest.raises(ValueError, match="tactics block"):
         cfg.configure_tactics({**_BLOCK, "kind": "per_stone"})
-    assert not cfg.tactics_armed, "a refused block arms nothing"
+    assert not cfg.tactics_armed, "a refused block leaves the config disarmed, not on its old block"
 
 
 def test_the_runner_names_every_tactics_row_and_reads_zero_before_it_searches() -> None:

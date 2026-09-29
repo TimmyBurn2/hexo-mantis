@@ -26,8 +26,8 @@ use crate::records;
 use crate::replay::hexg::GraphRecord;
 
 use super::record::record_position_graph_dispatch;
-use super::stats::{MoveRow, TacticsTotals};
-use super::tactics_move::{zero_vetoes, TargetEdit};
+use super::stats::TacticsTotals;
+use super::tactics_move::{count_rows, zero_vetoes, TargetEdit, Written};
 use super::PositionStats;
 
 /// A worker's inference seam, built once per worker thread; `Copy`, passed by value.
@@ -689,14 +689,8 @@ pub(crate) fn play_one_move(
         policy.clone()
     };
 
-    // The restored-mass fire-rate: moves whose exported target keeps off-window mass.
-    if target_policy.overflow.values().any(|&p| p > 0.0) {
-        accumulators
-            .export_offwindow_mass_moves
-            .fetch_add(1, Ordering::Relaxed);
-    }
-
-    // ── Sample and apply move: the decided stone, else the search's, vetted by the audit ──
+    // ── Sample and apply move: the decided stone, else the search's, vetted by the audit in the kind's order ──
+    let order = tree.audit_order(gumbel_state.as_ref());
     let move_idx = match decided {
         Some(stone) => stone,
         None => {
@@ -705,36 +699,22 @@ pub(crate) fn play_one_move(
             else {
                 return MoveOutcome::Break;
             };
-            tree.root_audit(chosen, None)
+            tree.root_audit(chosen, order.as_deref())
         }
     };
 
     // The audit's vetoed moves carry no target mass; a lost root, or a target left empty, records no policy.
-    let edit = zero_vetoes(
-        &mut target_policy,
-        tree.last_audit_vetoes(),
-        board,
-        agg_trunk_sz,
-    );
+    let vetoes = tree.last_audit_vetoes().to_vec();
+    let edit = zero_vetoes(&mut target_policy, &vetoes, board, agg_trunk_sz);
     let rows = tree.tactics_counters();
     let decided_lost = rows.decided_lost > 0;
     let record_full_search = move_is_full_search && !decided_lost && edit != TargetEdit::Emptied;
-    if tree.tactics_config().is_some() {
-        let totals = accumulators.tactics_totals;
-        totals.add_search(&rows);
-        if move_is_full_search {
-            if decided.is_some() {
-                totals.add_move(MoveRow::ProvenRoot);
-            }
-            if decided_lost {
-                totals.add_move(MoveRow::DecidedLost);
-            }
-            match edit {
-                TargetEdit::Zeroed => totals.add_move(MoveRow::VetoedTarget),
-                TargetEdit::Emptied => totals.add_move(MoveRow::EmptiedTarget),
-                TargetEdit::Unchanged => {}
-            }
-        }
+
+    // The restored-mass fire-rate: moves whose exported target keeps off-window mass.
+    if target_policy.overflow.values().any(|&p| p > 0.0) {
+        accumulators
+            .export_offwindow_mass_moves
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     if let Some(stats) = search_stats {
@@ -761,12 +741,13 @@ pub(crate) fn play_one_move(
 
     // ── Record position (BEFORE apply_move) ──
     {
-        // The sparse row's support is the search's OWN visited-candidate set, read from the
-        // tree: under Gumbel a visited candidate can carry LESS mass than an unvisited one.
+        // The sparse row's support: the search's OWN visited set (under Gumbel it can carry LESS mass
+        // than an unvisited cell), and each vetoed cell at zero, where the training tail cannot reach.
         let explicit_support = if ctx.search_kind.stores_sparse_rows() {
             Some(
                 tree.visited_root_child_cells()
                     .into_iter()
+                    .chain(vetoes.iter().copied())
                     .collect::<fxhash::FxHashSet<(i32, i32)>>(),
             )
         } else {
@@ -785,6 +766,16 @@ pub(crate) fn play_one_move(
             fatal_latch.store(err.to_string());
             return MoveOutcome::Break;
         }
+    }
+    if tree.tactics_config().is_some() {
+        let written = Written {
+            record: graph_records_vec.last(),
+            drawn_full: move_is_full_search,
+            decided: decided.is_some(),
+            decided_lost,
+            edit,
+        };
+        count_rows(accumulators.tactics_totals, &rows, &written, &vetoes);
     }
 
     if board.apply_move(move_idx.0, move_idx.1).is_err() {

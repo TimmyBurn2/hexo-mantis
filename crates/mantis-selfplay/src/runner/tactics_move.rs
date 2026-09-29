@@ -1,7 +1,12 @@
-//! A self-play target under the tactics block: the audit's vetoed moves carry zero mass, the rest renormalised.
+//! A self-play target under tactics: vetoed moves carry zero mass, and the move rows are read off the row written.
 
 use mantis_core::Board;
+use mantis_search::mcts::TacticsCounters;
 use mantis_search::LegalSetPolicy;
+
+use super::stats::{MoveRow, TacticsTotals};
+use crate::records::TARGET_MASS_TOL;
+use crate::replay::hexg::GraphRecord;
 
 /// What zeroing the vetoes did to a target.
 #[derive(Debug, PartialEq, Eq)]
@@ -13,9 +18,6 @@ pub(crate) enum TargetEdit {
     /// Every unit of mass sat on vetoed cells: the target is left as searched, and its row records no policy.
     Emptied,
 }
-
-/// Mass at or below this is no mass: the record's own `TARGET_MASS_TOL` scale.
-const EMPTY: f64 = 1e-6;
 
 /// Zero `vetoes`' mass in `ls` and scale the rest back to one, over the board's global window geometry.
 pub(crate) fn zero_vetoes(
@@ -33,7 +35,7 @@ pub(crate) fn zero_vetoes(
         .iter()
         .map(|&(q, r)| f64::from(ls.get(q, r, bcq, bcr, trunk_sz, half, 0.0)))
         .sum();
-    if removed <= EMPTY {
+    if removed <= 0.0 {
         return TargetEdit::Unchanged;
     }
     let total: f64 = ls
@@ -42,7 +44,7 @@ pub(crate) fn zero_vetoes(
         .chain(ls.overflow.values())
         .map(|&p| f64::from(p))
         .sum();
-    if total - removed <= EMPTY {
+    if total - removed <= TARGET_MASS_TOL {
         return TargetEdit::Emptied;
     }
     for &(q, r) in &cells {
@@ -59,6 +61,59 @@ pub(crate) fn zero_vetoes(
         .chain(ls.overflow.values_mut())
         .for_each(|p| *p *= scale);
     TargetEdit::Zeroed
+}
+
+/// The record's side of a move: the row written, the arm drawn, and what the root and the vetoes made of it.
+pub(crate) struct Written<'a> {
+    pub(crate) record: Option<&'a GraphRecord>,
+    pub(crate) drawn_full: bool,
+    pub(crate) decided: bool,
+    pub(crate) decided_lost: bool,
+    pub(crate) edit: TargetEdit,
+}
+
+/// Sum a search's tactics rows, then the one move row its written record carries; the kinds are disjoint, lost first.
+pub(crate) fn count_rows(
+    totals: &TacticsTotals,
+    rows: &TacticsCounters,
+    written: &Written<'_>,
+    vetoes: &[(i32, i32)],
+) {
+    totals.add_search(rows);
+    let Some(rec) = written.record.filter(|_| written.drawn_full) else {
+        return;
+    };
+    let row = if written.decided && rec.is_full_search {
+        Some(MoveRow::ProvenRoot)
+    } else if written.decided_lost && !rec.is_full_search {
+        Some(MoveRow::DecidedLost)
+    } else if written.edit == TargetEdit::Emptied && !rec.is_full_search {
+        Some(MoveRow::EmptiedTarget)
+    } else if written.edit == TargetEdit::Zeroed
+        && rec.is_full_search
+        && vetoes_hold_no_mass(rec, vetoes)
+    {
+        Some(MoveRow::VetoedTarget)
+    } else {
+        None
+    };
+    if let Some(row) = row {
+        totals.add_move(row);
+    }
+}
+
+/// Every vetoed cell is stored at zero, or is absent from a row with no tail (a tail would hand it mass in training).
+fn vetoes_hold_no_mass(rec: &GraphRecord, vetoes: &[(i32, i32)]) -> bool {
+    vetoes.iter().all(|&(q, r)| {
+        match rec
+            .visits
+            .iter()
+            .find(|v| (i32::from(v.0), i32::from(v.1)) == (q, r))
+        {
+            Some(v) => v.2 == 0.0,
+            None => rec.tail_mass == 0.0,
+        }
+    })
 }
 
 #[cfg(test)]
@@ -106,6 +161,16 @@ mod tests {
             (mass(&ls, &board, (40, 0)) - 0.4).abs() < 1e-6,
             "an off-window cell renormalises too"
         );
+    }
+
+    #[test]
+    fn a_vetoed_move_with_a_trace_of_mass_is_still_zeroed() {
+        let (board, mut ls) = target(&[((1, 0), 1e-8), ((2, 0), 1.0)]);
+        assert_eq!(
+            zero_vetoes(&mut ls, &[(1, 0)], &board, TRUNK),
+            TargetEdit::Zeroed
+        );
+        assert_eq!(mass(&ls, &board, (1, 0)), 0.0);
     }
 
     #[test]

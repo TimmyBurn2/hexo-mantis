@@ -148,9 +148,9 @@ def test_the_puct_arm_plays_the_most_visited_child():
 
 
 def test_the_budget_is_leaves_and_the_root_is_one_of_them():
-    """`n_sims` means N LEAVES of network work on both arms, root included.
+    """`n_sims` means N DESCENTS on both arms, root included.
 
-    The stub counts its own calls, which is the only place the leaf count is observable
+    The stub counts its own calls, which is the net's share of the descents, observable
     from outside the engine.
     """
     for kind in ("puct", "gumbel"):
@@ -163,7 +163,8 @@ def test_the_budget_is_leaves_and_the_root_is_one_of_them():
         player = _head(kind, expand_fn=dense_expand(counting), n_sims=12, leaf_batch_size=1)
         player.new_game()
         player.select_move(_board())
-        assert len(calls) == 12, (
-            f"{kind}: served {len(calls)} leaves against a budget of 12. The root's own "
-            f"evaluation is charged on both arms — N means N leaves."
+        assert player._tree is not None
+        assert player.last_sims == 12 == player._tree.root_visits() and len(calls) <= 12, (
+            f"{kind}: spent {player.last_sims} descents ({len(calls)} served) against a budget of 12. The "
+            f"root's own evaluation is charged on both arms — N means N descents."
         )

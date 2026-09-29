@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use mantis_search::mcts::TacticsCounters;
 
-/// The rows a self-play move adds beside its search's tactics rows, in `MoveRow` order.
+/// The rows a self-play move adds beside its search's rows, in `MoveRow` order: full draws only, one kind a row.
 pub const MOVE_TACTICS_ROWS: [&str; 4] = [
     "proven_root_rows",
     "decided_lost_rows",

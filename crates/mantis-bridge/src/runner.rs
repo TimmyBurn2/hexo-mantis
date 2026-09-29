@@ -224,6 +224,8 @@ impl PySelfPlayRunnerConfig {
     /// Arm every worker's tree with the block `MCTSTree.configure_tactics` takes, or disarm with `None`; ValueError: a bad one.
     #[pyo3(signature = (block))]
     pub fn configure_tactics(&mut self, block: Option<&Bound<'_, PyDict>>) -> PyResult<()> {
+        // A refused block leaves the config disarmed, never on the block it held before.
+        self.inner.tactics = None;
         self.inner.tactics = block.map(tactics_config_of).transpose()?;
         Ok(())
     }
@@ -372,9 +374,9 @@ impl PySelfPlayRunner {
     pub fn mcts_quiescence_fires(&self) -> u64 {
         self.snapshot().mcts_quiescence_fires
     }
-    /// The largest leaf count ANY one search served since `start()`, which must never exceed the
+    /// The largest descent count ANY one search spent since `start()`, which must never exceed the
     /// sim budget. Before the batch clamp it read `n_simulations + leaf_batch_size - 1`, which put
-    /// the ledger's 53.46 sims/move against a configured 50. The Gumbel arm reads LESS.
+    /// the ledger's 53.46 sims/move against a configured 50. Every kind now spends exactly N.
     #[getter]
     pub fn max_sims_per_search(&self) -> u64 {
         self.snapshot().max_sims_per_search
@@ -389,7 +391,7 @@ impl PySelfPlayRunner {
     pub fn pcr_quick_moves(&self) -> u64 {
         self.snapshot().pcr_quick_moves
     }
-    /// Leaves served by Gumbel rounds; over `gumbel_rounds`, the mean round width (0 under PUCT).
+    /// Descents Gumbel rounds spent, served and inline; over `gumbel_rounds`, the mean round width (0 under PUCT).
     #[getter]
     pub fn gumbel_round_leaves(&self) -> u64 {
         self.snapshot().gumbel_round_leaves

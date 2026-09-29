@@ -485,6 +485,17 @@ class RunConfig(StrictModel):
         return self
 
     @model_validator(mode="after")
+    def _armed_selfplay_trains_no_quick_policy(self) -> "RunConfig":
+        """Armed self-play records a lost or all-vetoed root as a quick row, so quick rows train no policy; Raises: ValueError."""
+        if self.selfplay.search.tactics is not None and self.train.fast_policy_weight != 0:
+            raise ValueError(
+                f"selfplay.search.tactics is armed with train.fast_policy_weight={self.train.fast_policy_weight}: a lost "
+                "or all-vetoed root records its row as a quick one, so a non-zero weight trains that row's policy "
+                "toward proven-losing moves. Mint fast_policy_weight 0 with an armed self-play block."
+            )
+        return self
+
+    @model_validator(mode="after")
     def _soft_policy_rows_pair_with_their_head(self) -> "RunConfig":
         """`model.aux_soft_policy` is armed iff `identity.arch_kind` carries the head (v36): rows without a head read armed unconsumed, a head without rows trains at unstated values; Raises: ValueError — either way."""
         carries_head = self.identity.arch_kind in SOFT_POLICY_ARCH_KINDS

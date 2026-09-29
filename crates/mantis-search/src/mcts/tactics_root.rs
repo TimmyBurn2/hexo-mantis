@@ -3,6 +3,8 @@
 
 use mantis_core::board::Board;
 
+use super::gumbel_mctx::MctxRootState;
+use super::kind::SearchKind;
 use super::node::Node;
 use super::tactics_wiring::{AuditConfig, AuditMode, TacticsError, TacticsState};
 use super::MCTSTree;
@@ -355,6 +357,15 @@ impl MCTSTree {
             Decided::Proof => t.counters.root_proofs_found += 1,
         }
         Ok(Some((q, r)))
+    }
+
+    /// The order the audit walks the root in: Sequential Halving's final ranking under Gumbel, else `None` (by visits).
+    #[must_use]
+    pub fn audit_order(&self, gumbel: Option<&MctxRootState>) -> Option<Vec<u32>> {
+        match (self.search_kind(), gumbel) {
+            (SearchKind::Gumbel, Some(state)) => Some(state.ranking(self, self.q_sigma())),
+            _ => None,
+        }
     }
 
     /// After the search: `chosen`, or the audit's hold for a turn allowing a proven opponent win; `order` ranks the root.

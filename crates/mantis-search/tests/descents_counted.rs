@@ -113,6 +113,10 @@ fn solver_terminals_and_table_hits_count_alike_with_tactics_on() {
         spent.inline > 0,
         "no leaf was decided, so the solver case is not exercised"
     );
+    assert!(
+        spent.table > 0,
+        "the search never transposed, so the table case is not exercised"
+    );
     assert_root_saw_every_descent(&tree, &spent, 256);
     let rows = tree.tactics_counters();
     assert_eq!(

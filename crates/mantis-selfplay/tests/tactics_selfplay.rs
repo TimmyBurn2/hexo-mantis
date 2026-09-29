@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 use mantis_encoding::lookup_or_panic;
 use mantis_search::mcts::{AuditConfig, AuditMode, TacticsConfig};
 use mantis_search::SearchKind;
+use mantis_selfplay::replay::hexg::GraphRecord;
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
 mod common;
@@ -33,8 +34,8 @@ const BLOCK: TacticsConfig = TacticsConfig {
     }),
 };
 
-/// One worker under `kind` and the block over compact play, until `want` searched plies; the rows and the max search.
-fn drive(kind: SearchKind, want: usize) -> (HashMap<&'static str, u64>, u64, usize) {
+/// One worker under `kind` and the block over compact play: its rows, widest search, plies and no-policy rows.
+fn drive(kind: SearchKind, want: usize) -> (HashMap<&'static str, u64>, u64, usize, u64) {
     let spec = lookup_or_panic(ENCODING);
     let runner = SelfPlayRunner::new(SelfPlayRunnerConfig {
         n_workers: 1,
@@ -57,28 +58,38 @@ fn drive(kind: SearchKind, want: usize) -> (HashMap<&'static str, u64>, u64, usi
     );
     runner.start();
     let deadline = Instant::now() + Duration::from_secs(600);
-    let mut records = 0;
-    while Instant::now() < deadline && records < want && runner.fatal_defect().is_none() {
-        records += runner.drain_graph_records().expect("unpoisoned").len();
+    let mut drained: Vec<GraphRecord> = Vec::new();
+    while Instant::now() < deadline && drained.len() < want && runner.fatal_defect().is_none() {
+        drained.extend(runner.drain_graph_records().expect("unpoisoned"));
         thread::sleep(Duration::from_millis(5));
     }
     let defect = runner.fatal_defect();
     runner.stop();
     producer.join().expect("producer exits");
+    drained.extend(runner.drain_graph_records().expect("unpoisoned"));
+    let (records, no_policy) = (
+        drained.len(),
+        drained.iter().filter(|r| !r.is_full_search).count() as u64,
+    );
     assert!(
         defect.is_none(),
         "{kind:?} latched a fatal defect: {defect:?}"
     );
     assert!(records >= want, "{kind:?}: only {records} searched plies");
     let rows = runner.tactics_totals().into_iter().collect();
-    (rows, runner.stats_snapshot().max_sims_per_search, records)
+    (
+        rows,
+        runner.stats_snapshot().max_sims_per_search,
+        records,
+        no_policy,
+    )
 }
 
-/// PLANTED BREAK: play the search's move at a decided root and `proof_stones_played` reads 0.
+/// PLANTED BREAKS: a decided root playing the search's move; a lost row on its drawn arm; vetoes zeroed on a copy.
 #[test]
 fn a_decided_root_is_searched_then_plays_its_stone_and_the_owed_stone_follows() {
     for kind in [SearchKind::Puct, SearchKind::Gumbel] {
-        let (rows, max_sims, records) = drive(kind, 200);
+        let (rows, max_sims, records, no_policy) = drive(kind, 300);
         println!("{kind:?} over {records} plies: {rows:?}");
         assert_eq!(
             max_sims, SIMS as u64,
@@ -97,9 +108,18 @@ fn a_decided_root_is_searched_then_plays_its_stone_and_the_owed_stone_follows() 
             rows["root_proofs_found"] + rows["finishes_played"] + rows["proof_stones_played"],
             "{kind:?}: every decided root records its searched target (every move here is a full search)"
         );
+        assert!(
+            rows["decided_lost"] > 0,
+            "{kind:?}: no root was lost, so the case proves nothing"
+        );
         assert_eq!(
             rows["decided_lost_rows"], rows["decided_lost"],
             "{kind:?}: every lost root records no policy target"
+        );
+        assert_eq!(
+            no_policy,
+            rows["decided_lost_rows"] + rows["emptied_target_rows"],
+            "{kind:?}: the rows recorded with no policy are the lost and the emptied ones (every move is a full draw)"
         );
         // Every edit needs a veto; under Gumbel a vetoed move can carry no target mass, so not every veto edits.
         let edits = rows["vetoed_target_rows"] + rows["emptied_target_rows"];
@@ -108,6 +128,12 @@ fn a_decided_root_is_searched_then_plays_its_stone_and_the_owed_stone_follows() 
             "{kind:?}: {edits} edited targets against {} vetoes",
             rows["root_vetoes"]
         );
+        if kind == SearchKind::Puct {
+            assert!(
+                rows["vetoed_target_rows"] > 0,
+                "PUCT: no row kept its vetoes at zero: {rows:?}"
+            );
+        }
         assert!(
             rows["descents"] > 0 && rows["audit_calls"] > 0,
             "{kind:?}: the rows are summed: {rows:?}"

@@ -158,7 +158,7 @@ train:
 selfplay:
   search:
     kind: puct
-    # REQUIRED and `null`: the self-play runner arms no tactics block, and the schema refuses one here.
+    # REQUIRED and `null`, the explicit off: a block arms every self-play worker's tree, the deploy head's module.
     tactics: null
   n_workers: 1
   leaf_batch_size: 8
