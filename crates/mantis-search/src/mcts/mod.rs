@@ -47,10 +47,9 @@ pub const MAX_CHILDREN_PER_NODE: usize = 1024;
 
 /// The largest armed sim budget the node pool can serve, DERIVED from the pool's own two
 /// constants: every descent counts against the budget and expands at most one leaf, so one move
-/// adds at most `sims` expansions of up to `MAX_CHILDREN_PER_NODE` children each, and the divisor
-/// keeps `select_leaves`' `4n` attempt cap as a margin over that. `finish_expansion`'s panic STAYS
-/// as the last line — an overflowed pool has corrupted its own indices — and this constant stops a
-/// config reaching it.
+/// adds at most `sims` expansions of up to `MAX_CHILDREN_PER_NODE` children; the divisor's 4 is a
+/// plain margin. `finish_expansion`'s panic STAYS as the last line — an overflowed pool has
+/// corrupted its own indices — and this constant stops a config reaching it.
 pub const MAX_ARMED_SIMS: usize = MAX_NODES / (4 * MAX_CHILDREN_PER_NODE);
 
 /// Root-only child cap under `SearchKind::Gumbel`, where the root expands its FULL legal set:

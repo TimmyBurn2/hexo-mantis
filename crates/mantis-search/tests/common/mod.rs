@@ -1,4 +1,4 @@
-//! The Gumbel drive, the skewed and compact priors and the radius-8 board the search tests share.
+//! The Gumbel drive, the skewed and compact priors and the radius-8 boards the search tests share.
 
 use mantis_core::Board;
 use mantis_search::{analyze, MCTSTree, MctxRootState, QSigma, SearchKind, Terminal};
@@ -25,6 +25,33 @@ pub fn stub_policy() -> Vec<f32> {
     let total: f32 = raw.iter().sum();
     raw.into_iter().map(|x| x / total).collect()
 }
+
+/// `moves` on a radius-8 board.
+pub fn replay(moves: &[(i32, i32)]) -> Board {
+    let mut b = Board::new();
+    b.set_legal_move_radius(8);
+    for &(q, r) in moves {
+        b.apply_move(q, r).expect("a legal fixture move");
+    }
+    b
+}
+
+/// P2 holds five on r = 3 and places two: its finish is a terminal child a compact prior piles onto.
+pub const FIVE: [(i32, i32); 13] = [
+    (0, 0),
+    (0, 3),
+    (1, 3),
+    (0, -3),
+    (5, -5),
+    (2, 3),
+    (3, 3),
+    (-5, 0),
+    (-4, -2),
+    (4, 3),
+    (-3, 6),
+    (-6, 2),
+    (-2, -6),
+];
 
 /// A prior decaying from the window centre (a compact net), with 0.9 of the mass on the mover's finish where it has one.
 pub fn compact_prior(board: &Board) -> Vec<f32> {

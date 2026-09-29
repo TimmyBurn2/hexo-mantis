@@ -3,8 +3,9 @@
 use mantis_core::Board;
 use mantis_search::{analyze, MCTSTree, Terminal};
 
-use common::compact_prior;
+use common::{compact_prior, replay, FIVE};
 
+#[allow(dead_code)]
 mod common;
 
 fn terminal_visits(tree: &MCTSTree) -> u64 {
@@ -49,15 +50,6 @@ fn drive(board: &Board, sims: usize) -> (u64, u64) {
     (hits, revisits)
 }
 
-fn replay(moves: &[(i32, i32)]) -> Board {
-    let mut b = Board::new();
-    b.set_legal_move_radius(8);
-    for &(q, r) in moves {
-        b.apply_move(q, r).expect("a legal fixture move");
-    }
-    b
-}
-
 #[test]
 fn a_two_stone_turn_transposes_and_every_table_hit_is_counted() {
     // P2 to place two: A then B and B then A reach one position.
@@ -73,21 +65,7 @@ fn a_two_stone_turn_transposes_and_every_table_hit_is_counted() {
 #[test]
 fn a_terminal_revisit_is_not_a_table_hit() {
     // P2 holds five on r = 3 and places two: its finish is a terminal child the prior piles onto.
-    let board = replay(&[
-        (0, 0),
-        (0, 3),
-        (1, 3),
-        (0, -3),
-        (5, -5),
-        (2, 3),
-        (3, 3),
-        (-5, 0),
-        (-4, -2),
-        (4, 3),
-        (-3, 6),
-        (-6, 2),
-        (-2, -6),
-    ]);
+    let board = replay(&FIVE);
     assert_eq!(analyze(&board).terminal, Some(Terminal::Win));
     let (_hits, revisits) = drive(&board, 200);
     assert!(

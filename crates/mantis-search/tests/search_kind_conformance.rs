@@ -293,8 +293,8 @@ fn the_kind_states_its_pool_envelope() {
 
 #[test]
 fn a_search_at_the_gumbel_ceiling_still_fits_the_pool() {
-    // The bound's PURPOSE, checked arithmetically: the worst case is `4 * sims` expansions at
-    // the per-node cap plus one root at the root cap, and it must fit MAX_NODES.
+    // The bound's PURPOSE, checked arithmetically: with its 4x margin, `4 * sims` expansions at
+    // the per-node cap plus one root at the root cap must fit MAX_NODES.
     let worst_case = 4 * MAX_ARMED_SIMS_GUMBEL * MAX_CHILDREN_PER_NODE + MAX_ROOT_CHILDREN;
     assert!(
         worst_case <= MAX_NODES,

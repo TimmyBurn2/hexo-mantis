@@ -327,8 +327,7 @@ impl MCTSTree {
         }
     }
 
-    /// Select up to `n` distinct leaves; every descent that backs up a value counts toward `n`, so returned boards,
-    /// inline descents and table hits together never exceed it.
+    /// Select up to `n` leaves; every descent that backs up a value counts toward `n`, whatever backed it.
     ///
     /// # Errors
     /// `SelectionDesync` — a selected child's `action_idx` decodes to a cell the board refuses.

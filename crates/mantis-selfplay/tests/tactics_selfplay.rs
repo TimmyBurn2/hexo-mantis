@@ -1,5 +1,4 @@
-//! Self-play under a tactics block: a decided root plays its stone after its search, the owed second stone follows,
-//! the audit vets the rest, and the runner sums every search's rows and the rows its moves recorded.
+//! A decided root plays its stone after its search, the owed stone follows, the audit vets the rest; rows are summed.
 
 use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
@@ -75,8 +74,7 @@ fn drive(kind: SearchKind, want: usize) -> (HashMap<&'static str, u64>, u64, usi
     (rows, runner.stats_snapshot().max_sims_per_search, records)
 }
 
-/// PLANTED BREAK: play the search's move at a decided root and the owed second stone is never asked for, so
-/// `proof_stones_played` reads 0 and this reds.
+/// PLANTED BREAK: play the search's move at a decided root and `proof_stones_played` reads 0.
 #[test]
 fn a_decided_root_is_searched_then_plays_its_stone_and_the_owed_stone_follows() {
     for kind in [SearchKind::Puct, SearchKind::Gumbel] {

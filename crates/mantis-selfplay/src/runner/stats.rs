@@ -14,8 +14,7 @@ pub const MOVE_TACTICS_ROWS: [&str; 4] = [
     "emptied_target_rows",
 ];
 
-/// A row a self-play move records: at a decided root with its searched target, with no policy target at a lost
-/// root, with vetoed mass zeroed, or with no policy target because every searched move was vetoed.
+/// A row a move records: a decided root's searched target, no policy at a lost or all-vetoed root, vetoes zeroed.
 #[derive(Clone, Copy)]
 pub(crate) enum MoveRow {
     ProvenRoot = 0,
@@ -77,7 +76,7 @@ pub(crate) struct WorkerStats {
     pub(crate) mcts_conc_accum: Arc<AtomicU64>,
     pub(crate) mcts_stat_count: Arc<AtomicU64>,
     pub(crate) mcts_quiescence_fires: Arc<AtomicU64>,
-    /// The largest number of leaves ANY one search served; it must never exceed the
+    /// The largest number of descents ANY one search spent; it must never exceed the
     /// budget, `n_simulations` (or the playout-cap arm's).
     pub(crate) max_sims_per_search: Arc<AtomicU64>,
     /// Searches that ended short of their budget, and the descents short: every descent counts, so both read 0.

@@ -1,5 +1,4 @@
-"""EVERY search kind spends EXACTLY `n_sims` descents, tactics off or on, whatever backed each: the net, the table or a
-terminal (the old Gumbel driver served 0.19–0.42 of 512, and the old PUCT driver ended short at a revisited win)."""
+"""EVERY search kind spends EXACTLY `n_sims` descents, tactics off or on, whatever backed each (net, table, terminal)."""
 from __future__ import annotations
 
 import math
@@ -79,6 +78,7 @@ def _peaked_infer(calls: list[int]) -> InferStub:
 @pytest.mark.parametrize("kind", ["puct", "gumbel"])
 @pytest.mark.parametrize("n_sims", [64, 512])
 def test_every_kind_spends_exactly_its_budget(kind: str, n_sims: int, tactics: dict | None) -> None:
+    """PLANTED BREAK: drop `last_tt_hits()` from `_drive_puct`'s count and the transposing PUCT cases overspend."""
     calls: list[int] = []
     player = DeployHeadPlayer(
         expand_fn=dense_expand(_peaked_infer(calls)), n_sims=n_sims, leaf_batch_size=8, c_visit=50.0,
@@ -99,13 +99,12 @@ def test_every_kind_spends_exactly_its_budget(kind: str, n_sims: int, tactics: d
         f"{kind} at {n_sims}: the rows do not add up: {rows}"
     )
     assert inline > 0, f"{kind} at {n_sims}: no decided leaf, so the tactics-on case proves nothing: {rows}"
+    # PUCT's two-stone turns transpose; Gumbel's forced descents have no table path.
+    assert (rows["table_hits"] > 0) == (kind == "puct"), f"{kind} at {n_sims}: the table case: {rows}"
 
 
 def _assert_every_descent_counted(player: DeployHeadPlayer, calls: list[int], n_sims: int, label: str) -> None:
-    """The head spent `n_sims` descents, each one backup through the root; the net served no more than that.
-
-    PLANTED BREAK: drop `last_tt_hits()` from `_drive_puct`'s count and the transposing PUCT cases overspend.
-    """
+    """The head spent `n_sims` descents, each one backup through the root; the net served no more than that."""
     assert player._tree is not None
     assert player.last_sims == n_sims == player._tree.root_visits(), (
         f"{label}: the head counted {player.last_sims} and the root saw {player._tree.root_visits()} backups"
@@ -115,8 +114,7 @@ def _assert_every_descent_counted(player: DeployHeadPlayer, calls: list[int], n_
 
 @pytest.mark.parametrize("kind", ["puct", "gumbel"])
 def test_the_plain_head_spends_its_budget_where_its_search_revisits_a_win(kind: str) -> None:
-    """The plain head's early end: a won child's revisits back up on the table path, and PUCT read a call of them as
-    exhaustion (43 of 256 before the fix)."""
+    """PLANTED BREAK: count a table-path terminal in no counter (the plain head's early end, 43 of 256) and PUCT reds."""
     calls: list[int] = []
     player = DeployHeadPlayer(
         expand_fn=dense_expand(_peaked_infer(calls)), n_sims=256, leaf_batch_size=8, c_visit=50.0,

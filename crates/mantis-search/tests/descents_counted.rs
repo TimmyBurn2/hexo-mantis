@@ -1,13 +1,13 @@
-//! A PUCT select call counts every descent it backs up against its `n`, whatever backed it: the net, the table or a
-//! terminal. A budget loop that sums the three spends exactly its budget, and the root's visits are that sum.
+//! A select call counts every descent it backs up toward `n`, whatever backed it; a loop spends N and the root sees N.
 
 use mantis_core::Board;
 use mantis_search::mcts::TacticsConfig;
 use mantis_search::MCTSTree;
 
+#[allow(dead_code)]
 mod common;
 
-use common::compact_prior;
+use common::{compact_prior, replay, FIVE};
 
 const LEAF_BATCH: usize = 8;
 
@@ -66,15 +66,6 @@ fn search(board: &Board, sims: usize, tactics: Option<TacticsConfig>) -> (MCTSTr
     (tree, spent)
 }
 
-fn replay(moves: &[(i32, i32)]) -> Board {
-    let mut b = Board::new();
-    b.set_legal_move_radius(8);
-    for &(q, r) in moves {
-        b.apply_move(q, r).expect("a legal fixture move");
-    }
-    b
-}
-
 /// The count is exact: each counted descent backed one value up through the root, and no uncounted one did.
 fn assert_root_saw_every_descent(tree: &MCTSTree, spent: &Spent, sims: usize) {
     assert_eq!(spent.total(), sims, "the search spent its budget exactly");
@@ -101,25 +92,10 @@ fn a_transposing_search_counts_its_table_hits_against_the_budget() {
     assert_root_saw_every_descent(&tree, &spent, 400);
 }
 
-/// The plain head's early end: its winning child's revisits back up on the table path, and a call of them counted nothing.
+/// PLANTED BREAK: count the table branch's terminal in no counter (the plain head's early end) and this reds.
 #[test]
 fn a_terminal_revisit_on_the_table_path_is_a_counted_descent() {
-    // P2 holds five on r = 3 and places two: its finish is a terminal child the prior piles onto.
-    let board = replay(&[
-        (0, 0),
-        (0, 3),
-        (1, 3),
-        (0, -3),
-        (5, -5),
-        (2, 3),
-        (3, 3),
-        (-5, 0),
-        (-4, -2),
-        (4, 3),
-        (-3, 6),
-        (-6, 2),
-        (-2, -6),
-    ]);
+    let board = replay(&FIVE);
     let (tree, spent) = search(&board, 256, None);
     assert!(
         spent.inline > 0,

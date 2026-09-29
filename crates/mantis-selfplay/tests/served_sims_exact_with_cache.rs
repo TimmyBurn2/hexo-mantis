@@ -1,4 +1,4 @@
-//! With the production eval cache on, a search still serves EXACTLY `n_simulations` leaves and the GPU sees only the misses.
+//! With the production eval cache on, a search still spends EXACTLY `n_simulations` descents and the GPU sees only misses.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -16,7 +16,7 @@ const ENCODING: &str = "gnn_axis_r8";
 const LEAF_BATCH: usize = 8;
 const SIMS: usize = 64;
 
-fn drive(kind: SearchKind) -> (usize, usize, u64, u64, u64) {
+fn drive(kind: SearchKind) -> (usize, usize, u64, u64, u64, u64) {
     let spec = lookup_or_panic(ENCODING);
     let runner = SelfPlayRunner::new(SelfPlayRunnerConfig {
         n_workers: 1,
@@ -63,22 +63,23 @@ fn drive(kind: SearchKind) -> (usize, usize, u64, u64, u64) {
         snap.max_sims_per_search,
         snap.served_leaves_total,
         snap.gpu_evals_total,
+        snap.inline_descents_total + snap.tt_hits_total,
     )
 }
 
 #[test]
 fn a_cached_search_serves_exactly_its_budget_and_the_gpu_sees_only_the_misses() {
     for kind in [SearchKind::Puct, SearchKind::Gumbel] {
-        let (answered, records, max_sims, served, gpu) = drive(kind);
-        println!("{kind:?}: {records} searches, widest {max_sims}, served {served}, gpu {gpu}, answered {answered}");
+        let (answered, records, max_sims, served, gpu, unserved) = drive(kind);
+        println!("{kind:?}: {records} searches, widest {max_sims}, served {served} + {unserved}, gpu {gpu}, answered {answered}");
         assert_eq!(
             max_sims, SIMS as u64,
             "{kind:?}: a cache hit changed the served count"
         );
         let expected = (records * SIMS) as u64;
         assert!(
-            served >= expected && served < expected + SIMS as u64,
-            "{kind:?}: served {served} outside [{expected}, +{SIMS})"
+            served + unserved >= expected && served + unserved < expected + SIMS as u64,
+            "{kind:?}: {served} served + {unserved} unserved descents outside [{expected}, +{SIMS})"
         );
         assert!(
             gpu < served,

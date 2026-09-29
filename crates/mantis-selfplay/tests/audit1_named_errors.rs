@@ -1,7 +1,7 @@
 //! FFI-reachable surfaces that return NAMED errors, never a panic: the MCTS node-pool bound
-//! (`select_leaves` expands TT-hit leaves outside the batch count, so `n_simulations` alone can
-//! overflow the pool past `MAX_ARMED_SIMS`) and `HexgBuffer::new`'s encoding and capacity
-//! refusals. The HEXG ring's persist/load refusals live in `replay_hexg.rs`.
+//! (an `n_simulations` past `MAX_ARMED_SIMS`, with its 4x margin, could overflow the pool) and
+//! `HexgBuffer::new`'s encoding and capacity refusals. The HEXG ring's persist/load refusals live
+//! in `replay_hexg.rs`.
 
 use mantis_search::{MAX_ARMED_SIMS, MAX_CHILDREN_PER_NODE, MAX_NODES};
 use mantis_selfplay::replay::hexg::{HexgBuffer, HEXG_CAPACITY_CEILING};

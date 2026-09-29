@@ -86,7 +86,7 @@ pub struct RunnerStatsSnapshot {
     pub mcts_conc_accum: u64,
     pub mcts_stat_count: u64,
     pub mcts_quiescence_fires: u64,
-    /// The largest leaf count ANY one search served; must never exceed the search budget.
+    /// The largest descent count ANY one search spent; must never exceed the search budget.
     pub max_sims_per_search: u64,
     /// Searches that ended short of their budget, and the descents short: every descent counts, so both read 0.
     pub starved_searches: u64,
@@ -112,7 +112,7 @@ pub struct RunnerStatsSnapshot {
     pub served_leaves_total: u64,
     /// Leaves that went to the GPU: `served_leaves_total` less the exact eval cache's hits.
     pub gpu_evals_total: u64,
-    /// Descents the tactics wiring backed up inline, no leaf served: with `served_leaves_total`, every descent.
+    /// Descents backed up with a terminal's or the solver's value, no leaf served; with served and table, every one.
     pub inline_descents_total: u64,
     /// Descents a PUCT select backed up from the in-search TT, no leaf served; 0 under Gumbel.
     pub tt_hits_total: u64,
@@ -250,10 +250,10 @@ impl SelfPlayRunner {
                 return Err(format!(
                     "SelfPlayRunner: {name} = {sims} exceeds {ceiling_name} \
                      ({armed_ceiling}), derived as {ceiling_derivation}. \
-                     `select_leaves` expands TT-hit leaves without counting them against the \
-                     batch (bounded by max_attempts = 4n), so each move can add up to \
-                     4 * sims * {} children and `finish_expansion` panics on pool overflow \
-                     at the first move that crosses it",
+                     Every descent counts against the budget and expands at most one leaf, \
+                     so each move adds at most sims * {} children; the bound keeps a 4x margin \
+                     over that, and `finish_expansion` panics on pool overflow at the first \
+                     move that crosses it",
                     mantis_search::MAX_CHILDREN_PER_NODE,
                 ));
             }

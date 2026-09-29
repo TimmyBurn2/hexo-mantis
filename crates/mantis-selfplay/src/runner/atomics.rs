@@ -23,7 +23,7 @@ pub(crate) struct WorkerAtomics {
     /// Leaves expanded, and of those the ones the GPU served: the eval cache's fire-rate pair.
     pub(crate) served_leaves_total: Arc<AtomicU64>,
     pub(crate) gpu_evals_total: Arc<AtomicU64>,
-    /// Descents backed up inline by the tactics wiring: with the served leaves, every descent.
+    /// Descents backed up with a terminal's or the solver's value: with served leaves and table hits, every descent.
     pub(crate) inline_descents_total: Arc<AtomicU64>,
     /// Descents a PUCT select backed up from the in-search TT, no leaf served.
     pub(crate) tt_hits_total: Arc<AtomicU64>,

@@ -45,8 +45,7 @@ enum Producer {
     Compact,
 }
 
-/// What one drive read: producer-served leaves, searched plies, the widest search, inline descents, table hits,
-/// starved rows.
+/// What one drive read: served leaves, searched plies, the widest search, inline, table and starved rows.
 #[derive(Clone, Copy)]
 struct Drive {
     served: usize,
@@ -210,8 +209,7 @@ fn drive_kind(
     }
 }
 
-/// `n` descents a search, exactly: the widest search spent `n`, none ended short, and served + inline + table
-/// over the searches is `records × n` with at most one search in flight.
+/// `n` descents a search: the widest spent `n`, none ended short, served + inline + table is `records × n` (+1 in flight).
 fn assert_exact(label: &str, drive: &Drive, n_simulations: usize) {
     let Drive {
         served,
@@ -289,9 +287,7 @@ fn r8_at_six_hundred_sims_serves_exactly_six_hundred_per_search() {
 // The run6 regime's own budgets on BOTH kinds: a claim taken at 50 and 600 says nothing about
 // the numbers a run is actually minted at.
 
-/// Each of the three heads ends a counted descent: the net (every case), the solver (tactics on) and the table
-/// (a transposing PUCT search, tactics off). PLANTED BREAK: drop the table branch's `i += 1` in
-/// `MCTSTree::select_leaves` and the transposing case overspends.
+/// The net, the solver and the table each end a counted descent. PLANTED BREAK: drop `select_leaves`' table `i += 1`.
 #[test]
 fn both_kinds_serve_exactly_sixty_four() {
     for kind in [SearchKind::Puct, SearchKind::Gumbel] {

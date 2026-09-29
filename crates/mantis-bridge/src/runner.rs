@@ -221,10 +221,7 @@ impl PySelfPlayRunnerConfig {
         self.inner.tactics.is_some()
     }
 
-    /// Arm every worker's tree with the tactics block `MCTSTree.configure_tactics` takes, or disarm with `None`.
-    ///
-    /// # Errors
-    /// `ValueError` — a key, kind, mode or leaf the block may not carry.
+    /// Arm every worker's tree with the block `MCTSTree.configure_tactics` takes, or disarm with `None`; ValueError: a bad one.
     #[pyo3(signature = (block))]
     pub fn configure_tactics(&mut self, block: Option<&Bound<'_, PyDict>>) -> PyResult<()> {
         self.inner.tactics = block.map(tactics_config_of).transpose()?;

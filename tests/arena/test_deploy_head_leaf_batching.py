@@ -34,15 +34,15 @@ def _counting_expand_fn(calls: list[int]):
     return _expand
 
 
-def _play_one_move(*, n_sims: int, leaf_batch_size: int) -> list[int]:
-    """One `select_move` on the GRAPH arm; returns the per-call batch widths."""
+def _play_one_move(*, n_sims: int, leaf_batch_size: int) -> tuple[list[int], DeployHeadPlayer]:
+    """One `select_move` on the GRAPH arm; returns the per-call batch widths and the head."""
     calls: list[int] = []
     player = DeployHeadPlayer(
         expand_fn=_counting_expand_fn(calls), n_sims=n_sims, leaf_batch_size=leaf_batch_size, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None,
     )
     player.new_game()
     player.select_move(Board.with_encoding_name(_ENCODING))
-    return calls
+    return calls, player
 
 
 # the mechanism: round-trips fall, node budget does not
@@ -51,12 +51,13 @@ def test_the_node_budget_is_EXACTLY_n_sims_at_every_batch_width(k: int) -> None:
     """FIXED NODES: without it the fix is indistinguishable from searching LESS, and a
     throughput knob would move deploy STRENGTH. `select_leaves(k)` returns fewer than `k` on a
     cold tree (measured 1, 1, then k), so a budget credited by the REQUEST spends ~11% fewer
-    nodes at k=8 than at k=1 — the budget must advance by leaves returned, exactly."""
+    nodes at k=8 than at k=1 — the budget must advance by descents counted, exactly."""
     n_sims = 128
-    calls = _play_one_move(n_sims=n_sims, leaf_batch_size=k)
-    assert sum(calls) == n_sims, (
-        f"leaf_batch_size={k} evaluated {sum(calls)} leaves against a budget of exactly "
-        f"{n_sims} (widths {calls}). Batching changes how the budget is SPENT, never how much "
+    calls, player = _play_one_move(n_sims=n_sims, leaf_batch_size=k)
+    assert player._tree is not None
+    assert player.last_sims == n_sims == player._tree.root_visits() and sum(calls) <= n_sims, (
+        f"leaf_batch_size={k} spent {player.last_sims} descents ({sum(calls)} evaluated) against a budget "
+        f"of exactly {n_sims} (widths {calls}). Batching changes how the budget is SPENT, never how much "
         f"of it is — otherwise the batch width is a hidden strength dial."
     )
     assert all(w <= k for w in calls), (
@@ -68,8 +69,8 @@ def test_batching_COLLAPSES_the_round_trip_count_which_is_the_whole_fix() -> Non
     """THE MECHANISM, pinned as a COUNT rather than a duration, and compared against k=1 because
     the exact count depends on the tree's cold-start ramp (1, 1, then k)."""
     n_sims = 128
-    at_1 = _play_one_move(n_sims=n_sims, leaf_batch_size=1)
-    at_8 = _play_one_move(n_sims=n_sims, leaf_batch_size=8)
+    at_1, _ = _play_one_move(n_sims=n_sims, leaf_batch_size=1)
+    at_8, _ = _play_one_move(n_sims=n_sims, leaf_batch_size=8)
 
     assert len(at_1) == n_sims, f"k=1 must issue one round-trip per sim; got {len(at_1)}"
     assert sum(at_1) == sum(at_8) == n_sims, "both must spend the identical node budget"
@@ -83,13 +84,13 @@ def test_batching_COLLAPSES_the_round_trip_count_which_is_the_whole_fix() -> Non
 
 def test_a_short_final_batch_never_OVERSPENDS_the_budget() -> None:
     """The remainder case: `min(k, remaining)` clamps the last request, or a move overspends."""
-    calls = _play_one_move(n_sims=10, leaf_batch_size=4)
+    calls, _ = _play_one_move(n_sims=10, leaf_batch_size=4)
     assert sum(calls) == 10, f"10 nodes requested, {sum(calls)} evaluated (widths {calls})"
 
 
 def test_k_equals_one_is_byte_for_byte_the_old_loop() -> None:
     """k=1 still requests one leaf per call, `n_sims` times — the pre-existing oracles' shape."""
-    calls = _play_one_move(n_sims=7, leaf_batch_size=1)
+    calls, _ = _play_one_move(n_sims=7, leaf_batch_size=1)
     assert calls == [1] * 7, f"k=1 must request one leaf per call, 7 times; got {calls}"
 
 

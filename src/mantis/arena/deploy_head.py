@@ -153,7 +153,7 @@ class DeployHeadPlayer:
         root_leaves = tree.select_leaves(1)
         if root_leaves:
             self._expand_fn(tree, root_leaves)
-        sims_done = len(root_leaves)
+        sims_done = len(root_leaves) + tree.last_inline_descents() + tree.last_tt_hits()
 
         if self._search_kind == "gumbel":
             move, spent = self._drive_gumbel(tree, sims_done)

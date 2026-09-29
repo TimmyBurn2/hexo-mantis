@@ -45,7 +45,7 @@ pub(crate) struct InferContext<'a> {
     /// Leaves expanded, and the ones of those the GPU served (the rest were exact cache hits).
     pub(crate) served_leaves: &'a AtomicU64,
     pub(crate) gpu_evals: &'a AtomicU64,
-    /// Descents the tactics wiring backed up inline: no leaf, no inference.
+    /// Descents backed up with a terminal's or the solver's value: no leaf, no inference.
     pub(crate) inline_descents: &'a AtomicU64,
     /// Descents a PUCT select backed up from the in-search TT: counted, never served.
     pub(crate) tt_hits: &'a AtomicU64,
