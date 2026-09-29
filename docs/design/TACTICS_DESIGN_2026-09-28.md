@@ -304,6 +304,8 @@ deploy and in self-play is one code (LAW-15).
   - Its re-selections depend on the kind. Under PUCT (`select_leaves`) they ride the TT-hit path, uncounted.
     Under Gumbel (`select_leaves_forced`, which has no TT path) they are queued again and counted as served
     leaves.
+  - Amended in place 2026-09-29 (TACTICS-SELFPLAY P0, R378(c)): the PUCT table path now counts every descent
+    toward `n`, a terminal there as an inline descent (it backs up its own value) and any other as a table hit.
   - With tactics on, the first visit is decided before the queue, and every revisit is a counted descent. A search
     whose visits pile onto a proven child therefore still spends exactly its budget, instead of starving
     `select_leaves` of countable leaves.
@@ -422,6 +424,9 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
 - `infer_and_expand_graph` returns `(served_leaves, inline_descents)`. `select_leaves(n)` /
   `select_leaves_forced` count inline descents toward their n, so returned boards + inline descents <= n and a
   batch never overspends.
+- Amended in place 2026-09-29 (P0, R378(c)): a fourth unit, TABLE HITS, the descents backed up with the TT's value
+  (`last_tt_hits`), counts toward n as well; a terminal on the table path is an inline descent, with tactics off
+  too. `infer_and_expand_graph` returns `(served, inline + table)`, and every loop counts served + inline + table.
 - **A named deviation from R376(e)'s letter, awaiting a ruling (§12 Q5).** A TT-hit expansion of a non-terminal
   leaf is a descent that backs up a value, so R376(e) counts it. Today it is uncounted (PUCT only; Gumbel has no
   TT path).
@@ -442,6 +447,9 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
   - `root_vetoes` (the chosen turn allowed a proven opponent win), `audit_swaps` (the audit changed the move),
     `best_holds`, `audit_unvetted`, `audit_calls`, `audit_exhausted`;
   - `proven_root_targets` (self-play).
+  - Amended in place 2026-09-29: `table_hits` joins the rows (`TacticsCounters::rows` is the one name list), and a
+    self-play move adds `proven_root_rows`, `decided_lost_rows`, `vetoed_target_rows` and `emptied_target_rows`
+    in `proven_root_targets`' place; the runner sums them all (`SelfPlayRunner.tactics_totals`).
 - The served-sims witness pins DESCENTS per SEARCHED root: `descents == n_sims`, tactics on or off.
   - With tactics on: `served_leaves + solver_terminals + terminal_revisits == descents`, and
     `gpu_evals <= served_leaves`.
@@ -449,6 +457,9 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
   - A root the offence decides with no search serves 0 descents and is carved out of the pin. Three cases: a
     proof found, the next proof stone played, or a finishable window played. Each has its own counter, so no
     proof is counted twice.
+  - Amended in place 2026-09-29 (P0): with tactics on, `served_leaves + solver_terminals + terminal_revisits +
+    table_hits == descents`; with tactics off, served + inline + table == descents, and the deploy head's test reads
+    root visits, not infer calls. In self-play a decided root is searched (R378(e)), so it spends its budget too.
 - Every row gets a producer test (LAW-07) and an entry in `docs/contracts/event_manifest.md`.
 
 ## 8. Protected contact
