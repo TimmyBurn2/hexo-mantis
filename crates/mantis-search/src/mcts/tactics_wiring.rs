@@ -108,6 +108,68 @@ pub struct TacticsCounters {
 }
 
 impl TacticsCounters {
+    /// How many rows `rows` names.
+    pub const ROWS: usize = 25;
+
+    /// Every row by its one name, in one order; the destructuring stops a new field compiling unnamed.
+    #[must_use]
+    pub fn rows(&self) -> [(&'static str, u64); Self::ROWS] {
+        let Self {
+            descents,
+            served_leaves,
+            terminal_win1,
+            terminal_lost_on_cover,
+            terminal_strict_win,
+            terminal_six,
+            terminal_revisits,
+            table_hits,
+            forced_restrictions,
+            leaf_solver_calls,
+            leaf_solver_exhausted,
+            root_proofs_found,
+            proof_stones_played,
+            finishes_played,
+            root_solver_exhausted,
+            decided_lost,
+            root_vetoes,
+            best_holds,
+            audit_calls,
+            audit_exhausted,
+            audit_swaps,
+            audit_unvetted,
+            proof_stone_illegal,
+            grid_overflows,
+            three_cells_capped,
+        } = *self;
+        [
+            ("descents", descents),
+            ("served_leaves", served_leaves),
+            ("terminal_win1", terminal_win1),
+            ("terminal_lost_on_cover", terminal_lost_on_cover),
+            ("terminal_strict_win", terminal_strict_win),
+            ("terminal_six", terminal_six),
+            ("terminal_revisits", terminal_revisits),
+            ("table_hits", table_hits),
+            ("forced_restrictions", forced_restrictions),
+            ("leaf_solver_calls", leaf_solver_calls),
+            ("leaf_solver_exhausted", leaf_solver_exhausted),
+            ("root_proofs_found", root_proofs_found),
+            ("proof_stones_played", proof_stones_played),
+            ("finishes_played", finishes_played),
+            ("root_solver_exhausted", root_solver_exhausted),
+            ("decided_lost", decided_lost),
+            ("root_vetoes", root_vetoes),
+            ("best_holds", best_holds),
+            ("audit_calls", audit_calls),
+            ("audit_exhausted", audit_exhausted),
+            ("audit_swaps", audit_swaps),
+            ("audit_unvetted", audit_unvetted),
+            ("proof_stone_illegal", proof_stone_illegal),
+            ("grid_overflows", grid_overflows),
+            ("three_cells_capped", three_cells_capped),
+        ]
+    }
+
     /// Solver terminals over every kind: the descents that ended at a leaf the module decided.
     #[must_use]
     pub fn solver_terminals(&self) -> u64 {
@@ -480,6 +542,23 @@ mod tests {
         assert!(
             c.solver_terminals() > 0,
             "a position this sharp decides some leaves: {c:?}"
+        );
+    }
+
+    #[test]
+    fn every_row_has_one_name_and_reads_its_own_field() {
+        let rows = TacticsCounters::default().rows();
+        let names: std::collections::HashSet<&str> = rows.iter().map(|(n, _)| *n).collect();
+        assert_eq!(names.len(), TacticsCounters::ROWS, "a name is used twice");
+        let one = TacticsCounters {
+            table_hits: 7,
+            decided_lost: 3,
+            ..TacticsCounters::default()
+        };
+        let read: std::collections::HashMap<&str, u64> = one.rows().into_iter().collect();
+        assert_eq!(
+            (read["table_hits"], read["decided_lost"], read["descents"]),
+            (7, 3, 0)
         );
     }
 

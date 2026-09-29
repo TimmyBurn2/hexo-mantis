@@ -208,35 +208,8 @@ impl PyMCTSTree {
 
     /// This search's tactics rows by name; every row 0 with tactics off.
     pub fn tactics_counters<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let c = self.inner.tactics_counters();
         let d = PyDict::new(py);
-        for (name, value) in [
-            ("descents", c.descents),
-            ("served_leaves", c.served_leaves),
-            ("terminal_win1", c.terminal_win1),
-            ("terminal_lost_on_cover", c.terminal_lost_on_cover),
-            ("terminal_strict_win", c.terminal_strict_win),
-            ("terminal_six", c.terminal_six),
-            ("terminal_revisits", c.terminal_revisits),
-            ("table_hits", c.table_hits),
-            ("forced_restrictions", c.forced_restrictions),
-            ("leaf_solver_calls", c.leaf_solver_calls),
-            ("leaf_solver_exhausted", c.leaf_solver_exhausted),
-            ("root_proofs_found", c.root_proofs_found),
-            ("proof_stones_played", c.proof_stones_played),
-            ("finishes_played", c.finishes_played),
-            ("root_solver_exhausted", c.root_solver_exhausted),
-            ("decided_lost", c.decided_lost),
-            ("root_vetoes", c.root_vetoes),
-            ("best_holds", c.best_holds),
-            ("audit_calls", c.audit_calls),
-            ("audit_exhausted", c.audit_exhausted),
-            ("audit_swaps", c.audit_swaps),
-            ("audit_unvetted", c.audit_unvetted),
-            ("proof_stone_illegal", c.proof_stone_illegal),
-            ("grid_overflows", c.grid_overflows),
-            ("three_cells_capped", c.three_cells_capped),
-        ] {
+        for (name, value) in self.inner.tactics_counters().rows() {
             d.set_item(name, value)?;
         }
         Ok(d)
