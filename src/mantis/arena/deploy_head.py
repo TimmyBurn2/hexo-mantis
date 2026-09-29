@@ -122,8 +122,8 @@ class DeployHeadPlayer:
     def select_move(self, board: Any) -> tuple[int, int]:
         """Search `n_sims` DESCENTS and return the move this run's search kind picks.
 
-        The budget counts leaves RETURNED plus inline descents, the root's own among them; armed tactics
-        play a decided root stone unsearched, and the audit may swap the searched move for a hold.
+        The budget counts every descent, the root's own among them: leaves RETURNED, inline descents and table hits;
+        armed tactics play a decided root stone unsearched, and the audit may swap the searched move for a hold.
 
         Raises:
             ValueError: no root children to pick from, or armed tactics at a radius below 5.
@@ -178,12 +178,12 @@ class DeployHeadPlayer:
         while sims_done < self._n_sims:
             current_batch = min(self._leaf_batch_size, self._n_sims - sims_done)
             leaves = tree.select_leaves(current_batch)
-            inline = tree.last_inline_descents()
-            if not leaves and not inline:
+            unserved = tree.last_inline_descents() + tree.last_tt_hits()
+            if not leaves and not unserved:
                 break
             if leaves:
                 self._expand_fn(tree, leaves)
-            sims_done += len(leaves) + inline
+            sims_done += len(leaves) + unserved
         top = tree.get_top_visits(1)
         return (top[0][0] if top else None), sims_done
 
@@ -197,15 +197,14 @@ class DeployHeadPlayer:
             child = tree.gumbel_root_select()
             if child is None:
                 break
-            # The FORCED descent, not `select_leaves(1)`: the batch path expands a transposition
-            # hit inline and returns nothing, which this loop read as exhaustion (A-1).
+            # The FORCED descent: the halving's chosen child is the one descended, not PUCT's pick.
             leaves = tree.select_leaves_forced([child])
-            inline = tree.last_inline_descents()
-            if not leaves and not inline:
+            unserved = tree.last_inline_descents() + tree.last_tt_hits()
+            if not leaves and not unserved:
                 break
             if leaves:
                 self._expand_fn(tree, leaves)
-            spent += len(leaves) + inline
+            spent += len(leaves) + unserved
         return tree.gumbel_root_best_move(), sims_done + spent
 
 

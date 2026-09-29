@@ -46,10 +46,11 @@ pub use tactics_wiring::{
 pub const MAX_CHILDREN_PER_NODE: usize = 1024;
 
 /// The largest armed sim budget the node pool can serve, DERIVED from the pool's own two
-/// constants: `select_leaves` expands TT-hit leaves without counting them against `n`, bounded
-/// only by `max_attempts = 4n`, so one move's worst case is `4 × sims` expansions of up to
-/// `MAX_CHILDREN_PER_NODE` children each. `finish_expansion`'s panic STAYS as the last line — an
-/// overflowed pool has corrupted its own indices — and this constant stops a config reaching it.
+/// constants: every descent counts against the budget and expands at most one leaf, so one move
+/// adds at most `sims` expansions of up to `MAX_CHILDREN_PER_NODE` children each, and the divisor
+/// keeps `select_leaves`' `4n` attempt cap as a margin over that. `finish_expansion`'s panic STAYS
+/// as the last line — an overflowed pool has corrupted its own indices — and this constant stops a
+/// config reaching it.
 pub const MAX_ARMED_SIMS: usize = MAX_NODES / (4 * MAX_CHILDREN_PER_NODE);
 
 /// Root-only child cap under `SearchKind::Gumbel`, where the root expands its FULL legal set:
@@ -124,7 +125,7 @@ pub struct MCTSTree {
     pub(crate) root_children_cap: usize,
     /// The tactics block and its solver; `None` searches exactly as before the module existed.
     pub(crate) tactics: Option<Box<tactics_wiring::TacticsState>>,
-    /// Descents the last select call backed up inline (`last_inline_descents`).
+    /// Descents the last select call backed up with a terminal's or the solver's value (`last_inline_descents`).
     pub(crate) inline_descents: usize,
     /// Descents the last select call backed up with the TT's value, unserved (`last_tt_hits`).
     pub(crate) tt_hits: usize,

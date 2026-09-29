@@ -87,7 +87,7 @@ pub struct RunnerStatsSnapshot {
     pub mcts_quiescence_fires: u64,
     /// The largest leaf count ANY one search served; must never exceed the search budget.
     pub max_sims_per_search: u64,
-    /// Searches TT hits uncharged against the budget starved, and the descents short: with served and inline, every budgeted descent.
+    /// Searches that ended short of their budget, and the descents short: every descent counts, so both read 0.
     pub starved_searches: u64,
     pub starved_descents: u64,
     /// Playout-cap randomization's fire rate, counted at the DRAW; at `full_search_prob == 0`

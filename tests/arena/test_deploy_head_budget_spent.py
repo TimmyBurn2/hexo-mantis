@@ -1,4 +1,5 @@
-"""EVERY search kind spends EXACTLY `n_sims` descents, tactics off or on (the old Gumbel driver served 0.19–0.42 of 512)."""
+"""EVERY search kind spends EXACTLY `n_sims` descents, tactics off or on, whatever backed each: the net, the table or a
+terminal (the old Gumbel driver served 0.19–0.42 of 512, and the old PUCT driver ended short at a revisited win)."""
 from __future__ import annotations
 
 import math
@@ -42,6 +43,15 @@ def _open_four_board() -> Board:
     return board
 
 
+def _five_board() -> Board:
+    """P2 holds five on r = 3 and places two: its finish is a terminal child the peaked prior piles onto."""
+    board = Board()
+    for q, r in [(0, 0), (0, 3), (1, 3), (0, -3), (5, -5), (2, 3), (3, 3), (-5, 0), (-4, -2), (4, 3), (-3, 6), (-6, 2),
+                 (-2, -6)]:
+        board.apply_move(q, r)
+    return board
+
+
 def _peaked_infer(calls: list[int]) -> InferStub:
     """The red team's peaked net: a distance-decay prior and a position-dependent value."""
     def _infer(board: Board) -> tuple[list[float], float]:
@@ -77,9 +87,7 @@ def test_every_kind_spends_exactly_its_budget(kind: str, n_sims: int, tactics: d
     player.new_game()
     if tactics is None:
         player.select_move(_mid_game_board(40, seed=3))
-        assert len(calls) == n_sims, (
-            f"{kind} at {n_sims}: served {len(calls)} leaves against a budget of {n_sims}"
-        )
+        _assert_every_descent_counted(player, calls, n_sims, f"{kind} at {n_sims}")
         return
     player.select_move(_open_four_board())
     rows = player.last_tactics
@@ -87,8 +95,36 @@ def test_every_kind_spends_exactly_its_budget(kind: str, n_sims: int, tactics: d
     inline = sum(rows[k] for k in _TERMINALS) + rows["terminal_revisits"]
     assert player.last_sims == rows["descents"] == n_sims, f"{kind} at {n_sims}: {rows}"
     assert rows["served_leaves"] == len(calls), "every served leaf is one net call"
-    assert rows["served_leaves"] + inline == rows["descents"], f"{kind} at {n_sims}: the rows do not add up: {rows}"
+    assert rows["served_leaves"] + inline + rows["table_hits"] == rows["descents"], (
+        f"{kind} at {n_sims}: the rows do not add up: {rows}"
+    )
     assert inline > 0, f"{kind} at {n_sims}: no decided leaf, so the tactics-on case proves nothing: {rows}"
+
+
+def _assert_every_descent_counted(player: DeployHeadPlayer, calls: list[int], n_sims: int, label: str) -> None:
+    """The head spent `n_sims` descents, each one backup through the root; the net served no more than that.
+
+    PLANTED BREAK: drop `last_tt_hits()` from `_drive_puct`'s count and the transposing PUCT cases overspend.
+    """
+    assert player._tree is not None
+    assert player.last_sims == n_sims == player._tree.root_visits(), (
+        f"{label}: the head counted {player.last_sims} and the root saw {player._tree.root_visits()} backups"
+    )
+    assert len(calls) <= n_sims, f"{label}: served {len(calls)} leaves against a budget of {n_sims}"
+
+
+@pytest.mark.parametrize("kind", ["puct", "gumbel"])
+def test_the_plain_head_spends_its_budget_where_its_search_revisits_a_win(kind: str) -> None:
+    """The plain head's early end: a won child's revisits back up on the table path, and PUCT read a call of them as
+    exhaustion (43 of 256 before the fix)."""
+    calls: list[int] = []
+    player = DeployHeadPlayer(
+        expand_fn=dense_expand(_peaked_infer(calls)), n_sims=256, leaf_batch_size=8, c_visit=50.0,
+        c_scale=1.0, q_rescale=True, search_kind=kind, gumbel_m=16, gumbel_seed=7, tactics=None,
+    )
+    player.new_game()
+    player.select_move(_five_board())
+    _assert_every_descent_counted(player, calls, 256, f"{kind} at a revisited win")
 
 
 def test_the_gumbel_head_spends_its_budget_on_a_second_board_too() -> None:
@@ -114,4 +150,4 @@ def test_the_head_reports_the_leaves_it_spent_as_its_own_counter(kind: str) -> N
     player.new_game()
     assert player.last_sims is None
     player.select_move(_mid_game_board(30, seed=3))
-    assert player.last_sims == 96 == len(calls)
+    _assert_every_descent_counted(player, calls, 96, kind)

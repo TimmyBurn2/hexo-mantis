@@ -319,14 +319,16 @@ impl MCTSTree {
 
     /// Count one select call's descents into this search's tactics rows.
     fn count_descents(&mut self, served: usize) {
-        let inline = self.inline_descents as u64;
+        let (inline, table) = (self.inline_descents as u64, self.tt_hits as u64);
         if let Some(t) = self.tactics.as_deref_mut() {
-            t.counters.descents += served as u64 + inline;
+            t.counters.descents += served as u64 + inline + table;
             t.counters.served_leaves += served as u64;
+            t.counters.table_hits += table;
         }
     }
 
-    /// Select up to `n` distinct leaves; returned boards plus inline descents (tactics armed) never exceed `n`.
+    /// Select up to `n` distinct leaves; every descent that backs up a value counts toward `n`, so returned boards,
+    /// inline descents and table hits together never exceed it.
     ///
     /// # Errors
     /// `SelectionDesync` — a selected child's `action_idx` decodes to a cell the board refuses.
@@ -369,8 +371,10 @@ impl MCTSTree {
                 .get(&board.zobrist_hash)
                 .map(|e| (e.policy.clone(), e.value));
             if let Some((policy, value)) = cached {
-                // A terminal backs up its own value here, not the table's: not a hit.
-                if !self.pool[leaf_idx as usize].is_terminal && !board.check_win() {
+                // A terminal backs up its own value here, not the table's: an inline descent, not a hit.
+                if self.pool[leaf_idx as usize].is_terminal || board.check_win() {
+                    self.inline_descents += 1;
+                } else {
                     self.tt_hits += 1;
                 }
                 match policy {
@@ -386,6 +390,7 @@ impl MCTSTree {
                     ),
                 }
                 rewind(&mut board, &mut diffs);
+                i += 1;
                 continue;
             }
 
@@ -450,8 +455,8 @@ impl MCTSTree {
                     return Err(desync.into());
                 }
             };
-            // No TT fast path here: a Gumbel round needs an exact leaf count per round trip,
-            // which `select_leaves`' TT-hit expansions, uncharged against the budget, would break.
+            // No TT fast path here: every forced descent is served or decided, so a round's width is
+            // its leaves plus its inline descents.
             let Some(leaf_idx) = leaf else {
                 continue;
             };

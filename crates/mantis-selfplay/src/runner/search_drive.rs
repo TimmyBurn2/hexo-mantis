@@ -244,7 +244,7 @@ fn select_for(
 
 /// Builds ONE axis graph per evaluated leaf, replays the eval cache's hits, submits the misses in
 /// ONE `submit_graphs_and_wait`, and expands against the BUILDER's per-leaf `window_center`.
-/// Returns `(served leaves, inline descents)`: with tactics armed a descent can end at a decided leaf.
+/// Returns `(served leaves, unserved descents)`: a descent can end at the table or at a decided leaf.
 ///
 /// # Errors
 /// A selection refusal, a build-guard trip or a leaf inference that FAILS on an OPEN queue is a
@@ -259,15 +259,14 @@ fn infer_and_expand_graph(
     // A tree/board desync or a foreign forced child is a NAMED run-fatal seam failure, not a panic.
     let leaves = select_for(tree, selection)
         .map_err(|err| InferenceSeamFailure::new("graph", "selection", err.to_string()))?;
-    let inline = tree.last_inline_descents();
+    let (inline, table) = (tree.last_inline_descents(), tree.last_tt_hits());
     infer
         .inline_descents
         .fetch_add(inline as u64, Ordering::Relaxed);
-    infer
-        .tt_hits
-        .fetch_add(tree.last_tt_hits() as u64, Ordering::Relaxed);
+    infer.tt_hits.fetch_add(table as u64, Ordering::Relaxed);
+    let unserved = inline + table;
     if leaves.is_empty() {
-        return Ok((0, inline));
+        return Ok((0, unserved));
     }
 
     let (win_length, radius) = (infer.win_length, infer.graph_radius);
@@ -332,7 +331,7 @@ fn infer_and_expand_graph(
             Ok(pair) => fresh.push(pair),
             Err(reason) => {
                 return seam_or_shutdown(infer.running, "graph", "submit_graphs_and_wait", reason)
-                    .map(|served| (served, inline))
+                    .map(|served| (served, unserved))
             }
         }
     }
@@ -347,7 +346,7 @@ fn infer_and_expand_graph(
                 n_misses
             ),
         )
-        .map(|served| (served, inline));
+        .map(|served| (served, unserved));
     }
     // A bump during the wait means these forwards may straddle two nets: serve them, store none.
     let storable = infer.model_version.load(Ordering::Acquire) == version;
@@ -383,7 +382,7 @@ fn infer_and_expand_graph(
                 leaves.len()
             ),
         )
-        .map(|served| (served, inline));
+        .map(|served| (served, unserved));
     }
     infer
         .served_leaves
@@ -400,14 +399,14 @@ fn infer_and_expand_graph(
         "graph trunk mismatch: spec agg_trunk_sz vs spec graph trunk_size"
     );
     tree.expand_and_backup_ls_at(&aggregated_ls, &aggregated_values, &centers, agg_trunk_sz);
-    Ok((n, inline))
+    Ok((n, unserved))
 }
 
 /// Two-branch dispatcher on the ONE search kind: Gumbel (Gumbel-Top-k root sampling +
 /// Sequential Halving, no Dirichlet — the Gumbel draw IS the root exploration) or PUCT.
 ///
 /// THE ROOT'S OWN EVALUATION IS CHARGED under both kinds, which is what makes `N` mean `N
-/// leaves`.
+/// descents`.
 #[allow(clippy::too_many_arguments)]
 fn run_mcts_search(
     tree: &mut MCTSTree,
@@ -430,7 +429,7 @@ fn run_mcts_search(
     // root is never decided inline, so this descent is always served.
     let root_sims = match infer_and_expand_graph(tree, LeafSelection::Batch(1), agg_trunk_sz, infer)
     {
-        Ok((served, inline)) => served + inline,
+        Ok((served, unserved)) => served + unserved,
         Err(e) => return McTSSearchResult::InferenceFailed(e),
     };
     if root_sims == 0 || !tree.pool[0].is_expanded() {
@@ -461,7 +460,7 @@ fn run_mcts_search(
                     agg_trunk_sz,
                     infer,
                 ) {
-                    Ok((served, inline)) => served + inline,
+                    Ok((served, unserved)) => served + unserved,
                     Err(e) => return McTSSearchResult::InferenceFailed(e),
                 };
                 if n == 0 {
@@ -514,7 +513,7 @@ fn run_mcts_search(
                     agg_trunk_sz,
                     infer,
                 ) {
-                    Ok((served, inline)) => served + inline,
+                    Ok((served, unserved)) => served + unserved,
                     Err(e) => return McTSSearchResult::InferenceFailed(e),
                 };
                 if n == 0 {

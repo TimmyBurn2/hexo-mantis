@@ -1,7 +1,7 @@
-//! The Gumbel drive, skewed prior and radius-8 board the r8 target measurements share.
+//! The Gumbel drive, the skewed and compact priors and the radius-8 board the search tests share.
 
 use mantis_core::Board;
-use mantis_search::{MCTSTree, MctxRootState, QSigma, SearchKind};
+use mantis_search::{analyze, MCTSTree, MctxRootState, QSigma, SearchKind, Terminal};
 
 /// 19-window stride with a pass slot.
 pub const N_ACTIONS: usize = 19 * 19 + 1;
@@ -24,6 +24,28 @@ pub fn stub_policy() -> Vec<f32> {
         .collect();
     let total: f32 = raw.iter().sum();
     raw.into_iter().map(|x| x / total).collect()
+}
+
+/// A prior decaying from the window centre (a compact net), with 0.9 of the mass on the mover's finish where it has one.
+pub fn compact_prior(board: &Board) -> Vec<f32> {
+    let mut p: Vec<f32> = (0..N_ACTIONS - 1)
+        .map(|i| {
+            let (dq, dr) = ((i / 19) as i32 - 9, (i % 19) as i32 - 9);
+            (-1.5 * dq.abs().max(dr.abs()).max((dq + dr).abs()) as f32).exp()
+        })
+        .collect();
+    p.push(0.0);
+    let total: f32 = p.iter().sum();
+    p.iter_mut().for_each(|x| *x /= total);
+    let facts = analyze(board);
+    if facts.terminal == Some(Terminal::Win) {
+        let idx = board.window_flat_idx(facts.finish[0].0, facts.finish[0].1);
+        if idx < p.len() {
+            p.iter_mut().for_each(|x| *x *= 0.1);
+            p[idx] += 0.9;
+        }
+    }
+    p
 }
 
 /// One Gumbel search of `sims` sims over `board` at `m` candidates, driven as self-play drives it.

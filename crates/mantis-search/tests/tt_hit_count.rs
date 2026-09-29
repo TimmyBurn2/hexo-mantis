@@ -3,29 +3,9 @@
 use mantis_core::Board;
 use mantis_search::{analyze, MCTSTree, Terminal};
 
-mod common;
+use common::compact_prior;
 
-/// A prior decaying from the window centre (a compact net), with 0.9 of the mass on the mover's finish where it has one.
-fn prior(board: &Board) -> Vec<f32> {
-    let mut p: Vec<f32> = (0..common::N_ACTIONS - 1)
-        .map(|i| {
-            let (dq, dr) = ((i / 19) as i32 - 9, (i % 19) as i32 - 9);
-            (-1.5 * dq.abs().max(dr.abs()).max((dq + dr).abs()) as f32).exp()
-        })
-        .collect();
-    p.push(0.0);
-    let total: f32 = p.iter().sum();
-    p.iter_mut().for_each(|x| *x /= total);
-    let facts = analyze(board);
-    if facts.terminal == Some(Terminal::Win) {
-        let idx = board.window_flat_idx(facts.finish[0].0, facts.finish[0].1);
-        if idx < p.len() {
-            p.iter_mut().for_each(|x| *x *= 0.1);
-            p[idx] += 0.9;
-        }
-    }
-    p
-}
+mod common;
 
 fn terminal_visits(tree: &MCTSTree) -> u64 {
     tree.pool[..tree.next_free_slot() as usize]
@@ -61,7 +41,7 @@ fn drive(board: &Board, sims: usize) -> (u64, u64) {
         if leaves.is_empty() {
             continue;
         }
-        let policies: Vec<Vec<f32>> = leaves.iter().map(prior).collect();
+        let policies: Vec<Vec<f32>> = leaves.iter().map(compact_prior).collect();
         let values: Vec<f32> = (0..leaves.len()).map(|i| 0.05 * (i % 3) as f32).collect();
         tree.expand_and_backup(&policies, &values);
         spent += leaves.len();

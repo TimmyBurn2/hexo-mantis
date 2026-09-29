@@ -218,6 +218,7 @@ impl PyMCTSTree {
             ("terminal_strict_win", c.terminal_strict_win),
             ("terminal_six", c.terminal_six),
             ("terminal_revisits", c.terminal_revisits),
+            ("table_hits", c.table_hits),
             ("forced_restrictions", c.forced_restrictions),
             ("leaf_solver_calls", c.leaf_solver_calls),
             ("leaf_solver_exhausted", c.leaf_solver_exhausted),

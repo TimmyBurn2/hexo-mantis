@@ -87,6 +87,7 @@ pub struct TacticsCounters {
     pub terminal_strict_win: u64,
     pub terminal_six: u64,
     pub terminal_revisits: u64,
+    pub table_hits: u64,
     pub forced_restrictions: u64,
     pub leaf_solver_calls: u64,
     pub leaf_solver_exhausted: u64,
@@ -177,7 +178,7 @@ impl MCTSTree {
             .unwrap_or_default()
     }
 
-    /// Descents the last `select_leaves` / `select_leaves_forced` call backed up inline, beside the boards it returned.
+    /// Descents the last `select_leaves` / `select_leaves_forced` call backed up with a terminal's or the solver's value.
     #[must_use]
     pub fn last_inline_descents(&self) -> usize {
         self.inline_descents
@@ -429,24 +430,24 @@ mod tests {
         }
     }
 
-    /// Drive `budget` descents the way the budget loops do, boards and inline descents both counted.
+    /// Drive `budget` descents the way the budget loops do, boards, inline descents and table hits all counted.
     fn drive(tree: &mut MCTSTree, budget: usize, batch: usize) -> usize {
         let mut done = 0;
         while done < budget {
             let boards = tree
                 .select_leaves(batch.min(budget - done))
                 .expect("no desync");
-            let inline = tree.last_inline_descents();
+            let unserved = tree.last_inline_descents() + tree.last_tt_hits();
             assert!(
-                boards.len() + inline <= batch.min(budget - done),
+                boards.len() + unserved <= batch.min(budget - done),
                 "a select call overspent its n"
             );
-            if boards.is_empty() && inline == 0 {
+            if boards.is_empty() && unserved == 0 {
                 break;
             }
             let policies = vec![uniform(); boards.len()];
             tree.expand_and_backup(&policies, &vec![0.0; boards.len()]);
-            done += boards.len() + inline;
+            done += boards.len() + unserved;
         }
         done
     }
@@ -463,7 +464,7 @@ mod tests {
         let c = tree.tactics_counters();
         assert_eq!(c.descents, 512, "every counted descent is in the row");
         assert_eq!(
-            c.served_leaves + c.solver_terminals() + c.terminal_revisits,
+            c.served_leaves + c.solver_terminals() + c.terminal_revisits + c.table_hits,
             c.descents
         );
         assert!(
