@@ -38,8 +38,20 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by R377 (TACTICS-DESIGN accepted; 2026-09-28) — the tactics module
 
-- **CARD-TACTICS-DEPLOY — IN PROGRESS: the TACTICS-DEPLOY packet (2026-09-28). ORDERED by R377(e); the lane's
-  next packet.** The packet reads X's floor first (one random-init net, 288 games), builds and benches the module,
+- **CARD-TACTICS-DEPLOY — EXITED 2026-09-29, the read awaiting the architect's ruling: the lever PASSES on both
+  rulers and the audit LANDS.**
+  - Lever X, full − plain: +0.957 logit [0.752, 1.162]; win rate ~0.33 → ~0.56 at 39k/45k/51k.
+  - Lever S: +0.973 [0.663, 1.284].
+  - Audit X, full − audit-off: +0.254 [0.049, 0.459].
+  - The known-bad (the audit inverted) reads 0.052 against 0.351.
+  - No game a found proof played was lost.
+  - The wiring alone (no solver, no audit) reads +0.027 over plain, so the solvers and the audit carry the lift.
+  - The read's block: leaf 256/3, root 20 000/8, audit 2 000/8, k 4, m 4, total 40 000.
+  - The bench: no abort; the deploy wall 0.864x plain; self-play 1.08x descents/s.
+  - The branch `tactics-deploy` is pushed; `dev` is untouched for the operator's fast-forward. Every config mints
+    `tactics: null`. Records: `mantis-records/tactics-deploy/` (EXIT.md, drivers/L5_BENCH.md, drivers/L6_READINGS.md).
+
+  As ORDERED by R377(e), the lane's next packet: The packet reads X's floor first (one random-init net, 288 games), builds and benches the module,
   wires it at deploy with `search.tactics` null in both homes (the self-play path unchanged), and reads plain,
   full and audit-off at 39k, 45k and 51k on X then S, with the inverted audit on 45k as its known-bad, on the box
   within a grant of ≤ 12 box-h. It builds the module to `docs/design/TACTICS_DESIGN_2026-09-28.md` §4–§10, as
@@ -99,6 +111,10 @@ Both were found by running the gate set rather than by reading it, and both are 
   witness's tactics-on cases assert served + inline + starved == N a search. Ruling Q5 by R376(e)'s letter (a TT hit
   is a counted descent) removes it; a loop that simply continued past a starved call would break `MAX_ARMED_SIMS`,
   which is derived from the 4n attempt cap.
+  - MEASURED at deploy (TACTICS-DEPLOY L5, 300 positions of the X 45k cell): the PLAIN head ends 12 % of its searches
+    short, by 139 descents on average and down to 2, a mean of 239 of 256. Any armed block, even the wiring alone,
+    does not, because its decided leaves are inline descents. On X the wiring alone reads +0.027 logit over plain,
+    so the shortfall costs no measurable strength there.
 
 ## Opened by R376 (DECIDE-1 accepted; 2026-09-28) — the tactics lane
 

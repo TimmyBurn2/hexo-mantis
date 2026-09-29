@@ -7,8 +7,9 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
-**R377 (2026-09-28): THE TACTICS MODULE. TACTICS-DESIGN is accepted, and the TACTICS-DEPLOY packet is in
-progress (2026-09-28, CARD-TACTICS-DEPLOY).** The tactics lane still goes first and run10 will not START (R376(c)).
+**R377 (2026-09-28): THE TACTICS MODULE. TACTICS-DESIGN is accepted, and the TACTICS-DEPLOY packet EXITED
+2026-09-29 (CARD-TACTICS-DEPLOY): the lever passes on X and S and the audit lands, awaiting the architect's
+ruling.** The tactics lane still goes first and run10 will not START (R376(c)).
 `configs/run10.yaml` stays the production config the instruments read until run11's mint replaces it, and run11
 is designed after TACTICS-DEPLOY's read (CARD-RUN11-DESIGN).
 
@@ -27,8 +28,13 @@ is designed after TACTICS-DEPLOY's read (CARD-RUN11-DESIGN).
   - TACTICS-DEPLOY reads the full module and an audit-off arm against the plain parent on both rulers, X's floor
     first. The defence audit lands only if its arm earns its cost: of 20 of D1's "safe" alternatives played out
     with Six on both seats (T3), 16 were still lost.
-  - The packet (2026-09-28) builds the module, wires it at deploy with `search.tactics` null in both homes (the
-    self-play path unchanged), and runs X's floor and the A/B on the box within a grant of ≤ 12 box-h.
+  - The packet (2026-09-28) built the module and wired it at deploy with `search.tactics` null in both homes
+    (the self-play path unchanged). It read the A/B on the box in 9.78 of the 12 box-h granted.
+    - Lever X: +0.957 logit [0.752, 1.162]; lever S: +0.973 [0.663, 1.284].
+    - The audit: +0.254 [0.049, 0.459] over audit-off on X.
+    - The known-bad reads 0.052; no found proof's game was lost.
+    - The wiring alone reads +0.027 over plain on X.
+    - The branch `tactics-deploy` is pushed; `dev` is untouched.
   - TACTICS-SELFPLAY follows (CARD-TACTICS-SELFPLAY): proof as the target, a plain twin as the control, and
     T4's starvation band at the panel's mean − 3 SD.
 - **The first stone is the origin (R377(g), CARD-ORIGIN-RULE).** The empty board's legal set becomes {origin},
