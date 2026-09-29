@@ -171,6 +171,7 @@ impl TacticsState {
             Proof::Lost(n) => n,
         };
         self.counters.root_vetoes += 1;
+        self.vetoes.push(chosen);
         let mut lost = vec![(n, chosen)];
         let walk = hold
             .into_iter()
@@ -185,7 +186,10 @@ impl TacticsState {
                     self.counters.audit_exhausted += 1;
                     return chosen;
                 }
-                Proof::Lost(n) => lost.push((n, cell)),
+                Proof::Lost(n) => {
+                    self.vetoes.push(cell);
+                    lost.push((n, cell));
+                }
             }
         }
         self.counters.best_holds += 1;
@@ -227,6 +231,7 @@ impl TacticsState {
                     if i == 0 {
                         self.counters.root_vetoes += 1;
                     }
+                    self.vetoes.push(cell);
                     lost.push((n, (cell, d2)));
                 }
             }
@@ -358,6 +363,7 @@ impl MCTSTree {
         let Some(t) = self.tactics.as_deref_mut() else {
             return chosen;
         };
+        t.vetoes.clear();
         let Some(audit) = t.config.audit else {
             return chosen;
         };
@@ -560,6 +566,40 @@ mod tests {
         assert_eq!(tree.root_audit((-10, 0), None), (-10, 0));
         let c = counters(&tree);
         assert_eq!((c.root_vetoes, c.best_holds, c.audit_calls), (1, 1, 3));
+    }
+
+    /// PLANTED BREAK: drop a lost candidate's `vetoes` push in `hold_last_stone` or `hold_first_stone` and this reds.
+    #[test]
+    fn the_audit_names_every_candidate_it_proved_lost_and_a_new_search_clears_them() {
+        let mut tree = last_stone_root(&[(-20, 0), (-21, 0), HOLDS_16[0], HOLDS_16[1]], ARMED);
+        assert_eq!(tree.root_audit((-10, 0), None), HOLDS_16[0]);
+        assert_eq!(tree.last_audit_vetoes(), &[(-10, 0), (-20, 0), (-21, 0)]);
+        let root = tree.root_board.clone();
+        tree.new_game(root);
+        assert!(
+            tree.last_audit_vetoes().is_empty(),
+            "a new search starts with none"
+        );
+
+        let mut tree = last_stone_root(&[HOLDS_16[0]], ARMED);
+        assert_eq!(tree.root_audit(HOLDS_16[0], None), HOLDS_16[0]);
+        assert!(
+            tree.last_audit_vetoes().is_empty(),
+            "a turn that holds vetoes nothing"
+        );
+
+        let root = played(&FIX219[..15]);
+        let mut tree = armed(&root, with_audit(AuditConfig { m: 2, ..AUDIT }));
+        let firsts = expand(&mut tree, 0, &[(-13, 0), (-12, 0), (-4, -11)], 10);
+        expand(&mut tree, firsts[0], &[(-10, 0), (-12, 1), (-4, -10)], 3);
+        expand(&mut tree, firsts[1], &[(-10, 0), (-12, 1)], 2);
+        expand(&mut tree, firsts[2], &[(-10, 0)], 1);
+        assert_eq!(tree.root_audit((-13, 0), None), (-4, -11));
+        assert_eq!(
+            tree.last_audit_vetoes(),
+            &[(-13, 0), (-12, 0)],
+            "two stones left: the lost first stones"
+        );
     }
 
     #[test]

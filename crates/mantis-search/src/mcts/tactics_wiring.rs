@@ -129,6 +129,8 @@ pub(crate) struct TacticsState {
     pub(crate) next_proof_stone: Option<(u128, (i32, i32))>,
     /// The second stone that held for the audit's first stone, tried first by the next call on that key.
     pub(crate) next_hold_stone: Option<(u128, (i32, i32))>,
+    /// The candidates this search's audit proved to allow an opponent win, in the order it walked them.
+    pub(crate) vetoes: Vec<(i32, i32)>,
 }
 
 /// How a descent's leaf is spent: backed up inline, or evaluated by the net with the facts its expansion reads.
@@ -155,6 +157,7 @@ impl MCTSTree {
                 solver_base: (0, 0),
                 next_proof_stone: None,
                 next_hold_stone: None,
+                vetoes: Vec::new(),
             })
         });
     }
@@ -184,6 +187,12 @@ impl MCTSTree {
         self.inline_descents
     }
 
+    /// The candidates the last `root_audit` proved to allow an opponent win; empty with no audit, or none lost.
+    #[must_use]
+    pub fn last_audit_vetoes(&self) -> &[(i32, i32)] {
+        self.tactics.as_deref().map_or(&[], |t| t.vetoes.as_slice())
+    }
+
     /// Refuse, as `TacticsError::RadiusBelowFive`, a board whose legal-move radius the armed block cannot run on.
     pub fn check_tactics_board(&self, board: &Board) -> Result<(), TacticsError> {
         match &self.tactics {
@@ -196,6 +205,7 @@ impl MCTSTree {
     pub(crate) fn reset_tactics_search(&mut self) {
         if let Some(t) = self.tactics.as_deref_mut() {
             t.counters = TacticsCounters::default();
+            t.vetoes.clear();
             t.solver_base = (t.solver.grid_overflows(), t.solver.three_cells_capped());
             t.solver.clear();
         }
