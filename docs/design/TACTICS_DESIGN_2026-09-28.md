@@ -1,7 +1,8 @@
 # TACTICS — the solver's kind and its wiring: measured, then designed (2026-09-28)
 
 Status: **ACCEPTED by R377** (2026-09-28), which rules §12's questions; where its entry in
-`docs/governance/RULINGS.md` and this text differ, the ruling governs.
+`docs/governance/RULINGS.md` and this text differ, the ruling governs. **R378** (2026-09-29) rules §12 Q5 by (c),
+amends §6's proven-root target form by (e) and extends §11's twin witness by (f); the same precedence holds.
 Was: **DESIGN** (the TACTICS-DESIGN packet under R376(d); CARD-TACTICS-LANE re-aimed to it). No code, config
 or mint change rides this document. It chooses the kind of the ONE exact tactics module, specifies its API and
 its wiring at deploy and in self-play, and scopes TACTICS-DEPLOY and TACTICS-SELFPLAY. The readings it stands on
@@ -391,6 +392,9 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
   - the value target stays the game's z.
   - Six records no policy target at such a root (`decided`). This design takes strix's form, because R239 makes
     injection mandatory and the target is what trains. §12 Q3 asks the architect.
+  - AMENDED by R378(e), in form, not rule: the target at a proven self-play root follows A9's reading. It is the
+    searched target where its proof-set mass reads ≥ 0.7 at the median, else the α = 0.5 mixture; never the bare
+    two-hot above.
 - **Lost roots in self-play.** A lost-on-cover root is searched (the root is always expanded), but every child
   loses. Following Six (`searchStone` marks it `decided`), its row carries NO policy target: counted as
   `decided_lost`, value target z. §12 Q3.
@@ -427,6 +431,9 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
     all TT hits returns nothing, and the budget loops stop short, tactics on or off. It is counted, not fixed: the
     runner's `starved_searches` / `starved_descents` rows and the head's `last_sims`, and the witness's tactics-on
     cases pin served + inline + starved == N a search (CARD-TT-HIT-STARVATION). A ruling on Q5 removes it.
+  - RULED by R378(c): a TT hit is a counted descent, as are a net leaf and a solver terminal. The plain head's early
+    end is a defect, fixed with a planted-break test before the twin (CARD-SIMS-ACCOUNTING). The witness pins all
+    three cases, and TACTICS-DEPLOY's A/B stands.
 - Rows per search, summed per worker into the runner's stats snapshot and emitted as manifest rows; per
   `select_move` on the head as `last_tactics`:
   - `descents`, `gpu_evals`, `solver_terminals` (split `win1`, `lost_on_cover`, `strict_win`), `terminal_revisits`;
@@ -560,7 +567,9 @@ Amended in place 2026-09-28 per R377, which ruled §12: the A/B gains an audit-o
   | build + bench_server on the box | ≈ 0.5 |
   | **total** | **≈ 8.7** (was ≈ 5.5 before the audit-off arm) |
 
-**TACTICS-SELFPLAY: the twin with the witness.**
+**TACTICS-SELFPLAY: the twin with the witness.** Amended by R378 (2026-09-29): the proven-root target by (e) (§6); the
+witness gains an enrichment ceiling, the defence exam and ring-composition bands, and T4 reads by proof length (f);
+the in-run gate is deploy-matched, candidate and anchor on the same block (d). The packet carries the bands.
 - **Twin.** A 4 h twin from the parent, `selfplay.search.tactics` armed as TACTICS-DEPLOY's read sets it, proof as
   the target (§6), audit vetoes as zeros. R377(f) rules the targets: a proven root plays and records its proof, a
   vetoed move gets zero target mass, and a lost root records no policy target.
@@ -584,7 +593,7 @@ Amended in place 2026-09-28 per R377, which ruled §12: the A/B gains an audit-o
 - **Box-h.** ≈ 4 (twin) + 0.5 (preflight) + ≈ 0.7 (two X cells) ≈ 5.2, and ≈ 9.5 with the plain twin R377(f)
   orders.
 
-## 12. Open questions for the architect — ruled by R377 except Q5
+## 12. Open questions for the architect — ruled by R377, and Q5 by R378
 
 Amended in place 2026-09-28: each ruled question leads with its ruling and keeps its question as "Was".
 1. **The verdict's letter.** RULED by R377(a): TACTICS-DESIGN is accepted. The head-to-head's null configuration
@@ -609,7 +618,10 @@ Amended in place 2026-09-28: each ruled question leads with its ruling and keeps
 4. **A strict Loss in v1?** RULED by R377(b): v1 proves wins and can't-cover losses, Six's set; deeper loss proofs
    are a later lever (CARD-TACTICS-DEEP-LOSS). Was: at cover-2 positions, every covering reply losing to a strict
    opponent win is a proof of Loss at bounded cost. It would make BLOCK leaves terminal too. In v1 or later?
-5. **TT-hit descents: a named deviation. NOT RULED: R377 names no item for it, so it stays open.** R376(e)'s letter
+5. **TT-hit descents: a named deviation. RULED by R378(c): a descent that backs up a value is a simulation,
+   whatever backed it (the net, the table or the solver). The plain head's early end is a defect, fixed with a
+   planted-break test before the twin; the served-sims witness pins all three cases, and the A/B stands.** Was: NOT
+   RULED by R377, which named no item for it. R376(e)'s letter
    counts a TT-hit expansion, a descent that backs up a value; today's PUCT code does not. This design keeps it
    uncounted (§7), because counting it changes the tactics-off search wherever PUCT transposes and voids the
    replay witness the A/B's plain arm relies on. Rule the deviation, or order the change and re-read the plain

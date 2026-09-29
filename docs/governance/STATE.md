@@ -7,18 +7,20 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
-**R377 (2026-09-28): THE TACTICS MODULE. TACTICS-DESIGN is accepted, and the TACTICS-DEPLOY packet EXITED
-2026-09-29 (CARD-TACTICS-DEPLOY): the lever passes on X and S and the audit lands, awaiting the architect's
-ruling.** The tactics lane still goes first and run10 will not START (R376(c)).
-`configs/run10.yaml` stays the production config the instruments read until run11's mint replaces it, and run11
-is designed after TACTICS-DEPLOY's read (CARD-RUN11-DESIGN).
+**R378 (2026-09-29): TACTICS AT DEPLOY. TACTICS-DEPLOY is ratified and merged, its read's block is the deploy
+block of record, and the TACTICS-SELFPLAY packet is in progress (CARD-TACTICS-SELFPLAY).** The tactics lane still
+goes first and run10 will not START (R376(c)). `configs/run10.yaml` stays the production config the instruments
+read until run11's mint replaces it. run11 arms the deploy block at its mint by the operator's word, in self-play
+and at deploy alike (R378(a), CARD-RUN11-DESIGN).
 
 - **The tactics lane (R376(d), CARD-TACTICS-LANE).** ONE exact tactics module in Rust on the search path, used
   identically at deploy and in self-play (LAW-15). Deploy lands first, read as an A/B against the plain parent
   on both rulers. Self-play follows only with a pre-registered starvation witness, and with F-15, F-39, F-53
   and R239 re-validated under LAW-02 first. A solver terminal counts as a simulation, GPU evaluations are
   their own LAW-18 row, and served-sims exactness pins descents (R376(e)); a descent that ends at a proven
-  terminal is one (R377(c)).
+  terminal is one (R377(c)). A descent that backs up a value is a simulation, whatever backed it: the net, the
+  table or the solver (R378(c)). The plain head's early end is a defect, fixed before the twin
+  (CARD-SIMS-ACCOUNTING).
 - **TACTICS-DESIGN exited 2026-09-28; R377(a) accepts it.** Its design is
   `docs/design/TACTICS_DESIGN_2026-09-28.md`, and its records are local.
   - On 8 966 quiet positions, Six's kind (a turn-level, strictly forcing threat-space search) proves 2 119–3 506
@@ -28,19 +30,32 @@ is designed after TACTICS-DEPLOY's read (CARD-RUN11-DESIGN).
   - TACTICS-DEPLOY reads the full module and an audit-off arm against the plain parent on both rulers, X's floor
     first. The defence audit lands only if its arm earns its cost: of 20 of D1's "safe" alternatives played out
     with Six on both seats (T3), 16 were still lost.
-  - The packet (2026-09-28) built the module and wired it at deploy with `search.tactics` null in both homes
-    (the self-play path unchanged). It read the A/B on the box in 9.78 of the 12 box-h granted.
-    - Lever X: +0.957 logit [0.752, 1.162]; lever S: +0.973 [0.663, 1.284].
-    - The audit: +0.254 [0.049, 0.459] over audit-off on X.
-    - The known-bad reads 0.052; no found proof's game was lost.
-    - The wiring alone reads +0.027 over plain on X.
-    - The branch `tactics-deploy` is pushed; `dev` is untouched.
-  - TACTICS-SELFPLAY follows (CARD-TACTICS-SELFPLAY): proof as the target, a plain twin as the control, and
-    T4's starvation band at the panel's mean − 3 SD.
+- **TACTICS-DEPLOY exited 2026-09-29; R378(a) ratifies it, and it merged (`dev` is its tip `0204edf9`).** It built
+  the module and wired it at deploy with `search.tactics` null in both homes (the self-play path unchanged). It read
+  the A/B on the box in 9.78 of the 12 box-h granted.
+  - Lever X: +0.957 logit [0.752, 1.162]; lever S: +0.973 [0.663, 1.284].
+  - The audit: +0.254 [0.049, 0.459] over audit-off on X.
+  - The known-bad reads 0.052; no found proof's game was lost.
+  - The wiring alone reads +0.027 over plain on X.
+  - The read's block, leaf 256/3, root 20 000/8 and audit 2 000/8, is the deploy block of record. Every config still
+    mints `tactics: null`.
+  - The in-run gate is deploy-matched: candidate and anchor play the same block (R378(d)). The tree still arms the
+    candidate alone (CARD-GATE-DEPLOY-MATCHED).
+- **TACTICS-SELFPLAY is in progress (2026-09-29, CARD-TACTICS-SELFPLAY).** It puts the same module in the loop: a 4 h
+  tactics twin against a 4 h plain twin from run8@45k, on the box within ≤ 12 box-h with P4's cache read.
+  - Before the twin, on the desktop: P0 (one simulation count, CARD-SIMS-ACCOUNTING) and P1–P3. Those pick the
+    proven-root target's form (R378(e)) and set the defence exam's band and the ring bands (R378(f)).
+  - Its pre-stated reading is PASS-TO-RUN11 or a halt.
+- **The strength series changes unit at the merge (R378(b)).** Every later cell plays the shipped head, earlier
+  points are the plain unit, and both are named where they meet. A read that needs the net alone plays
+  `--arm plain` and says so.
+- **CENSUS-1 runs beside the twin, and PERF-2 follows it (R378(g), CARD-CENSUS-1).** LEVERS_RESEARCH is its
+  background (local, in `mantis-records/research/`), accepted with its §0 corrections. The in-run cache hit rate
+  is measured, though: 24.2 %.
 - **The first stone is the origin (R377(g), CARD-ORIGIN-RULE).** The empty board's legal set becomes {origin},
   records and books are canonicalised by translation on load, and the frozen fixtures are re-pinned under grant.
-  It lands in RUN11-PREP. The ruler's book stays for the series; a random-opening share in self-play is a run11
-  arm (R377(h)).
+  It lands in RUN11-PREP, and the LAWS bullet for arena legality moves with it (R378(h)). The ruler's book stays
+  for the series; a random-opening share in self-play is a run11 arm (R377(h)).
 - **Two rulers (R376(a)).** Six gen 30 @16, cache off, is X; strix @ r8 is S. Recipe decisions read X;
   milestones read X and S. SIX-RUNG landed X by pin and hash (`mantis.bots.six`, the follower's `six30_16`
   unit); it re-reads the parent 0.351 [0.295, 0.406], SIX-SCOUT's reading exactly.
@@ -70,8 +85,9 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
   conditions were R370(i)'s and R371(c)'s. R376(b) prices every bar from a panel. SEAM-2 may merge before
   any run starts (R375(e) lifts R368(j)'s hold). Read a config's values from the file itself and diff two
   with `tools/config_diff.py`; STATE does not restate minted rows.
-- **A box is still rented** (2026-09-24: an RTX 4080 SUPER host, the operator's, R11; PERF-ADA made it the run box; DECIDE-1 and
-  SIX-RUNG's witness ran there, and SIX-RUNG left it idle and clean at the launch tree `451d23f9`); the previous instance was
+- **A box is still rented** (2026-09-24: an RTX 4080 SUPER host, the operator's, R11; PERF-ADA made it the run box; DECIDE-1,
+  SIX-RUNG's witness and TACTICS-DEPLOY's A/B ran there, and TACTICS-SELFPLAY's P4 and twin hold a grant of ≤ 12
+  box-h on it; this line said SIX-RUNG left it idle and clean until R378's record); the previous instance was
   destroyed on 2026-09-21 (R365, annotated by R367(d)); the operator's mirror (`tools/mirror_pull.py`) holds run7's and run8's
   artifacts, run10's parent and the ring its held-out slice reads. The run10 box criterion and its
   admission bench are R367(e), run with `tools/bench_server.py` per the prereg's §6; any admission
@@ -89,7 +105,7 @@ run6's by R369's packet (W0).
 ## Where things live
 
 - Open work: `docs/governance/CARDS.md` (swept in W6; derived there, never enumerated here).
-- Rulings: `docs/governance/RULINGS.md`; the latest is R377.
+- Rulings: `docs/governance/RULINGS.md`; the latest is R378.
 - Laws and the protected set: `docs/governance/LAWS.md`, whose protected set names each
   invariant's pinning tests (R370(f)); `tests/test_protected_set_pins.py` fails if one is gone.
   Falsified work: `docs/governance/falsified.md`.
@@ -135,4 +151,6 @@ The configs and "where things live" sections below the run were carried from the
 re-checked against `configs/` and `census.py` at this tip.
 The current phase was rewritten 2026-09-28 at R376 from the DECIDE-1 and SIX-RUNG exit records (local); the
 run, box and instrument lines were re-checked at `3e3fd263`. The tactics lines were updated at R377 from the
-TACTICS-DESIGN design doc (`d17dfdcd`), and at the TACTICS-DEPLOY packet's first commit.
+TACTICS-DESIGN design doc (`d17dfdcd`), and at the TACTICS-DEPLOY packet's first commit. The current phase was
+rewritten 2026-09-29 at R378 from the TACTICS-DEPLOY exit record (local) and the TACTICS-SELFPLAY packet, with
+`dev` = `origin/dev` = `0204edf9` read before the edit.

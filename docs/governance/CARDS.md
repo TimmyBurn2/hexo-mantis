@@ -36,10 +36,33 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R378 (TACTICS-DEPLOY ratified; 2026-09-29) — tactics at deploy
+
+- **CARD-SIMS-ACCOUNTING — OPEN until TACTICS-SELFPLAY's P0 closes it (R378(c)): one simulation count for every
+  head.** A descent that backs up a value is a simulation, whatever backed it: the net, the table or the solver.
+  - The plain head's early end is a defect: TACTICS-DEPLOY's L5 read the plain deploy head ending 12 % of its searches
+    short (CARD-TT-HIT-STARVATION, which this card fixes).
+  - P0 reproduces it first, then removes it, with a planted-break test that reds.
+  - The served-sims witness pins all three cases: a net leaf, a table hit and a solver terminal. The packet grants
+    the witness its table-hit and solver-terminal cases (R376(e), R378(c)).
+  - The A/B stands: TACTICS-DEPLOY's plain arm is not re-read.
+- **CARD-GATE-DEPLOY-MATCHED — OPENED by R378(d): the in-run gate is deploy-matched (LAW-15), so candidate and anchor
+  play the same block.** The tree arms the candidate alone. The eval worker's `_pair` gives the best side no block
+  (`tests/eval/test_game_record_eval_channel.py::test_an_armed_round_arms_the_candidate_alone_and_every_record_carries_its_rows`,
+  `docs/contracts/game_record.md`). This was TACTICS-DEPLOY's exit item (3), from L4's review. It is owed before a run
+  whose `deploy.search.tactics` is non-null plays a gate round. That means run11, and TACTICS-SELFPLAY's arm A if it
+  plays one (run10's header sets `terminal_eval_enabled: true`). The ruler cells'
+  candidate-only arm is not this seam (`docs/contracts/eval_instrument.md` v6).
+- **CARD-CENSUS-1 — ORDERED by R378(g): CENSUS-1 runs beside the TACTICS-SELFPLAY twin, and PERF-2 follows it.** It
+  is its own packet and session. Its background is LEVERS_RESEARCH (`mantis-records/research/LEVERS_RESEARCH_2026-09-28.md`,
+  local), accepted with its §0 corrections, except that the in-run cache hit rate is measured: 24.2 % (the F5
+  reading under the RUN10-PRESTART section).
+
 ## Opened by R377 (TACTICS-DESIGN accepted; 2026-09-28) — the tactics module
 
-- **CARD-TACTICS-DEPLOY — EXITED 2026-09-29, the read awaiting the architect's ruling: the lever PASSES on both
-  rulers and the audit LANDS.**
+- **CARD-TACTICS-DEPLOY — RATIFIED by R378(a) and MERGED: `dev` is the branch's tip `0204edf9`. The read's block is
+  the deploy block of record, and run11 arms it at its mint by the operator's word, in self-play and at deploy alike.
+  EXITED 2026-09-29: the lever PASSES on both rulers and the audit LANDS.**
   - Lever X, full − plain: +0.957 logit [0.752, 1.162]; win rate ~0.33 → ~0.56 at 39k/45k/51k.
   - Lever S: +0.973 [0.663, 1.284].
   - Audit X, full − audit-off: +0.254 [0.049, 0.459].
@@ -48,8 +71,12 @@ Both were found by running the gate set rather than by reading it, and both are 
   - The wiring alone (no solver, no audit) reads +0.027 over plain, so the solvers and the audit carry the lift.
   - The read's block: leaf 256/3, root 20 000/8, audit 2 000/8, k 4, m 4, total 40 000.
   - The bench: no abort; the deploy wall 0.864x plain; self-play 1.08x descents/s.
-  - The branch `tactics-deploy` is pushed; `dev` is untouched for the operator's fast-forward. Every config mints
-    `tactics: null`. Records: `mantis-records/tactics-deploy/` (EXIT.md, drivers/L5_BENCH.md, drivers/L6_READINGS.md).
+  - The branch `tactics-deploy` was fast-forwarded into `dev` (this line said "`dev` is untouched" until R378's
+    record). Every config mints `tactics: null`. Records: `mantis-records/tactics-deploy/` (EXIT.md,
+    drivers/L5_BENCH.md, drivers/L6_READINGS.md).
+  - R378 answers the exit's open items: the block by (a), Q5 by (c) (CARD-SIMS-ACCOUNTING), the gate by (d)
+    (CARD-GATE-DEPLOY-MATCHED) and the build hash by (h). From the merge, the strength series plays the shipped head,
+    and a read of the net alone plays `--arm plain` and says so (R378(b)).
 
   As ORDERED by R377(e), the lane's next packet: The packet reads X's floor first (one random-init net, 288 games), builds and benches the module,
   wires it at deploy with `search.tactics` null in both homes (the self-play path unchanged), and reads plain,
@@ -65,20 +92,41 @@ Both were found by running the gate set rather than by reading it, and both are 
     The defence audit lands only if its arm earns its cost (R377(e)). The design prices the bundle at ≈ 5.5
     box-h and the audit-off arm at ≈ +3.2 (§11, §12 Q2).
   - §12 Q5 (TT-hit expansions stay uncounted, the design's named deviation from R376(e)) is not among R377's
-    items.
-- **CARD-TACTICS-SELFPLAY — HELD on CARD-TACTICS-DEPLOY's read.** The twin's targets are proof-as-target
-  (R377(f)): a proven root plays and records its proof, a vetoed move gets zero target mass, and a lost root
-  records no policy target.
-  - F-53's novelty check, re-run with the new kind, runs before `selfplay.search.tactics` is armed. Its instrument,
-    PROBE-1's reading 4, left with the per-stone solver (`bd7bcde9`): the packet rebuilds it for the turn level.
-  - A plain twin of equal length is the control: ≈ 9.5 box-h with it (design §11).
-  - T4's band reads at the panel's mean − 3 SD on the frozen exam (sha256 `2b2eb7f5…`): mean prior < 0.154 or
-    mean value < 0.255 at a save is a starvation signal.
+    items. RULED by R378(c): a TT hit is a counted descent (CARD-SIMS-ACCOUNTING).
+- **CARD-TACTICS-SELFPLAY — IN PROGRESS: the TACTICS-SELFPLAY packet (2026-09-29), forwarded by R378. Was HELD on
+  CARD-TACTICS-DEPLOY's read.** A twin with the same module in the loop, against a plain twin. The design is
+  `docs/design/TACTICS_DESIGN_2026-09-28.md` as R377 and R378 amend it. The session works in worktree
+  `.wt/tactics-selfplay`, and its records go to `mantis-records/tactics-selfplay/`.
+  - The targets (R377(f), amended in form by R378(e)): a proven root plays its proof, a vetoed move gets zero target
+    mass, and a lost root records no policy target. The target at a proven root is the searched target where its
+    proof-set mass reads ≥ 0.7 at the median, else the α = 0.5 mixture; never the bare two-hot.
+  - Desktop legs, before the twin:
+    - P0: CARD-SIMS-ACCOUNTING.
+    - P1 (A9, F-53 with the new kind): over the proven roots in run8's 45k ring, the searched target's mass on the
+      proof's cells picks the target form. It rebuilds PROBE-1's reading 4, which left with the per-stone solver
+      (`bd7bcde9`).
+    - P2 (A10): the defence exam's band.
+    - P3 (A11): the ring's baselines, which set the ring-composition bands.
+  - Box legs: P4 reads the in-run cache at sync cadence 2, 50 and 200 beside F5's 24.2 %. Then T: arm A (tactics in
+    self-play and at deploy, at the block of record) and arm B (plain), 4 h each and one at a time, from run8@45k
+    with the same seed.
+  - The witness at every save (R377(f), R378(f)):
+    - T4 by proof length, against a floor (mean − 3 SD) and an enrichment ceiling (mean + 3 SD), on the frozen exam
+      (sha256 `2b2eb7f5…`). The panel's mean − 3 SD is mean prior 0.154 and mean value 0.255.
+    - The defence exam, against P2's band; the ring-composition bands.
+    - The throughput and tactics rows.
+  - Pre-stated: PASS-TO-RUN11 iff every band holds at every save, arm A's throughput is ≥ 0.8× arm B's, and arm A's
+    net alone is not below arm B's by more than 0.17 logit at 12k. A T4 or defence floor miss at any save is the
+    starvation signature, and it halts arm A.
+  - Grants: the self-play path accepts `selfplay.search.tactics`, the witness gains its two cases, and a census-exempt
+    twin config is minted through run10's header; the box, ≤ 12 box-h for P4 and T. No production config, no START
+    and no priced act.
 - **CARD-ORIGIN-RULE — OPENED for the RUN11-PREP packet, whose leg ORIGIN-1 lands it (R377(g)).** The first stone
   is the origin, as in the
   official rule and Six: the empty board's legal set is {origin}. Records and books are canonicalised by
   translation on load, and the frozen fixtures are re-pinned under grant. It touches the protected set's arena
-  legality, which R377(g) names.
+  legality, which R377(g) names. That naming stands in R377's Status line, and the LAWS bullet moves when ORIGIN-1
+  lands (R378(h)).
 - **CARD-TACTICS-DEEP-LOSS — CARDED, a later lever (R377(b)).** Loss proofs beyond can't-cover, e.g. the design's
   §12 Q4: a cover-2 position where every covering reply loses to a strict opponent win.
 - **CARD-QUIESCENCE-BLEND-RETIRE — CARDED, its own leg (R377(d)).** Retire `apply_quiescence`'s heuristic blend
@@ -95,14 +143,17 @@ Both were found by running the gate set rather than by reading it, and both are 
   table with it. The tactics solver no longer does: it keys stones by its own injective `grid::stone_key`, after a
   table keyed by core's carried a proven win to a reflected position. Fixing core re-mints the pinned values of
   `crates/mantis-core/tests/golden_replay.rs`.
-- **CARD-TACTICS-BUILD-HASH — CARDED: the engine does not carry the hash of the sources it was built from.** A
+- **CARD-TACTICS-BUILD-HASH — OPENED by R378(h); was CARDED: the engine does not carry the hash of the sources it
+  was built from.** A
   receipt names the tree's tactics sources (`module_sha256`) and the engine's bytes (`engine_sha256`), read before a
   cell plays, but nothing ties the two: a build-time hash embedded in `mantis._engine` (a `build.rs`), compared at
   cell start with a refusal on mismatch, would. Found by TACTICS-DEPLOY's L4 review.
 - **CARD-TACTICS-PLY-HORIZON — CARDED: a proof's turns are not capped by the plies a game has left.** A leaf or root
   proof whose six lands after the game's ply cap is not a win in that game. Deploy games rarely reach the cap;
   self-play's `max_moves_per_game` makes it a TACTICS-SELFPLAY question.
-- **CARD-TT-HIT-STARVATION — CARDED: a PUCT search can end short of its budget, tactics on or off.** A TT-hit
+- **CARD-TT-HIT-STARVATION — RULED by R378(c): a TT hit is a counted descent, and the plain head's early end is a
+  defect, fixed by CARD-SIMS-ACCOUNTING. Was CARDED: a PUCT search can end short of its budget, tactics on or
+  off.** A TT-hit
   expansion is an uncounted descent (the design's §12 Q5, unruled), and when every attempt of a `select_leaves`
   call (4n) is one, the call returns nothing and the budget loops (`run_mcts_search`, `_drive_puct`) stop. Found by
   TACTICS-DEPLOY's L2 review: a compact producer under-spent 8 of 8 tactics-off trials, and the witness's tactics-on
@@ -124,8 +175,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   starvation witness. Its exit commits `TACTICS_DESIGN_2026-09-28.md` in docs/design/ and scopes two packets:
   TACTICS-DEPLOY (the module and its A/B on S and X) and TACTICS-SELFPLAY (a twin read by the witness).
   TACTICS-DESIGN EXITED 2026-09-28 and is ACCEPTED by R377(a): Six's kind is the core, and the lane continues
-  as CARD-TACTICS-DEPLOY, then CARD-TACTICS-SELFPLAY. The lane is now carried by the TACTICS-DEPLOY packet
-  (2026-09-28, in progress).**
+  as CARD-TACTICS-DEPLOY, then CARD-TACTICS-SELFPLAY. TACTICS-DEPLOY is RATIFIED by R378(a), and the lane is now
+  carried by the TACTICS-SELFPLAY packet (2026-09-29, in progress).**
   ONE exact tactics module in Rust on the search path, used identically at deploy and in self-play
   (LAW-15). The search crate carried a net-free per-stone `TacticalSolver` (`crates/mantis-search/src/tactics/`,
   the solver F-53 read); one implementation per thing, so the lane's module replaces it (done in TACTICS-DEPLOY:
@@ -144,7 +195,8 @@ Both were found by running the gate set rather than by reading it, and both are 
     at a deeper budget, or played out). DISCHARGED by TACTICS-DESIGN's T3: 39 of 40 alternatives stay safe at
     12 turns / 60 000 nodes (f_corr 0.455 [0.385, 0.515]), but 16 of 20 played out with Six on both seats are
     still lost within 13 opponent turns.
-- **CARD-RUN11-DESIGN — HELD on CARD-TACTICS-LANE's deploy read (R376(c)), now CARD-TACTICS-DEPLOY's (R377).** Until run11's mint replaces it,
+- **CARD-RUN11-DESIGN — HELD on CARD-TACTICS-LANE's deploy read (R376(c)), now CARD-TACTICS-DEPLOY's (R377); that
+  read is RATIFIED by R378(a).** Until run11's mint replaces it,
   `configs/run10.yaml` stays the production config the instruments read; run10 will not START. The design
   carries:
   - Cooldown and EMA as screened levers with power lines (R376(g)): neither is shown nor excluded. DECIDE-1's
@@ -157,6 +209,9 @@ Both were found by running the gate set rather than by reading it, and both are 
     tactics.
   - A random-opening share in self-play, as an arm, not a default (R377(h)).
   - CARD-ORIGIN-RULE, which lands in RUN11-PREP (R377(g)).
+  - The deploy block of record (leaf 256/3, root 20 000/8, audit 2 000/8), armed at run11's mint by the operator's
+    word, in self-play and at deploy alike (R378(a)), with the gate deploy-matched (R378(d),
+    CARD-GATE-DEPLOY-MATCHED).
 - **CARD-PACKET-POWER-LINE — LANDED 2026-09-28 in the packet rule (`docs/governance/COMMS_STYLE.md` item 4): a
   packet carries each band's power line and sets known-bad bars against the ruler's measured floor. Was CARDED
   (process; DECIDE-1's exit).** Three of DECIDE-1's banded rules were void by R375(d) before any reading (B1-N2, B3, the S
@@ -284,7 +339,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   CPU, offline × in-run rate: leaf build + key 646 µs per leaf ≈ 2.6 cores, of which SHA-256 126–215 µs ≈
   0.5–0.9 cores (CARD-PERF-CACHE-KEY-HASH's share); server launch 0.57, collate 0.29 core-s/s; ≈ 9 cores
   unattributed (search, trainer host side — no in-run timer; no profiler attaches on the box). No single
-  lever is shown ≥ 20 % in-run (R371(e)): PERF-2 follows run10.
+  lever is shown ≥ 20 % in-run (R371(e)): PERF-2 follows run10. R378(g) moves it: "CENSUS-1 runs beside the
+  twin; PERF-2 follows it" (CARD-CENSUS-1), and it cites this 24.2 % as the measured in-run cache hit rate.
 
 ## Opened by the FINISH packet (R370; 2026-09-26)
 

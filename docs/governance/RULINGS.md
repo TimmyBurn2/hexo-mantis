@@ -1,4 +1,4 @@
-# RULINGS — R23 to R377
+# RULINGS — R23 to R378
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R378.
+- Numbering continues from R346. The next ruling is R379.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,39 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R378 — TACTICS AT DEPLOY
+Decision: verbatim below.
+
+> R378 — TACTICS AT DEPLOY.
+> (a) TACTICS-DEPLOY is ratified and merges. The block as read — leaf 256/3, root 20 000/8,
+> audit 2 000/8 — is the deploy block of record; run11 arms it at its mint by the operator's
+> word, in self-play and at deploy alike (R376(d)).
+> (b) The strength series changes unit at the merge: every later cell plays the shipped head,
+> earlier points are the plain unit, and both are named where they meet. A read that needs the
+> net alone plays `--arm plain` and says so.
+> (c) Q5: a descent that backs up a value is a simulation, whatever backed it — the net, the
+> table or the solver. The plain head's early end is a defect, fixed with a planted-break test
+> before the twin; the served-sims witness pins all three cases. The A/B stands.
+> (d) The in-run gate is deploy-matched (LAW-15): candidate and anchor play the same block.
+> (e) The target at a proven self-play root follows A9's reading: the searched target where its
+> proof-set mass reads ≥ 0.7 at the median, else the α = 0.5 mixture; never the bare two-hot.
+> This amends R377(f)'s form, not its rule.
+> (f) The twin's witness gains an enrichment ceiling, the defence exam and ring-composition
+> bands; T4 reads by proof length.
+> (g) LEVERS_RESEARCH is accepted as background with its §0 corrections, except that the in-run
+> cache hit rate is measured (24.2 %). CENSUS-1 runs beside the twin; PERF-2 follows it.
+> (h) R377(g)'s naming of arena legality stands in its Status line; the LAWS bullet moves when
+> ORIGIN-1 lands. CARD-TACTICS-BUILD-HASH is opened.
+
+Status: standing. Ratifies TACTICS-DEPLOY and makes its read's block the deploy block of record by (a); rules
+`docs/design/TACTICS_DESIGN_2026-09-28.md` §12 Q5 and construes R376(e) and R377(c) by (c); applies LAW-15 to an
+armed in-run gate by (d); amends R377(f)'s target form by (e) and its witness by (f); accepts LEVERS_RESEARCH
+(`mantis-records/research/LEVERS_RESEARCH_2026-09-28.md`, local, outside the tree) as background and re-sequences
+R371(e)'s PERF-2 by (g); answers TACTICS-DEPLOY's exit items (1) by (a), (2) by (c), (3) by (d) and (4) by (h).
+The packet it forwards is TACTICS-SELFPLAY (CARD-TACTICS-SELFPLAY).
+
+---
 
 ### R377 — THE TACTICS MODULE
 Decision: verbatim below.
@@ -66,6 +99,10 @@ Status: standing. Accepts `docs/design/TACTICS_DESIGN_2026-09-28.md` and rules i
 (b), Q6 by (d), Q2 by (e), Q3 and Q7 by (f); construes R376(e) for proven terminals by (c); names the protected
 set's arena legality by (g); rules on CARD-RANDOM-OPENINGS by (h). §12 Q5 (the design's TT-hit deviation) is not
 among its items.
+§12 Q5 RULED by R378(c), which extends (c): a descent that backs up a value is a simulation, whatever backed it (the
+net, the table or the solver). (e)'s read: TACTICS-DEPLOY RATIFIED by R378(a). (f)'s target form AMENDED by R378(e)
+(the searched target or the α = 0.5 mixture, never the bare two-hot), its rule standing; its witness extended by
+R378(f). (g)'s naming of arena legality stands in this Status line (R378(h)); the LAWS bullet moves when ORIGIN-1 lands.
 
 ---
 
@@ -94,7 +131,9 @@ Decision: verbatim below.
 
 Status: standing. Ratifies SIX-RUNG under R375(a) by (a); makes R375(c)'s choice by (c); construes the protected set's served-sims exactness by (e); rules on R375(f)'s provenance by (f).
 (d)'s lane: TACTICS-DESIGN ACCEPTED by R377(a), and the lane continues as TACTICS-DEPLOY then TACTICS-SELFPLAY;
-(e) CONSTRUED by R377(c): a descent that ends at a proven terminal is a simulation, and the served-sims witness counts it.
+TACTICS-DEPLOY RATIFIED by R378(a), and run11 arms its block of record in self-play and at deploy alike.
+(e) CONSTRUED by R377(c): a descent that ends at a proven terminal is a simulation, and the served-sims witness counts it;
+and by R378(c): whatever backed the value (the net, the table or the solver), and the witness pins all three cases.
 
 ---
 
@@ -200,6 +239,7 @@ Decision: verbatim below.
 
 Status: standing. Construes R370(d) by (b); the operator's 2026-09-25 strix waiver ends at PERF-ADA's tip by (c).
 (c)'s single-cell parent bar is SUPERSEDED by R376(b): every bar prices from a panel; run10 will not START (R376(c)).
+(e)'s "follows run10" is moved by R378(g): "CENSUS-1 runs beside the twin; PERF-2 follows it."
 
 ---
 
