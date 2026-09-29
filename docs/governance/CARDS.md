@@ -36,24 +36,55 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by the TACTICS-SELFPLAY packet (2026-09-29)
+
+- **CARD-TACTICS-TARGET-FEED — CARDED for the architect: what the tactics module teaches the policy in self-play.**
+  The twin's arm A played the module's moves, but its rows teach them weakly.
+  - Defence: when the audit vetoes every move the search visited, the row records no policy target (8 366 rows in
+    arm A's window, 18 per 1 000 positions). The hold the game played teaches nothing, in exactly the positions where
+    the net's policy is wrong. When the veto takes part of the mass (1 473 rows), the renormalised target carries the
+    defence.
+  - Offence: a proven root trains the searched target (R378(e)). On arm A's last ring, 35.5 % of those rows put under
+    0.5 of their mass on the proof (P1 read 35 % on run8), because P1's rule read the median of a bimodal
+    distribution. The α = 0.5 mixture would put at least 0.5 on the proof.
+  - A hold is not a proven defence (the audit failed to refute it within budget; TACTICS-DESIGN's T3 found 16 of 20
+    such moves lost when played out), so a bare one-hot on it would often teach a losing move.
+  - Options, cheapest first:
+    - (a) the net's prior with the vetoed cells removed;
+    - (b) α · one-hot(hold) + (1 − α) · (a);
+    - (c) a second search restricted to the non-vetoed moves.
+  - Any of them changes the target law of R377(f) and R378(e), so it is a ruling and a new twin's treatment.
+- **CARD-THROUGHPUT-IN-POSITIONS — CARDED: a throughput rule reads positions produced per hour, not games per hour.**
+  games/h reads game length as cost: in the twin, arm A's games ran 92.6 positions to arm B's 71.5. The rule read
+  positions/h by the operator's word before arm B's data was read (RULES_T A3). A/B read 1.058 in positions and
+  0.816 in games, so the choice did not decide the verdict. The per-game trainer budget (≈ 2.38 steps per game) means
+  the arm with longer games trains on fresher data per step (replay ratio 6.60 vs 8.49); it is part of the treatment.
+
 ## Opened by R378 (TACTICS-DEPLOY ratified; 2026-09-29) — tactics at deploy
 
-- **CARD-SIMS-ACCOUNTING — OPEN until TACTICS-SELFPLAY's P0 closes it (R378(c)): one simulation count for every
-  head.** A descent that backs up a value is a simulation, whatever backed it: the net, the table or the solver.
+- **CARD-SIMS-ACCOUNTING — CLOSED by TACTICS-SELFPLAY's P0 (`faa27c48`, branch `tactics-selfplay`); was OPEN
+  (R378(c)): one simulation count for every head.** P0 reproduced the early end (the plain PUCT head stopped at 43 of
+  256 descents at a revisited win) and removed it: a table descent counts toward n, and a terminal on the table path
+  counts as an inline descent. All three loops (runner, deploy PUCT, deploy Gumbel) spend exactly N. The witness pins
+  root visits == counted descents; its planted break reds. A descent that backs up a value is a simulation, whatever backed it: the net, the table or the solver.
   - The plain head's early end is a defect: TACTICS-DEPLOY's L5 read the plain deploy head ending 12 % of its searches
     short (CARD-TT-HIT-STARVATION, which this card fixes).
   - P0 reproduces it first, then removes it, with a planted-break test that reds.
   - The served-sims witness pins all three cases: a net leaf, a table hit and a solver terminal. The packet grants
     the witness its table-hit and solver-terminal cases (R376(e), R378(c)).
   - The A/B stands: TACTICS-DEPLOY's plain arm is not re-read.
-- **CARD-GATE-DEPLOY-MATCHED — OPENED by R378(d): the in-run gate is deploy-matched (LAW-15), so candidate and anchor
-  play the same block.** The tree arms the candidate alone. The eval worker's `_pair` gives the best side no block
-  (`tests/eval/test_game_record_eval_channel.py::test_an_armed_round_arms_the_candidate_alone_and_every_record_carries_its_rows`,
-  `docs/contracts/game_record.md`). This was TACTICS-DEPLOY's exit item (3), from L4's review. It is owed before a run
+- **CARD-GATE-DEPLOY-MATCHED — LANDED on branch `tactics-selfplay` (`a44c9b28`); OPENED by R378(d): the in-run gate
+  is deploy-matched (LAW-15), so candidate and anchor play the same block.** The eval worker's `_pair` arms the best
+  side with the round's block beside the candidate
+  (`tests/eval/test_game_record_eval_channel.py::test_an_armed_round_arms_both_gate_sides_and_every_record_carries_the_candidates_rows`,
+  `docs/contracts/game_record.md`); a ruler cell still arms our head alone. Before it, the tree armed the candidate
+  alone. This was TACTICS-DEPLOY's exit item (3), from L4's review. It is owed before a run
   whose `deploy.search.tactics` is non-null plays a gate round. That means run11, and TACTICS-SELFPLAY's arm A if it
   plays one (run10's header sets `terminal_eval_enabled: true`). The ruler cells'
   candidate-only arm is not this seam (`docs/contracts/eval_instrument.md` v6).
-- **CARD-CENSUS-1 — ORDERED by R378(g): CENSUS-1 runs beside the TACTICS-SELFPLAY twin, and PERF-2 follows it.** It
+- **CARD-CENSUS-1 — ORDERED by R378(g): CENSUS-1 runs beside the TACTICS-SELFPLAY twin, and PERF-2 follows it.**
+  Its three commits (`c4418ffd`, `7f18b478`, `986a9661`) ride branch `tactics-selfplay`, and it lent the desktop GPU
+  for that branch's gates.exit. It
   is its own packet and session. Its background is LEVERS_RESEARCH (`mantis-records/research/LEVERS_RESEARCH_2026-09-28.md`,
   local), accepted with its §0 corrections, except that the in-run cache hit rate is measured: 24.2 % (the F5
   reading under the RUN10-PRESTART section).
@@ -93,8 +124,23 @@ Both were found by running the gate set rather than by reading it, and both are 
     box-h and the audit-off arm at ≈ +3.2 (§11, §12 Q2).
   - §12 Q5 (TT-hit expansions stay uncounted, the design's named deviation from R376(e)) is not among R377's
     items. RULED by R378(c): a TT hit is a counted descent (CARD-SIMS-ACCOUNTING).
-- **CARD-TACTICS-SELFPLAY — IN PROGRESS: the TACTICS-SELFPLAY packet (2026-09-29), forwarded by R378. Was HELD on
-  CARD-TACTICS-DEPLOY's read.** A twin with the same module in the loop, against a plain twin. The design is
+- **CARD-TACTICS-SELFPLAY — EXITED 2026-09-29: NOT PASS-TO-RUN11. The pre-stated 12k screen fails, while every band
+  held and throughput passed; the architect rules next. Was IN PROGRESS: the TACTICS-SELFPLAY packet (2026-09-29),
+  forwarded by R378; was HELD on CARD-TACTICS-DEPLOY's read.**
+  - The screen: the net alone at 12k, A − B = −0.209 logit [−0.569, +0.151], against a bar of > −0.17 (X, 288
+    games; A 0.222, B 0.260).
+  - Report-only: the net alone at 9k +0.229 [−0.137, +0.596] and at 6k −0.795 [−1.240, −0.351]. Pooled over 9k and
+    12k it reads +0.010 [−0.247, +0.267].
+  - The shipped head at 12k: +0.676 [+0.342, +1.010] (A 0.642, B 0.477). What ships separates; the net alone does not.
+  - The bands at every save of both arms: no floor miss, no ring band outside, no halt. The ceiling misses were value
+    misses at 3k (A 1, B 3), from the shared parent.
+  - Throughput by positions/h (RULES_T A3, the operator's word before arm B's data was read): A/B 1.058. games/h
+    reads 0.816, because A's games run 30 % longer.
+  - A's policy is fed weakly (CARD-TACTICS-TARGET-FEED). A1's re-read of P1 on arm A's ring: median 0.928, with
+    35.5 % below 0.5.
+  - The code is on branch `tactics-selfplay` (tip `5db3280b`, gates.exit green). Its records, with every bias the
+    reading carries, are local in `mantis-records/tactics-selfplay/` (EXIT.md, EXIT_DRAFT.md).
+  - Box: 11.86 box-h of jobs. A twin with the same module in the loop, against a plain twin. The design is
   `docs/design/TACTICS_DESIGN_2026-09-28.md` as R377 and R378 amend it. The session works in worktree
   `.wt/tactics-selfplay`, and its records go to `mantis-records/tactics-selfplay/`.
   - The targets (R377(f), amended in form by R378(e)): a proven root plays its proof, a vetoed move gets zero target
@@ -151,8 +197,8 @@ Both were found by running the gate set rather than by reading it, and both are 
 - **CARD-TACTICS-PLY-HORIZON — CARDED: a proof's turns are not capped by the plies a game has left.** A leaf or root
   proof whose six lands after the game's ply cap is not a win in that game. Deploy games rarely reach the cap;
   self-play's `max_moves_per_game` makes it a TACTICS-SELFPLAY question.
-- **CARD-TT-HIT-STARVATION — RULED by R378(c): a TT hit is a counted descent, and the plain head's early end is a
-  defect, fixed by CARD-SIMS-ACCOUNTING. Was CARDED: a PUCT search can end short of its budget, tactics on or
+- **CARD-TT-HIT-STARVATION — FIXED by TACTICS-SELFPLAY's P0 (`faa27c48`). RULED by R378(c): a TT hit is a counted
+  descent, and the plain head's early end is a defect, fixed by CARD-SIMS-ACCOUNTING. Was CARDED: a PUCT search can end short of its budget, tactics on or
   off.** A TT-hit
   expansion is an uncounted descent (the design's §12 Q5, unruled), and when every attempt of a `select_leaves`
   call (4n) is one, the call returns nothing and the budget loops (`run_mcts_search`, `_drive_puct`) stop. Found by

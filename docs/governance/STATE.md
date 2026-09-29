@@ -8,7 +8,8 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 ## Current phase
 
 **R378 (2026-09-29): TACTICS AT DEPLOY. TACTICS-DEPLOY is ratified and merged, its read's block is the deploy
-block of record, and the TACTICS-SELFPLAY packet is in progress (CARD-TACTICS-SELFPLAY).** The tactics lane still
+block of record. TACTICS-SELFPLAY exited 2026-09-29 NOT PASS-TO-RUN11, and the architect rules next
+(CARD-TACTICS-SELFPLAY).** The tactics lane still
 goes first and run10 will not START (R376(c)). `configs/run10.yaml` stays the production config the instruments
 read until run11's mint replaces it. run11 arms the deploy block at its mint by the operator's word, in self-play
 and at deploy alike (R378(a), CARD-RUN11-DESIGN).
@@ -41,11 +42,17 @@ and at deploy alike (R378(a), CARD-RUN11-DESIGN).
     mints `tactics: null`.
   - The in-run gate is deploy-matched: candidate and anchor play the same block (R378(d)). The tree still arms the
     candidate alone (CARD-GATE-DEPLOY-MATCHED).
-- **TACTICS-SELFPLAY is in progress (2026-09-29, CARD-TACTICS-SELFPLAY).** It puts the same module in the loop: a 4 h
-  tactics twin against a 4 h plain twin from run8@45k, on the box within ≤ 12 box-h with P4's cache read.
-  - Before the twin, on the desktop: P0 (one simulation count, CARD-SIMS-ACCOUNTING) and P1–P3. Those pick the
-    proven-root target's form (R378(e)) and set the defence exam's band and the ring bands (R378(f)).
-  - Its pre-stated reading is PASS-TO-RUN11 or a halt.
+- **TACTICS-SELFPLAY exited 2026-09-29: NOT PASS-TO-RUN11 (CARD-TACTICS-SELFPLAY).** It put the same module in the
+  loop: a 4 h tactics twin (A) against a 4 h plain twin (B) from run8@45k, in 11.86 box-h. Its code is on branch
+  `tactics-selfplay` (gates.exit green), not yet in `dev`.
+  - P0 closed CARD-SIMS-ACCOUNTING. P1 picked the SEARCHED proven-root target; P2 and P3 set the defence and ring
+    bands. P4's cache hit reads 33 % at sync cadence 50, against 24.5 % at 2.
+  - The screen fails: the net alone at 12k reads A − B −0.209 logit against a bar of > −0.17. Every band held, and
+    throughput passed at 1.058× in positions/h.
+  - Beside it, report-only: the shipped head at 12k reads A − B +0.676 [+0.342, +1.010], and the net alone pooled over
+    9k and 12k reads +0.010.
+  - Open for the architect: CARD-TACTICS-TARGET-FEED (the module's moves reach the policy weakly) and
+    CARD-THROUGHPUT-IN-POSITIONS.
 - **The strength series changes unit at the merge (R378(b)).** Every later cell plays the shipped head, earlier
   points are the plain unit, and both are named where they meet. A read that needs the net alone plays
   `--arm plain` and says so.
@@ -153,4 +160,5 @@ The current phase was rewritten 2026-09-28 at R376 from the DECIDE-1 and SIX-RUN
 run, box and instrument lines were re-checked at `3e3fd263`. The tactics lines were updated at R377 from the
 TACTICS-DESIGN design doc (`d17dfdcd`), and at the TACTICS-DEPLOY packet's first commit. The current phase was
 rewritten 2026-09-29 at R378 from the TACTICS-DEPLOY exit record (local) and the TACTICS-SELFPLAY packet, with
-`dev` = `origin/dev` = `0204edf9` read before the edit.
+`dev` = `origin/dev` = `0204edf9` read before the edit. The TACTICS-SELFPLAY lines were updated 2026-09-29 at its
+exit from its exit record (local), on branch `tactics-selfplay` at `5db3280b`.
