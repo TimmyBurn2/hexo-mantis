@@ -201,9 +201,9 @@ def test_an_unwritable_record_dir_does_NOT_break_the_round(tmp_path: Path, capsy
     )
 
 
-def test_an_armed_round_arms_the_candidate_alone_and_every_record_carries_its_rows(tmp_path: Path,
-                                                                                  monkeypatch) -> None:
-    """Reds if `_pair` arms the best side or the sink drops `candidate_tactics`: the block crosses the JSON seam."""
+def test_an_armed_round_arms_both_gate_sides_and_every_record_carries_the_candidates_rows(tmp_path: Path,
+                                                                                         monkeypatch) -> None:
+    """PLANTED BREAK: `_pair` building the best side unarmed, or the sink dropping `candidate_tactics`, reds this."""
     armed = arm_block("full", _TACTICS)
     calls: list[tuple[Any, Any]] = []
     real = worker.build_candidate_player
@@ -218,9 +218,8 @@ def test_an_armed_round_arms_the_candidate_alone_and_every_record_carries_its_ro
                    tactics=armed)
     worker.run_round(RoundSpec.from_dict(json.loads(json.dumps(spec.to_dict()))))
     candidate = net_param_hash(seeded_net(seed=1))
-    assert {tactics is None for _engine, tactics in calls} == {True, False}, "both sides built, one armed"
-    for engine, tactics in calls:
-        assert (tactics == armed) == (net_param_hash(engine.model) == candidate), "the candidate alone is armed"
+    assert {net_param_hash(engine.model) == candidate for engine, _tactics in calls} == {True, False}, "both sides"
+    assert all(tactics == armed for _engine, tactics in calls), "the gate is deploy-matched: both sides play the block"
     records = list(iter_run_games(records_dir, _RUN_ID))
     assert records and all("candidate_tactics" in r for r in records)
     for r in records:

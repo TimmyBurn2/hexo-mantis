@@ -223,7 +223,7 @@ def cell_spec(cell: Mapping[str, Any], base: RoundSpec, *, cell_dir: Path, confi
         game_record=GameRecordTarget(record_dir=str(cell_dir / "games"), run_id=_RUN_ID),
         concurrency=int(cell.get("concurrency", 1)),
         rung_concurrency=int(cell.get("concurrency", 1)),
-        # The candidate's side only: the worker's gate pair gives the best side no block.
+        # Our head's block: a cell's opponent is a ruler, an external bot no block reaches.
         tactics=cell.get("tactics", base.tactics),
     )
     if opponent == STRIX:

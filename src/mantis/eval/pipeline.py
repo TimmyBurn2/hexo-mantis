@@ -302,7 +302,7 @@ class EvalPipeline:
         #: regime used to come from `DeployHeadPlayer`'s body, which the config never stated.
         self._search_kind = str(search_kind)
         self._gumbel_m = int(gumbel_m)
-        #: The run's resolved `deploy.search.tactics` for the candidate head. NOT defaulted, for the same reason.
+        #: The run's resolved `deploy.search.tactics` for both gate heads. NOT defaulted, for the same reason.
         self._tactics = tactics
         #: The graph collector's batching geometry. NOT defaulted: these two were LITERALS in
         #: the child's hand-made server dict, and a default would put them back.

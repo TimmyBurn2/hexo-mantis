@@ -396,7 +396,7 @@ def _play_gate_block(
                     leaf_batch_size=spec.leaf_batch_size,
                     c_visit=spec.c_visit, c_scale=spec.c_scale, q_rescale=spec.q_rescale,
                     search_kind=spec.search_kind, gumbel_m=spec.gumbel_m,
-                    gumbel_seed=spec.seed_base, tactics=None,
+                    gumbel_seed=spec.seed_base, tactics=spec.tactics,
                 ),
             )
 
