@@ -14,6 +14,7 @@ pub mod record;
 pub mod search_drive;
 pub mod spawn;
 pub mod stats;
+mod tactics_move;
 
 pub use config::SelfPlayRunnerConfig;
 
@@ -168,6 +169,7 @@ pub struct SelfPlayRunner {
     dirichlet_root_fires: Arc<AtomicU64>,
 
     export_offwindow_mass_moves: Arc<AtomicU64>,
+    tactics_totals: Arc<stats::TacticsTotals>,
     target_integrity_defects: Arc<AtomicU64>,
     /// SEAM conjunct fire count (see the snapshot field).
     inference_failures_total: Arc<AtomicU64>,
@@ -346,6 +348,7 @@ impl SelfPlayRunner {
             gumbel_rounds: Arc::new(AtomicU64::new(0)),
             dirichlet_root_fires: Arc::new(AtomicU64::new(0)),
             export_offwindow_mass_moves: Arc::new(AtomicU64::new(0)),
+            tactics_totals: Arc::new(stats::TacticsTotals::new()),
             target_integrity_defects: Arc::new(AtomicU64::new(0)),
             inference_failures_total: Arc::new(AtomicU64::new(0)),
             served_leaves_total: Arc::new(AtomicU64::new(0)),
@@ -472,6 +475,12 @@ impl SelfPlayRunner {
             tt_hits_total: self.tt_hits_total.load(Ordering::Relaxed),
             worker_panics: self.worker_panics.load(Ordering::Relaxed),
         }
+    }
+
+    /// The tactics block's rows summed over every search, then the rows its moves recorded, by name; all zero off.
+    #[must_use]
+    pub fn tactics_totals(&self) -> Vec<(&'static str, u64)> {
+        self.tactics_totals.snapshot()
     }
 
     /// Spec-derived state (feature) stride — drives inv23 (P-02).

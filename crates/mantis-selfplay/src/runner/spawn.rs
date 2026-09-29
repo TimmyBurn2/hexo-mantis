@@ -112,6 +112,7 @@ impl SelfPlayRunner {
             gumbel_rounds: self.gumbel_rounds.clone(),
             dirichlet_root_fires: self.dirichlet_root_fires.clone(),
             export_offwindow_mass_moves: self.export_offwindow_mass_moves.clone(),
+            tactics_totals: self.tactics_totals.clone(),
         };
         let atomics_proto = WorkerAtomics {
             running: self.running.clone(),

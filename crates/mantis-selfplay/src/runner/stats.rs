@@ -1,8 +1,69 @@
 //! `WorkerStats` — per-worker `Arc<AtomicU*>` fire-rate / health accumulators, cloned once per
 //! worker spawn and destructured at `game::run_worker_thread` entry.
 
-use std::sync::atomic::{AtomicU64, AtomicUsize};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
+
+use mantis_search::mcts::TacticsCounters;
+
+/// The rows a self-play move adds beside its search's tactics rows, in `MoveRow` order.
+pub const MOVE_TACTICS_ROWS: [&str; 4] = [
+    "proven_root_rows",
+    "decided_lost_rows",
+    "vetoed_target_rows",
+    "emptied_target_rows",
+];
+
+/// A row a self-play move records: at a decided root with its searched target, with no policy target at a lost
+/// root, with vetoed mass zeroed, or with no policy target because every searched move was vetoed.
+#[derive(Clone, Copy)]
+pub(crate) enum MoveRow {
+    ProvenRoot = 0,
+    DecidedLost = 1,
+    VetoedTarget = 2,
+    EmptiedTarget = 3,
+}
+
+/// Every search's tactics rows summed (`TacticsCounters::rows` order), then the move rows.
+pub(crate) struct TacticsTotals {
+    slots: Vec<AtomicU64>,
+}
+
+impl TacticsTotals {
+    pub(crate) fn new() -> Self {
+        let n = TacticsCounters::ROWS + MOVE_TACTICS_ROWS.len();
+        Self {
+            slots: (0..n).map(|_| AtomicU64::new(0)).collect(),
+        }
+    }
+
+    /// Add one search's rows.
+    pub(crate) fn add_search(&self, rows: &TacticsCounters) {
+        for (slot, (_, v)) in self.slots.iter().zip(rows.rows()) {
+            if v > 0 {
+                slot.fetch_add(v, Ordering::Relaxed);
+            }
+        }
+    }
+
+    /// Count one recorded row of `row`'s kind.
+    pub(crate) fn add_move(&self, row: MoveRow) {
+        self.slots[TacticsCounters::ROWS + row as usize].fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Every row by name, each read once with a `Relaxed` load.
+    pub(crate) fn snapshot(&self) -> Vec<(&'static str, u64)> {
+        let names = TacticsCounters::default()
+            .rows()
+            .map(|(name, _)| name)
+            .into_iter()
+            .chain(MOVE_TACTICS_ROWS);
+        names
+            .zip(&self.slots)
+            .map(|(name, slot)| (name, slot.load(Ordering::Relaxed)))
+            .collect()
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct WorkerStats {
@@ -34,4 +95,6 @@ pub(crate) struct WorkerStats {
     pub(crate) dirichlet_root_fires: Arc<AtomicU64>,
     // Target-integrity fire-rate counters.
     pub(crate) export_offwindow_mass_moves: Arc<AtomicU64>,
+    /// The tactics block's rows over every search, and the rows its moves recorded; all zero with tactics off.
+    pub(crate) tactics_totals: Arc<TacticsTotals>,
 }

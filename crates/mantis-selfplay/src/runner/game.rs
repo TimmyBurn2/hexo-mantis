@@ -125,6 +125,7 @@ pub(crate) fn run_worker_thread(
         gumbel_rounds,
         dirichlet_root_fires,
         export_offwindow_mass_moves,
+        tactics_totals,
     } = stats;
     let WorkerAtomics {
         running,
@@ -211,6 +212,7 @@ pub(crate) fn run_worker_thread(
         dirichlet_root_fires: &dirichlet_root_fires,
         positions_generated: &positions_generated,
         export_offwindow_mass_moves: &export_offwindow_mass_moves,
+        tactics_totals: &tactics_totals,
     };
     let infer = InferContext {
         graph_queue: &graph_queue,

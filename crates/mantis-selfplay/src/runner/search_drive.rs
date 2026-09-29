@@ -14,6 +14,7 @@ use rand::RngExt;
 
 use mantis_core::Board;
 use mantis_encoding::RegistrySpec;
+use mantis_search::mcts::TacticsError;
 use mantis_search::{
     compute_move_temperature, ply_to_compound_move, LegalSetPolicy, MCTSTree, MctxRootState,
     QSigma, SearchKind,
@@ -25,6 +26,8 @@ use crate::records;
 use crate::replay::hexg::GraphRecord;
 
 use super::record::record_position_graph_dispatch;
+use super::stats::{MoveRow, TacticsTotals};
+use super::tactics_move::{zero_vetoes, TargetEdit};
 use super::PositionStats;
 
 /// A worker's inference seam, built once per worker thread; `Copy`, passed by value.
@@ -71,6 +74,8 @@ pub(crate) struct MoveAccumulators<'a> {
     pub(crate) dirichlet_root_fires: &'a AtomicU64,
     pub(crate) positions_generated: &'a AtomicUsize,
     pub(crate) export_offwindow_mass_moves: &'a AtomicU64,
+    /// The tactics block's rows per search and the rows its moves record; untouched with tactics off.
+    pub(crate) tactics_totals: &'a TacticsTotals,
 }
 
 /// Fatal-defect latch handle: store the typed message (first defect wins), count the fire,
@@ -576,6 +581,17 @@ pub(crate) fn play_one_move(
 
     // ── MCTS Search ──
     tree.new_game(board.clone());
+    // The root offence: a finish, the owed proof stone or a new proof's first stone (`None` with tactics off). The
+    // root is searched all the same: its row records the search's own target, and the decided stone is played.
+    let decided = match tree.root_offence() {
+        Ok(decided) => decided,
+        // Counted by the tree (`proof_stone_illegal`); the search's own move stands.
+        Err(TacticsError::ProofStoneIllegal { .. }) => None,
+        Err(err) => {
+            fatal_latch.store(err.to_string());
+            return MoveOutcome::Break;
+        }
+    };
 
     let (gumbel_state, sims_served) = match run_mcts_search(
         tree,
@@ -667,13 +683,11 @@ pub(crate) fn play_one_move(
     }
 
     // The target's semantics are the search kind's own answer — no second flag can disagree.
-    let target_policy = if ctx.search_kind.completed_q_target() {
+    let mut target_policy = if ctx.search_kind.completed_q_target() {
         tree.get_improved_policy_ls(policy_stride, ctx.sigma)
     } else {
         policy.clone()
     };
-
-    let record_full_search = move_is_full_search;
 
     // The restored-mass fire-rate: moves whose exported target keeps off-window mass.
     if target_policy.overflow.values().any(|&p| p > 0.0) {
@@ -682,11 +696,46 @@ pub(crate) fn play_one_move(
             .fetch_add(1, Ordering::Relaxed);
     }
 
-    // ── Sample and apply move ──
-    let Some(move_idx) = select_move(board, &policy, gumbel_state, ctx, agg_trunk_sz, tree, rng)
-    else {
-        return MoveOutcome::Break;
+    // ── Sample and apply move: the decided stone, else the search's, vetted by the audit ──
+    let move_idx = match decided {
+        Some(stone) => stone,
+        None => {
+            let Some(chosen) =
+                select_move(board, &policy, gumbel_state, ctx, agg_trunk_sz, tree, rng)
+            else {
+                return MoveOutcome::Break;
+            };
+            tree.root_audit(chosen, None)
+        }
     };
+
+    // The audit's vetoed moves carry no target mass; a lost root, or a target left empty, records no policy.
+    let edit = zero_vetoes(
+        &mut target_policy,
+        tree.last_audit_vetoes(),
+        board,
+        agg_trunk_sz,
+    );
+    let rows = tree.tactics_counters();
+    let decided_lost = rows.decided_lost > 0;
+    let record_full_search = move_is_full_search && !decided_lost && edit != TargetEdit::Emptied;
+    if tree.tactics_config().is_some() {
+        let totals = accumulators.tactics_totals;
+        totals.add_search(&rows);
+        if move_is_full_search {
+            if decided.is_some() {
+                totals.add_move(MoveRow::ProvenRoot);
+            }
+            if decided_lost {
+                totals.add_move(MoveRow::DecidedLost);
+            }
+            match edit {
+                TargetEdit::Zeroed => totals.add_move(MoveRow::VetoedTarget),
+                TargetEdit::Emptied => totals.add_move(MoveRow::EmptiedTarget),
+                TargetEdit::Unchanged => {}
+            }
+        }
+    }
 
     if let Some(stats) = search_stats {
         // The root as the search left it — only the visited children, Q in the root's view —
