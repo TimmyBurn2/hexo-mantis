@@ -1,0 +1,117 @@
+//! `last_tt_hits` is exactly a PUCT select call's table-valued descents: a terminal revisit backs up its own value.
+
+use mantis_core::Board;
+use mantis_search::{analyze, MCTSTree, Terminal};
+
+mod common;
+
+/// A prior decaying from the window centre (a compact net), with 0.9 of the mass on the mover's finish where it has one.
+fn prior(board: &Board) -> Vec<f32> {
+    let mut p: Vec<f32> = (0..common::N_ACTIONS - 1)
+        .map(|i| {
+            let (dq, dr) = ((i / 19) as i32 - 9, (i % 19) as i32 - 9);
+            (-1.5 * dq.abs().max(dr.abs()).max((dq + dr).abs()) as f32).exp()
+        })
+        .collect();
+    p.push(0.0);
+    let total: f32 = p.iter().sum();
+    p.iter_mut().for_each(|x| *x /= total);
+    let facts = analyze(board);
+    if facts.terminal == Some(Terminal::Win) {
+        let idx = board.window_flat_idx(facts.finish[0].0, facts.finish[0].1);
+        if idx < p.len() {
+            p.iter_mut().for_each(|x| *x *= 0.1);
+            p[idx] += 0.9;
+        }
+    }
+    p
+}
+
+fn terminal_visits(tree: &MCTSTree) -> u64 {
+    tree.pool[..tree.next_free_slot() as usize]
+        .iter()
+        .filter(|n| n.is_terminal)
+        .map(|n| u64::from(n.n_visits))
+        .sum()
+}
+
+/// Every select call raises the root by its table hits plus its terminal revisits; (hits, revisits) over `sims`.
+fn drive(board: &Board, sims: usize) -> (u64, u64) {
+    let mut tree = MCTSTree::new(1.5);
+    tree.configure_quiescence(false, 0.0);
+    tree.new_game(board.clone());
+    let (mut hits, mut revisits, mut spent) = (0u64, 0u64, 0usize);
+    for call in 0..10 * sims {
+        if spent >= sims {
+            break;
+        }
+        let (root0, term0) = (tree.root_visits(), terminal_visits(&tree));
+        let leaves = tree
+            .select_leaves((sims - spent).min(8))
+            .expect("the board replays every selected cell");
+        let rose = u64::from(tree.root_visits() - root0);
+        let (h, t) = (tree.last_tt_hits() as u64, terminal_visits(&tree) - term0);
+        assert_eq!(
+            rose,
+            h + t,
+            "call {call}: the root rose by {rose} with {h} table hits and {t} terminal revisits"
+        );
+        hits += h;
+        revisits += t;
+        if leaves.is_empty() {
+            continue;
+        }
+        let policies: Vec<Vec<f32>> = leaves.iter().map(prior).collect();
+        let values: Vec<f32> = (0..leaves.len()).map(|i| 0.05 * (i % 3) as f32).collect();
+        tree.expand_and_backup(&policies, &values);
+        spent += leaves.len();
+    }
+    (hits, revisits)
+}
+
+fn replay(moves: &[(i32, i32)]) -> Board {
+    let mut b = Board::new();
+    b.set_legal_move_radius(8);
+    for &(q, r) in moves {
+        b.apply_move(q, r).expect("a legal fixture move");
+    }
+    b
+}
+
+#[test]
+fn a_two_stone_turn_transposes_and_every_table_hit_is_counted() {
+    // P2 to place two: A then B and B then A reach one position.
+    let (hits, revisits) = drive(&replay(&[(0, 0)]), 400);
+    assert!(
+        hits > 0,
+        "a compact PUCT search over a two-stone turn never transposed"
+    );
+    assert_eq!(revisits, 0, "no terminal is reachable this early");
+}
+
+/// PLANTED BREAK: count the `cached` branch's terminal revisits too and the oracle in `drive` reds.
+#[test]
+fn a_terminal_revisit_is_not_a_table_hit() {
+    // P2 holds five on r = 3 and places two: its finish is a terminal child the prior piles onto.
+    let board = replay(&[
+        (0, 0),
+        (0, 3),
+        (1, 3),
+        (0, -3),
+        (5, -5),
+        (2, 3),
+        (3, 3),
+        (-5, 0),
+        (-4, -2),
+        (4, 3),
+        (-3, 6),
+        (-6, 2),
+        (-2, -6),
+    ]);
+    assert_eq!(analyze(&board).terminal, Some(Terminal::Win));
+    let (_hits, revisits) = drive(&board, 200);
+    assert!(
+        revisits > 0,
+        "the search never revisited its winning child, so the case is not exercised"
+    );
+}

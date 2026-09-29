@@ -14,7 +14,7 @@ from mantis.config.schema._base import StrictModel
 from mantis.config.schema.search import SearchConfig
 
 #: The largest sim budget the MCTS node pool can serve, READ FROM THE ENGINE (only the pool knows
-#: it): uncounted TT-hit expansions let one move add `4 * sims * MAX_CHILDREN_PER_NODE` children,
+#: it): TT-hit expansions uncharged against the budget let one move add `4 * sims * MAX_CHILDREN_PER_NODE` children,
 #: and `finish_expansion` panics on overflow.
 MAX_ARMED_SIMS: int = mcts_max_armed_sims()
 

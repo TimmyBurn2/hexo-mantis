@@ -369,7 +369,10 @@ impl MCTSTree {
                 .get(&board.zobrist_hash)
                 .map(|e| (e.policy.clone(), e.value));
             if let Some((policy, value)) = cached {
-                self.tt_hits += 1;
+                // A terminal backs up its own value here, not the table's: not a hit.
+                if !self.pool[leaf_idx as usize].is_terminal && !board.check_win() {
+                    self.tt_hits += 1;
+                }
                 match policy {
                     CachedPolicy::Dense(p) => {
                         self.expand_and_backup_single(leaf_idx, &board, &p, value, facts.as_ref())
@@ -448,7 +451,7 @@ impl MCTSTree {
                 }
             };
             // No TT fast path here: a Gumbel round needs an exact leaf count per round trip,
-            // which `select_leaves`' uncounted TT-hit expansions would break.
+            // which `select_leaves`' TT-hit expansions, uncharged against the budget, would break.
             let Some(leaf_idx) = leaf else {
                 continue;
             };

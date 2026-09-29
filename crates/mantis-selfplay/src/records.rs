@@ -316,7 +316,7 @@ pub fn record_position_graph(
     })
 }
 
-/// Stamp the per-row outcome and draw-mask onto a graph record at game end: it reads winner /
+/// Stamp the per-row outcome and ply-cap mask onto a graph record at game end: it reads winner /
 /// terminal_reason / the row's move-time player only and no cell geometry, so the outcome split
 /// transfers to graph rows unchanged. `terminal_reason == 2` is the ply-cap branch, whose
 /// fabricated label is masked from the value loss.

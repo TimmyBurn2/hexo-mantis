@@ -1,8 +1,4 @@
-//! A PUCT descent that reaches a position its search's TT already holds is counted as a table hit, no leaf served.
-//! Two-stone turns transpose (A then B is B then A), so a PUCT drive hits the table; Gumbel's forced select has no
-//! table path and counts none.
-//!
-//! PLANTED BREAK: drop the `tt_hits += 1` in `MCTSTree::select_leaves` and the PUCT arm reds.
+//! The runner sums each PUCT select's table hits (`MCTSTree::last_tt_hits`) into its snapshot, and a Gumbel drive none.
 
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
@@ -63,6 +59,7 @@ fn tt_hits_under(kind: SearchKind) -> u64 {
     runner.stats_snapshot().tt_hits_total
 }
 
+/// PLANTED BREAK: drop the `tt_hits += 1` in `MCTSTree::select_leaves` and this reds.
 #[test]
 fn a_transposing_puct_search_counts_its_table_hits() {
     let hits = tt_hits_under(SearchKind::Puct);
@@ -72,7 +69,8 @@ fn a_transposing_puct_search_counts_its_table_hits() {
     );
 }
 
+/// Gumbel's one `select_leaves` call is its root's, on an empty table.
 #[test]
-fn a_gumbel_search_has_no_table_path_and_counts_none() {
+fn a_gumbel_drive_counts_no_table_hits() {
     assert_eq!(tt_hits_under(SearchKind::Gumbel), 0);
 }

@@ -19,7 +19,7 @@ pub(crate) struct WorkerStats {
     /// The largest number of leaves ANY one search served; it must never exceed the
     /// budget, `n_simulations` (or the playout-cap arm's).
     pub(crate) max_sims_per_search: Arc<AtomicU64>,
-    /// Searches a select call of uncounted TT hits starved, and the descents they fell short by.
+    /// Searches a select call of TT hits (uncharged against the budget) starved, and the descents short.
     pub(crate) starved_searches: Arc<AtomicU64>,
     pub(crate) starved_descents: Arc<AtomicU64>,
     /// Playout-cap randomization's own fire rate: these two count the DRAW, where the ARM IS

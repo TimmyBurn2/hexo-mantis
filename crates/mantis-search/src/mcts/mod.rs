@@ -126,7 +126,7 @@ pub struct MCTSTree {
     pub(crate) tactics: Option<Box<tactics_wiring::TacticsState>>,
     /// Descents the last select call backed up inline (`last_inline_descents`).
     pub(crate) inline_descents: usize,
-    /// Descents the last select call backed up from the TT, unserved (`last_tt_hits`).
+    /// Descents the last select call backed up with the TT's value, unserved (`last_tt_hits`).
     pub(crate) tt_hits: usize,
 }
 
@@ -203,7 +203,7 @@ impl MCTSTree {
         self.pool[0].n_visits
     }
 
-    /// Descents the last select call backed up from the TT; 0 after `select_leaves_forced`.
+    /// Descents the last select call backed up with the TT's value (a terminal's is its own); 0 if forced.
     #[must_use]
     pub fn last_tt_hits(&self) -> usize {
         self.tt_hits

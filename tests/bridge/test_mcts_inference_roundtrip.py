@@ -70,6 +70,33 @@ def test_mctstree_forced_root_child_round_trip():
     assert tree.forced_root_child is None
 
 
+def _compact_prior() -> list[float]:
+    """A dense prior decaying from the window centre, as a compact net's does: its two-stone turns transpose."""
+    raw = [np.exp(-1.5 * max(abs(i // 19 - 9), abs(i % 19 - 9), abs(i // 19 + i % 19 - 18))) for i in range(361)]
+    total = float(sum(raw))
+    return [float(x) / total for x in raw] + [0.0]
+
+
+def test_mctstree_last_tt_hits_is_every_table_valued_descent() -> None:
+    """With no terminal reachable, each PUCT select call raises the root by exactly `last_tt_hits`, and some do."""
+    tree = _engine.MCTSTree(1.5, 1.0, 0.25, False, 0.3)
+    board = _engine.Board.with_encoding_name("gnn_axis_v1")
+    board.apply_move(0, 0)
+    tree.new_game(board)
+    prior, hits, spent = _compact_prior(), 0, 0
+    for _ in range(4000):
+        if spent >= 400:
+            break
+        before = tree.root_visits()
+        leaves = tree.select_leaves(min(8, 400 - spent))
+        assert tree.root_visits() - before == tree.last_tt_hits()
+        hits += tree.last_tt_hits()
+        if leaves:
+            tree.expand_and_backup([prior] * len(leaves), [0.05 * (i % 3) for i in range(len(leaves))])
+            spent += len(leaves)
+    assert hits > 0, "a compact PUCT search over a two-stone turn never transposed"
+
+
 def _serve_one_uniform_batch(ib, batch_size: int = 8, max_wait_ms: int = 50) -> bool:
     """Pop one graph batch and submit uniform per-segment probs; False on an empty pop."""
     ids, wire = ib.next_graph_batch(batch_size, max_wait_ms)
