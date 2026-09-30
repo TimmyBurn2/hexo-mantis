@@ -1,3 +1,4 @@
+// >300 justify (R8): one armed drive and the replay that re-derives its proven rows serve every test here.
 //! A decided root plays its stone after its search, the owed stone follows, the audit vets the rest; rows are summed.
 
 use std::collections::{HashMap, HashSet};

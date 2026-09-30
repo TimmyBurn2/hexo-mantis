@@ -1,4 +1,5 @@
-//! A self-play target under tactics: vetoed moves carry zero mass, and the move rows are read off the row written.
+// >300 justify (R8): a row's edits (vetoes zeroed, the proof mixed), its fitted support and its move rows are one unit.
+//! A self-play target under tactics: vetoes zeroed, a weak proof mixed in, its support fitted, its rows counted.
 
 use fxhash::FxHashSet;
 use mantis_core::Board;
