@@ -22,7 +22,9 @@ instruments read until run11's mint replaces it. run11 arms the deploy block at 
     the played move. A proven root's target mixes the proof at α = 0.5 only where the searched mass on it reads below
     0.5, row by row, replacing R378(e)'s median rule.
   - TACTICS-SELFPLAY-2 (R379(c)): one arm with the feed against the recorded arms; it passes when the deploy-matched
-    reading's lower bound is above zero. IN PROGRESS from 2026-09-30 (worktree `.wt/tactics-selfplay-2`).
+    reading's lower bound is above zero. **HALTED 2026-09-30 at arm A′'s 3k save** (CARD-TACTICS-SELFPLAY-2): T4 floor
+    misses at every proof length (overall P 0.127, V 0.133 against A's 0.249 / 0.528) and the near-terminal band
+    outside; no cell ran, and the architect rules next. The feed is built on branch `tactics-selfplay-2` (unpushed).
   - CENSUS-1 (R379(d)): growth, the regret and restart family, the next-ply aux head and learning from Six's
     positions are parked (CARD-NET-EXPAND held, CARD-JK-LAST carded for throughput); six items are carried to run11's
     design; MCGS earns a deploy A/B later. Five of them are opened as cards (CARD-VALUE-HEAD-DEAD-OPENING,
@@ -179,4 +181,5 @@ TACTICS-DESIGN design doc (`d17dfdcd`), and at the TACTICS-DEPLOY packet's first
 rewritten 2026-09-29 at R378 from the TACTICS-DEPLOY exit record (local) and the TACTICS-SELFPLAY packet, with
 `dev` = `origin/dev` = `0204edf9` read before the edit. The TACTICS-SELFPLAY lines were updated 2026-09-29 at its
 exit from its exit record (local), on branch `tactics-selfplay` at `5db3280b`. The current phase was rewritten
-2026-09-30 at R379, with `dev` = `origin/dev` = `2d107c0f` read before the edit.
+2026-09-30 at R379, with `dev` = `origin/dev` = `2d107c0f` read before the edit. The TACTICS-SELFPLAY-2 line was
+updated 2026-09-30 at its halt from its exit record (local), on branch `tactics-selfplay-2` at `2dde57aa`.

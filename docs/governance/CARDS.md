@@ -38,9 +38,20 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by R379 (THE SECOND TWIN; 2026-09-30) — the feed, the second twin, CENSUS-1 accepted
 
-- **CARD-TACTICS-SELFPLAY-2 — IN PROGRESS: the TACTICS-SELFPLAY-2 packet (2026-09-30), worktree
-  `.wt/tactics-selfplay-2`, box T ≤ 7 box-h. ORDERED by R379(c): one arm with R379(b)'s feed against
-  TACTICS-SELFPLAY's recorded arms.** F1 builds the re-search (row `tactics_research_count`), F2 the row-wise mixing
+- **CARD-TACTICS-SELFPLAY-2 — HALTED 2026-09-30 at arm A′'s 3k save; the architect rules next. Was IN PROGRESS: the
+  TACTICS-SELFPLAY-2 packet (2026-09-30), worktree `.wt/tactics-selfplay-2`, box T ≤ 7 box-h. ORDERED by R379(c): one
+  arm with R379(b)'s feed against TACTICS-SELFPLAY's recorded arms.**
+  - The halt: T4 floor misses at 3k (overall P 0.127, V 0.133 against A's 0.249 / 0.528 and B's 0.239 / 0.565; 2-turn
+    V 0.022) and the near-terminal band outside (0.068 < 0.119); the shutdown save at 3598 misses too. The defence exam
+    held. No cell ran, so PASS-TO-RUN11 was not read. 1.54 box-h.
+  - The feed reached the ring: no all-vetoed row went without a policy, and the weak-proof share read 0.0. Throughput
+    read 0.876× A's positions/h over the same steps.
+  - Read after the halt (report-only): A′'s proven endgames are about 4× shorter (root proofs 11.5 per 1k positions
+    against A's 41.2; ring PROOF turn starts 282 against 1 191). The leading suspect is F1's move rule, which replaces
+    the best hold with the re-search's winner. F1's move rule, its target and F2 are not separated by this data.
+  - The build's reading of "every searched move is vetoed" (it cannot fire literally under Gumbel) is in
+    `docs/design/TACTICS_DESIGN_2026-09-28.md` §6; the exit record is local
+    (`mantis-records/tactics-selfplay-2/EXIT.md`). F1 builds the re-search (row `tactics_research_count`), F2 the row-wise mixing
   (row `tactics_mixed_rows`), and T runs arm A′ from run8@45k. Its pass line is the deploy-matched reading with the lower bound above zero. run11 arms tactics in self-play
   only on that pass, since R376(d) forbids a plain self-play under a tactics deploy.
   - The feed (R379(b)), at deploy and in self-play alike:
