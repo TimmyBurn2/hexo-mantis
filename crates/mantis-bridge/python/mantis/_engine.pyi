@@ -193,12 +193,6 @@ class MCTSTree:
         """
     def root_audit(self, chosen: tuple[int, int]) -> tuple[int, int]:
         """After the search: `chosen`, or the armed audit's substitute when its turn allows a proven opponent win."""
-    def last_audit_vetoes(self) -> list[tuple[int, int]]:
-        """The candidates the last `root_audit` proved lost, in the order it walked them."""
-    def searched_all_vetoed(self) -> bool:
-        """Whether the last audit vetoed every move holding mass in this kind's own target at temperature 1."""
-    def begin_research(self) -> bool:
-        """Re-arm the root to search again without the last audit's vetoes; False, re-arming nothing, when it cannot."""
     def select_leaves(self, n: int) -> list[Board]:
         """Raises:
         SelectionDesync: the tree and the board disagree about what has been played.

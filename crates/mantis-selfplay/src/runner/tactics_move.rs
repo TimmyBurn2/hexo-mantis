@@ -3,10 +3,11 @@
 
 use fxhash::FxHashSet;
 use mantis_core::Board;
-use mantis_search::mcts::{all_vetoed, TacticsCounters};
+use mantis_search::mcts::TacticsCounters;
 use mantis_search::LegalSetPolicy;
 
 use super::stats::{MoveRow, TacticsTotals};
+use crate::records::TARGET_MASS_TOL;
 use crate::replay::hexg::GraphRecord;
 
 /// What zeroing the vetoes did to a target.
@@ -16,7 +17,7 @@ pub(crate) enum TargetEdit {
     Unchanged,
     /// The vetoed mass is gone and the rest sums to one again.
     Zeroed,
-    /// Every unit of mass sat on vetoed cells: the target is left as searched, for the root's re-search to replace.
+    /// Every unit of mass sat on vetoed cells: the target is left as searched, and its row records no policy.
     Emptied,
 }
 
@@ -45,7 +46,7 @@ pub(crate) fn zero_vetoes(
         .chain(ls.overflow.values())
         .map(|&p| f64::from(p))
         .sum();
-    if all_vetoed(total, removed) {
+    if total - removed <= TARGET_MASS_TOL {
         return TargetEdit::Emptied;
     }
     for &(q, r) in &cells {
@@ -118,7 +119,7 @@ pub(crate) fn fitted_support(
     cap: usize,
 ) -> FxHashSet<(i32, i32)> {
     let legal = board.legal_moves_set();
-    // In their given order, so a cap too small for them keeps the audit's highest-ranked vetoes.
+    // In their given order, so a cap too small for them keeps the proof's played stone first.
     let mut pins: Vec<(i32, i32)> = Vec::new();
     for &c in pinned {
         if legal.contains(&c) && !pins.contains(&c) {
@@ -149,8 +150,6 @@ pub(crate) struct Written<'a> {
     pub(crate) edit: TargetEdit,
     /// The decided root's target took its proof in the mixture.
     pub(crate) mixed: bool,
-    /// The root was searched again without its vetoes, whose target the row records.
-    pub(crate) researched: bool,
 }
 
 /// Sum a search's tactics rows, then the one move row its written record carries; the kinds are disjoint, lost first.
@@ -181,12 +180,9 @@ pub(crate) fn count_rows(
     if let Some(row) = row {
         totals.add_move(row);
     }
-    // Sub-counts, not kinds of their own: a proven row's mixture, and a re-searched row holding every veto at zero.
+    // A sub-count of the proven-root rows, not a kind of its own.
     if matches!(row, Some(MoveRow::ProvenRoot)) && written.mixed {
         totals.add_move(MoveRow::Mixed);
-    }
-    if written.researched && rec.is_full_search && vetoes_hold_no_mass(rec, vetoes) {
-        totals.add_move(MoveRow::Research);
     }
 }
 
@@ -292,7 +288,7 @@ mod tests {
         v
     }
 
-    /// PLANTED BREAK: drop `fitted_support`'s pins and a vetoed cell leaves the row, for the tail to feed.
+    /// PLANTED BREAK: drop `fitted_support`'s pins and a proof cell leaves the row, for the tail to feed.
     #[test]
     fn pinned_cells_take_slots_from_the_lowest_mass_candidates_within_the_cap() {
         let (board, ls) = target(&[((1, 0), 0.5), ((2, 0), 0.3), ((3, 0), 0.15), ((4, 0), 0.05)]);
@@ -356,35 +352,7 @@ mod tests {
         assert_eq!(
             sorted(past_cap),
             support(&[(0, 4), (5, 0)]),
-            "past the cap the pins keep their given order: the audit's highest-ranked vetoes"
-        );
-    }
-
-    #[test]
-    fn a_re_searched_row_stores_its_vetoes_at_zero_so_the_tail_cannot_reach_them() {
-        let (board, ls) = target(&[((1, 0), 0.6), ((2, 0), 0.3), ((3, 0), 0.1)]);
-        let set = fitted_support(vec![(1, 0), (2, 0)], &[(-2, 0)], &ls, &board, TRUNK, 2);
-        let rec = crate::records::record_position_graph(
-            &board,
-            &ls,
-            TRUNK,
-            board.current_player as i8,
-            board.moves_remaining,
-            board.ply.index() as u16,
-            true,
-            2,
-            Some(&set),
-        )
-        .expect("a fitted row records");
-        let stored: Vec<(i16, i16, f32)> = rec.visits.clone();
-        assert!(
-            stored.contains(&(-2, 0, 0.0)),
-            "the veto is explicit, at zero: {stored:?}"
-        );
-        assert!(stored.contains(&(1, 0, 0.6)));
-        assert!(
-            (rec.tail_mass - 0.4).abs() < 1e-6,
-            "the displaced candidates' mass joins the tail"
+            "past the cap the pins keep their given order: the proof's played stone first"
         );
     }
 

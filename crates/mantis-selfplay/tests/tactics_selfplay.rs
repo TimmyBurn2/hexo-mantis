@@ -152,9 +152,8 @@ fn a_decided_root_is_searched_then_plays_its_stone_and_the_owed_stone_follows() 
             "{kind:?}: no root was lost, so the case proves nothing"
         );
         assert_eq!(
-            rows["decided_lost_rows"],
-            rows["decided_lost"] + rows["research_refused_lost"],
-            "{kind:?}: every lost root records no policy target, a last stone with every block vetoed among them"
+            rows["decided_lost_rows"], rows["decided_lost"],
+            "{kind:?}: every lost root records no policy target"
         );
         // A game in flight at `stop()` drops its records, so the drained rows can only fall short of the count.
         assert!(
@@ -162,8 +161,7 @@ fn a_decided_root_is_searched_then_plays_its_stone_and_the_owed_stone_follows() 
             "{kind:?}: {no_policy} no-policy rows drained against the lost and emptied ones: {rows:?}"
         );
         // Every edit needs a veto; under Gumbel a vetoed move can carry no target mass, so not every veto edits.
-        let edits =
-            rows["vetoed_target_rows"] + rows["emptied_target_rows"] + rows["research_count"];
+        let edits = rows["vetoed_target_rows"] + rows["emptied_target_rows"];
         assert!(
             edits <= rows["root_vetoes"] && edits > 0,
             "{kind:?}: {edits} edited targets against {} vetoes",
@@ -195,52 +193,6 @@ fn a_gumbel_audit_wider_than_its_candidates_records_within_the_rows_slots() {
         rows["root_vetoes"] >= 8,
         "too few vetoes to reach an unvisited cell: {rows:?}"
     );
-}
-
-/// PLANTED BREAKS: skip `play_one_move`'s re-search (no policy recorded); drop its pinned vetoes (a veto keeps mass).
-#[test]
-fn an_all_vetoed_root_is_re_searched_its_row_records_a_policy_and_both_searches_spend_their_budget()
-{
-    for (kind, want) in [(SearchKind::Gumbel, 3), (SearchKind::Puct, 1)] {
-        let more: fn(&Rows) -> bool = match kind {
-            SearchKind::Gumbel => |r| r["research_count"] + r["emptied_target_rows"] < 3,
-            _ => |r| r["research_count"] + r["emptied_target_rows"] < 1,
-        };
-        let drove = drive(kind, BLOCK, 300, more);
-        let (rows, snap, no_policy) = (&drove.rows, drove.snap, drove.no_policy());
-        println!("{kind:?} over {} plies: {rows:?}", drove.records.len());
-        assert!(
-            rows["research_count"] >= want,
-            "{kind:?}: too few re-searched roots to read: {rows:?}"
-        );
-        assert_eq!(
-            rows["emptied_target_rows"], 0,
-            "{kind:?}: an all-vetoed root recorded no policy: {rows:?}"
-        );
-        // Every move here is a full search: each re-searched row records its policy with every veto held at zero.
-        assert_eq!(
-            rows["research_rows"], rows["research_count"],
-            "{kind:?}: a re-searched row left a veto mass: {rows:?}"
-        );
-        assert!(rows["research_over_hold"] <= rows["research_count"]);
-        assert!(
-            no_policy <= rows["decided_lost_rows"],
-            "{kind:?}: {no_policy} no-policy rows drained, only lost roots record none: {rows:?}"
-        );
-        // Each search spends exactly its budget, and the re-search's descents count beside the first's.
-        assert_eq!(
-            (snap.max_sims_per_search, snap.starved_searches),
-            (SIMS as u64, 0)
-        );
-        let moves = snap.pcr_full_moves;
-        let searches = |done: u64| (done + rows["research_count"]) * SIMS as u64;
-        assert!(
-            (searches(moves - 1)..=searches(moves)).contains(&rows["descents"]),
-            "{kind:?}: {} descents over {moves} moves and {} re-searches at {SIMS}",
-            rows["descents"],
-            rows["research_count"]
-        );
-    }
 }
 
 /// The stones of a row, as a set.
@@ -340,10 +292,7 @@ fn a_runner_without_a_block_sums_no_rows() {
         "proven_root_rows",
         "decided_lost_rows",
         "vetoed_target_rows",
-        "research_count",
-        "research_refused_lost",
         "mixed_rows",
-        "research_rows",
     ] {
         assert!(names.contains(want), "the totals name {want}");
     }

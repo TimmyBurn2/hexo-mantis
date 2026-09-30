@@ -230,27 +230,6 @@ impl PyMCTSTree {
         py.detach(|| self.inner.root_audit(chosen, order.as_deref()))
     }
 
-    /// The candidates the last `root_audit` proved lost, in the order it walked them.
-    pub fn last_audit_vetoes(&self) -> Vec<(i32, i32)> {
-        self.inner.last_audit_vetoes().to_vec()
-    }
-
-    /// Whether the last audit vetoed every move holding mass in this kind's own target at temperature 1.
-    pub fn searched_all_vetoed(&self) -> bool {
-        self.inner.searched_all_vetoed()
-    }
-
-    /// Re-arm the root to search again without the last audit's vetoes; False, re-arming nothing, when it cannot.
-    pub fn begin_research(&mut self) -> bool {
-        if !self.inner.begin_research() {
-            return false;
-        }
-        self.pending_boards.clear();
-        self.forced_root_child = None;
-        self.gumbel_root = None;
-        true
-    }
-
     /// Select up to `n` distinct leaves for evaluation, one Board per unique leaf; always call
     /// `expand_and_backup` with the same number of results before the next call.
     ///

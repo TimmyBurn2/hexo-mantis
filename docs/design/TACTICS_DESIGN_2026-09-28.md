@@ -425,6 +425,7 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
   RETRACTED by R380(b), at deploy and in self-play alike: such a root records no policy target and plays the audit's
   best hold, as arm A did, R378(e)'s decided root by another route. The F1 bullets below record what TACTICS-SELFPLAY-2
   built and ran; TACTICS-SELFPLAY-3 lands the retraction in code (R380(f)).
+  Landed by TACTICS-SELFPLAY-3's L1 (2026-09-30): no re-search in either home and no `research_*` row; the code is arm A's again, F2 beside it.
   - Built (TACTICS-SELFPLAY-2 F1, as its review amended it). The letter, "every searched move is vetoed", cannot
     fire under Gumbel (the audit walks k + 1 = 5 of m = 16 candidates), so the build reads it in two parts, stated to
     the operator with the exit:

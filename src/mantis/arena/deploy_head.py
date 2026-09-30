@@ -82,7 +82,7 @@ class DeployHeadPlayer:
         #: The LAST search's root for the game record, `(root_value, children)` from rows this
         #: head already computes. A plain attribute: the consumer reads it once per ply.
         self.last_root: tuple[float, list[ChildInfo]] | None = None
-        #: The LAST move's descents, both searches' where it searched again (LADDER-1's budget witness reads it).
+        #: The LAST search's descents, the head's own count (LADDER-1's budget witness reads it).
         self.last_sims: int | None = None
         #: The LAST search's tactics rows (`MCTSTree.tactics_counters`), `None` with the module off.
         self.last_tactics: dict[str, int] | None = None
@@ -122,8 +122,8 @@ class DeployHeadPlayer:
     def select_move(self, board: Any) -> tuple[int, int]:
         """Search `n_sims` DESCENTS and return the move this run's search kind picks.
 
-        Every descent counts (leaves returned, inline descents, table hits); armed tactics play a decided root stone
-        unsearched, the audit may swap the move for a hold, and where it held on nothing a re-search's winner plays.
+        The budget counts every descent, the root's own among them: leaves RETURNED, inline descents and table hits;
+        armed tactics play a decided root stone unsearched, and the audit may swap the searched move for a hold.
 
         Raises:
             ValueError: no root children to pick from, or armed tactics at a radius below 5.
@@ -144,22 +144,9 @@ class DeployHeadPlayer:
         finally:
             release_cuda_cache()
         if self._tactics is not None:
-            move = self._audit(tree, move)
+            move = tree.root_audit(move)
             self.last_tactics = tree.tactics_counters()
         self._move_index += 1
-        return move
-
-    def _audit(self, tree: MCTSTree, move: tuple[int, int]) -> tuple[int, int]:
-        """The audit's move, or, where it held on nothing and the target sat on its vetoes, a re-search's winner."""
-        move = tree.root_audit(move)
-        if not (tree.searched_all_vetoed() and tree.begin_research()):
-            return move
-        spent = self.last_sims or 0
-        try:
-            move = self._search(tree)
-        finally:
-            release_cuda_cache()
-        self.last_sims = (self.last_sims or 0) + spent
         return move
 
     def _search(self, tree: MCTSTree) -> tuple[int, int]:

@@ -8,7 +8,7 @@ import pytest
 from mantis._engine import Board
 from mantis.arena.deploy_head import DeployHeadPlayer
 
-from _dense_expand import InferStub, dense_expand, peaked_infer
+from _dense_expand import InferStub, dense_expand
 
 _STRIDE = 362
 
@@ -86,9 +86,8 @@ def test_the_audit_swaps_a_searched_move_that_allows_a_proven_win_for_one_that_h
     head = _head(_block(root_nodes=0, audit=_AUDIT), infer, kind, n_sims=2)
     move = head.select_move(board)
     assert move in _HOLDS
-    rows = head.last_tactics
-    assert rows is not None and (rows["root_vetoes"], rows["research_count"]) == (1, 0)
-    assert head.last_sims == 2, "the audit spends solver nodes, not descents, and its hold is never searched away"
+    assert head.last_tactics is not None and head.last_tactics["root_vetoes"] == 1
+    assert head.last_sims == 2, "the audit spends solver nodes, not descents"
 
 
 def test_the_inverted_known_bad_plays_into_a_proven_win() -> None:
@@ -117,48 +116,3 @@ def test_a_first_stone_that_leaves_the_head_lost_on_cover_is_swapped_for_the_blo
     head = _head(_block(root_nodes=0, audit=_AUDIT), infer, kind, n_sims=2)
     assert head.select_move(_played(_FORCED)) in {(5, 0), (5, 6)}
     assert head.last_tactics is not None and head.last_tactics["audit_swaps"] == 1
-
-
-#: Five non-holds the prior ranks first, then a hold: at two descents every visited move is one of the five.
-_LOSING_FIRST = [(-10, 0), (-11, 0), (-12, 0), (-3, -10), (-6, -10), (-4, -11)]
-
-
-def test_a_root_whose_every_searched_move_is_vetoed_is_searched_again_without_them_and_plays_that_winner() -> None:
-    """PLANTED BREAK: drop `select_move`'s re-search and the head plays the audit's best hold, a proven loss."""
-    calls: list[int] = []
-    board = _played(_FIX219[:16])
-    head = _head(_block(root_nodes=0, audit=_AUDIT), _peaked_on(_LOSING_FIRST, calls), "puct", n_sims=2)
-    assert head.select_move(board) == (-4, -11)
-    rows = head.last_tactics
-    assert rows is not None
-    assert (rows["root_vetoes"], rows["best_holds"], rows["research_count"], rows["research_over_hold"]) == (1, 1, 1, 0)
-    assert head.last_sims == rows["descents"] == 4, "both searches spend their budget, and both count"
-    assert head.last_root is not None and (-10, 0) not in {c for c, *_ in head.last_root[1]}, "the re-search's root"
-
-
-#: A distance-decay net's game, read by a fresh Gumbel head (64 descents, seed 9): its audit holds on a move the
-#: completed-Q target left with no mass, every unit of it on the vetoes.
-_GUMBEL_HOLD_OVERRIDE = [(-1, 0), (2, 1), (-2, -2), (-1, -3), (5, 1), (0, -6), (1, -6), (5, 2), (-2, -3), (-1, -2),
-                         (-3, 0), (0, -3), (5, 0), (-2, -1), (-4, 1), (-6, 3)]
-
-
-def test_an_audited_hold_stands_where_the_target_sat_wholly_on_the_vetoes() -> None:
-    """PLANTED BREAK: drop `searched_all_vetoed`'s test of the audit's pick and the hold is searched away."""
-    audit = {"turns": 4, "nodes": 256, "k": 4, "m": 4, "total_nodes": 4000, "mode": "hold"}
-    block = {"kind": "strict_turn", "leaf_turns": 2, "leaf_nodes": 64, "root_turns": 4, "root_nodes": 2000,
-             "audit": audit}
-    head = DeployHeadPlayer(
-        expand_fn=dense_expand(peaked_infer([])), n_sims=64, leaf_batch_size=8, c_visit=50.0, c_scale=1.0,
-        q_rescale=True, search_kind="gumbel", gumbel_m=16, gumbel_seed=9, tactics=block,
-    )
-    head.new_game()
-    move = head.select_move(_played(_GUMBEL_HOLD_OVERRIDE))
-    rows = head.last_tactics
-    assert head._tree is not None and rows is not None
-    vetoes = head._tree.last_audit_vetoes()
-    assert vetoes and move not in vetoes, "the audit held on a move it did not veto"
-    board = _played(_GUMBEL_HOLD_OVERRIDE)
-    target = head._tree.get_improved_policy()
-    on_vetoes = sum(float(target[board.to_flat(q, r)]) for q, r in vetoes)
-    assert on_vetoes >= float(target.sum()) - 1e-4, f"the premise: the target sits on the vetoes ({on_vetoes})"
-    assert (rows["research_count"], rows["best_holds"], head.last_sims) == (0, 0, 64), rows
