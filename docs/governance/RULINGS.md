@@ -1,4 +1,4 @@
-# RULINGS — R23 to R379
+# RULINGS — R23 to R380
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R380.
+- Numbering continues from R346. The next ruling is R381.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,44 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R380 — THE FEED THAT PASSED
+Decision: verbatim below.
+
+> R380 — THE FEED THAT PASSED.
+> (a) TACTICS-SELFPLAY-2's halt stands. The exams read starvation at A′'s first save (T4
+> value 0.133 v floor 0.255, 2-turn 0.022; near-terminal share 0.068 v 0.119). No reading
+> of A′ is a strength reading and none of its saves is a parent candidate.
+> (b) R379(b)'s re-search (F1) is retracted, self-play and deploy alike. A root whose every
+> audited move is vetoed records no policy target and plays the audit's best hold, as arm A
+> did; it is R378(e)'s decided root by another route, never a hole. The error is the
+> architect's. R379(b) is corrected by annotation; the deploy block of record is unchanged.
+> (c) Mechanism of record, post-hoc: F1's move rule ended each forced endgame at its first
+> link (proven turn starts 282 v 1,191), removing the 2–5-turn chain from the ring and
+> leaving threat patterns labelled mostly as losses. It earns no test; its lever is gone.
+> (d) Row-wise mixing (F2) stands as one unmeasured lever. TACTICS-SELFPLAY-3 runs one arm,
+> A″ = arm A's feed with F2, 12k steps, same parent and seed, against the recorded A and B
+> saves. Witnesses in order: the exams and ring bands at every save (a floor miss halts and
+> kills F2); T4 prior at 12k beside A@12k as F2's pre-registered direction; R379(c)'s pass
+> line on the shipped head against B@12k. If F2 dies, run11 takes arm A's feed as measured.
+> (e) T4's "all" floors halt; per-length rows and all ceilings report. Throughput screens
+> at 0.9× arm A's positions/h over the same steps.
+> (f) tactics-selfplay-2 is not merged. TACTICS-SELFPLAY-3 starts from its tip, lands the
+> retraction, and merges as one branch.
+> (g) The box stays through TACTICS-SELFPLAY-3, ≤ 7 box-h. Stopping it is the operator's
+> act (R367(d)).
+
+Status: standing. Rules TACTICS-SELFPLAY-2's halt by (a): it stands, no reading of A′ is a strength reading and none of
+its saves is a parent candidate. Retracts R379(b)'s re-search (F1) at deploy and in self-play by (b), correcting R379(b)
+by annotation with the deploy block of record unchanged; records the mechanism, post-hoc and untested, by (c). Keeps the
+row-wise mixing (F2) as one unmeasured lever and orders TACTICS-SELFPLAY-3 (CARD-TACTICS-SELFPLAY-3) by (d), which moves
+run11's self-play arming to its pass, or to arm A's feed as measured if F2 dies. Makes T4's "all" floors the halting
+rows, the per-length rows and every ceiling report-only, and screens throughput at 0.9× arm A's positions/h over the same
+steps by (e). Holds `tactics-selfplay-2` unmerged: TACTICS-SELFPLAY-3 starts from its tip, lands the retraction and
+merges as one branch by (f). Keeps the box through TACTICS-SELFPLAY-3 within 7 box-h by (g). The packet it forwards is
+TACTICS-SELFPLAY-3.
+
+---
 
 ### R379 — THE SECOND TWIN
 Decision: verbatim below.
@@ -69,6 +107,11 @@ self-play, and the proven-root mixture is decided row by row, REPLACING R378(e)'
 (c). Accepts CENSUS-1 (`docs/design/measurements/CENSUS1_2026-09-29.md`), holds CARD-NET-EXPAND, parks four
 families and carries six items to CARD-RUN11-DESIGN by (d). Orders PERF-2's levers by CENSUS-1's C2 by (e), which
 R378(g) sequenced after CENSUS-1. The packet it forwards is TACTICS-SELFPLAY-2.
+(b)'s re-search (F1) is RETRACTED by R380(b), self-play and deploy alike: a root whose every audited move is vetoed
+records no policy target and plays the audit's best hold, as arm A did, R378(e)'s decided root by another route; the
+error is the architect's. (b)'s row-wise mixing (F2) stands as one unmeasured lever, tested by TACTICS-SELFPLAY-3
+(R380(d)). (c)'s run11 condition moves to TACTICS-SELFPLAY-3's pass, or to arm A's feed as measured if F2 dies (R380(d));
+TACTICS-SELFPLAY-2's halt stands (R380(a)).
 
 ---
 
@@ -105,6 +148,8 @@ The packet it forwards is TACTICS-SELFPLAY (CARD-TACTICS-SELFPLAY).
 (e)'s median rule is REPLACED by R379(b): a proven root's target mixes the proof at α = 0.5 only where the searched
 mass on it reads below 0.5, row by row. (a)'s self-play arming at run11's mint is conditioned by R379(c) on
 TACTICS-SELFPLAY-2's pass.
+The row-wise mixture stands as one unmeasured lever under TACTICS-SELFPLAY-3 (R380(d)); (a)'s self-play arming moves to
+its pass, or to arm A's feed as measured if the mixture dies (R380(d)).
 
 ---
 
@@ -145,6 +190,8 @@ R378(f). (g)'s naming of arena legality stands in this Status line (R378(h)); th
 (f)'s target form moved again by R379(b): the α = 0.5 mixture where the searched mass on the proof reads below 0.5, row
 by row; and a root whose every searched move is vetoed is re-searched over the non-vetoed set, whose search sets the
 row's target and the played move. (f)'s rule stands.
+That re-search is RETRACTED by R380(b): a root whose every audited move is vetoed records no policy target and plays the
+audit's best hold; the row-wise mixture stands under test (R380(d)).
 
 ---
 
@@ -176,6 +223,7 @@ Status: standing. Ratifies SIX-RUNG under R375(a) by (a); makes R375(c)'s choice
 TACTICS-DEPLOY RATIFIED by R378(a), and run11 arms its block of record in self-play and at deploy alike.
 TACTICS-SELFPLAY's screen stands and the lever is not adopted from it (R379(a)); run11 arms tactics in self-play only on
 TACTICS-SELFPLAY-2's pass, since (d) forbids a plain self-play under a tactics deploy (R379(c)).
+That condition moves to TACTICS-SELFPLAY-3's pass, or to arm A's feed as measured if its mixture dies (R380(d)).
 (e) CONSTRUED by R377(c): a descent that ends at a proven terminal is a simulation, and the served-sims witness counts it;
 and by R378(c): whatever backed the value (the net, the table or the solver), and the witness pins all three cases.
 

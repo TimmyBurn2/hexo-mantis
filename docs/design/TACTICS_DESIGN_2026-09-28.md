@@ -4,7 +4,8 @@ Status: **ACCEPTED by R377** (2026-09-28), which rules §12's questions; where i
 `docs/governance/RULINGS.md` and this text differ, the ruling governs. **R378** (2026-09-29) rules §12 Q5 by (c),
 amends §6's proven-root target form by (e) and extends §11's twin witness by (f); the same precedence holds.
 **R379** (2026-09-30) replaces (e)'s median rule and the all-vetoed root's empty row in §6 by (b); the same precedence
-holds.
+holds. **R380** (2026-09-30) retracts R379(b)'s re-search (F1) at deploy and in self-play and keeps the row-wise mixing
+(F2) under test; the same precedence holds.
 Was: **DESIGN** (the TACTICS-DESIGN packet under R376(d); CARD-TACTICS-LANE re-aimed to it). No code, config
 or mint change rides this document. It chooses the kind of the ONE exact tactics module, specifies its API and
 its wiring at deploy and in self-play, and scopes TACTICS-DEPLOY and TACTICS-SELFPLAY. The readings it stands on
@@ -421,6 +422,9 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
   left as searched and the row records no policy target, as a lost root's does (`emptied_target_rows`).
   REPLACED by R379(b), at deploy and in self-play alike: such a root is re-searched over the non-vetoed set at the
   same budget; that search's improved policy is the row's target and its winner the played move.
+  RETRACTED by R380(b), at deploy and in self-play alike: such a root records no policy target and plays the audit's
+  best hold, as arm A did, R378(e)'s decided root by another route. The F1 bullets below record what TACTICS-SELFPLAY-2
+  built and ran; TACTICS-SELFPLAY-3 lands the retraction in code (R380(f)).
   - Built (TACTICS-SELFPLAY-2 F1, as its review amended it). The letter, "every searched move is vetoed", cannot
     fire under Gumbel (the audit walks k + 1 = 5 of m = 16 candidates), so the build reads it in two parts, stated to
     the operator with the exit:

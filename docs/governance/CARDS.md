@@ -36,9 +36,25 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R380 (THE FEED THAT PASSED; 2026-09-30) — F1 retracted, F2 under test
+
+- **CARD-TACTICS-SELFPLAY-3 — ORDERED by R380(d): one arm, A″ = arm A's feed with the row-wise mixing (F2), 12k steps,
+  same parent (run8@45k) and seed, against TACTICS-SELFPLAY's recorded A and B saves.**
+  - Its code starts from `tactics-selfplay-2`'s tip, lands F1's retraction (R380(b)) and merges as one branch (R380(f)).
+  - The witnesses, in order:
+    - the exams and ring bands at every save: a floor miss halts and kills F2. T4's "all" floors halt; the per-length
+      rows and every ceiling report (R380(e));
+    - T4 prior at 12k beside A@12k, F2's pre-registered direction;
+    - R379(c)'s pass line on the shipped head against B@12k (0.477).
+  - Throughput screens at 0.9× arm A's positions/h over the same steps (R380(e)).
+  - If F2 dies, run11 takes arm A's feed as measured.
+  - The box stays through it, within 7 box-h (R380(g)).
+
 ## Opened by R379 (THE SECOND TWIN; 2026-09-30) — the feed, the second twin, CENSUS-1 accepted
 
-- **CARD-TACTICS-SELFPLAY-2 — HALTED 2026-09-30 at arm A′'s 3k save; the architect rules next. Was IN PROGRESS: the
+- **CARD-TACTICS-SELFPLAY-2 — RULED by R380(a): the halt stands; no reading of A′ is a strength reading and none of its
+  saves is a parent candidate; F1 is retracted (R380(b)) and the lane continues as CARD-TACTICS-SELFPLAY-3. HALTED
+  2026-09-30 at arm A′'s 3k save. Was IN PROGRESS: the
   TACTICS-SELFPLAY-2 packet (2026-09-30), worktree `.wt/tactics-selfplay-2`, box T ≤ 7 box-h. ORDERED by R379(c): one
   arm with R379(b)'s feed against TACTICS-SELFPLAY's recorded arms.**
   - The halt: T4 floor misses at 3k (overall P 0.127, V 0.133 against A's 0.249 / 0.528 and B's 0.239 / 0.565; 2-turn
@@ -97,7 +113,9 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by the TACTICS-SELFPLAY packet (2026-09-29)
 
-- **CARD-TACTICS-TARGET-FEED — RULED by R379(b), and the treatment of TACTICS-SELFPLAY-2 (CARD-TACTICS-SELFPLAY-2):
+- **CARD-TACTICS-TARGET-FEED — option (c) RETRACTED by R380(b): an all-vetoed root records no policy target and plays
+  the audit's best hold, as arm A did; the row-wise mixing is under test in CARD-TACTICS-SELFPLAY-3 (R380(d)). Was
+  RULED by R379(b), and the treatment of TACTICS-SELFPLAY-2 (CARD-TACTICS-SELFPLAY-2):
   the card's option (c) for the all-vetoed root, at deploy and in self-play alike, and the proven-root mixture decided
   row by row, replacing R378(e)'s median rule; TACTICS-SELFPLAY-2 builds them as F1 (the re-search) and F2 (the
   row-wise mixing). Was CARDED for the architect: what the tactics module teaches the policy in self-play.**
@@ -309,7 +327,7 @@ Both were found by running the gate set rather than by reading it, and both are 
     12 turns / 60 000 nodes (f_corr 0.455 [0.385, 0.515]), but 16 of 20 played out with Six on both seats are
     still lost within 13 opponent turns.
 - **CARD-RUN11-DESIGN — HELD on CARD-TACTICS-LANE's deploy read (R376(c)), now CARD-TACTICS-DEPLOY's (R377); that
-  read is RATIFIED by R378(a). Its self-play tactics wait on CARD-TACTICS-SELFPLAY-2's pass (R379(c)).** Until run11's
+  read is RATIFIED by R378(a). Its self-play tactics wait on CARD-TACTICS-SELFPLAY-3's pass, or take arm A's feed as measured if F2 dies (R380(d)).** Until run11's
   mint replaces it,
   `configs/run10.yaml` stays the production config the instruments read; run10 will not START. The design
   carries:
@@ -325,7 +343,7 @@ Both were found by running the gate set rather than by reading it, and both are 
   - CARD-ORIGIN-RULE, which lands in RUN11-PREP (R377(g)).
   - The deploy block of record (leaf 256/3, root 20 000/8, audit 2 000/8), armed at run11's mint by the operator's
     word, in self-play and at deploy alike (R378(a)), with the gate deploy-matched (R378(d),
-    CARD-GATE-DEPLOY-MATCHED). In self-play only on CARD-TACTICS-SELFPLAY-2's pass (R379(c)).
+    CARD-GATE-DEPLOY-MATCHED). In self-play only on CARD-TACTICS-SELFPLAY-3's pass, or with arm A's feed as measured if F2 dies (R380(d)).
   - Carried from CENSUS-1 by R379(d):
     - sync cadence 50 (TACTICS-SELFPLAY's P4 read the in-run cache hit at 33 % there, against 24.5 % at 2);
     - HL-Gauss as a screened lever (C5: it passes its lines, no gain resolved at one seed);

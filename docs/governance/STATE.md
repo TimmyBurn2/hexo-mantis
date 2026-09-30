@@ -7,11 +7,26 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
-**R379 (2026-09-30): THE SECOND TWIN. TACTICS-SELFPLAY's screen stands and the lever is not adopted from it; the
-feed is ruled, and TACTICS-SELFPLAY-2 is ordered (CARD-TACTICS-SELFPLAY-2). CENSUS-1 is accepted.** The tactics
-lane still goes first and run10 will not START (R376(c)). `configs/run10.yaml` stays the production config the
-instruments read until run11's mint replaces it. run11 arms the deploy block at its mint by the operator's word
-(R378(a)), and in self-play only on TACTICS-SELFPLAY-2's pass (R379(c), CARD-RUN11-DESIGN).
+**R380 (2026-09-30): THE FEED THAT PASSED. TACTICS-SELFPLAY-2's halt stands; the re-search (F1) is retracted,
+self-play and deploy alike; the row-wise mixing (F2) stands as one unmeasured lever, and TACTICS-SELFPLAY-3 is ordered
+(CARD-TACTICS-SELFPLAY-3).** The tactics lane still goes first and run10 will not START (R376(c)).
+`configs/run10.yaml` stays the production config the instruments read until run11's mint replaces it. run11 arms the
+deploy block at its mint by the operator's word (R378(a)), and in self-play on TACTICS-SELFPLAY-3's pass, or with arm
+A's feed as measured if F2 dies (R380(d), CARD-RUN11-DESIGN).
+
+- **R380's order.**
+  - The halt stands (R380(a)): no reading of A′ is a strength reading, and none of its saves is a parent candidate.
+  - F1 is retracted (R380(b)): a root whose every audited move is vetoed records no policy target and plays the
+    audit's best hold, as arm A did. The deploy block of record is unchanged. The mechanism of record, post-hoc and
+    untested (R380(c)): F1's move rule ended each forced endgame at its first link (proven turn starts 282 against
+    1,191), taking the 2–5-turn chain off the ring.
+  - TACTICS-SELFPLAY-3 (R380(d)): one arm, A″ = arm A's feed with F2, 12k steps, same parent and seed, against the
+    recorded A and B saves. A floor miss at any save halts and kills F2; T4 prior at 12k beside A@12k is F2's
+    pre-registered direction; the pass line is R379(c)'s, the shipped head against B@12k.
+  - The rules (R380(e)): T4's "all" floors halt; the per-length rows and every ceiling report. Throughput screens at
+    0.9× arm A's positions/h over the same steps.
+  - The branch (R380(f)): `tactics-selfplay-2` is not merged; TACTICS-SELFPLAY-3 starts from its tip, lands the
+    retraction, and merges as one branch. The box stays through TACTICS-SELFPLAY-3, within 7 box-h (R380(g)).
 
 - **R379's order.**
   - The readings (R379(a)): the T4 and defence exams are the starvation instrument; the deploy-matched head is the
@@ -19,12 +34,12 @@ instruments read until run11's mint replaces it. run11 arms the deploy block at 
     at least two saves.
   - The feed (R379(b)), at deploy and in self-play alike: a root whose every searched move is vetoed is re-searched
     over the non-vetoed set at the same budget, and that search's improved policy is the row's target and its winner
-    the played move. A proven root's target mixes the proof at α = 0.5 only where the searched mass on it reads below
-    0.5, row by row, replacing R378(e)'s median rule.
+    the played move (RETRACTED by R380(b)). A proven root's target mixes the proof at α = 0.5 only where the searched
+    mass on it reads below 0.5, row by row, replacing R378(e)'s median rule (under test, R380(d)).
   - TACTICS-SELFPLAY-2 (R379(c)): one arm with the feed against the recorded arms; it passes when the deploy-matched
     reading's lower bound is above zero. **HALTED 2026-09-30 at arm A′'s 3k save** (CARD-TACTICS-SELFPLAY-2): T4 floor
     misses at every proof length (overall P 0.127, V 0.133 against A's 0.249 / 0.528) and the near-terminal band
-    outside; no cell ran, and the architect rules next. The feed is built on branch `tactics-selfplay-2` (unpushed).
+    outside; no cell ran. The halt stands (R380(a)). The feed is built on branch `tactics-selfplay-2` (unpushed).
   - CENSUS-1 (R379(d)): growth, the regret and restart family, the next-ply aux head and learning from Six's
     positions are parked (CARD-NET-EXPAND held, CARD-JK-LAST carded for throughput); six items are carried to run11's
     design; MCGS earns a deploy A/B later. Five of them are opened as cards (CARD-VALUE-HEAD-DEAD-OPENING,
@@ -131,7 +146,7 @@ run6's by R369's packet (W0).
 ## Where things live
 
 - Open work: `docs/governance/CARDS.md` (swept in W6; derived there, never enumerated here).
-- Rulings: `docs/governance/RULINGS.md`; the latest is R379.
+- Rulings: `docs/governance/RULINGS.md`; the latest is R380.
 - Laws and the protected set: `docs/governance/LAWS.md`, whose protected set names each
   invariant's pinning tests (R370(f)); `tests/test_protected_set_pins.py` fails if one is gone.
   Falsified work: `docs/governance/falsified.md`.
@@ -182,4 +197,5 @@ rewritten 2026-09-29 at R378 from the TACTICS-DEPLOY exit record (local) and the
 `dev` = `origin/dev` = `0204edf9` read before the edit. The TACTICS-SELFPLAY lines were updated 2026-09-29 at its
 exit from its exit record (local), on branch `tactics-selfplay` at `5db3280b`. The current phase was rewritten
 2026-09-30 at R379, with `dev` = `origin/dev` = `2d107c0f` read before the edit. The TACTICS-SELFPLAY-2 line was
-updated 2026-09-30 at its halt from its exit record (local), on branch `tactics-selfplay-2` at `2dde57aa`.
+updated 2026-09-30 at its halt from its exit record (local), on branch `tactics-selfplay-2` at `2dde57aa`. The
+current phase was rewritten 2026-09-30 at R380, on that branch at `7f351b54`.
