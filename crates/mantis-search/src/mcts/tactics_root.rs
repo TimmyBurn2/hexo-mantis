@@ -320,14 +320,17 @@ impl MCTSTree {
         }
         let facts = analyze(root);
         let decided = match facts.terminal {
-            Some(Terminal::Win) => facts.finish.first().map(|&s| (s, Decided::Finish)),
+            Some(Terminal::Win) => facts
+                .finish
+                .first()
+                .map(|&s| (s, Decided::Finish, facts.finish.clone())),
             Some(Terminal::Loss) => {
                 t.counters.decided_lost += 1;
                 None
             }
             None if !facts.forced.is_empty() => None,
             None => match stored {
-                Some(s) => Some((s, Decided::StoredProof)),
+                Some(s) => Some((s, Decided::StoredProof, vec![s])),
                 None if root.moves_remaining == 2 && t.config.root_nodes > 0 => {
                     let solved =
                         t.solver
@@ -337,9 +340,9 @@ impl MCTSTree {
                             [a, b] => {
                                 t.next_proof_stone =
                                     Some((with_stone(key, a, root.current_player), b));
-                                Some((a, Decided::Proof))
+                                Some((a, Decided::Proof, vec![a, b]))
                             }
-                            [a] => Some((a, Decided::Proof)),
+                            [a] => Some((a, Decided::Proof, vec![a])),
                             _ => None,
                         },
                         Verdict::Unknown { exhausted: true } => {
@@ -352,14 +355,17 @@ impl MCTSTree {
                 None => None,
             },
         };
-        let Some(((q, r), row)) = decided else {
+        let Some(((q, r), row, proof)) = decided else {
             return Ok(None);
         };
-        if !root.legal_moves_set().contains(&(q, r)) {
+        let legal = root.legal_moves_set();
+        if !legal.contains(&(q, r)) {
             t.counters.proof_stone_illegal += 1;
             t.next_proof_stone = None;
             return Err(TacticsError::ProofStoneIllegal { q, r });
         }
+        // A pair's second stone may be legal only after its first: the proof a root target can hold is its legal part.
+        t.root_proof = proof.into_iter().filter(|c| legal.contains(c)).collect();
         match row {
             Decided::Finish => t.counters.finishes_played += 1,
             Decided::StoredProof => t.counters.proof_stones_played += 1,
@@ -1087,6 +1093,36 @@ mod tests {
         assert!(
             !all_vetoed(0.0, 0.0),
             "no veto holds mass: nothing to re-search"
+        );
+    }
+
+    /// PLANTED BREAK: record the played stone alone and the pair's second stone is missing.
+    #[test]
+    fn a_decided_root_names_its_proof_and_a_searched_root_none() {
+        let board = played(&FIX219);
+        let mut tree = armed(&board, ARMED);
+        assert_eq!(tree.root_offence(), Ok(Some((-4, -11))));
+        assert_eq!(tree.last_root_proof(), &[(-4, -11), (-4, -10)]);
+        let mut next = board.clone();
+        next.apply_move(-4, -11).expect("empty");
+        tree.new_game(next);
+        assert_eq!(tree.root_offence(), Ok(Some((-4, -10))));
+        assert_eq!(tree.last_root_proof(), &[(-4, -10)], "the stored stone");
+
+        let board = played(&P1_FOUR);
+        let mut tree = armed(&board, ARMED);
+        assert_eq!(tree.root_offence(), Ok(Some((-2, 0))));
+        assert_eq!(
+            tree.last_root_proof(),
+            &[(-2, 0), (-1, 0)],
+            "the finish's window"
+        );
+        tree.new_game(played(&FIX219[..16]));
+        assert!(tree.last_root_proof().is_empty(), "a new search clears it");
+        assert_eq!(tree.root_offence(), Ok(None));
+        assert!(
+            tree.last_root_proof().is_empty(),
+            "an undecided root has none"
         );
     }
 }

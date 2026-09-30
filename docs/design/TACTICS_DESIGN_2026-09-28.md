@@ -404,6 +404,13 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
     two-hot above.
   - REPLACED by R379(b), row by row: the target mixes the proof at α = 0.5 only where the searched mass on it reads
     below 0.5; elsewhere it is the searched target.
+  - Built (TACTICS-SELFPLAY-2 F2). `root_offence` names the proof (`MCTSTree::last_root_proof`): a finish's window
+    cells, a found proof's pair (or its one stone), or the stored stone; only its root-legal stones, since a pair's
+    second stone can be legal only after its first. The searched mass on it sums its cells in either order.
+    `mix_proof` sets the target to 0.5·searched + 0.5·proof, the proof's stones in equal shares, at every decided row
+    whatever its arm; `mixed_rows` counts the mixed rows among `proven_root_rows` (full draws). A Gumbel row stores
+    the proof's cells explicitly (`fitted_support`), taking slots from the lowest-mass candidates, since an unvisited
+    proof cell would otherwise sit in the prior-shaped tail.
 - **A vetoed cell outside the searched candidates (as built).** A Gumbel row stores its searched candidates only
   (`gumbel_m` slots), so such a cell is zeroed in the target but keeps its training-tail share; `vetoed_target_rows`
   counts only rows whose every veto holds no mass.

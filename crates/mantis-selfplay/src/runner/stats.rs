@@ -6,12 +6,13 @@ use std::sync::Arc;
 
 use mantis_search::mcts::TacticsCounters;
 
-/// The rows a self-play move adds beside its search's rows, in `MoveRow` order: full draws only, one kind a row.
-pub const MOVE_TACTICS_ROWS: [&str; 4] = [
+/// The rows a move adds beside its search's, in `MoveRow` order, full draws only: one kind a row, then the mixed sub-count.
+pub const MOVE_TACTICS_ROWS: [&str; 5] = [
     "proven_root_rows",
     "decided_lost_rows",
     "vetoed_target_rows",
     "emptied_target_rows",
+    "mixed_rows",
 ];
 
 /// A row a move records: a decided root's searched target, no policy at a lost or all-vetoed root, vetoes zeroed.
@@ -21,6 +22,7 @@ pub(crate) enum MoveRow {
     DecidedLost = 1,
     VetoedTarget = 2,
     EmptiedTarget = 3,
+    Mixed = 4,
 }
 
 /// Every search's tactics rows summed (`TacticsCounters::rows` order), then the move rows.

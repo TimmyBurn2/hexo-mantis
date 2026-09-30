@@ -27,7 +27,9 @@ use crate::replay::hexg::GraphRecord;
 
 use super::record::record_position_graph_dispatch;
 use super::stats::TacticsTotals;
-use super::tactics_move::{count_rows, fitted_support, zero_vetoes, TargetEdit, Written};
+use super::tactics_move::{
+    count_rows, fitted_support, mix_proof, zero_vetoes, TargetEdit, Written,
+};
 use super::PositionStats;
 
 /// A worker's inference seam, built once per worker thread; `Copy`, passed by value.
@@ -771,7 +773,7 @@ pub(crate) fn play_one_move(
     // move is vetoed is searched again without them: that search's target is the row's, its pick the move.
     let vetoes = tree.last_audit_vetoes().to_vec();
     let mut edit = zero_vetoes(&mut target_policy, &vetoes, board, agg_trunk_sz);
-    // Cells the sparse row stores whatever the search visited: a re-search's vetoes, which its tail must not feed.
+    // Cells the sparse row stores whatever the search visited: a re-search's vetoes and a mixed proof.
     let mut pinned: Vec<(i32, i32)> = Vec::new();
     if edit == TargetEdit::Emptied && tree.begin_research() {
         let again = match search_root(
@@ -803,6 +805,12 @@ pub(crate) fn play_one_move(
         target_policy = again.target;
         edit = zero_vetoes(&mut target_policy, &vetoes, board, agg_trunk_sz);
         pinned.clone_from(&vetoes);
+    }
+    // A decided root's target holding under half on its proof takes the proof in an even mixture, stored explicitly.
+    let proof = tree.last_root_proof().to_vec();
+    let mixed = decided.is_some() && mix_proof(&mut target_policy, &proof, board, agg_trunk_sz);
+    if mixed {
+        pinned.extend_from_slice(&proof);
     }
     let rows = tree.tactics_counters();
     let decided_lost = rows.decided_lost > 0;
@@ -881,6 +889,7 @@ pub(crate) fn play_one_move(
             decided: decided.is_some(),
             decided_lost,
             edit,
+            mixed,
         };
         count_rows(accumulators.tactics_totals, &rows, &written, &vetoes);
     }

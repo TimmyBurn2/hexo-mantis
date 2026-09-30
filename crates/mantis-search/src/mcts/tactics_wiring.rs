@@ -203,6 +203,8 @@ pub(crate) struct TacticsState {
     pub(crate) root_excluded: Vec<(i32, i32)>,
     /// The move this search's audit played, `None` before it runs.
     pub(crate) audit_pick: Option<(i32, i32)>,
+    /// The decided root's proof, its turn's stones in either order: the finish, the proof's pair, the stored stone.
+    pub(crate) root_proof: Vec<(i32, i32)>,
 }
 
 /// How a descent's leaf is spent: backed up inline, or evaluated by the net with the facts its expansion reads.
@@ -232,6 +234,7 @@ impl MCTSTree {
                 vetoes: Vec::new(),
                 root_excluded: Vec::new(),
                 audit_pick: None,
+                root_proof: Vec::new(),
             })
         });
     }
@@ -267,6 +270,14 @@ impl MCTSTree {
         self.tactics.as_deref().map_or(&[], |t| t.vetoes.as_slice())
     }
 
+    /// The legal stones of the proof `root_offence` decided this root by; empty on a root it did not decide.
+    #[must_use]
+    pub fn last_root_proof(&self) -> &[(i32, i32)] {
+        self.tactics
+            .as_deref()
+            .map_or(&[], |t| t.root_proof.as_slice())
+    }
+
     /// Refuse, as `TacticsError::RadiusBelowFive`, a board whose legal-move radius the armed block cannot run on.
     pub fn check_tactics_board(&self, board: &Board) -> Result<(), TacticsError> {
         match &self.tactics {
@@ -282,6 +293,7 @@ impl MCTSTree {
             t.vetoes.clear();
             t.root_excluded.clear();
             t.audit_pick = None;
+            t.root_proof.clear();
             t.solver_base = (t.solver.grid_overflows(), t.solver.three_cells_capped());
             t.solver.clear();
         }
