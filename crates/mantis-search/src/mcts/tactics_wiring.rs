@@ -102,6 +102,8 @@ pub struct TacticsCounters {
     pub audit_exhausted: u64,
     pub audit_swaps: u64,
     pub audit_unvetted: u64,
+    pub research_count: u64,
+    pub research_over_hold: u64,
     pub proof_stone_illegal: u64,
     pub grid_overflows: u64,
     pub three_cells_capped: u64,
@@ -109,7 +111,7 @@ pub struct TacticsCounters {
 
 impl TacticsCounters {
     /// How many rows `rows` names.
-    pub const ROWS: usize = 25;
+    pub const ROWS: usize = 27;
 
     /// Every row by its one name, in one order; the destructuring stops a new field compiling unnamed.
     #[must_use]
@@ -137,6 +139,8 @@ impl TacticsCounters {
             audit_exhausted,
             audit_swaps,
             audit_unvetted,
+            research_count,
+            research_over_hold,
             proof_stone_illegal,
             grid_overflows,
             three_cells_capped,
@@ -164,6 +168,8 @@ impl TacticsCounters {
             ("audit_exhausted", audit_exhausted),
             ("audit_swaps", audit_swaps),
             ("audit_unvetted", audit_unvetted),
+            ("research_count", research_count),
+            ("research_over_hold", research_over_hold),
             ("proof_stone_illegal", proof_stone_illegal),
             ("grid_overflows", grid_overflows),
             ("three_cells_capped", three_cells_capped),
@@ -193,6 +199,10 @@ pub(crate) struct TacticsState {
     pub(crate) next_hold_stone: Option<(u128, (i32, i32))>,
     /// The candidates this search's audit proved to allow an opponent win, in the order it walked them.
     pub(crate) vetoes: Vec<(i32, i32)>,
+    /// The cells a re-search's root leaves out: the vetoes of the search it repeats; empty on a first search.
+    pub(crate) root_excluded: Vec<(i32, i32)>,
+    /// The move this search's audit played, `None` before it runs.
+    pub(crate) audit_pick: Option<(i32, i32)>,
 }
 
 /// How a descent's leaf is spent: backed up inline, or evaluated by the net with the facts its expansion reads.
@@ -220,6 +230,8 @@ impl MCTSTree {
                 next_proof_stone: None,
                 next_hold_stone: None,
                 vetoes: Vec::new(),
+                root_excluded: Vec::new(),
+                audit_pick: None,
             })
         });
     }
@@ -268,6 +280,8 @@ impl MCTSTree {
         if let Some(t) = self.tactics.as_deref_mut() {
             t.counters = TacticsCounters::default();
             t.vetoes.clear();
+            t.root_excluded.clear();
+            t.audit_pick = None;
             t.solver_base = (t.solver.grid_overflows(), t.solver.three_cells_capped());
             t.solver.clear();
         }

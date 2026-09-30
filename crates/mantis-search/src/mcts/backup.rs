@@ -324,6 +324,19 @@ impl MCTSTree {
             return;
         }
 
+        // A re-search's root leaves out the vetoes of the search it repeats; `begin_research` leaves one move at least.
+        let kept: Option<FxHashSet<(i32, i32)>> = match self.tactics.as_deref() {
+            Some(t) if leaf_idx == 0 && !t.root_excluded.is_empty() => Some(
+                legal_moves
+                    .iter()
+                    .copied()
+                    .filter(|c| !t.root_excluded.contains(c))
+                    .collect(),
+            ),
+            _ => None,
+        };
+        let legal_moves = kept.as_ref().unwrap_or(legal_moves);
+
         // The ROOT's cap is the dialect's; `leaf_idx == 0` IS the root, since slot 0 is never
         // reallocated.
         let cap = self.expansion_cap(leaf_idx);

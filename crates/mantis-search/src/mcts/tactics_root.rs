@@ -6,9 +6,18 @@ use mantis_core::board::Board;
 use super::gumbel_mctx::MctxRootState;
 use super::kind::SearchKind;
 use super::node::Node;
-use super::tactics_wiring::{AuditConfig, AuditMode, TacticsError, TacticsState};
+use super::tactics_wiring::{AuditConfig, AuditMode, TacticsCounters, TacticsError, TacticsState};
 use super::MCTSTree;
 use crate::tactics::{analyze, position_key, with_stone, Terminal, Verdict};
+
+/// The mass a searched target may keep off its vetoed moves and still read as all-vetoed.
+pub const ALL_VETOED_TOL: f64 = 1e-4;
+
+/// Whether a target of mass `total` puts all but `ALL_VETOED_TOL` of it on vetoed moves, which hold `vetoed`.
+#[must_use]
+pub fn all_vetoed(total: f64, vetoed: f64) -> bool {
+    vetoed > 0.0 && total - vetoed <= ALL_VETOED_TOL
+}
 
 /// The opponent's standing after our turn: no proof (the turn holds), a proof in this many turns, or no budget left.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -412,7 +421,59 @@ impl MCTSTree {
         if played != chosen {
             t.counters.audit_swaps += 1;
         }
+        t.audit_pick = Some(played);
         played
+    }
+
+    /// Whether the last audit vetoed every move holding mass in this kind's own target at temperature 1.
+    #[must_use]
+    pub fn searched_all_vetoed(&self) -> bool {
+        let mut vetoes = self.last_audit_vetoes().to_vec();
+        if vetoes.is_empty() {
+            return false;
+        }
+        vetoes.sort_unstable();
+        vetoes.dedup();
+        // No window: every child lands in the overflow map, keyed by its cell.
+        let target = if self.kind.completed_q_target() {
+            self.get_improved_policy_ls(0, self.q_sigma)
+        } else {
+            self.get_policy_ls(1.0, 0)
+        };
+        let mass = |c: &(i32, i32)| target.overflow.get(c).map_or(0.0, |&p| f64::from(p));
+        let total: f64 = target.overflow.values().map(|&p| f64::from(p)).sum();
+        all_vetoed(total, vetoes.iter().map(mass).sum())
+    }
+
+    /// Re-arm the root to search without the last audit's vetoes, rows carried; `false` with no veto, lost, or no move left.
+    pub fn begin_research(&mut self) -> bool {
+        let Some(t) = self.tactics.as_deref() else {
+            return false;
+        };
+        let legal = self.root_board.legal_moves_set();
+        if t.vetoes.is_empty()
+            || t.counters.decided_lost > 0
+            || legal.iter().all(|c| t.vetoes.contains(c))
+        {
+            return false;
+        }
+        let (counters, vetoes, base) = (t.counters, t.vetoes.clone(), t.solver_base);
+        // The audit held on a move it did not veto, which the re-search's winner replaces.
+        let over_hold = t.audit_pick.is_some_and(|pick| !vetoes.contains(&pick));
+        self.new_game(self.root_board.clone());
+        if let Some(t) = self.tactics.as_deref_mut() {
+            t.counters = TacticsCounters {
+                research_count: counters.research_count + 1,
+                research_over_hold: counters.research_over_hold + u64::from(over_hold),
+                ..counters
+            };
+            t.root_excluded.clone_from(&vetoes);
+            t.vetoes = vetoes;
+            t.solver_base = base;
+            // The first audit's stored hold was for a vetoed first stone, which the re-search cannot play.
+            t.next_hold_stone = None;
+        }
+        true
     }
 }
 
@@ -878,5 +939,154 @@ mod tests {
             }
             assert_eq!(tree.root_audit((-10, 0), None), HOLDS_16[0], "{planted:?}");
         }
+    }
+
+    fn uniform() -> Vec<f32> {
+        let n = mantis_core::board::BOARD_SIZE * mantis_core::board::BOARD_SIZE + 1;
+        vec![1.0 / n as f32; n]
+    }
+
+    fn child_cells(tree: &MCTSTree) -> Vec<(i32, i32)> {
+        let root = tree.pool[0];
+        (root.first_child..root.first_child + u32::from(root.n_children))
+            .map(|i| tree.pool[i as usize].cell())
+            .collect()
+    }
+
+    /// `FIX219[..16]` with three losing candidates, all vetoed by a narrow audit: every searched move is vetoed.
+    fn all_vetoed_root() -> MCTSTree {
+        let narrow = with_audit(AuditConfig { k: 2, ..AUDIT });
+        let mut tree = last_stone_root(&[(-20, 0), (-21, 0)], narrow);
+        assert_eq!(tree.root_audit((-10, 0), None), (-10, 0), "the best hold");
+        assert_eq!(tree.last_audit_vetoes(), &[(-10, 0), (-20, 0), (-21, 0)]);
+        tree
+    }
+
+    /// PLANTED BREAK: drop `begin_research`'s `root_excluded` and the vetoed cells come back as root children.
+    #[test]
+    fn an_all_vetoed_root_is_re_searched_without_its_vetoes_and_its_first_rows_carried() {
+        let mut tree = all_vetoed_root();
+        assert!(tree.searched_all_vetoed());
+        let first = counters(&tree);
+        assert!(tree.begin_research());
+        let c = counters(&tree);
+        assert_eq!(
+            TacticsCounters {
+                research_count: 0,
+                research_over_hold: 0,
+                ..c
+            },
+            first,
+            "the first search's rows are carried whole"
+        );
+        assert_eq!(
+            (c.research_count, c.research_over_hold),
+            (1, 0),
+            "a best hold: no hold replaced"
+        );
+        assert_eq!(tree.last_audit_vetoes(), &[(-10, 0), (-20, 0), (-21, 0)]);
+        assert!(!tree.pool[0].is_expanded(), "the root is searched afresh");
+
+        // The root expands over the legal set less the vetoes; a plain search of the same root keeps all three.
+        let mut plain = armed(&tree.root_board.clone(), ARMED);
+        for t in [&mut tree, &mut plain] {
+            assert_eq!(t.select_leaves(1).expect("no desync").len(), 1);
+            t.expand_and_backup(&[uniform()], &[0.0]);
+        }
+        let (kept, all) = (child_cells(&tree), child_cells(&plain));
+        assert_eq!(kept.len() + 3, all.len());
+        for veto in [(-10, 0), (-20, 0), (-21, 0)] {
+            assert!(all.contains(&veto) && !kept.contains(&veto), "{veto:?}");
+        }
+        let root = tree.root_board.clone();
+        tree.new_game(root);
+        assert_eq!(
+            counters(&tree).research_count,
+            0,
+            "a new search starts clean"
+        );
+        assert!(tree.last_audit_vetoes().is_empty());
+    }
+
+    #[test]
+    fn a_re_search_is_refused_with_no_veto_at_a_lost_root_or_with_no_legal_move_left() {
+        let mut held = last_stone_root(&[HOLDS_16[0]], ARMED);
+        assert_eq!(held.root_audit(HOLDS_16[0], None), HOLDS_16[0]);
+        assert!(!held.searched_all_vetoed() && !held.begin_research());
+
+        let mut lost = armed(&played(&P2_FOUR_ONE_LEFT), ARMED);
+        assert_eq!(lost.root_offence(), Ok(None));
+        let every: Vec<(i32, i32)> = lost.root_board.legal_moves();
+        if let Some(t) = lost.tactics.as_deref_mut() {
+            t.vetoes = every[..1].to_vec();
+        }
+        assert!(!lost.begin_research(), "a lost root: every move loses");
+
+        let mut tree = all_vetoed_root();
+        let every: Vec<(i32, i32)> = tree.root_board.legal_moves();
+        if let Some(t) = tree.tactics.as_deref_mut() {
+            t.vetoes = every;
+        }
+        assert!(!tree.begin_research(), "nothing left to search");
+        assert_eq!(counters(&tree).research_count, 0);
+
+        let mut off = MCTSTree::new(1.5);
+        off.new_game(played(&FIX219[..16]));
+        assert!(!off.searched_all_vetoed() && !off.begin_research());
+    }
+
+    #[test]
+    fn a_target_is_all_vetoed_only_when_no_unvetoed_move_holds_mass_under_either_kind() {
+        // PUCT reads visits at temperature 1: a visited hold keeps mass.
+        let mut tree = last_stone_root(
+            &[(-20, 0), HOLDS_16[0]],
+            with_audit(AuditConfig { k: 2, ..AUDIT }),
+        );
+        assert_eq!(tree.root_audit((-10, 0), None), HOLDS_16[0]);
+        assert_eq!(tree.last_audit_vetoes(), &[(-10, 0), (-20, 0)]);
+        assert!(!tree.searched_all_vetoed());
+
+        // Gumbel reads the completed-Q policy: the vetoed pair's Q puts all but a trace of the mass on it.
+        let root = played(&FIX219[..16]);
+        for (hold_q, want) in [(-1.0f32, true), (1.0, false)] {
+            let mut tree = armed(&root, with_audit(AuditConfig { k: 2, ..AUDIT }));
+            tree.configure_search(SearchKind::Gumbel, tree.q_sigma());
+            tree.new_game(root.clone());
+            let kids = expand(&mut tree, 0, &[(-10, 0), (-20, 0), HOLDS_16[0]], 20);
+            tree.pool[0].n_visits = 60;
+            // A child's value is its own mover's: with one stone left that is the opponent, so Q flips sign.
+            let sign = if tree.pool[0].moves_remaining == 1 {
+                -1.0
+            } else {
+                1.0
+            };
+            for (&i, q) in kids.iter().zip([1.0f32, 1.0, hold_q]) {
+                let n = tree.pool[i as usize].n_visits as f32;
+                tree.pool[i as usize].w_value = sign * q * n;
+            }
+            let order = ranked_children(&tree.pool, 0);
+            assert_eq!(tree.root_audit((-10, 0), Some(&order)), HOLDS_16[0]);
+            assert_eq!(tree.searched_all_vetoed(), want, "hold Q {hold_q}");
+            if want {
+                assert!(tree.begin_research());
+                let c = counters(&tree);
+                assert_eq!(
+                    (c.research_count, c.research_over_hold),
+                    (1, 1),
+                    "the audit's hold is what the re-search replaces"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn all_vetoed_reads_the_mass_left_off_the_vetoes_against_its_tolerance() {
+        assert!(all_vetoed(1.0, 1.0));
+        assert!(all_vetoed(1.0, 1.0 - ALL_VETOED_TOL));
+        assert!(!all_vetoed(1.0, 1.0 - 2.0 * ALL_VETOED_TOL));
+        assert!(
+            !all_vetoed(0.0, 0.0),
+            "no veto holds mass: nothing to re-search"
+        );
     }
 }

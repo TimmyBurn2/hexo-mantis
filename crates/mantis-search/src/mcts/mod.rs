@@ -33,6 +33,7 @@ pub use gumbel_mctx::MctxRootState;
 pub use kind::SearchKind;
 pub use node::{pack_cell, CachedPolicy, Node, TTEntry, MAX_NODES, VIRTUAL_LOSS_PENALTY};
 pub use selection::{ForcedChildOutOfRange, ForcedSelectionError, SelectionDesync};
+pub use tactics_root::{all_vetoed, ALL_VETOED_TOL};
 pub use tactics_wiring::{
     AuditConfig, AuditMode, TacticsConfig, TacticsCounters, TacticsError, MIN_TACTICS_RADIUS,
     TACTICS_TABLE_ENTRIES,

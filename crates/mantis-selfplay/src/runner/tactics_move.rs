@@ -1,11 +1,11 @@
 //! A self-play target under tactics: vetoed moves carry zero mass, and the move rows are read off the row written.
 
+use fxhash::FxHashSet;
 use mantis_core::Board;
-use mantis_search::mcts::TacticsCounters;
+use mantis_search::mcts::{all_vetoed, TacticsCounters};
 use mantis_search::LegalSetPolicy;
 
 use super::stats::{MoveRow, TacticsTotals};
-use crate::records::TARGET_MASS_TOL;
 use crate::replay::hexg::GraphRecord;
 
 /// What zeroing the vetoes did to a target.
@@ -15,7 +15,7 @@ pub(crate) enum TargetEdit {
     Unchanged,
     /// The vetoed mass is gone and the rest sums to one again.
     Zeroed,
-    /// Every unit of mass sat on vetoed cells: the target is left as searched, and its row records no policy.
+    /// Every unit of mass sat on vetoed cells: the target is left as searched, for the root's re-search to replace.
     Emptied,
 }
 
@@ -44,7 +44,7 @@ pub(crate) fn zero_vetoes(
         .chain(ls.overflow.values())
         .map(|&p| f64::from(p))
         .sum();
-    if total - removed <= TARGET_MASS_TOL {
+    if all_vetoed(total, removed) {
         return TargetEdit::Emptied;
     }
     for &(q, r) in &cells {
@@ -61,6 +61,38 @@ pub(crate) fn zero_vetoes(
         .chain(ls.overflow.values_mut())
         .for_each(|p| *p *= scale);
     TargetEdit::Zeroed
+}
+
+/// The sparse row's support: its candidates, and `pinned` cells the prior-shaped tail would misstate, within `cap`.
+pub(crate) fn fitted_support(
+    candidates: Vec<(i32, i32)>,
+    pinned: &[(i32, i32)],
+    target: &LegalSetPolicy,
+    board: &Board,
+    trunk_sz: i32,
+    cap: usize,
+) -> FxHashSet<(i32, i32)> {
+    let legal = board.legal_moves_set();
+    let mut pins: Vec<(i32, i32)> = pinned
+        .iter()
+        .copied()
+        .filter(|c| legal.contains(c))
+        .collect();
+    pins.sort_unstable();
+    pins.dedup();
+    pins.truncate(cap);
+    let (bcq, bcr) = board.window_center();
+    let half = (trunk_sz - 1) / 2;
+    let mut rest: Vec<((i32, i32), f32)> = candidates
+        .into_iter()
+        .filter(|c| !pins.contains(c))
+        .map(|(q, r)| ((q, r), target.get(q, r, bcq, bcr, trunk_sz, half, 0.0)))
+        .collect();
+    rest.sort_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
+    rest.truncate(cap - pins.len());
+    pins.into_iter()
+        .chain(rest.into_iter().map(|(c, _)| c))
+        .collect()
 }
 
 /// The record's side of a move: the row written, the arm drawn, and what the root and the vetoes made of it.
@@ -189,6 +221,101 @@ mod tests {
             mass(&ls, &board, (1, 0)),
             1.0,
             "an emptied target stays as searched: its row records no policy"
+        );
+    }
+
+    fn support(cells: &[(i32, i32)]) -> Vec<(i32, i32)> {
+        let mut v = cells.to_vec();
+        v.sort_unstable();
+        v
+    }
+
+    fn sorted(set: fxhash::FxHashSet<(i32, i32)>) -> Vec<(i32, i32)> {
+        let mut v: Vec<(i32, i32)> = set.into_iter().collect();
+        v.sort_unstable();
+        v
+    }
+
+    /// PLANTED BREAK: drop `fitted_support`'s pins and a vetoed cell leaves the row, for the tail to feed.
+    #[test]
+    fn pinned_cells_take_slots_from_the_lowest_mass_candidates_within_the_cap() {
+        let (board, ls) = target(&[((1, 0), 0.5), ((2, 0), 0.3), ((3, 0), 0.15), ((4, 0), 0.05)]);
+        let candidates = vec![(1, 0), (2, 0), (3, 0), (4, 0)];
+        assert_eq!(
+            sorted(fitted_support(
+                candidates.clone(),
+                &[],
+                &ls,
+                &board,
+                TRUNK,
+                4
+            )),
+            support(&candidates),
+            "no pin: the searched candidates, as before"
+        );
+        assert_eq!(
+            sorted(fitted_support(
+                candidates.clone(),
+                &[(5, 0)],
+                &ls,
+                &board,
+                TRUNK,
+                4
+            )),
+            support(&[(1, 0), (2, 0), (3, 0), (5, 0)]),
+            "a pin displaces the lowest-mass candidate"
+        );
+        assert_eq!(
+            sorted(fitted_support(
+                candidates.clone(),
+                &[(5, 0), (2, 0)],
+                &ls,
+                &board,
+                TRUNK,
+                4
+            )),
+            support(&[(1, 0), (2, 0), (3, 0), (5, 0)]),
+            "a pinned candidate keeps its one slot"
+        );
+        assert_eq!(
+            sorted(fitted_support(
+                candidates,
+                &[(5, 0), (400, 400)],
+                &ls,
+                &board,
+                TRUNK,
+                8
+            )),
+            support(&[(1, 0), (2, 0), (3, 0), (4, 0), (5, 0)]),
+            "room for all, and an illegal pin takes none"
+        );
+    }
+
+    #[test]
+    fn a_re_searched_row_stores_its_vetoes_at_zero_so_the_tail_cannot_reach_them() {
+        let (board, ls) = target(&[((1, 0), 0.6), ((2, 0), 0.3), ((3, 0), 0.1)]);
+        let set = fitted_support(vec![(1, 0), (2, 0)], &[(-2, 0)], &ls, &board, TRUNK, 2);
+        let rec = crate::records::record_position_graph(
+            &board,
+            &ls,
+            TRUNK,
+            board.current_player as i8,
+            board.moves_remaining,
+            board.ply.index() as u16,
+            true,
+            2,
+            Some(&set),
+        )
+        .expect("a fitted row records");
+        let stored: Vec<(i16, i16, f32)> = rec.visits.clone();
+        assert!(
+            stored.contains(&(-2, 0, 0.0)),
+            "the veto is explicit, at zero: {stored:?}"
+        );
+        assert!(stored.contains(&(1, 0, 0.6)));
+        assert!(
+            (rec.tail_mass - 0.4).abs() < 1e-6,
+            "the displaced candidates' mass joins the tail"
         );
     }
 }

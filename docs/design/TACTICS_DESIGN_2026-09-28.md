@@ -411,6 +411,20 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
   left as searched and the row records no policy target, as a lost root's does (`emptied_target_rows`).
   REPLACED by R379(b), at deploy and in self-play alike: such a root is re-searched over the non-vetoed set at the
   same budget; that search's improved policy is the row's target and its winner the played move.
+  - Built (TACTICS-SELFPLAY-2 F1). One test decides "all-vetoed": every unit of the searched target's mass on vetoed
+    moves (`all_vetoed`, tolerance 1e-4). Self-play reads its own row's target (PUCT's at the move's temperature);
+    deploy, with no row, reads the kind's own target at temperature 1 (`MCTSTree::searched_all_vetoed`).
+  - `MCTSTree::begin_research` re-arms the root without the vetoes and carries the first search's rows. It refuses a
+    lost root (every move loses; its row carries no policy) and a root with no legal move left. The root's forced
+    restriction applies to what is left; where every block was vetoed, the re-search runs over the rest.
+  - The winner is the kind's own pick (`select_move` in self-play, the head's `_search` at deploy), not audited again.
+    A root the mass test reads all-vetoed can still hold an audited move the target left without mass; the
+    re-search's winner replaces it, counted as `research_over_hold`.
+  - The re-searched row's sparse support stores the vetoes at zero (`fitted_support`), taking slots from the
+    lowest-mass candidates, whose mass joins the tail: a vetoed cell outside the support would take the tail's
+    prior-shaped share.
+  - Rows: `research_count` and `research_over_hold` (`TacticsCounters`, both homes). `emptied_target_rows` now
+    counts only an all-vetoed root no re-search could take.
 - **Lost roots in self-play.** A lost-on-cover root is searched (the root is always expanded), but every child
   loses. Following Six (`searchStone` marks it `decided`), its row carries NO policy target: counted as
   `decided_lost`, value target z. §12 Q3.
@@ -474,6 +488,9 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
   - Amended in place 2026-09-29 (P0): with tactics on, `served_leaves + solver_terminals + terminal_revisits +
     table_hits == descents`; with tactics off, served + inline + table == descents, and the deploy head's test reads
     root visits, not infer calls. In self-play a decided root is searched (R378(e)), so it spends its budget too.
+  - Amended in place (TACTICS-SELFPLAY-2 F1): a re-searched root runs two searches, each spending exactly its budget
+    (`max_sims_per_search` stays the budget), and both count, so a move's `descents` is `(1 + research_count) × n`;
+    the deploy head's `last_sims` sums both.
 - Every row gets a producer test (LAW-07) and an entry in `docs/contracts/event_manifest.md`.
 
 ## 8. Protected contact

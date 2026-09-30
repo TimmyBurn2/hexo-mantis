@@ -27,7 +27,7 @@ use crate::replay::hexg::GraphRecord;
 
 use super::record::record_position_graph_dispatch;
 use super::stats::TacticsTotals;
-use super::tactics_move::{count_rows, zero_vetoes, TargetEdit, Written};
+use super::tactics_move::{count_rows, fitted_support, zero_vetoes, TargetEdit, Written};
 use super::PositionStats;
 
 /// A worker's inference seam, built once per worker thread; `Copy`, passed by value.
@@ -539,6 +539,122 @@ fn record_shortfall(searches: &AtomicU64, descents: &AtomicU64, budget: usize, s
     }
 }
 
+/// What a searched root hands the move: the Gumbel state, the visit policy at the move's temperature and the target.
+struct Searched {
+    gumbel_state: Option<MctxRootState>,
+    policy: LegalSetPolicy,
+    target: LegalSetPolicy,
+}
+
+/// One move's search parameters, the same for its first search and a re-search.
+#[derive(Clone, Copy)]
+struct SearchRoot {
+    move_sims: usize,
+    temperature: f32,
+    policy_stride: usize,
+    agg_trunk_sz: i32,
+}
+
+/// Search the tree's root at the move's budget, count it, and read its policy and target; `Err` ends the move.
+#[allow(clippy::too_many_arguments)]
+fn search_root(
+    tree: &mut MCTSTree,
+    board: &Board,
+    search: SearchRoot,
+    ctx: MovePlayContext,
+    running: &AtomicBool,
+    rng: &mut ThreadRng,
+    infer: InferContext,
+    accumulators: MoveAccumulators,
+    fatal_latch: FatalDefectLatch,
+) -> Result<Searched, MoveOutcome> {
+    let (gumbel_state, sims_served) = match run_mcts_search(
+        tree,
+        board,
+        search.move_sims,
+        ctx.leaf_batch_size,
+        ctx.search_kind,
+        ctx.dirichlet_enabled,
+        ctx.dirichlet_alpha,
+        ctx.dirichlet_epsilon,
+        ctx.gumbel_m,
+        ctx.sigma,
+        running,
+        rng,
+        search.agg_trunk_sz,
+        infer,
+        GumbelRoundCounters {
+            round_leaves: accumulators.gumbel_round_leaves,
+            rounds: accumulators.gumbel_rounds,
+            dirichlet_root_fires: accumulators.dirichlet_root_fires,
+        },
+    ) {
+        McTSSearchResult::Completed(gs, sims_served) => {
+            // A MAX rather than a mean: a mean hides a single overshooting search.
+            accumulators
+                .max_sims_per_search
+                .fetch_max(sims_served as u64, Ordering::Relaxed);
+            (gs, sims_served)
+        }
+        McTSSearchResult::RootExpansionFailed => return Err(MoveOutcome::Continue),
+        // Store-then-halt on its OWN counter, so the supervisor reads the inference failure
+        // that killed the run instead of a refusal a hundred plies downstream.
+        McTSSearchResult::InferenceFailed(err) => {
+            fatal_latch.store_inference_failure(err.to_string());
+            return Err(MoveOutcome::Break);
+        }
+    };
+
+    if !running.load(Ordering::Relaxed) {
+        return Err(MoveOutcome::Break);
+    }
+    // After the stop check: `stop()` flips `running` before it closes the queue, so a search it cut is never counted.
+    record_shortfall(
+        accumulators.starved_searches,
+        accumulators.starved_descents,
+        search.move_sims,
+        sims_served,
+    );
+
+    // No visits, no target — BEFORE any exporter runs and arm-independent. `policy` below feeds
+    // BOTH the recorded target and the move played, so a zero-visit search would otherwise also
+    // sample its move from the prior fallback.
+    if let Err(err) = records::refuse_zero_visit_export(tree, board.ply.index() as u16) {
+        fatal_latch.store(err.to_string());
+        return Err(MoveOutcome::Break);
+    }
+
+    let policy = tree.get_policy_ls(search.temperature, search.policy_stride);
+
+    // Accumulate MCTS health stats once per search (not in the inner sim loop).
+    {
+        let (depth, conc) = tree.last_search_stats();
+        accumulators
+            .mcts_depth_accum
+            .fetch_add((depth * 1_000_000.0) as u64, Ordering::Relaxed);
+        accumulators
+            .mcts_conc_accum
+            .fetch_add((conc * 1_000_000.0) as u64, Ordering::Relaxed);
+        accumulators.mcts_stat_count.fetch_add(1, Ordering::Relaxed);
+        accumulators.mcts_quiescence_fires.fetch_add(
+            tree.quiescence_fire_count.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+    }
+
+    // The target's semantics are the search kind's own answer — no second flag can disagree.
+    let target = if ctx.search_kind.completed_q_target() {
+        tree.get_improved_policy_ls(search.policy_stride, ctx.sigma)
+    } else {
+        policy.clone()
+    };
+    Ok(Searched {
+        gumbel_state,
+        policy,
+        target,
+    })
+}
+
 /// Orchestrate one full move: playout-cap selection, MCTS search, stat accumulation,
 /// target-policy build, sampling, position recording (BEFORE apply), and apply-move.
 #[allow(clippy::too_many_arguments)]
@@ -593,62 +709,6 @@ pub(crate) fn play_one_move(
         }
     };
 
-    let (gumbel_state, sims_served) = match run_mcts_search(
-        tree,
-        board,
-        move_sims,
-        ctx.leaf_batch_size,
-        ctx.search_kind,
-        ctx.dirichlet_enabled,
-        ctx.dirichlet_alpha,
-        ctx.dirichlet_epsilon,
-        ctx.gumbel_m,
-        ctx.sigma,
-        running,
-        rng,
-        agg_trunk_sz,
-        infer,
-        GumbelRoundCounters {
-            round_leaves: accumulators.gumbel_round_leaves,
-            rounds: accumulators.gumbel_rounds,
-            dirichlet_root_fires: accumulators.dirichlet_root_fires,
-        },
-    ) {
-        McTSSearchResult::Completed(gs, sims_served) => {
-            // A MAX rather than a mean: a mean hides a single overshooting search.
-            accumulators
-                .max_sims_per_search
-                .fetch_max(sims_served as u64, Ordering::Relaxed);
-            (gs, sims_served)
-        }
-        McTSSearchResult::RootExpansionFailed => return MoveOutcome::Continue,
-        // Store-then-halt on its OWN counter, so the supervisor reads the inference failure
-        // that killed the run instead of a refusal a hundred plies downstream.
-        McTSSearchResult::InferenceFailed(err) => {
-            fatal_latch.store_inference_failure(err.to_string());
-            return MoveOutcome::Break;
-        }
-    };
-
-    if !running.load(Ordering::Relaxed) {
-        return MoveOutcome::Break;
-    }
-    // After the stop check: `stop()` flips `running` before it closes the queue, so a search it cut is never counted.
-    record_shortfall(
-        accumulators.starved_searches,
-        accumulators.starved_descents,
-        move_sims,
-        sims_served,
-    );
-
-    // No visits, no target — BEFORE any exporter runs and arm-independent. `policy` below feeds
-    // BOTH the recorded target and the move played, so a zero-visit search would otherwise also
-    // sample its move from the prior fallback.
-    if let Err(err) = records::refuse_zero_visit_export(tree, board.ply.index() as u16) {
-        fatal_latch.store(err.to_string());
-        return MoveOutcome::Break;
-    }
-
     // ── MCTS Policy with cosine-annealed temperature schedule ──
     let compound_move = ply_to_compound_move(board.ply.index() as usize);
     let temperature = if ctx.is_fast_game {
@@ -656,23 +716,26 @@ pub(crate) fn play_one_move(
     } else {
         compute_move_temperature(compound_move, ctx.temp_threshold, ctx.temp_min)
     };
-    let policy = tree.get_policy_ls(temperature, policy_stride);
-
-    // Accumulate MCTS health stats once per search (not in the inner sim loop).
-    {
-        let (depth, conc) = tree.last_search_stats();
-        accumulators
-            .mcts_depth_accum
-            .fetch_add((depth * 1_000_000.0) as u64, Ordering::Relaxed);
-        accumulators
-            .mcts_conc_accum
-            .fetch_add((conc * 1_000_000.0) as u64, Ordering::Relaxed);
-        accumulators.mcts_stat_count.fetch_add(1, Ordering::Relaxed);
-        accumulators.mcts_quiescence_fires.fetch_add(
-            tree.quiescence_fire_count.load(Ordering::Relaxed),
-            Ordering::Relaxed,
-        );
-    }
+    let search = SearchRoot {
+        move_sims,
+        temperature,
+        policy_stride,
+        agg_trunk_sz,
+    };
+    let searched = match search_root(
+        tree,
+        board,
+        search,
+        ctx,
+        running,
+        rng,
+        infer,
+        accumulators,
+        fatal_latch,
+    ) {
+        Ok(searched) => searched,
+        Err(outcome) => return outcome,
+    };
 
     // Snapshot the model version once per move; a no-NN run's drain tuple is (0, 0, 1).
     {
@@ -682,19 +745,17 @@ pub(crate) fn play_one_move(
         }
     }
 
-    // The target's semantics are the search kind's own answer — no second flag can disagree.
-    let mut target_policy = if ctx.search_kind.completed_q_target() {
-        tree.get_improved_policy_ls(policy_stride, ctx.sigma)
-    } else {
-        policy.clone()
-    };
-
     // ── Sample and apply move: the decided stone, else the search's, vetted by the audit in the kind's order ──
+    let Searched {
+        gumbel_state,
+        policy,
+        target: mut target_policy,
+    } = searched;
     let order = match decided {
         None if tree.tactics_config().is_some() => tree.audit_order(gumbel_state.as_ref()),
         _ => None,
     };
-    let move_idx = match decided {
+    let mut move_idx = match decided {
         Some(stone) => stone,
         None => {
             let Some(chosen) =
@@ -706,9 +767,43 @@ pub(crate) fn play_one_move(
         }
     };
 
-    // The audit's vetoed moves carry no target mass; a lost root, or a target left empty, records no policy.
+    // The audit's vetoed moves carry no target mass; a lost root records no policy, and a root whose every searched
+    // move is vetoed is searched again without them: that search's target is the row's, its pick the move.
     let vetoes = tree.last_audit_vetoes().to_vec();
-    let edit = zero_vetoes(&mut target_policy, &vetoes, board, agg_trunk_sz);
+    let mut edit = zero_vetoes(&mut target_policy, &vetoes, board, agg_trunk_sz);
+    // Cells the sparse row stores whatever the search visited: a re-search's vetoes, which its tail must not feed.
+    let mut pinned: Vec<(i32, i32)> = Vec::new();
+    if edit == TargetEdit::Emptied && tree.begin_research() {
+        let again = match search_root(
+            tree,
+            board,
+            search,
+            ctx,
+            running,
+            rng,
+            infer,
+            accumulators,
+            fatal_latch,
+        ) {
+            Ok(searched) => searched,
+            Err(outcome) => return outcome,
+        };
+        let Some(chosen) = select_move(
+            board,
+            &again.policy,
+            again.gumbel_state,
+            ctx,
+            agg_trunk_sz,
+            tree,
+            rng,
+        ) else {
+            return MoveOutcome::Break;
+        };
+        move_idx = chosen;
+        target_policy = again.target;
+        edit = zero_vetoes(&mut target_policy, &vetoes, board, agg_trunk_sz);
+        pinned.clone_from(&vetoes);
+    }
     let rows = tree.tactics_counters();
     let decided_lost = rows.decided_lost > 0;
     let record_full_search = move_is_full_search && !decided_lost && edit != TargetEdit::Emptied;
@@ -747,11 +842,21 @@ pub(crate) fn play_one_move(
         // The sparse row's support is the search's OWN visited-candidate set, read from the
         // tree: under Gumbel a visited candidate can carry LESS mass than an unvisited one.
         let explicit_support = if ctx.search_kind.stores_sparse_rows() {
-            Some(
-                tree.visited_root_child_cells()
+            let visited = tree.visited_root_child_cells();
+            Some(if pinned.is_empty() {
+                visited
                     .into_iter()
-                    .collect::<fxhash::FxHashSet<(i32, i32)>>(),
-            )
+                    .collect::<fxhash::FxHashSet<(i32, i32)>>()
+            } else {
+                fitted_support(
+                    visited,
+                    &pinned,
+                    &target_policy,
+                    board,
+                    agg_trunk_sz,
+                    ctx.visit_capacity,
+                )
+            })
         } else {
             None
         };
