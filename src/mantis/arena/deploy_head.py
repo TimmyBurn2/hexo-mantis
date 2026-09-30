@@ -123,7 +123,7 @@ class DeployHeadPlayer:
         """Search `n_sims` DESCENTS and return the move this run's search kind picks.
 
         Every descent counts (leaves returned, inline descents, table hits); armed tactics play a decided root stone
-        unsearched, the audit may swap the move for a hold, and a root it vetoed wholly is searched again, both counted.
+        unsearched, the audit may swap the move for a hold, and where it held on nothing a re-search's winner plays.
 
         Raises:
             ValueError: no root children to pick from, or armed tactics at a radius below 5.
@@ -150,7 +150,7 @@ class DeployHeadPlayer:
         return move
 
     def _audit(self, tree: MCTSTree, move: tuple[int, int]) -> tuple[int, int]:
-        """The audit's move, or the winner of a second search without its vetoes where it vetoed every searched one."""
+        """The audit's move, or, where it held on nothing and the target sat on its vetoes, a re-search's winner."""
         move = tree.root_audit(move)
         if not (tree.searched_all_vetoed() and tree.begin_research()):
             return move

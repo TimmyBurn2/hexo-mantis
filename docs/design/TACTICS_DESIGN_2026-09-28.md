@@ -443,7 +443,9 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
     block of record is k 4, m 16).
   - Rows: `research_count`, `research_over_hold` and `research_refused_lost` (`TacticsCounters`, both homes); the move
     row `research_rows` counts re-searched full rows holding every veto at zero. `emptied_target_rows` counts only an
-    all-vetoed row no re-search could take.
+    all-vetoed row no re-search could take. Under PUCT self-play `research_count` also holds target-only re-searches at a
+    vetoed best hold whose tempered row empties while the untempered read does not, so the winner-played rate is not
+    read off it there; under Gumbel the two reads coincide.
 - **Lost roots in self-play.** A lost-on-cover root is searched (the root is always expanded), but every child
   loses. Following Six (`searchStone` marks it `decided`), its row carries NO policy target: counted as
   `decided_lost`, value target z. §12 Q3.

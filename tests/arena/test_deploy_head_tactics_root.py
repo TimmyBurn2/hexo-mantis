@@ -157,4 +157,8 @@ def test_an_audited_hold_stands_where_the_target_sat_wholly_on_the_vetoes() -> N
     assert head._tree is not None and rows is not None
     vetoes = head._tree.last_audit_vetoes()
     assert vetoes and move not in vetoes, "the audit held on a move it did not veto"
+    board = _played(_GUMBEL_HOLD_OVERRIDE)
+    target = head._tree.get_improved_policy()
+    on_vetoes = sum(float(target[board.to_flat(q, r)]) for q, r in vetoes)
+    assert on_vetoes >= float(target.sum()) - 1e-4, f"the premise: the target sits on the vetoes ({on_vetoes})"
     assert (rows["research_count"], rows["best_holds"], head.last_sims) == (0, 0, 64), rows
