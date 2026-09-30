@@ -504,6 +504,8 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
   - Amended in place 2026-09-29: `table_hits` joins the rows (`TacticsCounters::rows` is the one name list), and a
     self-play move adds `proven_root_rows`, `decided_lost_rows`, `vetoed_target_rows` and `emptied_target_rows`
     in `proven_root_targets`' place; the runner sums them all (`SelfPlayRunner.tactics_totals`).
+  - Amended in place 2026-09-30 (TACTICS-SELFPLAY-3): `mixed_rows` (F2) and `vetoed_all_rows`, every all-vetoed root
+    whatever its row holds, join the move rows; `emptied_target_rows` equals it while each such row has no policy.
 - The served-sims witness pins DESCENTS per SEARCHED root: `descents == n_sims`, tactics on or off.
   - With tactics on: `served_leaves + solver_terminals + terminal_revisits == descents`, and
     `gpu_evals <= served_leaves`.

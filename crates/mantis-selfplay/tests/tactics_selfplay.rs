@@ -195,6 +195,32 @@ fn a_gumbel_audit_wider_than_its_candidates_records_within_the_rows_slots() {
     );
 }
 
+/// PLANTED BREAK: record the searched target at an all-vetoed root and the emptied rows fall short of the all-vetoed.
+#[test]
+fn an_all_vetoed_root_records_no_policy_target() {
+    for (kind, want) in [(SearchKind::Gumbel, 3), (SearchKind::Puct, 1)] {
+        let more: fn(&Rows) -> bool = match kind {
+            SearchKind::Gumbel => |r| r["vetoed_all_rows"] < 3,
+            _ => |r| r["vetoed_all_rows"] < 1,
+        };
+        let drove = drive(kind, BLOCK, 300, more);
+        let (rows, no_policy) = (&drove.rows, drove.no_policy());
+        println!("{kind:?} over {} plies: {rows:?}", drove.records.len());
+        assert!(
+            rows["vetoed_all_rows"] >= want,
+            "{kind:?}: too few all-vetoed rows to read: {rows:?}"
+        );
+        assert_eq!(
+            rows["emptied_target_rows"], rows["vetoed_all_rows"],
+            "{kind:?}: an all-vetoed row recorded a policy: {rows:?}"
+        );
+        assert!(
+            no_policy <= rows["decided_lost_rows"] + rows["emptied_target_rows"],
+            "{kind:?}: {no_policy} no-policy rows drained against the lost and emptied ones: {rows:?}"
+        );
+    }
+}
+
 /// The stones of a row, as a set.
 fn stones_of(rec: &GraphRecord) -> HashSet<(i32, i32)> {
     rec.stones
@@ -293,6 +319,7 @@ fn a_runner_without_a_block_sums_no_rows() {
         "decided_lost_rows",
         "vetoed_target_rows",
         "mixed_rows",
+        "vetoed_all_rows",
     ] {
         assert!(names.contains(want), "the totals name {want}");
     }

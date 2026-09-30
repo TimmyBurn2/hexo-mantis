@@ -184,6 +184,10 @@ pub(crate) fn count_rows(
     if matches!(row, Some(MoveRow::ProvenRoot)) && written.mixed {
         totals.add_move(MoveRow::Mixed);
     }
+    // Every all-vetoed root whatever its row holds: the emptied rows equal it only while each records no policy.
+    if written.edit == TargetEdit::Emptied && !written.decided_lost {
+        totals.add_move(MoveRow::VetoedAll);
+    }
 }
 
 /// Every vetoed cell is stored at zero, or is absent from a row with no tail (a tail would hand it mass in training).
@@ -353,6 +357,53 @@ mod tests {
             sorted(past_cap),
             support(&[(0, 4), (5, 0)]),
             "past the cap the pins keep their given order: the proof's played stone first"
+        );
+    }
+
+    /// The move rows `count_rows` adds for one written row of an all-vetoed root, by name.
+    fn counted(
+        rec: &GraphRecord,
+        drawn_full: bool,
+        decided_lost: bool,
+    ) -> Vec<(&'static str, u64)> {
+        let totals = TacticsTotals::new();
+        let written = Written {
+            record: Some(rec),
+            drawn_full,
+            decided: false,
+            decided_lost,
+            edit: TargetEdit::Emptied,
+            mixed: false,
+        };
+        count_rows(&totals, &TacticsCounters::default(), &written, &[]);
+        totals
+            .snapshot()
+            .into_iter()
+            .filter(|&(_, v)| v > 0)
+            .collect()
+    }
+
+    #[test]
+    fn an_all_vetoed_row_counts_whatever_it_wrote_and_as_emptied_only_without_a_policy() {
+        let mut rec = GraphRecord::default();
+        assert_eq!(
+            counted(&rec, true, false),
+            vec![("emptied_target_rows", 1), ("vetoed_all_rows", 1)]
+        );
+        assert_eq!(
+            counted(&rec, true, true),
+            vec![("decided_lost_rows", 1)],
+            "lost first"
+        );
+        assert!(
+            counted(&rec, false, false).is_empty(),
+            "a quick draw adds no move row"
+        );
+        rec.is_full_search = true;
+        assert_eq!(
+            counted(&rec, true, false),
+            vec![("vetoed_all_rows", 1)],
+            "a row written with a policy is not an emptied one"
         );
     }
 
