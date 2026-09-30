@@ -38,8 +38,10 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by R380 (THE FEED THAT PASSED; 2026-09-30) — F1 retracted, F2 under test
 
-- **CARD-TACTICS-SELFPLAY-3 — ORDERED by R380(d): one arm, A″ = arm A's feed with the row-wise mixing (F2), 12k steps,
-  same parent (run8@45k) and seed, against TACTICS-SELFPLAY's recorded A and B saves.**
+- **CARD-TACTICS-SELFPLAY-3 — IN PROGRESS: the TACTICS-SELFPLAY-3 packet (2026-09-30), worktree
+  `.wt/tactics-selfplay-3` on branch `tactics-selfplay-3` (cut from `tactics-selfplay-2`'s tip `aa0c5304`), box T ≤ 7
+  box-h. ORDERED by R380(d): one arm, A″ = arm A's feed with the row-wise mixing (F2), 12k steps, same parent
+  (run8@45k) and seed, against TACTICS-SELFPLAY's recorded A and B saves.**
   - Its code starts from `tactics-selfplay-2`'s tip, lands F1's retraction (R380(b)) and merges as one branch (R380(f)).
   - The witnesses, in order:
     - the exams and ring bands at every save: a floor miss halts and kills F2. T4's "all" floors halt; the per-length
@@ -52,7 +54,8 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by R379 (THE SECOND TWIN; 2026-09-30) — the feed, the second twin, CENSUS-1 accepted
 
-- **CARD-TACTICS-SELFPLAY-2 — RULED by R380(a): the halt stands; no reading of A′ is a strength reading and none of its
+- **CARD-TACTICS-SELFPLAY-2 — CLOSED 2026-09-30 by the TACTICS-SELFPLAY-3 packet: the lane continues as
+  CARD-TACTICS-SELFPLAY-3. Was RULED by R380(a): the halt stands; no reading of A′ is a strength reading and none of its
   saves is a parent candidate; F1 is retracted (R380(b)) and the lane continues as CARD-TACTICS-SELFPLAY-3. HALTED
   2026-09-30 at arm A′'s 3k save. Was IN PROGRESS: the
   TACTICS-SELFPLAY-2 packet (2026-09-30), worktree `.wt/tactics-selfplay-2`, box T ≤ 7 box-h. ORDERED by R379(c): one
@@ -113,7 +116,8 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by the TACTICS-SELFPLAY packet (2026-09-29)
 
-- **CARD-TACTICS-TARGET-FEED — option (c) RETRACTED by R380(b): an all-vetoed root records no policy target and plays
+- **CARD-TACTICS-TARGET-FEED — F2 ONLY since R380: the row-wise mixing of the proof, under test in
+  CARD-TACTICS-SELFPLAY-3. Option (c) RETRACTED by R380(b): an all-vetoed root records no policy target and plays
   the audit's best hold, as arm A did; the row-wise mixing is under test in CARD-TACTICS-SELFPLAY-3 (R380(d)). Was
   RULED by R379(b), and the treatment of TACTICS-SELFPLAY-2 (CARD-TACTICS-SELFPLAY-2):
   the card's option (c) for the all-vetoed root, at deploy and in self-play alike, and the proven-root mixture decided
