@@ -118,13 +118,13 @@ pub(crate) fn fitted_support(
     cap: usize,
 ) -> FxHashSet<(i32, i32)> {
     let legal = board.legal_moves_set();
-    let mut pins: Vec<(i32, i32)> = pinned
-        .iter()
-        .copied()
-        .filter(|c| legal.contains(c))
-        .collect();
-    pins.sort_unstable();
-    pins.dedup();
+    // In their given order, so a cap too small for them keeps the audit's highest-ranked vetoes.
+    let mut pins: Vec<(i32, i32)> = Vec::new();
+    for &c in pinned {
+        if legal.contains(&c) && !pins.contains(&c) {
+            pins.push(c);
+        }
+    }
     pins.truncate(cap);
     let (bcq, bcr) = board.window_center();
     let half = (trunk_sz - 1) / 2;
@@ -149,6 +149,8 @@ pub(crate) struct Written<'a> {
     pub(crate) edit: TargetEdit,
     /// The decided root's target took its proof in the mixture.
     pub(crate) mixed: bool,
+    /// The root was searched again without its vetoes, whose target the row records.
+    pub(crate) researched: bool,
 }
 
 /// Sum a search's tactics rows, then the one move row its written record carries; the kinds are disjoint, lost first.
@@ -179,9 +181,12 @@ pub(crate) fn count_rows(
     if let Some(row) = row {
         totals.add_move(row);
     }
-    // A sub-count of the proven-root rows, not a kind of its own.
+    // Sub-counts, not kinds of their own: a proven row's mixture, and a re-searched row holding every veto at zero.
     if matches!(row, Some(MoveRow::ProvenRoot)) && written.mixed {
         totals.add_move(MoveRow::Mixed);
+    }
+    if written.researched && rec.is_full_search && vetoes_hold_no_mass(rec, vetoes) {
+        totals.add_move(MoveRow::Research);
     }
 }
 
@@ -330,7 +335,7 @@ mod tests {
         );
         assert_eq!(
             sorted(fitted_support(
-                candidates,
+                candidates.clone(),
                 &[(5, 0), (400, 400)],
                 &ls,
                 &board,
@@ -339,6 +344,19 @@ mod tests {
             )),
             support(&[(1, 0), (2, 0), (3, 0), (4, 0), (5, 0)]),
             "room for all, and an illegal pin takes none"
+        );
+        let past_cap = fitted_support(
+            candidates,
+            &[(0, 4), (5, 0), (0, 4), (-5, 0)],
+            &ls,
+            &board,
+            TRUNK,
+            2,
+        );
+        assert_eq!(
+            sorted(past_cap),
+            support(&[(0, 4), (5, 0)]),
+            "past the cap the pins keep their given order: the audit's highest-ranked vetoes"
         );
     }
 

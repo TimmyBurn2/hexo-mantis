@@ -431,11 +431,12 @@ impl MCTSTree {
         played
     }
 
-    /// Whether the last audit vetoed every move holding mass in this kind's own target at temperature 1.
+    /// Whether the last audit held on no move and vetoed every one holding mass in the kind's target at temperature 1.
     #[must_use]
     pub fn searched_all_vetoed(&self) -> bool {
         let mut vetoes = self.last_audit_vetoes().to_vec();
-        if vetoes.is_empty() {
+        let pick = self.tactics.as_deref().and_then(|t| t.audit_pick);
+        if !pick.is_some_and(|pick| vetoes.contains(&pick)) {
             return false;
         }
         vetoes.sort_unstable();
@@ -456,15 +457,31 @@ impl MCTSTree {
         let Some(t) = self.tactics.as_deref() else {
             return false;
         };
-        let legal = self.root_board.legal_moves_set();
+        let root = &self.root_board;
+        let legal = root.legal_moves_set();
         if t.vetoes.is_empty()
             || t.counters.decided_lost > 0
             || legal.iter().all(|c| t.vetoes.contains(c))
         {
             return false;
         }
+        // A last stone whose every block is proven lost is lost: every other stone leaves the opponent a finish.
+        let blocks: Vec<(i32, i32)> = analyze(root)
+            .forced
+            .into_iter()
+            .filter(|c| legal.contains(c))
+            .collect();
+        if root.moves_remaining == 1
+            && !blocks.is_empty()
+            && blocks.iter().all(|c| t.vetoes.contains(c))
+        {
+            if let Some(t) = self.tactics.as_deref_mut() {
+                t.counters.research_refused_lost += 1;
+            }
+            return false;
+        }
         let (counters, vetoes, base) = (t.counters, t.vetoes.clone(), t.solver_base);
-        // The audit held on a move it did not veto, which the re-search's winner replaces.
+        // The audit held on a move it did not veto: the move stands, and the re-search sets only the target.
         let over_hold = t.audit_pick.is_some_and(|pick| !vetoes.contains(&pick));
         self.new_game(self.root_board.clone());
         if let Some(t) = self.tactics.as_deref_mut() {
@@ -476,8 +493,6 @@ impl MCTSTree {
             t.root_excluded.clone_from(&vetoes);
             t.vetoes = vetoes;
             t.solver_base = base;
-            // The first audit's stored hold was for a vetoed first stone, which the re-search cannot play.
-            t.next_hold_stone = None;
         }
         true
     }
@@ -1041,48 +1056,119 @@ mod tests {
         assert!(!off.searched_all_vetoed() && !off.begin_research());
     }
 
-    #[test]
-    fn a_target_is_all_vetoed_only_when_no_unvetoed_move_holds_mass_under_either_kind() {
-        // PUCT reads visits at temperature 1: a visited hold keeps mass.
-        let mut tree = last_stone_root(
-            &[(-20, 0), HOLDS_16[0]],
-            with_audit(AuditConfig { k: 2, ..AUDIT }),
-        );
-        assert_eq!(tree.root_audit((-10, 0), None), HOLDS_16[0]);
-        assert_eq!(tree.last_audit_vetoes(), &[(-10, 0), (-20, 0)]);
-        assert!(!tree.searched_all_vetoed());
-
-        // Gumbel reads the completed-Q policy: the vetoed pair's Q puts all but a trace of the mass on it.
+    /// FIX219[..16] under Gumbel over `cells` (visits 20, 19, 18), each child's Q in the root's view as given.
+    fn gumbel_root(cells: &[(i32, i32)], qs: [f32; 3]) -> MCTSTree {
         let root = played(&FIX219[..16]);
-        for (hold_q, want) in [(-1.0f32, true), (1.0, false)] {
-            let mut tree = armed(&root, with_audit(AuditConfig { k: 2, ..AUDIT }));
-            tree.configure_search(SearchKind::Gumbel, tree.q_sigma());
-            tree.new_game(root.clone());
-            let kids = expand(&mut tree, 0, &[(-10, 0), (-20, 0), HOLDS_16[0]], 20);
-            tree.pool[0].n_visits = 60;
-            // A child's value is its own mover's: with one stone left that is the opponent, so Q flips sign.
-            let sign = if tree.pool[0].moves_remaining == 1 {
-                -1.0
-            } else {
-                1.0
-            };
-            for (&i, q) in kids.iter().zip([1.0f32, 1.0, hold_q]) {
-                let n = tree.pool[i as usize].n_visits as f32;
-                tree.pool[i as usize].w_value = sign * q * n;
-            }
+        let mut tree = armed(&root, with_audit(AuditConfig { k: 2, ..AUDIT }));
+        tree.configure_search(SearchKind::Gumbel, tree.q_sigma());
+        tree.new_game(root);
+        let kids = expand(&mut tree, 0, cells, 20);
+        tree.pool[0].n_visits = 60;
+        // A child's value is its own mover's: with one stone left that is the opponent, so Q flips sign.
+        let sign = if tree.pool[0].moves_remaining == 1 {
+            -1.0
+        } else {
+            1.0
+        };
+        for (&i, q) in kids.iter().zip(qs) {
+            let n = tree.pool[i as usize].n_visits as f32;
+            tree.pool[i as usize].w_value = sign * q * n;
+        }
+        tree
+    }
+
+    /// PLANTED BREAK: drop `searched_all_vetoed`'s test of the audit's pick and an audited hold reads as replaceable.
+    #[test]
+    fn the_winner_replaces_the_move_only_where_the_audit_held_nothing_and_the_target_sits_on_the_vetoes(
+    ) {
+        // PUCT reads visits at temperature 1: a visited hold keeps mass, and the audit's pick is that hold.
+        let narrow = with_audit(AuditConfig { k: 2, ..AUDIT });
+        let mut tree = last_stone_root(&[(-20, 0), HOLDS_16[0]], narrow);
+        assert_eq!(tree.root_audit((-10, 0), None), HOLDS_16[0]);
+        assert!(!tree.searched_all_vetoed());
+        assert!(
+            all_vetoed_root().searched_all_vetoed(),
+            "a best hold over visits all vetoed"
+        );
+
+        // Gumbel, every candidate lost: the pick is a veto and every unit of the completed-Q mass sits on vetoes.
+        let mut tree = gumbel_root(&[(-10, 0), (-20, 0), (-21, 0)], [1.0, 1.0, 1.0]);
+        let order = ranked_children(&tree.pool, 0);
+        assert_eq!(
+            tree.root_audit((-10, 0), Some(&order)),
+            (-10, 0),
+            "the best hold"
+        );
+        assert!(tree.searched_all_vetoed());
+
+        // Gumbel, a held candidate the completed Q leaves without mass: the target sits on the vetoes, the move holds.
+        for (hold_q, mass_on_vetoes) in [(-1.0f32, true), (1.0, false)] {
+            let mut tree = gumbel_root(&[(-10, 0), (-20, 0), HOLDS_16[0]], [1.0, 1.0, hold_q]);
             let order = ranked_children(&tree.pool, 0);
             assert_eq!(tree.root_audit((-10, 0), Some(&order)), HOLDS_16[0]);
-            assert_eq!(tree.searched_all_vetoed(), want, "hold Q {hold_q}");
-            if want {
-                assert!(tree.begin_research());
-                let c = counters(&tree);
-                assert_eq!(
-                    (c.research_count, c.research_over_hold),
-                    (1, 1),
-                    "the audit's hold is what the re-search replaces"
+            assert!(
+                !tree.searched_all_vetoed(),
+                "an audited hold is never replaced (hold Q {hold_q})"
+            );
+            if mass_on_vetoes {
+                assert!(
+                    tree.begin_research(),
+                    "the row's target is searched again all the same"
                 );
+                let c = counters(&tree);
+                assert_eq!((c.research_count, c.research_over_hold), (1, 1));
             }
         }
+    }
+
+    /// PLANTED BREAK: drop `begin_research`'s last-stone refusal and a lost last stone is searched over non-blocks.
+    #[test]
+    fn a_last_stone_whose_every_block_is_vetoed_is_lost_and_not_re_searched_while_a_first_stone_is()
+    {
+        let first = forced_root();
+        let mut last = first.clone();
+        last.apply_move(25, 10).expect("empty");
+        assert_eq!(last.moves_remaining, 1);
+        for (root, re_searched) in [(first, true), (last, false)] {
+            let forced = analyze(&root).forced;
+            assert!(!forced.is_empty());
+            let mut tree = armed(&root, ARMED);
+            if let Some(t) = tree.tactics.as_deref_mut() {
+                t.vetoes.clone_from(&forced);
+            }
+            assert_eq!(tree.begin_research(), re_searched, "{forced:?}");
+            let c = counters(&tree);
+            assert_eq!(
+                (c.research_count, c.research_refused_lost),
+                (u64::from(re_searched), u64::from(!re_searched))
+            );
+        }
+    }
+
+    /// PLANTED BREAK: clear `next_hold_stone` in `begin_research` and the second stone of an audited hold is lost.
+    #[test]
+    fn a_re_search_keeps_the_hold_stone_the_audit_stored_for_its_played_first_stone() {
+        let root = played(&FIX219[..15]);
+        let mut tree = armed(&root, with_audit(AuditConfig { m: 2, ..AUDIT }));
+        let firsts = expand(&mut tree, 0, &[(-13, 0), (-12, 0), (-4, -11)], 10);
+        expand(&mut tree, firsts[0], &[(-10, 0), (-12, 1), (-4, -10)], 3);
+        expand(&mut tree, firsts[1], &[(-10, 0), (-12, 1)], 2);
+        expand(&mut tree, firsts[2], &[(-10, 0)], 1);
+        assert_eq!(tree.root_audit((-13, 0), None), (-4, -11));
+        let mut after = root.clone();
+        after.apply_move(-4, -11).expect("empty");
+        let stored = Some((position_key(&after), (-10, 0)));
+        assert_eq!(
+            tree.tactics.as_deref().and_then(|t| t.next_hold_stone),
+            stored
+        );
+        assert!(tree.begin_research());
+        assert_eq!(counters(&tree).research_over_hold, 1);
+        assert_eq!(
+            tree.tactics.as_deref().and_then(|t| t.next_hold_stone),
+            stored,
+            "the played first stone's hold survives"
+        );
     }
 
     #[test]

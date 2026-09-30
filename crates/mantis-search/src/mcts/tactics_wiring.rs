@@ -104,6 +104,7 @@ pub struct TacticsCounters {
     pub audit_unvetted: u64,
     pub research_count: u64,
     pub research_over_hold: u64,
+    pub research_refused_lost: u64,
     pub proof_stone_illegal: u64,
     pub grid_overflows: u64,
     pub three_cells_capped: u64,
@@ -111,7 +112,7 @@ pub struct TacticsCounters {
 
 impl TacticsCounters {
     /// How many rows `rows` names.
-    pub const ROWS: usize = 27;
+    pub const ROWS: usize = 28;
 
     /// Every row by its one name, in one order; the destructuring stops a new field compiling unnamed.
     #[must_use]
@@ -141,6 +142,7 @@ impl TacticsCounters {
             audit_unvetted,
             research_count,
             research_over_hold,
+            research_refused_lost,
             proof_stone_illegal,
             grid_overflows,
             three_cells_capped,
@@ -170,6 +172,7 @@ impl TacticsCounters {
             ("audit_unvetted", audit_unvetted),
             ("research_count", research_count),
             ("research_over_hold", research_over_hold),
+            ("research_refused_lost", research_refused_lost),
             ("proof_stone_illegal", proof_stone_illegal),
             ("grid_overflows", grid_overflows),
             ("three_cells_capped", three_cells_capped),

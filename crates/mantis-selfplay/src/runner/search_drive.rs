@@ -769,13 +769,15 @@ pub(crate) fn play_one_move(
         }
     };
 
-    // The audit's vetoed moves carry no target mass; a lost root records no policy, and a root whose every searched
-    // move is vetoed is searched again without them: that search's target is the row's, its pick the move.
+    // Vetoes carry no target mass; a row whose target sits wholly on them is searched again without them for its
+    // target, and that search's winner is the move only where the audit held on nothing (the deploy head's rule).
     let vetoes = tree.last_audit_vetoes().to_vec();
     let mut edit = zero_vetoes(&mut target_policy, &vetoes, board, agg_trunk_sz);
+    let winner_plays = tree.searched_all_vetoed();
     // Cells the sparse row stores whatever the search visited: a re-search's vetoes and a mixed proof.
     let mut pinned: Vec<(i32, i32)> = Vec::new();
-    if edit == TargetEdit::Emptied && tree.begin_research() {
+    let researched = (edit == TargetEdit::Emptied || winner_plays) && tree.begin_research();
+    if researched {
         let again = match search_root(
             tree,
             board,
@@ -790,18 +792,20 @@ pub(crate) fn play_one_move(
             Ok(searched) => searched,
             Err(outcome) => return outcome,
         };
-        let Some(chosen) = select_move(
-            board,
-            &again.policy,
-            again.gumbel_state,
-            ctx,
-            agg_trunk_sz,
-            tree,
-            rng,
-        ) else {
-            return MoveOutcome::Break;
-        };
-        move_idx = chosen;
+        if winner_plays {
+            let Some(chosen) = select_move(
+                board,
+                &again.policy,
+                again.gumbel_state,
+                ctx,
+                agg_trunk_sz,
+                tree,
+                rng,
+            ) else {
+                return MoveOutcome::Break;
+            };
+            move_idx = chosen;
+        }
         target_policy = again.target;
         edit = zero_vetoes(&mut target_policy, &vetoes, board, agg_trunk_sz);
         pinned.clone_from(&vetoes);
@@ -813,7 +817,8 @@ pub(crate) fn play_one_move(
         pinned.extend_from_slice(&proof);
     }
     let rows = tree.tactics_counters();
-    let decided_lost = rows.decided_lost > 0;
+    // A last stone whose every block the audit proved lost is a lost root too: no policy, the best hold played.
+    let decided_lost = rows.decided_lost > 0 || rows.research_refused_lost > 0;
     let record_full_search = move_is_full_search && !decided_lost && edit != TargetEdit::Emptied;
 
     // The restored-mass fire-rate: moves whose exported target keeps off-window mass.
@@ -890,6 +895,7 @@ pub(crate) fn play_one_move(
             decided_lost,
             edit,
             mixed,
+            researched,
         };
         count_rows(accumulators.tactics_totals, &rows, &written, &vetoes);
     }

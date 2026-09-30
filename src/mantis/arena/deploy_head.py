@@ -82,7 +82,7 @@ class DeployHeadPlayer:
         #: The LAST search's root for the game record, `(root_value, children)` from rows this
         #: head already computes. A plain attribute: the consumer reads it once per ply.
         self.last_root: tuple[float, list[ChildInfo]] | None = None
-        #: The LAST search's descents, the head's own count (LADDER-1's budget witness reads it).
+        #: The LAST move's descents, both searches' where it searched again (LADDER-1's budget witness reads it).
         self.last_sims: int | None = None
         #: The LAST search's tactics rows (`MCTSTree.tactics_counters`), `None` with the module off.
         self.last_tactics: dict[str, int] | None = None
