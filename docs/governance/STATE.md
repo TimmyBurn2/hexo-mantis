@@ -200,5 +200,5 @@ rewritten 2026-09-29 at R378 from the TACTICS-DEPLOY exit record (local) and the
 exit from its exit record (local), on branch `tactics-selfplay` at `5db3280b`. The current phase was rewritten
 2026-09-30 at R379, with `dev` = `origin/dev` = `2d107c0f` read before the edit. The TACTICS-SELFPLAY-2 line was
 updated 2026-09-30 at its halt from its exit record (local), on branch `tactics-selfplay-2` at `2dde57aa`. The
-current phase was rewritten 2026-09-30 at R380, on that branch at `7f351b54`. The TACTICS-SELFPLAY-3 line was added 2026-09-30 at
-its packet's first commit, on branch `tactics-selfplay-3` at `aa0c5304`.
+current phase was rewritten 2026-09-30 at R380, on that branch at `7f351b54`. The TACTICS-SELFPLAY-3 line was
+added 2026-09-30 at its packet's first commit, on branch `tactics-selfplay-3` at `aa0c5304`.

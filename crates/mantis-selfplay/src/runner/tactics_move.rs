@@ -152,7 +152,7 @@ pub(crate) struct Written<'a> {
     pub(crate) mixed: bool,
 }
 
-/// Sum a search's tactics rows, then the one move row its written record carries; the kinds are disjoint, lost first.
+/// Sum a search's tactics rows, then its record's one kind (disjoint, lost first) and the two cross-counts.
 pub(crate) fn count_rows(
     totals: &TacticsTotals,
     rows: &TacticsCounters,

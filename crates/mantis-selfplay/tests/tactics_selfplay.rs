@@ -12,7 +12,7 @@ use mantis_encoding::lookup_or_panic;
 use mantis_search::mcts::{AuditConfig, AuditMode, TacticsConfig};
 use mantis_search::{MCTSTree, SearchKind};
 use mantis_selfplay::replay::hexg::GraphRecord;
-use mantis_selfplay::runner::{RunnerStatsSnapshot, SelfPlayRunner, SelfPlayRunnerConfig};
+use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
 mod common;
 
@@ -51,10 +51,10 @@ const WIDE: TacticsConfig = TacticsConfig {
 
 type Rows = HashMap<&'static str, u64>;
 
-/// A drive's summed rows, its stats snapshot and the rows it drained.
+/// A drive's summed rows, the most descents one search spent, and the rows it drained.
 struct Drove {
     rows: Rows,
-    snap: RunnerStatsSnapshot,
+    max_sims: u64,
     records: Vec<GraphRecord>,
 }
 
@@ -113,7 +113,7 @@ fn drive(kind: SearchKind, block: TacticsConfig, want: usize, more: fn(&Rows) ->
     );
     Drove {
         rows: totals(&runner),
-        snap: runner.stats_snapshot(),
+        max_sims: runner.stats_snapshot().max_sims_per_search,
         records: drained,
     }
 }
@@ -122,16 +122,16 @@ fn drive(kind: SearchKind, block: TacticsConfig, want: usize, more: fn(&Rows) ->
 #[test]
 fn a_decided_root_is_searched_then_plays_its_stone_and_the_owed_stone_follows() {
     for kind in [SearchKind::Puct, SearchKind::Gumbel] {
-        // PUCT drives on until a zeroed-veto row lands: a short drive can meet none.
+        // Each drives on until its rarest row lands: a short drive can meet none.
         let more: fn(&Rows) -> bool = match kind {
             SearchKind::Puct => |r| r["vetoed_target_rows"] == 0,
-            _ => |_| false,
+            _ => |r| r["proof_stones_played"] == 0,
         };
         let drove = drive(kind, BLOCK, 300, more);
         let (rows, no_policy) = (&drove.rows, drove.no_policy());
         println!("{kind:?} over {} plies: {rows:?}", drove.records.len());
         assert_eq!(
-            drove.snap.max_sims_per_search, SIMS as u64,
+            drove.max_sims, SIMS as u64,
             "{kind:?}: a decided root still spends its budget"
         );
         assert!(

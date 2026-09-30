@@ -16,7 +16,7 @@ pub const MOVE_TACTICS_ROWS: [&str; 6] = [
     "vetoed_all_rows",
 ];
 
-/// A row a move records: a decided root's searched target, no policy at a lost or all-vetoed root, vetoes zeroed.
+/// A row a move records: the four kinds, then the mixed proven rows and every all-vetoed root whatever it wrote.
 #[derive(Clone, Copy)]
 pub(crate) enum MoveRow {
     ProvenRoot = 0,
