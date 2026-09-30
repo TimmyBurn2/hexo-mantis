@@ -36,9 +36,44 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R379 (THE SECOND TWIN; 2026-09-30) — the feed, the second twin, CENSUS-1 accepted
+
+- **CARD-TACTICS-SELFPLAY-2 — ORDERED by R379(c): one arm with R379(b)'s feed against TACTICS-SELFPLAY's recorded
+  arms.** Its pass line is the deploy-matched reading with the lower bound above zero. run11 arms tactics in self-play
+  only on that pass, since R376(d) forbids a plain self-play under a tactics deploy.
+  - The feed (R379(b)), at deploy and in self-play alike:
+    - A root whose every searched move is vetoed is re-searched over the non-vetoed set at the same budget. That
+      search's improved policy is the row's target, and its winner is the played move. This replaces the all-vetoed
+      root's empty row (TACTICS-SELFPLAY's `emptied_target_rows`).
+    - A proven root's target mixes the proof at α = 0.5 only where the searched mass on it reads below 0.5, row by
+      row. This replaces R378(e)'s median rule.
+  - The readings (R379(a)): the T4 and defence exams are the starvation instrument; the deploy-matched head is the
+    strength reading for a tactics-era net (LAW-15, R378(b)); the net alone is a report-only diagnostic pooled over at
+    least two saves.
+  - The recorded arms are TACTICS-SELFPLAY's A and B (`mantis-records/tactics-selfplay/`, local; CARD-TACTICS-SELFPLAY).
+- **CARD-PERF-2 — its order RULED by R379(e), following CENSUS-1's C2: the copies first, then the edge table, then
+  CUDA graphs.** R378(g) sequenced PERF-2 after CENSUS-1, which R379(d) accepts. C2 read the H2D copies as the largest
+  part of the server's `launch` (33–38 %) and the compiled trunk's launch as nearly fixed per forward (≈ 3.5 ms)
+  (`docs/design/measurements/CENSUS1_2026-09-29.md` §C2).
+  - The copies: the levers' C1, one pinned buffer (`LEVERS_RESEARCH_2026-09-28.md`, local).
+  - The edge table: CARD-PERF-EDGE-TABLE.
+  - CUDA graphs: CARD-PERF-GRAPHS.
+- **CARD-JK-LAST — CARDED for throughput by R379(d).** CENSUS-1's C5 read the JK-last shape at Δ −0.052 nats against
+  4×256's −0.053, at a quarter of the parameters (229k against 996k); no shape passed the −0.07 line. It is carded as a
+  throughput lever, not as growth.
+- **CARD-CENSUS-1-PARKED — PARKED by R379(d).** Each needs a ruling to reopen:
+  - growth: CARD-NET-EXPAND is HELD (C5: no shape wins on the frozen 45k ring);
+  - the regret and restart family (C4);
+  - the next-ply aux head (C5: it fails its line);
+  - learning from Six's positions (R376(f) still governs any learning from Six's outputs).
+  - Beside them, not parked: MCGS earns a deploy A/B later.
+
 ## Opened by the TACTICS-SELFPLAY packet (2026-09-29)
 
-- **CARD-TACTICS-TARGET-FEED — CARDED for the architect: what the tactics module teaches the policy in self-play.**
+- **CARD-TACTICS-TARGET-FEED — RULED by R379(b), and the treatment of TACTICS-SELFPLAY-2 (CARD-TACTICS-SELFPLAY-2):
+  the card's option (c) for the all-vetoed root, at deploy and in self-play alike, and the proven-root mixture decided
+  row by row, replacing R378(e)'s median rule. Was CARDED for the architect: what the tactics module teaches the policy
+  in self-play.**
   The twin's arm A played the module's moves, but its rows teach them weakly.
   - Defence: when the audit vetoes every move the search visited, the row records no policy target (8 366 rows in
     arm A's window, 18 per 1 000 positions). The hold the game played teaches nothing, in exactly the positions where
@@ -54,7 +89,8 @@ Both were found by running the gate set rather than by reading it, and both are 
     - (b) α · one-hot(hold) + (1 − α) · (a);
     - (c) a second search restricted to the non-vetoed moves.
   - Any of them changes the target law of R377(f) and R378(e), so it is a ruling and a new twin's treatment.
-- **CARD-THROUGHPUT-IN-POSITIONS — CARDED: a throughput rule reads positions produced per hour, not games per hour.**
+- **CARD-THROUGHPUT-IN-POSITIONS — CARDED (R379 does not rule it): a throughput rule reads positions produced per
+  hour, not games per hour.**
   games/h reads game length as cost: in the twin, arm A's games ran 92.6 positions to arm B's 71.5. The rule read
   positions/h by the operator's word before arm B's data was read (RULES_T A3). A/B read 1.058 in positions and
   0.816 in games, so the choice did not decide the verdict. The per-game trainer budget (≈ 2.38 steps per game) means
@@ -82,7 +118,9 @@ Both were found by running the gate set rather than by reading it, and both are 
   whose `deploy.search.tactics` is non-null plays a gate round. That means run11, and TACTICS-SELFPLAY's arm A if it
   plays one (run10's header sets `terminal_eval_enabled: true`). The ruler cells'
   candidate-only arm is not this seam (`docs/contracts/eval_instrument.md` v6).
-- **CARD-CENSUS-1 — ORDERED by R378(g): CENSUS-1 runs beside the TACTICS-SELFPLAY twin, and PERF-2 follows it.**
+- **CARD-CENSUS-1 — ACCEPTED by R379(d): its record is `docs/design/measurements/CENSUS1_2026-09-29.md`. Its parked
+  items are CARD-CENSUS-1-PARKED, JK-last is CARD-JK-LAST, six items are carried to CARD-RUN11-DESIGN, and its C2 orders
+  CARD-PERF-2 (R379(e)). Was ORDERED by R378(g): CENSUS-1 runs beside the TACTICS-SELFPLAY twin, and PERF-2 follows it.**
   Its three commits (`c4418ffd`, `7f18b478`, `986a9661`) ride branch `tactics-selfplay`, and it lent the desktop GPU
   for that branch's gates.exit. It
   is its own packet and session. Its background is LEVERS_RESEARCH (`mantis-records/research/LEVERS_RESEARCH_2026-09-28.md`,
@@ -124,8 +162,9 @@ Both were found by running the gate set rather than by reading it, and both are 
     box-h and the audit-off arm at ≈ +3.2 (§11, §12 Q2).
   - §12 Q5 (TT-hit expansions stay uncounted, the design's named deviation from R376(e)) is not among R377's
     items. RULED by R378(c): a TT hit is a counted descent (CARD-SIMS-ACCOUNTING).
-- **CARD-TACTICS-SELFPLAY — EXITED 2026-09-29: NOT PASS-TO-RUN11. The pre-stated 12k screen fails, while every band
-  held and throughput passed; the architect rules next. Was IN PROGRESS: the TACTICS-SELFPLAY packet (2026-09-29),
+- **CARD-TACTICS-SELFPLAY — RULED by R379(a): the screen stands as written and the lever is not adopted from it; the
+  lane continues as CARD-TACTICS-SELFPLAY-2 (R379(c)). EXITED 2026-09-29: NOT PASS-TO-RUN11. The pre-stated 12k screen
+  fails, while every band held and throughput passed. Was IN PROGRESS: the TACTICS-SELFPLAY packet (2026-09-29),
   forwarded by R378; was HELD on CARD-TACTICS-DEPLOY's read.**
   - The screen: the net alone at 12k, A − B = −0.209 logit [−0.569, +0.151], against a bar of > −0.17 (X, 288
     games; A 0.222, B 0.260).
@@ -138,7 +177,8 @@ Both were found by running the gate set rather than by reading it, and both are 
     reads 0.816, because A's games run 30 % longer.
   - A's policy is fed weakly (CARD-TACTICS-TARGET-FEED). A1's re-read of P1 on arm A's ring: median 0.928, with
     35.5 % below 0.5.
-  - The code is on branch `tactics-selfplay` (tip `5db3280b`, gates.exit green). Its records, with every bias the
+  - The code is on branch `tactics-selfplay` (tip `5db3280b`, gates.exit green), which `dev` contains (this line did
+    not say so until R379's record). Its records, with every bias the
     reading carries, are local in `mantis-records/tactics-selfplay/` (EXIT.md, EXIT_DRAFT.md).
   - Box: 11.86 box-h of jobs. A twin with the same module in the loop, against a plain twin. The design is
   `docs/design/TACTICS_DESIGN_2026-09-28.md` as R377 and R378 amend it. The session works in worktree
@@ -242,14 +282,15 @@ Both were found by running the gate set rather than by reading it, and both are 
     12 turns / 60 000 nodes (f_corr 0.455 [0.385, 0.515]), but 16 of 20 played out with Six on both seats are
     still lost within 13 opponent turns.
 - **CARD-RUN11-DESIGN — HELD on CARD-TACTICS-LANE's deploy read (R376(c)), now CARD-TACTICS-DEPLOY's (R377); that
-  read is RATIFIED by R378(a).** Until run11's mint replaces it,
+  read is RATIFIED by R378(a). Its self-play tactics wait on CARD-TACTICS-SELFPLAY-2's pass (R379(c)).** Until run11's
+  mint replaces it,
   `configs/run10.yaml` stays the production config the instruments read; run10 will not START. The design
   carries:
   - Cooldown and EMA as screened levers with power lines (R376(g)): neither is shown nor excluded. DECIDE-1's
     cooldown screen read COOL 0.301 vs CTRL 0.266 on X over 4 origins (≈ +0.20 ± 0.30 logit), the S pair +0.009,
     and COOL − REV +0.025 (inconclusive: the lead is not attributed to the cool end); EMA5 read −0.020 against
     its members on X (void by power).
-  - CARD-NET-EXPAND (run11's build, R367(c)).
+  - CARD-NET-EXPAND (run11's build, R367(c)). HELD by R379(d): growth is parked (CARD-CENSUS-1-PARKED).
   - Learning from Six's outputs only as a means (R376(f)): probes first, a run only on a pass, and a net that
     learned from Six carries it in its lineage. The standing goal is to surpass Six by self-play with exact
     tactics.
@@ -257,7 +298,15 @@ Both were found by running the gate set rather than by reading it, and both are 
   - CARD-ORIGIN-RULE, which lands in RUN11-PREP (R377(g)).
   - The deploy block of record (leaf 256/3, root 20 000/8, audit 2 000/8), armed at run11's mint by the operator's
     word, in self-play and at deploy alike (R378(a)), with the gate deploy-matched (R378(d),
-    CARD-GATE-DEPLOY-MATCHED).
+    CARD-GATE-DEPLOY-MATCHED). In self-play only on CARD-TACTICS-SELFPLAY-2's pass (R379(c)).
+  - Carried from CENSUS-1 by R379(d):
+    - sync cadence 50 (TACTICS-SELFPLAY's P4 read the in-run cache hit at 33 % there, against 24.5 % at 2);
+    - HL-Gauss as a screened lever (C5: it passes its lines, no gain resolved at one seed);
+    - a value-head re-initialisation at warm start, with warm-up (C4: the parent's value head is dead in the opening;
+      C5: its value gap +0.160);
+    - a noise-free quick arm (C1: the 64-sim quick search draws root Gumbel noise);
+    - decided tails (C3(b): a pooled proven tail of 0.463, a games/h bound of 1.86×);
+    - a search-value aux target from our own search (C6: Six's search value beats our raw one off the proofs).
 - **CARD-PACKET-POWER-LINE — LANDED 2026-09-28 in the packet rule (`docs/governance/COMMS_STYLE.md` item 4): a
   packet carries each band's power line and sets known-bad bars against the ruler's measured floor. Was CARDED
   (process; DECIDE-1's exit).** Three of DECIDE-1's banded rules were void by R375(d) before any reading (B1-N2, B3, the S
@@ -437,7 +486,8 @@ recommended one; each is its own leg with a LAW-09 bench.
   dst-sorted edges: gather + edge add + relu fused, fp32 register sum, one rounding, no atomics, no fp32 [E, H];
   its backward the same sum over src order. Desktop prototype: 3.3–3.9 ms per 4 layers (committed L2 44.1,
   fp32 atomics 7.1), bitwise equal to the committed L2 op.
-- **CARD-PERF-EDGE-TABLE — the edge-code table (B2).** The edge embedding has 91 distinct raw rows, so each layer's
+- **CARD-PERF-EDGE-TABLE — the edge-code table (B2); second in PERF-2's order by R379(e), after the copies
+  (CARD-PERF-2).** The edge embedding has 91 distinct raw rows, so each layer's
   `lin(edge_proj(·))` is a lookup; the table is bitwise equal to the per-edge GEMM when padded to M ≥ 1024 (sm_86;
   sm_89 unverified). Box forward 11.8 → 6.5 ms on top of B1. Reaches past R369(b)'s "aggregation": its own leg.
   **DECIDED 2026-09-25 (dispatcher, on the operator's "think through if this should be done"): NOT in PERF-ADA.**
@@ -456,7 +506,8 @@ recommended one; each is its own leg with a LAW-09 bench.
   the runner field off by default so `served_sims_exact` stays unchanged). 35.8 % of leaves are repeats.
 - **CARD-PERF-DST-SORT — dst-sorted edges from the Rust builder.** Removes the per-forward GPU argsort
   (0.5–0.8 ms/pop INF); a wire/golden contract change.
-- **CARD-PERF-GRAPHS — CUDA graphs for the serving forward.** Dynamic shapes need bucketing; worth it only once
+- **CARD-PERF-GRAPHS — CUDA graphs for the serving forward; third in PERF-2's order by R379(e) (CARD-PERF-2).**
+  Dynamic shapes need bucketing; worth it only once
   the server is CPU-bound, after CARD-PERF-4's re-read.
 
 ## Opened by R368 (SLIM-FIX; 2026-09-23)
@@ -506,7 +557,8 @@ recommended one; each is its own leg with a LAW-09 bench.
 
 ## Opened by R367 (DESIGN STANDARD + REVIEW GATE; SIZE CONDITIONAL WITHDRAWN; PRICE LAW; 2026-09-21)
 
-- **CARD-NET-EXPAND — run11's build: a FUNCTION-PRESERVING width/depth expansion of the trunk behind the
+- **CARD-NET-EXPAND — HELD by R379(d): growth is parked (CENSUS-1's C5 reads no shape winning on the frozen 45k ring;
+  CARD-CENSUS-1-PARKED). Was run11's build: a FUNCTION-PRESERVING width/depth expansion of the trunk behind the
   seam, with a conformance section proving output equality at expansion.** OPENED by R367(c) from
   CARD-RUN10-SIZE-PARENT (CLOSED below): no shape-compatible parent exists for a 6×192 `GnnNetV2`, so the
   size row leaves run10 and returns as an EXPANSION — a wider/deeper net initialised FROM the 4×128 parent

@@ -3,6 +3,8 @@
 Status: **ACCEPTED by R377** (2026-09-28), which rules §12's questions; where its entry in
 `docs/governance/RULINGS.md` and this text differ, the ruling governs. **R378** (2026-09-29) rules §12 Q5 by (c),
 amends §6's proven-root target form by (e) and extends §11's twin witness by (f); the same precedence holds.
+**R379** (2026-09-30) replaces (e)'s median rule and the all-vetoed root's empty row in §6 by (b); the same precedence
+holds.
 Was: **DESIGN** (the TACTICS-DESIGN packet under R376(d); CARD-TACTICS-LANE re-aimed to it). No code, config
 or mint change rides this document. It chooses the kind of the ONE exact tactics module, specifies its API and
 its wiring at deploy and in self-play, and scopes TACTICS-DEPLOY and TACTICS-SELFPLAY. The readings it stands on
@@ -400,11 +402,15 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
   - AMENDED by R378(e), in form, not rule: the target at a proven self-play root follows A9's reading. It is the
     searched target where its proof-set mass reads ≥ 0.7 at the median, else the α = 0.5 mixture; never the bare
     two-hot above.
+  - REPLACED by R379(b), row by row: the target mixes the proof at α = 0.5 only where the searched mass on it reads
+    below 0.5; elsewhere it is the searched target.
 - **A vetoed cell outside the searched candidates (as built).** A Gumbel row stores its searched candidates only
   (`gumbel_m` slots), so such a cell is zeroed in the target but keeps its training-tail share; `vetoed_target_rows`
   counts only rows whose every veto holds no mass.
 - **All-vetoed roots (added as built).** When every unit of the searched target sits on vetoed moves, the target is
   left as searched and the row records no policy target, as a lost root's does (`emptied_target_rows`).
+  REPLACED by R379(b), at deploy and in self-play alike: such a root is re-searched over the non-vetoed set at the
+  same budget; that search's improved policy is the row's target and its winner the played move.
 - **Lost roots in self-play.** A lost-on-cover root is searched (the root is always expanded), but every child
   loses. Following Six (`searchStone` marks it `decided`), its row carries NO policy target: counted as
   `decided_lost`, value target z. §12 Q3.

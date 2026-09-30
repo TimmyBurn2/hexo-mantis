@@ -1,4 +1,4 @@
-# RULINGS — R23 to R378
+# RULINGS — R23 to R379
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R379.
+- Numbering continues from R346. The next ruling is R380.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,42 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R379 — THE SECOND TWIN
+Decision: verbatim below.
+
+> R379 — THE SECOND TWIN.
+> (a) TACTICS-SELFPLAY's screen stands as written and the lever is not adopted from it. The
+> screen measured specialisation, not starvation; from now on the T4 and defence exams are
+> the starvation instrument, the deploy-matched head is the strength reading for a
+> tactics-era net (LAW-15, R378(b)), and net-alone is a report-only diagnostic pooled over
+> at least two saves.
+> (b) The feed: a root whose every searched move is vetoed is re-searched over the
+> non-vetoed set at the same budget, and that search's improved policy is the row's target
+> and its winner the played move, at deploy and in self-play alike. A proven root's target
+> mixes the proof at α = 0.5 only where the searched mass on it reads below 0.5, row by row;
+> this replaces R378(e)'s median rule.
+> (c) TACTICS-SELFPLAY-2 runs one arm with (b) against the recorded arms; its pass line is
+> the deploy-matched reading with the lower bound above zero. run11 arms tactics in self-play
+> only on that pass (R376(d) forbids a plain self-play under a tactics deploy).
+> (d) CENSUS-1 is accepted. Parked: growth (CARD-NET-EXPAND held; JK-last carded for
+> throughput), the regret and restart family, the next-ply aux head, learning from Six's
+> positions. Carried to run11's design: sync cadence 50, HL-Gauss as a screened lever, a
+> value-head re-initialisation at warm start with warm-up, a noise-free quick arm, decided
+> tails, and a search-value aux target from our own search. MCGS earns a deploy A/B later.
+> (e) PERF-2's order follows C2: the copies first, then the edge table, then CUDA graphs.
+
+Status: standing. Rules TACTICS-SELFPLAY's exit: its pre-stated screen stands and the lever is not adopted from it,
+and the witness's roles are re-assigned (starvation to the T4 and defence exams, strength to the deploy-matched head,
+the net alone to a pooled report-only diagnostic) by (a). Answers CARD-TACTICS-TARGET-FEED by (b): the card's option
+(c), a second search restricted to the non-vetoed moves, replaces the all-vetoed root's empty row at deploy and in
+self-play, and the proven-root mixture is decided row by row, REPLACING R378(e)'s median rule. Orders TACTICS-SELFPLAY-2
+(CARD-TACTICS-SELFPLAY-2) and conditions run11's self-play arming, which R378(a) had set at the mint, on its pass by
+(c). Accepts CENSUS-1 (`docs/design/measurements/CENSUS1_2026-09-29.md`), holds CARD-NET-EXPAND, parks four
+families and carries six items to CARD-RUN11-DESIGN by (d). Orders PERF-2's levers by CENSUS-1's C2 by (e), which
+R378(g) sequenced after CENSUS-1. The packet it forwards is TACTICS-SELFPLAY-2.
+
+---
 
 ### R378 — TACTICS AT DEPLOY
 Decision: verbatim below.
@@ -66,6 +102,9 @@ armed in-run gate by (d); amends R377(f)'s target form by (e) and its witness by
 (`mantis-records/research/LEVERS_RESEARCH_2026-09-28.md`, local, outside the tree) as background and re-sequences
 R371(e)'s PERF-2 by (g); answers TACTICS-DEPLOY's exit items (1) by (a), (2) by (c), (3) by (d) and (4) by (h).
 The packet it forwards is TACTICS-SELFPLAY (CARD-TACTICS-SELFPLAY).
+(e)'s median rule is REPLACED by R379(b): a proven root's target mixes the proof at α = 0.5 only where the searched
+mass on it reads below 0.5, row by row. (a)'s self-play arming at run11's mint is conditioned by R379(c) on
+TACTICS-SELFPLAY-2's pass.
 
 ---
 
@@ -103,6 +142,9 @@ among its items.
 net, the table or the solver). (e)'s read: TACTICS-DEPLOY RATIFIED by R378(a). (f)'s target form AMENDED by R378(e)
 (the searched target or the α = 0.5 mixture, never the bare two-hot), its rule standing; its witness extended by
 R378(f). (g)'s naming of arena legality stands in this Status line (R378(h)); the LAWS bullet moves when ORIGIN-1 lands.
+(f)'s target form moved again by R379(b): the α = 0.5 mixture where the searched mass on the proof reads below 0.5, row
+by row; and a root whose every searched move is vetoed is re-searched over the non-vetoed set, whose search sets the
+row's target and the played move. (f)'s rule stands.
 
 ---
 
@@ -132,6 +174,8 @@ Decision: verbatim below.
 Status: standing. Ratifies SIX-RUNG under R375(a) by (a); makes R375(c)'s choice by (c); construes the protected set's served-sims exactness by (e); rules on R375(f)'s provenance by (f).
 (d)'s lane: TACTICS-DESIGN ACCEPTED by R377(a), and the lane continues as TACTICS-DEPLOY then TACTICS-SELFPLAY;
 TACTICS-DEPLOY RATIFIED by R378(a), and run11 arms its block of record in self-play and at deploy alike.
+TACTICS-SELFPLAY's screen stands and the lever is not adopted from it (R379(a)); run11 arms tactics in self-play only on
+TACTICS-SELFPLAY-2's pass, since (d) forbids a plain self-play under a tactics deploy (R379(c)).
 (e) CONSTRUED by R377(c): a descent that ends at a proven terminal is a simulation, and the served-sims witness counts it;
 and by R378(c): whatever backed the value (the net, the table or the solver), and the witness pins all three cases.
 
@@ -239,7 +283,8 @@ Decision: verbatim below.
 
 Status: standing. Construes R370(d) by (b); the operator's 2026-09-25 strix waiver ends at PERF-ADA's tip by (c).
 (c)'s single-cell parent bar is SUPERSEDED by R376(b): every bar prices from a panel; run10 will not START (R376(c)).
-(e)'s "follows run10" is moved by R378(g): "CENSUS-1 runs beside the twin; PERF-2 follows it."
+(e)'s "follows run10" is moved by R378(g): "CENSUS-1 runs beside the twin; PERF-2 follows it." R379(e) orders PERF-2's
+levers: the copies, then the edge table, then CUDA graphs.
 
 ---
 

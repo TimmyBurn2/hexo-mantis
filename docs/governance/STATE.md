@@ -7,12 +7,26 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
-**R378 (2026-09-29): TACTICS AT DEPLOY. TACTICS-DEPLOY is ratified and merged, its read's block is the deploy
-block of record. TACTICS-SELFPLAY exited 2026-09-29 NOT PASS-TO-RUN11, and the architect rules next
-(CARD-TACTICS-SELFPLAY).** The tactics lane still
-goes first and run10 will not START (R376(c)). `configs/run10.yaml` stays the production config the instruments
-read until run11's mint replaces it. run11 arms the deploy block at its mint by the operator's word, in self-play
-and at deploy alike (R378(a), CARD-RUN11-DESIGN).
+**R379 (2026-09-30): THE SECOND TWIN. TACTICS-SELFPLAY's screen stands and the lever is not adopted from it; the
+feed is ruled, and TACTICS-SELFPLAY-2 is ordered (CARD-TACTICS-SELFPLAY-2). CENSUS-1 is accepted.** The tactics
+lane still goes first and run10 will not START (R376(c)). `configs/run10.yaml` stays the production config the
+instruments read until run11's mint replaces it. run11 arms the deploy block at its mint by the operator's word
+(R378(a)), and in self-play only on TACTICS-SELFPLAY-2's pass (R379(c), CARD-RUN11-DESIGN).
+
+- **R379's order.**
+  - The readings (R379(a)): the T4 and defence exams are the starvation instrument; the deploy-matched head is the
+    strength reading for a tactics-era net (LAW-15, R378(b)); the net alone is a report-only diagnostic pooled over
+    at least two saves.
+  - The feed (R379(b)), at deploy and in self-play alike: a root whose every searched move is vetoed is re-searched
+    over the non-vetoed set at the same budget, and that search's improved policy is the row's target and its winner
+    the played move. A proven root's target mixes the proof at α = 0.5 only where the searched mass on it reads below
+    0.5, row by row, replacing R378(e)'s median rule.
+  - TACTICS-SELFPLAY-2 (R379(c)): one arm with the feed against the recorded arms; it passes when the deploy-matched
+    reading's lower bound is above zero.
+  - CENSUS-1 (R379(d)): growth, the regret and restart family, the next-ply aux head and learning from Six's
+    positions are parked (CARD-NET-EXPAND held, CARD-JK-LAST carded for throughput); six items are carried to run11's
+    design; MCGS earns a deploy A/B later.
+  - PERF-2 (R379(e), CARD-PERF-2): the copies first, then the edge table, then CUDA graphs.
 
 - **The tactics lane (R376(d), CARD-TACTICS-LANE).** ONE exact tactics module in Rust on the search path, used
   identically at deploy and in self-play (LAW-15). Deploy lands first, read as an A/B against the plain parent
@@ -42,23 +56,25 @@ and at deploy alike (R378(a), CARD-RUN11-DESIGN).
     mints `tactics: null`.
   - The in-run gate is deploy-matched: candidate and anchor play the same block (R378(d)). The tree still arms the
     candidate alone (CARD-GATE-DEPLOY-MATCHED).
-- **TACTICS-SELFPLAY exited 2026-09-29: NOT PASS-TO-RUN11 (CARD-TACTICS-SELFPLAY).** It put the same module in the
-  loop: a 4 h tactics twin (A) against a 4 h plain twin (B) from run8@45k, in 11.86 box-h. Its code is on branch
-  `tactics-selfplay` (gates.exit green), not yet in `dev`.
+- **TACTICS-SELFPLAY exited 2026-09-29: NOT PASS-TO-RUN11 (CARD-TACTICS-SELFPLAY); R379(a) lets its screen stand.**
+  It put the same module in the loop: a 4 h tactics twin (A) against a 4 h plain twin (B) from run8@45k, in 11.86
+  box-h. Its code is on branch `tactics-selfplay` (gates.exit green), which `dev` contains (this line said "not yet
+  in `dev`" until R379's record).
   - P0 closed CARD-SIMS-ACCOUNTING. P1 picked the SEARCHED proven-root target; P2 and P3 set the defence and ring
     bands. P4's cache hit reads 33 % at sync cadence 50, against 24.5 % at 2.
   - The screen fails: the net alone at 12k reads A − B −0.209 logit against a bar of > −0.17. Every band held, and
     throughput passed at 1.058× in positions/h.
   - Beside it, report-only: the shipped head at 12k reads A − B +0.676 [+0.342, +1.010], and the net alone pooled over
     9k and 12k reads +0.010.
-  - Open for the architect: CARD-TACTICS-TARGET-FEED (the module's moves reach the policy weakly) and
-    CARD-THROUGHPUT-IN-POSITIONS.
+  - CARD-TACTICS-TARGET-FEED (the module's moves reach the policy weakly) is ruled by R379(b);
+    CARD-THROUGHPUT-IN-POSITIONS stays carded.
 - **The strength series changes unit at the merge (R378(b)).** Every later cell plays the shipped head, earlier
   points are the plain unit, and both are named where they meet. A read that needs the net alone plays
   `--arm plain` and says so.
-- **CENSUS-1 runs beside the twin, and PERF-2 follows it (R378(g), CARD-CENSUS-1).** LEVERS_RESEARCH is its
-  background (local, in `mantis-records/research/`), accepted with its §0 corrections. The in-run cache hit rate
-  is measured, though: 24.2 %.
+- **CENSUS-1 is accepted (R379(d), CARD-CENSUS-1); PERF-2 follows it (R378(g)).** Its record is
+  `docs/design/measurements/CENSUS1_2026-09-29.md`. LEVERS_RESEARCH is its background (local, in
+  `mantis-records/research/`), accepted with its §0 corrections. The in-run cache hit rate is measured, though:
+  24.2 %.
 - **The first stone is the origin (R377(g), CARD-ORIGIN-RULE).** The empty board's legal set becomes {origin},
   records and books are canonicalised by translation on load, and the frozen fixtures are re-pinned under grant.
   It lands in RUN11-PREP, and the LAWS bullet for arena legality moves with it (R378(h)). The ruler's book stays
@@ -112,7 +128,7 @@ run6's by R369's packet (W0).
 ## Where things live
 
 - Open work: `docs/governance/CARDS.md` (swept in W6; derived there, never enumerated here).
-- Rulings: `docs/governance/RULINGS.md`; the latest is R378.
+- Rulings: `docs/governance/RULINGS.md`; the latest is R379.
 - Laws and the protected set: `docs/governance/LAWS.md`, whose protected set names each
   invariant's pinning tests (R370(f)); `tests/test_protected_set_pins.py` fails if one is gone.
   Falsified work: `docs/governance/falsified.md`.
@@ -161,4 +177,5 @@ run, box and instrument lines were re-checked at `3e3fd263`. The tactics lines w
 TACTICS-DESIGN design doc (`d17dfdcd`), and at the TACTICS-DEPLOY packet's first commit. The current phase was
 rewritten 2026-09-29 at R378 from the TACTICS-DEPLOY exit record (local) and the TACTICS-SELFPLAY packet, with
 `dev` = `origin/dev` = `0204edf9` read before the edit. The TACTICS-SELFPLAY lines were updated 2026-09-29 at its
-exit from its exit record (local), on branch `tactics-selfplay` at `5db3280b`.
+exit from its exit record (local), on branch `tactics-selfplay` at `5db3280b`. The current phase was rewritten
+2026-09-30 at R379, with `dev` = `origin/dev` = `2d107c0f` read before the edit.
