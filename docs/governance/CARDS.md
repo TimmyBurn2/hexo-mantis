@@ -38,8 +38,10 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by R379 (THE SECOND TWIN; 2026-09-30) — the feed, the second twin, CENSUS-1 accepted
 
-- **CARD-TACTICS-SELFPLAY-2 — ORDERED by R379(c): one arm with R379(b)'s feed against TACTICS-SELFPLAY's recorded
-  arms.** Its pass line is the deploy-matched reading with the lower bound above zero. run11 arms tactics in self-play
+- **CARD-TACTICS-SELFPLAY-2 — IN PROGRESS: the TACTICS-SELFPLAY-2 packet (2026-09-30), worktree
+  `.wt/tactics-selfplay-2`, box T ≤ 7 box-h. ORDERED by R379(c): one arm with R379(b)'s feed against
+  TACTICS-SELFPLAY's recorded arms.** F1 builds the re-search (row `tactics_research_count`), F2 the row-wise mixing
+  (row `tactics_mixed_rows`), and T runs arm A′ from run8@45k. Its pass line is the deploy-matched reading with the lower bound above zero. run11 arms tactics in self-play
   only on that pass, since R376(d) forbids a plain self-play under a tactics deploy.
   - The feed (R379(b)), at deploy and in self-play alike:
     - A root whose every searched move is vetoed is re-searched over the non-vetoed set at the same budget. That
@@ -66,14 +68,28 @@ Both were found by running the gate set rather than by reading it, and both are 
   - the regret and restart family (C4);
   - the next-ply aux head (C5: it fails its line);
   - learning from Six's positions (R376(f) still governs any learning from Six's outputs).
-  - Beside them, not parked: MCGS earns a deploy A/B later.
+  - Beside them, not parked: MCGS earns a deploy A/B later (CARD-MCGS-DEPLOY).
+- **CARD-VALUE-HEAD-DEAD-OPENING — CARDED for CARD-RUN11-DESIGN by R379(d): a value-head re-initialisation at warm
+  start, with warm-up.** CENSUS-1's C4 found run8@45k's value head dead in the opening: 18.5 % of the 45k ring's value
+  rows read the empty board's v = −0.015556, and 0 of `value_head.fc1`'s 32 ReLUs are live on opening rows. run10's
+  warm start inherits the head. C5 read the value gap at +0.160.
+- **CARD-QUICK-ARM-NOISE — CARDED for CARD-RUN11-DESIGN by R379(d): a noise-free quick arm.** CENSUS-1's C1: the
+  64-sim quick search builds `MctxRootState::new` and draws root Gumbel noise whatever the arm drew, and from ply
+  `gumbel_explore_moves` on the played move is `best_action`, whose score carries that noise.
+- **CARD-SEARCH-VALUE-AUX — CARDED for CARD-RUN11-DESIGN by R379(d): a search-value aux target from our own search.**
+  CENSUS-1's C6: Six's search value beats our raw one off the proofs (DEF −0.097 on its non-proof rows, QU −0.058,
+  MID −0.053). R376(f) governs any learning from Six's outputs; this card is our own search's value.
+- **CARD-DECIDED-TAILS — CARDED for CARD-RUN11-DESIGN by R379(d): decided tails.** CENSUS-1's C3(b): the pooled
+  proven tail is 0.463 of a game's plies, a games/h bound of 1.86×; the proven side converted 76.8 % of those games.
+- **CARD-MCGS-DEPLOY — CARDED by R379(d): graph search earns a deploy A/B, later.** CENSUS-1's C3(d): table hits are
+  28.6 % [27.9, 29.4] of descents at the plain deploy head's turn starts, above the 10 % line.
 
 ## Opened by the TACTICS-SELFPLAY packet (2026-09-29)
 
 - **CARD-TACTICS-TARGET-FEED — RULED by R379(b), and the treatment of TACTICS-SELFPLAY-2 (CARD-TACTICS-SELFPLAY-2):
   the card's option (c) for the all-vetoed root, at deploy and in self-play alike, and the proven-root mixture decided
-  row by row, replacing R378(e)'s median rule. Was CARDED for the architect: what the tactics module teaches the policy
-  in self-play.**
+  row by row, replacing R378(e)'s median rule; TACTICS-SELFPLAY-2 builds them as F1 (the re-search) and F2 (the
+  row-wise mixing). Was CARDED for the architect: what the tactics module teaches the policy in self-play.**
   The twin's arm A played the module's moves, but its rows teach them weakly.
   - Defence: when the audit vetoes every move the search visited, the row records no policy target (8 366 rows in
     arm A's window, 18 per 1 000 positions). The hold the game played teaches nothing, in exactly the positions where
@@ -303,10 +319,11 @@ Both were found by running the gate set rather than by reading it, and both are 
     - sync cadence 50 (TACTICS-SELFPLAY's P4 read the in-run cache hit at 33 % there, against 24.5 % at 2);
     - HL-Gauss as a screened lever (C5: it passes its lines, no gain resolved at one seed);
     - a value-head re-initialisation at warm start, with warm-up (C4: the parent's value head is dead in the opening;
-      C5: its value gap +0.160);
-    - a noise-free quick arm (C1: the 64-sim quick search draws root Gumbel noise);
-    - decided tails (C3(b): a pooled proven tail of 0.463, a games/h bound of 1.86×);
-    - a search-value aux target from our own search (C6: Six's search value beats our raw one off the proofs).
+      C5: its value gap +0.160; CARD-VALUE-HEAD-DEAD-OPENING);
+    - a noise-free quick arm (C1: the 64-sim quick search draws root Gumbel noise; CARD-QUICK-ARM-NOISE);
+    - decided tails (C3(b): a pooled proven tail of 0.463, a games/h bound of 1.86×; CARD-DECIDED-TAILS);
+    - a search-value aux target from our own search (C6: Six's search value beats our raw one off the proofs;
+      CARD-SEARCH-VALUE-AUX).
 - **CARD-PACKET-POWER-LINE — LANDED 2026-09-28 in the packet rule (`docs/governance/COMMS_STYLE.md` item 4): a
   packet carries each band's power line and sets known-bad bars against the ruler's measured floor. Was CARDED
   (process; DECIDE-1's exit).** Three of DECIDE-1's banded rules were void by R375(d) before any reading (B1-N2, B3, the S

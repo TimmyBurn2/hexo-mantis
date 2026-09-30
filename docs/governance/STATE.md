@@ -22,10 +22,11 @@ instruments read until run11's mint replaces it. run11 arms the deploy block at 
     the played move. A proven root's target mixes the proof at α = 0.5 only where the searched mass on it reads below
     0.5, row by row, replacing R378(e)'s median rule.
   - TACTICS-SELFPLAY-2 (R379(c)): one arm with the feed against the recorded arms; it passes when the deploy-matched
-    reading's lower bound is above zero.
+    reading's lower bound is above zero. IN PROGRESS from 2026-09-30 (worktree `.wt/tactics-selfplay-2`).
   - CENSUS-1 (R379(d)): growth, the regret and restart family, the next-ply aux head and learning from Six's
     positions are parked (CARD-NET-EXPAND held, CARD-JK-LAST carded for throughput); six items are carried to run11's
-    design; MCGS earns a deploy A/B later.
+    design; MCGS earns a deploy A/B later. Five of them are opened as cards (CARD-VALUE-HEAD-DEAD-OPENING,
+    CARD-QUICK-ARM-NOISE, CARD-SEARCH-VALUE-AUX, CARD-DECIDED-TAILS, CARD-MCGS-DEPLOY).
   - PERF-2 (R379(e), CARD-PERF-2): the copies first, then the edge table, then CUDA graphs.
 
 - **The tactics lane (R376(d), CARD-TACTICS-LANE).** ONE exact tactics module in Rust on the search path, used
