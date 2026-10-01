@@ -415,9 +415,7 @@ mod tests {
                 .expect("push ok");
             assert_eq!(b.size(py), 1);
             // `n_threads = 1` is the serial path, which is what a one-record ring wants.
-            let (_wire, targets) = b
-                .sample_graph_batch(py, 1, false, 0.0, 1)
-                .expect("sample ok");
+            let (_wire, targets) = b.sample_graph_batch(py, 1, false, 1).expect("sample ok");
             targets
         });
         // One sampled record → one per-graph argmax cell decoded.
