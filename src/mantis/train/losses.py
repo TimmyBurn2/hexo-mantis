@@ -41,7 +41,7 @@ def rebuild_sparse_target(
 
 def value_target(outcomes: torch.Tensor, root_value: torch.Tensor, root_value_valid: torch.Tensor,
                  lam: float) -> torch.Tensor:
-    """`lam·root_value + (1 − lam)·outcomes` on a row whose flag is set, `outcomes` elsewhere; at `lam == 0` it IS `outcomes`."""
+    """`lam·root_value + (1 − lam)·outcomes` where the flag is set, else `outcomes`; at `lam == 0` it IS `outcomes`."""
     if lam == 0.0:
         return outcomes
     z = outcomes.reshape(-1).to(torch.float32)

@@ -316,8 +316,9 @@ class Trainer:
                             explicit_mask=inputs.explicit_mask,
                             tail_mass=inputs.tail_mass,
                             denominator=policy_denominator)
+                        # z whatever `value_target_lambda`: a reading must not reward the lever.
                         value_loss = _binned_value_loss(
-                            bin_logits, self._value_target(inputs), value_mask=inputs.value_valid,
+                            bin_logits, inputs.outcomes, value_mask=inputs.value_valid,
                             denominator=value_denominator)
                         loss = policy_loss + value_loss
                     if torch.isfinite(loss):
@@ -492,12 +493,13 @@ class Trainer:
                                   # both reduced over the step's policy rows the same way.
                                   "policy_target_entropy": target_entropy_total,
                                   "policy_kl_target_vs_prior": policy_total - target_entropy_total,
+                                  "value_target_lambda": self.hp.value_target_lambda,
                                   **self._aux_soft_policy_block(aux_total, aux_kl_total, head_norms)})
             self._maybe_periodic_checkpoint(result)
         return result
 
     def _value_target(self, inputs: Any) -> torch.Tensor:
-        """The step's scalar value target, one construction for the train and the eval step."""
+        """The train step's scalar value target; the eval step reads z, so no reading rewards the mix."""
         return value_target(inputs.outcomes, inputs.root_value, inputs.root_value_valid,
                             self.hp.value_target_lambda)
 

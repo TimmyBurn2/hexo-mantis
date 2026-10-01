@@ -218,5 +218,5 @@ class TrainConfig(StrictModel):
     # loss selection + targets: which policy loss the trainer applies follows from
     # `policy_target`, itself pinned to `search.kind`; a game with no winner trains no value.
     policy_target: Literal["raw_visit_distribution", "completed_improved_policy"]
-    # The value target: `λ·v_search + (1−λ)·z` on a row whose search left a root value, z elsewhere; 0 is pure z.
+    # The value target: `λ·v_search + (1−λ)·z` on a row with a root value, z elsewhere; 0 is pure z.
     value_target_lambda: float = Field(ge=0, le=1, allow_inf_nan=False)

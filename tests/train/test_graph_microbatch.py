@@ -215,6 +215,9 @@ def test_of2_2_slice_fidelity_deterministic_mode_exact() -> None:
                                   np.asarray(targets.value_valid)[g0:g1])
             assert np.array_equal(np.asarray(tsl.is_full_search),
                                   np.asarray(targets.is_full_search)[g0:g1])
+            assert np.array_equal(np.asarray(tsl.root_value), np.asarray(targets.root_value)[g0:g1])
+            assert np.array_equal(np.asarray(tsl.root_value_valid),
+                                  np.asarray(targets.root_value_valid)[g0:g1])
             assert list(tsl.target_argmax_cells) == list(targets.target_argmax_cells)[g0:g1]
             assert len(tsl.target_argmax_cells) == g1 - g0
             seen += g1 - g0

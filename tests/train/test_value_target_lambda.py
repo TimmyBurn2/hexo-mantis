@@ -19,10 +19,12 @@ _STONES = [(0, 0, 1), (1, 0, -1), (0, 1, 1)]
 _VISITS = [(2, 0, 0.6), (1, 1, 0.4)]
 _CAPS = MicrobatchCapsSpec(max_edges=100_000_000, max_nodes=4_000_000)
 # (z, root value or None, value_valid). Row 4's game has no winner, so its value is masked whatever its root value.
+# Row 5's root value equals its z, so the mix reaches it without moving it.
 _ROWS = [(1.0, 0.5, True), (-1.0, None, True), (1.0, None, True), (-1.0, -0.25, True), (1.0, -0.5, False),
-         (-1.0, 1.0, True)]
-# The same rows' targets at λ = 0.5, each exact in float32.
-_MIXED_AT_HALF = [0.75, -1.0, 1.0, -0.625, 0.25, 0.0]
+         (-1.0, -1.0, True)]
+# The same rows' targets at λ = 0.25 (asymmetric, so a swapped 1 − λ shows), each exact in float32.
+_LAM = 0.25
+_MIXED = [0.875, -1.0, 1.0, -0.8125, 0.625, -1.0]
 
 
 def _ring(*, roots: bool = True, outcomes: list[float] | None = None) -> HexgBuffer:
@@ -46,12 +48,11 @@ def _value_loss(tmp_path: Path, ring: HexgBuffer, lam: float, *, train: bool) ->
 
 
 def _assert_the_mix_trains_its_own_target(tmp_path: Path) -> None:
-    """At λ = 0.5 the value loss IS the λ = 0 loss of the same rows relabelled with their mixed targets, both paths."""
-    for train in (False, True):
-        mixed = _value_loss(tmp_path, _ring(), 0.5, train=train)
-        relabelled = _value_loss(tmp_path, _ring(roots=False, outcomes=_MIXED_AT_HALF), 0.0, train=train)
-        assert mixed == relabelled, f"train={train}: the λ = 0.5 loss {mixed} is not its target's {relabelled}"
-        assert mixed != _value_loss(tmp_path, _ring(), 0.0, train=train), "λ > 0 moved nothing"
+    """At λ > 0 the train step's value loss IS the λ = 0 loss of the same rows relabelled with their mixed targets."""
+    mixed = _value_loss(tmp_path, _ring(), _LAM, train=True)
+    relabelled = _value_loss(tmp_path, _ring(roots=False, outcomes=_MIXED), 0.0, train=True)
+    assert mixed == relabelled, f"the λ = {_LAM} loss {mixed} is not its target's {relabelled}"
+    assert mixed != _value_loss(tmp_path, _ring(), 0.0, train=True), "λ > 0 moved nothing"
 
 
 def test_at_lambda_zero_the_value_target_is_the_outcome_tensor_itself() -> None:
@@ -95,14 +96,21 @@ def test_a_lambda_above_zero_mixes_only_rows_with_a_root_value_and_the_planted_b
         _assert_the_mix_trains_its_own_target(tmp_path)
 
 
-def test_the_step_event_counts_the_value_rows_the_mix_reaches(tmp_path: Path) -> None:
-    """`root_value_rows`, the mix's fire-rate, counts the step's value-supervised rows with a root value."""
+def test_the_eval_step_reads_z_whatever_lambda(tmp_path: Path) -> None:
+    """A reading must not reward the lever: the forward-only value loss at λ > 0 is the λ = 0 one, bit for bit."""
+    assert _value_loss(tmp_path, _ring(), _LAM, train=False) == _value_loss(tmp_path, _ring(), 0.0, train=False)
+
+
+def test_the_step_event_counts_the_value_rows_the_mix_reaches_and_moves(tmp_path: Path) -> None:
+    """The mix's fire-rate: value-supervised rows with a root value (reached), those with v != z (moved), λ echoed."""
     sink = H.SpySink()
-    trainer = H.tiny_graph_trainer(tmp_path, sink=sink, value_target_lambda=0.5, checkpoint_interval=0)
+    trainer = H.tiny_graph_trainer(tmp_path, sink=sink, value_target_lambda=_LAM, checkpoint_interval=0)
     replay = H.ReplayWireBuffer(_ring(), len(_ROWS))
     run_declared_train_step(trainer, replay, H.GSPEC, batch_size=len(_ROWS), augment=False,
                             caps_provider=lambda: _CAPS, sample_threads_provider=lambda: 1)
     t = replay.targets
     rooted = np.asarray(t.root_value_valid) != 0
     assert int(rooted.sum()) == 4 and sorted(np.asarray(t.outcomes).tolist()) == sorted(z for z, _v, _ok in _ROWS)
-    assert sink.named("trainer_step")[0]["root_value_rows"] == 3
+    event = sink.named("trainer_step")[0]
+    assert (event["root_value_rows"], event["root_value_rows_moved"]) == (3, 2)
+    assert event["value_target_lambda"] == _LAM
