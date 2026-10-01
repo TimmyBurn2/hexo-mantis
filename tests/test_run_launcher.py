@@ -346,11 +346,12 @@ def _event_rows(run_dir: Path) -> list[dict]:
 
 
 def _assert_the_production_regime_fired(rows: list[dict], steps: int) -> None:
-    """Every learner step trained the aux head, and Gumbel and both playout-cap arms fired in self-play."""
+    """Every learner step carries the aux loss and some step trained it (an all-quick batch has no target); Gumbel and both cap arms fired."""
     aux = [row.get("aux_soft_policy_loss") for row in rows if row["event"] == "trainer_step"]
-    assert len(aux) == steps and all(a is not None and 0 < a < float("inf") for a in aux), (
-        f"every learner step must train the aux head; got {aux}"
+    assert len(aux) == steps and all(a is not None and 0 <= a < float("inf") for a in aux), (
+        f"every learner step must carry a finite aux loss; got {aux}"
     )
+    assert any(a > 0 for a in aux), f"the aux head never trained; got {aux}"
     levers = [row["search_levers"] for row in rows if row["event"] == "iteration_complete"]
     assert levers, "the composed stream must carry the search-lever rows"
     for name in ("pcr_full_moves", "pcr_quick_moves", "gumbel_rounds"):
