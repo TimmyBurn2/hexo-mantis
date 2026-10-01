@@ -239,7 +239,6 @@ impl SelfPlayRunner {
         for (name, sims) in [
             ("n_simulations", config.n_simulations),
             ("n_sims_quick", config.n_sims_quick),
-            ("n_sims_full", config.n_sims_full),
         ] {
             if sims > armed_ceiling {
                 return Err(format!(
@@ -265,12 +264,10 @@ impl SelfPlayRunner {
                 config.dirichlet_alpha
             ));
         }
-        if config.full_search_prob > 0.0 && (config.n_sims_quick == 0 || config.n_sims_full == 0) {
-            let (n_sims_quick, n_sims_full) = (config.n_sims_quick, config.n_sims_full);
-            return Err(format!(
-                "SelfPlayRunner: n_sims_quick and n_sims_full must both be > 0 \
-                 when full_search_prob > 0 (got n_sims_quick={n_sims_quick}, n_sims_full={n_sims_full})"
-            ));
+        if config.full_search_prob > 0.0 && config.n_sims_quick == 0 {
+            return Err(
+                "SelfPlayRunner: n_sims_quick must be > 0 when full_search_prob > 0".to_string(),
+            );
         }
 
         // Boot guard reading EXISTING keys only: capacity is DERIVED by the same authority the
@@ -279,7 +276,6 @@ impl SelfPlayRunner {
             config.n_simulations,
             config.full_search_prob,
             config.n_sims_quick,
-            config.n_sims_full,
             config.leaf_batch_size,
             config.gumbel_m,
             config.search_kind.as_config_str(),

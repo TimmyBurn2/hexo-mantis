@@ -14,7 +14,7 @@ use mantis_core::board::{Board, BoardGeometry};
 use mantis_encoding::lookup_or_panic;
 use mantis_search::{LegalSetPolicy, MCTSTree};
 
-const N_SIMS: usize = 50; // run5 selfplay.mcts.n_simulations (target generation), NOT deploy_sims
+const N_SIMS: usize = 50; // run5's self-play sims (target generation), NOT deploy_sims
 const LEAF_BATCH: usize = 8;
 const TEMPERATURE: f32 = 1.0;
 const TOL: f64 = 1e-6;

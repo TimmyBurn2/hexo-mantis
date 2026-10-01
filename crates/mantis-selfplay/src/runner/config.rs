@@ -42,7 +42,6 @@ pub struct SelfPlayRunnerConfig {
     pub results_queue_cap: usize,
     pub full_search_prob: f32,
     pub n_sims_quick: usize,
-    pub n_sims_full: usize,
     pub random_opening_plies: u32,
     /// 1-in-N games carry per-position search stats on their result row; 0 is off.
     pub search_stats_every: usize,
@@ -84,7 +83,6 @@ impl Default for SelfPlayRunnerConfig {
             results_queue_cap: 10_000,
             full_search_prob: 0.0,
             n_sims_quick: 0,
-            n_sims_full: 0,
             random_opening_plies: 0,
             search_stats_every: 0,
             encoding_name: None,

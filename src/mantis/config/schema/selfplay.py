@@ -26,7 +26,6 @@ MAX_ARMED_SIMS_GUMBEL: int = mcts_max_armed_sims_gumbel()
 class MctsConfig(StrictModel):
     """Flat-regime MCTS knobs (`# mcts ns` in `hparams.py`)."""
 
-    n_simulations: int = Field(ge=1, le=MAX_ARMED_SIMS)
     c_puct: float = Field(gt=0)
     fpu_reduction: float
     quiescence_enabled: bool
@@ -43,30 +42,24 @@ class PlayoutCapConfig(StrictModel):
 
     full_search_prob: float = Field(ge=0, le=1)
     n_sims_quick: int = Field(ge=0, le=MAX_ARMED_SIMS)
-    n_sims_full: int = Field(ge=0, le=MAX_ARMED_SIMS)
+    #: Every searched move's sims; under an armed `full_search_prob`, the full arm's.
+    n_sims_full: int = Field(ge=1, le=MAX_ARMED_SIMS)
     # The schema field IS the config key, which retires the old resolver shim.
     temperature_threshold_compound_moves: int = Field(ge=0)
     temp_min: float = Field(ge=0)
 
     @model_validator(mode="after")
     def _mutual_exclusion(self) -> "PlayoutCapConfig":
-        if self.full_search_prob > 0.0 and (self.n_sims_quick <= 0 or self.n_sims_full <= 0):
-            raise ValueError(
-                "playout_cap: full_search_prob > 0 requires n_sims_quick>0 and n_sims_full>0"
-            )
-        if (
-            self.full_search_prob > 0.0
-            and self.n_sims_quick > 0
-            and self.n_sims_full > 0
-            and self.n_sims_quick > self.n_sims_full
-        ):
+        if self.full_search_prob > 0.0 and self.n_sims_quick <= 0:
+            raise ValueError("playout_cap: full_search_prob > 0 requires n_sims_quick>0")
+        if self.full_search_prob > 0.0 and self.n_sims_quick > self.n_sims_full:
             raise ValueError(
                 "playout_cap: n_sims_quick must be <= n_sims_full (quick>full is a "
                 "nonsensical playout-cap-randomization preset)"
             )
-        # Gated on "both presets are set", NOT on `full_search_prob > 0`: gating there would
-        # false-fire on every minted config's all-zero disabled shape.
-        if self.n_sims_quick > 0 and self.n_sims_full > 0:
+        # Gated on a quick preset being set, NOT on `full_search_prob > 0`: gating there would
+        # false-fire on every minted config's disabled shape.
+        if self.n_sims_quick > 0:
             if self.n_sims_quick == self.n_sims_full:
                 raise ValueError(
                     "playout_cap: n_sims_quick == n_sims_full is a no-op randomization "
@@ -74,9 +67,9 @@ class PlayoutCapConfig(StrictModel):
                 )
             if self.full_search_prob <= 0.0 or self.full_search_prob >= 1.0:
                 raise ValueError(
-                    "playout_cap: full_search_prob must be in (0, 1) when both n_sims_quick "
-                    "and n_sims_full are configured (0 or 1 makes one preset permanently "
-                    "unreachable — degenerate randomization)"
+                    "playout_cap: full_search_prob must be in (0, 1) when n_sims_quick is "
+                    "configured (0 or 1 makes one preset permanently unreachable — degenerate "
+                    "randomization)"
                 )
         return self
 

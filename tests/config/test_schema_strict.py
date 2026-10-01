@@ -55,11 +55,11 @@ def test_bool_to_int_rejected():
 
 def test_selfplay_nested_float_to_int_rejected():
     # O14 strict-coercion pin ported off the retired RadiusStage float-step case: a nested
-    # sub-model field (`selfplay.mcts.n_simulations`) still rejects a silent float->int
+    # sub-model field (`selfplay.playout_cap.n_sims_full`) still rejects a silent float->int
     # coercion (`selfplay.legal_move_radius_schedule`/`RadiusStage` are
     # gone from the schema, DESIGN_P2.md §5).
     payload = _valid_payload()
-    payload["selfplay"]["mcts"]["n_simulations"] = 50.0
+    payload["selfplay"]["playout_cap"]["n_sims_full"] = 50.0
     with pytest.raises(ValidationError):
         RunConfig.model_validate(payload)
 

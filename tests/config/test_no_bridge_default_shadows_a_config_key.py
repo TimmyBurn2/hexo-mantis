@@ -35,7 +35,6 @@ REGISTERED_DEBT: frozenset[str] = frozenset({
     "__init__(gumbel_m=16)",
     "__init__(leaf_batch_size=8)",
     "__init__(max_moves_per_game=128)",
-    "__init__(n_sims_full=0)",
     "__init__(n_sims_quick=0)",
     "__init__(n_simulations=50)",
     "__init__(n_workers=4)",
@@ -73,9 +72,9 @@ def test_neither_engine_stub_defaults_a_parameter_that_shadows_a_config_key() ->
     """The load-bearing row. A `= <literal>` on a name the schema also owns is a second
     authority over one number, sitting where nobody reads it."""
     leaves = _config_leaf_names()
-    #: `max_moves_per_game` is the bridge's spelling of `selfplay.max_game_moves`, renamed at
-    #: `build_runner_config`, so the census must know both names.
-    aliases = {"max_moves_per_game": "max_game_moves", "epsilon": "dirichlet_epsilon"}
+    #: `max_moves_per_game` and `n_simulations` are the bridge's spellings of `selfplay.max_game_moves`
+    #: and `selfplay.playout_cap.n_sims_full`, renamed at `build_runner_config`, so the census must know both names.
+    aliases = {"max_moves_per_game": "max_game_moves", "n_simulations": "n_sims_full", "epsilon": "dirichlet_epsilon"}
     offenders: list[str] = []
     tree = ast.parse(_STUB.read_text(encoding="utf-8"), filename=str(_STUB))
     for node in ast.walk(tree):

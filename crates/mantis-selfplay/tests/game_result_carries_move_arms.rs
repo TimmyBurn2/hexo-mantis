@@ -22,7 +22,7 @@ fn drive(random_opening_plies: u32, want_games: usize) -> Vec<GameResultRow> {
     let runner = SelfPlayRunner::new(SelfPlayRunnerConfig {
         n_workers: 1,
         max_moves_per_game: PLY_CAP,
-        n_simulations: N_SIMS_QUICK,
+        n_simulations: N_SIMS_FULL,
         leaf_batch_size: 4,
         random_opening_plies,
         dirichlet_enabled: true,
@@ -30,7 +30,6 @@ fn drive(random_opening_plies: u32, want_games: usize) -> Vec<GameResultRow> {
         quiescence_enabled: false,
         full_search_prob: 0.5,
         n_sims_quick: N_SIMS_QUICK,
-        n_sims_full: N_SIMS_FULL,
         encoding_name: Some(ENCODING.to_string()),
         ..Default::default()
     })

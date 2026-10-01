@@ -1219,11 +1219,10 @@ def _identity(representation: str, encoding: str = "gnn_axis_v1"):
             search=SimpleNamespace(kind="puct"),
             leaf_batch_size=8,
             gumbel_m=16,
-            mcts=SimpleNamespace(n_simulations=50),
             playout_cap=SimpleNamespace(
                 full_search_prob=0.0,
                 n_sims_quick=0,
-                n_sims_full=0,
+                n_sims_full=50,
             ),
         ),
     )

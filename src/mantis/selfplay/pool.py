@@ -123,7 +123,6 @@ class WorkerPool:
 
         hp = SelfPlayHParams.from_config(config, n_workers)
         self.n_workers = hp.n_workers
-        self.n_simulations = hp.n_simulations
         self.c_puct = hp.c_puct
         self.fpu_reduction = hp.fpu_reduction
         self.quiescence_enabled = hp.quiescence_enabled

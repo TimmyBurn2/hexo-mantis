@@ -142,7 +142,6 @@ impl SelfPlayRunner {
             results_queue_cap: c.results_queue_cap,
             full_search_prob: c.full_search_prob,
             n_sims_quick: c.n_sims_quick,
-            n_sims_full: c.n_sims_full,
             random_opening_plies: c.random_opening_plies,
             search_stats_every: c.search_stats_every,
             visit_capacity: self.visit_capacity,

@@ -85,7 +85,7 @@ def device() -> torch.device:
 
 def test_pool_presents_every_frozen_member(device) -> None:
     """H-01 — PASS iff every member the committed trainer reads exists on the pool with the right kind: plain attributes as attributes, properties as properties on the CLASS (so they are computed, not snapshotted at construction), and methods as callables."""
-    pool = graph_pool(device=device, capacity=32, n_simulations=50)
+    pool = graph_pool(device=device, capacity=32, n_sims_full=50)
 
     for name in FROZEN_ATTRS:
         assert hasattr(pool, name), f"missing attribute {name!r}"
@@ -103,7 +103,7 @@ def test_pool_presents_every_frozen_member(device) -> None:
 
 def test_pool_satisfies_both_runtime_protocols(device) -> None:
     """H-01 (Protocol arm) — PASS iff the pool satisfies the trainer's committed `WorkerPoolLike` AND this package's `ActorSyncTarget`."""
-    pool = graph_pool(device=device, capacity=32, n_simulations=50)
+    pool = graph_pool(device=device, capacity=32, n_sims_full=50)
     assert isinstance(pool, WorkerPoolLike)
     assert isinstance(pool, ActorSyncTarget)
 
@@ -113,7 +113,7 @@ def test_snapshot_dataclass_field_sets_are_frozen(device) -> None:
     assert set(RunnerStats.__dataclass_fields__) == RUNNER_STATS_FIELDS
     assert set(InferenceStats.__dataclass_fields__) == INFERENCE_STATS_FIELDS
 
-    pool = graph_pool(device=device, capacity=32, n_simulations=50)
+    pool = graph_pool(device=device, capacity=32, n_sims_full=50)
     rstats = pool.runner_stats()
     assert isinstance(rstats, RunnerStats)
     # The trainer's regime-gated block reads these two by name.
@@ -136,7 +136,7 @@ def test_snapshot_dataclass_field_sets_are_frozen(device) -> None:
 
 def test_winrates_are_computed_from_the_right_counters(device) -> None:
     """H-01 (winrate arm) — PASS iff `x_winrate == x_wins / games_completed` and `o_winrate == o_wins / games_completed`, with both 0.0 at zero games."""
-    pool = graph_pool(device=device, capacity=32, n_simulations=50)
+    pool = graph_pool(device=device, capacity=32, n_sims_full=50)
     assert pool.x_winrate == 0.0 and pool.o_winrate == 0.0, "zero games ⇒ 0.0, not NaN"
 
     pool.games_completed = 10
@@ -148,7 +148,7 @@ def test_winrates_are_computed_from_the_right_counters(device) -> None:
 
 def test_no_op_recorder_default_accepts_a_step(device) -> None:
     """H-01 (default-seam arm) — PASS iff a pool built without a recorder accepts `update_checkpoint_step` silently."""
-    pool = graph_pool(device=device, capacity=32, n_simulations=50)
+    pool = graph_pool(device=device, capacity=32, n_sims_full=50)
     pool.update_checkpoint_step(17)  # must not raise on the no-op recorder
 
 
@@ -156,7 +156,7 @@ def test_pool_replay_buffer_is_the_facade(device) -> None:
     """E-07 — PASS iff `pool.replay_buffer` IS a `ReplayFacade` wrapping the exact raw buffer handed to the constructor, with the kind resolved from the pool's own spec."""
     graph_raw = HexgBuffer(capacity=32, encoding="gnn_axis_v1", visit_capacity=128)
     wrapped = graph_pool(device=device, buffer=graph_raw, capacity=32,
-                          n_simulations=50)
+                          n_sims_full=50)
     assert isinstance(wrapped.replay_buffer, ReplayFacade)
     assert wrapped.replay_buffer.raw is graph_raw, (
         "the facade must wrap the ctor's buffer, not a copy")
@@ -166,7 +166,7 @@ def test_pool_replay_buffer_is_the_facade(device) -> None:
 def test_pool_does_not_keep_a_second_handle_on_the_raw_buffer(device) -> None:
     """E-07 (bypass arm) — PASS iff no pool attribute other than the facade holds the raw buffer."""
     raw = HexgBuffer(capacity=32, encoding="gnn_axis_v1", visit_capacity=128)
-    pool = graph_pool(device=device, buffer=raw, capacity=32, n_simulations=50)
+    pool = graph_pool(device=device, buffer=raw, capacity=32, n_sims_full=50)
 
     holders = [name for name, value in vars(pool).items() if value is raw]
     assert holders == [], (
@@ -177,7 +177,7 @@ def test_pool_does_not_keep_a_second_handle_on_the_raw_buffer(device) -> None:
 
 def test_graph_pool_buffer_composition_reads_the_empty_ring() -> None:
     """An empty graph ring composes as empty: no rows, all of them corpus by the push count, no games."""
-    pool = graph_pool(device=torch.device("cpu"), capacity=32, n_simulations=50)
+    pool = graph_pool(device=torch.device("cpu"), capacity=32, n_sims_full=50)
     composition = pool.buffer_composition()
     assert composition["buffer_size"] == 0
     assert composition["corpus_fraction"] == 1.0

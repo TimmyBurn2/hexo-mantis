@@ -16,17 +16,17 @@ from mantis.config.schema import RunConfig, SCHEMA_VERSION
 from _schema_blocks import eval_block, inference_block, monitor_block, train_block
 
 
-def _selfplay_block(*, n_simulations: int = 50) -> dict:
+def _selfplay_block(*, n_sims_full: int = 50) -> dict:
     return {
         "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
         "c_visit": 50.0, "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16,
         "gumbel_explore_moves": 10, "search_stats_every": 8,
         "results_queue_cap": 10_000, "random_opening_plies": 0,
         "log_investigation_metrics": True,
-        "mcts": {"n_simulations": n_simulations, "c_puct": 1.5, "fpu_reduction": 0.25,
+        "mcts": {"c_puct": 1.5, "fpu_reduction": 0.25,
                  "quiescence_enabled": True, "quiescence_blend_2": 0.3,
                  "dirichlet_alpha": 0.3, "dirichlet_epsilon": 0.25, "dirichlet_enabled": True},
-        "playout_cap": {"full_search_prob": 0.0, "n_sims_quick": 0, "n_sims_full": 0,
+        "playout_cap": {"full_search_prob": 0.0, "n_sims_quick": 0, "n_sims_full": n_sims_full,
                         "temperature_threshold_compound_moves": 0, "temp_min": 0.5},
     }
 
@@ -35,7 +35,7 @@ def _payload(
     *,
     train_over: dict | None = None,
     search_kind: str = "puct",
-    n_simulations: int = 50,
+    n_sims_full: int = 50,
     selfplay_over: dict | None = None,
 ) -> dict:
     return {
@@ -50,7 +50,7 @@ def _payload(
         "deploy": {"search": {"kind": search_kind, "tactics": None}},
         "eval": eval_block(),
         "train": train_block(**(train_over or {})),
-        "selfplay": {**_selfplay_block(n_simulations=n_simulations), "search": {"kind": search_kind, "tactics": None},
+        "selfplay": {**_selfplay_block(n_sims_full=n_sims_full), "search": {"kind": search_kind, "tactics": None},
                      **(selfplay_over or {})},
         "inference": inference_block(),
         "monitor": monitor_block(),
@@ -102,7 +102,7 @@ def test_the_gumbel_kind_on_a_graph_run_mints_at_the_minted_slot_bound():
         _payload(
             search_kind="gumbel",
             train_over={"policy_target": "completed_improved_policy"},
-            n_simulations=192,
+            n_sims_full=192,
         )
     )
     assert cfg.selfplay.search.kind == "gumbel"
@@ -116,7 +116,7 @@ def test_a_gumbel_m_past_the_minted_bound_is_refused_on_a_graph_run():
             _payload(
                 search_kind="gumbel",
                 train_over={"policy_target": "completed_improved_policy"},
-                n_simulations=192,
+                n_sims_full=192,
                 selfplay_over={"gumbel_m": 17},
             )
         )

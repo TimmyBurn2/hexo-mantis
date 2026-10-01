@@ -104,7 +104,6 @@ class SelfPlayHParams:
     results_queue_cap: int
     random_opening_plies: int
     # mcts ns
-    n_simulations: int
     c_puct: float
     fpu_reduction: float
     quiescence_enabled: bool
@@ -124,18 +123,15 @@ class SelfPlayHParams:
 
     @property
     def effective_sims_per_move(self) -> int:
-        """Effective per-MOVE sim count for the sims/sec bill: under a playout cap it bills at
-        the full-search ceiling, an over-bill, never the falsified per-GAME under-bill."""
-        if self.full_search_prob > 0.0:
-            return self.n_sims_full
-        return self.n_simulations
+        """Per-MOVE sims for the sims/sec bill: the full search's, an over-bill under an armed cap."""
+        return self.n_sims_full
 
     @classmethod
     def from_config(
         cls, config: dict[str, Any], n_workers: int | None = None
     ) -> SelfPlayHParams:
         """Resolve every ctor-time knob off a validated mapping's `selfplay` section.
-        `effective_sims_per_move == 0` spans `mcts.n_simulations` AND `playout_cap.*`, so it is checked here.
+        An unvalidated mapping can carry `playout_cap.n_sims_full == 0`, so it is checked here.
         Raises: ValueError — no effective per-move sim count; `MissingTacticsError`, no `selfplay.search.tactics`."""
         sp = config["selfplay"]
         mcts_cfg = sp["mcts"]
@@ -156,7 +152,6 @@ class SelfPlayHParams:
             gumbel_explore_moves=int(sp["gumbel_explore_moves"]),
             results_queue_cap=int(sp["results_queue_cap"]),
             random_opening_plies=int(sp["random_opening_plies"]),
-            n_simulations=int(mcts_cfg["n_simulations"]),
             c_puct=float(mcts_cfg["c_puct"]),
             fpu_reduction=float(mcts_cfg["fpu_reduction"]),
             quiescence_enabled=bool(mcts_cfg["quiescence_enabled"]),
@@ -173,11 +168,8 @@ class SelfPlayHParams:
         )
         if hp.effective_sims_per_move <= 0:
             raise ValueError(
-                "sims/sec: could not resolve effective per-move sim count — "
-                f"full_search_prob={hp.full_search_prob}, "
-                f"n_sims_full={hp.n_sims_full}, n_simulations={hp.n_simulations}. "
-                "Set mcts.n_simulations > 0 (flat regime) or "
-                "playout_cap.n_sims_full > 0 (move-level cap regime)."
+                "sims/sec: could not resolve the per-move sim count — "
+                f"playout_cap.n_sims_full={hp.n_sims_full}; set it > 0."
             )
         return hp
 
@@ -219,7 +211,7 @@ def build_runner_config(
     cfg = SelfPlayRunnerConfig(
         n_workers=hp.n_workers,
         max_moves_per_game=hp.max_moves_per_game,
-        n_simulations=hp.n_simulations,
+        n_simulations=hp.n_sims_full,
         leaf_batch_size=hp.leaf_batch_size,
         c_puct=hp.c_puct,
         fpu_reduction=hp.fpu_reduction,
@@ -239,7 +231,6 @@ def build_runner_config(
         results_queue_cap=hp.results_queue_cap,
         full_search_prob=hp.full_search_prob,
         n_sims_quick=hp.n_sims_quick,
-        n_sims_full=hp.n_sims_full,
         random_opening_plies=hp.random_opening_plies,
         encoding_name=encoding_name,
     )

@@ -11,7 +11,6 @@
 # delta: train.batch_size: 256 -> 32
 # delta: train.training_steps_per_game: 1.0 -> 4.0
 # delta: train.max_train_burst: 1 -> 4
-# delta: selfplay.mcts.n_simulations: 50 -> 2
 # delta: selfplay.max_game_moves: 128 -> 24
 # delta: eval.worker_device: cuda -> cpu
 # delta: eval.random_model_sims: 96 -> 1
@@ -22,6 +21,7 @@
 # delta: train.device: cuda -> cpu
 # delta: allocator_posture: null -> expandable_segments
 # delta: selfplay.n_workers: 1 -> 14
+# delta: selfplay.playout_cap.n_sims_full: 50 -> 2
 # delta: monitor.heartbeat_poll_interval_sec: 5.0 -> 0.5
 # delta: monitor.heartbeat_file_interval_sec: 15.0 -> 0.5
 schema_version: 1
@@ -119,7 +119,6 @@ selfplay:
   search_stats_every: 8
   random_opening_plies: 0
   mcts:
-    n_simulations: 2
     c_puct: 1.5
     fpu_reduction: 0.25
     quiescence_enabled: true
@@ -130,7 +129,7 @@ selfplay:
   playout_cap:
     full_search_prob: 0.0
     n_sims_quick: 0
-    n_sims_full: 0
+    n_sims_full: 2
     temperature_threshold_compound_moves: 0
     temp_min: 0.5
 inference:

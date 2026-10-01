@@ -126,7 +126,6 @@ pub(crate) struct WorkerParams {
     pub(crate) results_queue_cap: usize,
     pub(crate) full_search_prob: f32,
     pub(crate) n_sims_quick: usize,
-    pub(crate) n_sims_full: usize,
     pub(crate) random_opening_plies: u32,
     pub(crate) search_stats_every: usize,
     /// DERIVED HEXG visit-slot capacity — composed once in

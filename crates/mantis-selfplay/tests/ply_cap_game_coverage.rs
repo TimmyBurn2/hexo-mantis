@@ -38,7 +38,7 @@ const SEARCHED_PLIES: usize = PROD_PLY_CAP - RANDOM_OPENING_PLIES as usize;
 #[test]
 fn a_full_ply_cap_game_at_production_parameters_records_within_the_derived_capacity() {
     let spec = lookup_or_panic("gnn_axis_v1");
-    let capacity = derived_visit_capacity(PROD_SIMS, 0.0, 0, 0, PROD_LEAF_BATCH, 16, "puct")
+    let capacity = derived_visit_capacity(PROD_SIMS, 0.0, 0, PROD_LEAF_BATCH, 16, "puct")
         .expect("the production sims regime must have a derivable capacity");
 
     let runner = SelfPlayRunner::new(SelfPlayRunnerConfig {

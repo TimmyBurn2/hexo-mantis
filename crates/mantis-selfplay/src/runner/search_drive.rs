@@ -133,7 +133,6 @@ pub(crate) struct MovePlayContext {
     pub(crate) n_simulations: usize,
     pub(crate) full_search_prob: f32,
     pub(crate) n_sims_quick: usize,
-    pub(crate) n_sims_full: usize,
     /// THE search authority: the root mechanism, the interior selector and the exported
     /// target's semantics all read this one field.
     pub(crate) search_kind: SearchKind,
@@ -572,7 +571,7 @@ pub(crate) fn play_one_move(
     let (move_is_full_search, move_sims) = if ctx.full_search_prob > 0.0 {
         let full = rng.random::<f32>() < ctx.full_search_prob;
         let sims = if full {
-            ctx.n_sims_full
+            ctx.n_simulations
         } else {
             ctx.n_sims_quick
         };

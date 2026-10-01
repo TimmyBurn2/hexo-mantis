@@ -13,7 +13,7 @@ from mantis.selfplay.pool import WorkerPool
 
 
 def pool_cfg(
-    encoding: str = "gnn_axis_v1", *, n_simulations: int = 8,
+    encoding: str = "gnn_axis_v1", *, n_sims_full: int = 8,
     **over: Any
 ) -> dict[str, Any]:
     # `selfplay`/`inference`/`train` are nested schema-shaped sections, so the `from_config`
@@ -24,10 +24,10 @@ def pool_cfg(
         "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_explore_moves": 10, "search_stats_every": 8,
         "results_queue_cap": 10_000, "random_opening_plies": 0,
         "log_investigation_metrics": True,
-        "mcts": {"n_simulations": n_simulations, "c_puct": 1.5, "fpu_reduction": 0.25,
+        "mcts": {"c_puct": 1.5, "fpu_reduction": 0.25,
                  "quiescence_enabled": True, "quiescence_blend_2": 0.3,
                  "dirichlet_alpha": 0.3, "dirichlet_epsilon": 0.25, "dirichlet_enabled": True},
-        "playout_cap": {"full_search_prob": 0.0, "n_sims_quick": 0, "n_sims_full": 0,
+        "playout_cap": {"full_search_prob": 0.0, "n_sims_quick": 0, "n_sims_full": n_sims_full,
                         "temperature_threshold_compound_moves": 0, "temp_min": 0.5},
     }
     selfplay.update(over)
@@ -48,7 +48,7 @@ def graph_pool(
     buffer: Any = None,
     capacity: int = 256,
     visit_capacity: int = 128,
-    n_simulations: int = 8,
+    n_sims_full: int = 8,
     **pool_over: Any,
 ) -> WorkerPool:
     """A graph WorkerPool over a fresh 1-layer GNN; `buffer` replaces the raw buffer when given,
@@ -59,7 +59,7 @@ def graph_pool(
     raw = buffer if buffer is not None else HexgBuffer(
         capacity=capacity, encoding="gnn_axis_v1", visit_capacity=visit_capacity)
     return WorkerPool(
-        build_net(arch), pool_cfg(n_simulations=n_simulations),
+        build_net(arch), pool_cfg(n_sims_full=n_sims_full),
         device or torch.device("cpu"), raw, arch=arch,
         **pool_over,
     )

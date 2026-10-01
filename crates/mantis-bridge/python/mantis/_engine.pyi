@@ -356,7 +356,6 @@ class SelfPlayRunnerConfig:
         results_queue_cap: int = 10_000,
         full_search_prob: float = 0.0,
         n_sims_quick: int = 0,
-        n_sims_full: int = 0,
         random_opening_plies: int = 0,
         encoding_name: str | None = None,
     ) -> None: ...
@@ -572,7 +571,6 @@ def derived_hexg_visit_capacity(
     n_simulations: int,
     full_search_prob: float,
     n_sims_quick: int,
-    n_sims_full: int,
     leaf_batch_size: int,
     gumbel_m: int,
     search_kind: str,

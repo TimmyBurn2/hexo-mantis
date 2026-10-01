@@ -14,25 +14,25 @@ from pydantic import ValidationError
 from mantis.config.schema import MctsConfig, PlayoutCapConfig
 
 VALID_MCTS: dict = {
-    "n_simulations": 50, "c_puct": 1.5, "fpu_reduction": 0.25, "quiescence_enabled": True,
+    "c_puct": 1.5, "fpu_reduction": 0.25, "quiescence_enabled": True,
     "quiescence_blend_2": 0.3, "dirichlet_alpha": 0.3, "dirichlet_epsilon": 0.25,
     "dirichlet_enabled": True,
 }
 VALID_PLAYOUT_CAP: dict = {
     "full_search_prob": 0.0,
-    "n_sims_quick": 0, "n_sims_full": 0,
+    "n_sims_quick": 0, "n_sims_full": 50,
     "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
 }
 MCTS_FIELDS = sorted(VALID_MCTS)
 PLAYOUT_CAP_FIELDS = sorted(VALID_PLAYOUT_CAP)
 
 MCTS_BOUND_VIOLATIONS: list[tuple[str, object]] = [
-    ("n_simulations", 0), ("c_puct", 0.0), ("quiescence_blend_2", 1.1),
+    ("c_puct", 0.0), ("quiescence_blend_2", 1.1),
     ("quiescence_blend_2", -0.1), ("dirichlet_alpha", 0.0), ("dirichlet_epsilon", 1.1),
     ("dirichlet_epsilon", -0.1),
 ]
 PLAYOUT_CAP_BOUND_VIOLATIONS: list[tuple[str, object]] = [
-    ("full_search_prob", 1.1), ("n_sims_quick", -1), ("n_sims_full", -1),
+    ("full_search_prob", 1.1), ("n_sims_quick", -1), ("n_sims_full", 0),
     ("temperature_threshold_compound_moves", -1),
     ("temp_min", -0.1),
 ]
@@ -53,7 +53,7 @@ def _playout_cap(**over: object) -> dict:
 # MctsConfig
 def test_mcts_valid_payload_constructs_clean():
     cfg = MctsConfig.model_validate(VALID_MCTS)
-    assert cfg.n_simulations == 50
+    assert cfg.c_puct == 1.5
     assert cfg.dirichlet_epsilon == 0.25
 
 

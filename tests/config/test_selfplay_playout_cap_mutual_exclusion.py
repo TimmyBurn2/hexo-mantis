@@ -1,8 +1,9 @@
 """`PlayoutCapConfig._mutual_exclusion` — what the schema refuses at load.
 
-Gated on `full_search_prob > 0`: either sims preset zero; `n_sims_quick > n_sims_full`.
+Gated on `full_search_prob > 0`: a zero quick preset; `n_sims_quick > n_sims_full`. `n_sims_full`
+is every move's sims, so its zero is a field bound.
 
-Gated instead on BOTH presets being set, independently of `full_search_prob`:
+Gated instead on a quick preset being set, independently of `full_search_prob`:
 `n_sims_quick == n_sims_full` (a no-op randomization) and a degenerate `full_search_prob`
 outside the open interval (0, 1).
 """
@@ -15,7 +16,7 @@ from mantis.config.schema import PlayoutCapConfig
 
 BASE: dict = {
     "full_search_prob": 0.0,
-    "n_sims_quick": 0, "n_sims_full": 0,
+    "n_sims_quick": 0, "n_sims_full": 50,
     "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
 }
 
@@ -86,10 +87,10 @@ def test_degenerate_full_search_prob_one_raises():
         )
 
 
-def test_all_zero_minted_shape_is_unaffected_negative_control():
-    """The gate's `and` needs BOTH sims > 0, so the all-zero minted shape stays constructible."""
+def test_the_disarmed_minted_shape_is_unaffected_negative_control():
+    """No quick preset and no probability: the disarmed minted shape stays constructible."""
     cfg = PlayoutCapConfig.model_validate(
-        _payload(n_sims_quick=0, n_sims_full=0, full_search_prob=0.0)
+        _payload(n_sims_quick=0, n_sims_full=50, full_search_prob=0.0)
     )
     assert cfg.n_sims_quick == 0
-    assert cfg.n_sims_full == 0
+    assert cfg.n_sims_full == 50

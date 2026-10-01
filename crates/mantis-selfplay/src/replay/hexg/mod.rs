@@ -52,7 +52,7 @@ pub const HEXG_CAPACITY_CEILING: usize = usize::MAX / (MAX_STONES * 2);
 /// THE derivation authority for the HEXG visit-slot capacity.
 ///
 /// `capacity = max(ARMED sim budgets) + leaf_batch_size − 1`, the largest positive-mass support a
-/// graph record can carry; `n_simulations` is armed always, quick/full iff `full_search_prob > 0`.
+/// graph record can carry; `n_simulations` is armed always, the quick arm iff `full_search_prob > 0`.
 /// The `− 1` is HEADROOM, not a bound; tightening it would
 /// change which configs mint.
 ///
@@ -73,7 +73,6 @@ pub fn derived_visit_capacity(
     n_simulations: usize,
     full_search_prob: f32,
     n_sims_quick: usize,
-    n_sims_full: usize,
     leaf_batch_size: usize,
     gumbel_m: usize,
     search_kind: &str,
@@ -103,7 +102,7 @@ pub fn derived_visit_capacity(
     }
     let mut max_armed = n_simulations;
     if full_search_prob > 0.0 {
-        max_armed = max_armed.max(n_sims_quick).max(n_sims_full);
+        max_armed = max_armed.max(n_sims_quick);
     }
     let capacity = max_armed + leaf_batch_size.saturating_sub(1);
     if capacity > HEXG_VISIT_COUNT_CEILING {
@@ -113,7 +112,7 @@ pub fn derived_visit_capacity(
              {HEXG_VISIT_COUNT_CEILING} (the per-record visit count is u16) — this sims \
              regime cannot be honored by the HEXG record format at any slot sizing; an \
              unsupported regime is a mint-time config error, never a boot surprise \
-             (R255/ADJ-D34; keys: selfplay.mcts.n_simulations, selfplay.playout_cap.*, \
+             (R255/ADJ-D34; keys: selfplay.playout_cap.*, \
              selfplay.leaf_batch_size)"
         ));
     }

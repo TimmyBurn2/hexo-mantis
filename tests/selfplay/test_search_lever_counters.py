@@ -85,9 +85,9 @@ def _answer_uniformly(batcher: Any, stop: threading.Event) -> None:
 def drive() -> Iterator[_Drive]:
     """One Gumbel self-play drive with the playout cap armed at a fair coin between two budgets."""
     cfg = _engine.SelfPlayRunnerConfig(
-        n_workers=_N_WORKERS, max_moves_per_game=4, n_simulations=_N_SIMS_QUICK,
+        n_workers=_N_WORKERS, max_moves_per_game=4, n_simulations=_N_SIMS_FULL,
         leaf_batch_size=4, quiescence_enabled=False, q_rescale=True, search_stats_every=0,
-        gumbel_m=4, full_search_prob=0.5, n_sims_quick=_N_SIMS_QUICK, n_sims_full=_N_SIMS_FULL,
+        gumbel_m=4, full_search_prob=0.5, n_sims_quick=_N_SIMS_QUICK,
         random_opening_plies=0, encoding_name=_ENCODING,
     )
     cfg.search_kind = "gumbel"

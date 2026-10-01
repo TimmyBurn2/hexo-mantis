@@ -291,12 +291,11 @@ impl PyHexgBuffer {
 /// honor. Live consumers: the schema validator and the buffer composition.
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
-#[pyo3(signature = (n_simulations, full_search_prob, n_sims_quick, n_sims_full, leaf_batch_size, gumbel_m, search_kind))]
+#[pyo3(signature = (n_simulations, full_search_prob, n_sims_quick, leaf_batch_size, gumbel_m, search_kind))]
 pub fn derived_hexg_visit_capacity(
     n_simulations: usize,
     full_search_prob: f32,
     n_sims_quick: usize,
-    n_sims_full: usize,
     leaf_batch_size: usize,
     gumbel_m: usize,
     search_kind: &str,
@@ -305,7 +304,6 @@ pub fn derived_hexg_visit_capacity(
         n_simulations,
         full_search_prob,
         n_sims_quick,
-        n_sims_full,
         leaf_batch_size,
         gumbel_m,
         search_kind,

@@ -65,7 +65,6 @@ struct WorkerMoveCfg {
     n_simulations: usize,
     full_search_prob: f32,
     n_sims_quick: usize,
-    n_sims_full: usize,
     search_kind: SearchKind,
     dirichlet_enabled: bool,
 }
@@ -155,7 +154,6 @@ pub(crate) fn run_worker_thread(
         results_queue_cap,
         full_search_prob,
         n_sims_quick,
-        n_sims_full,
         random_opening_plies,
         search_stats_every,
         visit_capacity,
@@ -243,7 +241,6 @@ pub(crate) fn run_worker_thread(
         n_simulations,
         full_search_prob,
         n_sims_quick,
-        n_sims_full,
         search_kind,
         dirichlet_enabled,
     };
@@ -331,7 +328,6 @@ fn run_one_game(
         full_search_prob,
         n_simulations,
         n_sims_quick,
-        n_sims_full,
         search_kind,
         dirichlet_enabled,
     } = move_cfg;
@@ -357,7 +353,6 @@ fn run_one_game(
         n_simulations,
         full_search_prob,
         n_sims_quick,
-        n_sims_full,
         search_kind,
         dirichlet_enabled,
     };

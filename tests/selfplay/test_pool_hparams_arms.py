@@ -20,13 +20,13 @@ BASE_SELFPLAY: dict[str, Any] = {
     "log_investigation_metrics": False,
 }
 BASE_MCTS: dict[str, Any] = {
-    "n_simulations": 111, "c_puct": 1.75, "fpu_reduction": 0.4, "quiescence_enabled": False,
+    "c_puct": 1.75, "fpu_reduction": 0.4, "quiescence_enabled": False,
     "quiescence_blend_2": 0.55, "dirichlet_alpha": 0.25, "dirichlet_epsilon": 0.3,
     "dirichlet_enabled": False,
 }
 BASE_PLAYOUT_CAP: dict[str, Any] = {
     "full_search_prob": 0.0,
-    "n_sims_quick": 0, "n_sims_full": 0,
+    "n_sims_quick": 0, "n_sims_full": 111,
     "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
 }
 # The LEGACY flat hparams dict `cfg()` builds, never a validated `train:` payload, so INCOMPLETE.
@@ -67,13 +67,12 @@ def assemble(monkeypatch):
 
 # effective-sims resolution + the one hard error with no schema equivalent
 def test_effective_sims_zero_is_a_hard_error() -> None:
-    """A config resolving to zero effective per-move sims raises, naming both escape routes; the
-    check spans two sections, so it has no single-model schema equivalent."""
+    """An unvalidated mapping resolving to zero per-move sims raises, naming the key."""
     with pytest.raises(ValueError) as exc:
-        SelfPlayHParams.from_config(cfg(mcts={"n_simulations": 0}))
+        SelfPlayHParams.from_config(cfg(playout_cap={"n_sims_full": 0}))
     message = str(exc.value)
-    assert "could not resolve effective per-move sim count" in message
-    assert "mcts.n_simulations > 0" in message and "playout_cap.n_sims_full > 0" in message
+    assert "could not resolve the per-move sim count" in message
+    assert "playout_cap.n_sims_full=0" in message
 
 
 @pytest.mark.parametrize(
@@ -85,7 +84,7 @@ def test_effective_sims_zero_is_a_hard_error() -> None:
     ids=["flat_regime", "move_level_cap_regime"],
 )
 def test_effective_sims_per_move_resolution(playout_cap: dict, expected: int) -> None:
-    """Effective sims are flat `mcts.n_simulations`, or `n_sims_full` under a move-level cap."""
+    """Effective sims are `n_sims_full`, the full arm's under a move-level cap."""
     hp = SelfPlayHParams.from_config(cfg(playout_cap=playout_cap))
     assert hp.effective_sims_per_move == expected
 

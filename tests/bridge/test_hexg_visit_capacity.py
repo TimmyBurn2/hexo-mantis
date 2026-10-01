@@ -19,7 +19,6 @@ def _derive(**over):
         n_simulations=50,
         full_search_prob=0.0,
         n_sims_quick=0,
-        n_sims_full=0,
         leaf_batch_size=8,
         # The slot count depends on the SEARCH KIND: under `puct` it is the sims regime's
         # formula, under `gumbel` it is the minted m and the sims regime is inert.
@@ -32,16 +31,16 @@ def _derive(**over):
 
 def test_derivation_is_max_armed_plus_leaf_overshoot() -> None:
     assert _derive() == 57  # run5 shape: 50 + 8 - 1
-    assert _derive(full_search_prob=0.10, n_sims_quick=75, n_sims_full=600) == 607
+    assert _derive(n_simulations=600, full_search_prob=0.10, n_sims_quick=75) == 607
 
 
 def test_an_unarmed_arm_never_enters_the_max() -> None:
-    assert _derive(n_sims_quick=70_000, n_sims_full=70_000) == 57  # prob 0.0 → inert
+    assert _derive(n_sims_quick=70_000) == 57  # prob 0.0 → inert
 
 
 def test_a_regime_over_the_ceiling_raises_naming_it() -> None:
     with pytest.raises(ValueError, match="65535"):
-        _derive(full_search_prob=0.10, n_sims_quick=75, n_sims_full=70_000)
+        _derive(n_simulations=70_000, full_search_prob=0.10, n_sims_quick=75)
 
 
 def test_the_gumbel_slot_count_is_the_minted_m_and_the_sims_regime_is_inert() -> None:
@@ -56,10 +55,10 @@ def test_the_gumbel_slot_count_is_the_minted_m_and_the_sims_regime_is_inert() ->
     assert _derive(search_kind="gumbel") == 16
     assert _derive(search_kind="gumbel", gumbel_m=4) == 4
     # A regime with an enormous PUCT-derived capacity does not move the Gumbel answer.
-    assert _derive(search_kind="gumbel", full_search_prob=0.10,
-                   n_sims_quick=75, n_sims_full=600) == 16
+    assert _derive(search_kind="gumbel", n_simulations=600, full_search_prob=0.10,
+                   n_sims_quick=75) == 16
     # And PUCT at the same shapes reads the sims regime, not m.
-    assert _derive(full_search_prob=0.10, n_sims_quick=75, n_sims_full=600) == 607
+    assert _derive(n_simulations=600, full_search_prob=0.10, n_sims_quick=75) == 607
     assert _derive(gumbel_m=4) == 57
 
 

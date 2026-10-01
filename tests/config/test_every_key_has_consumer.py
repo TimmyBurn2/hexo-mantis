@@ -257,7 +257,6 @@ CONSUMER_REGISTRY = {
     "selfplay.results_queue_cap": "SelfPlayHParams.from_config -> runner results_queue_cap",
     "selfplay.random_opening_plies": "SelfPlayHParams.from_config -> runner random_opening_plies",
     "selfplay.log_investigation_metrics": "SelfPlayHParams.from_config -> pool investigation logging",
-    "selfplay.mcts.n_simulations": "SelfPlayHParams.from_config -> runner n_simulations",
     "selfplay.mcts.c_puct": "SelfPlayHParams.from_config -> runner c_puct",
     "selfplay.mcts.fpu_reduction": "SelfPlayHParams.from_config -> runner fpu_reduction",
     "selfplay.mcts.quiescence_enabled": "SelfPlayHParams.from_config -> runner quiescence_enabled",
@@ -267,7 +266,7 @@ CONSUMER_REGISTRY = {
     "selfplay.mcts.dirichlet_enabled": "SelfPlayHParams.from_config -> runner dirichlet_enabled",
     "selfplay.playout_cap.full_search_prob": "SelfPlayHParams.from_config -> runner full_search_prob",
     "selfplay.playout_cap.n_sims_quick": "SelfPlayHParams.from_config -> runner n_sims_quick",
-    "selfplay.playout_cap.n_sims_full": "SelfPlayHParams.from_config -> runner n_sims_full",
+    "selfplay.playout_cap.n_sims_full": "SelfPlayHParams.from_config -> runner n_simulations",
     "selfplay.playout_cap.temperature_threshold_compound_moves": (
         "SelfPlayHParams.from_config -> runner temp_threshold_compound_moves"
     ),

@@ -37,7 +37,6 @@
      "random_opening_plies": 3,
      "log_investigation_metrics": false,
      "mcts": {
-      "n_simulations": 111,
       "c_puct": 1.75,
       "fpu_reduction": 0.4,
       "quiescence_enabled": false,
@@ -72,9 +71,8 @@
     "gumbel_m": 24,
     "leaf_batch_size": 12,
     "max_moves_per_game": 200,
-    "n_sims_full": 200,
     "n_sims_quick": 40,
-    "n_simulations": 111,
+    "n_simulations": 200,
     "n_workers": 7,
     "quiescence_blend_2": 0.55,
     "quiescence_enabled": false,
@@ -115,7 +113,6 @@
      "random_opening_plies": 0,
      "log_investigation_metrics": true,
      "mcts": {
-      "n_simulations": 50,
       "c_puct": 1.5,
       "fpu_reduction": 0.25,
       "quiescence_enabled": true,
@@ -127,7 +124,7 @@
      "playout_cap": {
       "full_search_prob": 0.0,
       "n_sims_quick": 0,
-      "n_sims_full": 0,
+      "n_sims_full": 50,
       "temperature_threshold_compound_moves": 0,
       "temp_min": 0.5
      },
@@ -150,7 +147,6 @@
     "gumbel_m": 16,
     "leaf_batch_size": 8,
     "max_moves_per_game": 128,
-    "n_sims_full": 0,
     "n_sims_quick": 0,
     "n_simulations": 50,
     "n_workers": 1,

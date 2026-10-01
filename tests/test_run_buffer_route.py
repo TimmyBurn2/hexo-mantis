@@ -28,10 +28,9 @@ def _derived(config) -> int:
     sp = config.selfplay
     pc = sp.playout_cap
     return derived_hexg_visit_capacity(
-        n_simulations=sp.mcts.n_simulations,
+        n_simulations=pc.n_sims_full,
         full_search_prob=pc.full_search_prob,
         n_sims_quick=pc.n_sims_quick,
-        n_sims_full=pc.n_sims_full,
         leaf_batch_size=sp.leaf_batch_size,
         gumbel_m=sp.gumbel_m,
         search_kind=config.selfplay.search.kind,

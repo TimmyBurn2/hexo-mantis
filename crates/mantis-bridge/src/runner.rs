@@ -115,7 +115,6 @@ impl PySelfPlayRunnerConfig {
         results_queue_cap = 10_000,
         full_search_prob = 0.0,
         n_sims_quick = 0,
-        n_sims_full = 0,
         random_opening_plies = 0,
         encoding_name = None,
     ))]
@@ -142,7 +141,6 @@ impl PySelfPlayRunnerConfig {
         results_queue_cap: usize,
         full_search_prob: f32,
         n_sims_quick: usize,
-        n_sims_full: usize,
         random_opening_plies: u32,
         encoding_name: Option<String>,
     ) -> Self {
@@ -170,7 +168,6 @@ impl PySelfPlayRunnerConfig {
                 results_queue_cap,
                 full_search_prob,
                 n_sims_quick,
-                n_sims_full,
                 random_opening_plies,
                 search_stats_every,
                 encoding_name,
@@ -526,7 +523,6 @@ mod tests {
             0.0,
             0,
             0,
-            0,
             Some("gnn_axis_v1".to_string()),
         );
         let rust = cfg.to_rust();
@@ -560,7 +556,7 @@ mod tests {
     fn runner_missing_encoding_errors() {
         let cfg = PySelfPlayRunnerConfig::new(
             1, 64, 30, 8, 1.5, 0.25, 0, true, 0.3, 0.5, 50.0, 1.0, true, 0, 16, 10, 0.3, 0.25,
-            true, 10_000, 0.0, 0, 0, 0, None,
+            true, 10_000, 0.0, 0, 0, None,
         );
         assert!(
             PySelfPlayRunner::new(&cfg).is_err(),

@@ -21,13 +21,13 @@ from mantis.config.schema.selfplay import MAX_ARMED_SIMS, MAX_ARMED_SIMS_GUMBEL
 
 
 VALID_MCTS: dict = {
-    "n_simulations": 50, "c_puct": 1.5, "fpu_reduction": 0.25, "quiescence_enabled": True,
+    "c_puct": 1.5, "fpu_reduction": 0.25, "quiescence_enabled": True,
     "quiescence_blend_2": 0.3, "dirichlet_alpha": 0.3, "dirichlet_epsilon": 0.25,
     "dirichlet_enabled": True,
 }
 VALID_PLAYOUT_CAP: dict = {
     "full_search_prob": 0.0,
-    "n_sims_quick": 0, "n_sims_full": 0,
+    "n_sims_quick": 0, "n_sims_full": 50,
     "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
 }
 VALID_SELFPLAY: dict = {
@@ -76,7 +76,7 @@ def _inference(**over: object) -> dict:
 def test_selfplay_valid_payload_constructs_clean():
     cfg = SelfplayConfig.model_validate(VALID_SELFPLAY)
     assert cfg.n_workers == 1
-    assert cfg.mcts.n_simulations == 50
+    assert cfg.playout_cap.n_sims_full == 50
     assert cfg.playout_cap.full_search_prob == 0.0
 
 
@@ -165,15 +165,15 @@ def test_the_gumbel_kind_lowers_the_sim_ceiling_at_mint(smoke_run_config):
 
     # PUCT at the same budget is accepted: the control arm.
     ok = smoke_run_config(
-        "dev_example.yaml", selfplay={"mcts": {"n_simulations": in_gap}}
+        "dev_example.yaml", selfplay={"playout_cap": {"n_sims_full": in_gap}}
     )
-    assert ok.selfplay.mcts.n_simulations == in_gap
+    assert ok.selfplay.playout_cap.n_sims_full == in_gap
 
     with pytest.raises(ValidationError, match="MAX_ROOT_CHILDREN"):
         smoke_run_config(
             "dev_example.yaml",
             train={"policy_target": "completed_improved_policy"},
-            selfplay={"search": {"kind": "gumbel", "tactics": None}, "mcts": {"n_simulations": in_gap}},
+            selfplay={"search": {"kind": "gumbel", "tactics": None}, "playout_cap": {"n_sims_full": in_gap}},
         )
 
     # The DEPLOY kind spends the eval sims against the same pool (the split's design).
@@ -186,7 +186,7 @@ def test_the_gumbel_kind_lowers_the_sim_ceiling_at_mint(smoke_run_config):
 
 
 def test_every_armed_sims_knob_is_checked_against_the_kinds_ceiling(smoke_run_config):
-    """Every armed sims knob, not only `n_simulations`, is checked against the kind's ceiling."""
+    """Every armed sims knob, not only `n_sims_full`, is checked against the kind's ceiling."""
     over = MAX_ARMED_SIMS_GUMBEL + 1
     for key in ("n_sims_quick", "n_sims_full"):
         with pytest.raises(ValidationError, match=key):
