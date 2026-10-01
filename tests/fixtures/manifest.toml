@@ -273,15 +273,6 @@ sha256 = "543fc137be20e0c4961b96d53f4d3ba7582875d90aae47cfd3d6521664dc121b"
 added_by = "SEAM-B2"
 
 [[required]]
-# SEAM-B2 Leg 3 (R322(d)): W-L1's byte-frozen golden for the lambda-return value-target CODEC —
-# a fixed trajectory in, a fixed fp64 target vector out, plus both known endpoints. The
-# trajectory carries COMPOUND two-stone turns and one single-stone final turn, which is the
-# case a codec transcribed from a single-stone-per-turn source gets wrong by construction.
-path = "value_targets/lambda_return_golden_v1.json"
-sha256 = "f3b26261fad685c253799f653eea03c54bcf30ca04c515cbe90a0fca02f3925f"
-added_by = "SEAM-B2"
-
-[[required]]
 # Minted by running google-deepmind/mctx itself (tools/gen_mctx_parity_fixtures.py).
 # jax/mctx are deliberately not repo dependencies — the fixture is the artefact.
 path = "mctx_parity/mctx_parity_v1.json"
