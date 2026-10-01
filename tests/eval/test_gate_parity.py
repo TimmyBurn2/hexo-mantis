@@ -1,20 +1,17 @@
-"""Pin the deploy-strength gate's ported arithmetic.
+"""Pin the gate aggregate's arithmetic over the GSPRT's games, and promotion as an anchor-only move.
 
-  * draw-aware win rate `(wins + 0.5*draws) / n`, over the SCREEN games alone for `wr_screen`;
-  * escalation on a SINGLE lower bound, with no upper band;
-  * `wr_confirm` over the POOLED screen+confirm set, never confirm-only;
-  * `promoted = wr_ok and ci_clean and not low_power`, `ci_clean` needing `ci_lo_boot > 0.0`;
-  * distinct-game dedup by `(p1, p2, tuple(moves))` feeding the low-power warning.
+  * draw-aware win rate `(wins + 0.5*draws) / n` over EVERY game the GSPRT played;
+  * the pair bootstrap seeded from `gate.seed_base`;
+  * distinct-game dedup by `(p1, p2, tuple(moves))` feeding the low-power guard over the same set.
 """
 from __future__ import annotations
 
 import pytest
 
-from mantis.eval.aggregate import (
-    aggregate_gate,
-    gate_promotion_decision,
-    should_escalate,
-)
+from mantis.eval.aggregate import aggregate_gate
+
+#: A verdict the aggregate takes as given; its arithmetic is the subject here.
+_PROMOTE = {"decision": "promote", "checks": 1}
 
 # Record shape: {"p1", "p2", "winner": "p1"|"p2"|"draw", "moves": [[q, r], ...]}, where `moves`
 # drives the trajectory-hash dedupe.
@@ -41,148 +38,72 @@ def _gate_cfg(**overrides):
     from types import SimpleNamespace
 
     base = dict(
-        promotion_winrate=0.55, screen_confirm_lo=0.44, bootstrap_resamples=1000,
-        min_distinct_per_pair=10, seed_base=20260625, sequential=None,
+        bootstrap_resamples=1000,
+        min_distinct_per_pair=10, seed_base=20260625,
     )
     base.update(overrides)
     return SimpleNamespace(**base)
 
 
-# All 8 corners of (wr_ok, ci_clean, low_power): wr_ok is 0.60 vs 0.50 against a 0.55 bar,
-# ci_clean is 5.0 vs None.
-@pytest.mark.parametrize(
-    "wr_confirm,ci_lo_boot,low_power,expected",
-    [
-        (0.60, 5.0, False, True),     # the only cell that promotes
-        (0.60, 5.0, True, False),
-        (0.60, None, False, False),
-        (0.60, None, True, False),
-        (0.50, 5.0, False, False),
-        (0.50, 5.0, True, False),
-        (0.50, None, False, False),
-        (0.50, None, True, False),
-    ],
-)
-def test_gate_truth_table_matches_run3(wr_confirm, ci_lo_boot, low_power, expected) -> None:
-    assert gate_promotion_decision(wr_confirm, ci_lo_boot, low_power, 0.55) is expected
-
-
-@pytest.mark.parametrize(
-    "wr_confirm,ci_lo_boot,low_power,expected",
-    [
-        (0.55, 5.0, False, True),    # exactly at the bar: wr_ok is `>=`
-        (0.60, -1.0, False, False),  # present but not > 0
-        (0.60, 0.0, False, False),   # exactly zero is not `> 0.0`
-    ],
-)
-def test_gate_truth_table_boundary_cases(wr_confirm, ci_lo_boot, low_power, expected) -> None:
-    assert gate_promotion_decision(wr_confirm, ci_lo_boot, low_power, 0.55) is expected
-
-
-def test_aggregate_gate_calls_the_pure_decision_function_not_a_reimplementation(monkeypatch) -> None:
-    import mantis.eval.aggregate as agg_mod
-
-    calls: list[tuple] = []
-    real = agg_mod.gate_promotion_decision
-
-    def spy(wr_confirm, ci_lo_boot, low_power, promotion_winrate):
-        calls.append((wr_confirm, ci_lo_boot, low_power, promotion_winrate))
-        return real(wr_confirm, ci_lo_boot, low_power, promotion_winrate)
-
-    monkeypatch.setattr(agg_mod, "gate_promotion_decision", spy)
-    screen = _records(80, wins=50, draws=10, losses=20, tag="s")
-    confirm = _records(128, wins=80, draws=20, losses=28, tag="c")
-    cfg = _gate_cfg()
-    result = agg_mod.aggregate_gate(screen, confirm, cfg)
-    assert calls, "aggregate_gate must call gate_promotion_decision — not reimplement the table"
-    wr_c, ci_c, lp_c, bar_c = calls[-1]
-    assert wr_c == pytest.approx(result.wr_confirm)
-    assert ci_c == result.elo_ci_lower_boot
-    assert lp_c == result.low_power
-    assert bar_c == cfg.promotion_winrate
-    assert result.promoted == real(wr_c, ci_c, lp_c, bar_c)
-
-
-def test_wr_confirm_is_pooled_draw_aware_from_raw_records() -> None:
-    # draw-aware WR = (24+15)/80 = 0.4875
-    screen = _records(80, wins=24, draws=30, losses=26, tag="s")
-    # draw-aware WR = (55+20)/128 = 0.5859375
-    confirm = _records(128, wins=55, draws=40, losses=33, tag="c")
-    cfg = _gate_cfg(promotion_winrate=0.55)
-
-    result = aggregate_gate(screen, confirm, cfg)
+def test_the_gate_rate_is_draw_aware_over_every_game_the_gsprt_played() -> None:
+    first = _records(80, wins=24, draws=30, losses=26, tag="s")
+    later = _records(128, wins=55, draws=40, losses=33, tag="c")
+    result = aggregate_gate(first + later, _gate_cfg(), _PROMOTE)
 
     pooled_wr = (79 + 0.5 * 70) / 208             # 0.548077 — correct
-    confirm_only_wr = 75 / 128                    # 0.585938 — the confirm-only bug
+    later_only_wr = 75 / 128                      # 0.585938 — a last-batch-only bug
     draw_blind_pooled_wr = 79 / (79 + 59)         # 0.572464 — the draw-blind bug
-
-    assert pooled_wr != pytest.approx(confirm_only_wr)
-    assert pooled_wr != pytest.approx(draw_blind_pooled_wr)
-    assert pooled_wr < 0.55 < confirm_only_wr
-    assert pooled_wr < 0.55 < draw_blind_pooled_wr
-
-    assert result.wr_confirm == pytest.approx(pooled_wr), (
-        "wr_confirm must be the POOLED draw-aware WR (:522-524), not confirm-only or draw-blind "
-        "— either bug would flip the promotion decision at the 0.55 bar"
-    )
-    assert result.wr_screen == pytest.approx(39 / 80), "wr_screen is draw-aware over screen alone (:494)"
-    assert result.n_screen == 80 and result.n_confirm == 128 and result.n_pooled == 208
+    assert pooled_wr != pytest.approx(later_only_wr) and pooled_wr != pytest.approx(draw_blind_pooled_wr)
+    assert result.wr_confirm == pytest.approx(pooled_wr) and result.wr_screen == result.wr_confirm
+    assert result.n_pooled == 208 and result.n_confirm == 0
 
 
 def test_bootstrap_and_low_power_guard_consume_the_pooled_set() -> None:
     cfg = _gate_cfg(min_distinct_per_pair=10)
 
-    # 3 distinct sequences filling 80 games: screen alone is under the threshold of 10, so a
-    # screen-only guard would flag low_power.
-    distinct_screen_moves = [[[0, 0], [1, 1]], [[0, 1], [1, 0]], [[0, 2], [1, 2]]]
-    screen = [
+    # 3 distinct sequences filling 80 games: the first batch alone is under the threshold of 10,
+    # so a first-batch guard would flag low_power.
+    distinct_first_moves = [[[0, 0], [1, 1]], [[0, 1], [1, 0]], [[0, 2], [1, 2]]]
+    first = [
         {"p1": "cand", "p2": "best", "winner": "p1" if i % 2 == 0 else "p2",
-         "moves": distinct_screen_moves[i % 3]}
+         "moves": distinct_first_moves[i % 3]}
         for i in range(80)
     ]
     # 128 new distinct sequences take the pooled count to 131, flipping low_power to False. MIXED is
     # load-bearing: 0/1 alone collided on one 2.5% quantile (12 at n=11; still n=67, 20260625/999).
-    _confirm_outcome_cycle = ["p1", "p1", "draw", "p2", "p1", "p2", "draw", "p1", "p2", "p1"]
-    distinct_confirm_moves = [[[9, k], [8, k]] for k in range(128)]
-    confirm = [
+    _later_outcome_cycle = ["p1", "p1", "draw", "p2", "p1", "p2", "draw", "p1", "p2", "p1"]
+    distinct_later_moves = [[[9, k], [8, k]] for k in range(128)]
+    later = [
         {"p1": "cand", "p2": "best",
-         "winner": _confirm_outcome_cycle[i % len(_confirm_outcome_cycle)],
-         "moves": distinct_confirm_moves[i]}
+         "winner": _later_outcome_cycle[i % len(_later_outcome_cycle)],
+         "moves": distinct_later_moves[i]}
         for i in range(128)
     ]
 
-    result = aggregate_gate(screen, confirm, cfg)
+    result = aggregate_gate(first + later, cfg, _PROMOTE)
 
-    screen_only_distinct = 3
+    first_only_distinct = 3
     pooled_distinct = 3 + 128
-    assert screen_only_distinct < cfg.min_distinct_per_pair, "fixture sanity: screen alone is low-power"
+    assert first_only_distinct < cfg.min_distinct_per_pair, "fixture sanity: the first batch alone is low-power"
     assert pooled_distinct >= cfg.min_distinct_per_pair, "fixture sanity: pooled clears the floor"
     assert result.low_power is False, (
-        "the low-power guard must consume the POOLED distinct-game count (131), not the "
-        "screen-alone count (3) — a screen-only guard would wrongly block promotion here"
+        "the low-power guard must consume every game's distinct count (131), not the first "
+        "batch's (3) — a first-batch guard would wrongly block promotion here"
     )
     assert result.eff_n == pooled_distinct, "eff_n (LAW-04) must be the pooled distinct-game count"
 
     # Two identical calls with the same seed_base must produce an identical bootstrap CI.
-    result2 = aggregate_gate(screen, confirm, cfg)
+    result2 = aggregate_gate(first + later, cfg, _PROMOTE)
     assert result.elo_ci_lower_boot == result2.elo_ci_lower_boot, (
         "the bootstrap must be seeded from gate.seed_base — identical inputs/seed must "
         "reproduce an identical CI lower bound"
     )
     cfg_other_seed = _gate_cfg(min_distinct_per_pair=10, seed_base=999)
-    result3 = aggregate_gate(screen, confirm, cfg_other_seed)
+    result3 = aggregate_gate(first + later, cfg_other_seed, _PROMOTE)
     assert result3.elo_ci_lower_boot != result.elo_ci_lower_boot or result.elo_ci_lower_boot is None, (
         "a different seed_base should (with overwhelming probability) move the bootstrap CI — "
         "if this ever spuriously collides, the seed is very likely not threaded at all"
     )
-
-
-@pytest.mark.parametrize(
-    "wr_screen,expected_escalate",
-    [(0.30, False), (0.43, False), (0.44, True), (0.50, True), (0.99, True)],
-)
-def test_screen_escalates_iff_wr_screen_at_least_screen_confirm_lo(wr_screen, expected_escalate) -> None:
-    assert should_escalate(wr_screen, screen_confirm_lo=0.44) is expected_escalate
 
 
 class _SpyOrder:

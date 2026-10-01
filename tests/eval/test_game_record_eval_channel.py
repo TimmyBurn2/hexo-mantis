@@ -26,6 +26,7 @@ from mantis.eval.snapshot import write_model_snapshot
 from mantis.model.identity import net_param_hash
 from mantis.monitor.game_record import iter_run_games
 from _minted_puct import MINTED_PUCT
+from _gsprt import TWO_PAIR_GSPRT
 
 #: `book_v1_s20260625_p4` is minted against `gnn_axis_v1` and 292 of its 512 openings need
 #: radius >= 6 to replay, so the round's encoding has to cover that.
@@ -44,9 +45,8 @@ def _round_spec(tmp_path: Path, target: GameRecordTarget | None) -> RoundSpec:
     write_model_snapshot(seeded_net(seed=1), candidate)
     write_model_snapshot(seeded_net(seed=2), best)
     gate = GateSpec(
-        stride=1, screen_games=2, confirm_games=2, promotion_winrate=0.55,
-        screen_confirm_lo=0.44, deploy_sims=2, opening_book=_BOOK,
-        bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=True, sequential=None,
+        stride=1, deploy_sims=2, opening_book=_BOOK,
+        bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=True, sequential=TWO_PAIR_GSPRT,
     )
     return RoundSpec(
         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, tactics=None, max_plies=16,
@@ -83,11 +83,11 @@ def test_a_real_round_writes_every_game_it_played(tmp_path: Path) -> None:
     by_phase: dict[str, int] = {}
     for record in records:
         by_phase[record["phase"]] = by_phase.get(record["phase"], 0) + 1
-    assert "gate_screen" in by_phase, f"the gate block did not record; saw {by_phase}"
+    assert "gate_sequential" in by_phase, f"the gate block did not record; saw {by_phase}"
     assert "random_floor" in by_phase, f"the floor block did not record; saw {by_phase}"
 
     channels = {r["phase"]: r["channel"] for r in records}
-    assert channels["gate_screen"] == "promotion"
+    assert channels["gate_sequential"] == "promotion"
     assert channels["random_floor"] == "random_floor"
 
 

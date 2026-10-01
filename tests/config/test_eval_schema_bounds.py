@@ -1,7 +1,6 @@
 """Numeric-bounds validation on the eval/gate schema fields.
 
-Pre-fix, `random_model_sims=-5` and `gate.promotion_winrate=2.0` loaded SILENTLY — crashing
-`np.quantile` inside a worker or disabling promotion forever. Every case is parametrized: one out-of-domain
+Pre-fix, `random_model_sims=-5` loaded SILENTLY, crashing `np.quantile` inside a worker. Every case is parametrized: one out-of-domain
 value raises a `ValidationError` naming the field, one in-domain boundary value loads clean.
 
 The two timeout fields were floor-only bounds that admitted a REAL `.inf` YAML literal end to
@@ -22,13 +21,13 @@ from pydantic import ValidationError
 
 from mantis.config.schema import SCHEMA_VERSION, RunConfig, _EVAL_TIMEOUT_CEILING_SEC
 from _schema_blocks import inference_block, monitor_block, selfplay_block, train_block
+from _gsprt import TWO_PAIR_GSPRT
 
 
 def _gate(**overrides: Any) -> dict:
     base = dict(
-        stride=1, screen_games=80, confirm_games=128, promotion_winrate=0.55,
-        screen_confirm_lo=0.44, deploy_sims=150, opening_book="book_v1_s20260625_p4",
-        bootstrap_resamples=1000, min_distinct_per_pair=10, seed_base=20260625, sequential=None,
+        stride=1, deploy_sims=150, opening_book="book_v1_s20260625_p4",
+        bootstrap_resamples=1000, min_distinct_per_pair=10, seed_base=20260625, sequential=TWO_PAIR_GSPRT,
     )
     base.update(overrides)
     return base
@@ -82,15 +81,6 @@ def test_random_model_sims_negative_is_rejected_not_silently_loaded() -> None:
     assert "random_model_sims" in str(ei.value)
 
 
-def test_promotion_winrate_above_one_is_rejected_not_silently_loaded() -> None:
-    """`promotion_winrate = 2.0` loaded clean and disabled promotion forever."""
-    payload = _payload()
-    payload["eval"]["gate"]["promotion_winrate"] = 2.0
-    with pytest.raises(ValidationError) as ei:
-        _validate(payload)
-    assert "promotion_winrate" in str(ei.value)
-
-
 # Every bounded numeric field, out-of-domain + in-domain. Paths are relative to `eval`.
 _OUT_OF_DOMAIN_CASES = [
     # EvalConfig
@@ -111,12 +101,6 @@ _OUT_OF_DOMAIN_CASES = [
     (("worker_kill_grace_sec",), _EVAL_TIMEOUT_CEILING_SEC + 1.0, "eval.worker_kill_grace_sec"),
     # GateConfig
     (("gate", "stride"), 0, "eval.gate.stride"),
-    (("gate", "screen_games"), 0, "eval.gate.screen_games"),
-    (("gate", "confirm_games"), 0, "eval.gate.confirm_games"),
-    (("gate", "promotion_winrate"), 2.0, "eval.gate.promotion_winrate"),
-    (("gate", "promotion_winrate"), -0.1, "eval.gate.promotion_winrate"),
-    (("gate", "screen_confirm_lo"), 1.1, "eval.gate.screen_confirm_lo"),
-    (("gate", "screen_confirm_lo"), -0.1, "eval.gate.screen_confirm_lo"),
     (("gate", "deploy_sims"), 0, "eval.gate.deploy_sims"),
     (("gate", "bootstrap_resamples"), 0, "eval.gate.bootstrap_resamples"),
     (("gate", "min_distinct_per_pair"), 0, "eval.gate.min_distinct_per_pair"),
@@ -148,12 +132,6 @@ _IN_DOMAIN_BOUNDARY_CASES = [
     (("round_timeout_sec",), _EVAL_TIMEOUT_CEILING_SEC),
     (("worker_kill_grace_sec",), _EVAL_TIMEOUT_CEILING_SEC),
     (("gate", "stride"), 1),
-    (("gate", "screen_games"), 1),
-    (("gate", "confirm_games"), 1),
-    (("gate", "promotion_winrate"), 0.0),
-    (("gate", "promotion_winrate"), 1.0),
-    (("gate", "screen_confirm_lo"), 0.0),
-    (("gate", "screen_confirm_lo"), 1.0),
     (("gate", "deploy_sims"), 1),
     (("gate", "bootstrap_resamples"), 1),
     (("gate", "min_distinct_per_pair"), 1),
@@ -170,7 +148,7 @@ def test_in_domain_boundary_value_loads_clean(path: "tuple[str, ...]", value: An
 def test_valid_payload_still_loads_after_bounds_added() -> None:
     """Sanity anchor: the bounds must never reject a legitimate, already-shipped config shape."""
     cfg = RunConfig.model_validate(_payload())
-    assert cfg.eval.gate.promotion_winrate == 0.55
+    assert cfg.eval.gate.sequential.max_pairs >= cfg.eval.gate.sequential.min_pairs
 
 
     # The ORIGINAL repro shape: a genuine YAML document, not a hand-constructed Python float.

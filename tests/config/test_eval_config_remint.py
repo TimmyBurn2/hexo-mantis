@@ -56,9 +56,6 @@ def test_the_gate_parity_values_are_pinned(config: Path) -> None:
     cfg = load_config(config)
     assert cfg.eval.random_model_sims == 96
     gate = cfg.eval.gate
-    assert gate.screen_games == 80
-    assert gate.confirm_games == 128
-    assert gate.promotion_winrate == 0.55
     assert gate.bootstrap_resamples == 1000
     assert gate.min_distinct_per_pair == 10
     assert gate.seed_base == 20260625, (

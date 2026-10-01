@@ -23,6 +23,7 @@ from mantis.eval import worker
 from mantis.eval.errors import EvalDecodeUnsupportedError
 from mantis.eval.rounds import GateSpec, RoundSpec, RungJob
 from _minted_puct import MINTED_PUCT
+from _gsprt import TWO_PAIR_GSPRT
 
 _BOOK = "book_v1_s20260625_p4"
 _SEED = 20260625
@@ -36,9 +37,8 @@ def _spec(tmp_path: Path, enc_name: str) -> RoundSpec:
     """A real `RoundSpec`. The snapshot paths deliberately do NOT exist — every arm below
     replaces the loader, and a round that reaches the filesystem has already lost."""
     gate = GateSpec(
-        stride=1, screen_games=2, confirm_games=2, promotion_winrate=0.55,
-        screen_confirm_lo=0.44, deploy_sims=2, opening_book=_BOOK,
-        bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=True, sequential=None,
+        stride=1, deploy_sims=2, opening_book=_BOOK,
+        bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=True, sequential=TWO_PAIR_GSPRT,
     )
     rung_jobs = [
         RungJob(

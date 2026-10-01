@@ -106,19 +106,14 @@ class RungJob:
 @dataclass(frozen=True)
 class GateSpec:
     stride: int
-    screen_games: int
-    confirm_games: int
-    promotion_winrate: float
-    screen_confirm_lo: float
     deploy_sims: int
     opening_book: str
     bootstrap_resamples: int
     min_distinct_per_pair: int
     seed_base: int
     run_gate: bool
-    #: `eval.gate.sequential` as a plain mapping (`None` = screen/confirm). NOT defaulted: a spec
-    #: silently carrying `None` while the config minted the block is the silently-disabled class.
-    sequential: dict[str, Any] | None
+    #: `eval.gate.sequential` as a plain mapping, the gate's one promotion rule. NOT defaulted.
+    sequential: dict[str, Any]
 
 
 @dataclass(frozen=True)

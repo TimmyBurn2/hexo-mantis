@@ -1,7 +1,7 @@
 """The retired-path authority names only paths the schema no longer has, and splitting them off never mutates the record."""
 from __future__ import annotations
 
-from mantis.config.retired import FOLDED_PATHS, RETIRED_PATHS, split_retired
+from mantis.config.retired import FOLDED_PATHS, RETIRED_NULL_POSTURES, RETIRED_PATHS, split_retired
 from mantis.config.schema import RunConfig, leaf_paths
 
 
@@ -42,3 +42,14 @@ def test_a_fold_never_overrides_a_value_the_record_set() -> None:
 def test_every_fold_runs_from_a_retired_path_to_a_live_one() -> None:
     live = set(leaf_paths(RunConfig))
     assert all(src in RETIRED_PATHS and dst in live for src, dst in FOLDED_PATHS.items()), FOLDED_PATHS
+
+
+def test_a_record_whose_null_named_a_retired_posture_reads_as_predating_the_leaf() -> None:
+    """PLANTED BREAK: drop the null-posture rule and a screen/confirm-era stamp's `sequential: null` fails the schema."""
+    record = {"eval": {"gate": {"stride": 1, "sequential": None}}}
+    kept, removed = split_retired(record)
+    assert kept == {"eval": {"gate": {"stride": 1}}} and removed == {"eval.gate.sequential": None}
+    armed = {"eval": {"gate": {"sequential": {"mu0": 0.42}}}}
+    assert split_retired(armed)[0] == armed, "an armed block is the live rule and stays"
+    live = set(leaf_paths(RunConfig))
+    assert all(any(leaf.startswith(f"{p}.") for leaf in live) for p in RETIRED_NULL_POSTURES), RETIRED_NULL_POSTURES

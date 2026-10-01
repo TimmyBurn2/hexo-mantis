@@ -131,11 +131,10 @@ def base_round_spec(config: Any, *, work_dir: Path) -> RoundSpec:
     cfg = config.eval
     graph = config.identity.representation == "graph"
     gate = GateSpec(
-        stride=1, screen_games=0, confirm_games=0, promotion_winrate=cfg.gate.promotion_winrate,
-        screen_confirm_lo=cfg.gate.screen_confirm_lo, deploy_sims=cfg.gate.deploy_sims,
+        stride=1, deploy_sims=cfg.gate.deploy_sims,
         opening_book=cfg.gate.opening_book, bootstrap_resamples=cfg.gate.bootstrap_resamples,
         min_distinct_per_pair=cfg.gate.min_distinct_per_pair, seed_base=cfg.gate.seed_base,
-        run_gate=False, sequential=None,
+        run_gate=False, sequential=cfg.gate.sequential.model_dump(),
     )
     return RoundSpec(
         round_id="cell", round_index=0, step=0, candidate_snapshot="", best_snapshot=None,
@@ -209,7 +208,7 @@ def armed_sides(cell: Mapping[str, Any]) -> str:
 
 
 def cell_spec(cell: Mapping[str, Any], base: RoundSpec, *, cell_dir: Path, config: Any) -> RoundSpec:
-    """One cell's RoundSpec: the rung at `sims` vs strix or six, or the gate SCREEN vs a model."""
+    """One cell's RoundSpec: the rung at `sims` vs strix or six, or a fixed-N gate block vs a model."""
     games = int(cell["games"])
     kind = str(cell["search_kind"])
     sims = int(cell["sims"])
@@ -246,9 +245,13 @@ def cell_spec(cell: Mapping[str, Any], base: RoundSpec, *, cell_dir: Path, confi
                                         "six_nodes: its nodes per turn)")
         job = _rung_job(config, SIX, str(cell["six_net"]), int(cell["six_nodes"]), games)
         return replace(base, **common, rung_model_sims=sims, rung_jobs=[_rung_on_cell_book(job, cell)])
-    gate = replace(base.gate, run_gate=True, screen_games=games, confirm_games=0,
-                   deploy_sims=sims, screen_confirm_lo=2.0, seed_base=seed_base,
-                   opening_book=str(cell.get("opening_book", base.gate.opening_book)))
+    # A fixed-N match: the GSPRT cannot stop before its last pair and reads its verdict once, which the cell ignores.
+    pairs = games // 2
+    if pairs < 2:
+        raise FrontierCellError(f"{cell['label']}: a model cell plays >= 2 pairs (the GSPRT's LLR reads two); games={games}")
+    gate = replace(base.gate, run_gate=True, deploy_sims=sims, seed_base=seed_base,
+                   opening_book=str(cell.get("opening_book", base.gate.opening_book)),
+                   sequential={**base.gate.sequential, "min_pairs": pairs, "max_pairs": pairs, "check_every_pairs": pairs})
     return replace(base, **common, gate=gate, best_snapshot=str(cell_dir / "opponent.pt"))
 
 

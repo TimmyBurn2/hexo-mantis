@@ -18,9 +18,13 @@ RETIRED_PATHS: frozenset[str] = frozenset({
     "selfplay.mcts.n_simulations", "train.policy_loss_weight_schedule", "train.total_steps",
     "train.replay_capacity_schedule", "train.fast_policy_weight", "train.recency_weight",
     "train.policy_loss_trough_abort",
+    "eval.gate.screen_games", "eval.gate.confirm_games", "eval.gate.screen_confirm_lo", "eval.gate.promotion_winrate",
     "train.hard_gn_threshold", "train.hard_gn_min_steps",
 })
 
+
+#: A live block whose `null` named a retired posture (`eval.gate.sequential: null` was the screen/confirm rule).
+RETIRED_NULL_POSTURES: frozenset[str] = frozenset({"eval.gate.sequential"})
 
 #: A retired path whose value now lives at a live leaf: a record predating the fold left that leaf unset (null or 0).
 FOLDED_PATHS: dict[str, str] = {
@@ -45,6 +49,10 @@ def split_retired(config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any
     for dotted in sorted(RETIRED_PATHS):
         node, leaf = _parent(kept, dotted)
         if isinstance(node, dict) and leaf in node:
+            removed[dotted] = node.pop(leaf)
+    for dotted in sorted(RETIRED_NULL_POSTURES):
+        node, leaf = _parent(kept, dotted)
+        if isinstance(node, dict) and leaf in node and node[leaf] is None:
             removed[dotted] = node.pop(leaf)
     for source, target in FOLDED_PATHS.items():
         node, leaf = _parent(kept, target)

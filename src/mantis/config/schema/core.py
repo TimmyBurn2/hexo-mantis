@@ -213,7 +213,7 @@ class IdentityConfig(StrictModel):
 
 
 class SequentialGateConfig(StrictModel):
-    """The GSPRT promotion rule over opening pairs (2026-09-15); armed it replaces the screen/confirm rule, `null` is that rule."""
+    """The GSPRT promotion rule over opening pairs (2026-09-15), the gate's one rule since screen/confirm left."""
 
     mu0: float = Field(gt=0, lt=1)
     mu1: float = Field(gt=0, lt=1)
@@ -236,24 +236,15 @@ class SequentialGateConfig(StrictModel):
 
 
 class GateConfig(StrictModel):
-    """The run3 deploy-strength gate, knob-for-knob (LIVE knobs only).
-
-    `screen_confirm_hi` is deliberately NOT ported, so a minted one is rejected by
-    `extra="forbid"`. The win-rate fractions are bounded to `[0,1]`, because an out-of-range value
-    loads silently and then disables promotion permanently; the counts and `stride` are `>=1`."""
+    """The deploy-strength gate: the GSPRT over opening pairs, deploy-matched, with the pair bootstrap and low-power guard."""
 
     stride: int = Field(ge=1)
-    screen_games: int = Field(ge=1)
-    confirm_games: int = Field(ge=1)
-    promotion_winrate: float = Field(ge=0, le=1)
-    screen_confirm_lo: float = Field(ge=0, le=1)
     deploy_sims: int = Field(ge=1)
     opening_book: str = Field(min_length=1)
     bootstrap_resamples: int = Field(ge=1)
     min_distinct_per_pair: int = Field(ge=1)
     seed_base: int
-    #: REQUIRED key, `null` the explicit screen/confirm posture (`draw_rate_abort`'s idiom).
-    sequential: SequentialGateConfig | None = Field(default=...)
+    sequential: SequentialGateConfig
 
 
 class PlyCapAdjudicationConfig(StrictModel):

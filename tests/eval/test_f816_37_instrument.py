@@ -27,6 +27,7 @@ from mantis.eval.rounds import GateSpec, RoundSpec, RungJob
 from mantis.eval.snapshot import write_model_snapshot
 from mantis.model import GnnArch, build_net
 from _minted_puct import MINTED_PUCT
+from _gsprt import TWO_PAIR_GSPRT
 
 _ENC = "gnn_axis_v1"
 _BOOK = "book_v1_s20260625_p4"
@@ -50,9 +51,8 @@ def _round_spec(tmp_path: Path) -> RoundSpec:
     write_model_snapshot(_net(seed=1), candidate)
     write_model_snapshot(_net(seed=2), best)
     gate = GateSpec(
-        stride=1, screen_games=2, confirm_games=2, promotion_winrate=0.55,
-        screen_confirm_lo=0.44, deploy_sims=2, opening_book=_BOOK,
-        bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=True, sequential=None,
+        stride=1, deploy_sims=2, opening_book=_BOOK,
+        bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=True, sequential=TWO_PAIR_GSPRT,
     )
     return RoundSpec(
         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, tactics=None, max_plies=24,

@@ -353,15 +353,15 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
 - `eval_round` joins the heartbeat sources at WP11-A (4th source): the eval pipeline's
   persistent poller thread beats it every tick, in or out of an active round.
 - `eval_round_complete`'s routed `gate.rule` / `gate.llr` / `gate.pairs_played` / `gate.stopped` fields
-  (2026-09-15): WHICH promotion rule decided the round — `screen_confirm` (the three latter fields
-  `null`) or `gsprt` (`eval.gate.sequential` armed: the GSPRT's final LLR, the pairs it played
-  before stopping, and `accept` / `reject` / `max` for how it stopped). Under `gsprt` the record's
+  (2026-09-15): WHICH promotion rule decided the round — `gsprt`, the one rule since HYGIENE-1 (the
+  GSPRT's final LLR, the pairs it played before stopping, and `accept` / `reject` / `max` for how it
+  stopped); a record from before it may read `screen_confirm` with the three latter fields `null`. Under `gsprt` the record's
   `n_screen` is every game played, `n_confirm` is 0, `wr_screen == wr_confirm` is the pooled
   draw-aware WR, and `promoted` is the verdict AND the low-power guard — a reader must not take a
   32-game `gsprt` gate for a truncated screen. Producer `eval.worker.run_round` off
-  `eval.sequential.run_sequential_gate` / `eval.aggregate.aggregate_sequential_gate`; pinned by
+  `eval.sequential.run_sequential_gate` / `eval.aggregate.aggregate_gate`; pinned by
   `tests/eval/test_gate_sequential.py::test_the_worker_plays_the_sequential_gate_in_batches_and_reports_the_rule`
-  and the null-block control beside it.
+  and `test_the_gsprt_is_the_gates_one_rule` beside it.
 - `eval_round_complete`'s routed `gate.elo_ci_lower_boot` field (fed from
   `eval.aggregate.aggregate_gate`, consumed by `gate_promotion_decision`'s `ci_lo_boot`
   parameter) is NOT an Elo-scale bootstrap bound (deviation #5, FIX-PASS document-the-unit

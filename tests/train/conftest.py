@@ -19,6 +19,7 @@ from mantis.config.schema import ARCH_SCOPED_KEYS
 from mantis.encoding import lookup
 from mantis.model import GnnArch, arch_from_spec_and_config, build_net
 from _spy import SpyEventSink
+from _gsprt import TWO_PAIR_GSPRT
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 TRAIN_FIXTURES = FIXTURES / "train"
@@ -94,9 +95,8 @@ def _make_eval_block() -> dict[str, Any]:
         "round_timeout_sec": 3600.0, "worker_kill_grace_sec": 10.0,
         "ply_cap_adjudication": None, "strength_floor": None,
         "gate": {
-            "stride": 1, "screen_games": 80, "confirm_games": 128, "promotion_winrate": 0.55,
-            "screen_confirm_lo": 0.44, "deploy_sims": 150, "opening_book": "book_v1_s20260625_p4",
-            "bootstrap_resamples": 1000, "min_distinct_per_pair": 10, "seed_base": 20260625, "sequential": None,
+            "stride": 1, "deploy_sims": 150, "opening_book": "book_v1_s20260625_p4",
+            "bootstrap_resamples": 1000, "min_distinct_per_pair": 10, "seed_base": 20260625, "sequential": TWO_PAIR_GSPRT,
         },
     }
 

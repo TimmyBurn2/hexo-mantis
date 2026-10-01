@@ -1,17 +1,11 @@
-# >300 justify (R8): one arithmetic unit; each function reads the SAME record convention and feeds
-# the next toward ONE decision, the promotion gate. Split, the dedupe key would drift from the
-# estimator relying on it (this file's last defect) and the run3 parity cites from their arithmetic.
 """Vectorized aggregation over game-record arrays (design §a.3).
 
 `aggregate_rung` RAISES `MixedRegimeError` on >1 distinct `regime_key` in one call, and
 trajectory-hash dedupe feeds `eff_n`. `pair_bootstrap_wr_ci` is vectorized numpy with
 no per-game Python loop.
 
-`aggregate_gate` reproduces run3's POOLED draw-aware gate arithmetic EXACTLY
-(deploy_strength_eval.py:494,522-533,560-563): `wr_screen` is draw-aware over the screen games
-ALONE, and on escalation the POOLED set feeds `wr_confirm`, the bootstrap Elo-CI-vs-best and
-the low-power guard. `gate_promotion_decision` / `should_escalate` are the oracle-chosen pure
-truth-table functions it calls, never reimplemented ad hoc.
+`aggregate_gate` reads the GSPRT's games: the pooled draw-aware rate, the pair bootstrap, the
+pair count and the low-power guard, the verdict deciding promotion.
 
 Game records follow the hexo_rl `_play_pair` convention, or the arena-native
 `{"regime_key", "trajectory_hash"}` shape; either satisfies the trajectory dedupe key.
@@ -29,15 +23,12 @@ from mantis.arena.regime import MixedRegimeError
 
 __all__ = [
     "GateAggregate",
-    "aggregate_sequential_gate",
     "MixedRegimeError",
     "RungAggregate",
     "aggregate_gate",
     "aggregate_rung",
-    "gate_promotion_decision",
     "pair_bootstrap_wr_ci",
     "pair_units",
-    "should_escalate",
 ]
 
 
@@ -203,25 +194,10 @@ def aggregate_rung(
     )
 
 
-def should_escalate(wr_screen: float, screen_confirm_lo: float) -> bool:
-    """The SINGLE lower-bound escalation test (deploy_strength_eval.py:504) — NO upper
-    band (`screen_confirm_hi` was inert in run3 and is not ported, MUST-FIX 1)."""
-    return wr_screen >= screen_confirm_lo
-
-
-def gate_promotion_decision(
-    wr_confirm: float, ci_lo_boot: float | None, low_power: bool, promotion_winrate: float
-) -> bool:
-    """The run3 promotion truth table (:560-563): `wr_ok AND ci_clean AND not low_power`."""
-    wr_ok = wr_confirm >= promotion_winrate
-    ci_clean = ci_lo_boot is not None and ci_lo_boot > 0.0
-    return bool(wr_ok and ci_clean and not low_power)
-
-
-def aggregate_sequential_gate(
+def aggregate_gate(
     records: Sequence[Mapping[str, Any]], gate_cfg: Any, verdict: Mapping[str, Any],
 ) -> GateAggregate:
-    """The GSPRT's aggregate over every game it played: `aggregate_gate`'s pooled WR and pair bootstrap, `promoted` = the verdict AND the low-power guard."""
+    """The GSPRT's aggregate over every game it played: the pooled WR and pair bootstrap, `promoted` = the verdict AND the low-power guard."""
     pooled = list(records)
     n_pooled = len(pooled)
     pooled_wins = sum(1 for r in pooled if r["winner"] == "p1")
@@ -263,75 +239,3 @@ class GateAggregate:
     wins: int = 0
     losses: int = 0
     draws: int = 0
-
-
-def aggregate_gate(
-    screen_records: Sequence[Mapping[str, Any]],
-    confirm_records: Sequence[Mapping[str, Any]],
-    gate_cfg: Any,
-) -> GateAggregate:
-    """The run3 deploy-strength gate, pooled draw-aware arithmetic EXACTLY.
-
-    UNIT NOTE on `elo_ci_lower_boot`: despite its name the value is NOT a per-resample BT/Elo
-    bound — it is the pooled distinct-game WR bootstrap's lower bound RE-CENTERED to the Elo
-    zero-point, so it lives in `[-0.5, 0.5]`. It is DECISION-EQUIVALENT for the
-    `ci_lo_boot > 0.0` test, because any monotone transform commutes with taking a quantile.
-    The field keeps its historical name for run3-parity continuity.
-    """
-    n_screen = len(screen_records)
-    n_confirm = len(confirm_records)
-
-    screen_wins = sum(1 for r in screen_records if r["winner"] == "p1")
-    screen_draws = sum(1 for r in screen_records if r["winner"] == "draw")
-    wr_screen = (
-        (screen_wins + 0.5 * screen_draws) / n_screen if n_screen > 0 else None
-    )
-
-    # Escalation is normally the worker's decision before any confirm game; a duck-typed
-    # `gate_cfg` without `screen_confirm_lo` falls back to whether confirm games were played.
-    screen_confirm_lo = getattr(gate_cfg, "screen_confirm_lo", None)
-    if screen_confirm_lo is not None and wr_screen is not None:
-        escalated = should_escalate(wr_screen, screen_confirm_lo)
-    else:
-        escalated = n_confirm > 0
-
-    pooled = list(screen_records) + list(confirm_records) if escalated else list(screen_records)
-    n_pooled = len(pooled)
-    pooled_wins = sum(1 for r in pooled if r["winner"] == "p1")
-    pooled_draws = sum(1 for r in pooled if r["winner"] == "draw")
-    wr_confirm = (pooled_wins + 0.5 * pooled_draws) / n_pooled if n_pooled > 0 else None
-
-    # The resampling UNIT is the opening PAIR: resampling games treats one opening's legs as
-    # independent and understates the LOWER bound's variance; `eff_n` counts the same unit.
-    unit_outcomes = np.asarray(pair_units(pooled), dtype=np.float64)
-    eff_n = int(unit_outcomes.shape[0])
-    # The pooled WR bootstrap lower bound, seeded from `gate.seed_base` and RE-CENTERED so it is
-    # > 0 iff it clears 50 %; no oracle pins a literal BT-rating bootstrap, so none is reproduced.
-    wr_lower_boot, _wr_upper_boot = pair_bootstrap_wr_ci(
-        unit_outcomes, resamples=gate_cfg.bootstrap_resamples,
-        ci_level=0.95, seed=gate_cfg.seed_base,
-    )
-    elo_ci_lower_boot = (wr_lower_boot - 0.5) if wr_lower_boot is not None else None
-
-    distinct_per_pair = _distinct_per_pair(pooled) if pooled else 0
-    low_power = distinct_per_pair < int(gate_cfg.min_distinct_per_pair)
-    # `min_distinct_per_pair` is `ge=1` (the smoke config mints 1), but a one-sample bootstrap is
-    # its point estimate, so one distinct WIN would re-centre to +0.5 and promote: the STATISTIC
-    # refuses an interval below two distinct games.
-    _MIN_DISTINCT_FOR_AN_INTERVAL = 2
-    if distinct_per_pair < _MIN_DISTINCT_FOR_AN_INTERVAL:
-        elo_ci_lower_boot = None
-
-    promoted = (
-        wr_confirm is not None
-        and gate_promotion_decision(
-            wr_confirm, elo_ci_lower_boot, low_power, gate_cfg.promotion_winrate
-        )
-    )
-
-    return GateAggregate(
-        wr_screen=wr_screen, wr_confirm=wr_confirm, n_screen=n_screen, n_confirm=n_confirm,
-        n_pooled=n_pooled, escalated=escalated, elo_ci_lower_boot=elo_ci_lower_boot,
-        low_power=low_power, eff_n=eff_n, promoted=promoted,
-        wins=pooled_wins, losses=n_pooled - pooled_wins - pooled_draws, draws=pooled_draws,
-    )

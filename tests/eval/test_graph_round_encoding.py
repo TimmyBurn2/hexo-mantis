@@ -21,6 +21,7 @@ from mantis.model import GnnArch, build_net
 from mantis.selfplay.hparams import is_graph_representation
 from mantis.selfplay.inference_local import LocalInferenceEngine
 from _minted_puct import MINTED_PUCT
+from _gsprt import TWO_PAIR_GSPRT
 
 # The repo's one opening book and the probe's parameter set verbatim, so every recorded sha is
 # re-derivable: candidate seed 1, best seed 2, deploy_sims=2, seed_base=20260625.
@@ -53,9 +54,8 @@ def _round_spec(
     write_model_snapshot(_net(enc_name, seed=2), best)
 
     gate = GateSpec(
-        stride=1, screen_games=2, confirm_games=2, promotion_winrate=0.55,
-        screen_confirm_lo=0.44, deploy_sims=2, opening_book=_BOOK,
-        bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=True, sequential=None,
+        stride=1, deploy_sims=2, opening_book=_BOOK,
+        bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=True, sequential=TWO_PAIR_GSPRT,
     )
     rung_jobs = [
         RungJob(
@@ -99,7 +99,7 @@ def test_graph_eval_round_runs_end_to_end(tmp_path: Path) -> None:
     result = worker.run_round(_round_spec(tmp_path, "gnn_axis_v1"))
 
     assert result["gate"] is not None, "run_gate=True with a best snapshot must play a gate"
-    assert result["gate"]["n_screen"] == 2
+    assert result["gate"]["n_pooled"] == 4, "the two-pair GSPRT plays four games"
 
 
 def test_both_engines_bind_the_declared_graph_spec(

@@ -825,10 +825,10 @@ def strip_and_restamp(
             "round_timeout_sec": 1.0, "worker_kill_grace_sec": 1.0,
             "ply_cap_adjudication": None, "strength_floor": None, "max_plies": 1,
             "gate": {
-                "stride": 1, "screen_games": 1, "confirm_games": 1, "promotion_winrate": 0.55,
-                "screen_confirm_lo": 0.44, "deploy_sims": 1, "opening_book": "book_v1_s20260625_p4",
+                "stride": 1, "deploy_sims": 1, "opening_book": "book_v1_s20260625_p4",
                 "bootstrap_resamples": 1, "min_distinct_per_pair": 1, "seed_base": 1,
-                "sequential": None,
+                "sequential": {"mu0": 0.42, "mu1": 0.52, "alpha": 0.05, "beta": 0.1, "check_every_pairs": 2,
+                               "min_pairs": 2, "max_pairs": 2, "at_max_pairs": "promote"},
             },
         },
         # `legal_move_radius_schedule` is gone; the registry alone is the radius authority.

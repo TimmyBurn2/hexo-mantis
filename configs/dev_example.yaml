@@ -29,16 +29,20 @@ eval:
   max_plies: 128
   gate:
     stride: 1
-    screen_games: 80
-    confirm_games: 128
-    promotion_winrate: 0.55
-    screen_confirm_lo: 0.44
     deploy_sims: 150
     opening_book: book_v1_s20260625_p4
     bootstrap_resamples: 1000
     min_distinct_per_pair: 10
     seed_base: 20260625
-    sequential: null
+    sequential:
+      mu0: 0.42
+      mu1: 0.52
+      alpha: 0.05
+      beta: 0.1
+      check_every_pairs: 8
+      min_pairs: 16
+      max_pairs: 104
+      at_max_pairs: promote
 train:
   lr: 0.001
   weight_decay: 0.0001

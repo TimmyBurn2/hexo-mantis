@@ -58,7 +58,11 @@ def test_a_gate_cell_book_and_seed_rows_replace_the_configs(frontier, base, tmp_
     spec = frontier.cell_spec(cell, base_spec, cell_dir=tmp_path, config=config)
     assert spec.gate.opening_book == "book_v2_pool_s20260915_p4"
     assert (spec.gate.seed_base, spec.seed_base) == (3, 3)
-    assert spec.gate.run_gate and spec.gate.screen_games == 1024 and spec.gate.deploy_sims == 256
+    assert spec.gate.run_gate and spec.gate.deploy_sims == 256
+    seq = spec.gate.sequential
+    assert seq["min_pairs"] == seq["max_pairs"] == seq["check_every_pairs"] == 512, (
+        "a model cell is a fixed-N match: the GSPRT plays every pair and checks once"
+    )
     assert spec.best_snapshot == str(tmp_path / "opponent.pt")
 
 

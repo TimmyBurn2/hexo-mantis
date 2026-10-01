@@ -25,9 +25,7 @@
 # delta: selfplay.search.kind: puct -> gumbel
 # delta: train.policy_target: raw_visit_distribution -> completed_improved_policy
 # delta: train.ply_cap_abort: null -> {rate: 0.5, window_games: 600, min_step: 3000}
-# delta: eval.gate.screen_confirm_lo: 0.44 -> 0.5
 # delta: eval.max_plies: 128 -> 256
-# delta: eval.gate.sequential: null -> {mu0: 0.42, mu1: 0.52, alpha: 0.05, beta: 0.1, check_every_pairs: 8, min_pairs: 16, max_pairs: 104, at_max_pairs: promote}
 # delta: selfplay.q_rescale: true -> false
 # delta: train.augment: false -> true
 # delta: train.replay_capacity: 100000 -> 500000
@@ -80,10 +78,6 @@ eval:
   max_plies: 256
   gate:
     stride: 1
-    screen_games: 80
-    confirm_games: 128
-    promotion_winrate: 0.55
-    screen_confirm_lo: 0.5
     deploy_sims: 256
     opening_book: book_v1_s20260625_p4
     bootstrap_resamples: 1000

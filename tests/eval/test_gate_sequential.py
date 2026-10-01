@@ -1,6 +1,8 @@
 """The sequential promotion gate: the LLR, its bounds, the loop's stops, and once through a real round."""
 from __future__ import annotations
 
+import dataclasses
+
 import json
 import math
 from pathlib import Path
@@ -161,7 +163,7 @@ def _net(seed: int):
     return net
 
 
-def _round_spec(tmp_path, sequential: dict | None):
+def _round_spec(tmp_path, sequential: dict):
     from mantis.config.resolve.inference_batching import InferenceBatchingSpec
     from mantis.eval.rounds import GateSpec, RoundSpec
     from mantis.eval.snapshot import write_model_snapshot
@@ -170,8 +172,7 @@ def _round_spec(tmp_path, sequential: dict | None):
     write_model_snapshot(_net(seed=1), candidate)
     write_model_snapshot(_net(seed=2), best)
     gate = GateSpec(
-        stride=1, screen_games=2, confirm_games=2, promotion_winrate=0.55, screen_confirm_lo=0.44,
-        deploy_sims=2, opening_book=_BOOK, bootstrap_resamples=10, min_distinct_per_pair=1,
+        stride=1, deploy_sims=2, opening_book=_BOOK, bootstrap_resamples=10, min_distinct_per_pair=1,
         seed_base=_SEED, run_gate=True, sequential=sequential,
     )
     return RoundSpec(
@@ -217,8 +218,18 @@ def test_the_worker_plays_the_sequential_gate_in_batches_and_reports_the_rule(tm
     assert gate["promoted"] is (expected and not gate["low_power"])
 
 
-def test_a_null_block_keeps_the_screen_confirm_rule(tmp_path) -> None:
-    from mantis.eval import worker
+def test_the_gsprt_is_the_gates_one_rule() -> None:
+    """PLANTED BREAK: restore the screen/confirm rule and a null block mints, and its four keys come back."""
+    from pydantic import ValidationError
 
-    gate = worker.run_round(_round_spec(tmp_path, None))["gate"]
-    assert gate["rule"] == "screen_confirm" and gate["llr"] is None and gate["pairs_played"] is None
+    from mantis.config.loader import load_config
+    from mantis.config.schema import RunConfig
+    from mantis.eval.rounds import GateSpec
+
+    dump = load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").model_dump()
+    dump["eval"]["gate"]["sequential"] = None
+    with pytest.raises(ValidationError, match="sequential"):
+        RunConfig.model_validate(dump)
+    gone = {"screen_games", "confirm_games", "screen_confirm_lo", "promotion_winrate"}
+    assert not gone & set(dump["eval"]["gate"]), "a minted config still carries the deleted rule's keys"
+    assert not gone & {f.name for f in dataclasses.fields(GateSpec)}, "the round's gate spec still carries them"

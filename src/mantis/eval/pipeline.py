@@ -455,13 +455,11 @@ class EvalPipeline:
 
         run_gate = (best is not None) and (round_idx % cfg.gate.stride == 0 or terminal)
         gate_spec = GateSpec(
-            stride=cfg.gate.stride, screen_games=cfg.gate.screen_games,
-            confirm_games=cfg.gate.confirm_games, promotion_winrate=cfg.gate.promotion_winrate,
-            screen_confirm_lo=cfg.gate.screen_confirm_lo, deploy_sims=cfg.gate.deploy_sims,
+            stride=cfg.gate.stride, deploy_sims=cfg.gate.deploy_sims,
             opening_book=cfg.gate.opening_book, bootstrap_resamples=cfg.gate.bootstrap_resamples,
             min_distinct_per_pair=cfg.gate.min_distinct_per_pair, seed_base=cfg.gate.seed_base,
             run_gate=run_gate,
-            sequential=(None if cfg.gate.sequential is None else cfg.gate.sequential.model_dump()),
+            sequential=cfg.gate.sequential.model_dump(),
         )
         result_path = self._work_dir / f"{round_id}_result.json"
         progress_path = self._work_dir / f"{round_id}_progress.txt"

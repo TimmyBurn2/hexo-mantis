@@ -25,9 +25,11 @@ from mantis.eval.aggregate import (
 class _GateCfg:
     bootstrap_resamples = 400
     seed_base = 7
-    promotion_winrate = 0.55
     min_distinct_per_pair = 1
-    screen_confirm_lo = 0.0
+
+
+#: A verdict the GSPRT reached at its first check, which the aggregate takes as given.
+_PROMOTE = {"decision": "promote", "checks": 1}
 
 
 def _rec(opening: str, seat: int, winner: str, moves: list[tuple[int, int]]) -> dict[str, Any]:
@@ -104,7 +106,7 @@ def test_the_gate_ci_and_eff_n_are_both_over_pairs() -> None:
     for i in range(12):
         records.extend(_split_pair(f"op{i}", "p1", "p2"))
 
-    result = aggregate_gate(records, [], _GateCfg())
+    result = aggregate_gate(records, _GateCfg(), _PROMOTE)
 
     assert result.eff_n == 12, (
         f"eff_n is {result.eff_n} — counted in games (24) rather than in the pairs the CI "
@@ -115,7 +117,7 @@ def test_the_gate_ci_and_eff_n_are_both_over_pairs() -> None:
 def test_the_gate_result_retains_wins_losses_and_draws() -> None:
     """A promotion decision with no W/L/D beside it cannot be read after the fact."""
     records = _split_pair("op0", "p1", "p2") + _split_pair("op1", "p1", "draw")
-    result = aggregate_gate(records, [], _GateCfg())
+    result = aggregate_gate(records, _GateCfg(), _PROMOTE)
     assert (result.wins, result.losses, result.draws) == (2, 1, 1), (
         f"W/L/D reads {(result.wins, result.losses, result.draws)} over "
         f"{result.n_pooled} pooled games"
@@ -123,16 +125,19 @@ def test_the_gate_result_retains_wins_losses_and_draws() -> None:
     assert result.wins + result.losses + result.draws == result.n_pooled
 
 
-def test_a_perfect_sweep_still_promotes() -> None:
-    """Mutation half: a CI so wide nothing clears it is not a fix, it is a broken gate."""
+def test_the_verdict_promotes_unless_the_low_power_guard_refuses() -> None:
+    """The GSPRT decides; the aggregate refuses only an accept read off too few distinct games per pair."""
     records: list[dict[str, Any]] = []
     for i in range(30):
         records.extend(_split_pair(f"op{i}", "p1", "p1"))
-    result = aggregate_gate(records, [], _GateCfg())
-    assert result.promoted, (
-        "a candidate that won every game on thirty distinct openings did not promote — the "
-        "pair-level interval is not an interval, it is a refusal"
-    )
+    assert aggregate_gate(records, _GateCfg(), _PROMOTE).promoted
+    assert not aggregate_gate(records, _GateCfg(), {"decision": "reject", "checks": 1}).promoted
+
+    class _ThreeDistinct(_GateCfg):
+        min_distinct_per_pair = 3
+
+    guarded = aggregate_gate(records, _ThreeDistinct(), _PROMOTE)
+    assert guarded.low_power and not guarded.promoted, "two distinct legs per pair cannot meet a bar of three"
 
 
 def test_consecutive_rounds_draw_disjoint_openings() -> None:
@@ -160,31 +165,6 @@ def test_the_subset_is_derived_from_the_seed_and_the_round_index() -> None:
     assert first == again, "the same round drew a different subset twice"
     assert first != other_round, "the round index does not move the subset"
     assert first != other_seed, "the seed does not move the subset"
-
-
-def test_the_confirm_block_does_not_replay_the_screen_block() -> None:
-    """The confirm phase draws its own slice on its own PERMUTATION.
-
-    Offsetting the ROUND INDEX instead looks equivalent and is not: screen and confirm take
-    windows of DIFFERENT widths out of the SAME permutation, so they collide on a schedule —
-    one round's confirm block re-drew all forty of the screen's openings, which with
-    deterministic players buys wall-clock and no evidence.
-    """
-    screen_pairs, confirm_pairs = 40, 64
-    seed_base, offset = 20260625, 7919
-    for round_index in range(12):
-        screen = {o.opening_id for o in round_openings(
-            "book_v1_s20260625_p4", n_pairs=screen_pairs,
-            seed_base=seed_base, round_index=round_index)}
-        confirm = {o.opening_id for o in round_openings(
-            "book_v1_s20260625_p4", n_pairs=confirm_pairs,
-            seed_base=seed_base + offset, round_index=round_index)}
-        shared = len(screen & confirm)
-        assert shared <= screen_pairs // 2, (
-            f"round {round_index}: the confirm block re-played {shared} of the screen's "
-            f"{screen_pairs} openings — an escalation that mostly repeats the screen is "
-            "wall-clock without evidence"
-        )
 
 
 def test_the_window_wraps_rather_than_running_out() -> None:

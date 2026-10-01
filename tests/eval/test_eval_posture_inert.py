@@ -39,6 +39,7 @@ from mantis.config.resolve.eval_posture import (
 from mantis.eval.rounds import RoundSpec, _REQUIRED_RESULT_KEYS
 from mantis.eval.worker import _build_adjudicator, _round_result
 from _minted_puct import MINTED_PUCT
+from _gsprt import TWO_PAIR_GSPRT
 
 _REPO = Path(__file__).resolve().parents[2]
 _CONFIG_DIR = _REPO / "configs"
@@ -196,10 +197,9 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
     base = dict(
         round_index=0, round_id="r1", step=1, candidate_snapshot="c.pt", best_snapshot=None, best_step=None,
         encoding="gnn_axis_v1", worker_device="cpu",
-        gate=GateSpec(stride=1, screen_games=2, confirm_games=2, promotion_winrate=0.55,
-                      screen_confirm_lo=0.44, deploy_sims=1, opening_book="b",
+        gate=GateSpec(stride=1, deploy_sims=1, opening_book="b",
                       bootstrap_resamples=1, min_distinct_per_pair=1, seed_base=1,
-                      run_gate=False, sequential=None),
+                      run_gate=False, sequential=TWO_PAIR_GSPRT),
         rung_jobs=[], random_floor_games=0, random_model_sims=1,
         seed_base=1, round_timeout_sec=1.0,
         result_path="r.json", progress_path="p.txt",

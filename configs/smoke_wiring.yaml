@@ -13,8 +13,6 @@
 # delta: selfplay.max_game_moves: 128 -> 24
 # delta: eval.worker_device: cuda -> cpu
 # delta: eval.random_model_sims: 96 -> 1
-# delta: eval.gate.screen_games: 80 -> 1
-# delta: eval.gate.confirm_games: 128 -> 1
 # delta: eval.gate.deploy_sims: 150 -> 1
 # delta: eval.gate.min_distinct_per_pair: 10 -> 1
 # delta: train.device: cuda -> cpu
@@ -33,6 +31,7 @@
 # delta: selfplay.playout_cap.n_sims_quick: 0 -> 2
 # delta: selfplay.playout_cap.n_sims_full: 50 -> 4
 # delta: model.aux_soft_policy: null -> {target_temperature: 4.0, weight: 4.0}
+# delta: eval.gate.sequential: {mu0: 0.42, mu1: 0.52, alpha: 0.05, beta: 0.1, check_every_pairs: 8, min_pairs: 16, max_pairs: 104, at_max_pairs: promote} -> {mu0: 0.42, mu1: 0.52, alpha: 0.05, beta: 0.1, check_every_pairs: 2, min_pairs: 2, max_pairs: 2, at_max_pairs: promote}
 # delta: monitor.heartbeat_poll_interval_sec: 5.0 -> 0.5
 # delta: monitor.heartbeat_file_interval_sec: 15.0 -> 0.5
 # delta: identity.arch_kind: null -> GnnArchV2SoftPolicy
@@ -65,16 +64,20 @@ eval:
   max_plies: 24
   gate:
     stride: 1
-    screen_games: 1
-    confirm_games: 1
-    promotion_winrate: 0.55
-    screen_confirm_lo: 0.44
     deploy_sims: 1
     opening_book: book_v1_s20260625_p4
     bootstrap_resamples: 1000
     min_distinct_per_pair: 1
     seed_base: 20260625
-    sequential: null
+    sequential:
+      mu0: 0.42
+      mu1: 0.52
+      alpha: 0.05
+      beta: 0.1
+      check_every_pairs: 2
+      min_pairs: 2
+      max_pairs: 2
+      at_max_pairs: promote
 train:
   lr: 0.001
   weight_decay: 0.0001

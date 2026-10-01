@@ -85,10 +85,6 @@ CONSUMER_REGISTRY = {
         "resolve_strength_floor -> RoundSpec.strength_floor -> floor_gate.py "
         "evaluate_strength_floor win-rate bar",
     "eval.gate.stride": "pipeline.py promotion-capable round stride",
-    "eval.gate.screen_games": "worker.py gate screen block",
-    "eval.gate.confirm_games": "worker.py gate confirm block",
-    "eval.gate.promotion_winrate": "aggregate.py gate truth table",
-    "eval.gate.screen_confirm_lo": "aggregate.py escalation test",
     "eval.gate.deploy_sims": "arena/deploy_head.py sims",
     "eval.gate.opening_book": "arena/books.py gate openings",
     "eval.gate.bootstrap_resamples": "aggregate.py bootstrap CI",

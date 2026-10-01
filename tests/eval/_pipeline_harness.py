@@ -25,6 +25,7 @@ from mantis.eval.pipeline import DrainCaps
 from mantis.eval.promote import DeployTagHooks
 from mantis.model import GnnArch, build_net
 from mantis.selfplay.inference_local import LocalInferenceEngine
+from _gsprt import TWO_PAIR_GSPRT
 
 GSPEC = lookup("gnn_axis_v1")
 #: `LocalInferenceEngine` builds its `InferenceServer` config with no `RunConfig`, so the
@@ -41,9 +42,8 @@ def tiny_model() -> torch.nn.Module:
 
 def eval_config(**overrides: Any) -> EvalConfig:
     gate = GateConfig(
-        stride=1, screen_games=80, confirm_games=128, promotion_winrate=0.55,
-        screen_confirm_lo=0.44, deploy_sims=150, opening_book="book_v1_s20260625_p4",
-        bootstrap_resamples=1000, min_distinct_per_pair=10, seed_base=20260625, sequential=None,
+        stride=1, deploy_sims=150, opening_book="book_v1_s20260625_p4",
+        bootstrap_resamples=1000, min_distinct_per_pair=10, seed_base=20260625, sequential=TWO_PAIR_GSPRT,
     )
     defaults = dict(
         random_model_sims=96, max_plies=128, random_floor_games=4, worker_device="cpu",

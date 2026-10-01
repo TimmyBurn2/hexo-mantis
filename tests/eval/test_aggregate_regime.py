@@ -77,22 +77,17 @@ def test_pair_bootstrap_lower_ci_all_wins_and_n_zero_degenerates() -> None:
 
 
 def test_low_power_guard_blocks_promotion() -> None:
-    # 20 screen + 20 confirm games, all WINS for cand, but only 2 DISTINCT trajectories (repeated
-    # 20x each) — below min_distinct_per_pair (10), so low_power blocks promotion despite the win rate.
+    # 40 games, all WINS for cand, but only 4 DISTINCT trajectories (repeated 10x each) — below
+    # min_distinct_per_pair (10), so low_power blocks a promote verdict despite the win rate.
     gate_cfg = SimpleNamespace(
-        promotion_winrate=0.55,
         min_distinct_per_pair=10,
         bootstrap_resamples=200,
         seed_base=20260625,
     )
-    screen = [
-        _record(p1="cand", p2="best", winner="p1", regime_key="rk", traj=f"screen_traj_{i % 2}")
-        for i in range(20)
+    records = [
+        _record(p1="cand", p2="best", winner="p1", regime_key="rk", traj=f"traj_{i % 4}")
+        for i in range(40)
     ]
-    confirm = [
-        _record(p1="cand", p2="best", winner="p1", regime_key="rk", traj=f"confirm_traj_{i % 2}")
-        for i in range(20)
-    ]
-    agg = aggregate_gate(screen, confirm, gate_cfg)
+    agg = aggregate_gate(records, gate_cfg, {"decision": "promote", "checks": 1})
     assert agg.low_power is True
     assert agg.promoted is False

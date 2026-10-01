@@ -20,6 +20,7 @@ from mantis.encoding import lookup
 from mantis.model import build_net
 from mantis.train.checkpoints import resume_trainer, save_checkpoint
 from mantis.train.trainer.core import Trainer
+from _gsprt import TWO_PAIR_GSPRT
 
 ENCODING = "gnn_axis_v1"
 
@@ -36,9 +37,8 @@ def _eval_block() -> dict:
         "round_timeout_sec": 1.0, "worker_kill_grace_sec": 1.0,
         "ply_cap_adjudication": None, "strength_floor": None,
         "gate": {
-            "stride": 1, "screen_games": 1, "confirm_games": 1, "promotion_winrate": 0.55,
-            "screen_confirm_lo": 0.44, "deploy_sims": 1, "opening_book": "book_v1_s20260625_p4",
-            "bootstrap_resamples": 1, "min_distinct_per_pair": 1, "seed_base": 1, "sequential": None,
+            "stride": 1, "deploy_sims": 1, "opening_book": "book_v1_s20260625_p4",
+            "bootstrap_resamples": 1, "min_distinct_per_pair": 1, "seed_base": 1, "sequential": TWO_PAIR_GSPRT,
         },
     }
 

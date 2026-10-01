@@ -27,12 +27,7 @@ from mantis.bots.protocol import RungUnresolvable
 from mantis.bots.resolve import resolve_bot
 from mantis.config.resolve.allocator_posture import assert_posture_token
 from mantis.encoding import EncodingSpec, lookup, normalize_encoding_name
-from mantis.eval.aggregate import (
-    aggregate_gate,
-    aggregate_rung,
-    aggregate_sequential_gate,
-    should_escalate,
-)
+from mantis.eval.aggregate import aggregate_gate, aggregate_rung
 from mantis.eval.child_memory import make_probe
 from mantis.eval.errors import EvalDecodeUnsupportedError
 from mantis.eval.floor_gate import FLOOR_PROBE_VARIANT, evaluate_strength_floor
@@ -48,9 +43,6 @@ from mantis.monitor.game_record import (
 from mantis.monitor.sink import RunIdError
 from mantis.selfplay.inference_local import LocalInferenceEngine
 from mantis.util.puct import PuctConstants
-
-#: Confirm-phase opening seed offset, so the confirm block draws a DIFFERENT book slice.
-_CONFIRM_SEED_OFFSET = 7919
 
 #: Policy-pool values the eval decode ENTRANCE accepts; the graph decode drops nothing. A
 #: CLOSED SET, so a registry row declaring `scatter_mean` is refused, not silently max-pooled.
@@ -359,9 +351,8 @@ def _play_gate_block(
     progress: _RoundProgress,
     games: _RoundGameRecords,
 ) -> dict | None:
-    """Play the gate block: candidate vs the best anchor, deploy-matched, screen -> confirm
-    escalation. Returns the raw `{"screen": [...], "confirm": [...]}` lists, or None with no
-    best anchor yet.
+    """Play the gate block: candidate vs the best anchor, deploy-matched, by the GSPRT in batches of
+    pairs. Returns `{"records": [...], "verdict": {...}}`, or None with no best anchor yet.
 
     THE ROUND'S ONLY CONCURRENT BLOCK — 93 % of the round's wall. DISCLOSED at G > 1:
     `record_sink` is called in loop order AFTER the block completes, so the progress file goes
@@ -408,66 +399,25 @@ def _play_gate_block(
             opponent_spec="best_anchor:deploy_matched", opening_book=spec.gate.opening_book,
             deploy_matched=True, encoding=spec.encoding,
         )
-        if spec.gate.sequential is not None:
-            seq = SequentialGateSpec(**spec.gate.sequential)
-            # ONE seeded window of `max_pairs` openings, consumed in order batch by batch.
-            openings = round_openings(
-                spec.gate.opening_book, n_pairs=seq.max_pairs,
-                seed_base=spec.gate.seed_base, round_index=spec.round_index,
-            )
-
-            def _play_pairs(start: int, end: int) -> list[dict[str, Any]]:
-                batch = play_paired_match(
-                    candidate, opponent, openings[start:end], regime_key=regime_key,
-                    board_factory=board_factory, record_sink=_both(progress.sink("gate_sequential"), games.sink("gate_sequential", channel="promotion", rung="anchor", served_sims=spec.gate.deploy_sims, seed=spec.gate.seed_base)), adjudicator=adjudicator, max_plies=spec.max_plies,
-                    player_factory=_pair, concurrency=spec.concurrency,
-                )
-                return [_agg_record(r) for r in batch]
-
-            records, verdict = run_sequential_gate(_play_pairs, seq)
-            return {"screen": list(records), "confirm": [], "sequential": dataclasses.asdict(verdict)}
-        # A per-ROUND window over a seed_base-seeded permutation, confirm offset by
-        # `_CONFIRM_SEED_OFFSET`, so consecutive rounds and phases do not replay games.
-        screen_openings = round_openings(
-            spec.gate.opening_book, n_pairs=max(spec.gate.screen_games // 2, 1),
+        seq = SequentialGateSpec(**spec.gate.sequential)
+        # ONE seeded window of `max_pairs` openings, consumed in order batch by batch.
+        openings = round_openings(
+            spec.gate.opening_book, n_pairs=seq.max_pairs,
             seed_base=spec.gate.seed_base, round_index=spec.round_index,
         )
-        screen_records = play_paired_match(
-            candidate, opponent, screen_openings, regime_key=regime_key,
-            board_factory=board_factory, record_sink=_both(progress.sink("gate_screen"), games.sink("gate_screen", channel="promotion", rung="anchor", served_sims=spec.gate.deploy_sims, seed=spec.gate.seed_base)), adjudicator=adjudicator, max_plies=spec.max_plies,
-            player_factory=_pair, concurrency=spec.concurrency,
-        )
-        screen_agg = [_agg_record(r) for r in screen_records]
 
-        wr_screen = _draw_aware_wr(screen_agg)
-        escalate = wr_screen is not None and should_escalate(wr_screen, spec.gate.screen_confirm_lo)
-        confirm_agg: list[dict[str, Any]] = []
-        if escalate:
-            confirm_openings = round_openings(
-                spec.gate.opening_book, n_pairs=max(spec.gate.confirm_games // 2, 1),
-                # The offset stays on the SEED: a ROUND-INDEX offset over the SAME permutation
-                # collides (MEASURED at run6's 40/64 widths: round 2's confirm drew ALL FORTY
-                # screen openings); on its own permutation the worst overlap is 8 of 40 vs ~5.
-                seed_base=spec.gate.seed_base + _CONFIRM_SEED_OFFSET,
-                round_index=spec.round_index,
-            )
-            confirm_records = play_paired_match(
-                candidate, opponent, confirm_openings, regime_key=regime_key,
-                board_factory=board_factory, record_sink=_both(progress.sink("gate_confirm"), games.sink("gate_confirm", channel="promotion", rung="anchor", served_sims=spec.gate.deploy_sims, seed=spec.gate.seed_base + _CONFIRM_SEED_OFFSET)), adjudicator=adjudicator, max_plies=spec.max_plies,
+        def _play_pairs(start: int, end: int) -> list[dict[str, Any]]:
+            batch = play_paired_match(
+                candidate, opponent, openings[start:end], regime_key=regime_key,
+                board_factory=board_factory, record_sink=_both(progress.sink("gate_sequential"), games.sink("gate_sequential", channel="promotion", rung="anchor", served_sims=spec.gate.deploy_sims, seed=spec.gate.seed_base)), adjudicator=adjudicator, max_plies=spec.max_plies,
                 player_factory=_pair, concurrency=spec.concurrency,
             )
-            confirm_agg = [_agg_record(r) for r in confirm_records]
-        return {"screen": screen_agg, "confirm": confirm_agg}
+            return [_agg_record(r) for r in batch]
+
+        records, verdict = run_sequential_gate(_play_pairs, seq)
+        return {"records": list(records), "verdict": dataclasses.asdict(verdict)}
     finally:
         best_engine.close()
-
-
-def _draw_aware_wr(records: list[dict[str, Any]]) -> float | None:
-    if not records:
-        return None
-    wins = sum(1 for r in records if r["winner"] == "p1")
-    draws = sum(1 for r in records if r["winner"] == "draw")
-    return (wins + 0.5 * draws) / len(records)
 
 
 def _play_rung_block(
@@ -689,11 +639,8 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
         probe.mark("gate_block")
         gate_result: dict | None = None
         if gate_records is not None:
-            verdict = gate_records.get("sequential")
-            if verdict is not None:
-                gate_agg = aggregate_sequential_gate(gate_records["screen"], spec.gate, verdict)
-            else:
-                gate_agg = aggregate_gate(gate_records["screen"], gate_records["confirm"], spec.gate)
+            verdict = gate_records["verdict"]
+            gate_agg = aggregate_gate(gate_records["records"], spec.gate, verdict)
             gate_result = {
                 "wr_screen": gate_agg.wr_screen, "wr_confirm": gate_agg.wr_confirm,
                 "n_screen": gate_agg.n_screen, "n_confirm": gate_agg.n_confirm,
@@ -701,12 +648,11 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
                 "elo_ci_lower_boot": gate_agg.elo_ci_lower_boot, "low_power": gate_agg.low_power,
                 "eff_n": gate_agg.eff_n, "reason": "", "deploy_matched": True,
                 "promoted": gate_agg.promoted,
-                # The rule that decided, and the sequential rule's own reading (null under the
-                # screen/confirm rule): a reader must not take a 32-game gate for a truncated one.
-                "rule": "gsprt" if verdict is not None else "screen_confirm",
-                "llr": None if verdict is None else verdict["llr"],
-                "pairs_played": None if verdict is None else verdict["pairs_played"],
-                "stopped": None if verdict is None else verdict["stopped"],
+                # The rule that decided, kept for records written while a second rule existed.
+                "rule": "gsprt",
+                "llr": verdict["llr"],
+                "pairs_played": verdict["pairs_played"],
+                "stopped": verdict["stopped"],
                 "wall_sec": gate_wall_sec,
             }
             # The verdict outlives a kill at the bound or a stop (A-3): persisted the moment it exists.

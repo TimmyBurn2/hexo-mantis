@@ -11,15 +11,15 @@ from mantis.eval import worker
 from mantis.eval.rounds import GateSpec, RoundSpec, RungJob
 from mantis.eval.worker import _model_sims_for_kind
 from _minted_puct import MINTED_PUCT
+from _gsprt import TWO_PAIR_GSPRT
 
 
 def _spec(**over):
     base = dict(
         round_id="r", round_index=0, step=0, candidate_snapshot="", best_snapshot=None, best_step=None,
         encoding="gnn_axis_r8", worker_device="cpu", rung_jobs=[], random_floor_games=0,
-        gate=GateSpec(stride=1, screen_games=0, confirm_games=0, promotion_winrate=0.55,
-                      screen_confirm_lo=0.44, deploy_sims=512, opening_book="book_v1_s20260625_p4",
-                      bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=1, run_gate=False, sequential=None),
+        gate=GateSpec(stride=1, deploy_sims=512, opening_book="book_v1_s20260625_p4",
+                      bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=1, run_gate=False, sequential=TWO_PAIR_GSPRT),
         random_model_sims=96, seed_base=1, round_timeout_sec=1.0,
         result_path="", progress_path="",
         game_record=None, ply_cap_adjudication=None, strength_floor=None,

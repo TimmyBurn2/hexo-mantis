@@ -215,10 +215,10 @@ def test_eval_broken_never_promotes_and_never_silently_skips(fake_mp, tmp_path) 
 
 
 def _gate_verdict(promoted: bool) -> dict:
-    return {"wr_screen": 0.7, "wr_confirm": 0.66, "n_screen": 80, "n_confirm": 128, "n_pooled": 208,
+    return {"wr_screen": 0.66, "wr_confirm": 0.66, "n_screen": 208, "n_confirm": 0, "n_pooled": 208,
             "escalated": True, "elo_ci_lower_boot": 40.0, "low_power": False, "eff_n": 100.0,
-            "reason": "", "deploy_matched": True, "promoted": promoted, "rule": "screen_confirm",
-            "llr": None, "pairs_played": None, "stopped": None}
+            "reason": "", "deploy_matched": True, "promoted": promoted, "rule": "gsprt",
+            "llr": 2.9, "pairs_played": 104, "stopped": "accept" if promoted else "reject"}
 
 
 def _kill_after_partial(fake_mp, pipeline, *, partial_step: int, promoted: bool) -> str:
