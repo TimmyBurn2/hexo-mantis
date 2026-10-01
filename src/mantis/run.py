@@ -60,10 +60,6 @@ from mantis.config.resolve.inference_batching import resolve_inference_batching
 from mantis.config.resolve.leaf_build_threads import resolve_leaf_build_threads
 from mantis.config.resolve.monitor import resolve_monitor_config
 from mantis.config.resolve.ply_cap import PlyCapAbortSpec, resolve_ply_cap_abort
-from mantis.config.resolve.policy_loss_trough import (
-    PolicyLossTroughAbortSpec,
-    resolve_policy_loss_trough_abort,
-)
 from mantis.config.resolve.run_length import resolve_max_train_steps
 from mantis.config.resolve.search import resolve_deploy_search_kind
 from mantis.config.resolve.tactics import resolve_deploy_tactics
@@ -366,7 +362,6 @@ def _step_coordinator_config(
     *,
     stop_step: int,
     draw_rate_abort: DrawRateAbortSpec | None,
-    policy_loss_trough_abort: PolicyLossTroughAbortSpec | None,
     ply_cap_abort: PlyCapAbortSpec | None,
     drain_caps: DrainCapsSpec,
     gate_interval: int,
@@ -392,7 +387,6 @@ def _step_coordinator_config(
         augment=knobs.augment,
         stop_step=stop_step,
         draw_rate_abort=draw_rate_abort,
-        policy_loss_trough_abort=policy_loss_trough_abort,
         ply_cap_abort=ply_cap_abort,
         final_eval_drain_timeout_sec=drain_caps.final_eval_drain_timeout_sec,
         eval_final_drain_safety_factor=drain_caps.eval_final_drain_safety_factor,
@@ -616,7 +610,6 @@ def compose_run(
             step_coordinator_cfg = _step_coordinator_config(
                 stop_step=_resolve_stop_step(config, burst_stop_step),
                 draw_rate_abort=resolve_draw_rate_abort(config.train),
-                policy_loss_trough_abort=resolve_policy_loss_trough_abort(config.train),
                 ply_cap_abort=resolve_ply_cap_abort(config.train),
                 drain_caps=resolve_drain_caps(config.monitor),
                 # The ARMING cadence; never `knobs.log_interval`, which would blind armed aborts

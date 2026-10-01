@@ -425,7 +425,7 @@ def test_of2_4_one_optimizer_step_and_seven_keys_at_every_m(tmp_path, m: int) ->
     """ONE of everything per training step, at M in {1, 2, 4}, and the returned dict carries all
     seven keys at every M. The key-presence half is not decoration: the coordinator reads
     `loss_info.get("grad_norm", math.nan)` to tell a taken step from a refused one, so a branch
-    returning a dict without `grad_norm` silently drops every step from the trough window."""
+    returning a dict without `grad_norm` silently drops every step from the held-out gap's train-loss sum."""
     r = _drive_with_spies(tmp_path, m)
     assert r.opt.zero_grads == 1, f"M={m}: {r.opt.zero_grads} zero_grad calls, want 1"
     assert r.opt.steps == 1, f"M={m}: {r.opt.steps} optimizer.step calls, want 1 (MB-7)"

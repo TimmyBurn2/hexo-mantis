@@ -94,7 +94,6 @@ train:
   # The four travel together (R80) and are RUN-SCOPED CONSTANTS fixed at mint prereg
   # (R82/R85/R92) — never hand-edited in a minted file (R1).
   draw_rate_abort: null
-  policy_loss_trough_abort: null
   ply_cap_abort: null
   # The held-out gap witness (R366(c), v37): every `interval` steps the trainer's forward-only loss
   # over a frozen slice of `ring` against the train loss since the last read. `null` is OFF.

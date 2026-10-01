@@ -66,7 +66,7 @@ def dev_coordinator_config(**overrides: Any) -> StepCoordinatorConfig:
     """The production builder's config for an unbounded, gate-disarmed drive with `overrides` applied."""
     settings = mirrored({"eval_interval": 1, "log_interval": 1, "min_buf_size": 10, **overrides})
     return dataclasses.replace(
-        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None,
+        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None,
                                  ply_cap_abort=None, drain_caps=DEV_DRAIN_CAPS,
                                  gate_interval=DEV_GATE_INTERVAL, knobs=DEV_KNOBS),
         **settings,

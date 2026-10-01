@@ -78,7 +78,7 @@ class _SpySink:
 
 def _coordinator(*, spec, pool):
     config = dataclasses.replace(
-        _step_coordinator_config(stop_step=10**9, draw_rate_abort=spec, policy_loss_trough_abort=None, ply_cap_abort=None,
+        _step_coordinator_config(stop_step=10**9, draw_rate_abort=spec, ply_cap_abort=None,
                                  drain_caps=DEV_DRAIN_CAPS, gate_interval=DEV_GATE_INTERVAL,
                                  knobs=DEV_KNOBS),
         # Gate cadence mirrors narration cadence; this file calls `_run_hard_abort_gates`
@@ -244,9 +244,9 @@ def test_a_disarmed_gate_run_records_exactly_one_check_and_one_skip() -> None:
 
     # `_sample` is what SKIP-counts an absent producer — the fact the deleted comment denied.
     # Driven on the real method, against a gate key of its own so the counters above stay pinned.
-    before = dict(harness.coord._gate_stats["policy_loss_trough"])
-    assert harness.coord._sample("policy_loss_trough", [], None) is False
-    after = harness.coord._gate_stats["policy_loss_trough"]
+    before = dict(harness.coord._gate_stats["ply_cap_attractor"])
+    assert harness.coord._sample("ply_cap_attractor", [], None) is False
+    after = harness.coord._gate_stats["ply_cap_attractor"]
     assert after["checks"] == before["checks"] + 1 and after["skips"] == before["skips"] + 1, (
         "`_sample` itself counts the check AND the skip for an absent producer. The skip arm "
         f"DR-1 deleted claimed to be what counted the EXPLICIT-off case; it never ran. "

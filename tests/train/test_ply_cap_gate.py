@@ -108,7 +108,7 @@ class _Trainer:
 def _harness(flags: list[int], spec: PlyCapAbortSpec | None, *, gate_interval: int = 4):
     cfg = load_config(_CONFIG)
     base = _step_coordinator_config(
-        stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=spec,
+        stop_step=10**9, draw_rate_abort=None, ply_cap_abort=spec,
         drain_caps=resolve_drain_caps(cfg.monitor), gate_interval=gate_interval,
         knobs=resolve_coordinator_knobs(cfg.train))
     config = dataclasses.replace(base, eval_interval=0, log_interval=gate_interval,

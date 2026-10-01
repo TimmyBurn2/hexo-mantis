@@ -40,7 +40,6 @@ VALID_TRAIN_PAYLOAD: dict = {
     "selfplay_stall_timeout_sec": 1800.0,
     "policy_target": "raw_visit_distribution",
     "ema": {"enabled": False, "decay": 0.999, "update_every": 10},
-    "policy_loss_trough_abort": None,
     "ply_cap_abort": None,
     "heldout_gap": None,
 }

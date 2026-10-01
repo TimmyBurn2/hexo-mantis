@@ -73,17 +73,6 @@ class DrawRateAbortLike(Protocol):
     def consec(self) -> int: ...
 
 
-class PolicyLossTroughAbortLike(Protocol):
-    """The RESOLVED trough halt's terms; `None` is the EXPLICIT disarmed posture."""
-
-    @property
-    def delta_nats(self) -> float: ...
-    @property
-    def consec(self) -> int: ...
-    @property
-    def max_step(self) -> int: ...
-
-
 class PlyCapAbortLike(Protocol):
     """The RESOLVED ply-cap halt's terms; `None` is the EXPLICIT disarmed posture."""
 
@@ -199,8 +188,6 @@ class StepCoordinatorConfig:
     # CONFIG-authored like `stop_step`, NO default: `None` is EXPLICITLY OFF, never inherited,
     # since a literal the caller always replaces is still a second default authority.
     draw_rate_abort: DrawRateAbortLike | None
-    # The policy-loss trough halt, the same idiom: `None` is EXPLICITLY OFF, never inherited.
-    policy_loss_trough_abort: PolicyLossTroughAbortLike | None
     # The ply-cap attractor halt, the same idiom.
     ply_cap_abort: PlyCapAbortLike | None
     # The drain/terminal-eval caps are CONFIG-authored (`monitor.drain.*`), no code-side default.

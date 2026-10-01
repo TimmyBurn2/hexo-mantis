@@ -120,7 +120,6 @@ train:
     min_step: 25000
     N_pool_min: 50
     consec: 3
-  policy_loss_trough_abort: null
   ply_cap_abort:
     rate: 0.5
     window_games: 600

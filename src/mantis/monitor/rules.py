@@ -160,33 +160,6 @@ def emit_training_step_alerts(
     return fired
 
 
-def check_policy_loss_trough(
-    history: Sequence[float],
-    current_step: int,
-    *,
-    reference: float,
-    delta_nats: float,
-    consec: int,
-    max_step: int,
-) -> str | None:
-    """The last ``consec`` window means all sit ``delta_nats`` above ``reference``
-    while ``current_step <= max_step``; silent past it (the signature is an EARLY overwrite)."""
-    if delta_nats <= 0 or consec <= 0 or len(history) < consec:
-        return None
-    if current_step > max_step:
-        return None
-    tail = [float(v) for v in list(history)[-consec:]]
-    bar = float(reference) + float(delta_nats)
-    if all(value >= bar for value in tail):
-        return (
-            f"HARD-ABORT (policy-loss trough): policy loss {tail[-1]:.3f} >= {bar:.3f} "
-            f"(reference window {float(reference):.3f} + {float(delta_nats):.2f} nats) for "
-            f"{consec} consecutive windows inside the first {max_step:,} steps — the "
-            "warm-started prior is being overwritten"
-        )
-    return None
-
-
 def check_ply_cap_attractor(
     observed_rate: float,
     current_step: int,

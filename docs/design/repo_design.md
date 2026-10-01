@@ -495,7 +495,7 @@ ADDED (v7 → v8). `docs/contracts/run_config_schema.md` is the version authorit
   | 46 | `DRAW_RATE_COLLAPSE_EXIT_CODE` | `monitor/heartbeat.py` | **cooperative** — see below |
   | 47 | `DISK_SPACE_EXHAUSTED_EXIT_CODE` | `monitor/heartbeat.py` | **cooperative** — see below |
   | 48 | `TERMINAL_EVAL_BROKEN_EXIT_CODE` | `monitor/heartbeat.py` | **cooperative** — see below |
-  | 49 | `POLICY_LOSS_TROUGH_EXIT_CODE` | `monitor/heartbeat.py` | **cooperative** — the R350(b)(iv) trough halt, fired through `_fire_hard_abort` like 46 |
+  | 49 | retired | — | the policy-loss trough halt's, deleted with it at HYGIENE-1 (R351(d) had demoted it to a warning); never reused, so a recorded 49 keeps its meaning |
   | 50 | `PLY_CAP_ATTRACTOR_EXIT_CODE` | `monitor/heartbeat.py` | **cooperative** — the R352(c) ply-cap attractor halt, fired through `_fire_hard_abort` like 46 |
 
   Codes OUTSIDE the reserved band that a supervisor may nonetheless read from its child. They

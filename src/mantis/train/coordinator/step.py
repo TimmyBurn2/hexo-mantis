@@ -30,7 +30,6 @@ from mantis.monitor.config import MonitorConfig
 from mantis.monitor.rules import (
     check_draw_rate_collapse,
     check_ply_cap_attractor,
-    check_policy_loss_trough,
     emit_training_step_alerts,
 )
 from mantis.train.coordinator.config import (
@@ -77,7 +76,7 @@ def _anchor_sha256(anchor_state: Any) -> str | None:
 #: The gate keys carried by the `monitor_gates` summary (checks/fires/skips/warns).
 #: `draw_rate_collapse` is armed by the config and named here to keep an inert posture readable.
 GATE_NAMES: tuple[str, ...] = (
-    "draw_rate_collapse", "policy_loss_trough", "ply_cap_attractor",
+    "draw_rate_collapse", "ply_cap_attractor",
 )
 
 #: The target-integrity counters and the RECORDED-POSITION counter their rate is over, off one
@@ -209,11 +208,6 @@ class StepCoordinator:
         # Gate state — every ring is caller-owned (the rules are stateless).
         self._draw_rate_history: list[float] = []
         self._loss_window: list[float] = []
-        # The trough halt's producer state: every step's policy loss since the last
-        # gate boundary, the FIRST boundary's mean as the reference, later means as the history.
-        self._policy_loss_window: list[float] = []
-        self._policy_loss_reference: float | None = None
-        self._policy_loss_window_means: list[float] = []
         # The ply-cap halt's last windowed reading; `None` until the window fills.
         self._ply_cap_rate: float | None = None
         self._last_iter_games = 0
@@ -482,11 +476,6 @@ class StepCoordinator:
                 self.actor_sync.maybe_sync(self._train_step)
             if self._initial_policy_loss is None and "policy_loss" in loss_info:
                 self._initial_policy_loss = float(loss_info["policy_loss"])
-            # Only a TAKEN step feeds the trough window: a refused step (non-finite grad norm)
-            # reports a policy loss no parameter saw, and a 0.0 there would reset `consec`.
-            if ("policy_loss" in loss_info and math.isfinite(float(loss_info["policy_loss"]))
-                    and math.isfinite(float(loss_info.get("grad_norm", math.nan)))):
-                self._policy_loss_window.append(float(loss_info["policy_loss"]))
             self._last_loss_info = loss_info
 
             # D3: the ply-cap attractor halt, per training step against the pool's live window.
@@ -608,35 +597,8 @@ class StepCoordinator:
             return False
         sink = self._sink if self._sink is not None else NullEventSink()
         fired = self._run_hard_abort_gates(cfg)
-        fired = self._run_policy_loss_trough_gate(cfg) or fired
         self._emit_monitor_gates(cfg, sink)
         return fired
-
-    def _run_policy_loss_trough_gate(self, cfg: StepCoordinatorConfig) -> bool:
-        """The policy-loss trough halt: one policy-loss mean per gate window, the FIRST the reference."""
-        spec = cfg.policy_loss_trough_abort
-        window = self._policy_loss_window
-        self._policy_loss_window = []
-        if spec is None:
-            self._sample("policy_loss_trough", self._policy_loss_window_means, None)
-            return False
-        if not window:
-            self._sample("policy_loss_trough", self._policy_loss_window_means, None)
-            return False
-        mean = sum(window) / len(window)
-        if self._policy_loss_reference is None:
-            self._policy_loss_reference = mean
-            self._gate_stats["policy_loss_trough"]["checks"] += 1
-            return False
-        if not self._sample("policy_loss_trough", self._policy_loss_window_means, lambda: mean):
-            return False
-        del self._policy_loss_window_means[:-spec.consec]
-        message = check_policy_loss_trough(
-            self._policy_loss_window_means, self._train_step,
-            reference=self._policy_loss_reference, delta_nats=spec.delta_nats,
-            consec=spec.consec, max_step=spec.max_step,
-        )
-        return self._fire_hard_abort("policy_loss_trough", message)
 
     def _run_ply_cap_gate(self, cfg: StepCoordinatorConfig) -> bool:
         """The ply-cap halt, read EVERY training step; `min_step` gates the fire only."""
@@ -827,13 +789,6 @@ class StepCoordinator:
             "step": self._train_step,
             "gates": {name: dict(stats) for name, stats in self._gate_stats.items()},
             "draw_rate_threshold": None if spec is None else spec.threshold,
-            # The trough halt's live terms beside its counters: the reference window mean is
-            # `None` until the first boundary, never a 0.0 in the loss's own range.
-            "policy_loss_trough_delta_nats": (
-                None if cfg.policy_loss_trough_abort is None
-                else cfg.policy_loss_trough_abort.delta_nats),
-            "policy_loss_reference": self._policy_loss_reference,
-            "policy_loss_window_means": list(self._policy_loss_window_means),
             # The ply-cap halt's live terms and last windowed reading: `None` on the
             # explicit OFF, and `None` while the window is still filling, never a 0.0.
             "ply_cap_abort_rate": None if cfg.ply_cap_abort is None else cfg.ply_cap_abort.rate,
@@ -933,31 +888,12 @@ class StepCoordinator:
     #: The trainer's guard counters that ride the sidecar beside the coordinator's windows.
     _TRAINER_COUNTERS = ("skipped_steps", "nonfinite_loss_microbatches", "nonfinite_grad_steps")
 
-    def _fold_window_left_at_a_boundary(self) -> None:
-        """A boundary bundle is written before the boundary consumed its window: fold it as it would have (B-7)."""
-        cfg = self.config
-        if not self._policy_loss_window or self._train_step % cfg.gate_interval != 0:
-            return
-        window, self._policy_loss_window = self._policy_loss_window, []
-        spec = cfg.policy_loss_trough_abort
-        if spec is None:
-            return
-        mean = sum(window) / len(window)
-        if self._policy_loss_reference is None:
-            self._policy_loss_reference = mean
-            return
-        self._policy_loss_window_means.append(mean)
-        del self._policy_loss_window_means[:-spec.consec]
-
     def guard_state(self) -> dict[str, Any]:
         """The abort windows and guard counters a resume must carry (B-7): JSON-shaped."""
         trainer = self.trainer
         return {
             "draw_rate_history": [float(v) for v in self._draw_rate_history],
             "initial_policy_loss": self._initial_policy_loss,
-            "policy_loss_reference": self._policy_loss_reference,
-            "policy_loss_window_means": [float(v) for v in self._policy_loss_window_means],
-            "policy_loss_window": [float(v) for v in self._policy_loss_window],
             "loss_window": [float(v) for v in self._loss_window],
             "ply_cap_rate": self._ply_cap_rate,
             "trainer": {name: int(getattr(trainer, name, 0)) for name in self._TRAINER_COUNTERS
@@ -974,19 +910,10 @@ class StepCoordinator:
     def _restore_guard_fields(self, state: Mapping[str, Any]) -> None:
         if "draw_rate_history" in state:
             self._draw_rate_history = [float(v) for v in state["draw_rate_history"]]
-        # An older sidecar's `wr_history` / `wr_history_rung` (the sealbot ring) are ignored.
-        # An older sidecar's `consec_high_gn` (the deleted grad-norm abort's counter) is ignored.
+        # An older sidecar's keys of deleted guards (sealbot ring, grad-norm counter, trough windows) are ignored.
         if "initial_policy_loss" in state:
             v = state["initial_policy_loss"]
             self._initial_policy_loss = None if v is None else float(v)
-        if "policy_loss_reference" in state:
-            v = state["policy_loss_reference"]
-            self._policy_loss_reference = None if v is None else float(v)
-        if "policy_loss_window_means" in state:
-            self._policy_loss_window_means = [float(v) for v in state["policy_loss_window_means"]]
-        if "policy_loss_window" in state:
-            self._policy_loss_window = [float(v) for v in state["policy_loss_window"]]
-            self._fold_window_left_at_a_boundary()
         if "loss_window" in state:
             self._loss_window = [float(v) for v in state["loss_window"]]
         if "ply_cap_rate" in state:

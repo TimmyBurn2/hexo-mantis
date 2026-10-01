@@ -72,7 +72,7 @@ class _EvalPipeline:
 
 def _coordinator(full_config: dict[str, Any]):
     cfg = dataclasses.replace(
-        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
+        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, ply_cap_abort=None,
                                  drain_caps=DEV_DRAIN_CAPS, gate_interval=DEV_GATE_INTERVAL,
                                  knobs=DEV_KNOBS),
         eval_interval=1, log_interval=1000, gate_interval=1000, min_buf_size=10,

@@ -52,10 +52,9 @@ def _iteration_complete() -> dict[str, Any]:
 
 def _monitor_gates() -> dict[str, Any]:
     sink = SpyEventSink()
-    coord = SimpleNamespace(_train_step=1, _gate_stats={}, _policy_loss_reference=None,
-                            _policy_loss_window_means=[], _ply_cap_rate=None,
+    coord = SimpleNamespace(_train_step=1, _gate_stats={}, _ply_cap_rate=None,
                             _watchdog_counters=lambda: None)
-    cfg = SimpleNamespace(draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None)
+    cfg = SimpleNamespace(draw_rate_abort=None, ply_cap_abort=None)
     StepCoordinator._emit_monitor_gates(coord, cfg, sink)  # type: ignore[arg-type]
     return sink.events[0]
 

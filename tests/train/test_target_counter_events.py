@@ -70,7 +70,7 @@ def _drive(*snapshots: RunnerStats) -> list[dict]:
     guard line with a bigger modulus."""
     assert snapshots, "a drive with no snapshot measures nothing"
     config = dataclasses.replace(
-        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
+        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, ply_cap_abort=None,
                                  drain_caps=DEV_DRAIN_CAPS, gate_interval=DEV_GATE_INTERVAL,
                                  knobs=DEV_KNOBS),
         # Gate cadence mirrors narration cadence, the shipped posture.

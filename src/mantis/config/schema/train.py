@@ -119,15 +119,6 @@ class EmaConfig(StrictModel):
     update_every: int = Field(ge=1)
 
 
-class PolicyLossTroughAbortConfig(StrictModel):
-    """The policy-loss trough halt: `consec` gate windows each `delta_nats` above the FIRST window's
-    mean policy loss, at or before `max_step`, halt; `null` on the parent is the explicit OFF."""
-
-    delta_nats: float = Field(gt=0)
-    consec: int = Field(ge=1)
-    max_step: int = Field(ge=1)
-
-
 class PlyCapAbortConfig(StrictModel):
     """The ply-cap halt: the last `window_games` games' cap fraction STRICTLY above `rate` at or past `min_step` halts; `null` is OFF."""
 
@@ -186,8 +177,6 @@ class TrainConfig(StrictModel):
     # The draw-rate abort's ARMING SURFACE: `None` is EXPLICITLY OFF, with no second boolean
     # authority; `default=...` is the no-terminal-default idiom, so absence names the key.
     draw_rate_abort: DrawRateAbortConfig | None = Field(default=...)
-    # The policy-loss trough halt's ARMING SURFACE, the same idiom: `None` is EXPLICITLY OFF.
-    policy_loss_trough_abort: PolicyLossTroughAbortConfig | None = Field(default=...)
     # The ply-cap attractor halt's ARMING SURFACE, the same idiom.
     ply_cap_abort: PlyCapAbortConfig | None = Field(default=...)
     # The held-out gap witness's ARMING SURFACE, the same idiom: `null` is OFF.

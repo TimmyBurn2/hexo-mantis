@@ -153,7 +153,7 @@ def test_the_counters_reach_iteration_complete(drive: _Drive) -> None:
     """The coordinator's `search_levers` block carries the same totals, deltas and rates."""
     dev = load_config(_REPO / "configs" / "dev_example.yaml")
     config = _step_coordinator_config(
-        stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
+        stop_step=10**9, draw_rate_abort=None, ply_cap_abort=None,
         drain_caps=resolve_drain_caps(dev.monitor), gate_interval=dev.monitor.gate_interval,
         knobs=resolve_coordinator_knobs(dev.train))
     events: list[dict[str, Any]] = []
@@ -222,7 +222,7 @@ def test_an_armed_runners_tactics_rows_reach_iteration_complete(armed_drive: _Dr
     )
     dev = load_config(_REPO / "configs" / "dev_example.yaml")
     config = _step_coordinator_config(
-        stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
+        stop_step=10**9, draw_rate_abort=None, ply_cap_abort=None,
         drain_caps=resolve_drain_caps(dev.monitor), gate_interval=dev.monitor.gate_interval,
         knobs=resolve_coordinator_knobs(dev.train))
     events: list[dict[str, Any]] = []

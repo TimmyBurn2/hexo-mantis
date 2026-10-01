@@ -40,7 +40,7 @@ def _coord_cfg(**over: Any) -> StepCoordinatorConfig:
         # The three interval knobs are 0: this drive is about the training step, not a boundary.
         eval_interval=0, log_interval=0, gate_interval=0, min_buf_size=1,
         capacity=64, training_steps_per_game=1.0, max_train_burst=1,
-        batch_size=4, augment=False, stop_step=None, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
+        batch_size=4, augment=False, stop_step=None, draw_rate_abort=None, ply_cap_abort=None,
         final_eval_drain_timeout_sec=1.0, eval_final_drain_safety_factor=1.0,
         eval_final_drain_hard_cap_sec=1.0, terminal_eval_hard_cap_sec=1.0,
         terminal_eval_enabled=False,
