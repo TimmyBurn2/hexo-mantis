@@ -1,4 +1,4 @@
-# RULINGS — R23 to R380
+# RULINGS — R23 to R381
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R381.
+- Numbering continues from R346. The next ruling is R382.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,54 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R381 — THREE TWINS, ONE LESSON
+Decision: verbatim below.
+
+> R381 — THREE TWINS, ONE LESSON.
+> (a) TACTICS-SELFPLAY-3 is NOT PASS with no halting row fired. F2 is killed by screen
+> (R375(d)): A″ − A on the shipped head −0.48 [−0.80, −0.16] at one seed, with F-53's
+> mechanism against it. The feed of record is arm A's: no re-search, no mixing. F2's code
+> leaves the tree. CARD-TACTICS-TARGET-FEED closes.
+> (b) A one-seed 12k-step twin reads starvation (the exams and bands) and nothing else.
+> R379(c)'s pass line is annotated: that instrument cannot meet it. Strength readings of
+> self-play levers come from run panels (R375) or multi-seed twins with the count pre-stated.
+> (c) Tactics in self-play, arm A's design, is CARRIED into run11, not adopted: two positive
+> screens over plain (+0.65, +0.17), exams held at every save. run11's exams and ring bands
+> halt it; its process level on the shipped head against the parent's anchor reads it.
+> R376(d) is annotated: B's plain net took the full deploy lift (≈ +1.1 logit), so plain
+> self-play under the tactics deploy is the permitted fallback; the audit's label-only
+> design (relabel z, decided tails on the quick arm, no leaf decisions) is the second.
+> (d) The training-path audit is accepted; its F8 evidence is corrected as above. Before the
+> mint, on the desktop: HYGIENE-1 (F5, F7, F11, F18, F22, §7 items 1–5, F2 out, CUDA tests
+> serial) in parallel with CENSUS-2 (the value head's width and activation with re-init and
+> warm-up; weight decay); PERF-2 after HYGIENE-1; ORIGIN-1 in RUN11-PREP. The natural book
+> is deferred. Reuse stays at 2.4 steps/game; run11's held-out gap reads it. Carded, not
+> built: the quick arm's noise, EMA as a shadow copy read paired at saves, the search-value
+> target with a v2→v3 ring migration. Parked: decided tails. JK-last is dead for run11.
+> (e) run11 mints aux weight 2.0 (the owed re-pick, inside its own band), draw_reward gone
+> with reason-3 rows masked, min_buf_size 100k rows (the warm-start draw count ≈ 13, C5's
+> tested figure), sync cadence 50, and the value head and weight decay as CENSUS-2 reads them.
+> (f) A scalar re-mint inside a config's pre-registered envelope needs a STATE line, not a
+> ruling. The envelope is a prereg row.
+> (g) TACTICS-SELFPLAY-3 closes at 6.75 box-h. Nothing needs the box for two days or more;
+> stopping it is the operator's act.
+
+Status: standing. Rules TACTICS-SELFPLAY-3's exit NOT PASS with no halting row fired, kills the row-wise mixing (F2)
+by screen under R375(d), makes arm A's feed the feed of record (no re-search, no mixing), takes F2's code out of the
+tree and closes CARD-TACTICS-TARGET-FEED by (a). Limits a one-seed 12k-step twin to a starvation reading, annotating
+R379(c)'s pass line as one that instrument cannot meet, and sends strength readings of self-play levers to run panels
+or multi-seed twins with the count pre-stated by (b). Carries arm A's tactics in self-play into run11 without adopting
+it, halted by run11's exams and ring bands and read by its process level on the shipped head against the parent's
+anchor, and annotates R376(d): plain self-play under the tactics deploy is the permitted fallback, the audit's
+label-only design the second, by (c). Accepts the training-path audit (`reports/training_path_audit.md`, local,
+outside the tree) with its F8 evidence corrected by (c), and orders the desktop work before the mint: HYGIENE-1 beside
+CENSUS-2, PERF-2 after HYGIENE-1, ORIGIN-1 in RUN11-PREP; defers the natural book, holds reuse at 2.4 steps/game, cards
+three items, parks decided tails and kills JK-last for run11 by (d). Sets run11's mint rows by (e). Makes a scalar
+re-mint inside a pre-registered envelope a STATE line, the envelope a prereg row, by (f). Closes TACTICS-SELFPLAY-3 at
+6.75 box-h and leaves the box's fate to the operator by (g). The packets it forwards are HYGIENE-1 and CENSUS-2.
+
+---
 
 ### R380 — THE FEED THAT PASSED
 Decision: verbatim below.
@@ -71,6 +119,9 @@ rows, the per-length rows and every ceiling report-only, and screens throughput 
 steps by (e). Holds `tactics-selfplay-2` unmerged: TACTICS-SELFPLAY-3 starts from its tip, lands the retraction and
 merges as one branch by (f). Keeps the box through TACTICS-SELFPLAY-3 within 7 box-h by (g). The packet it forwards is
 TACTICS-SELFPLAY-3.
+(d)'s F2 is KILLED by R381(a), by screen (A″ − A −0.48 [−0.80, −0.16] on the shipped head): the feed of record is arm
+A's, no re-search and no mixing, and F2's code leaves the tree. (d)'s pass line could not be met by a one-seed twin
+(R381(b)); arm A's tactics are CARRIED into run11, not adopted (R381(c)). TACTICS-SELFPLAY-3 closed at 6.75 box-h (R381(g)).
 
 ---
 
@@ -112,6 +163,11 @@ records no policy target and plays the audit's best hold, as arm A did, R378(e)'
 error is the architect's. (b)'s row-wise mixing (F2) stands as one unmeasured lever, tested by TACTICS-SELFPLAY-3
 (R380(d)). (c)'s run11 condition moves to TACTICS-SELFPLAY-3's pass, or to arm A's feed as measured if F2 dies (R380(d));
 TACTICS-SELFPLAY-2's halt stands (R380(a)).
+(b)'s row-wise mixing (F2) is KILLED by R381(a); the feed of record is arm A's. (c)'s pass line is ANNOTATED by R381(b):
+a one-seed 12k-step twin reads starvation and nothing else, so that instrument cannot meet it; strength readings of
+self-play levers come from run panels or multi-seed twins with the count pre-stated. run11 carries arm A's tactics in
+self-play, not adopted (R381(c)). (d)'s carried items moved by R381(d): the quick arm's noise and the search-value target
+are carded, not built; decided tails are parked; JK-last is dead for run11. Sync cadence 50 is minted (R381(e)).
 
 ---
 
@@ -150,6 +206,8 @@ mass on it reads below 0.5, row by row. (a)'s self-play arming at run11's mint i
 TACTICS-SELFPLAY-2's pass.
 The row-wise mixture stands as one unmeasured lever under TACTICS-SELFPLAY-3 (R380(d)); (a)'s self-play arming moves to
 its pass, or to arm A's feed as measured if the mixture dies (R380(d)).
+The mixture is KILLED by R381(a): the feed of record is arm A's, no re-search and no mixing. (a)'s self-play arming is
+CARRIED into run11, not adopted (R381(c)).
 
 ---
 
@@ -192,6 +250,7 @@ by row; and a root whose every searched move is vetoed is re-searched over the n
 row's target and the played move. (f)'s rule stands.
 That re-search is RETRACTED by R380(b): a root whose every audited move is vetoed records no policy target and plays the
 audit's best hold; the row-wise mixture stands under test (R380(d)).
+The row-wise mixture is KILLED by R381(a); the feed of record is arm A's, no re-search and no mixing.
 
 ---
 
@@ -224,6 +283,10 @@ TACTICS-DEPLOY RATIFIED by R378(a), and run11 arms its block of record in self-p
 TACTICS-SELFPLAY's screen stands and the lever is not adopted from it (R379(a)); run11 arms tactics in self-play only on
 TACTICS-SELFPLAY-2's pass, since (d) forbids a plain self-play under a tactics deploy (R379(c)).
 That condition moves to TACTICS-SELFPLAY-3's pass, or to arm A's feed as measured if its mixture dies (R380(d)).
+(d) ANNOTATED by R381(c): B's plain net took the full deploy lift (≈ +1.1 logit), so plain self-play under the tactics
+deploy is the permitted fallback, and the audit's label-only design (relabel z, decided tails on the quick arm, no leaf
+decisions) is the second. Arm A's tactics in self-play are CARRIED into run11, not adopted, halted by run11's exams and
+ring bands and read by its process level on the shipped head against the parent's anchor.
 (e) CONSTRUED by R377(c): a descent that ends at a proven terminal is a simulation, and the served-sims witness counts it;
 and by R378(c): whatever backed the value (the net, the table or the solver), and the witness pins all three cases.
 

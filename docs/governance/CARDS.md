@@ -36,9 +36,30 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R381 (THREE TWINS, ONE LESSON; 2026-10-01) — F2 killed, the desktop work before run11's mint
+
+- **CARD-HYGIENE-1 — ORDERED by R381(d), on the desktop before the mint, in parallel with CARD-CENSUS-2.** From the
+  training-path audit (`reports/training_path_audit.md`, local, outside the tree), accepted by R381(d):
+  - F5: a game ending short of the cap without a winner trains as a draw; a transient `RootExpansionFailed` turns a
+    masked cap game into a trained one, uncounted;
+  - F7: under tactics the tail can hand mass to a vetoed unvisited cell, or past 16 forced cells to non-blocking ones;
+  - F11: the composed live loop with the production regime (Gumbel + PCR + aux) is never booted by a test tier;
+  - F18: `--override-scheduler-horizon` is a no-op on a full resume;
+  - F22: deploy PUCT constants come from bridge defaults, not the config;
+  - the audit's §7 items 1–5: game-level fast games out, one sims key, F5 then `ply_cap_value` and `draw_reward` out,
+    the dead learner knobs out, screen/confirm out;
+  - F2 out: the row-wise mixing's code leaves the tree (R381(a));
+  - the CUDA tests run serial (four xdist workers OOM the desktop's 8 GB card).
+- **CARD-CENSUS-2 — ORDERED by R381(d), on the desktop before the mint, in parallel with CARD-HYGIENE-1.** It reads
+  the value head's width and activation, with re-initialisation and warm-up (CARD-VALUE-HEAD-DEAD-OPENING; audit F3),
+  and weight decay (audit F24: decoupled AdamW 1e-4 at lr 1e-3 is ≈ 1e-7 shrink per step). run11 mints both as it
+  reads them (R381(e)).
+- **CARD-EMA-SHADOW — CARDED, not built, by R381(d): EMA as a shadow copy, read paired at saves.**
+
 ## Opened by R380 (THE FEED THAT PASSED; 2026-09-30) — F1 retracted, F2 under test
 
-- **CARD-TACTICS-SELFPLAY-3 — EXITED 2026-10-01 NOT PASS; the architect rules next. Was IN PROGRESS: the
+- **CARD-TACTICS-SELFPLAY-3 — CLOSED 2026-10-01 by R381(a) and (g): NOT PASS with no halting row fired; F2 is killed
+  by screen and the feed of record is arm A's; closed at 6.75 box-h. Was EXITED 2026-10-01 NOT PASS; the architect rules next. Was IN PROGRESS: the
   TACTICS-SELFPLAY-3 packet (2026-09-30), worktree
   `.wt/tactics-selfplay-3` on branch `tactics-selfplay-3` (cut from `tactics-selfplay-2`'s tip `aa0c5304`), box T ≤ 7
   box-h. ORDERED by R380(d): one arm, A″ = arm A's feed with the row-wise mixing (F2), 12k steps, same parent
@@ -97,14 +118,14 @@ Both were found by running the gate set rather than by reading it, and both are 
     strength reading for a tactics-era net (LAW-15, R378(b)); the net alone is a report-only diagnostic pooled over at
     least two saves.
   - The recorded arms are TACTICS-SELFPLAY's A and B (`mantis-records/tactics-selfplay/`, local; CARD-TACTICS-SELFPLAY).
-- **CARD-PERF-2 — its order RULED by R379(e), following CENSUS-1's C2: the copies first, then the edge table, then
+- **CARD-PERF-2 — runs after CARD-HYGIENE-1, on the desktop before the mint (R381(d)). Its order RULED by R379(e), following CENSUS-1's C2: the copies first, then the edge table, then
   CUDA graphs.** R378(g) sequenced PERF-2 after CENSUS-1, which R379(d) accepts. C2 read the H2D copies as the largest
   part of the server's `launch` (33–38 %) and the compiled trunk's launch as nearly fixed per forward (≈ 3.5 ms)
   (`docs/design/measurements/CENSUS1_2026-09-29.md` §C2).
   - The copies: the levers' C1, one pinned buffer (`LEVERS_RESEARCH_2026-09-28.md`, local).
   - The edge table: CARD-PERF-EDGE-TABLE.
   - CUDA graphs: CARD-PERF-GRAPHS.
-- **CARD-JK-LAST — CARDED for throughput by R379(d).** CENSUS-1's C5 read the JK-last shape at Δ −0.052 nats against
+- **CARD-JK-LAST — DEAD for run11 by R381(d). Was CARDED for throughput by R379(d).** CENSUS-1's C5 read the JK-last shape at Δ −0.052 nats against
   4×256's −0.053, at a quarter of the parameters (229k against 996k); no shape passed the −0.07 line. It is carded as a
   throughput lever, not as growth.
 - **CARD-CENSUS-1-PARKED — PARKED by R379(d).** Each needs a ruling to reopen:
@@ -113,24 +134,25 @@ Both were found by running the gate set rather than by reading it, and both are 
   - the next-ply aux head (C5: it fails its line);
   - learning from Six's positions (R376(f) still governs any learning from Six's outputs).
   - Beside them, not parked: MCGS earns a deploy A/B later (CARD-MCGS-DEPLOY).
-- **CARD-VALUE-HEAD-DEAD-OPENING — CARDED for CARD-RUN11-DESIGN by R379(d): a value-head re-initialisation at warm
+- **CARD-VALUE-HEAD-DEAD-OPENING — read by CARD-CENSUS-2 (R381(d)), run11 mints the head as it reads. Was CARDED for CARD-RUN11-DESIGN by R379(d): a value-head re-initialisation at warm
   start, with warm-up.** CENSUS-1's C4 found run8@45k's value head dead in the opening: 18.5 % of the 45k ring's value
   rows read the empty board's v = −0.015556, and 0 of `value_head.fc1`'s 32 ReLUs are live on opening rows. run10's
   warm start inherits the head. C5 read the value gap at +0.160.
-- **CARD-QUICK-ARM-NOISE — CARDED for CARD-RUN11-DESIGN by R379(d): a noise-free quick arm.** CENSUS-1's C1: the
+- **CARD-QUICK-ARM-NOISE — CARDED, not built, by R381(d). Was CARDED for CARD-RUN11-DESIGN by R379(d): a noise-free quick arm.** CENSUS-1's C1: the
   64-sim quick search builds `MctxRootState::new` and draws root Gumbel noise whatever the arm drew, and from ply
   `gumbel_explore_moves` on the played move is `best_action`, whose score carries that noise.
-- **CARD-SEARCH-VALUE-AUX — CARDED for CARD-RUN11-DESIGN by R379(d): a search-value aux target from our own search.**
+- **CARD-SEARCH-VALUE-AUX — CARDED, not built, by R381(d), with a v2→v3 ring migration. Was CARDED for CARD-RUN11-DESIGN by R379(d): a search-value aux target from our own search.**
   CENSUS-1's C6: Six's search value beats our raw one off the proofs (DEF −0.097 on its non-proof rows, QU −0.058,
   MID −0.053). R376(f) governs any learning from Six's outputs; this card is our own search's value.
-- **CARD-DECIDED-TAILS — CARDED for CARD-RUN11-DESIGN by R379(d): decided tails.** CENSUS-1's C3(b): the pooled
+- **CARD-DECIDED-TAILS — PARKED by R381(d). Was CARDED for CARD-RUN11-DESIGN by R379(d): decided tails.** CENSUS-1's C3(b): the pooled
   proven tail is 0.463 of a game's plies, a games/h bound of 1.86×; the proven side converted 76.8 % of those games.
 - **CARD-MCGS-DEPLOY — CARDED by R379(d): graph search earns a deploy A/B, later.** CENSUS-1's C3(d): table hits are
   28.6 % [27.9, 29.4] of descents at the plain deploy head's turn starts, above the 10 % line.
 
 ## Opened by the TACTICS-SELFPLAY packet (2026-09-29)
 
-- **CARD-TACTICS-TARGET-FEED — F2 ONLY since R380: the row-wise mixing of the proof, under test in
+- **CARD-TACTICS-TARGET-FEED — CLOSED 2026-10-01 by R381(a): F2 is killed by screen; the feed of record is arm A's,
+  no re-search and no mixing, and F2's code leaves the tree (CARD-HYGIENE-1). Was F2 ONLY since R380: the row-wise mixing of the proof, under test in
   CARD-TACTICS-SELFPLAY-3. Option (c) RETRACTED by R380(b): an all-vetoed root records no policy target and plays
   the audit's best hold, as arm A did; the row-wise mixing is under test in CARD-TACTICS-SELFPLAY-3 (R380(d)). Was
   RULED by R379(b), and the treatment of TACTICS-SELFPLAY-2 (CARD-TACTICS-SELFPLAY-2):
@@ -280,7 +302,7 @@ Both were found by running the gate set rather than by reading it, and both are 
   §12 Q4: a cover-2 position where every covering reply loses to a strict opponent win.
 - **CARD-QUIESCENCE-BLEND-RETIRE — CARDED, its own leg (R377(d)).** Retire `apply_quiescence`'s heuristic blend
   (−0.3 for two fives against a two-stone turn), which is not exact.
-- **CARD-NATURAL-BOOK — OPENED for the RUN11-PREP packet (R377(h)): a policy-drawn natural book becomes a second
+- **CARD-NATURAL-BOOK — DEFERRED by R381(d). Was OPENED for the RUN11-PREP packet (R377(h)): a policy-drawn natural book becomes a second
   reading.** The ruler's book (`book_v1_s20260625_p4`) stays for the series.
 
 ## Opened by the TACTICS-DEPLOY packet (2026-09-28)
@@ -345,7 +367,8 @@ Both were found by running the gate set rather than by reading it, and both are 
     12 turns / 60 000 nodes (f_corr 0.455 [0.385, 0.515]), but 16 of 20 played out with Six on both seats are
     still lost within 13 opponent turns.
 - **CARD-RUN11-DESIGN — HELD on CARD-TACTICS-LANE's deploy read (R376(c)), now CARD-TACTICS-DEPLOY's (R377); that
-  read is RATIFIED by R378(a). Its self-play tactics wait on CARD-TACTICS-SELFPLAY-3's pass, or take arm A's feed as measured if F2 dies (R380(d)).** Until run11's
+  read is RATIFIED by R378(a). Its self-play tactics are arm A's design, CARRIED, not adopted (R381(c)); its mint rows
+  are R381(e)'s, after CARD-HYGIENE-1, CARD-CENSUS-2 and CARD-PERF-2 (R381(d)).** Until run11's
   mint replaces it,
   `configs/run10.yaml` stays the production config the instruments read; run10 will not START. The design
   carries:
@@ -361,7 +384,14 @@ Both were found by running the gate set rather than by reading it, and both are 
   - CARD-ORIGIN-RULE, which lands in RUN11-PREP (R377(g)).
   - The deploy block of record (leaf 256/3, root 20 000/8, audit 2 000/8), armed at run11's mint by the operator's
     word, in self-play and at deploy alike (R378(a)), with the gate deploy-matched (R378(d),
-    CARD-GATE-DEPLOY-MATCHED). In self-play only on CARD-TACTICS-SELFPLAY-3's pass, or with arm A's feed as measured if F2 dies (R380(d)).
+    CARD-GATE-DEPLOY-MATCHED). In self-play as arm A's design, CARRIED, not adopted (R381(c)): run11's exams and ring
+    bands halt it, and its process level on the shipped head against the parent's anchor reads it. The fallback is
+    plain self-play under the tactics deploy (R376(d) as annotated), then the audit's label-only design.
+  - The mint rows (R381(e)): aux weight 2.0 (the owed re-pick, inside its own band); `draw_reward` gone, with
+    reason-3 rows masked; `min_buf_size` 100k rows (the warm-start draw count ≈ 13, C5's tested figure); sync cadence
+    50; the value head and weight decay as CARD-CENSUS-2 reads them. Reuse stays at 2.4 steps/game, read by run11's
+    held-out gap (R381(d)). A scalar re-mint inside the pre-registered envelope is a STATE line, and the envelope is a
+    prereg row (R381(f)).
   - Carried from CENSUS-1 by R379(d):
     - sync cadence 50 (TACTICS-SELFPLAY's P4 read the in-run cache hit at 33 % there, against 24.5 % at 2);
     - HL-Gauss as a screened lever (C5: it passes its lines, no gain resolved at one seed);

@@ -5,7 +5,8 @@ Status: **ACCEPTED by R377** (2026-09-28), which rules §12's questions; where i
 amends §6's proven-root target form by (e) and extends §11's twin witness by (f); the same precedence holds.
 **R379** (2026-09-30) replaces (e)'s median rule and the all-vetoed root's empty row in §6 by (b); the same precedence
 holds. **R380** (2026-09-30) retracts R379(b)'s re-search (F1) at deploy and in self-play and keeps the row-wise mixing
-(F2) under test; the same precedence holds.
+(F2) under test; the same precedence holds. **R381** (2026-10-01) kills F2 by screen: the feed of record is arm A's,
+no re-search and no mixing, and F2's code leaves the tree; the same precedence holds.
 Was: **DESIGN** (the TACTICS-DESIGN packet under R376(d); CARD-TACTICS-LANE re-aimed to it). No code, config
 or mint change rides this document. It chooses the kind of the ONE exact tactics module, specifies its API and
 its wiring at deploy and in self-play, and scopes TACTICS-DEPLOY and TACTICS-SELFPLAY. The readings it stands on
@@ -405,6 +406,8 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
     two-hot above.
   - REPLACED by R379(b), row by row: the target mixes the proof at α = 0.5 only where the searched mass on it reads
     below 0.5; elsewhere it is the searched target.
+  - KILLED by R381(a), by screen (A″ − A −0.48 [−0.80, −0.16] on the shipped head): the feed of record is arm A's.
+    The F2 bullets below record what TACTICS-SELFPLAY-2 built; HYGIENE-1 takes the code out of the tree.
   - Built (TACTICS-SELFPLAY-2 F2). `root_offence` names the proof (`MCTSTree::last_root_proof`): a finish's window
     cells, a found proof's pair (or its one stone), or the stored stone; only its root-legal stones, since a pair's
     second stone can be legal only after its first. The searched mass on it sums its cells in either order.

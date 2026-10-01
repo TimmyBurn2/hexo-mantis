@@ -7,12 +7,34 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
-**R380 (2026-09-30): THE FEED THAT PASSED. TACTICS-SELFPLAY-2's halt stands; the re-search (F1) is retracted,
-self-play and deploy alike; the row-wise mixing (F2) stands as one unmeasured lever, and TACTICS-SELFPLAY-3 is ordered
-(CARD-TACTICS-SELFPLAY-3).** The tactics lane still goes first and run10 will not START (R376(c)).
+**R381 (2026-10-01): THREE TWINS, ONE LESSON. TACTICS-SELFPLAY-3 is NOT PASS with no halting row fired; F2 is
+killed by screen and the feed of record is arm A's. Arm A's tactics in self-play are carried into run11, not adopted.
+Before the mint, on the desktop: HYGIENE-1 beside CENSUS-2, then PERF-2.** run10 will not START (R376(c)).
 `configs/run10.yaml` stays the production config the instruments read until run11's mint replaces it. run11 arms the
-deploy block at its mint by the operator's word (R378(a)), and in self-play on TACTICS-SELFPLAY-3's pass, or with arm
-A's feed as measured if F2 dies (R380(d), CARD-RUN11-DESIGN).
+deploy block at its mint by the operator's word (R378(a)), and in self-play arm A's design, carried (R381(c),
+CARD-RUN11-DESIGN).
+
+- **R381's order.**
+  - The exit (R381(a)): F2 is killed by screen (R375(d)): A″ − A on the shipped head −0.48 [−0.80, −0.16] at one seed,
+    with F-53's mechanism against it. The feed of record is arm A's: no re-search, no mixing. F2's code leaves the
+    tree (CARD-HYGIENE-1); CARD-TACTICS-TARGET-FEED closes.
+  - The instrument (R381(b)): a one-seed 12k-step twin reads starvation (the exams and bands) and nothing else, so
+    R379(c)'s pass line was one it could not meet. Strength readings of self-play levers come from run panels (R375)
+    or multi-seed twins with the count pre-stated.
+  - run11's self-play (R381(c)): arm A's design is carried, not adopted, on two positive screens over plain (+0.65,
+    +0.17) with the exams held at every save. run11's exams and ring bands halt it; its process level on the shipped
+    head against the parent's anchor reads it. The fallbacks, in order: plain self-play under the tactics deploy
+    (B's plain net took the full deploy lift, ≈ +1.1 logit; R376(d) annotated), then the audit's label-only design.
+  - Before the mint (R381(d)): the training-path audit (`reports/training_path_audit.md`, local) is accepted, its F8
+    evidence corrected by (c). On the desktop, HYGIENE-1 (CARD-HYGIENE-1) runs beside CENSUS-2 (CARD-CENSUS-2), and
+    PERF-2 follows HYGIENE-1; ORIGIN-1 lands in RUN11-PREP. The natural book is deferred. Reuse stays at 2.4
+    steps/game, read by run11's held-out gap. Carded, not built: the quick arm's noise, EMA as a shadow copy, the
+    search-value target. Decided tails are parked; JK-last is dead for run11.
+  - The mint rows (R381(e)): aux weight 2.0, `draw_reward` gone with reason-3 rows masked, `min_buf_size` 100k rows,
+    sync cadence 50, and the value head and weight decay as CENSUS-2 reads them. A scalar re-mint inside a config's
+    pre-registered envelope is a STATE line, not a ruling; the envelope is a prereg row (R381(f)).
+  - The box (R381(g)): TACTICS-SELFPLAY-3 closes at 6.75 box-h. Nothing needs the box for two days or more; stopping
+    it is the operator's act.
 
 - **R380's order.**
   - The halt stands (R380(a)): no reading of A′ is a strength reading, and none of its saves is a parent candidate.
@@ -29,7 +51,7 @@ A's feed as measured if F2 dies (R380(d), CARD-RUN11-DESIGN).
     retraction, and merges as one branch. The box stays through TACTICS-SELFPLAY-3, within 7 box-h (R380(g)).
   - **TACTICS-SELFPLAY-3 EXITED 2026-10-01 NOT PASS** (CARD-TACTICS-SELFPLAY-3), on branch `tactics-selfplay-3`
     (unpushed). Every exam and ring band held at every save and throughput read 0.979× A's, but the shipped-head line
-    missed: A″ − B@12k +0.174 [−0.158, +0.505]. The architect rules next.
+    missed: A″ − B@12k +0.174 [−0.158, +0.505]. R381 rules it.
 
 - **R379's order.**
   - The readings (R379(a)): the T4 and defence exams are the starvation instrument; the deploy-matched head is the
@@ -149,7 +171,7 @@ run6's by R369's packet (W0).
 ## Where things live
 
 - Open work: `docs/governance/CARDS.md` (swept in W6; derived there, never enumerated here).
-- Rulings: `docs/governance/RULINGS.md`; the latest is R380.
+- Rulings: `docs/governance/RULINGS.md`; the latest is R381.
 - Laws and the protected set: `docs/governance/LAWS.md`, whose protected set names each
   invariant's pinning tests (R370(f)); `tests/test_protected_set_pins.py` fails if one is gone.
   Falsified work: `docs/governance/falsified.md`.
@@ -203,4 +225,5 @@ exit from its exit record (local), on branch `tactics-selfplay` at `5db3280b`. T
 updated 2026-09-30 at its halt from its exit record (local), on branch `tactics-selfplay-2` at `2dde57aa`. The
 current phase was rewritten 2026-09-30 at R380, on that branch at `7f351b54`. The TACTICS-SELFPLAY-3 line was
 added 2026-09-30 at its packet's first commit, on branch `tactics-selfplay-3` at `aa0c5304`, and updated 2026-10-01
-at its exit from its exit record (local), on that branch at `a3899487`.
+at its exit from its exit record (local), on that branch at `a3899487`. The current phase was rewritten 2026-10-01 at
+R381, on that branch at `9e962173`.
