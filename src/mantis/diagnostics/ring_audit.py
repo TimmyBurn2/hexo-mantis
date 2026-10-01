@@ -247,10 +247,11 @@ def outcome_rows(ring: Ring) -> list[Row]:
     n_games = int(first.size)
     note = "" if (ring.game_id >= 0).all() else "untagged rows (game_id -1) counted as one game"
     rows = [Row("cap_rate", float((~valid).mean()), n_games,
-                "value_valid == 0 (finalize: no winner, at the ply cap or short of it)", note)]
+                "value_valid == 0 (finalize: no winner, at the cap or short of it; an upper band reads it conservatively)", note)]
     n_valid = int(valid.sum())
     rows.append(Row("draw_share", float((z[valid] < 1.0).mean()) if n_valid else None, n_valid,
-                    "outcome not ±1 on a value-supervised game", "" if n_valid else "no supervised game"))
+                    "outcome not ±1 on a value-supervised game (none on a ring written since no-winner games are masked)",
+                    "" if n_valid else "no supervised game"))
     sup = ring.value_valid != 0
     rows.append(Row("mean_abs_z", float(np.abs(ring.outcome[sup]).mean()) if sup.any() else None,
                     int(sup.sum()), "outcome over value_valid rows"))

@@ -313,8 +313,8 @@ pub fn record_position_graph(
     })
 }
 
-/// Stamp the per-row outcome and value mask at game end, from the winner and the row's player alone.
-/// A game with no winner (reason 2, the cap, or 3, short of it) has no result to learn: 0 and masked.
+/// Stamp a row's outcome from the winner and its player, and its value mask from the reason: a game
+/// with no winner (reason 2, the cap, or 3, short of it) has no result to learn, so 0 and masked.
 #[inline]
 #[must_use]
 pub fn finalize_graph_outcome(

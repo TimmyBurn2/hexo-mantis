@@ -26,11 +26,11 @@ pub(crate) fn take_mcts_pool_overflow_count() -> u64 {
 /// bootstrap corpus encoder cannot transcribe the sign convention a second time in Python.
 ///
 /// `winner` is `1` / `-1` for a decided game and `0` for none; `terminal_reason` is the
-/// runner's own code, and a game with no winner trains no value.
+/// runner's own code (0 or 1 decided, 2 or 3 no winner), and a game with no winner trains no value.
 ///
 /// # Errors
-/// `ValueError` if `rec_player` or `winner` is outside its declared set — refused rather than
-/// coerced, since a silently-mapped player is a value target with the wrong sign.
+/// `ValueError` if `rec_player` or `winner` is outside its declared set, or `winner` disagrees with
+/// `terminal_reason` — refused rather than coerced, since either is a value target the game never had.
 #[pyfunction]
 #[pyo3(signature = (rec_player, winner, terminal_reason))]
 pub(crate) fn graph_row_outcome(
@@ -53,6 +53,14 @@ pub(crate) fn graph_row_outcome(
             )))
         }
     };
+    if !matches!(terminal_reason, 0..=3)
+        || matches!(terminal_reason, 2 | 3) != winner_player.is_none()
+    {
+        return Err(PyValueError::new_err(format!(
+            "graph_row_outcome: winner {winner} and terminal_reason {terminal_reason} disagree \
+             (a decided game ends on reason 0 or 1, a game with no winner on 2 or 3)"
+        )));
+    }
     Ok(finalize_graph_outcome(
         rec_player,
         winner_player,
