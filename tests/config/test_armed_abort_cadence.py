@@ -191,8 +191,8 @@ def test_the_earliest_fire_step_is_derived_and_never_a_constant() -> None:
     """A constant here would silently pass or fail every row at once. Each step-cadenced member
     is driven with two operand sets that must give DIFFERENT answers, and the answers are the
     evaluating code's: the draw-rate gate fires at a `gate_interval` boundary that is both the
-    `consec`-th observation and at or past `min_step`; the grad-norm gate counts consecutive
-    TRAINING steps; the actor-lag invariant needs the learner one step PAST its threshold."""
+    `consec`-th observation and at or past `min_step`; the ply-cap halt fires at its own
+    training-step floor; the actor-lag invariant needs the learner one step PAST its threshold."""
     gate = Cadence.GATE_INTERVAL_CONSEC
     assert gate.earliest_fire_step((3, 25000), period_steps=1000) == 25000.0
     assert gate.earliest_fire_step((3, 0), period_steps=1000) == 3000.0
@@ -201,8 +201,8 @@ def test_the_earliest_fire_step_is_derived_and_never_a_constant() -> None:
         "min_step floors the FIRE, and the fire can only land on a boundary — so a min_step "
         "that is not a multiple of the interval rounds UP to the next boundary"
     )
-    assert Cadence.CONSEC_TRAIN_STEPS.earliest_fire_step((3,), period_steps=1) == 3.0
-    assert Cadence.CONSEC_TRAIN_STEPS.earliest_fire_step((7,), period_steps=1) == 7.0
+    assert Cadence.TRAIN_STEP_FLOOR.earliest_fire_step((3,), period_steps=1) == 3.0
+    assert Cadence.TRAIN_STEP_FLOOR.earliest_fire_step((7,), period_steps=1) == 7.0
     assert Cadence.STEP_LAG_THRESHOLD.earliest_fire_step((100,), period_steps=1) == 101.0
     assert Cadence.STEP_LAG_THRESHOLD.earliest_fire_step((14,), period_steps=1) == 15.0
     assert Cadence.WALL_CLOCK_POLL.earliest_fire_step((), period_steps=None) == 0.0
@@ -226,7 +226,7 @@ def test_an_unjudgeable_operand_reads_as_UNREACHABLE_never_as_early() -> None:
             "never as `nan`, which `inf * 0` would produce and every bound would accept"
         )
     assert Cadence.STEP_LAG_THRESHOLD.earliest_fire_step((None,), period_steps=1) == math.inf
-    assert Cadence.CONSEC_TRAIN_STEPS.earliest_fire_step((True,), period_steps=1) == math.inf, (
+    assert Cadence.TRAIN_STEP_FLOOR.earliest_fire_step((True,), period_steps=1) == math.inf, (
         "`bool` on a threshold path is a type confusion, not a threshold"
     )
 

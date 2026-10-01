@@ -78,7 +78,7 @@ def _anchor_sha256(anchor_state: Any) -> str | None:
 #: The gate keys carried by the `monitor_gates` summary (checks/fires/skips/warns).
 #: `draw_rate_collapse` is armed by the config and named here to keep an inert posture readable.
 GATE_NAMES: tuple[str, ...] = (
-    "draw_rate_collapse", "grad_norm_hard_abort", "policy_loss_trough", "ply_cap_attractor",
+    "draw_rate_collapse", "policy_loss_trough", "ply_cap_attractor",
 )
 
 #: The target-integrity counters and the RECORDED-POSITION counter their rate is over, off one
@@ -206,7 +206,6 @@ class StepCoordinator:
         #: The memo behind `_microbatch_caps`, the graph-only cap thunk.
         self._resolved_caps: Any | None = None
         self._initial_policy_loss: float | None = None
-        self._consec_high_gn = 0
         self._eval_round_last_step = -1
 
         # Gate state — every ring is caller-owned (the rules are stateless).
@@ -367,7 +366,6 @@ class StepCoordinator:
         return StepOutcome(
             train_step=self._train_step,
             games_played=self._games_played,
-            consec_high_gn=self._consec_high_gn,
             last_loss_info=self._last_loss_info,
             **kw,
         )
@@ -503,28 +501,7 @@ class StepCoordinator:
                 self._policy_loss_window.append(float(loss_info["policy_loss"]))
             self._last_loss_info = loss_info
 
-            # D3: hard-abort on sustained gradient norm. The FIRE routes through the shared
-            # `_fire_hard_abort` contract so this gate is visible in the one channel.
-            self._gate_stats["grad_norm_hard_abort"]["checks"] += 1
-            step_gn = float(loss_info.get("grad_norm", 0.0))
-            # NaN/inf is EXCLUDED from this abort — a KNOWN GAP, not an oversight. This exact
-            # comparison is a SOURCE PIN in `config/armed_aborts.py`'s `grad_norm_hard_abort`
-            # row: re-adjudicate the row rather than editing the line. The non-finite guard is
-            # in `clip_and_step`, which refuses the step, so resetting the counter is correct.
-            if math.isfinite(step_gn) and step_gn > cfg.hard_gn_threshold:
-                self._consec_high_gn += 1
-                if self._consec_high_gn >= cfg.hard_gn_min_steps:
-                    _LOG.error("hard_abort_grad_norm step=%s consec=%s gn=%.4f",
-                               self._train_step, self._consec_high_gn, step_gn)
-                    hard_abort_fired = self._fire_hard_abort(
-                        "grad_norm_hard_abort",
-                        f"HARD-ABORT (grad-norm): grad_norm {step_gn:.4f} > "
-                        f"{cfg.hard_gn_threshold:.4f} for {self._consec_high_gn} consecutive "
-                        f"training steps — optimizer instability",
-                    ) or hard_abort_fired
-            else:
-                self._consec_high_gn = 0
-            # D3b: the ply-cap attractor halt, per training step against the pool's live window.
+            # D3: the ply-cap attractor halt, per training step against the pool's live window.
             hard_abort_fired = self._run_ply_cap_gate(cfg) or hard_abort_fired
 
             # There is no checkpoint-cadence buffer save on this leg: `checkpoint_saved` stays
@@ -1000,7 +977,6 @@ class StepCoordinator:
         trainer = self.trainer
         return {
             "draw_rate_history": [float(v) for v in self._draw_rate_history],
-            "consec_high_gn": int(self._consec_high_gn),
             "initial_policy_loss": self._initial_policy_loss,
             "policy_loss_reference": self._policy_loss_reference,
             "policy_loss_window_means": [float(v) for v in self._policy_loss_window_means],
@@ -1022,8 +998,7 @@ class StepCoordinator:
         if "draw_rate_history" in state:
             self._draw_rate_history = [float(v) for v in state["draw_rate_history"]]
         # An older sidecar's `wr_history` / `wr_history_rung` (the sealbot ring) are ignored.
-        if "consec_high_gn" in state:
-            self._consec_high_gn = int(state["consec_high_gn"])
+        # An older sidecar's `consec_high_gn` (the deleted grad-norm abort's counter) is ignored.
         if "initial_policy_loss" in state:
             v = state["initial_policy_loss"]
             self._initial_policy_loss = None if v is None else float(v)

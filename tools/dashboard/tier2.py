@@ -74,7 +74,7 @@ def losses(rec: Record, gaps: Gaps) -> Panel:
             charts.append(f'<div class="multiple"><h3>{esc(label)}</h3>' + gaps.mark(
                 "Losses", f"<code>trainer_step.{key}</code> carries no finite value") + "</div>")
     note = "" if ceiling is not None else gaps.mark(
-        "Losses", "the grad-norm abort ceiling <code>monitor.alert_grad_norm_max</code> is not "
+        "Losses", "the grad-norm alert line <code>monitor.alert_grad_norm_max</code> is not "
         "among the knobs the <code>resolved_config</code> event carries, so no rule is drawn "
         "on the grad-norm chart")
     return Panel("Losses", reads, f'<div class="multiples">{"".join(charts)}</div>' + note, "losses")

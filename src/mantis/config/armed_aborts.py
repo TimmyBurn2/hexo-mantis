@@ -69,10 +69,6 @@ class Mechanism(StrEnum):
 
     CONFIG_BOOL = "config_bool"
     CONFIG_THRESHOLD_GT_ZERO = "config_threshold_gt_zero"
-    #: An UPPER-bounded threshold: armed iff the value is a real, finite, positive number that
-    #: is ALSO no greater than a ceiling read off the row's `ceiling_path`. `> 0` alone reads
-    #: an unreachable `1e9` as ARMED, which is "armed in the config, absent in effect".
-    CONFIG_THRESHOLD_BELOW_CEILING = "config_threshold_below_ceiling"
     #: A TOKEN, not a number: armed iff the value is a non-empty string. Its subject is
     #: `allocator_posture`, whose value is a regime member or the `null` placeholder — a
     #: numeric predicate would report a correctly minted posture DISARMED forever.
@@ -83,14 +79,8 @@ class Mechanism(StrEnum):
     #: indistinguishable from one being read.
     CONFIG_THRESHOLD_GT_ZERO_WITH_LIVE_PRODUCER = "config_threshold_gt_zero_with_live_producer"
 
-    def is_armed(self, value: Any, *, ceiling: Any = None,
-                 producer_live: bool | None = None) -> bool:
-        """True iff `value` arms the abort. A real predicate in BOTH directions.
-
-        `ceiling` is consumed only by `CONFIG_THRESHOLD_BELOW_CEILING` and is resolved by
-        `audit_arming` from the row's own `ceiling_path`; a row with no usable ceiling reports
-        DISARMED, because an unjudgeable row must fail toward visibility, never toward silence.
-        """
+    def is_armed(self, value: Any, *, producer_live: bool | None = None) -> bool:
+        """True iff `value` arms the abort. A real predicate in BOTH directions."""
         if self is Mechanism.CONFIG_BOOL:
             return value is True
         if self is Mechanism.CONFIG_ENUM_VALUED:
@@ -98,10 +88,6 @@ class Mechanism(StrEnum):
             return isinstance(value, str) and value != ""
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             return False
-        if self is Mechanism.CONFIG_THRESHOLD_BELOW_CEILING:
-            if not _is_real_number(value) or not _is_real_number(ceiling):
-                return False
-            return 0.0 < float(value) <= float(ceiling)
         if self is Mechanism.CONFIG_THRESHOLD_GT_ZERO_WITH_LIVE_PRODUCER:
             # `producer_live is None` means NO ANSWER WAS SUPPLIED, not "the producer is
             # dead": collapsing the two would red the pure-config audit on every commit.
@@ -224,10 +210,6 @@ class Cadence(StrEnum):
     #: fire is boundary `consec + 1`, and only at or before `max_step` (an UPPER bound). Operands: (consec, max-step).
     GATE_INTERVAL_CONSEC_BOUNDED = "gate_interval_consec_bounded"
 
-    #: The grad-norm gate is evaluated PER TRAINING STEP inside the burst and fires when
-    #: `self._consec_high_gn >= cfg.hard_gn_min_steps`. Operands: (min-steps path,).
-    CONSEC_TRAIN_STEPS = "consec_train_steps"
-
     #: The ply-cap halt runs PER TRAINING STEP against the pool's live window and fires at the
     #: first step `>= min_step` over the rate, so the earliest fire IS the floor. Operands: (min-step,).
     TRAIN_STEP_FLOOR = "train_step_floor"
@@ -260,7 +242,6 @@ class Cadence(StrEnum):
         return {
             Cadence.GATE_INTERVAL_CONSEC: SampleClock.GATE_BOUNDARY,
             Cadence.GATE_INTERVAL_CONSEC_BOUNDED: SampleClock.GATE_BOUNDARY,
-            Cadence.CONSEC_TRAIN_STEPS: SampleClock.TRAIN_STEP,
             Cadence.TRAIN_STEP_FLOOR: SampleClock.TRAIN_STEP,
             Cadence.STEP_LAG_THRESHOLD: SampleClock.TRAIN_STEP,
             Cadence.WALL_CLOCK_POLL: SampleClock.NO_STEP_CLOCK,
@@ -275,7 +256,6 @@ class Cadence(StrEnum):
         return {
             Cadence.GATE_INTERVAL_CONSEC: 2,
             Cadence.GATE_INTERVAL_CONSEC_BOUNDED: 2,
-            Cadence.CONSEC_TRAIN_STEPS: 1,
             Cadence.TRAIN_STEP_FLOOR: 1,
             Cadence.STEP_LAG_THRESHOLD: 1,
             Cadence.WALL_CLOCK_POLL: 0,
@@ -329,8 +309,6 @@ class Cadence(StrEnum):
             return math.inf
         if self is Cadence.STEP_LAG_THRESHOLD:
             return float(values[0]) + 1.0
-        if self is Cadence.CONSEC_TRAIN_STEPS:
-            return float(values[0])
         if self is Cadence.TRAIN_STEP_FLOOR:
             return float(values[0])
         if self is Cadence.GATE_INTERVAL_CONSEC_BOUNDED:
@@ -395,11 +373,6 @@ class ArmedAbort:
     owner: str | None
     source_pin: tuple[str, str] | None
     note: str
-    #: The SECOND config path a `CONFIG_THRESHOLD_BELOW_CEILING` row needs — where its upper
-    #: bound is minted. The default is safe because `__post_init__` REQUIRES it on the
-    #: mechanism that consumes it and FORBIDS it on the others, in both directions, so `None`
-    #: can neither arm a row nor excuse one.
-    ceiling_path: str | None = None
     #: WHEN this row's abort can first fire, and the paths its arithmetic reads. The defaults
     #: are safe because they are not silent: `audit_cadence` reports a REQUIRED row with NO
     #: cadence as OUT OF BOUND by name, and `__post_init__` enforces the arity pairing both
@@ -428,20 +401,6 @@ class ArmedAbort:
                 f"armed-abort row {self.name!r} is REQUIRED and carries an `owner`: an "
                 "owner on a required row reads as already-excused; drop the owner or "
                 "declare the row DEFERRED"
-            )
-        needs_ceiling = self.mechanism is Mechanism.CONFIG_THRESHOLD_BELOW_CEILING
-        if needs_ceiling and not self.ceiling_path:
-            raise ValueError(
-                f"armed-abort row {self.name!r} uses {self.mechanism.value} and names no "
-                "`ceiling_path`: that predicate is DISARMED without a ceiling, so the row "
-                "would read disarmed forever for a reason nobody could see in the row"
-            )
-        if not needs_ceiling and self.ceiling_path:
-            raise ValueError(
-                f"armed-abort row {self.name!r} names a `ceiling_path` "
-                f"({self.ceiling_path!r}) but its mechanism {self.mechanism.value} ignores "
-                "it: a config path the predicate never reads is a claim the audit does not "
-                "make (LAW-07's phantom-input class)"
             )
         needs_probe = (
             self.mechanism is Mechanism.CONFIG_THRESHOLD_GT_ZERO_WITH_LIVE_PRODUCER
@@ -640,16 +599,15 @@ MANIFEST: tuple[ArmedAbort, ...] = (
             "never a second literal. "
             "WHY REQUIRED AND NOT DEFERRED, since gate 12 audits every required row against "
             "every production config: nothing has to be invented for this row and nothing is "
-            "owed, which is the exact test the grad-norm row below FAILS. The arming surface "
-            "monitor.disk_guard.fail_gb is a minted operator value on all six committed "
-            "configs (5.0), its schema carries gt=0, and the block is a REQUIRED field of "
-            "MonitorConfig — so a validated RunConfig arms this row by construction and a "
-            "DEFERRED status would demand an `owner` for debt that does not exist. What the "
-            "row is FOR, then, is the drift it makes loud: `_dotted` short-circuits a "
-            "mid-walk None to DISARMED, so the day someone makes the disk-guard block "
-            "optional or nullable — the posture that let the guard sit unconstructed with "
-            "dead 60/10/5 literals for the whole migration — gate 12 goes RED on run5 "
-            "instead of the guard quietly disappearing again. "
+            "owed. The arming surface monitor.disk_guard.fail_gb is a minted operator value on "
+            "all six committed configs (5.0), its schema carries gt=0, and the block is a "
+            "REQUIRED field of MonitorConfig — so a validated RunConfig arms this row by "
+            "construction and a DEFERRED status would demand an `owner` for debt that does not "
+            "exist. What the row is FOR, then, is the drift it makes loud: `_dotted` "
+            "short-circuits a mid-walk None to DISARMED, so the day someone makes the disk-guard "
+            "block optional or nullable — the posture that let the guard sit unconstructed with "
+            "dead 60/10/5 literals for the whole migration — gate 12 goes RED on run5 instead of "
+            "the guard quietly disappearing again. "
             "DELIVERY IS COOPERATIVE, like 46 and for the same reason: the SIGTERM is "
             "save-then-exit, so the run unwinds through close_out, the terminal-eval drain "
             "and the shutdown checkpoint. An os._exit(47) from the guard thread would discard "
@@ -698,13 +656,12 @@ MANIFEST: tuple[ArmedAbort, ...] = (
             "mantis.eval.errors.EvalBrokenReason — on the eval_broken event's reason and on "
             "the round result's eval_broken_reason. A supervisor reading only the rc sees "
             "'terminal eval degraded' and not WHICH break; that is stated, not hidden. "
-            "WHY REQUIRED AND NOT DEFERRED, the exact test the grad-norm row below fails: "
-            "nothing has to be invented and nothing is owed. train.terminal_eval_enabled is "
-            "a REQUIRED typed bool (config/schema/train.py) minted true on every "
-            "committed config, so gate 12 is green the moment this row lands and NO armed "
-            "value moves. What the row is FOR is the drift it makes loud: the day someone "
-            "mints a production config with the terminal eval off, gate 12 goes RED instead "
-            "of the run quietly shipping with no terminal promotion decision at all. "
+            "WHY REQUIRED AND NOT DEFERRED: nothing has to be invented and nothing is owed. "
+            "train.terminal_eval_enabled is a REQUIRED typed bool (config/schema/train.py) "
+            "minted true on every committed config, so gate 12 is green the moment this row "
+            "lands and NO armed value moves. What the row is FOR is the drift it makes loud: the "
+            "day someone mints a production config with the terminal eval off, gate 12 goes RED "
+            "instead of the run quietly shipping with no terminal promotion decision at all. "
             "RESIDUAL, disclosed: the rc is reachable only if BOTH eval_enabled and "
             "train.terminal_eval_enabled are true, and a row carries ONE config_path. The "
             "nearer condition is armed here (it gates the terminal round specifically, "
@@ -733,55 +690,6 @@ MANIFEST: tuple[ArmedAbort, ...] = (
             "recording line, so deleting it, renaming the rule constant or reordering it "
             "past the disk-guard read all break the R56 scan rather than the rc silently "
             "returning to 0."
-        ),
-    ),
-    ArmedAbort(
-        name="grad_norm_hard_abort",
-        config_path="train.hard_gn_threshold",
-        ceiling_path="monitor.alert_grad_norm_max",
-        mechanism=Mechanism.CONFIG_THRESHOLD_BELOW_CEILING,
-        # Declared even though a DEFERRED row is not audited, so the flip to REQUIRED stays a
-        # one-field data edit; `preflight_mint.py::_print_deferred_rows` prints it meanwhile.
-        cadence=Cadence.CONSEC_TRAIN_STEPS,
-        cadence_paths=("train.hard_gn_min_steps",),
-        status=Status.DEFERRED,
-        exit_code=None,
-        owner="CARD-COORD-KNOBS follow-up — the operator, at run5 mint prereg",
-        source_pin=(
-            "src/mantis/train/coordinator/step.py",
-            "if math.isfinite(step_gn) and step_gn > cfg.hard_gn_threshold:",
-        ),
-        note=(
-            "The optimizer-instability hard abort (`grad_norm_hard_abort`, coordinator/step.py "
-            "D3): fire when grad_norm exceeds train.hard_gn_threshold for "
-            "train.hard_gn_min_steps consecutive training steps. It has a real gate, a real "
-            "`_gate_stats` counter and a real `_fire_hard_abort` path, and it had NO manifest "
-            "row at all until WPMINT Phase K-B — while its threshold sat at the unauthored "
-            "code-side literal 1e9, which no finite gradient norm reaches. So the run shipped a "
-            "hard abort that could not fire and nothing said so. "
-            "WHY DEFERRED AND NOT REQUIRED (adjudication call K-c): flipping it REQUIRED would "
-            "gate run5's mint on a grad-norm threshold nobody has pre-registered, and the tool "
-            "would then be demanding a number this repo would have to invent — the class R84 "
-            "refused when it ratified exit_code=None rather than fabricating a 46. A DEFERRED "
-            "row prints loudly on every gate-12 run and gates nothing, which is exactly the "
-            "posture for a live gate whose value is owed. "
-            "WHY THE MECHANISM IS NEW: CONFIG_THRESHOLD_GT_ZERO would read 1e9 as ARMED, which "
-            "is 'armed in the config, absent in effect' — the defect the manifest exists to "
-            "surface. CONFIG_THRESHOLD_BELOW_CEILING reads the ceiling off `ceiling_path`, "
-            "monitor.alert_grad_norm_max: the value the operator ALREADY minted as 'this grad "
-            "norm is worth warning about' (10.0 on every committed config). A hard abort set "
-            "orders of magnitude above the line the run already WARNS at is not a hard abort. "
-            "That ceiling is derived from the config, never from this file, so no number is "
-            "invented here either. "
-            "TO CLOSE THIS ROW: pre-register a threshold at mint prereg, mint it into "
-            "train.hard_gn_threshold, and flip status to REQUIRED — a one-field data edit, the "
-            "same shape Phase D's flip took. Until then run5 mints with this abort disarmed, "
-            "knowingly and in writing. exit_code is None, truthfully: `_fire_hard_abort` stops "
-            "the run cooperatively and R84 authored a code for the draw-rate family only; "
-            "inventing one here would be that same refused class one layer down "
-            "(`exit_code_for_abort`'s docstring says so by name). The pin binds to the gate's "
-            "own comparison, so deleting the gate, renaming the field or inverting the test all "
-            "break the R56 scan."
         ),
     ),
     ArmedAbort(
@@ -826,10 +734,9 @@ MANIFEST: tuple[ArmedAbort, ...] = (
             "the box with `python -m mantis.diagnostics.fusion_calibrate`, and R119 makes it "
             "their act. Flipping this REQUIRED THEN would have gated run5's mint on a number this "
             "repo would have to invent — the class R84 refused when it ratified "
-            "exit_code=None rather than fabricating a 46, and the same class the grad-norm "
-            "row above is deferred for. A DEFERRED row prints loudly on every gate-12 run and "
-            "gates nothing, which is exactly the posture for a live refusal whose value is "
-            "owed. "
+            "exit_code=None rather than fabricating a 46. A DEFERRED row prints loudly on every "
+            "gate-12 run and gates nothing, which is exactly the posture for a live refusal "
+            "whose value is owed. "
             "WHY THE ROW EXISTS AT ALL, given the refusal is already run-fatal: the refusal "
             "fires when a graph run STARTS, and gate 12 runs on every push. The row is what "
             "makes an uncalibrated production config AUDIBLE in CI instead of discovered by a "
@@ -950,13 +857,7 @@ def audit_arming(config: Any, *, manifest: tuple[ArmedAbort, ...] = MANIFEST) ->
     deferred = tuple(row for row in manifest if row.status is Status.DEFERRED)
     disarmed = tuple(
         row for row in required
-        if not row.mechanism.is_armed(
-            _dotted(config, row.config_path, row=row.name),
-            # Resolved through the SAME walker as the value, so a typo in a `ceiling_path`
-            # raises `ArmingSurfaceMissingError` naming the row as a `config_path` typo does.
-            ceiling=(None if row.ceiling_path is None
-                     else _dotted(config, row.ceiling_path, row=row.name)),
-        )
+        if not row.mechanism.is_armed(_dotted(config, row.config_path, row=row.name))
     )
     return AuditResult(required=required, deferred=deferred, disarmed=disarmed)
 
@@ -1004,7 +905,7 @@ def audit_arming_live(
 
     Raises:
         ProducerProbeMissingError: a REQUIRED row names a probe absent from `probes`.
-        ArmingSurfaceMissingError: a row's `config_path` or `ceiling_path` does not resolve.
+        ArmingSurfaceMissingError: a row's `config_path` does not resolve.
     """
     required = tuple(row for row in manifest if row.status is Status.REQUIRED)
     deferred = tuple(row for row in manifest if row.status is Status.DEFERRED)
@@ -1018,8 +919,6 @@ def audit_arming_live(
             live = bool(probes[row.producer_probe]())
         if not row.mechanism.is_armed(
             _dotted(config, row.config_path, row=row.name),
-            ceiling=(None if row.ceiling_path is None
-                     else _dotted(config, row.ceiling_path, row=row.name)),
             producer_live=live,
         ):
             disarmed.append(row)

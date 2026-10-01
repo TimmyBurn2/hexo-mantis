@@ -203,14 +203,14 @@ def test_a_fired_abort_with_no_authored_code_is_a_named_failure_never_an_invente
     invented number that would be a second exit-code authority beside the manifest."""
     preflight_stamped(_CONFIG)
     monkeypatch.setattr(mantis_run, "launch_run",
-                        lambda **_kw: _handles("grad_norm_hard_abort"))
-    assert exit_code_for_abort("grad_norm_hard_abort") is None, (
+                        lambda **_kw: _handles("fused_graph_caps_calibrated"))
+    assert exit_code_for_abort("fused_graph_caps_calibrated") is None, (
         "premise check: the rule genuinely has no authored code (if this flips, the arm "
         "above is testing nothing)"
     )
     with pytest.raises(UnregisteredAbortExitError) as exc_info:
         mantis_run.main(["--config", str(_CONFIG), "--out-dir", str(tmp_path)])
-    assert "grad_norm_hard_abort" in str(exc_info.value), (
+    assert "fused_graph_caps_calibrated" in str(exc_info.value), (
         f"the refusal must name the rule that fired; got {str(exc_info.value)!r}"
     )
 

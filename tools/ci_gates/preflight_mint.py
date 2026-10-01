@@ -357,11 +357,9 @@ def _print_deferred_rows(*, manifest: tuple[ArmedAbort, ...] = MANIFEST) -> None
           "closed:")
     for row in deferred:
         print(f"  {row.name}  owner={row.owner}")
-        # Deferred for a missing arming surface OR an unregistered value. `surface` is hoisted out of
-        # the f-string: a replacement field spanning a line break is 3.12-only syntax.
-        surface = "present" if row.ceiling_path is None else f"present, ceiling {row.ceiling_path}"
+        # Deferred for a missing arming surface OR an unregistered value.
         print(f"    arming surface: {row.config_path} "
-              f"({surface}) — NOT audited, so a mint does not gate on it")
+              "(present) — NOT audited, so a mint does not gate on it")
         # A deferred row's `cadence` is declared so the flip to REQUIRED stays a one-field
         # data edit, which would leave it a field nothing reads until that flip. Printed.
         cadence = "NOT DECLARED" if row.cadence is None else (

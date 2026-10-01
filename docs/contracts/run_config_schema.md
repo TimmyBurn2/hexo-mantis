@@ -1,8 +1,8 @@
 # Contract: run config schema
 
-- version: v45
+- version: v46
 - owner: mantis.config.schema
-- status: LIVE since scaffold (WP0). Forty-four steps since (v1 -> v45). Each through v6 is
+- status: LIVE since scaffold (WP0). Forty-five steps since (v1 -> v46). Each through v6 is
   recorded as a named amendment in docs/design/repo_design.md §4; v7, v8 and v9 are NOT, and
   that is stated rather than implied — v7 landed without one, v8 (R242/ADJ-D12) inherited that
   gap rather than back-filling somebody else's amendment, and v9 records the same gap for
@@ -72,10 +72,11 @@ plays the deploy block too, deploy-matched (R378(d)); the v39 row's "without it"
 | v43 | ONE leaf FOLDED: the `mcts` block's `n_simulations` is DELETED and `selfplay.playout_cap.n_sims_full` becomes the one sims key (`int`, `ge=1`) — every searched move's sims, and under an armed `full_search_prob` the full arm's (HYGIENE-1, R381(d); the training-path audit's §7 item 2). Under the move-level cap `n_simulations` was search-inert (it fed only the boot zero check, the pool ceiling and a PUCT capacity term), so one budget had two keys. The runner keeps its own field name, `n_simulations` (the served-sims witness builds it), and folds its `n_sims_full` into it: `SelfPlayHParams` passes `selfplay.playout_cap.n_sims_full` there, and `_mutual_exclusion` now gates on the quick preset alone. `effective_sims_per_move` is unchanged on every committed config (run10 320, the smokes 2, dev 50). The path joins `RETIRED_PATHS`; every config is RE-MINTED through its own header, its `n_simulations` delta folded onto `n_sims_full` (run10's two were equal), and run10's `tools/config_diff.py --expect` names that one leaf alone | R381(d); HYGIENE-1 |
 | v44 | ONE block DELETED from the `train` section, `policy_loss_weight_schedule` (`warmup_steps`) — THE POLICY WARM-UP (HYGIENE-1, R381(d); the training-path audit's §7 item 4), minted 0 in every committed config. With it go the trainer's policy-zero branch, the BC route's refusal of a non-zero warm-up and the `trainer_step` weight it reported (event manifest v6): the step's loss is the policy CE plus the value loss, and the aux term rides every step. CENSUS-2's value-head warm-up is its own driver (it freezes everything but the head) and reads nothing here. The path joins `RETIRED_PATHS`; every config is RE-MINTED through its own header and `tools/config_diff.py --expect` names that block's leaf alone | R381(d); HYGIENE-1 |
 | v45 | ONE leaf FOLDED: the `train` section's `total_steps` is DELETED and `train.scheduler_t_max` becomes the one LR horizon (`int`, `ge=1`, no null) — THE FLOORED COSINE'S T_MAX (HYGIENE-1, R381(d); the training-path audit's §7 item 4). `total_steps` decided nothing on run10 (its `scheduler_t_max` is 108 000) and elsewhere only stood in for a null horizon, so one horizon had two keys; neither is a run length (`train.max_train_steps` is). Configs that minted a null now state 1 000 000, the horizon they already annealed over. Both stay checkpoint-owned on a resume. The path joins `RETIRED_PATHS`; every config is RE-MINTED through its own header and run10's `tools/config_diff.py --expect` names that one leaf alone | R381(d); HYGIENE-1 |
+| v46 | TWO leaves DELETED from the `train` section, `hard_gn_threshold` and `hard_gn_min_steps` — THE GRAD-NORM HARD ABORT (HYGIENE-1, R381(d)), minted `1e9` / `3` in every committed config, a threshold no finite gradient norm reaches, so the gate could not fire. With them go the coordinator's per-step comparison and its counter (an older resume sidecar's counter is ignored), the abort's DEFERRED armed-abort row, the mechanism and cadence only that row used (`CONFIG_THRESHOLD_BELOW_CEILING` with its `ceiling_path`, `CONSEC_TRAIN_STEPS`) and the gate's `monitor_gates` entry (event manifest v7). The non-finite step guard in `clip_and_step` and the `grad_norm_spike` alert at `monitor.alert_grad_norm_max` are untouched. Both paths join `RETIRED_PATHS`; every config is RE-MINTED through its own header and `tools/config_diff.py --expect` names those two leaves alone | R381(d); HYGIENE-1 |
 
 ## Shape
 
-Thirteen top-level fields; **171 leaf key-paths** under the walker that descends nested blocks
+Thirteen top-level fields; **169 leaf key-paths** under the walker that descends nested blocks
 (including optional ones) and counts a `list[SubModel]` field as ONE leaf.
 
 | section | leaves | models |
@@ -89,7 +90,7 @@ Thirteen top-level fields; **171 leaf key-paths** under the walker that descends
 | `model` | 4 | `ModelConfig`, `GnnWidthsConfig`, `AuxSoftPolicyConfig` |
 | `deploy` | 11 | `DeployConfig`, `SearchConfig`, `TacticsConfig`, `TacticsAuditConfig` |
 | `eval` | 30 | `EvalConfig`, `GateConfig`, `SequentialGateConfig`, `PlyCapAdjudicationConfig`, `StrengthFloorConfig` |
-| `train` | 46 | `TrainConfig`, `DrawRateAbortConfig`, `PolicyLossTroughAbortConfig`, `PlyCapAbortConfig`, `HeldoutGapConfig`, `ReplayCapacityStage`, `MicrobatchCapsConfig` |
+| `train` | 44 | `TrainConfig`, `DrawRateAbortConfig`, `PolicyLossTroughAbortConfig`, `PlyCapAbortConfig`, `HeldoutGapConfig`, `ReplayCapacityStage`, `MicrobatchCapsConfig` |
 | `selfplay` | 35 | `SelfplayConfig`, `SearchConfig`, `TacticsConfig`, `TacticsAuditConfig`, `MctsConfig`, `PlayoutCapConfig` |
 | `inference` | 6 | `InferenceConfig`, `FusedGraphCapsConfig` |
 | `monitor` | 28 | `MonitorSchemaConfig`, `DrainCapsConfig`, `DiskGuardConfig` |
@@ -261,18 +262,13 @@ is also written at the field it belongs to.
   runner/search_drive.rs`; the Gumbel draw IS the root exploration), and the deploy head applies
   none — so run7/run8's minted `dirichlet_enabled: true` adds no second noise (R359(d), 2026-09-18).
   Their live consumer is the PUCT self-play arm; run9's mint drops the rows with a pin.
-- `train.hard_gn_threshold` and `train.hard_gn_min_steps` have OPEN upper halves: the shipped
-  `1e9` threshold is finite, positive and unreachable by any real gradient norm, and a very
-  large `min_steps` disarms the gate without touching the threshold. No honest ceiling is
-  derivable from either field alone, so none is invented; the gate joins the armed-abort
-  manifest as a DEFERRED row instead, whose ceiling is read off `monitor.alert_grad_norm_max`.
 - `train.draw_rate_abort.consec`'s upper half is CLOSED (ADJ-D36), and closed by derivation
   rather than by a ceiling: the gate's history ring is sized BY the minted `consec` at the
   point of use (`_run_hard_abort_gates`'s draw-rate arm trims to `spec.consec`; the literal
   depth constant is deleted), so every schema-legal value is fireable and "unfireable while
   it audits ARMED" is no longer a reachable state on this key. Kept in this list as a
   closure record: this bullet used to call its upper half open "for the same reason" as the
-  grad-norm pair above — that reason still stands for them and no longer stands here. Driven
+  grad-norm pair (deleted at v46) — that reason no longer stands here. Driven
   by tests/train/test_drawrate_gate_capacity.py.
 - The two `monitor.wr_*_consecutive_evals` residuals this section carried (the ring capacity
   closed by R265 / ADJ-D38, and the open `ge=0` lower half) are MOOT: the keys, the ring and

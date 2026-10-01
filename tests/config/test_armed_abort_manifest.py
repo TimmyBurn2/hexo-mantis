@@ -201,11 +201,6 @@ def test_the_manifest_is_not_vacuous() -> None:
         "rule below it are being asserted on an empty list — R81's kept machinery with no "
         "subject at all"
     )
-    assert "grad_norm_hard_abort" in [row.name for row in _deferred()], (
-        "the grad-norm row (WPMINT K-B) is a live gate whose threshold nobody pre-registered, "
-        "printed loudly and gating nothing. It vanishing or turning REQUIRED is a "
-        f"mint-visible change; got {[row.name for row in _deferred()]}"
-    )
     for shipped in _deferred():
         rel, text = shipped.source_pin
         assert (REPO_ROOT / rel).is_file() and text in (REPO_ROOT / rel).read_text(encoding="utf-8"), (
@@ -352,81 +347,6 @@ def test_the_mechanisms_are_real_predicates_in_both_directions() -> None:
     assert Mechanism.CONFIG_THRESHOLD_GT_ZERO.is_armed(0.15) is True
     assert Mechanism.CONFIG_THRESHOLD_GT_ZERO.is_armed(0.0) is False
     assert Mechanism.CONFIG_THRESHOLD_GT_ZERO.is_armed(-1.0) is False
-
-    # The UPPER-bounded mechanism: `CONFIG_THRESHOLD_GT_ZERO` cannot judge `train.hard_gn_threshold`,
-    # whose range is unbounded above, so the shipped `1e9` reads ARMED while nothing reaches it.
-    below = Mechanism.CONFIG_THRESHOLD_BELOW_CEILING
-    assert below.is_armed(5.0, ceiling=10.0) is True
-    assert below.is_armed(10.0, ceiling=10.0) is True, "the ceiling itself is IN range"
-    assert below.is_armed(1e9, ceiling=10.0) is False, (
-        "the shipped grad-norm threshold against the shipped monitor.alert_grad_norm_max — "
-        "this False is the whole reason the mechanism exists"
-    )
-    assert below.is_armed(1e9, ceiling=1e10) is True, (
-        "…and the SAME value must arm once the ceiling moves above it. Without this arm the "
-        "predicate could ignore its ceiling and still pass every other line here"
-    )
-    assert below.is_armed(0.0, ceiling=10.0) is False
-    assert below.is_armed(-1.0, ceiling=10.0) is False
-    assert below.is_armed(5.0, ceiling=None) is False, (
-        "a row with no usable ceiling must report DISARMED — an unjudgeable row fails toward "
-        "visibility, never toward silence"
-    )
-    assert below.is_armed(float("inf"), ceiling=10.0) is False
-    assert below.is_armed(5.0, ceiling=float("nan")) is False
-    assert below.is_armed(True, ceiling=10.0) is False, "a bool is not a threshold"
-
-    # …and the ceiling is DATA on the row, enforced in both directions.
-    common = dict(name="probe", config_path="train.hard_gn_threshold",
-                  status=Status.REQUIRED, exit_code=None, owner=None, source_pin=None,
-                  note="oracle probe")
-    with pytest.raises(ValueError, match="ceiling_path"):
-        ArmedAbort(mechanism=Mechanism.CONFIG_THRESHOLD_BELOW_CEILING, **common)
-    with pytest.raises(ValueError, match="ceiling_path"):
-        ArmedAbort(mechanism=Mechanism.CONFIG_BOOL, ceiling_path="monitor.axis_warn", **common)
-    ArmedAbort(mechanism=Mechanism.CONFIG_THRESHOLD_BELOW_CEILING,
-               ceiling_path="monitor.alert_grad_norm_max", **common)
-
-
-@pytest.mark.parametrize("production", _PRODUCTION, ids=lambda p: p.name)
-def test_the_grad_norm_row_reads_its_ceiling_off_the_real_config(smoke_run_config, production: Path) -> None:
-    """The DEFERRED grad-norm row, audited against a REAL RunConfig in both directions.
-    `Mechanism.is_armed` is a pure predicate; this is the other half — `audit_arming` must
-    RESOLVE the row's `ceiling_path` and hand it over, or the second operand is a claim nothing
-    feeds. Flipped to REQUIRED in an in-memory copy, which is the edit that closes the row."""
-    row = [candidate for candidate in MANIFEST
-           if candidate.name == "grad_norm_hard_abort"][0]
-    assert row.status is Status.DEFERRED and row.exit_code is None, (
-        "the row must stay DEFERRED with no invented exit code: flipping it REQUIRED would "
-        "gate a mint on a threshold nobody pre-registered (R84's class)"
-    )
-    assert row.ceiling_path == "monitor.alert_grad_norm_max"
-
-    def _required(manifest_row):
-        return ArmedAbort(
-            name=manifest_row.name, config_path=manifest_row.config_path,
-            ceiling_path=manifest_row.ceiling_path, mechanism=manifest_row.mechanism,
-            status=Status.REQUIRED, exit_code=manifest_row.exit_code, owner=None,
-            source_pin=manifest_row.source_pin, note=manifest_row.note,
-        )
-
-    manifest = (_required(row),)
-    shipped = load_config(production)
-    assert [r.name for r in audit_arming(shipped, manifest=manifest).disarmed] == [row.name], (
-        "as shipped (threshold 1e9 against alert_grad_norm_max 10.0) the gate is DISARMED — "
-        "that is the finding the row exists to publish"
-    )
-
-    reachable = smoke_run_config(production, train={"hard_gn_threshold": 5.0})
-    assert list(audit_arming(reachable, manifest=manifest).disarmed) == [], (
-        "a threshold at or below the warn line ARMS the row — the audit must read the CONFIG "
-        "through both paths, not a constant"
-    )
-    raised = smoke_run_config(production, monitor={"alert_grad_norm_max": 1e10})
-    assert list(audit_arming(raised, manifest=manifest).disarmed) == [], (
-        "and raising the CEILING alone must arm the SAME shipped threshold — the second "
-        "operand really is resolved from `ceiling_path` and is not a literal"
-    )
 
 
 @pytest.mark.parametrize("name", CONFIG_PATHS)

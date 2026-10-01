@@ -42,18 +42,6 @@ gates:
   #  dead artifact of bad hyperparams that never occurs under current recipes. The
   #  selfplay-owned WorkerPool.current_stride5_p90() producer stays; only the gate is gone.)
 
-  - id: grad_norm_hard_abort         # KEPT WP10 gate (decision byte-identical), manifest-cited
-    input: grad_norm
-    producer:
-      kind: symbol
-      module: mantis.train.coordinator.step
-      symbol: StepCoordinator._run_training_step
-    note: >-
-      the cited test asserts the gate's DECISION (sustained grad norm above threshold for
-      `hard_gn_min_steps` consecutive training steps ⇒ run stops + ONE `hard_abort` event
-      naming the rule + a `monitor_gates` entry) — the uniform WP13-A fire contract.
-    producer_test: tests/train/test_coordinator_gates.py::test_grad_norm_gate_fires_with_the_uniform_contract
-
   # ── liveness heartbeats (the L-B watchdog's three sources) ────────────────────────
   - id: heartbeat.train_step
     producer:

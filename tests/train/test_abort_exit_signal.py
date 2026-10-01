@@ -243,10 +243,10 @@ def test_a_signal_handler_stop_is_a_clean_stop() -> None:
     assert h.shutdown.running is False and h.shutdown.abort_rule is None
 
 
-@pytest.mark.parametrize(("rule", "has_row"), [("grad_norm_hard_abort", True),
+@pytest.mark.parametrize(("rule", "has_row"), [("fused_graph_caps_calibrated", True),
                                               ("an_abort_rule_with_no_manifest_row", False)])
 def test_an_abort_with_no_authored_code_resolves_to_None(rule: str, has_row: bool) -> None:
-    """A live rule whose row carries no code, and a name with NO row, both resolve to None.
+    """A shipped row that carries no code, and a name with NO row, both resolve to None.
 
     Every fired rule has a row, so an unregistered name witnesses the no-row branch; a default
     code would fabricate a number, and a raise would crash an un-carded abort at the boundary."""
@@ -254,7 +254,7 @@ def test_an_abort_with_no_authored_code_resolves_to_None(rule: str, has_row: boo
     assert bool(row) is has_row, f"premise: {rule!r} {'has' if has_row else 'has no'} manifest row"
     assert all(candidate.exit_code is None for candidate in row), (
         "the premise: this rule has NO AUTHORED EXIT CODE. A row may exist for it — "
-        "grad_norm_hard_abort gained a DEFERRED one at WPMINT Phase K-B — but a code "
+        "fused_graph_caps_calibrated's construction-time refusal has one — but a code "
         "appearing without a card is the class R84 refused, and inventing one at the "
         f"resolver is that class one layer down; got {[c.exit_code for c in row]}"
     )

@@ -27,7 +27,7 @@ def _clean_rows() -> list[dict]:
         {"event": "selfplay_stall_watchdog_armed", "enabled": True},
         # The ply-cap terms armed at window 4 ride the one monitor_gates row.
         {"event": "monitor_gates", "step": 1000, "ply_cap_abort_rate": 0.5, "ply_cap_window_games": 4,
-         "gates": {"grad_norm_hard_abort": {"checks": 1000, "fires": 0, "skips": 0, "warns": 0}}},
+         "gates": {"ply_cap_attractor": {"checks": 1000, "fires": 0, "skips": 0, "warns": 0}}},
         {"event": "resume_state_persisted", "step": 1000, "unreceipted_bundles": [1000]},
         {"event": "disk_free", "disk_free_gb": 88.0, "ts": 2.0},
         {"event": "trainer_step", "step": 0, "policy_loss": 2.30},
@@ -66,7 +66,7 @@ def test_no_record_dir_leaves_the_firings_input_unmeasured(health, reader, tmp_p
 
 def test_a_gate_fire_or_a_hard_abort_is_bad(health, reader, tmp_path):
     rows = _clean_rows()
-    rows[3]["gates"]["grad_norm_hard_abort"]["fires"] = 1
+    rows[3]["gates"]["ply_cap_attractor"]["fires"] = 1
     assert health.assess(_record(reader, tmp_path, rows, tmp_path)).state == "bad"
     rows = _clean_rows() + [{"event": "hard_abort", "rule": "x", "step": 5, "message": "m"}]
     reading = health.assess(_record(reader, tmp_path, rows, tmp_path))
@@ -161,7 +161,7 @@ def test_an_unarmed_record_is_read_at_the_minted_terms_and_says_so(health, reade
     """No ply-cap terms on `monitor_gates`: read at R352(c)'s minted {0.5, 600}."""
     rows = [r for r in _clean_rows() if r["event"] != "monitor_gates"] + [
         {"event": "monitor_gates", "step": 2000,
-         "gates": {"grad_norm_hard_abort": {"checks": 2000, "fires": 0, "skips": 0, "warns": 0}}}]
+         "gates": {"ply_cap_attractor": {"checks": 2000, "fires": 0, "skips": 0, "warns": 0}}}]
     rows += _games(*(["six_in_a_row"] * 600 + ["ply_cap"] * 400))
     reading = health.assess(_record(reader, tmp_path, rows, record_dir=tmp_path))
     assert _states(reading)["ply-cap attractor"] == "bad"

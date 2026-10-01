@@ -59,8 +59,6 @@ _DISTINGUISHABLE: dict[str, Any] = {
     "batch_size": 41,
     "augment": True,
     "recency_weight": 0.43,
-    "hard_gn_threshold": 0.59,
-    "hard_gn_min_steps": 61,
     "terminal_eval_enabled": False,
     "selfplay_stall_timeout_sec": 67.0,
 }
@@ -453,35 +451,6 @@ def test_recency_weight_reaches_the_samplers_recency_window() -> None:
     assert set(h.buffer.recent_frac_seen) == {0.43}, (
         f"the sampler must be handed the CONFIGURED recency fraction; got "
         f"{h.buffer.recent_frac_seen}"
-    )
-
-
-def test_the_grad_norm_knobs_decide_whether_the_hard_abort_fires() -> None:
-    """`train.hard_gn_threshold` / `train.hard_gn_min_steps` -> `step.py` D3, in three drives:
-    below the threshold nothing fires, above it the run stops after exactly `min_steps`
-    consecutive breaches, and a `min_steps` beyond the drive keeps it silent — so each knob is
-    the binding term in one drive and not the other. Shipped at `1e9` this gate can never fire,
-    which is why it is a DEFERRED armed-abort row."""
-    quiet = _coordinator(trainer=DrivableTrainerStub(grad_norm=0.5), hard_gn_threshold=1.0,
-                         hard_gn_min_steps=1)
-    _drive(quiet, steps=4, games=1)
-    assert quiet.coord.shutdown.running is True, "a grad norm below the threshold must not fire"
-
-    loud = _coordinator(trainer=DrivableTrainerStub(grad_norm=5.0), hard_gn_threshold=1.0,
-                        hard_gn_min_steps=3)
-    _drive(loud, steps=4, games=1)
-    assert loud.coord.shutdown.running is False
-    assert loud.trainer.step == 3, (
-        f"the abort must fire on the third consecutive breach, not the first; got "
-        f"{loud.trainer.step}"
-    )
-
-    patient = _coordinator(trainer=DrivableTrainerStub(grad_norm=5.0), hard_gn_threshold=1.0,
-                           hard_gn_min_steps=10**6)
-    _drive(patient, steps=4, games=1)
-    assert patient.coord.shutdown.running is True, (
-        "the SAME breaching grad norm with a higher consecutive count must stay silent — "
-        "that is hard_gn_min_steps deciding on its own"
     )
 
 

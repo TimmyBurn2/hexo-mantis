@@ -271,7 +271,7 @@ class Trainer:
         or `_maybe_periodic_checkpoint`. THE MODE IS RESTORED IN A `finally`, because leaving the
         model in `eval()` would change every LATER step's dropout and normalisation and the loss
         curve would look BETTER for it. The return DELIBERATELY omits `grad_norm` and `lr`, so a
-        later edit routing this dict into `grad_norm_hard_abort` raises rather than passing a zero.
+        later edit routing this dict into the coordinator reads a refused step, not a passing zero.
 
         Args:
             parts: zero-arg callables, each materialising one micro-batch lazily.
@@ -346,8 +346,8 @@ class Trainer:
         `len()` without consuming anything, and the callables keep materialisation LAZY — already
         collated batches would all be resident at once, defeating the cap while passing every
         count-based oracle. ONE OPTIMIZER STEP PER TRAINING STEP: clipping is nonlinear in the
-        whole gradient and `grad_norm` is an armed gate's input. SINGLE TAIL, seven keys — a path
-        returning a dict without `grad_norm` would feed `grad_norm_hard_abort` a passing `0.0`.
+        whole gradient and `grad_norm` is the spike alert's input. SINGLE TAIL, seven keys — a path
+        returning a dict without `grad_norm` would read as a refused step to the coordinator.
         """
         if len(parts) == 0:
             raise GraphEmptyBatchError(

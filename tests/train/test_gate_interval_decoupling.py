@@ -77,7 +77,7 @@ def _config(**overrides) -> StepCoordinatorConfig:
                                  drain_caps=DEV_DRAIN_CAPS, gate_interval=DEV_GATE_INTERVAL,
                                  knobs=DEV_KNOBS),
         **{"eval_interval": 10**9, "min_buf_size": 10, "max_train_burst": 4,
-           "training_steps_per_game": 4.0, "hard_gn_threshold": 1e9, **overrides},
+           "training_steps_per_game": 4.0, **overrides},
     )
 
 

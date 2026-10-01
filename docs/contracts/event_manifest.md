@@ -1,6 +1,6 @@
 # Contract: event manifest
 
-- version: v6
+- version: v7
 - owner: `mantis.monitor` (`manifest.py` + `producer_manifest.yaml`)
 - status: v4 — first filled by the run-safety subsystem port (WP13-A); the eval-pipeline rows
   (`eval_round` heartbeat, `eval_round_wall`/`eval_broken`) landed at WP11-A. R362(c)
@@ -24,6 +24,9 @@
   searches whose root did not expand while the run was live.
   v6 (HYGIENE-1, R381(d)): `trainer_step.policy_loss_weight` LEAVES the stream with the policy warm-up it
   reported (`train.policy_loss_weight_schedule`, never armed); a pre-v6 record still carries it as data.
+  v7 (HYGIENE-1, R381(d)): the `grad_norm_hard_abort` gate LEAVES the stream with the knobs that armed it
+  (`train.hard_gn_threshold`, `train.hard_gn_min_steps`, minted at an unreachable `1e9`): its shipped row and
+  its `monitor_gates.gates` entry; a pre-v7 record still carries that entry as data.
 
 ## Summary
 
@@ -96,7 +99,6 @@ producers is a phantom-armed abort chain waiting to happen).
 | id | kind | producer | producer test |
 |---|---|---|---|
 | `draw_rate_collapse` | symbol | `train.coordinator.config.pooled_draw_rate` ← `selfplay.pool.WorkerPool.pooled_draw_counts` | `tests/train/test_coordinator_gates.py::test_draw_rate_gate_fires_on_live_producer` |
-| `grad_norm_hard_abort` | symbol | `train.coordinator.step.StepCoordinator._run_training_step` | `tests/train/test_coordinator_gates.py::test_grad_norm_gate_fires_with_the_uniform_contract` |
 | `heartbeat.train_step` | event_literal | `train.coordinator.step` / `train_step` | `tests/train/test_coordinator_gates.py::test_step_loop_beats` |
 | `heartbeat.inference_dispatch` | event_literal | `selfplay.inference_server` / `inference_dispatch` | `tests/selfplay/test_inference_server.py::test_graph_loop_emits_one_heartbeat_per_batch` |
 | `heartbeat.selfplay_drain` | event_literal | `selfplay.pool_drain` / `selfplay_drain` | `tests/selfplay/test_pool_drain_parity.py::test_heartbeat_emission_at_drain` |
@@ -193,7 +195,7 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   supervisor that reads only exit statuses now sees 46 instead of 0. Delivery stays
   cooperative — the run still unwinds through `close_out`, the terminal-eval drain and the
   shutdown checkpoint — so the abort's own evidence survives the abort.
-  A rule with no manifest row (`grad_norm_hard_abort`) resolves to `None`:
+  A rule with no manifest row resolves to `None`:
   truthful, and no code is invented for an abort nobody pre-registered.
 - `disk_space_exhausted` is the manifest's THIRD row and its second authored code, **47**
   (`monitor.heartbeat.DISK_SPACE_EXHAUSTED_EXIT_CODE`), REQUIRED, arming surface
@@ -371,20 +373,7 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   continuity; a future consumer must read the VALUE as a re-centered win-rate bound, never
   as Elo points.
 
-`grad_norm_hard_abort` has an armed-abort manifest row since **WPMINT Phase K-B** (call K-c),
-and it is **DEFERRED**: its threshold is `train.hard_gn_threshold`, authored by the same phase
-and minted at `1e9`, which no finite gradient norm reaches — so the gate is LIVE, fires through
-the same `_fire_hard_abort` contract as every other, and is effectively OFF. The row makes that
-visible instead of silent: gate 12 prints it loudly on every run and gates nothing, because a
-REQUIRED row would demand a number nobody pre-registered (R84's class). Its predicate is
-`Mechanism.CONFIG_THRESHOLD_BELOW_CEILING`, which reads its ceiling off
-`monitor.alert_grad_norm_max` — a hard abort set orders of magnitude above the line the run
-already WARNS at is not a hard abort. Its `exit_code` is `None`, truthfully: R84 authored a
-code for the draw-rate family only. Closing the row is a mint-prereg value plus a one-field
-flip to REQUIRED.
-
-The one gate LIVE the moment a coordinator runs is `grad_norm_hard_abort`. The heartbeat
-watchdog, persist-fatal and the heartbeat file are code-complete and oracle-tested but are
+The heartbeat watchdog, persist-fatal and the heartbeat file are code-complete and oracle-tested but are
 CONSTRUCTED ONLY by `train.subsystems.build_run_safety`, which has no caller yet (the full-run
 launch entry is not WP13-A's property) — they arm when the run wiring lands. Every warn/inert
 state is named per-gate in each `monitor_gates` event (checks/fires/skips/warns), so nothing

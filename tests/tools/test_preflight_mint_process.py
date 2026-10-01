@@ -397,8 +397,8 @@ def test_the_boot_childs_rc_is_decided_by_whether_an_abort_fired() -> None:
     assert TOOL._abort_rc("draw_rate_collapse") == TOOL.DRAW_RATE_COLLAPSE_EXIT_CODE
 
     with pytest.raises(TOOL.PreflightBootFailedError) as caught:
-        TOOL._abort_rc("grad_norm_hard_abort")
-    assert "grad_norm_hard_abort" in str(caught.value) and caught.value.rc == 33, (
+        TOOL._abort_rc("fused_graph_caps_calibrated")
+    assert "fused_graph_caps_calibrated" in str(caught.value) and caught.value.rc == 33, (
         "an abort with no authored code is a named failure that NAMES THE RULE, not a silent "
         f"rc 0 and not a fabricated code; got rc {caught.value.rc}"
     )
@@ -1170,7 +1170,7 @@ def test_the_report_publishes_the_audits_own_deferred_and_required_rows(
     assert shipped_deferred, (
         "…and the shipped set must be non-empty, or the equality above is `[] == []` and "
         "witnesses nothing (LAW-07's vanished-subject species). This assertion is DERIVED, "
-        "not a transcribed row list: the previous `== ['grad_norm_hard_abort']` tally had to "
+        "not a transcribed row list: the previous one-row tally had to "
         "be re-edited for a change it has no opinion about (R192(e))"
     )
     # The field-completeness claim needs a manifest that HAS a deferred row; against the

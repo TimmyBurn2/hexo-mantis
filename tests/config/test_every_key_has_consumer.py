@@ -179,12 +179,6 @@ CONSUMER_REGISTRY = {
         "resolve_coordinator_knobs -> _step_coordinator_config -> step.py _run_training_step"
         " -> dispatch.py::run_declared_train_step(recency_weight=) -> _graph_step -> the ring"
         " sampler's recent_frac",
-    "train.hard_gn_threshold":
-        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py D3"
-        " grad_norm_hard_abort comparison (+ armed_aborts DEFERRED row, WPMINT K-B)",
-    "train.hard_gn_min_steps":
-        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py D3"
-        " grad_norm_hard_abort consecutive-step count",
     "train.terminal_eval_enabled":
         "resolve_coordinator_knobs -> _step_coordinator_config -> coordinator/drain.py"
         " run_terminal_eval close-out gate",

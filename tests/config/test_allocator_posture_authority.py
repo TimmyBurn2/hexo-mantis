@@ -484,7 +484,6 @@ def test_ap08_the_existing_predicates_are_byte_unchanged_by_the_new_member(mecha
         Mechanism.CONFIG_BOOL: value is True,
         Mechanism.CONFIG_THRESHOLD_GT_ZERO: gt_zero,
         Mechanism.CONFIG_THRESHOLD_GT_ZERO_WITH_LIVE_PRODUCER: gt_zero,
-        Mechanism.CONFIG_THRESHOLD_BELOW_CEILING: False,
     }[mechanism]
     assert mechanism.is_armed(value) is expected
 

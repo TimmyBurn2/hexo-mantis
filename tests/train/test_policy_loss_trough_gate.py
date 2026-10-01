@@ -88,7 +88,7 @@ def _harness(script, spec: PolicyLossTroughAbortSpec | None, *, gate_interval: i
         knobs=resolve_coordinator_knobs(cfg.train))
     config = dataclasses.replace(base, eval_interval=0, log_interval=gate_interval,
                                  min_buf_size=10, max_train_burst=1,
-                                 training_steps_per_game=1.0, hard_gn_threshold=1e9)
+                                 training_steps_per_game=1.0)
     shutdown = ShutdownState()
     sink = SpyEventSink()
     pool = DrivablePoolStub()

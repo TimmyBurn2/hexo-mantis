@@ -121,27 +121,3 @@ def test_a_finite_or_absent_loss_does_not_fire_the_nonfinite_rule() -> None:
     assert check_nonfinite_loss({"loss_total": True}, cfg) is None, (
         "a bool is not a loss reading; it must not be treated as one"
     )
-
-
-def test_the_hard_abort_gap_is_documented_and_pin_bound() -> None:
-    """KNOWN GAP, deliberately left open and pinned so it cannot close by accident.
-
-    Making a non-finite grad norm trip `grad_norm_hard_abort` was implemented and REVERTED: the
-    manifest SOURCE-PINS this exact comparison, so a change to the gate's decision must force a
-    re-adjudication rather than a quiet edit, and the row is DEFERRED and knowingly DISARMED, so
-    firing regardless of the threshold would partially arm it — an operator-only change. A NaN
-    is still caught by the trainer guard and the alert rules; only the backstop stays gated.
-    """
-    src = (Path(__file__).resolve().parents[2]
-           / "src" / "mantis" / "train" / "coordinator" / "step.py").read_text(encoding="utf-8")
-    assert "if math.isfinite(step_gn) and step_gn > cfg.hard_gn_threshold:" in src, (
-        "the grad-norm abort's comparison changed. That comparison is an R56 SOURCE PIN in "
-        "`mantis/config/armed_aborts.py` — re-adjudicate the manifest row, do not edit the "
-        "pin, and do not change this test to match (ADJ-D13)"
-    )
-    manifest = (Path(__file__).resolve().parents[2]
-                / "src" / "mantis" / "config" / "armed_aborts.py").read_text(encoding="utf-8")
-    assert "if math.isfinite(step_gn) and step_gn > cfg.hard_gn_threshold:" in manifest, (
-        "the manifest no longer pins this comparison — the two sides have drifted apart, "
-        "which is the state R56's scan exists to make impossible"
-    )

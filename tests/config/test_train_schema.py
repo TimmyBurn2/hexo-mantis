@@ -38,8 +38,6 @@ VALID_TRAIN_PAYLOAD: dict = {
     "microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
     "augment": False,
     "recency_weight": 0.0,
-    "hard_gn_threshold": 1e9,
-    "hard_gn_min_steps": 3,
     "terminal_eval_enabled": True,
     "selfplay_stall_timeout_sec": 1800.0,
     "policy_target": "raw_visit_distribution",
@@ -85,9 +83,6 @@ BOUND_VIOLATIONS: list[tuple[str, object]] = [
     ("recency_weight", -0.1),
     ("recency_weight", 1.1),            # the sampler clamps, so above 1 is a difference the
                                         # config can express and the run cannot have
-    ("hard_gn_threshold", 0.0),         # fires on every finite step
-    ("hard_gn_threshold", float("inf")),  # accepted, reads ARMED, can never be met
-    ("hard_gn_min_steps", 0),           # fires on the FIRST breach — not "sustained"
     ("selfplay_stall_timeout_sec", 0.0),   # the always-armed guard, silently disarmed
     ("selfplay_stall_timeout_sec", -1.0),
 ]

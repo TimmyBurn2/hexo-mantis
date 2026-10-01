@@ -851,8 +851,7 @@ def strip_and_restamp(
             "training_steps_per_game": 1.0, "max_train_burst": 1, "batch_size": 256,
             # (`train.microbatch_caps` is ARCH-SCOPED and is spliced in below, on the graph
             # route only: an unconditional literal would write a graph cap into a grid config.)
-            "augment": False, "recency_weight": 0.0, "hard_gn_threshold": 1e9,
-            "hard_gn_min_steps": 3, "terminal_eval_enabled": True,
+            "augment": False, "recency_weight": 0.0, "terminal_eval_enabled": True,
             "selfplay_stall_timeout_sec": 1800.0,
             "policy_target": "raw_visit_distribution",
             "fast_policy_weight": 0.0,

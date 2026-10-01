@@ -306,9 +306,9 @@ def _graph_step_fn() -> ast.FunctionDef:
 def test_of2_9_leg2_the_graph_step_has_exactly_one_tail_returning_five_keys() -> None:
     """Exactly ONE `return`, of a dict literal whose keys are exactly the five.
 
-    This is what makes `grad_norm`'s presence structural: the grad-norm gate reads
-    `loss_info.get("grad_norm", 0.0)`, so a path returning a dict WITHOUT the key would silently
-    feed an armed abort a `0.0` that always passes its threshold.
+    This is what makes `grad_norm`'s presence structural: the coordinator reads
+    `loss_info.get("grad_norm", math.nan)` to tell a taken step from a refused one, so a path
+    returning a dict WITHOUT the key would silently read every step as refused.
     """
     fn = _graph_step_fn()
     returns = [n for n in ast.walk(fn) if isinstance(n, ast.Return)]

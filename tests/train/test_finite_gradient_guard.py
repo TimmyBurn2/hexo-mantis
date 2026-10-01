@@ -167,8 +167,8 @@ def test_a_healthy_step_steps_advances_the_clock_and_counts_nothing(tmp_path: Pa
 def test_the_loss_info_contract_stays_seven_keys_on_a_skipped_step(tmp_path: Path) -> None:
     """Prove a skipped step still returns all seven `loss_info` keys: the skip rides the event.
 
-    The hard-abort consumer reads `grad_norm` off this return, so dropping a key would
-    change what the abort compares.
+    The coordinator reads `grad_norm` off this return to tell a taken step from a refused one,
+    so dropping a key would change what it counts.
     """
     trainer = H.tiny_graph_trainer(tmp_path, sink=H.SpySink())
     handle = _poison_one_gradient(trainer.model)

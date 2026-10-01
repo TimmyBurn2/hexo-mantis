@@ -93,7 +93,6 @@ _TUNABLE_TOKENS: frozenset[str] = frozenset({
     "leaf_batch_size",
     "zoi_margin",
     "max_train_burst",
-    "hard_abort_grad_norm_steps",
     "backup_count",        # log rotation, infra not geometry
     "batch_size",
     "max_frames",          # display frame count, not geometry

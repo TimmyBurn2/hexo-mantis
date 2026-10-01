@@ -28,14 +28,13 @@ class FakeTrainer:
     """Conforms to the DECLARED seam: typed entry points +
     `device`; the dead `train_step` fake is gone with the card."""
 
-    def __init__(self, grad_norm: float = 0.1) -> None:
+    def __init__(self) -> None:
         self.step = 0
         self.model = object()
         self.device = "cpu"
-        self._gn = grad_norm
 
     def _loss(self) -> dict[str, float]:
-        return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": self._gn,
+        return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
                 "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3, "opp_reply_loss": 0.0,
                 "loss_total": 1.0}
 
@@ -275,18 +274,20 @@ def test_guard_state_round_trips_through_json_and_tolerates_an_empty_one() -> No
     import json
 
     h = _make_coordinator()
-    h.coord._consec_high_gn = 2
     h.coord._initial_policy_loss = 2.5
     h.trainer.skipped_steps = 4
     state = json.loads(json.dumps(h.coord.guard_state()))
     other = _make_coordinator()
     other.coord.restore_guard_state(state)
-    assert other.coord._consec_high_gn == 2 and other.coord._initial_policy_loss == 2.5
+    assert other.coord._initial_policy_loss == 2.5
     assert other.trainer.skipped_steps == 4
     other.coord.restore_guard_state({})  # a pre-field sidecar: nothing to restore, nothing raised
     # A sealbot ring in a sidecar from before the sealbot rung's removal is ignored, not refused.
     other.coord.restore_guard_state({"wr_history": [[3000, 0.4]], "wr_history_rung": "sealbot_d5"})
     assert not hasattr(other.coord, "_wr_history")
+    # So is the deleted grad-norm abort's counter.
+    other.coord.restore_guard_state({"consec_high_gn": 2})
+    assert not hasattr(other.coord, "_consec_high_gn")
 
 
 def test_draw_rate_gate_default_off_does_not_fire() -> None:
@@ -404,8 +405,7 @@ def test_gate_sampling_cadence_follows_gate_interval_not_the_burst() -> None:
     cfg = dev_coordinator_config(log_interval=5, gate_interval=5, max_train_burst=4,
                        training_steps_per_game=4.0,
                        draw_rate_abort=DrawRateAbortSpec(threshold=0.4, min_step=0,
-                                                        N_pool_min=10, consec=3),
-                       hard_gn_threshold=1e9)
+                                                        N_pool_min=10, consec=3))
     h = _make_coordinator(pool=pool, config=cfg)
     _drive_until_stopped(h, cap=8)
 
@@ -424,37 +424,6 @@ def test_gate_sampling_cadence_follows_gate_interval_not_the_burst() -> None:
     assert at_fire["gates"]["draw_rate_collapse"]["checks"] == 3, (
         "exactly 3 gate samples were taken — one per gate_interval boundary, not per burst"
     )
-
-
-def test_grad_norm_gate_fires_with_the_uniform_contract() -> None:
-    """The `grad_norm_hard_abort` producer test — the kept gate's DECISION: a sustained grad
-    norm above the threshold for `hard_gn_min_steps` consecutive steps stops the run AND emits
-    ONE `hard_abort` event naming the rule. It only wrote a log line before, so the one
-    unconditionally-active hard abort was invisible in the ONE channel."""
-    cfg = dev_coordinator_config(hard_gn_threshold=0.5, hard_gn_min_steps=3)
-    h = _make_coordinator(config=cfg)
-    h.trainer._gn = 10.0                              # sustained instability
-    _drive_until_stopped(h)
-
-    assert h.shutdown.running is False, "3 consecutive high-gn steps must hard-abort"
-    aborts = h.sink.named("hard_abort")
-    assert len(aborts) == 1, f"exactly one abort decision, got {aborts}"
-    assert aborts[0]["rule"] == "grad_norm_hard_abort"
-    assert "grad" in str(aborts[0]).lower() and aborts[0]["step"] == 3
-    assert h.sink.named("monitor_gates")[-1]["gates"]["grad_norm_hard_abort"]["fires"] == 1
-
-
-def test_grad_norm_gate_does_not_fire_below_the_consecutive_count() -> None:
-    """A single high-gn step (the consecutive counter reset by a healthy step) must NOT fire;
-    only a sustained run of `hard_gn_min_steps` does. Bites a gate that aborts on one spike."""
-    cfg = dev_coordinator_config(hard_gn_threshold=0.5, hard_gn_min_steps=3)
-    h = _make_coordinator(config=cfg)
-    for gn in (10.0, 0.1, 10.0, 0.1):
-        h.trainer._gn = gn
-        h.pool.games_completed += 5
-        h.coord.step()
-    assert h.shutdown.running is True
-    assert h.sink.named("hard_abort") == []
 
 
 def test_step_loop_beats() -> None:
@@ -490,4 +459,4 @@ def test_a_malformed_guard_value_is_a_named_resume_error() -> None:
 
     h = _make_coordinator()
     with pytest.raises(ResumeStateError, match="malformed"):
-        h.coord.restore_guard_state({"consec_high_gn": "three"})
+        h.coord.restore_guard_state({"initial_policy_loss": "three"})

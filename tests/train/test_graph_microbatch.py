@@ -427,9 +427,9 @@ def _drive_with_spies(tmp_path, m: int, *, checkpoint_interval: int = 1):
 @pytest.mark.parametrize("m", [1, 2, 4])
 def test_of2_4_one_optimizer_step_and_seven_keys_at_every_m(tmp_path, m: int) -> None:
     """ONE of everything per training step, at M in {1, 2, 4}, and the returned dict carries all
-    seven keys at every M. The key-presence half is not decoration: the coordinator's grad-norm gate
-    reads `float(loss_info.get("grad_norm", 0.0))`, so a branch returning a dict without
-    `grad_norm` silently feeds an armed abort a `0.0` that always passes its threshold."""
+    seven keys at every M. The key-presence half is not decoration: the coordinator reads
+    `loss_info.get("grad_norm", math.nan)` to tell a taken step from a refused one, so a branch
+    returning a dict without `grad_norm` silently drops every step from the trough window."""
     r = _drive_with_spies(tmp_path, m)
     assert r.opt.zero_grads == 1, f"M={m}: {r.opt.zero_grads} zero_grad calls, want 1"
     assert r.opt.steps == 1, f"M={m}: {r.opt.steps} optimizer.step calls, want 1 (MB-7)"
@@ -442,8 +442,8 @@ def test_of2_4_one_optimizer_step_and_seven_keys_at_every_m(tmp_path, m: int) ->
     assert len(r.sink.named("periodic_checkpoint_save")) == 1
     for key in ("loss", "policy_loss", "value_loss", "grad_norm", "lr"):
         assert key in r.info, (
-            f"M={m}: the returned dict omits {key!r} — a missing 'grad_norm' silently "
-            "disarms grad_norm_hard_abort through coordinator/step.py's .get(\"grad_norm\", 0.0)")
+            f"M={m}: the returned dict omits {key!r} — a missing 'grad_norm' reads every "
+            "step as refused through coordinator/step.py's .get(\"grad_norm\", math.nan)")
     assert set(r.info) == {"loss", "policy_loss", "value_loss", "grad_norm", "lr", "policy_entropy", "policy_entropy_selfplay"}
     assert math.isfinite(r.info["grad_norm"]) or math.isnan(r.info["grad_norm"])
     assert r.sink.named("trainer_step")[0]["microbatches"] == m
@@ -484,7 +484,7 @@ def test_of2_4_the_ema_update_fires_exactly_once_per_training_step(tmp_path, m: 
 @pytest.mark.parametrize("m", [1, 2, 4])
 def test_of2_5_clip_grad_norm_is_called_exactly_once_for_any_m(tmp_path, m: int) -> None:
     """Clipping is NONLINEAR in the whole gradient, so it happens ONCE, after the accumulation:
-    per-micro clipping would feed `grad_norm_hard_abort` the norm of a FRACTION of the gradient.
+    per-micro clipping would report the norm of a FRACTION of the gradient.
     A call COUNT cannot be absorbed by variance, which is why it is the primary assertion."""
     r = _drive_with_spies(tmp_path, m)
     assert r.clips == 1, f"M={m}: clip_grad_norm_ called {r.clips} times, want exactly 1"

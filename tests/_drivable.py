@@ -11,18 +11,17 @@ from typing import Any, Callable
 class DrivableTrainerStub:
     """The ONE trainer double: the declared entry points plus `device`; `actor_sd` and `inference_sd` are DISTINCT so a root that hands the deploy view to the actors reds."""
 
-    def __init__(self, *, step: int = 0, grad_norm: float = 0.1, on_step: Any = None, model: Any = None) -> None:
+    def __init__(self, *, step: int = 0, on_step: Any = None, model: Any = None) -> None:
         self.step = step
         self.device = "cpu"
         self.model = object() if model is None else model
-        self.grad_norm = grad_norm
         self.on_step = on_step
         self.saves: list = []
         self.actor_sd: dict = {"w": "ACTOR-SENTINEL"}
         self.inference_sd: dict = {"w": "DEPLOY-SENTINEL"}
 
     def loss_info(self) -> dict[str, float]:
-        return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": self.grad_norm,
+        return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
                 "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
                 "opp_reply_loss": 0.0, "loss_total": 1.0}
 

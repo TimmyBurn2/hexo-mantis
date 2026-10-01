@@ -198,8 +198,6 @@ class StepCoordinatorConfig:
     batch_size: int
     augment: bool
     recency_weight: float
-    hard_gn_threshold: float
-    hard_gn_min_steps: int
     stop_step: int | None
     # CONFIG-authored like `stop_step`, NO default: `None` is EXPLICITLY OFF, never inherited,
     # since a literal the caller always replaces is still a second default authority.
@@ -238,7 +236,6 @@ class StepOutcome:
     promoted_step: int | None
     soft_abort_fired: bool
     hard_abort_fired: bool
-    consec_high_gn: int
     instrumentation_emitted: list[str]
     pool_overflow_delta: int
     # `games_per_hour` was a field here too, built as a hard `0.0` with NO reader anywhere — a

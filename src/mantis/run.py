@@ -392,8 +392,6 @@ def _step_coordinator_config(
         batch_size=knobs.batch_size,
         augment=knobs.augment,
         recency_weight=knobs.recency_weight,
-        hard_gn_threshold=knobs.hard_gn_threshold,
-        hard_gn_min_steps=knobs.hard_gn_min_steps,
         stop_step=stop_step,
         draw_rate_abort=draw_rate_abort,
         policy_loss_trough_abort=policy_loss_trough_abort,

@@ -129,7 +129,7 @@ def test_the_coordinator_reads_the_slice_at_its_own_cadence_and_reports_the_gap(
         stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
         drain_caps=resolve_drain_caps(cfg.monitor), gate_interval=100, knobs=resolve_coordinator_knobs(cfg.train))
     config = dataclasses.replace(base, eval_interval=0, log_interval=100, min_buf_size=1, max_train_burst=1,
-                                 training_steps_per_game=1.0, hard_gn_threshold=1e9, batch_size=4)
+                                 training_steps_per_game=1.0, batch_size=4)
     sink = SpyEventSink()
     buffer = SimpleNamespace(size=100, capacity=1000, resize=lambda n: None, save_to_path=lambda p: None,
                              sample_graph_batch=opened.buffer.sample_graph_batch)

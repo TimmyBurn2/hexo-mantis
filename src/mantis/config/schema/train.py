@@ -237,13 +237,6 @@ class TrainConfig(StrictModel):
     # `recency_weight` — the fraction of each batch drawn from the recency window. `ge=0, le=1`
     # is that fraction's own range: above 1 the sampler clamps and the difference is unreal.
     recency_weight: float = Field(ge=0, le=1)
-    # `hard_gn_*` — the `grad_norm_hard_abort` gate. `gt=0`: 0 fires on every finite step; no
-    # inf, which reads ARMED and is never met. DISCLOSED: the shipped finite `1e9` is unreachable
-    # too; the derivable ceiling lives in the armed-abort manifest.
-    hard_gn_threshold: float = Field(gt=0, allow_inf_nan=False)
-    # `ge=1`: at `0` the gate fires the FIRST time the threshold is exceeded, the opposite of
-    # sustained instability. DISCLOSED: a very large value disarms the abort just as quietly.
-    hard_gn_min_steps: int = Field(ge=1)
     # `terminal_eval_enabled` — whether close-out runs a terminal eval round, i.e. whether the
     # run gets its LAST promotion opportunity.
     terminal_eval_enabled: bool

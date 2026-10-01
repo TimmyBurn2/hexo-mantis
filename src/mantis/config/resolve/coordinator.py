@@ -42,8 +42,6 @@ class CoordinatorKnobsSpec:
     batch_size: int
     augment: bool
     recency_weight: float
-    hard_gn_threshold: float
-    hard_gn_min_steps: int
     terminal_eval_enabled: bool
     selfplay_stall_timeout_sec: float
 
@@ -66,8 +64,6 @@ def resolve_coordinator_knobs(train_section: Any) -> CoordinatorKnobsSpec:
         batch_size=int(train_section.batch_size),
         augment=bool(train_section.augment),
         recency_weight=float(train_section.recency_weight),
-        hard_gn_threshold=float(train_section.hard_gn_threshold),
-        hard_gn_min_steps=int(train_section.hard_gn_min_steps),
         terminal_eval_enabled=bool(train_section.terminal_eval_enabled),
         selfplay_stall_timeout_sec=float(train_section.selfplay_stall_timeout_sec),
     )
