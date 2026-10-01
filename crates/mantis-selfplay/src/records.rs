@@ -97,6 +97,8 @@ pub enum TargetIntegrityError {
     /// The search backed up ZERO child visits, so there is no visit distribution to export and
     /// every exporter would ship the prior fallback instead. See [`refuse_zero_visit_export`].
     ZeroVisitSearch { ply_index: u16, n_children: usize },
+    /// The row's root value is not a search value (non-finite or outside [-1, 1]), so the ring would refuse it.
+    RootValueOutOfRange { value: f32, ply_index: u16 },
 }
 
 impl std::fmt::Display for TargetIntegrityError {
@@ -139,6 +141,12 @@ impl std::fmt::Display for TargetIntegrityError {
                  cannot be built from a search that did not run (R275(b) exporter conjunct; \
                  LAW-14: run-fatal, never recorded)"
             ),
+            TargetIntegrityError::RootValueOutOfRange { value, ply_index } => write!(
+                f,
+                "RootValueOutOfRange: the root value {value} at ply_index={ply_index} is not a \
+                 backed-up search value (finite, in -1..=1) — the search or the net upstream \
+                 produced it (LAW-14: run-fatal, never recorded)"
+            ),
         }
     }
 }
@@ -150,6 +158,13 @@ impl std::error::Error for TargetIntegrityError {}
 /// unity anchor makes absolute and relative identical. `pub`, so the bridge push face refuses with
 /// the SAME window.
 pub const TARGET_MASS_TOL: f64 = 1e-4;
+
+/// The row's root value if it is a search value; errors with [`TargetIntegrityError::RootValueOutOfRange`] naming the ply.
+pub fn refuse_root_value(value: f32, ply_index: u16) -> Result<f32, TargetIntegrityError> {
+    crate::replay::hexg::push::validate_root_value(value, true)
+        .map(|()| value)
+        .map_err(|_| TargetIntegrityError::RootValueOutOfRange { value, ply_index })
+}
 
 /// Refuse a target built from a search that backed up nothing; returns the root-child visit total.
 ///
@@ -368,6 +383,28 @@ pub(crate) fn sample_policy_ls(
         }
     }
     Some(legal_moves[legal_moves.len() - 1])
+}
+
+#[cfg(test)]
+mod root_value_tests {
+    use super::{refuse_root_value, TargetIntegrityError};
+
+    /// A NaN net or a broken backup is refused where the row is made, by type and ply, not later at the ring.
+    #[test]
+    fn a_root_value_that_is_not_a_search_value_is_refused_where_the_row_is_made() {
+        for bad in [f32::NAN, f32::INFINITY, 1.0001, -1.5] {
+            match refuse_root_value(bad, 7) {
+                Err(TargetIntegrityError::RootValueOutOfRange { ply_index: 7, .. }) => {}
+                other => panic!("{bad}: {other:?}"),
+            }
+        }
+        for good in [-1.0f32, -0.0, 0.0, 0.25, 1.0] {
+            assert_eq!(
+                refuse_root_value(good, 7).map(f32::to_bits),
+                Ok(good.to_bits())
+            );
+        }
+    }
 }
 
 #[cfg(test)]

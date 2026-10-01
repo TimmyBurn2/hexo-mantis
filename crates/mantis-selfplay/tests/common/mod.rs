@@ -27,9 +27,14 @@ pub fn spawn_uniform_producer(
     served: Arc<AtomicUsize>,
     pop_max: usize,
 ) -> JoinHandle<()> {
-    spawn_producer(queue, n_actions, served, pop_max, |coords| {
-        vec![1.0f32 / coords.len().max(1) as f32; coords.len()]
-    })
+    spawn_producer(
+        queue,
+        n_actions,
+        served,
+        pop_max,
+        |coords| vec![1.0f32 / coords.len().max(1) as f32; coords.len()],
+        |_| 0.0,
+    )
 }
 
 /// A compact-play mock server: its prior decays from the legal region's centroid, so decided positions come fast.
@@ -39,22 +44,41 @@ pub fn spawn_compact_producer(
     served: Arc<AtomicUsize>,
     pop_max: usize,
 ) -> JoinHandle<()> {
-    spawn_producer(queue, n_actions, served, pop_max, |coords| {
-        let n = coords.len().max(1) as f32;
-        let cq = coords.iter().map(|c| c.0 as f32).sum::<f32>() / n;
-        let cr = coords.iter().map(|c| c.1 as f32).sum::<f32>() / n;
-        let raw: Vec<f32> = coords
-            .iter()
-            .map(|&(q, r)| {
-                let (dq, dr) = (q as f32 - cq, r as f32 - cr);
-                // Axial hex distance in its max form: the halved-sum form is a midpoint construction to the census.
-                let d = dq.abs().max(dr.abs()).max((dq + dr).abs());
-                (-1.5 * d).exp()
-            })
-            .collect();
-        let total: f32 = raw.iter().sum();
-        raw.into_iter().map(|x| x / total).collect()
+    spawn_producer(queue, n_actions, served, pop_max, compact_prior, |_| 0.0)
+}
+
+/// The compact-play server answering every leaf a value in (-0.9, 0.9) hashed from its legal set, so W/N is non-zero.
+pub fn spawn_valued_compact_producer(
+    queue: GraphQueue,
+    n_actions: usize,
+    served: Arc<AtomicUsize>,
+    pop_max: usize,
+) -> JoinHandle<()> {
+    spawn_producer(queue, n_actions, served, pop_max, compact_prior, |coords| {
+        let mut s = coords.iter().fold(coords.len() as u64, |h, &(q, r)| {
+            h.wrapping_mul(31)
+                .wrapping_add(((q as u64) << 32) ^ (r as u32 as u64))
+        });
+        (splitmix64(&mut s) % 1801) as f32 / 1000.0 - 0.9
     })
+}
+
+/// The compact prior: mass decays from the legal region's centroid.
+fn compact_prior(coords: &[(i32, i32)]) -> Vec<f32> {
+    let n = coords.len().max(1) as f32;
+    let cq = coords.iter().map(|c| c.0 as f32).sum::<f32>() / n;
+    let cr = coords.iter().map(|c| c.1 as f32).sum::<f32>() / n;
+    let raw: Vec<f32> = coords
+        .iter()
+        .map(|&(q, r)| {
+            let (dq, dr) = (q as f32 - cq, r as f32 - cr);
+            // Axial hex distance in its max form: the halved-sum form is a midpoint construction to the census.
+            let d = dq.abs().max(dr.abs()).max((dq + dr).abs());
+            (-1.5 * d).exp()
+        })
+        .collect();
+    let total: f32 = raw.iter().sum();
+    raw.into_iter().map(|x| x / total).collect()
 }
 
 fn spawn_producer(
@@ -63,6 +87,7 @@ fn spawn_producer(
     served: Arc<AtomicUsize>,
     pop_max: usize,
     prior: fn(&[(i32, i32)]) -> Vec<f32>,
+    value: fn(&[(i32, i32)]) -> f32,
 ) -> JoinHandle<()> {
     thread::spawn(move || loop {
         let batch = queue.pop_graph_batch(pop_max, 5);
@@ -89,7 +114,7 @@ fn spawn_producer(
             ids.push(id);
             results.push(
                 assemble_ls_from_gnn_probs(n_actions, &probs, &g.policy_scatter_index.0, &coords)
-                    .map(|ls| (ls, 0.0f32)),
+                    .map(|ls| (ls, value(&coords))),
             );
         }
         served.fetch_add(ids.len(), Ordering::Relaxed);

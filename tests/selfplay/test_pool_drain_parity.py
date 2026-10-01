@@ -208,7 +208,7 @@ def test_graph_drain_push_rows(run_drain, drain_goldens, graph_pushed, graph_row
             "trailing game id is consumed, so none may be forwarded positionally"
         )
         assert kwargs["tail_mass"] == expected_row[-3], (
-            f"row {i}: the row's tail mass (R347(a)'s alpha) must reach the push; got {kwargs}"
+            f"row {i}: the row's tail mass alpha must reach the push; got {kwargs}"
         )
         assert (kwargs["root_value"], kwargs["root_value_valid"]) == expected_row[-2], (
             f"row {i}: the row's root value and its flag must reach the push; got {kwargs}"

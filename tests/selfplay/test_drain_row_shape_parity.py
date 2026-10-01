@@ -161,13 +161,13 @@ def stub_graph_row_arity(source: str) -> int:
 
 
 def test_the_graph_row_carries_its_tail_mass_and_root_value_from_the_bridge_to_the_push() -> None:
-    """A drain that drops a trailing field lets the push default it (GUMBEL-3's tail mass): bridge alias, stub and push agree."""
+    """A drain that drops a trailing field lets the push default it: bridge alias, stub and push agree."""
     bridge = graph_row_arity(_BRIDGE_RUNNER.read_text(encoding="utf-8"))
     stub = stub_graph_row_arity(_STUB.read_text(encoding="utf-8"))
     assert bridge == stub == 12, f"GraphRecordRow: bridge={bridge} stub={stub}"
     push = _POOL_PUSH.read_text(encoding="utf-8")
     assert "tail_mass, (root_value, root_value_valid), runner_game_id = rec[-3:]" in push
-    assert "push_graph_position(*rec[:-3]" in push
+    assert "*rec[:-3], game_id=buffer_game_id" in push
     assert all(f"{k}={k}" in push for k in ("tail_mass", "root_value", "root_value_valid"))
     bridge_src = _BRIDGE_RUNNER.read_text(encoding="utf-8")
     body = bridge_src[bridge_src.index("fn collect_graph_data"):]

@@ -30,18 +30,19 @@ def _alpha_full_row_event(rec: tuple[Any, ...], tail_mass: float,
 
 
 def push_graph(pool: Any, rows: list[tuple[Any, ...]]) -> None:
-    """Push one drained batch of graph records, one row per position, with its game id.
+    """Push one drained batch of graph rows, each runner game id TRANSLATED through `next_game_id()`.
 
-    The game id is TRANSLATED, not forwarded: the runner's sequence restarts at 0 every launch
-    while a resumed ring already holds ids from before the stop, so it is allocated through the
-    buffer's own `next_game_id()`. A sentinel id would skip the sampler's uniqueness guard
-    entirely and let one game's positions count as independent samples.
+    The runner's sequence restarts every launch while a resumed ring holds older ids, and a sentinel
+    id would skip the sampler's uniqueness guard, so one game's rows would count as independent.
+
+    Raises:
+        ValueError: the engine refused a row (a target or a root value outside its contract).
     """
     allocated: dict[int, int] = {}
     alpha_full = 0
     for rec in rows:
-        # `(…positional fields…, tail_mass, (root_value, root_value_valid), runner_game_id)`: the tail and the
-        # root pair ride by keyword because the push signature carries `game_id` before them.
+        # `(…positional…, tail_mass, (root_value, root_value_valid), runner_game_id)`: the tail and
+        # the root pair ride by keyword because the push signature carries `game_id` before them.
         tail_mass, (root_value, root_value_valid), runner_game_id = rec[-3:]
         tail_mass, runner_game_id = float(tail_mass), int(runner_game_id)
         if is_alpha_full(tail_mass):
@@ -59,8 +60,9 @@ def push_graph(pool: Any, rows: list[tuple[Any, ...]]) -> None:
             if buffer_game_id < 0:
                 buffer_game_id = int(pool.replay_buffer.next_game_id())
                 allocated[runner_game_id] = buffer_game_id
-        pool.replay_buffer.push_graph_position(*rec[:-3], game_id=buffer_game_id, tail_mass=tail_mass,
-                                               root_value=root_value, root_value_valid=root_value_valid)
+        pool.replay_buffer.push_graph_position(
+            *rec[:-3], game_id=buffer_game_id, tail_mass=tail_mass, root_value=root_value,
+            root_value_valid=root_value_valid)
     n = len(rows)
     with pool._lock:
         pool.positions_pushed += n

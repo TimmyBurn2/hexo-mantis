@@ -42,11 +42,12 @@ struct Drove {
     rows: Rows,
 }
 
-/// One worker, every game sampled, both playout-cap arms drawn, until `done` or the deadline.
+/// One worker, every game sampled, both arms drawn, until `done` and then one more finished game (the one in flight).
 fn drive(
     kind: SearchKind,
     tactics: Option<TacticsConfig>,
     ply_cap: usize,
+    valued: bool,
     done: fn(&Rows, &[GameResultRow]) -> bool,
 ) -> Drove {
     let spec = lookup_or_panic(ENCODING);
@@ -66,7 +67,12 @@ fn drive(
         ..Default::default()
     })
     .expect("runner constructs at the drive's parameters");
-    let producer = common::spawn_compact_producer(
+    let spawn = if valued {
+        common::spawn_valued_compact_producer
+    } else {
+        common::spawn_compact_producer
+    };
+    let producer = spawn(
         runner.graph_producer(),
         spec.policy_logit_count,
         Arc::new(AtomicUsize::new(0)),
@@ -76,10 +82,14 @@ fn drive(
     let deadline = Instant::now() + Duration::from_secs(600);
     let totals = |r: &SelfPlayRunner| -> Rows { r.tactics_totals().into_iter().collect() };
     let (mut games, mut records) = (Vec::new(), Vec::new());
+    let mut finished_at: Option<usize> = None;
     while Instant::now() < deadline
-        && !done(&totals(&runner), &games)
+        && finished_at.is_none_or(|n| games.len() <= n)
         && runner.fatal_defect().is_none()
     {
+        if finished_at.is_none() && done(&totals(&runner), &games) {
+            finished_at = Some(games.len());
+        }
         // Rows first, then results: a game's result is never drained before its rows.
         records.extend(runner.drain_graph_records().expect("unpoisoned"));
         games.extend(runner.drain_game_results().expect("unpoisoned"));
@@ -146,9 +156,15 @@ fn rows_beside_stats(d: &Drove) -> Vec<(f32, &GraphRecord)> {
 #[test]
 fn every_row_carries_its_own_searchs_root_value_bit_for_bit() {
     for kind in [SearchKind::Gumbel, SearchKind::Puct] {
-        let d = drive(kind, None, 12, |_, g| g.len() >= 6);
+        let d = drive(kind, None, 12, true, |_, g| g.len() >= 6);
         let pairs = rows_beside_stats(&d);
         assert!(pairs.len() >= 20, "{kind:?}: only {} rows", pairs.len());
+        let nonzero = pairs.iter().filter(|(_, r)| r.root_value != 0.0).count();
+        assert!(
+            10 * nonzero >= 9 * pairs.len(),
+            "{kind:?}: {nonzero} of {} values non-zero",
+            pairs.len()
+        );
         let quick = pairs.iter().filter(|(_, r)| !r.is_full_search).count();
         assert!(
             quick > 0 && quick < pairs.len(),
@@ -173,7 +189,7 @@ fn every_row_carries_its_own_searchs_root_value_bit_for_bit() {
 /// A decided root reads +1 (a finish, the owed stone, a new proof), a root lost on cover -1; the outcome confirms the sign.
 #[test]
 fn a_proven_root_carries_the_proofs_value_and_every_other_row_its_searchs() {
-    let d = drive(SearchKind::Gumbel, Some(BLOCK), 80, |r, g| {
+    let d = drive(SearchKind::Gumbel, Some(BLOCK), 80, false, |r, g| {
         g.len() >= 4 && r["proof_stones_played"] > 0 && r["decided_lost"] > 0
     });
     let (mut won, mut lost) = (0u64, 0u64);

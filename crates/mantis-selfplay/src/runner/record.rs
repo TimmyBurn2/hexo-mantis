@@ -37,7 +37,7 @@ pub(crate) fn record_position_graph_dispatch(
         visit_capacity,
         explicit_support,
     )?;
-    rec.root_value = root_value;
+    rec.root_value = records::refuse_root_value(root_value, ply_index)?;
     rec.root_value_valid = true;
     graph_records_vec.push(rec);
     Ok(())
