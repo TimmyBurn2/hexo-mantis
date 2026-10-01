@@ -853,7 +853,6 @@ def strip_and_restamp(
             "augment": False, "recency_weight": 0.0, "terminal_eval_enabled": True,
             "selfplay_stall_timeout_sec": 1800.0,
             "policy_target": "raw_visit_distribution",
-            "fast_policy_weight": 0.0,
         },
         "selfplay": {
             "search": {"kind": "puct", "tactics": None},

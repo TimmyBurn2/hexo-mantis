@@ -187,7 +187,6 @@ CONSUMER_REGISTRY = {
         "against search.kind by RunConfig._policy_target_matches_the_search_kind and by "
         "_assert_policy_target_consistency, and carried on the checkpoint stamp"
     ),
-    "train.fast_policy_weight": "resolve_fast_policy_weight -> run_declared_train_step fast_policy_weight_provider -> losses.graph_policy_row_weights (R347(b))",
     # Every selfplay/mcts/playout_cap/inference leaf's live consumer is
     # SelfPlayHParams.from_config / InferenceHParams.from_config, reading the nested sections.
     "train.heldout_gap.ring": "resolve_heldout_gap -> HeldoutSlice.open in mantis.run (the frozen slice's ring file; R366(c), v37; null = the explicit OFF)",

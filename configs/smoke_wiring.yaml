@@ -108,7 +108,6 @@ train:
   recency_weight: 0.0
   terminal_eval_enabled: true
   policy_target: completed_improved_policy
-  fast_policy_weight: 0.0
 selfplay:
   search:
     kind: gumbel

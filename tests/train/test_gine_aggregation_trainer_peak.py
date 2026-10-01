@@ -51,7 +51,7 @@ def test_iii_the_trainer_peak_at_the_caps_does_not_rise(tmp_path: Path) -> None:
         before = int(torch.cuda.max_memory_allocated())
         run_declared_train_step(trainer, replay, H.GSPEC, batch_size=n_graphs, augment=False,
                                 recency_weight=0.0, caps_provider=lambda: caps,
-                                sample_threads_provider=lambda: 1, fast_policy_weight_provider=lambda: 0.0)
+                                sample_threads_provider=lambda: 1)
         torch.cuda.synchronize()
         got = int(torch.cuda.max_memory_allocated()) - before
         del trainer

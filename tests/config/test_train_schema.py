@@ -40,7 +40,6 @@ VALID_TRAIN_PAYLOAD: dict = {
     "terminal_eval_enabled": True,
     "selfplay_stall_timeout_sec": 1800.0,
     "policy_target": "raw_visit_distribution",
-    "fast_policy_weight": 0.0,
     "ema": {"enabled": False, "decay": 0.999, "update_every": 10},
     "policy_loss_trough_abort": None,
     "ply_cap_abort": None,
@@ -59,7 +58,6 @@ BOUND_VIOLATIONS: list[tuple[str, object]] = [
     ("scheduler_t_max", 0),
     ("eta_min", -1e-9),
     ("checkpoint_interval", -1),
-    ("fast_policy_weight", -0.1),
     # One violation per knob whose bound makes a real defect inexpressible.
     ("eval_interval", 0),               # the entire eval/promotion pipeline, silently off
     ("log_interval", 0),                # the whole hard-abort family AND monitor_gates

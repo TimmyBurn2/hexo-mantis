@@ -45,16 +45,14 @@ class HeldoutSlice:
         return cls(spec, buffer, rows=rows, ring_path=path)
 
     def read(self, trainer: Any, step_spec: Any, *, batch_size: int, caps_provider: Callable[[], Any],
-             sample_threads_provider: Callable[[], int],
-             fast_policy_weight_provider: Callable[[], float]) -> dict[str, float]:
+             sample_threads_provider: Callable[[], int]) -> dict[str, float]:
         """The mean forward-only `(policy_loss, value_loss)` over the frozen slice's `batches`, the sampler re-seeded first."""
         self.buffer.seed_sampler(self.spec.seed)
         policy = value = 0.0
         for _ in range(self.spec.batches):
             out = run_declared_eval_step(
                 trainer, self.buffer, step_spec, batch_size=batch_size, caps_provider=caps_provider,
-                sample_threads_provider=sample_threads_provider,
-                fast_policy_weight_provider=fast_policy_weight_provider)
+                sample_threads_provider=sample_threads_provider)
             policy += float(out["policy_loss"])
             value += float(out["value_loss"])
         self.reads += 1

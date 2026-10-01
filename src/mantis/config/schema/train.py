@@ -233,7 +233,3 @@ class TrainConfig(StrictModel):
     # `policy_target`, itself pinned to `search.kind`; the value target is the game outcome z, and a game
     # with no winner trains no value.
     policy_target: Literal["raw_visit_distribution", "completed_improved_policy"]
-    #: The POLICY weight a fast-arm (`is_full_search == 0`) row carries (value is always
-    #: supervised); `ge=0` because the shipped 0.0 discards the fast arm's policy outright.
-    #: Read once per step via `fast_policy_weight_provider`, the `microbatch_caps` provider shape.
-    fast_policy_weight: float = Field(ge=0)

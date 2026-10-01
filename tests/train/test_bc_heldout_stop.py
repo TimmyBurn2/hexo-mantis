@@ -63,8 +63,7 @@ def test_a_monitor_that_never_observed_reports_no_best_rather_than_a_sentinel() 
 def _monitor(**kw):
     base = dict(ring=object(), spec=object(), plies=1000, batch_size=100, eval_every=10,
                 patience=2, min_delta=0.01, caps_provider=lambda: None,
-                sample_threads_provider=lambda: 1,
-                fast_policy_weight_provider=lambda: 0.0)
+                sample_threads_provider=lambda: 1)
     base.update(kw)
     return HeldOutMonitor.build(**base)
 

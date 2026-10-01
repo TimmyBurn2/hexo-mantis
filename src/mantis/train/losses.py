@@ -39,23 +39,12 @@ def rebuild_sparse_target(
     return policy_target.reshape(-1) + sparse_tail(prior_probs, explicit_mask, tail_mass, legal_offsets)
 
 
-def graph_policy_row_weights(
-    is_full_search: Any, fast_policy_weight: float
-) -> torch.Tensor:
-    """Per-row POLICY weight for a graph batch, the one authority: 1 on a full-search row,
-    `fast_policy_weight` on a fast-arm row (weighted, not gated). A flat float32 `[B]`, evaluated
-    ONCE per step and read by both the numerator and the denominator.
+def graph_policy_row_weights(is_full_search: Any) -> torch.Tensor:
+    """Per-row POLICY weight for a graph batch, the one authority: 1 on a full-search row, 0 on a fast-arm row (value-only).
 
-    Raises:
-        ValueError: `fast_policy_weight` negative or not finite — it would train the fast arm AWAY.
+    A flat float32 `[B]`, evaluated ONCE per step and read by both the numerator and the denominator.
     """
-    if not math.isfinite(fast_policy_weight) or fast_policy_weight < 0.0:
-        raise ValueError(
-            f"fast_policy_weight must be finite and >= 0, got {fast_policy_weight!r} "
-            "(train.fast_policy_weight)"
-        )
-    ifs = torch.as_tensor(is_full_search).reshape(-1).to(torch.float32)
-    return ifs + fast_policy_weight * (1.0 - ifs)
+    return torch.as_tensor(is_full_search).reshape(-1).to(torch.float32)
 
 
 def exclude_alpha_full_rows(policy_row_weight: torch.Tensor, tail_mass: Any) -> tuple[torch.Tensor, int]:

@@ -43,8 +43,7 @@ class GraphStepInputs:
     tail_mass: Any
     outcomes: Any
     value_valid: Any
-    #: The per-row POLICY weight, 1 on a full-search row and `train.fast_policy_weight` on a
-    #: fast-arm one: the fast arm is weighted, not gated.
+    #: The per-row POLICY weight: 1 on a full-search row, 0 on a fast-arm one.
     policy_row_weight: Any
     n_graphs: int
 
@@ -103,21 +102,19 @@ def run_declared_train_step(
     recency_weight: float,
     caps_provider: Callable[[], Any],
     sample_threads_provider: Callable[[], int],
-    fast_policy_weight_provider: Callable[[], float],
 ) -> dict[str, float]:
     """One straight self-play gradient update through the typed route for ``spec``.
 
-    ``caps_provider``, ``sample_threads_provider`` and ``fast_policy_weight_provider`` are ZERO-ARG
-    CALLABLES, read only once the route is known to be graph. All three are REQUIRED and
-    undefaulted: a default would be a code-side default for a config-derived value.
+    ``caps_provider`` and ``sample_threads_provider`` are ZERO-ARG CALLABLES, read only once the
+    route is known to be graph. Both are REQUIRED and undefaulted: a default would be a code-side
+    default for a config-derived value.
     """
     representation = getattr(spec, "representation", None)
     if representation == "graph":
         return _graph_step(trainer, buffer, spec, batch_size=batch_size, augment=augment,
                            recency_weight=recency_weight,
                            caps_provider=caps_provider,
-                           sample_threads_provider=sample_threads_provider,
-                           fast_policy_weight_provider=fast_policy_weight_provider)
+                           sample_threads_provider=sample_threads_provider)
     raise RepresentationRouteError(
         f"declared representation {representation!r} selects no training-step route — an "
         "absent or unknown representation is an ERROR, never a dense default (LAW-11)"
@@ -128,7 +125,6 @@ def _build_graph_parts(
     trainer: Any, buffer: Any, spec: Any, *,
     batch_size: int, augment: bool, recency_weight: float,
     caps_provider: Callable[[], Any], sample_threads_provider: Callable[[], int],
-    fast_policy_weight_provider: Callable[[], float],
 ) -> dict[str, Any]:
     """One sampled graph batch, prepared for a step — the kwargs BOTH step routes take.
 
@@ -186,9 +182,7 @@ def _build_graph_parts(
     n_graphs = int(payload.n_graphs)
     # ONE evaluation over the WHOLE batch, so the per-part numerator and the whole-step
     # denominator cannot come from two different vectors; no fallback is supplied here.
-    policy_row_weight = graph_policy_row_weights(
-        np.asarray(targets.is_full_search), float(fast_policy_weight_provider())
-    )
+    policy_row_weight = graph_policy_row_weights(np.asarray(targets.is_full_search))
     # An alpha = 1.0 row leaves the policy loss here, BEFORE the denominator reads
     # this vector, so it is out of the numerator and the mean alike; the count rides the step event.
     policy_row_weight, alpha_full_excluded = exclude_alpha_full_rows(
@@ -262,14 +256,12 @@ def _graph_step(
     trainer: Any, buffer: Any, spec: Any, *,
     batch_size: int, augment: bool, recency_weight: float,
     caps_provider: Callable[[], Any], sample_threads_provider: Callable[[], int],
-    fast_policy_weight_provider: Callable[[], float],
 ) -> dict[str, float]:
     """One gradient update from a freshly sampled graph batch."""
     return trainer.train_step_from_graph_batch(**_build_graph_parts(
         trainer, buffer, spec, batch_size=batch_size, augment=augment,
         recency_weight=recency_weight,
         caps_provider=caps_provider, sample_threads_provider=sample_threads_provider,
-        fast_policy_weight_provider=fast_policy_weight_provider,
     ))
 
 
@@ -295,7 +287,6 @@ def run_declared_eval_step(
     batch_size: int,
     caps_provider: Callable[[], Any],
     sample_threads_provider: Callable[[], int],
-    fast_policy_weight_provider: Callable[[], float],
 ) -> dict[str, float]:
     """One FORWARD-ONLY loss reading over `buffer`, through the declared graph route.
 
@@ -317,5 +308,4 @@ def run_declared_eval_step(
         trainer, buffer, spec, batch_size=batch_size, augment=False,
         recency_weight=0.0,
         caps_provider=caps_provider, sample_threads_provider=sample_threads_provider,
-        fast_policy_weight_provider=fast_policy_weight_provider,
     ))

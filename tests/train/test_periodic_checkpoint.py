@@ -159,8 +159,7 @@ def _drive_graph(trainer: Trainer, spec: Any, n_steps: int) -> None:
     for _ in range(n_steps):
         run_declared_train_step(trainer, buffer, spec, batch_size=4, augment=False,
                                 recency_weight=0.0,
-                                caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0)
+                                caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1)
 
 
 # arm 1: interval N writes at N and 2N (the GRAPH route)

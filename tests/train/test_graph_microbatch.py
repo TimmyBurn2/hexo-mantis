@@ -324,7 +324,6 @@ def test_of2_3a_prime_bin_logits_row_count_is_asserted_at_the_call(tmp_path) -> 
         run_declared_train_step(
             trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
             sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0,
             caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps[0], max_nodes=caps[1]))
 
 
@@ -353,13 +352,11 @@ def _two_arm_step(tmp_path, m: int):
             run_declared_train_step(
                 trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
                 sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0,
                 caps_provider=lambda: MicrobatchCapsSpec(max_edges=non_binding[0],
                                                          max_nodes=non_binding[1]))
         info = run_declared_train_step(
             trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
             sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0,
             caps_provider=lambda c=caps: MicrobatchCapsSpec(max_edges=c[0], max_nodes=c[1]))
         out.append((info, H.grad_vector(trainer.model), H.param_vector(trainer.model)))
     return out
@@ -415,7 +412,6 @@ def _drive_with_spies(tmp_path, m: int, *, checkpoint_interval: int = 1):
         info = run_declared_train_step(
             trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
             sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0,
             caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps[0], max_nodes=caps[1]))
     finally:
         torch.nn.utils.clip_grad_norm_ = real_clip
@@ -472,7 +468,6 @@ def test_of2_4_the_ema_update_fires_exactly_once_per_training_step(tmp_path, m: 
     run_declared_train_step(
         trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
         sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0,
         caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps[0], max_nodes=caps[1]))
     assert trainer.step - before == 1
     assert len(updates) == 1, (
@@ -540,7 +535,6 @@ def test_of2_7_a_single_over_cap_graph_raises_and_nothing_partial_happens(tmp_pa
         run_declared_train_step(
             trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
             sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0,
             caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps[0], max_nodes=caps[1]))
     message = str(exc.value)
     assert "graph 0" in message or "graph index 0" in message, message
@@ -583,7 +577,6 @@ def test_of2_11_records_whether_deterministic_mode_rejects_index_add(tmp_path, c
             run_declared_train_step(
                 trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
                 sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0,
                 caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps[0],
                                                          max_nodes=caps[1]))
     except RuntimeError as exc:                      # noqa: BLE001 — recorded, then re-read
@@ -630,7 +623,6 @@ def test_of2_15b_the_graph_route_propagates_the_named_absence(tmp_path) -> None:
     with pytest.raises(MissingMicrobatchCapsError):
         run_declared_train_step(trainer, replay, H.GSPEC, batch_size=4, augment=False,
                                 recency_weight=0.0, sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0,
                                 caps_provider=coord._microbatch_caps)
 
 

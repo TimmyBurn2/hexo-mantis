@@ -1,6 +1,6 @@
-# >300 justify (R8). ONE claim over ONE rebuilt target: the tail, the fast-arm weight, the alpha
+# >300 justify (R8). ONE claim over ONE rebuilt target: the tail, the fast-arm gate, the alpha
 # exclusion and the KL line read the same fixture and real step; a split forks both into copies that drift.
-"""The sparse Gumbel row's trainer side: the reconstructed tail, the fast-arm policy weight, the
+"""The sparse Gumbel row's trainer side: the reconstructed tail, the fast-arm policy gate, the
 alpha = 1.0 exclusion and the KL line.
 
 Under Sequential Halving only `selfplay.gumbel_m` candidates are visited, so the row stores
@@ -10,6 +10,8 @@ detach is the mechanism: built from a live `probs`, the CE gradient would pick u
 term pushing the prior toward whatever it already is, on most of the legal set.
 """
 from __future__ import annotations
+
+import inspect
 
 import math
 
@@ -154,26 +156,14 @@ def test_a_graph_whose_legal_set_is_entirely_explicit_survives_a_positive_alpha(
     assert torch.isfinite(loss)
 
 
-def test_the_row_weight_at_zero_is_the_binary_gate() -> None:
+def test_a_fast_arm_row_carries_no_policy_weight_and_no_knob_sets_one() -> None:
+    """PLANTED BREAK: give the fast arm any weight and its row trains the quick search's policy; the denominator follows."""
     ifs = np.array([1, 0, 1, 0], dtype=np.uint8)
-    w = graph_policy_row_weights(ifs, 0.0)
+    w = graph_policy_row_weights(ifs)
     assert torch.equal(w, torch.tensor([1.0, 0.0, 1.0, 0.0]))
-
-
-def test_the_row_weight_lifts_the_fast_arm_and_the_denominator_follows() -> None:
-    """The numerator's vector and the denominator's sum come from one evaluation of the rule."""
-    ifs = np.array([1, 0, 1, 0], dtype=np.uint8)
-    w = graph_policy_row_weights(ifs, 0.25)
-    assert torch.equal(w, torch.tensor([1.0, 0.25, 1.0, 0.25]))
+    assert list(inspect.signature(graph_policy_row_weights).parameters) == ["is_full_search"]
     p_den, _ = graph_loss_denominators(w, np.array([1, 1, 1, 1], dtype=np.uint8), 4)
-    print(f"policy denominator at fast_policy_weight=0.25: {p_den}")
-    assert p_den == pytest.approx(2.5)
-
-
-@pytest.mark.parametrize("bad", [-0.1, float("nan"), float("inf")])
-def test_a_negative_or_nonfinite_fast_policy_weight_is_refused(bad: float) -> None:
-    with pytest.raises(ValueError, match="fast_policy_weight"):
-        graph_policy_row_weights(np.array([1, 0], dtype=np.uint8), bad)
+    assert p_den == pytest.approx(2.0)
 
 
 def test_the_tail_mass_block_reports_the_steps_own_distribution() -> None:
@@ -226,7 +216,7 @@ def test_the_real_graph_trainer_step_publishes_the_tail_mass_reading(tmp_path) -
     run_declared_train_step(
         trainer, replay, H.GSPEC, batch_size=8, augment=False, recency_weight=0.0,
         caps_provider=lambda: MicrobatchCapsSpec(*H.non_binding_caps(replay.wire)),
-        sample_threads_provider=lambda: 1, fast_policy_weight_provider=lambda: 0.0)
+        sample_threads_provider=lambda: 1)
 
     events = sink.named("trainer_step")
     assert len(events) == 1
@@ -265,7 +255,7 @@ def test_an_all_tail_sparse_row_is_admitted_stored_at_zero_and_trains_finite(tmp
     result = run_declared_train_step(
         trainer, replay, H.GSPEC, batch_size=8, augment=False, recency_weight=0.0,
         caps_provider=lambda: MicrobatchCapsSpec(*H.non_binding_caps(replay.wire)),
-        sample_threads_provider=lambda: 1, fast_policy_weight_provider=lambda: 0.0)
+        sample_threads_provider=lambda: 1)
     assert math.isfinite(float(result["loss"])) and math.isfinite(float(result["policy_loss"]))
     event = sink.named("trainer_step")[0]
     assert event[GUMBEL_TAIL_MASS_KEY]["max"] == pytest.approx(1.0)
@@ -308,7 +298,7 @@ def test_the_real_graph_trainer_step_publishes_the_kl_line(tmp_path) -> None:
     run_declared_train_step(
         trainer, replay, H.GSPEC, batch_size=8, augment=False, recency_weight=0.0,
         caps_provider=lambda: MicrobatchCapsSpec(*H.non_binding_caps(replay.wire)),
-        sample_threads_provider=lambda: 1, fast_policy_weight_provider=lambda: 0.0)
+        sample_threads_provider=lambda: 1)
     event = sink.named("trainer_step")[0]
     assert event["policy_target_entropy"] > 0.0
     assert event["policy_kl_target_vs_prior"] == pytest.approx(
@@ -318,7 +308,7 @@ def test_the_real_graph_trainer_step_publishes_the_kl_line(tmp_path) -> None:
 
 def test_an_alpha_full_row_leaves_the_policy_weight_and_the_denominator() -> None:
     """The unit: a row at alpha >= the threshold weighs 0, one just under it stays."""
-    weights = graph_policy_row_weights(np.asarray([True, True, True, False]), 0.5)
+    weights = graph_policy_row_weights(np.asarray([True, True, True, True]))
     alpha = np.asarray([1.0, 1.0 - 1e-7, ALPHA_FULL_THRESHOLD - 1e-5, 1.0], dtype=np.float32)
     out, excluded = exclude_alpha_full_rows(weights, alpha)
     assert excluded == 3
@@ -336,6 +326,6 @@ def test_the_alpha_full_threshold_has_one_authority() -> None:
 
     assert pool_push.is_alpha_full is is_alpha_full
     f32_edge = float(np.float32(ALPHA_FULL_THRESHOLD))
-    weights = graph_policy_row_weights(np.asarray([True]), 0.0)
+    weights = graph_policy_row_weights(np.asarray([True]))
     _out, excluded = exclude_alpha_full_rows(weights, np.asarray([f32_edge], dtype=np.float32))
     assert excluded == int(is_alpha_full(f32_edge))

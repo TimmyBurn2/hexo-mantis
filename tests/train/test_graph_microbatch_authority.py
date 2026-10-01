@@ -81,8 +81,7 @@ def test_of2_8_a_production_config_reaches_the_split_through_its_own_route(
     trainer = H.tiny_graph_trainer(tmp_path, sink=sink)
     run_declared_train_step(trainer, replay, H.GSPEC, batch_size=4, augment=False,
                             recency_weight=0.0,
-                            caps_provider=coord._microbatch_caps, sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0)
+                            caps_provider=coord._microbatch_caps, sample_threads_provider=lambda: 1)
     ev = sink.named("trainer_step")[0]
     assert ev["microbatches"] >= 2, (
         f"{config.name}'s own declared route produced {ev['microbatches']} micro-batches — the block "

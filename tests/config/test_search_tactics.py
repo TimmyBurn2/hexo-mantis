@@ -90,19 +90,6 @@ def test_a_selfplay_block_validates_and_every_worker_tree_arms_what_the_resolver
         resolve_selfplay_tactics(dump)
 
 
-def test_an_armed_selfplay_block_refuses_a_quick_arm_that_trains_policy() -> None:
-    """A lost root's row rides the quick arm, so its policy must weigh nothing there."""
-    dump = _with("selfplay", _BLOCK)
-    dump["train"]["fast_policy_weight"] = 0.5
-    with pytest.raises(ValidationError, match="fast_policy_weight"):
-        RunConfig.model_validate(dump)
-    dump["train"]["fast_policy_weight"] = 0.0
-    RunConfig.model_validate(dump)
-    unarmed = _with("selfplay", None)
-    unarmed["train"]["fast_policy_weight"] = 0.5
-    RunConfig.model_validate(unarmed)
-
-
 @pytest.mark.parametrize("bad", [
     {"kind": "per_stone"}, {"leaf_turns": 0}, {"root_turns": 41}, {"leaf_nodes": -1}, {"root_nodes": True},
     {"root_nodes": 2**63}, {"audit": {**_BLOCK["audit"], "total_nodes": 2**63}},

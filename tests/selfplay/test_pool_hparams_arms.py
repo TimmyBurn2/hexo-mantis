@@ -35,7 +35,6 @@ BASE_TRAIN: dict[str, Any] = {
     "lr_schedule": "cosine", "scheduler_t_max": 1_000_000,
     "eta_min": 5e-4, "checkpoint_interval": 0,
     "policy_target": "raw_visit_distribution",
-    "fast_policy_weight": 0.0,
 }
 
 

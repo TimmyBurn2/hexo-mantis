@@ -85,7 +85,7 @@ def test_two_reads_at_the_same_weights_are_the_same_rows_and_the_planted_break_i
     opened = HeldoutSlice.open(_spec(path, batches=2), encoding=_ENC, visit_capacity=128, capacity=64)
     trainer = H.tiny_graph_trainer(tmp_path, sink=H.SpySink())
     kwargs = dict(batch_size=4, caps_provider=lambda: MicrobatchCapsSpec(10**8, 10**6),
-                  sample_threads_provider=lambda: 1, fast_policy_weight_provider=lambda: 0.0)
+                  sample_threads_provider=lambda: 1)
     first = opened.read(trainer, H.GSPEC, **kwargs)
     second = opened.read(trainer, H.GSPEC, **kwargs)
     assert first == second and opened.reads == 2

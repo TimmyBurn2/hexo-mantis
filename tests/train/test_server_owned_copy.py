@@ -94,7 +94,7 @@ def _step(trainer, buf):
     return run_declared_train_step(
         trainer, replay, H.GSPEC, batch_size=8, augment=False, recency_weight=0.0,
         caps_provider=lambda: MicrobatchCapsSpec(*H.non_binding_caps(replay.wire)),
-        sample_threads_provider=lambda: 1, fast_policy_weight_provider=lambda: 0.0)
+        sample_threads_provider=lambda: 1)
 
 
 def test_with_ema_on_the_actors_serve_the_learner_and_deploy_reads_the_shadow(tmp_path: Path) -> None:

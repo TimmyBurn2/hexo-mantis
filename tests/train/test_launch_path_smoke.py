@@ -74,7 +74,6 @@ def test_launch_path_smoke(tmp_path: Path) -> None:
             caps_provider=lambda: MicrobatchCapsSpec(max_edges=train.microbatch_caps.max_edges,
                                                      max_nodes=train.microbatch_caps.max_nodes),
             sample_threads_provider=lambda: 1,
-            fast_policy_weight_provider=lambda: train.fast_policy_weight,
         )
         seen["n"] += 1
         if seen["n"] >= 2:

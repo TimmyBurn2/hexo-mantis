@@ -51,8 +51,7 @@ class GraphSampleBuffer:
 #: the sections its resolvers read. The caps are the NON-BINDING pair — nothing here exercises a split.
 GRAPH_FULL_CONFIG: dict = {
     "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
-    "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
-              "fast_policy_weight": 0.0},
+    "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000}},
     "selfplay": {"n_workers": 1},
 }
 

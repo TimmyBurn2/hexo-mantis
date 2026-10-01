@@ -24,7 +24,6 @@ import mantis.train.buffer_persist as _buffer_persist
 import mantis.train.bundle as _bundle
 import mantis.train.bundle_receipts as _bundle_receipts
 import mantis.train.resume_state as _resume_state
-from mantis.config.resolve.fast_policy_weight import resolve_fast_policy_weight
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.config.resolve.sample_threads import resolve_sample_threads
 from mantis.monitor.config import MonitorConfig
@@ -582,8 +581,7 @@ class StepCoordinator:
         started = time.monotonic()
         read = self.heldout.read(
             self.trainer, self._step_spec(), batch_size=self.config.batch_size,
-            caps_provider=self._microbatch_caps, sample_threads_provider=self._sample_threads,
-            fast_policy_weight_provider=self._fast_policy_weight)
+            caps_provider=self._microbatch_caps, sample_threads_provider=self._sample_threads)
         n = int(sums[2])
         emit_via(self._sink, heldout_gap_event(
             step=self._train_step, slice_=self.heldout, heldout=read,
@@ -871,16 +869,7 @@ class StepCoordinator:
             recency_weight=cfg.recency_weight,
             caps_provider=self._microbatch_caps,
             sample_threads_provider=self._sample_threads,
-            fast_policy_weight_provider=self._fast_policy_weight,
         )
-
-    def _fast_policy_weight(self) -> float:
-        """The graph route's fast-arm policy weight, resolved lazily.
-
-        Not memoised, unlike the caps: it is one dict lookup and a float, and a memo would be
-        a second place the value lives.
-        """
-        return resolve_fast_policy_weight(self.full_config)
 
     def _step_spec(self) -> Any:
         """The resolved encoding spec, lazily resolved ONCE from the declared config through

@@ -122,7 +122,6 @@ def test_graph_step_advances_trainer_step_counter(tmp_path, mk_config) -> None:
         batch_size=4, augment=False, recency_weight=0.0,
         caps_provider=_NON_BINDING_CAPS,
         sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0,
     )
     assert trainer.step == before + 1
 
@@ -135,8 +134,7 @@ def test_unknown_representation_raises_named_error() -> None:
     with pytest.raises(RepresentationRouteError, match="voxel"):
         run_declared_train_step(_RecordingTypedTrainer(), filled_hexg(), _AlienSpec(),
                                 batch_size=2, augment=False, recency_weight=0.0,
-                                caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0)
+                                caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1)
 
 
 def test_undeclared_encoding_raises_from_the_one_resolver() -> None:
@@ -167,8 +165,7 @@ def test_missing_graph_entry_point_dies_loud_on_the_graph_route() -> None:
     with pytest.raises(AttributeError, match="train_step_from_graph_batch"):
         run_declared_train_step(_HalfTrainer(), filled_hexg(), _GSPEC,
                                 batch_size=2, augment=False, recency_weight=0.0,
-                                caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0)
+                                caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1)
 
 
 def test_graph_arm_threads_recency_weight_as_recent_frac() -> None:
@@ -189,8 +186,7 @@ def test_graph_arm_threads_recency_weight_as_recent_frac() -> None:
     rec = _RecordingTypedTrainer()
     run_declared_train_step(rec, _RecordingHexg(), _GSPEC,
                             batch_size=2, augment=False, recency_weight=0.25,
-                            caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0)
+                            caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1)
     assert seen == [{"batch_size": 2, "augment": False, "recent_frac": 0.25}]
     assert len(rec.graph_calls) == 1
     kw = rec.graph_calls[0]
@@ -221,8 +217,7 @@ def test_the_caps_provider_is_invoked_exactly_once_per_graph_step() -> None:
 
     run_declared_train_step(rec, filled_hexg(), _GSPEC, batch_size=2, augment=False,
                             recency_weight=0.0, caps_provider=_counting,
-                            sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0)
+                            sample_threads_provider=lambda: 1)
     assert invoked == [1], "the graph arm must invoke the provider exactly once"
 
 
@@ -239,6 +234,5 @@ def test_the_sample_threads_provider_is_invoked_exactly_once_per_graph_step() ->
     run_declared_train_step(rec, filled_hexg(), _GSPEC, batch_size=2, augment=False,
                             recency_weight=0.0,
                             caps_provider=_NON_BINDING_CAPS,
-                            sample_threads_provider=_counting,
-                            fast_policy_weight_provider=lambda: 0.0)
+                            sample_threads_provider=_counting)
     assert invoked == [1], "the graph arm must invoke the provider exactly once"
