@@ -35,6 +35,8 @@ CARD-RUN11-DESIGN).
     pre-registered envelope is a STATE line, not a ruling; the envelope is a prereg row (R381(f)).
   - The box (R381(g)): TACTICS-SELFPLAY-3 closes at 6.75 box-h. Nothing needs the box for two days or more; stopping
     it is the operator's act.
+  - **HYGIENE-1 IN PROGRESS** (CARD-HYGIENE-1), from 2026-10-01 in worktree `.wt/hygiene-1` on branch `hygiene-1`
+    from origin/dev `b1e34aa4`: deletions, masks and enforced laws, each with a pin; no run and no cells.
 
 - **R380's order.**
   - The halt stands (R380(a)): no reading of A′ is a strength reading, and none of its saves is a parent candidate.
@@ -49,8 +51,8 @@ CARD-RUN11-DESIGN).
     0.9× arm A's positions/h over the same steps.
   - The branch (R380(f)): `tactics-selfplay-2` is not merged; TACTICS-SELFPLAY-3 starts from its tip, lands the
     retraction, and merges as one branch. The box stays through TACTICS-SELFPLAY-3, within 7 box-h (R380(g)).
-  - **TACTICS-SELFPLAY-3 EXITED 2026-10-01 NOT PASS** (CARD-TACTICS-SELFPLAY-3), on branch `tactics-selfplay-3`
-    (unpushed). Every exam and ring band held at every save and throughput read 0.979× A's, but the shipped-head line
+  - **TACTICS-SELFPLAY-3 EXITED 2026-10-01 NOT PASS** (CARD-TACTICS-SELFPLAY-3), on branch `tactics-selfplay-3`,
+    fast-forwarded into `dev` at `9e962173`. Every exam and ring band held at every save and throughput read 0.979× A's, but the shipped-head line
     missed: A″ − B@12k +0.174 [−0.158, +0.505]. R381 rules it.
 
 - **R379's order.**
@@ -64,7 +66,7 @@ CARD-RUN11-DESIGN).
   - TACTICS-SELFPLAY-2 (R379(c)): one arm with the feed against the recorded arms; it passes when the deploy-matched
     reading's lower bound is above zero. **HALTED 2026-09-30 at arm A′'s 3k save** (CARD-TACTICS-SELFPLAY-2): T4 floor
     misses at every proof length (overall P 0.127, V 0.133 against A's 0.249 / 0.528) and the near-terminal band
-    outside; no cell ran. The halt stands (R380(a)). The feed is built on branch `tactics-selfplay-2` (unpushed).
+    outside; no cell ran. The halt stands (R380(a)). The feed was built on branch `tactics-selfplay-2`, which reached `dev` through TACTICS-SELFPLAY-3 with F1 retracted (`3a7e4cd1`).
   - CENSUS-1 (R379(d)): growth, the regret and restart family, the next-ply aux head and learning from Six's
     positions are parked (CARD-NET-EXPAND held, CARD-JK-LAST carded for throughput); six items are carried to run11's
     design; MCGS earns a deploy A/B later. Five of them are opened as cards (CARD-VALUE-HEAD-DEAD-OPENING,
@@ -226,4 +228,5 @@ updated 2026-09-30 at its halt from its exit record (local), on branch `tactics-
 current phase was rewritten 2026-09-30 at R380, on that branch at `7f351b54`. The TACTICS-SELFPLAY-3 line was
 added 2026-09-30 at its packet's first commit, on branch `tactics-selfplay-3` at `aa0c5304`, and updated 2026-10-01
 at its exit from its exit record (local), on that branch at `a3899487`. The current phase was rewritten 2026-10-01 at
-R381, on that branch at `9e962173`.
+R381, on that branch at `9e962173`. The HYGIENE-1 line was added 2026-10-01 at its packet's first commit, on
+branch `hygiene-1` from origin/dev `b1e34aa4`, which also repaired the two stale "unpushed" branch lines.

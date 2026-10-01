@@ -38,8 +38,11 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by R381 (THREE TWINS, ONE LESSON; 2026-10-01) — F2 killed, the desktop work before run11's mint
 
-- **CARD-HYGIENE-1 — ORDERED by R381(d), on the desktop before the mint, in parallel with CARD-CENSUS-2.** From the
-  training-path audit (`reports/training_path_audit.md`, local, outside the tree), accepted by R381(d):
+- **CARD-HYGIENE-1 — IN PROGRESS: the HYGIENE-1 packet (2026-10-01), worktree `.wt/hygiene-1` on branch `hygiene-1`
+  from origin/dev `b1e34aa4`, no run and no cells. ORDERED by R381(d), on the desktop before the mint, in parallel with
+  CARD-CENSUS-2.** Every change is a deletion, a mask or a standing law enforced, each with a pin; the protected set,
+  the serving path (CARD-PERF-2), the engine's legal set (ORIGIN-1) and the model (CARD-CENSUS-2) are out of it. From
+  the training-path audit (`reports/training_path_audit.md`, local, outside the tree), accepted by R381(d):
   - F5: a game ending short of the cap without a winner trains as a draw; a transient `RootExpansionFailed` turns a
     masked cap game into a trained one, uncounted;
   - F7: under tactics the tail can hand mass to a vetoed unvisited cell, or past 16 forced cells to non-blocking ones;
@@ -54,7 +57,15 @@ Both were found by running the gate set rather than by reading it, and both are 
   the value head's width and activation, with re-initialisation and warm-up (CARD-VALUE-HEAD-DEAD-OPENING; audit F3),
   and weight decay (audit F24: decoupled AdamW 1e-4 at lr 1e-3 is ≈ 1e-7 shrink per step). run11 mints both as it
   reads them (R381(e)).
-- **CARD-EMA-SHADOW — CARDED, not built, by R381(d): EMA as a shadow copy, read paired at saves.**
+- **CARD-EMA-SHADOW — CARDED for CARD-RUN11-DESIGN, not built, by R381(d): EMA as a shadow copy, read paired at
+  saves.** R376(g) left EMA neither shown nor excluded; the audit's §8 reads it as the steadier of every reading.
+- **CARD-TACTICS-LABELS-ONLY — CARDED by R381(c) as run11's second fallback, not built.** The audit's label-only
+  design: proven rows relabel z, decided tails are played on the quick arm at value-only weight, and the tree decides
+  no leaf; root vetoes stay the one in-search use. The first fallback is plain self-play under the tactics deploy
+  (R376(d) as annotated).
+- **CARD-RING-MIGRATION — CARDED by R381(d), with CARD-SEARCH-VALUE-AUX, not built: a v2→v3 ring migration that
+  default-fills a new field.** Today a new per-row field bumps `HEXG_VERSION` with no migration path, so every v2 ring
+  (the sha-pinned held-out ring and the resume bundles' rings among them) stops reading (audit §6).
 
 ## Opened by R380 (THE FEED THAT PASSED; 2026-09-30) — F1 retracted, F2 under test
 
@@ -151,8 +162,9 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by the TACTICS-SELFPLAY packet (2026-09-29)
 
-- **CARD-TACTICS-TARGET-FEED — CLOSED 2026-10-01 by R381(a): F2 is killed by screen; the feed of record is arm A's,
-  no re-search and no mixing, and F2's code leaves the tree (CARD-HYGIENE-1). Was F2 ONLY since R380: the row-wise mixing of the proof, under test in
+- **CARD-TACTICS-TARGET-FEED — CLOSED 2026-10-01: F1 (the re-search) retracted by R380(b), F2 (the row-wise mixing)
+  killed by screen by R381(a); the feed of record is arm A's, no re-search and no mixing, and F2's code leaves the
+  tree (CARD-HYGIENE-1). Was F2 ONLY since R380: the row-wise mixing of the proof, under test in
   CARD-TACTICS-SELFPLAY-3. Option (c) RETRACTED by R380(b): an all-vetoed root records no policy target and plays
   the audit's best hold, as arm A did; the row-wise mixing is under test in CARD-TACTICS-SELFPLAY-3 (R380(d)). Was
   RULED by R379(b), and the treatment of TACTICS-SELFPLAY-2 (CARD-TACTICS-SELFPLAY-2):
