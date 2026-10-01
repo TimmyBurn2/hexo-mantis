@@ -246,6 +246,30 @@ def test_sink_and_heartbeat_are_threaded_to_pipeline_and_coordinator(
     )
 
 
+def test_the_eval_pipeline_receives_the_configs_puct_constants(
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
+) -> None:
+    """PLANTED BREAK: hand the pipeline fixed constants and a config's own `selfplay.mcts` never reaches the gate's heads."""
+    from mantis.config.resolve.puct import resolve_puct_constants
+
+    monkeypatch.setattr(mantis.run, "build_run_safety", lambda **_kw: SimpleNamespace(
+        sink=SimpleNamespace(emit=lambda e: None), registry=SimpleNamespace(beat=lambda s: None),
+        watchdog=FakeWatchdog(_OrderSpy()), heartbeat=lambda s: None))
+    captured: dict[str, Any] = {}
+    _patch_eval_side(monkeypatch, captured)
+    config = smoke_run_config(
+        train={"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS, "batch_size": 8},
+        monitor={"actor_lag_threshold_steps": _DRIVE_STEPS - 1}, eval_enabled=True,
+        selfplay={"mcts": {"c_puct": 2.75, "fpu_reduction": 0.4}},
+    )
+    mantis.run.compose_run(
+        config=config, trainer=DrivableTrainerStub(), pool=DrivablePoolStub(game_per_read=True),
+        buffer=mk_graph_buffer(n_records=32), log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
+    )
+    assert captured.get("puct") == resolve_puct_constants(config)
+    assert (captured["puct"].c_puct, captured["puct"].fpu_reduction) == (2.75, 0.4)
+
+
 # F-R-P2B-2 — the TRAINER's sink is composed live, not authored-and-dropped
 def test_trainer_deferred_sink_is_bound_to_run_safety_sink(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer

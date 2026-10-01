@@ -18,6 +18,7 @@ from mantis.eval.sequential import (
     llr_bounds,
     run_sequential_gate,
 )
+from _gsprt import two_pair_gsprt
 from _minted_puct import MINTED_PUCT
 
 
@@ -163,7 +164,7 @@ def _net(seed: int):
     return net
 
 
-def _round_spec(tmp_path, sequential: dict):
+def _round_spec(tmp_path, sequential: dict, puct=MINTED_PUCT):
     from mantis.config.resolve.inference_batching import InferenceBatchingSpec
     from mantis.eval.rounds import GateSpec, RoundSpec
     from mantis.eval.snapshot import write_model_snapshot
@@ -186,7 +187,7 @@ def _round_spec(tmp_path, sequential: dict):
         game_record=None, ply_cap_adjudication=None, strength_floor=None,
         fused_graph_caps=CAPS,
         inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10),
-        puct=MINTED_PUCT,
+        puct=puct,
     )
 
 
@@ -216,6 +217,35 @@ def test_the_worker_plays_the_sequential_gate_in_batches_and_reports_the_rule(tm
     assert phases == {"gate_sequential"}, phases
     expected = {"accept": True, "reject": False, "max": gate["llr"] > 0.0}[gate["stopped"]]
     assert gate["promoted"] is (expected and not gate["low_power"])
+
+
+def test_every_head_a_round_builds_searches_with_the_rounds_puct_constants(tmp_path, monkeypatch) -> None:
+    """PLANTED BREAK: build a head from fixed constants in the eval child and the run's `selfplay.mcts` stops at the spec."""
+    from mantis.config.resolve.eval_posture import StrengthFloorSpec
+    from mantis.eval import worker
+    from mantis.eval.rounds import RungJob
+
+    seen: list = []
+    real = worker.DeployHeadPlayer
+
+    class _Spy(real):  # type: ignore[valid-type, misc]
+        def __init__(self, **kwargs) -> None:
+            seen.append(kwargs["puct"])
+            super().__init__(**kwargs)
+
+    monkeypatch.setattr(worker, "DeployHeadPlayer", _Spy)
+    puct = dataclasses.replace(MINTED_PUCT, c_puct=2.75, fpu_reduction=0.4)
+    # Every block that builds a head: the floor probe, the gate's two sides, a rung and the random floor.
+    spec = dataclasses.replace(
+        _round_spec(tmp_path, two_pair_gsprt(), puct=puct), random_floor_games=2,
+        strength_floor=StrengthFloorSpec(probe_games=2, min_decisive_rate=0.0, min_winrate=0.0),
+        rung_jobs=[RungJob(name="random_rung", bot="random", variant="raw", opponent_sims=None, opening_book=_BOOK,
+                           deploy_matched=False, games=2, bootstrap_resamples=10, bootstrap_ci_level=0.95,
+                           bootstrap_seed=_SEED)],
+    )
+    result = worker.run_round(spec)
+    assert result["gate"] is not None and result["random"] and result["rungs"], sorted(result)
+    assert len(seen) >= 5 and all(p == puct for p in seen), f"heads built with {seen}, the round carried {puct}"
 
 
 def test_the_gsprt_is_the_gates_one_rule() -> None:
