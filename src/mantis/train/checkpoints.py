@@ -927,8 +927,7 @@ def strip_and_restamp(
 # `resume_trainer` STRIPS exactly these — deliberately NOT a general unknown-key filter, since
 # an unknown key from anywhere else must still reach the writer and raise there.
 RESUME_DIRECTIVE_KEYS: frozenset[str] = frozenset({
-    "allow_fresh_scheduler", "scheduler_t_max", "torch_compile", "torch_compile_mode",
-    "total_steps", "resume_owned_launch_values",
+    "allow_fresh_scheduler", "torch_compile", "torch_compile_mode", "resume_owned_launch_values",
 })
 
 

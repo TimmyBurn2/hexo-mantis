@@ -53,17 +53,10 @@
       "launch_variant_B": {"total_steps": 5000, "scheduler_t_max": 5000}
     },
     "expected_output": {
-      "override_scheduler_horizon_FALSE": {
+      "resume": {
         "overrides_contains_total_steps": false,
         "overrides_contains_scheduler_t_max": false,
         "resumed_scheduler_T_max": 1000
-      },
-      "override_scheduler_horizon_TRUE": {
-        "overrides_contains_total_steps": true,
-        "overrides_contains_scheduler_t_max": true,
-        "overrides_total_steps": 5000,
-        "overrides_scheduler_t_max": 5000,
-        "resumed_scheduler_T_max": 5000
       }
     }
   },

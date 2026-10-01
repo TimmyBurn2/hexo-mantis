@@ -56,20 +56,17 @@ def test_frozen_owned_keys_excluded_from_overrides():
         assert frozen not in ov, f"frozen key {frozen} leaked into the resume overrides"
 
 
-# scheduler-horizon gate
-def test_scheduler_horizon_gate(resume_goldens):
-    """O-F1E0(c) — without --override-scheduler-horizon the horizon keys stay owned (excluded);
-    with it, total_steps/scheduler_t_max re-enter and re-horizon the anneal."""
+# scheduler horizon: checkpoint-owned on every resume
+def test_a_resume_keeps_the_checkpoint_horizon_and_has_no_switch_to_re_horizon(resume_goldens):
+    """O-F1E0(c) — the horizon keys stay owned on a resume, and no switch re-enters them (the old one was a no-op)."""
     g = resume_goldens["T-CK-17_scheduler_horizon_gate"]
     baked, launch = g["inputs"]["baked_config_A"], g["inputs"]["launch_variant_B"]
-    exp = g["expected_output"]
-    off = _overrides(build_resume_config_overrides(dict(baked), dict(launch),
-                                                   override_scheduler_horizon=False))
-    assert ("total_steps" in off) is exp["override_scheduler_horizon_FALSE"]["overrides_contains_total_steps"]
-    on = _overrides(build_resume_config_overrides(dict(baked), dict(launch),
-                                                  override_scheduler_horizon=True))
-    assert on.get("total_steps") == exp["override_scheduler_horizon_TRUE"]["overrides_total_steps"]
-    assert on.get("scheduler_t_max") == exp["override_scheduler_horizon_TRUE"]["overrides_scheduler_t_max"]
+    exp = g["expected_output"]["resume"]
+    ov = _overrides(build_resume_config_overrides(dict(baked), dict(launch)))
+    assert ("total_steps" in ov) is exp["overrides_contains_total_steps"]
+    assert ("scheduler_t_max" in ov) is exp["overrides_contains_scheduler_t_max"]
+    with pytest.raises(TypeError, match="override_scheduler_horizon"):
+        build_resume_config_overrides(dict(baked), dict(launch), override_scheduler_horizon=True)
 
 
 # lr resume-owned (loud on an ignored declared override)

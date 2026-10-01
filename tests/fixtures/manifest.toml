@@ -95,7 +95,7 @@ added_by = "WP10"
 
 [[required]]
 path = "train/resume_goldens.json"
-sha256 = "4f22d3b92b2e4bbdd0af0e6f135e98358f7dab76b71c44d8f5a09f44bd2b8170"
+sha256 = "6ed15482605ad19ed88b2b68d65ba6b1fee6559e29671956ffa42e70b92bd834"
 added_by = "WP10"
 
 # WP-SP (selfplay) — ⊕ oracle-first fixture bank under tests/fixtures/selfplay/.

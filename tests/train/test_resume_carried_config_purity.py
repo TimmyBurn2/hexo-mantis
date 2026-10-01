@@ -69,8 +69,7 @@ def test_resume_then_first_periodic_boundary_saves_and_emits(
 @pytest.mark.parametrize("flags", [
     {},
     {"allow_fresh_scheduler": True},
-    {"override_scheduler_horizon": True},
-], ids=["plain", "allow_fresh_scheduler", "override_scheduler_horizon"])
+], ids=["plain", "allow_fresh_scheduler"])
 def test_resumed_carried_config_is_exactly_the_runconfig_key_set(
     tmp_path, tiny_net, optim_scaler_sched, mk_config, mk_meta, tiny_arch, flags
 ):
@@ -118,8 +117,6 @@ def test_legacy_explicit_torch_compile_override_never_reaches_the_carried_config
     directives = {
         "torch_compile": False,
         "torch_compile_mode": "default",
-        "total_steps": 5000,
-        "scheduler_t_max": 5000,
     }  # every RESUME_DIRECTIVE_KEYS member a legacy caller can pass alongside a real resume
     trainer = resume_trainer(
         Trainer, path, fallback_config=cfg,
@@ -161,11 +158,11 @@ def test_write_time_validation_still_raises_on_a_non_directive_unknown_key(
 def test_mechanism_directives_force_declare_and_win_over_baked():
     """A mechanism directive in the overrides WINS over a baked flat value even undeclared, and
     nothing defers: the force-declare set derives from `RESUME_DIRECTIVE_KEYS`, and a divergent
-    local set omitting `total_steps` would defer to the baked value with only a warning."""
+    local set omitting `allow_fresh_scheduler` would defer to the baked value with only a warning."""
     resolved, deferred = apply_config_overrides_f1(
-        {"total_steps": 1000}, {"total_steps": 5000}, frozenset(), sink=None,
+        {"allow_fresh_scheduler": False}, {"allow_fresh_scheduler": True}, frozenset(), sink=None,
     )
-    assert resolved["total_steps"] == 5000, (
+    assert resolved["allow_fresh_scheduler"] is True, (
         f"the mechanism directive lost the merge: resolved {resolved!r}"
     )
     assert deferred == frozenset(), (

@@ -51,28 +51,18 @@ def _split_owned_section(section: str, value: Mapping[str, Any]) -> tuple[dict[s
     return kept, dropped
 
 
-def _horizon_value(launch_config: Mapping[str, Any], key: str) -> Any:
-    """The scheduler-horizon key off either shape: flat `key`, else nested `train.key`."""
-    if launch_config.get(key) is not None:
-        return launch_config[key]
-    train = launch_config.get("train")
-    return train.get(key) if isinstance(train, Mapping) else None
-
-
 def build_resume_config_overrides(
     baked_config: Mapping[str, Any],
     launch_config: Mapping[str, Any],
     *,
-    override_scheduler_horizon: bool = False,
     allow_fresh_scheduler: bool = False,
     declared_keys: frozenset | set | None = None,
 ) -> dict[str, Any]:
     """Build the resume `config_overrides` so the launch variant WINS.
 
-    Seeded from `launch_config` minus `RESUME_CHECKPOINT_OWNED_KEYS`.
-    `total_steps`/`scheduler_t_max` re-enter — re-horizoning the LR scheduler on load — ONLY
-    under `--override-scheduler-horizon`. A `None` the operator EXPLICITLY declared travels; a
-    `None` merely inherited is SKIPPED, so a stray null cannot nuke a real checkpoint value.
+    Seeded from `launch_config` minus `RESUME_CHECKPOINT_OWNED_KEYS`, so the scheduler horizon
+    is always the checkpoint's. A `None` the operator EXPLICITLY declared travels; a `None`
+    merely inherited is SKIPPED, so a stray null cannot nuke a real checkpoint value.
     """
     declared: frozenset = frozenset(declared_keys or ())
     overrides: dict[str, Any] = {}
@@ -91,12 +81,6 @@ def build_resume_config_overrides(
     if owned_launch:
         overrides[RESUME_OWNED_LAUNCH_VALUES_KEY] = owned_launch
     # No `torch_compile[_mode]` injection: a key with no consumer fails write-time validation.
-    # Scheduler-horizon gate: only --override-scheduler-horizon re-horizons the LR anneal.
-    if override_scheduler_horizon:
-        for horizon in ("total_steps", "scheduler_t_max"):
-            value = _horizon_value(launch_config, horizon)
-            if value is not None:
-                overrides[horizon] = int(value)
     if allow_fresh_scheduler:
         overrides["allow_fresh_scheduler"] = True
     return overrides
@@ -108,7 +92,6 @@ def init_trainer(
     device: Any,
     checkpoint_path: str | None = None,
     checkpoint_dir: Any = None,
-    override_scheduler_horizon: bool = False,
     allow_fresh_scheduler: bool = False,
     declared_keys: frozenset | set | None = None,
     sink: Any = None,
@@ -127,7 +110,6 @@ def init_trainer(
 
         overrides = build_resume_config_overrides(
             config, config,
-            override_scheduler_horizon=override_scheduler_horizon,
             allow_fresh_scheduler=allow_fresh_scheduler,
             declared_keys=declared_keys,
         )

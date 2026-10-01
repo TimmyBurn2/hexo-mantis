@@ -450,19 +450,14 @@ def test_declared_key_wins_base_inherited_defers(resume_goldens, spy_sink):
 
 
 def test_scheduler_horizon_gate(resume_goldens):
-    """T-CK-17 — without the flag the horizon keys stay OWNED; with it, total_steps and scheduler_t_max re-enter the overrides."""
+    """T-CK-17 — on a resume total_steps and scheduler_t_max stay OWNED: the launch's horizon never enters the overrides."""
     from mantis.train.orchestrator import build_resume_config_overrides
     g = resume_goldens["T-CK-17_scheduler_horizon_gate"]
     baked, launch = g["inputs"]["baked_config_A"], g["inputs"]["launch_variant_B"]
-    exp = g["expected_output"]
-    ov_off = _overrides(build_resume_config_overrides(dict(baked), dict(launch),
-                                                      override_scheduler_horizon=False))
-    assert ("total_steps" in ov_off) is exp["override_scheduler_horizon_FALSE"]["overrides_contains_total_steps"]
-    assert ("scheduler_t_max" in ov_off) is exp["override_scheduler_horizon_FALSE"]["overrides_contains_scheduler_t_max"]
-    ov_on = _overrides(build_resume_config_overrides(dict(baked), dict(launch),
-                                                     override_scheduler_horizon=True))
-    assert ov_on.get("total_steps") == exp["override_scheduler_horizon_TRUE"]["overrides_total_steps"]
-    assert ov_on.get("scheduler_t_max") == exp["override_scheduler_horizon_TRUE"]["overrides_scheduler_t_max"]
+    exp = g["expected_output"]["resume"]
+    ov = _overrides(build_resume_config_overrides(dict(baked), dict(launch)))
+    assert ("total_steps" in ov) is exp["overrides_contains_total_steps"]
+    assert ("scheduler_t_max" in ov) is exp["overrides_contains_scheduler_t_max"]
 
 
 def test_missing_scheduler_state_requires_allow_fresh(tmp_path, tiny_net, optim_scaler_sched,
