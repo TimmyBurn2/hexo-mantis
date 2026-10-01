@@ -193,8 +193,6 @@ pub(crate) struct TacticsState {
     pub(crate) next_hold_stone: Option<(u128, (i32, i32))>,
     /// The candidates this search's audit proved to allow an opponent win, in the order it walked them.
     pub(crate) vetoes: Vec<(i32, i32)>,
-    /// The decided root's proof, its turn's stones in either order: the finish, the proof's pair, the stored stone.
-    pub(crate) root_proof: Vec<(i32, i32)>,
 }
 
 /// How a descent's leaf is spent: backed up inline, or evaluated by the net with the facts its expansion reads.
@@ -222,7 +220,6 @@ impl MCTSTree {
                 next_proof_stone: None,
                 next_hold_stone: None,
                 vetoes: Vec::new(),
-                root_proof: Vec::new(),
             })
         });
     }
@@ -258,14 +255,6 @@ impl MCTSTree {
         self.tactics.as_deref().map_or(&[], |t| t.vetoes.as_slice())
     }
 
-    /// The legal stones of the proof `root_offence` decided this root by; empty on a root it did not decide.
-    #[must_use]
-    pub fn last_root_proof(&self) -> &[(i32, i32)] {
-        self.tactics
-            .as_deref()
-            .map_or(&[], |t| t.root_proof.as_slice())
-    }
-
     /// Refuse, as `TacticsError::RadiusBelowFive`, a board whose legal-move radius the armed block cannot run on.
     pub fn check_tactics_board(&self, board: &Board) -> Result<(), TacticsError> {
         match &self.tactics {
@@ -279,7 +268,6 @@ impl MCTSTree {
         if let Some(t) = self.tactics.as_deref_mut() {
             t.counters = TacticsCounters::default();
             t.vetoes.clear();
-            t.root_proof.clear();
             t.solver_base = (t.solver.grid_overflows(), t.solver.three_cells_capped());
             t.solver.clear();
         }

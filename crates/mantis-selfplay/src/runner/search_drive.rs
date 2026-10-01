@@ -27,9 +27,7 @@ use crate::replay::hexg::GraphRecord;
 
 use super::record::record_position_graph_dispatch;
 use super::stats::TacticsTotals;
-use super::tactics_move::{
-    count_rows, fitted_support, mix_proof, zero_vetoes, TargetEdit, Written,
-};
+use super::tactics_move::{count_rows, zero_vetoes, TargetEdit, Written};
 use super::PositionStats;
 
 /// A worker's inference seam, built once per worker thread; `Copy`, passed by value.
@@ -711,9 +709,6 @@ pub(crate) fn play_one_move(
     // The audit's vetoed moves carry no target mass; a lost root, or a target left empty, records no policy.
     let vetoes = tree.last_audit_vetoes().to_vec();
     let edit = zero_vetoes(&mut target_policy, &vetoes, board, agg_trunk_sz);
-    // A decided root's target holding under half on its proof takes the proof in an even mixture, stored explicitly.
-    let proof = tree.last_root_proof().to_vec();
-    let mixed = decided.is_some() && mix_proof(&mut target_policy, &proof, board, agg_trunk_sz);
     let rows = tree.tactics_counters();
     let decided_lost = rows.decided_lost > 0;
     let record_full_search = move_is_full_search && !decided_lost && edit != TargetEdit::Emptied;
@@ -752,21 +747,11 @@ pub(crate) fn play_one_move(
         // The sparse row's support is the search's OWN visited-candidate set, read from the
         // tree: under Gumbel a visited candidate can carry LESS mass than an unvisited one.
         let explicit_support = if ctx.search_kind.stores_sparse_rows() {
-            let visited = tree.visited_root_child_cells();
-            Some(if mixed {
-                fitted_support(
-                    visited,
-                    &proof,
-                    &target_policy,
-                    board,
-                    agg_trunk_sz,
-                    ctx.visit_capacity,
-                )
-            } else {
-                visited
+            Some(
+                tree.visited_root_child_cells()
                     .into_iter()
-                    .collect::<fxhash::FxHashSet<(i32, i32)>>()
-            })
+                    .collect::<fxhash::FxHashSet<(i32, i32)>>(),
+            )
         } else {
             None
         };
@@ -791,7 +776,6 @@ pub(crate) fn play_one_move(
             decided: decided.is_some(),
             decided_lost,
             edit,
-            mixed,
         };
         count_rows(accumulators.tactics_totals, &rows, &written, &vetoes);
     }

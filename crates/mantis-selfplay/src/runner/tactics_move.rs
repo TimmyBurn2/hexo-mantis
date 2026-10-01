@@ -1,7 +1,5 @@
-// >300 justify (R8): a row's edits (vetoes zeroed, the proof mixed), its fitted support and its move rows are one unit.
-//! A self-play target under tactics: vetoes zeroed, a weak proof mixed in, its support fitted, its rows counted.
+//! A self-play target under tactics: vetoed moves carry zero mass, and the move rows are read off the row written.
 
-use fxhash::FxHashSet;
 use mantis_core::Board;
 use mantis_search::mcts::TacticsCounters;
 use mantis_search::LegalSetPolicy;
@@ -65,82 +63,6 @@ pub(crate) fn zero_vetoes(
     TargetEdit::Zeroed
 }
 
-/// A decided root's target is mixed with its proof where it holds less than this on the proof.
-pub(crate) const PROOF_MASS_FLOOR: f64 = 0.5;
-
-/// The proof's weight in the mixture: the target becomes `(1 − α)·searched + α·proof`.
-pub(crate) const PROOF_MIX_ALPHA: f32 = 0.5;
-
-/// Mix `proof` (its stones in equal shares) into a decided root's target where it holds under the floor on them.
-pub(crate) fn mix_proof(
-    ls: &mut LegalSetPolicy,
-    proof: &[(i32, i32)],
-    board: &Board,
-    trunk_sz: i32,
-) -> bool {
-    let mut cells = proof.to_vec();
-    cells.sort_unstable();
-    cells.dedup();
-    if cells.is_empty() {
-        return false;
-    }
-    let (bcq, bcr) = board.window_center();
-    let half = (trunk_sz - 1) / 2;
-    let on_proof: f64 = cells
-        .iter()
-        .map(|&(q, r)| f64::from(ls.get(q, r, bcq, bcr, trunk_sz, half, 0.0)))
-        .sum();
-    if on_proof >= PROOF_MASS_FLOOR {
-        return false;
-    }
-    ls.dense
-        .iter_mut()
-        .chain(ls.overflow.values_mut())
-        .for_each(|p| *p *= 1.0 - PROOF_MIX_ALPHA);
-    let share = PROOF_MIX_ALPHA / cells.len() as f32;
-    for (q, r) in cells {
-        let flat = Board::window_flat_idx_at_geom(q, r, bcq, bcr, trunk_sz, half);
-        if flat < ls.dense.len() {
-            ls.dense[flat] += share;
-        } else {
-            *ls.overflow.entry((q, r)).or_insert(0.0) += share;
-        }
-    }
-    true
-}
-
-/// The sparse row's support: its candidates, and `pinned` cells the prior-shaped tail would misstate, within `cap`.
-pub(crate) fn fitted_support(
-    candidates: Vec<(i32, i32)>,
-    pinned: &[(i32, i32)],
-    target: &LegalSetPolicy,
-    board: &Board,
-    trunk_sz: i32,
-    cap: usize,
-) -> FxHashSet<(i32, i32)> {
-    let legal = board.legal_moves_set();
-    // In their given order, so a cap too small for them keeps the proof's played stone first.
-    let mut pins: Vec<(i32, i32)> = Vec::new();
-    for &c in pinned {
-        if legal.contains(&c) && !pins.contains(&c) {
-            pins.push(c);
-        }
-    }
-    pins.truncate(cap);
-    let (bcq, bcr) = board.window_center();
-    let half = (trunk_sz - 1) / 2;
-    let mut rest: Vec<((i32, i32), f32)> = candidates
-        .into_iter()
-        .filter(|c| !pins.contains(c))
-        .map(|(q, r)| ((q, r), target.get(q, r, bcq, bcr, trunk_sz, half, 0.0)))
-        .collect();
-    rest.sort_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
-    rest.truncate(cap - pins.len());
-    pins.into_iter()
-        .chain(rest.into_iter().map(|(c, _)| c))
-        .collect()
-}
-
 /// The record's side of a move: the row written, the arm drawn, and what the root and the vetoes made of it.
 pub(crate) struct Written<'a> {
     pub(crate) record: Option<&'a GraphRecord>,
@@ -148,11 +70,9 @@ pub(crate) struct Written<'a> {
     pub(crate) decided: bool,
     pub(crate) decided_lost: bool,
     pub(crate) edit: TargetEdit,
-    /// The decided root's target took its proof in the mixture.
-    pub(crate) mixed: bool,
 }
 
-/// Sum a search's tactics rows, then its record's one kind (disjoint, lost first) and the two cross-counts.
+/// Sum a search's tactics rows, then its record's one kind (disjoint, lost first) and the all-vetoed cross-count.
 pub(crate) fn count_rows(
     totals: &TacticsTotals,
     rows: &TacticsCounters,
@@ -179,10 +99,6 @@ pub(crate) fn count_rows(
     };
     if let Some(row) = row {
         totals.add_move(row);
-    }
-    // A sub-count of the proven-root rows, not a kind of its own.
-    if matches!(row, Some(MoveRow::ProvenRoot)) && written.mixed {
-        totals.add_move(MoveRow::Mixed);
     }
     // Every all-vetoed root whatever its row holds: the emptied rows equal it only while each records no policy.
     if written.edit == TargetEdit::Emptied && !written.decided_lost {
@@ -280,86 +196,6 @@ mod tests {
         );
     }
 
-    fn support(cells: &[(i32, i32)]) -> Vec<(i32, i32)> {
-        let mut v = cells.to_vec();
-        v.sort_unstable();
-        v
-    }
-
-    fn sorted(set: fxhash::FxHashSet<(i32, i32)>) -> Vec<(i32, i32)> {
-        let mut v: Vec<(i32, i32)> = set.into_iter().collect();
-        v.sort_unstable();
-        v
-    }
-
-    /// PLANTED BREAK: drop `fitted_support`'s pins and a proof cell leaves the row, for the tail to feed.
-    #[test]
-    fn pinned_cells_take_slots_from_the_lowest_mass_candidates_within_the_cap() {
-        let (board, ls) = target(&[((1, 0), 0.5), ((2, 0), 0.3), ((3, 0), 0.15), ((4, 0), 0.05)]);
-        let candidates = vec![(1, 0), (2, 0), (3, 0), (4, 0)];
-        assert_eq!(
-            sorted(fitted_support(
-                candidates.clone(),
-                &[],
-                &ls,
-                &board,
-                TRUNK,
-                4
-            )),
-            support(&candidates),
-            "no pin: the searched candidates, as before"
-        );
-        assert_eq!(
-            sorted(fitted_support(
-                candidates.clone(),
-                &[(5, 0)],
-                &ls,
-                &board,
-                TRUNK,
-                4
-            )),
-            support(&[(1, 0), (2, 0), (3, 0), (5, 0)]),
-            "a pin displaces the lowest-mass candidate"
-        );
-        assert_eq!(
-            sorted(fitted_support(
-                candidates.clone(),
-                &[(5, 0), (2, 0)],
-                &ls,
-                &board,
-                TRUNK,
-                4
-            )),
-            support(&[(1, 0), (2, 0), (3, 0), (5, 0)]),
-            "a pinned candidate keeps its one slot"
-        );
-        assert_eq!(
-            sorted(fitted_support(
-                candidates.clone(),
-                &[(5, 0), (400, 400)],
-                &ls,
-                &board,
-                TRUNK,
-                8
-            )),
-            support(&[(1, 0), (2, 0), (3, 0), (4, 0), (5, 0)]),
-            "room for all, and an illegal pin takes none"
-        );
-        let past_cap = fitted_support(
-            candidates,
-            &[(0, 4), (5, 0), (0, 4), (-5, 0)],
-            &ls,
-            &board,
-            TRUNK,
-            2,
-        );
-        assert_eq!(
-            sorted(past_cap),
-            support(&[(0, 4), (5, 0)]),
-            "past the cap the pins keep their given order: the proof's played stone first"
-        );
-    }
-
     /// The move rows `count_rows` adds for one written row of an all-vetoed root, by name.
     fn counted(
         rec: &GraphRecord,
@@ -373,7 +209,6 @@ mod tests {
             decided: false,
             decided_lost,
             edit: TargetEdit::Emptied,
-            mixed: false,
         };
         count_rows(&totals, &TacticsCounters::default(), &written, &[]);
         totals
@@ -404,56 +239,6 @@ mod tests {
             counted(&rec, true, false),
             vec![("vetoed_all_rows", 1)],
             "a row written with a policy is not an emptied one"
-        );
-    }
-
-    fn masses(ls: &LegalSetPolicy, board: &Board, cells: &[(i32, i32)]) -> Vec<f32> {
-        cells.iter().map(|&c| mass(ls, board, c)).collect()
-    }
-
-    /// PLANTED BREAK: return before the mixture and a weak row keeps 0.3 on its proof.
-    #[test]
-    fn a_target_weak_on_its_proof_mixes_it_in_at_one_half_and_a_strong_one_is_left() {
-        let cells = [(1, 0), (2, 0), (3, 0)];
-        let (board, mut ls) = target(&[((1, 0), 0.7), ((2, 0), 0.2), ((3, 0), 0.1)]);
-        assert!(mix_proof(&mut ls, &[(2, 0), (3, 0)], &board, TRUNK));
-        for (got, want) in masses(&ls, &board, &cells)
-            .into_iter()
-            .zip([0.35, 0.35, 0.3])
-        {
-            assert!((got - want).abs() < 1e-6, "{got} against {want}");
-        }
-
-        let (board, mut ls) = target(&[((1, 0), 0.7), ((2, 0), 0.2), ((3, 0), 0.1)]);
-        assert!(
-            !mix_proof(&mut ls, &[(1, 0)], &board, TRUNK),
-            "0.7 on the proof: searched"
-        );
-        assert!(
-            !mix_proof(&mut ls, &[], &board, TRUNK),
-            "no proof: nothing to mix"
-        );
-        assert_eq!(masses(&ls, &board, &cells), vec![0.7, 0.2, 0.1]);
-
-        let (board, mut ls) = target(&[((1, 0), 0.5), ((2, 0), 0.5)]);
-        assert!(
-            !mix_proof(&mut ls, &[(2, 0)], &board, TRUNK),
-            "exactly one half is not below it"
-        );
-    }
-
-    #[test]
-    fn a_one_stone_proof_is_one_hot_and_an_off_window_proof_cell_takes_its_share() {
-        let (board, mut ls) = target(&[((1, 0), 0.9), ((3, 0), 0.1)]);
-        assert!(mix_proof(&mut ls, &[(3, 0)], &board, TRUNK));
-        assert_eq!(masses(&ls, &board, &[(1, 0), (3, 0)]), vec![0.45, 0.55]);
-
-        let (board, mut ls) = target(&[((1, 0), 1.0)]);
-        assert!(mix_proof(&mut ls, &[(40, 0), (2, 0)], &board, TRUNK));
-        assert_eq!(
-            masses(&ls, &board, &[(1, 0), (2, 0), (40, 0)]),
-            vec![0.5, 0.25, 0.25],
-            "the off-window cell is the overflow's"
         );
     }
 }

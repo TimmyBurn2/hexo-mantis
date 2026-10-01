@@ -407,7 +407,8 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
   - REPLACED by R379(b), row by row: the target mixes the proof at α = 0.5 only where the searched mass on it reads
     below 0.5; elsewhere it is the searched target.
   - KILLED by R381(a), by screen (A″ − A −0.48 [−0.80, −0.16] on the shipped head): the feed of record is arm A's.
-    The F2 bullets below record what TACTICS-SELFPLAY-2 built; HYGIENE-1 takes the code out of the tree.
+    The F2 bullets below record what TACTICS-SELFPLAY-2 built; HYGIENE-1 took the code out of the tree, its
+    feed byte-equal again to TACTICS-SELFPLAY's (`368cbad0`), and `mixed_rows` with it.
   - Built (TACTICS-SELFPLAY-2 F2). `root_offence` names the proof (`MCTSTree::last_root_proof`): a finish's window
     cells, a found proof's pair (or its one stone), or the stored stone; only its root-legal stones, since a pair's
     second stone can be legal only after its first. The searched mass on it sums its cells in either order.
@@ -510,6 +511,7 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
     in `proven_root_targets`' place; the runner sums them all (`SelfPlayRunner.tactics_totals`).
   - Amended in place 2026-09-30 (TACTICS-SELFPLAY-3): `mixed_rows` (F2) and `vetoed_all_rows`, every all-vetoed root
     whatever its row holds, join the move rows; `emptied_target_rows` equals it while each such row has no policy.
+    Amended 2026-10-01 (HYGIENE-1): `mixed_rows` left the tree with F2; `vetoed_all_rows` stays.
 - The served-sims witness pins DESCENTS per SEARCHED root: `descents == n_sims`, tactics on or off.
   - With tactics on: `served_leaves + solver_terminals + terminal_revisits == descents`, and
     `gpu_evals <= served_leaves`.

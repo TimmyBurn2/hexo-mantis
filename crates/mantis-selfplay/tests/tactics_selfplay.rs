@@ -1,16 +1,14 @@
-// >300 justify (R8): one armed drive and the replay that re-derives its proven rows serve every test here.
 //! A decided root plays its stone after its search, the owed stone follows, the audit vets the rest; rows are summed.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use mantis_core::{Board, BoardGeometry};
 use mantis_encoding::lookup_or_panic;
 use mantis_search::mcts::{AuditConfig, AuditMode, TacticsConfig};
-use mantis_search::{MCTSTree, SearchKind};
+use mantis_search::SearchKind;
 use mantis_selfplay::replay::hexg::GraphRecord;
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
@@ -221,86 +219,6 @@ fn an_all_vetoed_root_records_no_policy_target() {
     }
 }
 
-/// The stones of a row, as a set.
-fn stones_of(rec: &GraphRecord) -> HashSet<(i32, i32)> {
-    rec.stones
-        .iter()
-        .map(|&(q, r, _)| (i32::from(q), i32::from(r)))
-        .collect()
-}
-
-/// Every full-search row the root decision proves, with its proof: each game replayed from its rows, every row asked.
-fn proven_rows(records: &[GraphRecord]) -> Vec<(&GraphRecord, Vec<(i32, i32)>)> {
-    let spec = lookup_or_panic(ENCODING);
-    let geometry = BoardGeometry {
-        legal_move_radius: spec.legal_move_radius as i32,
-        cluster_window_size: spec.cluster_window_size.unwrap_or(spec.board_size),
-    };
-    let mut games: HashMap<i64, Vec<&GraphRecord>> = HashMap::new();
-    for rec in records {
-        games.entry(rec.game_id).or_default().push(rec);
-    }
-    let mut tree = MCTSTree::new(1.5);
-    tree.configure_tactics(Some(BLOCK));
-    let mut proven = Vec::new();
-    for rows in games.values_mut() {
-        rows.sort_by_key(|r| r.ply_index);
-        let mut board = Board::with_geometry(geometry);
-        for (i, rec) in rows.iter().enumerate() {
-            assert_eq!(
-                usize::from(rec.ply_index),
-                i,
-                "a game's rows are every ply from its first"
-            );
-            tree.new_game(board.clone());
-            if matches!(tree.root_offence(), Ok(Some(_))) && rec.is_full_search {
-                proven.push((*rec, tree.last_root_proof().to_vec()));
-            }
-            let Some(next) = rows.get(i + 1) else {
-                break;
-            };
-            let placed: Vec<(i32, i32)> = stones_of(next)
-                .difference(&stones_of(rec))
-                .copied()
-                .collect();
-            assert_eq!(placed.len(), 1, "one stone a ply");
-            board
-                .apply_move(placed[0].0, placed[0].1)
-                .expect("the game's own move");
-        }
-    }
-    proven
-}
-
-/// PLANTED BREAK: skip `play_one_move`'s mixture and a proven row keeps under half its mass on the proof.
-#[test]
-fn a_proven_root_weak_on_its_proof_records_the_mixture_and_every_proven_row_holds_half_on_it() {
-    for kind in [SearchKind::Gumbel, SearchKind::Puct] {
-        let drove = drive(kind, BLOCK, 300, |r| r["proven_root_rows"] < 20);
-        let rows = &drove.rows;
-        println!("{kind:?} over {} plies: {rows:?}", drove.records.len());
-        let proven = proven_rows(&drove.records);
-        assert!(!proven.is_empty(), "{kind:?}: no drained row was proven");
-        for (rec, proof) in &proven {
-            let on_proof: f32 = rec
-                .visits
-                .iter()
-                .filter(|v| proof.contains(&(i32::from(v.0), i32::from(v.1))))
-                .map(|v| v.2)
-                .sum();
-            assert!(
-                on_proof >= 0.5 - 1e-5,
-                "{kind:?}: ply {} stores {on_proof} on its proof {proof:?}",
-                rec.ply_index
-            );
-        }
-        assert!(
-            rows["mixed_rows"] > 0 && rows["mixed_rows"] <= rows["proven_root_rows"],
-            "{kind:?}: the mixture fires on some proven rows, never on another kind: {rows:?}"
-        );
-    }
-}
-
 #[test]
 fn a_runner_without_a_block_sums_no_rows() {
     let runner = SelfPlayRunner::new(SelfPlayRunnerConfig {
@@ -318,7 +236,6 @@ fn a_runner_without_a_block_sums_no_rows() {
         "proven_root_rows",
         "decided_lost_rows",
         "vetoed_target_rows",
-        "mixed_rows",
         "vetoed_all_rows",
     ] {
         assert!(names.contains(want), "the totals name {want}");
