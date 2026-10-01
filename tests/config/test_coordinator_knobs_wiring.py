@@ -1,5 +1,5 @@
 """>300 justify (R8): one demonstration PER KEY — "set the knob, observe the consumer" — for
-eighteen registry citations, so half the length is one row and one behavioural drive per knob.
+registry citations, so half the length is one row and one behavioural drive per knob.
 The rest is the shared fakes harness BOTH halves use; splitting it would fork that harness into
 copies free to drift apart.
 
@@ -53,7 +53,6 @@ _DISTINGUISHABLE: dict[str, Any] = {
     "log_interval": 17,
     "min_buf_size": 29,
     "replay_capacity": 31_337,
-    "replay_capacity_schedule": [{"step": 11, "capacity": 222_222}],
     "training_steps_per_game": 2.5,
     "max_train_burst": 7,
     "batch_size": 41,
@@ -67,7 +66,6 @@ _DISTINGUISHABLE: dict[str, Any] = {
 #: a bare `train.capacity` names nothing on its own.
 _SCHEMA_TO_FIELD = {
     "replay_capacity": "capacity",
-    "replay_capacity_schedule": "buffer_schedule",
 }
 _KNOB_KEYS = tuple(_DISTINGUISHABLE)
 
@@ -88,16 +86,11 @@ class _Buffer:
     def __init__(self, size: int = 1000, capacity: int = 100_000) -> None:
         self.size = size
         self.capacity = capacity
-        self.resizes: list[int] = []
         self.saves: list[str] = []
         self.augment_seen: list[bool] = []
         self.recent_frac_seen: list[float] = []
         self.sampled: list[int] = []
         self._real = _real_graph_ring()
-
-    def resize(self, n: int) -> None:
-        self.capacity = n
-        self.resizes.append(int(n))
 
     def save_to_path(self, p) -> None:
         self.saves.append(str(p))
@@ -172,7 +165,7 @@ def test_each_knob_reaches_the_coordinator_the_composition_root_builds(
 ) -> None:
     """Set ONE `train.*` knob to a distinguishable value; the coordinator the run holds must
     carry it, and NO sibling may move with it. Parametrized per key on purpose: folded into one
-    drive the eighteen would share one failure signature, and every one of these was once a
+    drive them all would share one failure signature, and every one of these was once a
     literal in the builder, so a wire feeding the whole spec from one field would satisfy any
     single-key assertion."""
     field = _SCHEMA_TO_FIELD.get(key, key)
@@ -182,8 +175,6 @@ def test_each_knob_reaches_the_coordinator_the_composition_root_builds(
                                            mk_graph_buffer, **{key: _DISTINGUISHABLE[key]})
 
     expected = _DISTINGUISHABLE[key]
-    if key == "replay_capacity_schedule":
-        expected = tuple({"step": s["step"], "capacity": s["capacity"]} for s in expected)
 
     assert getattr(baseline, field) != expected, (
         f"the test value for {key} is not distinguishable from the minted one — this oracle "
@@ -199,7 +190,7 @@ def test_each_knob_reaches_the_coordinator_the_composition_root_builds(
              and getattr(mutated, _SCHEMA_TO_FIELD.get(other, other))
              != getattr(baseline, _SCHEMA_TO_FIELD.get(other, other))]
     assert not moved, (
-        f"setting {key} moved {moved} too — the eighteen must arrive independently, or one "
+        f"setting {key} moved {moved} too — every knob must arrive independently, or one "
         "key's citation is really another key's"
     )
 
@@ -387,18 +378,6 @@ def test_replay_capacity_is_the_window_the_run_publishes_and_the_preflight_sizes
     )
 
 
-def test_the_capacity_schedule_ramps_the_buffer_at_its_own_step() -> None:
-    """`train.replay_capacity_schedule` -> `step.py` D1. One registry leaf, so both inner names
-    are demonstrated here: the STEP decides when, the CAPACITY decides what."""
-    h = _coordinator(buffer_schedule=({"step": 2, "capacity": 555_555},))
-    _drive(h, steps=1, games=1)
-    assert h.buffer.resizes == [], "the ramp must not fire before its own step"
-    _drive(h, steps=3, games=1)
-    assert h.buffer.resizes == [555_555], (
-        f"the ramp must fire once, at step 2, to the configured capacity; got {h.buffer.resizes}"
-    )
-
-
 def test_training_steps_per_game_and_max_train_burst_set_the_step_budget() -> None:
     """Both -> `step.py` O6 `_steps_budget`. Driven together because the budget is
     `min(max(1, games*per_game), burst)` and each knob is the binding term in exactly one of the
@@ -496,10 +475,10 @@ def test_selfplay_stall_timeout_is_the_budget_the_watchdog_arms_with() -> None:
 def test_the_builder_takes_knobs_as_a_required_keyword_only_parameter() -> None:
     """A parameter DEFAULT would move the authority from the builder BODY to its SIGNATURE,
     leaving every `dataclasses.fields()` assertion green while a caller that omitted the
-    argument silently inherited eighteen postures."""
+    argument silently inherited every posture."""
     param = inspect.signature(_step_coordinator_config).parameters.get("knobs")
     assert param is not None, (
-        "`_step_coordinator_config` must take `knobs`: the eighteen are `train.*` keys and "
+        "`_step_coordinator_config` must take `knobs`: the knobs are `train.*` keys and "
         "arrive from `resolve_coordinator_knobs`, never from a literal here"
     )
     assert param.default is inspect.Parameter.empty, (
@@ -528,7 +507,7 @@ def test_no_coordinator_field_carries_a_code_side_default_and_the_dead_six_are_g
     )
 
 
-def test_the_resolver_is_the_only_read_of_the_eighteen_keys(smoke_run_config) -> None:
+def test_the_resolver_is_the_only_read_of_the_authored_keys(smoke_run_config) -> None:
     """`resolve_coordinator_knobs` returns exactly what the loaded config holds, key for key. A
     resolver that dropped, defaulted or CROSSED two fields would still satisfy the per-key
     mutations above, and the schema->field rename is where a crossing would be easiest."""
@@ -538,15 +517,13 @@ def test_the_resolver_is_the_only_read_of_the_eighteen_keys(smoke_run_config) ->
     for key, value in _DISTINGUISHABLE.items():
         field = _SCHEMA_TO_FIELD.get(key, key)
         expected = value
-        if key == "replay_capacity_schedule":
-            expected = tuple({"step": s["step"], "capacity": s["capacity"]} for s in value)
         assert getattr(spec, field) == expected, (
             f"train.{key} must resolve to CoordinatorKnobsSpec.{field}; got "
             f"{getattr(spec, field)!r}"
         )
     assert {f.name for f in dataclasses.fields(CoordinatorKnobsSpec)} == {
         _SCHEMA_TO_FIELD.get(key, key) for key in _DISTINGUISHABLE
-    }, "the spec must carry exactly the eighteen authored knobs and nothing else"
+    }, "the spec must carry exactly the authored knobs and nothing else"
     for field in dataclasses.fields(CoordinatorKnobsSpec):
         assert (field.default is dataclasses.MISSING
                 and field.default_factory is dataclasses.MISSING), (
@@ -565,9 +542,7 @@ def test_the_builder_holds_no_literal_for_any_authored_knob() -> None:
     EVERY field the builder sets comes from one of them. Driven by construction rather than by
     reading source: a surviving literal shows up as that field disagreeing with the spec."""
     distinguishable = CoordinatorKnobsSpec(**{
-        _SCHEMA_TO_FIELD.get(key, key): (
-            tuple({"step": s["step"], "capacity": s["capacity"]} for s in value)
-            if key == "replay_capacity_schedule" else value)
+        _SCHEMA_TO_FIELD.get(key, key): value
         for key, value in _DISTINGUISHABLE.items()
     })
     built = _step_coordinator_config(stop_step=11, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,

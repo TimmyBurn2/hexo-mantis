@@ -74,18 +74,6 @@ class DrawRateAbortConfig(StrictModel):
         return self
 
 
-class ReplayCapacityStage(StrictModel):
-    """One step of `train.replay_capacity_schedule` — at train step S, grow the buffer to C.
-
-    A nested block rather than two parallel lists, whose lengths could disagree. `capacity` is
-    `ge=1` because a buffer that holds nothing is not a buffer, and the walker only ever GROWS,
-    so a stage below the current capacity is silently inert rather than a shrink.
-    """
-
-    step: int = Field(ge=0)
-    capacity: int = Field(ge=1)
-
-
 class MicrobatchCapsConfig(StrictModel):
     """The GRAPH training step's memory bound — ONE block, ONE fact.
 
@@ -217,9 +205,6 @@ class TrainConfig(StrictModel):
     min_buf_size: int = Field(ge=1)
     # `replay_capacity` — the replay window, i.e. the distribution the learner trains on.
     replay_capacity: int = Field(ge=1)
-    # `replay_capacity_schedule` — the step-keyed ramp; `[]` means "no ramp". The cursor never
-    # rewinds, so the validator below makes a stage-skipping schedule unrepresentable.
-    replay_capacity_schedule: list[ReplayCapacityStage]
     # `training_steps_per_game` — the sample-reuse ratio. `gt=0` because `_steps_budget` floors
     # its result at 1, so `0` means "one step per round" while reading as an off switch.
     training_steps_per_game: float = Field(gt=0)
@@ -252,21 +237,3 @@ class TrainConfig(StrictModel):
     #: supervised); `ge=0` because the shipped 0.0 discards the fast arm's policy outright.
     #: Read once per step via `fast_policy_weight_provider`, the `microbatch_caps` provider shape.
     fast_policy_weight: float = Field(ge=0)
-
-    @model_validator(mode="after")
-    def _stages_are_strictly_increasing(self) -> "TrainConfig":
-        """Require `train.replay_capacity_schedule` to be strictly increasing in `step`.
-
-        The consumer's cursor never rewinds, so out-of-order stages are applied in the same pass
-        at the earlier step and the ramp the run performs is not the one written; equal steps
-        are the same defect. An empty schedule satisfies this vacuously.
-        """
-        steps = [stage.step for stage in self.replay_capacity_schedule]
-        if any(later <= earlier for earlier, later in zip(steps, steps[1:], strict=False)):
-            raise ValueError(
-                f"train.replay_capacity_schedule steps must be strictly increasing; got "
-                f"{steps}. The consumer's cursor only moves forward, so an out-of-order or "
-                "duplicated step is consumed in the same pass as the one before it and the "
-                "ramp the run performs is not the ramp that was written"
-            )
-        return self

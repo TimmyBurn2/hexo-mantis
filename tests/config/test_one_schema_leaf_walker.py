@@ -97,21 +97,11 @@ def test_the_container_mode_hands_out_every_field_name_the_schema_reaches():
     )
 
 
-def test_the_two_modes_differ_by_exactly_the_container_expansion():
-    """The divergence is an ARGUMENT, and this says what the argument buys, on the live schema."""
-    writable = set(leaf_paths(RunConfig))
-    reachable = set(leaf_paths(RunConfig, descend_containers=True))
-    only_writable = writable - reachable
-    only_reachable = reachable - writable
-    assert only_writable == {"train.replay_capacity_schedule"}, (
-        "the writable walk's extra leaves are exactly the container FIELDS themselves (one since "
-        f"R362(c) deleted `eval.ladder.rungs`); if this set moved, a container block entered or "
-        f"left the schema: {sorted(only_writable)}"
+def test_the_two_modes_agree_on_the_live_schema_which_holds_no_container_block():
+    """The live schema holds no `list[SubModel]` field since the capacity schedule left, so both walks agree."""
+    assert set(leaf_paths(RunConfig)) == set(leaf_paths(RunConfig, descend_containers=True)), (
+        "the two walks diverged: a container block entered the schema, so say here what it buys"
     )
-    assert all(leaf.split(".")[0:2] == ["train", "replay_capacity_schedule"]
-               or leaf.startswith("train.replay_capacity_schedule.")
-               for leaf in only_reachable), sorted(only_reachable)
-    assert len(reachable) > len(writable)
 
 
 def test_a_descend_anything_that_mentions_a_block_implementation_is_refused():

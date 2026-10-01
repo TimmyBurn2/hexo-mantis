@@ -117,9 +117,6 @@ train:
   # stood here ("close-out and the shutdown signal still save") was false on both halves.
   min_buf_size: 1
   replay_capacity: 100000
-  # `[]` = no ramp. Each stage is `{step: <train step>, capacity: <new capacity>}` and the
-  # steps must be STRICTLY INCREASING (the consumer's cursor never rewinds).
-  replay_capacity_schedule: []
   training_steps_per_game: 1.0
   max_train_burst: 1
   batch_size: 256

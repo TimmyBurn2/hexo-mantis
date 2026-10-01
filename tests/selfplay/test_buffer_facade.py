@@ -42,9 +42,6 @@ class _RecordingBuffer:
     def push_graph_position(self, *args, **kwargs) -> None:
         self.graph_calls.append((args, kwargs))
 
-    def resize(self, new_capacity: int) -> None:
-        self.other.append(("resize", (new_capacity,)))
-
     def save_to_path(self, path: str) -> None:
         self.other.append(("save_to_path", (path,)))
 
@@ -131,11 +128,9 @@ def test_passthrough_surface_forwards() -> None:
     facade = ReplayFacade(_GRAPH_SPEC, rec)
     assert facade.size == 7
     assert facade.capacity == 11
-    facade.resize(99)
     facade.save_to_path("buffer.hexg")
     assert facade.load_from_path("buffer.hexg") == 3
     assert rec.other == [
-        ("resize", (99,)),
         ("save_to_path", ("buffer.hexg",)),
         ("load_from_path", ("buffer.hexg",)),
     ]

@@ -40,7 +40,6 @@ class ReplayBufferLike(Protocol):
     size: int
     capacity: int
 
-    def resize(self, new_capacity: int) -> None: ...
     def save_to_path(self, path: str) -> None: ...
     #: The last sampled batch's rows-per-game and age quantiles, on the SHARED protocol because
     #: it is a fact about a ring, not about which sampler it carries.
@@ -192,7 +191,6 @@ class StepCoordinatorConfig:
     gate_interval: int
     min_buf_size: int
     capacity: int
-    buffer_schedule: tuple[dict[str, Any], ...]
     training_steps_per_game: float
     max_train_burst: int
     batch_size: int
@@ -227,7 +225,6 @@ class StepOutcome:
     waiting_for_games: bool
     steps_run: int
     last_loss_info: dict[str, float] | None
-    buffer_resized: int | None
     checkpoint_saved: bool
     axis_emitted: bool
     eval_kicked_off: bool

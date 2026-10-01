@@ -27,16 +27,14 @@ class CoordinatorKnobsSpec:
 
     A frozen dataclass beside the resolver rather than the pydantic section, so nothing in
     `mantis.train` imports a schema class to consume it. The field NAMES are
-    `StepCoordinatorConfig`'s where the two differ (`replay_capacity` -> `capacity`,
-    `replay_capacity_schedule` -> `buffer_schedule`), and those renames do not propagate into
-    the runtime object.
+    `StepCoordinatorConfig`'s where the two differ (`replay_capacity` -> `capacity`), and that
+    rename does not propagate into the runtime object.
     """
 
     eval_interval: int
     log_interval: int
     min_buf_size: int
     capacity: int
-    buffer_schedule: tuple[dict[str, Any], ...]
     training_steps_per_game: float
     max_train_burst: int
     batch_size: int
@@ -53,12 +51,6 @@ def resolve_coordinator_knobs(train_section: Any) -> CoordinatorKnobsSpec:
         log_interval=int(train_section.log_interval),
         min_buf_size=int(train_section.min_buf_size),
         capacity=int(train_section.replay_capacity),
-        # The consumer indexes each stage as a MAPPING (`stage["step"]`/`stage["capacity"]`),
-        # so the schema blocks are flattened here rather than at the consumer.
-        buffer_schedule=tuple(
-            {"step": int(stage.step), "capacity": int(stage.capacity)}
-            for stage in train_section.replay_capacity_schedule
-        ),
         training_steps_per_game=float(train_section.training_steps_per_game),
         max_train_burst=int(train_section.max_train_burst),
         batch_size=int(train_section.batch_size),

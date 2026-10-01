@@ -33,7 +33,7 @@ The registered encoding set is `{gnn_axis_v1, gnn_axis_r8}`; both are `graph`.
 | HEXG record round-trips byte-identically (`record_at` inverts `push_record_impl`); over-cap push LOUD; push-time validation (finite/non-negative visit prob, finite outcome, ±1 stone player) | `replay/hexg/{push.rs,mod.rs}` | O-17, O-18, O-19, O-28 |
 | HEXG rebuild-at-sample: per sampled record, D6-rotate stones + visit keys, rebuild via `build_axis_graph` (stamps `builder_impl = 1`), align to legal nodes, mass-drop guard | `replay/hexg/sample.rs` | O-24, O-25, O-27, O-30 |
 | f16 stored as raw u16 bits; no f16->f32->f16 on the data path (NaN/subnormal/-0/max-normal survive) | `replay/hexg/*` | O-34 |
-| the D6 axial rotation primitive + the weight schedule | `replay/sym.rs`, `replay/schedule.rs` | O-13, O-31 |
+| the D6 axial rotation primitive; the per-slot weight column is stored at 1.0 and read by no sampler (its schedule left at HYGIENE-1) | `replay/sym.rs`, `replay/hexg/push.rs` | O-13 |
 
 ## Pinning tests
 
@@ -41,6 +41,4 @@ The gating oracle bank is O-1..O-35 (WP5 DESIGN §b). O-1..O-12, O-32..O-35 were
 and are RETIRED with the format. Live homes:
 
 - `crates/mantis-selfplay/src/replay/sym.rs` (`#[cfg(test)]`) — O-13.
-- `crates/mantis-selfplay/src/replay/schedule.rs` (`#[cfg(test)]`) — O-31
-  (uniform).
 - `crates/mantis-selfplay/tests/replay_hexg.rs` — O-16..O-30.

@@ -21,7 +21,6 @@ use half::f16;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
-use super::schedule::WeightSchedule;
 use super::sym::N_SYMS;
 use mantis_encoding::RegistrySpec;
 
@@ -202,9 +201,8 @@ pub struct HexgBuffer {
     pub value_valid: Vec<u8>,     // [cap]
     pub game_length: Vec<u16>,    // [cap]
     pub game_ids: Vec<i64>,       // [cap]; -1 = untagged
-    pub weights: Vec<u16>,        // f16 bits; [cap]
+    pub weights: Vec<u16>,        // f16 bits; [cap]; stored at 1.0, read by no sampler
 
-    pub weight_schedule: WeightSchedule,
     pub next_game_id: i64,
     //: The LAST sampled batch's composition, kept on the buffer rather than returned from
     //: `sample_graph_batch` so the hot path keeps its signature.
@@ -297,7 +295,6 @@ impl HexgBuffer {
             game_length: vec![0u16; capacity],
             game_ids: vec![-1i64; capacity],
             weights: vec![default_w; capacity],
-            weight_schedule: WeightSchedule::uniform(),
             next_game_id: 0,
             last_batch_distinct_games: 0,
             last_batch_max_rows_per_game: 0,

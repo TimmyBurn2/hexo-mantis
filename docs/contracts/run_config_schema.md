@@ -1,8 +1,8 @@
 # Contract: run config schema
 
-- version: v46
+- version: v47
 - owner: mantis.config.schema
-- status: LIVE since scaffold (WP0). Forty-five steps since (v1 -> v46). Each through v6 is
+- status: LIVE since scaffold (WP0). Forty-six steps since (v1 -> v47). Each through v6 is
   recorded as a named amendment in docs/design/repo_design.md §4; v7, v8 and v9 are NOT, and
   that is stated rather than implied — v7 landed without one, v8 (R242/ADJ-D12) inherited that
   gap rather than back-filling somebody else's amendment, and v9 records the same gap for
@@ -73,10 +73,11 @@ plays the deploy block too, deploy-matched (R378(d)); the v39 row's "without it"
 | v44 | ONE block DELETED from the `train` section, `policy_loss_weight_schedule` (`warmup_steps`) — THE POLICY WARM-UP (HYGIENE-1, R381(d); the training-path audit's §7 item 4), minted 0 in every committed config. With it go the trainer's policy-zero branch, the BC route's refusal of a non-zero warm-up and the `trainer_step` weight it reported (event manifest v6): the step's loss is the policy CE plus the value loss, and the aux term rides every step. CENSUS-2's value-head warm-up is its own driver (it freezes everything but the head) and reads nothing here. The path joins `RETIRED_PATHS`; every config is RE-MINTED through its own header and `tools/config_diff.py --expect` names that block's leaf alone | R381(d); HYGIENE-1 |
 | v45 | ONE leaf FOLDED: the `train` section's `total_steps` is DELETED and `train.scheduler_t_max` becomes the one LR horizon (`int`, `ge=1`, no null) — THE FLOORED COSINE'S T_MAX (HYGIENE-1, R381(d); the training-path audit's §7 item 4). `total_steps` decided nothing on run10 (its `scheduler_t_max` is 108 000) and elsewhere only stood in for a null horizon, so one horizon had two keys; neither is a run length (`train.max_train_steps` is). Configs that minted a null now state 1 000 000, the horizon they already annealed over. Both stay checkpoint-owned on a resume. The path joins `RETIRED_PATHS`; every config is RE-MINTED through its own header and run10's `tools/config_diff.py --expect` names that one leaf alone | R381(d); HYGIENE-1 |
 | v46 | TWO leaves DELETED from the `train` section, `hard_gn_threshold` and `hard_gn_min_steps` — THE GRAD-NORM HARD ABORT (HYGIENE-1, R381(d)), minted `1e9` / `3` in every committed config, a threshold no finite gradient norm reaches, so the gate could not fire. With them go the coordinator's per-step comparison and its counter (an older resume sidecar's counter is ignored), the abort's DEFERRED armed-abort row, the mechanism and cadence only that row used (`CONFIG_THRESHOLD_BELOW_CEILING` with its `ceiling_path`, `CONSEC_TRAIN_STEPS`) and the gate's `monitor_gates` entry (event manifest v7). The non-finite step guard in `clip_and_step` and the `grad_norm_spike` alert at `monitor.alert_grad_norm_max` are untouched. Both paths join `RETIRED_PATHS`; every config is RE-MINTED through its own header and `tools/config_diff.py --expect` names those two leaves alone | R381(d); HYGIENE-1 |
+| v47 | ONE leaf DELETED from the `train` section, `replay_capacity_schedule` (a list of `{step, capacity}` stages), with its block model, its strictly-increasing validator, the coordinator's growth walker and the engine ring's `resize` it alone called (HYGIENE-1, R381(d); the training-path audit's §7 item 4). Minted `[]` in every committed config. Beside it the sampler's weighted rejection loop goes: every slot's weight was 1.0, so each draw was already one uniform `random_range`, and a seeded draw order is byte-equal before and after; the v2 record still stores its weight column, at 1.0, read by no sampler. The path joins `RETIRED_PATHS`; every config is RE-MINTED through its own header and `tools/config_diff.py --expect` names that leaf alone | R381(d); HYGIENE-1 |
 
 ## Shape
 
-Thirteen top-level fields; **169 leaf key-paths** under the walker that descends nested blocks
+Thirteen top-level fields; **168 leaf key-paths** under the walker that descends nested blocks
 (including optional ones) and counts a `list[SubModel]` field as ONE leaf.
 
 | section | leaves | models |
@@ -90,7 +91,7 @@ Thirteen top-level fields; **169 leaf key-paths** under the walker that descends
 | `model` | 4 | `ModelConfig`, `GnnWidthsConfig`, `AuxSoftPolicyConfig` |
 | `deploy` | 11 | `DeployConfig`, `SearchConfig`, `TacticsConfig`, `TacticsAuditConfig` |
 | `eval` | 30 | `EvalConfig`, `GateConfig`, `SequentialGateConfig`, `PlyCapAdjudicationConfig`, `StrengthFloorConfig` |
-| `train` | 44 | `TrainConfig`, `DrawRateAbortConfig`, `PolicyLossTroughAbortConfig`, `PlyCapAbortConfig`, `HeldoutGapConfig`, `ReplayCapacityStage`, `MicrobatchCapsConfig` |
+| `train` | 43 | `TrainConfig`, `DrawRateAbortConfig`, `PolicyLossTroughAbortConfig`, `PlyCapAbortConfig`, `HeldoutGapConfig`, `MicrobatchCapsConfig` |
 | `selfplay` | 35 | `SelfplayConfig`, `SearchConfig`, `TacticsConfig`, `TacticsAuditConfig`, `MctsConfig`, `PlayoutCapConfig` |
 | `inference` | 6 | `InferenceConfig`, `FusedGraphCapsConfig` |
 | `monitor` | 28 | `MonitorSchemaConfig`, `DrainCapsConfig`, `DiskGuardConfig` |
@@ -156,13 +157,11 @@ name at the moment it fires.
 | `_search_kind_fits_the_node_pool` | `RunConfig` | a `gumbel` kind reaches the root's full legal set and so spends `MAX_ROOT_CHILDREN` pool slots on it, lowering the sim ceiling from `MAX_ARMED_SIMS` to `MAX_ARMED_SIMS_GUMBEL` — both read across the bridge from `mantis-search`, neither transcribed. The field bounds keep the LOOSE value because a `Field(le=…)` cannot see a key in another SECTION, so without this a config in the gap between the two ceilings would validate clean and be refused by `SelfPlayRunner::new` at BOOT — the same inversion R255/ADJ-D34 closed for the visit capacity, one section away. Both armed self-play sims knobs (`n_sims_full`, `n_sims_quick`) are checked under `selfplay.search.kind: gumbel`, and the two eval sims knobs (`eval.gate.deploy_sims`, `eval.random_model_sims`; a third, the sealbot sims, until v33) under `deploy.search.kind: gumbel`: any of them overflows the same pool |
 | `_draw_rate_evidence_bar_within_configured_capacity` | `RunConfig` | `train.draw_rate_abort.N_pool_min` <= `DRAW_RATE_WINDOW * selfplay.n_workers`, the measured ceiling of the pooled window sum; the bound that replaced the retired `min_samples: le=DRAW_RATE_WINDOW` pin. **A CAPACITY check, not a reachability one (R95/ADJ-22)** — whether the bar is actually met depends on how many workers report, which load time cannot witness; an unmet bar surfaces at runtime as an absence of observations (R92), never as a healthy `0.0` |
 | `_one_drawn_game_cannot_fire_the_abort` | `DrawRateAbortConfig` | `1 / N_pool_min` < `threshold`: below that a SINGLE drawn game meets the bar and fires a hard abort |
-| `_stages_are_strictly_increasing` | `TrainConfig` | `train.replay_capacity_schedule` steps strictly increase; the consumer's cursor only moves forward, so an out-of-order stage is applied at the wrong boundary |
 | `_mutual_exclusion` | `PlayoutCapConfig` | an armed `full_search_prob` needs both presets and quick at most full; a configured quick/full pair must differ and its probability must sit in `(0, 1)` |
 
-TWO v4 keys are spelled differently in the schema and in the runtime object they reach, each
-for a measured reason: `train.replay_capacity` -> `capacity` and
-`train.replay_capacity_schedule` -> `buffer_schedule` (a config key spelled only `capacity`
-names nothing on its own). The rename happens at the schema and does not propagate into the
+ONE v4 key is spelled differently in the schema and in the runtime object it reaches, for a
+measured reason: `train.replay_capacity` -> `capacity` (its schedule partner, renamed beside it,
+left at v47). The rename happens at the schema and does not propagate into the
 runtime object. A THIRD rename stood here until v6 and is listed under *Deliberately absent*
 below: it existed only because `train.checkpoint_interval` (the TRAINER's periodic save, which
 is untouched and still live) would otherwise have collided with a same-named coordinator key,

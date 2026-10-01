@@ -169,12 +169,6 @@ impl PyHexgBuffer {
         ))
     }
 
-    /// Grow to `new_capacity`, preserving all records.
-    pub fn resize(&self, py: Python<'_>, new_capacity: usize) -> PyResult<()> {
-        py.detach(|| self.ring().resize_impl(new_capacity))
-            .map_err(PyValueError::new_err)
-    }
-
     /// `(size, capacity, weight_histogram)` for dashboard display.
     pub fn get_buffer_stats(&self, py: Python<'_>) -> (usize, usize, Vec<u64>) {
         py.detach(|| self.ring().get_buffer_stats_impl())

@@ -39,9 +39,6 @@ class GraphSampleBuffer:
         self.capacity = capacity
         self._hexg = filled_hexg()
 
-    def resize(self, n: int) -> None:
-        self.capacity = n
-
     def save_to_path(self, p: Any) -> None: ...
 
     def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,

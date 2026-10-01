@@ -57,9 +57,6 @@ class ReplayFacade:
     def capacity(self) -> int:
         return self.raw.capacity
 
-    def resize(self, new_capacity: int) -> None:
-        self.raw.resize(new_capacity)
-
     def save_to_path(self, path: str) -> None:
         self.raw.save_to_path(path)
 

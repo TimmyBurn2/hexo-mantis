@@ -147,7 +147,7 @@ impl HexgBuffer {
         self.value_valid[slot] = u8::from(rec.value_valid);
         self.game_length[slot] = rec.game_length;
         self.game_ids[slot] = game_id;
-        self.weights[slot] = self.weight_schedule.weight_for();
+        self.weights[slot] = half::f16::ONE.to_bits();
 
         let new_bucket = weight_bucket(self.weights[slot]);
         self.weight_buckets[new_bucket].fetch_add(1, Ordering::Relaxed);

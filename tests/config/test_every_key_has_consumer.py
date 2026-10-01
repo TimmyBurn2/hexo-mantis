@@ -150,9 +150,6 @@ CONSUMER_REGISTRY = {
         "resolve_coordinator_knobs -> _step_coordinator_config ->"
         " StepCoordinatorConfig.capacity -> step.py buffer_capacity (warmup event + axis"
         " payload) and mantis.run.build_run_collaborators buffer sizing",
-    "train.replay_capacity_schedule":
-        "resolve_coordinator_knobs -> _step_coordinator_config ->"
-        " StepCoordinatorConfig.buffer_schedule -> step.py D1 buffer.resize ramp",
     "train.training_steps_per_game":
         "resolve_coordinator_knobs -> _step_coordinator_config -> step.py O6"
         " _steps_budget(new_games, this, max_train_burst)",

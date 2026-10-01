@@ -194,7 +194,6 @@ class StepCoordinator:
         self.last_train_game_count = 0
         # The step budget's fractional remainder in [0, 1); in-memory only (a resume restarts it).
         self._steps_budget_carry = 0.0
-        self._schedule_idx = 0
         self.last_warmup_log = 0.0
         self._last_loss_info: dict[str, float] | None = None
         # The resolved encoding spec (lazy, once): the straight arm dispatches off
@@ -411,7 +410,7 @@ class StepCoordinator:
         eval_drained = self._poll_eval_results()
 
         base = dict(
-            steps_run=0, buffer_resized=None, checkpoint_saved=False, axis_emitted=False,
+            steps_run=0, checkpoint_saved=False, axis_emitted=False,
             eval_kicked_off=False, eval_skipped_busy=False, eval_drained=eval_drained,
             promoted_step=None, soft_abort_fired=False, hard_abort_fired=False,
             instrumentation_emitted=[], pool_overflow_delta=0,
@@ -462,7 +461,6 @@ class StepCoordinator:
         self.last_train_game_count = self._games_played
 
         loss_info: dict[str, float] = {}
-        buffer_resized: int | None = None
         checkpoint_saved = False
         hard_abort_fired = False
         axis_emitted = False
@@ -475,15 +473,6 @@ class StepCoordinator:
             self._beat("train_step")
             if cfg.stop_step is not None and self._train_step >= cfg.stop_step:
                 break
-            # D1: buffer growth schedule.
-            while (self._schedule_idx < len(cfg.buffer_schedule)
-                   and self._train_step >= cfg.buffer_schedule[self._schedule_idx]["step"]):
-                new_cap = cfg.buffer_schedule[self._schedule_idx]["capacity"]
-                if new_cap > self.buffer.capacity:
-                    self.buffer.resize(new_cap)
-                    buffer_resized = new_cap
-                self._schedule_idx += 1
-
             # D2: training step — mixed when a pretrained buffer is present, else straight
             # self-play. Both route through the injected trainer.
             loss_info = self._run_training_step(cfg)
@@ -524,7 +513,7 @@ class StepCoordinator:
         self._emit_iteration_complete(cfg)
         return self._build_outcome(
             in_warmup=False, waiting_for_games=False,
-            **{**base, "steps_run": steps_budget, "buffer_resized": buffer_resized,
+            **{**base, "steps_run": steps_budget,
                "checkpoint_saved": checkpoint_saved, "eval_kicked_off": eval_kicked_off,
                "eval_skipped_busy": eval_skipped_busy,
                "hard_abort_fired": hard_abort_fired, "axis_emitted": axis_emitted},

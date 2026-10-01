@@ -386,7 +386,6 @@ def _step_coordinator_config(
         gate_interval=gate_interval,
         min_buf_size=knobs.min_buf_size,
         capacity=knobs.capacity,
-        buffer_schedule=knobs.buffer_schedule,
         training_steps_per_game=knobs.training_steps_per_game,
         max_train_burst=knobs.max_train_burst,
         batch_size=knobs.batch_size,

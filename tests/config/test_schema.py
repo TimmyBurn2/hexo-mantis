@@ -156,8 +156,8 @@ def test_o16_schema_round_trip(cfg_path):
 #: THE PREDICATE IS THE AUTHORITY'S: `mantis.config.schema.nested_block` is the one predicate,
 #: in `src/` where a test may import it, replacing a fourth local copy. The census parts company
 #: with the leaf-path walk deliberately — keeping `list[SubModel]` as ONE leaf is a statement
-#: about KEY PATHS, and `train.replay_capacity_schedule` is reachable ONLY through the container
-#: arm, so the census asks the SAME predicate its second question.
+#: about KEY PATHS, and a block reachable ONLY through the container arm would be missed, so the
+#: census asks the SAME predicate its second question.
 #: the census asks the SAME predicate its second question instead of holding a second walker.
 
 

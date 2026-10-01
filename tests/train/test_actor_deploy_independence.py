@@ -201,7 +201,7 @@ def test_eval_kick_fields_deploy_tag_model_not_actor_weights(tmp_path) -> None:
         trainer=SimpleNamespace(step=4, model=object(),
                                 save_checkpoint=lambda info: None),
         buffer=SimpleNamespace(size=1000, capacity=100_000,
-                               save_to_path=lambda p: None, resize=lambda n: None),
+                               save_to_path=lambda p: None),
         pool=SimpleNamespace(games_completed=0), eval_pipeline=pipeline,
         subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=sentinel_tag, best_model_step=42),

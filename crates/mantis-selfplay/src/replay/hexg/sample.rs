@@ -47,17 +47,9 @@ pub fn mass_drop_check(
 }
 
 impl HexgBuffer {
-    /// Sample one index by weighted rejection, 32-attempt cap then unconditional accept.
+    /// Sample one index uniformly over the filled ring.
     #[inline]
-    pub fn weighted_sample_one(&mut self) -> usize {
-        const MAX_REJECT: usize = 32;
-        for _ in 0..MAX_REJECT {
-            let idx = self.rng.random_range(0..self.size);
-            let w = half::f16::from_bits(self.weights[idx]).to_f32();
-            if w >= 1.0 || self.rng.random::<f32>() < w {
-                return idx;
-            }
-        }
+    pub fn sample_one(&mut self) -> usize {
         self.rng.random_range(0..self.size)
     }
 
@@ -111,19 +103,17 @@ impl HexgBuffer {
     }
 
     /// Sample `batch_size` slot indices, deduping by `game_id` (untagged -1 slots skip the
-    /// guard). `recent_frac == 0.0` is byte-identical to the full-ring weighted sample.
+    /// guard). `recent_frac == 0.0` is byte-identical to the full-ring uniform sample.
     pub fn sample_indices(&mut self, batch_size: usize, recent_frac: f32) -> Vec<usize> {
         const MAX_RETRIES: usize = 8;
         let mut indices: Vec<usize> = if recent_frac > 0.0 && self.size > 0 {
             let n_recent = ((batch_size as f32) * recent_frac).round() as usize;
             let n_recent = n_recent.min(batch_size);
             let mut idx = self.sample_recent_indices(n_recent);
-            idx.extend((n_recent..batch_size).map(|_| self.weighted_sample_one()));
+            idx.extend((n_recent..batch_size).map(|_| self.sample_one()));
             idx
         } else {
-            (0..batch_size)
-                .map(|_| self.weighted_sample_one())
-                .collect()
+            (0..batch_size).map(|_| self.sample_one()).collect()
         };
         let mut seen: HashSet<i64> = HashSet::with_capacity(batch_size);
         for _ in 0..MAX_RETRIES {
@@ -135,13 +125,13 @@ impl HexgBuffer {
                     continue;
                 }
                 all_unique = false;
-                let mut candidate = self.weighted_sample_one();
+                let mut candidate = self.sample_one();
                 for _ in 0..16 {
                     let cgid = self.game_ids[candidate];
                     if cgid == -1 || !seen.contains(&cgid) {
                         break;
                     }
-                    candidate = self.weighted_sample_one();
+                    candidate = self.sample_one();
                 }
                 *idx = candidate;
                 let cgid = self.game_ids[candidate];

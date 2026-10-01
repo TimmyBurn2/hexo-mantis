@@ -30,7 +30,6 @@ VALID_TRAIN_PAYLOAD: dict = {
     "log_interval": 1000,
     "min_buf_size": 1,
     "replay_capacity": 100_000,
-    "replay_capacity_schedule": [],
     "training_steps_per_game": 1.0,
     "max_train_burst": 1,
     "batch_size": 256,

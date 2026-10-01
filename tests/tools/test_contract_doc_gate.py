@@ -158,11 +158,11 @@ def test_emptying_the_cross_field_table_cannot_silently_retire_the_arm(tmp_path,
 
 def test_a_dead_model_name_in_the_second_cell_reds_the_gate(tmp_path, doc_text):
     # The anchor must be a LIVE cross-field row.
-    doc = _mutate(tmp_path, doc_text, "| `_stages_are_strictly_increasing` | `TrainConfig` |",
-                  "| `_stages_are_strictly_increasing` | `RetiredTrainConfig` |", 1)
+    doc = _mutate(tmp_path, doc_text, "| `_mutual_exclusion` | `PlayoutCapConfig` |",
+                  "| `_mutual_exclusion` | `RetiredPlayoutCapConfig` |", 1)
     res = _run(doc)
     assert res.returncode == 1
-    assert "RetiredTrainConfig" in res.stdout
+    assert "RetiredPlayoutCapConfig" in res.stdout
 
 
 def test_the_unmutated_schema_agrees_with_the_shipped_doc(gate_module):

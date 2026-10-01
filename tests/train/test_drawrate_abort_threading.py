@@ -120,9 +120,6 @@ class _Buffer:
 
     size, capacity = 1000, 100_000
 
-    def resize(self, n: int) -> None:
-        return None
-
     def save_to_path(self, p) -> None:
         return None
 
