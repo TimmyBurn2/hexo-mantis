@@ -24,9 +24,18 @@
 # delta: model.gnn.num_layers: 4 -> 1
 # delta: eval.max_plies: 128 -> 24
 # delta: eval.random_floor_games: 4 -> 2
-# delta: selfplay.playout_cap.n_sims_full: 50 -> 2
+# delta: selfplay.search.kind: puct -> gumbel
+# delta: train.policy_target: raw_visit_distribution -> completed_improved_policy
+# delta: selfplay.q_rescale: true -> false
+# delta: selfplay.mcts.dirichlet_enabled: true -> false
+# delta: selfplay.gumbel_m: 16 -> 4
+# delta: selfplay.playout_cap.full_search_prob: 0.0 -> 0.25
+# delta: selfplay.playout_cap.n_sims_quick: 0 -> 2
+# delta: selfplay.playout_cap.n_sims_full: 50 -> 4
+# delta: model.aux_soft_policy: null -> {target_temperature: 4.0, weight: 4.0}
 # delta: monitor.heartbeat_poll_interval_sec: 5.0 -> 0.5
 # delta: monitor.heartbeat_file_interval_sec: 15.0 -> 0.5
+# delta: identity.arch_kind: null -> GnnArchV2SoftPolicy
 schema_version: 1
 run_id: smoke_wiring
 seed: 20260716
@@ -35,11 +44,14 @@ allocator_posture: expandable_segments
 identity:
   encoding: gnn_axis_v1
   representation: graph
+  arch_kind: GnnArchV2SoftPolicy
 model:
   gnn:
     hidden: 8
     num_layers: 1
-  aux_soft_policy: null
+  aux_soft_policy:
+    target_temperature: 4.0
+    weight: 4.0
 deploy:
   search:
     kind: puct
@@ -95,19 +107,19 @@ train:
   augment: false
   recency_weight: 0.0
   terminal_eval_enabled: true
-  policy_target: raw_visit_distribution
+  policy_target: completed_improved_policy
   fast_policy_weight: 0.0
 selfplay:
   search:
-    kind: puct
+    kind: gumbel
     tactics: null
   n_workers: 4
   leaf_batch_size: 8
   max_game_moves: 24
   c_visit: 50.0
   c_scale: 1.0
-  q_rescale: true
-  gumbel_m: 16
+  q_rescale: false
+  gumbel_m: 4
   gumbel_explore_moves: 10
   search_stats_every: 8
   random_opening_plies: 0
@@ -118,11 +130,11 @@ selfplay:
     quiescence_blend_2: 0.3
     dirichlet_alpha: 0.3
     dirichlet_epsilon: 0.25
-    dirichlet_enabled: true
+    dirichlet_enabled: false
   playout_cap:
-    full_search_prob: 0.0
-    n_sims_quick: 0
-    n_sims_full: 2
+    full_search_prob: 0.25
+    n_sims_quick: 2
+    n_sims_full: 4
     temperature_threshold_compound_moves: 0
     temp_min: 0.5
 inference:

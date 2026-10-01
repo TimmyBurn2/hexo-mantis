@@ -1,12 +1,8 @@
-"""O-SMOKE — end-to-end launch-path smoke (Slice-2 gate, INTEGRATION tier).
+"""O-SMOKE — end-to-end launch-path smoke (INTEGRATION tier), on the production regime.
 
-A minimal end-to-end launch of `run_training_loop` on a CPU synthetic config: build the trainer
-via `build_net(arch)`, run ≈2 steps, write an envelope-v2 checkpoint, resume from it, and shut
-down clean on a simulated signal. Bites a launch-path wiring break unit tests
-miss. Tier ruling (DISPATCHER CORRECTION of rev-1): the launch-path smoke homes in the
-INTEGRATION tier (operator brief + repo_design §8: "integration … includes at least one launch-
-path smoke"); carries `@pytest.mark.integration`, reached via `make test.integration`. Kept
-minimal (N≈2 steps, CPU synthetic, tiny net). IMPL-authored gating oracle (non-⊕⊕).
+The minted wiring config (Gumbel, its completed target, the playout cap, the aux head) builds its
+own net and trainer, runs 2 steps through `run_training_loop` on sparse rows, writes an envelope-v2
+checkpoint, resumes from it, and shuts down clean on a simulated signal.
 """
 from __future__ import annotations
 
@@ -16,156 +12,69 @@ from pathlib import Path
 import pytest
 import torch
 
-from _fused_caps import CAPS_DICT
+from mantis._engine import HexgBuffer
 from mantis.config.loader import load_config
 from mantis.config.resolve.microbatch import MicrobatchCapsSpec
-from mantis.config.schema import ARCH_SCOPED_KEYS
-from mantis.encoding import lookup
-from mantis.model import GnnArch, build_net
+from mantis.config.schema import SOFT_POLICY_ARCH_KINDS
+from mantis.config.schema.core import derived_visit_capacity
+from mantis.encoding import resolve_from_config
+from mantis.model import arch_from_spec_and_config, build_net
 from mantis.train.coordinator.dispatch import run_declared_train_step
 from mantis.train.checkpoints import CHECKPOINT_SCHEMA_VERSION, resume_trainer
 from mantis.train.lifecycle.signals import ShutdownState, install_signal_handlers
 from mantis.train.loop import run_training_loop
 from mantis.train.trainer.core import Trainer
-from _graph_drive import filled_hexg
 
 pytestmark = pytest.mark.integration
 
-ENCODING = "gnn_axis_v1"
+WIRING = Path(__file__).resolve().parents[2] / "configs" / "smoke_wiring.yaml"
 
 
-def _eval_block():
-    # Schema extension: eval.gate/eval.ladder are now required (design §c.1).
-    return {
-        "random_model_sims": 1, "max_plies": 128, "random_floor_games": 0, "worker_device": "cpu",
-        "round_timeout_sec": 1.0, "worker_kill_grace_sec": 1.0,
-        "ply_cap_adjudication": None, "strength_floor": None,
-        "gate": {
-            "stride": 1, "screen_games": 1, "confirm_games": 1, "promotion_winrate": 0.55,
-            "screen_confirm_lo": 0.44, "deploy_sims": 1, "opening_book": "book_v1_s20260625_p4",
-            "bootstrap_resamples": 1, "min_distinct_per_pair": 1, "seed_base": 1, "sequential": None,
-        },
-    }
+class _Rows:
+    """The sink double: keeps every emitted row."""
+
+    def __init__(self) -> None:
+        self.rows: list[dict] = []
+
+    def emit(self, event: dict) -> None:
+        self.rows.append(dict(event))
 
 
-#: The complete `train:` payload, DERIVED from a MINTED config rather than restated.
-#: `dev_example.yaml`'s resolved block is byte-identical to this file's census except `fp16`.
-_MINTED_TRAIN: dict = load_config(
-    Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").train.model_dump()
+def _sparse_ring(run_config, encoding: str) -> HexgBuffer:
+    """A ring at the config's own visit capacity, holding sparse rows with a tail and the playout cap's fast rows."""
+    ring = HexgBuffer(64, encoding, derived_visit_capacity(run_config))
+    for i in range(16):
+        stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
+        ring.push_graph_position(stones, [(2, 0, 0.5), (1, 1, 0.3)], 1, 30, 2 + i, i % 4 != 0,
+                                 1.0 if i % 2 == 0 else -1.0, True, 10 + i, tail_mass=0.2)
+    ring.seed_sampler(run_config.seed)
+    return ring
 
 
-#: Every config this file builds is a GRAPH config, and it says so once. The block builders drop
-#: any arch-scoped block belonging to another arch AT SOURCE, via `ARCH_SCOPED_KEYS`, not by name.
-_REPRESENTATION = "graph"
+def test_launch_path_smoke(tmp_path):
+    """Build → run 2 steps → write envelope-v2 ckpt → resume → clean shutdown on a signal."""
+    run_config = load_config(WIRING)
+    assert run_config.selfplay.search.kind == "gumbel" and run_config.model.aux_soft_policy is not None
+    config = run_config.model_dump()
+    spec = resolve_from_config(config)
+    arch = arch_from_spec_and_config(spec, config)
+    assert type(arch).__name__ in SOFT_POLICY_ARCH_KINDS, f"the wiring config must build the aux head; got {arch}"
+    sink = _Rows()
+    tr = Trainer(build_net(arch), config, arch=arch, checkpoint_dir=tmp_path, sink=sink)
 
-
-def _drop_foreign_arch_keys(section: str, block: dict) -> dict:
-    """`block` without the arch-scoped keys `_REPRESENTATION` does not have."""
-    for key in ARCH_SCOPED_KEYS:
-        if key.section == section and key.arch != _REPRESENTATION:
-            block.pop(key.field, None)
-    return block
-
-
-def _train_block():
-    # `train:` is now a required RunConfig section (DESIGN_P2.md §2).
-    return _drop_foreign_arch_keys("train", dict(_MINTED_TRAIN))
-
-
-def _selfplay_block():
-    # `selfplay:` is now the expanded nested shape (DESIGN_P2.md §3);
-    # `legal_move_radius_schedule` is gone (DESIGN_P2.md §5).
-    return {
-        "search": {"kind": "puct", "tactics": None}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
-        "c_visit": 50.0,
-        "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_explore_moves": 10, "search_stats_every": 8,
-        "results_queue_cap": 10_000, "random_opening_plies": 0,
-        "log_investigation_metrics": True,
-        "mcts": {"c_puct": 1.5, "fpu_reduction": 0.25,
-                 "quiescence_enabled": True, "quiescence_blend_2": 0.3,
-                 "dirichlet_alpha": 0.3, "dirichlet_epsilon": 0.25, "dirichlet_enabled": True},
-        "playout_cap": {"full_search_prob": 0.0, "n_sims_quick": 0, "n_sims_full": 50,
-                        "temperature_threshold_compound_moves": 0, "temp_min": 0.5},
-    }
-
-
-def _inference_block():
-    return _drop_foreign_arch_keys("inference", {
-        "inference_batch_size": 64, "inference_max_wait_ms": 10,
-        # `fused_graph_caps` is ARCH-SCOPED to graph, and this is a GRID config, so it
-        # is stripped by the helper above. Left in the block so the strip is visible here.
-        "fused_graph_caps": CAPS_DICT,
-    })
-
-
-def _monitor_block():
-    return {
-        # The ARMING cadence, schema-only and required.
-        "gate_interval": 1000,
-        "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
-        "alert_loss_increase_window": 3, "axis_warn": 0.45, "axis_alert": 0.50,
-        "heartbeat_deadline_train_step_sec": 1800.0,
-        "heartbeat_deadline_inference_dispatch_sec": 1800.0,
-        "heartbeat_deadline_selfplay_drain_sec": 1800.0,
-        "heartbeat_deadline_eval_round_sec": 1800.0,
-        "heartbeat_poll_interval_sec": 5.0, "heartbeat_file_interval_sec": 15.0,
-        "heartbeat_close_out_deadline_sec": 14400.0, "heartbeat_fire_effect_timeout_sec": 30.0,
-        "supervisor_stale_after_sec": 900.0, "supervisor_poll_interval_sec": 30.0,
-        "supervisor_kill_grace_sec": 30.0, "supervisor_max_relaunches": 5,
-        "actor_lag_threshold_steps": 100, "actor_lag_abort_enabled": False,
-        "drain": {
-            "final_eval_drain_timeout_sec": 900.0, "eval_final_drain_safety_factor": 3.0,
-            "eval_final_drain_hard_cap_sec": 14400.0, "terminal_eval_hard_cap_sec": 14400.0,
-        },
-        "disk_guard": {"interval_sec": 60.0, "warn_gb": 10.0, "fail_gb": 5.0},
-    }
-
-
-def _config():
-    return {
-        "schema_version": 1, "run_id": "smoke", "seed": 20260722,
-        "eval_enabled": True,
-        # RECAL-PREP: a REQUIRED top-level leaf. `null` is the placeholder — refused at boot
-        # on a cuda process, valued only by the re-calibration.
-        "allocator_posture": None,
-        "identity": {"encoding": ENCODING, "representation": _REPRESENTATION},
-        "model": {"gnn": {"hidden": 16, "num_layers": 1}, "aux_soft_policy": None},
-        "eval": _eval_block(),
-        "train": _train_block(),
-        "deploy": {"search": {"kind": "puct", "tactics": None}},
-        "selfplay": _selfplay_block(),
-        "inference": _inference_block(),
-        "monitor": _monitor_block(),
-    }
-
-
-def test_launch_path_smoke(tmp_path, full_train_hparams):
-    """Build → run ≈2 steps → write envelope-v2 ckpt → resume → clean shutdown on a signal."""
-    spec = lookup(ENCODING)
-    # a tiny GNN (hidden=16, one layer) — CPU-cheap, real build_net(arch) net.
-    arch = GnnArch(in_dim=int(spec.node_feat_dim), edge_dim=int(spec.edge_feat_dim),
-                   hidden=16, num_layers=1, policy_hidden=16, value_hidden=16)
-    net = build_net(arch)
-    config = _config()
-    # Default cosine schedule (TrainConfig-minted "cosine") so the saved envelope carries a
-    # scheduler_state and the resumed Trainer (which re-defaults to cosine) restores it.
-    hp = full_train_hparams(checkpoint_interval=0)
-    tr = Trainer(net, config, arch=arch, checkpoint_dir=tmp_path, train_hparams=hp)
-
-    ring = filled_hexg()
-    caps = config["train"]["microbatch_caps"]
-
-    # run ≈2 steps through run_training_loop, then request save-then-exit
+    ring = _sparse_ring(run_config, spec.name)
+    train = run_config.train
     state = ShutdownState()
     seen = {"n": 0}
 
     def one_step():
         run_declared_train_step(
-            tr, ring, spec, batch_size=4, augment=False, recency_weight=0.0,
-            caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps["max_edges"],
-                                                     max_nodes=caps["max_nodes"]),
+            tr, ring, spec, batch_size=train.batch_size, augment=train.augment,
+            recency_weight=train.recency_weight,
+            caps_provider=lambda: MicrobatchCapsSpec(max_edges=train.microbatch_caps.max_edges,
+                                                     max_nodes=train.microbatch_caps.max_nodes),
             sample_threads_provider=lambda: 1,
-            fast_policy_weight_provider=lambda: 0.0,
+            fast_policy_weight_provider=lambda: train.fast_policy_weight,
         )
         seen["n"] += 1
         if seen["n"] >= 2:
@@ -173,12 +82,17 @@ def test_launch_path_smoke(tmp_path, full_train_hparams):
 
     run_training_loop(trainer=tr, shutdown_state=state, step_fn=one_step, max_steps=10)
     assert tr.step == 2, "the loop must have driven exactly 2 training steps"
+    aux = [row.get("aux_soft_policy_loss") for row in sink.rows if row["event"] == "trainer_step"]
+    assert len(aux) == 2 and all(a is not None and torch.isfinite(torch.tensor(a)) and a > 0 for a in aux), (
+        f"every step must train the aux head on its soft target; got {aux}"
+    )
 
     # the loop wrote a FINAL envelope-v2 checkpoint on shutdown_save
     ckpts = list(tmp_path.glob("*.ckpt"))
     assert ckpts, "run_training_loop must write an envelope-v2 checkpoint on shutdown_save"
     ckpt = ckpts[0]
-    assert ckpt.name.startswith("smoke_00000002_"), f"unexpected v2 filename {ckpt.name}"
+    prefix = f"{run_config.run_id}_00000002_"
+    assert ckpt.name.startswith(prefix), f"unexpected v2 filename {ckpt.name}"
     payload = torch.load(ckpt, weights_only=True)
     assert payload["schema_version"] == CHECKPOINT_SCHEMA_VERSION == 2
     assert payload["kind"] == "full"
@@ -200,6 +114,6 @@ def test_launch_path_smoke(tmp_path, full_train_hparams):
         # a 0-step loop over the shutdown-flagged state saves once and returns clean.
         final = run_training_loop(trainer=tr2, shutdown_state=state2)
         assert final.shutdown_save is True
-        assert len(list(tmp_path.glob("smoke_00000002_*.ckpt"))) >= 1
+        assert len(list(tmp_path.glob(f"{prefix}*.ckpt"))) >= 1
     finally:
         signal.signal(signal.SIGINT, orig_int)

@@ -339,9 +339,10 @@ def test_the_selected_V2_arch_is_the_SIBLING_dataclass_and_not_V1(diagnostic_con
 def test_the_selector_row_is_the_ONE_config_key_naming_an_arch_and_only_the_minted_set_carries_it(
     derived,
 ):
-    """The `arch_kind` row enters a config ONLY as a minted row, so exactly the production census
-    carries it and no exempt config does; the kind each carries is the file's own (the build test
-    above honours it). A second arch-naming key still reds against the untouched schema half."""
+    """The `arch_kind` row enters a config ONLY as a minted row: every production config carries it and every carrier's header mints it.
+
+    The kind each carries is the file's own (the build test above honours it). A second arch-naming key still reds against the untouched schema half.
+    """
     from mantis.config.schema import RunConfig
 
     from test_config_partition_shared_vs_arch_scoped import live_leaf_paths
@@ -360,9 +361,14 @@ def test_the_selector_row_is_the_ONE_config_key_naming_an_arch_and_only_the_mint
     }
     carrying = sorted(name for name, kind in carried.items() if kind is not None)
     derived("t10.configs_carrying_the_row", carrying)
-    assert carrying == sorted(path.name for path in production_configs(CONFIGS.parent)), (
-        f"{carrying} carry identity.arch_kind; R323(b) reserves the row to a mint act, so the "
-        "carriers are exactly the production census"
+    production = sorted(path.name for path in production_configs(CONFIGS.parent))
+    assert set(production) <= set(carrying), (
+        f"{sorted(set(production) - set(carrying))} build an arch the config does not name"
+    )
+    unminted = [name for name in carrying
+                if f"# delta: {ARCH_KIND_ROW}: null -> " not in (CONFIGS / name).read_text(encoding="utf-8")]
+    assert not unminted, (
+        f"{unminted} carry identity.arch_kind with no mint delta for it; R323(b) reserves the row to a mint act"
     )
 
 

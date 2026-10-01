@@ -25,6 +25,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import torch
 
 from mantis.run import RunHandles, UnregisteredAbortExitError, launch_run  # noqa: F401
 
@@ -50,7 +51,7 @@ _LAUNCHER_REQUIRED_OPTIONS = {"--config", "--out-dir"}
 _LAUNCHER_OPTIONAL_OPTIONS = {"--resume-from", "--inherit-preflight"}
 _LAUNCHER_OPTIONS = _LAUNCHER_REQUIRED_OPTIONS | _LAUNCHER_OPTIONAL_OPTIONS
 
-#: The wiring config is the armed smoke with its compute shrunk and draw-rate disarmed; 16 is its
+#: The wiring config is the armed smoke on the production regime, compute shrunk and draw-rate disarmed; 16 is its
 #: minimum legal burst plus headroom, the same number `test_preflight_armed_smoke.py` drives.
 _WIRING_CONFIG = "smoke_wiring.yaml"
 _BURST_STEPS = 16
@@ -317,6 +318,7 @@ def test_launch_run_boots_a_minted_config_into_the_live_loop_and_stops_clean(
         "the boot must reach an ARMED training loop and publish its own identity, not merely "
         f"construct objects (LAW-18); saw {sorted(events)}"
     )
+    _assert_the_production_regime_fired(rows, _BURST_STEPS)
 
     # The leg is READABLE from the ONE channel, not only from the filesystem.
     clean_stop = [row for row in rows if row["event"] == "clean_stop_save"]
@@ -335,6 +337,45 @@ def test_launch_run_boots_a_minted_config_into_the_live_loop_and_stops_clean(
         f"the duplicate-final-artefact window is open; got "
         f"{[row for row in rows if row['event'] == 'shutdown_save']}"
     )
+
+
+def _event_rows(run_dir: Path) -> list[dict]:
+    return [json.loads(line)
+            for segment in sorted((run_dir / "logs").glob("events_*.jsonl"))
+            for line in segment.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def _assert_the_production_regime_fired(rows: list[dict], steps: int) -> None:
+    """Every learner step trained the aux head, and Gumbel and both playout-cap arms fired in self-play."""
+    aux = [row.get("aux_soft_policy_loss") for row in rows if row["event"] == "trainer_step"]
+    assert len(aux) == steps and all(a is not None and 0 < a < float("inf") for a in aux), (
+        f"every learner step must train the aux head; got {aux}"
+    )
+    levers = [row["search_levers"] for row in rows if row["event"] == "iteration_complete"]
+    assert levers, "the composed stream must carry the search-lever rows"
+    for name in ("pcr_full_moves", "pcr_quick_moves", "gumbel_rounds"):
+        assert levers[-1][name]["total"] > 0, f"the {name} lever never fired on the production regime: {levers[-1]}"
+
+
+@pytest.mark.integration
+@pytest.mark.cuda
+@pytest.mark.skipif(not torch.cuda.is_available(),
+                    reason="loud skip: no CUDA device, so the production device has no subject here")
+def test_the_wiring_config_boots_the_production_regime_on_cuda_and_stops_clean(
+    tmp_path, smoke_run_config
+) -> None:
+    """The production regime (Gumbel, the playout cap, the aux head) on the production device, one bounded burst, a clean stop."""
+    config = smoke_run_config(_WIRING_CONFIG, train={"max_train_steps": _BURST_STEPS, "device": "cuda"})
+    handles = launch_run(config=config, out_dir=tmp_path)
+
+    assert handles.shutdown.running is False and handles.shutdown.abort_rule is None, (
+        f"a clean bounded run; got running={handles.shutdown.running!r} abort_rule={handles.shutdown.abort_rule!r}"
+    )
+    trainer = handles.coordinator.trainer
+    assert int(trainer.step) == _BURST_STEPS
+    assert next(trainer.model.parameters()).device.type == "cuda", "the learner must sit on the configured device"
+
+    _assert_the_production_regime_fired(_event_rows(tmp_path), _BURST_STEPS)
 
 
 @pytest.mark.integration
