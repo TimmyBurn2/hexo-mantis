@@ -7,12 +7,32 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
-**R381 (2026-10-01): THREE TWINS, ONE LESSON. TACTICS-SELFPLAY-3 is NOT PASS with no halting row fired; F2 is
-killed by screen and the feed of record is arm A's. Arm A's tactics in self-play are carried into run11, not adopted.
-Before the mint, on the desktop: HYGIENE-1 beside CENSUS-2, then PERF-2.** run10 will not START (R376(c)).
-`configs/run10.yaml` stays the production config the instruments read until run11's mint replaces it. run11 arms the
-deploy block at its mint by the operator's word (R378(a)), and in self-play arm A's design, carried (R381(c),
+**R382 (2026-10-01): THE BLIND METRIC. CENSUS-2's halt stands as a success of LAW-19: raw held-out value CE reads
+calibration, not skill, and rules on nothing. Nothing mints before CENSUS-3 reads its value levers on the value
+instrument of record, and RING-V3 lands first. HYGIENE-1 is ratified and `dev` is its tip.** run10 will not START
+(R376(c)). `configs/run10.yaml` stays the production config the instruments read until run11's mint replaces it. run11
+arms the deploy block at its mint by the operator's word (R378(a)), and in self-play arm A's design, carried (R381(c),
 CARD-RUN11-DESIGN).
+
+- **R382's order.**
+  - The void (R382(a)): every value reading ruled on through raw held-out value CE is void as evidence: CENSUS-1 C5's
+    reuse reading (the audit's F1 counter-evidence) and any HL-Gauss line read on it. CENSUS-1's strength-based lines
+    stand as screens.
+  - The instrument (R382(b), CARD-VALUE-INSTRUMENT): calibration-free held-out CE with the temperature fitted on
+    disjoint games, AUC, the temperature and the train/held-out gap, by ply band (0–10, 11–40, > 40); T4 V and DEF
+    V_att co-primary; rings the parent never trained on; ≥ 3 seeds; the known-bad worse by ≥ 2 seed SDs before any
+    arm runs. No instrument ranks a lever until it has read its known-bad. The same rows read at every run11 save.
+  - The problem (R382(c)): one outcome bit per game shown ≈ 600 times on unique boards, so the head memorises game
+    identity (0.16-nat gap, 2.7× overconfident, ≈ 0.08 nats of held-out skill, none before ply 10). The levers in
+    order: a position-specific value target (z mixed with the search's root value), the label's reuse per game as a
+    curve, the head's shape and activation re-initialised and warmed, weight decay. The dead opening head is a
+    capacity defect with no shown cost.
+  - The order (R382(d)): CENSUS-3 (CARD-CENSUS-3) reads those levers with 3 seeds and its picks set run11's value
+    rows (R381(e) re-pointed). RING-V3 (CARD-RING-V3) lands the root value field with default-fill before the mint.
+    RESEARCH-FORGE-2 runs beside, read-only; nothing it proposes is adopted without a census.
+  - HYGIENE-1 (R382(e)) is ratified with the operator-granted protected-set edits; the gate record keeps one shape
+    across eras; the un-squashed pair stands. `dev` is fast-forwarded to `7978cf1b`.
+  - The box (R382(f)): CENSUS-3 needs it within a day (≤ 32 box-h). Keep or stop is the operator's.
 
 - **R381's order.**
   - The exit (R381(a)): F2 is killed by screen (R375(d)): A″ − A on the shipped head −0.48 [−0.80, −0.16] at one seed,
@@ -32,11 +52,14 @@ CARD-RUN11-DESIGN).
     search-value target. Decided tails are parked; JK-last is dead for run11.
   - The mint rows (R381(e)): aux weight 2.0, `draw_reward` gone with reason-3 rows masked, `min_buf_size` 100k rows,
     sync cadence 50, and the value head and weight decay as CENSUS-2 reads them. A scalar re-mint inside a config's
-    pre-registered envelope is a STATE line, not a ruling; the envelope is a prereg row (R381(f)).
+    pre-registered envelope is a STATE line, not a ruling; the envelope is a prereg row (R381(f)). The value rows are
+    re-pointed to CENSUS-3's picks (R382(d)).
+  - **CENSUS-2 HALTED 2026-10-01 by its own known-bad** (CARD-CENSUS-2): raw held-out value CE read calibration, not
+    skill. R382 rules it; its records are local.
   - The box (R381(g)): TACTICS-SELFPLAY-3 closes at 6.75 box-h. Nothing needs the box for two days or more; stopping
     it is the operator's act.
-  - **HYGIENE-1 EXITED 2026-10-01** (CARD-HYGIENE-1) on branch `hygiene-1` from origin/dev `b1e34aa4`, awaiting the
-    operator's fast-forward: gates.exit green; every item landed, the five touching protected pins under the operator's
+  - **HYGIENE-1 EXITED 2026-10-01** (CARD-HYGIENE-1) on branch `hygiene-1` from origin/dev `b1e34aa4`, ratified and
+    fast-forwarded into `dev` by R382(e): gates.exit green; every item landed, the five touching protected pins under the operator's
     grant of 2026-10-01. PERF-2 follows it.
 
 - **R380's order.**
@@ -174,7 +197,7 @@ run6's by R369's packet (W0).
 ## Where things live
 
 - Open work: `docs/governance/CARDS.md` (swept in W6; derived there, never enumerated here).
-- Rulings: `docs/governance/RULINGS.md`; the latest is R381.
+- Rulings: `docs/governance/RULINGS.md`; the latest is R382.
 - Laws and the protected set: `docs/governance/LAWS.md`, whose protected set names each
   invariant's pinning tests (R370(f)); `tests/test_protected_set_pins.py` fails if one is gone.
   Falsified work: `docs/governance/falsified.md`.

@@ -1,4 +1,4 @@
-# RULINGS — R23 to R381
+# RULINGS — R23 to R382
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R382.
+- Numbering continues from R346. The next ruling is R383.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,50 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R382 — THE BLIND METRIC
+Decision: verbatim below.
+
+> R382 — THE BLIND METRIC.
+> (a) CENSUS-2's halt stands as a success of LAW-19. Raw held-out value CE reads calibration,
+> not skill, on a coin-flip outcome; it rules on nothing from now on, and every value reading
+> ruled on through it is void as evidence: CENSUS-1 C5's reuse reading (the audit's F1
+> counter-evidence) and any HL-Gauss line read on it. Strength-based lines of CENSUS-1 stand
+> as screens. The error is the architect's: a primary reading named without asking what it
+> rewards.
+> (b) The value instrument of record (CARD-VALUE-INSTRUMENT): calibration-free held-out CE
+> with the temperature fitted on disjoint games, AUC, the temperature and the train/held-out
+> gap as rows, by ply band (0–10, 11–40, > 40); T4 V and DEF V_att co-primary; rings the
+> parent never trained on; ≥ 3 seeds; the known-bad reads worse by ≥ 2 seed SDs before any
+> arm runs. No instrument ranks a lever until it has read its known-bad. The same rows are
+> read at every run11 save.
+> (c) The value problem of record: one outcome bit per game shown ≈ 600 times on unique
+> boards, so the head memorises game identity (0.16-nat gap, 2.7× overconfident, ≈ 0.08 nats
+> of held-out skill, none before ply 10). Levers, in order of mechanism: a position-specific
+> value target (z mixed with the search's root value; KataGo, Lc0, MuZero); the value label's
+> reuse per game, read as a curve; the head's shape and activation re-initialised and warmed;
+> weight decay. The opening head's deadness is a capacity defect with no shown cost.
+> (d) CENSUS-3 reads those levers on (b) with 3 seeds; its picks set run11's value rows
+> (R381(e) stands, re-pointed). RING-V3 lands the root value field with default-fill before
+> the mint. Nothing mints before CENSUS-3 reads. RESEARCH-FORGE-2 runs beside, read-only;
+> nothing it proposes is adopted without a census.
+> (e) HYGIENE-1 is ratified, the operator-granted protected-set edits included (kept or
+> strengthened, per the fresh review); the gate record keeps one shape across eras; the
+> un-squashed pair stands. dev fast-forwards to 7978cf1b.
+> (f) The box: CENSUS-3 needs it within a day (≤ 32 box-h). Keep or stop is the operator's.
+
+Status: standing. Lets CENSUS-2's halt stand as a success of LAW-19, retires raw held-out value CE as a ruling
+instrument and voids every value reading ruled on through it (CENSUS-1 C5's reuse reading, the audit's F1
+counter-evidence, and any HL-Gauss line read on it), leaving CENSUS-1's strength-based lines as screens, by (a). Sets
+the value instrument of record (CARD-VALUE-INSTRUMENT), its known-bad before any arm, and its rows at every run11 save
+by (b). States the value problem of record, memorisation of game identity, and orders its levers by mechanism by (c).
+Orders CENSUS-3 on that instrument with 3 seeds, its picks setting run11's value rows (R381(e) re-pointed), RING-V3
+before the mint, no mint before CENSUS-3 reads, and RESEARCH-FORGE-2 beside it read-only, by (d). Ratifies HYGIENE-1
+with the operator-granted protected-set edits, keeps the gate record's one shape and the un-squashed pair, and
+fast-forwards `dev` to `7978cf1b` by (e). Prices CENSUS-3's box need and leaves keep or stop to the operator by (f). The
+packets it forwards are CENSUS-3, RING-V3 and RESEARCH-FORGE-2.
+
+---
 
 ### R381 — THREE TWINS, ONE LESSON
 Decision: verbatim below.
@@ -81,6 +125,8 @@ CENSUS-2, PERF-2 after HYGIENE-1, ORIGIN-1 in RUN11-PREP; defers the natural boo
 three items, parks decided tails and kills JK-last for run11 by (d). Sets run11's mint rows by (e). Makes a scalar
 re-mint inside a pre-registered envelope a STATE line, the envelope a prereg row, by (f). Closes TACTICS-SELFPLAY-3 at
 6.75 box-h and leaves the box's fate to the operator by (g). The packets it forwards are HYGIENE-1 and CENSUS-2.
+CENSUS-2 HALTED by its own known-bad and is ruled by R382(a); HYGIENE-1 is RATIFIED by R382(e). (e)'s "the value head
+and weight decay as CENSUS-2 reads them" is ANNOTATED by R382(d): run11's value rows are CENSUS-3's picks.
 
 ---
 
@@ -168,6 +214,8 @@ a one-seed 12k-step twin reads starvation and nothing else, so that instrument c
 self-play levers come from run panels or multi-seed twins with the count pre-stated. run11 carries arm A's tactics in
 self-play, not adopted (R381(c)). (d)'s carried items moved by R381(d): the quick arm's noise and the search-value target
 are carded, not built; decided tails are parked; JK-last is dead for run11. Sync cadence 50 is minted (R381(e)).
+(d)'s CENSUS-1 is ANNOTATED by R382(a): C5's reuse reading and any HL-Gauss line read on raw held-out value CE are void
+as evidence; its strength-based lines stand as screens.
 
 ---
 

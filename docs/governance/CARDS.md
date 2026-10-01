@@ -36,10 +36,27 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R382 (THE BLIND METRIC; 2026-10-01) — the value instrument, then CENSUS-3
+
+- **CARD-VALUE-INSTRUMENT — ORDERED by R382(b); it reads its known-bad before any arm runs.** Calibration-free
+  held-out value CE with the temperature fitted on disjoint games, AUC, the temperature and the train/held-out gap as
+  rows, by ply band (0–10, 11–40, > 40); T4 V and DEF V_att co-primary; rings the parent never trained on; ≥ 3 seeds;
+  the known-bad reads worse by ≥ 2 seed SDs. The same rows are read at every run11 save. Raw held-out value CE rules
+  on nothing (R382(a)).
+- **CARD-CENSUS-3 — ORDERED by R382(d), MINT-BLOCKING: nothing mints before it reads.** It reads, on
+  CARD-VALUE-INSTRUMENT with 3 seeds and in order of mechanism (R382(c)): a position-specific value target (z mixed
+  with the search's root value); the value label's reuse per game, read as a curve; the head's shape and activation
+  re-initialised and warmed; weight decay. Its picks set run11's value rows (R381(e), re-pointed). It needs the box
+  within a day, ≤ 32 box-h (R382(f)); keep or stop is the operator's.
+- **CARD-RING-V3 — ORDERED by R382(d), MINT-BLOCKING: the root value field lands with default-fill before the mint.**
+  It discharges CARD-RING-MIGRATION's v2→v3 path for the field CARD-SEARCH-VALUE-AUX and CENSUS-3's first lever need.
+- **CARD-RESEARCH-FORGE-2 — ORDERED by R382(d), beside CENSUS-3, read-only.** Nothing it proposes is adopted without
+  a census.
+
 ## Opened by R381 (THREE TWINS, ONE LESSON; 2026-10-01) — F2 killed, the desktop work before run11's mint
 
-- **CARD-HYGIENE-1 — EXITED 2026-10-01 on branch `hygiene-1` from origin/dev `b1e34aa4`, unpushed past its opening
-  docs commit (the operator fast-forwards); gates.exit ALL GREEN on the card. Every item landed, H1–H9 and all of H5.
+- **CARD-HYGIENE-1 — RATIFIED by R382(e), the operator-granted protected-set edits included; `dev` fast-forwarded
+  to its tip `7978cf1b`. EXITED 2026-10-01 on branch `hygiene-1` from origin/dev `b1e34aa4`; gates.exit ALL GREEN on the card. Every item landed, H1–H9 and all of H5.
   The five that edit ruling-protected tests or their harness (H7, H9, `recency_weight`, `policy_loss_trough_abort`,
   screen/confirm) landed under the OPERATOR'S GRANT of 2026-10-01 to touch protected pins where each pinned invariant is
   kept; a fresh review judged every touched protected test kept or strengthened (the pair-statistics pin now binds the
@@ -59,7 +76,9 @@ Both were found by running the gate set rather than by reading it, and both are 
     the dead learner knobs out, screen/confirm out;
   - F2 out: the row-wise mixing's code leaves the tree (R381(a));
   - the CUDA tests run serial (four xdist workers OOM the desktop's 8 GB card).
-- **CARD-CENSUS-2 — ORDERED by R381(d), on the desktop before the mint, in parallel with CARD-HYGIENE-1.** It reads
+- **CARD-CENSUS-2 — CLOSED by R382(a): HALTED 2026-10-01 by its own known-bad, a success of LAW-19. Raw held-out
+  value CE read calibration, not skill; its levers move to CARD-CENSUS-3 on CARD-VALUE-INSTRUMENT. Was ORDERED by
+  R381(d), on the desktop before the mint, in parallel with CARD-HYGIENE-1.** It reads
   the value head's width and activation, with re-initialisation and warm-up (CARD-VALUE-HEAD-DEAD-OPENING; audit F3),
   and weight decay (audit F24: decoupled AdamW 1e-4 at lr 1e-3 is ≈ 1e-7 shrink per step). run11 mints both as it
   reads them (R381(e)).
@@ -69,7 +88,7 @@ Both were found by running the gate set rather than by reading it, and both are 
   design: proven rows relabel z, decided tails are played on the quick arm at value-only weight, and the tree decides
   no leaf; root vetoes stay the one in-search use. The first fallback is plain self-play under the tactics deploy
   (R376(d) as annotated).
-- **CARD-RING-MIGRATION — CARDED by R381(d), with CARD-SEARCH-VALUE-AUX, not built: a v2→v3 ring migration that
+- **CARD-RING-MIGRATION — ORDERED for the root value field as CARD-RING-V3 by R382(d). Was CARDED by R381(d), with CARD-SEARCH-VALUE-AUX, not built: a v2→v3 ring migration that
   default-fills a new field.** Today a new per-row field bumps `HEXG_VERSION` with no migration path, so every v2 ring
   (the sha-pinned held-out ring and the resume bundles' rings among them) stops reading (audit §6).
 
@@ -151,14 +170,16 @@ Both were found by running the gate set rather than by reading it, and both are 
   - the next-ply aux head (C5: it fails its line);
   - learning from Six's positions (R376(f) still governs any learning from Six's outputs).
   - Beside them, not parked: MCGS earns a deploy A/B later (CARD-MCGS-DEPLOY).
-- **CARD-VALUE-HEAD-DEAD-OPENING — read by CARD-CENSUS-2 (R381(d)), run11 mints the head as it reads. Was CARDED for CARD-RUN11-DESIGN by R379(d): a value-head re-initialisation at warm
+- **CARD-VALUE-HEAD-DEAD-OPENING — a capacity defect with no shown cost (R382(c)); the head's shape and activation
+  are CARD-CENSUS-3's third lever. Was read by CARD-CENSUS-2 (R381(d)), run11 mints the head as it reads. Was CARDED for CARD-RUN11-DESIGN by R379(d): a value-head re-initialisation at warm
   start, with warm-up.** CENSUS-1's C4 found run8@45k's value head dead in the opening: 18.5 % of the 45k ring's value
   rows read the empty board's v = −0.015556, and 0 of `value_head.fc1`'s 32 ReLUs are live on opening rows. run10's
   warm start inherits the head. C5 read the value gap at +0.160.
 - **CARD-QUICK-ARM-NOISE — CARDED, not built, by R381(d). Was CARDED for CARD-RUN11-DESIGN by R379(d): a noise-free quick arm.** CENSUS-1's C1: the
   64-sim quick search builds `MctxRootState::new` and draws root Gumbel noise whatever the arm drew, and from ply
   `gumbel_explore_moves` on the played move is `best_action`, whose score carries that noise.
-- **CARD-SEARCH-VALUE-AUX — CARDED, not built, by R381(d), with a v2→v3 ring migration. Was CARDED for CARD-RUN11-DESIGN by R379(d): a search-value aux target from our own search.**
+- **CARD-SEARCH-VALUE-AUX — CARD-CENSUS-3's first lever by R382(c)-(d): z mixed with the search's root value, on
+  CARD-RING-V3. Was CARDED, not built, by R381(d), with a v2→v3 ring migration. Was CARDED for CARD-RUN11-DESIGN by R379(d): a search-value aux target from our own search.**
   CENSUS-1's C6: Six's search value beats our raw one off the proofs (DEF −0.097 on its non-proof rows, QU −0.058,
   MID −0.053). R376(f) governs any learning from Six's outputs; this card is our own search's value.
 - **CARD-DECIDED-TAILS — PARKED by R381(d). Was CARDED for CARD-RUN11-DESIGN by R379(d): decided tails.** CENSUS-1's C3(b): the pooled
@@ -386,7 +407,8 @@ Both were found by running the gate set rather than by reading it, and both are 
     still lost within 13 opponent turns.
 - **CARD-RUN11-DESIGN — HELD on CARD-TACTICS-LANE's deploy read (R376(c)), now CARD-TACTICS-DEPLOY's (R377); that
   read is RATIFIED by R378(a). Its self-play tactics are arm A's design, CARRIED, not adopted (R381(c)); its mint rows
-  are R381(e)'s, after CARD-HYGIENE-1, CARD-CENSUS-2 and CARD-PERF-2 (R381(d)).** Until run11's
+  are R381(e)'s, after CARD-HYGIENE-1, CARD-CENSUS-2 and CARD-PERF-2 (R381(d)); its value rows are CARD-CENSUS-3's
+  picks, and nothing mints before CENSUS-3 reads and CARD-RING-V3 lands (R382(d)).** Until run11's
   mint replaces it,
   `configs/run10.yaml` stays the production config the instruments read; run10 will not START. The design
   carries:
@@ -407,14 +429,15 @@ Both were found by running the gate set rather than by reading it, and both are 
     plain self-play under the tactics deploy (R376(d) as annotated), then the audit's label-only design.
   - The mint rows (R381(e)): aux weight 2.0 (the owed re-pick, inside its own band); `draw_reward` gone, with
     reason-3 rows masked; `min_buf_size` 100k rows (the warm-start draw count ≈ 13, C5's tested figure); sync cadence
-    50; the value head and weight decay as CARD-CENSUS-2 reads them. Reuse stays at 2.4 steps/game, read by run11's
+    50; the value head and weight decay as CARD-CENSUS-2 reads them (re-pointed to CARD-CENSUS-3's picks by R382(d)). Reuse stays at 2.4 steps/game, read by run11's
     held-out gap (R381(d)). A scalar re-mint inside the pre-registered envelope is a STATE line, and the envelope is a
     prereg row (R381(f)).
   - Carried from CENSUS-1 by R379(d):
     - sync cadence 50 (TACTICS-SELFPLAY's P4 read the in-run cache hit at 33 % there, against 24.5 % at 2);
-    - HL-Gauss as a screened lever (C5: it passes its lines, no gain resolved at one seed);
+    - HL-Gauss as a screened lever (C5: it passes its lines, no gain resolved at one seed; any HL-Gauss line read on
+      raw held-out value CE is VOID as evidence, R382(a));
     - a value-head re-initialisation at warm start, with warm-up (C4: the parent's value head is dead in the opening;
-      C5: its value gap +0.160; CARD-VALUE-HEAD-DEAD-OPENING);
+      C5: its value gap +0.160, read on raw held-out value CE; CARD-VALUE-HEAD-DEAD-OPENING);
     - a noise-free quick arm (C1: the 64-sim quick search draws root Gumbel noise; CARD-QUICK-ARM-NOISE);
     - decided tails (C3(b): a pooled proven tail of 0.463, a games/h bound of 1.86×; CARD-DECIDED-TAILS);
     - a search-value aux target from our own search (C6: Six's search value beats our raw one off the proofs;
