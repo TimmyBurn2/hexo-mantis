@@ -23,6 +23,12 @@ def test_a_plain_arm_records_its_worker(i: int) -> None:
     _record(f"plain-{i}")
 
 
+@pytest.mark.integration
+@pytest.mark.parametrize("i", range(6))
+def test_an_integration_arm_records_its_worker(i: int) -> None:
+    _record(f"integration-{i}")
+
+
 def test_an_unmarked_arm_allocates_on_the_gpu() -> None:
     import torch
 

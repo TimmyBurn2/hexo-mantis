@@ -363,9 +363,11 @@ def _assert_the_production_regime_fired(rows: list[dict], steps: int) -> None:
 @pytest.mark.skipif(not torch.cuda.is_available(),
                     reason="loud skip: no CUDA device, so the production device has no subject here")
 def test_the_wiring_config_boots_the_production_regime_on_cuda_and_stops_clean(
-    tmp_path, smoke_run_config
+    tmp_path, smoke_run_config, monkeypatch
 ) -> None:
     """The production regime (Gumbel, the playout cap, the aux head) on the production device, one bounded burst, a clean stop."""
+    # The config's allocator posture, supplied as a launch would; the posture halt has its own oracle.
+    monkeypatch.setenv("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     config = smoke_run_config(_WIRING_CONFIG, train={"max_train_steps": _BURST_STEPS, "device": "cuda"})
     handles = launch_run(config=config, out_dir=tmp_path)
 

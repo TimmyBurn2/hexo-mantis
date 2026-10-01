@@ -176,6 +176,7 @@ def test_the_configs_device_reaches_the_real_trainer_and_the_real_pool(
 
 
 @pytest.mark.integration
+@pytest.mark.cuda
 def test_a_cuda_minted_config_never_silently_boots_on_the_cpu(
     tmp_path, smoke_run_config, monkeypatch,
 ) -> None:

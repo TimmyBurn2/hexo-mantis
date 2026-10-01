@@ -4,6 +4,7 @@ Every test starts from an identical RNG state via an autouse reseed of random, p
 numpy/torch when installed — neither is a scaffold dependency, so the reseed self-arms.
 """
 import importlib.util
+from collections.abc import Iterator
 import os
 import random
 import sys
@@ -41,14 +42,16 @@ def pytest_report_header(config):
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Put every `cuda`-marked test in one xdist group, before xdist reads the groups, so `--dist loadgroup` runs them all on one worker."""
+    """Group every `cuda` test as one and every other integration test by its file, before xdist reads the groups: `--dist loadgroup` then runs the cuda tests on one worker and keeps `loadfile`'s file locality."""
     for item in items:
         if item.get_closest_marker("cuda") is not None:
             item.add_marker(pytest.mark.xdist_group(name="cuda"))
+        elif item.get_closest_marker("integration") is not None:
+            item.add_marker(pytest.mark.xdist_group(name=item.nodeid.split("::", 1)[0]))
 
 
 @pytest.fixture(autouse=True)
-def _gpu_work_carries_the_cuda_mark(request: pytest.FixtureRequest):
+def _gpu_work_carries_the_cuda_mark(request: pytest.FixtureRequest) -> Iterator[None]:
     """Fail an unmarked test that allocates on the GPU (a bare context passes): it would share the card with the cuda group."""
     torch = sys.modules.get("torch")
     base = 0
@@ -60,8 +63,8 @@ def _gpu_work_carries_the_cuda_mark(request: pytest.FixtureRequest):
     if torch is None or not torch.cuda.is_initialized() or request.node.get_closest_marker("cuda") is not None:
         return
     if torch.cuda.max_memory_allocated() > base:
-        pytest.fail(f"{request.node.nodeid} allocated on the GPU without the `cuda` mark: gate 3a would run "
-                    "it beside the cuda group on the shared card", pytrace=False)
+        pytest.fail(f"{request.node.nodeid} allocated on the GPU without the `cuda` mark: a pytest tier would "
+                    "run it beside the cuda group on the shared card", pytrace=False)
 
 
 @pytest.fixture(autouse=True)
