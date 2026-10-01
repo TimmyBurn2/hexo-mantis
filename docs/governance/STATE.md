@@ -29,6 +29,10 @@ CARD-RUN11-DESIGN).
     capacity defect with no shown cost.
   - The order (R382(d)): CENSUS-3 (CARD-CENSUS-3) reads those levers with 3 seeds and its picks set run11's value
     rows (R381(e) re-pointed). RING-V3 (CARD-RING-V3) lands the root value field with default-fill before the mint.
+  - **RING-V3 EXITED 2026-10-01** (CARD-RING-V3) on branch `ring-v3` from origin/dev `80b54f5a`, awaiting the operator's
+    fast-forward: HEXG v3 with v2 default-fill, self-play writing the root value, `train.value_target_lambda` minted 0.0
+    (the trainer bit-equal to v2 there; the eval step reads z whatever λ); gates.exit green. A λ > 0 run's held-out gap
+    is not z against z until CARD-HELDOUT-GAP-Z lands.
     RESEARCH-FORGE-2 runs beside, read-only; nothing it proposes is adopted without a census.
   - HYGIENE-1 (R382(e)) is ratified with the operator-granted protected-set edits; the gate record keeps one shape
     across eras; the un-squashed pair stands. `dev` is fast-forwarded to `7978cf1b`.

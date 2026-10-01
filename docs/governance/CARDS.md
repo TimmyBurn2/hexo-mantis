@@ -48,8 +48,23 @@ Both were found by running the gate set rather than by reading it, and both are 
   with the search's root value); the value label's reuse per game, read as a curve; the head's shape and activation
   re-initialised and warmed; weight decay. Its picks set run11's value rows (R381(e), re-pointed). It needs the box
   within a day, ≤ 32 box-h (R382(f)); keep or stop is the operator's.
-- **CARD-RING-V3 — ORDERED by R382(d), MINT-BLOCKING: the root value field lands with default-fill before the mint.**
-  It discharges CARD-RING-MIGRATION's v2→v3 path for the field CARD-SEARCH-VALUE-AUX and CENSUS-3's first lever need.
+- **CARD-RING-V3 — EXITED 2026-10-01 on branch `ring-v3` (from origin/dev `80b54f5a`, code tip `de80ea35`), awaiting
+  the operator's fast-forward; gates.exit green. Was ORDERED by R382(d), MINT-BLOCKING: the root value field lands with
+  default-fill before the mint.** It discharges CARD-RING-MIGRATION's v2→v3 path for the field CARD-SEARCH-VALUE-AUX
+  and CENSUS-3's first lever need.
+  - HEXG v3 (contract #6, repo_design amendment): every row carries the search's root value in the row-mover's frame
+    and its flag; a v2 ring loads with every flag 0, and its v3 re-save minus the two fields is the file byte for byte.
+  - Self-play writes it: the search's W/N (bit-equal to the 1-in-N `search_stats` value, which stays a cross-check),
+    or a decided root's proof value (+1, and -1 lost on cover); the drain, `push_graph` and the facade carry it.
+  - `train.value_target_lambda` (run config v52, template and every config at 0.0): λ·v + (1−λ)·z on rows with a root
+    value, z on the rest, in the TRAIN step; the eval step reads z whatever λ. At 0.0 the trainer is the v2 trainer
+    bit for bit. Fire-rate `trainer_step.root_value_rows` / `root_value_rows_moved` with λ echoed (manifest v9).
+  - Witnesses (local records): the sha-pinned held-out ring with run8@45k trains byte-equal across trees at λ = 0;
+    all 135 v2 rings in the mirror load default-filled and byte-equal, 141 resume bundles and 8 parent stamps load.
+- **CARD-HELDOUT-GAP-Z — PROPOSED by RING-V3's exit, not built: a train-side value CE against z.** At λ > 0 the
+  `heldout_gap` event's train side is the mixed-target CE while its held-out side reads z, so `gap_value` is not z
+  against z and rules on nothing; the fix publishes a z-CE from the train step, which moves the seven-key `loss_info`
+  contract. Needed before any λ > 0 run reads its gap.
 - **CARD-RESEARCH-FORGE-2 — ORDERED by R382(d), beside CENSUS-3, read-only.** Nothing it proposes is adopted without
   a census.
 
@@ -88,7 +103,9 @@ Both were found by running the gate set rather than by reading it, and both are 
   design: proven rows relabel z, decided tails are played on the quick arm at value-only weight, and the tree decides
   no leaf; root vetoes stay the one in-search use. The first fallback is plain self-play under the tactics deploy
   (R376(d) as annotated).
-- **CARD-RING-MIGRATION — ORDERED for the root value field as CARD-RING-V3 by R382(d). Was CARDED by R381(d), with CARD-SEARCH-VALUE-AUX, not built: a v2→v3 ring migration that
+- **CARD-RING-MIGRATION — LANDED for the root value field by CARD-RING-V3 (EXITED 2026-10-01): HEXG v3 reads v2 rings
+  default-filled, so the sha-pinned held-out ring and the resume bundles' rings still load. Was ORDERED for the root
+  value field as CARD-RING-V3 by R382(d). Was CARDED by R381(d), with CARD-SEARCH-VALUE-AUX, not built: a v2→v3 ring migration that
   default-fills a new field.** Today a new per-row field bumps `HEXG_VERSION` with no migration path, so every v2 ring
   (the sha-pinned held-out ring and the resume bundles' rings among them) stops reading (audit §6).
 
@@ -179,7 +196,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   64-sim quick search builds `MctxRootState::new` and draws root Gumbel noise whatever the arm drew, and from ply
   `gumbel_explore_moves` on the played move is `best_action`, whose score carries that noise.
 - **CARD-SEARCH-VALUE-AUX — CARD-CENSUS-3's first lever by R382(c)-(d): z mixed with the search's root value, on
-  CARD-RING-V3. Was CARDED, not built, by R381(d), with a v2→v3 ring migration. Was CARDED for CARD-RUN11-DESIGN by R379(d): a search-value aux target from our own search.**
+  CARD-RING-V3, whose exit lands the lever as `train.value_target_lambda` minted 0.0 (rings written before it carry
+  no root value, so the lever reads on rings self-play writes after it). Was CARDED, not built, by R381(d), with a v2→v3 ring migration. Was CARDED for CARD-RUN11-DESIGN by R379(d): a search-value aux target from our own search.**
   CENSUS-1's C6: Six's search value beats our raw one off the proofs (DEF −0.097 on its non-proof rows, QU −0.058,
   MID −0.053). R376(f) governs any learning from Six's outputs; this card is our own search's value.
 - **CARD-DECIDED-TAILS — PARKED by R381(d). Was CARDED for CARD-RUN11-DESIGN by R379(d): decided tails.** CENSUS-1's C3(b): the pooled
