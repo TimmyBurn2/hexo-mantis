@@ -104,6 +104,17 @@ _OUT_OF_DOMAIN_CASES = [
     (("gate", "deploy_sims"), 0, "eval.gate.deploy_sims"),
     (("gate", "bootstrap_resamples"), 0, "eval.gate.bootstrap_resamples"),
     (("gate", "min_distinct_per_pair"), 0, "eval.gate.min_distinct_per_pair"),
+    # SequentialGateConfig, the gate's one rule
+    (("gate", "sequential", "mu0"), 0.0, "eval.gate.sequential.mu0"),
+    (("gate", "sequential", "mu0"), 1.0, "eval.gate.sequential.mu0"),
+    (("gate", "sequential", "mu1"), 1.0, "eval.gate.sequential.mu1"),
+    (("gate", "sequential", "alpha"), 0.0, "eval.gate.sequential.alpha"),
+    (("gate", "sequential", "alpha"), 1.0, "eval.gate.sequential.alpha"),
+    (("gate", "sequential", "beta"), 0.0, "eval.gate.sequential.beta"),
+    (("gate", "sequential", "beta"), 1.0, "eval.gate.sequential.beta"),
+    (("gate", "sequential", "check_every_pairs"), 0, "eval.gate.sequential.check_every_pairs"),
+    (("gate", "sequential", "min_pairs"), 1, "eval.gate.sequential.min_pairs"),
+    (("gate", "sequential", "max_pairs"), 1, "eval.gate.sequential.max_pairs"),
     # LadderConfig
 ]
 
@@ -135,6 +146,11 @@ _IN_DOMAIN_BOUNDARY_CASES = [
     (("gate", "deploy_sims"), 1),
     (("gate", "bootstrap_resamples"), 1),
     (("gate", "min_distinct_per_pair"), 1),
+    (("gate", "sequential", "min_pairs"), 2),
+    (("gate", "sequential", "check_every_pairs"), 1),
+    (("gate", "sequential", "alpha"), 0.5),
+    (("gate", "sequential", "beta"), 0.5),
+    (("gate", "sequential", "mu1"), 0.99),
 ]
 
 

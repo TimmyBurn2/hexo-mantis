@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from mantis.eval.aggregate import pair_units
+from mantis.util.constants import GSPRT_MIN_PAIRS
 
 #: The floor on the pair-score standard deviation: a window of identical scores has sd 0 and an
 #: undefined t̂; the memo's simulation ran with this floor and its error curve assumes it.
@@ -40,8 +41,9 @@ class SequentialGateSpec:
             raise ValueError(f"sequential gate: alpha and beta must lie in (0, 1), got {self.alpha}, {self.beta}")
         if self.check_every_pairs < 1:
             raise ValueError(f"sequential gate: check_every_pairs must be >= 1, got {self.check_every_pairs}")
-        if not 1 <= self.min_pairs <= self.max_pairs:
-            raise ValueError(f"sequential gate: need 1 <= min_pairs <= max_pairs, got {self.min_pairs}, {self.max_pairs}")
+        if not GSPRT_MIN_PAIRS <= self.min_pairs <= self.max_pairs:
+            raise ValueError(f"sequential gate: need {GSPRT_MIN_PAIRS} <= min_pairs <= max_pairs (the LLR reads at least "
+                             f"{GSPRT_MIN_PAIRS} pairs), got {self.min_pairs}, {self.max_pairs}")
 
 
 @dataclass(frozen=True)
@@ -63,8 +65,8 @@ def llr_bounds(alpha: float, beta: float) -> tuple[float, float]:
 def gsprt_llr(pair_scores: Sequence[float], mu0: float, mu1: float) -> float:
     """Van den Bergh's normalized-t LLR (4.14) over pair scores, σ̂ floored at `SD_FLOOR`; raises ValueError below two scores."""
     n = len(pair_scores)
-    if n < 2:
-        raise ValueError(f"the sequential gate's LLR needs >= 2 pair scores, got {n}")
+    if n < GSPRT_MIN_PAIRS:
+        raise ValueError(f"the sequential gate's LLR needs >= {GSPRT_MIN_PAIRS} pair scores, got {n}")
     mean = statistics.fmean(pair_scores)
     sd = max(statistics.stdev(pair_scores), SD_FLOOR)
     t, t0, t1 = (mean - 0.5) / sd, (mu0 - 0.5) / sd, (mu1 - 0.5) / sd

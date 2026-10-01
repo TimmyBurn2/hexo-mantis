@@ -26,7 +26,7 @@ from mantis.config.schema.selfplay import (
 )
 from mantis.config.schema.train import TrainConfig
 from mantis.encoding import EncodingRegistryError, lookup
-from mantis.util.constants import DRAW_RATE_WINDOW, PLY_CAP_RING_GAMES
+from mantis.util.constants import DRAW_RATE_WINDOW, GSPRT_MIN_PAIRS, PLY_CAP_RING_GAMES
 
 SCHEMA_VERSION = 1
 
@@ -220,8 +220,8 @@ class SequentialGateConfig(StrictModel):
     alpha: float = Field(gt=0, lt=1)
     beta: float = Field(gt=0, lt=1)
     check_every_pairs: int = Field(ge=1)
-    min_pairs: int = Field(ge=1)
-    max_pairs: int = Field(ge=1)
+    min_pairs: int = Field(ge=GSPRT_MIN_PAIRS)
+    max_pairs: int = Field(ge=GSPRT_MIN_PAIRS)
     # At `max_pairs` undecided: `sign` reads the LLR's sign (run7/run8's rule); `promote` promotes
     # (the anchor follows the run unless the candidate is clearly worse, i.e. a reject).
     at_max_pairs: Literal["sign", "promote"]

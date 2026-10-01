@@ -66,6 +66,13 @@ def test_a_gate_cell_book_and_seed_rows_replace_the_configs(frontier, base, tmp_
     assert spec.best_snapshot == str(tmp_path / "opponent.pt")
 
 
+def test_a_model_cell_below_the_gsprts_two_pairs_is_refused_when_built(frontier, base, tmp_path) -> None:
+    """The rule's own spec refuses it at cell build, not the eval child mid-round."""
+    config, base_spec = base
+    with pytest.raises(frontier.FrontierCellError, match="min_pairs"):
+        frontier.cell_spec(_self_cell(games=2), base_spec, cell_dir=tmp_path, config=config)
+
+
 def test_a_strix_rung_cell_book_row_replaces_the_gates_book(frontier, base, tmp_path) -> None:
     config, base_spec = base
     cell = {"label": "bridge_v2", "candidate": "ck.ckpt", "opponent": "strix", "strix_sims": 256,

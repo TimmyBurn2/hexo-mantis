@@ -21,6 +21,9 @@ DRAW_RATE_WINDOW: int = 50
 # coupling as `DRAW_RATE_WINDOW`: `train.ply_cap_abort.window_games` is bounded by it in core.py.
 PLY_CAP_RING_GAMES: int = 4096
 
+# The fewest pair scores the GSPRT's LLR reads (a sample deviation needs two): the schema's floor and the rule's own.
+GSPRT_MIN_PAIRS: int = 2
+
 # A sparse Gumbel row at alpha = 1.0 (within one f32 ULP): ONE authority for the self-play counter
 # and the trainer's exclusion — `selfplay` and `train` may not import each other.
 ALPHA_FULL_THRESHOLD: float = 1.0 - 1e-6

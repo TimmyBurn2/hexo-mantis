@@ -44,6 +44,7 @@ from mantis.config.resolve.tactics import ARMS, arm_from_file, resolve_deploy_ta
 from mantis.encoding import lookup
 from mantis.eval.aggregate import pair_bootstrap_wr_ci
 from mantis.eval.rounds import GameRecordTarget, GateSpec, RoundSpec, RungJob
+from mantis.eval.sequential import SequentialGateSpec
 from mantis.eval.snapshot import write_model_snapshot
 from mantis.model import arch_from_spec_and_config, build_net
 from mantis.model.identity import net_param_hash
@@ -208,7 +209,7 @@ def armed_sides(cell: Mapping[str, Any]) -> str:
 
 
 def cell_spec(cell: Mapping[str, Any], base: RoundSpec, *, cell_dir: Path, config: Any) -> RoundSpec:
-    """One cell's RoundSpec: the rung at `sims` vs strix or six, or a fixed-N gate block vs a model."""
+    """One cell's RoundSpec: the rung at `sims` vs strix or six, or a fixed-N gate block vs a model; Raises: FrontierCellError on a cell no round can play."""
     games = int(cell["games"])
     kind = str(cell["search_kind"])
     sims = int(cell["sims"])
@@ -247,11 +248,13 @@ def cell_spec(cell: Mapping[str, Any], base: RoundSpec, *, cell_dir: Path, confi
         return replace(base, **common, rung_model_sims=sims, rung_jobs=[_rung_on_cell_book(job, cell)])
     # A fixed-N match: the GSPRT cannot stop before its last pair and reads its verdict once, which the cell ignores.
     pairs = games // 2
-    if pairs < 2:
-        raise FrontierCellError(f"{cell['label']}: a model cell plays >= 2 pairs (the GSPRT's LLR reads two); games={games}")
+    sequential = {**base.gate.sequential, "min_pairs": pairs, "max_pairs": pairs, "check_every_pairs": pairs}
+    try:
+        SequentialGateSpec(**sequential)
+    except ValueError as exc:
+        raise FrontierCellError(f"{cell['label']}: games={games} is not a fixed-N GSPRT the rule admits: {exc}") from exc
     gate = replace(base.gate, run_gate=True, deploy_sims=sims, seed_base=seed_base,
-                   opening_book=str(cell.get("opening_book", base.gate.opening_book)),
-                   sequential={**base.gate.sequential, "min_pairs": pairs, "max_pairs": pairs, "check_every_pairs": pairs})
+                   opening_book=str(cell.get("opening_book", base.gate.opening_book)), sequential=sequential)
     return replace(base, **common, gate=gate, best_snapshot=str(cell_dir / "opponent.pt"))
 
 
