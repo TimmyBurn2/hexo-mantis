@@ -357,8 +357,6 @@ fn o4b_latch_stores_the_named_variant_and_halts_the_runner() {
         max_moves_per_game: 50,
         n_simulations: 1,
         leaf_batch_size: 1,
-        fast_sims: 1,
-        standard_sims: 1,
         quiescence_enabled: false,
         dirichlet_enabled: false,
         random_opening_plies: 50,

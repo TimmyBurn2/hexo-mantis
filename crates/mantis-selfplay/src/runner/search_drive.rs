@@ -129,11 +129,11 @@ pub(crate) struct MovePlayContext {
     pub(crate) gumbel_explore_moves: usize,
     pub(crate) dirichlet_alpha: f32,
     pub(crate) dirichlet_epsilon: f32,
+    /// Every searched move's sims, the full arm's when the playout cap is armed.
+    pub(crate) n_simulations: usize,
     pub(crate) full_search_prob: f32,
     pub(crate) n_sims_quick: usize,
     pub(crate) n_sims_full: usize,
-    pub(crate) game_sims: usize,
-    pub(crate) is_fast_game: bool,
     /// THE search authority: the root mechanism, the interior selector and the exported
     /// target's semantics all read this one field.
     pub(crate) search_kind: SearchKind,
@@ -568,7 +568,7 @@ pub(crate) fn play_one_move(
     accumulators: MoveAccumulators,
     fatal_latch: FatalDefectLatch,
 ) -> MoveOutcome {
-    // Move-level playout cap (orthogonal to game-level fast_prob).
+    // Move-level playout cap.
     let (move_is_full_search, move_sims) = if ctx.full_search_prob > 0.0 {
         let full = rng.random::<f32>() < ctx.full_search_prob;
         let sims = if full {
@@ -578,7 +578,7 @@ pub(crate) fn play_one_move(
         };
         (full, sims)
     } else {
-        (true, ctx.game_sims)
+        (true, ctx.n_simulations)
     };
     // Fire-rate counted HERE — at the draw, before anything else can move the flag.
     if move_is_full_search {
@@ -662,11 +662,7 @@ pub(crate) fn play_one_move(
 
     // ── MCTS Policy with cosine-annealed temperature schedule ──
     let compound_move = ply_to_compound_move(board.ply.index() as usize);
-    let temperature = if ctx.is_fast_game {
-        1.0 // fast games: always exploratory
-    } else {
-        compute_move_temperature(compound_move, ctx.temp_threshold, ctx.temp_min)
-    };
+    let temperature = compute_move_temperature(compound_move, ctx.temp_threshold, ctx.temp_min);
     let policy = tree.get_policy_ls(temperature, policy_stride);
 
     // Accumulate MCTS health stats once per search (not in the inner sim loop).

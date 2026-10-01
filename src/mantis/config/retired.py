@@ -14,6 +14,7 @@ RETIRED_PATHS: frozenset[str] = frozenset({
     "monitor.wr_collapse_consecutive_evals", "monitor.wr_early_death_threshold",
     "monitor.wr_early_death_min_step",
     "train.value_target", "train.draw_reward", "train.ply_cap_value",
+    "selfplay.playout_cap.fast_sims", "selfplay.playout_cap.fast_prob", "selfplay.playout_cap.standard_sims",
 })
 
 

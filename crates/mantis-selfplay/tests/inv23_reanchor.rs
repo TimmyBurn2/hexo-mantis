@@ -18,8 +18,6 @@ fn cfg_with_encoding(encoding_name: Option<&str>) -> SelfPlayRunnerConfig {
         max_moves_per_game: 0,
         n_simulations: 1,
         leaf_batch_size: 1,
-        fast_sims: 1,
-        standard_sims: 1,
         quiescence_enabled: false,
         quiescence_blend_2: 0.0,
         dirichlet_enabled: false,
@@ -49,10 +47,17 @@ fn every_registered_encoding_name_resolves_to_its_own_spec_derived_shapes() {
             "{}: policy_len must be the row's own policy_stride",
             spec.name
         );
-        assert!(!runner.is_running(), "{}: runner must not auto-start", spec.name);
+        assert!(
+            !runner.is_running(),
+            "{}: runner must not auto-start",
+            spec.name
+        );
         seen += 1;
     }
-    assert!(seen > 0, "the registry shipped no encodings, so this test asserted nothing");
+    assert!(
+        seen > 0,
+        "the registry shipped no encodings, so this test asserted nothing"
+    );
 }
 
 /// Test 2 — a DELETED grid row does not resolve: a stale config naming one is an error rather

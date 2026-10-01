@@ -12,7 +12,6 @@
 # delta: train.training_steps_per_game: 1.0 -> 4.0
 # delta: train.max_train_burst: 1 -> 4
 # delta: selfplay.mcts.n_simulations: 50 -> 2
-# delta: selfplay.playout_cap.fast_sims: 50 -> 2
 # delta: selfplay.max_game_moves: 128 -> 24
 # delta: eval.worker_device: cuda -> cpu
 # delta: eval.random_model_sims: 96 -> 1
@@ -129,9 +128,6 @@ selfplay:
     dirichlet_epsilon: 0.25
     dirichlet_enabled: true
   playout_cap:
-    fast_sims: 2
-    fast_prob: 0.0
-    standard_sims: 0
     full_search_prob: 0.0
     n_sims_quick: 0
     n_sims_full: 0

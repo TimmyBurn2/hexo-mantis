@@ -24,8 +24,6 @@ fn random_only_runner(max_moves: usize) -> SelfPlayRunner {
         max_moves_per_game: max_moves,
         n_simulations: 1, // irrelevant — no MCTS
         leaf_batch_size: 1,
-        fast_sims: 1,
-        standard_sims: 1,
         quiescence_enabled: false,
         quiescence_blend_2: 0.0,
         dirichlet_enabled: false,

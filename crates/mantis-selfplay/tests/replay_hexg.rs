@@ -120,7 +120,7 @@ fn push_rejects_over_cap() {
 fn a_sparse_row_over_the_minted_m_is_refused_at_insert() {
     // The bound is derived through the one authority: under `gumbel` the slot count IS the
     // minted m and the sims regime does not enter.
-    let m = derived_visit_capacity(320, 0, 0.0, 64, 0.0, 0, 0, 8, HEXG_GUMBEL_M_MAX, "gumbel")
+    let m = derived_visit_capacity(320, 0.0, 0, 0, 8, HEXG_GUMBEL_M_MAX, "gumbel")
         .expect("the minted Gumbel slot bound resolves");
     assert_eq!(m, HEXG_GUMBEL_M_MAX);
 

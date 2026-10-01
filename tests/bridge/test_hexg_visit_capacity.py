@@ -17,9 +17,6 @@ from mantis.encoding.registry import lookup
 def _derive(**over):
     args = dict(
         n_simulations=50,
-        standard_sims=0,
-        fast_prob=0.0,
-        fast_sims=50,
         full_search_prob=0.0,
         n_sims_quick=0,
         n_sims_full=0,
@@ -35,13 +32,10 @@ def _derive(**over):
 
 def test_derivation_is_max_armed_plus_leaf_overshoot() -> None:
     assert _derive() == 57  # run5 shape: 50 + 8 - 1
-    assert _derive(standard_sims=40) == 47  # standard_sims wins when set
     assert _derive(full_search_prob=0.10, n_sims_quick=75, n_sims_full=600) == 607
-    assert _derive(fast_prob=0.5, fast_sims=500) == 507
 
 
 def test_an_unarmed_arm_never_enters_the_max() -> None:
-    assert _derive(fast_sims=500) == 57  # fast_prob == 0.0 → inert
     assert _derive(n_sims_quick=70_000, n_sims_full=70_000) == 57  # prob 0.0 → inert
 
 

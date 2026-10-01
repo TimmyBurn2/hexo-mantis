@@ -35,7 +35,6 @@ fn latch_carries_the_variant_name_from_the_production_store_site_to_the_drain_fa
         max_moves_per_game: 20,
         n_simulations: 1,
         leaf_batch_size: 1,
-        standard_sims: 0,
         dirichlet_enabled: false,
         quiescence_enabled: false,
         random_opening_plies: 8,

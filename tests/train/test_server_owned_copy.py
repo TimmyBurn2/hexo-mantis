@@ -31,7 +31,7 @@ def _pool_cfg() -> dict[str, Any]:
         "log_investigation_metrics": False,
         "mcts": {"n_simulations": 8, "c_puct": 1.5, "fpu_reduction": 0.25, "quiescence_enabled": True,
                  "quiescence_blend_2": 0.3, "dirichlet_alpha": 0.3, "dirichlet_epsilon": 0.25, "dirichlet_enabled": True},
-        "playout_cap": {"fast_sims": 8, "fast_prob": 0.0, "standard_sims": 0, "full_search_prob": 0.0,
+        "playout_cap": {"full_search_prob": 0.0,
                         "n_sims_quick": 0, "n_sims_full": 0, "temperature_threshold_compound_moves": 0, "temp_min": 0.5},
     }
     inference = {"inference_batch_size": 4, "inference_max_wait_ms": 10, "edge_geometry_check": "inline",

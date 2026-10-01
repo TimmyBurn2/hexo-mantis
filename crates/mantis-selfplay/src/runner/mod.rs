@@ -128,7 +128,7 @@ pub struct RunnerStatsSnapshot {
 pub struct SelfPlayRunner {
     /// Resolved encoding spec; never `None`, since an absent identity key is rejected at `new()`.
     spec: &'static RegistrySpec,
-    /// Runner config, with `standard_sims` already resolved to the effective budget.
+    /// Runner config.
     config: SelfPlayRunnerConfig,
     /// HEXG visit-slot capacity, DERIVED once at composition from the sims regime; never a default.
     visit_capacity: usize,
@@ -217,14 +217,8 @@ impl SelfPlayRunner {
             }
         };
 
-        // Effective standard-search sim budget: `standard_sims` wins, else `n_simulations` — the
-        // ONE resolution rule, and zero is rejected on the *effective* value.
-        let effective_standard = crate::replay::hexg::effective_standard_sims(
-            config.n_simulations,
-            config.standard_sims,
-        );
-        if effective_standard == 0 {
-            return Err("SelfPlayRunner: n_simulations (or standard_sims) must be > 0".to_string());
+        if config.n_simulations == 0 {
+            return Err("SelfPlayRunner: n_simulations must be > 0".to_string());
         }
         // The Gumbel kind reaches the root's FULL legal set, so it spends up to
         // `MAX_ROOT_CHILDREN` slots there and its ceiling is correspondingly lower.
@@ -244,8 +238,6 @@ impl SelfPlayRunner {
         // EVERY sims knob the search can be driven at.
         for (name, sims) in [
             ("n_simulations", config.n_simulations),
-            ("standard_sims", config.standard_sims),
-            ("fast_sims", config.fast_sims),
             ("n_sims_quick", config.n_sims_quick),
             ("n_sims_full", config.n_sims_full),
         ] {
@@ -260,9 +252,6 @@ impl SelfPlayRunner {
                     mantis_search::MAX_CHILDREN_PER_NODE,
                 ));
             }
-        }
-        if config.fast_prob > 0.0 && config.fast_sims == 0 {
-            return Err("SelfPlayRunner: fast_sims must be > 0 when fast_prob > 0".to_string());
         }
         // `sample_dirichlet` refuses such an alpha only at the first noised root; boot names the key.
         // NaN-SAFE AND CLIPPY-CLEAN: `x <= 0.0` is FALSE for NaN and `!(x > 0.0)` trips
@@ -288,9 +277,6 @@ impl SelfPlayRunner {
         // mint-time validator calls, so this is defense in depth.
         let visit_capacity = crate::replay::hexg::derived_visit_capacity(
             config.n_simulations,
-            config.standard_sims,
-            config.fast_prob,
-            config.fast_sims,
             config.full_search_prob,
             config.n_sims_quick,
             config.n_sims_full,
@@ -307,9 +293,6 @@ impl SelfPlayRunner {
                 .check_radius(spec.legal_move_radius as i32)
                 .map_err(|e| format!("SelfPlayRunner: {e}"))?;
         }
-
-        // Bake the resolved budget so the workers read the effective value.
-        config.standard_sims = effective_standard;
 
         // The collector's saturation threshold is DERIVED from what this run can supply: a worker
         // blocks on its whole submitted batch, so `n_workers x leaf_batch_size` caps queue depth.

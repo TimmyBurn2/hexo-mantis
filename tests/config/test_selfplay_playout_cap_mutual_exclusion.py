@@ -1,7 +1,6 @@
 """`PlayoutCapConfig._mutual_exclusion` — what the schema refuses at load.
 
-Gated on `full_search_prob > 0`: `fast_prob` and `full_search_prob` both positive; either
-sims preset zero; `n_sims_quick > n_sims_full`.
+Gated on `full_search_prob > 0`: either sims preset zero; `n_sims_quick > n_sims_full`.
 
 Gated instead on BOTH presets being set, independently of `full_search_prob`:
 `n_sims_quick == n_sims_full` (a no-op randomization) and a degenerate `full_search_prob`
@@ -15,7 +14,7 @@ from pydantic import ValidationError
 from mantis.config.schema import PlayoutCapConfig
 
 BASE: dict = {
-    "fast_sims": 50, "fast_prob": 0.0, "standard_sims": 0, "full_search_prob": 0.0,
+    "full_search_prob": 0.0,
     "n_sims_quick": 0, "n_sims_full": 0,
     "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
 }
@@ -25,11 +24,6 @@ def _payload(**over: object) -> dict:
     out = dict(BASE)
     out.update(over)
     return out
-
-
-def test_fast_prob_and_full_search_prob_both_positive_raises():
-    with pytest.raises(ValidationError, match="mutually exclusive"):
-        PlayoutCapConfig.model_validate(_payload(fast_prob=0.5, full_search_prob=0.5))
 
 
 def test_full_search_prob_positive_with_zero_n_sims_quick_raises():
@@ -76,13 +70,6 @@ def test_valid_move_level_cap_regime_constructs_cleanly():
         _payload(full_search_prob=0.3, n_sims_quick=40, n_sims_full=250)
     )
     assert cfg.full_search_prob == 0.3
-
-
-def test_fast_prob_alone_constructs_cleanly():
-    # contrast arm: `full_search_prob == 0` clears the first three checks and both presets at
-    # 0 clears the other gate.
-    cfg = PlayoutCapConfig.model_validate(_payload(fast_prob=0.3))
-    assert cfg.fast_prob == 0.3
 
 
 def test_degenerate_full_search_prob_zero_raises():

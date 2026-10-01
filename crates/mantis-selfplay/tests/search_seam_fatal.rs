@@ -39,7 +39,6 @@ fn graph_runner() -> SelfPlayRunner {
         max_moves_per_game: 12,
         n_simulations: 24,
         leaf_batch_size: 4,
-        standard_sims: 0,
         dirichlet_enabled: false,
         quiescence_enabled: false,
         random_opening_plies: 0,

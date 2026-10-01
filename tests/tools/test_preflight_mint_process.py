@@ -1221,9 +1221,6 @@ def _identity(representation: str, encoding: str = "gnn_axis_v1"):
             gumbel_m=16,
             mcts=SimpleNamespace(n_simulations=50),
             playout_cap=SimpleNamespace(
-                standard_sims=0,
-                fast_prob=0.0,
-                fast_sims=50,
                 full_search_prob=0.0,
                 n_sims_quick=0,
                 n_sims_full=0,

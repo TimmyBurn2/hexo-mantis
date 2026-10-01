@@ -50,17 +50,6 @@ impl SelfPlayRunner {
             return;
         }
 
-        // Defense in depth: game-level (`fast_prob`) and move-level (`full_search_prob`)
-        // playout-cap randomisers must not both be active.
-        assert!(
-            !(self.config.fast_prob > 0.0 && self.config.full_search_prob > 0.0),
-            "playout-cap mutex violated: fast_prob={} and full_search_prob={} \
-             are both > 0 (§100 — game-level and move-level caps are mutually \
-             exclusive)",
-            self.config.fast_prob,
-            self.config.full_search_prob,
-        );
-
         let geometry = self.geometry;
 
         let (stats_proto, atomics_proto, channels_proto, params_proto) =
@@ -138,9 +127,7 @@ impl SelfPlayRunner {
             c_puct: c.c_puct,
             fpu_reduction: c.fpu_reduction,
             quiescence_blend_2: c.quiescence_blend_2,
-            fast_prob: c.fast_prob,
-            fast_sims: c.fast_sims,
-            standard_sims: c.standard_sims,
+            n_simulations: c.n_simulations,
             temp_threshold: c.temp_threshold_compound_moves,
             temp_min: c.temp_min,
             sigma: QSigma {

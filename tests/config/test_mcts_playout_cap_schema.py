@@ -19,7 +19,7 @@ VALID_MCTS: dict = {
     "dirichlet_enabled": True,
 }
 VALID_PLAYOUT_CAP: dict = {
-    "fast_sims": 50, "fast_prob": 0.0, "standard_sims": 0, "full_search_prob": 0.0,
+    "full_search_prob": 0.0,
     "n_sims_quick": 0, "n_sims_full": 0,
     "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
 }
@@ -32,7 +32,6 @@ MCTS_BOUND_VIOLATIONS: list[tuple[str, object]] = [
     ("dirichlet_epsilon", -0.1),
 ]
 PLAYOUT_CAP_BOUND_VIOLATIONS: list[tuple[str, object]] = [
-    ("fast_sims", 0), ("fast_prob", 1.1), ("fast_prob", -0.1), ("standard_sims", -1),
     ("full_search_prob", 1.1), ("n_sims_quick", -1), ("n_sims_full", -1),
     ("temperature_threshold_compound_moves", -1),
     ("temp_min", -0.1),
@@ -76,7 +75,7 @@ def test_mcts_bound_violation_rejected(field: str, bad_value: object):
 # PlayoutCapConfig
 def test_playout_cap_valid_payload_constructs_clean():
     cfg = PlayoutCapConfig.model_validate(VALID_PLAYOUT_CAP)
-    assert cfg.fast_sims == 50
+    assert cfg.full_search_prob == 0.0
 
 
 @pytest.mark.parametrize("field", PLAYOUT_CAP_FIELDS)

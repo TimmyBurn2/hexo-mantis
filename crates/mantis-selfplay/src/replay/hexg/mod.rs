@@ -49,23 +49,11 @@ pub const HEXG_GUMBEL_M_MAX: usize = 16;
 /// for which that product cannot overflow `usize`. The bound stops a wrap, not a policy.
 pub const HEXG_CAPACITY_CEILING: usize = usize::MAX / (MAX_STONES * 2);
 
-/// The ONE effective-standard-budget resolution: `standard_sims` wins when set, else
-/// `n_simulations`. Shared by [`derived_visit_capacity`] and the runner's own budget bake, so the
-/// guard capacity and the workers' baked budget cannot diverge onto two copies of the rule.
-#[must_use]
-pub fn effective_standard_sims(n_simulations: usize, standard_sims: usize) -> usize {
-    if standard_sims == 0 {
-        n_simulations
-    } else {
-        standard_sims
-    }
-}
-
 /// THE derivation authority for the HEXG visit-slot capacity.
 ///
-/// `capacity = max(ARMED effective sim budgets) + leaf_batch_size − 1`, the largest positive-mass
-/// support a graph record can carry; armed arms are standard always, fast iff `fast_prob > 0`,
-/// quick/full iff `full_search_prob > 0`. The `− 1` is HEADROOM, not a bound; tightening it would
+/// `capacity = max(ARMED sim budgets) + leaf_batch_size − 1`, the largest positive-mass support a
+/// graph record can carry; `n_simulations` is armed always, quick/full iff `full_search_prob > 0`.
+/// The `− 1` is HEADROOM, not a bound; tightening it would
 /// change which configs mint.
 ///
 /// Called by BOTH enforcement surfaces — the mint-time schema validator through its bridge twin
@@ -83,9 +71,6 @@ pub fn effective_standard_sims(n_simulations: usize, standard_sims: usize) -> us
 #[allow(clippy::too_many_arguments)]
 pub fn derived_visit_capacity(
     n_simulations: usize,
-    standard_sims: usize,
-    fast_prob: f32,
-    fast_sims: usize,
     full_search_prob: f32,
     n_sims_quick: usize,
     n_sims_full: usize,
@@ -116,11 +101,7 @@ pub fn derived_visit_capacity(
         }
         return Ok(gumbel_m);
     }
-    let effective_standard = effective_standard_sims(n_simulations, standard_sims);
-    let mut max_armed = effective_standard;
-    if fast_prob > 0.0 {
-        max_armed = max_armed.max(fast_sims);
-    }
+    let mut max_armed = n_simulations;
     if full_search_prob > 0.0 {
         max_armed = max_armed.max(n_sims_quick).max(n_sims_full);
     }

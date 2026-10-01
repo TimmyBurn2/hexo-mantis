@@ -113,9 +113,6 @@ class SelfPlayHParams:
     dirichlet_epsilon: float  # field name == schema key (mcts.dirichlet_epsilon)
     dirichlet_enabled: bool
     # playout_cap ns
-    fast_sims: int
-    fast_prob: float
-    standard_sims: int
     full_search_prob: float
     n_sims_quick: int
     n_sims_full: int
@@ -167,9 +164,6 @@ class SelfPlayHParams:
             dirichlet_alpha=float(mcts_cfg["dirichlet_alpha"]),
             dirichlet_epsilon=float(mcts_cfg["dirichlet_epsilon"]),
             dirichlet_enabled=bool(mcts_cfg["dirichlet_enabled"]),
-            fast_sims=int(pc["fast_sims"]),
-            fast_prob=float(pc["fast_prob"]),
-            standard_sims=int(pc["standard_sims"]),
             full_search_prob=float(pc["full_search_prob"]),
             n_sims_quick=int(pc["n_sims_quick"]),
             n_sims_full=int(pc["n_sims_full"]),
@@ -229,9 +223,6 @@ def build_runner_config(
         leaf_batch_size=hp.leaf_batch_size,
         c_puct=hp.c_puct,
         fpu_reduction=hp.fpu_reduction,
-        fast_prob=hp.fast_prob,
-        fast_sims=hp.fast_sims,
-        standard_sims=hp.standard_sims,
         temp_threshold_compound_moves=hp.temp_threshold_compound_moves,
         quiescence_enabled=hp.quiescence_enabled,
         quiescence_blend_2=hp.quiescence_blend_2,

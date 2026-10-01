@@ -177,9 +177,6 @@ selfplay:
     dirichlet_epsilon: 0.25
     dirichlet_enabled: false
   playout_cap:
-    fast_sims: 50
-    fast_prob: 0.0
-    standard_sims: 0
     full_search_prob: 0.25
     n_sims_quick: 64
     n_sims_full: 320

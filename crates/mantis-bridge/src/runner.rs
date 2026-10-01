@@ -98,9 +98,6 @@ impl PySelfPlayRunnerConfig {
         leaf_batch_size = 8,
         c_puct = 1.5,
         fpu_reduction = 0.25,
-        fast_prob = 0.0,
-        fast_sims = 50,
-        standard_sims = 0,
         temp_threshold_compound_moves = 0,
         quiescence_enabled = true,
         quiescence_blend_2 = 0.3,
@@ -129,9 +126,6 @@ impl PySelfPlayRunnerConfig {
         leaf_batch_size: usize,
         c_puct: f32,
         fpu_reduction: f32,
-        fast_prob: f32,
-        fast_sims: usize,
-        standard_sims: usize,
         temp_threshold_compound_moves: usize,
         quiescence_enabled: bool,
         quiescence_blend_2: f32,
@@ -161,9 +155,6 @@ impl PySelfPlayRunnerConfig {
                 leaf_batch_size,
                 c_puct,
                 fpu_reduction,
-                fast_prob,
-                fast_sims,
-                standard_sims,
                 temp_threshold_compound_moves,
                 quiescence_enabled,
                 quiescence_blend_2,
@@ -518,9 +509,6 @@ mod tests {
             8,
             1.5,
             0.25,
-            0.0,
-            50,
-            0,
             0,
             true,
             0.3,
@@ -571,8 +559,8 @@ mod tests {
     #[test]
     fn runner_missing_encoding_errors() {
         let cfg = PySelfPlayRunnerConfig::new(
-            1, 64, 30, 8, 1.5, 0.25, 0.0, 50, 0, 0, true, 0.3, 0.5, 50.0, 1.0, true, 0, 16, 10,
-            0.3, 0.25, true, 10_000, 0.0, 0, 0, 0, None,
+            1, 64, 30, 8, 1.5, 0.25, 0, true, 0.3, 0.5, 50.0, 1.0, true, 0, 16, 10, 0.3, 0.25,
+            true, 10_000, 0.0, 0, 0, 0, None,
         );
         assert!(
             PySelfPlayRunner::new(&cfg).is_err(),

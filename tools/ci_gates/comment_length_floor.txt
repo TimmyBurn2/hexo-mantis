@@ -15,4 +15,4 @@ rust_doc_excess_lines 2077
 # files the .py/.rs scopes never saw. Down-only, like the rest. The narrower ungated
 # ruling_cite_comment_lines counter is retired with the same edit.
 ruling_cite_lines 91
-textfile_comment_excess_lines 227
+textfile_comment_excess_lines 224

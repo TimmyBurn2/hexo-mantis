@@ -71,11 +71,8 @@ pub fn assemble_ls_from_gnn_probs(
 
 /// Typed, run-fatal target-integrity refusal, in two scopes.
 ///
-/// `MassNotUnity` / `EmptyTarget` / `VisitSlotsExceeded` bind the GRAPH record constructor only,
-/// making the degenerate target class unconstructible there; the dense fast-game zero-policy arm
-/// is a deliberate value-only sentinel and never reaches this constructor. `ZeroVisitSearch` binds
-/// the TARGET-EXPORT boundary on BOTH arms, since the dense arm's zero-visit export is an all-zero
-/// row indistinguishable from its legitimate sentinel.
+/// `MassNotUnity` / `EmptyTarget` / `VisitSlotsExceeded` bind the GRAPH record constructor, making
+/// the degenerate target class unconstructible there; `ZeroVisitSearch` binds the TARGET-EXPORT boundary.
 ///
 /// `Display` leads with the variant name, so the name survives verbatim through the runner
 /// fatal-defect latch to the supervisor.

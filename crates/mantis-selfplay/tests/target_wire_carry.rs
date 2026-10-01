@@ -59,7 +59,6 @@ fn s2w_drained_graph_records_carry_full_mass_visits_verbatim() {
         max_moves_per_game: 44, // opening 40 + a few searched moves → fast ply-cap finalize
         n_simulations: 8,
         leaf_batch_size: 4,
-        standard_sims: 0,
         dirichlet_enabled: false,
         quiescence_enabled: false,
         random_opening_plies: 40,
@@ -132,7 +131,6 @@ fn ctr_export_offwindow_mass_moves_fires_on_a_dispersed_run() {
         max_moves_per_game: 44,
         n_simulations: 8,
         leaf_batch_size: 4,
-        standard_sims: 0,
         dirichlet_enabled: false,
         quiescence_enabled: false,
         random_opening_plies: 40,

@@ -1,8 +1,8 @@
 # Contract: run config schema
 
-- version: v41
+- version: v42
 - owner: mantis.config.schema
-- status: LIVE since scaffold (WP0). Forty steps since (v1 -> v41). Each through v6 is
+- status: LIVE since scaffold (WP0). Forty-one steps since (v1 -> v42). Each through v6 is
   recorded as a named amendment in docs/design/repo_design.md §4; v7, v8 and v9 are NOT, and
   that is stated rather than implied — v7 landed without one, v8 (R242/ADJ-D12) inherited that
   gap rather than back-filling somebody else's amendment, and v9 records the same gap for
@@ -68,10 +68,11 @@ holds no block). The SELF-PLAY home is REFUSED non-null by `_selfplay_runs_no_ta
 | v40 | NO leaf moves; ONE validator DELETED, the refusal of a non-null `selfplay.search.tactics`: the SELF-PLAY home now ARMS every worker's tree (TACTICS-SELFPLAY, R378): `mantis.config.resolve.resolve_selfplay_tactics` -> `SelfPlayHParams.from_config` -> `build_runner_config` -> `SelfPlayRunnerConfig.configure_tactics` -> each worker's `MCTSTree::configure_tactics`. The leaves decide what they prove; the root offence's decided root is searched, then plays its stone, and its row records the search's own target (R378(e), A9's reading); the audit vets every other move and its vetoes carry no target mass; a lost root records no policy target, as does a root whose every searched move was vetoed, both as quick rows, so ONE validator ADDED requires `train.fast_policy_weight` 0 while the block is armed. The gate's best side now
 plays the deploy block too, deploy-matched (R378(d)); the v39 row's "without it" is that version's. Every committed config still mints `null` in both homes; no armed value moves | TACTICS-SELFPLAY |
 | v41 | TWO leaves DELETED from the `train` section, `draw_reward` and `ply_cap_value` (both `float`), with every reader: the runner's `SelfPlayRunnerConfig` fields and their −0.1 Rust defaults, the bridge ctor kwargs, `graph_row_outcome`'s two arguments and the buffer-composition band read off them (HYGIENE-1, R381(d)/(e); the training-path audit's F5). A game with no winner now trains NO value: `finalize_graph_outcome` writes 0 and `value_valid` false at the cap (reason 2) AND short of it (reason 3), so a reason-3 game, which one live `RootExpansionFailed` makes of a capped one, is masked rather than trained as a draw for both colours; the LAW-18 row `root_expansion_failed` in `iteration_complete`'s target-integrity block counts those searches (event manifest v5). Eval's draw score (0.5) is untouched, and `draw_rate_abort` still pools reason-3 games. Both paths join `RETIRED_PATHS`, so a stamp carrying them still loads; every committed config is RE-MINTED through its own header and `tools/config_diff.py --expect` between each old and new file names those two leaves alone | R381(d); HYGIENE-1 |
+| v42 | THREE leaves DELETED from `selfplay.playout_cap`, `fast_sims`, `fast_prob` and `standard_sims` — GAME-LEVEL FAST GAMES (HYGIENE-1, R381(d); the training-path audit's §7 item 1). Never armed in any committed config, and latently wrong: a fast game's rows were recorded with `is_full_search` true, so they trained policy at full weight. With them go the runner's per-game draw and its temperature-1.0 override, the spawn assert and `_mutual_exclusion`'s refusal that kept them apart from the move-level cap, and `effective_standard_sims`: every searched move now runs `selfplay.mcts.n_simulations`, or the move-level cap's arm when `full_search_prob` is armed, and the HEXG capacity derivation reads those alone. The paths join `RETIRED_PATHS`; every committed config is RE-MINTED through its own header (the smokes' `fast_sims` delta dropped with its leaf) and `tools/config_diff.py --expect` names the three leaves alone | R381(d); HYGIENE-1 |
 
 ## Shape
 
-Thirteen top-level fields; **177 leaf key-paths** under the walker that descends nested blocks
+Thirteen top-level fields; **174 leaf key-paths** under the walker that descends nested blocks
 (including optional ones) and counts a `list[SubModel]` field as ONE leaf.
 
 | section | leaves | models |
@@ -86,7 +87,7 @@ Thirteen top-level fields; **177 leaf key-paths** under the walker that descends
 | `deploy` | 11 | `DeployConfig`, `SearchConfig`, `TacticsConfig`, `TacticsAuditConfig` |
 | `eval` | 30 | `EvalConfig`, `GateConfig`, `SequentialGateConfig`, `PlyCapAdjudicationConfig`, `StrengthFloorConfig` |
 | `train` | 48 | `TrainConfig`, `DrawRateAbortConfig`, `PolicyLossTroughAbortConfig`, `PlyCapAbortConfig`, `HeldoutGapConfig`, `ReplayCapacityStage`, `MicrobatchCapsConfig` |
-| `selfplay` | 39 | `SelfplayConfig`, `SearchConfig`, `TacticsConfig`, `TacticsAuditConfig`, `MctsConfig`, `PlayoutCapConfig` |
+| `selfplay` | 36 | `SelfplayConfig`, `SearchConfig`, `TacticsConfig`, `TacticsAuditConfig`, `MctsConfig`, `PlayoutCapConfig` |
 | `inference` | 6 | `InferenceConfig`, `FusedGraphCapsConfig` |
 | `monitor` | 28 | `MonitorSchemaConfig`, `DrainCapsConfig`, `DiskGuardConfig` |
 
@@ -152,7 +153,7 @@ name at the moment it fires.
 | `_draw_rate_evidence_bar_within_configured_capacity` | `RunConfig` | `train.draw_rate_abort.N_pool_min` <= `DRAW_RATE_WINDOW * selfplay.n_workers`, the measured ceiling of the pooled window sum; the bound that replaced the retired `min_samples: le=DRAW_RATE_WINDOW` pin. **A CAPACITY check, not a reachability one (R95/ADJ-22)** — whether the bar is actually met depends on how many workers report, which load time cannot witness; an unmet bar surfaces at runtime as an absence of observations (R92), never as a healthy `0.0` |
 | `_one_drawn_game_cannot_fire_the_abort` | `DrawRateAbortConfig` | `1 / N_pool_min` < `threshold`: below that a SINGLE drawn game meets the bar and fires a hard abort |
 | `_stages_are_strictly_increasing` | `TrainConfig` | `train.replay_capacity_schedule` steps strictly increase; the consumer's cursor only moves forward, so an out-of-order stage is applied at the wrong boundary |
-| `_mutual_exclusion` | `PlayoutCapConfig` | `fast_prob` and `full_search_prob` are mutually exclusive; a configured quick/full pair must differ and its probability must sit in `(0, 1)` |
+| `_mutual_exclusion` | `PlayoutCapConfig` | an armed `full_search_prob` needs both presets and quick at most full; a configured quick/full pair must differ and its probability must sit in `(0, 1)` |
 
 TWO v4 keys are spelled differently in the schema and in the runtime object they reach, each
 for a measured reason: `train.replay_capacity` -> `capacity` and

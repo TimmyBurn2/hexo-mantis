@@ -41,9 +41,6 @@ class MctsConfig(StrictModel):
 class PlayoutCapConfig(StrictModel):
     """Playout-cap-randomization (PCR) knobs (`# playout_cap ns` in `hparams.py`)."""
 
-    fast_sims: int = Field(ge=1, le=MAX_ARMED_SIMS)
-    fast_prob: float = Field(ge=0, le=1)
-    standard_sims: int = Field(ge=0, le=MAX_ARMED_SIMS)
     full_search_prob: float = Field(ge=0, le=1)
     n_sims_quick: int = Field(ge=0, le=MAX_ARMED_SIMS)
     n_sims_full: int = Field(ge=0, le=MAX_ARMED_SIMS)
@@ -53,11 +50,6 @@ class PlayoutCapConfig(StrictModel):
 
     @model_validator(mode="after")
     def _mutual_exclusion(self) -> "PlayoutCapConfig":
-        # The two frozen hard errors, plus the "PCR quick > full" check.
-        if self.full_search_prob > 0.0 and self.fast_prob > 0.0:
-            raise ValueError(
-                "playout_cap: fast_prob and full_search_prob are mutually exclusive"
-            )
         if self.full_search_prob > 0.0 and (self.n_sims_quick <= 0 or self.n_sims_full <= 0):
             raise ValueError(
                 "playout_cap: full_search_prob > 0 requires n_sims_quick>0 and n_sims_full>0"

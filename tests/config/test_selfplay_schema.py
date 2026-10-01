@@ -26,7 +26,7 @@ VALID_MCTS: dict = {
     "dirichlet_enabled": True,
 }
 VALID_PLAYOUT_CAP: dict = {
-    "fast_sims": 50, "fast_prob": 0.0, "standard_sims": 0, "full_search_prob": 0.0,
+    "full_search_prob": 0.0,
     "n_sims_quick": 0, "n_sims_full": 0,
     "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
 }
@@ -77,7 +77,7 @@ def test_selfplay_valid_payload_constructs_clean():
     cfg = SelfplayConfig.model_validate(VALID_SELFPLAY)
     assert cfg.n_workers == 1
     assert cfg.mcts.n_simulations == 50
-    assert cfg.playout_cap.fast_sims == 50
+    assert cfg.playout_cap.full_search_prob == 0.0
 
 
 @pytest.mark.parametrize("field",
@@ -188,7 +188,7 @@ def test_the_gumbel_kind_lowers_the_sim_ceiling_at_mint(smoke_run_config):
 def test_every_armed_sims_knob_is_checked_against_the_kinds_ceiling(smoke_run_config):
     """Every armed sims knob, not only `n_simulations`, is checked against the kind's ceiling."""
     over = MAX_ARMED_SIMS_GUMBEL + 1
-    for key in ("fast_sims", "n_sims_quick", "n_sims_full"):
+    for key in ("n_sims_quick", "n_sims_full"):
         with pytest.raises(ValidationError, match=key):
             smoke_run_config(
                 "dev_example.yaml",

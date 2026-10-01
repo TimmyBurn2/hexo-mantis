@@ -188,7 +188,8 @@ path = "selfplay/pool/runner_config_goldens.json"
 # Re-cut by TACTICS-SELFPLAY (contract v40): the self-play home's `tactics` is read by `from_config`, so the
 # capture carries `tactics: null` in both homes and records the `configure_tactics` call beside `search_kind`.
 # Re-cut by HYGIENE-1 (contract v41): `train.draw_reward` and `train.ply_cap_value` left the tree with their kwargs.
-sha256 = "b33bef4bb812864f5fe0432f0edbb299c4238c6f0909c9498ee07a590a510f39"
+# Re-cut by HYGIENE-1 (contract v42): game-level fast games (`fast_prob`, `fast_sims`, `standard_sims`) left the tree.
+sha256 = "78a63aae354501ef63a01d88dd69b8c050caa9589d8a4fe0190656e9e6758932"
 added_by = "WP-SP"
 
 [[required]]

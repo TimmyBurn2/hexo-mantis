@@ -22,7 +22,7 @@ use crate::inference::{PyGraphWire, SeamFailure};
 
 /// `push_graph_position` is the SECOND public graph-record constructor, so it refuses
 /// non-distribution rows with the SAME typed semantics as `record_position_graph`: this face has
-/// no legitimate zero/value-only form, the fast-game sentinel being the DENSE recorder's.
+/// no legitimate zero/value-only form.
 fn refuse_non_distribution_row(
     visits: &[(i16, i16, f32)],
     ply_index: u16,
@@ -291,12 +291,9 @@ impl PyHexgBuffer {
 /// honor. Live consumers: the schema validator and the buffer composition.
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
-#[pyo3(signature = (n_simulations, standard_sims, fast_prob, fast_sims, full_search_prob, n_sims_quick, n_sims_full, leaf_batch_size, gumbel_m, search_kind))]
+#[pyo3(signature = (n_simulations, full_search_prob, n_sims_quick, n_sims_full, leaf_batch_size, gumbel_m, search_kind))]
 pub fn derived_hexg_visit_capacity(
     n_simulations: usize,
-    standard_sims: usize,
-    fast_prob: f32,
-    fast_sims: usize,
     full_search_prob: f32,
     n_sims_quick: usize,
     n_sims_full: usize,
@@ -306,9 +303,6 @@ pub fn derived_hexg_visit_capacity(
 ) -> PyResult<usize> {
     derived_visit_capacity_impl(
         n_simulations,
-        standard_sims,
-        fast_prob,
-        fast_sims,
         full_search_prob,
         n_sims_quick,
         n_sims_full,

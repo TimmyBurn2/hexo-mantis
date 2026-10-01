@@ -47,9 +47,6 @@
       "dirichlet_enabled": false
      },
      "playout_cap": {
-      "fast_sims": 40,
-      "fast_prob": 0.0,
-      "standard_sims": 160,
       "full_search_prob": 0.25,
       "n_sims_quick": 40,
       "n_sims_full": 200,
@@ -69,8 +66,6 @@
     "dirichlet_enabled": false,
     "dirichlet_epsilon": 0.3,
     "encoding_name": "gnn_axis_r8",
-    "fast_prob": 0.0,
-    "fast_sims": 40,
     "fpu_reduction": 0.4,
     "full_search_prob": 0.25,
     "gumbel_explore_moves": 14,
@@ -85,7 +80,6 @@
     "quiescence_enabled": false,
     "random_opening_plies": 3,
     "results_queue_cap": 5000,
-    "standard_sims": 160,
     "temp_min": 0.35,
     "temp_threshold_compound_moves": 12,
     "search_stats_every": 8
@@ -131,9 +125,6 @@
       "dirichlet_enabled": true
      },
      "playout_cap": {
-      "fast_sims": 100,
-      "fast_prob": 0.0,
-      "standard_sims": 0,
       "full_search_prob": 0.0,
       "n_sims_quick": 0,
       "n_sims_full": 0,
@@ -153,8 +144,6 @@
     "dirichlet_enabled": true,
     "dirichlet_epsilon": 0.25,
     "encoding_name": "gnn_axis_v1",
-    "fast_prob": 0.0,
-    "fast_sims": 100,
     "fpu_reduction": 0.25,
     "full_search_prob": 0.0,
     "gumbel_explore_moves": 10,
@@ -169,7 +158,6 @@
     "quiescence_enabled": true,
     "random_opening_plies": 0,
     "results_queue_cap": 10000,
-    "standard_sims": 0,
     "temp_min": 0.5,
     "temp_threshold_compound_moves": 0,
     "search_stats_every": 8

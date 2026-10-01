@@ -8,8 +8,7 @@ constructor-quantified, so it refuses non-distribution rows with the SAME typed
 semantics as `record_position_graph`: the `TargetIntegrityError` Display (variant name
 first) mapped to `ValueError`; `panic="unwind"` untouched. Census grounds for refusing
 ALL non-distribution rows on this face: the graph push face has NO legitimate
-zero/value-only form (the fast-game zero-policy sentinel is the DENSE recorder's,
-runner/record.rs:67-78; graph quick-arm rows carry full mass — the frozen QA oracle
+zero/value-only form (graph quick-arm rows carry full mass — the frozen QA oracle
 pins it). Duplicate-coord rows stay admitted (caught loud at sample-align); per-entry
 NaN/negative refusals pre-date this loop in `push_record_impl`.
 

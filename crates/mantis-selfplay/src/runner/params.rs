@@ -114,9 +114,8 @@ pub(crate) struct WorkerParams {
     pub(crate) c_puct: f32,
     pub(crate) fpu_reduction: f32,
     pub(crate) quiescence_blend_2: f32,
-    pub(crate) fast_prob: f32,
-    pub(crate) fast_sims: usize,
-    pub(crate) standard_sims: usize,
+    /// Every searched move's sims, the full arm's when the playout cap is armed.
+    pub(crate) n_simulations: usize,
     pub(crate) temp_threshold: usize,
     pub(crate) temp_min: f32,
     pub(crate) sigma: QSigma,

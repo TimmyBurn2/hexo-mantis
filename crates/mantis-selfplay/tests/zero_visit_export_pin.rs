@@ -180,7 +180,6 @@ fn the_exporter_pin_stops_a_zero_visit_run_with_the_seam_never_firing() {
         max_moves_per_game: 20,
         n_simulations: 1,
         leaf_batch_size: 1,
-        standard_sims: 0,
         dirichlet_enabled: false,
         quiescence_enabled: false,
         random_opening_plies: 8,

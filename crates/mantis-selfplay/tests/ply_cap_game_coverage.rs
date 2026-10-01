@@ -27,7 +27,6 @@ mod common;
 const PROD_SIMS: usize = 50;
 const PROD_LEAF_BATCH: usize = 8;
 const PROD_PLY_CAP: usize = 128;
-const PROD_FAST_SIMS: usize = 50;
 const PROD_DIRICHLET_ALPHA: f32 = 0.3;
 const PROD_DIRICHLET_EPSILON: f32 = 0.25;
 /// HARNESS-ONLY accelerator: plies below this are played at random with no search and no
@@ -39,27 +38,14 @@ const SEARCHED_PLIES: usize = PROD_PLY_CAP - RANDOM_OPENING_PLIES as usize;
 #[test]
 fn a_full_ply_cap_game_at_production_parameters_records_within_the_derived_capacity() {
     let spec = lookup_or_panic("gnn_axis_v1");
-    let capacity = derived_visit_capacity(
-        PROD_SIMS,
-        0,
-        0.0,
-        PROD_FAST_SIMS,
-        0.0,
-        0,
-        0,
-        PROD_LEAF_BATCH,
-        16,
-        "puct",
-    )
-    .expect("the production sims regime must have a derivable capacity");
+    let capacity = derived_visit_capacity(PROD_SIMS, 0.0, 0, 0, PROD_LEAF_BATCH, 16, "puct")
+        .expect("the production sims regime must have a derivable capacity");
 
     let runner = SelfPlayRunner::new(SelfPlayRunnerConfig {
         n_workers: 1,
         max_moves_per_game: PROD_PLY_CAP,
         n_simulations: PROD_SIMS,
         leaf_batch_size: PROD_LEAF_BATCH,
-        fast_sims: PROD_FAST_SIMS,
-        standard_sims: 0,
         quiescence_enabled: true,
         quiescence_blend_2: 0.3,
         dirichlet_enabled: true,

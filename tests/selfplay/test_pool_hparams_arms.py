@@ -25,7 +25,7 @@ BASE_MCTS: dict[str, Any] = {
     "dirichlet_enabled": False,
 }
 BASE_PLAYOUT_CAP: dict[str, Any] = {
-    "fast_sims": 40, "fast_prob": 0.0, "standard_sims": 160, "full_search_prob": 0.0,
+    "full_search_prob": 0.0,
     "n_sims_quick": 0, "n_sims_full": 0,
     "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
 }

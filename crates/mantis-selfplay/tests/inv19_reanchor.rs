@@ -29,9 +29,6 @@ fn distinct_sentinels() -> SelfPlayRunnerConfig {
         leaf_batch_size: 3,
         c_puct: 2.5,
         fpu_reduction: 0.125,
-        fast_prob: 0.375,
-        fast_sims: 37,
-        standard_sims: 42,
         temp_threshold_compound_moves: 21,
         quiescence_enabled: false,
         quiescence_blend_2: 0.625,
@@ -89,9 +86,6 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
         leaf_batch_size,
         c_puct,
         fpu_reduction,
-        fast_prob,
-        fast_sims,
-        standard_sims,
         temp_threshold_compound_moves,
         quiescence_enabled,
         quiescence_blend_2,
@@ -122,9 +116,6 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
     assert_eq!(leaf_batch_size, 3);
     assert!(feq(c_puct, 2.5));
     assert!(feq(fpu_reduction, 0.125));
-    assert!(feq(fast_prob, 0.375));
-    assert_eq!(fast_sims, 37);
-    assert_eq!(standard_sims, 42);
     assert_eq!(temp_threshold_compound_moves, 21);
     assert!(!quiescence_enabled);
     assert!(feq(quiescence_blend_2, 0.625));
@@ -150,9 +141,6 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
 }
 
 /// Prove the ctor accepts the sentinel config and exposes spec-derived shapes.
-///
-/// `fast_prob > 0` with `full_search_prob > 0` is rejected at `start()`, not `new()`, and
-/// `start()` is not called here.
 #[test]
 fn distinct_config_constructs_and_exposes_spec_derived_shapes() {
     let runner = SelfPlayRunner::new(distinct_sentinels())

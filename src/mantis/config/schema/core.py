@@ -320,9 +320,7 @@ def derived_visit_capacity(config: "RunConfig") -> int:
     sp = config.selfplay
     pc = sp.playout_cap
     return int(derived_hexg_visit_capacity(
-        n_simulations=sp.mcts.n_simulations, standard_sims=pc.standard_sims,
-        fast_prob=pc.fast_prob, fast_sims=pc.fast_sims,
-        full_search_prob=pc.full_search_prob, n_sims_quick=pc.n_sims_quick,
+        n_simulations=sp.mcts.n_simulations, full_search_prob=pc.full_search_prob, n_sims_quick=pc.n_sims_quick,
         n_sims_full=pc.n_sims_full, leaf_batch_size=sp.leaf_batch_size,
         gumbel_m=sp.gumbel_m, search_kind=sp.search.kind,
     ))
@@ -462,8 +460,6 @@ class RunConfig(StrictModel):
         if self.selfplay.search.kind == "gumbel":
             armed.update({
                 "selfplay.mcts.n_simulations": self.selfplay.mcts.n_simulations,
-                "selfplay.playout_cap.standard_sims": self.selfplay.playout_cap.standard_sims,
-                "selfplay.playout_cap.fast_sims": self.selfplay.playout_cap.fast_sims,
                 "selfplay.playout_cap.n_sims_quick": self.selfplay.playout_cap.n_sims_quick,
                 "selfplay.playout_cap.n_sims_full": self.selfplay.playout_cap.n_sims_full,
             })
@@ -608,8 +604,8 @@ class RunConfig(StrictModel):
             raise ValueError(
                 "the selfplay sims regime cannot be honored by the HEXG graph record "
                 f"format: {exc} [derived from selfplay.mcts.n_simulations, "
-                "selfplay.playout_cap.{standard_sims,fast_prob,fast_sims,"
-                "full_search_prob,n_sims_quick,n_sims_full}, selfplay.leaf_batch_size, "
+                "selfplay.playout_cap.{full_search_prob,n_sims_quick,n_sims_full}, "
+                "selfplay.leaf_batch_size, "
                 "selfplay.gumbel_m, selfplay.search.kind — R255/ADJ-D34 + R347(a): refused at mint, "
                 "never at boot]"
             ) from exc

@@ -3,8 +3,7 @@
 //!  * Under `puct` the capacity is DERIVED at composition:
 //!    `max(ARMED effective sim counts) + leaf_batch_size - 1`, via the one authority
 //!    `replay::hexg::derived_visit_capacity` (shared verbatim with the mint-time schema
-//!    validator). Armed arms: standard always (effective = standard_sims else
-//!    n_simulations), fast iff `fast_prob > 0`, quick/full iff `full_search_prob > 0`.
+//!    validator). Armed arms: `n_simulations` always, quick/full iff `full_search_prob > 0`.
 //!  * A derived capacity past the `u16` count ceiling `HEXG_VISIT_COUNT_CEILING` is an
 //!    error, refused at mint by the schema twin; the boot refusal is defense in depth for
 //!    un-minted constructions.
@@ -27,9 +26,6 @@ fn graph_cfg() -> SelfPlayRunnerConfig {
         encoding_name: Some(GRAPH_ENC.to_string()),
         n_simulations: 50,
         leaf_batch_size: 8,
-        standard_sims: 0, // effective standard = n_simulations
-        fast_prob: 0.0,
-        fast_sims: 50,
         full_search_prob: 0.0,
         n_sims_quick: 0,
         n_sims_full: 0,
@@ -50,38 +46,20 @@ fn pcr_600_75_cfg() -> SelfPlayRunnerConfig {
 
 #[test]
 fn derived_capacity_is_max_armed_plus_leaf_overshoot() {
-    // standard-only: 50 + 8 - 1 = 57.
-    assert_eq!(
-        derived_visit_capacity(50, 0, 0.0, 50, 0.0, 0, 0, 8, 16, "puct"),
-        Ok(57)
-    );
-    // standard_sims wins over n_simulations when set: 40 + 8 - 1 = 47.
-    assert_eq!(
-        derived_visit_capacity(50, 40, 0.0, 50, 0.0, 0, 0, 8, 16, "puct"),
-        Ok(47)
-    );
+    // n_simulations alone: 50 + 8 - 1 = 57.
+    assert_eq!(derived_visit_capacity(50, 0.0, 0, 0, 8, 16, "puct"), Ok(57));
     // PCR-armed: max(50, 75, 600) + 8 - 1 = 607.
     assert_eq!(
-        derived_visit_capacity(50, 0, 0.0, 50, 0.10, 75, 600, 8, 16, "puct"),
+        derived_visit_capacity(50, 0.10, 75, 600, 8, 16, "puct"),
         Ok(607)
-    );
-    // fast-armed: max(50, 500) + 8 - 1 = 507.
-    assert_eq!(
-        derived_visit_capacity(50, 0, 0.5, 500, 0.0, 0, 0, 8, 16, "puct"),
-        Ok(507)
     );
 }
 
 #[test]
 fn derivation_ignores_a_defined_but_unarmed_arm() {
-    // `fast_sims: 500` at `fast_prob: 0.0` must NOT enter the max: 50+8-1=57.
-    assert_eq!(
-        derived_visit_capacity(50, 0, 0.0, 500, 0.0, 0, 0, 8, 16, "puct"),
-        Ok(57)
-    );
     // Quick/full carrying huge values while full_search_prob == 0.0: still 57.
     assert_eq!(
-        derived_visit_capacity(50, 0, 0.0, 50, 0.0, 70_000, 70_000, 8, 16, "puct"),
+        derived_visit_capacity(50, 0.0, 70_000, 70_000, 8, 16, "puct"),
         Ok(57)
     );
 }
@@ -90,7 +68,7 @@ fn derivation_ignores_a_defined_but_unarmed_arm() {
 fn derivation_refuses_a_regime_over_the_format_ceiling() {
     // 70_000 + 8 - 1 = 70_007 > u16::MAX (65_535): the record format's `n_visits`
     // count is u16 — no capacity can honor this regime, whatever the config asks.
-    let err = derived_visit_capacity(50, 0, 0.0, 50, 0.10, 75, 70_000, 8, 16, "puct")
+    let err = derived_visit_capacity(50, 0.10, 75, 70_000, 8, 16, "puct")
         .expect_err("a regime past the u16 count ceiling cannot be honored");
     assert!(
         err.contains(&HEXG_VISIT_COUNT_CEILING.to_string()),
@@ -108,11 +86,11 @@ fn the_ceiling_is_the_u16_count_type_not_a_tunable() {
     assert_eq!(HEXG_VISIT_COUNT_CEILING, usize::from(u16::MAX));
     // Admit at the exact ceiling: max_armed + lb - 1 == 65_535 → Ok.
     assert_eq!(
-        derived_visit_capacity(65_528, 0, 0.0, 50, 0.0, 0, 0, 8, 16, "puct"),
+        derived_visit_capacity(65_528, 0.0, 0, 0, 8, 16, "puct"),
         Ok(HEXG_VISIT_COUNT_CEILING)
     );
     // One past → refuse.
-    assert!(derived_visit_capacity(65_529, 0, 0.0, 50, 0.0, 0, 0, 8, 16, "puct").is_err());
+    assert!(derived_visit_capacity(65_529, 0.0, 0, 0, 8, 16, "puct").is_err());
 }
 
 #[test]
@@ -181,7 +159,7 @@ fn the_gumbel_slot_count_is_the_minted_m_and_the_puct_one_is_the_derived_formula
     // PUCT: the sims regime decides, at every m.
     for m in [1usize, 8, 16] {
         assert_eq!(
-            derived_visit_capacity(50, 0, 0.0, 50, 0.0, 0, 0, 8, m, "puct"),
+            derived_visit_capacity(50, 0.0, 0, 0, 8, m, "puct"),
             Ok(57),
             "m must not enter the PUCT derivation"
         );
@@ -189,18 +167,18 @@ fn the_gumbel_slot_count_is_the_minted_m_and_the_puct_one_is_the_derived_formula
     // Gumbel: m decides, at every sims regime.
     for sims in [2usize, 50, 320, 600] {
         assert_eq!(
-            derived_visit_capacity(sims, 0, 0.0, sims, 0.0, 0, 0, 8, 16, "gumbel"),
+            derived_visit_capacity(sims, 0.0, 0, 0, 8, 16, "gumbel"),
             Ok(16),
             "the sims regime must not enter the Gumbel slot count"
         );
         assert_eq!(
-            derived_visit_capacity(sims, 0, 0.0, sims, 0.0, 0, 0, 8, 4, "gumbel"),
+            derived_visit_capacity(sims, 0.0, 0, 0, 8, 4, "gumbel"),
             Ok(4)
         );
     }
     println!(
         "sparse-row slot bound: HEXG_GUMBEL_M_MAX = {HEXG_GUMBEL_M_MAX}, derived at m=16 -> {:?}",
-        derived_visit_capacity(320, 0, 0.0, 64, 0.0, 0, 0, 8, 16, "gumbel")
+        derived_visit_capacity(320, 0.0, 0, 0, 8, 16, "gumbel")
     );
 }
 
@@ -208,7 +186,7 @@ fn the_gumbel_slot_count_is_the_minted_m_and_the_puct_one_is_the_derived_formula
 #[test]
 fn a_gumbel_m_past_the_minted_bound_is_refused() {
     for bad in [0usize, HEXG_GUMBEL_M_MAX + 1, 8192] {
-        let err = derived_visit_capacity(320, 0, 0.0, 64, 0.0, 0, 0, 8, bad, "gumbel")
+        let err = derived_visit_capacity(320, 0.0, 0, 0, 8, bad, "gumbel")
             .expect_err("m outside the minted range must not resolve to a slot count");
         assert!(
             err.contains("gumbel_m") && err.contains(&HEXG_GUMBEL_M_MAX.to_string()),
@@ -217,7 +195,7 @@ fn a_gumbel_m_past_the_minted_bound_is_refused() {
     }
     // The bound itself resolves — a bound refusing its own value would be off by one.
     assert_eq!(
-        derived_visit_capacity(320, 0, 0.0, 64, 0.0, 0, 0, 8, HEXG_GUMBEL_M_MAX, "gumbel"),
+        derived_visit_capacity(320, 0.0, 0, 0, 8, HEXG_GUMBEL_M_MAX, "gumbel"),
         Ok(HEXG_GUMBEL_M_MAX)
     );
 }
@@ -249,7 +227,7 @@ fn boot_composes_the_gumbel_graph_ring_at_the_minted_m() {
 /// Prove an unknown search kind is refused by the derivation, never defaulted.
 #[test]
 fn an_unknown_kind_is_refused_by_the_capacity_derivation() {
-    let err = derived_visit_capacity(50, 0, 0.0, 50, 0.0, 0, 0, 8, 16, "mctx")
+    let err = derived_visit_capacity(50, 0.0, 0, 0, 8, 16, "mctx")
         .expect_err("an unknown kind must not resolve");
     assert!(err.contains("search.kind"), "{err}");
 }

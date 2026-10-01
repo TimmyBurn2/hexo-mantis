@@ -339,9 +339,6 @@ class SelfPlayRunnerConfig:
         leaf_batch_size: int = 8,
         c_puct: float = 1.5,
         fpu_reduction: float = 0.25,
-        fast_prob: float = 0.0,
-        fast_sims: int = 50,
-        standard_sims: int = 0,
         temp_threshold_compound_moves: int = 0,
         quiescence_enabled: bool = True,
         quiescence_blend_2: float = 0.3,
@@ -573,9 +570,6 @@ def registry_sha_hex() -> str: ...
 
 def derived_hexg_visit_capacity(
     n_simulations: int,
-    standard_sims: int,
-    fast_prob: float,
-    fast_sims: int,
     full_search_prob: float,
     n_sims_quick: int,
     n_sims_full: int,

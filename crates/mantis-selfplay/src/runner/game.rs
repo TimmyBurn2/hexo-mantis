@@ -42,9 +42,6 @@ use super::{GameResultRow, PositionStats};
 struct PerGameInitCtx {
     max_moves: usize,
     random_opening_plies: u32,
-    fast_prob: f32,
-    fast_sims: usize,
-    standard_sims: usize,
     results_queue_cap: usize,
     worker_id: usize,
     /// 1-in-N games carry per-position search stats; 0 is off.
@@ -65,6 +62,7 @@ struct WorkerMoveCfg {
     gumbel_explore_moves: usize,
     dirichlet_alpha: f32,
     dirichlet_epsilon: f32,
+    n_simulations: usize,
     full_search_prob: f32,
     n_sims_quick: usize,
     n_sims_full: usize,
@@ -80,8 +78,6 @@ struct PerGameInit {
     move_history: Vec<(i32, i32)>,
     /// One `(sims, is_full_search)` per entry of `move_history`.
     move_arms: Vec<(u32, bool)>,
-    is_fast_game: bool,
-    game_sims: usize,
 }
 
 /// Per-worker thread entry. Owns its `MCTSTree`, RNG and per-game `Board`; builds the tree once,
@@ -148,9 +144,7 @@ pub(crate) fn run_worker_thread(
         c_puct,
         fpu_reduction,
         quiescence_blend_2,
-        fast_prob,
-        fast_sims,
-        standard_sims,
+        n_simulations,
         temp_threshold,
         temp_min,
         sigma,
@@ -232,9 +226,6 @@ pub(crate) fn run_worker_thread(
     let init_ctx = PerGameInitCtx {
         max_moves,
         random_opening_plies,
-        fast_prob,
-        fast_sims,
-        standard_sims,
         results_queue_cap,
         worker_id,
         search_stats_every,
@@ -249,6 +240,7 @@ pub(crate) fn run_worker_thread(
         gumbel_explore_moves,
         dirichlet_alpha,
         dirichlet_epsilon,
+        n_simulations,
         full_search_prob,
         n_sims_quick,
         n_sims_full,
@@ -337,6 +329,7 @@ fn run_one_game(
         dirichlet_alpha,
         dirichlet_epsilon,
         full_search_prob,
+        n_simulations,
         n_sims_quick,
         n_sims_full,
         search_kind,
@@ -348,9 +341,7 @@ fn run_one_game(
         mut graph_records,
         mut move_history,
         mut move_arms,
-        is_fast_game,
-        game_sims,
-    } = init_per_game_board(board_geometry, init_ctx, rng, version_seen);
+    } = init_per_game_board(board_geometry, init_ctx, version_seen);
     let mut search_stats: Option<Vec<PositionStats>> = sample_stats.then(Vec::new);
 
     let play_ctx = MovePlayContext {
@@ -363,11 +354,10 @@ fn run_one_game(
         gumbel_explore_moves,
         dirichlet_alpha,
         dirichlet_epsilon,
+        n_simulations,
         full_search_prob,
         n_sims_quick,
         n_sims_full,
-        game_sims,
-        is_fast_game,
         search_kind,
         dirichlet_enabled,
     };
@@ -446,12 +436,10 @@ fn run_one_game(
     );
 }
 
-/// Per-game board + state initializer: the spec-geometry board, pre-sized record vectors and the
-/// game-level playout-cap draw.
+/// Per-game board + state initializer: the spec-geometry board and pre-sized record vectors.
 fn init_per_game_board(
     board_geometry: BoardGeometry,
     init_ctx: PerGameInitCtx,
-    rng: &mut ThreadRng,
     version_seen: &mut Vec<u64>,
 ) -> PerGameInit {
     // The spec is ALWAYS resolved (absent = error at `new()`), so the board is built with the
@@ -463,20 +451,10 @@ fn init_per_game_board(
 
     // `legal_move_radius_jitter` is KILLED: dead for every registry spec.
 
-    // KataGo-style playout cap randomisation.
-    let is_fast_game = init_ctx.fast_prob > 0.0 && rng.random::<f32>() < init_ctx.fast_prob;
-    let game_sims = if is_fast_game {
-        init_ctx.fast_sims
-    } else {
-        init_ctx.standard_sims
-    };
-
     PerGameInit {
         board,
         graph_records: Vec::new(),
         move_history,
         move_arms,
-        is_fast_game,
-        game_sims,
     }
 }

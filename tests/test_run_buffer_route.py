@@ -29,9 +29,6 @@ def _derived(config) -> int:
     pc = sp.playout_cap
     return derived_hexg_visit_capacity(
         n_simulations=sp.mcts.n_simulations,
-        standard_sims=pc.standard_sims,
-        fast_prob=pc.fast_prob,
-        fast_sims=pc.fast_sims,
         full_search_prob=pc.full_search_prob,
         n_sims_quick=pc.n_sims_quick,
         n_sims_full=pc.n_sims_full,
