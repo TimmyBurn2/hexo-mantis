@@ -23,7 +23,7 @@ from mantis.eval import worker
 from mantis.eval.errors import EvalDecodeUnsupportedError
 from mantis.eval.rounds import GateSpec, RoundSpec, RungJob
 from _minted_puct import MINTED_PUCT
-from _gsprt import TWO_PAIR_GSPRT
+from _gsprt import two_pair_gsprt
 
 _BOOK = "book_v1_s20260625_p4"
 _SEED = 20260625
@@ -38,7 +38,7 @@ def _spec(tmp_path: Path, enc_name: str) -> RoundSpec:
     replaces the loader, and a round that reaches the filesystem has already lost."""
     gate = GateSpec(
         stride=1, deploy_sims=2, opening_book=_BOOK,
-        bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=True, sequential=TWO_PAIR_GSPRT,
+        bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=True, sequential=two_pair_gsprt(),
     )
     rung_jobs = [
         RungJob(

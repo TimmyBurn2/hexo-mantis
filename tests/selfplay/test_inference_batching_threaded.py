@@ -26,7 +26,7 @@ from mantis.config.resolve.inference_batching import (
 )
 from mantis.selfplay.inference_local import LocalInferenceEngine
 from _minted_puct import MINTED_PUCT
-from _gsprt import TWO_PAIR_GSPRT
+from _gsprt import two_pair_gsprt
 
 _CPU = torch.device("cpu")
 _GRAPH_SPEC = RegistrySpec.from_registry("gnn_axis_v1")
@@ -139,7 +139,7 @@ def test_the_round_spec_carries_the_batching_across_the_process_seam() -> None:
         encoding="gnn_axis_v1", worker_device="cpu",
         gate=GateSpec(stride=1, deploy_sims=8, opening_book="none",
                       bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=1,
-                      run_gate=False, sequential=TWO_PAIR_GSPRT),
+                      run_gate=False, sequential=two_pair_gsprt()),
         rung_jobs=[], random_floor_games=0, random_model_sims=1,
         seed_base=1, round_timeout_sec=1.0,
         result_path="r.json", progress_path="p.txt",

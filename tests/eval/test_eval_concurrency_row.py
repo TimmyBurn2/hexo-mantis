@@ -30,7 +30,7 @@ from mantis.eval import worker
 from mantis.eval.rounds import EVAL_CONCURRENCY_ROW, GateSpec, RoundSpec
 from mantis.eval.snapshot import write_model_snapshot
 from _minted_puct import MINTED_PUCT
-from _gsprt import TWO_PAIR_GSPRT
+from _gsprt import two_pair_gsprt
 
 #: The book is minted against `gnn_axis_v1` and most openings need radius >= 6 to replay.
 _ENC = "gnn_axis_v1"
@@ -162,7 +162,7 @@ def _round_spec(tmp_path: Path, concurrency: int) -> RoundSpec:
     write_model_snapshot(seeded_net(seed=2), best)
     gate = GateSpec(
         stride=1, deploy_sims=2, opening_book=_BOOK,
-        bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=True, sequential=TWO_PAIR_GSPRT,
+        bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=True, sequential=two_pair_gsprt(),
     )
     return RoundSpec(
         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, tactics=None, max_plies=32,

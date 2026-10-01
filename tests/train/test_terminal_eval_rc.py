@@ -60,7 +60,7 @@ from mantis.train.lifecycle.disk_guard import DiskGuard
 from mantis.train.lifecycle.signals import ShutdownState
 from _drivable import await_signal, DrivablePoolStub, DrivableTrainerStub, fake_disk_usage
 from _minted_puct import MINTED_PUCT
-from _gsprt import TWO_PAIR_GSPRT
+from _gsprt import two_pair_gsprt
 
 _REPO = Path(__file__).resolve().parents[2]
 _SRC = _REPO / "src" / "mantis"
@@ -330,7 +330,7 @@ class _FakeCtx:
 def _real_pipeline(tmp_path: Path, sink: SpyEventSink):
     gate = GateConfig(stride=1, deploy_sims=150,
                       opening_book="book_v1_s20260625_p4", bootstrap_resamples=1000,
-                      min_distinct_per_pair=10, seed_base=20260625, sequential=TWO_PAIR_GSPRT)
+                      min_distinct_per_pair=10, seed_base=20260625, sequential=two_pair_gsprt())
     eval_cfg = EvalConfig(random_model_sims=96, max_plies=128, random_floor_games=4, worker_device="cpu",
                           round_timeout_sec=5.0, worker_kill_grace_sec=0.2,
                           ply_cap_adjudication=None, strength_floor=None, gate=gate)

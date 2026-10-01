@@ -21,7 +21,7 @@ from mantis.model import GnnArch, build_net
 from mantis.selfplay.hparams import is_graph_representation
 from mantis.selfplay.inference_local import LocalInferenceEngine
 from _minted_puct import MINTED_PUCT
-from _gsprt import TWO_PAIR_GSPRT
+from _gsprt import two_pair_gsprt
 
 # The repo's one opening book and the probe's parameter set verbatim, so every recorded sha is
 # re-derivable: candidate seed 1, best seed 2, deploy_sims=2, seed_base=20260625.
@@ -55,7 +55,7 @@ def _round_spec(
 
     gate = GateSpec(
         stride=1, deploy_sims=2, opening_book=_BOOK,
-        bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=True, sequential=TWO_PAIR_GSPRT,
+        bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=True, sequential=two_pair_gsprt(),
     )
     rung_jobs = [
         RungJob(

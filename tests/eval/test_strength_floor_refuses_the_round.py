@@ -30,7 +30,7 @@ from mantis.eval.rounds import GateSpec, RoundSpec
 from mantis.eval.snapshot import write_model_snapshot
 from mantis.model import GnnArch, build_net
 from _minted_puct import MINTED_PUCT
-from _gsprt import TWO_PAIR_GSPRT
+from _gsprt import two_pair_gsprt
 
 #: A real registry row and the one shipped book, so this drives the production round shape.
 #: A DENSE encoding at radius 8: 292 of the book's 512 openings need radius >= 6 to replay.
@@ -65,7 +65,7 @@ def _round_spec(tmp_path: Path, floor: StrengthFloorSpec | None) -> RoundSpec:
 
     gate = GateSpec(
         stride=1, deploy_sims=2, opening_book=_BOOK,
-        bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=True, sequential=TWO_PAIR_GSPRT,
+        bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=True, sequential=two_pair_gsprt(),
     )
     return RoundSpec(
         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, tactics=None, max_plies=128, leaf_build_threads=1, concurrency=1, rung_concurrency=1,

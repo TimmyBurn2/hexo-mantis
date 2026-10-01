@@ -5,7 +5,7 @@ from pathlib import Path
 
 from _fused_caps import CAPS_DICT
 from mantis.config.loader import load_config
-from _gsprt import TWO_PAIR_GSPRT
+from _gsprt import two_pair_gsprt
 
 _REPO = Path(__file__).resolve().parents[2]
 
@@ -23,7 +23,7 @@ def eval_block() -> dict:
         "ply_cap_adjudication": None, "strength_floor": None,
         "gate": {
             "stride": 1, "deploy_sims": 150, "opening_book": "book_v1_s20260625_p4",
-            "bootstrap_resamples": 1000, "min_distinct_per_pair": 10, "seed_base": 20260625, "sequential": TWO_PAIR_GSPRT,
+            "bootstrap_resamples": 1000, "min_distinct_per_pair": 10, "seed_base": 20260625, "sequential": two_pair_gsprt(),
         },
     }
 

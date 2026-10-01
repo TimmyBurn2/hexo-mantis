@@ -21,13 +21,13 @@ from pydantic import ValidationError
 
 from mantis.config.schema import SCHEMA_VERSION, RunConfig, _EVAL_TIMEOUT_CEILING_SEC
 from _schema_blocks import inference_block, monitor_block, selfplay_block, train_block
-from _gsprt import TWO_PAIR_GSPRT
+from _gsprt import two_pair_gsprt
 
 
 def _gate(**overrides: Any) -> dict:
     base = dict(
         stride=1, deploy_sims=150, opening_book="book_v1_s20260625_p4",
-        bootstrap_resamples=1000, min_distinct_per_pair=10, seed_base=20260625, sequential=TWO_PAIR_GSPRT,
+        bootstrap_resamples=1000, min_distinct_per_pair=10, seed_base=20260625, sequential=two_pair_gsprt(),
     )
     base.update(overrides)
     return base
