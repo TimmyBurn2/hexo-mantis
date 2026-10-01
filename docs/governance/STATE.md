@@ -36,8 +36,8 @@ CARD-RUN11-DESIGN).
   - The box (R381(g)): TACTICS-SELFPLAY-3 closes at 6.75 box-h. Nothing needs the box for two days or more; stopping
     it is the operator's act.
   - **HYGIENE-1 EXITED 2026-10-01** (CARD-HYGIENE-1) on branch `hygiene-1` from origin/dev `b1e34aa4`, awaiting the
-    operator's fast-forward: gates.exit green; H7, H9, `recency_weight`, `policy_loss_trough_abort` and screen/confirm
-    wait on a ruling, each touching a protected pin. PERF-2 follows it.
+    operator's fast-forward: gates.exit green; every item landed, the five touching protected pins under the operator's
+    grant of 2026-10-01. PERF-2 follows it.
 
 - **R380's order.**
   - The halt stands (R380(a)): no reading of A′ is a strength reading, and none of its saves is a parent candidate.

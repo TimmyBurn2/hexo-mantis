@@ -39,10 +39,12 @@ Both were found by running the gate set rather than by reading it, and both are 
 ## Opened by R381 (THREE TWINS, ONE LESSON; 2026-10-01) — F2 killed, the desktop work before run11's mint
 
 - **CARD-HYGIENE-1 — EXITED 2026-10-01 on branch `hygiene-1` from origin/dev `b1e34aa4`, unpushed past its opening
-  docs commit (the operator fast-forwards); gates.exit ALL GREEN on the card. H1–H4, H6 and H8 landed, and H5 but for
-  three keys; NOT DONE, a ruling owed because each edits a protected pin or its harness: H7 (the deploy PUCT constants),
-  H9 (`fast_policy_weight`), `recency_weight`, `policy_loss_trough_abort` and screen/confirm. The schema went 179 → 168
-  leaves (contract v47) and run10's resolved config lost exactly those eleven keys. Exit record local, outside the tree.
+  docs commit (the operator fast-forwards); gates.exit ALL GREEN on the card. Every item landed, H1–H9 and all of H5.
+  The five that edit ruling-protected tests or their harness (H7, H9, `recency_weight`, `policy_loss_trough_abort`,
+  screen/confirm) landed under the OPERATOR'S GRANT of 2026-10-01 to touch protected pins where each pinned invariant is
+  kept; a fresh review judged every touched protected test kept or strengthened (the pair-statistics pin now binds the
+  GSPRT's live aggregate and its LLR). The schema went 179 → 159 leaves (contract v51, event manifest v8; rc 49
+  retired) and run10's resolved config lost exactly eighteen dead keys, no value changed. Exit record local.
   Was IN PROGRESS from 2026-10-01, no run and no cells, ORDERED by R381(d), on the desktop before the mint, in parallel
   with CARD-CENSUS-2.** Every change is a deletion, a mask or a standing law enforced, each with a pin; the protected set,
   the serving path (CARD-PERF-2), the engine's legal set (ORIGIN-1) and the model (CARD-CENSUS-2) are out of it. From
