@@ -965,7 +965,10 @@ document and nothing needs to be.
    ruling is owed): `smoke_wiring.yaml` is the armed smoke with its compute shrunk and its
    draw-rate row disarmed, booted by the in-process wiring rows and pinned leaf-for-leaf to the
    armed smoke by `tests/config/test_smoke_wiring_config.py`; named to gate 12 it refuses (rc 30),
-   as a disarmed config must, incidentally to the audit. All four are re-minted from `tools/config_templates/dev.yaml`, so
+   as a disarmed config must, incidentally to the audit. AMENDMENT (HYGIENE-1 H4, 2026-10-01): it
+   also runs the production regime at smoke budgets (Gumbel, its completed target, the playout cap,
+   the aux head), so the same test pins it to the armed smoke outside those leaves and to every
+   production config's regime, and one CUDA row boots the live loop on it. All four are re-minted from `tools/config_templates/dev.yaml`, so
    their `# delta:` headers replay. `configs/run5.yaml` left the tree with
    `docs/contracts/eval_decision_run5.md`, whose drift gate derived every expectation from it;
    the two durable properties of that document — a one-lineage Bradley-Terry fit, and eff_n
