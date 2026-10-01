@@ -32,7 +32,7 @@ def test_a_record_predating_a_fold_reads_its_folded_value_and_stays_untouched() 
 
 
 def test_a_fold_never_overrides_a_value_the_record_set() -> None:
-    """The armed run8 shape keeps its own full arm and horizon; the folded source only fills an unset target."""
+    """An armed config keeps its own full arm and horizon; the folded source only fills an unset target."""
     record = {"train": {"total_steps": 1_000_000, "scheduler_t_max": 108_000},
               "selfplay": {"mcts": {"n_simulations": 320}, "playout_cap": {"n_sims_full": 320}}}
     kept, _ = split_retired(record)

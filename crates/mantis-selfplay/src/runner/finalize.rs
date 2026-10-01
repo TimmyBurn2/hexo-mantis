@@ -1,8 +1,8 @@
 //! Finalize phase — `finalize_game_graph`.
 //!
 //! A game with no winner trains no value: its rows carry 0 and `value_valid` false, at the cap
-//! (reason 2) and short of it (reason 3) alike. The loop holds the results-queue lock ONCE across the whole game so every game's rows are CONTIGUOUS in the shared
-//! queue (observable only multi-worker). The terminal reason / outcome are read from
+//! (reason 2) and short of it (reason 3) alike. The loop holds the results-queue lock ONCE per
+//! game so its rows are CONTIGUOUS in the shared queue (observable only multi-worker). The terminal reason / outcome are read from
 //! `board.winner()` + `terminal_reason`, never re-derived from ply parity. Drop-oldest past
 //! `results_queue_cap` bumps `positions_dropped`.
 

@@ -96,6 +96,7 @@ added_by = "WP10"
 
 [[required]]
 path = "train/resume_goldens.json"
+# Re-cut by HYGIENE-1: the resume overrides carry no scheduler-horizon switch, which is deleted.
 sha256 = "6ed15482605ad19ed88b2b68d65ba6b1fee6559e29671956ffa42e70b92bd834"
 added_by = "WP10"
 

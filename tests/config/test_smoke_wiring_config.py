@@ -56,7 +56,9 @@ def test_the_wiring_config_moves_only_the_shrunk_and_regime_leaves_off_the_armed
     smoke_dump["train"]["draw_rate_abort"] = None
     wiring = _leaves(load_config(_CONFIGS / _WIRING).model_dump())
     smoke = _leaves(smoke_dump)
-    assert wiring.keys() <= smoke.keys() | REGIME.keys()
+    # The aux head's null leaf becomes its two rows; every other leaf is shared.
+    assert wiring.keys() == (smoke.keys() - {"model.aux_soft_policy"}) | {
+        key for key in REGIME if key.startswith("model.aux_soft_policy.")}
     moved = {key: wiring[key] for key in wiring if wiring[key] != smoke.get(key)}
     assert moved == SHRUNK | REGIME, (
         f"the wiring config must differ from the armed smoke in exactly {sorted(SHRUNK | REGIME)}; "

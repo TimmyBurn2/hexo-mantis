@@ -15,7 +15,7 @@ import torch
 from mantis._engine import HexgBuffer
 from mantis.config.loader import load_config
 from mantis.config.resolve.microbatch import MicrobatchCapsSpec
-from mantis.config.schema import SOFT_POLICY_ARCH_KINDS
+from mantis.config.schema import SOFT_POLICY_ARCH_KINDS, RunConfig
 from mantis.config.schema.core import derived_visit_capacity
 from mantis.encoding import resolve_from_config
 from mantis.model import arch_from_spec_and_config, build_net
@@ -40,7 +40,7 @@ class _Rows:
         self.rows.append(dict(event))
 
 
-def _sparse_ring(run_config, encoding: str) -> HexgBuffer:
+def _sparse_ring(run_config: RunConfig, encoding: str) -> HexgBuffer:
     """A ring at the config's own visit capacity, holding sparse rows with a tail and the playout cap's fast rows."""
     ring = HexgBuffer(64, encoding, derived_visit_capacity(run_config))
     for i in range(16):
@@ -51,7 +51,7 @@ def _sparse_ring(run_config, encoding: str) -> HexgBuffer:
     return ring
 
 
-def test_launch_path_smoke(tmp_path):
+def test_launch_path_smoke(tmp_path: Path) -> None:
     """Build → run 2 steps → write envelope-v2 ckpt → resume → clean shutdown on a signal."""
     run_config = load_config(WIRING)
     assert run_config.selfplay.search.kind == "gumbel" and run_config.model.aux_soft_policy is not None

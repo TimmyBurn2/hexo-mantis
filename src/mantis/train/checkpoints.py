@@ -844,7 +844,6 @@ def strip_and_restamp(
             "policy_loss_trough_abort": None,
             "ply_cap_abort": None,
             "heldout_gap": None,
-            # The warm-up OFF, for `draw_rate_abort`'s reason: this payload trains nothing.
             # The step-coordinator knobs, at the template's own numbers.
             "eval_interval": 1000, "log_interval": 1000,
             "min_buf_size": 1, "replay_capacity": 100_000,

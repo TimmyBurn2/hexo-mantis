@@ -71,7 +71,6 @@ class BufferStub:
     size = 1000
     capacity = 100_000
 
-
     def save_to_path(self, p: Any) -> None: ...
 
 
