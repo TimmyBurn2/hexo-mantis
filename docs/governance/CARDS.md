@@ -38,9 +38,13 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by R381 (THREE TWINS, ONE LESSON; 2026-10-01) — F2 killed, the desktop work before run11's mint
 
-- **CARD-HYGIENE-1 — IN PROGRESS: the HYGIENE-1 packet (2026-10-01), worktree `.wt/hygiene-1` on branch `hygiene-1`
-  from origin/dev `b1e34aa4`, no run and no cells. ORDERED by R381(d), on the desktop before the mint, in parallel with
-  CARD-CENSUS-2.** Every change is a deletion, a mask or a standing law enforced, each with a pin; the protected set,
+- **CARD-HYGIENE-1 — EXITED 2026-10-01 on branch `hygiene-1` from origin/dev `b1e34aa4`, unpushed past its opening
+  docs commit (the operator fast-forwards); gates.exit ALL GREEN on the card. H1–H4, H6 and H8 landed, and H5 but for
+  three keys; NOT DONE, a ruling owed because each edits a protected pin or its harness: H7 (the deploy PUCT constants),
+  H9 (`fast_policy_weight`), `recency_weight`, `policy_loss_trough_abort` and screen/confirm. The schema went 179 → 168
+  leaves (contract v47) and run10's resolved config lost exactly those eleven keys. Exit record local, outside the tree.
+  Was IN PROGRESS from 2026-10-01, no run and no cells, ORDERED by R381(d), on the desktop before the mint, in parallel
+  with CARD-CENSUS-2.** Every change is a deletion, a mask or a standing law enforced, each with a pin; the protected set,
   the serving path (CARD-PERF-2), the engine's legal set (ORIGIN-1) and the model (CARD-CENSUS-2) are out of it. From
   the training-path audit (`reports/training_path_audit.md`, local, outside the tree), accepted by R381(d):
   - F5: a game ending short of the cap without a winner trains as a draw; a transient `RootExpansionFailed` turns a

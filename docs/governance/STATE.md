@@ -35,8 +35,9 @@ CARD-RUN11-DESIGN).
     pre-registered envelope is a STATE line, not a ruling; the envelope is a prereg row (R381(f)).
   - The box (R381(g)): TACTICS-SELFPLAY-3 closes at 6.75 box-h. Nothing needs the box for two days or more; stopping
     it is the operator's act.
-  - **HYGIENE-1 IN PROGRESS** (CARD-HYGIENE-1), from 2026-10-01 in worktree `.wt/hygiene-1` on branch `hygiene-1`
-    from origin/dev `b1e34aa4`: deletions, masks and enforced laws, each with a pin; no run and no cells.
+  - **HYGIENE-1 EXITED 2026-10-01** (CARD-HYGIENE-1) on branch `hygiene-1` from origin/dev `b1e34aa4`, awaiting the
+    operator's fast-forward: gates.exit green; H7, H9, `recency_weight`, `policy_loss_trough_abort` and screen/confirm
+    wait on a ruling, each touching a protected pin. PERF-2 follows it.
 
 - **R380's order.**
   - The halt stands (R380(a)): no reading of A′ is a strength reading, and none of its saves is a parent candidate.
@@ -229,4 +230,5 @@ current phase was rewritten 2026-09-30 at R380, on that branch at `7f351b54`. Th
 added 2026-09-30 at its packet's first commit, on branch `tactics-selfplay-3` at `aa0c5304`, and updated 2026-10-01
 at its exit from its exit record (local), on that branch at `a3899487`. The current phase was rewritten 2026-10-01 at
 R381, on that branch at `9e962173`. The HYGIENE-1 line was added 2026-10-01 at its packet's first commit, on
-branch `hygiene-1` from origin/dev `b1e34aa4`, which also repaired the two stale "unpushed" branch lines.
+branch `hygiene-1` from origin/dev `b1e34aa4`, which also repaired the two stale "unpushed" branch lines, and updated
+2026-10-01 at its exit from its exit record (local), on that branch.
