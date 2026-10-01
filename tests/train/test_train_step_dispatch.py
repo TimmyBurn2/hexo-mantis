@@ -4,8 +4,8 @@ The straight self-play arm routes through `run_declared_train_step`, keyed on th
 `EncodingSpec.representation` and never on a buffer sniff. Pinned: a REAL train step executes
 end-to-end from the coordinator path for the GRAPH representation; an unknown representation
 raises and an UNDECLARED encoding raises `MissingEncodingError` from THE resolver; removing the
-trainer-side implementation reds THIS suite, not the conformance gate; and the graph arm threads
-`recency_weight` in as `recent_frac`."""
+trainer-side implementation reds THIS suite, not the conformance gate; and the graph arm samples
+the ring uniformly, handing the trainer a partition."""
 from __future__ import annotations
 
 from typing import Any
@@ -40,7 +40,7 @@ def _coord_cfg(**over: Any) -> StepCoordinatorConfig:
         # The three interval knobs are 0: this drive is about the training step, not a boundary.
         eval_interval=0, log_interval=0, gate_interval=0, min_buf_size=1,
         capacity=64, training_steps_per_game=1.0, max_train_burst=1,
-        batch_size=4, augment=False, recency_weight=0.0, stop_step=None, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
+        batch_size=4, augment=False, stop_step=None, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
         final_eval_drain_timeout_sec=1.0, eval_final_drain_safety_factor=1.0,
         eval_final_drain_hard_cap_sec=1.0, terminal_eval_hard_cap_sec=1.0,
         terminal_eval_enabled=False,
@@ -119,7 +119,7 @@ def test_graph_step_advances_trainer_step_counter(tmp_path, mk_config) -> None:
     before = trainer.step
     run_declared_train_step(
         trainer, filled_hexg(), _GSPEC,
-        batch_size=4, augment=False, recency_weight=0.0,
+        batch_size=4, augment=False,
         caps_provider=_NON_BINDING_CAPS,
         sample_threads_provider=lambda: 1,
     )
@@ -133,7 +133,7 @@ def test_unknown_representation_raises_named_error() -> None:
 
     with pytest.raises(RepresentationRouteError, match="voxel"):
         run_declared_train_step(_RecordingTypedTrainer(), filled_hexg(), _AlienSpec(),
-                                batch_size=2, augment=False, recency_weight=0.0,
+                                batch_size=2, augment=False,
                                 caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1)
 
 
@@ -164,11 +164,11 @@ def test_missing_graph_entry_point_dies_loud_on_the_graph_route() -> None:
 
     with pytest.raises(AttributeError, match="train_step_from_graph_batch"):
         run_declared_train_step(_HalfTrainer(), filled_hexg(), _GSPEC,
-                                batch_size=2, augment=False, recency_weight=0.0,
+                                batch_size=2, augment=False,
                                 caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1)
 
 
-def test_graph_arm_threads_recency_weight_as_recent_frac() -> None:
+def test_graph_arm_samples_the_ring_and_hands_the_trainer_a_partition() -> None:
     real = filled_hexg()
     seen: list[dict[str, Any]] = []
 
@@ -176,18 +176,16 @@ def test_graph_arm_threads_recency_weight_as_recent_frac() -> None:
         size = real.size
         capacity = real.capacity
 
-        def sample_graph_batch(self, batch_size, augment=False, recent_frac=0.0,
+        def sample_graph_batch(self, batch_size, augment=False,
                                n_threads=1):
-            seen.append({"batch_size": batch_size, "augment": augment,
-                         "recent_frac": recent_frac})
-            return real.sample_graph_batch(batch_size, augment=augment,
-                                           recent_frac=recent_frac)
+            seen.append({"batch_size": batch_size, "augment": augment})
+            return real.sample_graph_batch(batch_size, augment=augment)
 
     rec = _RecordingTypedTrainer()
     run_declared_train_step(rec, _RecordingHexg(), _GSPEC,
-                            batch_size=2, augment=False, recency_weight=0.25,
+                            batch_size=2, augment=False,
                             caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1)
-    assert seen == [{"batch_size": 2, "augment": False, "recent_frac": 0.25}]
+    assert seen == [{"batch_size": 2, "augment": False}]
     assert len(rec.graph_calls) == 1
     kw = rec.graph_calls[0]
     # The graph entry point takes a PARTITION plus the step's denominators, not eleven loose
@@ -216,7 +214,7 @@ def test_the_caps_provider_is_invoked_exactly_once_per_graph_step() -> None:
         return _NON_BINDING_CAPS()
 
     run_declared_train_step(rec, filled_hexg(), _GSPEC, batch_size=2, augment=False,
-                            recency_weight=0.0, caps_provider=_counting,
+                            caps_provider=_counting,
                             sample_threads_provider=lambda: 1)
     assert invoked == [1], "the graph arm must invoke the provider exactly once"
 
@@ -232,7 +230,6 @@ def test_the_sample_threads_provider_is_invoked_exactly_once_per_graph_step() ->
         return 1
 
     run_declared_train_step(rec, filled_hexg(), _GSPEC, batch_size=2, augment=False,
-                            recency_weight=0.0,
                             caps_provider=_NON_BINDING_CAPS,
                             sample_threads_provider=_counting)
     assert invoked == [1], "the graph arm must invoke the provider exactly once"

@@ -80,7 +80,6 @@ def test_of2_8_a_production_config_reaches_the_split_through_its_own_route(
     sink = H.SpySink()
     trainer = H.tiny_graph_trainer(tmp_path, sink=sink)
     run_declared_train_step(trainer, replay, H.GSPEC, batch_size=4, augment=False,
-                            recency_weight=0.0,
                             caps_provider=coord._microbatch_caps, sample_threads_provider=lambda: 1)
     ev = sink.named("trainer_step")[0]
     assert ev["microbatches"] >= 2, (
@@ -372,7 +371,7 @@ def test_of2_14_the_smoke_configs_caps_do_not_bind(name: str) -> None:
     caps = resolve_microbatch_caps(cfg.model_dump())
     batch_size = int(cfg.train.batch_size)
     buf = H.uniform_graph_buffer(max(8, batch_size))
-    wire, _targets = buf.sample_graph_batch(batch_size, augment=False, recent_frac=0.0)
+    wire, _targets = buf.sample_graph_batch(batch_size, augment=False)
     ec, nc = H.per_graph_counts(wire)
     parts = plan_microbatches(np.concatenate([[0], np.cumsum(ec)]).astype(np.int64),
                               np.concatenate([[0], np.cumsum(nc)]).astype(np.int64),

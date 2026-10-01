@@ -33,10 +33,6 @@ from mantis.util.hashing import sha256_file
 
 _LOG = logging.getLogger(__name__)
 
-#: Structural, NOT `train.recency_weight`: the BC ring has no time ordering, so `recent_frac`
-#: has no recent window to mean anything over.
-BC_RECENCY_WEIGHT = 0.0
-
 
 class GraphPretrainError(RuntimeError):
     """The graph BC-pretrain route cannot run as declared: a missing ring, a missing or
@@ -214,7 +210,6 @@ def run_graph_pretrain(
         loss_info = run_declared_train_step(
             trainer, buf, spec,
             batch_size=knobs.batch_size, augment=knobs.augment,
-            recency_weight=BC_RECENCY_WEIGHT,
             caps_provider=_caps, sample_threads_provider=_threads,
         )
         steps_run += 1

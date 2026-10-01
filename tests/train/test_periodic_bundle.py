@@ -24,13 +24,13 @@ def _drive(trainer: Any, buffer: Any, n: int) -> None:
     from mantis.train.coordinator.dispatch import _graph_step as production_graph_step
 
     for _ in range(n):
-        wire, _targets = buffer.sample_graph_batch(4, augment=False, recent_frac=0.0)
+        wire, _targets = buffer.sample_graph_batch(4, augment=False)
         # Bound as default arguments, not captured: a closure over the loop variables reads
         # whatever the LAST iteration left them at (ruff B023).
         caps = MicrobatchCapsSpec(*H.non_binding_caps(wire))
         production_graph_step(
             trainer, buffer, H.GSPEC,
-            batch_size=4, augment=False, recency_weight=0.0,
+            batch_size=4, augment=False,
             caps_provider=lambda caps=caps: caps,
             sample_threads_provider=lambda: 1,
         )

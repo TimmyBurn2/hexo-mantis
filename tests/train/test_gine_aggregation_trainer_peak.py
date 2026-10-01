@@ -36,7 +36,7 @@ def test_iii_the_trainer_peak_at_the_caps_does_not_rise(tmp_path: Path) -> None:
     config = load_config(_MINTED).model_dump()
     caps = resolve_microbatch_caps(config)
     probe = H.uniform_graph_buffer(8)
-    ec, nc = H.per_graph_counts(probe.sample_graph_batch(4, augment=False, recent_frac=0.0)[0])
+    ec, nc = H.per_graph_counts(probe.sample_graph_batch(4, augment=False)[0])
     n_graphs = min(caps.max_edges // int(ec[0]), caps.max_nodes // int(nc[0]))
     replay = H.ReplayWireBuffer(H.uniform_graph_buffer(n_graphs + 8), n_graphs)
     arch = arch_from_spec_and_config(H.GSPEC, config)
@@ -50,7 +50,7 @@ def test_iii_the_trainer_peak_at_the_caps_does_not_rise(tmp_path: Path) -> None:
         torch.cuda.reset_peak_memory_stats()
         before = int(torch.cuda.max_memory_allocated())
         run_declared_train_step(trainer, replay, H.GSPEC, batch_size=n_graphs, augment=False,
-                                recency_weight=0.0, caps_provider=lambda: caps,
+                                caps_provider=lambda: caps,
                                 sample_threads_provider=lambda: 1)
         torch.cuda.synchronize()
         got = int(torch.cuda.max_memory_allocated()) - before

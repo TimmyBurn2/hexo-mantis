@@ -360,7 +360,7 @@ fn sample_wire_matches_direct_builder_unaugmented() {
     let rec = sample_record();
     buf.push_record_impl(&rec, 0).unwrap();
 
-    let (graphs, targets) = buf.sample_graph_batch_impl(1, false, 0.0, 1).unwrap();
+    let (graphs, targets) = buf.sample_graph_batch_impl(1, false, 1).unwrap();
     assert_eq!(graphs.len(), 1);
     let sg = &graphs[0];
     assert_eq!(
@@ -424,7 +424,7 @@ fn augmented_sample_target_is_coherent_every_element() {
     let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();
     buf.push_record_impl(&sample_record(), 0).unwrap();
     for _ in 0..48 {
-        let (graphs, targets) = buf.sample_graph_batch_impl(1, true, 0.0, 1).unwrap();
+        let (graphs, targets) = buf.sample_graph_batch_impl(1, true, 1).unwrap();
         if targets.argmax_valid[0] == 0 {
             continue;
         }
@@ -486,7 +486,7 @@ fn empty_board_record_survives_d6_augmented_sample_align() {
     };
     buf.push_record_impl(&rec, 0).unwrap();
     for _ in 0..48 {
-        buf.sample_graph_batch_impl(1, true, 0.0, 1).expect(
+        buf.sample_graph_batch_impl(1, true, 1).expect(
             "empty-board record must survive D6-augmented sample-align (sym forced to identity)",
         );
     }
@@ -539,7 +539,7 @@ fn failed_truncated_load_is_loud_and_leaves_buffer_untouched() {
         assert_eq!(victim.game_ids[s], *gid, "game_id {s} unchanged");
         assert_eq!(victim.weights[s], *w, "weight {s} unchanged");
     }
-    let (_, targets) = victim.sample_graph_batch_impl(4, false, 0.0, 1).unwrap();
+    let (_, targets) = victim.sample_graph_batch_impl(4, false, 1).unwrap();
     assert_eq!(targets.outcomes.len(), 4);
 
     let _ = std::fs::remove_file(&good_path);
@@ -564,7 +564,7 @@ fn sample_rejects_illegal_cell_visit_mass_drop() {
     };
     buf.push_record_impl(&rec, 7).unwrap();
     assert!(
-        buf.sample_graph_batch_impl(1, false, 0.0, 1).is_err(),
+        buf.sample_graph_batch_impl(1, false, 1).is_err(),
         "illegal-cell visit mass drop must raise, not silently under-weight"
     );
 }
@@ -592,7 +592,7 @@ fn legit_push_sample_roundtrip_does_not_trip_mass_drop_guard() {
     buf.push_record_impl(&sample_record(), 0).unwrap();
     for aug in [false, true] {
         for _ in 0..24 {
-            buf.sample_graph_batch_impl(1, aug, 0.0, 1)
+            buf.sample_graph_batch_impl(1, aug, 1)
                 .expect("legit round-trip must not trip the guard");
         }
     }
@@ -779,75 +779,6 @@ fn legit_push_unaffected_by_outcome_and_stone_player_guards() {
         }
     );
     assert_eq!(buf.game_ids[0], 42);
-}
-
-#[test]
-fn recency_sampler_draws_the_newest_slot_fraction() {
-    let cap = 600;
-    let total_pushes: u32 = 700;
-    let mut buf = HexgBuffer::new(cap, ENC, 128).unwrap();
-    for i in 0..total_pushes {
-        let mut rec = sample_record();
-        rec.ply_index = (i % (u16::MAX as u32 + 1)) as u16;
-        buf.push_record_impl(&rec, -1).unwrap();
-    }
-    assert_eq!(buf.size, cap);
-    let window = buf.recent_window();
-    assert_eq!(window, 300, "max(256, 600/2) == 300");
-    let newest_threshold = (total_pushes - window as u32) as u16; // 400
-
-    let idx = buf.sample_indices(64, 1.0);
-    assert_eq!(idx.len(), 64);
-    for i in &idx {
-        let ply = buf.ply_index[*i];
-        assert!(
-            ply >= newest_threshold,
-            "recent_frac=1.0 draw ply={ply} must be >= {newest_threshold}"
-        );
-    }
-}
-
-#[test]
-fn recency_sampler_zero_frac_is_byte_identical_to_full_ring_sample() {
-    let cap = 600;
-    let total_pushes: u32 = 700;
-    let mut buf = HexgBuffer::new(cap, ENC, 128).unwrap();
-    for i in 0..total_pushes {
-        let mut rec = sample_record();
-        rec.ply_index = (i % (u16::MAX as u32 + 1)) as u16;
-        buf.push_record_impl(&rec, -1).unwrap();
-    }
-    let window = buf.recent_window();
-    let newest_threshold = (total_pushes - window as u32) as u16;
-
-    let idx = buf.sample_indices(500, 0.0);
-    assert_eq!(idx.len(), 500);
-    let any_old = idx.iter().any(|&i| buf.ply_index[i] < newest_threshold);
-    assert!(
-        any_old,
-        "recent_frac=0.0 must sample beyond the newest-slots window"
-    );
-}
-
-#[test]
-fn recency_sampler_recent_window_clamped_by_size_before_ring_fills() {
-    let cap = 1000;
-    let mut buf = HexgBuffer::new(cap, ENC, 128).unwrap();
-    for i in 0..50u32 {
-        let mut rec = sample_record();
-        rec.ply_index = i as u16;
-        buf.push_record_impl(&rec, -1).unwrap();
-    }
-    assert_eq!(buf.size, 50);
-    let window = buf.recent_window();
-    assert_eq!(window, 50, "window must clamp to the live size");
-    let idx = buf.sample_indices(20, 1.0);
-    for i in &idx {
-        assert!(
-            buf.ply_index[*i] < 50,
-            "must never draw a never-written slot"
-        );
-    }
 }
 
 #[test]

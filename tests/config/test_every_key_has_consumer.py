@@ -172,10 +172,6 @@ CONSUMER_REGISTRY = {
         "resolve_coordinator_knobs -> _step_coordinator_config -> step.py _run_training_step"
         " -> dispatch.py::run_declared_train_step(augment=) -> _graph_step -> the ring sampler's"
         " augment flag (the B-11 witness retired a dead batch-assembler name here, 2026-09-16)",
-    "train.recency_weight":
-        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py _run_training_step"
-        " -> dispatch.py::run_declared_train_step(recency_weight=) -> _graph_step -> the ring"
-        " sampler's recent_frac",
     "train.terminal_eval_enabled":
         "resolve_coordinator_knobs -> _step_coordinator_config -> coordinator/drain.py"
         " run_terminal_eval close-out gate",

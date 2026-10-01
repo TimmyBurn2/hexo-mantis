@@ -866,7 +866,6 @@ class StepCoordinator:
         return run_declared_train_step(
             self.trainer, self.buffer, self._step_spec(),
             batch_size=batch_size, augment=cfg.augment,
-            recency_weight=cfg.recency_weight,
             caps_provider=self._microbatch_caps,
             sample_threads_provider=self._sample_threads,
         )

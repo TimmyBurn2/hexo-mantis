@@ -46,7 +46,7 @@ fn filled_graph_ring(with_empty_board_rows: bool) -> HexgBuffer {
 fn draw(buf: &mut HexgBuffer, augment: bool) -> usize {
     let mut n = 0;
     for _ in 0..BATCHES {
-        let indices = buf.sample_indices(BATCH, 0.0);
+        let indices = buf.sample_indices(BATCH);
         n += buf.draw_syms(&indices, augment).len();
     }
     n
@@ -137,17 +137,16 @@ fn the_ring_counts_the_rows_it_hands_to_the_trainer() {
     // The replay ratio's numerator is what the sampler handed out, since boot.
     let mut buf = filled_graph_ring(false);
     assert_eq!(buf.samples_consumed_total, 0);
-    buf.sample_graph_batch_impl(BATCH, false, 0.0, 1)
+    buf.sample_graph_batch_impl(BATCH, false, 1)
         .expect("sample");
     assert_eq!(buf.samples_consumed_total, BATCH as u64);
-    buf.sample_graph_batch_impl(BATCH, true, 0.0, 1)
-        .expect("sample");
+    buf.sample_graph_batch_impl(BATCH, true, 1).expect("sample");
     assert_eq!(
         buf.samples_consumed_total,
         2 * BATCH as u64,
         "cumulative, not per batch"
     );
     // `sample_indices` alone is a probe, not a consumption: the seed tests draw through it.
-    buf.sample_indices(BATCH, 0.0);
+    buf.sample_indices(BATCH);
     assert_eq!(buf.samples_consumed_total, 2 * BATCH as u64);
 }

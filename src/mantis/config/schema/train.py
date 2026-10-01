@@ -219,9 +219,6 @@ class TrainConfig(StrictModel):
     # `augment` — 12-fold hex-symmetry augmentation of every sampled batch. It multiplies the
     # effective dataset, so two runs that differ only here are not comparable.
     augment: bool
-    # `recency_weight` — the fraction of each batch drawn from the recency window. `ge=0, le=1`
-    # is that fraction's own range: above 1 the sampler clamps and the difference is unreal.
-    recency_weight: float = Field(ge=0, le=1)
     # `terminal_eval_enabled` — whether close-out runs a terminal eval round, i.e. whether the
     # run gets its LAST promotion opportunity.
     terminal_eval_enabled: bool

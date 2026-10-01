@@ -35,7 +35,7 @@ def _filled_ring(n_rows: int = 64, *, empty_every: int = 0) -> Any:
 
 def _sample(buf: Any, *, augment: bool) -> int:
     for _ in range(_BATCHES):
-        buf.sample_graph_batch(_BATCH, augment=augment, recent_frac=0.0, n_threads=1)
+        buf.sample_graph_batch(_BATCH, augment=augment, n_threads=1)
     return _BATCH * _BATCHES
 
 

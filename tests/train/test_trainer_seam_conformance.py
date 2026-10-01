@@ -78,7 +78,7 @@ SEAM_MATRIX: tuple[tuple[object, tuple[str, ...], tuple[type, ...], tuple[str, .
      ("drain_pending", "apply_gate_decision", "run_evaluation")),
     (step_mod, ("buffer",), (ReplayBufferLike,),
      ("save_to_path", "size")),
-    # The graph arm flows recency in-engine: `dispatch` reaches no `recent_buffer` at all.
+    # The graph arm samples in-engine: `dispatch` reaches no `recent_buffer` at all.
     (dispatch_mod, ("buffer",), (ReplayBufferLike, GraphRouteBufferLike),
      ("sample_graph_batch",)),
     (step_mod, ("_clock",), (ClockLike,), ("now", "sleep")),

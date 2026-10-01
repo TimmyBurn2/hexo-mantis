@@ -53,7 +53,7 @@ class ReplayBufferLike(Protocol):
 class GraphRouteBufferLike(Protocol):
     """The graph route-key, ONE member, kept out of `ReplayBufferLike`: the sampler is the route."""
 
-    def sample_graph_batch(self, batch_size: int, *, augment: bool, recent_frac: float) -> Any: ...
+    def sample_graph_batch(self, batch_size: int, *, augment: bool) -> Any: ...
 
 
 @runtime_checkable
@@ -195,7 +195,6 @@ class StepCoordinatorConfig:
     max_train_burst: int
     batch_size: int
     augment: bool
-    recency_weight: float
     stop_step: int | None
     # CONFIG-authored like `stop_step`, NO default: `None` is EXPLICITLY OFF, never inherited,
     # since a literal the caller always replaces is still a second default authority.

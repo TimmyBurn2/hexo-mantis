@@ -23,7 +23,6 @@ from mantis.config.census import discovered_config_paths
 from mantis.encoding import resolvers
 from mantis.train.pretrain import graph_route
 from mantis.train.pretrain.graph_route import (
-    BC_RECENCY_WEIGHT,
     GraphPretrainError,
     load_ring,
     read_ring_provenance,
@@ -254,43 +253,6 @@ def test_the_graph_arm_trains_THROUGH_the_declared_seam(tmp_path: Path, monkeypa
     # The providers are CALLABLES, not resolved values — the dispatcher's own contract.
     assert callable(first["caps_provider"]) and first["caps_provider"]() == "CAPS"
     assert callable(first["sample_threads_provider"]) and first["sample_threads_provider"]() == 3
-
-
-def test_the_BC_route_passes_zero_recency_and_it_is_STRUCTURAL(tmp_path: Path, monkeypatch) -> None:
-    """A corpus ring has no time ordering, so `recent_frac` has no subject over it."""
-    assert BC_RECENCY_WEIGHT == 0.0
-    ring = _write_ring(tmp_path)
-    seen: list[float] = []
-
-    class _Buf:
-        def __init__(self, *_a, **_k) -> None: ...
-        def load_from_path(self, _p: str) -> int:
-            return 40
-
-    class _Spec:
-        name = "gnn_axis_v1"
-        representation = "graph"
-
-    class _Knobs:
-        batch_size = 4
-        augment = False
-
-    import mantis._engine as _engine
-    monkeypatch.setattr(_engine, "HexgBuffer", _Buf, raising=False)
-    monkeypatch.setattr(graph_route, "Trainer",
-                        lambda *_a, **_k: type("T", (), {"save_checkpoint": lambda s, li: tmp_path / "c.pt"})())
-    monkeypatch.setattr(graph_route, "build_net", lambda _arch: object())
-    monkeypatch.setattr(graph_route, "arch_from_spec_and_config", lambda _s, _c: object())
-    monkeypatch.setattr(graph_route, "resolve_coordinator_knobs", lambda _t: _Knobs())
-    monkeypatch.setattr(graph_route, "resolve_microbatch_caps", lambda _c: None)
-    monkeypatch.setattr(graph_route, "resolve_sample_threads", lambda _c: 1)
-    monkeypatch.setattr(graph_route, "run_declared_train_step",
-                        lambda _t, _b, _s, **kw: seen.append(kw["recency_weight"]) or {"loss": 0.0})
-    run_graph_pretrain(
-        spec=_Spec(), full_config=_CONFIG, train_section=object(), ring_path=ring,
-        checkpoint_dir=tmp_path, device=None, steps=2, epochs=1,
-    )
-    assert seen == [0.0, 0.0]
 
 
 def test_the_cli_routes_on_the_declared_representation() -> None:

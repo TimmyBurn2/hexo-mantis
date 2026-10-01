@@ -390,7 +390,6 @@ def _step_coordinator_config(
         max_train_burst=knobs.max_train_burst,
         batch_size=knobs.batch_size,
         augment=knobs.augment,
-        recency_weight=knobs.recency_weight,
         stop_step=stop_step,
         draw_rate_abort=draw_rate_abort,
         policy_loss_trough_abort=policy_loss_trough_abort,

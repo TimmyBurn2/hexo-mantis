@@ -57,7 +57,6 @@ _DISTINGUISHABLE: dict[str, Any] = {
     "max_train_burst": 7,
     "batch_size": 41,
     "augment": True,
-    "recency_weight": 0.43,
     "terminal_eval_enabled": False,
     "selfplay_stall_timeout_sec": 67.0,
 }
@@ -88,22 +87,20 @@ class _Buffer:
         self.capacity = capacity
         self.saves: list[str] = []
         self.augment_seen: list[bool] = []
-        self.recent_frac_seen: list[float] = []
         self.sampled: list[int] = []
         self._real = _real_graph_ring()
 
     def save_to_path(self, p) -> None:
         self.saves.append(str(p))
 
-    def sample_graph_batch(self, n: int, augment: bool = False, recent_frac: float = 0.0,
+    def sample_graph_batch(self, n: int, augment: bool = False,
                            n_threads: int = 1):
         """The graph route's sampler, RECORDED and then delegated to a real `HexgBuffer`: the
         dispatcher refuses a shapeless fake by design and everything downstream needs real bytes,
         so the fake records WHAT THE DISPATCHER ASKED FOR."""
         self.sampled.append(int(n))
         self.augment_seen.append(bool(augment))
-        self.recent_frac_seen.append(float(recent_frac))
-        return self._real.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
+        return self._real.sample_graph_batch(n, augment=augment,
                                              n_threads=n_threads)
 
 
@@ -419,16 +416,6 @@ def test_augment_reaches_the_training_path() -> None:
     assert off.buffer.augment_seen and not any(off.buffer.augment_seen), (
         "the discriminating negative: a knob that reaches the sampler as True whatever the "
         "config says is not wired, it is hardcoded"
-    )
-
-
-def test_recency_weight_reaches_the_samplers_recency_window() -> None:
-    """`train.recency_weight` -> `sample_graph_batch(recent_frac=)`, the one live reader."""
-    h = _coordinator(recency_weight=0.43)
-    _drive(h, steps=2, games=1)
-    assert set(h.buffer.recent_frac_seen) == {0.43}, (
-        f"the sampler must be handed the CONFIGURED recency fraction; got "
-        f"{h.buffer.recent_frac_seen}"
     )
 
 

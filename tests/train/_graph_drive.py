@@ -41,9 +41,9 @@ class GraphSampleBuffer:
 
     def save_to_path(self, p: Any) -> None: ...
 
-    def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
+    def sample_graph_batch(self, n: int, *, augment: bool = False,
                            n_threads: int = 1) -> Any:
-        return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
+        return self._hexg.sample_graph_batch(n, augment=augment,
                                              n_threads=n_threads)
 
 

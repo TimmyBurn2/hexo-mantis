@@ -48,11 +48,11 @@ def _real_graph_loss_info(tmp_path: Path) -> dict[str, float]:
 
     trainer = H.tiny_graph_trainer(tmp_path, sink=H.SpySink())
     buffer = H.uniform_graph_buffer()
-    wire, _targets = buffer.sample_graph_batch(4, augment=False, recent_frac=0.0)
+    wire, _targets = buffer.sample_graph_batch(4, augment=False)
     max_edges, max_nodes = H.non_binding_caps(wire)
     return production_graph_step(
         trainer, buffer, H.GSPEC,
-        batch_size=4, augment=False, recency_weight=0.0,
+        batch_size=4, augment=False,
         caps_provider=lambda: MicrobatchCapsSpec(max_edges=max_edges, max_nodes=max_nodes),
         sample_threads_provider=lambda: 1,
     )

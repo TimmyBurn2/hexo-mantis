@@ -136,7 +136,7 @@ impl PyHexgBuffer {
     }
 
     /// Sample `batch_size` records, rebuild + align each graph, and block-diagonal fuse them into
-    /// `(GraphWire, GraphTargets)`, drawing `recent_frac` from the newest slots.
+    /// `(GraphWire, GraphTargets)`.
     ///
     /// GIL-FREE: measured at 1386 ms of a 2769 ms step, and held under the GIL it left the
     /// in-process inference server serving ZERO graphs across 16.85 s of sample windows against
@@ -144,19 +144,18 @@ impl PyHexgBuffer {
     /// `PyRefMut` spanning the window is what raised `Already mutably borrowed` — so exclusion is
     /// held by the `inner` mutex with every pymethod on `&self`. `n_threads` is the rebuild's
     /// width, `1` being the serial exact-parity path.
-    #[pyo3(signature = (batch_size, augment = false, recent_frac = 0.0, n_threads = 1))]
+    #[pyo3(signature = (batch_size, augment = false, n_threads = 1))]
     pub fn sample_graph_batch(
         &self,
         py: Python<'_>,
         batch_size: usize,
         augment: bool,
-        recent_frac: f32,
         n_threads: usize,
     ) -> PyResult<(PyGraphWire, PyGraphTargets)> {
         let sampled = py.detach(|| {
             let inner = &mut *self.ring();
             let (graphs, targets) =
-                inner.sample_graph_batch_impl(batch_size, augment, recent_frac, n_threads)?;
+                inner.sample_graph_batch_impl(batch_size, augment, n_threads)?;
             // Single-source block-diagonal fuse, shared with the inference seam.
             let mut wire = GraphWire::from_axis_graphs(&graphs, inner.contract_version);
             let arrays = wire.take()?;

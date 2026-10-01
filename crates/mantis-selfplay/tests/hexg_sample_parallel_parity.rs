@@ -134,11 +134,9 @@ fn parallel_rebuild_is_bit_identical_to_serial() {
         for &augment in &[false, true] {
             let mut serial = filled_buffer(records);
             let mut parallel = filled_buffer(records);
-            let (gs, ts) = serial
-                .sample_graph_batch_impl(batch, augment, 0.0, 1)
-                .unwrap();
+            let (gs, ts) = serial.sample_graph_batch_impl(batch, augment, 1).unwrap();
             let (gp, tp) = parallel
-                .sample_graph_batch_impl(batch, augment, 0.0, threads)
+                .sample_graph_batch_impl(batch, augment, threads)
                 .unwrap();
             let case = format!("records={records} batch={batch} threads={threads} aug={augment}");
             assert_eq!(gs.len(), batch, "{case}: batch size");
@@ -157,8 +155,8 @@ fn the_rng_hoist_leaves_the_draw_stream_unchanged_across_repeats() {
     let mut serial = filled_buffer(128);
     let mut parallel = filled_buffer(128);
     for round in 0..3 {
-        let (gs, ts) = serial.sample_graph_batch_impl(48, true, 0.0, 1).unwrap();
-        let (gp, tp) = parallel.sample_graph_batch_impl(48, true, 0.0, 8).unwrap();
+        let (gs, ts) = serial.sample_graph_batch_impl(48, true, 1).unwrap();
+        let (gp, tp) = parallel.sample_graph_batch_impl(48, true, 8).unwrap();
         let case = format!("augmented repeat {round}");
         assert_graphs_identical(&gs, &gp, &case);
         assert_targets_identical(&ts, &tp, &case);
@@ -171,8 +169,8 @@ fn the_rng_hoist_leaves_the_draw_stream_unchanged_across_repeats() {
 fn results_come_back_in_index_order() {
     let mut serial = filled_buffer(200);
     let mut parallel = filled_buffer(200);
-    let (gs, ts) = serial.sample_graph_batch_impl(64, false, 0.0, 1).unwrap();
-    let (gp, tp) = parallel.sample_graph_batch_impl(64, false, 0.0, 7).unwrap();
+    let (gs, ts) = serial.sample_graph_batch_impl(64, false, 1).unwrap();
+    let (gp, tp) = parallel.sample_graph_batch_impl(64, false, 7).unwrap();
 
     // The batch is genuinely heterogeneous, or a permutation would be invisible here.
     let distinct: std::collections::HashSet<usize> = gs.iter().map(AxisGraph::num_nodes).collect();

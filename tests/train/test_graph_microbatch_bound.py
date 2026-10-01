@@ -159,7 +159,7 @@ def _max_concurrently_live_parts(trainer, replay, caps, batch_size: int) -> int:
 
     trainer.train_step_from_graph_batch = _wrapped
     run_declared_train_step(
-        trainer, replay, H.GSPEC, batch_size=batch_size, augment=False, recency_weight=0.0,
+        trainer, replay, H.GSPEC, batch_size=batch_size, augment=False,
         caps_provider=lambda: caps, sample_threads_provider=lambda: 1)
     return peak
 
@@ -251,7 +251,7 @@ def _cap_regime_batch(caps: MicrobatchCapsSpec):
     """A wire sized to sit just under BOTH minted members, with the graph count derived from the
     caps and the fixture's own per-graph counts so it tracks a re-mint."""
     probe = H.uniform_graph_buffer(8)
-    ec, nc = H.per_graph_counts(probe.sample_graph_batch(4, augment=False, recent_frac=0.0)[0])
+    ec, nc = H.per_graph_counts(probe.sample_graph_batch(4, augment=False)[0])
     per_e, per_n = int(ec[0]), int(nc[0])
     n_graphs = min(caps.max_edges // per_e, caps.max_nodes // per_n)
     buf = H.uniform_graph_buffer(n_graphs + 8)
@@ -324,7 +324,7 @@ def test_of2_10_leg2_peak_allocation_is_under_the_sizing_budget(tmp_path) -> Non
     torch.cuda.reset_peak_memory_stats()
     before = int(torch.cuda.max_memory_allocated())
     run_declared_train_step(
-        trainer, replay, H.GSPEC, batch_size=n_graphs, augment=False, recency_weight=0.0,
+        trainer, replay, H.GSPEC, batch_size=n_graphs, augment=False,
         caps_provider=lambda: caps, sample_threads_provider=lambda: 1)
     torch.cuda.synchronize()
     peak_delta = int(torch.cuda.max_memory_allocated()) - before
@@ -403,7 +403,7 @@ def test_of2_10_leg2b_doubling_the_input_does_not_move_the_peak(tmp_path) -> Non
         before = int(torch.cuda.max_memory_allocated())
         run_declared_train_step(
             trainer, replay, H.GSPEC, batch_size=batch_size, augment=False,
-            recency_weight=0.0, caps_provider=lambda: caps, sample_threads_provider=lambda: 1)
+            caps_provider=lambda: caps, sample_threads_provider=lambda: 1)
         torch.cuda.synchronize()
         peak = int(torch.cuda.max_memory_allocated()) - before
         del trainer

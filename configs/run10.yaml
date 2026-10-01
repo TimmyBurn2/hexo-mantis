@@ -142,7 +142,6 @@ train:
     max_edges: 4500000
     max_nodes: 170000
   augment: true
-  recency_weight: 0.0
   terminal_eval_enabled: true
   policy_target: completed_improved_policy
 selfplay:

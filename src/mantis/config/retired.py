@@ -16,7 +16,7 @@ RETIRED_PATHS: frozenset[str] = frozenset({
     "train.value_target", "train.draw_reward", "train.ply_cap_value",
     "selfplay.playout_cap.fast_sims", "selfplay.playout_cap.fast_prob", "selfplay.playout_cap.standard_sims",
     "selfplay.mcts.n_simulations", "train.policy_loss_weight_schedule", "train.total_steps",
-    "train.replay_capacity_schedule", "train.fast_policy_weight",
+    "train.replay_capacity_schedule", "train.fast_policy_weight", "train.recency_weight",
     "train.hard_gn_threshold", "train.hard_gn_min_steps",
 })
 

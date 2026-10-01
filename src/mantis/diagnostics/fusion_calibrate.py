@@ -181,7 +181,7 @@ def _build_wire(encoding: str, max_moves: int, n_graphs: int, stones: int, sprea
         buf.push_graph_position(
             placed, visits, 1, 30, 2 + i, True, 1.0 if i % 2 == 0 else -1.0, True, 10 + i,
         )
-    wire, _targets = buf.sample_graph_batch(n_graphs, augment=False, recent_frac=0.0)
+    wire, _targets = buf.sample_graph_batch(n_graphs, augment=False)
     return wire
 
 
@@ -193,7 +193,7 @@ def _wire_for(
     `--source corpus` run that quietly fitted GENERATED graphs would emit a pair carrying the
     corpus's authority and the generator's geometry."""
     if corpus is not None:
-        wire, _targets = corpus.sample_graph_batch(n_graphs, augment=False, recent_frac=0.0)
+        wire, _targets = corpus.sample_graph_batch(n_graphs, augment=False)
         return wire
     return _build_wire(encoding, max_moves, n_graphs, stones, spread)
 

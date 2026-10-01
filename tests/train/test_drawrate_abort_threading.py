@@ -123,11 +123,11 @@ class _Buffer:
     def save_to_path(self, p) -> None:
         return None
 
-    def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
+    def sample_graph_batch(self, n: int, *, augment: bool = False,
                            n_threads: int = 1):
         # The graph route's sampler, DELEGATED to a real `HexgBuffer`: the dispatcher collates
         # the wire for real, so a hand-built payload would be a second wire format.
-        return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
+        return self._hexg.sample_graph_batch(n, augment=augment,
                                              n_threads=n_threads)
 
 

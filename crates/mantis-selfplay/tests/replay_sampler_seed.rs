@@ -48,7 +48,7 @@ fn graph_draw(buf: &mut HexgBuffer, seed: Option<u64>) -> Vec<usize> {
     if let Some(s) = seed {
         buf.seed_sampler(s);
     }
-    buf.sample_indices(BATCH, 0.0)
+    buf.sample_indices(BATCH)
 }
 
 #[test]

@@ -68,15 +68,13 @@ def test_dispatch_forwards_policy_target_value_intact() -> None:
         size = real.size
         capacity = real.capacity
 
-        def sample_graph_batch(self, batch_size: int, augment: bool = False,
-                               recent_frac: float = 0.0, n_threads: int = 1):
-            wire, targets = real.sample_graph_batch(batch_size, augment=augment, recent_frac=recent_frac)
+        def sample_graph_batch(self, batch_size: int, augment: bool = False, n_threads: int = 1):
+            wire, targets = real.sample_graph_batch(batch_size, augment=augment)
             sampled.append(targets)
             return wire, targets
 
     rec = _RecordingTrainer()
     run_declared_train_step(rec, _RecordingHexg(), _GSPEC, batch_size=3, augment=False,
-                            recency_weight=0.0,
                             caps_provider=lambda: _S4_CAPS, sample_threads_provider=lambda: 1)
     assert len(rec.calls) == 1 and len(sampled) == 1
     # The trainer receives a PARTITION, not a `policy_target` kwarg: dtype per part and value ORDER

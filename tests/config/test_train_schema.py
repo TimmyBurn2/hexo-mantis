@@ -36,7 +36,6 @@ VALID_TRAIN_PAYLOAD: dict = {
     # Two inseparable members: `batch_size` bounds graphs, not E and N, which drive memory.
     "microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
     "augment": False,
-    "recency_weight": 0.0,
     "terminal_eval_enabled": True,
     "selfplay_stall_timeout_sec": 1800.0,
     "policy_target": "raw_visit_distribution",
@@ -77,9 +76,6 @@ BOUND_VIOLATIONS: list[tuple[str, object]] = [
     ("microbatch_caps", {"max_nodes": 1}),
     # `extra="forbid"` reaches INTO the block, so a third member cannot be smuggled in
     ("microbatch_caps", {"max_edges": 1, "max_nodes": 1, "max_bytes": 1}),
-    ("recency_weight", -0.1),
-    ("recency_weight", 1.1),            # the sampler clamps, so above 1 is a difference the
-                                        # config can express and the run cannot have
     ("selfplay_stall_timeout_sec", 0.0),   # the always-armed guard, silently disarmed
     ("selfplay_stall_timeout_sec", -1.0),
 ]

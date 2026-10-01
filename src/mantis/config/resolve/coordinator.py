@@ -39,7 +39,6 @@ class CoordinatorKnobsSpec:
     max_train_burst: int
     batch_size: int
     augment: bool
-    recency_weight: float
     terminal_eval_enabled: bool
     selfplay_stall_timeout_sec: float
 
@@ -55,7 +54,6 @@ def resolve_coordinator_knobs(train_section: Any) -> CoordinatorKnobsSpec:
         max_train_burst=int(train_section.max_train_burst),
         batch_size=int(train_section.batch_size),
         augment=bool(train_section.augment),
-        recency_weight=float(train_section.recency_weight),
         terminal_eval_enabled=bool(train_section.terminal_eval_enabled),
         selfplay_stall_timeout_sec=float(train_section.selfplay_stall_timeout_sec),
     )

@@ -110,7 +110,7 @@ def test_buffer_carries_and_honors_the_composed_capacity() -> None:
     visits = [(q, r, 1.0 / 130.0) for q, r in cells]
     hb.push_graph_position(stones, visits, 1, 2, 0, True, 1.0, True, 4)
     assert hb.size == 1
-    _wire, targets = hb.sample_graph_batch(1, False, 0.0)
+    _wire, targets = hb.sample_graph_batch(1, False)
     assert len(targets.policy_target) >= 130
 
 

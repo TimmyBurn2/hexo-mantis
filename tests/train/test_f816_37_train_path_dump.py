@@ -38,7 +38,7 @@ _OBSERVED = [0.5, 0.0, 1.1754944e-38]
 def _drive(trainer: Any, replay: Any) -> None:
     caps = H.non_binding_caps(replay.wire)
     run_declared_train_step(
-        trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
+        trainer, replay, H.GSPEC, batch_size=4, augment=False,
         sample_threads_provider=lambda: 1,
         caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps[0], max_nodes=caps[1]))
 

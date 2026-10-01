@@ -158,7 +158,6 @@ def _drive_graph(trainer: Trainer, spec: Any, n_steps: int) -> None:
     buffer = filled_hexg()
     for _ in range(n_steps):
         run_declared_train_step(trainer, buffer, spec, batch_size=4, augment=False,
-                                recency_weight=0.0,
                                 caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1)
 
 
@@ -332,7 +331,7 @@ def _coord_cfg(**over: Any) -> StepCoordinatorConfig:
         # terminus, not about either boundary, and 0 keeps both quiet.
         eval_interval=0, log_interval=0, gate_interval=0, min_buf_size=1,
         capacity=64, training_steps_per_game=4.0, max_train_burst=4,
-        batch_size=4, augment=False, recency_weight=0.0, stop_step=4, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
+        batch_size=4, augment=False, stop_step=4, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
         final_eval_drain_timeout_sec=1.0, eval_final_drain_safety_factor=1.0,
         eval_final_drain_hard_cap_sec=1.0, terminal_eval_hard_cap_sec=1.0,
         terminal_eval_enabled=False,

@@ -62,7 +62,7 @@ def _push(hb: HexgBuffer, pos: dict, is_full_search: bool = True) -> None:
 
 
 def _sampled_map(hb: HexgBuffer):
-    wire, targets = hb.sample_graph_batch(1, False, 0.0)
+    wire, targets = hb.sample_graph_batch(1, False)
     pt = np.asarray(targets.policy_target, dtype=np.float64)
     node_coords = np.asarray(wire.node_coords).reshape(-1, 2)
     gather = np.asarray(wire.legal_node_gather)

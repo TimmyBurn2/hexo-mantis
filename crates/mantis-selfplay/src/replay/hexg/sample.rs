@@ -53,26 +53,6 @@ impl HexgBuffer {
         self.rng.random_range(0..self.size)
     }
 
-    /// Newest-slots window for `recent_frac`: `[head - window, head)` mod capacity, clamped.
-    #[inline]
-    #[must_use]
-    pub fn recent_window(&self) -> usize {
-        self.size.min(usize::max(256, self.capacity / 2))
-    }
-
-    /// Draw `n` indices uniformly (with replacement) from the newest-slots window.
-    pub fn sample_recent_indices(&mut self, n: usize) -> Vec<usize> {
-        let window = self.recent_window();
-        debug_assert!(window > 0, "recent_window must be >0 when size>0");
-        let start = (self.head + self.capacity - window) % self.capacity;
-        (0..n)
-            .map(|_| {
-                let offset = self.rng.random_range(0..window);
-                (start + offset) % self.capacity
-            })
-            .collect()
-    }
-
     /// Remember WHAT this batch was made of, for the trainer's per-batch line: rows per game
     /// says whether the dedupe guard is doing anything, and age in rows back from the newest is
     /// what says a ring has stopped being fed. Stored rather than returned, so the hot sample
@@ -102,19 +82,11 @@ impl HexgBuffer {
         };
     }
 
-    /// Sample `batch_size` slot indices, deduping by `game_id` (untagged -1 slots skip the
-    /// guard). `recent_frac == 0.0` is byte-identical to the full-ring uniform sample.
-    pub fn sample_indices(&mut self, batch_size: usize, recent_frac: f32) -> Vec<usize> {
+    /// Sample `batch_size` slot indices uniformly over the filled ring, deduping by `game_id`
+    /// (untagged -1 slots skip the guard).
+    pub fn sample_indices(&mut self, batch_size: usize) -> Vec<usize> {
         const MAX_RETRIES: usize = 8;
-        let mut indices: Vec<usize> = if recent_frac > 0.0 && self.size > 0 {
-            let n_recent = ((batch_size as f32) * recent_frac).round() as usize;
-            let n_recent = n_recent.min(batch_size);
-            let mut idx = self.sample_recent_indices(n_recent);
-            idx.extend((n_recent..batch_size).map(|_| self.sample_one()));
-            idx
-        } else {
-            (0..batch_size).map(|_| self.sample_one()).collect()
-        };
+        let mut indices: Vec<usize> = (0..batch_size).map(|_| self.sample_one()).collect();
         let mut seen: HashSet<i64> = HashSet::with_capacity(batch_size);
         for _ in 0..MAX_RETRIES {
             seen.clear();
@@ -175,13 +147,12 @@ impl HexgBuffer {
         &mut self,
         batch_size: usize,
         augment: bool,
-        recent_frac: f32,
         n_threads: usize,
     ) -> Result<(Vec<AxisGraph>, GraphTargets), String> {
         if self.size == 0 {
             return Err("Cannot sample from an empty HEXG buffer".to_string());
         }
-        let indices = self.sample_indices(batch_size, recent_frac);
+        let indices = self.sample_indices(batch_size);
         self.samples_consumed_total += indices.len() as u64;
         self.record_batch_composition(&indices);
 

@@ -214,7 +214,7 @@ def test_the_real_graph_trainer_step_publishes_the_tail_mass_reading(tmp_path) -
     sink = H.SpySink()
     trainer = H.tiny_graph_trainer(tmp_path, sink=sink, checkpoint_interval=0)
     run_declared_train_step(
-        trainer, replay, H.GSPEC, batch_size=8, augment=False, recency_weight=0.0,
+        trainer, replay, H.GSPEC, batch_size=8, augment=False,
         caps_provider=lambda: MicrobatchCapsSpec(*H.non_binding_caps(replay.wire)),
         sample_threads_provider=lambda: 1)
 
@@ -242,7 +242,7 @@ def test_an_all_tail_sparse_row_is_admitted_stored_at_zero_and_trains_finite(tmp
     for i in range(8):
         buf.push_graph_position(stones, [(2, 0, 0.0), (1, 1, 0.0)], 1, 1, 2 + i, True,
                                 -1.0, True, 10 + i, -1, 1.0)
-    _wire, targets = buf.sample_graph_batch(4, augment=False, recent_frac=0.0)
+    _wire, targets = buf.sample_graph_batch(4, augment=False)
     mask = targets.explicit_mask.reshape(-1)
     assert int(mask.sum()) == 8, "each sampled row must mark its two zero-mass cells explicit"
     assert float(targets.policy_target.reshape(-1).sum()) == 0.0
@@ -253,7 +253,7 @@ def test_an_all_tail_sparse_row_is_admitted_stored_at_zero_and_trains_finite(tmp
     sink = H.SpySink()
     trainer = H.tiny_graph_trainer(tmp_path, sink=sink, checkpoint_interval=0)
     result = run_declared_train_step(
-        trainer, replay, H.GSPEC, batch_size=8, augment=False, recency_weight=0.0,
+        trainer, replay, H.GSPEC, batch_size=8, augment=False,
         caps_provider=lambda: MicrobatchCapsSpec(*H.non_binding_caps(replay.wire)),
         sample_threads_provider=lambda: 1)
     assert math.isfinite(float(result["loss"])) and math.isfinite(float(result["policy_loss"]))
@@ -296,7 +296,7 @@ def test_the_real_graph_trainer_step_publishes_the_kl_line(tmp_path) -> None:
     sink = H.SpySink()
     trainer = H.tiny_graph_trainer(tmp_path, sink=sink, checkpoint_interval=0)
     run_declared_train_step(
-        trainer, replay, H.GSPEC, batch_size=8, augment=False, recency_weight=0.0,
+        trainer, replay, H.GSPEC, batch_size=8, augment=False,
         caps_provider=lambda: MicrobatchCapsSpec(*H.non_binding_caps(replay.wire)),
         sample_threads_provider=lambda: 1)
     event = sink.named("trainer_step")[0]

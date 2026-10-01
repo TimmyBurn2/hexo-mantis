@@ -480,7 +480,6 @@ class HexgBuffer:
         self,
         batch_size: int,
         augment: bool = False,
-        recent_frac: float = 0.0,
         n_threads: int = 1,
     ) -> tuple[GraphWire, GraphTargets]: ...
     def get_buffer_stats(self) -> tuple[int, int, list[int]]: ...

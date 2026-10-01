@@ -1,8 +1,8 @@
 # Contract: run config schema
 
-- version: v48
+- version: v49
 - owner: mantis.config.schema
-- status: LIVE since scaffold (WP0). Forty-seven steps since (v1 -> v48). Each through v6 is
+- status: LIVE since scaffold (WP0). Forty-eight steps since (v1 -> v49). Each through v6 is
   recorded as a named amendment in docs/design/repo_design.md §4; v7, v8 and v9 are NOT, and
   that is stated rather than implied — v7 landed without one, v8 (R242/ADJ-D12) inherited that
   gap rather than back-filling somebody else's amendment, and v9 records the same gap for
@@ -75,10 +75,11 @@ plays the deploy block too, deploy-matched (R378(d)); the v39 row's "without it"
 | v46 | TWO leaves DELETED from the `train` section, `hard_gn_threshold` and `hard_gn_min_steps` — THE GRAD-NORM HARD ABORT (HYGIENE-1, R381(d)), minted `1e9` / `3` in every committed config, a threshold no finite gradient norm reaches, so the gate could not fire. With them go the coordinator's per-step comparison and its counter (an older resume sidecar's counter is ignored), the abort's DEFERRED armed-abort row, the mechanism and cadence only that row used (`CONFIG_THRESHOLD_BELOW_CEILING` with its `ceiling_path`, `CONSEC_TRAIN_STEPS`) and the gate's `monitor_gates` entry (event manifest v7). The non-finite step guard in `clip_and_step` and the `grad_norm_spike` alert at `monitor.alert_grad_norm_max` are untouched. Both paths join `RETIRED_PATHS`; every config is RE-MINTED through its own header and `tools/config_diff.py --expect` names those two leaves alone | R381(d); HYGIENE-1 |
 | v47 | ONE leaf DELETED from the `train` section, `replay_capacity_schedule` (a list of `{step, capacity}` stages), with its block model, its strictly-increasing validator, the coordinator's growth walker and the engine ring's `resize` it alone called (HYGIENE-1, R381(d); the training-path audit's §7 item 4). Minted `[]` in every committed config. Beside it the sampler's weighted rejection loop goes: every slot's weight was 1.0, so each draw was already one uniform `random_range`, and a seeded draw order is byte-equal before and after; the v2 record still stores its weight column, at 1.0, read by no sampler. The path joins `RETIRED_PATHS`; every config is RE-MINTED through its own header and `tools/config_diff.py --expect` names that leaf alone | R381(d); HYGIENE-1 |
 | v48 | ONE leaf DELETED from the `train` section, `fast_policy_weight` (minted 0.0 everywhere): a fast-arm row is value-only by construction, as KataGo's, so `mantis.train.losses.graph_policy_row_weights` reads the row's `is_full_search` alone and the providers, the resolver and the validator that refused a non-zero weight under armed self-play tactics all go (HYGIENE-1, under the operator's grant). `1 + 0` is the gate the weight reproduced, so every step is bit-identical; every config is RE-MINTED through its own header and `tools/config_diff.py --expect` names that leaf alone | operator grant; HYGIENE-1 |
+| v49 | ONE leaf DELETED from the `train` section, `recency_weight` (minted 0.0 everywhere), with the engine's recency window behind it: every caller already passed `recent_frac` 0.0 (the config, the BC route's constant, the probe and the fusion calibration), so `HexgBuffer.sample_graph_batch` loses the argument and the ring samples uniformly; a seeded draw order at 0.0 is byte-equal before and after (HYGIENE-1, under the operator's grant). Every config is RE-MINTED through its own header and `tools/config_diff.py --expect` names that leaf alone | operator grant; HYGIENE-1 |
 
 ## Shape
 
-Thirteen top-level fields; **167 leaf key-paths** under the walker that descends nested blocks
+Thirteen top-level fields; **166 leaf key-paths** under the walker that descends nested blocks
 (including optional ones) and counts a `list[SubModel]` field as ONE leaf.
 
 | section | leaves | models |
@@ -92,7 +93,7 @@ Thirteen top-level fields; **167 leaf key-paths** under the walker that descends
 | `model` | 4 | `ModelConfig`, `GnnWidthsConfig`, `AuxSoftPolicyConfig` |
 | `deploy` | 11 | `DeployConfig`, `SearchConfig`, `TacticsConfig`, `TacticsAuditConfig` |
 | `eval` | 30 | `EvalConfig`, `GateConfig`, `SequentialGateConfig`, `PlyCapAdjudicationConfig`, `StrengthFloorConfig` |
-| `train` | 42 | `TrainConfig`, `DrawRateAbortConfig`, `PolicyLossTroughAbortConfig`, `PlyCapAbortConfig`, `HeldoutGapConfig`, `MicrobatchCapsConfig` |
+| `train` | 41 | `TrainConfig`, `DrawRateAbortConfig`, `PolicyLossTroughAbortConfig`, `PlyCapAbortConfig`, `HeldoutGapConfig`, `MicrobatchCapsConfig` |
 | `selfplay` | 35 | `SelfplayConfig`, `SearchConfig`, `TacticsConfig`, `TacticsAuditConfig`, `MctsConfig`, `PlayoutCapConfig` |
 | `inference` | 6 | `InferenceConfig`, `FusedGraphCapsConfig` |
 | `monitor` | 28 | `MonitorSchemaConfig`, `DrainCapsConfig`, `DiskGuardConfig` |

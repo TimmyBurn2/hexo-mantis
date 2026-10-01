@@ -63,11 +63,10 @@ class ReplayWireBuffer:
         self.size = real.size
         self.capacity = real.capacity
         self.calls = 0
-        wire, targets = real.sample_graph_batch(batch_size, augment=augment, recent_frac=0.0)
+        wire, targets = real.sample_graph_batch(batch_size, augment=augment)
         self._pair = (graph_wire_from_rust(wire), targets)
 
-    def sample_graph_batch(self, batch_size: int, augment: bool = False,
-                           recent_frac: float = 0.0, n_threads: int = 1):
+    def sample_graph_batch(self, batch_size: int, augment: bool = False, n_threads: int = 1):
         # `n_threads` is the rebuild width: accepted because the dispatcher passes it on
         # every graph step, ignored because the double has no rebuild of its own.
         self.calls += 1
@@ -113,11 +112,11 @@ def graph_step(trainer: Any, buffer: Any) -> dict[str, float]:
     is what the coordinator calls, so a guard driven here sits on the path that runs."""
     from mantis.train.coordinator.dispatch import _graph_step as production_graph_step
 
-    wire, _targets = buffer.sample_graph_batch(4, augment=False, recent_frac=0.0)
+    wire, _targets = buffer.sample_graph_batch(4, augment=False)
     max_edges, max_nodes = non_binding_caps(wire)
     return production_graph_step(
         trainer, buffer, GSPEC,
-        batch_size=4, augment=False, recency_weight=0.0,
+        batch_size=4, augment=False,
         caps_provider=lambda: MicrobatchCapsSpec(max_edges=max_edges, max_nodes=max_nodes),
         sample_threads_provider=lambda: 1,
     )
@@ -127,7 +126,7 @@ def step_once(trainer: Any, buf: HexgBuffer, *, replay_n: int = 8) -> dict[str, 
     """One declared train step over a fixed `replay_n`-row wire, with caps that cannot bind."""
     replay = ReplayWireBuffer(buf, replay_n)
     return run_declared_train_step(
-        trainer, replay, GSPEC, batch_size=replay_n, augment=False, recency_weight=0.0,
+        trainer, replay, GSPEC, batch_size=replay_n, augment=False,
         caps_provider=lambda: MicrobatchCapsSpec(*non_binding_caps(replay.wire)),
         sample_threads_provider=lambda: 1)
 

@@ -124,7 +124,7 @@ def encode_game(
             int(board.moves_remaining),
             ply,
             # TRUE, decided by the flag's ROLE and not its NAME: its only semantic consumer
-            # turns it into the row's POLICY WEIGHT, and `recency_buffer` defaults it to 1. A
+            # turns it into the row's POLICY WEIGHT (1 on a full row, 0 on a fast one). A
             # BC row's one-hot IS a policy target, and FALSE zeroed the policy loss and its
             # denominator on EVERY row — measured 0.000000 held-out policy loss across 2 000
             # steps over 511 145 human positions.
