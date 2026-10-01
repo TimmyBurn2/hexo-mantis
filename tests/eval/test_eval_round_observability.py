@@ -88,7 +88,7 @@ def test_the_child_writes_one_row_per_game_with_counters_only(tmp_path: Path) ->
     """The child writes one row per game, safe by construction: counters and a timestamp."""
     path = tmp_path / "r1_progress.txt"
     progress = _RoundProgress(path)
-    screen = progress.sink("gate_screen")
+    screen = progress.sink("gate_sequential")
     screen(_game(plies=40))
     screen(_game(plies=52))
     progress.sink("rung")(_game(plies=31))
@@ -98,7 +98,7 @@ def test_the_child_writes_one_row_per_game_with_counters_only(tmp_path: Path) ->
         f"the game index must run monotonically ACROSS phases so a reader can say 'game 3 of N' "
         f"for the whole round; got {rows}"
     )
-    assert [r["phase"] for r in rows] == ["gate_screen", "gate_screen", "rung"]
+    assert [r["phase"] for r in rows] == ["gate_sequential", "gate_sequential", "rung"]
     assert [r["plies"] for r in rows] == [40, 52, 31]
     for row in rows:
         assert set(row) == {"game_index", "phase", "plies", "t_wall",
@@ -116,7 +116,7 @@ def test_each_row_carries_the_outcome_facts_the_margin_distribution_needs(
     """Each row carries the four facts a margin histogram and a seat split need — the
     adjudicator's tally reads the decisive RATE and nothing about its shape."""
     path = tmp_path / "r1_progress.txt"
-    sink = _RoundProgress(path).sink("gate_screen")
+    sink = _RoundProgress(path).sink("gate_sequential")
     sink(_game(plies=128, winner="candidate", candidate_color=1, margin=2))
     sink(_game(plies=128, winner="opponent", candidate_color=-1, margin=-3))
     sink(_game(plies=128, winner="draw", candidate_color=1, margin=0))
@@ -138,7 +138,7 @@ def test_a_ZERO_margin_and_an_ABSENT_one_do_not_collide(tmp_path: Path) -> None:
     """A measured `margin: 0` and an absent `margin: null` do not collide: `0` is the two
     sides EXACTLY LEVEL, the residual-draw bin, while `null` is no measurement at all."""
     path = tmp_path / "r1_progress.txt"
-    sink = _RoundProgress(path).sink("gate_screen")
+    sink = _RoundProgress(path).sink("gate_sequential")
     sink(_game(plies=128, winner="draw", margin=0))
     sink(_game(plies=128, winner="draw", margin=None))
     sink(_game(plies=61, winner="candidate", terminal="win", margin=None))
@@ -155,7 +155,7 @@ def test_a_ZERO_margin_and_an_ABSENT_one_do_not_collide(tmp_path: Path) -> None:
 def test_the_disarmed_posture_still_writes_a_complete_row(tmp_path: Path) -> None:
     """The disarmed row is the COMMON case and still carries `terminal`, `winner` and seat."""
     path = tmp_path / "r1_progress.txt"
-    _RoundProgress(path).sink("gate_confirm")(
+    _RoundProgress(path).sink("gate_sequential")(
         _game(plies=128, winner="draw", terminal="ply_cap", candidate_color=-1, margin=None)
     )
     row = json.loads(path.read_text(encoding="utf-8").strip())
@@ -201,7 +201,7 @@ def test_the_verdict_margin_the_writer_reads_is_the_ADJUDICATORS_OWN() -> None:
         def _write(self, row: dict) -> None:
             captured.append(row)
 
-    _Capture("unused").sink("gate_screen")(record)
+    _Capture("unused").sink("gate_sequential")(record)
     assert captured[0]["margin"] == -2 and captured[0]["winner"] == "opponent"
 
 
@@ -209,7 +209,7 @@ def test_the_parent_reads_the_LAST_row_back(tmp_path: Path) -> None:
     """The parent reads the LAST row back — how far the round got is the newest row."""
     path = tmp_path / "r1_progress.txt"
     progress = _RoundProgress(path)
-    sink = progress.sink("gate_screen")
+    sink = progress.sink("gate_sequential")
     for _ in range(5):
         sink(_game())
     assert read_progress(SimpleNamespace(progress_path=str(path)))["game_index"] == 5
@@ -219,7 +219,7 @@ def test_a_broken_round_now_CARRIES_how_far_it_got(tmp_path: Path) -> None:
     """A broken round reports `games_total=None` AND the progress it made."""
     path = tmp_path / "r1_progress.txt"
     progress = _RoundProgress(path)
-    sink = progress.sink("gate_screen")
+    sink = progress.sink("gate_sequential")
     for _ in range(7):
         sink(_game())
 
@@ -260,7 +260,7 @@ def test_a_progress_WRITE_failure_disables_itself_and_never_breaks_the_round(
     blocked = tmp_path / "afile"
     blocked.write_text("i am a file, not a directory", encoding="utf-8")
     progress = _RoundProgress(blocked / "sub" / "p.txt")   # parent mkdir must fail
-    sink = progress.sink("gate_screen")
+    sink = progress.sink("gate_sequential")
     sink(_game())     # must not raise
     sink(_game())     # must not raise, and must not re-report
     assert capsys.readouterr().err.count("progress writes DISABLED") == 1, (

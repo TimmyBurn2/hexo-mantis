@@ -648,7 +648,7 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
                 "elo_ci_lower_boot": gate_agg.elo_ci_lower_boot, "low_power": gate_agg.low_power,
                 "eff_n": gate_agg.eff_n, "reason": "", "deploy_matched": True,
                 "promoted": gate_agg.promoted,
-                # The rule that decided, kept for records written while a second rule existed.
+                # One record shape for every era (wr_screen == wr_confirm, n_confirm 0), so one reader parses all rounds.
                 "rule": "gsprt",
                 "llr": verdict["llr"],
                 "pairs_played": verdict["pairs_played"],

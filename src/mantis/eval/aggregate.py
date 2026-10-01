@@ -197,7 +197,7 @@ def aggregate_rung(
 def aggregate_gate(
     records: Sequence[Mapping[str, Any]], gate_cfg: Any, verdict: Mapping[str, Any],
 ) -> GateAggregate:
-    """The GSPRT's aggregate over every game it played: the pooled WR and pair bootstrap, `promoted` = the verdict AND the low-power guard."""
+    """The GSPRT's aggregate over its games: pooled WR, pair bootstrap, `promoted` = verdict AND low-power guard; Raises: KeyError, ValueError (a winner not p1/p2/draw)."""
     pooled = list(records)
     n_pooled = len(pooled)
     pooled_wins = sum(1 for r in pooled if r["winner"] == "p1")

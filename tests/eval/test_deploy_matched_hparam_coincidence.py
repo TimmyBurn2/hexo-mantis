@@ -25,7 +25,7 @@ _PRODUCTION_CONFIG = production_configs(_REPO)[0]
 _INFERENCE_PY = _REPO / "src" / "mantis" / "selfplay" / "inference_local.py"
 
 
-def _run5() -> dict[str, Any]:
+def _production() -> dict[str, Any]:
     return yaml.safe_load(_PRODUCTION_CONFIG.read_text(encoding="utf-8"))
 
 
@@ -67,7 +67,7 @@ def _split_literal_and_threaded(section: str) -> tuple[dict[str, Any], set[str]]
 # the dense path, so the coverage row below is what keeps a NEW literal from appearing unwatched.
 _INFERENCE_KEYS: list[str] = []
 
-#: Keys run5 declares that the literal DELIBERATELY does not mirror, a CLOSED set: the caps are
+#: Keys the production config declares that the literal DELIBERATELY does not mirror, a CLOSED set: the caps are
 #: threaded; the two serving postures the eval child does not take — eager forward, inline
 #: dump-on-fire check 14 (CARD-A4-MINT).
 _DELIBERATELY_NOT_IN_THE_LITERAL = {"fused_graph_caps", "compile_trunk", "edge_geometry_check"}
@@ -77,20 +77,20 @@ _DELIBERATELY_NOT_IN_THE_LITERAL = {"fused_graph_caps", "compile_trunk", "edge_g
 _THREADED_NOT_LITERAL = {"inference_batch_size", "inference_max_wait_ms"}
 
 
-def test_the_literal_covers_every_key_run5_declares() -> None:
-    """Coverage, not just agreement: a NEW key in run5's inference block that the literal omits
+def test_the_literal_covers_every_key_the_production_config_declares() -> None:
+    """Coverage, not just agreement: a NEW key in the production config's inference block that the literal omits
     is the same defect one level out, and parametrising over a stale list would hide it. The
     exception set is CLOSED — a key is excused only by a ruling that says the literal must not
     carry it."""
     sets = [set(_INFERENCE_KEYS), _DELIBERATELY_NOT_IN_THE_LITERAL, _THREADED_NOT_LITERAL]
-    assert set().union(*sets) == set(_run5()["inference"]), (
-        "run5's inference block and this oracle's key lists have diverged"
+    assert set().union(*sets) == set(_production()["inference"]), (
+        "the production config's inference block and this oracle's key lists have diverged"
     )
     for i, a in enumerate(sets):
         for b in sets[i + 1:]:
             assert not (a & b), (
                 "a key is listed in two of {mirrored, deliberately-absent, threaded}; the "
-                "three lists must PARTITION run5's inference block, or the coverage claim "
+                "three lists must PARTITION the production config's inference block, or the coverage claim "
                 "above is vacuous"
             )
     literals, threaded = _split_literal_and_threaded("inference")
@@ -129,8 +129,8 @@ def test_the_train_SECTION_IS_GONE_and_law06_still_pins_the_dtype() -> None:
         "thing it ever carried was `amp_dtype`, which R346(f) deleted; a re-added section is a "
         "second dtype authority on the one construction path with no config to be the first."
     )
-    assert "amp_dtype" not in _run5()["train"], (
-        "`train.amp_dtype` is back in run5. LAW-06 pins the graph autocast dtype in code; a "
+    assert "amp_dtype" not in _production()["train"], (
+        "`train.amp_dtype` is back in the production config. LAW-06 pins the graph autocast dtype in code; a "
         "config row for it is the second authority this deletion removed."
     )
     assert amp_dtype_for("graph") is torch.bfloat16, (
@@ -142,6 +142,6 @@ def test_the_train_SECTION_IS_GONE_and_law06_still_pins_the_dtype() -> None:
 @pytest.mark.parametrize("path", production_configs(_REPO), ids=lambda p: p.name)
 def test_every_production_config_carries_the_values_read_above(path: Path) -> None:
     """The rows above read one census member; each other member must carry the same values."""
-    read, other = _run5(), yaml.safe_load(path.read_text(encoding="utf-8"))
+    read, other = _production(), yaml.safe_load(path.read_text(encoding="utf-8"))
     assert set(other["inference"]) == set(read["inference"]), path.name
     assert "amp_dtype" not in other["train"], path.name

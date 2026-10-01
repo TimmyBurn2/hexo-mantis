@@ -11,7 +11,7 @@ def resolve_puct_constants(config: Any) -> PuctConstants:
     """The minted `selfplay.mcts` constants, from a `RunConfig` or its plain mapping (a checkpoint stamp's).
 
     Raises:
-        KeyError: a mapping without `selfplay.mcts` or one of its four keys.
+        KeyError, TypeError: a mapping without `selfplay.mcts` or one of its four keys, or a null value.
     """
     mcts = config["selfplay"]["mcts"] if isinstance(config, Mapping) else config.selfplay.mcts
     read = mcts.__getitem__ if isinstance(mcts, Mapping) else (lambda key: getattr(mcts, key))

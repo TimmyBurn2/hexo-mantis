@@ -74,12 +74,12 @@ every edit, the search lands seconds later — and the page shows the search as 
 
 1. **Root quiescence.** `finish_expansion` applies `apply_quiescence` to the ROOT's own value
    before backup and stores the CORRECTED value in `raw_values` (`crates/mantis-search/src/mcts/
-   backup.rs`); `DeployHeadPlayer._fresh_tree` builds `MCTSTree()` with `quiescence_enabled=True`.
+   backup.rs`); `DeployHeadPlayer._fresh_tree` builds its tree from the stamp's `selfplay.mcts` constants (quiescence on).
    So a 1-sim `root_value()` is the solver's verdict wherever it fires — measured on a CHECK
    position (p1 open four, p2 to move at k=2): net −0.2987, deploy head 1 sim −0.5987
    (`quiescence_fire_count` 1), 64 sims +0.3429 (3 fires). And under `puct` `root_raw_value()`
    is 0.0 at every budget (the kind keeps no raw values). The raw tier therefore reads the NET
-   through a `MCTSTree(quiescence_enabled=False)` driven by the worker's own expand collaborator
+   through a tree on the stamp's constants with quiescence off, driven by the worker's own expand collaborator
    — measured −0.2987, equal to `engine.infer_batch_ls` — and the searched tier is stated to INCLUDE the
    deploy head's quiescence override, with the fire count printed as its own instrument.
 2. **Terminal positions.** `select_move` RAISES on a won board (no root children, every kind
@@ -225,7 +225,7 @@ explicitly (the box passes `cuda`); `--threads` absent means torch's own default
 states the count in use. The card carries `run_id, step, sha8, encoding, radius, search_kind,
 deploy_sims (= eval.gate.deploy_sims), params, device, threads`.
 
-**Two trees per engine.** (i) THE RAW TREE, cached: `MCTSTree(quiescence_enabled=False)` +
+**Two trees per engine.** (i) THE RAW TREE, cached: the stamp's `selfplay.mcts` constants with quiescence off +
 `configure_search(kind, c_visit, c_scale, q_rescale)` once; per read `new_game(board)` →
 `select_leaves(1)` → the worker's expand collaborator (`_graph_expand_fn(engine, spec)`)
 → `root_value()` is the NET's value and

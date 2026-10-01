@@ -53,7 +53,7 @@ class ReplayBufferLike(Protocol):
 class GraphRouteBufferLike(Protocol):
     """The graph route-key, ONE member, kept out of `ReplayBufferLike`: the sampler is the route."""
 
-    def sample_graph_batch(self, batch_size: int, *, augment: bool) -> Any: ...
+    def sample_graph_batch(self, batch_size: int, *, augment: bool, n_threads: int) -> Any: ...
 
 
 @runtime_checkable

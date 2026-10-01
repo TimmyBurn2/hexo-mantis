@@ -43,7 +43,7 @@ def _parent(config: dict[str, Any], dotted: str) -> tuple[Any, str]:
 
 
 def split_retired(config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    """`(a copy without the retired paths, a fold's unset target filled, {dotted path: value})`; the input is untouched."""
+    """`(a copy without the retired paths and retired-posture nulls, a fold's unset target filled, {dotted path: value})`; the input is untouched."""
     kept = copy.deepcopy(config)
     removed: dict[str, Any] = {}
     for dotted in sorted(RETIRED_PATHS):
