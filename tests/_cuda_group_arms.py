@@ -8,7 +8,8 @@ import pytest
 
 
 def _record(tag: str) -> None:
-    Path(os.environ["MANTIS_CUDA_ARMS_DIR"], tag).write_text(os.environ.get("PYTEST_XDIST_WORKER", "main"))
+    Path(os.environ["MANTIS_CUDA_ARMS_DIR"], tag).write_text(os.environ.get("PYTEST_XDIST_WORKER", "main"),
+                                                     encoding="utf-8")
 
 
 @pytest.mark.cuda

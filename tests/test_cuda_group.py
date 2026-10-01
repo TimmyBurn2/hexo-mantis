@@ -23,7 +23,7 @@ def _child(tmp_path: Path, *args: str) -> subprocess.CompletedProcess[str]:
 
 
 def _workers(tmp_path: Path, prefix: str) -> set[str]:
-    return {p.read_text() for p in tmp_path.glob(f"{prefix}-*")}
+    return {p.read_text(encoding="utf-8") for p in tmp_path.glob(f"{prefix}-*")}
 
 
 def test_every_cuda_test_lands_on_one_worker_under_gate_3a_distribution(tmp_path: Path) -> None:
@@ -48,5 +48,5 @@ def test_gate_3a_and_make_test_distribute_by_group() -> None:
     """The group means one worker only under `--dist loadgroup`, so both default-tier invocations carry it."""
     for path, needle in (("tools/ci_gates/run_all.sh", '-m "not integration and not slow" -n 8'),
                          ("Makefile", '-m "not integration and not slow" -n 8')):
-        lines = [ln for ln in (REPO_ROOT / path).read_text().splitlines() if needle in ln]
+        lines = [ln for ln in (REPO_ROOT / path).read_text(encoding="utf-8").splitlines() if needle in ln]
         assert lines and all("--dist loadgroup" in ln for ln in lines), (path, lines)
