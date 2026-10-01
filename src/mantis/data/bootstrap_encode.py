@@ -31,14 +31,8 @@ from typing import Any
 from mantis.encoding import assert_not_heldout_sha
 from mantis.util.hashing import sha256_file
 
-#: The runner's terminal-reason code for a normal decided/drawn end. `2` is the ply-cap branch,
-#: which a completed human game never takes.
+#: The runner's terminal-reason code for a decided end, the only end a completed human game takes.
 _TERMINAL_DECIDED = 0
-
-#: Values the decided branch never reads. Named rather than passed as bare zeros so a reader
-#: can see they are inert, and so a future draw-aware corpus has one place to change.
-_PLY_CAP_VALUE = 0.0
-_DRAW_REWARD = 0.0
 
 
 class CorpusEncodeError(ValueError):
@@ -122,9 +116,7 @@ def encode_game(
                 "move desynchronises every later position from its own label."
             )
         rec_player = int(board.current_player)
-        outcome, value_valid = graph_row_outcome(
-            rec_player, int(winner), _TERMINAL_DECIDED, _PLY_CAP_VALUE, _DRAW_REWARD,
-        )
+        outcome, value_valid = graph_row_outcome(rec_player, int(winner), _TERMINAL_DECIDED)
         yield (
             [(int(sq), int(sr), int(sp)) for sq, sr, sp in board.get_stones()],
             [(int(q), int(r), 1.0)],          # one-hot on the played stone

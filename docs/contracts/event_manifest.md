@@ -1,6 +1,6 @@
 # Contract: event manifest
 
-- version: v4
+- version: v5
 - owner: `mantis.monitor` (`manifest.py` + `producer_manifest.yaml`)
 - status: v4 — first filled by the run-safety subsystem port (WP13-A); the eval-pipeline rows
   (`eval_round` heartbeat, `eval_round_wall`/`eval_broken`) landed at WP11-A. R362(c)
@@ -20,6 +20,8 @@
   top-level keys are now the checked rosters under "Published field rosters".
   v4 (R368, SLIM-FIX): `iteration_complete.target_integrity.positions_dropped` publishes the graph
   rows the results-queue cap (`selfplay.results_queue_cap`) discarded before a drain read them.
+  v5 (HYGIENE-1, R381(d)): `iteration_complete.target_integrity.root_expansion_failed` publishes the
+  searches whose root did not expand while the run was live.
 
 ## Summary
 
@@ -270,6 +272,11 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   them — training data the run generated and lost. It is 0 while the drain keeps up; its
   `per_position` is the share of recorded positions lost. `runner_stats` reads the getter with NO
   default. Producer test: `tests/selfplay/test_positions_dropped_counter.py`.
+  `root_expansion_failed` counts searches whose root did not expand while the run was live
+  (`mantis-selfplay/src/runner/search_drive.rs::count_live_failure`; a root our own `stop()` cut is
+  a shutdown and is not counted). Each costs its game one ply, so a game that met one ends short of
+  the cap; it trains no value either way, since a game without a winner is masked. `runner_stats`
+  reads the getter with NO default. Producer test: `tests/selfplay/test_root_expansion_failed_counter.py`.
 - `iteration_complete.inference_batching` is the Q3 in-run batching instrument (LAW-18),
   and `iteration_complete.batch_fill_pct` gains the manifest row it shipped without.
   `batch_fill_pct` has published a mean batch occupancy on every `iteration_complete` since

@@ -67,7 +67,7 @@ def _config_leaf_names() -> set[str]:
 def test_the_vocabulary_is_not_empty() -> None:
     leaves = _config_leaf_names()
     assert len(leaves) > 100, f"only {len(leaves)} leaf name(s) — the walk is broken"
-    for expected in ("n_workers", "max_game_moves", "draw_reward", "c_visit", "c_scale",
+    for expected in ("n_workers", "max_game_moves", "temp_min", "c_visit", "c_scale",
                      "q_rescale"):
         assert expected in leaves, f"{expected} missing — the census would not cover it"
 

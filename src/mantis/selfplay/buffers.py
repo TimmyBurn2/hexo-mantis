@@ -5,8 +5,7 @@ representation dies at construction rather than downstream. It is a veneer and n
 zero copies (no `numpy` import and no array operation at all; identity is test-pinned), zero
 storage change (capacity, eviction, weighting and the on-disk formats are the engine's, whose
 byte-level cross-magic rejection it re-asserts only by letting it propagate), and zero new
-metrics — `outcome_in_range_count` is absent on the graph buffer, so the caller's
-missing-attribute fallback stays reachable.
+metrics.
 """
 from __future__ import annotations
 
@@ -90,11 +89,6 @@ class ReplayFacade:
     def samples_consumed_total(self) -> int:
         """Rows the ring handed the trainer since boot, the replay ratio's numerator."""
         return self.raw.samples_consumed_total()
-
-    def outcome_in_range_count(self, lo: float, hi: float) -> int:
-        """Count buffered outcomes in `[lo, hi)`; absent on a graph buffer, and the resulting
-        `AttributeError` propagates so the caller's NaN fallback stays reachable."""
-        return self.raw.outcome_in_range_count(lo, hi)
 
 
 __all__ = ["BufferKind", "ReplayFacade"]

@@ -29,14 +29,12 @@ BASE_PLAYOUT_CAP: dict[str, Any] = {
     "n_sims_quick": 0, "n_sims_full": 0,
     "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
 }
-# The LEGACY flat hparams dict `cfg()` builds, never a validated `train:` payload, so INCOMPLETE;
-# `draw_reward` -0.4 and `ply_cap_value` -0.7 differ from the minted defaults so oracles see them.
+# The LEGACY flat hparams dict `cfg()` builds, never a validated `train:` payload, so INCOMPLETE.
 BASE_TRAIN: dict[str, Any] = {
     "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0,
     "lr_schedule": "cosine", "total_steps": 1_000_000, "scheduler_t_max": None,
     "eta_min": 5e-4, "checkpoint_interval": 0,
     "policy_target": "raw_visit_distribution",
-    "draw_reward": -0.4, "ply_cap_value": -0.7,
     "fast_policy_weight": 0.0,
 }
 
@@ -125,28 +123,6 @@ def test_dirichlet_epsilon_reaches_hparams_and_wire(assemble) -> None:
     config = cfg(mcts={"dirichlet_epsilon": 0.9})
     assert SelfPlayHParams.from_config(config).dirichlet_epsilon == 0.9
     assert assemble(config).recorded_kwargs["dirichlet_epsilon"] == 0.9
-
-
-# the ply-cap value chain and its wire site
-@pytest.mark.parametrize(
-    "train_over,expected_draw,expected_ply",
-    [
-        ({"draw_reward": -0.5, "ply_cap_value": -0.9}, -0.5, -0.9),
-        ({"draw_reward": -0.3, "ply_cap_value": -0.3}, -0.3, -0.3),
-    ],
-    ids=["explicit_split", "explicit_equal"],
-)
-def test_ply_cap_value_wire(assemble, train_over, expected_draw, expected_ply) -> None:
-    """`train.draw_reward`/`train.ply_cap_value` land on the runner kwargs of the same name."""
-    config = cfg(train=train_over)
-
-    hp = SelfPlayHParams.from_config(config)
-    assert hp.draw_value == expected_draw
-    assert hp.ply_cap_value == expected_ply
-
-    recorded = assemble(config)
-    assert recorded.recorded_kwargs["draw_reward"] == expected_draw
-    assert recorded.recorded_kwargs["ply_cap_value"] == expected_ply
 
 
 # `search_kind` re-reads the LIVE config

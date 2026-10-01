@@ -55,6 +55,8 @@ RUNNER_STATS_FIELDS = {
     "inference_failures_total",
     # Graph rows the results-queue cap dropped before a drain read them.
     "positions_dropped",
+    # Searches whose root did not expand while the run was live.
+    "root_expansion_failed",
     # Worker threads that died by panic — a lifecycle counter, a DIFFERENT family from the
     # target-integrity latches beside it, which is why it is kept out of that tuple.
     "worker_panics",
@@ -173,18 +175,13 @@ def test_pool_does_not_keep_a_second_handle_on_the_raw_buffer(device) -> None:
     )
 
 
-def test_graph_pool_buffer_composition_is_nan_and_that_is_parity(device) -> None:
-    """A graph pool reports `draw_target_fraction` as NaN, never a fabricated number."""
-    pool = graph_pool(device=device, capacity=32, n_simulations=50, fast_sims=40)
-    pool.config["train"] = {"draw_reward": -0.5, "ply_cap_value": -0.7}
-
+def test_graph_pool_buffer_composition_reads_the_empty_ring() -> None:
+    """An empty graph ring composes as empty: no rows, all of them corpus by the push count, no games."""
+    pool = graph_pool(device=torch.device("cpu"), capacity=32, n_simulations=50, fast_sims=40)
     composition = pool.buffer_composition()
-    assert math.isnan(composition["draw_target_fraction"])
     assert composition["buffer_size"] == 0
     assert composition["corpus_fraction"] == 1.0
-    assert not hasattr(pool.replay_buffer.raw, "outcome_in_range_count"), (
-        "the graph buffer must not gain the getter; that would create a metric with no old-side twin"
-    )
+    assert composition["n_games_observed"] == 0
 
 
 def _top_level_imports(path: Path) -> set[str]:

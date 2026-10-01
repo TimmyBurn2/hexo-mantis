@@ -96,6 +96,8 @@ pub(crate) struct WorkerStats {
     pub(crate) dirichlet_root_fires: Arc<AtomicU64>,
     // Target-integrity fire-rate counters.
     pub(crate) export_offwindow_mass_moves: Arc<AtomicU64>,
+    /// Searches whose root did not expand while the run was live; the move is tried again.
+    pub(crate) root_expansion_failed: Arc<AtomicU64>,
     /// The tactics block's rows over every search, and the rows its moves recorded; all zero with tactics off.
     pub(crate) tactics_totals: Arc<TacticsTotals>,
 }

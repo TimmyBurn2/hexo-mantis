@@ -32,7 +32,8 @@ from mantis.selfplay.pool_hooks import RunnerStats, runner_stats
 from mantis.train.coordinator.step import _SEARCH_LEVER_COUNTERS
 
 #: The getters `runner_stats` reads with no default; `tactics_totals` is a call, so its stand-in is `dict`.
-_LEVERS = {**dict.fromkeys((*_SEARCH_LEVER_COUNTERS, "positions_dropped"), 0), "tactics_totals": dict}
+_LEVERS = {**dict.fromkeys((*_SEARCH_LEVER_COUNTERS, "positions_dropped", "root_expansion_failed"), 0),
+           "tactics_totals": dict}
 
 _FIELDS = (
     "export_offwindow_mass_moves",

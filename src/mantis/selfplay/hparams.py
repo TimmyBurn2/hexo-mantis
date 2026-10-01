@@ -122,9 +122,6 @@ class SelfPlayHParams:
     # The runner ctor kwarg spelling differs from the schema field name.
     temp_threshold_compound_moves: int
     temp_min: float  # field name == config key
-    # training ns
-    draw_value: float
-    ply_cap_value: float
     # monitoring / instrumentation ns
     log_investigation_metrics: bool
 
@@ -140,13 +137,12 @@ class SelfPlayHParams:
     def from_config(
         cls, config: dict[str, Any], n_workers: int | None = None
     ) -> SelfPlayHParams:
-        """Resolve every ctor-time knob off a validated mapping's `selfplay`/`train` sections.
+        """Resolve every ctor-time knob off a validated mapping's `selfplay` section.
         `effective_sims_per_move == 0` spans `mcts.n_simulations` AND `playout_cap.*`, so it is checked here.
         Raises: ValueError — no effective per-move sim count; `MissingTacticsError`, no `selfplay.search.tactics`."""
         sp = config["selfplay"]
         mcts_cfg = sp["mcts"]
         pc = sp["playout_cap"]
-        train = config["train"]
 
         hp = cls(
             n_workers=int(n_workers if n_workers is not None else sp["n_workers"]),
@@ -179,9 +175,6 @@ class SelfPlayHParams:
             n_sims_full=int(pc["n_sims_full"]),
             temp_threshold_compound_moves=int(pc["temperature_threshold_compound_moves"]),
             temp_min=float(pc["temp_min"]),
-            # Cross-section read: draw_reward/ply_cap_value define `pure_outcome_z`.
-            draw_value=float(train["draw_reward"]),
-            ply_cap_value=float(train["ply_cap_value"]),
             log_investigation_metrics=bool(sp["log_investigation_metrics"]),
         )
         if hp.effective_sims_per_move <= 0:
@@ -240,8 +233,6 @@ def build_runner_config(
         fast_sims=hp.fast_sims,
         standard_sims=hp.standard_sims,
         temp_threshold_compound_moves=hp.temp_threshold_compound_moves,
-        draw_reward=hp.draw_value,
-        ply_cap_value=hp.ply_cap_value,
         quiescence_enabled=hp.quiescence_enabled,
         quiescence_blend_2=hp.quiescence_blend_2,
         temp_min=hp.temp_min,

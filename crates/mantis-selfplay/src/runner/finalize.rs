@@ -1,8 +1,7 @@
 //! Finalize phase — `finalize_game_graph`.
 //!
-//! The `winner == None` arm pays `ply_cap_value` when `terminal_reason == 2` else `draw_reward`;
-//! `value_valid` is the PLY-CAP mask (`terminal_reason != 2`); a draw trains. The loop holds the
-//! results-queue lock ONCE across the whole game so every game's rows are CONTIGUOUS in the shared
+//! A game with no winner trains no value: its rows carry 0 and `value_valid` false, at the cap
+//! (reason 2) and short of it (reason 3) alike. The loop holds the results-queue lock ONCE across the whole game so every game's rows are CONTIGUOUS in the shared
 //! queue (observable only multi-worker). The terminal reason / outcome are read from
 //! `board.winner()` + `terminal_reason`, never re-derived from ply parity. Drop-oldest past
 //! `results_queue_cap` bumps `positions_dropped`.
@@ -33,8 +32,6 @@ pub(crate) fn finalize_game_graph(
     move_arms: Vec<(u32, bool)>,
     search_stats: Option<Vec<PositionStats>>,
     version_seen: &[u64],
-    draw_reward: f32,
-    ply_cap_value: f32,
     results_queue_cap: usize,
     worker_id: usize,
 
@@ -76,15 +73,8 @@ pub(crate) fn finalize_game_graph(
     // Written through a poisoned lock: the poisoning panic already halted the run.
     let mut gq = lock_or_recover(graph_results_queue, None);
     for mut rec in graph_records {
-        // §178 KEEP-verbatim split — reads rec.current_player / winner /
-        // terminal_reason only, no cell geometry.
-        let (outcome, value_valid_u8) = records::finalize_graph_outcome(
-            rec.current_player,
-            winner,
-            terminal_reason,
-            ply_cap_value,
-            draw_reward,
-        );
+        let (outcome, value_valid_u8) =
+            records::finalize_graph_outcome(rec.current_player, winner, terminal_reason);
         rec.outcome = outcome;
         rec.value_valid = value_valid_u8 != 0;
         rec.game_length = game_length;
@@ -175,5 +165,62 @@ fn push_recent_meta(
     ));
     if rg.len() > 2000 {
         rg.pop_front();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::VecDeque;
+    use std::sync::atomic::{AtomicU64, AtomicUsize};
+    use std::sync::Mutex;
+
+    use mantis_core::Board;
+
+    use super::finalize_game_graph;
+    use crate::replay::hexg::GraphRecord;
+
+    /// PLANTED BREAK: mask the cap alone and this game's rows train a value with no result behind it.
+    #[test]
+    fn a_planted_game_without_a_winner_short_of_the_cap_trains_no_value() {
+        let (queue, recent) = (Mutex::new(VecDeque::new()), Mutex::new(VecDeque::new()));
+        let (games, seq) = (AtomicUsize::new(0), AtomicU64::new(0));
+        let (x, o, d, dropped) = (
+            AtomicU64::new(0),
+            AtomicU64::new(0),
+            AtomicU64::new(0),
+            AtomicU64::new(0),
+        );
+        let rows = [1, -1].map(|current_player| GraphRecord {
+            current_player,
+            ..GraphRecord::default()
+        });
+        // An empty board under a 200-ply cap: no winner, short of the cap.
+        finalize_game_graph(
+            &Board::new(),
+            200,
+            rows.to_vec(),
+            vec![],
+            vec![],
+            None,
+            &[0],
+            1_000,
+            0,
+            &queue,
+            &recent,
+            &games,
+            &x,
+            &o,
+            &d,
+            &dropped,
+            &seq,
+        );
+        let recent = recent.into_inner().expect("unpoisoned");
+        assert_eq!(recent[0].4, 3, "the planted game ends as reason 3");
+        let queue = queue.into_inner().expect("unpoisoned");
+        assert_eq!(queue.len(), 2);
+        for rec in &queue {
+            assert!(!rec.value_valid, "a reason-3 row trained its value");
+            assert_eq!(rec.outcome, 0.0);
+        }
     }
 }

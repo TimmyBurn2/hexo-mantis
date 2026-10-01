@@ -58,8 +58,6 @@ impl Drop for SaveOnUnwind<'_> {
             vec![],
             None,
             &[0],
-            0.0,
-            0.0,
             1_000,
             0,
             &self.graph_results,

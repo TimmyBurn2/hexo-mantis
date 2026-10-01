@@ -82,10 +82,11 @@ GATE_NAMES: tuple[str, ...] = (
 )
 
 #: The target-integrity counters and the RECORDED-POSITION counter their rate is over, off one
-#: `RunnerStats` snapshot; `inference_failures_total` and `positions_dropped` are data-loss rates.
+#: `RunnerStats` snapshot; `inference_failures_total` and `positions_dropped` are data-loss rates, and
+#: `root_expansion_failed` the searches whose game lost a ply to a root that did not expand.
 _TARGET_INTEGRITY_COUNTERS: tuple[str, ...] = (
     "export_offwindow_mass_moves", "target_integrity_defects", "inference_failures_total",
-    "positions_dropped",
+    "positions_dropped", "root_expansion_failed",
 )
 _POSITIONS_COUNTER = "positions_generated"
 #: The playout-cap arms, the Gumbel round-width terms, the eval cache's served/GPU leaf pair and

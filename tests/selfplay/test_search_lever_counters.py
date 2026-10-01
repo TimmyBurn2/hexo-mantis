@@ -244,7 +244,7 @@ def test_an_armed_runners_tactics_rows_reach_iteration_complete(armed_drive: _Dr
 
 
 def test_a_runner_without_the_tactics_totals_getter_is_refused_not_published_as_zero() -> None:
-    runner = SimpleNamespace(**{name: 1 for name in _LEVERS}, positions_dropped=0)
+    runner = SimpleNamespace(**{name: 1 for name in _LEVERS}, positions_dropped=0, root_expansion_failed=0)
     with pytest.raises(AttributeError, match="tactics_totals"):
         runner_stats(_Pool(runner))
 

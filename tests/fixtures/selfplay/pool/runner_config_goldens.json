@@ -58,10 +58,7 @@
      },
      "search_stats_every": 8
     },
-    "train": {
-     "draw_reward": -0.4,
-     "ply_cap_value": -0.7
-    }
+    "train": {}
    },
    "ctor_kwargs": {
     "c_puct": 1.75,
@@ -71,7 +68,6 @@
     "dirichlet_alpha": 0.25,
     "dirichlet_enabled": false,
     "dirichlet_epsilon": 0.3,
-    "draw_reward": -0.4,
     "encoding_name": "gnn_axis_r8",
     "fast_prob": 0.0,
     "fast_sims": 40,
@@ -85,7 +81,6 @@
     "n_sims_quick": 40,
     "n_simulations": 111,
     "n_workers": 7,
-    "ply_cap_value": -0.7,
     "quiescence_blend_2": 0.55,
     "quiescence_enabled": false,
     "random_opening_plies": 3,
@@ -147,10 +142,7 @@
      },
      "search_stats_every": 8
     },
-    "train": {
-     "draw_reward": -0.5,
-     "ply_cap_value": -0.5
-    }
+    "train": {}
    },
    "ctor_kwargs": {
     "c_puct": 1.5,
@@ -160,7 +152,6 @@
     "dirichlet_alpha": 0.3,
     "dirichlet_enabled": true,
     "dirichlet_epsilon": 0.25,
-    "draw_reward": -0.5,
     "encoding_name": "gnn_axis_v1",
     "fast_prob": 0.0,
     "fast_sims": 100,
@@ -174,7 +165,6 @@
     "n_sims_quick": 0,
     "n_simulations": 50,
     "n_workers": 1,
-    "ply_cap_value": -0.5,
     "quiescence_blend_2": 0.3,
     "quiescence_enabled": true,
     "random_opening_plies": 0,

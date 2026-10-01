@@ -37,7 +37,7 @@ def _pool_cfg() -> dict[str, Any]:
     inference = {"inference_batch_size": 4, "inference_max_wait_ms": 10, "edge_geometry_check": "inline",
                  "compile_trunk": False, "fused_graph_caps": CAPS_DICT}
     return {"encoding": _ENCODING, "deploy": {"search": {"kind": "puct", "tactics": None}}, "selfplay": selfplay,
-            "inference": inference, "train": {"draw_reward": -0.5, "ply_cap_value": -0.5}}
+            "inference": inference, "train": {}}
 
 
 def _arch() -> GnnArch:

@@ -103,6 +103,8 @@ pub struct RunnerStatsSnapshot {
     pub dirichlet_root_fires: u64,
     /// Moves whose exported policy target carried off-window (overflow) mass.
     pub export_offwindow_mass_moves: u64,
+    /// Searches whose root did not expand while the run was live (each costs its game one ply).
+    pub root_expansion_failed: u64,
     /// Fatal-defect latch fire count (must read 0 in a healthy run).
     pub target_integrity_defects: u64,
     /// Leaf inferences that FAILED on an open queue and halted the run; a drain shutdown does
@@ -169,6 +171,7 @@ pub struct SelfPlayRunner {
     dirichlet_root_fires: Arc<AtomicU64>,
 
     export_offwindow_mass_moves: Arc<AtomicU64>,
+    root_expansion_failed: Arc<AtomicU64>,
     tactics_totals: Arc<stats::TacticsTotals>,
     target_integrity_defects: Arc<AtomicU64>,
     /// SEAM conjunct fire count (see the snapshot field).
@@ -348,6 +351,7 @@ impl SelfPlayRunner {
             gumbel_rounds: Arc::new(AtomicU64::new(0)),
             dirichlet_root_fires: Arc::new(AtomicU64::new(0)),
             export_offwindow_mass_moves: Arc::new(AtomicU64::new(0)),
+            root_expansion_failed: Arc::new(AtomicU64::new(0)),
             tactics_totals: Arc::new(stats::TacticsTotals::new()),
             target_integrity_defects: Arc::new(AtomicU64::new(0)),
             inference_failures_total: Arc::new(AtomicU64::new(0)),
@@ -467,6 +471,7 @@ impl SelfPlayRunner {
             gumbel_rounds: self.gumbel_rounds.load(Ordering::Relaxed),
             dirichlet_root_fires: self.dirichlet_root_fires.load(Ordering::Relaxed),
             export_offwindow_mass_moves: self.export_offwindow_mass_moves.load(Ordering::Relaxed),
+            root_expansion_failed: self.root_expansion_failed.load(Ordering::Relaxed),
             target_integrity_defects: self.target_integrity_defects.load(Ordering::Relaxed),
             inference_failures_total: self.inference_failures_total.load(Ordering::Relaxed),
             served_leaves_total: self.served_leaves_total.load(Ordering::Relaxed),
@@ -687,6 +692,7 @@ mod seam_roundtrip {
         r.gumbel_rounds.store(40, Ordering::Relaxed);
         r.dirichlet_root_fires.store(41, Ordering::Relaxed);
         r.export_offwindow_mass_moves.store(22, Ordering::Relaxed);
+        r.root_expansion_failed.store(43, Ordering::Relaxed);
         r.target_integrity_defects.store(24, Ordering::Relaxed);
         r.worker_panics.store(25, Ordering::Relaxed);
         r.inference_failures_total.store(36, Ordering::Relaxed);
@@ -715,6 +721,7 @@ mod seam_roundtrip {
             gumbel_rounds: 40,
             dirichlet_root_fires: 41,
             export_offwindow_mass_moves: 22,
+            root_expansion_failed: 43,
             target_integrity_defects: 24,
             inference_failures_total: 36,
             served_leaves_total: 42,

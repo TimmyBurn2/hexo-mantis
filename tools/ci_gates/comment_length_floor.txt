@@ -9,7 +9,7 @@ docstring_excess_lines 11880
 # 2026-09-17 (R355 step 12, C-15/C-16): two measures added at their measured values — the private-
 # docstring and Rust-doc halves of the judgment backlog (CARD-STYLE-BACKLOG). Down-only, like the rest.
 private_docstring_excess_lines 1278
-rust_doc_excess_lines 2084
+rust_doc_excess_lines 2077
 # 2026-09-24 (R368(g), W4): two measures added at their measured values — the ruling-cite
 # class (bare R-tokens and docstrings now included) and the narrative runs in the text-format
 # files the .py/.rs scopes never saw. Down-only, like the rest. The narrower ungated

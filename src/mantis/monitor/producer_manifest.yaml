@@ -21,8 +21,8 @@ gates:
       symbol: pooled_draw_rate
       feeds_from: mantis.selfplay.pool.WorkerPool.pooled_draw_counts
     note: >-
-      keyed on the LIVE pooled draw counts, NEVER the NaN draw-target phantom at
-      pool_push.py:135 (whose token is grep-banned in this file too — O-15). Armed BY
+      keyed on the LIVE pooled draw counts, NEVER the NaN draw-target phantom the
+      buffer composition once carried (its token is grep-banned in this file too — O-15). Armed BY
       THE CONFIG since WPAX Phase D (`train.draw_rate_abort`, R65/R80): run5 arms it at
       threshold 0.25 / min_step 25000 / N_pool_min 50, and `null` is the explicit OFF
       posture the four non-production configs carry. WPMINT Phase DS (R92) replaced the
@@ -207,7 +207,9 @@ gates:
       target_integrity_defects at 0 means the run died at the seam before any target was
       built. positions_dropped is the fifth: graph rows the results-queue cap discarded,
       read with no getattr default and pinned by
-      tests/selfplay/test_positions_dropped_counter.py.
+      tests/selfplay/test_positions_dropped_counter.py. root_expansion_failed is the sixth:
+      searches whose root did not expand while the run was live, read with no getattr
+      default and pinned by tests/selfplay/test_root_expansion_failed_counter.py.
     producer_test: tests/train/test_target_counter_events.py::test_iteration_complete_carries_the_target_integrity_fire_rates
 
   # ── Q3: the inference batching instrument (iteration_complete, LAW-18) ────────────

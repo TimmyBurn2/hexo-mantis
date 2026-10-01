@@ -59,7 +59,8 @@ added_by = "WP6"
 
 [[required]]
 path = "worker/finalize_graph_outcome.bin"
-sha256 = "bb4b3b9805eebff5a8ca971ace12588020bd0575b928a0b78decfc982a7325b0"
+# Re-cut by HYGIENE-1: a game with no winner carries 0 and is masked at the cap and short of it alike.
+sha256 = "dc234ddee0c74a75afd37ce85a5b24e34458392b4610a9ab030f98ee56363afc"
 added_by = "WP6"
 
 [[required]]
@@ -186,7 +187,8 @@ path = "selfplay/pool/runner_config_goldens.json"
 # Re-pinned 2026-09-24: the unread `pool_derived` block deleted with the dense-arm pool attributes.
 # Re-cut by TACTICS-SELFPLAY (contract v40): the self-play home's `tactics` is read by `from_config`, so the
 # capture carries `tactics: null` in both homes and records the `configure_tactics` call beside `search_kind`.
-sha256 = "80340d46d74688aeb2a1ba8b28b1d578f452c25ea972f9ff870ebbebf03e1449"
+# Re-cut by HYGIENE-1 (contract v41): `train.draw_reward` and `train.ply_cap_value` left the tree with their kwargs.
+sha256 = "b33bef4bb812864f5fe0432f0edbb299c4238c6f0909c9498ee07a590a510f39"
 added_by = "WP-SP"
 
 [[required]]

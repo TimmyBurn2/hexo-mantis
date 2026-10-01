@@ -124,6 +124,8 @@ class RunnerStats:
     inference_failures_total: int = 0
     # Graph rows the results-queue cap dropped before a drain read them: lost training data.
     positions_dropped: int = 0
+    # Searches whose root did not expand while the run was live; each costs its game one ply.
+    root_expansion_failed: int = 0
     # Worker threads that died by panic: non-zero means self-play HALTED rather than slowed.
     worker_panics: int = 0
     # Leaves expanded, and the ones the GPU served: their gap is the exact eval cache's hits.
@@ -145,9 +147,10 @@ class InferenceStats:
 
 
 def runner_stats(pool: Any) -> RunnerStats:
-    """Snapshot the runner's counters; the search levers and the drop count have no `getattr` default.
+    """Snapshot the runner's counters; the search levers, the drop and root-failure counts have no `getattr` default.
 
-    Raises: AttributeError: the runner has no search-lever, `positions_dropped`, leaf-count or tactics-totals getter.
+    Raises: AttributeError: the runner has no search-lever, `positions_dropped`, `root_expansion_failed`, leaf-count or
+        tactics-totals getter.
     """
     r = pool._runner
     return RunnerStats(
@@ -173,6 +176,7 @@ def runner_stats(pool: Any) -> RunnerStats:
         target_integrity_defects=int(getattr(r, "target_integrity_defects", 0)),
         inference_failures_total=int(getattr(r, "inference_failures_total", 0)),
         positions_dropped=int(r.positions_dropped),
+        root_expansion_failed=int(r.root_expansion_failed),
         worker_panics=int(getattr(r, "worker_panics", 0)),
         tactics_totals={str(k): int(v) for k, v in r.tactics_totals().items()},
     )

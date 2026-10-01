@@ -1,4 +1,4 @@
-//! `ply_cap_value` distinct from `draw_reward`, driven end-to-end through the native
+//! A random-only regime ends every game at the ply cap, driven end-to-end through the native
 //! `start()/drain_game_results()/stop()`.
 //!
 //! This file drives the runner in RANDOM-ONLY mode (`random_opening_plies ==
@@ -10,15 +10,15 @@
 //! every completed game terminates at the ply-cap (`terminal_reason == 2`). No
 //! reliance on the unseeded worker RNG avoiding a lucky win.
 //!
-//! The drain tuple exposes `terminal_reason` but NOT the per-row `outcome`; the VALUE branch
-//! (`outcome == ply_cap_value`) is driven by `worker_output_pin.rs`'s g7 arm.
+//! The drain tuple exposes `terminal_reason` but NOT the per-row `outcome`; the value mask is
+//! driven by `worker_output_pin.rs`'s g7 arm.
 
 use std::time::{Duration, Instant};
 
 use mantis_selfplay::runner::{GameResultRow, SelfPlayRunner, SelfPlayRunnerConfig};
 
 /// Random-only runner: `random_opening_plies == max_moves` → never MCTS.
-fn random_only_runner(max_moves: usize, draw_reward: f32, ply_cap_value: f32) -> SelfPlayRunner {
+fn random_only_runner(max_moves: usize) -> SelfPlayRunner {
     SelfPlayRunner::new(SelfPlayRunnerConfig {
         n_workers: 2,
         max_moves_per_game: max_moves,
@@ -26,8 +26,6 @@ fn random_only_runner(max_moves: usize, draw_reward: f32, ply_cap_value: f32) ->
         leaf_batch_size: 1,
         fast_sims: 1,
         standard_sims: 1,
-        draw_reward,
-        ply_cap_value,
         quiescence_enabled: false,
         quiescence_blend_2: 0.0,
         dirichlet_enabled: false,
@@ -64,48 +62,13 @@ fn drive_to_completion(
     games
 }
 
-/// Cell 1 — split values reachable; ply-cap path confirmed with `ply_cap_value`
-/// DISTINCT from `draw_reward`. Every random-play game hits `terminal_reason == 2`.
-#[test]
-fn ply_cap_value_distinct_from_draw_reward_every_game_reason_2() {
-    let runner = random_only_runner(10, -0.1, -0.5);
-    let games = drive_to_completion(&runner, 4, Duration::from_secs(5));
-    assert!(
-        !games.is_empty(),
-        "at least one game must complete (5s, max_moves=10, random-only)",
-    );
-    for (plies, reason) in &games {
-        assert_eq!(
-            *reason, 2,
-            "random play with max_moves=10 must hit ply-cap (reason 2); got reason={reason} \
-             plies={plies}",
-        );
-    }
-}
-
-/// Cell 4 — back-compat: `ply_cap_value == draw_reward` (both `-0.1`) reaches the
-/// same ply-cap path. `if terminal_reason == 2 { v } else { v } ≡ v` by
-/// construction; the drain confirms the branch is still reached.
-#[test]
-fn back_compat_when_ply_cap_value_equals_draw_reward() {
-    let runner = random_only_runner(10, -0.1, -0.1);
-    let games = drive_to_completion(&runner, 4, Duration::from_secs(5));
-    assert!(!games.is_empty(), "at least one game must complete");
-    for (plies, reason) in &games {
-        assert_eq!(
-            *reason, 2,
-            "back-compat: ply-cap still reached (reason 2); got reason={reason} plies={plies}",
-        );
-    }
-}
-
 /// A random-only ply-cap regime must NEVER produce an organic draw (`reason == 3`)
 /// nor a legal-move-exhaustion break — the whole point of the ply-cap oracle is
 /// that `reason == 2` is the only terminal it can reach. (This also guards the
 /// GameResultRow tuple field order used above: `terminal_reason` is field 4.)
 #[test]
 fn ply_cap_regime_never_organic_draws() {
-    let runner = random_only_runner(10, -0.1, -0.5);
+    let runner = random_only_runner(10);
     let games = drive_to_completion(&runner, 4, Duration::from_secs(5));
     for (_plies, reason) in &games {
         assert_ne!(

@@ -8,17 +8,6 @@ from typing import Any
 
 from mantis.util.constants import is_alpha_full
 
-
-def _draw_outcome_band(
-    draw_value: float, ply_cap_value: float, eps: float = 0.05
-) -> tuple[float, float]:
-    """Return the outcome band capturing draw-like value targets, spanning both configured
-    draw-like values so decisive games' ±1 are excluded."""
-    lo = min(draw_value, ply_cap_value) - eps
-    hi = max(draw_value, ply_cap_value) + eps
-    return lo, hi
-
-
 #: At most this many `alpha_full_row` events per run: enough to reconstruct, never a second ring.
 ALPHA_FULL_ROW_EVENT_CAP = 256
 
@@ -81,35 +70,16 @@ def push_graph(pool: Any, rows: list[tuple[Any, ...]]) -> None:
 
 
 def buffer_composition(pool: Any) -> dict[str, float]:
-    """Return a composition snapshot of the live replay buffer.
-
-    The draw/ply-cap values are re-resolved from the LIVE config with no fallback default, so this
-    read adds no second authority. `draw_target_fraction` is NaN when the bound buffer has no
-    `outcome_in_range_count`: the graph buffer does not expose it, so NaN is the true value there.
-    """
+    """Return a composition snapshot of the live replay buffer and the games' terminal reasons."""
     size = max(1, int(pool.replay_buffer.size))
     sp_pushed = int(pool.self_play_positions_pushed)
     corpus_fraction = max(0.0, 1.0 - (sp_pushed / size))
-    try:
-        _train = pool.config["train"]
-        _draw = float(_train["draw_reward"])
-        _ply = float(_train["ply_cap_value"])
-        _lo, _hi = _draw_outcome_band(_draw, _ply)
-        draws_in_buf = int(pool.replay_buffer.outcome_in_range_count(_lo, _hi))
-        draw_target_fraction = draws_in_buf / size
-    except (AttributeError, TypeError):
-        draw_target_fraction = float("nan")
     tr = pool.terminal_reason_counts()
     total_games = max(1, sum(tr.values()))
     return {
         "buffer_size": int(pool.replay_buffer.size),
         "buffer_capacity": int(pool.replay_buffer.capacity),
         "corpus_fraction":      round(corpus_fraction, 6),
-        "draw_target_fraction": (
-            round(draw_target_fraction, 6)
-            if draw_target_fraction == draw_target_fraction
-            else float("nan")
-        ),
         "six_terminal_fraction":    tr["six_in_a_row"] / total_games,
         "colony_terminal_fraction": tr["colony"]       / total_games,
         "cap_terminal_fraction":    tr["ply_cap"]      / total_games,

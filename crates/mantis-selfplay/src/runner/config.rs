@@ -27,10 +27,6 @@ pub struct SelfPlayRunnerConfig {
     pub fast_sims: usize,
     pub standard_sims: usize,
     pub temp_threshold_compound_moves: usize,
-    pub draw_reward: f32,
-    /// The terminal-via-ply-cap outcome (winner=None AND ply >= max_moves), split from
-    /// `draw_reward` so organic draws and truncations pay distinct value-head targets.
-    pub ply_cap_value: f32,
     pub quiescence_enabled: bool,
     pub quiescence_blend_2: f32,
     pub temp_min: f32,
@@ -78,8 +74,6 @@ impl Default for SelfPlayRunnerConfig {
             standard_sims: 0,
             // cosine-OFF
             temp_threshold_compound_moves: 0,
-            draw_reward: -0.1,
-            ply_cap_value: -0.1,
             quiescence_enabled: true,
             quiescence_blend_2: 0.3,
             // anti-colony constant floor

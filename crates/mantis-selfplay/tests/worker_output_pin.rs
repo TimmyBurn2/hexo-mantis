@@ -267,8 +267,8 @@ fn produce_g6(mutate: bool) -> (f64, Vec<u8>) {
     (refusal_sum, ser_graph_record(&rec))
 }
 
-/// g7 `finalize_graph_outcome`: 6 enumerated rows (ply_cap_value=-0.5, draw_reward=-0.1):
-/// win / loss / ply-cap(tr=2) / organic-draw(tr=3) / P2-win-as-P2 / P2-win-as-P1.
+/// g7 `finalize_graph_outcome`: 6 enumerated rows, win / loss / ply-cap(tr=2) / no winner short of
+/// the cap (tr=3) / P2-win-as-P2 / P2-win-as-P1; both no-winner rows carry 0, masked.
 fn produce_g7(mutate: bool) -> Vec<u8> {
     // (rec_player, winner, terminal_reason)
     let mut rows: [(i8, Option<Player>, u8); 6] = [
@@ -280,13 +280,12 @@ fn produce_g7(mutate: bool) -> Vec<u8> {
         (-1, Some(Player::One), 0), // P2-win-as-P1
     ];
     if mutate {
-        // Flip the ply-cap row's terminal_reason 2 → 3 (ply-cap → organic
-        // draw): outcome -0.5 → -0.1 AND value_valid 0 → 1.
-        rows[2].2 = 3;
+        // Give the reason-3 row a winner: outcome 0 → 1 AND value_valid 0 → 1.
+        rows[3].1 = Some(Player::One);
     }
     let out: Vec<(f32, u8)> = rows
         .iter()
-        .map(|&(rp, w, tr)| finalize_graph_outcome(rp, w, tr, -0.5, -0.1))
+        .map(|&(rp, w, tr)| finalize_graph_outcome(rp, w, tr))
         .collect();
     ser_finalize(&out)
 }

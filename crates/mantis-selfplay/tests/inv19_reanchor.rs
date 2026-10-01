@@ -33,8 +33,6 @@ fn distinct_sentinels() -> SelfPlayRunnerConfig {
         fast_sims: 37,
         standard_sims: 42,
         temp_threshold_compound_moves: 21,
-        draw_reward: -0.75,
-        ply_cap_value: -0.875, // distinct from the draw_reward sentinel
         quiescence_enabled: false,
         quiescence_blend_2: 0.625,
         temp_min: 0.0625,
@@ -95,8 +93,6 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
         fast_sims,
         standard_sims,
         temp_threshold_compound_moves,
-        draw_reward,
-        ply_cap_value,
         quiescence_enabled,
         quiescence_blend_2,
         temp_min,
@@ -130,8 +126,6 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
     assert_eq!(fast_sims, 37);
     assert_eq!(standard_sims, 42);
     assert_eq!(temp_threshold_compound_moves, 21);
-    assert!(feq(draw_reward, -0.75));
-    assert!(feq(ply_cap_value, -0.875));
     assert!(!quiescence_enabled);
     assert!(feq(quiescence_blend_2, 0.625));
     assert!(feq(temp_min, 0.0625));

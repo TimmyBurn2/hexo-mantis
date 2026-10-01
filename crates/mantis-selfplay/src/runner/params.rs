@@ -119,9 +119,6 @@ pub(crate) struct WorkerParams {
     pub(crate) standard_sims: usize,
     pub(crate) temp_threshold: usize,
     pub(crate) temp_min: f32,
-    pub(crate) draw_reward: f32,
-    /// §178: terminal-via-ply-cap outcome (distinct from `draw_reward`).
-    pub(crate) ply_cap_value: f32,
     pub(crate) sigma: QSigma,
     pub(crate) gumbel_m: usize,
     pub(crate) gumbel_explore_moves: usize,

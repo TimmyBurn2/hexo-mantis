@@ -247,7 +247,7 @@ def outcome_rows(ring: Ring) -> list[Row]:
     n_games = int(first.size)
     note = "" if (ring.game_id >= 0).all() else "untagged rows (game_id -1) counted as one game"
     rows = [Row("cap_rate", float((~valid).mean()), n_games,
-                "value_valid == 0 (finalize: terminal_reason ply_cap)", note)]
+                "value_valid == 0 (finalize: no winner, at the ply cap or short of it)", note)]
     n_valid = int(valid.sum())
     rows.append(Row("draw_share", float((z[valid] < 1.0).mean()) if n_valid else None, n_valid,
                     "outcome not ±1 on a value-supervised game", "" if n_valid else "no supervised game"))

@@ -39,9 +39,8 @@ def pool_cfg(
         # BY CONSTRUCTION here, since these suites are about wiring and nothing asserts the M.
         "fused_graph_caps": CAPS_DICT,
     }
-    train = {"draw_reward": -0.5, "ply_cap_value": -0.5}
     return {"encoding": encoding, "deploy": {"search": {"kind": "puct", "tactics": None}}, "selfplay": selfplay,
-            "inference": inference, "train": train}
+            "inference": inference, "train": {}}
 
 
 def graph_pool(

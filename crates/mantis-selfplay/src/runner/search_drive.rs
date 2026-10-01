@@ -74,6 +74,7 @@ pub(crate) struct MoveAccumulators<'a> {
     pub(crate) dirichlet_root_fires: &'a AtomicU64,
     pub(crate) positions_generated: &'a AtomicUsize,
     pub(crate) export_offwindow_mass_moves: &'a AtomicU64,
+    pub(crate) root_expansion_failed: &'a AtomicU64,
     /// The tactics block's rows per search and the rows its moves record; untouched with tactics off.
     pub(crate) tactics_totals: &'a TacticsTotals,
 }
@@ -215,6 +216,13 @@ impl std::fmt::Display for InferenceSeamFailure {
              other than `stop()` closed it. reason={}",
             self.arm, self.stage, self.reason
         )
+    }
+}
+
+/// Count a root that did not expand, unless our own `stop()` cut it: that one is a shutdown, not a failure.
+fn count_live_failure(running: &AtomicBool, counter: &AtomicU64) {
+    if running.load(Ordering::SeqCst) {
+        counter.fetch_add(1, Ordering::Relaxed);
     }
 }
 
@@ -621,7 +629,10 @@ pub(crate) fn play_one_move(
                 .fetch_max(sims_served as u64, Ordering::Relaxed);
             (gs, sims_served)
         }
-        McTSSearchResult::RootExpansionFailed => return MoveOutcome::Continue,
+        McTSSearchResult::RootExpansionFailed => {
+            count_live_failure(running, accumulators.root_expansion_failed);
+            return MoveOutcome::Continue;
+        }
         // Store-then-halt on its OWN counter, so the supervisor reads the inference failure
         // that killed the run instead of a refusal a hundred plies downstream.
         McTSSearchResult::InferenceFailed(err) => {
@@ -979,6 +990,22 @@ mod shortfall_tests {
         record_shortfall(&searches, &descents, 50, 47);
         record_shortfall(&searches, &descents, 64, 63);
         assert_eq!(read(), (2, 4));
+    }
+}
+
+#[cfg(test)]
+mod live_failure_tests {
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+
+    use super::count_live_failure;
+
+    /// PLANTED BREAK: count without the `running` check and a shutdown reads as a failed root.
+    #[test]
+    fn a_live_root_failure_is_counted_and_one_our_own_stop_cut_is_not() {
+        let counter = AtomicU64::new(0);
+        count_live_failure(&AtomicBool::new(true), &counter);
+        count_live_failure(&AtomicBool::new(false), &counter);
+        assert_eq!(counter.load(Ordering::Relaxed), 1);
     }
 }
 

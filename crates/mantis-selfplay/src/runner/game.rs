@@ -45,9 +45,6 @@ struct PerGameInitCtx {
     fast_prob: f32,
     fast_sims: usize,
     standard_sims: usize,
-    draw_reward: f32,
-    /// Terminal-via-ply-cap outcome, distinct from `draw_reward`.
-    ply_cap_value: f32,
     results_queue_cap: usize,
     worker_id: usize,
     /// 1-in-N games carry per-position search stats; 0 is off.
@@ -125,6 +122,7 @@ pub(crate) fn run_worker_thread(
         gumbel_rounds,
         dirichlet_root_fires,
         export_offwindow_mass_moves,
+        root_expansion_failed,
         tactics_totals,
     } = stats;
     let WorkerAtomics {
@@ -155,8 +153,6 @@ pub(crate) fn run_worker_thread(
         standard_sims,
         temp_threshold,
         temp_min,
-        draw_reward,
-        ply_cap_value,
         sigma,
         gumbel_m,
         gumbel_explore_moves,
@@ -212,6 +208,7 @@ pub(crate) fn run_worker_thread(
         dirichlet_root_fires: &dirichlet_root_fires,
         positions_generated: &positions_generated,
         export_offwindow_mass_moves: &export_offwindow_mass_moves,
+        root_expansion_failed: &root_expansion_failed,
         tactics_totals: &tactics_totals,
     };
     let infer = InferContext {
@@ -238,8 +235,6 @@ pub(crate) fn run_worker_thread(
         fast_prob,
         fast_sims,
         standard_sims,
-        draw_reward,
-        ply_cap_value,
         results_queue_cap,
         worker_id,
         search_stats_every,
@@ -438,8 +433,6 @@ fn run_one_game(
         move_arms,
         search_stats,
         version_seen,
-        init_ctx.draw_reward,
-        init_ctx.ply_cap_value,
         init_ctx.results_queue_cap,
         init_ctx.worker_id,
         graph_results_queue,

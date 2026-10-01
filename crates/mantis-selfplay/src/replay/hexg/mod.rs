@@ -181,7 +181,7 @@ pub struct GraphRecord {
     pub is_full_search: bool,
     /// Outcome z (placeholder at record time → filled at finalize).
     pub outcome: f32,
-    /// 1 = supervise value, 0 = ply-capped row masked.
+    /// 1 = supervise value, 0 = a row of a game with no winner, masked.
     pub value_valid: bool,
     /// Completed-game length (compound moves) — sampling weight.
     pub game_length: u16,

@@ -316,36 +316,21 @@ pub fn record_position_graph(
     })
 }
 
-/// Stamp the per-row outcome and ply-cap mask onto a graph record at game end: it reads winner /
-/// terminal_reason / the row's move-time player only and no cell geometry, so the outcome split
-/// transfers to graph rows unchanged. `terminal_reason == 2` is the ply-cap branch, whose
-/// fabricated label is masked from the value loss.
+/// Stamp the per-row outcome and value mask at game end, from the winner and the row's player alone.
+/// A game with no winner (reason 2, the cap, or 3, short of it) has no result to learn: 0 and masked.
 #[inline]
 #[must_use]
 pub fn finalize_graph_outcome(
     rec_player: i8,
     winner: Option<mantis_core::Player>,
     terminal_reason: u8,
-    ply_cap_value: f32,
-    draw_reward: f32,
 ) -> (f32, u8) {
     let outcome = match winner {
-        Some(p) => {
-            if p as i8 == rec_player {
-                1.0
-            } else {
-                -1.0
-            }
-        }
-        None => {
-            if terminal_reason == 2 {
-                ply_cap_value
-            } else {
-                draw_reward
-            }
-        }
+        Some(p) if p as i8 == rec_player => 1.0,
+        Some(_) => -1.0,
+        None => 0.0,
     };
-    (outcome, u8::from(terminal_reason != 2))
+    (outcome, u8::from(!matches!(terminal_reason, 2 | 3)))
 }
 
 /// Legal-set counterpart of `sample_policy`: samples from `legal_moves` proportional to the ragged
@@ -737,28 +722,27 @@ mod gnn_assemble_tests {
         }
     }
 
+    /// PLANTED BREAK: mask only reason 2 and the reason-3 row trains.
     #[test]
-    fn finalize_graph_outcome_matches_178_split() {
+    fn a_win_trains_both_frames_and_a_game_without_a_winner_trains_no_value() {
         use mantis_core::Player;
-        // Win as this row's player → +1, supervised.
         assert_eq!(
-            super::finalize_graph_outcome(1, Some(Player::One), 0, -0.5, -0.1),
+            super::finalize_graph_outcome(1, Some(Player::One), 0),
             (1.0, 1)
         );
-        // Win as the opponent → −1, supervised.
         assert_eq!(
-            super::finalize_graph_outcome(-1, Some(Player::One), 0, -0.5, -0.1),
+            super::finalize_graph_outcome(-1, Some(Player::One), 0),
             (-1.0, 1)
         );
-        // Ply-cap (terminal_reason 2) → ply_cap_value, MASKED (value_valid 0).
         assert_eq!(
-            super::finalize_graph_outcome(1, None, 2, -0.5, -0.1),
-            (-0.5, 0)
+            super::finalize_graph_outcome(1, None, 2),
+            (0.0, 0),
+            "the cap"
         );
-        // Organic draw (terminal_reason 3) → draw_reward, supervised.
         assert_eq!(
-            super::finalize_graph_outcome(1, None, 3, -0.5, -0.1),
-            (-0.1, 1)
+            super::finalize_graph_outcome(1, None, 3),
+            (0.0, 0),
+            "no winner short of the cap"
         );
     }
 }

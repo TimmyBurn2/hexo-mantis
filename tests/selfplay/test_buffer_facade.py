@@ -3,9 +3,6 @@
 Kind resolution, the zero-copy identity verdict and the passthrough surface all bind the SAME
 module and share the recording stub; `BufferKind` now has one member.
 
-The per-buffer-kind rule this suite holds: the graph `HexgBuffer` genuinely has no
-`outcome_in_range_count` on EITHER side, so the missing attribute must PROPAGATE and keep the
-caller's NaN fallback reachable. A fabricated number here is a FAIL.
 """
 from __future__ import annotations
 
@@ -18,7 +15,6 @@ from mantis.encoding import lookup
 from mantis.model import RepresentationMismatch
 from mantis.selfplay.buffers import BufferKind, ReplayFacade
 
-_DRAW_BAND = (-0.75, -0.45)
 _GRAPH_SPEC = lookup("gnn_axis_v1")
 
 
@@ -144,10 +140,3 @@ def test_passthrough_surface_forwards() -> None:
         ("load_from_path", ("buffer.hexg",)),
     ]
 
-
-def test_graph_arm_missing_getter_propagates() -> None:
-    """The graph buffer has no `outcome_in_range_count`, so the facade lets the AttributeError out."""
-    facade = ReplayFacade(_GRAPH_SPEC, HexgBuffer(capacity=8, encoding="gnn_axis_v1", visit_capacity=128))
-    assert not hasattr(facade.raw, "outcome_in_range_count")
-    with pytest.raises(AttributeError):
-        facade.outcome_in_range_count(*_DRAW_BAND)

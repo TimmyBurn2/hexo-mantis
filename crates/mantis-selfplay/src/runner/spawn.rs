@@ -112,6 +112,7 @@ impl SelfPlayRunner {
             gumbel_rounds: self.gumbel_rounds.clone(),
             dirichlet_root_fires: self.dirichlet_root_fires.clone(),
             export_offwindow_mass_moves: self.export_offwindow_mass_moves.clone(),
+            root_expansion_failed: self.root_expansion_failed.clone(),
             tactics_totals: self.tactics_totals.clone(),
         };
         let atomics_proto = WorkerAtomics {
@@ -142,8 +143,6 @@ impl SelfPlayRunner {
             standard_sims: c.standard_sims,
             temp_threshold: c.temp_threshold_compound_moves,
             temp_min: c.temp_min,
-            draw_reward: c.draw_reward,
-            ply_cap_value: c.ply_cap_value,
             sigma: QSigma {
                 c_visit: c.c_visit,
                 c_scale: c.c_scale,

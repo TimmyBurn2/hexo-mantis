@@ -104,8 +104,6 @@ train:
   hard_gn_min_steps: 3
   terminal_eval_enabled: true
   policy_target: raw_visit_distribution
-  draw_reward: -0.5
-  ply_cap_value: -0.5
   fast_policy_weight: 0.0
 selfplay:
   search:

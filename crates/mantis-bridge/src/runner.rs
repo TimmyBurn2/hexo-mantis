@@ -102,8 +102,6 @@ impl PySelfPlayRunnerConfig {
         fast_sims = 50,
         standard_sims = 0,
         temp_threshold_compound_moves = 0,
-        draw_reward = -0.1,
-        ply_cap_value = -0.1,
         quiescence_enabled = true,
         quiescence_blend_2 = 0.3,
         temp_min = 0.5,
@@ -135,8 +133,6 @@ impl PySelfPlayRunnerConfig {
         fast_sims: usize,
         standard_sims: usize,
         temp_threshold_compound_moves: usize,
-        draw_reward: f32,
-        ply_cap_value: f32,
         quiescence_enabled: bool,
         quiescence_blend_2: f32,
         temp_min: f32,
@@ -169,8 +165,6 @@ impl PySelfPlayRunnerConfig {
                 fast_sims,
                 standard_sims,
                 temp_threshold_compound_moves,
-                draw_reward,
-                ply_cap_value,
                 quiescence_enabled,
                 quiescence_blend_2,
                 temp_min,
@@ -405,6 +399,11 @@ impl PySelfPlayRunner {
     pub fn export_offwindow_mass_moves(&self) -> u64 {
         self.snapshot().export_offwindow_mass_moves
     }
+    /// Searches whose root did not expand while the run was live.
+    #[getter]
+    pub fn root_expansion_failed(&self) -> u64 {
+        self.snapshot().root_expansion_failed
+    }
     /// Fatal-defect latch fire count — must read 0 in a healthy run.
     #[getter]
     pub fn target_integrity_defects(&self) -> u64 {
@@ -523,8 +522,6 @@ mod tests {
             50,
             0,
             0,
-            -0.1,
-            -0.1,
             true,
             0.3,
             0.5,
@@ -574,8 +571,8 @@ mod tests {
     #[test]
     fn runner_missing_encoding_errors() {
         let cfg = PySelfPlayRunnerConfig::new(
-            1, 64, 30, 8, 1.5, 0.25, 0.0, 50, 0, 0, -0.1, -0.1, true, 0.3, 0.5, 50.0, 1.0, true, 0,
-            16, 10, 0.3, 0.25, true, 10_000, 0.0, 0, 0, 0, None,
+            1, 64, 30, 8, 1.5, 0.25, 0.0, 50, 0, 0, true, 0.3, 0.5, 50.0, 1.0, true, 0, 16, 10,
+            0.3, 0.25, true, 10_000, 0.0, 0, 0, 0, None,
         );
         assert!(
             PySelfPlayRunner::new(&cfg).is_err(),

@@ -41,7 +41,7 @@ def _cfg() -> dict[str, Any]:
         "fused_graph_caps": CAPS_DICT,
     }
     return {"encoding": _ENCODING, "deploy": {"search": {"kind": "puct", "tactics": None}}, "selfplay": selfplay,
-            "inference": inference, "train": {"draw_reward": -0.5, "ply_cap_value": -0.5}}
+            "inference": inference, "train": {}}
 
 
 @pytest.mark.integration

@@ -343,8 +343,6 @@ class SelfPlayRunnerConfig:
         fast_sims: int = 50,
         standard_sims: int = 0,
         temp_threshold_compound_moves: int = 0,
-        draw_reward: float = -0.1,
-        ply_cap_value: float = -0.1,
         quiescence_enabled: bool = True,
         quiescence_blend_2: float = 0.3,
         temp_min: float = 0.5,
@@ -436,6 +434,8 @@ class SelfPlayRunner:
     def max_sims_per_search(self) -> int: ...
     @property
     def export_offwindow_mass_moves(self) -> int: ...
+    @property
+    def root_expansion_failed(self) -> int: ...
     @property
     def target_integrity_defects(self) -> int: ...
     @property
@@ -561,8 +561,6 @@ def graph_row_outcome(
     rec_player: int,
     winner: int,
     terminal_reason: int,
-    ply_cap_value: float,
-    draw_reward: float,
 ) -> tuple[float, int]: ...
 
 # --------------------------------------------------------------------------- #
