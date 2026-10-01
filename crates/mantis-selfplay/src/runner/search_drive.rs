@@ -796,6 +796,13 @@ pub(crate) fn play_one_move(
         ));
     }
 
+    // A proven root carries the proof's value, every other row its search's W/N; both are the mover's frame.
+    let root_value = match (decided, decided_lost) {
+        (Some(_), _) => 1.0,
+        (None, true) => -1.0,
+        (None, false) => tree.root_value(),
+    };
+
     // ── Record position (BEFORE apply_move) ──
     if let Err(err) = record_position_graph_dispatch(
         board,
@@ -805,6 +812,7 @@ pub(crate) fn play_one_move(
         graph_records_vec,
         ctx.visit_capacity,
         seal.as_ref().map(|s| &s.support),
+        root_value,
     ) {
         // A target-integrity defect is RUN-FATAL: latch the typed message and halt.
         fatal_latch.store(err.to_string());

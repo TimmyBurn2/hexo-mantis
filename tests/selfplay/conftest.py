@@ -143,11 +143,11 @@ def graph_pushed() -> dict[str, np.ndarray]:
 def graph_rows_input() -> list[tuple[Any, ...]]:
     """The scripted `collect_graph_data()` rows, rebuilt from the capture recipe.
 
-    Opaque fields forwarded verbatim, then the TAIL MASS (forwarded by keyword), then the runner
+    Opaque fields forwarded verbatim, then the tail mass and the (root value, flag) pair (by keyword), then the runner
     game id the drain translates; rows 0-1 share game 100 so one game must land under ONE id.
     """
     return [
-        (np.arange(6, dtype=np.float32), np.arange(4, dtype=np.int64), 3, 0.5, 0.0, 100),
-        (np.arange(6, dtype=np.float32) + 10.0, np.arange(4, dtype=np.int64) + 1, 4, -1.0, 0.25, 100),
-        (np.arange(6, dtype=np.float32) + 20.0, np.arange(4, dtype=np.int64) + 2, 5, 0.0, 0.0, 101),
+        (np.arange(6, dtype=np.float32), np.arange(4, dtype=np.int64), 3, 0.5, 0.0, (0.5, True), 100),
+        (np.arange(6, dtype=np.float32) + 10.0, np.arange(4, dtype=np.int64) + 1, 4, -1.0, 0.25, (0.0, False), 100),
+        (np.arange(6, dtype=np.float32) + 20.0, np.arange(4, dtype=np.int64) + 2, 5, 0.0, 0.0, (-0.25, True), 101),
     ]

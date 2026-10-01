@@ -160,15 +160,16 @@ def stub_graph_row_arity(source: str) -> int:
     raise AssertionError("no `collect_graph_data` in the stub")
 
 
-def test_the_graph_row_carries_its_tail_mass_from_the_bridge_to_the_push() -> None:
-    """GUMBEL-3's drain dropped the tail mass and the push defaulted it to 0, so the first sparse
-    row with a real alpha was refused at insert: bridge alias, stub and push slots must agree."""
+def test_the_graph_row_carries_its_tail_mass_and_root_value_from_the_bridge_to_the_push() -> None:
+    """A drain that drops a trailing field lets the push default it (GUMBEL-3's tail mass): bridge alias, stub and push agree."""
     bridge = graph_row_arity(_BRIDGE_RUNNER.read_text(encoding="utf-8"))
     stub = stub_graph_row_arity(_STUB.read_text(encoding="utf-8"))
-    assert bridge == stub == 11, f"GraphRecordRow: bridge={bridge} stub={stub}"
+    assert bridge == stub == 12, f"GraphRecordRow: bridge={bridge} stub={stub}"
     push = _POOL_PUSH.read_text(encoding="utf-8")
-    assert "tail_mass = float(rec[-2])" in push and "runner_game_id = int(rec[-1])" in push
-    assert "push_graph_position(*rec[:-2]" in push and "tail_mass=tail_mass" in push
+    assert "tail_mass, (root_value, root_value_valid), runner_game_id = rec[-3:]" in push
+    assert "push_graph_position(*rec[:-3]" in push
+    assert all(f"{k}={k}" in push for k in ("tail_mass", "root_value", "root_value_valid"))
     bridge_src = _BRIDGE_RUNNER.read_text(encoding="utf-8")
     body = bridge_src[bridge_src.index("fn collect_graph_data"):]
-    assert body.index("r.tail_mass,") < body.index("r.game_id,"), "the tail rides before the id"
+    order = [body.index(f) for f in ("r.tail_mass,", "(r.root_value, r.root_value_valid),", "r.game_id,")]
+    assert order == sorted(order), "the tail, the root value and its flag ride before the id, in that order"

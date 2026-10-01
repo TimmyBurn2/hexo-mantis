@@ -40,10 +40,10 @@ def push_graph(pool: Any, rows: list[tuple[Any, ...]]) -> None:
     allocated: dict[int, int] = {}
     alpha_full = 0
     for rec in rows:
-        # `(…nine positional fields…, tail_mass, runner_game_id)`: the tail mass rides by keyword
-        # because the push signature carries `game_id` before it.
-        runner_game_id = int(rec[-1])
-        tail_mass = float(rec[-2])
+        # `(…positional fields…, tail_mass, (root_value, root_value_valid), runner_game_id)`: the tail and the
+        # root pair ride by keyword because the push signature carries `game_id` before them.
+        tail_mass, (root_value, root_value_valid), runner_game_id = rec[-3:]
+        tail_mass, runner_game_id = float(tail_mass), int(runner_game_id)
         if is_alpha_full(tail_mass):
             alpha_full += 1
             sink = getattr(pool, "_sink", None)
@@ -59,8 +59,8 @@ def push_graph(pool: Any, rows: list[tuple[Any, ...]]) -> None:
             if buffer_game_id < 0:
                 buffer_game_id = int(pool.replay_buffer.next_game_id())
                 allocated[runner_game_id] = buffer_game_id
-        pool.replay_buffer.push_graph_position(*rec[:-2], game_id=buffer_game_id,
-                                               tail_mass=tail_mass)
+        pool.replay_buffer.push_graph_position(*rec[:-3], game_id=buffer_game_id, tail_mass=tail_mass,
+                                               root_value=root_value, root_value_valid=root_value_valid)
     n = len(rows)
     with pool._lock:
         pool.positions_pushed += n

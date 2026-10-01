@@ -203,12 +203,15 @@ def test_graph_drain_push_rows(run_drain, drain_goldens, graph_pushed, graph_row
 
     for i, (args, kwargs) in enumerate(pool.replay_buffer.graph_calls):
         expected_row = graph_rows_input[i]
-        assert len(args) == len(expected_row) - 2, (
-            f"row {i}: arity changed — the tail mass rides by keyword and the trailing game id "
-            "is consumed, so neither may be forwarded positionally"
+        assert len(args) == len(expected_row) - 3, (
+            f"row {i}: arity changed — the tail mass and the root value ride by keyword and the "
+            "trailing game id is consumed, so none may be forwarded positionally"
         )
-        assert kwargs["tail_mass"] == expected_row[-2], (
+        assert kwargs["tail_mass"] == expected_row[-3], (
             f"row {i}: the row's tail mass (R347(a)'s alpha) must reach the push; got {kwargs}"
+        )
+        assert (kwargs["root_value"], kwargs["root_value_valid"]) == expected_row[-2], (
+            f"row {i}: the row's root value and its flag must reach the push; got {kwargs}"
         )
         _assert_array(args[0], graph_pushed[f"push_graph_position_{i}_arg0"], f"row{i}.arg0")
         _assert_array(args[1], graph_pushed[f"push_graph_position_{i}_arg1"], f"row{i}.arg1")

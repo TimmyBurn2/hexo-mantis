@@ -394,6 +394,7 @@ class SelfPlayRunner:
             bool,
             int,
             float,
+            tuple[float, bool],
             int,
         ]
     ]: ...

@@ -40,7 +40,7 @@ def _row(*, tail: float, ply: int = 3, game_id: int = 1) -> tuple[Any, ...]:
     visits = ([(2, 0, 1e-9), (1, 1, 1e-9)] if tail >= 1.0
               else [(2, 0, 0.6 * (1 - tail)), (1, 1, 0.4 * (1 - tail))])
     return ([(0, 0, 1), (1, 0, -1), (0, 1, 1)], visits, 1, 2, ply, True, 1.0, True, 10,
-            tail, game_id)
+            tail, (0.0, False), game_id)
 
 
 def test_the_counter_moves_only_on_alpha_full_rows() -> None:

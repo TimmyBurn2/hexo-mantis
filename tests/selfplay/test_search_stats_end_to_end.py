@@ -10,6 +10,7 @@ import torch
 
 from _fused_caps import CAPS_DICT
 from mantis._engine import HexgBuffer
+from mantis.diagnostics.ring_reader import load_ring
 from mantis.encoding import lookup
 from mantis.model import GnnArch, build_net
 from mantis.monitor.game_record import iter_run_games
@@ -77,3 +78,30 @@ def test_a_sampled_self_play_record_reaches_the_shard(tmp_path: Path) -> None:
         assert len(entry["q"]) == len(entry["visits"]) == len(entry["prior"])
         assert all(n >= 1 for _q, _r, n in entry["visits"])
         assert -1.0 <= entry["root_value"] <= 1.0
+
+
+@pytest.mark.integration
+def test_every_row_the_pool_pushes_carries_its_searchs_root_value(tmp_path: Path) -> None:
+    """Through the production drain every pushed row is flagged, and each (ply, root value) the shard recorded is a ring row's."""
+    spec = lookup(_ENCODING)
+    arch = GnnArch(in_dim=int(spec.node_feat_dim), edge_dim=int(spec.edge_feat_dim), hidden=16, num_layers=1)
+    recorder = GameRecorder(record_dir=tmp_path, run_id="e2e", seed=1)
+    ring = HexgBuffer(capacity=256, encoding=_ENCODING, visit_capacity=128)
+    pool = WorkerPool(build_net(arch), _cfg(), torch.device("cpu"), ring, arch=arch, recorder=recorder)
+    pool.start()
+    try:
+        deadline = time.monotonic() + _TIMEOUT_S
+        while time.monotonic() < deadline and recorder.games_written < 2:
+            pool.check_producer_health()
+            time.sleep(0.2)
+    finally:
+        pool.stop()
+    pool.check_producer_health()
+    path = tmp_path / "ring.hexg"
+    ring.save_to_path(str(path))
+    rows = load_ring(path)
+    assert rows.header.size > 0, "the pool pushed no row inside the budget"
+    assert rows.root_value_valid.tolist() == [1] * rows.header.size, "a searched self-play row carries its root value"
+    in_ring = set(zip(rows.ply_index.tolist(), rows.root_value.tolist(), strict=True))
+    recorded = [(e["ply"], e["root_value"]) for g in iter_run_games(tmp_path, "e2e") for e in g["search_stats"]]
+    assert recorded and all(pair in in_ring for pair in recorded), "a recorded root value is no ring row's"

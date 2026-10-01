@@ -306,13 +306,12 @@ pub fn record_position_graph(
         moves_remaining,
         ply_index,
         is_full_search,
-        outcome: 0.0,      // placeholder → finalize_graph_outcome
-        value_valid: true, // placeholder → finalize_graph_outcome
-        game_length: 0,    // placeholder → finalize_graph_outcome
-        game_id: -1,       // placeholder → finalize_game_graph
-        // No producer writes the search's root value yet: the row is the v2 row, flag 0.
-        root_value: 0.0,
-        root_value_valid: false,
+        outcome: 0.0,            // placeholder → finalize_graph_outcome
+        value_valid: true,       // placeholder → finalize_graph_outcome
+        game_length: 0,          // placeholder → finalize_graph_outcome
+        game_id: -1,             // placeholder → finalize_game_graph
+        root_value: 0.0,         // placeholder → record_position_graph_dispatch
+        root_value_valid: false, // placeholder → record_position_graph_dispatch
     })
 }
 
