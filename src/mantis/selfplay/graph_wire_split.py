@@ -64,6 +64,8 @@ class GraphTargetSlice:
     outcomes: np.ndarray
     value_valid: np.ndarray
     is_full_search: np.ndarray
+    root_value: np.ndarray
+    root_value_valid: np.ndarray
     target_argmax_cells: list[Any]
 
 
@@ -198,6 +200,8 @@ def slice_targets(targets: Any, legal_offsets: Any, g0: int, g1: int) -> GraphTa
         outcomes=np.asarray(targets.outcomes)[g0:g1],
         value_valid=np.asarray(targets.value_valid)[g0:g1],
         is_full_search=np.asarray(targets.is_full_search)[g0:g1],
+        root_value=np.asarray(targets.root_value)[g0:g1],
+        root_value_valid=np.asarray(targets.root_value_valid)[g0:g1],
         target_argmax_cells=list(cells)[g0:g1],
     )
 

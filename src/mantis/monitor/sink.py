@@ -23,7 +23,7 @@ from typing import Any
 _LOG = logging.getLogger(__name__)
 
 # The contract version stamped into every segment header line.
-EVENT_CONTRACT = "event-manifest-v8"
+EVENT_CONTRACT = "event-manifest-v9"
 
 _SEGMENT_RE = re.compile(r"^events_(?P<run>.+)_seg(?P<seg>\d+)\.jsonl$")
 

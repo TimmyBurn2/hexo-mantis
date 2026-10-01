@@ -43,6 +43,8 @@ class GraphStepInputs:
     tail_mass: Any
     outcomes: Any
     value_valid: Any
+    root_value: Any
+    root_value_valid: Any
     #: The per-row POLICY weight: 1 on a full-search row, 0 on a fast-arm one.
     policy_row_weight: Any
     n_graphs: int
@@ -226,6 +228,10 @@ def _build_graph_parts(
                     np.asarray(tsl.outcomes, dtype=np.float32)).to(device),
                 value_valid=torch.from_numpy(
                     np.asarray(tsl.value_valid, dtype=np.uint8)).to(device),
+                root_value=torch.from_numpy(
+                    np.asarray(tsl.root_value, dtype=np.float32)).to(device),
+                root_value_valid=torch.from_numpy(
+                    np.asarray(tsl.root_value_valid, dtype=np.uint8)).to(device),
                 policy_row_weight=policy_row_weight[g0:g1].clone().to(device),
                 n_graphs=g1 - g0,
             )
@@ -236,6 +242,9 @@ def _build_graph_parts(
     # loss exactly — NOT `1/M` and NOT `B_m/B`.
     policy_denominator, value_denominator = graph_loss_denominators(
         policy_row_weight, np.asarray(targets.value_valid), n_graphs)
+    # The rows a `train.value_target_lambda` mix reaches: value-supervised, with a root value.
+    root_value_rows = int(np.count_nonzero(
+        (np.asarray(targets.value_valid) != 0) & (np.asarray(targets.root_value_valid) != 0)))
     return {
         "parts": tuple(_make(g0, g1) for g0, g1 in plan),
         "policy_denominator": policy_denominator,
@@ -245,7 +254,8 @@ def _build_graph_parts(
         "caps_max_edges": max_edges,
         "caps_max_nodes": max_nodes,
         "batch_composition": {**_batch_composition(buffer),
-                              "policy_rows_excluded_alpha_full": alpha_full_excluded},
+                              "policy_rows_excluded_alpha_full": alpha_full_excluded,
+                              "root_value_rows": root_value_rows},
     }
 
 

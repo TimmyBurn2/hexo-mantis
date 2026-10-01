@@ -137,6 +137,7 @@ train:
   augment: true
   terminal_eval_enabled: true
   policy_target: completed_improved_policy
+  value_target_lambda: 0.0
 selfplay:
   search:
     kind: gumbel

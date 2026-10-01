@@ -48,6 +48,7 @@ from mantis.train.losses import (
     segment_softmax,
     segment_sum,
     soft_policy_target,
+    value_target,
 )
 from mantis.train.lr_schedule import FlooredCosineAnnealingLR
 
@@ -86,6 +87,7 @@ class TrainHParams:
     checkpoint_interval: int
     #: `model.aux_soft_policy` as `(temperature, weight)`; `None` is the explicit OFF.
     aux_soft_policy: tuple[float, float] | None
+    value_target_lambda: float
 
     @classmethod
     def from_config(cls, config: Any) -> TrainHParams:
@@ -315,7 +317,7 @@ class Trainer:
                             tail_mass=inputs.tail_mass,
                             denominator=policy_denominator)
                         value_loss = _binned_value_loss(
-                            bin_logits, inputs.outcomes, value_mask=inputs.value_valid,
+                            bin_logits, self._value_target(inputs), value_mask=inputs.value_valid,
                             denominator=value_denominator)
                         loss = policy_loss + value_loss
                     if torch.isfinite(loss):
@@ -393,7 +395,7 @@ class Trainer:
                     full_search_mask=inputs.policy_row_weight,
                     explicit_mask=inputs.explicit_mask, tail_mass=inputs.tail_mass,
                     denominator=policy_denominator)
-                value_loss = _binned_value_loss(bin_logits, inputs.outcomes,
+                value_loss = _binned_value_loss(bin_logits, self._value_target(inputs),
                                                 value_mask=inputs.value_valid,
                                                 denominator=value_denominator)
                 loss = policy_loss + value_loss
@@ -493,6 +495,11 @@ class Trainer:
                                   **self._aux_soft_policy_block(aux_total, aux_kl_total, head_norms)})
             self._maybe_periodic_checkpoint(result)
         return result
+
+    def _value_target(self, inputs: Any) -> torch.Tensor:
+        """The step's scalar value target, one construction for the train and the eval step."""
+        return value_target(inputs.outcomes, inputs.root_value, inputs.root_value_valid,
+                            self.hp.value_target_lambda)
 
     def _aux_soft_policy_terms(
         self, policy_logits: torch.Tensor, aux_logits: torch.Tensor, inputs: Any,

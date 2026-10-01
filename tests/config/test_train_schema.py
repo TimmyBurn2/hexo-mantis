@@ -39,6 +39,7 @@ VALID_TRAIN_PAYLOAD: dict = {
     "terminal_eval_enabled": True,
     "selfplay_stall_timeout_sec": 1800.0,
     "policy_target": "raw_visit_distribution",
+    "value_target_lambda": 0.0,
     "ema": {"enabled": False, "decay": 0.999, "update_every": 10},
     "ply_cap_abort": None,
     "heldout_gap": None,
@@ -77,6 +78,10 @@ BOUND_VIOLATIONS: list[tuple[str, object]] = [
     ("microbatch_caps", {"max_edges": 1, "max_nodes": 1, "max_bytes": 1}),
     ("selfplay_stall_timeout_sec", 0.0),   # the always-armed guard, silently disarmed
     ("selfplay_stall_timeout_sec", -1.0),
+    # the mix weight is a convex weight: outside [0, 1] the target leaves the head's support
+    ("value_target_lambda", -0.1),
+    ("value_target_lambda", 1.5),
+    ("value_target_lambda", float("nan")),
 ]
 
 LITERAL_VIOLATIONS: list[tuple[str, object]] = [

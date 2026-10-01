@@ -39,6 +39,16 @@ def rebuild_sparse_target(
     return policy_target.reshape(-1) + sparse_tail(prior_probs, explicit_mask, tail_mass, legal_offsets)
 
 
+def value_target(outcomes: torch.Tensor, root_value: torch.Tensor, root_value_valid: torch.Tensor,
+                 lam: float) -> torch.Tensor:
+    """`lam·root_value + (1 − lam)·outcomes` on a row whose flag is set, `outcomes` elsewhere; at `lam == 0` it IS `outcomes`."""
+    if lam == 0.0:
+        return outcomes
+    z = outcomes.reshape(-1).to(torch.float32)
+    mixed = lam * root_value.reshape(-1).to(torch.float32) + (1.0 - lam) * z
+    return torch.where(root_value_valid.reshape(-1).bool(), mixed, z)
+
+
 def graph_policy_row_weights(is_full_search: Any) -> torch.Tensor:
     """Per-row POLICY weight for a graph batch, the one authority: 1 on a full-search row, 0 on a fast-arm row (value-only).
 

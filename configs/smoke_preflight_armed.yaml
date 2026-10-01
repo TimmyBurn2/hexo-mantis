@@ -98,6 +98,7 @@ train:
   augment: false
   terminal_eval_enabled: true
   policy_target: raw_visit_distribution
+  value_target_lambda: 0.0
 selfplay:
   search:
     kind: puct
