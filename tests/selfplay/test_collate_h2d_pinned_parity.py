@@ -69,6 +69,7 @@ def test_decode_uses_one_resident_support_equal_to_the_module_constant() -> None
     assert decode_binned_value(logits).dtype == torch.float32
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="LOUD SKIP — the pinned H2D path is CUDA-only")
 def test_pinned_non_blocking_collate_is_byte_identical_to_a_pageable_copy(payload_fields) -> None:
     payload = GraphWirePayload(**payload_fields("b6"))

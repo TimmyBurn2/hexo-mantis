@@ -282,6 +282,7 @@ def test_of2_10_leg2_fixture_reaches_the_minted_cap_regime() -> None:
 
 
 @pytest.mark.integration
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(),
                     reason="OF2-10 leg 2 measures the max_memory_allocated DELTA over one real "
                            "graph training step at (E, N) ~ the MINTED caps, with the production config's own "
@@ -373,6 +374,7 @@ def test_of2_10_leg2b_premise_the_doubled_batch_actually_binds_the_caps() -> Non
 
 
 @pytest.mark.integration
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(),
                     reason="OF2-10 leg 2b measures peak allocation at 1x AND at ~2x the caps "
                            "and compares them; it needs the same CUDA device. LOUD SKIP: the "

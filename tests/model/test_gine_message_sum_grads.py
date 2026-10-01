@@ -6,8 +6,8 @@ import torch
 
 from mantis.model.gine import csr_edges, gine_message_sum
 
-pytestmark = pytest.mark.skipif(not torch.cuda.is_available(),
-                                reason="LOUD SKIP — the Triton kernels exist only on CUDA")
+pytestmark = [pytest.mark.cuda, pytest.mark.skipif(not torch.cuda.is_available(),
+                                 reason="LOUD SKIP — the Triton kernels exist only on CUDA")]
 
 
 def _case(h: int, dtype: torch.dtype, with_div: bool, seed: int = 7) -> dict[str, torch.Tensor | None]:

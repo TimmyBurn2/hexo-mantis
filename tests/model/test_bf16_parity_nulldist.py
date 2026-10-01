@@ -377,6 +377,7 @@ def test_test_scope_determinism_does_not_leak_to_sibling_tests() -> None:
     print("DETERMINISM-CONTEXT restore verified in both directions; no leak")
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(),
                     reason="LOUD SKIP — the CUDA parity legs need a GPU; the CI venv is "
                            "torch 2.11.0+cpu. NOT verified by CI; measured out-of-band on an "
@@ -411,6 +412,7 @@ def test_mutation_green_cuda_exact_null_under_TEST_SCOPE_determinism() -> None:
           f"Regime label: EQUALITY ASSERTED OUTRIGHT, no envelope.")
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(),
                     reason="LOUD SKIP — the CUDA parity legs need a GPU; the CI venv is "
                            "torch 2.11.0+cpu. NOT verified by CI; measured out-of-band on an "

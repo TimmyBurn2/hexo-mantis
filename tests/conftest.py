@@ -6,6 +6,7 @@ numpy/torch when installed — neither is a scaffold dependency, so the reseed s
 import importlib.util
 import os
 import random
+import sys
 from pathlib import Path
 
 import pytest
@@ -36,6 +37,31 @@ def pytest_report_header(config):
         f"PYTEST_SEED={PYTEST_SEED} (autouse reseed per test: {', '.join(_SEEDED_LIBS)})",
         f"TIER: {tier}",
     ]
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Put every `cuda`-marked test in one xdist group, before xdist reads the groups, so `--dist loadgroup` runs them all on one worker."""
+    for item in items:
+        if item.get_closest_marker("cuda") is not None:
+            item.add_marker(pytest.mark.xdist_group(name="cuda"))
+
+
+@pytest.fixture(autouse=True)
+def _gpu_work_carries_the_cuda_mark(request: pytest.FixtureRequest):
+    """Fail an unmarked test that allocates on the GPU (a bare context passes): it would share the card with the cuda group."""
+    torch = sys.modules.get("torch")
+    base = 0
+    if torch is not None and torch.cuda.is_initialized():
+        base = torch.cuda.memory_allocated()
+        torch.cuda.reset_peak_memory_stats()
+    yield
+    torch = sys.modules.get("torch")
+    if torch is None or not torch.cuda.is_initialized() or request.node.get_closest_marker("cuda") is not None:
+        return
+    if torch.cuda.max_memory_allocated() > base:
+        pytest.fail(f"{request.node.nodeid} allocated on the GPU without the `cuda` mark: gate 3a would run "
+                    "it beside the cuda group on the shared card", pytrace=False)
 
 
 @pytest.fixture(autouse=True)

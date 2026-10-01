@@ -24,8 +24,8 @@ from mantis.train.checkpoints import load_checkpoint
 _REPO = Path(__file__).resolve().parents[2]
 _REPEATS = 5
 
-pytestmark = pytest.mark.skipif(not torch.cuda.is_available(),
-                                reason="LOUD SKIP — the non-deterministic aggregation exists only on CUDA")
+pytestmark = [pytest.mark.cuda, pytest.mark.skipif(not torch.cuda.is_available(),
+                                 reason="LOUD SKIP — the non-deterministic aggregation exists only on CUDA")]
 
 
 def _net() -> torch.nn.Module:

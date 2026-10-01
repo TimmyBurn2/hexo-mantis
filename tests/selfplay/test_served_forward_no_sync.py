@@ -20,8 +20,8 @@ _REPO = Path(__file__).resolve().parents[2]
 _GAME = [(-2, 2), (1, 2), (3, 1), (-2, 1), (-2, 0), (-2, -2), (-2, -1), (-1, 1), (-1, 0), (0, 0),
          (-3, 2), (0, 1), (-3, 1), (-4, 1), (1, 1), (-4, 2), (-1, -1), (0, -2)]
 
-pytestmark = pytest.mark.skipif(not torch.cuda.is_available(),
-                                reason="LOUD SKIP — the served forward's device syncs exist only on CUDA")
+pytestmark = [pytest.mark.cuda, pytest.mark.skipif(not torch.cuda.is_available(),
+                                 reason="LOUD SKIP — the served forward's device syncs exist only on CUDA")]
 
 
 def _positions(encoding: str) -> list[tuple[list[tuple[int, int, int]], int, int]]:

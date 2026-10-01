@@ -111,6 +111,7 @@ def test_graph_amp_dtype_is_bf16_unconditionally(device) -> None:
     server.stop()
 
 
+@pytest.mark.cuda
 def test_nonfinite_graph_output_submits_failure_and_releases_waiters(
     device, monkeypatch
 ) -> None:
@@ -130,6 +131,7 @@ def test_nonfinite_graph_output_submits_failure_and_releases_waiters(
     assert batcher.closed == 1
 
 
+@pytest.mark.cuda
 def test_finite_graph_output_submits_results(device, monkeypatch) -> None:
     """Prove the clean twin: the same harness with finite outputs submits results, no failure."""
     batch = hand_built_batch()
@@ -154,6 +156,7 @@ def test_finite_graph_output_submits_results(device, monkeypatch) -> None:
     assert server.total_requests == 2
 
 
+@pytest.mark.cuda
 def test_graph_loop_emits_one_heartbeat_per_batch(device, monkeypatch) -> None:
     batch = hand_built_batch()
     monkeypatch.setattr(collate_mod, "collate_graph_batch", lambda *a, **kw: batch)
@@ -166,6 +169,7 @@ def test_graph_loop_emits_one_heartbeat_per_batch(device, monkeypatch) -> None:
     assert beats == ["inference_dispatch"] * 3
 
 
+@pytest.mark.cuda
 def test_graph_loop_default_heartbeat_none_emits_nothing(device, monkeypatch) -> None:
     batch = hand_built_batch()
     monkeypatch.setattr(collate_mod, "collate_graph_batch", lambda *a, **kw: batch)

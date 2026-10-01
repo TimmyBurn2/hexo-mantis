@@ -6,8 +6,8 @@ import torch
 
 from mantis.model.gnn_v2 import GnnNetV2
 
-_DEVICES = ["cpu", pytest.param("cuda", marks=pytest.mark.skipif(
-    not torch.cuda.is_available(), reason="LOUD SKIP — the synced form only syncs on CUDA"))]
+_DEVICES = ["cpu", pytest.param("cuda", marks=[pytest.mark.cuda, pytest.mark.skipif(
+    not torch.cuda.is_available(), reason="LOUD SKIP — the synced form only syncs on CUDA")])]
 
 
 def _assignment_form(stone_mask: torch.Tensor, legal_index: torch.Tensor) -> torch.Tensor:

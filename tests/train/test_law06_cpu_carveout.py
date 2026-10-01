@@ -26,6 +26,7 @@ def test_a_cpu_trainer_keeps_the_bf16_pin_but_runs_its_step_in_fp32(tmp_path: Pa
     )
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="R349(a): the CUDA half needs a card")
 def test_a_cuda_trainer_still_autocasts_to_bf16(tmp_path: Path) -> None:
     """Killer: `enabled=False` everywhere — the carve-out widened into a repeal of bf16 autocast."""

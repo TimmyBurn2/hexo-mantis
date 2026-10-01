@@ -76,6 +76,7 @@ addopts = "-ra --strict-markers -m 'not integration and not slow'"
 markers = [
     "integration: CI integration tier (runs in CI via `make test.integration`)",
     "slow: on-demand only; excluded from `make test` and CI default tier",
+    "cuda: touches the GPU; `--dist loadgroup` runs every such test on one xdist worker",
 ]
 
 [tool.ruff]

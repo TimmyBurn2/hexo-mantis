@@ -121,6 +121,7 @@ def test_a_pop_is_dispatched_while_the_server_thread_still_waits_for_the_next_on
     assert server.batch_timing_snapshot()["pipeline"]["depth"] == 2
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="LOUD SKIP — the CUDA pipeline path (event, pinned D2H) needs a GPU")
 def test_every_pop_is_dispatched_to_its_own_ids_on_the_cuda_path(monkeypatch) -> None:
     """The CPU drives record no event and no pinned D2H; this one does (red team 13)."""

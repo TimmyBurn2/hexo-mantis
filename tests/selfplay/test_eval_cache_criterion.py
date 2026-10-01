@@ -30,8 +30,8 @@ _RECORD_ENV = "MANTIS_EVAL_CACHE_CRITERION_RECORD"
 Position = tuple[list[tuple[int, int, int]], int, int]
 Served = tuple[list[float], float]
 
-pytestmark = pytest.mark.skipif(not torch.cuda.is_available(),
-                                reason="LOUD SKIP — the batch-size spread is a property of the CUDA served path")
+pytestmark = [pytest.mark.cuda, pytest.mark.skipif(not torch.cuda.is_available(),
+                                 reason="LOUD SKIP — the batch-size spread is a property of the CUDA served path")]
 
 
 def _positions(encoding: str) -> list[Position]:

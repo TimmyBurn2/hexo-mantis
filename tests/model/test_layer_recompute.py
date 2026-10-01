@@ -25,8 +25,8 @@ def _step(net: torch.nn.Module, b: dict[str, torch.Tensor], device: str) -> tupl
     return logits.detach(), [p.grad.clone() for p in net.parameters() if p.grad is not None]
 
 
-@pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=pytest.mark.skipif(
-    not torch.cuda.is_available(), reason="LOUD SKIP — the bf16 autocast training path needs a GPU"))])
+@pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=[pytest.mark.cuda, pytest.mark.skipif(
+    not torch.cuda.is_available(), reason="LOUD SKIP — the bf16 autocast training path needs a GPU")])])
 def test_recompute_equals_kept_activations(device: str, monkeypatch: pytest.MonkeyPatch) -> None:
     """The same net, batch and seed, with and without the per-layer recompute: bit-identical logits and gradients."""
     config = load_config(production_configs(_REPO)[0]).model_dump()

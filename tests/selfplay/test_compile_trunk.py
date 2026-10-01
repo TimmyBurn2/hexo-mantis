@@ -87,6 +87,7 @@ def test_a_trunk_override_leaves_the_shared_module_eager_and_untouched(payload_f
         assert torch.equal(a, b), "the module's own forward must not change when a trunk was used"
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="LOUD SKIP — the compiled trunk is a CUDA lever")
 def test_compiled_trunk_matches_eager_to_bf16_noise_and_leaves_the_module_eager(payload_fields) -> None:
     net, batch = _net_and_batch(payload_fields, "cuda")
@@ -111,6 +112,7 @@ def test_compiled_trunk_matches_eager_to_bf16_noise_and_leaves_the_module_eager(
     assert d_probs < 1e-2 and d_value < 1e-2, (d_probs, d_value)
 
 
+@pytest.mark.cuda
 def test_the_compiling_server_makes_the_recompile_limit_a_loud_failure() -> None:
     """Past `recompile_limit` Dynamo runs eager silently; the server makes it raise (red team 1)."""
     import torch._dynamo

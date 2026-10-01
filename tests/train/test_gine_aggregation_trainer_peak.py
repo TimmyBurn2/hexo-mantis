@@ -27,10 +27,12 @@ def _big_enough() -> bool:
 
 
 @pytest.mark.integration
-@pytest.mark.skipif(not _big_enough(),
-                    reason=f"LOUD SKIP — the cap-regime step needs a CUDA card of >= {_MIN_DEVICE_GIB} GiB")
+@pytest.mark.cuda
 def test_iii_the_trainer_peak_at_the_caps_does_not_rise(tmp_path: Path) -> None:
     """Real steps just under both minted caps, after a discarded warm-up, the two paths alternated: max(fused) <= max(old)."""
+    # Asked here, not in a skipif: reading the card's size initialises CUDA, and at import that is every worker.
+    if not _big_enough():
+        pytest.skip(f"LOUD SKIP — the cap-regime step needs a CUDA card of >= {_MIN_DEVICE_GIB} GiB")
     config = load_config(_MINTED).model_dump()
     caps = resolve_microbatch_caps(config)
     probe = H.uniform_graph_buffer(8)

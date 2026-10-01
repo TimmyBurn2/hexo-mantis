@@ -329,6 +329,7 @@ def test_a_rung_without_nodes_or_a_known_device_is_refused(tmp_path: Path, kwarg
 
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="LOUD SKIP — the Six rung plays on CUDA")
 def test_the_vendored_engine_plays_two_games_on_cuda() -> None:
     """The landed rung's smoke: gen 30 at 16 nodes, two games through the arena, no forfeit, CUDA reported."""
