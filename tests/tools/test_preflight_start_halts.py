@@ -110,6 +110,7 @@ def test_a_cuda_config_on_a_cpu_torch_HALTS_with_its_own_rc() -> None:
     assert "cuda" in message and config.run_id in message
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(torch.version.cuda is None,
                     reason="loud skip: this host has no CUDA torch build, so the pass arm has "
                            "no subject here")

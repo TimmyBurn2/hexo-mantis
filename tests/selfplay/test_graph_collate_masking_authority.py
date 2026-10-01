@@ -11,11 +11,14 @@ import ast
 import inspect
 import textwrap
 
+import pytest
+
 from mantis.model.gnn import GnnNet
 from mantis.selfplay.graph_collate import GraphWirePayload, collate_graph_batch
 from mantis.train.losses import ragged_policy_ce
 
 
+@pytest.mark.cuda
 def test_the_gather_and_the_CSR_are_one_set_total_count(payload_fields, wire_geometry) -> None:
     """Prove the gather and the CSR are one set: same total count AND no duplicate entries.
 
@@ -34,6 +37,7 @@ def test_the_gather_and_the_CSR_are_one_set_total_count(payload_fields, wire_geo
     )
 
 
+@pytest.mark.cuda
 def test_the_gather_and_the_CSR_agree_per_graph_segment(payload_fields, wire_geometry) -> None:
     """Prove each graph's gather slice sits inside its own node range and matches the CSR length."""
     batch = collate_graph_batch(GraphWirePayload(**payload_fields("b6")), expected_version=1,

@@ -174,6 +174,7 @@ def test_the_runner_help_names_the_slow_flag() -> None:
     assert "--with-slow" in proc.stdout
 
 
+@pytest.mark.cuda
 def test_the_slow_tier_actually_selects_the_slow_tests() -> None:
     """Prove the slow tier really selects the slow tests, by driving the runner rather than its source."""
     proc = subprocess.run(

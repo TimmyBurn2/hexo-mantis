@@ -37,6 +37,7 @@ def test_the_four_geometry_parameters_carry_no_default():
     assert all(params[name].kind is inspect.Parameter.KEYWORD_ONLY for name in GEOMETRY_PARAMS)
 
 
+@pytest.mark.cuda
 def test_a_wire_whose_node_feat_dim_disagrees_with_the_declared_row_is_refused(payload_fields,
                                                                               wire_geometry):
     """The planted break the audit named: declare 12 where the wire carries 11.
