@@ -46,7 +46,6 @@ VALID_TRAIN_PAYLOAD: dict = {
     "policy_target": "raw_visit_distribution",
     "fast_policy_weight": 0.0,
     "ema": {"enabled": False, "decay": 0.999, "update_every": 10},
-    "policy_loss_weight_schedule": {"warmup_steps": 0},
     "policy_loss_trough_abort": None,
     "ply_cap_abort": None,
     "heldout_gap": None,

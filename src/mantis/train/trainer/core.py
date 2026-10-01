@@ -42,7 +42,6 @@ from mantis.train.events import tail_mass_block
 from mantis.train.losses import (
     backward_accumulate,
     clip_and_step,
-    policy_loss_weight_at,
     ragged_policy_ce,
     ragged_policy_ce_and_entropies,
     rebuild_sparse_target,
@@ -86,8 +85,6 @@ class TrainHParams:
     scheduler_t_max: int | None
     eta_min: float
     checkpoint_interval: int
-    #: `train.policy_loss_weight_schedule.warmup_steps`; 0 is OFF.
-    policy_loss_warmup_steps: int
     #: `model.aux_soft_policy` as `(temperature, weight)`; `None` is the explicit OFF.
     aux_soft_policy: tuple[float, float] | None
 
@@ -108,12 +105,11 @@ class TrainHParams:
                 "closure) — no flat legacy training keys are read anymore."
             )
         _assert_policy_target_consistency(train, (cfg.get("selfplay") or {}).get("search") or {})
-        fields = set(cls.__dataclass_fields__) - {"policy_loss_warmup_steps", "aux_soft_policy"}
+        fields = set(cls.__dataclass_fields__) - {"aux_soft_policy"}
         kwargs = {k: train[k] for k in fields}
         aux = resolve_aux_soft_policy(cfg)
         return cls(
             **kwargs,
-            policy_loss_warmup_steps=int(train["policy_loss_weight_schedule"]["warmup_steps"]),
             aux_soft_policy=None if aux is None else (aux.temperature, aux.weight),
         )
 
@@ -372,7 +368,6 @@ class Trainer:
         # Every row's tail mass alpha, collected across the split so the reading is the STEP's
         # distribution and not one part's.
         tail_alphas: list[float] = []
-        policy_weight = policy_loss_weight_at(self.step, self.hp.policy_loss_warmup_steps)
         target_entropy_total = 0.0
         policy_entropy_total = 0.0
         aux_total = 0.0
@@ -405,16 +400,13 @@ class Trainer:
                 value_loss = _binned_value_loss(bin_logits, inputs.outcomes,
                                                 value_mask=inputs.value_valid,
                                                 denominator=value_denominator)
-                # At weight 0 the policy term is LEFT OUT, not zeroed: a zero grad would still let
-                # AdamW's decoupled decay move the prior the warm-up holds. `policy_loss` stays the raw CE.
-                loss = value_loss if policy_weight == 0.0 else policy_weight * policy_loss + value_loss
+                loss = policy_loss + value_loss
                 aux_loss: torch.Tensor | None = None
                 aux_kl: torch.Tensor | None = None
                 if aux_logits is not None and self.hp.aux_soft_policy is not None:
                     aux_loss, aux_kl = self._aux_soft_policy_terms(
                         policy_logits, aux_logits, inputs, policy_denominator)
-                    if policy_weight != 0.0:
-                        loss = loss + self.hp.aux_soft_policy[1] * aux_loss
+                    loss = loss + self.hp.aux_soft_policy[1] * aux_loss
             # A NaN/inf microbatch loss would NaN every weight via the clip coefficient: SKIPPED
             # (its gradient is undefined) and COUNTED, since dropped microbatches hide on loss alone.
             if not torch.isfinite(loss) or not torch.isfinite(policy_loss):
@@ -498,8 +490,6 @@ class Trainer:
                                   **(batch_composition or {}),
                                   # The same reasoning for the tail mass.
                                   **tail_mass_block(tail_alphas),
-                                  # The warm-up reports its own weight on every step.
-                                  "policy_loss_weight": policy_weight,
                                   # KL(target || policy) = CE - H(target),
                                   # both reduced over the step's policy rows the same way.
                                   "policy_target_entropy": target_entropy_total,

@@ -80,8 +80,6 @@ train:
     enabled: false
     decay: 0.999
     update_every: 10
-  policy_loss_weight_schedule:
-    warmup_steps: 0
   max_train_steps: 1000000
   # WPAX Phase D (R65/R80/R79+R83), statistic replaced by R92 (WPMINT Phase DS): the
   # draw-rate collapse hard abort's terms. `null` is the EXPLICIT off posture and is what

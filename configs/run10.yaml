@@ -115,8 +115,6 @@ train:
     enabled: false
     decay: 0.999
     update_every: 10
-  policy_loss_weight_schedule:
-    warmup_steps: 0
   max_train_steps: 1000000
   draw_rate_abort:
     threshold: 0.25

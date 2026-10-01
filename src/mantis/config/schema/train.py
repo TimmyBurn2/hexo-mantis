@@ -170,12 +170,6 @@ class HeldoutGapConfig(StrictModel):
     interval: int = Field(ge=1)
 
 
-class PolicyLossWeightScheduleConfig(StrictModel):
-    """The value warm-up: policy weight 0 for the first `warmup_steps`, then 1; 0 is OFF."""
-
-    warmup_steps: int = Field(ge=0)
-
-
 class TrainConfig(StrictModel):
     """Training hyperparameters. Every field REQUIRED — no terminal default anywhere in this
     class; the minted value in each `configs/*.yaml` is the sole default authority.
@@ -198,8 +192,6 @@ class TrainConfig(StrictModel):
     actor_sync_cadence_steps: int = Field(ge=1)
     # The EMA lever's arming block, REQUIRED so every config states its posture explicitly.
     ema: EmaConfig
-    # The value warm-up's one knob, consumed by `TrainHParams.from_config` -> the graph step.
-    policy_loss_weight_schedule: PolicyLossWeightScheduleConfig
     # The RUN-LENGTH authority (`resolve_max_train_steps` -> `stop_step`), not the LR horizon;
     # ABSOLUTE, so a run resumed past it stops at once, which looks like a frozen actor.
     max_train_steps: int = Field(ge=1)

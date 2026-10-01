@@ -73,17 +73,6 @@ def exclude_alpha_full_rows(policy_row_weight: torch.Tensor, tail_mass: Any) -> 
     return policy_row_weight * (~full).to(policy_row_weight.dtype), int(full.sum().item())
 
 
-def policy_loss_weight_at(step: int, warmup_steps: int) -> float:
-    """The policy-loss warm-up weight: 0.0 while `step < warmup_steps` (0-based, the step about to be taken), else 1.0.
-
-    Raises:
-        ValueError: a negative step or warm-up length.
-    """
-    if step < 0 or warmup_steps < 0:
-        raise ValueError(f"policy_loss_weight_at: step={step}, warmup_steps={warmup_steps} must be >= 0")
-    return 0.0 if step < warmup_steps else 1.0
-
-
 def graph_loss_denominators(
     is_full_search: Any,
     value_valid: Any,
