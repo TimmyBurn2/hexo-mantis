@@ -21,6 +21,7 @@ from mantis.config.resolve.tactics import (
 )
 from mantis.config.schema import RunConfig
 from mantis.selfplay.hparams import SelfPlayHParams, build_runner_config, resolve_pool_encoding
+from _minted_puct import MINTED_PUCT
 
 _CONFIGS = discover_configs(Path(__file__).resolve().parents[2] / "configs")
 _BLOCK: dict[str, Any] = {
@@ -60,7 +61,7 @@ def test_a_deploy_block_validates_and_the_bridge_arms_what_the_resolver_hands_it
     config = RunConfig.model_validate(_with("deploy", _BLOCK))
     armed = resolve_deploy_tactics(config.model_dump())
     assert armed == {**_BLOCK, "audit": {**_BLOCK["audit"], "mode": "hold"}}
-    tree = MCTSTree()
+    tree = MCTSTree(**MINTED_PUCT.tree_kwargs())
     tree.configure_tactics(armed)
     assert tree.tactics_armed
     off = RunConfig.model_validate(_with("deploy", {**_BLOCK, "audit": None}))
@@ -106,7 +107,7 @@ def test_each_arm_resolves_the_one_block_and_the_bridge_arms_every_one() -> None
     assert arm_block("audit-off", _BLOCK) == tactics_block({**_BLOCK, "audit": None})
     assert arm_block("known-bad", _BLOCK) == tactics_block(_BLOCK, audit_mode=AUDIT_INVERTED)
     for arm in ("full", "audit-off", "known-bad"):
-        MCTSTree().configure_tactics(arm_block(arm, _BLOCK))
+        MCTSTree(**MINTED_PUCT.tree_kwargs()).configure_tactics(arm_block(arm, _BLOCK))
     assert set(ARMS) == {"plain", "full", "audit-off", "known-bad"}
 
 

@@ -1,17 +1,16 @@
 """The eval path's code-side literals EQUAL the production config's values.
 
-Thirteen hyper-parameters on the deploy-matched eval path are code-side literals measured
-equal to the production config by coincidence of defaults, not by threading, and nothing detected
-the day they stopped being equal. This file is that detector: it PINS THE COINCIDENCE rather
+The deploy-matched eval path's remaining code-side literals are measured equal to the production
+config by coincidence of defaults, not by threading, and nothing detected the day they stopped
+being equal (the PUCT constants left this file when the deploy head began to read them). This file is that detector: it PINS THE COINCIDENCE rather
 than threading the config (a behaviour change on a frozen parity surface), so retuning a
 production config without following the eval path names the decoupling instead of letting the
 promotion bar stop measuring the net that ships. Both literal sets are read FROM THEIR SOURCE —
-the pyo3 signature, the inline dict — never transcribed.
+the inline dict, never transcribed.
 """
 from __future__ import annotations
 
 import ast
-import re
 from pathlib import Path
 from typing import Any
 
@@ -23,29 +22,11 @@ from mantis.config.census import production_configs
 _REPO = Path(__file__).resolve().parents[2]
 #: One census member; the last test holds every other member to the values read here.
 _PRODUCTION_CONFIG = production_configs(_REPO)[0]
-_MCTS_RS = _REPO / "crates" / "mantis-bridge" / "src" / "mcts.rs"
 _INFERENCE_PY = _REPO / "src" / "mantis" / "selfplay" / "inference_local.py"
 
 
 def _run5() -> dict[str, Any]:
     return yaml.safe_load(_PRODUCTION_CONFIG.read_text(encoding="utf-8"))
-
-
-def _pyo3_mctstree_defaults() -> dict[str, Any]:
-    """Parse `#[pyo3(signature = (...))]` on `PyMCTSTree::new` — the defaults
-    `DeployHeadPlayer.new_game` gets by calling `MCTSTree()` with no arguments."""
-    source = _MCTS_RS.read_text(encoding="utf-8")
-    match = re.search(
-        r"#\[pyo3\(signature = \((c_puct[^)]*)\)\)\]", source, re.DOTALL
-    )
-    assert match, "could not locate the PyMCTSTree::new pyo3 signature"
-    out: dict[str, Any] = {}
-    for part in match.group(1).split(","):
-        if "=" not in part:
-            continue
-        key, raw = (piece.strip() for piece in part.split("=", 1))
-        out[key] = {"true": True, "false": False}.get(raw, raw)
-    return out
 
 
 def _inline_inference_dict() -> ast.Dict:
@@ -80,36 +61,6 @@ def _split_literal_and_threaded(section: str) -> tuple[dict[str, Any], set[str]]
                 threaded.add(k.value)
         return literals, threaded
     pytest.fail(f"the inline dict has no {section!r} section")
-
-
-#: `(pyo3 ctor key, selfplay.mcts key)`, read by the ctor row and the census row alike.
-_CTOR_DEFAULT_KEYS: tuple[tuple[str, str], ...] = (
-    ("c_puct", "c_puct"),
-    ("fpu_reduction", "fpu_reduction"),
-    ("quiescence_enabled", "quiescence_enabled"),
-    ("quiescence_blend_2", "quiescence_blend_2"),
-)
-
-
-# D-15: `DeployHeadPlayer.new_game` builds `MCTSTree()` on the pyo3 ctor defaults while
-# self-play threads the same knobs from config.
-@pytest.mark.parametrize("ctor_key, config_key", _CTOR_DEFAULT_KEYS)
-def test_deploy_head_mcts_default_equals_run5(ctor_key: str, config_key: str) -> None:
-    ctor = _pyo3_mctstree_defaults()[ctor_key]
-    configured = _run5()["selfplay"]["mcts"][config_key]
-    if isinstance(configured, bool):
-        assert ctor is configured, (
-            f"MCTSTree ctor default {ctor_key}={ctor!r} no longer equals run5's "
-            f"selfplay.mcts.{config_key}={configured!r}. The eval deploy head does NOT "
-            f"read the config — it would keep the ctor default while self-play moved, so "
-            f"the promotion bar would stop being deploy-matched (LAW-15). Thread the "
-            f"value or re-rule ADJ-WP12R-8."
-        )
-    else:
-        assert float(ctor) == float(configured), (
-            f"MCTSTree ctor default {ctor_key}={ctor!r} no longer equals run5's "
-            f"selfplay.mcts.{config_key}={configured!r} — see ADJ-WP12R-8."
-        )
 
 
 # D-23: the eval engine's InferenceServer knobs. The six mirrored `inference.*` keys went with
@@ -192,8 +143,5 @@ def test_the_train_SECTION_IS_GONE_and_law06_still_pins_the_dtype() -> None:
 def test_every_production_config_carries_the_values_read_above(path: Path) -> None:
     """The rows above read one census member; each other member must carry the same values."""
     read, other = _run5(), yaml.safe_load(path.read_text(encoding="utf-8"))
-    keys = tuple(config_key for _, config_key in _CTOR_DEFAULT_KEYS)
-    assert {k: other["selfplay"]["mcts"][k] for k in keys} == {
-        k: read["selfplay"]["mcts"][k] for k in keys}, path.name
     assert set(other["inference"]) == set(read["inference"]), path.name
     assert "amp_dtype" not in other["train"], path.name

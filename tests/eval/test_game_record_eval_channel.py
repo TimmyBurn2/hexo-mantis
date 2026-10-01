@@ -25,6 +25,7 @@ from mantis.eval.rounds import GameRecordTarget, GateSpec, RoundSpec
 from mantis.eval.snapshot import write_model_snapshot
 from mantis.model.identity import net_param_hash
 from mantis.monitor.game_record import iter_run_games
+from _minted_puct import MINTED_PUCT
 
 #: `book_v1_s20260625_p4` is minted against `gnn_axis_v1` and 292 of its 512 openings need
 #: radius >= 6 to replay, so the round's encoding has to cover that.
@@ -61,6 +62,7 @@ def _round_spec(tmp_path: Path, target: GameRecordTarget | None) -> RoundSpec:
         fused_graph_caps=CAPS,
         inference_batching=InferenceBatchingSpec(inference_batch_size=64,
                                                  inference_max_wait_ms=10),
+        puct=MINTED_PUCT,
     )
 
 

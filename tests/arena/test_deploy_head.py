@@ -22,6 +22,7 @@ from mantis._engine import Board
 from mantis.arena.deploy_head import DeployHeadPlayer
 
 from _dense_expand import dense_expand
+from _minted_puct import MINTED_PUCT
 
 #: `selfplay.c_visit` / `selfplay.c_scale` as the committed configs mint them — STATED here,
 #: not imported, so this file does not silently re-anchor when the keys are re-minted.
@@ -49,6 +50,7 @@ def _head(kind: str, **over):
         gumbel_m=4,
         gumbel_seed=20260909,
         tactics=None,
+        puct=MINTED_PUCT,
     )
     kwargs.update(over)
     return DeployHeadPlayer(**kwargs)

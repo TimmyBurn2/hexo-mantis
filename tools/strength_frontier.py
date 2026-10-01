@@ -39,6 +39,7 @@ from mantis.config.resolve.eval_posture import resolve_ply_cap_adjudication, res
 from mantis.config.resolve.fused_graph_caps import resolve_fused_graph_caps
 from mantis.config.resolve.inference_batching import resolve_inference_batching
 from mantis.config.resolve.leaf_build_threads import resolve_leaf_build_threads
+from mantis.config.resolve.puct import resolve_puct_constants
 from mantis.config.resolve.tactics import ARMS, arm_from_file, resolve_deploy_tactics
 from mantis.encoding import lookup
 from mantis.eval.aggregate import pair_bootstrap_wr_ci
@@ -151,6 +152,7 @@ def base_round_spec(config: Any, *, work_dir: Path) -> RoundSpec:
         c_visit=config.selfplay.c_visit, c_scale=config.selfplay.c_scale,
         q_rescale=config.selfplay.q_rescale,
         search_kind="", gumbel_m=config.selfplay.gumbel_m, tactics=resolve_deploy_tactics(dump),
+        puct=resolve_puct_constants(config),
         inference_batching=resolve_inference_batching(dump) if graph else None,
         leaf_build_threads=resolve_leaf_build_threads(dump) if graph else 1,
         concurrency=1, rung_concurrency=1,

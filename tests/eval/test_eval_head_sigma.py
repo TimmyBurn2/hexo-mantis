@@ -11,6 +11,7 @@ from mantis.arena.deploy_head import DeployHeadPlayer
 from mantis.encoding import lookup
 from mantis.eval import worker
 from mantis.eval.rounds import RoundSpec
+from _minted_puct import MINTED_PUCT
 
 
 def test_round_spec_requires_q_rescale_and_round_trips_it() -> None:
@@ -30,7 +31,7 @@ def test_the_head_built_for_a_round_holds_the_round_sigma(rescale: bool) -> None
     spec = lookup("gnn_axis_v1")
     player = worker.build_candidate_player(
         object(), 1, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=0.1,
-        q_rescale=rescale, search_kind="gumbel", gumbel_m=4, gumbel_seed=0, tactics=None
+        q_rescale=rescale, search_kind="gumbel", gumbel_m=4, gumbel_seed=0, tactics=None, puct=MINTED_PUCT
     )
     assert isinstance(player, DeployHeadPlayer)
     player.new_game()

@@ -29,6 +29,7 @@ from mantis.eval.floor_gate import FLOOR_PROBE_VARIANT
 from mantis.eval.rounds import GateSpec, RoundSpec
 from mantis.eval.snapshot import write_model_snapshot
 from mantis.model import GnnArch, build_net
+from _minted_puct import MINTED_PUCT
 
 #: A real registry row and the one shipped book, so this drives the production round shape.
 #: A DENSE encoding at radius 8: 292 of the book's 512 openings need radius >= 6 to replay.
@@ -80,6 +81,7 @@ def _round_spec(tmp_path: Path, floor: StrengthFloorSpec | None) -> RoundSpec:
         inference_batching=InferenceBatchingSpec(
             inference_batch_size=64, inference_max_wait_ms=10
         ),
+        puct=MINTED_PUCT,
     )
 
 

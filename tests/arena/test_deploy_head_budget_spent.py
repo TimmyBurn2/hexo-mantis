@@ -10,6 +10,7 @@ from mantis._engine import Board
 from mantis.arena.deploy_head import DeployHeadPlayer
 
 from _dense_expand import InferStub, dense_expand
+from _minted_puct import MINTED_PUCT
 
 _STRIDE = 362
 
@@ -82,7 +83,7 @@ def test_every_kind_spends_exactly_its_budget(kind: str, n_sims: int, tactics: d
     calls: list[int] = []
     player = DeployHeadPlayer(
         expand_fn=dense_expand(_peaked_infer(calls)), n_sims=n_sims, leaf_batch_size=8, c_visit=50.0,
-        c_scale=1.0, q_rescale=True, search_kind=kind, gumbel_m=16, gumbel_seed=7, tactics=tactics,
+        c_scale=1.0, q_rescale=True, search_kind=kind, gumbel_m=16, gumbel_seed=7, tactics=tactics, puct=MINTED_PUCT,
     )
     player.new_game()
     if tactics is None:
@@ -118,7 +119,7 @@ def test_the_plain_head_spends_its_budget_where_its_search_revisits_a_win(kind: 
     calls: list[int] = []
     player = DeployHeadPlayer(
         expand_fn=dense_expand(_peaked_infer(calls)), n_sims=256, leaf_batch_size=8, c_visit=50.0,
-        c_scale=1.0, q_rescale=True, search_kind=kind, gumbel_m=16, gumbel_seed=7, tactics=None,
+        c_scale=1.0, q_rescale=True, search_kind=kind, gumbel_m=16, gumbel_seed=7, tactics=None, puct=MINTED_PUCT,
     )
     player.new_game()
     player.select_move(_five_board())
@@ -130,7 +131,7 @@ def test_the_gumbel_head_spends_its_budget_on_a_second_board_too() -> None:
     calls: list[int] = []
     player = DeployHeadPlayer(
         expand_fn=dense_expand(_peaked_infer(calls)), n_sims=256, leaf_batch_size=1, c_visit=50.0,
-        c_scale=1.0, q_rescale=False, search_kind="gumbel", gumbel_m=16, gumbel_seed=11, tactics=None,
+        c_scale=1.0, q_rescale=False, search_kind="gumbel", gumbel_m=16, gumbel_seed=11, tactics=None, puct=MINTED_PUCT,
     )
     player.new_game()
     player.select_move(_mid_game_board(12, seed=5))
@@ -143,7 +144,7 @@ def test_the_head_reports_the_leaves_it_spent_as_its_own_counter(kind: str) -> N
     calls: list[int] = []
     player = DeployHeadPlayer(
         expand_fn=dense_expand(_peaked_infer(calls)), n_sims=96, leaf_batch_size=8, c_visit=50.0,
-        c_scale=1.0, q_rescale=True, search_kind=kind, gumbel_m=16, gumbel_seed=7, tactics=None,
+        c_scale=1.0, q_rescale=True, search_kind=kind, gumbel_m=16, gumbel_seed=7, tactics=None, puct=MINTED_PUCT,
     )
     player.new_game()
     assert player.last_sims is None

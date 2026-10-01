@@ -17,6 +17,7 @@ import pytest
 torch = pytest.importorskip("torch")
 from mantis._engine import Board  # noqa: E402
 from mantis.arena.deploy_head import DeployHeadPlayer  # noqa: E402
+from _minted_puct import MINTED_PUCT
 
 
 def _stub_expand_fn(tree, leaves):
@@ -30,7 +31,7 @@ def test_graph_arm_empty_cache_fires_once_per_move(monkeypatch):
     calls: list = []
     monkeypatch.setattr(torch.cuda, "empty_cache", lambda: calls.append(1))
 
-    player = DeployHeadPlayer(expand_fn=_stub_expand_fn, n_sims=2, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None)
+    player = DeployHeadPlayer(expand_fn=_stub_expand_fn, n_sims=2, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None, puct=MINTED_PUCT)
     player.new_game()
     board = Board.with_encoding_name("gnn_axis_v1")
     player.select_move(board)
@@ -48,7 +49,7 @@ def test_empty_cache_skipped_when_cuda_unavailable(monkeypatch):
     calls: list = []
     monkeypatch.setattr(torch.cuda, "empty_cache", lambda: calls.append(1))
 
-    player = DeployHeadPlayer(expand_fn=_stub_expand_fn, n_sims=2, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None)
+    player = DeployHeadPlayer(expand_fn=_stub_expand_fn, n_sims=2, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None, puct=MINTED_PUCT)
     player.new_game()
     board = Board.with_encoding_name("gnn_axis_v1")
     player.select_move(board)

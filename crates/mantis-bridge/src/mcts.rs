@@ -16,7 +16,9 @@ use mantis_core::Board;
 use mantis_search::mcts::{
     AuditConfig, AuditMode, ForcedSelectionError, TacticsConfig, TacticsError,
 };
-use mantis_search::{LegalSetPolicy, MCTSTree, MctxRootState, QSigma, SearchKind};
+use mantis_search::{
+    LegalSetPolicy, MCTSTree, MctxRootState, QSigma, SearchKind, VIRTUAL_LOSS_PENALTY,
+};
 
 use crate::board::PyBoard;
 
@@ -51,20 +53,18 @@ pub struct PyMCTSTree {
 
 #[pymethods]
 impl PyMCTSTree {
-    /// Args: `c_puct` exploration constant (1.5); `virtual_loss` fixed penalty (1.0);
-    ///     `fpu_reduction` KataGo dynamic FPU base (0.25), an unvisited child's FPU being
-    ///     `parent_q - fpu_reduction * sqrt(explored_mass)`; `quiescence_enabled` (True) and
-    ///     `quiescence_blend_2` (0.3) for the proven forced win/loss override.
+    /// The config's `selfplay.mcts` constants, all required (`mantis.config.resolve.puct` reads
+    /// them): `fpu_reduction` is the KataGo dynamic FPU base, an unvisited child's FPU being
+    /// `parent_q - fpu_reduction * sqrt(explored_mass)`; the virtual loss is self-play's constant.
     #[new]
-    #[pyo3(signature = (c_puct = 1.5, virtual_loss = 1.0, fpu_reduction = 0.25, quiescence_enabled = true, quiescence_blend_2 = 0.3))]
+    #[pyo3(signature = (*, c_puct, fpu_reduction, quiescence_enabled, quiescence_blend_2))]
     pub fn new(
         c_puct: f32,
-        virtual_loss: f32,
         fpu_reduction: f32,
         quiescence_enabled: bool,
         quiescence_blend_2: f32,
     ) -> Self {
-        let mut inner = MCTSTree::new_full(c_puct, virtual_loss, fpu_reduction);
+        let mut inner = MCTSTree::new_full(c_puct, VIRTUAL_LOSS_PENALTY, fpu_reduction);
         inner.configure_quiescence(quiescence_enabled, quiescence_blend_2);
         PyMCTSTree {
             inner,
@@ -608,7 +608,7 @@ mod tests {
     fn forced_root_child_mirror_round_trips() {
         // The setter validates against the ROOT's child range, so the round-trip needs a root
         // that HAS children and an index that is one of them.
-        let mut t = PyMCTSTree::new(1.5, 1.0, 0.25, true, 0.3);
+        let mut t = PyMCTSTree::new(1.5, 0.25, true, 0.3);
         assert_eq!(t.forced_root_child(), None);
         assert!(
             t.set_forced_root_child(Some(7)).is_err(),
@@ -636,7 +636,7 @@ mod tests {
 
     #[test]
     fn quiescence_fire_count_starts_zero() {
-        let t = PyMCTSTree::new(1.5, 1.0, 0.25, true, 0.3);
+        let t = PyMCTSTree::new(1.5, 0.25, true, 0.3);
         assert_eq!(t.get_quiescence_fire_count(), 0);
     }
 
@@ -646,7 +646,7 @@ mod tests {
     fn select_and_expand_round_trip_under_gil() {
         Python::initialize();
         Python::attach(|py| {
-            let mut t = PyMCTSTree::new(1.5, 1.0, 0.25, false, 0.3);
+            let mut t = PyMCTSTree::new(1.5, 0.25, false, 0.3);
             let board = PyBoard::new();
             t.new_game(&board).expect("an unarmed tree takes any board");
             let leaves = t.select_leaves(py, 1).expect("select");

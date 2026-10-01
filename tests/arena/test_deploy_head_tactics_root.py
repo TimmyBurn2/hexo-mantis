@@ -9,6 +9,7 @@ from mantis._engine import Board
 from mantis.arena.deploy_head import DeployHeadPlayer
 
 from _dense_expand import InferStub, dense_expand
+from _minted_puct import MINTED_PUCT
 
 _STRIDE = 362
 
@@ -55,7 +56,7 @@ def _peaked_on(cells: list[tuple[int, int]], calls: list[int]) -> InferStub:
 def _head(tactics: dict[str, Any], infer: InferStub, kind: str = "puct", n_sims: int = 64) -> DeployHeadPlayer:
     head = DeployHeadPlayer(
         expand_fn=dense_expand(infer), n_sims=n_sims, leaf_batch_size=8, c_visit=50.0, c_scale=1.0,
-        q_rescale=True, search_kind=kind, gumbel_m=16, gumbel_seed=7, tactics=tactics,
+        q_rescale=True, search_kind=kind, gumbel_m=16, gumbel_seed=7, tactics=tactics, puct=MINTED_PUCT,
     )
     head.new_game()
     return head

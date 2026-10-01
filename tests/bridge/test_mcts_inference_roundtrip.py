@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from mantis import _engine
+from _minted_puct import MINTED_PUCT
 
 # The Python-facing InferenceBatcher compat surface. A LIST, not a count: it is compared to
 # `dir()` in BOTH directions, which is what a count could never do.
@@ -34,7 +35,7 @@ INFERENCE_METHODS = [
 
 
 def test_mctstree_ctor_compose_and_policy_round_trip():
-    tree = _engine.MCTSTree(1.5, 1.0, 0.25, True, 0.3)  # new_full + configure_quiescence
+    tree = _engine.MCTSTree(**MINTED_PUCT.tree_kwargs())  # new_full + configure_quiescence
     assert tree.quiescence_fire_count == 0
     board = _engine.Board.with_encoding_name("gnn_axis_v1")
     board.apply_move(0, 0)
@@ -54,7 +55,7 @@ def test_mctstree_forced_root_child_round_trip():
     """The setter validates against the ROOT'S CHILD RANGE, so the round-trip needs a root
     that HAS children: on a bare tree an arbitrary index decodes to a cell an UNBOUNDED board
     accepts, producing neither a panic nor an error."""
-    tree = _engine.MCTSTree()
+    tree = _engine.MCTSTree(**MINTED_PUCT.tree_kwargs())
     assert tree.forced_root_child is None
     with pytest.raises(ValueError, match="not a child of the root"):
         tree.forced_root_child = 3
@@ -79,7 +80,7 @@ def _compact_prior() -> list[float]:
 
 def test_mctstree_last_tt_hits_is_every_table_valued_descent() -> None:
     """With no terminal reachable, each PUCT select call raises the root by exactly `last_tt_hits`, and some do."""
-    tree = _engine.MCTSTree(1.5, 1.0, 0.25, False, 0.3)
+    tree = _engine.MCTSTree(**{**MINTED_PUCT.tree_kwargs(), "quiescence_enabled": False})
     board = _engine.Board.with_encoding_name("gnn_axis_v1")
     board.apply_move(0, 0)
     tree.new_game(board)
@@ -133,7 +134,7 @@ def test_mctstree_expand_and_backup_ls_graph_round_trip():
     board = _engine.Board.with_encoding_name("gnn_axis_v1")
     board.apply_move(0, 0)
     board.apply_move(1, 0)
-    tree = _engine.MCTSTree()
+    tree = _engine.MCTSTree(**MINTED_PUCT.tree_kwargs())
     tree.new_game(board)
     leaves = tree.select_leaves(1)
     assert len(leaves) == 1

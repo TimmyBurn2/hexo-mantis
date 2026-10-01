@@ -16,6 +16,7 @@ from typing import Any
 
 from mantis.config.loader import load_config
 from mantis.eval.pipeline import DrainCaps, EvalPipeline
+from _minted_puct import MINTED_PUCT
 
 _REPO = Path(__file__).resolve().parents[2]
 _CONFIG = _REPO / "configs" / "dev_example.yaml"
@@ -35,6 +36,7 @@ def _pipeline(tmp_path: Path, run_id: str, spool_name: str = "spool") -> Any:
         promotion=None, sink=None,
         fused_graph_caps=None,
         inference_batching=None,
+        puct=MINTED_PUCT,
     )
 
 

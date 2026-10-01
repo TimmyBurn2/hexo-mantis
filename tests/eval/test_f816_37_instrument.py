@@ -26,6 +26,7 @@ from mantis.eval import worker
 from mantis.eval.rounds import GateSpec, RoundSpec, RungJob
 from mantis.eval.snapshot import write_model_snapshot
 from mantis.model import GnnArch, build_net
+from _minted_puct import MINTED_PUCT
 
 _ENC = "gnn_axis_v1"
 _BOOK = "book_v1_s20260625_p4"
@@ -73,6 +74,7 @@ def _round_spec(tmp_path: Path) -> RoundSpec:
         inference_batching=InferenceBatchingSpec(
             inference_batch_size=64, inference_max_wait_ms=10
         ),
+        puct=MINTED_PUCT,
     )
 
 

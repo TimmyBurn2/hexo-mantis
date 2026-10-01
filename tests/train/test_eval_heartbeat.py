@@ -18,6 +18,7 @@ from mantis.train.lifecycle.heartbeat_watchdog import HeartbeatWatchdog
 from mantis.train.subsystems import build_run_safety
 from _spy import SpyEventSink
 from _drivable import ExitSpy
+from _minted_puct import MINTED_PUCT
 
 
 class FakeBuffer:
@@ -45,6 +46,7 @@ def test_poller_thread_beats_eval_round(tmp_path) -> None:
         # Inert in this drive, but the parameter carries no default so the decision is written.
         fused_graph_caps=None,
         inference_batching=None,
+        puct=MINTED_PUCT,
     )
     try:
         assert beat_eval_round.wait(timeout=10.0), (

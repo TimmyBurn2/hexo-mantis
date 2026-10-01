@@ -24,6 +24,7 @@ from _pipeline_harness import (
 )
 
 from mantis.eval.pipeline import build_eval_pipeline
+from _minted_puct import MINTED_PUCT
 
 
 class _SpySink:
@@ -46,7 +47,7 @@ def _inject_completion_crash(pipeline) -> None:
 
 def test_poller_thread_survives_an_uncaught_exception_in_round_completion(fake_mp, tmp_path) -> None:
     sink = _SpySink()
-    pipeline = build_eval_pipeline(**pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
+    pipeline = build_eval_pipeline(**pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1, puct=MINTED_PUCT)
     try:
         ack = pipeline.run_evaluation(tiny_model(), 1000, None, full_config={}, best_model_step=None)
         assert ack["kicked"] is True
@@ -93,7 +94,7 @@ def test_poller_thread_survives_an_uncaught_exception_in_round_completion(fake_m
 # `drain_pending()` is the synchronous teardown join point, a second route to the same crash.
 def test_drain_pending_survives_an_uncaught_exception_in_round_completion(fake_mp, tmp_path) -> None:
     sink = _SpySink()
-    pipeline = build_eval_pipeline(**pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
+    pipeline = build_eval_pipeline(**pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1, puct=MINTED_PUCT)
     try:
         pipeline.run_evaluation(tiny_model(), 1000, None, full_config={}, best_model_step=None)
         _inject_completion_crash(pipeline)
@@ -119,7 +120,7 @@ def test_drain_pending_survives_an_uncaught_exception_in_round_completion(fake_m
 def test_round_completion_error_never_silent_never_dropped(fake_mp, tmp_path) -> None:
     """A routed result WITH no event, or an event WITH no routed result, are each rejected."""
     sink = _SpySink()
-    pipeline = build_eval_pipeline(**pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
+    pipeline = build_eval_pipeline(**pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1, puct=MINTED_PUCT)
     try:
         pipeline.run_evaluation(tiny_model(), 1000, None, full_config={}, best_model_step=None)
         _inject_completion_crash(pipeline)

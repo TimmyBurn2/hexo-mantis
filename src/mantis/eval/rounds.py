@@ -16,6 +16,7 @@ from mantis.config.resolve.eval_posture import PlyCapAdjudicationSpec, StrengthF
 from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.eval.errors import EvalBrokenReason, ResultContractError
+from mantis.util.puct import PuctConstants
 
 _LOG = logging.getLogger(__name__)
 
@@ -80,6 +81,7 @@ _REHYDRATED_SPEC_FIELDS: tuple[tuple[str, Any], ...] = (
     ("fused_graph_caps", FusedGraphCapsSpec),
     ("inference_batching", InferenceBatchingSpec),
     ("game_record", GameRecordTarget),
+    ("puct", PuctConstants),
 )
 
 
@@ -172,6 +174,8 @@ class RoundSpec:
     #: The run's resolved `deploy.search.tactics` as the bridge arms it, `None` the explicit off. NOT
     #: defaulted; the gate is deploy-matched, so its candidate and best side both play it.
     tactics: dict[str, Any] | None
+    #: The run's `selfplay.mcts` PUCT constants every deploy head's tree is built with. NOT defaulted.
+    puct: PuctConstants
     #: The graph collector's batching geometry, resolved in the parent: a wrong child literal
     #: cost 33% of the eval path's ms/sim in the collector's own deadline.
     inference_batching: InferenceBatchingSpec | None

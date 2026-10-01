@@ -34,6 +34,7 @@ from mantis.encoding import lookup
 from mantis.eval import worker
 from mantis.eval.errors import EvalDecodeUnsupportedError
 from mantis.selfplay.inference_local import LocalInferenceEngine
+from _minted_puct import MINTED_PUCT
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "eval_selfplay_parity"
 _P1_FIXTURE = _FIXTURES / "child_parity_v1.json"
 _P2_FIXTURE = _FIXTURES / "dispersed_r6_v1.json"
@@ -98,7 +99,7 @@ def _expand(engine, spec, tree, leaves, *, overflows=None) -> None:
 
 def _eval_children(engine, spec, board) -> list[tuple[tuple[int, int], float]]:
     """Root children the eval decode produces for `board`, canonically ordered."""
-    tree = MCTSTree()
+    tree = MCTSTree(**MINTED_PUCT.tree_kwargs())
     tree.new_game(board)
     leaves = tree.select_leaves(1)
     assert len(leaves) == 1, "a fresh root must yield exactly one pending leaf"
@@ -130,7 +131,7 @@ def test_deploy_head_entrance_reaches_the_same_children(graph_engine) -> None:
     pos = _positions(fx)[0]
     board = board_from(pos)
 
-    player = worker.build_candidate_player(engine, 1, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None)
+    player = worker.build_candidate_player(engine, 1, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None, puct=MINTED_PUCT)
     assert isinstance(player, DeployHeadPlayer)
     player.new_game()
     player.select_move(board)
@@ -169,7 +170,7 @@ def test_overflow_order_does_not_change_the_child_set(graph_engine) -> None:
     pos = _positions(fx)[0]
     board = board_from(pos)
 
-    tree = MCTSTree()
+    tree = MCTSTree(**MINTED_PUCT.tree_kwargs())
     tree.new_game(board)
     leaves = tree.select_leaves(1)
     _dense, overflow, _values, _centers = engine.infer_batch_ls(leaves)
@@ -181,7 +182,7 @@ def test_overflow_order_does_not_change_the_child_set(graph_engine) -> None:
         assert entries != list(half), "the permutation must actually permute"
         shuffled.append(entries)
 
-    tree2 = MCTSTree()
+    tree2 = MCTSTree(**MINTED_PUCT.tree_kwargs())
     tree2.new_game(board)
     leaves2 = tree2.select_leaves(1)
     _expand(engine, spec, tree2, leaves2, overflows=shuffled)
@@ -303,7 +304,7 @@ def test_head_plays_an_off_window_move_against_random_bot(graph_engine) -> None:
     pos = _positions(_load(_P2_FIXTURE))[3]
     board = board_from(pos)
     head_seat = int(board.current_player)
-    player = worker.build_candidate_player(engine, 1, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None)
+    player = worker.build_candidate_player(engine, 1, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None, puct=MINTED_PUCT)
     player.new_game()
     bot = RandomBot(seed=20260731)
 
@@ -360,7 +361,7 @@ def test_expand_ls_graph_arity_conjuncts_are_enforced(graph_engine, short_arg) -
     assert len(_eval_children(engine, spec, board)) == _expected_children(board), (
         "clean-call control")
 
-    tree = MCTSTree()
+    tree = MCTSTree(**MINTED_PUCT.tree_kwargs())
     tree.new_game(board)
     leaves = tree.select_leaves(1)
     dense, overflow, values, centers = engine.infer_batch_ls(leaves)
@@ -382,7 +383,7 @@ def test_expand_ls_graph_refuses_a_centre_the_board_disagrees_with(graph_engine)
     assert len(_eval_children(engine, spec, board)) == _expected_children(board), (
         "clean-call control")
 
-    tree = MCTSTree()
+    tree = MCTSTree(**MINTED_PUCT.tree_kwargs())
     tree.new_game(board)
     leaves = tree.select_leaves(1)
     dense, overflow, values, centers = engine.infer_batch_ls(leaves)
@@ -401,7 +402,7 @@ def test_expand_ls_graph_refuses_a_trunk_the_board_disagrees_with(graph_engine) 
     assert len(_eval_children(engine, spec, board)) == _expected_children(board), (
         "clean-call control")
 
-    tree = MCTSTree()
+    tree = MCTSTree(**MINTED_PUCT.tree_kwargs())
     tree.new_game(board)
     leaves = tree.select_leaves(1)
     dense, overflow, values, centers = engine.infer_batch_ls(leaves)
@@ -419,7 +420,7 @@ def test_expand_ls_graph_refuses_a_dense_half_of_the_wrong_stride(graph_engine) 
     assert len(_eval_children(engine, spec, board)) == _expected_children(board), (
         "clean-call control")
 
-    tree = MCTSTree()
+    tree = MCTSTree(**MINTED_PUCT.tree_kwargs())
     tree.new_game(board)
     leaves = tree.select_leaves(1)
     dense, overflow, values, centers = engine.infer_batch_ls(leaves)
@@ -433,7 +434,7 @@ def test_expand_ls_graph_refuses_a_dense_half_of_the_wrong_stride(graph_engine) 
 def test_deploy_head_requires_its_expand_collaborator() -> None:
     """`expand_fn=` has no default: a head without its decode+expand collaborator is a TypeError."""
     with pytest.raises(TypeError, match="expand_fn"):
-        DeployHeadPlayer(n_sims=1, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None)  # type: ignore[call-arg]
+        DeployHeadPlayer(n_sims=1, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None, puct=MINTED_PUCT)  # type: ignore[call-arg]
 
 
 def test_build_candidate_player_closed_match_refuses_an_unknown_representation() -> None:
@@ -456,7 +457,7 @@ def test_build_candidate_player_closed_match_refuses_an_unknown_representation()
         max_in_flight=8, )
     try:
         with pytest.raises(EvalDecodeUnsupportedError):
-            worker.build_candidate_player(engine, 2, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None)
+            worker.build_candidate_player(engine, 2, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None, puct=MINTED_PUCT)
     finally:
         engine.close()
 

@@ -10,6 +10,7 @@ registered-but-unexercised.
 import numpy as np
 
 from mantis import _engine
+from _minted_puct import MINTED_PUCT
 
 
 def test_hexg_buffer_and_graph_targets_round_trip():
@@ -50,7 +51,7 @@ def test_selfplay_runner_construct_and_counters():
 
 def test_mcts_and_inference_batcher_construct():
     """Smoke: both remain constructible (depth coverage in O20)."""
-    assert _engine.MCTSTree().root_visits() == 0
+    assert _engine.MCTSTree(**MINTED_PUCT.tree_kwargs()).root_visits() == 0
     spec = _engine.RegistrySpec.from_registry("gnn_axis_v1")
     ib = _engine.InferenceBatcher(encoding_spec=spec)
     assert ib.policy_len_py == spec.policy_stride

@@ -15,6 +15,7 @@ from typing import Any
 
 from mantis._engine import MCTSTree
 from mantis.util.device import release_cuda_cache
+from mantis.util.puct import PuctConstants
 
 #: `get_root_children_info()` row shape: (coord, pool_idx, prior, visits, q).
 ChildInfo = tuple[tuple[int, int], int, float, int, float]
@@ -49,6 +50,7 @@ class DeployHeadPlayer:
         gumbel_m: int,
         gumbel_seed: int,
         tactics: dict[str, Any] | None,
+        puct: PuctConstants,
     ) -> None:
         # `c_visit`, `c_scale`, `q_rescale`, `leaf_batch_size` and `gumbel_m` are REQUIRED schema
         # keys, never defaulted: a default equal to today's minted value is still a second authority.
@@ -76,6 +78,8 @@ class DeployHeadPlayer:
         self._gumbel_seed = int(gumbel_seed) & _SEED_MASK
         #: The resolved `deploy.search.tactics` block the tree arms, or `None` (the module off).
         self._tactics = tactics
+        #: The run's `selfplay.mcts` constants every tree is built with: the bridge holds no default.
+        self._puct = puct
         self._game_index = 0
         self._move_index = 0
         self._tree: MCTSTree | None = None
@@ -107,7 +111,7 @@ class DeployHeadPlayer:
         """A tree configured with the RUN's search kind and σ. `configure_search` runs ONCE per
         tree: under `gumbel` it allocates a per-node raw-value vector that does not change per
         ply, and the root calls below read the σ it set (one σ per tree)."""
-        tree = MCTSTree()
+        tree = MCTSTree(**self._puct.tree_kwargs())
         tree.configure_search(self._search_kind, self._c_visit, self._c_scale, self._q_rescale)
         tree.configure_tactics(self._tactics)
         return tree

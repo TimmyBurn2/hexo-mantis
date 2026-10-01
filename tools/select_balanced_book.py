@@ -28,7 +28,7 @@ games per replay cell. At run7's measured gate cost beside a live run (RUN7_EVAL
 s/ply, 55-77 plies/game, concurrency 8) that is roughly 27-65 s/game, so 31-74 box-hours serial;
 the box measures it, this line does not.
 Honesty about the replays: under `puct` the deploy head consumes NO seed (`_move_seed` feeds only
-the Gumbel root pick; `MCTSTree()` is unseeded), so `seed_base` changes the opening ORDER and the
+the Gumbel root pick; `MCTSTree` is unseeded), so `seed_base` changes the opening ORDER and the
 record's `seed` field, never the search. Four replays differ only through the engine's own
 run-to-run nondeterminism (batched GPU inference, games in flight). The selector reports
 `identical_replays` per opening and in its summary: if it is near the pool size, the four replays

@@ -25,6 +25,7 @@ from mantis.config.resolve.inference_batching import (
     resolve_inference_batching,
 )
 from mantis.selfplay.inference_local import LocalInferenceEngine
+from _minted_puct import MINTED_PUCT
 
 _CPU = torch.device("cpu")
 _GRAPH_SPEC = RegistrySpec.from_registry("gnn_axis_v1")
@@ -144,7 +145,7 @@ def test_the_round_spec_carries_the_batching_across_the_process_seam() -> None:
         result_path="r.json", progress_path="p.txt",
         game_record=None,
         ply_cap_adjudication=None, strength_floor=None, fused_graph_caps=_CAPS,
-        inference_batching=batching, leaf_batch_size=8, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, tactics=None, max_plies=128, leaf_build_threads=1, concurrency=1, rung_concurrency=1,
+        inference_batching=batching, leaf_batch_size=8, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, tactics=None, max_plies=128, leaf_build_threads=1, concurrency=1, rung_concurrency=1, puct=MINTED_PUCT,
     )
     back = RoundSpec.from_dict(json.loads(json.dumps(dataclasses.asdict(spec))))
     assert isinstance(back.inference_batching, InferenceBatchingSpec), (

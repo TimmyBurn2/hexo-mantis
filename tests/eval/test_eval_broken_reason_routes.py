@@ -32,6 +32,7 @@ from _pipeline_harness import (
 
 from mantis.eval.errors import EvalBrokenReason
 from mantis.eval.pipeline import build_eval_pipeline
+from _minted_puct import MINTED_PUCT
 
 #: The routes, each with the member it must produce and the phase that member forces, stated
 #: here rather than derived from the enum under test.
@@ -100,7 +101,7 @@ def _drive(route: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Driv
     ctx = FakeCtx()
     monkeypatch.setattr(multiprocessing, "get_context", lambda name=None: ctx)
     sink = _SpySink()
-    pipeline = build_eval_pipeline(**pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
+    pipeline = build_eval_pipeline(**pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1, puct=MINTED_PUCT)
     try:
         _quiesce_poller(pipeline)
         ack = pipeline.run_evaluation(tiny_model(), 1000, None, full_config={},

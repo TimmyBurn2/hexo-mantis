@@ -47,6 +47,7 @@ from mantis.monitor.game_record import (
 )
 from mantis.monitor.sink import RunIdError
 from mantis.selfplay.inference_local import LocalInferenceEngine
+from mantis.util.puct import PuctConstants
 
 #: Confirm-phase opening seed offset, so the confirm block draws a DIFFERENT book slice.
 _CONFIRM_SEED_OFFSET = 7919
@@ -262,7 +263,7 @@ def _graph_expand_fn(engine: LocalInferenceEngine, spec: EncodingSpec):
 def build_candidate_player(
     engine: LocalInferenceEngine, n_sims: int, *, spec: EncodingSpec, leaf_batch_size: int,
     c_visit: float, c_scale: float, q_rescale: bool, search_kind: str, gumbel_m: int,
-    gumbel_seed: int, tactics: dict[str, Any] | None,
+    gumbel_seed: int, tactics: dict[str, Any] | None, puct: PuctConstants,
 ) -> DeployHeadPlayer:
     """A closed match on the representation. Raises: EvalDecodeUnsupportedError if not graph."""
     if spec.representation == "graph":
@@ -270,7 +271,7 @@ def build_candidate_player(
                                 leaf_batch_size=leaf_batch_size,
                                 c_visit=c_visit, c_scale=c_scale, q_rescale=q_rescale,
                                 search_kind=search_kind, gumbel_m=gumbel_m,
-                                gumbel_seed=gumbel_seed, tactics=tactics)
+                                gumbel_seed=gumbel_seed, tactics=tactics, puct=puct)
     raise EvalDecodeUnsupportedError(
         f"encoding {spec.name!r} declares representation={spec.representation!r}, which "
         f"this eval worker's decode entrance does not implement. The implemented arm is "
@@ -330,7 +331,7 @@ def _play_floor_probe(
         leaf_batch_size=spec.leaf_batch_size,
         c_visit=spec.c_visit, c_scale=spec.c_scale, q_rescale=spec.q_rescale,
         search_kind=spec.search_kind, gumbel_m=spec.gumbel_m, gumbel_seed=spec.seed_base,
-        tactics=spec.tactics,
+        tactics=spec.tactics, puct=spec.puct,
     )
     regime_key = RegimeKey(
         bot="random", variant=FLOOR_PROBE_VARIANT, model_sims=spec.random_model_sims,
@@ -389,14 +390,14 @@ def _play_gate_block(
                     leaf_batch_size=spec.leaf_batch_size,
                     c_visit=spec.c_visit, c_scale=spec.c_scale, q_rescale=spec.q_rescale,
                     search_kind=spec.search_kind, gumbel_m=spec.gumbel_m,
-                    gumbel_seed=spec.seed_base, tactics=spec.tactics,
+                    gumbel_seed=spec.seed_base, tactics=spec.tactics, puct=spec.puct,
                 ),
                 build_candidate_player(
                     best_engine, spec.gate.deploy_sims, spec=encoding_spec,
                     leaf_batch_size=spec.leaf_batch_size,
                     c_visit=spec.c_visit, c_scale=spec.c_scale, q_rescale=spec.q_rescale,
                     search_kind=spec.search_kind, gumbel_m=spec.gumbel_m,
-                    gumbel_seed=spec.seed_base, tactics=spec.tactics,
+                    gumbel_seed=spec.seed_base, tactics=spec.tactics, puct=spec.puct,
                 ),
             )
 
@@ -489,7 +490,7 @@ def _play_rung_block(
             leaf_batch_size=spec.leaf_batch_size,
             c_visit=spec.c_visit, c_scale=spec.c_scale, q_rescale=spec.q_rescale,
             search_kind=spec.search_kind, gumbel_m=spec.gumbel_m, gumbel_seed=spec.seed_base,
-            tactics=spec.tactics,
+            tactics=spec.tactics, puct=spec.puct,
         )
 
     # One (candidate, opponent) pair per game thread under `rung_concurrency` > 1: both carry
@@ -561,7 +562,7 @@ def _play_random_floor(
         leaf_batch_size=spec.leaf_batch_size,
         c_visit=spec.c_visit, c_scale=spec.c_scale, q_rescale=spec.q_rescale,
         search_kind=spec.search_kind, gumbel_m=spec.gumbel_m, gumbel_seed=spec.seed_base,
-        tactics=spec.tactics,
+        tactics=spec.tactics, puct=spec.puct,
     )
     regime_key = RegimeKey(
         bot="random", variant="raw", model_sims=spec.random_model_sims,

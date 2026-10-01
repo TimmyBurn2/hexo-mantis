@@ -11,6 +11,7 @@ from mantis.config.census import production_configs
 from mantis.config.loader import load_config
 from mantis.config.schema import RunConfig
 from mantis.selfplay.hparams import SelfPlayHParams
+from _minted_puct import MINTED_PUCT
 
 _REPO = Path(__file__).resolve().parents[2]
 #: Any census member: the rows set `selfplay.q_rescale` themselves, so two targets differ in that key alone.
@@ -52,7 +53,7 @@ def _child_row(tree: MCTSTree, cell: tuple[int, int]) -> tuple[int, float, int, 
 def _target(hp: SelfPlayHParams, q_a: float, q_b: float) -> tuple[np.ndarray, float, int, tuple[int, int]]:
     """The real target under `hp`'s σ: (masses, Δq read back, max_n, the two flat indices)."""
     board = _root_board()
-    tree = MCTSTree()
+    tree = MCTSTree(**MINTED_PUCT.tree_kwargs())
     # THE setter the self-play workers call, fed from the hparams the config resolved to.
     tree.configure_search(hp.search_kind, hp.c_visit, hp.c_scale, hp.q_rescale)
     tree.new_game(board)

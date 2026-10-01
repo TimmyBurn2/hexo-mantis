@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from mantis._engine import MCTSTree
+from _minted_puct import MINTED_PUCT
 
 _LEAF: dict[str, Any] = {"kind": "strict_turn", "leaf_turns": 2, "leaf_nodes": 64, "root_turns": 8,
                          "root_nodes": 0, "audit": None}
@@ -13,7 +14,7 @@ _AUDIT: dict[str, Any] = {"turns": 2, "nodes": 256, "k": 4, "m": 2, "total_nodes
 
 
 def test_a_well_formed_block_arms_and_none_disarms() -> None:
-    tree = MCTSTree()
+    tree = MCTSTree(**MINTED_PUCT.tree_kwargs())
     tree.configure_tactics({**_LEAF, "audit": {**_AUDIT, "mode": "inverted"}})
     assert tree.tactics_armed
     tree.configure_tactics(None)
@@ -35,7 +36,7 @@ def test_a_well_formed_block_arms_and_none_disarms() -> None:
     ({**_LEAF, "audit": {**_AUDIT, "k": 0}}, "k=0"),
 ])
 def test_a_malformed_block_is_refused_by_name_and_arms_nothing(block: dict[Any, Any], names: str) -> None:
-    tree = MCTSTree()
+    tree = MCTSTree(**MINTED_PUCT.tree_kwargs())
     with pytest.raises(ValueError, match=names):
         tree.configure_tactics(block)
     assert not tree.tactics_armed
@@ -43,4 +44,4 @@ def test_a_malformed_block_is_refused_by_name_and_arms_nothing(block: dict[Any, 
 
 def test_a_block_that_is_not_a_dict_is_a_type_error() -> None:
     with pytest.raises(TypeError):
-        MCTSTree().configure_tactics([("kind", "strict_turn")])  # type: ignore[arg-type]
+        MCTSTree(**MINTED_PUCT.tree_kwargs()).configure_tactics([("kind", "strict_turn")])  # type: ignore[arg-type]

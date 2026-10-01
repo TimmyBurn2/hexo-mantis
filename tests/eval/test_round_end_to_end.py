@@ -28,6 +28,7 @@ from mantis.config.resolve.inference_batching import resolve_inference_batching
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
 from mantis.encoding import lookup
 from mantis.model import GnnArch, build_net
+from _minted_puct import MINTED_PUCT
 
 pytestmark = pytest.mark.integration
 
@@ -82,6 +83,7 @@ def _build_pipeline(tmp_path: Path, *, adjudicate: bool = False):
         # is the smoke's own minted caps as a spec, since the tiny oracle net is not its arch.
         fused_graph_caps=FusedGraphCapsSpec(**_SMOKE["inference"]["fused_graph_caps"]),
         inference_batching=resolve_inference_batching(_SMOKE),
+        puct=MINTED_PUCT,
     )
 
 

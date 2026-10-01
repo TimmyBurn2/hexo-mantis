@@ -20,6 +20,7 @@ from mantis.eval.snapshot import write_model_snapshot
 from mantis.model import GnnArch, build_net
 from mantis.selfplay.hparams import is_graph_representation
 from mantis.selfplay.inference_local import LocalInferenceEngine
+from _minted_puct import MINTED_PUCT
 
 # The repo's one opening book and the probe's parameter set verbatim, so every recorded sha is
 # re-derivable: candidate seed 1, best seed 2, deploy_sims=2, seed_base=20260625.
@@ -74,6 +75,7 @@ def _round_spec(
         ply_cap_adjudication=None, strength_floor=None,
         fused_graph_caps=caps_for(enc_name),
         inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10),
+        puct=MINTED_PUCT,
     )
 
 

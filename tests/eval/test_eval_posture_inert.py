@@ -38,6 +38,7 @@ from mantis.config.resolve.eval_posture import (
 )
 from mantis.eval.rounds import RoundSpec, _REQUIRED_RESULT_KEYS
 from mantis.eval.worker import _build_adjudicator, _round_result
+from _minted_puct import MINTED_PUCT
 
 _REPO = Path(__file__).resolve().parents[2]
 _CONFIG_DIR = _REPO / "configs"
@@ -148,6 +149,7 @@ def _spec_from(config_name: str, tmp_path: Path) -> RoundSpec:
         # These fixtures assert the POSTURE fields, so the memory bound is `None` here.
         fused_graph_caps=None,
         inference_batching=None,
+        puct=MINTED_PUCT,
     )
     try:
         spec, _gate, _path = pipeline._build_round_spec(
@@ -208,7 +210,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
     disarmed = RoundSpec(**base, ply_cap_adjudication=None, strength_floor=None,
                          leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, tactics=None, max_plies=128, leaf_build_threads=1, concurrency=1, rung_concurrency=1,
                          fused_graph_caps=None,
-                         inference_batching=None)
+                         inference_batching=None, puct=MINTED_PUCT)
     back = RoundSpec.from_dict(json.loads(json.dumps(disarmed.to_dict())))
     assert back.ply_cap_adjudication is None and back.strength_floor is None
     assert back == disarmed
@@ -221,7 +223,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
         strength_floor=StrengthFloorSpec(probe_games=4, min_decisive_rate=0.5,
                                          min_winrate=0.5),
            fused_graph_caps=None,
-           inference_batching=None,
+           inference_batching=None, puct=MINTED_PUCT,
     )
     back_armed = RoundSpec.from_dict(json.loads(json.dumps(armed.to_dict())))
     assert back_armed == armed
@@ -235,7 +237,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
         leaf_build_threads=1, concurrency=1, rung_concurrency=1,
         **{**base, "game_record": GameRecordTarget(record_dir="/tmp/games", run_id="r6")},
         ply_cap_adjudication=None, strength_floor=None,
-        fused_graph_caps=None, inference_batching=None,
+        fused_graph_caps=None, inference_batching=None, puct=MINTED_PUCT,
     )
     back_target = RoundSpec.from_dict(json.loads(json.dumps(targeted.to_dict())))
     assert back_target == targeted

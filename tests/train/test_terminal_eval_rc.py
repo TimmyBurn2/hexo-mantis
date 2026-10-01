@@ -59,6 +59,7 @@ from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.disk_guard import DiskGuard
 from mantis.train.lifecycle.signals import ShutdownState
 from _drivable import await_signal, DrivablePoolStub, DrivableTrainerStub, fake_disk_usage
+from _minted_puct import MINTED_PUCT
 
 _REPO = Path(__file__).resolve().parents[2]
 _SRC = _REPO / "src" / "mantis"
@@ -353,6 +354,7 @@ def _real_pipeline(tmp_path: Path, sink: SpyEventSink):
         # parameter carries no default.
         fused_graph_caps=None,
         inference_batching=None,
+        puct=MINTED_PUCT,
     )
     # The persistent poller would finalize a round the drive is about to finalize itself; a
     # race here would make WHICH path minted the round id nondeterministic.

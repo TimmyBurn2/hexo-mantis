@@ -93,6 +93,7 @@ class MantisBackend:
         from mantis.config.resolve.fused_graph_caps import resolve_fused_graph_caps
         from mantis.config.resolve.inference_batching import resolve_inference_batching
         from mantis.config.resolve.leaf_build_threads import resolve_leaf_build_threads
+        from mantis.config.resolve.puct import resolve_puct_constants
         from mantis.config.resolve.tactics import resolve_deploy_tactics
         from mantis.encoding import lookup, normalize_encoding_name
         from mantis.model import build_net
@@ -133,6 +134,7 @@ class MantisBackend:
         self._q_rescale, self._gumbel_m = bool(config.selfplay.q_rescale), int(config.selfplay.gumbel_m)
         self._search_kind = str(config.deploy.search.kind)
         self._tactics = resolve_deploy_tactics(dump)
+        self._puct = resolve_puct_constants(config)
         self.search: dict[str, Any] = {
             "kind": self._search_kind, "sims": self.sims, "preset": preset, "device": "cpu", "tactics": self._tactics,
             "torch_threads": torch.get_num_threads(),
@@ -150,7 +152,7 @@ class MantisBackend:
         self._head = build_candidate_player(
             self._engine, self.sims, spec=self._spec, leaf_batch_size=self._leaf_batch_size, c_visit=self._c_visit,
             c_scale=self._c_scale, q_rescale=self._q_rescale, search_kind=self._search_kind, gumbel_m=self._gumbel_m,
-            gumbel_seed=self.seed, tactics=self._tactics)
+            gumbel_seed=self.seed, tactics=self._tactics, puct=self._puct)
         self._head.new_game()
 
     def select_turn(self, board: Any, forced: tuple[Cell, ...] = ()) -> TurnResult:

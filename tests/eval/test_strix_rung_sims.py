@@ -10,6 +10,7 @@ from mantis.bots.protocol import RungUnresolvable
 from mantis.eval import worker
 from mantis.eval.rounds import GateSpec, RoundSpec, RungJob
 from mantis.eval.worker import _model_sims_for_kind
+from _minted_puct import MINTED_PUCT
 
 
 def _spec(**over):
@@ -27,7 +28,7 @@ def _spec(**over):
         concurrency=1, rung_concurrency=1,
     )
     base.update(over)
-    return RoundSpec(**base)
+    return RoundSpec(**base, puct=MINTED_PUCT)
 
 
 def test_a_production_round_carries_no_strix_sims_and_a_strix_rung_on_it_is_a_named_refusal():

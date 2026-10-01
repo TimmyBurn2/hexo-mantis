@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -14,6 +14,7 @@ from mantis.arena.deploy_head import ChildInfo
 from mantis.config.resolve.fused_graph_caps import resolve_fused_graph_caps
 from mantis.config.resolve.inference_batching import resolve_inference_batching
 from mantis.config.resolve.leaf_build_threads import resolve_leaf_build_threads
+from mantis.config.resolve.puct import PuctConstants, resolve_puct_constants
 from mantis.config.resolve.search import MissingSearchKindError, resolve_deploy_search_kind
 from mantis.encoding import lookup
 from mantis.eval.worker import _graph_expand_fn, build_candidate_player
@@ -78,6 +79,7 @@ class HParams:
     c_scale: float
     q_rescale: bool
     gumbel_m: int
+    puct: PuctConstants
 
 
 @dataclass(frozen=True)
@@ -144,7 +146,7 @@ class MantisEngine:
             sp = cfg["selfplay"]
             self.hparams = HParams(leaf_batch_size=int(sp["leaf_batch_size"]), c_visit=float(sp["c_visit"]),
                                    c_scale=float(sp["c_scale"]), q_rescale=bool(sp["q_rescale"]),
-                                   gumbel_m=int(sp["gumbel_m"]))
+                                   gumbel_m=int(sp["gumbel_m"]), puct=resolve_puct_constants(cfg))
             self.deploy_sims = int(cfg["eval"]["gate"]["deploy_sims"])
         except (KeyError, TypeError) as exc:
             raise EngineLoadError(f"{info.id}: the stamp's config lacks {exc.args[0]!r}; nothing is defaulted here") from None
@@ -170,7 +172,7 @@ class MantisEngine:
             inference_batching=resolve_inference_batching(cfg), max_in_flight=self.hparams.leaf_batch_size,
             leaf_build_threads=resolve_leaf_build_threads(cfg))
         self._expand = _graph_expand_fn(self.engine, self.spec)
-        self._raw_tree = MCTSTree(quiescence_enabled=False)
+        self._raw_tree = MCTSTree(**replace(self.hparams.puct, quiescence_enabled=False).tree_kwargs())
         self._raw_tree.configure_search(self.search_kind, self.hparams.c_visit, self.hparams.c_scale,
                                         self.hparams.q_rescale)
         self.card: dict[str, Any] = {
@@ -201,7 +203,7 @@ class MantisEngine:
                                         gumbel_seed=ANALYZER_GUMBEL_SEED, leaf_batch_size=hp.leaf_batch_size,
                                         c_visit=hp.c_visit, c_scale=hp.c_scale, q_rescale=hp.q_rescale,
                                         # The NET's search, tactics off: a stamp before v39 holds no block to read.
-                                        gumbel_m=hp.gumbel_m, tactics=None)
+                                        gumbel_m=hp.gumbel_m, tactics=None, puct=hp.puct)
         player.new_game()
         t0 = time.perf_counter()
         move = player.select_move(board)

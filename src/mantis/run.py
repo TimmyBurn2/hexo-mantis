@@ -60,6 +60,7 @@ from mantis.config.resolve.inference_batching import resolve_inference_batching
 from mantis.config.resolve.leaf_build_threads import resolve_leaf_build_threads
 from mantis.config.resolve.monitor import resolve_monitor_config
 from mantis.config.resolve.ply_cap import PlyCapAbortSpec, resolve_ply_cap_abort
+from mantis.config.resolve.puct import resolve_puct_constants
 from mantis.config.resolve.run_length import resolve_max_train_steps
 from mantis.config.resolve.search import resolve_deploy_search_kind
 from mantis.config.resolve.tactics import resolve_deploy_tactics
@@ -658,6 +659,7 @@ def compose_run(
                     gumbel_m=config.selfplay.gumbel_m,
                     # Both gate heads' tactics block: the deploy key's, never the self-play one.
                     tactics=resolve_deploy_tactics(config.model_dump()),
+                    puct=resolve_puct_constants(config),
                     run_id=run_id, spool_dir=log_dir / "eval_spool",
                     # The SAME directory the self-play recorder writes into, named once
                     # here, so one run's four channels land in one store.

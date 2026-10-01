@@ -32,6 +32,7 @@ from mantis.eval.worker import build_candidate_player
 from mantis.model import GnnArch, build_net
 from mantis.model.identity import net_param_hash
 from mantis.selfplay.inference_local import LocalInferenceEngine
+from _minted_puct import MINTED_PUCT
 
 #: A finished, REACHABLE game: player 1 completes a six along `(1, 0)` at ply 11. Cells follow
 #: the engine's compound-turn order, which is what the ply-parity expression gets wrong.
@@ -114,7 +115,7 @@ def _readout(seed: int) -> dict:
         records = play_arm(
             build_candidate_player(engine, 2, spec=spec, leaf_batch_size=1, c_visit=50.0,
                                    c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16,
-                                   gumbel_seed=seed, tactics=None),
+                                   gumbel_seed=seed, tactics=None, puct=MINTED_PUCT),
             resolve_bot("random", opponent_sims=2)(seed=7),
             openings,
             regime_key=witness_regime(encoding_name=_ENCODING, model_sims=2,

@@ -18,6 +18,7 @@ import pytest
 
 from mantis._engine import Board
 from mantis.arena.deploy_head import DeployHeadPlayer
+from _minted_puct import MINTED_PUCT
 
 _REPO = Path(__file__).resolve().parents[2]
 _ENCODING = "gnn_axis_v1"
@@ -38,7 +39,7 @@ def _play_one_move(*, n_sims: int, leaf_batch_size: int) -> tuple[list[int], Dep
     """One `select_move` on the GRAPH arm; returns the per-call batch widths and the head."""
     calls: list[int] = []
     player = DeployHeadPlayer(
-        expand_fn=_counting_expand_fn(calls), n_sims=n_sims, leaf_batch_size=leaf_batch_size, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None,
+        expand_fn=_counting_expand_fn(calls), n_sims=n_sims, leaf_batch_size=leaf_batch_size, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None, puct=MINTED_PUCT,
     )
     player.new_game()
     player.select_move(Board.with_encoding_name(_ENCODING))
@@ -99,13 +100,13 @@ def test_k_equals_one_is_byte_for_byte_the_old_loop() -> None:
 def test_a_batch_width_below_one_is_REFUSED_not_clamped(bad: int) -> None:
     """A silent clamp to 1 would restore the exact defect this row exists to close."""
     with pytest.raises(ValueError, match="leaf_batch_size"):
-        DeployHeadPlayer(expand_fn=_counting_expand_fn([]), n_sims=4, leaf_batch_size=bad, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None)
+        DeployHeadPlayer(expand_fn=_counting_expand_fn([]), n_sims=4, leaf_batch_size=bad, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None, puct=MINTED_PUCT)
 
 
 def test_leaf_batch_size_has_NO_DEFAULT_and_must_be_stated() -> None:
     """A default here would be a search regime nobody minted: omitting it is a TypeError."""
     with pytest.raises(TypeError, match="leaf_batch_size"):
-        DeployHeadPlayer(expand_fn=_counting_expand_fn([]), n_sims=4, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None)  # type: ignore[call-arg]
+        DeployHeadPlayer(expand_fn=_counting_expand_fn([]), n_sims=4, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None, puct=MINTED_PUCT)  # type: ignore[call-arg]
 
 
 def test_deploy_and_selfplay_read_THE_SAME_CONFIG_KEY() -> None:

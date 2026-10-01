@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from mantis._engine import SelfPlayRunnerConfig
+from mantis.config.resolve.puct import resolve_puct_constants
 from mantis.config.resolve.search import resolve_selfplay_search_kind
 from mantis.config.resolve.tactics import resolve_selfplay_tactics
 from mantis.encoding import EncodingSpec, resolve_from_config
@@ -136,6 +137,7 @@ class SelfPlayHParams:
         sp = config["selfplay"]
         mcts_cfg = sp["mcts"]
         pc = sp["playout_cap"]
+        puct = resolve_puct_constants(config)
 
         hp = cls(
             n_workers=int(n_workers if n_workers is not None else sp["n_workers"]),
@@ -152,10 +154,10 @@ class SelfPlayHParams:
             gumbel_explore_moves=int(sp["gumbel_explore_moves"]),
             results_queue_cap=int(sp["results_queue_cap"]),
             random_opening_plies=int(sp["random_opening_plies"]),
-            c_puct=float(mcts_cfg["c_puct"]),
-            fpu_reduction=float(mcts_cfg["fpu_reduction"]),
-            quiescence_enabled=bool(mcts_cfg["quiescence_enabled"]),
-            quiescence_blend_2=float(mcts_cfg["quiescence_blend_2"]),
+            c_puct=puct.c_puct,
+            fpu_reduction=puct.fpu_reduction,
+            quiescence_enabled=puct.quiescence_enabled,
+            quiescence_blend_2=puct.quiescence_blend_2,
             dirichlet_alpha=float(mcts_cfg["dirichlet_alpha"]),
             dirichlet_epsilon=float(mcts_cfg["dirichlet_epsilon"]),
             dirichlet_enabled=bool(mcts_cfg["dirichlet_enabled"]),

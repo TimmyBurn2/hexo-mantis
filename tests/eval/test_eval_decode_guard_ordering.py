@@ -22,6 +22,7 @@ from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.eval import worker
 from mantis.eval.errors import EvalDecodeUnsupportedError
 from mantis.eval.rounds import GateSpec, RoundSpec, RungJob
+from _minted_puct import MINTED_PUCT
 
 _BOOK = "book_v1_s20260625_p4"
 _SEED = 20260625
@@ -60,6 +61,7 @@ def _spec(tmp_path: Path, enc_name: str) -> RoundSpec:
         ply_cap_adjudication=None, strength_floor=None,
         fused_graph_caps=caps_for(enc_name),
         inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10),
+        puct=MINTED_PUCT,
     )
 
 

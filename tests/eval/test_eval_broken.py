@@ -36,6 +36,7 @@ from mantis.eval.pipeline import build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks, apply_gate_decision
 from mantis.eval.rounds import partial_gate_path, write_partial_gate
 from mantis.config.schema import EvalConfig
+from _minted_puct import MINTED_PUCT
 
 
 def _eval_cfg(**overrides: Any) -> EvalConfig:
@@ -73,7 +74,7 @@ def _result_path_from_ctx(ctx: FakeCtx) -> Path:
 
 def test_killed_worker_yields_eval_broken_and_clean_drain(fake_mp, tmp_path) -> None:
     sink = _SpySink()
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1, puct=MINTED_PUCT)
     try:
         ack = pipeline.run_evaluation(tiny_model(), 1000, None, full_config={}, best_model_step=None)
         assert ack["kicked"] is True
@@ -104,7 +105,7 @@ def test_a_resumable_stop_abandons_the_live_round_at_once_without_the_drain_budg
     sink = _SpySink()
     clock = FakeClock(0.0)
     cfg = _eval_cfg(round_timeout_sec=3600.0, worker_kill_grace_sec=0.1)
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, eval_cfg=cfg, sink=sink, clock=clock), leaf_batch_size=1)
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, eval_cfg=cfg, sink=sink, clock=clock), leaf_batch_size=1, puct=MINTED_PUCT)
     try:
         ack = pipeline.run_evaluation(tiny_model(), 1000, None, full_config={}, best_model_step=None)
         assert ack["kicked"] is True
@@ -124,7 +125,7 @@ def test_hung_worker_join_timeout_escalates_terminate_then_kill(fake_mp, tmp_pat
     sink = _SpySink()
     clock = FakeClock(0.0)
     cfg = _eval_cfg(round_timeout_sec=0.2, worker_kill_grace_sec=0.1)
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, eval_cfg=cfg, sink=sink, clock=clock), leaf_batch_size=1)
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, eval_cfg=cfg, sink=sink, clock=clock), leaf_batch_size=1, puct=MINTED_PUCT)
     try:
         ack = pipeline.run_evaluation(tiny_model(), 1000, None, full_config={}, best_model_step=None)
         assert ack["kicked"] is True
@@ -148,7 +149,7 @@ def test_hung_worker_join_timeout_escalates_terminate_then_kill(fake_mp, tmp_pat
 
 def test_garbage_sidecar_json_is_eval_broken_not_a_crash(fake_mp, tmp_path) -> None:
     sink = _SpySink()
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1, puct=MINTED_PUCT)
     try:
         ack = pipeline.run_evaluation(tiny_model(), 1000, None, full_config={}, best_model_step=None)
         result_path = _result_path_from_ctx(fake_mp)
@@ -172,7 +173,7 @@ def test_garbage_sidecar_json_is_eval_broken_not_a_crash(fake_mp, tmp_path) -> N
 
 def test_missing_result_file_is_eval_broken(fake_mp, tmp_path) -> None:
     sink = _SpySink()
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1, puct=MINTED_PUCT)
     try:
         pipeline.run_evaluation(tiny_model(), 1000, None, full_config={}, best_model_step=None)
         proc = fake_mp.last_process
@@ -194,7 +195,7 @@ def test_eval_broken_never_promotes_and_never_silently_skips(fake_mp, tmp_path) 
     # Both must hold together: a result with no event is silent, an event with no result
     # is dropped, and each alone is a partial failure.
     sink = _SpySink()
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1, puct=MINTED_PUCT)
     try:
         pipeline.run_evaluation(tiny_model(), 1000, None, full_config={}, best_model_step=None)
         proc = fake_mp.last_process
@@ -233,7 +234,7 @@ def _kill_after_partial(fake_mp, pipeline, *, partial_step: int, promoted: bool)
 def test_a_round_killed_after_its_gate_phase_promotes_off_the_partial_verdict(fake_mp, tmp_path) -> None:
     """A-3: a round killed after its gate phase is broken for the ladder and still promotes."""
     sink = _SpySink()
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1, puct=MINTED_PUCT)
     try:
         result_path = _kill_after_partial(fake_mp, pipeline, partial_step=3000, promoted=True)
         result = bounded(lambda: pipeline.drain_pending(), timeout=5.0)
@@ -251,7 +252,7 @@ def test_a_round_killed_after_its_gate_phase_promotes_off_the_partial_verdict(fa
 
 def test_a_partial_verdict_that_did_not_promote_does_not(fake_mp, tmp_path) -> None:
     sink = _SpySink()
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1, puct=MINTED_PUCT)
     try:
         _kill_after_partial(fake_mp, pipeline, partial_step=3000, promoted=False)
         result = bounded(lambda: pipeline.drain_pending(), timeout=5.0)
@@ -262,7 +263,7 @@ def test_a_partial_verdict_that_did_not_promote_does_not(fake_mp, tmp_path) -> N
 
 def test_a_partial_from_another_step_is_ignored(fake_mp, tmp_path) -> None:
     sink = _SpySink()
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1, puct=MINTED_PUCT)
     try:
         _kill_after_partial(fake_mp, pipeline, partial_step=2000, promoted=True)
         result = bounded(lambda: pipeline.drain_pending(), timeout=5.0)
@@ -291,14 +292,14 @@ def test_a_partial_left_by_an_earlier_process_cannot_promote_a_new_round(fake_mp
     """A watchdog exit finalises nothing and the relaunch restores the same round id: the ghost must go."""
     sink = _SpySink()
     kwargs = _pipeline_kwargs(tmp_path, sink=sink)
-    pipeline = build_eval_pipeline(**kwargs, leaf_batch_size=1)
+    pipeline = build_eval_pipeline(**kwargs, leaf_batch_size=1, puct=MINTED_PUCT)
     try:
         pipeline.run_evaluation(tiny_model(), 3000, None, full_config={}, best_model_step=None)
         result_path = pipeline._inflight["spec"].result_path
     finally:
         pipeline.stop()
     write_partial_gate(result_path, step=3000, gate_result=_gate_verdict(True))  # the ghost
-    pipeline2 = build_eval_pipeline(**kwargs, leaf_batch_size=1)
+    pipeline2 = build_eval_pipeline(**kwargs, leaf_batch_size=1, puct=MINTED_PUCT)
     try:
         assert not partial_gate_path(result_path).exists(), "the constructor sweep takes it"
         write_partial_gate(result_path, step=3000, gate_result=_gate_verdict(True))

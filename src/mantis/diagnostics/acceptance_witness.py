@@ -34,6 +34,7 @@ from mantis.config.loader import load_config
 from mantis.config.resolve.eval_posture import resolve_strength_floor
 from mantis.config.resolve.fused_graph_caps import resolve_fused_graph_caps
 from mantis.config.resolve.inference_batching import resolve_inference_batching
+from mantis.config.resolve.puct import resolve_puct_constants
 from mantis.config.resolve.search import resolve_deploy_search_kind
 from mantis.config.resolve.tactics import resolve_deploy_tactics
 from mantis.encoding import lookup
@@ -296,7 +297,8 @@ def run_witness(config_path: Path, arms: Sequence[ArmSpec], *, games: int,
                                        search_kind=resolve_deploy_search_kind(cfg),
                                        gumbel_m=cfg.selfplay.gumbel_m,
                                        # As the round's floor probe arms it.
-                                       gumbel_seed=cfg.seed, tactics=resolve_deploy_tactics(dump)),
+                                       gumbel_seed=cfg.seed, tactics=resolve_deploy_tactics(dump),
+                                       puct=resolve_puct_constants(cfg)),
                 resolve_bot("random", opponent_sims=sims)(
                     seed=cfg.eval.gate.seed_base),
                 paired_openings(cfg.eval.gate.opening_book, n_pairs=max(games // 2, 1),

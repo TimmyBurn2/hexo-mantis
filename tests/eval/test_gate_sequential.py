@@ -16,6 +16,7 @@ from mantis.eval.sequential import (
     llr_bounds,
     run_sequential_gate,
 )
+from _minted_puct import MINTED_PUCT
 
 
 def _spec(**over: object) -> SequentialGateSpec:
@@ -184,6 +185,7 @@ def _round_spec(tmp_path, sequential: dict | None):
         game_record=None, ply_cap_adjudication=None, strength_floor=None,
         fused_graph_caps=CAPS,
         inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10),
+        puct=MINTED_PUCT,
     )
 
 

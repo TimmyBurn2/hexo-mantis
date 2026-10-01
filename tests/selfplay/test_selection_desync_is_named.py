@@ -24,6 +24,7 @@ from __future__ import annotations
 import pytest
 
 from mantis import _engine
+from _minted_puct import MINTED_PUCT
 
 
 def test_the_named_exception_is_exported_from_the_engine() -> None:
@@ -38,7 +39,7 @@ def test_a_forced_root_child_outside_the_range_raises_ValueError_not_a_panic() -
     any other foreign index descended into a node the root does not own — an uninitialised
     slot carries `action_idx = u32::MAX`, which decodes to (32767, 32767), a cell an
     UNBOUNDED board accepts. That arm produced neither a panic nor an error."""
-    tree = _engine.MCTSTree(1.5, 1.0, 0.25, True, 0.3)
+    tree = _engine.MCTSTree(**MINTED_PUCT.tree_kwargs())
     board = _engine.Board()
     tree.new_game(board)
     # `forced_root_child` is a pyo3 PROPERTY (a `#[setter]`), so the refusal arrives on
@@ -54,7 +55,7 @@ def test_a_short_expand_batch_is_refused_by_name(monkeypatch: pytest.MonkeyPatch
     rest, so a short batch from the inference side expanded the leading leaves and silently
     skipped the others — on the self-play worker and on `arena/deploy_head.py`, the
     deploy-strength path. The graph sibling already carried C-1..C-4 guards for exactly this."""
-    tree = _engine.MCTSTree(1.5, 1.0, 0.25, True, 0.3)
+    tree = _engine.MCTSTree(**MINTED_PUCT.tree_kwargs())
     board = _engine.Board.with_encoding_name("gnn_axis_v1")
     tree.new_game(board)
     leaves = tree.select_leaves(1)

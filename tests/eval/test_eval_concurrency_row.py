@@ -29,6 +29,7 @@ from mantis.encoding import lookup
 from mantis.eval import worker
 from mantis.eval.rounds import EVAL_CONCURRENCY_ROW, GateSpec, RoundSpec
 from mantis.eval.snapshot import write_model_snapshot
+from _minted_puct import MINTED_PUCT
 
 #: The book is minted against `gnn_axis_v1` and most openings need radius >= 6 to replay.
 _ENC = "gnn_axis_v1"
@@ -178,6 +179,7 @@ def _round_spec(tmp_path: Path, concurrency: int) -> RoundSpec:
         inference_batching=InferenceBatchingSpec(
             inference_batch_size=64, inference_max_wait_ms=10
         ),
+        puct=MINTED_PUCT,
     )
 
 

@@ -27,6 +27,7 @@ from mantis.eval.pipeline import (
     _JOIN_TIMEOUT_CEILING_SEC,
     build_eval_pipeline,
 )
+from _minted_puct import MINTED_PUCT
 
 
 def _cfg_with_bypassed_worker_kill_grace_sec(value: float):
@@ -78,7 +79,7 @@ def test_escalate_and_finalize_survives_non_finite_worker_kill_grace_sec(fake_mp
     clock = FakeClock(0.0)
     bad_cfg = _cfg_with_bypassed_worker_kill_grace_sec(float("inf"))
     assert not math.isfinite(bad_cfg.worker_kill_grace_sec)  # confirm the injection landed
-    pipeline = build_eval_pipeline(**pipeline_kwargs(tmp_path, eval_cfg=bad_cfg, sink=sink, clock=clock), leaf_batch_size=1)
+    pipeline = build_eval_pipeline(**pipeline_kwargs(tmp_path, eval_cfg=bad_cfg, sink=sink, clock=clock), leaf_batch_size=1, puct=MINTED_PUCT)
     try:
         ack = pipeline.run_evaluation(tiny_model(), 1000, None, full_config={}, best_model_step=None)
         assert ack["kicked"] is True
@@ -140,7 +141,7 @@ def test_escalate_and_finalize_survives_non_finite_worker_kill_grace_sec(fake_mp
 def test_drain_pending_survives_non_finite_worker_kill_grace_sec(fake_mp, tmp_path) -> None:
     sink = _SpySink()
     bad_cfg = _cfg_with_bypassed_worker_kill_grace_sec(float("inf"))
-    pipeline = build_eval_pipeline(**pipeline_kwargs(tmp_path, eval_cfg=bad_cfg, sink=sink), leaf_batch_size=1)
+    pipeline = build_eval_pipeline(**pipeline_kwargs(tmp_path, eval_cfg=bad_cfg, sink=sink), leaf_batch_size=1, puct=MINTED_PUCT)
     try:
         pipeline.run_evaluation(tiny_model(), 1000, None, full_config={}, best_model_step=None)
         proc = fake_mp.last_process

@@ -19,6 +19,7 @@ from mantis._engine import Board, MCTSTree
 from mantis.diagnostics import tactics as T
 from mantis.diagnostics.ring_reader import Ring, explicit_entropy, load_ring
 from mantis.util.constants import is_alpha_full
+from mantis.util.puct import PuctConstants
 
 #: A row with H(explicit) under this is a one-hot.
 ONE_HOT_H = 1e-3
@@ -165,9 +166,13 @@ def _uniform_policy(board: Board) -> list[float]:
     return policy
 
 
+#: The probe's own tree, fixed with its sigma below as A-2 measured it; an instrument, not a run's search.
+_PROBE_TREE = PuctConstants(c_puct=1.5, fpu_reduction=0.25, quiescence_enabled=True, quiescence_blend_2=0.3)
+
+
 def child_q(board: Board, cell: tuple[int, int]) -> float | None:
     """The falsifier's probe: root expanded (uniform, NN = 0), one forced descent into `cell`, its Q in the root's view."""
-    tree = MCTSTree()
+    tree = MCTSTree(**_PROBE_TREE.tree_kwargs())
     tree.configure_search("gumbel", 50.0, 1.0, True)
     tree.new_game(board)
     root = tree.select_leaves(1)

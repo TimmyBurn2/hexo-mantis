@@ -18,6 +18,7 @@ from mantis._engine import Board
 from mantis.encoding import lookup
 from mantis.eval import worker
 from mantis.selfplay.inference_local import LocalInferenceEngine
+from _minted_puct import MINTED_PUCT
 
 _ENC = "gnn_axis_v1"
 _FIXTURE = (
@@ -93,7 +94,7 @@ def value_visible_engines():
 
 def _search(engine, spec, board, n_sims):
     """Drive the production entrance and return the played move and root child q values."""
-    player = worker.build_candidate_player(engine, n_sims, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None)
+    player = worker.build_candidate_player(engine, n_sims, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None, puct=MINTED_PUCT)
     player.new_game()
     move = player.select_move(board)
     tree = player._tree

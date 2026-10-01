@@ -30,6 +30,7 @@ from mantis.train.warmstart import (
     maybe_warmstart_gnn_from_bc,
     resolve_bc_warm_start,
 )
+from _minted_puct import MINTED_PUCT
 
 _ENC = "gnn_axis_v1"
 
@@ -237,7 +238,7 @@ def test_a_cpu_smoke_plays_one_legal_game_from_the_warm_started_net(tmp_path: Pa
         def _player() -> Any:
             # `n_sims` is small: a liveness smoke, not a search-quality measurement.
             return DeployHeadPlayer(
-                expand_fn=_graph_expand_fn(engine, spec), n_sims=4, leaf_batch_size=2, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None,
+                expand_fn=_graph_expand_fn(engine, spec), n_sims=4, leaf_batch_size=2, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None, puct=MINTED_PUCT,
             )
 
         winner, plies, moves, terminal, _adj, _stats, _tactics = _play_one_game(

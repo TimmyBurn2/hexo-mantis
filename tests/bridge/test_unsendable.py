@@ -9,6 +9,7 @@ PanicException — the process survives, the object is simply refused off-thread
 import threading
 
 from mantis import _engine
+from _minted_puct import MINTED_PUCT
 
 
 def _access_on_new_thread(fn):
@@ -38,7 +39,7 @@ def test_board_rejects_cross_thread_access(panic_exception):
 
 
 def test_mctstree_rejects_cross_thread_access(panic_exception):
-    tree = _engine.MCTSTree()
+    tree = _engine.MCTSTree(**MINTED_PUCT.tree_kwargs())
     assert _access_on_new_thread(tree.root_visits) == panic_exception.__name__
     # Same-thread use is unaffected.
     assert tree.root_visits() == 0

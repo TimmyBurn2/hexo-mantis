@@ -4,6 +4,7 @@ from __future__ import annotations
 import pytest
 
 from mantis._engine import Board, MCTSTree
+from _minted_puct import MINTED_PUCT
 
 _STRIDE = 362
 
@@ -14,7 +15,7 @@ def _uniform(_board: Board) -> list[float]:
 
 def _expanded_root() -> MCTSTree:
     board = Board.with_encoding_name("gnn_axis_v1")
-    tree = MCTSTree()
+    tree = MCTSTree(**MINTED_PUCT.tree_kwargs())
     tree.configure_search("gumbel", 50.0, 1.0, True)
     tree.new_game(board)
     (root,) = tree.select_leaves(1)

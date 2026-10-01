@@ -146,11 +146,11 @@ class RegistrySpec:
 class MCTSTree:
     def __init__(
         self,
-        c_puct: float = 1.5,
-        virtual_loss: float = 1.0,
-        fpu_reduction: float = 0.25,
-        quiescence_enabled: bool = True,
-        quiescence_blend_2: float = 0.3,
+        *,
+        c_puct: float,
+        fpu_reduction: float,
+        quiescence_enabled: bool,
+        quiescence_blend_2: float,
     ) -> None: ...
     def configure_search(
         self, kind: str, c_visit: float, c_scale: float, q_rescale: bool

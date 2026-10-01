@@ -21,6 +21,7 @@ from mantis._engine import Board
 from mantis.bots.random_bot import RandomBot
 from mantis.encoding import lookup
 from mantis.eval import worker
+from _minted_puct import MINTED_PUCT
 _FIXTURE = (
     Path(__file__).resolve().parents[1] / "fixtures" / "eval_selfplay_parity" / "dispersed_r6_v1.json"
 )
@@ -69,7 +70,7 @@ def test_rung_seat_head_plays_an_off_window_move_against_a_full_legal_set_oppone
     pos = _position(position_index)
     board = board_from(pos)
     head_seat = int(board.current_player)
-    player = worker.build_candidate_player(engine, rung_sims, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None)
+    player = worker.build_candidate_player(engine, rung_sims, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None, puct=MINTED_PUCT)
     player.new_game()
     bot = RandomBot(seed=20260802)
 
