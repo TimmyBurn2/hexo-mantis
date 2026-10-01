@@ -38,7 +38,8 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by R380 (THE FEED THAT PASSED; 2026-09-30) — F1 retracted, F2 under test
 
-- **CARD-TACTICS-SELFPLAY-3 — IN PROGRESS: the TACTICS-SELFPLAY-3 packet (2026-09-30), worktree
+- **CARD-TACTICS-SELFPLAY-3 — EXITED 2026-10-01 NOT PASS; the architect rules next. Was IN PROGRESS: the
+  TACTICS-SELFPLAY-3 packet (2026-09-30), worktree
   `.wt/tactics-selfplay-3` on branch `tactics-selfplay-3` (cut from `tactics-selfplay-2`'s tip `aa0c5304`), box T ≤ 7
   box-h. ORDERED by R380(d): one arm, A″ = arm A's feed with the row-wise mixing (F2), 12k steps, same parent
   (run8@45k) and seed, against TACTICS-SELFPLAY's recorded A and B saves.**
@@ -51,6 +52,19 @@ Both were found by running the gate set rather than by reading it, and both are 
   - Throughput screens at 0.9× arm A's positions/h over the same steps (R380(e)).
   - If F2 dies, run11 takes arm A's feed as measured.
   - The box stays through it, within 7 box-h (R380(g)).
+  - The exit (records `mantis-records/tactics-selfplay-3/EXIT.md`, local):
+    - L1: F1 is retracted in code, and with F2 off the golden of feed rows is byte-equal to origin/dev's.
+      `vetoed_all_rows` joins the move rows: every all-vetoed root, whatever its row holds. `emptied_target_rows`
+      equals it while each such row records no policy.
+    - The run lived. At 3k, 6k, 9k and 12k no halting row fired and every ring band was inside. Throughput read 0.979×
+      A's positions/h over the same steps. The all-vetoed rows read 19.1 per 1 000 positions against A's 18.4, none
+      given a policy. No proven ring row held under 0.5 on its proof.
+    - The pass line missed: A″@12k − B@12k on the shipped head is +0.174 [−0.158, +0.505] logit (A″ 0.521, B 0.477).
+    - Report-only:
+      - A″ − A on the shipped head, −0.48 [−0.80, −0.16]: F2's screen reads negative, and decides nothing;
+      - the parent line, −0.21 [−0.53, +0.11]: A″@12k is not offered, and run8@45k stands;
+      - the T4 prior at 12k, 0.246 against A's 0.227.
+    - 6.75 box-h of 7. The box has been idle since 2026-09-30 17:24Z, mirrored.
 
 ## Opened by R379 (THE SECOND TWIN; 2026-09-30) — the feed, the second twin, CENSUS-1 accepted
 

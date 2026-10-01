@@ -27,8 +27,9 @@ A's feed as measured if F2 dies (R380(d), CARD-RUN11-DESIGN).
     0.9× arm A's positions/h over the same steps.
   - The branch (R380(f)): `tactics-selfplay-2` is not merged; TACTICS-SELFPLAY-3 starts from its tip, lands the
     retraction, and merges as one branch. The box stays through TACTICS-SELFPLAY-3, within 7 box-h (R380(g)).
-  - **TACTICS-SELFPLAY-3 is IN PROGRESS** (CARD-TACTICS-SELFPLAY-3): branch `tactics-selfplay-3` (unpushed), cut from
-    `tactics-selfplay-2`'s tip `aa0c5304`; L1 retracts F1 in code on the desktop, then T runs arm A″ on the box.
+  - **TACTICS-SELFPLAY-3 EXITED 2026-10-01 NOT PASS** (CARD-TACTICS-SELFPLAY-3), on branch `tactics-selfplay-3`
+    (unpushed). Every exam and ring band held at every save and throughput read 0.979× A's, but the shipped-head line
+    missed: A″ − B@12k +0.174 [−0.158, +0.505]. The architect rules next.
 
 - **R379's order.**
   - The readings (R379(a)): the T4 and defence exams are the starvation instrument; the deploy-matched head is the
@@ -201,4 +202,5 @@ exit from its exit record (local), on branch `tactics-selfplay` at `5db3280b`. T
 2026-09-30 at R379, with `dev` = `origin/dev` = `2d107c0f` read before the edit. The TACTICS-SELFPLAY-2 line was
 updated 2026-09-30 at its halt from its exit record (local), on branch `tactics-selfplay-2` at `2dde57aa`. The
 current phase was rewritten 2026-09-30 at R380, on that branch at `7f351b54`. The TACTICS-SELFPLAY-3 line was
-added 2026-09-30 at its packet's first commit, on branch `tactics-selfplay-3` at `aa0c5304`.
+added 2026-09-30 at its packet's first commit, on branch `tactics-selfplay-3` at `aa0c5304`, and updated 2026-10-01
+at its exit from its exit record (local), on that branch at `a3899487`.
