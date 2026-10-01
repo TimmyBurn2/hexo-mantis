@@ -218,6 +218,8 @@ fn check_roundtrip(src: &str, i: usize) {
         value_valid: true,
         game_length: 0,
         game_id: -1,
+        root_value: 0.0,
+        root_value_valid: false,
     };
     let mut buf = HexgBuffer::new(2, "gnn_axis_v1", 128).expect("graph buffer");
     buf.push_record_impl(&rec, 1)

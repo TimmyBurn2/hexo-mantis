@@ -310,6 +310,9 @@ pub fn record_position_graph(
         value_valid: true, // placeholder → finalize_graph_outcome
         game_length: 0,    // placeholder → finalize_graph_outcome
         game_id: -1,       // placeholder → finalize_game_graph
+        // No producer writes the search's root value yet: the row is the v2 row, flag 0.
+        root_value: 0.0,
+        root_value_valid: false,
     })
 }
 

@@ -120,9 +120,9 @@ pub fn derived_visit_capacity(
 
 /// HEXG on-disk magic — "HEXG" little-endian (distinct from HEXB `0x48455842`).
 pub const HEXG_MAGIC: u32 = 0x4845_5847;
-/// HEXG on-disk version. v2 added the per-record tail mass α, so a v1 file is a DIFFERENT record
-/// shape and is refused by name, never re-parsed.
-pub const HEXG_VERSION: u32 = 2;
+/// HEXG on-disk version written. v2 added the per-record tail mass α (a v1 file is refused by
+/// name); v3 adds the root value and its flag, and a v2 file still loads with every flag 0.
+pub const HEXG_VERSION: u32 = 3;
 
 /// The dashboard histogram bucket of an f16 slot weight.
 #[inline]
@@ -166,6 +166,10 @@ pub struct GraphRecord {
     pub game_length: u16,
     /// WHICH GAME this position came from, stamped once per game; `-1` is the untagged sentinel.
     pub game_id: i64,
+    /// The search's root value in the row-mover's frame, in [-1, 1] (a proven root: the proof's); `+0.0` if invalid.
+    pub root_value: f32,
+    /// 1 = the row's search left a root value; 0 = none (a v2 row, a row no search produced).
+    pub root_value_valid: bool,
 }
 
 /// Graph-position replay ring: fixed-slot SoA Vecs, ring overwrite by `head`, weighted rejection
@@ -186,22 +190,24 @@ pub struct HexgBuffer {
     /// literal.
     pub visit_capacity: usize,
 
-    pub stones_qr: Vec<i16>,      // flat [cap * MAX_STONES * 2]
-    pub stone_players: Vec<i8>,   // flat [cap * MAX_STONES]
-    pub n_stones: Vec<u16>,       // [cap]
-    pub visit_qr: Vec<i16>,       // flat [cap * visit_capacity * 2]
-    pub visit_probs: Vec<f32>,    // flat [cap * visit_capacity]
-    pub n_visits: Vec<u16>,       // [cap]
-    pub tail_mass: Vec<f32>,      // [cap]; tail mass α
-    pub current_player: Vec<i8>,  // [cap]
-    pub moves_remaining: Vec<u8>, // [cap]
-    pub ply_index: Vec<u16>,      // [cap]
-    pub is_full_search: Vec<u8>,  // [cap]
-    pub outcomes: Vec<f32>,       // [cap]
-    pub value_valid: Vec<u8>,     // [cap]
-    pub game_length: Vec<u16>,    // [cap]
-    pub game_ids: Vec<i64>,       // [cap]; -1 = untagged
-    pub weights: Vec<u16>,        // f16 bits; [cap]; stored at 1.0, read by no sampler
+    pub stones_qr: Vec<i16>,       // flat [cap * MAX_STONES * 2]
+    pub stone_players: Vec<i8>,    // flat [cap * MAX_STONES]
+    pub n_stones: Vec<u16>,        // [cap]
+    pub visit_qr: Vec<i16>,        // flat [cap * visit_capacity * 2]
+    pub visit_probs: Vec<f32>,     // flat [cap * visit_capacity]
+    pub n_visits: Vec<u16>,        // [cap]
+    pub tail_mass: Vec<f32>,       // [cap]; tail mass α
+    pub current_player: Vec<i8>,   // [cap]
+    pub moves_remaining: Vec<u8>,  // [cap]
+    pub ply_index: Vec<u16>,       // [cap]
+    pub is_full_search: Vec<u8>,   // [cap]
+    pub outcomes: Vec<f32>,        // [cap]
+    pub value_valid: Vec<u8>,      // [cap]
+    pub game_length: Vec<u16>,     // [cap]
+    pub game_ids: Vec<i64>,        // [cap]; -1 = untagged
+    pub root_value: Vec<f32>,      // [cap]; +0.0 where invalid
+    pub root_value_valid: Vec<u8>, // [cap]
+    pub weights: Vec<u16>,         // f16 bits; [cap]; stored at 1.0, read by no sampler
 
     pub next_game_id: i64,
     //: The LAST sampled batch's composition, kept on the buffer rather than returned from
@@ -294,6 +300,8 @@ impl HexgBuffer {
             value_valid: vec![1u8; capacity],
             game_length: vec![0u16; capacity],
             game_ids: vec![-1i64; capacity],
+            root_value: vec![0.0f32; capacity],
+            root_value_valid: vec![0u8; capacity],
             weights: vec![default_w; capacity],
             next_game_id: 0,
             last_batch_distinct_games: 0,
@@ -355,7 +363,7 @@ impl HexgBuffer {
 ///   graph's segment sums to ~1 MINUS its `tail_mass`.
 /// * `explicit_mask` — flat `[Lg]`, 1 where the row carried a STORED entry, emitted rather than
 ///   inferred from `policy_target > 0` so an underflowed entry is not reclassified as tail.
-/// * `tail_mass` / `outcomes` / `value_valid` / `is_full_search` — `[B]` per-row scalars.
+/// * `tail_mass` / `outcomes` / `value_valid` / `is_full_search` / `root_value{,_valid}` — `[B]` per-row scalars.
 /// * argmax_q/argmax_r/argmax_valid — per-graph max-mass legal node in the ROTATED frame.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct GraphTargets {
@@ -365,6 +373,8 @@ pub struct GraphTargets {
     pub outcomes: Vec<f32>,
     pub value_valid: Vec<u8>,
     pub is_full_search: Vec<u8>,
+    pub root_value: Vec<f32>,
+    pub root_value_valid: Vec<u8>,
     pub argmax_q: Vec<i32>,
     pub argmax_r: Vec<i32>,
     pub argmax_valid: Vec<u8>,

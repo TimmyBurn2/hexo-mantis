@@ -1,0 +1,168 @@
+{
+ "_recipe": "HexgBuffer(16, gnn_axis_v1, 128) <- tests/fixtures/replay/hexg_v2_golden.hexg; seed_sampler(20261001); sample_graph_batch(8, augment=True, n_threads=1); every wire array (graph_wire_from_rust) and target array as dtype/shape/sha256 of its C-order bytes; captured on the HEXG v2 tree at 80b54f5a",
+ "arrays": {
+  "targets_argmax_qr": {
+   "dtype": "<i4",
+   "sha256": "a7ce108408812ce9978c52d528a602b80f4e0c989ab8f62ea9afe85b9127994d",
+   "shape": [
+    8,
+    2
+   ]
+  },
+  "targets_argmax_valid": {
+   "dtype": "|u1",
+   "sha256": "04abc8821a06e5a30937967d11ad10221cb5ac3b5273e434f1284ee87129a061",
+   "shape": [
+    8
+   ]
+  },
+  "targets_explicit_mask": {
+   "dtype": "|u1",
+   "sha256": "efcbae4c0dd0950f882de1ac9e72e11db74874325debbf56bcedc6e35c7784d4",
+   "shape": [
+    1242
+   ]
+  },
+  "targets_is_full_search": {
+   "dtype": "|u1",
+   "sha256": "92c61eb32cd99a6278cc639d5a70dea87536e7fdf2cc89b95ee28b9e214d31a3",
+   "shape": [
+    8
+   ]
+  },
+  "targets_outcomes": {
+   "dtype": "<f4",
+   "sha256": "d10ea69c3337f81aa9dbc4c5859390ee313b4eb36ad0daffe6695f802df13b2b",
+   "shape": [
+    8
+   ]
+  },
+  "targets_policy_target": {
+   "dtype": "<f4",
+   "sha256": "16226020208c82d5750f8c0ccca431b5922eeb5f0e793a1443bafdb808abf108",
+   "shape": [
+    1242
+   ]
+  },
+  "targets_tail_mass": {
+   "dtype": "<f4",
+   "sha256": "4056000ddc84f17799afaaf7aa9d2a46dc56f2d3dcfd67b7b21cb072acbd8d75",
+   "shape": [
+    8
+   ]
+  },
+  "targets_value_valid": {
+   "dtype": "|u1",
+   "sha256": "92c61eb32cd99a6278cc639d5a70dea87536e7fdf2cc89b95ee28b9e214d31a3",
+   "shape": [
+    8
+   ]
+  },
+  "wire_builder_impl": {
+   "dtype": "<i8",
+   "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+   "shape": []
+  },
+  "wire_contract_version": {
+   "dtype": "<i8",
+   "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+   "shape": []
+  },
+  "wire_current_player": {
+   "dtype": "|i1",
+   "sha256": "10bbc598faf1859b64287dabfc6b2de837133158b68c072d8d029e8c23478fb3",
+   "shape": [
+    8
+   ]
+  },
+  "wire_edge_attr": {
+   "dtype": "<f4",
+   "sha256": "98cd3208e6f2a2aca84f82c1b8586043818dcdca5bacfb67667c6b1e3216da36",
+   "shape": [
+    144190
+   ]
+  },
+  "wire_edge_index": {
+   "dtype": "<i8",
+   "sha256": "32c3a03011d305c9933930d35654088bf45cb1f6cc8cdb50e13082dbed1f8a23",
+   "shape": [
+    57676
+   ]
+  },
+  "wire_edge_offsets": {
+   "dtype": "<i8",
+   "sha256": "36477985c261c9cb4a383ee265d17eb5a4b9a5dc8bb5da867b6bf8a234550b3f",
+   "shape": [
+    9
+   ]
+  },
+  "wire_legal_node_gather": {
+   "dtype": "<i8",
+   "sha256": "60b7592262e7e9c74bd7bd3fcb0e2fc4abeb7ac32215d523a7b188d81ad43240",
+   "shape": [
+    1242
+   ]
+  },
+  "wire_legal_offsets": {
+   "dtype": "<i8",
+   "sha256": "8ba8eebde5263e04fc024341d71797d41eb2b7ab78d833b5b928d041828c42b0",
+   "shape": [
+    9
+   ]
+  },
+  "wire_n_graphs": {
+   "dtype": "<i8",
+   "sha256": "6cc16abd70eefb90dc0ba0d14fb088630873b2c6ad943f7442356735984c35a3",
+   "shape": []
+  },
+  "wire_n_nodes_checksum": {
+   "dtype": "<u4",
+   "sha256": "cbcc00241238ce647cc998a091e36b2d077e1cf3c2d33e84d1e4211df2e3088a",
+   "shape": [
+    8
+   ]
+  },
+  "wire_n_stones": {
+   "dtype": "<u2",
+   "sha256": "6ec180e74e2dc33e6ecec60897b50dd46b05182c134d765f5ce5ab87bfbe89fd",
+   "shape": [
+    8
+   ]
+  },
+  "wire_node_coords": {
+   "dtype": "<i4",
+   "sha256": "edbe6815fbbc62d1fff4451a73bf1c1850111656024729f707ce6986c75fe99d",
+   "shape": [
+    2538
+   ]
+  },
+  "wire_node_feat": {
+   "dtype": "<f4",
+   "sha256": "58f4a4e3c44452287ce3af446bde97ce6f3d276afa47b750ba9b12d7b1a0ebf3",
+   "shape": [
+    13959
+   ]
+  },
+  "wire_node_offsets": {
+   "dtype": "<i8",
+   "sha256": "1872ae409eb1d0f0710b308cd0d1e0f85594af4b6405f54271fd05b5bbeedbf7",
+   "shape": [
+    9
+   ]
+  },
+  "wire_policy_dst_slot": {
+   "dtype": "<i4",
+   "sha256": "c3f302a529949e67e714c815d02a83a35266f65380621b5e71f7659eb0d7ada8",
+   "shape": [
+    1242
+   ]
+  },
+  "wire_window_center": {
+   "dtype": "<i4",
+   "sha256": "6a44f4e3143970b18d95558a82f606063168a6a707945dc3713b00eeff1e5995",
+   "shape": [
+    16
+   ]
+  }
+ }
+}

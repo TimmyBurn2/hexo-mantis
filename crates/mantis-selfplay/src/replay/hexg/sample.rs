@@ -183,6 +183,8 @@ impl HexgBuffer {
         let mut outcomes: Vec<f32> = Vec::with_capacity(batch_size);
         let mut value_valid: Vec<u8> = Vec::with_capacity(batch_size);
         let mut is_full_search: Vec<u8> = Vec::with_capacity(batch_size);
+        let mut root_value: Vec<f32> = Vec::with_capacity(batch_size);
+        let mut root_value_valid: Vec<u8> = Vec::with_capacity(batch_size);
         let mut argmax_q: Vec<i32> = Vec::with_capacity(batch_size);
         let mut argmax_r: Vec<i32> = Vec::with_capacity(batch_size);
         let mut argmax_valid: Vec<u8> = Vec::with_capacity(batch_size);
@@ -199,6 +201,8 @@ impl HexgBuffer {
             outcomes.push(out.outcome);
             value_valid.push(out.value_valid);
             is_full_search.push(out.is_full_search);
+            root_value.push(out.root_value);
+            root_value_valid.push(out.root_value_valid);
             graphs.push(out.graph);
         }
 
@@ -211,6 +215,8 @@ impl HexgBuffer {
                 outcomes,
                 value_valid,
                 is_full_search,
+                root_value,
+                root_value_valid,
                 argmax_q,
                 argmax_r,
                 argmax_valid,
@@ -231,6 +237,8 @@ struct SampleOut {
     outcome: f32,
     value_valid: u8,
     is_full_search: u8,
+    root_value: f32,
+    root_value_valid: u8,
 }
 
 /// Rebuild + align every sampled record, across at most `n_threads` OS threads, returning the
@@ -321,5 +329,8 @@ fn build_and_align_one(
         outcome: rec.outcome,
         value_valid: u8::from(rec.value_valid),
         is_full_search: u8::from(rec.is_full_search),
+        // A scalar of the position, so it is invariant under the D6 element and rides unrotated.
+        root_value: rec.root_value,
+        root_value_valid: u8::from(rec.root_value_valid),
     })
 }

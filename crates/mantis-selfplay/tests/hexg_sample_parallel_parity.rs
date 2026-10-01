@@ -58,6 +58,12 @@ fn filled_buffer(n_records: usize) -> HexgBuffer {
             value_valid: true,
             game_length: 40,
             game_id: -1,
+            root_value: if i % 4 == 0 {
+                0.0
+            } else {
+                (i % 7) as f32 / 8.0 - 0.375
+            },
+            root_value_valid: i % 4 != 0,
         };
         buf.push_record_impl(&rec, (10 + i) as i64).expect("push");
     }
@@ -118,6 +124,10 @@ fn assert_targets_identical(a: &GraphTargets, b: &GraphTargets, case: &str) {
     assert_eq!(a.argmax_q, b.argmax_q, "{case}: argmax_q");
     assert_eq!(a.argmax_r, b.argmax_r, "{case}: argmax_r");
     assert_eq!(a.argmax_valid, b.argmax_valid, "{case}: argmax_valid");
+    assert_eq!(
+        a, b,
+        "{case}: every target array, the tail and root value columns included"
+    );
 }
 
 /// The headline: same seed, same ring, serial vs parallel — every byte equal.

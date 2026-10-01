@@ -475,6 +475,8 @@ class HexgBuffer:
         game_length: int,
         game_id: int = -1,
         tail_mass: float = 0.0,
+        root_value: float = 0.0,
+        root_value_valid: bool = False,
     ) -> None: ...
     def sample_graph_batch(
         self,
@@ -515,6 +517,10 @@ class GraphTargets:
     def value_valid(self) -> numpy.ndarray: ...
     @property
     def is_full_search(self) -> numpy.ndarray: ...
+    @property
+    def root_value(self) -> numpy.ndarray: ...
+    @property
+    def root_value_valid(self) -> numpy.ndarray: ...
     @property
     def target_argmax_cells(self) -> list[tuple[int, int] | None]: ...
 

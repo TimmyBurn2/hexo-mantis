@@ -185,7 +185,7 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
 | 3 | graph wire (ragged) | v1 | block-diagonal GraphWire; the structural assertions and named errors are ENUMERATED in the contract, not counted here (AUDIT-1 F-52); single-read `take()`; −1 off-window sentinel travels; NO fixed-width fallback |
 | 4 | checkpoint envelope | v2 | see §6 |
 | 5 | run config schema | see the contract doc's version table | pydantic models, extra=forbid; schema_version key in every file. The version is the CONTRACT DOC's own table, whose last row is the authority — this cell read v8 while `docs/contracts/run_config_schema.md` had reached v13, and v13 while it had reached v32, so the cell now DEFERS to the doc; gate 13 now asserts the doc's header equals its own max row (AUDIT-1 F-52) |
-| 6 | replay persist | HEXG v2 | magic, versioned header, slot-geometry guard, two-pass atomic load |
+| 6 | replay persist | HEXG v3 | magic, versioned header (v2 read default-filled), slot-geometry guard, two-pass atomic load |
 | 7 | event manifest | v1 | every panel AND every headless gate input cites a live producer; mutation self-test proves the checker bites |
 | 9 | eval instrument | v1 | deploy-matched argmax head, frozen sha-pinned paired opening books, per-pair bootstrap CI, eff_n = trajectory-hash-distinct games |
 | 10 | mint preflight report | preflight-mint-v1 | the mint preflight's evidence JSON: always written (LAW-14); mode, verdict and mint TIER derived from what the run DID, never from what it intended |
@@ -900,6 +900,25 @@ that lands as an amendment in the commit that moves them, rather than as drift.
    to work around it. The counters now live on `MCTSTree`. AMENDED (SLIM-FIX, R368(d)): the
    bridge no longer exports the process-wide totals — no Python reader ever consumed them —
    and mantis-search's statics that fed them are deleted, so the per-search set is the only one.
+
+---
+
+### AMENDMENT — HEXG v3: the root value field, and the first format move that keeps the old rings (R382(d))
+
+**RING-V3.** This moves contract #6's HEXG version 2 → 3 in the commit that moves it (R9).
+
+1. **Each record carries the search's backed-up root value and its flag**, appended to the fixed
+   head after `tail_mass`. The value is the row-mover's frame, in [-1, 1]; a proven root carries
+   the proof's value; a row without one stores exactly `+0.0` with flag 0.
+2. **A v2 ring LOADS.** Unlike v1 → v2 (§ the SPARSE Gumbel row above), this move keeps the old
+   rings: the version field picks the record layout, and a v2 record reads with flag 0. The
+   sha-pinned held-out ring and every resume bundle's ring stay readable, and their rows are the
+   rows they were — re-saved as v3 and stripped of the two fields, a v2 file is itself byte for
+   byte. What this buys is not a shim for a state the tree no longer has: the tree still holds
+   and pins v2 rings it reads.
+3. **The layout is chosen only by the version, which is the authority.** A payload read through
+   the other version's layout is refused by the over-cap and trailing-bytes guards unless its
+   garbage realigns exactly, and a refused load touches nothing.
 
 ---
 

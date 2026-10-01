@@ -531,6 +531,8 @@ mod seam_roundtrip {
             value_valid: true,
             game_length: 8,
             game_id: -1,
+            root_value: -0.5,
+            root_value_valid: true,
         };
         let g1 = GraphRecord {
             current_player: -1,

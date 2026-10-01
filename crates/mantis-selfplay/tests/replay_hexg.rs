@@ -36,6 +36,8 @@ fn sample_record() -> GraphRecord {
         value_valid: true,
         game_length: 30,
         game_id: -1,
+        root_value: 0.25,
+        root_value_valid: true,
     }
 }
 
@@ -215,17 +217,8 @@ fn fixture_path(name: &str) -> std::path::PathBuf {
         .join(name)
 }
 
-#[test]
-fn o21_hexg_v2_byte_golden_load_and_resave_identity() {
-    let golden = fixture_path("hexg_v2_golden.hexg");
-    let golden_bytes = std::fs::read(&golden).expect("frozen hexg golden must exist");
-    println!("hexg v2 golden: {} bytes for 2 records", golden_bytes.len());
-
-    let mut buf = HexgBuffer::new(16, ENC, 128).unwrap();
-    let n = buf.load_from_path_impl(golden.to_str().unwrap()).unwrap();
-    assert_eq!(n, 2, "golden holds 2 records");
-
-    // Exact field values, re-minted at v2 with the tail mass.
+/// The two HEXG v2 records of the frozen golden, field for field; the v3 golden carries the same.
+fn assert_golden_v2_fields(buf: &HexgBuffer) {
     let r0 = buf.record_at(0);
     assert_eq!(r0.stones, vec![(0, 0, 1), (1, 0, -1), (0, 1, 1)]);
     assert_eq!(r0.visits, vec![(2, 0, 0.6), (0, 2, 0.4)]);
@@ -253,16 +246,258 @@ fn o21_hexg_v2_byte_golden_load_and_resave_identity() {
     assert!(!r1.value_valid);
     assert_eq!(r1.game_length, 12);
     assert_eq!(buf.game_ids[1], 43);
+}
 
-    // Re-save must be byte-identical to the frozen golden.
-    let resave = unique_path("o21_resave");
+/// Bytes of one record's fixed head in a v2 file; v3 appends the root value (f32) and its flag (u8).
+const V2_HEAD: usize = 30;
+const V3_ROOT: usize = 5;
+
+/// A v3 payload with the two root fields cut out of every record and the version set back to 2.
+fn strip_to_v2(v3: &[u8]) -> Vec<u8> {
+    let u32_at = |o: usize| u32::from_le_bytes(v3[o..o + 4].try_into().unwrap());
+    let u16_at = |o: usize| usize::from(u16::from_le_bytes(v3[o..o + 2].try_into().unwrap()));
+    let size = u64::from_le_bytes(v3[24..32].try_into().unwrap()) as usize;
+    let mut pos = 36 + u32_at(32) as usize;
+    let mut out = v3[..pos].to_vec();
+    out[4..8].copy_from_slice(&2u32.to_le_bytes());
+    for _ in 0..size {
+        let (ns, nv) = (u16_at(pos), u16_at(pos + 2));
+        let body = ns * 5 + nv * 8;
+        out.extend_from_slice(&v3[pos..pos + V2_HEAD]);
+        out.extend_from_slice(&v3[pos + V2_HEAD + V3_ROOT..pos + V2_HEAD + V3_ROOT + body]);
+        pos += V2_HEAD + V3_ROOT + body;
+    }
+    assert_eq!(pos, v3.len(), "the walk must consume the whole v3 payload");
+    out
+}
+
+/// A v2 ring loads with no root value on any row, and its v3 re-save minus the root fields IS the v2 golden.
+#[test]
+fn the_v2_byte_golden_loads_with_no_root_value_and_its_v3_resave_carries_its_rows_byte_for_byte() {
+    let golden = fixture_path("hexg_v2_golden.hexg");
+    let golden_bytes = std::fs::read(&golden).expect("frozen hexg v2 golden must exist");
+
+    let mut buf = HexgBuffer::new(16, ENC, 128).unwrap();
+    let n = buf.load_from_path_impl(golden.to_str().unwrap()).unwrap();
+    assert_eq!(n, 2, "golden holds 2 records");
+    assert_golden_v2_fields(&buf);
+    for slot in 0..2 {
+        let r = buf.record_at(slot);
+        assert!(
+            !r.root_value_valid,
+            "a v2 row has no root value: default-filled invalid"
+        );
+        assert_eq!(
+            r.root_value.to_bits(),
+            0.0f32.to_bits(),
+            "an invalid root value is stored as +0.0"
+        );
+    }
+
+    let resave = unique_path("v2_resave");
     buf.save_to_path_impl(resave.to_str().unwrap()).unwrap();
     let resaved = std::fs::read(&resave).unwrap();
     assert_eq!(
-        resaved, golden_bytes,
-        "new-engine re-save must reproduce the frozen bytes"
+        &resaved[4..8],
+        &HEXG_VERSION.to_le_bytes(),
+        "a save writes the current version"
+    );
+    assert_eq!(HEXG_VERSION, 3);
+    assert_eq!(resaved.len(), golden_bytes.len() + 2 * V3_ROOT);
+    assert_eq!(
+        strip_to_v2(&resaved),
+        golden_bytes,
+        "the v3 re-save minus its root fields must be the v2 golden"
     );
     let _ = std::fs::remove_file(resave);
+}
+
+/// The v3 golden (the v2 golden's bytes with the root fields inserted elsewhere) loads exact and re-saves itself.
+#[test]
+fn the_v3_byte_golden_loads_exact_and_resaves_byte_identical() {
+    let golden = fixture_path("hexg_v3_golden.hexg");
+    let golden_bytes = std::fs::read(&golden).expect("frozen hexg v3 golden must exist");
+
+    let mut buf = HexgBuffer::new(16, ENC, 128).unwrap();
+    assert_eq!(
+        buf.load_from_path_impl(golden.to_str().unwrap()).unwrap(),
+        2
+    );
+    assert_golden_v2_fields(&buf);
+    let (r0, r1) = (buf.record_at(0), buf.record_at(1));
+    assert!(r0.root_value_valid);
+    assert_eq!(r0.root_value, -0.625);
+    assert!(!r1.root_value_valid);
+    assert_eq!(r1.root_value.to_bits(), 0.0f32.to_bits());
+
+    let resave = unique_path("v3_resave");
+    buf.save_to_path_impl(resave.to_str().unwrap()).unwrap();
+    assert_eq!(
+        std::fs::read(&resave).unwrap(),
+        golden_bytes,
+        "a v3 re-save must reproduce the frozen bytes"
+    );
+    let _ = std::fs::remove_file(resave);
+}
+
+/// PLANTED BREAK — a v3 payload stamped 2 (the v2 path), or the reverse, is refused and touches nothing.
+#[test]
+fn a_v3_payload_read_through_the_v2_layout_is_refused_and_leaves_the_buffer_untouched() {
+    let mut v3_as_v2 = std::fs::read(fixture_path("hexg_v3_golden.hexg")).unwrap();
+    v3_as_v2[4..8].copy_from_slice(&2u32.to_le_bytes());
+    let mut v2_as_v3 = std::fs::read(fixture_path("hexg_v2_golden.hexg")).unwrap();
+    v2_as_v3[4..8].copy_from_slice(&3u32.to_le_bytes());
+    for (stem, bytes) in [("v3_as_v2", v3_as_v2), ("v2_as_v3", v2_as_v3)] {
+        let path = unique_path(stem);
+        std::fs::write(&path, &bytes).unwrap();
+        let mut buf = HexgBuffer::new(16, ENC, 128).unwrap();
+        buf.push_record_impl(&sample_record(), 7)
+            .expect("seed push");
+        let before = buf.record_at(0);
+        let err = buf
+            .load_from_path_impl(path.to_str().unwrap())
+            .expect_err("a payload read through the other version's layout must be refused");
+        assert!(
+            err.contains("HEXG load"),
+            "{stem}: the refusal must be the loader's: {err}"
+        );
+        assert_eq!(
+            buf.size(),
+            1,
+            "{stem}: a refused load must not change the ring"
+        );
+        assert_eq!(
+            buf.record_at(0),
+            before,
+            "{stem}: a refused load must not touch a slot"
+        );
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+/// Bytes past the last record mean a misread layout or a corrupt file: refused, no row trusted.
+#[test]
+fn a_payload_with_bytes_past_its_last_record_is_refused() {
+    let mut bytes = std::fs::read(fixture_path("hexg_v3_golden.hexg")).unwrap();
+    bytes.extend_from_slice(&[0u8; 5]);
+    let path = unique_path("trailing");
+    std::fs::write(&path, &bytes).unwrap();
+    let mut buf = HexgBuffer::new(16, ENC, 128).unwrap();
+    let err = buf
+        .load_from_path_impl(path.to_str().unwrap())
+        .expect_err("trailing bytes must be refused");
+    assert!(err.contains("trailing bytes"), "{err}");
+    assert_eq!(buf.size(), 0, "a refused load must not change the ring");
+    let _ = std::fs::remove_file(path);
+}
+
+/// A v3 file whose root field breaks the contract is refused at load, and the buffer is untouched.
+#[test]
+fn a_v3_root_field_outside_its_contract_is_refused_at_load() {
+    // Record 0's root value sits after the 47-byte header and its 30-byte v2 head; its flag after that.
+    const VALUE: usize = 47 + V2_HEAD;
+    const FLAG: usize = VALUE + 4;
+    let golden = std::fs::read(fixture_path("hexg_v3_golden.hexg")).unwrap();
+    assert_eq!(
+        f32::from_le_bytes(golden[VALUE..FLAG].try_into().unwrap()),
+        -0.625
+    );
+    for (stem, value, flag) in [
+        ("flag_two", -0.625f32, 2u8),
+        ("nan", f32::NAN, 1),
+        ("over_one", 1.5, 1),
+        ("negative_zero_invalid", -0.0, 0),
+        ("nonzero_invalid", 0.5, 0),
+    ] {
+        let mut bytes = golden.clone();
+        bytes[VALUE..FLAG].copy_from_slice(&value.to_le_bytes());
+        bytes[FLAG] = flag;
+        let path = unique_path(stem);
+        std::fs::write(&path, &bytes).unwrap();
+        let mut buf = HexgBuffer::new(16, ENC, 128).unwrap();
+        buf.push_record_impl(&sample_record(), 7)
+            .expect("seed push");
+        let before = buf.record_at(0);
+        let err = buf
+            .load_from_path_impl(path.to_str().unwrap())
+            .expect_err("an out-of-contract root field must be refused at load");
+        assert!(err.contains("root_value"), "{stem}: {err}");
+        assert_eq!(
+            buf.size(),
+            1,
+            "{stem}: a refused load must not change the ring"
+        );
+        assert_eq!(
+            buf.record_at(0),
+            before,
+            "{stem}: a refused load must not touch a slot"
+        );
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+/// A valid root value is a search value in [-1, 1]; an invalid one is exactly +0.0, the v2 default-fill.
+#[test]
+fn a_root_value_that_is_not_a_search_value_is_refused_at_insert() {
+    let mut buf = HexgBuffer::new(4, ENC, VISIT_CAP).unwrap();
+    for (bad, valid) in [
+        (f32::NAN, true),
+        (f32::INFINITY, true),
+        (1.0001f32, true),
+        (-1.0001f32, true),
+        (0.5f32, false),
+        (-0.0f32, false),
+    ] {
+        let rec = GraphRecord {
+            root_value: bad,
+            root_value_valid: valid,
+            ..sample_record()
+        };
+        let err = buf
+            .push_record_impl(&rec, -1)
+            .expect_err("a root value outside the contract must be refused");
+        assert!(err.contains("root_value"), "{err}");
+    }
+    assert_eq!(buf.size(), 0, "no refused row may have been inserted");
+    for (good, valid) in [(-1.0f32, true), (0.0, true), (1.0, true), (0.0, false)] {
+        buf.push_record_impl(
+            &GraphRecord {
+                root_value: good,
+                root_value_valid: valid,
+                ..sample_record()
+            },
+            -1,
+        )
+        .expect("a value in [-1, 1], or +0.0 without one, is admissible");
+    }
+}
+
+/// Each sampled row carries its OWN root value and flag, in index order beside its outcome.
+#[test]
+fn the_sampled_targets_carry_each_rows_root_value_beside_its_outcome() {
+    let mut buf = HexgBuffer::new(8, ENC, VISIT_CAP).unwrap();
+    for i in 0..6u16 {
+        let valid = !i.is_multiple_of(3);
+        let rec = GraphRecord {
+            ply_index: i,
+            outcome: f32::from(i),
+            root_value: if valid { f32::from(i) / 8.0 } else { 0.0 },
+            root_value_valid: valid,
+            ..sample_record()
+        };
+        buf.push_record_impl(&rec, i64::from(i)).unwrap();
+    }
+    buf.seed_sampler(11);
+    let (_graphs, t) = buf.sample_graph_batch_impl(6, true, 1).unwrap();
+    assert_eq!(t.root_value.len(), 6);
+    assert_eq!(t.root_value_valid.len(), 6);
+    for k in 0..6 {
+        let i = t.outcomes[k];
+        let valid = !(i as u16).is_multiple_of(3);
+        assert_eq!(t.root_value_valid[k], u8::from(valid), "row {k}");
+        let want = if valid { i / 8.0 } else { 0.0 };
+        assert_eq!(t.root_value[k].to_bits(), want.to_bits(), "row {k}");
+    }
 }
 
 /// PLANTED BREAK — the v1 golden must be refused, never re-parsed: v2 inserted `tail_mass`
@@ -483,6 +718,8 @@ fn empty_board_record_survives_d6_augmented_sample_align() {
         value_valid: false,
         game_length: 10,
         game_id: -1,
+        root_value: 0.0,
+        root_value_valid: false,
     };
     buf.push_record_impl(&rec, 0).unwrap();
     for _ in 0..48 {
@@ -561,6 +798,8 @@ fn sample_rejects_illegal_cell_visit_mass_drop() {
         value_valid: true,
         game_length: 30,
         game_id: -1,
+        root_value: 0.0,
+        root_value_valid: false,
     };
     buf.push_record_impl(&rec, 7).unwrap();
     assert!(

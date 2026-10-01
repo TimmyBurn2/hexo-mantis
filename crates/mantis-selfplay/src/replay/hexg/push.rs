@@ -47,6 +47,24 @@ pub fn validate_outcome(outcome: f32) -> Result<(), String> {
     }
 }
 
+/// Reject a root value outside its contract: a valid one is finite in [-1, 1], an invalid one exactly `+0.0`.
+pub fn validate_root_value(root_value: f32, root_value_valid: bool) -> Result<(), String> {
+    let ok = if root_value_valid {
+        root_value.is_finite() && (-1.0..=1.0).contains(&root_value)
+    } else {
+        root_value.to_bits() == 0.0f32.to_bits()
+    };
+    if ok {
+        Ok(())
+    } else {
+        Err(format!(
+            "push_graph_position: root_value {root_value} with root_value_valid \
+             {root_value_valid} breaks the field's contract (a valid root value is a backed-up \
+             search value, finite and in -1.0..=1.0; an invalid one is stored as exactly +0.0)"
+        ))
+    }
+}
+
 /// Reject a stone player outside {+1, -1} at push time, naming coord + value.
 pub fn validate_stone_player(q: i16, r: i16, player: i8) -> Result<(), String> {
     if player == 1 || player == -1 {
@@ -95,6 +113,7 @@ impl HexgBuffer {
         // Validate outcome finiteness before any mutation of `self`.
         validate_outcome(rec.outcome)?;
         validate_tail_mass(rec.tail_mass)?;
+        validate_root_value(rec.root_value, rec.root_value_valid)?;
         // Validate every visit prob before any mutation of `self`.
         for &(q, r, prob) in &rec.visits {
             validate_visit_prob(q, r, prob)?;
@@ -147,6 +166,8 @@ impl HexgBuffer {
         self.value_valid[slot] = u8::from(rec.value_valid);
         self.game_length[slot] = rec.game_length;
         self.game_ids[slot] = game_id;
+        self.root_value[slot] = rec.root_value;
+        self.root_value_valid[slot] = u8::from(rec.root_value_valid);
         self.weights[slot] = half::f16::ONE.to_bits();
 
         let new_bucket = weight_bucket(self.weights[slot]);
@@ -197,6 +218,8 @@ impl HexgBuffer {
             value_valid: self.value_valid[slot] != 0,
             game_length: self.game_length[slot],
             game_id: self.game_ids[slot],
+            root_value: self.root_value[slot],
+            root_value_valid: self.root_value_valid[slot] != 0,
         }
     }
 }

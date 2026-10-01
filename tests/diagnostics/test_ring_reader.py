@@ -1,4 +1,4 @@
-"""The pure-numpy HEXG v2 reader agrees with the engine that wrote the ring, field by field."""
+"""The pure-numpy HEXG reader agrees with the engine that wrote the ring, field by field, on both layouts."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -20,13 +20,17 @@ _ROWS = [
     ([(0, 0, 1), (1, 0, -1), (2, 0, -1), (0, 1, 1)], [(5, 5, 1.0)], -1, 2, 4, True, 0.0, False,
      21, 8, 0.0),
 ]
+# (root_value, root_value_valid) per row of `_ROWS`.
+_ROOTS = [(0.5, True), (0.0, False), (-1.0, True)]
+_REPLAY = Path(__file__).resolve().parents[1] / "fixtures" / "replay"
 
 
-def _write_ring(path: Path):
+def _write_ring(path: Path) -> _engine.HexgBuffer:
     buf = _engine.HexgBuffer(16, _ENCODING, 64)
-    for stones, visits, player, remaining, ply, full, outcome, valid, length, gid, tail in _ROWS:
+    for (stones, visits, player, remaining, ply, full, outcome, valid, length, gid, tail), (root, root_ok) \
+            in zip(_ROWS, _ROOTS, strict=True):
         buf.push_graph_position(stones, visits, player, remaining, ply, full, outcome, valid,
-                                length, gid, tail)
+                                length, gid, tail, root_value=root, root_value_valid=root_ok)
     buf.save_to_path(str(path))
     return buf
 
@@ -56,6 +60,8 @@ def test_every_field_reads_back_as_pushed(tmp_path: Path) -> None:
         assert ring.game_length[i] == length
         assert ring.game_id[i] == gid
         assert ring.tail_mass[i] == pytest.approx(tail)
+        assert ring.root_value[i] == _ROOTS[i][0]
+        assert bool(ring.root_value_valid[i]) is _ROOTS[i][1]
         got_stones = ring.row_stones(i)
         assert [(int(s["q"]), int(s["r"]), int(s["p"])) for s in got_stones] == stones
         got_visits = ring.row_visits(i)
@@ -133,3 +139,47 @@ def test_the_cli_prints_the_entropy_line_by_arm(tmp_path: Path, capsys) -> None:
     out = capsys.readouterr().out
     line = next(ln for ln in out.splitlines() if ln.startswith("H(explicit) nats:"))
     assert "full n=2 median" in line and "quick n=1 median" in line
+
+
+def test_the_v2_golden_reads_with_no_root_value_on_any_row() -> None:
+    """A v2 ring still reads: its fields as written, every row default-filled to no root value."""
+    ring = R.load_ring(_REPLAY / "hexg_v2_golden.hexg")
+    assert ring.header.size == 2
+    assert ring.outcome.tolist() == [1.0, -1.0]
+    assert ring.tail_mass.tolist() == [0.0, 0.25]
+    assert ring.game_id.tolist() == [42, 43]
+    assert ring.root_value_valid.tolist() == [0, 0]
+    assert ring.root_value.view(np.uint32).tolist() == [0, 0]
+
+
+def test_the_v3_golden_reads_its_root_values() -> None:
+    ring = R.load_ring(_REPLAY / "hexg_v3_golden.hexg")
+    assert ring.root_value_valid.tolist() == [1, 0]
+    assert ring.root_value.tolist() == [-0.625, 0.0]
+    assert ring.tail_mass.tolist() == [0.0, 0.25]
+    assert ring.game_id.tolist() == [42, 43]
+
+
+@pytest.mark.parametrize(("fixture", "stamp"), [("hexg_v3_golden.hexg", 2), ("hexg_v2_golden.hexg", 3)])
+def test_a_payload_read_through_the_other_versions_layout_is_refused(tmp_path: Path, fixture: str,
+                                                                      stamp: int) -> None:
+    """PLANTED BREAK: one layout for every version takes root-value bytes for stones; the reader must refuse."""
+    data = bytearray((_REPLAY / fixture).read_bytes())
+    data[4:8] = stamp.to_bytes(4, "little")
+    path = tmp_path / "relabelled.hexg"
+    path.write_bytes(bytes(data))
+    with pytest.raises(ValueError):
+        R.load_ring(path)
+
+
+def test_a_version_this_reader_has_no_layout_for_is_refused() -> None:
+    with pytest.raises(ValueError, match="version 1"):
+        R.load_ring(_REPLAY / "hexg_v1_golden.hexg")
+
+
+@pytest.mark.parametrize("cut", [40, 60])
+def test_a_payload_cut_inside_a_header_or_a_fixed_head_is_a_value_error(tmp_path: Path, cut: int) -> None:
+    path = tmp_path / "cut.hexg"
+    path.write_bytes((_REPLAY / "hexg_v3_golden.hexg").read_bytes()[:cut])
+    with pytest.raises(ValueError):
+        R.load_ring(path)

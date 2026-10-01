@@ -1,4 +1,4 @@
-"""Pure-numpy reader for a HEXG v2 replay ring; the layout is `replay/hexg/persist.rs`'s."""
+"""Pure-numpy reader for a HEXG v2 or v3 replay ring; the layouts are `replay/hexg/persist.rs`'s."""
 from __future__ import annotations
 
 import struct
@@ -9,12 +9,11 @@ from pathlib import Path
 import numpy as np
 
 HEXG_MAGIC = 0x48455847
-HEXG_VERSION = 2
 # Header (LE): magic u32, version u32, max_stones u32, max_visits u32, capacity u64, size u64,
 # name_len u32, name bytes; then `size` records oldest first, each a FIXED head + stones + visits.
-FIXED = struct.Struct("<HHbBHBBfHqHf")
-# Record head: n_stones u16, n_visits u16, current_player i8, moves_remaining u8, ply_index u16,
-# is_full_search u8, value_valid u8, outcome f32, game_length u16, game_id i64, weight u16, tail f32.
+FIXED_BY_VERSION = {2: struct.Struct("<HHbBHBBfHqHf"), 3: struct.Struct("<HHbBHBBfHqHffB")}
+# Record head: n_stones u16, n_visits u16, current_player i8, moves_remaining u8, ply_index u16, is_full_search u8,
+# value_valid u8, outcome f32, game_length u16, game_id i64, weight u16, tail f32; v3 adds root_value f32, flag u8.
 STONE_DT = np.dtype([("q", "<i2"), ("r", "<i2"), ("p", "i1")])
 #: A visit entry is an improved-policy MASS on an explicit root child: the row stores no counts, no Q.
 VISIT_DT = np.dtype([("q", "<i2"), ("r", "<i2"), ("prob", "<f4")])
@@ -22,8 +21,9 @@ VISIT_DT = np.dtype([("q", "<i2"), ("r", "<i2"), ("prob", "<f4")])
 
 @dataclass
 class RingHeader:
-    """The HEXG v2 header fields."""
+    """The HEXG header fields."""
 
+    version: int
     max_stones: int
     max_visits: int
     capacity: int
@@ -46,6 +46,8 @@ class Ring:
     game_id: np.ndarray
     weight_bits: np.ndarray
     tail_mass: np.ndarray
+    root_value: np.ndarray
+    root_value_valid: np.ndarray
     n_stones: np.ndarray
     n_visits: np.ndarray
     stone_off: np.ndarray
@@ -67,40 +69,52 @@ def _read_header(buf: memoryview) -> tuple[RingHeader, int]:
     magic, version, max_stones, max_visits = struct.unpack_from("<IIII", buf, 0)
     if magic != HEXG_MAGIC:
         raise ValueError(f"bad magic {magic:#x}")
-    if version != HEXG_VERSION:
-        raise ValueError(f"HEXG version {version}, reader is v{HEXG_VERSION}")
+    if version not in FIXED_BY_VERSION:
+        raise ValueError(f"HEXG version {version}, reader reads {sorted(FIXED_BY_VERSION)}")
     capacity, size, name_len = struct.unpack_from("<QQI", buf, 16)
     name = bytes(buf[36 : 36 + name_len]).decode("utf-8")
-    return RingHeader(max_stones, max_visits, capacity, size, name), 36 + name_len
+    return RingHeader(version, max_stones, max_visits, capacity, size, name), 36 + name_len
 
 
 def load_ring(path: Path) -> Ring:
-    """Parse every record of the ring at `path` into column arrays.
+    """Parse every record of the ring at `path` into column arrays; field contracts are the engine's, not checked here.
 
     Raises:
-        ValueError: a wrong magic or version, a record over the header's caps, a truncated payload.
+        ValueError: a wrong magic or version, a record over the header's caps, a truncated payload, trailing bytes.
         OSError: the file cannot be read.
     """
     data = path.read_bytes()
+    try:
+        return _parse(data)
+    except struct.error as exc:
+        raise ValueError(f"{path}: truncated HEXG payload ({exc})") from exc
+
+
+def _parse(data: bytes) -> Ring:
     buf = memoryview(data)
     header, pos = _read_header(buf)
+    fixed_struct = FIXED_BY_VERSION[header.version]
     n = header.size
     fixed = np.zeros((n, 12), dtype=np.float64)
     fixed_i = np.zeros((n, 12), dtype=np.int64)
+    root_value = np.zeros(n, dtype=np.float32)
+    root_value_valid = np.zeros(n, dtype=np.int64)
     stone_chunks: list[np.ndarray] = []
     visit_chunks: list[np.ndarray] = []
     stone_off = np.zeros(n, dtype=np.int64)
     visit_off = np.zeros(n, dtype=np.int64)
     so = vo = 0
     for i in range(n):
-        rec = FIXED.unpack_from(buf, pos)
-        pos += FIXED.size
+        rec = fixed_struct.unpack_from(buf, pos)
+        pos += fixed_struct.size
         ns, nv = rec[0], rec[1]
         if ns > header.max_stones or nv > header.max_visits:
             raise ValueError(f"record {i} declares {ns} stones / {nv} visits over cap")
         fixed_i[i, :] = [ns, nv, rec[2], rec[3], rec[4], rec[5], rec[6], 0, rec[8], rec[9], rec[10], 0]
         fixed[i, 7] = rec[7]
         fixed[i, 11] = rec[11]
+        if header.version >= 3:
+            root_value[i], root_value_valid[i] = rec[12], rec[13]
         stone_chunks.append(np.frombuffer(buf, dtype=STONE_DT, count=ns, offset=pos))
         pos += ns * STONE_DT.itemsize
         visit_chunks.append(np.frombuffer(buf, dtype=VISIT_DT, count=nv, offset=pos))
@@ -125,6 +139,8 @@ def load_ring(path: Path) -> Ring:
         game_id=fixed_i[:, 9],
         weight_bits=fixed_i[:, 10],
         tail_mass=fixed[:, 11].astype(np.float32),
+        root_value=root_value,
+        root_value_valid=root_value_valid,
         stone_off=stone_off,
         visit_off=visit_off,
         stones=np.concatenate(stone_chunks) if stone_chunks else np.zeros(0, STONE_DT),

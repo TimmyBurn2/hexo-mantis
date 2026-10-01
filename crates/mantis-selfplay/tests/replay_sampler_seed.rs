@@ -38,6 +38,8 @@ fn filled_graph_ring() -> HexgBuffer {
             value_valid: true,
             game_length: 40,
             game_id: -1,
+            root_value: 0.0,
+            root_value_valid: false,
         };
         buf.push_record_impl(&rec, (10 + i) as i64).expect("push");
     }

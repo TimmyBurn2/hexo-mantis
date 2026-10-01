@@ -258,6 +258,8 @@ fn produce_g6(mutate: bool) -> (f64, Vec<u8>) {
         value_valid: true,
         game_length: 0,
         game_id: -1,
+        root_value: 0.0,
+        root_value_valid: false,
     };
     assert_eq!(
         ser_graph_record(&rec),

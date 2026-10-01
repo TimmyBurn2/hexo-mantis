@@ -2,15 +2,15 @@
 //! and the little-endian cursor are one indivisible format unit; the atomicity proof
 //! depends on the parser and committer living together.
 //!
-//! HEXG v2 on-disk format, separate from dense HEXB.
+//! HEXG v3 on-disk format, separate from dense HEXB.
 //!
-//! v2 added the per-record `tail_mass` of the sparse Gumbel row. A v1 payload differs at a
-//! byte offset the parser cannot detect from the data, so the version field is checked
-//! before any record is read and a v1 file is refused by name.
+//! v2 added `tail_mass`, at an offset only the version field can see, so a v1 file is refused by name. v3 appends
+//! the root value and its flag; a v2 file loads with every flag 0. The version picks the record layout, and a
+//! payload not ending at its last record is refused; the version field is the layout's authority.
 //!
 //! Header (little-endian native):
 //!   [magic:   u32 = 0x48455847]  ("HEXG" — distinct from HEXB 0x48455842)
-//!   [version: u32 = 2]
+//!   [version: u32 = 3]          (written; 2 and 3 are read)
 //!   [max_stones: u32] [max_visits: u32]   (slot geometry; `max_visits` is the buffer's
 //!                                          DERIVED `visit_capacity`; reject on mismatch)
 //!   [capacity: u64] [size: u64]
@@ -18,7 +18,7 @@
 //!   For each of `size` records (oldest → newest):
 //!     n_stones: u16, n_visits: u16, current_player: i8, moves_remaining: u8,
 //!     ply_index: u16, is_full_search: u8, value_valid: u8, outcome: f32,
-//!     game_length: u16, game_id: i64, weight: u16, tail_mass: f32,
+//!     game_length: u16, game_id: i64, weight: u16, tail_mass: f32, [v3] root_value: f32, root_value_valid: u8,
 //!     stones: n_stones × (q:i16, r:i16, p:i8),
 //!     visits: n_visits × (q:i16, r:i16, prob:f32)
 //!
@@ -33,7 +33,7 @@ use std::sync::atomic::Ordering;
 use super::{weight_bucket, HexgBuffer, HEXG_MAGIC, HEXG_VERSION, MAX_STONES};
 
 impl HexgBuffer {
-    /// Save all records (oldest → newest) to `path` in HEXG v2 format.
+    /// Save all records (oldest → newest) to `path` in HEXG v3 format.
     ///
     /// Published through `atomic_save` (temp, fsync, rename, fsync(dir)), so a kill
     /// mid-save leaves the older ring intact rather than a truncated one.
@@ -81,6 +81,9 @@ impl HexgBuffer {
             w.write_all(&self.weights[slot].to_le_bytes()).map_err(io)?;
             w.write_all(&self.tail_mass[slot].to_le_bytes())
                 .map_err(io)?;
+            w.write_all(&self.root_value[slot].to_le_bytes())
+                .map_err(io)?;
+            w.write_all(&[self.root_value_valid[slot]]).map_err(io)?;
 
             let stone_base = slot * MAX_STONES * 2;
             let player_base = slot * MAX_STONES;
@@ -128,15 +131,16 @@ impl HexgBuffer {
             ));
         }
         let version = cur.u32()?;
-        if version != HEXG_VERSION {
-            return Err(format!(
-                "HEXG version {version} not supported (this build reads v{HEXG_VERSION}). \
-                 v2 added the per-record tail mass alpha of the sparse Gumbel row (R347(a)), \
-                 so a v1 record is a different byte layout from `weight` onward and \
-                 re-parsing it would read a stone coordinate as a probability. There is no \
-                 in-place upgrade: a v1 ring is regenerated, not converted"
-            ));
-        }
+        let layout = RecordLayout::of_version(version).ok_or_else(|| {
+            format!(
+                "HEXG version {version} not supported (this build reads v2 and \
+                 v{HEXG_VERSION}). v2 added the per-record tail mass alpha of the sparse \
+                 Gumbel row, so a v1 record is a different byte layout from \
+                 `weight` onward and re-parsing it would read a stone coordinate as a \
+                 probability. There is no in-place upgrade: a v1 ring is regenerated, not \
+                 converted"
+            )
+        })?;
         let max_stones = cur.u32()? as usize;
         let max_visits = cur.u32()? as usize;
         if max_stones != MAX_STONES || max_visits != self.visit_capacity {
@@ -168,7 +172,14 @@ impl HexgBuffer {
         }
 
         // Pass 1: parse, with no mutation of `self`.
-        let parsed = parse_records(&mut cur, size, self.visit_capacity)?;
+        let parsed = parse_records(&mut cur, size, self.visit_capacity, layout)?;
+        if cur.pos != buf.len() {
+            return Err(format!(
+                "HEXG load: {} trailing bytes after record {size} of a v{version} payload (the \
+                 records do not end where the file does: a layout misread, or a corrupt file)",
+                buf.len() - cur.pos
+            ));
+        }
 
         // Pass 2: commit.
         self.commit_records(&parsed);
@@ -202,6 +213,8 @@ impl HexgBuffer {
             self.game_ids[slot] = rec.game_id;
             self.weights[slot] = rec.weight;
             self.tail_mass[slot] = rec.tail_mass;
+            self.root_value[slot] = rec.root_value;
+            self.root_value_valid[slot] = rec.root_value_valid;
             self.n_stones[slot] = rec.ns as u16;
             self.n_visits[slot] = rec.nv as u16;
 
@@ -227,6 +240,25 @@ impl HexgBuffer {
     }
 }
 
+/// The record layout a version names; the version field is the only thing that can tell them apart.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RecordLayout {
+    /// No root value: every row loads `root_value_valid = 0`, `root_value = +0.0`.
+    V2,
+    /// The root value and its flag follow `tail_mass`.
+    V3,
+}
+
+impl RecordLayout {
+    fn of_version(version: u32) -> Option<Self> {
+        match version {
+            2 => Some(Self::V2),
+            3 => Some(Self::V3),
+            _ => None,
+        }
+    }
+}
+
 /// Parse `size` records from `cur` into an owned staging Vec.
 ///
 /// A free function with no `&self`, so it structurally cannot touch a `HexgBuffer` and any
@@ -235,6 +267,7 @@ fn parse_records(
     cur: &mut Cursor,
     size: usize,
     visit_capacity: usize,
+    layout: RecordLayout,
 ) -> Result<Vec<ParsedRecord>, String> {
     let mut parsed: Vec<ParsedRecord> = Vec::with_capacity(size);
     for slot in 0..size {
@@ -258,6 +291,18 @@ fn parse_records(
         if !tail_mass.is_finite() || !(0.0..=1.0).contains(&tail_mass) {
             return Err(format!(
                 "HEXG load: record {slot} declares tail_mass {tail_mass}, not a probability"
+            ));
+        }
+        let (root_value, root_value_valid) = match layout {
+            RecordLayout::V2 => (0.0f32, 0u8),
+            RecordLayout::V3 => (cur.f32()?, cur.u8()?),
+        };
+        if root_value_valid > 1
+            || super::push::validate_root_value(root_value, root_value_valid == 1).is_err()
+        {
+            return Err(format!(
+                "HEXG load: record {slot} declares root_value {root_value} with flag \
+                 {root_value_valid}, outside the field's contract"
             ));
         }
 
@@ -289,6 +334,8 @@ fn parse_records(
             game_id,
             weight,
             tail_mass,
+            root_value,
+            root_value_valid,
             stones_qr,
             stone_players,
             visit_qr,
@@ -312,6 +359,8 @@ struct ParsedRecord {
     game_id: i64,
     weight: u16,
     tail_mass: f32,
+    root_value: f32,
+    root_value_valid: u8,
     stones_qr: Vec<i16>,
     stone_players: Vec<i8>,
     visit_qr: Vec<i16>,

@@ -48,6 +48,19 @@ path = "replay/hexg_v2_golden.hexg"
 sha256 = "3932c52054c1d13616ba108b535e1b39d81a47e932bf8e0b94d202a5bcd44524"
 added_by = "GUMBEL-3"
 
+# RING-V3: the v3 byte golden is the v2 golden's bytes with each record's root value and flag
+# inserted by an independent writer; the sample golden digests one seeded sample of the v2 golden
+# as the HEXG v2 tree produced it, so the v3 tree's rows are held byte-equal to v2.
+[[required]]
+path = "replay/hexg_v3_golden.hexg"
+sha256 = "a8fe46570a427b40a9e17ea125f517746d4f93e1d7a59b7468855f2ba9c76d27"
+added_by = "RING-V3"
+
+[[required]]
+path = "replay/hexg_v2_sample_golden.json"
+sha256 = "bc17c9b6c8ca9e514d5a71240b706903114ffcb2dbaa28b1d586e1c281d842d6"
+added_by = "RING-V3"
+
 # WP6 Stage B ⊕ oracle-first old-side capture (wp/WP6/CAPTURE_LOG.md). Dispatcher-
 # stamped shas of the FROZEN hexo_rl (rev 750b599) PUB pyo3-free record/finalize
 # producers over PINNED inputs; the P-04/P-09 pins assert the ported new-side
