@@ -154,8 +154,10 @@ fn a_decided_root_is_searched_then_plays_its_stone_and_the_owed_stone_follows() 
             "{kind:?}: every lost root records no policy target"
         );
         // A game in flight at `stop()` drops its records, so the drained rows can only fall short of the count.
+        let empties =
+            rows["decided_lost_rows"] + rows["emptied_target_rows"] + rows["tail_emptied_rows"];
         assert!(
-            no_policy <= rows["decided_lost_rows"] + rows["emptied_target_rows"] && no_policy > 0,
+            no_policy <= empties && no_policy > 0,
             "{kind:?}: {no_policy} no-policy rows drained against the lost and emptied ones: {rows:?}"
         );
         // Every edit needs a veto; under Gumbel a vetoed move can carry no target mass, so not every veto edits.
@@ -212,8 +214,10 @@ fn an_all_vetoed_root_records_no_policy_target() {
             rows["emptied_target_rows"], rows["vetoed_all_rows"],
             "{kind:?}: an all-vetoed row recorded a policy: {rows:?}"
         );
+        let empties =
+            rows["decided_lost_rows"] + rows["emptied_target_rows"] + rows["tail_emptied_rows"];
         assert!(
-            no_policy <= rows["decided_lost_rows"] + rows["emptied_target_rows"],
+            no_policy <= empties,
             "{kind:?}: {no_policy} no-policy rows drained against the lost and emptied ones: {rows:?}"
         );
     }
@@ -237,6 +241,8 @@ fn a_runner_without_a_block_sums_no_rows() {
         "decided_lost_rows",
         "vetoed_target_rows",
         "vetoed_all_rows",
+        "tail_emptied_rows",
+        "tail_leak_rows",
     ] {
         assert!(names.contains(want), "the totals name {want}");
     }

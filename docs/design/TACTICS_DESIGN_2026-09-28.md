@@ -422,6 +422,12 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
 - **A vetoed cell outside the searched candidates (as built).** A Gumbel row stores its searched candidates only
   (`gumbel_m` slots), so such a cell is zeroed in the target but keeps its training-tail share; `vetoed_target_rows`
   counts only rows whose every veto holds no mass.
+  - SEALED by HYGIENE-1 under R377(f) (the audit's F7): the training tail spreads over every unstored legal cell by the
+    prior, so a sparse row now stores every veto at zero within its slots, and the tail renormalises over the rest. A
+    root restricted to its forced blocks, past its slots, leaves unvisited blocks the row cannot name, and a veto with
+    no slot cannot be stored: in either case the tail folds into the stored cells (`tail_leak_rows` counts every row
+    that would have leaked; a fold with no stored mass records no policy, `tail_emptied_rows`). A written row with a
+    policy whose tail still leaks is the run-fatal `TailLeak`.
 - **All-vetoed roots (added as built).** When every unit of the searched target sits on vetoed moves, the target is
   left as searched and the row records no policy target, as a lost root's does (`emptied_target_rows`).
   REPLACED by R379(b), at deploy and in self-play alike: such a root is re-searched over the non-vetoed set at the
@@ -512,6 +518,7 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
   - Amended in place 2026-09-30 (TACTICS-SELFPLAY-3): `mixed_rows` (F2) and `vetoed_all_rows`, every all-vetoed root
     whatever its row holds, join the move rows; `emptied_target_rows` equals it while each such row has no policy.
     Amended 2026-10-01 (HYGIENE-1): `mixed_rows` left the tree with F2; `vetoed_all_rows` stays.
+    `tail_emptied_rows` (a kind) and `tail_leak_rows` (a cross-count) join them with the tail seal.
 - The served-sims witness pins DESCENTS per SEARCHED root: `descents == n_sims`, tactics on or off.
   - With tactics on: `served_leaves + solver_terminals + terminal_revisits == descents`, and
     `gpu_evals <= served_leaves`.

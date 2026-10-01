@@ -193,6 +193,8 @@ pub(crate) struct TacticsState {
     pub(crate) next_hold_stone: Option<(u128, (i32, i32))>,
     /// The candidates this search's audit proved to allow an opponent win, in the order it walked them.
     pub(crate) vetoes: Vec<(i32, i32)>,
+    /// This search's root expanded only the blocks of the opponent's threats.
+    pub(crate) root_forced: bool,
 }
 
 /// How a descent's leaf is spent: backed up inline, or evaluated by the net with the facts its expansion reads.
@@ -220,6 +222,7 @@ impl MCTSTree {
                 next_proof_stone: None,
                 next_hold_stone: None,
                 vetoes: Vec::new(),
+                root_forced: false,
             })
         });
     }
@@ -255,6 +258,12 @@ impl MCTSTree {
         self.tactics.as_deref().map_or(&[], |t| t.vetoes.as_slice())
     }
 
+    /// Whether this search's root expanded only its forced blocks; false with tactics off.
+    #[must_use]
+    pub fn root_forced(&self) -> bool {
+        self.tactics.as_deref().is_some_and(|t| t.root_forced)
+    }
+
     /// Refuse, as `TacticsError::RadiusBelowFive`, a board whose legal-move radius the armed block cannot run on.
     pub fn check_tactics_board(&self, board: &Board) -> Result<(), TacticsError> {
         match &self.tactics {
@@ -268,6 +277,7 @@ impl MCTSTree {
         if let Some(t) = self.tactics.as_deref_mut() {
             t.counters = TacticsCounters::default();
             t.vetoes.clear();
+            t.root_forced = false;
             t.solver_base = (t.solver.grid_overflows(), t.solver.three_cells_capped());
             t.solver.clear();
         }
@@ -468,10 +478,14 @@ mod tests {
             "priors renormalised over the forced cells: {mass}"
         );
         assert_eq!(tree.tactics_counters().forced_restrictions, 1);
+        assert!(tree.root_forced(), "the root expanded its blocks alone");
+        tree.new_game(played(&P2_FOUR_ONE_LEFT[..1]));
+        assert!(!tree.root_forced(), "a new search clears it");
 
         let mut plain = MCTSTree::new(1.5);
         plain.new_game(root.clone());
         expand_root(&mut plain);
+        assert!(!plain.root_forced(), "no block, no restriction");
         assert_eq!(
             root_children(&plain).len(),
             root.legal_move_count(),

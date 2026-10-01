@@ -1,5 +1,7 @@
-//! A self-play target under tactics: vetoed moves carry zero mass, and the move rows are read off the row written.
+// >300 justify (R8): a row's target edits, its tail seal and the move rows read off the row written are one unit.
+//! A self-play target under tactics: vetoed moves carry zero mass, the tail reaches no veto or non-block, rows counted.
 
+use fxhash::FxHashSet;
 use mantis_core::Board;
 use mantis_search::mcts::TacticsCounters;
 use mantis_search::LegalSetPolicy;
@@ -63,6 +65,128 @@ pub(crate) fn zero_vetoes(
     TargetEdit::Zeroed
 }
 
+/// What sealing a sparse row's tail did.
+pub(crate) struct Seal {
+    /// The row's explicit support, every veto it could hold among it at zero.
+    pub(crate) support: FxHashSet<(i32, i32)>,
+    /// The unsealed tail would have reached a vetoed or a non-blocking cell.
+    pub(crate) leaked: bool,
+    /// The tail had to fold and no stored cell held mass, so the row records no policy.
+    pub(crate) no_policy: bool,
+}
+
+/// Seal a sparse row's training tail: vetoes stored at zero within `cap`, else (a forced root, an unslotted veto) folded.
+pub(crate) fn seal_tail(
+    ls: &mut LegalSetPolicy,
+    mut support: FxHashSet<(i32, i32)>,
+    vetoes: &[(i32, i32)],
+    root_forced: bool,
+    board: &Board,
+    trunk_sz: i32,
+    cap: usize,
+) -> Seal {
+    let legal = board.legal_moves_set();
+    let (bcq, bcr) = board.window_center();
+    let half = (trunk_sz - 1) / 2;
+    let mass = |ls: &LegalSetPolicy, (q, r): (i32, i32)| {
+        f64::from(ls.get(q, r, bcq, bcr, trunk_sz, half, 0.0))
+    };
+    let tail: f64 = legal
+        .iter()
+        .filter(|c| !support.contains(c))
+        .map(|&c| mass(ls, c))
+        .sum();
+    let mut unstored: Vec<(i32, i32)> = vetoes
+        .iter()
+        .copied()
+        .filter(|c| legal.contains(c) && !support.contains(c))
+        .collect();
+    unstored.sort_unstable();
+    unstored.dedup();
+    let leaked = tail > 0.0 && (root_forced || !unstored.is_empty());
+    let fits = support.len() + unstored.len() <= cap;
+    if fits {
+        support.extend(unstored);
+    }
+    if !(tail > 0.0 && (root_forced || !fits)) {
+        return Seal {
+            support,
+            leaked,
+            no_policy: false,
+        };
+    }
+    let kept: f64 = support.iter().map(|&c| mass(ls, c)).sum();
+    if kept <= TARGET_MASS_TOL {
+        return Seal {
+            support,
+            leaked,
+            no_policy: true,
+        };
+    }
+    for &(q, r) in legal.iter().filter(|c| !support.contains(c)) {
+        let flat = Board::window_flat_idx_at_geom(q, r, bcq, bcr, trunk_sz, half);
+        if flat < ls.dense.len() {
+            ls.dense[flat] = 0.0;
+        } else if let Some(p) = ls.overflow.get_mut(&(q, r)) {
+            *p = 0.0;
+        }
+    }
+    let scale = (1.0 / kept) as f32;
+    ls.dense
+        .iter_mut()
+        .chain(ls.overflow.values_mut())
+        .for_each(|p| *p *= scale);
+    Seal {
+        support,
+        leaked,
+        no_policy: false,
+    }
+}
+
+/// A written row with a policy whose tail still reaches a vetoed cell, or any cell past a root's blocks: run-fatal.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct TailLeak {
+    pub(crate) ply_index: u16,
+    pub(crate) unstored_vetoes: usize,
+    pub(crate) root_forced: bool,
+}
+
+impl std::fmt::Display for TailLeak {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "TailLeak: the row at ply_index={} keeps a training tail with {} vetoed cell(s) unstored (root restricted \
+             to its blocks: {}), so training would hand mass to a move the tactics module proved losing",
+            self.ply_index, self.unstored_vetoes, self.root_forced
+        )
+    }
+}
+
+/// Refuse a written row whose training tail could still reach a vetoed or a non-blocking cell.
+pub(crate) fn refuse_tail_leak(
+    rec: &GraphRecord,
+    vetoes: &[(i32, i32)],
+    root_forced: bool,
+) -> Result<(), TailLeak> {
+    if !rec.is_full_search || rec.tail_mass <= 0.0 {
+        return Ok(());
+    }
+    let stored = |c: (i32, i32)| {
+        rec.visits
+            .iter()
+            .any(|v| (i32::from(v.0), i32::from(v.1)) == c)
+    };
+    let unstored_vetoes = vetoes.iter().filter(|&&c| !stored(c)).count();
+    if root_forced || unstored_vetoes > 0 {
+        return Err(TailLeak {
+            ply_index: rec.ply_index,
+            unstored_vetoes,
+            root_forced,
+        });
+    }
+    Ok(())
+}
+
 /// The record's side of a move: the row written, the arm drawn, and what the root and the vetoes made of it.
 pub(crate) struct Written<'a> {
     pub(crate) record: Option<&'a GraphRecord>,
@@ -70,9 +194,13 @@ pub(crate) struct Written<'a> {
     pub(crate) decided: bool,
     pub(crate) decided_lost: bool,
     pub(crate) edit: TargetEdit,
+    /// The row's unsealed tail would have reached a vetoed or a non-blocking cell.
+    pub(crate) tail_leaked: bool,
+    /// The seal's fold found no stored mass, so the row records no policy.
+    pub(crate) tail_emptied: bool,
 }
 
-/// Sum a search's tactics rows, then its record's one kind (disjoint, lost first) and the all-vetoed cross-count.
+/// Sum a search's tactics rows, then its record's one kind (disjoint, lost first) and the two cross-counts.
 pub(crate) fn count_rows(
     totals: &TacticsTotals,
     rows: &TacticsCounters,
@@ -89,6 +217,8 @@ pub(crate) fn count_rows(
         Some(MoveRow::DecidedLost)
     } else if written.edit == TargetEdit::Emptied && !rec.is_full_search {
         Some(MoveRow::EmptiedTarget)
+    } else if written.tail_emptied && !rec.is_full_search {
+        Some(MoveRow::TailEmptied)
     } else if written.edit == TargetEdit::Zeroed
         && rec.is_full_search
         && vetoes_hold_no_mass(rec, vetoes)
@@ -103,6 +233,10 @@ pub(crate) fn count_rows(
     // Every all-vetoed root whatever its row holds: the emptied rows equal it only while each records no policy.
     if written.edit == TargetEdit::Emptied && !written.decided_lost {
         totals.add_move(MoveRow::VetoedAll);
+    }
+    // Every row whose unsealed tail would have reached a vetoed or non-blocking cell, whatever the seal made of it.
+    if written.tail_leaked {
+        totals.add_move(MoveRow::TailLeak);
     }
 }
 
@@ -209,6 +343,8 @@ mod tests {
             decided: false,
             decided_lost,
             edit: TargetEdit::Emptied,
+            tail_leaked: false,
+            tail_emptied: false,
         };
         count_rows(&totals, &TacticsCounters::default(), &written, &[]);
         totals
@@ -239,6 +375,145 @@ mod tests {
             counted(&rec, true, false),
             vec![("vetoed_all_rows", 1)],
             "a row written with a policy is not an emptied one"
+        );
+    }
+
+    fn cells(set: &FxHashSet<(i32, i32)>) -> Vec<(i32, i32)> {
+        let mut v: Vec<(i32, i32)> = set.iter().copied().collect();
+        v.sort_unstable();
+        v
+    }
+
+    fn stored(cells: &[(i32, i32)]) -> FxHashSet<(i32, i32)> {
+        cells.iter().copied().collect()
+    }
+
+    /// Visited (1,0) and (2,0) hold 0.8, unvisited (3,0) the tail's 0.2; the veto (0,1) holds nothing.
+    fn searched() -> (Board, LegalSetPolicy) {
+        target(&[((1, 0), 0.5), ((2, 0), 0.3), ((3, 0), 0.2)])
+    }
+
+    /// PLANTED BREAK: skip the pinning and the unvisited veto is left for the tail to feed.
+    #[test]
+    fn an_unvisited_veto_is_stored_at_zero_and_the_tail_stays_for_the_rest() {
+        let (board, mut ls) = searched();
+        let seal = seal_tail(
+            &mut ls,
+            stored(&[(1, 0), (2, 0)]),
+            &[(0, 1)],
+            false,
+            &board,
+            TRUNK,
+            16,
+        );
+        assert_eq!(cells(&seal.support), vec![(0, 1), (1, 0), (2, 0)]);
+        assert!(seal.leaked && !seal.no_policy);
+        assert_eq!(mass(&ls, &board, (3, 0)), 0.2, "the tail keeps its share");
+        assert_eq!(mass(&ls, &board, (0, 1)), 0.0);
+    }
+
+    /// PLANTED BREAK: skip the fold and the tail spreads over the non-blocking cells.
+    #[test]
+    fn a_root_restricted_to_its_blocks_folds_its_tail_into_the_stored_cells() {
+        let (board, mut ls) = searched();
+        let seal = seal_tail(
+            &mut ls,
+            stored(&[(1, 0), (2, 0)]),
+            &[],
+            true,
+            &board,
+            TRUNK,
+            16,
+        );
+        assert!(seal.leaked && !seal.no_policy);
+        assert_eq!(mass(&ls, &board, (3, 0)), 0.0);
+        assert!((mass(&ls, &board, (1, 0)) - 0.625).abs() < 1e-6);
+        assert!((mass(&ls, &board, (2, 0)) - 0.375).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_veto_the_row_has_no_slot_for_folds_the_tail_instead() {
+        let (board, mut ls) = searched();
+        let seal = seal_tail(
+            &mut ls,
+            stored(&[(1, 0), (2, 0)]),
+            &[(0, 1)],
+            false,
+            &board,
+            TRUNK,
+            2,
+        );
+        assert_eq!(
+            cells(&seal.support),
+            vec![(1, 0), (2, 0)],
+            "within the slots"
+        );
+        assert!(seal.leaked);
+        assert_eq!(
+            mass(&ls, &board, (3, 0)),
+            0.0,
+            "no tail is left to reach the veto"
+        );
+    }
+
+    #[test]
+    fn a_row_with_no_veto_no_restriction_or_no_tail_is_left_as_searched() {
+        let (board, mut ls) = searched();
+        let seal = seal_tail(
+            &mut ls,
+            stored(&[(1, 0), (2, 0)]),
+            &[],
+            false,
+            &board,
+            TRUNK,
+            16,
+        );
+        assert!(!seal.leaked && cells(&seal.support) == vec![(1, 0), (2, 0)]);
+        assert_eq!(mass(&ls, &board, (3, 0)), 0.2);
+        let seal = seal_tail(
+            &mut ls,
+            stored(&[(1, 0), (2, 0), (3, 0)]),
+            &[(0, 1)],
+            true,
+            &board,
+            TRUNK,
+            16,
+        );
+        assert!(
+            !seal.leaked,
+            "every unit of mass is stored: there is no tail to leak"
+        );
+    }
+
+    #[test]
+    fn a_fold_over_cells_holding_nothing_records_no_policy() {
+        let (board, mut ls) = target(&[((3, 0), 1.0)]);
+        let seal = seal_tail(&mut ls, stored(&[(1, 0)]), &[], true, &board, TRUNK, 16);
+        assert!(seal.leaked && seal.no_policy);
+    }
+
+    fn row(full: bool, tail: f32, visits: &[(i16, i16)]) -> GraphRecord {
+        GraphRecord {
+            is_full_search: full,
+            tail_mass: tail,
+            visits: visits.iter().map(|&(q, r)| (q, r, 0.0)).collect(),
+            ..GraphRecord::default()
+        }
+    }
+
+    #[test]
+    fn a_written_row_whose_tail_reaches_an_unstored_veto_or_a_forced_roots_rest_is_refused() {
+        let leaked = refuse_tail_leak(&row(true, 0.2, &[(1, 0)]), &[(0, 1)], false);
+        assert_eq!(leaked.map_err(|e| e.unstored_vetoes), Err(1));
+        assert!(refuse_tail_leak(&row(true, 0.2, &[(1, 0), (0, 1)]), &[(0, 1)], false).is_ok());
+        assert!(refuse_tail_leak(&row(true, 0.2, &[(1, 0)]), &[], true).is_err());
+        assert!(
+            refuse_tail_leak(&row(true, 0.0, &[(1, 0)]), &[(0, 1)], true).is_ok(),
+            "no tail"
+        );
+        assert!(
+            refuse_tail_leak(&row(false, 0.2, &[(1, 0)]), &[(0, 1)], true).is_ok(),
+            "no policy"
         );
     }
 }

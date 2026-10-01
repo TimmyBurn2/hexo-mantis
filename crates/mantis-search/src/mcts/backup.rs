@@ -342,6 +342,7 @@ impl MCTSTree {
             renormalise(&mut pick.children);
             if let Some(t) = self.tactics.as_deref_mut() {
                 t.counters.forced_restrictions += 1;
+                t.root_forced |= leaf_idx == 0;
             }
         }
         self.record_omitted_prior(pick.dropped_prior_mass);

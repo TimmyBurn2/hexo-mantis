@@ -27,7 +27,9 @@ use crate::replay::hexg::GraphRecord;
 
 use super::record::record_position_graph_dispatch;
 use super::stats::TacticsTotals;
-use super::tactics_move::{count_rows, zero_vetoes, TargetEdit, Written};
+use super::tactics_move::{
+    count_rows, refuse_tail_leak, seal_tail, zero_vetoes, Seal, TargetEdit, Written,
+};
 use super::PositionStats;
 
 /// A worker's inference seam, built once per worker thread; `Copy`, passed by value.
@@ -717,7 +719,36 @@ pub(crate) fn play_one_move(
     let edit = zero_vetoes(&mut target_policy, &vetoes, board, agg_trunk_sz);
     let rows = tree.tactics_counters();
     let decided_lost = rows.decided_lost > 0;
-    let record_full_search = move_is_full_search && !decided_lost && edit != TargetEdit::Emptied;
+    let root_forced = tree.root_forced();
+    // The sparse row's support is the search's OWN visited set (a visited candidate can carry LESS
+    // mass than an unvisited one under Gumbel), sealed under tactics.
+    let seal = ctx.search_kind.stores_sparse_rows().then(|| {
+        let visited = tree
+            .visited_root_child_cells()
+            .into_iter()
+            .collect::<fxhash::FxHashSet<(i32, i32)>>();
+        if tree.tactics_config().is_some() {
+            seal_tail(
+                &mut target_policy,
+                visited,
+                &vetoes,
+                root_forced,
+                board,
+                agg_trunk_sz,
+                ctx.visit_capacity,
+            )
+        } else {
+            Seal {
+                support: visited,
+                leaked: false,
+                no_policy: false,
+            }
+        }
+    });
+    let record_full_search = move_is_full_search
+        && !decided_lost
+        && edit != TargetEdit::Emptied
+        && !seal.as_ref().is_some_and(|s| s.no_policy);
 
     // The restored-mass fire-rate: moves whose exported target keeps off-window mass.
     if target_policy.overflow.values().any(|&p| p > 0.0) {
@@ -749,39 +780,35 @@ pub(crate) fn play_one_move(
     }
 
     // ── Record position (BEFORE apply_move) ──
-    {
-        // The sparse row's support is the search's OWN visited-candidate set, read from the
-        // tree: under Gumbel a visited candidate can carry LESS mass than an unvisited one.
-        let explicit_support = if ctx.search_kind.stores_sparse_rows() {
-            Some(
-                tree.visited_root_child_cells()
-                    .into_iter()
-                    .collect::<fxhash::FxHashSet<(i32, i32)>>(),
-            )
-        } else {
-            None
-        };
-        if let Err(err) = record_position_graph_dispatch(
-            board,
-            &target_policy,
-            agg_trunk_sz,
-            record_full_search,
-            graph_records_vec,
-            ctx.visit_capacity,
-            explicit_support.as_ref(),
-        ) {
-            // A target-integrity defect is RUN-FATAL: latch the typed message and halt.
-            fatal_latch.store(err.to_string());
-            return MoveOutcome::Break;
-        }
+    if let Err(err) = record_position_graph_dispatch(
+        board,
+        &target_policy,
+        agg_trunk_sz,
+        record_full_search,
+        graph_records_vec,
+        ctx.visit_capacity,
+        seal.as_ref().map(|s| &s.support),
+    ) {
+        // A target-integrity defect is RUN-FATAL: latch the typed message and halt.
+        fatal_latch.store(err.to_string());
+        return MoveOutcome::Break;
     }
     if tree.tactics_config().is_some() {
+        if let Some(Err(leak)) = graph_records_vec
+            .last()
+            .map(|rec| refuse_tail_leak(rec, &vetoes, root_forced))
+        {
+            fatal_latch.store(leak.to_string());
+            return MoveOutcome::Break;
+        }
         let written = Written {
             record: graph_records_vec.last(),
             drawn_full: move_is_full_search,
             decided: decided.is_some(),
             decided_lost,
             edit,
+            tail_leaked: seal.as_ref().is_some_and(|s| s.leaked),
+            tail_emptied: seal.as_ref().is_some_and(|s| s.no_policy),
         };
         count_rows(accumulators.tactics_totals, &rows, &written, &vetoes);
     }
