@@ -151,6 +151,8 @@ pub(crate) struct TailLeak {
     pub(crate) root_forced: bool,
 }
 
+impl std::error::Error for TailLeak {}
+
 impl std::fmt::Display for TailLeak {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -163,7 +165,7 @@ impl std::fmt::Display for TailLeak {
 }
 
 /// Refuse a written row whose training tail could still reach a vetoed or a non-blocking cell.
-pub(crate) fn refuse_tail_leak(
+fn refuse_tail_leak(
     rec: &GraphRecord,
     vetoes: &[(i32, i32)],
     root_forced: bool,
@@ -176,7 +178,8 @@ pub(crate) fn refuse_tail_leak(
             .iter()
             .any(|v| (i32::from(v.0), i32::from(v.1)) == c)
     };
-    let unstored_vetoes = vetoes.iter().filter(|&&c| !stored(c)).count();
+    let unstored: FxHashSet<(i32, i32)> = vetoes.iter().copied().filter(|&c| !stored(c)).collect();
+    let unstored_vetoes = unstored.len();
     if root_forced || unstored_vetoes > 0 {
         return Err(TailLeak {
             ply_index: rec.ply_index,
@@ -198,18 +201,23 @@ pub(crate) struct Written<'a> {
     pub(crate) tail_leaked: bool,
     /// The seal's fold found no stored mass, so the row records no policy.
     pub(crate) tail_emptied: bool,
+    /// The search restricted its root to the blocks.
+    pub(crate) root_forced: bool,
 }
 
-/// Sum a search's tactics rows, then its record's one kind (disjoint, lost first) and the two cross-counts.
-pub(crate) fn count_rows(
+/// Refuse a row whose tail leaks (run-fatal, counted nowhere), else sum the search's rows, its record's one kind and the two cross-counts.
+pub(crate) fn account_row(
     totals: &TacticsTotals,
     rows: &TacticsCounters,
     written: &Written<'_>,
     vetoes: &[(i32, i32)],
-) {
+) -> Result<(), TailLeak> {
+    if let Some(rec) = written.record {
+        refuse_tail_leak(rec, vetoes, written.root_forced)?;
+    }
     totals.add_search(rows);
     let Some(rec) = written.record.filter(|_| written.drawn_full) else {
-        return;
+        return Ok(());
     };
     let row = if written.decided && rec.is_full_search {
         Some(MoveRow::ProvenRoot)
@@ -238,6 +246,7 @@ pub(crate) fn count_rows(
     if written.tail_leaked {
         totals.add_move(MoveRow::TailLeak);
     }
+    Ok(())
 }
 
 /// Every vetoed cell is stored at zero, or is absent from a row with no tail (a tail would hand it mass in training).
@@ -330,7 +339,7 @@ mod tests {
         );
     }
 
-    /// The move rows `count_rows` adds for one written row of an all-vetoed root, by name.
+    /// The move rows `account_row` adds for one written row of an all-vetoed root, by name.
     fn counted(
         rec: &GraphRecord,
         drawn_full: bool,
@@ -345,8 +354,9 @@ mod tests {
             edit: TargetEdit::Emptied,
             tail_leaked: false,
             tail_emptied: false,
+            root_forced: false,
         };
-        count_rows(&totals, &TacticsCounters::default(), &written, &[]);
+        account_row(&totals, &TacticsCounters::default(), &written, &[]).expect("no tail, no leak");
         totals
             .snapshot()
             .into_iter()
@@ -514,6 +524,67 @@ mod tests {
         assert!(
             refuse_tail_leak(&row(false, 0.2, &[(1, 0)]), &[(0, 1)], true).is_ok(),
             "no policy"
+        );
+    }
+
+    /// PLANTED BREAK: drop the refusal from `account_row` and a leaking row is counted and written.
+    #[test]
+    fn a_leaking_row_is_refused_before_any_row_is_counted() {
+        let totals = TacticsTotals::new();
+        let rec = row(true, 0.2, &[(1, 0)]);
+        let written = Written {
+            record: Some(&rec),
+            drawn_full: true,
+            decided: false,
+            decided_lost: false,
+            edit: TargetEdit::Zeroed,
+            tail_leaked: true,
+            tail_emptied: false,
+            root_forced: false,
+        };
+        let refused = account_row(
+            &totals,
+            &TacticsCounters::default(),
+            &written,
+            &[(0, 1), (0, 1)],
+        );
+        assert_eq!(
+            refused.map_err(|e| e.unstored_vetoes),
+            Err(1),
+            "a repeated veto is one cell"
+        );
+        assert!(totals.snapshot().iter().all(|&(_, v)| v == 0));
+    }
+
+    /// PLANTED BREAK: drop or swap either seal row's increment and its name reads wrong.
+    #[test]
+    fn a_sealed_leak_and_an_emptied_fold_count_on_their_own_rows() {
+        let by_name = |rec: &GraphRecord, leaked: bool, emptied: bool| {
+            let totals = TacticsTotals::new();
+            let written = Written {
+                record: Some(rec),
+                drawn_full: true,
+                decided: false,
+                decided_lost: false,
+                edit: TargetEdit::Unchanged,
+                tail_leaked: leaked,
+                tail_emptied: emptied,
+                root_forced: false,
+            };
+            account_row(&totals, &TacticsCounters::default(), &written, &[]).expect("sealed");
+            totals
+                .snapshot()
+                .into_iter()
+                .filter(|&(_, v)| v > 0)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            by_name(&row(true, 0.0, &[(1, 0)]), true, false),
+            vec![("tail_leak_rows", 1)]
+        );
+        assert_eq!(
+            by_name(&row(false, 0.0, &[(1, 0)]), false, true),
+            vec![("tail_emptied_rows", 1)]
         );
     }
 }

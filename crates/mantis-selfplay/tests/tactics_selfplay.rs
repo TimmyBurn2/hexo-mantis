@@ -56,15 +56,29 @@ struct Drove {
     records: Vec<GraphRecord>,
 }
 
+/// Drained rows that record no policy target.
+fn no_policy(records: &[GraphRecord]) -> u64 {
+    records.iter().filter(|r| !r.is_full_search).count() as u64
+}
+
 impl Drove {
-    /// Drained rows that record no policy target.
     fn no_policy(&self) -> u64 {
-        self.records.iter().filter(|r| !r.is_full_search).count() as u64
+        no_policy(&self.records)
     }
 }
 
+/// A drive still owes a decided stone, a lost root or a drained no-policy row.
+fn owes_a_decided_row(r: &Rows, drained: &[GraphRecord]) -> bool {
+    r["proof_stones_played"] == 0 || r["decided_lost"] == 0 || no_policy(drained) == 0
+}
+
 /// One worker under `kind` and `block` over compact play for `want` plies, then until `more` is false or the deadline.
-fn drive(kind: SearchKind, block: TacticsConfig, want: usize, more: fn(&Rows) -> bool) -> Drove {
+fn drive(
+    kind: SearchKind,
+    block: TacticsConfig,
+    want: usize,
+    more: fn(&Rows, &[GraphRecord]) -> bool,
+) -> Drove {
     let spec = lookup_or_panic(ENCODING);
     let runner = SelfPlayRunner::new(SelfPlayRunnerConfig {
         n_workers: 1,
@@ -90,7 +104,7 @@ fn drive(kind: SearchKind, block: TacticsConfig, want: usize, more: fn(&Rows) ->
     let mut drained: Vec<GraphRecord> = Vec::new();
     let totals = |r: &SelfPlayRunner| -> Rows { r.tactics_totals().into_iter().collect() };
     while Instant::now() < deadline
-        && (drained.len() < want || more(&totals(&runner)))
+        && (drained.len() < want || more(&totals(&runner), &drained))
         && runner.fatal_defect().is_none()
     {
         drained.extend(runner.drain_graph_records().expect("unpoisoned"));
@@ -120,10 +134,12 @@ fn drive(kind: SearchKind, block: TacticsConfig, want: usize, more: fn(&Rows) ->
 #[test]
 fn a_decided_root_is_searched_then_plays_its_stone_and_the_owed_stone_follows() {
     for kind in [SearchKind::Puct, SearchKind::Gumbel] {
-        // Each drives on until its rarest row lands: a short drive can meet none.
-        let more: fn(&Rows) -> bool = match kind {
-            SearchKind::Puct => |r| r["vetoed_target_rows"] == 0,
-            _ => |r| r["proof_stones_played"] == 0,
+        // Each drives on until every row asserted below has landed: a short drive can meet none.
+        let more: fn(&Rows, &[GraphRecord]) -> bool = match kind {
+            SearchKind::Puct => |r, d| r["vetoed_target_rows"] == 0 || owes_a_decided_row(r, d),
+            _ => |r, d| {
+                r["vetoed_target_rows"] + r["emptied_target_rows"] == 0 || owes_a_decided_row(r, d)
+            },
         };
         let drove = drive(kind, BLOCK, 300, more);
         let (rows, no_policy) = (&drove.rows, drove.no_policy());
@@ -180,10 +196,12 @@ fn a_decided_root_is_searched_then_plays_its_stone_and_the_owed_stone_follows() 
     }
 }
 
-/// PLANTED BREAK: store vetoed cells in the sparse support; an unvisited veto overflows `gumbel_m` and latches.
+/// PLANTED BREAKS: pin every veto past `seal_tail`'s fit check and a row overflows `gumbel_m` and latches; drop the leak count and none reads.
 #[test]
 fn a_gumbel_audit_wider_than_its_candidates_records_within_the_rows_slots() {
-    let drove = drive(SearchKind::Gumbel, WIDE, 300, |r| r["root_vetoes"] < 8);
+    let drove = drive(SearchKind::Gumbel, WIDE, 300, |r, _| {
+        r["root_vetoes"] < 8 || r["tail_leak_rows"] == 0
+    });
     let rows = &drove.rows;
     println!(
         "Gumbel wide audit over {} plies: {rows:?}",
@@ -193,15 +211,19 @@ fn a_gumbel_audit_wider_than_its_candidates_records_within_the_rows_slots() {
         rows["root_vetoes"] >= 8,
         "too few vetoes to reach an unvisited cell: {rows:?}"
     );
+    assert!(
+        rows["tail_leak_rows"] > 0,
+        "no row's unsealed tail reached a veto, so the seal was never read: {rows:?}"
+    );
 }
 
 /// PLANTED BREAK: record the searched target at an all-vetoed root and the emptied rows fall short of the all-vetoed.
 #[test]
 fn an_all_vetoed_root_records_no_policy_target() {
     for (kind, want) in [(SearchKind::Gumbel, 3), (SearchKind::Puct, 1)] {
-        let more: fn(&Rows) -> bool = match kind {
-            SearchKind::Gumbel => |r| r["vetoed_all_rows"] < 3,
-            _ => |r| r["vetoed_all_rows"] < 1,
+        let more: fn(&Rows, &[GraphRecord]) -> bool = match kind {
+            SearchKind::Gumbel => |r, _| r["vetoed_all_rows"] < 3,
+            _ => |r, _| r["vetoed_all_rows"] < 1,
         };
         let drove = drive(kind, BLOCK, 300, more);
         let (rows, no_policy) = (&drove.rows, drove.no_policy());

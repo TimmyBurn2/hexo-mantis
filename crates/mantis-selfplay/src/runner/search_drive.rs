@@ -27,9 +27,7 @@ use crate::replay::hexg::GraphRecord;
 
 use super::record::record_position_graph_dispatch;
 use super::stats::TacticsTotals;
-use super::tactics_move::{
-    count_rows, refuse_tail_leak, seal_tail, zero_vetoes, Seal, TargetEdit, Written,
-};
+use super::tactics_move::{account_row, seal_tail, zero_vetoes, Seal, TargetEdit, Written};
 use super::PositionStats;
 
 /// A worker's inference seam, built once per worker thread; `Copy`, passed by value.
@@ -224,6 +222,33 @@ impl std::fmt::Display for InferenceSeamFailure {
 fn count_live_failure(running: &AtomicBool, counter: &AtomicU64) {
     if running.load(Ordering::SeqCst) {
         counter.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+/// A search's served result, or the move outcome its failure ends in: a failed root is counted and skipped.
+fn settle_search(
+    search: McTSSearchResult,
+    running: &AtomicBool,
+    max_sims_per_search: &AtomicU64,
+    root_expansion_failed: &AtomicU64,
+    fatal_latch: FatalDefectLatch,
+) -> Result<(Option<MctxRootState>, usize), MoveOutcome> {
+    match search {
+        McTSSearchResult::Completed(gs, sims_served) => {
+            // A MAX rather than a mean: a mean hides a single overshooting search.
+            max_sims_per_search.fetch_max(sims_served as u64, Ordering::Relaxed);
+            Ok((gs, sims_served))
+        }
+        McTSSearchResult::RootExpansionFailed => {
+            count_live_failure(running, root_expansion_failed);
+            Err(MoveOutcome::Continue)
+        }
+        // Store-then-halt on its OWN counter, so the supervisor reads the inference failure
+        // that killed the run instead of a refusal a hundred plies downstream.
+        McTSSearchResult::InferenceFailed(err) => {
+            fatal_latch.store_inference_failure(err.to_string());
+            Err(MoveOutcome::Break)
+        }
     }
 }
 
@@ -602,7 +627,7 @@ pub(crate) fn play_one_move(
         }
     };
 
-    let (gumbel_state, sims_served) = match run_mcts_search(
+    let search = run_mcts_search(
         tree,
         board,
         move_sims,
@@ -622,24 +647,16 @@ pub(crate) fn play_one_move(
             rounds: accumulators.gumbel_rounds,
             dirichlet_root_fires: accumulators.dirichlet_root_fires,
         },
+    );
+    let (gumbel_state, sims_served) = match settle_search(
+        search,
+        running,
+        accumulators.max_sims_per_search,
+        accumulators.root_expansion_failed,
+        fatal_latch,
     ) {
-        McTSSearchResult::Completed(gs, sims_served) => {
-            // A MAX rather than a mean: a mean hides a single overshooting search.
-            accumulators
-                .max_sims_per_search
-                .fetch_max(sims_served as u64, Ordering::Relaxed);
-            (gs, sims_served)
-        }
-        McTSSearchResult::RootExpansionFailed => {
-            count_live_failure(running, accumulators.root_expansion_failed);
-            return MoveOutcome::Continue;
-        }
-        // Store-then-halt on its OWN counter, so the supervisor reads the inference failure
-        // that killed the run instead of a refusal a hundred plies downstream.
-        McTSSearchResult::InferenceFailed(err) => {
-            fatal_latch.store_inference_failure(err.to_string());
-            return MoveOutcome::Break;
-        }
+        Ok(served) => served,
+        Err(outcome) => return outcome,
     };
 
     if !running.load(Ordering::Relaxed) {
@@ -794,13 +811,6 @@ pub(crate) fn play_one_move(
         return MoveOutcome::Break;
     }
     if tree.tactics_config().is_some() {
-        if let Some(Err(leak)) = graph_records_vec
-            .last()
-            .map(|rec| refuse_tail_leak(rec, &vetoes, root_forced))
-        {
-            fatal_latch.store(leak.to_string());
-            return MoveOutcome::Break;
-        }
         let written = Written {
             record: graph_records_vec.last(),
             drawn_full: move_is_full_search,
@@ -809,8 +819,12 @@ pub(crate) fn play_one_move(
             edit,
             tail_leaked: seal.as_ref().is_some_and(|s| s.leaked),
             tail_emptied: seal.as_ref().is_some_and(|s| s.no_policy),
+            root_forced,
         };
-        count_rows(accumulators.tactics_totals, &rows, &written, &vetoes);
+        if let Err(leak) = account_row(accumulators.tactics_totals, &rows, &written, &vetoes) {
+            fatal_latch.store(leak.to_string());
+            return MoveOutcome::Break;
+        }
     }
 
     if board.apply_move(move_idx.0, move_idx.1).is_err() {
@@ -1019,7 +1033,9 @@ mod shortfall_tests {
 mod live_failure_tests {
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
-    use super::count_live_failure;
+    use super::{
+        count_live_failure, settle_search, FatalDefectLatch, McTSSearchResult, MoveOutcome,
+    };
 
     /// PLANTED BREAK: count without the `running` check and a shutdown reads as a failed root.
     #[test]
@@ -1028,6 +1044,49 @@ mod live_failure_tests {
         count_live_failure(&AtomicBool::new(true), &counter);
         count_live_failure(&AtomicBool::new(false), &counter);
         assert_eq!(counter.load(Ordering::Relaxed), 1);
+    }
+
+    /// PLANTED BREAK: drop the count from the failed-root arm and a live run's failed roots read zero.
+    #[test]
+    fn a_settled_search_counts_a_failed_root_and_skips_its_move() {
+        let (running, max_sims, failed) =
+            (AtomicBool::new(true), AtomicU64::new(0), AtomicU64::new(0));
+        let (slot, fires, inference_failures) = (
+            std::sync::Mutex::new(None),
+            AtomicU64::new(0),
+            AtomicU64::new(0),
+        );
+        let latch = FatalDefectLatch {
+            slot: &slot,
+            fires: &fires,
+            inference_failures: &inference_failures,
+            running: &running,
+        };
+        let settled = settle_search(
+            McTSSearchResult::RootExpansionFailed,
+            &running,
+            &max_sims,
+            &failed,
+            latch,
+        );
+        assert!(matches!(settled, Err(MoveOutcome::Continue)));
+        assert_eq!(failed.load(Ordering::Relaxed), 1);
+        let settled = settle_search(
+            McTSSearchResult::Completed(None, 7),
+            &running,
+            &max_sims,
+            &failed,
+            latch,
+        );
+        assert!(matches!(settled, Ok((None, 7))));
+        assert_eq!(
+            (
+                max_sims.load(Ordering::Relaxed),
+                failed.load(Ordering::Relaxed)
+            ),
+            (7, 1)
+        );
+        assert!(slot.lock().expect("unpoisoned").is_none() && running.load(Ordering::Relaxed));
     }
 }
 
