@@ -2,7 +2,7 @@
 
 `train.max_train_steps` is read HERE and nowhere else; the composition root
 (`mantis.run.compose_run`) threads the resolved value into `StepCoordinatorConfig.stop_step`,
-which is the real stop condition (`coordinator/step.py` O2). `train.total_steps` is ONLY the
+which is the real stop condition (`coordinator/step.py` O2). `train.scheduler_t_max` is ONLY the
 LR-scheduler horizon (`trainer/core.py` cosine `t_max`) and is NOT a run-length authority — no
 stop condition reads it.
 

@@ -82,7 +82,7 @@ def test_the_fraction_is_a_named_constant_and_a_config_can_never_set_it(producti
 def test_the_run_length_the_bound_is_taken_from_is_a_real_key(production) -> None:
     """`RUN_LENGTH_PATH` is walked through the SAME `_dotted` every row's paths go through, so a
     rename of the run-length key is one loud `ArmingSurfaceMissingError` rather than a silent
-    bound of 0. NOT SUFFICIENT ALONE: `train.total_steps` also resolves to a positive int, which
+    bound of 0. NOT SUFFICIENT ALONE: `train.scheduler_t_max` also resolves to a positive int, which
     is the one substitution that matters."""
     obj: object = production
     for part in RUN_LENGTH_PATH.split("."):
@@ -95,13 +95,13 @@ def test_the_run_length_the_bound_is_taken_from_is_a_real_key(production) -> Non
 def test_the_bound_follows_the_RUN_LENGTH_authority_never_the_scheduler_horizon() -> None:
     """The anchor key, a class now caught TWICE.
 
-    The schema's own bound records the first: anchored to `train.max_train_steps`, not
-    `train.total_steps`, after a 2000-step run with `total_steps: 1000000` blessed a cadence of
+    The schema's own bound records the first: anchored to `train.max_train_steps`, not the LR
+    horizon, after a 2000-step run with a 1000000-step horizon blessed a cadence of
     999 999. Re-pointing at the scheduler horizon is INVISIBLE across the production set, where
     the two agree; short configs are where it bites. Driven rather than asserted by name.
     """
     short = load_config(REPO_ROOT / "configs" / "smoke_preflight_armed.yaml")
-    assert short.train.total_steps != short.train.max_train_steps, (
+    assert short.train.scheduler_t_max != short.train.max_train_steps, (
         "this pin needs a config on which the RUN LENGTH and the LR-scheduler horizon DIFFER, "
         f"or it proves nothing; both read {short.train.max_train_steps}"
     )
@@ -110,8 +110,8 @@ def test_the_bound_follows_the_RUN_LENGTH_authority_never_the_scheduler_horizon(
     for verdict in verdicts:
         assert verdict.bound == EARLIEST_FIRE_FRACTION * short.train.max_train_steps, (
             f"row {verdict.row.name!r}'s bound must be a fraction of {RUN_LENGTH_PATH}, the "
-            f"RUN-LENGTH authority — anchored to train.total_steps it would read "
-            f"{EARLIEST_FIRE_FRACTION * short.train.total_steps} on this 2000-step config, "
+            f"RUN-LENGTH authority — anchored to train.scheduler_t_max it would read "
+            f"{EARLIEST_FIRE_FRACTION * short.train.scheduler_t_max} on this 2000-step config, "
             f"which is the F-C defect verbatim; got {verdict.bound}"
         )
 

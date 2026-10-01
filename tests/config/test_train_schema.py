@@ -17,8 +17,7 @@ VALID_TRAIN_PAYLOAD: dict = {
     "grad_clip": 1.0,
     "device": "cpu",
     "lr_schedule": "cosine",
-    "total_steps": 1_000_000,
-    "scheduler_t_max": None,
+    "scheduler_t_max": 1_000_000,
     "eta_min": 5e-4,
     "checkpoint_interval": 0,
     "actor_sync_cadence_steps": 1,
@@ -60,7 +59,6 @@ BOUND_VIOLATIONS: list[tuple[str, object]] = [
     ("lr", -1e-3),
     ("weight_decay", -1e-4),
     ("grad_clip", 0.0),
-    ("total_steps", 0),
     ("scheduler_t_max", 0),
     ("eta_min", -1e-9),
     ("checkpoint_interval", -1),
@@ -109,7 +107,7 @@ def _payload(**over: object) -> dict:
 def test_valid_payload_constructs_clean():
     cfg = TrainConfig.model_validate(VALID_TRAIN_PAYLOAD)
     assert cfg.lr == 1e-3
-    assert cfg.scheduler_t_max is None
+    assert cfg.scheduler_t_max == 1_000_000
 
 
 #: Arch-scoped blocks are omittable at this level: their required-ness depends on
@@ -162,7 +160,7 @@ def test_literal_out_of_enum_rejected(field: str, bad_value: object):
         TrainConfig.model_validate(_payload(**{field: bad_value}))
 
 
-def test_scheduler_t_max_none_is_a_real_value_not_a_missing_key():
-    # `None` satisfies the union, but the key itself is still required.
-    cfg = TrainConfig.model_validate(_payload(scheduler_t_max=None))
-    assert cfg.scheduler_t_max is None
+def test_the_lr_horizon_is_one_required_int_with_no_null_fallback():
+    """`scheduler_t_max` is the one horizon: a null no longer falls back to a second key."""
+    with pytest.raises(ValidationError, match="scheduler_t_max"):
+        TrainConfig.model_validate(_payload(scheduler_t_max=None))

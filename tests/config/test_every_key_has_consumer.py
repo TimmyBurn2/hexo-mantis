@@ -104,7 +104,6 @@ CONSUMER_REGISTRY = {
         " init_trainer(device=…) AND WorkerPool(device=…) (R126; the retired --device flag"
         " on both callers)",
     "train.lr_schedule": "TrainHParams.from_config -> Trainer._build_scheduler",
-    "train.total_steps": "TrainHParams.from_config -> Trainer._build_scheduler T_max fallback",
     "train.scheduler_t_max": "TrainHParams.from_config -> Trainer._build_scheduler T_max",
     "train.eta_min": "TrainHParams.from_config -> Trainer._build_scheduler eta_min",
     "train.checkpoint_interval": "TrainHParams.from_config ->"

@@ -528,7 +528,7 @@ class RunConfig(StrictModel):
         `max_train_steps` lets the actor take its single unconditional first sync and then freeze,
         and it also pushes the lag threshold out of reach, so the two knobs fail open together. The
         bound is anchored to `train.max_train_steps`, the RUN-LENGTH authority, not to
-        `train.total_steps`, which is only the LR-scheduler horizon.
+        `train.scheduler_t_max`, which is only the LR-scheduler horizon.
         """
         total = self.train.max_train_steps
         if self.train.actor_sync_cadence_steps >= total:

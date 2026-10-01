@@ -417,25 +417,25 @@ def test_full_config_carries_the_real_config_not_an_empty_dict(
 
 
 def test_a_cadence_inside_the_LR_horizon_but_beyond_the_RUN_is_rejected():
-    """The reachability bound reads `train.max_train_steps`, not `train.total_steps`.
+    """The reachability bound reads `train.max_train_steps`, not `train.scheduler_t_max`.
 
-    `total_steps` is ONLY the LR-scheduler horizon; a bound anchored to it blesses a cadence of
+    `scheduler_t_max` is ONLY the LR-scheduler horizon; a bound anchored to it blesses a cadence of
     100 against a 50-step run. Every test payload in the repo sets the two equal, so driving
     them APART is the only thing that discriminates them.
     """
     with pytest.raises(ValidationError, match="must be < train.max_train_steps"):
         RunConfig(**_payload(
-            train_over={"total_steps": 1_000_000, "max_train_steps": 50,
+            train_over={"scheduler_t_max": 1_000_000, "max_train_steps": 50,
                         "actor_sync_cadence_steps": 100},
             monitor_over={"actor_lag_threshold_steps": 200},
         ))
 
 
 def test_a_run_that_outlives_its_LR_horizon_is_accepted():
-    """A cadence beyond `total_steps` but inside the run length is ACCEPTED — without this arm
+    """A cadence beyond `scheduler_t_max` but inside the run length is ACCEPTED — without this arm
     the fix could be a blanket tightening that survives in one direction."""
     cfg = RunConfig(**_payload(
-        train_over={"total_steps": 100, "max_train_steps": 1_000_000,
+        train_over={"scheduler_t_max": 100, "max_train_steps": 1_000_000,
                     "actor_sync_cadence_steps": 2000},
         monitor_over={"actor_lag_threshold_steps": 3000},
     ))

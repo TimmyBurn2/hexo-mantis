@@ -60,9 +60,7 @@ def test_the_floor_survives_a_resume_from_the_parents_state() -> None:
 def _schedule(name: str) -> tuple[float, float, int, int]:
     """A config's `(lr, eta_min, horizon, budget)` off its own rows."""
     hp = TrainHParams.from_config(load_config(_CONFIGS / name).model_dump())
-    horizon = hp.scheduler_t_max if hp.scheduler_t_max is not None else hp.total_steps
-    assert horizon is not None
-    return (hp.lr, hp.eta_min, int(horizon), int(load_config(_CONFIGS / name).train.max_train_steps))
+    return (hp.lr, hp.eta_min, int(hp.scheduler_t_max), int(load_config(_CONFIGS / name).train.max_train_steps))
 
 
 _SCHEDULES = sorted({_schedule(name) for name in _COSINE})

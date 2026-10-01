@@ -1,7 +1,7 @@
 """The retired-path authority names only paths the schema no longer has, and splitting them off never mutates the record."""
 from __future__ import annotations
 
-from mantis.config.retired import RETIRED_PATHS, split_retired
+from mantis.config.retired import FOLDED_PATHS, RETIRED_PATHS, split_retired
 from mantis.config.schema import RunConfig, leaf_paths
 
 
@@ -19,3 +19,26 @@ def test_split_retired_copies_and_leaves_the_record_untouched() -> None:
     assert kept == {"train": {"lr": 1e-3}}
     assert removed == {"train.value_target": "pure_outcome_z", "search": {"kind": "gumbel"}}
     assert record["train"]["value_target"] == "pure_outcome_z" and "search" in record
+
+
+def test_a_record_predating_a_fold_reads_its_folded_value_and_stays_untouched() -> None:
+    """PLANTED BREAK: drop `FOLDED_PATHS` and a pre-fold stamp's null horizon and zero sims fail the schema."""
+    record = {"train": {"total_steps": 1_000_000, "scheduler_t_max": None},
+              "selfplay": {"mcts": {"n_simulations": 2}, "playout_cap": {"n_sims_full": 0}}}
+    kept, removed = split_retired(record)
+    assert kept == {"train": {"scheduler_t_max": 1_000_000}, "selfplay": {"mcts": {}, "playout_cap": {"n_sims_full": 2}}}
+    assert removed == {"train.total_steps": 1_000_000, "selfplay.mcts.n_simulations": 2}
+    assert record["train"]["scheduler_t_max"] is None and record["selfplay"]["playout_cap"]["n_sims_full"] == 0
+
+
+def test_a_fold_never_overrides_a_value_the_record_set() -> None:
+    """The armed run8 shape keeps its own full arm and horizon; the folded source only fills an unset target."""
+    record = {"train": {"total_steps": 1_000_000, "scheduler_t_max": 108_000},
+              "selfplay": {"mcts": {"n_simulations": 320}, "playout_cap": {"n_sims_full": 320}}}
+    kept, _ = split_retired(record)
+    assert kept["train"]["scheduler_t_max"] == 108_000 and kept["selfplay"]["playout_cap"]["n_sims_full"] == 320
+
+
+def test_every_fold_runs_from_a_retired_path_to_a_live_one() -> None:
+    live = set(leaf_paths(RunConfig))
+    assert all(src in RETIRED_PATHS and dst in live for src, dst in FOLDED_PATHS.items()), FOLDED_PATHS

@@ -32,7 +32,7 @@ BASE_PLAYOUT_CAP: dict[str, Any] = {
 # The LEGACY flat hparams dict `cfg()` builds, never a validated `train:` payload, so INCOMPLETE.
 BASE_TRAIN: dict[str, Any] = {
     "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0,
-    "lr_schedule": "cosine", "total_steps": 1_000_000, "scheduler_t_max": None,
+    "lr_schedule": "cosine", "scheduler_t_max": 1_000_000,
     "eta_min": 5e-4, "checkpoint_interval": 0,
     "policy_target": "raw_visit_distribution",
     "fast_policy_weight": 0.0,

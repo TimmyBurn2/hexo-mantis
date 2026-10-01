@@ -81,8 +81,7 @@ class TrainHParams:
     weight_decay: float
     grad_clip: float
     lr_schedule: str
-    total_steps: int
-    scheduler_t_max: int | None
+    scheduler_t_max: int
     eta_min: float
     checkpoint_interval: int
     #: `model.aux_soft_policy` as `(temperature, weight)`; `None` is the explicit OFF.
@@ -245,10 +244,7 @@ class Trainer:
         if schedule in {"none", "off", "disabled"}:
             return None
         if schedule == "cosine":
-            t_max = self.hp.scheduler_t_max if self.hp.scheduler_t_max is not None else self.hp.total_steps
-            if t_max is None:
-                raise ValueError("lr_schedule: cosine requires total_steps / scheduler_t_max.")
-            return FlooredCosineAnnealingLR(self.optimizer, T_max=max(1, int(t_max)),
+            return FlooredCosineAnnealingLR(self.optimizer, T_max=max(1, int(self.hp.scheduler_t_max)),
                                             eta_min=float(self.hp.eta_min), last_epoch=-1)
         raise ValueError(f"Unsupported lr_schedule: {schedule}")
 

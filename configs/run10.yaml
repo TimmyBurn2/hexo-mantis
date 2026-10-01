@@ -34,7 +34,7 @@
 # delta: train.training_steps_per_game: 1.0 -> 2.4
 # delta: selfplay.mcts.dirichlet_enabled: true -> false
 # delta: model.aux_soft_policy: null -> {target_temperature: 4.0, weight: 4.0}
-# delta: train.scheduler_t_max: null -> 108000
+# delta: train.scheduler_t_max: 1000000 -> 108000
 # delta: train.eta_min: 0.0005 -> 0.0001
 # delta: train.heldout_gap: null -> {ring: checkpoints/run8/run8_00045000_3bdedf76.ckpt.ring.bin, ring_sha256: 2a3c4e57815b962a81773e170903153015f42f31d445ecb85563096e6468eba3, batches: 12, seed: 20260921, interval: 3000}
 # delta: eval.round_timeout_sec: 3600.0 -> 14400.0
@@ -106,7 +106,6 @@ train:
   grad_clip: 1.0
   device: cuda
   lr_schedule: cosine
-  total_steps: 1000000
   scheduler_t_max: 108000
   eta_min: 0.0001
   checkpoint_interval: 3000

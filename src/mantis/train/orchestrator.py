@@ -30,7 +30,7 @@ RESUME_CHECKPOINT_OWNED_KEYS: frozenset[str] = frozenset({
 RESUME_CHECKPOINT_OWNED_PATHS: frozenset[str] = frozenset({
     "identity.encoding", "identity.representation", "identity.arch_kind",
     "train.lr", "train.weight_decay", "train.lr_schedule",
-    "train.total_steps", "train.scheduler_t_max", "train.eta_min",
+    "train.scheduler_t_max", "train.eta_min",
 })
 
 #: The override key carrying the owned launch values the builder dropped, so the resume can say

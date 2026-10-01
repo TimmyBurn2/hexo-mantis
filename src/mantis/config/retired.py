@@ -15,19 +15,36 @@ RETIRED_PATHS: frozenset[str] = frozenset({
     "monitor.wr_early_death_min_step",
     "train.value_target", "train.draw_reward", "train.ply_cap_value",
     "selfplay.playout_cap.fast_sims", "selfplay.playout_cap.fast_prob", "selfplay.playout_cap.standard_sims",
-    "selfplay.mcts.n_simulations", "train.policy_loss_weight_schedule",
+    "selfplay.mcts.n_simulations", "train.policy_loss_weight_schedule", "train.total_steps",
 })
 
 
+#: A retired path whose value now lives at a live leaf: a record predating the fold left that leaf unset (null or 0).
+FOLDED_PATHS: dict[str, str] = {
+    "train.total_steps": "train.scheduler_t_max",
+    "selfplay.mcts.n_simulations": "selfplay.playout_cap.n_sims_full",
+}
+
+
+def _parent(config: dict[str, Any], dotted: str) -> tuple[Any, str]:
+    """`(the mapping holding the dotted leaf, or None, the leaf's key)`."""
+    *parents, leaf = dotted.split(".")
+    node: Any = config
+    for part in parents:
+        node = node.get(part) if isinstance(node, dict) else None
+    return node, leaf
+
+
 def split_retired(config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    """`(a deep copy without the retired paths, {dotted path: the value it carried})`; the input is untouched."""
+    """`(a copy without the retired paths, a fold's unset target filled, {dotted path: value})`; the input is untouched."""
     kept = copy.deepcopy(config)
     removed: dict[str, Any] = {}
     for dotted in sorted(RETIRED_PATHS):
-        *parents, leaf = dotted.split(".")
-        node: Any = kept
-        for part in parents:
-            node = node.get(part) if isinstance(node, dict) else None
+        node, leaf = _parent(kept, dotted)
         if isinstance(node, dict) and leaf in node:
             removed[dotted] = node.pop(leaf)
+    for source, target in FOLDED_PATHS.items():
+        node, leaf = _parent(kept, target)
+        if source in removed and isinstance(node, dict) and node.get(leaf) in (None, 0):
+            node[leaf] = removed[source]
     return kept, removed

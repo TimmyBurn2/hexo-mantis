@@ -71,8 +71,7 @@ train:
   grad_clip: 1.0
   device: cuda
   lr_schedule: cosine
-  total_steps: 1000000
-  scheduler_t_max: null
+  scheduler_t_max: 1000000
   eta_min: 0.0005
   checkpoint_interval: 0
   actor_sync_cadence_steps: 1

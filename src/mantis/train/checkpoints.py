@@ -836,8 +836,7 @@ def strip_and_restamp(
             "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0,
             "ema": {"enabled": False, "decay": 0.999, "update_every": 10},
             "device": "cpu",
-            "lr_schedule": "cosine", "total_steps": 1_000_000,
-            "scheduler_t_max": None, "eta_min": 5e-4,
+            "lr_schedule": "cosine", "scheduler_t_max": 1_000_000, "eta_min": 5e-4,
             "checkpoint_interval": 0, "actor_sync_cadence_steps": 1,
             "max_train_steps": 1_000_000,  # required run-length key
             # `None` is the EXPLICIT disarmed posture: a config that is not a run claims no abort.

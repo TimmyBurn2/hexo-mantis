@@ -183,8 +183,8 @@ class TrainConfig(StrictModel):
     # CLOSED vocabulary: device indices (`cuda:1`) are unrepresentable.
     device: Literal["cpu", "cuda"]
     lr_schedule: Literal["cosine", "none"]
-    total_steps: int = Field(ge=1)
-    scheduler_t_max: int | None = Field(default=..., ge=1)  # no terminal default; None is real
+    # The LR anneal's horizon (the floored cosine's T_max), never a run length: `max_train_steps` is that.
+    scheduler_t_max: int = Field(ge=1)
     eta_min: float = Field(ge=0)
     checkpoint_interval: int = Field(ge=0)
     # Continuous actor-sync cadence in coordinator training steps. `ge=1` means NO disabled

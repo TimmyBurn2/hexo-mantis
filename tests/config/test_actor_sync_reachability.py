@@ -46,7 +46,7 @@ _payload = _load_frozen_schema_oracle()._payload
 
 def _max_train_steps() -> int:
     """The bound is anchored to the RUN-LENGTH knob, not to the LR-scheduler
-    horizon `train.total_steps` that it used to read (F-C re-anchor)."""
+    horizon `train.scheduler_t_max` that it used to read (F-C re-anchor)."""
     return int(_payload()["train"]["max_train_steps"])
 
 

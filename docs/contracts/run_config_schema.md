@@ -1,8 +1,8 @@
 # Contract: run config schema
 
-- version: v44
+- version: v45
 - owner: mantis.config.schema
-- status: LIVE since scaffold (WP0). Forty-three steps since (v1 -> v44). Each through v6 is
+- status: LIVE since scaffold (WP0). Forty-four steps since (v1 -> v45). Each through v6 is
   recorded as a named amendment in docs/design/repo_design.md §4; v7, v8 and v9 are NOT, and
   that is stated rather than implied — v7 landed without one, v8 (R242/ADJ-D12) inherited that
   gap rather than back-filling somebody else's amendment, and v9 records the same gap for
@@ -23,7 +23,7 @@ YAML keys and enumerates the audit root name-agnostically.
 | ver | what moved | landed by |
 |---|---|---|
 | v1 | founding shape; additive growth in WP8 (strict mode, the resolver family, the duplicate-key loader, the consumer bijection) — no key changed incompatibly | WP0 scaffold, WP8 |
-| v2 | `train.max_train_steps` becomes a required leaf: the RUN-LENGTH authority, distinct from `train.total_steps`, which is only the LR-scheduler horizon | WPAX Phase S (ADJ-09 Option B) |
+| v2 | `train.max_train_steps` becomes a required leaf: the RUN-LENGTH authority, distinct from the `train` section's `total_steps` (folded into `train.scheduler_t_max` at v45), which is only the LR-scheduler horizon | WPAX Phase S (ADJ-09 Option B) |
 | v3 | `train.draw_rate_abort` becomes a required leaf — a block or `null`, where `null` is the EXPLICIT disarmed posture. Its third key was `min_samples` (`ge=1, le=DRAW_RATE_WINDOW`) and is now `N_pool_min` (`ge=1`), because the gated statistic changed to the pooled count-weighted rate | WPAX Phase D; third-key swap WPMINT Phase DS (R92) |
 | v4 | twenty new required leaves: nineteen flat `train.*` step-coordinator knobs plus `train.draw_rate_abort.consec`. Six sibling coordinator fields were DELETED rather than authored (no reader in `src/`), and `train.batch_size` is minted at the value the code actually used | WPMINT Phase K-B |
 | v6 | one required leaf REMOVED — the `train` section's `buffer_save_interval`, the first leaf this contract has ever dropped. Its only consumer chain ended in `coordinator/step.py`'s D4 `_try_save_buffer` arm, which WP12-R Phase CS MEASURED (F-CS-2) production-dead on every leg, so a key minted into `run5.yaml` had zero reachable effect (R116/LAW-08/R1). The `buffer_save_interval` -> `checkpoint_interval` rename seam and both no-op `_try_save_buffer` arms go with it. `extra="forbid"` makes this incompatible in reverse: a config still carrying the key fails to load | WP12-R (R178(a), assigned by R183(a)) |
@@ -71,10 +71,11 @@ plays the deploy block too, deploy-matched (R378(d)); the v39 row's "without it"
 | v42 | THREE leaves DELETED from `selfplay.playout_cap`, `fast_sims`, `fast_prob` and `standard_sims` — GAME-LEVEL FAST GAMES (HYGIENE-1, R381(d); the training-path audit's §7 item 1). Never armed in any committed config, and latently wrong: a fast game's rows were recorded with `is_full_search` true, so they trained policy at full weight. With them go the runner's per-game draw and its temperature-1.0 override, the spawn assert and `_mutual_exclusion`'s refusal that kept them apart from the move-level cap, and `effective_standard_sims`: every searched move now runs the `mcts` block's `n_simulations`, or the move-level cap's arm when `full_search_prob` is armed, and the HEXG capacity derivation reads those alone. The paths join `RETIRED_PATHS`; every committed config is RE-MINTED through its own header (the smokes' `fast_sims` delta dropped with its leaf) and `tools/config_diff.py --expect` names the three leaves alone | R381(d); HYGIENE-1 |
 | v43 | ONE leaf FOLDED: the `mcts` block's `n_simulations` is DELETED and `selfplay.playout_cap.n_sims_full` becomes the one sims key (`int`, `ge=1`) — every searched move's sims, and under an armed `full_search_prob` the full arm's (HYGIENE-1, R381(d); the training-path audit's §7 item 2). Under the move-level cap `n_simulations` was search-inert (it fed only the boot zero check, the pool ceiling and a PUCT capacity term), so one budget had two keys. The runner keeps its own field name, `n_simulations` (the served-sims witness builds it), and folds its `n_sims_full` into it: `SelfPlayHParams` passes `selfplay.playout_cap.n_sims_full` there, and `_mutual_exclusion` now gates on the quick preset alone. `effective_sims_per_move` is unchanged on every committed config (run10 320, the smokes 2, dev 50). The path joins `RETIRED_PATHS`; every config is RE-MINTED through its own header, its `n_simulations` delta folded onto `n_sims_full` (run10's two were equal), and run10's `tools/config_diff.py --expect` names that one leaf alone | R381(d); HYGIENE-1 |
 | v44 | ONE block DELETED from the `train` section, `policy_loss_weight_schedule` (`warmup_steps`) — THE POLICY WARM-UP (HYGIENE-1, R381(d); the training-path audit's §7 item 4), minted 0 in every committed config. With it go the trainer's policy-zero branch, the BC route's refusal of a non-zero warm-up and the `trainer_step` weight it reported (event manifest v6): the step's loss is the policy CE plus the value loss, and the aux term rides every step. CENSUS-2's value-head warm-up is its own driver (it freezes everything but the head) and reads nothing here. The path joins `RETIRED_PATHS`; every config is RE-MINTED through its own header and `tools/config_diff.py --expect` names that block's leaf alone | R381(d); HYGIENE-1 |
+| v45 | ONE leaf FOLDED: the `train` section's `total_steps` is DELETED and `train.scheduler_t_max` becomes the one LR horizon (`int`, `ge=1`, no null) — THE FLOORED COSINE'S T_MAX (HYGIENE-1, R381(d); the training-path audit's §7 item 4). `total_steps` decided nothing on run10 (its `scheduler_t_max` is 108 000) and elsewhere only stood in for a null horizon, so one horizon had two keys; neither is a run length (`train.max_train_steps` is). Configs that minted a null now state 1 000 000, the horizon they already annealed over. Both stay checkpoint-owned on a resume. The path joins `RETIRED_PATHS`; every config is RE-MINTED through its own header and run10's `tools/config_diff.py --expect` names that one leaf alone | R381(d); HYGIENE-1 |
 
 ## Shape
 
-Thirteen top-level fields; **172 leaf key-paths** under the walker that descends nested blocks
+Thirteen top-level fields; **171 leaf key-paths** under the walker that descends nested blocks
 (including optional ones) and counts a `list[SubModel]` field as ONE leaf.
 
 | section | leaves | models |
@@ -88,7 +89,7 @@ Thirteen top-level fields; **172 leaf key-paths** under the walker that descends
 | `model` | 4 | `ModelConfig`, `GnnWidthsConfig`, `AuxSoftPolicyConfig` |
 | `deploy` | 11 | `DeployConfig`, `SearchConfig`, `TacticsConfig`, `TacticsAuditConfig` |
 | `eval` | 30 | `EvalConfig`, `GateConfig`, `SequentialGateConfig`, `PlyCapAdjudicationConfig`, `StrengthFloorConfig` |
-| `train` | 47 | `TrainConfig`, `DrawRateAbortConfig`, `PolicyLossTroughAbortConfig`, `PlyCapAbortConfig`, `HeldoutGapConfig`, `ReplayCapacityStage`, `MicrobatchCapsConfig` |
+| `train` | 46 | `TrainConfig`, `DrawRateAbortConfig`, `PolicyLossTroughAbortConfig`, `PlyCapAbortConfig`, `HeldoutGapConfig`, `ReplayCapacityStage`, `MicrobatchCapsConfig` |
 | `selfplay` | 35 | `SelfplayConfig`, `SearchConfig`, `TacticsConfig`, `TacticsAuditConfig`, `MctsConfig`, `PlayoutCapConfig` |
 | `inference` | 6 | `InferenceConfig`, `FusedGraphCapsConfig` |
 | `monitor` | 28 | `MonitorSchemaConfig`, `DrainCapsConfig`, `DiskGuardConfig` |
