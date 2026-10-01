@@ -922,8 +922,8 @@ recommended one; each is its own leg with a LAW-09 bench.
   source); NEW (vii) AUXILIARY SOFT-POLICY HEAD — a second policy head on target^(1/4)
   (renormalised), nominal weight 8, behind the seam with a producer test (same source: KataGo's
   T = 4, weight 8). A value-target swap is NOT a queue entry: KataGo's short-term value heads are the
-  family the landed-UNARMED λ-return codec already is (`src/mantis/model/value_targets.py`,
-  `f049ef02`, imported by nothing). ORDER after run8's 15k/30k reading: (i), (vii), (ii), (vi),
+  family the landed-UNARMED λ-return codec already was (`f049ef02`, imported by nothing; deleted by
+  HYGIENE-1 at `482684f2`, recoverable from either). ORDER after run8's 15k/30k reading: (i), (vii), (ii), (vi),
   (iv), (v). run9's mint also DROPS the `selfplay.mcts.dirichlet_*` rows (R359(d): inert on the
   Gumbel arm by code, so a cosmetic) with one pin that the Gumbel arm never applies Dirichlet.
   FALSIFIED run8 → run9 = parent + A-2 + augment with run7's σ (rescale): σ leaves, augmentation
