@@ -15,6 +15,7 @@ import numpy as np
 import pytest
 
 from mantis.arena.books import round_openings
+from mantis.eval.sequential import SequentialGateSpec, gsprt_llr, run_sequential_gate
 from mantis.eval.aggregate import (
     aggregate_gate,
     pair_bootstrap_wr_ci,
@@ -111,6 +112,28 @@ def test_the_gate_ci_and_eff_n_are_both_over_pairs() -> None:
     assert result.eff_n == 12, (
         f"eff_n is {result.eff_n} — counted in games (24) rather than in the pairs the CI "
         "is computed over"
+    )
+    assert result.elo_ci_lower_boot == pytest.approx(0.0), (
+        "every pair splits 1-1, so the pair-level interval sits on 0.5 (re-centred to 0.0); a game-level "
+        f"bootstrap spreads it below; got {result.elo_ci_lower_boot}"
+    )
+
+
+def test_the_gsprt_reads_its_llr_over_pairs_not_games() -> None:
+    """PLANTED BREAK: feed the GSPRT per-game scores and correlated legs count twice in the promotion decision."""
+    records: list[dict[str, Any]] = []
+    for i in range(8):
+        records.extend(_split_pair(f"s{i}", "p1", "p2"))
+    for i in range(8):
+        records.extend(_split_pair(f"w{i}", "p1", "p1"))
+    spec = SequentialGateSpec(mu0=0.42, mu1=0.52, alpha=0.05, beta=0.1, check_every_pairs=16, min_pairs=16,
+                              max_pairs=16, at_max_pairs="sign")
+    played, verdict = run_sequential_gate(lambda start, end: records[2 * start:2 * end], spec)
+    over_pairs = gsprt_llr(pair_units(records), spec.mu0, spec.mu1)
+    over_games = gsprt_llr([1.0 if r["winner"] == "p1" else 0.0 for r in records], spec.mu0, spec.mu1)
+    assert over_pairs != pytest.approx(over_games), "fixture sanity: the two units must read differently"
+    assert len(played) == 32 and verdict.llr == pytest.approx(over_pairs), (
+        f"the GSPRT read {verdict.llr}, not the pair-level {over_pairs} (game-level {over_games})"
     )
 
 
