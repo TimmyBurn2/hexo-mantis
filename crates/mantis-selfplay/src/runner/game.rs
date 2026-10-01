@@ -20,8 +20,8 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 use rand::prelude::IndexedRandom;
+use rand::rng;
 use rand::rngs::ThreadRng;
-use rand::{rng, RngExt};
 
 use mantis_core::{Board, BoardGeometry};
 use mantis_search::{MCTSTree, QSigma, SearchKind, VIRTUAL_LOSS_PENALTY};

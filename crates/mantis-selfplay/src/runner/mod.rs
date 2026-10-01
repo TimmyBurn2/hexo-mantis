@@ -194,7 +194,7 @@ impl SelfPlayRunner {
     /// # Errors
     /// Returns `Err(msg)` when `encoding_name` is absent or unknown, or when a sim-budget /
     /// playout-cap invariant is violated.
-    pub fn new(mut config: SelfPlayRunnerConfig) -> Result<Self, String> {
+    pub fn new(config: SelfPlayRunnerConfig) -> Result<Self, String> {
         // Absent spec = error (no `None -> v6` fallback); unknown name = error naming it.
         let spec: &'static RegistrySpec = match config.encoding_name.as_deref() {
             Some(name) => match lookup(name) {
