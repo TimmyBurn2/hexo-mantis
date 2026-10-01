@@ -288,6 +288,10 @@ def test_guard_state_round_trips_through_json_and_tolerates_an_empty_one() -> No
     # So is the deleted grad-norm abort's counter.
     other.coord.restore_guard_state({"consec_high_gn": 2})
     assert not hasattr(other.coord, "_consec_high_gn")
+    # And the deleted trough halt's windows.
+    other.coord.restore_guard_state({"policy_loss_reference": 2.1, "policy_loss_window_means": [2.3],
+                                     "policy_loss_window": [2.4, 2.5]})
+    assert not hasattr(other.coord, "_policy_loss_window") and not hasattr(other.coord, "_policy_loss_reference")
 
 
 def test_draw_rate_gate_default_off_does_not_fire() -> None:
