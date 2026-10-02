@@ -15,6 +15,11 @@ START (R376(c)). `configs/run10.yaml` stays the production config the instrument
 run11 arms the deploy block at its mint by the operator's word (R378(a)), and in self-play arm A's design, carried
 (R381(c), CARD-RUN11-DESIGN).
 
+- **REG-1 IN PROGRESS** (CARD-REG-1; branch `reg-1` from `census-3`'s tip `7b8d6a6e`, the combined tip R383(g) orders):
+  GEN self-plays run8@45k frozen under arm A's config on the box, then the arms at 8 draws per row read on its
+  in-distribution held-out split. Its first commit lands R383(f)'s record corrections (CARD-FORGE2-ANNOTATIONS) and
+  the cards R383 names. Records: `mantis-records/reg-1/` (local).
+
 - **R383's order.**
   - The clarification (R383(a)):
     - power guards nulls: a null is a bound only at power ≥ 0.8 for the pre-stated minimal effect;
@@ -48,7 +53,7 @@ run11 arms the deploy block at its mint by the operator's word (R378(a)), and in
     - run11 trains at search weight 0; the field is recorded.
   - FORGE-2 (R383(f)) is accepted.
     - Derived numbers from archived scripts over our own records rank and card, never adopt.
-    - Its record corrections land as annotations (CARD-FORGE2-ANNOTATIONS, OWED).
+    - Its record corrections land as annotations (CARD-FORGE2-ANNOTATIONS, LANDED 2026-10-02 at REG-1's first commit).
     - Five items are carded; the rest is killed as run11 levers.
     - ORIGIN-1 gains: the forced ply-0 row does not train.
   - Merge and box (R383(g)):
@@ -303,4 +308,5 @@ at its exit from its exit record (local), on that branch at `a3899487`. The curr
 R381, on that branch at `9e962173`. The HYGIENE-1 line was added 2026-10-01 at its packet's first commit, on
 branch `hygiene-1` from origin/dev `b1e34aa4`, which also repaired the two stale "unpushed" branch lines, and updated
 2026-10-01 at its exit from its exit record (local), on that branch. The current phase was rewritten 2026-10-02 at R383 from the CENSUS-3 exit record
-(local), on branch `census-3` rebased onto `ring-v3` (`5b607454`).
+(local), on branch `census-3` rebased onto `ring-v3` (`5b607454`). The REG-1 line was added 2026-10-02 at its packet's first commit, on
+branch `reg-1` from `7b8d6a6e`.

@@ -38,18 +38,28 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by R383 (THE REUSE READING; 2026-10-02) — the last two reads before the mint
 
-- **CARD-REG-1 — ORDERED by R383(d), MINT-BLOCKING: the regularisers at run11's reuse, the first of the last two reads
-  before the mint.**
-  - **Data:** fresh parent games under run11's regime, read at run11's reuse (8 draws per row).
+- **CARD-REG-1 (CENSUS-3's proposed CARD-VALUE-REGULARISER) — ORDERED by R383(d), MINT-BLOCKING: the regularisers at
+  run11's reuse, the first of the last two reads before the mint. IN PROGRESS 2026-10-02: the REG-1 packet, branch
+  `reg-1`.**
+  - **Data:** fresh parent games under run11's regime, read at run11's reuse (8 draws per row). GEN self-plays
+    run8@45k frozen under arm A's tactics config (F2 out), with the v3 producer, ≤ 4 box-h.
   - **Instrument:** an IN-DISTRIBUTION held-out split (unseen games from the train actors' window, split by game id),
-    so the gap reads memorisation and not drift from the parent, the confound CENSUS-3's EXIT names.
-  - **Design:** 5 seeds and a fixed-subset known-bad. The value-head LR group comes in by R383(f).
-  - **Box:** within a day, ≤ 40 box-h (R383(g)); keep or stop is the operator's.
-  - **Candidates from CENSUS-3's readings, not picks:**
-    - the per-game value mask (k unresolved; mask8 recovered 59 % of D8 → D2);
-    - value-label smoothing (c-bad25's mechanism);
-    - a raw-value anchor;
-    - a re-drawn-per-step mask control.
+    so the gap reads memorisation and not drift from the parent, the confound CENSUS-3's EXIT names. The 48k ring
+    stays the near-parent second held-out, reported.
+  - **Design:** 5 seeds and a fixed-subset known-bad (Rbad: 25 % label corruption on the same rows every draw).
+    Census jobs ≤ 36 box-h (the packet's grant, inside R383(g)'s 40); keep or stop is the operator's.
+  - **Arms**, against a plain control:
+    - the fixed per-game value mask, k ∈ {4, 8};
+    - the re-drawn per-step value mask, p ∈ {1/4, 1/8};
+    - the value-head LR factor, m ∈ {0.5, 0.25} (CARD-VALUE-HEAD-LR, folded here);
+    - label shrinkage, ε ∈ {0.1, 0.25}, with its re-drawn noise twin as a report row;
+    - a lagged-value anchor, 0.5·z + 0.5·the parent's raw value.
+  - **Pick:** the best arm whose CI clears the control by the line, whose policy CE is within 0.012 of it, and whose
+    calibrated exams hold the run8-panel floors. The top two re-read at 4 draws per row. If nothing clears, the step
+    rate alone carries to RUN11-PRE.
+  - **Its two free reads:**
+    - the field's semantics on run8's `search_stats` (CARD-RING-V3-SEMANTICS);
+    - the calibrated exam floors (CARD-EXAMS-CALIBRATED).
 - **CARD-RUN11-PRE — ORDERED by R383(d), MINT-BLOCKING, after CARD-REG-1's exit: the step rate read live at matched
   throughput on the instrument.** Its packet follows REG-1's exit. CENSUS-3 read generalisation on fixed rings, not
   learning per hour.
@@ -60,22 +70,41 @@ Both were found by running the gate set rather than by reading it, and both are 
   re-derived calibrated on run8's panel.**
   - CENSUS-3's post-hoc read is V_cal = tanh(atanh V / T), with the net's held-out temperature.
   - On it the raw floor rewarded overconfidence: D8 0.382 → 0.208 calibrated, D2 0.352 → 0.321.
-- **CARD-RING-V3-KEY — ORDERED by R383(e), before any mint.**
-  - `train.value_target_lambda` is renamed to weight the search (0 = z).
-  - The field's semantics (root W/N v Σπ′·completedQ) are read on `search_stats` at 0 box-h, and the producer follows
-    the read.
-  - run11 trains at search weight 0; the field is recorded.
-- **CARD-FORGE2-ANNOTATIONS — OWED by R383(f): FORGE-2's corrections to the record land as annotations** (its report
-  §5, `mantis-records/research/FORGE2_2026-10-01.md`, local).
-  - Already landed: R382(a)'s void (raw MSE and MAE) and CARD-ORIGIN-RULE's forced ply-0 row (this record).
-  - Owed: the audit/LEVERS lines (`value_targets.py` deleted, KataGo td horizons, Lc0 ratios, C15), CENSUS-1's
-    measurement doc, CARD-EMA-SHADOW's arming fact, and the temperature-convention note.
+- **CARD-RING-V3-KEY — ORDERED by R383(e), before any mint.** `train.value_target_lambda` is renamed to weight the
+  search (0 = z). run11 trains at search weight 0; the field is recorded.
+- **CARD-RING-V3-SEMANTICS — OPENED by R383(e): what the root value field holds.** The field's semantics (root W/N v
+  Σπ′·completedQ) are read on run8's `search_stats` at 0 box-h (REG-1's free read 0a), and the producer follows the
+  read. If `search_stats` lacks the children's π′ or completed Q, the read waits for RUN11-PRE's producer.
+- **CARD-FORGE2-ANNOTATIONS — LANDED 2026-10-02 by R383(f): FORGE-2's corrections to the record are annotations**
+  (its report §5, `mantis-records/research/FORGE2_2026-10-01.md`, local).
+  - R382(a)'s void covers raw MSE and MAE. It is annotated on R382's entry and on
+    `docs/design/measurements/CENSUS1_2026-09-29.md` (C5's value MSE and C6's MAE). That doc also carries C5's
+    coords-off Δ as policy CE, `is_full_search` not being the drawn arm, and `root_offence` running on both arms.
+  - `value_targets.py` was deleted at `482684f2`, annotated where `docs/design/research/STRENGTH_RESEARCH_2_2026-09-21.md`
+    cites it.
+  - CARD-EMA-SHADOW carries the arming fact.
+  - CARD-ORIGIN-RULE carries the untrained forced ply-0 row.
+  - The temperature convention note sits on CARD-VALUE-INSTRUMENT.
+  - The local records carry their own lines: the training-path audit and LEVERS (KataGo's td horizons, Lc0's sampling
+    ratios, C15's ≈ 75 Elo, hex pairing at k ≥ 7, the §8 swing as cell noise) and CENSUS-2's regime-check rings.
 - **CARDED by R383(f), from FORGE-2's survivors (derived numbers rank and card, never adopt):**
-  - CARD-VALUE-HEAD-LR-GROUP, into CARD-REG-1;
-  - CARD-OFFLINE-AVERAGING, offline averaging of run11's saves;
-  - the segment rule as CARD-TACTICS-LABELS-ONLY's text;
-  - CARD-DEPLOY-PUCT-ABLATION, a deploy c_puct/fpu ablation;
-  - CARD-SHORT-TERM-VALUE, short-term value outputs, post-mint.
+  - **CARD-VALUE-HEAD-LR — FOLDED into CARD-REG-1** as its value-head LR arm.
+    - The head gets its own AdamW group.
+    - `FlooredCosineAnnealingLR` holds one `eta_min` for every group, so the group's floor eta_min × m is set
+      harness-side.
+  - **CARD-SAVE-AVERAGING-OFFLINE — CARDED, no box-h before run11: snapshot averages of run11's own stamped saves,
+    built offline with the existing averagers, each read against its own raw save.**
+    - `train.ema` stays off: arming it is not a shadow (CARD-EMA-SHADOW).
+    - Prior ≈ 0: EMA5 −0.10 logit on X, run8swa +0.26 on S, both void or descriptive.
+    - It needs ≥ 15 non-overlapping pairs and a known-bad with a measured fall.
+  - **CARD-DEPLOY-PUCT-ABLATION — CARDED as a deploy packet's census: c_puct 1.5 and fpu 0.25 were never ablated.**
+    - The overconfident raw scale makes the deploy search ≈ 2.7× greedier near v ≈ 0 than a calibrated one.
+    - It runs as a named c_puct/fpu ablation behind a desktop move-change pre-gate.
+    - It needs a mirror known-bad and power stated before cells.
+  - **CARD-SHORT-TERM-VALUE-POSTMINT — CARDED post-mint: short-term value / error outputs.** They are the
+    precondition of uncertainty-weighted playouts, read on run11's own rings and adopted only at a re-mint. An aux
+    leaves z's per-game gradient intact, so it is an enabler, not a value lever.
+  - The segment rule as CARD-TACTICS-LABELS-ONLY's text (that card).
   The rest of FORGE-2's proposals are killed as run11 levers.
 
 ## Opened by R382 (THE BLIND METRIC; 2026-10-01) — the value instrument, then CENSUS-3
@@ -87,6 +116,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   rows, by ply band (0–10, 11–40, > 40); T4 V and DEF V_att co-primary; rings the parent never trained on; ≥ 3 seeds;
   the known-bad reads worse by ≥ 2 seed SDs. The same rows are read at every run11 save. Raw held-out value CE rules
   on nothing (R382(a)).
+  - The temperature convention (FORGE-2 §5.9): the instrument DIVIDES the logit, so T > 1 is overconfident. CENSUS-2
+    multiplied it, so its 0.37 is 1/T. Witnesses state the convention or read convention-free.
 - **CARD-CENSUS-3 — CLOSED by R383(a): EXITED 2026-10-02 (local records `mantis-records/census-3/`). I0 PASS; the
   parent's head stands (shape bounded at ≈ 0.009); 8 draws per row over-fits the value head on held-out games (D2 − D8
   −0.031, effect of record ≥ 0.022) and the 13-draw warm start is the worst point; decay and the 64-sim W/N target null
@@ -148,11 +179,27 @@ Both were found by running the gate set rather than by reading it, and both are 
   reads them (R381(e)).
 - **CARD-EMA-SHADOW — CARDED for CARD-RUN11-DESIGN, not built, by R381(d): EMA as a shadow copy, read paired at
   saves.** R376(g) left EMA neither shown nor excluded; the audit's §8 reads it as the steadier of every reading.
+  - ANNOTATED by R383(f) (FORGE-2 §5.13): arming `train.ema` is NOT a shadow. The EMA becomes the gate candidate,
+    the anchor, the follower, the witness and the next warm start.
+  - `train/ema.py`'s module docstring contradicts `actor_state_dict` on this.
+  - A shadow needs its own wiring; offline averaging is CARD-SAVE-AVERAGING-OFFLINE.
 - **CARD-TACTICS-LABELS-ONLY — CARDED by R381(c) as run11's second fallback, not built; FORGE-2's segment rule is its
   "relabel z" text by R383(f).** The audit's label-only
   design: proven rows relabel z, decided tails are played on the quick arm at value-only weight, and the tree decides
   no leaf; root vetoes stay the one in-search use. The first fallback is plain self-play under the tactics deploy
   (R376(d) as annotated).
+  - **The relabel is FORGE-2's segment rule** (§2 item 5, Lc0's TB-rescoring rule), replacing "proven rows relabel z":
+    - each row takes the verdict of the next proven turn-start row j ≥ i, its sign flipped only at turn handovers;
+    - rows with no later proof keep z;
+    - it is a sample of "self-play until the proof, perfect play after", sound as a sample, not exact before the
+      proof.
+  - **The old rule** changed 0.91 % of rows against the segment rule's 19 %, and it left "A wins" beside "B wins"
+    inside one segment.
+  - **Where it lands:** in `finalize_graph_outcome`, behind a cap guard (an anchor only if p + 4·turns + 1 ≤ 255),
+    sharing one proof producer with RING-V3's override.
+  - **Expected effect:** 0 rows under arm A, ≈ 19 % under plain self-play.
+  - **Census, if the fallback is taken:** a per-ply sign-flip known-bad, and held-out arm-A games read on unproven
+    rows by band.
 - **CARD-RING-MIGRATION — LANDED for the root value field by CARD-RING-V3 (EXITED 2026-10-01): HEXG v3 reads v2 rings
   default-filled, so the sha-pinned held-out ring and the resume bundles' rings still load. Was ORDERED for the root
   value field as CARD-RING-V3 by R382(d). Was CARDED by R381(d), with CARD-SEARCH-VALUE-AUX, not built: a v2→v3 ring migration that

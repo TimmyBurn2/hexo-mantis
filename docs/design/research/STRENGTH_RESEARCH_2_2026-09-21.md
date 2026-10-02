@@ -200,6 +200,7 @@ The run9-relevant state, in reading order:
     `INVESTIGATION1_2026-09-15.md` (cd062e7bbe3e9303 — the Gumbel head residue red team),
     `crates/mantis-encoding/src/registry.toml` (f03c78eb47a6d9a3 — `gnn_axis_r8`, 11 node / 5
     edge features), `src/mantis/model/value_targets.py` (the λ-return codec, landed UNARMED).
+    ANNOTATION (2026-10-02, R383(f), FORGE-2 §5.1): `value_targets.py` left the tree at `482684f2` (HYGIENE-1).
 
 ## PREMISES THIS PACK FLAGS (per §0 — question premises, including ours)
 
