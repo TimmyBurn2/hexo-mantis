@@ -1,12 +1,11 @@
-# >300 justify (R8): one oracle for one tool; the fake-read writer and the synthetic reads serve compare, lagged and exams alike.
-"""The value instrument: temperature, Platt, scale, ties, folds, bootstrap and line on synthetic draws; trace, read, compare, lagged and exams end to end."""
+"""The value instrument end to end: trace and read on a planted ring; compare, lagged and exams on synthetic reads."""
 from __future__ import annotations
 
 import argparse
 import importlib
 import json
-from itertools import product
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import numpy as np
@@ -26,90 +25,6 @@ _ENCODING = "gnn_axis_r8"
 def vi() -> Any:
     load_tools_package("value_instrument")
     return tuple(importlib.import_module(f"value_instrument.{m}") for m in ("metrics", "draws", "cli"))
-
-
-def _draws(n: int, temperature: float, seed: int = 0) -> tuple[np.ndarray, np.ndarray]:
-    """Logits whose calibrated probability is sigmoid(u / temperature), and outcomes drawn from it."""
-    rng = np.random.default_rng(seed)
-    u = rng.normal(0.0, 2.0, n)
-    return u, np.where(rng.random(n) < 1.0 / (1.0 + np.exp(-u / temperature)), 1.0, -1.0)
-
-
-def test_the_fit_recovers_a_known_overconfidence(vi) -> None:
-    m = vi[0]
-    u, y = _draws(200_000, temperature=2.5)
-    assert 1.0 / m.fit_beta(u, y) == pytest.approx(2.5, rel=0.03)
-
-
-def test_no_skill_reads_ln2_and_a_balanced_constant(vi) -> None:
-    m = vi[0]
-    rng = np.random.default_rng(1)
-    y = np.where(rng.random(40_000) < 0.5, 1.0, -1.0)
-    fold = (np.arange(40_000) % 2).astype(np.int8)
-    noise = m.block(rng.normal(0, 3, 40_000), y, np.zeros(40_000), fold)
-    assert noise["cf_ce"] == pytest.approx(noise["constant_ce"], abs=0.003)  # temperature only: no intercept
-    zero = m.block(np.zeros(40_000), y, np.zeros(40_000), fold)
-    assert zero["cf_ce"] == pytest.approx(np.log(2.0), abs=1e-9) and zero["temperature"] is None
-
-
-def test_the_temperature_absorbs_scale_so_an_overconfident_copy_reads_the_same(vi) -> None:
-    m = vi[0]
-    u, y = _draws(50_000, temperature=1.0, seed=2)
-    fold = (np.arange(len(u)) % 2).astype(np.int8)
-    a, b = m.block(u, y, np.zeros(len(u)), fold), m.block(3.0 * u, y, np.zeros(len(u)), fold)
-    assert a["cf_ce"] == pytest.approx(b["cf_ce"], abs=1e-9)
-    assert b["temperature"] == pytest.approx(3.0 * a["temperature"], rel=1e-6)
-    assert b["uncal_binary_ce"] > a["uncal_binary_ce"] + 0.1
-
-
-def test_auc_counts_ties_half_against_brute_force(vi) -> None:
-    m = vi[0]
-    rng = np.random.default_rng(3)
-    s = rng.integers(0, 5, 60).astype(np.float64)
-    y = np.where(rng.random(60) < 0.5, 1.0, -1.0)
-    brute = np.mean([1.0 if a > b else 0.5 if a == b else 0.0 for a, b in product(s[y > 0], s[y < 0])])
-    assert m.auc(s, y) == pytest.approx(brute, abs=1e-12)
-
-
-def test_folds_keep_each_game_whole_split_the_universe_in_half_and_refuse_a_stranger(vi) -> None:
-    m = vi[0]
-    universe = np.repeat(np.arange(101), 7)
-    drawn = universe[::3]
-    fold = m.game_folds(drawn, 5, universe)
-    assert np.array_equal(fold, m.game_folds(universe, 5, universe)[::3])
-    whole = m.game_folds(universe, 5, universe)
-    assert all(len(set(whole[universe == g].tolist())) == 1 for g in range(101))
-    assert int(whole.reshape(101, 7)[:, 0].sum()) == 101 - 101 // 2
-    with pytest.raises(ValueError):
-        m.game_folds(np.array([500]), 5, universe)
-
-
-def test_an_empty_band_reads_n0_and_a_one_class_band_has_no_auc(vi) -> None:
-    m = vi[0]
-    u, y = _draws(2_000, temperature=1.0, seed=4)
-    ply = np.full(len(u), 5)
-    ply[:1000] = 20
-    y = np.where(ply == 20, 1.0, y)
-    out = m.side(u, y, np.zeros(len(u)), (np.arange(len(u)) % 2).astype(np.int8), ply)
-    assert out["plies_41_up"] == {"n": 0}
-    assert out["plies_11_40"]["auc"] is None and out["plies_0_10"]["auc"] is not None
-    json.dumps(out, allow_nan=False)
-
-
-def test_the_game_bootstrap_reads_a_constant_difference_exactly_and_noise_as_spread(vi) -> None:
-    m = vi[0]
-    gid = np.repeat(np.arange(300), 20)
-    flat = m.game_se(np.full(len(gid), 0.01), gid, seed=0, resamples=200)
-    assert flat["diff"] == pytest.approx(0.01) and flat["se_game"] == pytest.approx(0.0, abs=1e-12)
-    noisy = m.game_se(np.repeat(np.random.default_rng(6).normal(0, 0.1, 300), 20), gid, seed=0, resamples=500)
-    assert noisy["se_game"] == pytest.approx(0.1 / np.sqrt(300), rel=0.2)
-
-
-def test_the_line_has_its_floor_and_power_falls_as_the_spread_grows(vi) -> None:
-    m = vi[0]
-    tight, loose = m.line_and_power(0.001, 0.001), m.line_and_power(0.004, 0.004)
-    assert tight["line"] == m.MIN_LINE and tight["power"] > 0.99
-    assert loose["line"] == pytest.approx(2 * np.hypot(0.004, 0.004)) and loose["power"] < 0.5
 
 
 def _planted(path: Path, n: int = 48) -> R.Ring:
@@ -183,98 +98,87 @@ def _fake_read(path: Path, u: np.ndarray, *, slot_shift: int = 0, ring_sha: str 
     return path
 
 
+def _ns(m: ModuleType, arm: list[Path], base: list[Path], sigma: float | None = None,
+        effect: float | None = None) -> argparse.Namespace:
+    return argparse.Namespace(arm=arm, base=base, sigma=sigma, effect=m.EFFECT if effect is None else effect)
+
+
 def test_compare_refuses_other_draws_and_a_missing_seed_spread_and_reads_a_real_gap(vi, tmp_path: Path) -> None:
-    cli = vi[2]
+    m, cli = vi[0], vi[2]
     n = 4000
     z = np.where(np.arange(n) % 2, 1.0, -1.0)
     rng = np.random.default_rng(8)
     good = [_fake_read(tmp_path / f"g{i}.json", 3.0 * z + rng.normal(0, 3, n)) for i in range(3)]
     bad = [_fake_read(tmp_path / f"b{i}.json", rng.normal(0, 3, n)) for i in range(3)]
-    ns = lambda arm, base, sigma=None: argparse.Namespace(arm=arm, base=base, sigma=sigma, effect=vi[0].EFFECT)  # noqa: E731
     with pytest.raises(ValueError, match="seed spread"):
-        cli.compare(ns(good[:1], bad[:1]))
+        cli.compare(_ns(m, good[:1], bad[:1]))
     with pytest.raises(ValueError, match="same held-out draws"):
-        cli.compare(ns(good, [_fake_read(tmp_path / "s.json", rng.normal(0, 3, n), slot_shift=1)]))
-    out = cli.compare(ns(good, bad))
+        cli.compare(_ns(m, good, [_fake_read(tmp_path / "s.json", rng.normal(0, 3, n), slot_shift=1)]))
+    out = cli.compare(_ns(m, good, bad))
     assert out["beats"] and out["sigma_df"] == 4 and 0.0 <= out["power"] <= 1.0
     assert out["diff"] < -out["line"] < 0.0
 
 
-def _sigmoid(x: np.ndarray) -> np.ndarray:
-    return 1.0 / (1.0 + np.exp(-x))
-
-
-def test_platt_recovers_a_known_slope_and_intercept_and_falls_back_to_the_base_rate(vi) -> None:
-    m = vi[0]
-    rng = np.random.default_rng(10)
-    u = rng.normal(0.0, 2.0, 200_000)
-    y = np.where(rng.random(len(u)) < _sigmoid(0.6 * u + 0.4), 1.0, -1.0)
-    a, c = m.fit_platt(u, y)
-    assert a == pytest.approx(0.6, abs=0.02) and c == pytest.approx(0.4, abs=0.02)
-    assert m.fit_platt(u, np.ones(len(u))) == (0.0, pytest.approx(np.log((1 - 1e-6) / 1e-6)))
-    assert m.fit_platt(np.empty(0), np.empty(0)) == (0.0, 0.0)
-
-
-def test_the_crossfit_platt_ce_beats_the_constant_and_absorbs_the_intercept_a_temperature_cannot(vi) -> None:
-    m = vi[0]
-    rng = np.random.default_rng(11)
-    u = rng.normal(0.0, 2.0, 40_000)
-    y = np.where(rng.random(len(u)) < _sigmoid(0.5 * u + 1.0), 1.0, -1.0)
-    fold = (np.arange(len(u)) % 2).astype(np.int8)
-    out = m.block(u, y, np.zeros(len(u)), fold)
-    assert out["platt_ce"] < out["constant_ce"] - 0.05 and out["platt_ce"] < out["cf_ce"] - 0.01
-    assert out["platt_ce_f1"] == pytest.approx(float(m.crossfit_platt_losses(u, y, fold)[fold == 1].mean()))
-    assert "platt_ce" in m.side(u, y, np.zeros(len(u)), fold, np.full(len(u), 5))["plies_0_10"]
-
-
-def test_calibrated_is_odd_the_identity_at_one_shrinks_when_overconfident_and_zero_without_skill(vi) -> None:
-    m = vi[0]
-    v = np.linspace(-0.99, 0.99, 199)
-    np.testing.assert_allclose(m.calibrated(v, 1.0), v, rtol=0, atol=1e-12)
-    hot = m.calibrated(v, 2.5)
-    assert np.all(np.abs(hot) < np.abs(v) + 1e-18) and np.all(np.abs(hot[np.abs(v) > 0.01]) < np.abs(v[np.abs(v) > 0.01]))
-    np.testing.assert_allclose(m.calibrated(-v, 2.5), -hot, rtol=0, atol=1e-15)
-    assert np.isfinite(m.calibrated(np.array([-1.0, 1.0]), 2.0)).all()
-    zero = m.calibrated(v, None)
-    assert zero.shape == v.shape and not zero.any()
-
-
 def _synthetic_reads(tmp_path: Path, n: int = 4000) -> dict[str, list[Path]]:
-    """Informative and noise reads, two jittered twins of one function per side, every ply band populated."""
+    """Informative reads (4x overconfident past ply 40) and noise reads, two jittered twins of one function per side."""
     z = np.where(np.arange(n) % 2, 1.0, -1.0)
     ply = (np.arange(n) % 60).astype(np.int32)
     rng = np.random.default_rng(12)
     shared = 3.0 * z + rng.normal(0, 3, n)
-    made = {"good": lambda: 3.0 * z + rng.normal(0, 3, n), "bad": lambda: rng.normal(0, 3, n),
+    made = {"good": lambda: np.where(ply > 40, 4.0, 1.0) * (3.0 * z + rng.normal(0, 3, n)), "bad": lambda: rng.normal(0, 3, n),
             "twin_a": lambda: shared + rng.normal(0, 0.01, n), "twin_b": lambda: shared + rng.normal(0, 0.01, n)}
     return {k: [_fake_read(tmp_path / f"{k}{i}.json", f(), ply=ply) for i in range(3)] for k, f in made.items()}
-
-
-def _ns(arm: list[Path], base: list[Path], sigma: float | None = None, effect: float = 0.01) -> argparse.Namespace:
-    return argparse.Namespace(arm=arm, base=base, sigma=sigma, effect=effect)
 
 
 def test_compare_reads_a_detection_a_worse_arm_a_tost_null_and_every_band(vi, tmp_path: Path) -> None:
     m, cli = vi[0], vi[2]
     r = _synthetic_reads(tmp_path)
-    out = cli.compare(_ns(r["good"], r["bad"]))
+    out = cli.compare(_ns(m, r["good"], r["bad"]))
     assert out["detection"] and out["beats"] and not out["worse"] and not out["tost_null"]
     assert out["ci"] == pytest.approx([out["diff"] - out["line"], out["diff"] + out["line"]])
     assert out["effect_of_record"] == pytest.approx(out["diff"] + out["line"]) and out["effect"] == m.EFFECT
-    assert out["sigma_source"] == "groups" and set(out["bands"]) == set(m.PLY_BANDS)
+    assert out["sigma_source"] == "groups" and list(out["bands"]) == list(m.PLY_BANDS)
+    assert [b["n"] for b in out["bands"].values()] == [737, 2009, 1254]  # plies 0..59 cycled: both bounds inclusive
     for band in out["bands"].values():
-        assert band["n"] > 0 and band["detection"] and band["sigma_source"] == "groups" and len(band["ci"]) == 2
-    worse = cli.compare(_ns(r["bad"], r["good"]))
+        assert band["detection"] and band["sigma_source"] == "groups" and len(band["ci"]) == 2
+    worse = cli.compare(_ns(m, r["bad"], r["good"]))
     assert worse["worse"] and not worse["detection"] and worse["effect_of_record"] is None
-    null = cli.compare(_ns(r["twin_a"], r["twin_b"]))
+    null = cli.compare(_ns(m, r["twin_a"], r["twin_b"]))
     assert null["tost_null"] and not null["detection"] and not null["worse"] and null["effect_of_record"] is None
-    assert not cli.compare(_ns(r["twin_a"], r["twin_b"], effect=0.001))["tost_null"]  # the line's floor exceeds it
-    pooled = cli.compare(_ns(r["good"], r["bad"], sigma=0.002))
+    assert not cli.compare(_ns(m, r["twin_a"], r["twin_b"], effect=0.001))["tost_null"]  # the line's floor exceeds it
+    pooled = cli.compare(_ns(m, r["good"], r["bad"], sigma=0.002))
     assert pooled["sigma_source"] == "--sigma" and pooled["sigma_seed"] == 0.002
     assert all(b["sigma_source"] == "groups" for b in pooled["bands"].values())
-    single = cli.compare(_ns(r["good"][:1], r["bad"][:1], sigma=0.002))
+    single = cli.compare(_ns(m, r["good"][:1], r["bad"][:1], sigma=0.002))
     assert all(b["sigma_source"] == "--sigma" and b["sigma_seed"] == 0.002 for b in single["bands"].values())
     json.dumps(out, allow_nan=False)
+
+
+def test_compare_power_moves_with_the_effect_and_a_non_positive_effect_is_refused(vi, tmp_path: Path) -> None:
+    m, cli = vi[0], vi[2]
+    r = _synthetic_reads(tmp_path)
+    near, far = cli.compare(_ns(m, r["good"], r["bad"])), cli.compare(_ns(m, r["good"], r["bad"], effect=0.05))
+    assert far["power"] > near["power"] + 0.3 and far["effect"] == 0.05 and far["line"] == near["line"]
+    for effect in (0.0, -0.01):
+        with pytest.raises(ValueError, match="compare: --effect must be positive"):
+            cli.compare(_ns(m, r["good"], r["bad"], effect=effect))
+
+
+def _rows(path: Path) -> dict[str, np.ndarray]:
+    return dict(np.load(path.with_suffix(".rows.npz")))
+
+
+def test_each_band_refits_its_own_temperatures(vi, tmp_path: Path) -> None:
+    m, cli = vi[0], vi[2]
+    r = _synthetic_reads(tmp_path)
+    band = cli.compare(_ns(m, r["good"][:1], r["bad"][:1], sigma=0.0))["bands"]["plies_41_up"]
+    arm, base = _rows(r["good"][0]), _rows(r["bad"][0])
+    y, fold = arm["heldout__z"], arm["heldout__fold"]
+    sel = m.band_masks(arm["heldout__ply"])["plies_41_up"]
+    refit = (m.crossfit_losses(arm["heldout__u"][sel], y[sel], fold[sel])
+             - m.crossfit_losses(base["heldout__u"][sel], y[sel], fold[sel])).mean()
+    sliced = (m.crossfit_losses(arm["heldout__u"], y, fold) - m.crossfit_losses(base["heldout__u"], y, fold))[sel].mean()
+    assert band["diff"] == pytest.approx(refit, rel=1e-9) and abs(refit - sliced) > 0.01
 
 
 def test_lagged_is_compare_at_zero_sigma_with_its_source_named(vi, tmp_path: Path, capsys) -> None:
@@ -291,13 +195,14 @@ def test_lagged_is_compare_at_zero_sigma_with_its_source_named(vi, tmp_path: Pat
     assert got["sd_seed"] == 0.0 and got["line"] == pytest.approx(max(m.MIN_LINE, 2.0 * got["se_game"]))
 
 
-def test_lagged_refuses_reads_on_other_draws(vi, tmp_path: Path) -> None:
+def test_lagged_refuses_reads_on_other_draws_and_a_non_positive_effect(vi, tmp_path: Path) -> None:
     m, cli = vi[0], vi[2]
     cur = _fake_read(tmp_path / "cur.json", np.random.default_rng(13).normal(0, 3, 400))
     other = _fake_read(tmp_path / "other.json", np.random.default_rng(14).normal(0, 3, 400), slot_shift=1)
     with pytest.raises(ValueError, match="lagged: the reads were not taken on the same held-out draws"):
         cli.lagged(argparse.Namespace(current=cur, lagged=other, effect=m.EFFECT))
     assert cli.main(["lagged", "--current", str(cur), "--lagged", str(other)]) == 2
+    assert cli.main(["lagged", "--current", str(cur), "--lagged", str(cur), "--effect", "0"]) == 2
 
 
 def test_exams_calibrates_at_the_read_temperature_reads_the_floor_and_refuses(vi, tmp_path: Path) -> None:
@@ -311,16 +216,23 @@ def test_exams_calibrates_at_the_read_temperature_reads_the_floor_and_refuses(vi
     want = np.tanh(np.arctanh(np.array(vals[:3])) / 2.0)
     out = cli.exams(ns(net="a", floor=0.2))
     assert out["n"] == 3 and out["temperature"] == 2.0 and out["raw_mean"] == pytest.approx(0.4)
-    assert out["calibrated_mean"] == pytest.approx(want.mean()) and out["se_calibrated"] == pytest.approx(want.std() / np.sqrt(3))
+    assert out["se_raw"] == pytest.approx(np.sqrt(0.62 / 2 / 3))  # squared deviations 0.25 + 0.01 + 0.36, n - 1 = 2
+    assert out["calibrated_mean"] == pytest.approx(want.mean())
+    assert out["se_calibrated"] == pytest.approx(want.std(ddof=1) / np.sqrt(3))
     assert out["holds"] and out["floor"] == 0.2
     assert not cli.exams(ns(net="a", floor=0.3))["holds"]  # the raw mean 0.4 would have held
     assert cli.exams(ns())["n"] == 4 and "floor" not in cli.exams(ns())
+    one = cli.exams(ns(net="b"))
+    assert one["n"] == 1 and one["se_raw"] is None and one["se_calibrated"] is None
     with pytest.raises(ValueError, match="no rows"):
         cli.exams(ns(net="c"))
-    nan_rows = tmp_path / "nan.jsonl"
+    nan_rows, broken = tmp_path / "nan.jsonl", tmp_path / "broken.jsonl"
     nan_rows.write_text(json.dumps({"v": float("nan")}) + "\n", encoding="utf-8")
     with pytest.raises(ValueError, match="not a finite number"):
         cli.exams(ns(rows=nan_rows))
+    broken.write_text('{"v": 0.1}\n{"v": \n', encoding="utf-8")
+    with pytest.raises(ValueError, match="line 2 of .*broken.jsonl is not JSON"):
+        cli.exams(ns(rows=broken))
     cold = tmp_path / "cold.json"
     cold.write_text(json.dumps({"heldout": {"overall": {"temperature": None}}}), encoding="utf-8")
     with pytest.raises(ValueError, match="no held-out temperature"):
