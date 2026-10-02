@@ -7,12 +7,55 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
-**R382 (2026-10-01): THE BLIND METRIC. CENSUS-2's halt stands as a success of LAW-19: raw held-out value CE reads
-calibration, not skill, and rules on nothing. Nothing mints before CENSUS-3 reads its value levers on the value
-instrument of record, and RING-V3 lands first. HYGIENE-1 is ratified and `dev` is its tip.** run10 will not START
-(R376(c)). `configs/run10.yaml` stays the production config the instruments read until run11's mint replaces it. run11
-arms the deploy block at its mint by the operator's word (R378(a)), and in self-play arm A's design, carried (R381(c),
-CARD-RUN11-DESIGN).
+**R383 (2026-10-02): THE REUSE READING. LAW-19 is clarified (power guards nulls, the false-pass rate guards
+detections). Under it CENSUS-3 reads: run11's planned reuse (8 draws per row) over-fits the value head on held-out games
+and the 13-draw warm start is the worst point. REG-1 then RUN11-PRE are the last two reads before the mint; PERF-2 runs
+now, in parallel. RING-V3 is ratified; `dev` fast-forwards to `ring-v3` and census-3 rebases onto it.** run10 will not
+START (R376(c)). `configs/run10.yaml` stays the production config the instruments read until run11's mint replaces it.
+run11 arms the deploy block at its mint by the operator's word (R378(a)), and in self-play arm A's design, carried
+(R381(c), CARD-RUN11-DESIGN).
+
+- **R383's order.**
+  - The clarification (R383(a)):
+    - power guards nulls: a null is a bound only at power ≥ 0.8 for the pre-stated minimal effect;
+    - the false-pass rate guards detections: a detection stands when its CI clears zero by the line, and its effect of
+      record is the CI's bound nearest zero;
+    - "screen, not adopt" binds marginal passes, not detections many SDs out.
+  - CENSUS-3's readings under it (R383(a); CARD-CENSUS-3 CLOSED):
+    - run11's planned 8 draws per row over-fits the value head on held-out games. D2 − D8 is −0.031 calibration-free,
+      95 % CI [−0.039, −0.022], so the effect of record is ≥ 0.022.
+    - The 13-draw warm start is the worst point.
+    - Head shape is bounded at ≈ 0.009.
+    - Weight decay and the 64-sim W/N target are null at this regime.
+    - `tools/value_instrument` is the value reading of record (CARD-VALUE-INSTRUMENT LANDED, on branch `census-3`).
+    - T4 V and DEF V_att are read on calibrated values, floors re-derived calibrated on run8's panel
+      (CARD-EXAMS-CALIBRATED).
+  - The problem and its levers (R383(b)):
+    - measured as exposures per outcome bit;
+    - the levers are the value label's reuse and the head's regularisation;
+    - throughput (independent games per step) is a value lever, so PERF-2 runs now, in parallel (CARD-PERF-2).
+  - The warm start (R383(c)): training steps per game scale with ring fill (tspg × rows/capacity), holding draws per
+    row at the steady state from the first row. R381(e)'s `min_buf_size` 100k is withdrawn.
+  - Before the mint (R383(d)), the last two reads:
+    - REG-1 (CARD-REG-1): the regularisers at run11's reuse on fresh parent games under run11's regime, an
+      in-distribution held-out split, 5 seeds, a fixed-subset known-bad;
+    - then RUN11-PRE (CARD-RUN11-PRE): the step rate read live at matched throughput on the instrument. Its packet
+      follows REG-1's exit.
+  - RING-V3 (R383(e)) is ratified.
+    - The key is renamed to weight the search (0 = z) before any mint.
+    - The field's semantics (root W/N v Σπ′·completedQ) are read on `search_stats` at 0 box-h, and the producer follows
+      the read.
+    - run11 trains at search weight 0; the field is recorded.
+  - FORGE-2 (R383(f)) is accepted.
+    - Derived numbers from archived scripts over our own records rank and card, never adopt.
+    - Its record corrections land as annotations (CARD-FORGE2-ANNOTATIONS, OWED).
+    - Five items are carded; the rest is killed as run11 levers.
+    - ORIGIN-1 gains: the forced ply-0 row does not train.
+  - Merge and box (R383(g)):
+    - `dev` fast-forwards to `ring-v3`, and `census-3` is rebased onto it (done 2026-10-02: `ring-v3` + the instrument
+      commit + this record).
+    - The gates run on the combined tip before the push.
+    - REG-1 needs the box within a day (≤ 40 box-h); keep or stop is the operator's.
 
 - **R382's order.**
   - The void (R382(a)): every value reading ruled on through raw held-out value CE is void as evidence: CENSUS-1 C5's
@@ -27,9 +70,9 @@ CARD-RUN11-DESIGN).
     order: a position-specific value target (z mixed with the search's root value), the label's reuse per game as a
     curve, the head's shape and activation re-initialised and warmed, weight decay. The dead opening head is a
     capacity defect with no shown cost.
-  - The order (R382(d)): CENSUS-3 (CARD-CENSUS-3) reads those levers with 3 seeds and its picks set run11's value
+  - The order (R382(d)), CENSUS-3 EXITED 2026-10-02 and ruled by R383(a): CENSUS-3 (CARD-CENSUS-3) reads those levers with 3 seeds and its picks set run11's value
     rows (R381(e) re-pointed). RING-V3 (CARD-RING-V3) lands the root value field with default-fill before the mint.
-  - **RING-V3 EXITED 2026-10-01** (CARD-RING-V3) on branch `ring-v3` from origin/dev `80b54f5a`, awaiting the operator's
+  - **RING-V3 EXITED 2026-10-01, RATIFIED by R383(e)** (CARD-RING-V3) on branch `ring-v3` from origin/dev `80b54f5a`, awaiting the operator's
     fast-forward: HEXG v3 with v2 default-fill, self-play writing the root value, `train.value_target_lambda` minted 0.0
     (the trainer bit-equal to v2 there; the eval step reads z whatever λ); gates.exit green. A λ > 0 run's held-out gap
     is not z against z until CARD-HELDOUT-GAP-Z lands.
@@ -54,7 +97,8 @@ CARD-RUN11-DESIGN).
     PERF-2 follows HYGIENE-1; ORIGIN-1 lands in RUN11-PREP. The natural book is deferred. Reuse stays at 2.4
     steps/game, read by run11's held-out gap. Carded, not built: the quick arm's noise, EMA as a shadow copy, the
     search-value target. Decided tails are parked; JK-last is dead for run11.
-  - The mint rows (R381(e)): aux weight 2.0, `draw_reward` gone with reason-3 rows masked, `min_buf_size` 100k rows,
+  - The mint rows (R381(e)): aux weight 2.0, `draw_reward` gone with reason-3 rows masked, `min_buf_size` 100k rows
+    (WITHDRAWN by R383(c): steps per game scale with ring fill),
     sync cadence 50, and the value head and weight decay as CENSUS-2 reads them. A scalar re-mint inside a config's
     pre-registered envelope is a STATE line, not a ruling; the envelope is a prereg row (R381(f)). The value rows are
     re-pointed to CENSUS-3's picks (R382(d)).
@@ -258,4 +302,5 @@ added 2026-09-30 at its packet's first commit, on branch `tactics-selfplay-3` at
 at its exit from its exit record (local), on that branch at `a3899487`. The current phase was rewritten 2026-10-01 at
 R381, on that branch at `9e962173`. The HYGIENE-1 line was added 2026-10-01 at its packet's first commit, on
 branch `hygiene-1` from origin/dev `b1e34aa4`, which also repaired the two stale "unpushed" branch lines, and updated
-2026-10-01 at its exit from its exit record (local), on that branch.
+2026-10-01 at its exit from its exit record (local), on that branch. The current phase was rewritten 2026-10-02 at R383 from the CENSUS-3 exit record
+(local), on branch `census-3` rebased onto `ring-v3` (`5b607454`).

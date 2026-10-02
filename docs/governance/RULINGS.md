@@ -1,4 +1,4 @@
-# RULINGS — R23 to R382
+# RULINGS — R23 to R383
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R383.
+- Numbering continues from R346. The next ruling is R384.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,64 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R383 — THE REUSE READING
+Decision: verbatim below.
+
+> R383 — THE REUSE READING.
+> (a) LAW-19 and R375(d) are clarified: power guards nulls — a null is a bound only at power
+> ≥ 0.8 for the pre-stated minimal effect — and the false-pass rate guards detections — a
+> detection stands when its CI clears zero by the line, and its effect of record is the CI's
+> bound nearest zero. "Screen, not adopt" applies to marginal passes, not to detections many
+> SDs out. The error is the architect's. Under this, CENSUS-3 reads: run11's planned reuse
+> (8 draws per row) over-fits the value head on held-out games by at least D2 − D8's near
+> bound; the 13-draw warm start is the worst point; head shape is bounded at ≈ 0.009, decay
+> and the 64-sim W/N target are null at this regime. tools/value_instrument is the value
+> reading of record. T4 V and DEF V_att are read on calibrated values from now on, floors
+> re-derived calibrated on run8's panel.
+> (b) The value problem is measured, not inferred: exposures per outcome bit. Its levers are
+> the value label's reuse and the head's regularisation; throughput (independent games per
+> step) is a value lever, so PERF-2 runs now, in parallel.
+> (c) Warm start: training steps per game scale with ring fill (tspg × rows/capacity), which
+> holds draws per row at the steady state from the first row. R381(e)'s min_buf_size 100k is
+> withdrawn.
+> (d) REG-1 reads the regularisers at run11's reuse on fresh parent games under run11's
+> regime, with an in-distribution held-out split, 5 seeds and a fixed-subset known-bad.
+> RUN11-PRE then reads the step rate live at matched throughput on the instrument; its
+> packet follows REG-1's exit. These are the last two reads before the mint.
+> (e) RING-V3 is ratified. The key is renamed to weight the search (0 = z) before any mint;
+> the field's semantics (root W/N v Σπ′·completedQ) are read on search_stats at 0 box-h and
+> the producer follows the read. run11 trains at search weight 0; the field is recorded.
+> (f) FORGE-2 is accepted. DERIVED numbers from archived scripts over our own records are
+> evidence for ranking and carding, never for adoption. Its record corrections land as
+> annotations. Carded: the value-head LR group (into REG-1), offline averaging of run11's
+> saves, the segment rule as CARD-TACTICS-LABELS-ONLY's text, a deploy c_puct/fpu ablation,
+> short-term value outputs post-mint. The rest is killed as run11 levers. ORIGIN-1 gains:
+> the forced ply-0 row does not train.
+> (g) Merge order: dev fast-forwards to ring-v3; census-3 rebases onto it; gates on the
+> combined tip before the push. The box: REG-1 needs it within a day (≤ 40 box-h); keep or
+> stop is the operator's.
+
+Status: standing. Clarifies LAW-19 and R375(d) by (a): power guards nulls (a null is a bound only at power ≥ 0.8 for
+the pre-stated minimal effect), the false-pass rate guards detections (a detection stands when its CI clears zero by the
+line, its effect of record the CI's bound nearest zero), and "screen, not adopt" binds marginal passes only. Under it
+rules CENSUS-3's readings: run11's planned reuse (8 draws per row) over-fits the value head on held-out games by at
+least D2 − D8's near bound; the 13-draw warm start is the worst point; head shape is bounded at ≈ 0.009; decay and the
+64-sim W/N target are null at this regime. Names `tools/value_instrument` the value reading of record and moves T4 V and
+DEF V_att to calibrated values, floors re-derived calibrated on run8's panel, also by (a). Measures the value problem as
+exposures per outcome bit, makes its levers the label's reuse and the head's regularisation, and makes throughput a
+value lever, so PERF-2 runs now in parallel, by (b). Scales training steps per game with ring fill and withdraws
+R381(e)'s `min_buf_size` 100k by (c). Orders REG-1 (the regularisers at run11's reuse on fresh parent games under
+run11's regime, an in-distribution held-out split, 5 seeds, a fixed-subset known-bad) and then RUN11-PRE (the step rate
+live at matched throughput), the last two reads before the mint, by (d). Ratifies RING-V3, renames its key to weight
+the search (0 = z) before any mint, has the field's semantics (root W/N v Σπ′·completedQ) read on `search_stats` at
+0 box-h with the producer following, and trains run11 at search weight 0 with the field recorded, by (e). Accepts
+FORGE-2: derived numbers from archived scripts over our own records rank and card, never adopt; its record corrections
+land as annotations; five items are carded and the rest killed as run11 levers; ORIGIN-1 gains the untrained forced
+ply-0 row, by (f). Sets the merge order and prices REG-1's box need (≤ 40 box-h within a day), keep or stop the
+operator's, by (g). The packets it forwards are REG-1, RUN11-PRE and PERF-2.
+
+---
 
 ### R382 — THE BLIND METRIC
 Decision: verbatim below.
@@ -77,6 +135,11 @@ before the mint, no mint before CENSUS-3 reads, and RESEARCH-FORGE-2 beside it r
 with the operator-granted protected-set edits, keeps the gate record's one shape and the un-squashed pair, and
 fast-forwards `dev` to `7978cf1b` by (e). Prices CENSUS-3's box need and leaves keep or stop to the operator by (f). The
 packets it forwards are CENSUS-3, RING-V3 and RESEARCH-FORGE-2.
+CENSUS-3 EXITED 2026-10-02 and is ruled by R383(a). (b)'s instrument is LANDED as `tools/value_instrument`, the value
+reading of record (R383(a)), and T4 V and DEF V_att are read on calibrated values from R383(a). (d)'s RING-V3 is
+RATIFIED by R383(e). (a)'s void is ANNOTATED by FORGE-2's corrections (R383(f)): raw value MSE (= 4 × Brier) carries raw
+CE's calibration flaw, so CENSUS-1 C5's value-MSE comparison and C6's MAE reading fall under it; C5's next-ply verdict
+rests on policy CE and fixture recall and stands.
 
 ---
 
@@ -127,6 +190,10 @@ re-mint inside a pre-registered envelope a STATE line, the envelope a prereg row
 6.75 box-h and leaves the box's fate to the operator by (g). The packets it forwards are HYGIENE-1 and CENSUS-2.
 CENSUS-2 HALTED by its own known-bad and is ruled by R382(a); HYGIENE-1 is RATIFIED by R382(e). (e)'s "the value head
 and weight decay as CENSUS-2 reads them" is ANNOTATED by R382(d): run11's value rows are CENSUS-3's picks.
+(e)'s `min_buf_size` 100k is WITHDRAWN by R383(c): training steps per game scale with ring fill (tspg × rows/capacity),
+which holds draws per row at the steady state from the first row; CENSUS-3 read the 13-draw warm start as the worst
+point (R383(a)). (d)'s "reuse stays at 2.4 steps/game" is ANNOTATED by R383(a)-(d): 8 draws per row over-fits the
+value head on held-out games; REG-1 and RUN11-PRE read the regularisers and the step rate before the mint.
 
 ---
 
@@ -364,6 +431,9 @@ Status: standing. Admits a second ruler under R374(b) by (a); extends LAW-19 by 
 (a)'s landing RATIFIED by R376(a); (c)'s choice MADE by R376(c): run10 will not START, and run11 is designed after the
 tactics lane's deploy read; (f)'s provenance RULED by R376(f): learning from Six's outputs is a means, probes first,
 a run only on a pass, and the net carries Six in its lineage.
+(d) is CLARIFIED by R383(a): power guards nulls (a null is a bound only at power ≥ 0.8 for the pre-stated minimal
+effect) and the false-pass rate guards detections (a detection stands when its CI clears zero by the line, its effect
+of record the CI's bound nearest zero); "screen, not adopt" binds marginal passes only.
 
 ---
 

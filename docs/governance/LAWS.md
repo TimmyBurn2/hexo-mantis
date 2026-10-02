@@ -56,6 +56,10 @@ amendment commit and operator sign-off.
   and its false-pass rate at zero effect, at the measured spread between nets; below 0.8 power it
   is void. Strength claims read panels or averaged nets, and a fine-tune is judged against an
   equal-recipe control fine-tune.
+  ANNOTATION (2026-10-02, R383(a)): power guards nulls — a null is a bound only at power ≥ 0.8
+  for the pre-stated minimal effect — and the false-pass rate guards detections — a detection
+  stands when its CI clears zero by the line, and its effect of record is the CI's bound nearest
+  zero. "Screen, not adopt" applies to marginal passes, not to detections many SDs out.
 
 ## The protected set
 
