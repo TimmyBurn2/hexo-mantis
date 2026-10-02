@@ -1,4 +1,4 @@
-"""`read` a stamped checkpoint on a held-out ring (and a train ring, for the gap); `compare` two sets of reads."""
+"""`read` a stamped checkpoint on a held-out ring (and a train ring, for the gap); `compare` two sets of reads, `lagged` two saves of one run; `exams` a position set."""
 from __future__ import annotations
 
 import argparse
@@ -17,7 +17,17 @@ from mantis.train.checkpoints import deploy_state, load_checkpoint
 
 from .draws import BATCH, TraceMismatchError
 from .draws import read as read_draws
-from .metrics import crossfit_losses, game_folds, game_se, line_and_power, side
+from .metrics import (
+    EFFECT,
+    PLY_BANDS,
+    calibrated,
+    crossfit_losses,
+    game_folds,
+    game_se,
+    line_and_power,
+    side,
+    verdicts,
+)
 
 # The seeds, batch size and batch count define "the same rows": change one and no earlier read compares.
 HELDOUT_SEED = 20260929
@@ -81,30 +91,87 @@ def _loaded(path: Path) -> dict[str, Any]:
     return {"rows": dict(np.load(Path(path).with_suffix(".rows.npz"))), "ring_sha256": body["heldout"]["ring_sha256"]}
 
 
-def compare(a: argparse.Namespace) -> dict[str, Any]:
-    """The arm reads against the base reads on the same held-out draws. Raises: ValueError (different draws or folds, or no seed spread and no --sigma), OSError, KeyError."""
-    reads = [_loaded(p) for p in [*a.arm, *a.base]]
+def _same_draws(reads: list[dict[str, Any]], cmd: str) -> None:
+    """Raises: ValueError when the reads were not taken on the same held-out draws and folds."""
     first = reads[0]["rows"]
     for x in reads[1:]:
         if x["ring_sha256"] != reads[0]["ring_sha256"] or any(
                 not np.array_equal(x["rows"][f"heldout__{k}"], first[f"heldout__{k}"]) for k in ("slot", "valid", "fold")):
-            raise ValueError("compare: the reads were not taken on the same held-out draws and folds")
-    v = first["heldout__valid"]
-    gid, fold = first["heldout__game_id"][v], first["heldout__fold"][v]
-    y = _outcomes(first["heldout__z"][v])
-    loss = [crossfit_losses(x["rows"]["heldout__u"][v], y, fold) for x in reads]
-    arm, base = loss[:len(a.arm)], loss[len(a.arm):]
+            raise ValueError(f"{cmd}: the reads were not taken on the same held-out draws and folds")
+
+
+def _contrast(u: list[np.ndarray], n_arm: int, y: np.ndarray, fold: np.ndarray, gid: np.ndarray, sel: np.ndarray,
+              sigma: float | None, prefer_groups: bool, source: str, effect: float) -> dict[str, Any]:
+    """Arm minus base CE on the draws `sel`, each read at its own temperatures there. Raises: ValueError (no seed spread and no sigma)."""
+    if not sel.any():
+        return {"n": 0}
+    loss = [crossfit_losses(x[sel], y[sel], fold[sel]) for x in u]
+    arm, base = loss[:n_arm], loss[n_arm:]
     groups = [[float(x.mean()) for x in arm], [float(x.mean()) for x in base]]
     df = sum(len(g) - 1 for g in groups)
-    if a.sigma is None and df == 0:
+    if df > 0 and (prefer_groups or sigma is None):
+        sigma, source = math.sqrt(sum(float(np.sum((np.asarray(g) - np.mean(g)) ** 2)) for g in groups) / df), "groups"
+    elif sigma is None:
         raise ValueError("compare: one read per side has no seed spread; pass a family's pooled --sigma")
-    sigma = a.sigma if a.sigma is not None else math.sqrt(
-        sum(float(np.sum((np.asarray(g) - np.mean(g)) ** 2)) for g in groups) / df)
     sd_seed = sigma * math.sqrt(1.0 / len(arm) + 1.0 / len(base))
-    g = game_se(np.mean(arm, axis=0) - np.mean(base, axis=0), gid, BOOT_SEED)
-    lp = line_and_power(sd_seed, g["se_game"])
-    return {**g, "sigma_seed": sigma, "sigma_df": df, "sd_seed": sd_seed, **lp, "beats": g["diff"] <= -lp["line"],
-            "powered": lp["power"] >= 0.8}
+    g = game_se(np.mean(arm, axis=0) - np.mean(base, axis=0), gid[sel], BOOT_SEED)
+    lp = line_and_power(sd_seed, g["se_game"], effect)
+    return {"n": int(sel.sum()), **g, "sigma_seed": sigma, "sigma_df": df, "sigma_source": source, "sd_seed": sd_seed,
+            **lp, "beats": g["diff"] <= -lp["line"], "powered": lp["power"] >= 0.8, **verdicts(g["diff"], lp["line"], effect)}
+
+
+def _paired(arm: list[Path], base: list[Path], sigma: float | None, source: str, effect: float, cmd: str) -> dict[str, Any]:
+    """Overall and per ply band: `sigma` rules overall when given, a band's own groups' spread rules it when it has one. Raises: ValueError, OSError, KeyError."""
+    reads = [_loaded(p) for p in [*arm, *base]]
+    _same_draws(reads, cmd)
+    first = reads[0]["rows"]
+    v = first["heldout__valid"]
+    gid, fold, ply = (first[f"heldout__{k}"][v] for k in ("game_id", "fold", "ply"))
+    y = _outcomes(first["heldout__z"][v])
+    u = [x["rows"]["heldout__u"][v] for x in reads]
+    out = _contrast(u, len(arm), y, fold, gid, np.ones(len(y), bool), sigma, False, source, effect)
+    out["bands"] = {band: _contrast(u, len(arm), y, fold, gid, (ply >= lo) & (ply <= hi), sigma, True, source, effect)
+                    for band, (lo, hi) in PLY_BANDS.items()}
+    return out
+
+
+def compare(a: argparse.Namespace) -> dict[str, Any]:
+    """The arm reads against the base reads on the same held-out draws. Raises: ValueError (different draws or folds, or no seed spread and no --sigma), OSError, KeyError."""
+    return _paired(a.arm, a.base, a.sigma, "--sigma", a.effect, "compare")
+
+
+def lagged(a: argparse.Namespace) -> dict[str, Any]:
+    """Current minus lagged, two saves of one run on the same held-out draws: no seed spread, so game noise only. Raises: ValueError (different draws or folds), OSError, KeyError."""
+    return _paired([a.current], [a.lagged], 0.0, "none (one run): game noise only", a.effect, "lagged")
+
+
+def exams(a: argparse.Namespace) -> dict[str, Any]:
+    """A JSONL field's per-position values, raw and calibrated at the read's held-out temperature. Raises: ValueError (no temperature, no rows, a non-finite or missing value, a malformed line), OSError."""
+    body = json.loads(Path(a.read).read_text(encoding="utf-8"))
+    t = ((body.get("heldout") or {}).get("overall") or {}).get("temperature")
+    if t is None:
+        raise ValueError(f"exams: {a.read} carries no held-out temperature (a read with no skill calibrates nothing)")
+    vals: list[float] = []
+    for i, line in enumerate(Path(a.rows).read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        if not isinstance(row, dict):
+            raise ValueError(f"exams: line {i} of {a.rows} is not a JSON object")
+        if a.net is not None and row.get("net") != a.net:
+            continue
+        x = row.get(a.field)
+        if isinstance(x, bool) or not isinstance(x, int | float) or not math.isfinite(x):
+            raise ValueError(f"exams: line {i} of {a.rows}: {a.field!r} is {x!r}, not a finite number")
+        vals.append(float(x))
+    if not vals:
+        raise ValueError(f"exams: no rows in {a.rows}" + (f" for net {a.net!r}" if a.net is not None else ""))
+    raw = np.asarray(vals)
+    cal = calibrated(raw, float(t))
+    out = {"n": len(raw), "raw_mean": float(raw.mean()), "calibrated_mean": float(cal.mean()),
+           "se_raw": float(raw.std() / math.sqrt(len(raw))), "se_calibrated": float(cal.std() / math.sqrt(len(raw))),
+           "temperature": float(t)}
+    return out if a.floor is None else {**out, "floor": a.floor, "holds": out["calibrated_mean"] >= a.floor}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -126,15 +193,26 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--arm", type=Path, nargs="+", required=True)
     c.add_argument("--base", type=Path, nargs="+", required=True)
     c.add_argument("--sigma", type=float, default=None, help="a family's pooled seed SD (default: the two groups')")
+    c.add_argument("--effect", type=float, default=EFFECT)
+    lg = sub.add_parser("lagged", help="two saves of one run on the same held-out draws, game noise only")
+    lg.add_argument("--current", type=Path, required=True)
+    lg.add_argument("--lagged", type=Path, required=True)
+    lg.add_argument("--effect", type=float, default=EFFECT)
+    e = sub.add_parser("exams", help="a position set's values calibrated at a read's held-out temperature")
+    e.add_argument("--read", type=Path, required=True)
+    e.add_argument("--rows", type=Path, required=True)
+    e.add_argument("--field", required=True)
+    e.add_argument("--net", default=None)
+    e.add_argument("--floor", type=float, default=None)
     a = ap.parse_args(argv)
     try:
-        out = read(a) if a.cmd == "read" else compare(a)
+        out = {"read": read, "compare": compare, "lagged": lagged, "exams": exams}[a.cmd](a)
     except (ValueError, TraceMismatchError) as exc:
         print(f"value_instrument: {exc}", file=sys.stderr)
         return 2
-    print(json.dumps(out if a.cmd == "compare" else {k: out[k] for k in out if k in ("heldout", "gap")}, indent=1,
+    print(json.dumps(out if a.cmd != "read" else {k: out[k] for k in out if k in ("heldout", "gap")}, indent=1,
                      allow_nan=False))
     return 0
 
 
-__all__ = ["compare", "main", "read"]
+__all__ = ["compare", "exams", "lagged", "main", "read"]

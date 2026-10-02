@@ -1,4 +1,5 @@
-"""The value instrument: temperature, scale, ties, folds, bootstrap and line on synthetic draws; trace, read and compare end to end."""
+# >300 justify (R8): one oracle for one tool; the fake-read writer and the synthetic reads serve compare, lagged and exams alike.
+"""The value instrument: temperature, Platt, scale, ties, folds, bootstrap and line on synthetic draws; trace, read, compare, lagged and exams end to end."""
 from __future__ import annotations
 
 import argparse
@@ -170,11 +171,12 @@ def test_read_refuses_a_draw_its_tracer_misplaces(vi, net_and_config, tmp_path: 
         d.read(model, cfg, path, seed=7, batches=1, device=torch.device("cpu"), threads=2, dump_dir=tmp_path)
 
 
-def _fake_read(path: Path, u: np.ndarray, *, slot_shift: int = 0, ring_sha: str = "x") -> Path:
+def _fake_read(path: Path, u: np.ndarray, *, slot_shift: int = 0, ring_sha: str = "x", ply: np.ndarray | None = None) -> Path:
     n = len(u)
     gid = np.repeat(np.arange(n // 4), 4)
     rows = {"heldout__u": u, "heldout__raw_ce": np.zeros(n), "heldout__z": np.where(np.arange(n) % 2, 1.0, -1.0),
-            "heldout__valid": np.ones(n, bool), "heldout__game_id": gid, "heldout__ply": np.zeros(n, np.int32),
+            "heldout__valid": np.ones(n, bool), "heldout__game_id": gid,
+            "heldout__ply": np.zeros(n, np.int32) if ply is None else ply,
             "heldout__slot": np.arange(n) + slot_shift, "heldout__fold": (gid % 2).astype(np.int8)}
     np.savez(path.with_suffix(".rows.npz"), **rows)
     path.write_text(json.dumps({"heldout": {"ring_sha256": ring_sha}}), encoding="utf-8")
@@ -188,7 +190,7 @@ def test_compare_refuses_other_draws_and_a_missing_seed_spread_and_reads_a_real_
     rng = np.random.default_rng(8)
     good = [_fake_read(tmp_path / f"g{i}.json", 3.0 * z + rng.normal(0, 3, n)) for i in range(3)]
     bad = [_fake_read(tmp_path / f"b{i}.json", rng.normal(0, 3, n)) for i in range(3)]
-    ns = lambda arm, base, sigma=None: argparse.Namespace(arm=arm, base=base, sigma=sigma)  # noqa: E731
+    ns = lambda arm, base, sigma=None: argparse.Namespace(arm=arm, base=base, sigma=sigma, effect=vi[0].EFFECT)  # noqa: E731
     with pytest.raises(ValueError, match="seed spread"):
         cli.compare(ns(good[:1], bad[:1]))
     with pytest.raises(ValueError, match="same held-out draws"):
@@ -196,3 +198,131 @@ def test_compare_refuses_other_draws_and_a_missing_seed_spread_and_reads_a_real_
     out = cli.compare(ns(good, bad))
     assert out["beats"] and out["sigma_df"] == 4 and 0.0 <= out["power"] <= 1.0
     assert out["diff"] < -out["line"] < 0.0
+
+
+def _sigmoid(x: np.ndarray) -> np.ndarray:
+    return 1.0 / (1.0 + np.exp(-x))
+
+
+def test_platt_recovers_a_known_slope_and_intercept_and_falls_back_to_the_base_rate(vi) -> None:
+    m = vi[0]
+    rng = np.random.default_rng(10)
+    u = rng.normal(0.0, 2.0, 200_000)
+    y = np.where(rng.random(len(u)) < _sigmoid(0.6 * u + 0.4), 1.0, -1.0)
+    a, c = m.fit_platt(u, y)
+    assert a == pytest.approx(0.6, abs=0.02) and c == pytest.approx(0.4, abs=0.02)
+    assert m.fit_platt(u, np.ones(len(u))) == (0.0, pytest.approx(np.log((1 - 1e-6) / 1e-6)))
+    assert m.fit_platt(np.empty(0), np.empty(0)) == (0.0, 0.0)
+
+
+def test_the_crossfit_platt_ce_beats_the_constant_and_absorbs_the_intercept_a_temperature_cannot(vi) -> None:
+    m = vi[0]
+    rng = np.random.default_rng(11)
+    u = rng.normal(0.0, 2.0, 40_000)
+    y = np.where(rng.random(len(u)) < _sigmoid(0.5 * u + 1.0), 1.0, -1.0)
+    fold = (np.arange(len(u)) % 2).astype(np.int8)
+    out = m.block(u, y, np.zeros(len(u)), fold)
+    assert out["platt_ce"] < out["constant_ce"] - 0.05 and out["platt_ce"] < out["cf_ce"] - 0.01
+    assert out["platt_ce_f1"] == pytest.approx(float(m.crossfit_platt_losses(u, y, fold)[fold == 1].mean()))
+    assert "platt_ce" in m.side(u, y, np.zeros(len(u)), fold, np.full(len(u), 5))["plies_0_10"]
+
+
+def test_calibrated_is_odd_the_identity_at_one_shrinks_when_overconfident_and_zero_without_skill(vi) -> None:
+    m = vi[0]
+    v = np.linspace(-0.99, 0.99, 199)
+    np.testing.assert_allclose(m.calibrated(v, 1.0), v, rtol=0, atol=1e-12)
+    hot = m.calibrated(v, 2.5)
+    assert np.all(np.abs(hot) < np.abs(v) + 1e-18) and np.all(np.abs(hot[np.abs(v) > 0.01]) < np.abs(v[np.abs(v) > 0.01]))
+    np.testing.assert_allclose(m.calibrated(-v, 2.5), -hot, rtol=0, atol=1e-15)
+    assert np.isfinite(m.calibrated(np.array([-1.0, 1.0]), 2.0)).all()
+    zero = m.calibrated(v, None)
+    assert zero.shape == v.shape and not zero.any()
+
+
+def _synthetic_reads(tmp_path: Path, n: int = 4000) -> dict[str, list[Path]]:
+    """Informative and noise reads, two jittered twins of one function per side, every ply band populated."""
+    z = np.where(np.arange(n) % 2, 1.0, -1.0)
+    ply = (np.arange(n) % 60).astype(np.int32)
+    rng = np.random.default_rng(12)
+    shared = 3.0 * z + rng.normal(0, 3, n)
+    made = {"good": lambda: 3.0 * z + rng.normal(0, 3, n), "bad": lambda: rng.normal(0, 3, n),
+            "twin_a": lambda: shared + rng.normal(0, 0.01, n), "twin_b": lambda: shared + rng.normal(0, 0.01, n)}
+    return {k: [_fake_read(tmp_path / f"{k}{i}.json", f(), ply=ply) for i in range(3)] for k, f in made.items()}
+
+
+def _ns(arm: list[Path], base: list[Path], sigma: float | None = None, effect: float = 0.01) -> argparse.Namespace:
+    return argparse.Namespace(arm=arm, base=base, sigma=sigma, effect=effect)
+
+
+def test_compare_reads_a_detection_a_worse_arm_a_tost_null_and_every_band(vi, tmp_path: Path) -> None:
+    m, cli = vi[0], vi[2]
+    r = _synthetic_reads(tmp_path)
+    out = cli.compare(_ns(r["good"], r["bad"]))
+    assert out["detection"] and out["beats"] and not out["worse"] and not out["tost_null"]
+    assert out["ci"] == pytest.approx([out["diff"] - out["line"], out["diff"] + out["line"]])
+    assert out["effect_of_record"] == pytest.approx(out["diff"] + out["line"]) and out["effect"] == m.EFFECT
+    assert out["sigma_source"] == "groups" and set(out["bands"]) == set(m.PLY_BANDS)
+    for band in out["bands"].values():
+        assert band["n"] > 0 and band["detection"] and band["sigma_source"] == "groups" and len(band["ci"]) == 2
+    worse = cli.compare(_ns(r["bad"], r["good"]))
+    assert worse["worse"] and not worse["detection"] and worse["effect_of_record"] is None
+    null = cli.compare(_ns(r["twin_a"], r["twin_b"]))
+    assert null["tost_null"] and not null["detection"] and not null["worse"] and null["effect_of_record"] is None
+    assert not cli.compare(_ns(r["twin_a"], r["twin_b"], effect=0.001))["tost_null"]  # the line's floor exceeds it
+    pooled = cli.compare(_ns(r["good"], r["bad"], sigma=0.002))
+    assert pooled["sigma_source"] == "--sigma" and pooled["sigma_seed"] == 0.002
+    assert all(b["sigma_source"] == "groups" for b in pooled["bands"].values())
+    single = cli.compare(_ns(r["good"][:1], r["bad"][:1], sigma=0.002))
+    assert all(b["sigma_source"] == "--sigma" and b["sigma_seed"] == 0.002 for b in single["bands"].values())
+    json.dumps(out, allow_nan=False)
+
+
+def test_lagged_is_compare_at_zero_sigma_with_its_source_named(vi, tmp_path: Path, capsys) -> None:
+    m, cli = vi[0], vi[2]
+    r = _synthetic_reads(tmp_path)
+    cur, lag = str(r["good"][0]), str(r["bad"][0])
+    assert cli.main(["lagged", "--current", cur, "--lagged", lag]) == 0
+    got = json.loads(capsys.readouterr().out)
+    assert cli.main(["compare", "--arm", cur, "--base", lag, "--sigma", "0"]) == 0
+    want = json.loads(capsys.readouterr().out)
+    strip = lambda d: {k: v for k, v in d.items() if k not in ("sigma_source", "bands")}  # noqa: E731
+    assert strip(got) == strip(want) and all(strip(got["bands"][b]) == strip(want["bands"][b]) for b in m.PLY_BANDS)
+    assert {got["sigma_source"], *(b["sigma_source"] for b in got["bands"].values())} == {"none (one run): game noise only"}
+    assert got["sd_seed"] == 0.0 and got["line"] == pytest.approx(max(m.MIN_LINE, 2.0 * got["se_game"]))
+
+
+def test_lagged_refuses_reads_on_other_draws(vi, tmp_path: Path) -> None:
+    m, cli = vi[0], vi[2]
+    cur = _fake_read(tmp_path / "cur.json", np.random.default_rng(13).normal(0, 3, 400))
+    other = _fake_read(tmp_path / "other.json", np.random.default_rng(14).normal(0, 3, 400), slot_shift=1)
+    with pytest.raises(ValueError, match="lagged: the reads were not taken on the same held-out draws"):
+        cli.lagged(argparse.Namespace(current=cur, lagged=other, effect=m.EFFECT))
+    assert cli.main(["lagged", "--current", str(cur), "--lagged", str(other)]) == 2
+
+
+def test_exams_calibrates_at_the_read_temperature_reads_the_floor_and_refuses(vi, tmp_path: Path) -> None:
+    cli = vi[2]
+    read, rows = tmp_path / "r.json", tmp_path / "rows.jsonl"
+    read.write_text(json.dumps({"heldout": {"overall": {"temperature": 2.0}}}), encoding="utf-8")
+    vals = [0.9, 0.5, -0.2, 0.7]
+    rows.write_text("\n".join(json.dumps({"net": "b" if i == 3 else "a", "v": x}) for i, x in enumerate(vals)) + "\n\n",
+                    encoding="utf-8")
+    ns = lambda **kw: argparse.Namespace(**{"read": read, "rows": rows, "field": "v", "net": None, "floor": None, **kw})  # noqa: E731
+    want = np.tanh(np.arctanh(np.array(vals[:3])) / 2.0)
+    out = cli.exams(ns(net="a", floor=0.2))
+    assert out["n"] == 3 and out["temperature"] == 2.0 and out["raw_mean"] == pytest.approx(0.4)
+    assert out["calibrated_mean"] == pytest.approx(want.mean()) and out["se_calibrated"] == pytest.approx(want.std() / np.sqrt(3))
+    assert out["holds"] and out["floor"] == 0.2
+    assert not cli.exams(ns(net="a", floor=0.3))["holds"]  # the raw mean 0.4 would have held
+    assert cli.exams(ns())["n"] == 4 and "floor" not in cli.exams(ns())
+    with pytest.raises(ValueError, match="no rows"):
+        cli.exams(ns(net="c"))
+    nan_rows = tmp_path / "nan.jsonl"
+    nan_rows.write_text(json.dumps({"v": float("nan")}) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="not a finite number"):
+        cli.exams(ns(rows=nan_rows))
+    cold = tmp_path / "cold.json"
+    cold.write_text(json.dumps({"heldout": {"overall": {"temperature": None}}}), encoding="utf-8")
+    with pytest.raises(ValueError, match="no held-out temperature"):
+        cli.exams(ns(read=cold))
+    assert cli.main(["exams", "--read", str(cold), "--rows", str(rows), "--field", "v"]) == 2
