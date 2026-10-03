@@ -158,34 +158,16 @@ impl MCTSTree {
         }
         let first = root.first_child as usize;
         let n_ch = root.n_children as usize;
-        let q_sign: f32 = if self.pool[0].moves_remaining == 1 {
-            -1.0
-        } else {
-            1.0
-        };
 
         // The ONE divergence from the dense exporter is this ragged scatter: every child
         // kept, no coverage read, `flat >= n_actions` meaning off-window.
-        let mut children: Vec<completed_q::CqChild> = Vec::with_capacity(n_ch);
-        let mut coords: Vec<(i32, i32, usize)> = Vec::with_capacity(n_ch);
-
-        for j in 0..n_ch {
-            let child = &self.pool[first + j];
-            let (q, r) = child.cell();
-            let flat = self.root_board.window_flat_idx(q, r);
-
-            let visits = child.n_visits;
-            children.push(completed_q::CqChild {
-                visits,
-                prior: child.prior,
-                q_val: if visits > 0 {
-                    q_sign * child.w_value / visits as f32
-                } else {
-                    0.0
-                },
-            });
-            coords.push((q, r, flat));
-        }
+        let children = self.node_cq_children(0);
+        let coords: Vec<(i32, i32, usize)> = (first..first + n_ch)
+            .map(|i| {
+                let (q, r) = self.pool[i].cell();
+                (q, r, self.root_board.window_flat_idx(q, r))
+            })
+            .collect();
 
         // See `get_improved_policy` for why no zero-visit branch is needed.
         let masses =

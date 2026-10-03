@@ -31,6 +31,12 @@ def test_a_record_predating_a_fold_reads_its_folded_value_and_stays_untouched() 
     assert record["train"]["scheduler_t_max"] is None and record["selfplay"]["playout_cap"]["n_sims_full"] == 0
 
 
+def test_a_stamp_carrying_the_old_search_weight_key_reads_its_weight_under_the_new_one() -> None:
+    record = {"train": {"value_target_lambda": 0.25}}
+    kept, removed = split_retired(record)
+    assert kept == {"train": {"value_target_search_weight": 0.25}} and removed == {"train.value_target_lambda": 0.25}
+
+
 def test_a_fold_never_overrides_a_value_the_record_set() -> None:
     """An armed config keeps its own full arm and horizon; the folded source only fills an unset target."""
     record = {"train": {"total_steps": 1_000_000, "scheduler_t_max": 108_000},

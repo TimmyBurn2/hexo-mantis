@@ -10,7 +10,7 @@ use mantis_encoding::lookup_or_panic;
 use mantis_search::mcts::{AuditConfig, AuditMode, TacticsConfig};
 use mantis_search::SearchKind;
 use mantis_selfplay::replay::hexg::GraphRecord;
-use mantis_selfplay::runner::{GameResultRow, SelfPlayRunner, SelfPlayRunnerConfig};
+use mantis_selfplay::runner::{GameResultRow, PositionStats, SelfPlayRunner, SelfPlayRunnerConfig};
 
 mod common;
 
@@ -131,8 +131,8 @@ fn paired(d: &Drove) -> Vec<(&GameResultRow, Vec<&GraphRecord>)> {
         .collect()
 }
 
-/// Every row of every sampled game, beside the search stats' search value and W/N for its ply.
-fn rows_beside_stats(d: &Drove) -> Vec<(f32, f32, &GraphRecord)> {
+/// Every row of every sampled game, beside the search stats' entry for its ply.
+fn rows_beside_stats(d: &Drove) -> Vec<(&PositionStats, &GraphRecord)> {
     let mut out = Vec::new();
     for (game, rows) in paired(d) {
         let stats = game
@@ -146,10 +146,54 @@ fn rows_beside_stats(d: &Drove) -> Vec<(f32, f32, &GraphRecord)> {
                 s.0,
                 "the stats and the rows walk the same plies"
             );
-            out.push((s.4, s.1, r));
+            out.push((s, r));
         }
     }
     out
+}
+
+/// Σ π′·completedQ rebuilt from one stats entry alone in f64: the unvisited children are ONE logit at v_mix.
+fn rebuilt_from_stats(s: &PositionStats, cfg: &SelfPlayRunnerConfig) -> f64 {
+    let raw = f64::from(s.2.expect("a Gumbel root stores its raw value"));
+    let kids: Vec<(f64, f64, f64)> =
+        s.3.iter()
+            .map(|&(_, n, q, p)| (f64::from(n), f64::from(q), f64::from(p)))
+            .collect();
+    let floor = f64::from(f32::MIN_POSITIVE);
+    let sum_p: f64 = kids.iter().map(|&(_, _, p)| p.max(floor)).sum();
+    let wq = kids.iter().map(|&(_, q, p)| p.max(floor) * q).sum::<f64>() / sum_p;
+    let n: f64 = kids.iter().map(|&(n, _, _)| n).sum();
+    let v_mix = (raw + n * wq) / (n + 1.0);
+    let rest = 1.0 - kids.iter().map(|&(_, _, p)| p).sum::<f64>();
+    let mut vals: Vec<(f64, f64)> = kids
+        .iter()
+        .map(|&(_, q, p)| (p.max(1e-8).ln(), q))
+        .collect();
+    if rest > 1e-6 {
+        vals.push((rest.ln(), v_mix));
+    }
+    let max_n = kids.iter().map(|&(n, _, _)| n).fold(0.0, f64::max);
+    let scale = (f64::from(cfg.c_visit) + max_n) * f64::from(cfg.c_scale);
+    let (lo, hi) = vals
+        .iter()
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), &(_, v)| {
+            (lo.min(v), hi.max(v))
+        });
+    let sigma = |v: f64| {
+        if cfg.q_rescale {
+            (v - lo) / (hi - lo).max(1e-8) * scale
+        } else {
+            v * scale
+        }
+    };
+    let logits: Vec<f64> = vals.iter().map(|&(lp, v)| lp + sigma(v)).collect();
+    let top = logits.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let z: f64 = logits.iter().map(|l| (l - top).exp()).sum();
+    logits
+        .iter()
+        .zip(&vals)
+        .map(|(l, &(_, v))| (l - top).exp() / z * v)
+        .sum()
 }
 
 /// The cross-check pin: with no proof the row's value IS the stats' search value bit for bit (Σ π′·completedQ, PUCT's W/N).
@@ -159,30 +203,43 @@ fn every_row_carries_its_own_searchs_root_value_bit_for_bit() {
         let d = drive(kind, None, 12, true, |_, g| g.len() >= 6);
         let pairs = rows_beside_stats(&d);
         assert!(pairs.len() >= 20, "{kind:?}: only {} rows", pairs.len());
-        let nonzero = pairs.iter().filter(|(_, _, r)| r.root_value != 0.0).count();
+        let nonzero = pairs.iter().filter(|(_, r)| r.root_value != 0.0).count();
         assert!(
             10 * nonzero >= 9 * pairs.len(),
             "{kind:?}: {nonzero} of {} values non-zero",
             pairs.len()
         );
-        let quick = pairs.iter().filter(|(_, _, r)| !r.is_full_search).count();
+        let quick = pairs.iter().filter(|(_, r)| !r.is_full_search).count();
         assert!(
             quick > 0 && quick < pairs.len(),
             "{kind:?}: both arms drew ({quick} quick)"
         );
         let off_wn = pairs
             .iter()
-            .filter(|(value, wn, _)| value.to_bits() != wn.to_bits())
+            .filter(|(s, _)| s.4.to_bits() != s.1.to_bits())
             .count();
         match kind {
-            SearchKind::Gumbel => assert!(
-                10 * off_wn >= 9 * pairs.len(),
-                "Gumbel: only {off_wn} of {} values leave W/N",
-                pairs.len()
-            ),
+            SearchKind::Gumbel => {
+                assert!(
+                    10 * off_wn >= 9 * pairs.len(),
+                    "Gumbel: only {off_wn} of {} values leave W/N",
+                    pairs.len()
+                );
+                let cfg = SelfPlayRunnerConfig::default();
+                for (s, r) in &pairs {
+                    let want = rebuilt_from_stats(s, &cfg);
+                    assert!(
+                        (f64::from(r.root_value) - want).abs() < 1e-4,
+                        "ply {}: the row's {} is not 0a's Σ π′·completedQ {want} off its own stats",
+                        r.ply_index,
+                        r.root_value
+                    );
+                }
+            }
             SearchKind::Puct => assert_eq!(off_wn, 0, "PUCT has no π′: its value is W/N"),
         }
-        for (stats_value, _wn, r) in &pairs {
+        for (s, r) in &pairs {
+            let stats_value = s.4;
             assert!(
                 r.root_value_valid,
                 "{kind:?} ply {}: a searched row has a root value",
@@ -205,7 +262,8 @@ fn a_proven_root_carries_the_proofs_value_and_every_other_row_its_searchs() {
         g.len() >= 4 && r["proof_stones_played"] > 0 && r["decided_lost"] > 0
     });
     let (mut won, mut lost) = (0u64, 0u64);
-    for (stats_value, _wn, r) in rows_beside_stats(&d) {
+    for (s, r) in rows_beside_stats(&d) {
+        let stats_value = s.4;
         assert!(r.root_value_valid);
         if r.root_value.to_bits() == stats_value.to_bits() {
             continue;

@@ -22,8 +22,8 @@ _CAPS = MicrobatchCapsSpec(max_edges=100_000_000, max_nodes=4_000_000)
 # Row 5's root value equals its z, so the mix reaches it without moving it.
 _ROWS = [(1.0, 0.5, True), (-1.0, None, True), (1.0, None, True), (-1.0, -0.25, True), (1.0, -0.5, False),
          (-1.0, -1.0, True)]
-# The same rows' targets at λ = 0.25 (asymmetric, so a swapped 1 − λ shows), each exact in float32.
-_LAM = 0.25
+# The same rows' targets at weight 0.25 (asymmetric, so a swapped 1 − w shows), each exact in float32.
+_WEIGHT = 0.25
 _MIXED = [0.875, -1.0, 1.0, -0.8125, 0.625, -1.0]
 
 
@@ -38,8 +38,8 @@ def _ring(*, roots: bool = True, outcomes: list[float] | None = None) -> HexgBuf
     return buf
 
 
-def _value_loss(tmp_path: Path, ring: HexgBuffer, lam: float, *, train: bool) -> float:
-    trainer = H.tiny_graph_trainer(tmp_path, value_target_search_weight=lam, checkpoint_interval=0)
+def _value_loss(tmp_path: Path, ring: HexgBuffer, weight: float, *, train: bool) -> float:
+    trainer = H.tiny_graph_trainer(tmp_path, value_target_search_weight=weight, checkpoint_interval=0)
     step: Callable[..., dict[str, float]] = run_declared_train_step if train else run_declared_eval_step
     kw: dict[str, Any] = {"augment": False} if train else {}
     out = step(trainer, ring, H.GSPEC, batch_size=len(_ROWS), caps_provider=lambda: _CAPS,
@@ -48,14 +48,14 @@ def _value_loss(tmp_path: Path, ring: HexgBuffer, lam: float, *, train: bool) ->
 
 
 def _assert_the_mix_trains_its_own_target(tmp_path: Path) -> None:
-    """At λ > 0 the train step's value loss IS the λ = 0 loss of the same rows relabelled with their mixed targets."""
-    mixed = _value_loss(tmp_path, _ring(), _LAM, train=True)
+    """At weight > 0 the train step's value loss IS the weight 0 loss of the same rows relabelled with their mixed targets."""
+    mixed = _value_loss(tmp_path, _ring(), _WEIGHT, train=True)
     relabelled = _value_loss(tmp_path, _ring(roots=False, outcomes=_MIXED), 0.0, train=True)
-    assert mixed == relabelled, f"the λ = {_LAM} loss {mixed} is not its target's {relabelled}"
-    assert mixed != _value_loss(tmp_path, _ring(), 0.0, train=True), "λ > 0 moved nothing"
+    assert mixed == relabelled, f"the weight {_WEIGHT} loss {mixed} is not its target's {relabelled}"
+    assert mixed != _value_loss(tmp_path, _ring(), 0.0, train=True), "weight > 0 moved nothing"
 
 
-def test_at_lambda_zero_the_value_target_is_the_outcome_tensor_itself() -> None:
+def test_at_weight_zero_the_value_target_is_the_outcome_tensor_itself() -> None:
     z = torch.tensor([1.0, -1.0, 0.0])
     assert losses.value_target(z, torch.tensor([0.5, 0.0, -0.25]), torch.tensor([1, 0, 1], dtype=torch.uint8), 0.0) is z
 
@@ -68,8 +68,8 @@ def test_the_mix_reaches_only_rows_with_a_root_value() -> None:
     assert losses.value_target(z, v, ok, 1.0).tolist() == [0.5, -1.0, 1.0, 1.0]
 
 
-def test_at_lambda_zero_the_trainer_is_byte_equal_whatever_the_rows_root_values(tmp_path: Path) -> None:
-    """The v2 trainer at λ = 0: rows with and without root values train to the same bits, losses and weights alike."""
+def test_at_weight_zero_the_trainer_is_byte_equal_whatever_the_rows_root_values(tmp_path: Path) -> None:
+    """The v2 trainer at weight 0: rows with and without root values train to the same bits, losses and weights alike."""
     def run(ring: HexgBuffer) -> tuple[list[dict[str, str]], bytes]:
         trainer = H.tiny_graph_trainer(tmp_path, value_target_search_weight=0.0, checkpoint_interval=0)
         replay = H.ReplayWireBuffer(ring, len(_ROWS))
@@ -82,29 +82,29 @@ def test_at_lambda_zero_the_trainer_is_byte_equal_whatever_the_rows_root_values(
 
     with_roots, without = run(_ring()), run(_ring(roots=False))
     assert with_roots[0] == without[0]
-    assert with_roots[1] == without[1], "the weights moved differently at λ = 0"
+    assert with_roots[1] == without[1], "the weights moved differently at weight 0"
 
 
-def test_a_lambda_above_zero_mixes_only_rows_with_a_root_value_and_the_planted_break_reds(
+def test_a_weight_above_zero_mixes_only_rows_with_a_root_value_and_the_planted_break_reds(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """PLANTED BREAK: a mix that ignores the flag trains a row with no root value toward (1−λ)·z; the checker reds."""
+    """PLANTED BREAK: a mix that ignores the flag trains a row with no root value toward (1−w)·z; the checker reds."""
     _assert_the_mix_trains_its_own_target(tmp_path)
     from mantis.train.trainer import core
 
-    monkeypatch.setattr(core, "value_target", lambda z, v, ok, lam: lam * v + (1.0 - lam) * z)
+    monkeypatch.setattr(core, "value_target", lambda z, v, ok, w: w * v + (1.0 - w) * z)
     with pytest.raises(AssertionError, match="is not its target's"):
         _assert_the_mix_trains_its_own_target(tmp_path)
 
 
 def test_the_eval_step_reads_z_whatever_the_weight(tmp_path: Path) -> None:
-    """A reading must not reward the lever: the forward-only value loss at λ > 0 is the λ = 0 one, bit for bit."""
-    assert _value_loss(tmp_path, _ring(), _LAM, train=False) == _value_loss(tmp_path, _ring(), 0.0, train=False)
+    """A reading must not reward the lever: the forward-only value loss at weight > 0 is the weight 0 one, bit for bit."""
+    assert _value_loss(tmp_path, _ring(), _WEIGHT, train=False) == _value_loss(tmp_path, _ring(), 0.0, train=False)
 
 
 def test_the_step_event_counts_the_value_rows_the_mix_reaches_and_moves(tmp_path: Path) -> None:
-    """The mix's fire-rate: value-supervised rows with a root value (reached), those with v != z (moved), λ echoed."""
+    """The mix's fire-rate: value-supervised rows with a root value (reached), those with v != z (moved), the weight echoed."""
     sink = H.SpySink()
-    trainer = H.tiny_graph_trainer(tmp_path, sink=sink, value_target_search_weight=_LAM, checkpoint_interval=0)
+    trainer = H.tiny_graph_trainer(tmp_path, sink=sink, value_target_search_weight=_WEIGHT, checkpoint_interval=0)
     replay = H.ReplayWireBuffer(_ring(), len(_ROWS))
     run_declared_train_step(trainer, replay, H.GSPEC, batch_size=len(_ROWS), augment=False,
                             caps_provider=lambda: _CAPS, sample_threads_provider=lambda: 1)
@@ -113,4 +113,4 @@ def test_the_step_event_counts_the_value_rows_the_mix_reaches_and_moves(tmp_path
     assert int(rooted.sum()) == 4 and sorted(np.asarray(t.outcomes).tolist()) == sorted(z for z, _v, _ok in _ROWS)
     event = sink.named("trainer_step")[0]
     assert (event["root_value_rows"], event["root_value_rows_moved"]) == (3, 2)
-    assert event["value_target_search_weight"] == _LAM
+    assert event["value_target_search_weight"] == _WEIGHT

@@ -194,13 +194,13 @@ class TrainConfig(StrictModel):
     min_buf_size: int = Field(ge=1)
     # `replay_capacity` — the replay window, i.e. the distribution the learner trains on.
     replay_capacity: int = Field(ge=1)
-    # `training_steps_per_game` — the sample-reuse ratio. `gt=0` because `_steps_budget` floors
-    # its result at 1, so `0` means "one step per round" while reading as an off switch.
+    # `training_steps_per_game` — the sample-reuse ratio. `gt=0` because off the fill ramp `_steps_budget`
+    # floors its result at 1, so `0` means "one step per round" while reading as an off switch.
     training_steps_per_game: float = Field(gt=0)
     # The ratio scaled by the ring's fill (rows/capacity): a row inserted while it fills is drawn as a steady row is.
     training_steps_fill_ramp: bool
-    # `max_train_burst` — the ceiling of that budget. `ge=1` because the `max(1, ...)` floor is
-    # INSIDE the `min(...)`, so `0` clamps the budget to 0 and stops the learner silently.
+    # `max_train_burst` — the ceiling of that budget. `ge=1` because the ceiling is the `min(...)`'s
+    # outer term, so `0` clamps the budget to 0 and stops the learner silently.
     max_train_burst: int = Field(ge=1)
     # `batch_size` — the training batch, AUTHORED HERE AND NOWHERE ELSE.
     batch_size: int = Field(ge=1)

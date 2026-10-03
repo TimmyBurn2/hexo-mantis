@@ -781,12 +781,19 @@ pub(crate) fn play_one_move(
             .fetch_add(1, Ordering::Relaxed);
     }
 
-    // The search's value of the root: Σ π′·completedQ under a completed-Q search, W/N under PUCT (which has no π′); a
-    // degenerate π′ reads NaN, which the record refuses as run-fatal.
+    // The search's value of the root: Σ π′·completedQ under a completed-Q search, W/N under PUCT (which has no π′).
     let search_value = if ctx.search_kind.completed_q_target() {
         tree.improved_policy_value(ctx.sigma).unwrap_or(f32::NAN)
     } else {
         tree.root_value()
+    };
+    // Refused here, ahead of a proof's override, so a degenerate search never reaches the stats either.
+    let search_value = match records::refuse_root_value(search_value, board.ply.index() as u16) {
+        Ok(value) => value,
+        Err(err) => {
+            fatal_latch.store(err.to_string());
+            return MoveOutcome::Break;
+        }
     };
 
     if let Some(stats) = search_stats {

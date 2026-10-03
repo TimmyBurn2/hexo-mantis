@@ -40,7 +40,7 @@ _SHARD_RE = re.compile(
 _MAX_SHARD_CLAIM_RETRIES = 64
 
 #: One searched ply of a sampled self-play game as the runner hands it over:
-#: `(ply, root_value, root_raw | None, [((q, r), visits, q_root_view, prior), ...])`.
+#: `(ply, root W/N, root_raw | None, [((q, r), visits, q_root_view, prior), ...], search_value)`.
 PositionStatsRow = tuple[int, float, float | None, list[tuple[tuple[int, int], int, float, float]], float]
 
 #: The four channels a game can come from.

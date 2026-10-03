@@ -90,8 +90,8 @@ def _step(tmp_path: Path, ring: Any, mask: tuple[float, int] | None, *, train: b
                                    caps_provider=lambda: _CAPS, sample_threads_provider=lambda: 1)
 
 
-def test_a_kept_row_is_weighted_through_the_whole_batch_denominator_as_reg1s_harness(tmp_path: Path) -> None:
-    """REG-1's semantics: the masked step IS the step with the dropped rows' value_valid zeroed, a kept row ≈ 1/p."""
+def test_a_kept_row_is_weighted_through_the_whole_batch_denominator(tmp_path: Path) -> None:
+    """The harness semantics of record: the masked step IS the step with the dropped rows' value_valid zeroed, a kept row ≈ 1/p."""
     replay = H.ReplayWireBuffer(_ring(), _ROWS)
     masked = _step(tmp_path, replay, (_P, _SEED))
     kept = losses.redraw_value_mask(np.asarray(replay.targets.value_valid), _P, _SEED, 0)
@@ -99,9 +99,51 @@ def test_a_kept_row_is_weighted_through_the_whole_batch_denominator_as_reg1s_har
     relabelled = H.ReplayWireBuffer(_ring(), _ROWS)
     relabelled._pair = (relabelled._pair[0], _TargetsView(relabelled.targets, value_valid=kept))
     plain = _step(tmp_path, relabelled, None)
-    assert masked["value_loss"] == plain["value_loss"], "the masked step is not REG-1's zeroed-row step"
+    assert masked["value_loss"] == plain["value_loss"], "the masked step is not the zeroed-row step"
     assert masked["policy_loss"] == plain["policy_loss"], "the mask moved the policy loss"
     assert masked["value_loss"] != _step(tmp_path, H.ReplayWireBuffer(_ring(), _ROWS), None)["value_loss"]
+
+
+def _kept_by_step(tmp_path: Path, steps: int) -> list[np.ndarray]:
+    """The value rows each of `steps` production train steps of ONE trainer trained on, the same batch every step."""
+    trainer = H.tiny_graph_trainer(tmp_path, value_mask=(_P, _SEED), checkpoint_interval=0)
+    real, seen = trainer.train_step_from_graph_batch, []
+
+    def spy(**kw: Any) -> dict[str, float]:
+        rows: list[np.ndarray] = []
+
+        def wrap(make: Any) -> Any:
+            def materialise() -> Any:
+                inputs = make()
+                rows.append(inputs.value_valid.cpu().numpy().copy())
+                return inputs
+            return materialise
+        out = real(**{**kw, "parts": tuple(wrap(m) for m in kw["parts"])})
+        seen.append(np.concatenate(rows))
+        return out
+
+    trainer.train_step_from_graph_batch = spy  # type: ignore[method-assign]
+    replay = H.ReplayWireBuffer(_ring(), _ROWS)
+    for _ in range(steps):
+        run_declared_train_step(trainer, replay, H.GSPEC, batch_size=_ROWS, augment=False, caps_provider=lambda: _CAPS,
+                                sample_threads_provider=lambda: 1)
+    assert trainer.step == steps
+    return seen
+
+
+def _assert_each_step_draws_its_own_rows(kept: list[np.ndarray]) -> None:
+    assert all(0 < int(k.sum()) < _ROWS for k in kept)
+    assert all((kept[i] != kept[i + 1]).any() for i in range(len(kept) - 1)), "two production steps trained one subset"
+
+
+def test_consecutive_production_steps_train_different_value_rows_and_the_planted_break_reds(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """PLANTED BREAK: the dispatcher keying the draw on a constant instead of the trainer's step trains one subset."""
+    _assert_each_step_draws_its_own_rows(_kept_by_step(tmp_path, 3))
+    real = losses.redraw_value_mask
+    monkeypatch.setattr(losses, "redraw_value_mask", lambda vv, p, seed, step: real(vv, p, seed, 0))
+    with pytest.raises(AssertionError, match="one subset"):
+        _assert_each_step_draws_its_own_rows(_kept_by_step(tmp_path, 3))
 
 
 class _TargetsView:
