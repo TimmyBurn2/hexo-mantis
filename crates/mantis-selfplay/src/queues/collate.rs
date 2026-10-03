@@ -109,6 +109,15 @@ pub struct PackOut<'a> {
     pub n_stones: &'a mut [i64],
 }
 
+/// A padded pack's sizes: graphs past the wire's are empty but the last, which owns every padding node, self-loop and legal entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PadTo {
+    pub n_graphs: usize,
+    pub n_nodes: usize,
+    pub n_edges: usize,
+    pub n_legal: usize,
+}
+
 /// Per non-empty graph: `(graph, src_lo, src_hi, dst_lo, dst_hi)` over its edge range.
 type EdgeSpan = (usize, i64, i64, i64, i64);
 
@@ -136,6 +145,7 @@ pub fn pack_wire(
     node_feat_dim: usize,
     edge_feat_dim: usize,
     threads: usize,
+    pad: Option<PadTo>,
 ) -> Result<(), PackError> {
     if node_feat_dim == 0 || edge_feat_dim == 0 {
         return caller("zero feature dim");
@@ -157,23 +167,34 @@ pub fn pack_wire(
     if w.edge_index.len() != 2 * e {
         return caller("edge_index is not 2E (check 2 precedes the pack)");
     }
+    check_counts(w)?;
+    let (b, lg) = (w.n_graphs, w.legal_node_gather.len());
+    let to = pad.unwrap_or(PadTo {
+        n_graphs: b,
+        n_nodes: n,
+        n_edges: e,
+        n_legal: lg,
+    });
+    if pad.is_some() && (to.n_graphs <= b || to.n_nodes <= n || to.n_edges < e || to.n_legal < lg) {
+        return caller(format!(
+            "{to:?} leaves no padding graph or node for B {b} N {n} E {e} Lg {lg}"
+        ));
+    }
     let shapes = [
-        (out.x.len(), w.node_feat.len()),
-        (out.edge_index.len(), w.edge_index.len()),
+        (out.x.len(), to.n_nodes * node_feat_dim),
+        (out.edge_index.len(), 2 * to.n_edges),
         match &out.edges {
-            EdgeOut::Attr(attr) => (attr.len(), w.edge_attr.len()),
-            EdgeOut::Code { codes, .. } => (codes.len(), e),
+            EdgeOut::Attr(attr) => (attr.len(), to.n_edges * edge_feat_dim),
+            EdgeOut::Code { codes, .. } => (codes.len(), to.n_edges),
         },
-        (out.legal_offsets.len(), w.legal_offsets.len()),
-        (out.legal_node_gather.len(), w.legal_node_gather.len()),
-        (out.node_offsets.len(), w.node_offsets.len()),
-        (out.n_stones.len(), w.n_stones.len()),
+        (out.legal_offsets.len(), to.n_graphs + 1),
+        (out.legal_node_gather.len(), to.n_legal),
+        (out.node_offsets.len(), to.n_graphs + 1),
+        (out.n_stones.len(), to.n_graphs),
     ];
     if shapes.iter().any(|(o, i)| o != i) {
         return caller(format!("out slices sized {shapes:?} (out, wire)"));
     }
-    check_counts(w)?;
-    let lg = w.legal_node_gather.len();
     check_offsets(w, n, e, lg)?;
     check_checksums(w)?;
     let miss = if e > 0 {
@@ -185,12 +206,47 @@ pub fn pack_wire(
     if let Some(message) = miss {
         return refuse(StructuralKind::EdgeAttrGeometryMismatch, message);
     }
-    out.x.copy_from_slice(w.node_feat);
-    out.legal_offsets.copy_from_slice(w.legal_offsets);
-    out.node_offsets.copy_from_slice(w.node_offsets);
+    out.x[..w.node_feat.len()].copy_from_slice(w.node_feat);
+    out.legal_offsets[..=b].copy_from_slice(w.legal_offsets);
+    out.node_offsets[..=b].copy_from_slice(w.node_offsets);
     for (dst, &s) in out.n_stones.iter_mut().zip(w.n_stones) {
         *dst = i64::from(s);
     }
+    if pad.is_some() {
+        write_padding(out, (b, n, e, lg), to, node_feat_dim, edge_feat_dim)?;
+    }
+    Ok(())
+}
+
+/// The padding graph: zero rows past N, self-loops (the dummy's row) spread over the padding nodes, legal entries on them.
+fn write_padding(
+    out: &mut PackOut<'_>,
+    (b, n, e, lg): (usize, usize, usize, usize),
+    to: PadTo,
+    node_feat_dim: usize,
+    edge_feat_dim: usize,
+) -> Result<(), PackError> {
+    let wide =
+        |v: usize| i64::try_from(v).map_err(|_| PackError::Caller("a padded size past i64".into()));
+    let sinks = to.n_nodes - n;
+    out.x[n * node_feat_dim..].fill(0.0);
+    let (src, dst) = out.edge_index.split_at_mut(to.n_edges);
+    for j in 0..to.n_edges - e {
+        let sink = wide(n + j % sinks)?;
+        (src[e + j], dst[e + j]) = (sink, sink);
+    }
+    match &mut out.edges {
+        EdgeOut::Attr(attr) => attr[e * edge_feat_dim..].fill(0.0),
+        EdgeOut::Code { codes, .. } => codes[e..].fill(0),
+    }
+    for (k, row) in out.legal_node_gather[lg..].iter_mut().enumerate() {
+        *row = wide(n + k % sinks)?;
+    }
+    out.legal_offsets[b + 1..to.n_graphs].fill(wide(lg)?);
+    out.legal_offsets[to.n_graphs] = wide(to.n_legal)?;
+    out.node_offsets[b + 1..to.n_graphs].fill(wide(n)?);
+    out.node_offsets[to.n_graphs] = wide(to.n_nodes)?;
+    out.n_stones[b..].fill(0);
     Ok(())
 }
 
@@ -302,10 +358,14 @@ fn pack_edges(
         threads.max(1)
     };
     let groups = edge_groups(w.edge_offsets, w.n_graphs, n_edges, threads)?;
-    let (mut src_out, mut dst_out) = out.edge_index.split_at_mut(n_edges);
+    let half = out.edge_index.len() / 2;
+    let (src_all, dst_all) = out.edge_index.split_at_mut(half);
+    let (mut src_out, mut dst_out) = (&mut src_all[..n_edges], &mut dst_all[..n_edges]);
     let (mut feat_out, win_length) = match &mut out.edges {
-        EdgeOut::Attr(attr) => (EdgeChunk::Attr(attr), 0),
-        EdgeOut::Code { codes, win_length } => (EdgeChunk::Code(codes), *win_length),
+        EdgeOut::Attr(attr) => (EdgeChunk::Attr(&mut attr[..n_edges * edge_feat_dim]), 0),
+        EdgeOut::Code { codes, win_length } => {
+            (EdgeChunk::Code(&mut codes[..n_edges]), *win_length)
+        }
     };
     let mut jobs = Vec::with_capacity(groups.len());
     for &(g0, g1) in &groups {
@@ -543,7 +603,7 @@ fn check_and_pack_gather(
             ),
         );
     }
-    out.legal_node_gather.copy_from_slice(gather);
+    out.legal_node_gather[..lg].copy_from_slice(gather);
     Ok(())
 }
 

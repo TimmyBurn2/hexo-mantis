@@ -50,9 +50,9 @@ def test_the_census_has_a_subject() -> None:
     """Vacuity guard. A census that reaches no `autocast` would pass forever — which is the
     failure mode of the instrument this file replaces."""
     calls = _autocast_calls()
-    # A FLOOR, not a tally: it exists so a broken walk cannot pass, and it moves DOWN only when
-    # autocast sites are deleted. R346(f) took the dense trainer and dense inference-loop sites.
-    assert len(calls) >= 4, f"only {len(calls)} autocast call(s) found — the walk is broken"
+    # A FLOOR, not a tally: it exists so a broken walk cannot pass, and it moves DOWN only when autocast sites are
+    # deleted. R346(f) took the dense sites; the server's and fusion_calibrate's became the one `served_outputs`.
+    assert len(calls) >= 3, f"only {len(calls)} autocast call(s) found — the walk is broken"
 
 
 def test_every_autocast_in_src_names_a_dtype() -> None:

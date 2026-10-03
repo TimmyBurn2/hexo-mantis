@@ -229,11 +229,8 @@ def _measure_point(
     import torch
 
     from mantis._engine import edge_vocabulary
-    from mantis.selfplay.graph_collate import (
-        collate_graph_batch,
-        segment_softmax,
-        stone_mask_from_batch,
-    )
+    from mantis.selfplay.graph_collate import collate_graph_batch
+    from mantis.selfplay.served_graphs import served_outputs
 
     # The server serves coded edges: the vocabulary's projections, never an [E, H] one per edge.
     vocab = torch.from_numpy(np.asarray(edge_vocabulary(spec.win_length))).reshape(-1, spec.edge_feat_dim).to(device)
@@ -259,19 +256,10 @@ def _measure_point(
             edge_feat_dim=spec.edge_feat_dim, device=str(device), semantic="canary",
             canary_period=64, coded_edges=True,
         )
-        stone_mask = stone_mask_from_batch(batch)
-        # `amp_dtype_for` is the ONE dtype authority; a literal `torch.bfloat16` beside it
-        # happens to be right for the graph path, which is exactly why it was invisible.
-        with torch.inference_mode(), torch.autocast(
-            device_type="cuda",
-            dtype=amp_dtype_for(str(spec.representation)),
-            enabled=True,
-        ):
-            policy_logits, value, _bins = net.forward_batch(
-                batch.x, batch.edge_index, batch.edge_code, batch.legal_node_gather,
-                stone_mask, batch.node_offsets, edge_vocab=vocab,
-            )
-        probs = segment_softmax(policy_logits.float(), batch.legal_offsets)
+        # The server's own served forward, eager: a bucket's captured graph holds this forward's peak.
+        with torch.inference_mode():
+            probs, value = served_outputs(net, batch, vocab, trunk=None,
+                                          amp_dtype=amp_dtype_for(str(spec.representation)))
         if not bool(torch.isfinite(probs).all()) or not bool(torch.isfinite(value).all()):
             raise CalibrationRefusal(
                 f"{_TOOL}: the production forward produced NaN/Inf at "
@@ -289,7 +277,7 @@ def _measure_point(
         allocated_abs.append(int(torch.cuda.max_memory_allocated()))
         stats = torch.cuda.memory_stats()
         reserved.append(int(stats["reserved_bytes.all.peak"]))
-        del wire, batch, stone_mask, policy_logits, value, probs
+        del wire, batch, value, probs
     stats = torch.cuda.memory_stats()
     free_b, total_b = torch.cuda.mem_get_info()
     return {

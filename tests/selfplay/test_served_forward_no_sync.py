@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import threading
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 import torch
 
@@ -14,6 +16,7 @@ from mantis.config.loader import load_config
 from mantis.config.resolve.edge_geometry_check import resolve_edge_geometry_check
 from mantis.encoding import lookup
 from mantis.model import arch_from_spec_and_config, build_net
+from mantis.selfplay.graph_collate import collate_graph_batch, graph_wire_from_rust
 from mantis.selfplay.inference_server import InferenceServer
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -32,9 +35,9 @@ def _positions(encoding: str) -> list[tuple[list[tuple[int, int, int]], int, int
     return out
 
 
-def _serve_with_checked_launch(compile_trunk: bool,
-                               plant: Callable[[], None] | None = None) -> list[BaseException]:
-    """Serve two pops through the real server; the SECOND pop's launch runs under sync-debug "error"."""
+def _serve_with_checked_launch(compile_trunk: bool, plant: Callable[[], None] | None = None,
+                               checked: int = 2) -> list[BaseException]:
+    """Serve two pops through the real server; pop `checked`'s launch runs under sync-debug "error" (the first captures its bucket)."""
     if compile_trunk:
         torch._dynamo.reset()  # an earlier test's cache entries would otherwise stand in for this compile
     config = load_config(production_configs(_REPO)[0]).model_dump()
@@ -47,10 +50,13 @@ def _serve_with_checked_launch(compile_trunk: bool,
                              edge_geometry_check=resolve_edge_geometry_check(config),
                              compile_trunk=compile_trunk)
     launch, calls, caught = server._launch_pop, [], []
+    if checked == 1:
+        # Compile, autotune and library handles happen here, eagerly: the checked first pop is left with the capture.
+        _prewarm(server, spec, _positions(config["identity"]["encoding"]))
 
-    def checked(*args: Any) -> Any:
+    def checked_launch(*args: Any) -> Any:
         calls.append(1)
-        if len(calls) != 2:
+        if len(calls) != checked:
             return launch(*args)
         torch.cuda.synchronize()
         torch.cuda.set_sync_debug_mode("error")
@@ -64,7 +70,7 @@ def _serve_with_checked_launch(compile_trunk: bool,
         finally:
             torch.cuda.set_sync_debug_mode("default")
 
-    server._launch_pop = checked  # type: ignore[method-assign]
+    server._launch_pop = checked_launch  # type: ignore[method-assign]
     frames_before = server.batch_timing_snapshot()["compile"]["frames_ok"]
     server.start()
     positions = _positions(config["identity"]["encoding"])
@@ -82,6 +88,33 @@ def _serve_with_checked_launch(compile_trunk: bool,
     assert (frames > 0) == compile_trunk, f"compile_trunk={compile_trunk} but {frames} compiled frame(s)"
     assert len(calls) == 2, f"{len(calls)} pops for two submissions; the checked launch was not one whole submission"
     return caught
+
+
+def _prewarm(server: InferenceServer, spec: Any, positions: list[Any]) -> None:
+    batcher = InferenceBatcher(encoding_spec=spec)
+    submit = threading.Thread(target=batcher.submit_graphs_and_wait, args=(positions, 1))
+    submit.start()
+    ids, wire = batcher.next_graph_batch(len(positions), 100)
+    while not ids:
+        ids, wire = batcher.next_graph_batch(len(positions), 100)
+    payload = graph_wire_from_rust(wire)
+    batch = collate_graph_batch(payload, device="cuda", semantic="off", trunk_size=spec.trunk_size,
+                                win_length=spec.win_length, node_feat_dim=spec.node_feat_dim,
+                                edge_feat_dim=spec.edge_feat_dim, coded_edges=True)
+    with torch.inference_mode():
+        server._serve(batch)
+    torch.cuda.synchronize()
+    counts = np.diff(np.asarray(payload.legal_offsets))
+    batcher.submit_graph_inference_results(ids, np.repeat(1.0 / counts, counts).astype(np.float32),
+                                           np.asarray(payload.legal_offsets), np.zeros(len(ids), np.float32))
+    submit.join(timeout=10.0)
+
+
+@pytest.mark.parametrize("compile_trunk", [False, pytest.param(True, marks=pytest.mark.slow)], ids=["eager", "compiled"])
+def test_a_pop_that_captures_its_bucket_launches_without_a_host_sync(compile_trunk: bool) -> None:
+    """The bucket's warm-ups and capture run on the serving thread's first pop: none of it may wait on the device."""
+    caught = _serve_with_checked_launch(compile_trunk, checked=1)
+    assert not caught, f"a capturing pop synchronised with the device: {caught}"
 
 
 def test_the_instrument_reds_on_a_planted_sync() -> None:

@@ -218,6 +218,10 @@ def run_cell(model: torch.nn.Module, device: torch.device, config: dict[str, Any
         server.join(timeout=10.0)
     (before, t_before), (after, t_after) = snaps[0], snaps[-1]
     row = summarize(before, after, wall_s=t_after - t_before)
+    graphs0, graphs1 = before.get("served_graphs"), after.get("served_graphs")
+    if graphs0 is not None and graphs1 is not None:
+        # A capture inside the window is launch time no steady state pays: the window's own deltas say if one happened.
+        row["served_graphs"] = {k: graphs1[k] - graphs0[k] for k in graphs1 if k not in ("enabled", "buckets")}
     row["window_leaves_per_s"] = [summarize(a, b, wall_s=tb - ta)["leaves_per_s"]
                                   for (a, ta), (b, tb) in zip(snaps, snaps[1:], strict=False)]
     row.update(zip(("leaves_per_s_q1", "leaves_per_s_median", "leaves_per_s_q3"),
@@ -314,6 +318,8 @@ def main(argv: list[str] | None = None) -> int:
               f"{row['cycle_ms']:.2f} ms (launch {row['launch_ms']:.2f}, gpu_wait "
               f"{row['gpu_wait_ms']:.2f}), served {row['served']} == submitted {row['submitted']}",
               flush=True)
+        if row.get("served_graphs", {}).get("captured", 0):
+            print(f"B={batch}: WARNING {row['served_graphs']['captured']} bucket(s) captured INSIDE the window", flush=True)
     reference = int(config["inference"]["inference_batch_size"])
     print(_table(rows, reference))
     comparisons = []

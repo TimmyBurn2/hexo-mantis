@@ -337,13 +337,15 @@ def collate_graph_batch(
     target_argmax_cells: Sequence[tuple[int, int] | None] | None = None,
     deferred_edge_geometry: list[EdgeGeometryCheck] | None = None,
     coded_edges: bool = False,
+    pad_to: tuple[int, int, int, int] | None = None,
+    device_out: Sequence[Any] | None = None,
 ) -> GraphBatch:
     """Validate and collate one block-diagonal graph wire into a `GraphBatch`.
 
     `semantic`: "full" (trainer), "canary" (hot path — first + every Nth) or "off". The
     structural layer always runs full, and any mismatch raises a NAMED `GraphContractError`.
     `deferred_edge_geometry`: a sink for check 14 — when given, the check is appended to it
-    instead of run, exactly when it would have run, for the caller's checker thread. `coded_edges`: each edge's vocabulary code, not its row.
+    instead of run, exactly when it would have run, for the caller's checker thread. `coded_edges`: each edge's vocabulary code, not its row; `pad_to` `(graphs, nodes, edges, legal)`: one padding graph to those sizes; `device_out`: the flat tensors to fill.
 
     THE FOUR GEOMETRY PARAMETERS ARE REQUIRED: they are the EXPECTED geometry the wire is
     checked against, so a default is a silent expectation and a payload re-captured at another
@@ -400,11 +402,11 @@ def collate_graph_batch(
         window_center, current_player, B, node_feat_dim, edge_feat_dim,
     )
     pinned = torch.device(device).type == "cuda"
+    B_out, N_out, E_out, L_out = (B, N, E, legal_node_gather.size) if pad_to is None else pad_to
     staged = _stage_block((
-        (node_feat.size, torch.float32), (edge_index.size, torch.int64),
-        (E, torch.uint8) if coded_edges else (edge_attr.size, torch.float32),
-        (legal_offsets.size, torch.int64), (legal_node_gather.size, torch.int64),
-        (node_offsets.size, torch.int64), (n_stones.size, torch.int64),
+        (N_out * node_feat_dim, torch.float32), (2 * E_out, torch.int64),
+        (E_out, torch.uint8) if coded_edges else (E_out * edge_feat_dim, torch.float32),
+        (B_out + 1, torch.int64), (L_out, torch.int64), (B_out + 1, torch.int64), (B_out, torch.int64),
     ), pinned)
     out = _numpy_views(staged)
     refusal = _collate_pack(
@@ -412,7 +414,7 @@ def collate_graph_batch(
         legal_node_gather, policy_dst_slot, n_nodes_checksum, n_stones, window_center,
         current_player, out[0], out[1], None if coded_edges else out[2],
         out[2] if coded_edges else None, out[3], out[4], out[5], out[6], node_feat_dim,
-        edge_feat_dim, win_length, _PACK_THREADS,
+        edge_feat_dim, win_length, _PACK_THREADS, pad_to,
     )
     if refusal is not None:
         if refusal[0] == EdgeAttrGeometryMismatch.__name__:
@@ -434,17 +436,17 @@ def collate_graph_batch(
         )
 
     # --- resolver step 4: the block's arrays on the device (edge_index already global) ---
-    x, ei, edges, lo, lg, no, ns = _ship(staged, device)
+    x, ei, edges, lo, lg, no, ns = _ship(staged, device, device_out)
     return GraphBatch(
-        x=x.reshape(N, node_feat_dim),
-        edge_index=ei.reshape(2, E),
-        edge_attr=None if coded_edges else edges.reshape(E, edge_feat_dim),
+        x=x.reshape(N_out, node_feat_dim),
+        edge_index=ei.reshape(2, E_out),
+        edge_attr=None if coded_edges else edges.reshape(E_out, edge_feat_dim),
         edge_code=edges if coded_edges else None,
         legal_offsets=lo,
         legal_node_gather=lg,
         node_offsets=no,
         n_stones=ns,
-        n_graphs=B,
+        n_graphs=B_out,
         device=device,
     )
 
@@ -479,8 +481,10 @@ def _numpy_views(staged: list[Any]) -> list[np.ndarray]:
     return [t.numpy() for t in staged]
 
 
-def _ship(staged: list[Any], device: str) -> list[Any]:
-    """The staged arrays on `device`: one queued DMA each from the pinned block on CUDA, the views themselves on CPU."""
+def _ship(staged: list[Any], device: str, out: Sequence[Any] | None = None) -> list[Any]:
+    """The staged arrays on `device` (one queued DMA each from the pinned block on CUDA; the views themselves on CPU), or copied into `out`."""
+    if out is not None:
+        return [dst.copy_(src, non_blocking=True) for src, dst in zip(staged, out, strict=True)]
     return [t.to(device, non_blocking=True) for t in staged]
 
 

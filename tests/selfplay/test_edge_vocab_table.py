@@ -117,3 +117,47 @@ def test_a_coded_cuda_forward_is_the_per_edge_forward_bit_for_bit(payload_fields
     got = _serve(net, coded, coded.edge_code, _vocab("cuda"), amp=True)
     for w, g in zip(want, got, strict=True):
         assert torch.equal(g, w), f"max |d| {float((g - w).abs().max()):.4g}"
+
+
+def _sizes(batch) -> tuple[int, int, int, int]:
+    return (int(batch.n_graphs), int(batch.x.shape[0]), int(batch.edge_index.shape[1]), int(batch.legal_node_gather.shape[0]))
+
+
+@pytest.mark.parametrize("name", ["b6", "b1"])
+def test_a_padded_coded_collate_holds_the_real_part_then_one_padding_graph(payload_fields, name):
+    real = _collate(payload_fields(name), coded_edges=True)
+    b, n, e, lg = _sizes(real)
+    pad = (b + 2, n + 9, e + 31, lg + 5)
+    padded = _collate(payload_fields(name), coded_edges=True, pad_to=pad)
+    assert padded.n_graphs == b + 2 and padded.x.shape == (n + 9, 11) and padded.edge_index.shape == (2, e + 31)
+    assert torch.equal(padded.x[:n], real.x) and not padded.x[n:].any()
+    assert torch.equal(padded.edge_index[:, :e], real.edge_index)
+    assert torch.equal(padded.edge_code[:e], real.edge_code) and not padded.edge_code[e:].any()
+    assert torch.equal(padded.legal_node_gather[:lg], real.legal_node_gather)
+    assert padded.node_offsets.tolist() == real.node_offsets.tolist() + [n, n + 9]
+    assert padded.legal_offsets.tolist() == real.legal_offsets.tolist() + [lg, lg + 5]
+
+
+@pytest.mark.parametrize("name", ["b6", "b1"])
+def test_a_padded_forward_serves_the_real_rows_as_the_unpadded_forward(payload_fields, name):
+    net = _net()
+    real = _collate(payload_fields(name), coded_edges=True)
+    b, n, e, lg = _sizes(real)
+    padded = _collate(payload_fields(name), coded_edges=True, pad_to=(b + 1, n + 64, e + 1000, lg + 40))
+    want = _serve(net, real, real.edge_code, _vocab(), amp=False)
+    got = _serve(net, padded, padded.edge_code, _vocab(), amp=False)
+    torch.testing.assert_close(got[0][:lg], want[0], rtol=0, atol=1e-6)
+    torch.testing.assert_close(got[1][:b], want[1], rtol=0, atol=1e-6)
+
+
+def test_a_collate_into_given_buffers_fills_them_and_returns_them(payload_fields):
+    real = _collate(payload_fields("b6"), coded_edges=True)
+    b, n, e, lg = _sizes(real)
+    pad = (b + 1, n + 8, e + 8, lg + 8)
+    buffers = [torch.full(((n + 8) * 11,), 7.0), torch.full((2 * (e + 8),), 7, dtype=torch.int64),
+               torch.full((e + 8,), 7, dtype=torch.uint8), torch.full((b + 2,), 7, dtype=torch.int64),
+               torch.full((lg + 8,), 7, dtype=torch.int64), torch.full((b + 2,), 7, dtype=torch.int64),
+               torch.full((b + 1,), 7, dtype=torch.int64)]
+    padded = _collate(payload_fields("b6"), coded_edges=True, pad_to=pad, device_out=buffers)
+    assert padded.x.data_ptr() == buffers[0].data_ptr() and padded.edge_code.data_ptr() == buffers[2].data_ptr()
+    assert torch.equal(padded.x[:n], real.x)

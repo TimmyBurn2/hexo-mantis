@@ -201,3 +201,13 @@ def test_a_telemetry_source_without_the_producer_publishes_none_never_zero() -> 
     payload = emit_iteration(_NoInstrumentPool())
     assert "inference_batching" in payload
     assert payload["inference_batching"] is None
+
+
+def test_the_served_graphs_lever_reports_its_own_fire_rate_and_cpu_serves_every_part_eagerly(
+    device, monkeypatch
+) -> None:
+    """The bucketed replay counts the parts it replayed and the parts it served eagerly, visible at 0."""
+    server = _run_graph_server(device, monkeypatch, [2, 3, 1])
+    block = server.batch_timing_snapshot()["served_graphs"]
+    assert block == {"enabled": False, "buckets": len(server._ladder), "captured": 0, "replayed_parts": 0,
+                     "eager_parts": 3, "real_nodes": 0, "padded_nodes": 0, "real_edges": 0, "padded_edges": 0}

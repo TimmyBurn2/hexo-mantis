@@ -5,7 +5,7 @@ use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 
 use mantis_graph::edge_vocabulary as vocabulary;
-use mantis_selfplay::queues::collate::{pack_wire, EdgeOut, PackError, PackOut, WireRef};
+use mantis_selfplay::queues::collate::{pack_wire, EdgeOut, PackError, PackOut, PadTo, WireRef};
 
 /// Checks 4–13 and the pack into the `out_*` views (exactly one of attr and code), which must not overlap; `RuntimeError` is a wiring break.
 #[pyfunction]
@@ -14,7 +14,7 @@ use mantis_selfplay::queues::collate::{pack_wire, EdgeOut, PackError, PackOut, W
     n_graphs, node_feat, edge_index, edge_attr, node_offsets, edge_offsets, legal_offsets,
     legal_node_gather, policy_dst_slot, n_nodes_checksum, n_stones, window_center, current_player,
     out_x, out_edge_index, out_edge_attr, out_edge_code, out_legal_offsets, out_legal_node_gather,
-    out_node_offsets, out_n_stones, node_feat_dim, edge_feat_dim, win_length, threads,
+    out_node_offsets, out_n_stones, node_feat_dim, edge_feat_dim, win_length, threads, pad_to=None,
 ))]
 pub(crate) fn collate_pack(
     py: Python<'_>,
@@ -43,7 +43,14 @@ pub(crate) fn collate_pack(
     edge_feat_dim: usize,
     win_length: u8,
     threads: usize,
+    pad_to: Option<(usize, usize, usize, usize)>,
 ) -> PyResult<Option<(&'static str, String)>> {
+    let pad = pad_to.map(|(n_graphs, n_nodes, n_edges, n_legal)| PadTo {
+        n_graphs,
+        n_nodes,
+        n_edges,
+        n_legal,
+    });
     let (mut attr_view, mut code_view) = (out_edge_attr, out_edge_code);
     let edges = match (&mut attr_view, &mut code_view) {
         (Some(attr), None) => EdgeOut::Attr(attr.as_slice_mut()?),
@@ -82,7 +89,7 @@ pub(crate) fn collate_pack(
         n_stones: out_n_stones.as_slice_mut()?,
     };
     // Plain slices are `Send`; the numpy borrows above outlive the detached section.
-    match py.detach(|| pack_wire(&wire, &mut out, node_feat_dim, edge_feat_dim, threads)) {
+    match py.detach(|| pack_wire(&wire, &mut out, node_feat_dim, edge_feat_dim, threads, pad)) {
         Ok(()) => Ok(None),
         Err(PackError::Contract { kind, message }) => Ok(Some((kind.name(), message))),
         Err(caller @ PackError::Caller(_)) => Err(PyRuntimeError::new_err(caller.to_string())),

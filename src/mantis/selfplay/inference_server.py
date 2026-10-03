@@ -31,6 +31,7 @@ from mantis.encoding import resolve_from_config
 from mantis.model import amp_dtype_for
 from mantis.selfplay.hparams import InferenceHParams, is_graph_representation
 from mantis.selfplay.pool_hooks import EventSink
+from mantis.selfplay.served_graphs import Bucket, BucketedForward, bucket_ladder, served_outputs
 
 _LOG = logging.getLogger(__name__)
 
@@ -421,8 +422,13 @@ class InferenceServer(threading.Thread):
         if win_length is None or edge_dim is None or node_dim is None:
             raise ValueError(f"InferenceServer: encoding {self.encoding_spec.name!r} carries no graph geometry")
         self._edge_vocab = torch.from_numpy(np.asarray(edge_vocabulary(win_length))).reshape(-1, edge_dim).to(device)
-        # The eager call stays byte-identical to the pre-A4-3 one: no kwarg unless compiling.
-        self._trunk_kwarg: dict[str, Any] = {} if self._trunk is None else {"trunk": self._trunk}
+        # On CUDA each part replays its padded shape bucket's captured forward: one launch, not one per kernel.
+        self._ladder = bucket_ladder(self._fused_caps, batch_size=self._batch_size)
+        self._graphs = BucketedForward(self._serve, device, node_feat_dim=node_dim) if device.type == "cuda" else None
+        self._replayed_parts = 0
+        self._eager_parts = 0
+        # Replayed parts' real and padded nodes and edges: (real N, padded N, real E, padded E).
+        self._padding = [0, 0, 0, 0]
 
     @property
     def batcher(self) -> InferenceBatcher:
@@ -623,6 +629,18 @@ class InferenceServer(threading.Thread):
             # A `unique_graphs` count still climbing after warm-up is the recompile storm the
             # abort names; past `recompile_limit` Dynamo falls back to eager.
             "compile": _compile_snapshot(self._compile_trunk),
+            # The bucketed replay's own fire rate: parts replayed from a captured bucket against parts served eagerly.
+            "served_graphs": {
+                "enabled": self._graphs is not None,
+                "buckets": len(self._ladder),
+                "captured": 0 if self._graphs is None else self._graphs.captured,
+                "replayed_parts": self._replayed_parts,
+                "eager_parts": self._eager_parts,
+                "real_nodes": self._padding[0],
+                "padded_nodes": self._padding[1],
+                "real_edges": self._padding[2],
+                "padded_edges": self._padding[3],
+            },
             # One pop in flight, and the wait its retire spent on the device.
             "pipeline": {
                 "depth": _PIPELINE_DEPTH,
@@ -734,6 +752,10 @@ class InferenceServer(threading.Thread):
             retirer.join()
             self._batcher.close()
 
+    def _serve(self, batch: Any) -> tuple[torch.Tensor, torch.Tensor]:
+        """One part's `(probs, values)`, eager: the function every bucket captures."""
+        return served_outputs(self.model, batch, self._edge_vocab, trunk=self._trunk, amp_dtype=self._amp_dtype)
+
     def _launch_pop(
         self, request_ids: list[int], wire: Any, geometry: _CollateGeometry,
     ) -> _InFlightPop:
@@ -742,8 +764,6 @@ class InferenceServer(threading.Thread):
             GraphContractError,
             collate_graph_batch,
             graph_wire_from_rust,
-            segment_softmax,
-            stone_mask_from_batch,
         )
         from mantis.selfplay.graph_wire_split import plan_fused_forwards, slice_graph_wire
 
@@ -752,6 +772,7 @@ class InferenceServer(threading.Thread):
         payload = graph_wire_from_rust(wire)
         edge_counts = np.diff(np.asarray(payload.edge_offsets, dtype=np.int64))
         node_counts = np.diff(np.asarray(payload.node_offsets, dtype=np.int64))
+        legal_counts = np.diff(np.asarray(payload.legal_offsets, dtype=np.int64))
         plan = plan_fused_forwards(payload.edge_offsets, payload.node_offsets, caps)
         self._record_fusion_plan(
             len(plan), *_fusion_bound_hits(plan, edge_counts, node_counts, caps),
@@ -766,6 +787,9 @@ class InferenceServer(threading.Thread):
             # A one-part plan IS the payload: the slice would copy `edge_index` (7 MB at B = 50)
             # and re-base every offset array to subtract zero, on the pipeline's bound stage.
             sub = payload if len(plan) == 1 else slice_graph_wire(payload, g0, g1)
+            n_part, e_part = int(node_counts[g0:g1].sum()), int(edge_counts[g0:g1].sum())
+            lg_part = int(legal_counts[g0:g1].sum())
+            bucket = None if self._graphs is None else Bucket.of(self._ladder, g1 - g0, n_part, e_part)
             _t_collate_start = time.perf_counter()
             sink: list[Any] | None = [] if geometry.capture_checks else None
             try:
@@ -781,6 +805,9 @@ class InferenceServer(threading.Thread):
                     canary_period=geometry.canary_period,
                     deferred_edge_geometry=sink,
                     coded_edges=True,
+                    pad_to=None if bucket is None else (
+                        bucket.n_graphs, bucket.n_nodes, bucket.n_edges, bucket.n_legal),
+                    device_out=None if bucket is None or self._graphs is None else self._graphs.inputs(bucket),
                 )
             except GraphContractError as exc:
                 # DUMP-ON-FIRE: the SLICE is what the check read, so the slice is what is
@@ -793,43 +820,33 @@ class InferenceServer(threading.Thread):
             if sink:
                 # One check per part: `_check_semantic` captures check 14 once.
                 pop.pending_checks.append((sink[0], sub, (g0, g1)))
-            stone_mask = stone_mask_from_batch(batch)
             if self._forward_count == 0 and not pop.parts:
                 assert not self.model.training, (
                     "InferenceServer(graph) model entered hot loop in "
                     "train() mode; eval() should be set at __init__"
                 )
             with self._weights_lock, torch.inference_mode():
-                with torch.autocast(
-                    device_type=self.device.type,
-                    dtype=self._amp_dtype,
-                    enabled=on_cuda,
-                ):
-                    # `forward_batch` is GnnNet's real method; nn.Module's __getattr__ types
-                    # dynamic attrs as Tensor | Module.
-                    policy_logits, value, _bins = self.model.forward_batch(  # pyright: ignore[reportCallIssue]
-                        batch.x,
-                        batch.edge_index,
-                        batch.edge_code,
-                        batch.legal_node_gather,
-                        stone_mask,
-                        batch.node_offsets,
-                        edge_vocab=self._edge_vocab,
-                        **self._trunk_kwarg,
-                    )
-            # Segment-softmax in float32 corrects reduced-precision drift and is segment-LOCAL,
-            # so a part's softmax is the un-split forward's softmax.
-            probs = segment_softmax(policy_logits.float(), batch.legal_offsets)
-            values = value.detach().float().reshape(-1)
+                if bucket is None or self._graphs is None:
+                    probs, values = self._serve(batch)
+                    self._eager_parts += 1
+                else:
+                    if not self._graphs.holds(bucket, batch):
+                        raise RuntimeError("the collate did not fill the bucket's inputs; a replay would read stale ones")
+                    probs, values = self._graphs.run(bucket, batch)
+                    self._replayed_parts += 1
+                    self._padding[0] += n_part
+                    self._padding[1] += bucket.n_nodes
+                    self._padding[2] += e_part
+                    self._padding[3] += bucket.n_edges
+                    # The padding graph's rows sit past the part's own, sliced off before the copy.
+                    probs, values = probs[:lg_part], values[: g1 - g0]
             # The D2H is queued behind the forward, into pinned host buffers on CUDA; nothing
             # here waits on the device. The finiteness gate runs on the host copy at retire.
             pop.parts.append((_to_host_async(probs, on_cuda), _to_host_async(values, on_cuda)))
-            self._record_fusion_part(
-                int(node_counts[g0:g1].sum()), int(edge_counts[g0:g1].sum()),
-            )
+            self._record_fusion_part(n_part, e_part)
             # One FORWARD resident at a time: the allocator reuses this part's activations for
             # the next part's in stream order once the Python references are gone.
-            del sub, batch, stone_mask, policy_logits, value, probs, values
+            del sub, batch, probs, values
         if on_cuda:
             pop.event = torch.cuda.Event()
             pop.event.record()

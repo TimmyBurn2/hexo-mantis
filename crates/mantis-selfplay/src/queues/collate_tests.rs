@@ -1,5 +1,5 @@
-// >300 justify (R8): every structural kind, the coded pack and the thread split are pinned against one fixture
-// set, so a kind added to the pack lands beside the cases that prove it.
+// >300 justify (R8): every structural kind, the coded and padded packs and the thread split are pinned against one
+// fixture set, so a kind added to the pack lands beside the cases that prove it.
 
 //! The pack's byte parity against the fused wire and every structural kind, in the contract's order.
 
@@ -88,7 +88,7 @@ fn pack(a: &GraphWireArrays, out: &mut Out, threads: usize) -> Result<(), PackEr
         node_offsets: &mut out.node_offsets,
         n_stones: &mut out.n_stones,
     };
-    pack_wire(&w, &mut o, NODE_DIM, EDGE_DIM, threads)
+    pack_wire(&w, &mut o, NODE_DIM, EDGE_DIM, threads, None)
 }
 
 fn kind_of(a: &GraphWireArrays) -> StructuralKind {
@@ -326,7 +326,7 @@ fn pack_coded(a: &GraphWireArrays, codes: &mut [u8], threads: usize) -> Result<(
         node_offsets: &mut out.node_offsets,
         n_stones: &mut out.n_stones,
     };
-    pack_wire(&w, &mut o, NODE_DIM, EDGE_DIM, threads)
+    pack_wire(&w, &mut o, NODE_DIM, EDGE_DIM, threads, None)
 }
 
 #[test]
@@ -441,7 +441,213 @@ fn a_coded_pack_without_a_vocabulary_is_a_wiring_break_not_a_wire_defect() {
         n_stones: &mut out.n_stones,
     };
     assert!(matches!(
-        pack_wire(&w, &mut o, NODE_DIM, EDGE_DIM, 1),
+        pack_wire(&w, &mut o, NODE_DIM, EDGE_DIM, 1, None),
         Err(PackError::Caller(_))
     ));
+}
+
+#[test]
+fn a_padded_pack_writes_the_real_arrays_then_one_padding_graph() {
+    let a = three();
+    let (b, n, e, lg) = (
+        a.n_graphs,
+        a.node_feat.len() / NODE_DIM,
+        a.edge_attr.len() / EDGE_DIM,
+        a.legal_node_gather.len(),
+    );
+    let pad = PadTo {
+        n_graphs: b + 3,
+        n_nodes: n + 10,
+        n_edges: e + 25,
+        n_legal: lg + 7,
+    };
+    let mut real_codes = vec![0u8; e];
+    pack_coded(&a, &mut real_codes, 1).expect("unpadded");
+    let mut x = vec![f32::NAN; pad.n_nodes * NODE_DIM];
+    let mut ei = vec![-7i64; 2 * pad.n_edges];
+    let mut codes = vec![255u8; pad.n_edges];
+    let mut lo = vec![-7i64; pad.n_graphs + 1];
+    let mut lgat = vec![-7i64; pad.n_legal];
+    let mut no = vec![-7i64; pad.n_graphs + 1];
+    let mut ns = vec![-7i64; pad.n_graphs];
+    let w = WireRef {
+        n_graphs: a.n_graphs,
+        node_feat: &a.node_feat,
+        edge_index: &a.edge_index,
+        edge_attr: &a.edge_attr,
+        node_offsets: &a.node_offsets,
+        edge_offsets: &a.edge_offsets,
+        legal_offsets: &a.legal_offsets,
+        legal_node_gather: &a.legal_node_gather,
+        policy_dst_slot: &a.policy_dst_slot,
+        n_nodes_checksum: &a.n_nodes_checksum,
+        n_stones: &a.n_stones,
+        window_center: &a.window_center,
+        current_player: &a.current_player,
+    };
+    let mut o = PackOut {
+        x: &mut x,
+        edge_index: &mut ei,
+        edges: EdgeOut::Code {
+            codes: &mut codes,
+            win_length: 6,
+        },
+        legal_offsets: &mut lo,
+        legal_node_gather: &mut lgat,
+        node_offsets: &mut no,
+        n_stones: &mut ns,
+    };
+    pack_wire(&w, &mut o, NODE_DIM, EDGE_DIM, 2, Some(pad)).expect("a padded pack");
+    let as_i64 = |v: usize| i64::try_from(v).expect("small");
+    assert_eq!(
+        x[..n * NODE_DIM]
+            .iter()
+            .map(|v| v.to_bits())
+            .collect::<Vec<_>>(),
+        a.node_feat.iter().map(|v| v.to_bits()).collect::<Vec<_>>()
+    );
+    assert!(x[n * NODE_DIM..].iter().all(|&v| v.to_bits() == 0));
+    assert_eq!(&ei[..e], &a.edge_index[..e]);
+    assert_eq!(&ei[pad.n_edges..pad.n_edges + e], &a.edge_index[e..]);
+    for j in 0..25 {
+        let sink = as_i64(n + j % 10);
+        assert_eq!(
+            (ei[e + j], ei[pad.n_edges + e + j]),
+            (sink, sink),
+            "padding edge {j}"
+        );
+    }
+    assert_eq!(&codes[..e], &real_codes[..]);
+    assert!(codes[e..].iter().all(|&c| c == 0));
+    assert_eq!(&lo[..=b], &a.legal_offsets[..]);
+    assert_eq!(&lo[b + 1..], &[as_i64(lg), as_i64(lg), as_i64(lg + 7)]);
+    assert_eq!(&no[..=b], &a.node_offsets[..]);
+    assert_eq!(&no[b + 1..], &[as_i64(n), as_i64(n), as_i64(n + 10)]);
+    assert_eq!(&lgat[..lg], &a.legal_node_gather[..]);
+    assert_eq!(
+        &lgat[lg..],
+        &(0..7).map(|k| as_i64(n + k % 10)).collect::<Vec<_>>()[..]
+    );
+    assert!(ns[b..].iter().all(|&s| s == 0));
+}
+
+#[test]
+fn a_pad_that_leaves_no_padding_node_or_graph_is_a_caller_error() {
+    let a = three();
+    let (b, n, e, lg) = (
+        a.n_graphs,
+        a.node_feat.len() / NODE_DIM,
+        a.edge_attr.len() / EDGE_DIM,
+        a.legal_node_gather.len(),
+    );
+    for pad in [
+        PadTo {
+            n_graphs: b,
+            n_nodes: n + 1,
+            n_edges: e,
+            n_legal: lg,
+        },
+        PadTo {
+            n_graphs: b + 1,
+            n_nodes: n,
+            n_edges: e,
+            n_legal: lg,
+        },
+        PadTo {
+            n_graphs: b + 1,
+            n_nodes: n + 1,
+            n_edges: e - 1,
+            n_legal: lg,
+        },
+    ] {
+        let mut out = out_for(&a);
+        let w = WireRef {
+            n_graphs: a.n_graphs,
+            node_feat: &a.node_feat,
+            edge_index: &a.edge_index,
+            edge_attr: &a.edge_attr,
+            node_offsets: &a.node_offsets,
+            edge_offsets: &a.edge_offsets,
+            legal_offsets: &a.legal_offsets,
+            legal_node_gather: &a.legal_node_gather,
+            policy_dst_slot: &a.policy_dst_slot,
+            n_nodes_checksum: &a.n_nodes_checksum,
+            n_stones: &a.n_stones,
+            window_center: &a.window_center,
+            current_player: &a.current_player,
+        };
+        let mut o = PackOut {
+            x: &mut out.x,
+            edge_index: &mut out.edge_index,
+            edges: EdgeOut::Attr(&mut out.edge_attr),
+            legal_offsets: &mut out.legal_offsets,
+            legal_node_gather: &mut out.legal_node_gather,
+            node_offsets: &mut out.node_offsets,
+            n_stones: &mut out.n_stones,
+        };
+        assert!(
+            matches!(
+                pack_wire(&w, &mut o, NODE_DIM, EDGE_DIM, 1, Some(pad)),
+                Err(PackError::Caller(_))
+            ),
+            "{pad:?}"
+        );
+    }
+}
+
+#[test]
+fn padding_legal_entries_wrap_over_the_padding_nodes_when_they_outnumber_them() {
+    let a = three();
+    let (b, n, e, lg) = (
+        a.n_graphs,
+        a.node_feat.len() / NODE_DIM,
+        a.edge_attr.len() / EDGE_DIM,
+        a.legal_node_gather.len(),
+    );
+    let pad = PadTo {
+        n_graphs: b + 1,
+        n_nodes: n + 3,
+        n_edges: e + 5,
+        n_legal: lg + 7,
+    };
+    let mut out = Out {
+        x: vec![f32::NAN; pad.n_nodes * NODE_DIM],
+        edge_index: vec![-7; 2 * pad.n_edges],
+        edge_attr: vec![f32::NAN; pad.n_edges * EDGE_DIM],
+        legal_offsets: vec![-7; pad.n_graphs + 1],
+        legal_node_gather: vec![-7; pad.n_legal],
+        node_offsets: vec![-7; pad.n_graphs + 1],
+        n_stones: vec![-7; pad.n_graphs],
+    };
+    let w = WireRef {
+        n_graphs: a.n_graphs,
+        node_feat: &a.node_feat,
+        edge_index: &a.edge_index,
+        edge_attr: &a.edge_attr,
+        node_offsets: &a.node_offsets,
+        edge_offsets: &a.edge_offsets,
+        legal_offsets: &a.legal_offsets,
+        legal_node_gather: &a.legal_node_gather,
+        policy_dst_slot: &a.policy_dst_slot,
+        n_nodes_checksum: &a.n_nodes_checksum,
+        n_stones: &a.n_stones,
+        window_center: &a.window_center,
+        current_player: &a.current_player,
+    };
+    let mut o = PackOut {
+        x: &mut out.x,
+        edge_index: &mut out.edge_index,
+        edges: EdgeOut::Attr(&mut out.edge_attr),
+        legal_offsets: &mut out.legal_offsets,
+        legal_node_gather: &mut out.legal_node_gather,
+        node_offsets: &mut out.node_offsets,
+        n_stones: &mut out.n_stones,
+    };
+    pack_wire(&w, &mut o, NODE_DIM, EDGE_DIM, 1, Some(pad)).expect("a padded pack");
+    let as_i64 = |v: usize| i64::try_from(v).expect("small");
+    let tail: Vec<i64> = (0..7).map(|k| as_i64(n + k % 3)).collect();
+    assert_eq!(&out.legal_node_gather[lg..], &tail[..]);
+    assert!(out.edge_attr[e * EDGE_DIM..]
+        .iter()
+        .all(|&v| v.to_bits() == 0));
 }

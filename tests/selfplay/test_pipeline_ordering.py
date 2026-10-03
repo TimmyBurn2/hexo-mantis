@@ -143,6 +143,7 @@ def test_every_pop_is_dispatched_to_its_own_ids_on_the_cuda_path(monkeypatch) ->
     batcher = _IdTaggedBatcher(list(pops))
     server = InferenceServer(H.SentinelGraphNet().cuda(), torch.device("cuda"), H.graph_cfg(),
                              batcher=batcher, encoding_spec=H.GRAPH_SPEC)
+    server._graphs = None  # the stub collate fills no bucket; the replayed path is test_served_graphs'
     batcher.server = server
     server.run()
     assert batcher.failures == []

@@ -59,8 +59,7 @@ def test_the_scan_finds_the_call_sites_it_claims_to_guard() -> None:
     # a claim about code that is not there.
     assert len(sites) >= 3, f"the scan found only {len(sites)} call site(s): {sites}"
     files = {s[0] for s in sites}
-    for expected in ("selfplay/inference_server.py", "train/trainer/core.py",
-                     "diagnostics/fusion_calibrate.py"):
+    for expected in ("selfplay/served_graphs.py", "train/trainer/core.py"):
         assert expected in files, f"{expected} is a known call site the scan did not reach"
 
 

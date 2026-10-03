@@ -328,6 +328,10 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   because the bounded queue was full — never dropped) and `failures` (check-14 refusals
   found after serving, each with its F-816-37 dump). Cumulative since server start; visible
   at 0 under `inline`; `None` in a retired-grid-path record, for `fusion`'s reason.
+  The block also carries a `served_graphs` SUB-BLOCK (LAW-18): `enabled` (a CUDA server replays captured buckets),
+  `buckets` (the ladder's size), `captured` (buckets captured so far), `replayed_parts` and `eager_parts` (fused parts
+  served by a replay and by the eager forward), and over the replayed parts `real_nodes`/`padded_nodes` and
+  `real_edges`/`padded_edges` (the padding's volume). Cumulative since server start, visible at 0.
   And a `compile` SUB-BLOCK (PERF-A4 lever 3, LAW-18): `enabled` (the minted
   `inference.compile_trunk`), `unique_graphs` (Dynamo's own count of distinct compiled graphs
   since process start — a count still climbing after warm-up is the recompile storm the lever's
