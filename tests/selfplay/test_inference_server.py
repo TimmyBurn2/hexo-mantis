@@ -33,9 +33,11 @@ from mantis.selfplay.graph_collate import (
 from mantis.selfplay.inference_server import InferenceServer
 
 
-@pytest.fixture(scope="module")
-def device() -> torch.device:
-    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+@pytest.fixture
+def device(request: pytest.FixtureRequest) -> torch.device:
+    """The card for a `cuda`-marked test when there is one, else the CPU: a server on the card allocates as it is built."""
+    on_card = request.node.get_closest_marker("cuda") is not None and torch.cuda.is_available()
+    return torch.device("cuda" if on_card else "cpu")
 
 
 @dataclass
@@ -69,6 +71,8 @@ def _graph_server(
         encoding_spec=H.GRAPH_SPEC,
         heartbeat=heartbeat,
     )
+    # These tests hand the server their own batch, never collated into a bucket's inputs: they read the eager path.
+    server._graphs = None
     batcher.server = server
     return server
 
