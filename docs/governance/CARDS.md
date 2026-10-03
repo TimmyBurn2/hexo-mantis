@@ -36,6 +36,22 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by the PERF-2 packet (2026-10-03)
+
+- **CARD-PERF-TRAINER-CONTENTION — CARDED by PERF-2's L4: the trainer in the process costs serving a third.** At 1.2
+  trainer steps/s the loop reads 149-156k positions/h against 235k alone, the device wait per pop 3.97 -> 6.6 ms. A
+  highest-priority serving stream does not move it (-1 %). Untried: pacing the trainer against serving, a second
+  process under MPS, the trainer's kernel sizes.
+- **CARD-PERF-COLLATE-2 — CARDED by PERF-2: after L3 the server's launch is its collate.** Per B-64 pop the pack takes
+  3.51 ms and the semantic checks 1.83 of a 6.72 ms launch. Coding edges by value in the pack costs 1.45 ms over L1's
+  copy; the builder emitting codes on the wire removes it (a wire contract change). The semantic checks 15-16 can
+  follow the structural ones into the Rust pass. The pack's 4-thread split reads inside the IQR of one thread under 32
+  workers: a removal candidate, with its own bench.
+- **CARD-INDUCTOR-CACHE-SCHEMA — CARDED by PERF-2: torch's compile-cache key does not cover a custom op's schema.** A
+  tree whose `mantis::gine_message_sum` takes six arguments loaded a later tree's compiled module (seven, `code=None`)
+  from the shared `/tmp/torchinductor_<user>` and failed at its first compiled call: loud, never silent. A host that
+  runs trees from both sides of PERF-2's L2 gives each its own `TORCHINDUCTOR_CACHE_DIR`.
+
 ## Opened by R383 (THE REUSE READING; 2026-10-02) — the last two reads before the mint
 
 - **CARD-REG-1 (CENSUS-3's proposed CARD-VALUE-REGULARISER) — ORDERED by R383(d), MINT-BLOCKING: the regularisers at
@@ -268,13 +284,30 @@ Both were found by running the gate set rather than by reading it, and both are 
     strength reading for a tactics-era net (LAW-15, R378(b)); the net alone is a report-only diagnostic pooled over at
     least two saves.
   - The recorded arms are TACTICS-SELFPLAY's A and B (`mantis-records/tactics-selfplay/`, local; CARD-TACTICS-SELFPLAY).
-- **CARD-PERF-2 — runs NOW, in parallel, by R383(b): throughput (independent games per step) is a value lever. Was: runs after CARD-HYGIENE-1, on the desktop before the mint (R381(d)). Its order RULED by R379(e), following CENSUS-1's C2: the copies first, then the edge table, then
+- **CARD-PERF-2 — LANDED 2026-10-03 by the PERF-2 packet (L1 `bef8f04f`, L2 `7ad5208a`, L3 `355c7dc9`, L3b `e6b9e0e8`; L4 not landed): the production self-play loop on the 4080S box reads 235 455 positions/h against 164 422 (+43 %, IQRs [230 895, 243 870] and [158 910, 169 215]; games/h 2 580 against 1 807 at 91.3 and 91.0 plies per game). Was: runs NOW, in parallel, by R383(b): throughput (independent games per step) is a value lever. Was: runs after CARD-HYGIENE-1, on the desktop before the mint (R381(d)). Its order RULED by R379(e), following CENSUS-1's C2: the copies first, then the edge table, then
   CUDA graphs.** R378(g) sequenced PERF-2 after CENSUS-1, which R379(d) accepts. C2 read the H2D copies as the largest
   part of the server's `launch` (33–38 %) and the compiled trunk's launch as nearly fixed per forward (≈ 3.5 ms)
   (`docs/design/measurements/CENSUS1_2026-09-29.md` §C2).
   - The copies: the levers' C1, one pinned buffer (`LEVERS_RESEARCH_2026-09-28.md`, local).
   - The edge table: CARD-PERF-EDGE-TABLE.
   - CUDA graphs: CARD-PERF-GRAPHS.
+  - The bench (box, B 64, 5 windows, median [IQR] leaves/s): base 3 931 [3 643, 4 405]; L1 4 253 [4 176, 4 560]
+    (+8.2 %, inside the IQR); L2 4 629 [4 587, 4 629] (+8.8 % over L1, beyond it); L3 5 130 [4 949, 5 691] (+10.8 %
+    over L2, beyond it); L3b 5 029 [4 841, 5 834] (-2.0 %, inside). The server's launch per pop reads 11.94, 9.84,
+    11.05 and 6.72 ms; its device wait 7.74, 7.84, 3.81 and 5.35 ms.
+  - L1 missed its pre-registered +10 % line. The line was drawn from CENSUS-1's desktop split (copies 7.60 ms), and
+    the box's base copies take 3.67 ms. L1 landed under L2 and L3 by the operator's word (2026-10-03). Its 4-thread
+    pack reads 4 253 against 4 149 at one thread, inside the IQR.
+  - The pins: L1 and L2 are byte-equal on the golden collate and on the 24 seeded deploy searches. L2's coded forward
+    is bit-identical to the per-edge forward (sm_86 on 11 batches; sm_89 on the bench's 64 probe values). L3 is within
+    LAW-06 (ii-b) (pooled mean |dlogit| 0.0452 eager and 0.0434 compiled against the 0.0511 line) with no argmax or
+    value-sign flip, and the 24 deploy searches' moves are equal with root values within 0.0101.
+  - Memory: the served path reserves 2.6 GB with buckets against 13.6 GB eager. With the trainer in the process the
+    card peaks at 15.2 of 15.6 GiB reserved (4.96 GiB live), and the allocator retried at the ceiling 3-4 times in 8
+    minutes. A capture cannot release cached blocks, so L3b releases them before each capture: one device wait per
+    bucket per server.
+  - L4 (a highest-priority serving stream, an event around the weight copy) read 9.86 against 9.96 ms serving latency
+    at an equal 1.20 trainer steps/s: -1 % against a 10 % line, not landed (CARD-PERF-TRAINER-CONTENTION).
 - **CARD-JK-LAST — DEAD for run11 by R381(d). Was CARDED for throughput by R379(d).** CENSUS-1's C5 read the JK-last shape at Δ −0.052 nats against
   4×256's −0.053, at a quarter of the parameters (229k against 996k); no shape passed the −0.07 line. It is carded as a
   throughput lever, not as growth.
@@ -336,6 +369,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   positions/h by the operator's word before arm B's data was read (RULES_T A3). A/B read 1.058 in positions and
   0.816 in games, so the choice did not decide the verdict. The per-game trainer budget (≈ 2.38 steps per game) means
   the arm with longer games trains on fresher data per step (replay ratio 6.60 vs 8.49); it is part of the treatment.
+  PERF-2 read both units (+43 % positions/h and +43 % games/h at 91.0 and 91.3 plies per game): a serving change
+  leaves game length alone, so the units agree there, and the rule decides only where a treatment moves game length.
 
 ## Opened by R378 (TACTICS-DEPLOY ratified; 2026-09-29) — tactics at deploy
 
@@ -741,7 +776,9 @@ recommended one; each is its own leg with a LAW-09 bench.
   dst-sorted edges: gather + edge add + relu fused, fp32 register sum, one rounding, no atomics, no fp32 [E, H];
   its backward the same sum over src order. Desktop prototype: 3.3–3.9 ms per 4 layers (committed L2 44.1,
   fp32 atomics 7.1), bitwise equal to the committed L2 op.
-- **CARD-PERF-EDGE-TABLE — the edge-code table (B2); second in PERF-2's order by R379(e), after the copies
+- **CARD-PERF-EDGE-TABLE — LANDED 2026-10-03 by PERF-2's L2 (`7ad5208a`): bit-identical to the per-edge forward on
+  sm_86 and on the box's sm_89 probe, +8.8 % at B 64. Serving only: the coded path raises under grad, so training
+  keeps the per-edge forward. Was: the edge-code table (B2); second in PERF-2's order by R379(e), after the copies
   (CARD-PERF-2).** The edge embedding has 91 distinct raw rows, so each layer's
   `lin(edge_proj(·))` is a lookup; the table is bitwise equal to the per-edge GEMM when padded to M ≥ 1024 (sm_86;
   sm_89 unverified). Box forward 11.8 → 6.5 ms on top of B1. Reaches past R369(b)'s "aggregation": its own leg.
@@ -761,7 +798,9 @@ recommended one; each is its own leg with a LAW-09 bench.
   the runner field off by default so `served_sims_exact` stays unchanged). 35.8 % of leaves are repeats.
 - **CARD-PERF-DST-SORT — dst-sorted edges from the Rust builder.** Removes the per-forward GPU argsort
   (0.5–0.8 ms/pop INF); a wire/golden contract change.
-- **CARD-PERF-GRAPHS — CUDA graphs for the serving forward; third in PERF-2's order by R379(e) (CARD-PERF-2).**
+- **CARD-PERF-GRAPHS — LANDED 2026-10-03 by PERF-2's L3 (`355c7dc9`) and L3b (`e6b9e0e8`): twelve padded buckets at
+  ratio 1.25 down to 4 096 nodes, one capture per bucket per server, +10.8 % at B 64 with the launch 11.05 -> 6.72 ms.
+  Was: CUDA graphs for the serving forward; third in PERF-2's order by R379(e) (CARD-PERF-2).**
   Dynamic shapes need bucketing; worth it only once
   the server is CPU-bound, after CARD-PERF-4's re-read.
 

@@ -38,7 +38,8 @@ run11 arms the deploy block at its mint by the operator's word (R378(a)), and in
   - The problem and its levers (R383(b)):
     - measured as exposures per outcome bit;
     - the levers are the value label's reuse and the head's regularisation;
-    - throughput (independent games per step) is a value lever, so PERF-2 runs now, in parallel (CARD-PERF-2).
+    - throughput (independent games per step) is a value lever; PERF-2 LANDED 2026-10-03 at +43 % positions/h
+      in the production loop (CARD-PERF-2).
   - The warm start (R383(c)): training steps per game scale with ring fill (tspg × rows/capacity), holding draws per
     row at the steady state from the first row. R381(e)'s `min_buf_size` 100k is withdrawn.
   - Before the mint (R383(d)), the last two reads:
@@ -148,7 +149,7 @@ run11 arms the deploy block at its mint by the operator's word (R378(a)), and in
     positions are parked (CARD-NET-EXPAND held, CARD-JK-LAST carded for throughput); six items are carried to run11's
     design; MCGS earns a deploy A/B later. Five of them are opened as cards (CARD-VALUE-HEAD-DEAD-OPENING,
     CARD-QUICK-ARM-NOISE, CARD-SEARCH-VALUE-AUX, CARD-DECIDED-TAILS, CARD-MCGS-DEPLOY).
-  - PERF-2 (R379(e), CARD-PERF-2): the copies first, then the edge table, then CUDA graphs.
+  - PERF-2 (R379(e), CARD-PERF-2): the copies first, then the edge table, then CUDA graphs; LANDED 2026-10-03.
 
 - **The tactics lane (R376(d), CARD-TACTICS-LANE).** ONE exact tactics module in Rust on the search path, used
   identically at deploy and in self-play (LAW-15). Deploy lands first, read as an A/B against the plain parent
