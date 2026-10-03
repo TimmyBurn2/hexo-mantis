@@ -74,8 +74,10 @@ def _mapfilter_census(func: ast.AST) -> int:
 _Q6_TABLE: list[tuple[str, list[tuple[str, str]], tuple[int, int, int]]] = [
     ("collate_graph_batch",
      [("graph_collate.py", "collate_graph_batch")], (0, 0, 0)),
-    ("_check_structural",
-     [("graph_collate.py", "_check_structural")], (2, 0, 0)),
+    # DOWN-RATCHET `(2, 0, 0)` -> `(0, 0, 0)`: checks 4-13 and their two `for` loops moved into the Rust pack
+    # (`collate_pack`); checks 1-3 stay here, loop-free.
+    ("_check_wire_shape",
+     [("graph_collate.py", "_check_wire_shape")], (0, 0, 0)),
     # DOWN-RATCHET `(1, 0, 1)` -> `(1, 0, 0)`: the comprehension over a graph's legal nodes is
     # gone, replaced by three linear numpy passes, and the surviving `for` is the O(B) cell-array
     # build rather than an O(Lg) per-legal-node walk. A NO-NEW-LOOPS contract, so lowering it

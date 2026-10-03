@@ -71,8 +71,9 @@ def test_decode_uses_one_resident_support_equal_to_the_module_constant() -> None
 
 @pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="LOUD SKIP — the pinned H2D path is CUDA-only")
-def test_pinned_non_blocking_collate_is_byte_identical_to_a_pageable_copy(payload_fields) -> None:
-    payload = GraphWirePayload(**payload_fields("b6"))
+@pytest.mark.parametrize("name", ["b6", "b1", "b0"])
+def test_pinned_non_blocking_collate_is_byte_identical_to_a_pageable_copy(payload_fields, name) -> None:
+    payload = GraphWirePayload(**payload_fields(name))
     on_cpu = collate_graph_batch(payload, device="cpu", semantic="off", **_GEOMETRY)
     on_cuda = collate_graph_batch(payload, device="cuda", semantic="off", **_GEOMETRY)
     torch.cuda.synchronize()

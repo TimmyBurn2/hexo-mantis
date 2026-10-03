@@ -7,10 +7,10 @@ Splitting them would break the "one place asserts the wire" property the ADV sui
 `collate_graph_batch` is the one-and-only consumer of the block-diagonal wire emitted by the
 Rust `InferenceBatcher.next_graph_batch`, imported by BOTH the self-play hot path and the
 promotion-gate eval path, and import-safe with no module-scope torch. It asserts the contract
-version and the native-builder handshake, runs the structural checks (always full) and the
-semantic ones (canary on the hot path), then builds block-diagonal torch tensors. Every
-mismatch raises a NAMED error; there is no silent fixed-width fallback anywhere. The OUTPUT is
-not a dense scatter — the InferenceServer segment-softmaxes and returns ragged probs.
+version and the native-builder handshake, runs the structural checks (always full; 4-13 in the
+Rust pack that fills ONE host block) and the semantic ones (canary on the hot path), then ships
+the block. Every mismatch raises a NAMED error; there is no silent fixed-width fallback anywhere.
+The OUTPUT is not a dense scatter — the InferenceServer segment-softmaxes and returns ragged probs.
 """
 from __future__ import annotations
 
@@ -112,6 +112,16 @@ class ScatterSlotCanonicalMismatch(GraphContractError):
 
 class AugRoundTripMismatch(GraphContractError):
     pass
+
+
+#: The classes the Rust pack names its refusals by (checks 4-13).
+_STRUCTURAL_ERRORS: dict[str, type[GraphContractError]] = {
+    cls.__name__: cls for cls in (
+        BatchCountMismatch, OffsetsNonMonotonic, NodeCountChecksum, EdgeIndexOutOfBounds,
+        EdgeCrossesGraphBoundary, ScatterGatherCrossesGraph, ScatterSlotOutOfBounds,
+        ScatterSlotAliasing, EmptyLegalSet, GatherNotStrictlyIncreasing,
+    )
+}
 
 
 @dataclass
@@ -338,8 +348,8 @@ def collate_graph_batch(
     radius would collate under stale geometry with nothing red.
 
     Raises:
-        GraphContractError: any wire array disagrees with the declared geometry or the
-            structural contract.
+        GraphContractError: any wire array disagrees with the declared geometry or the structural contract.
+        RuntimeError: the staged block and the wire disagree in the Rust pack, a wiring break, never a contract error.
     """
     import torch  # deferred: keeps this module import-safe in torch-free envs
 
@@ -366,27 +376,41 @@ def collate_graph_batch(
         )
 
     # Pull flat arrays (numpy view of either the pyclass getters or the payload).
-    node_feat = np.asarray(wire.node_feat)
-    node_coords = np.asarray(wire.node_coords)
-    edge_index = np.asarray(wire.edge_index)
-    edge_attr = np.asarray(wire.edge_attr)
-    node_offsets = np.asarray(wire.node_offsets)
-    edge_offsets = np.asarray(wire.edge_offsets)
-    legal_offsets = np.asarray(wire.legal_offsets)
-    legal_node_gather = np.asarray(wire.legal_node_gather)
-    policy_dst_slot = np.asarray(wire.policy_dst_slot)
-    n_nodes_checksum = np.asarray(wire.n_nodes_checksum)
-    n_stones = np.asarray(wire.n_stones)
-    window_center = np.asarray(wire.window_center)
-    current_player = np.asarray(wire.current_player)
+    node_feat = _flat(wire.node_feat)
+    node_coords = _flat(wire.node_coords)
+    edge_index = _flat(wire.edge_index)
+    edge_attr = _flat(wire.edge_attr)
+    node_offsets = _flat(wire.node_offsets)
+    edge_offsets = _flat(wire.edge_offsets)
+    legal_offsets = _flat(wire.legal_offsets)
+    legal_node_gather = _flat(wire.legal_node_gather)
+    policy_dst_slot = _flat(wire.policy_dst_slot)
+    n_nodes_checksum = _flat(wire.n_nodes_checksum)
+    n_stones = _flat(wire.n_stones)
+    window_center = _flat(wire.window_center)
+    current_player = _flat(wire.current_player)
     B = int(wire.n_graphs)
 
-    # --- resolver step 3a: STRUCTURAL layer (13) — always full ---
-    _check_structural(
+    # --- resolver step 3a: STRUCTURAL layer (13) — always full; 4-13 run in the pack ---
+    N, E = _check_wire_shape(
         node_feat, node_coords, edge_index, edge_attr, node_offsets, edge_offsets,
         legal_offsets, legal_node_gather, policy_dst_slot, n_nodes_checksum, n_stones,
         window_center, current_player, B, node_feat_dim, edge_feat_dim,
     )
+    pinned = torch.device(device).type == "cuda"
+    staged = _stage_block((
+        (node_feat.size, torch.float32), (edge_index.size, torch.int64),
+        (edge_attr.size, torch.float32), (legal_offsets.size, torch.int64),
+        (legal_node_gather.size, torch.int64), (node_offsets.size, torch.int64),
+        (n_stones.size, torch.int64),
+    ), pinned)
+    refusal = _collate_pack(
+        B, node_feat, edge_index, edge_attr, node_offsets, edge_offsets, legal_offsets,
+        legal_node_gather, policy_dst_slot, n_nodes_checksum, n_stones, window_center,
+        current_player, *_numpy_views(staged), node_feat_dim, edge_feat_dim, _PACK_THREADS,
+    )
+    if refusal is not None:
+        raise _STRUCTURAL_ERRORS[refusal[0]](refusal[1])
 
     # --- resolver step 3b: SEMANTIC/GEOMETRIC layer (4) — mode-gated ---
     run_semantic = semantic == "full" or (
@@ -400,54 +424,72 @@ def collate_graph_batch(
             edge_feat_dim, target_argmax_cells, deferred_edge_geometry,
         )
 
-    # --- resolver step 4: block-diagonal torch tensors (edge_index already global) ---
-    N = node_feat.size // node_feat_dim
-    E = edge_attr.size // edge_feat_dim
-    to_device = _device_copier(device)
+    # --- resolver step 4: the block's arrays on the device (edge_index already global) ---
+    x, ei, ea, lo, lg, no, ns = _ship(staged, device)
     return GraphBatch(
-        x=to_device(node_feat, np.float32).reshape(N, node_feat_dim),
-        edge_index=to_device(edge_index, np.int64).reshape(2, E),
-        edge_attr=to_device(edge_attr, np.float32).reshape(E, edge_feat_dim),
-        legal_offsets=to_device(legal_offsets, np.int64),
-        legal_node_gather=to_device(legal_node_gather, np.int64),
-        node_offsets=to_device(node_offsets, np.int64),
-        n_stones=to_device(n_stones, np.int64),
+        x=x.reshape(N, node_feat_dim),
+        edge_index=ei.reshape(2, E),
+        edge_attr=ea.reshape(E, edge_feat_dim),
+        legal_offsets=lo,
+        legal_node_gather=lg,
+        node_offsets=no,
+        n_stones=ns,
         n_graphs=B,
         device=device,
     )
 
 
-#: Below this size the pinned staging copy is a single-threaded `np.copyto`; above it torch's parallel
-#: `pin_memory()`, whose intra-op region is worth its pool wake-up only for the two edge arrays.
-_PIN_PARALLEL_BYTES = 1 << 20
+#: Every staged segment starts on this boundary, so each typed view is aligned for its dtype and its DMA.
+_STAGE_ALIGN = 64
+#: The pack's edge-copy threads beside the caller (1 below its edge threshold): best of 1/4/8 measured under load.
+_PACK_THREADS = 4
 
 
-def _device_copier(device: str):
-    """The one H2D path of the collate: pinned staging + `non_blocking` DMA on CUDA."""
-    # The caching host allocator holds each pinned staging block until its copy has completed.
+def _flat(arr: Any) -> np.ndarray:
+    """`arr` as the contiguous 1-D view the pack reads (no copy when it already is one)."""
+    return np.ascontiguousarray(arr).reshape(-1)
+
+
+def _stage_block(sizes: tuple[tuple[int, Any], ...], pinned: bool) -> list[Any]:
+    """Typed views, in order, of ONE fresh host block sized for `(numel, dtype)` each; pinned for a CUDA part."""
     import torch
 
-    pinned = torch.device(device).type == "cuda"
-
-    def copy(arr: np.ndarray, dtype) -> Any:
-        host = torch.from_numpy(np.ascontiguousarray(arr, dtype=dtype))
-        if not pinned:
-            return host.to(device)
-        if host.nbytes >= _PIN_PARALLEL_BYTES:
-            return host.pin_memory().to(device, non_blocking=True)
-        staged = torch.empty(host.shape, dtype=host.dtype, pin_memory=True)
-        np.copyto(staged.numpy(), host.numpy())
-        return staged.to(device, non_blocking=True)
-
-    return copy
+    offsets: list[int] = []
+    total = 0
+    for numel, dtype in sizes:
+        offsets.append(total)
+        total += -(-numel * dtype.itemsize // _STAGE_ALIGN) * _STAGE_ALIGN
+    # The caching host allocator holds a pinned block until every DMA queued from it has completed.
+    block = torch.empty(total, dtype=torch.uint8, pin_memory=pinned)
+    return [block[o:o + n * d.itemsize].view(d) for o, (n, d) in zip(offsets, sizes, strict=True)]
 
 
-# Structural layer — index in-range / unique / monotonic / typed.
-def _check_structural(
-    node_feat, node_coords, edge_index, edge_attr, node_offsets, edge_offsets,
-    legal_offsets, legal_node_gather, policy_dst_slot, n_nodes_checksum, n_stones,
-    window_center, current_player, B, node_feat_dim, edge_feat_dim,
-) -> None:
+def _numpy_views(staged: list[Any]) -> list[np.ndarray]:
+    """The staged views as writable numpy arrays over the same bytes, for the pack to fill."""
+    return [t.numpy() for t in staged]
+
+
+def _ship(staged: list[Any], device: str) -> list[Any]:
+    """The staged arrays on `device`: one queued DMA each from the pinned block on CUDA, the views themselves on CPU."""
+    return [t.to(device, non_blocking=True) for t in staged]
+
+
+def _collate_pack(*args: Any) -> tuple[str, str] | None:
+    """Checks 4-13 and the pack, in Rust with the GIL released; a refusal is `(class name, message)`."""
+    from mantis._engine import collate_pack
+
+    return collate_pack(*args)
+
+
+# Structural layer, checks 1-3: the dims and dtypes every later check and the pack index by.
+def _check_wire_shape(
+    node_feat: np.ndarray, node_coords: np.ndarray, edge_index: np.ndarray, edge_attr: np.ndarray,
+    node_offsets: np.ndarray, edge_offsets: np.ndarray, legal_offsets: np.ndarray,
+    legal_node_gather: np.ndarray, policy_dst_slot: np.ndarray, n_nodes_checksum: np.ndarray,
+    n_stones: np.ndarray, window_center: np.ndarray, current_player: np.ndarray, B: int,
+    node_feat_dim: int, edge_feat_dim: int,
+) -> tuple[int, int]:
+    """`(N, E)` once checks 1-3 hold and `B` sizes arrays; each failure raises its named class."""
     # 1. NodeFeatDimMismatch
     if node_feat.size % node_feat_dim != 0:
         raise NodeFeatDimMismatch(
@@ -480,132 +522,9 @@ def _check_structural(
     _require_dtype(n_stones, np.uint16, "n_stones")
     _require_dtype(window_center, np.int32, "window_center")
     _require_dtype(current_player, np.int8, "current_player")
-
-    # 4. BatchCountMismatch
-    for name, arr, want in (
-        ("node_offsets", node_offsets, B + 1),
-        ("edge_offsets", edge_offsets, B + 1),
-        ("legal_offsets", legal_offsets, B + 1),
-        ("n_nodes_checksum", n_nodes_checksum, B),
-        ("n_stones", n_stones, B),
-        ("current_player", current_player, B),
-        ("window_center", window_center, 2 * B),
-    ):
-        if arr.size != want:
-            raise BatchCountMismatch(f"len({name})={arr.size} != {want} (B={B})")
-
-    Lg = legal_node_gather.size
-    if policy_dst_slot.size != Lg:
-        raise BatchCountMismatch(
-            f"len(policy_dst_slot)={policy_dst_slot.size} != Lg={Lg}"
-        )
-
-    # 5. OffsetsNonMonotonic — non-decreasing, [0]=0, [B]=total.
-    for name, off, total in (
-        ("node_offsets", node_offsets, N),
-        ("edge_offsets", edge_offsets, E),
-        ("legal_offsets", legal_offsets, Lg),
-    ):
-        if off[0] != 0:
-            raise OffsetsNonMonotonic(f"{name}[0]={off[0]} != 0")
-        if off[-1] != total:
-            raise OffsetsNonMonotonic(f"{name}[B]={off[-1]} != total {total}")
-        if np.any(np.diff(off) < 0):
-            raise OffsetsNonMonotonic(f"{name} not non-decreasing")
-
-    # 6. NodeCountChecksum — per-graph count == checksum; n_stones+1 <= checksum.
-    per_graph_nodes = np.diff(node_offsets)
-    if not np.array_equal(per_graph_nodes, n_nodes_checksum.astype(np.int64)):
-        raise NodeCountChecksum("per-graph node count != n_nodes_checksum")
-    if np.any(n_stones.astype(np.int64) + 1 > n_nodes_checksum.astype(np.int64)):
-        raise NodeCountChecksum("n_stones + 1 > n_nodes_checksum for some graph")
-
-    # 8. EdgeCrossesGraphBoundary — SEGMENTED MIN/MAX, not a per-edge graph id: the fuse lays
-    # each graph's edges out contiguously, so `reduceat` answers "both endpoints inside this
-    # graph's node range" in ONE allocation-free pass. Measured at the minted cap
-    # (E = 1,942,920): 13.48 ms -> 0.93 ms, already memory-bandwidth-bound at ~33 GB/s. Checks 7
-    # and 8 fold into that pass; `EdgeIndexOutOfBounds` still precedes the boundary error,
-    # because a row outside `[0, N)` is in NO graph and is the stronger statement.
-    if E > 0:
-        ei2 = edge_index.reshape(2, E)
-        nonempty = np.diff(edge_offsets) > 0
-        if np.any(nonempty):
-            # Empty segments are DROPPED rather than special-cased: an empty graph's start
-            # equals the next graph's, so the partition of [0, E) is unchanged.
-            seg_start = edge_offsets[:-1][nonempty]
-            seg_lo = node_offsets[:-1][nonempty]
-            seg_hi = node_offsets[1:][nonempty]
-            # The two endpoints are UNROLLED rather than looped only because the hot-path
-            # census counts `for` statements; the code says the same thing without one.
-            src, dst = ei2[0], ei2[1]
-            src_lo = np.minimum.reduceat(src, seg_start)
-            src_hi = np.maximum.reduceat(src, seg_start)
-            dst_lo = np.minimum.reduceat(dst, seg_start)
-            dst_hi = np.maximum.reduceat(dst, seg_start)
-            if min(src_lo.min(), dst_lo.min()) < 0 or max(src_hi.max(), dst_hi.max()) >= N:
-                raise EdgeIndexOutOfBounds(f"edge_index out of [0,{N})")
-            if (np.any(src_lo < seg_lo) or np.any(src_hi >= seg_hi)
-                    or np.any(dst_lo < seg_lo) or np.any(dst_hi >= seg_hi)):
-                raise EdgeCrossesGraphBoundary(
-                    "an edge endpoint is outside its own graph's node range"
-                )
-        elif edge_index.min() < 0 or edge_index.max() >= N:
-            # UNREACHABLE while check 5 holds, and kept so the named error stays reachable on
-            # any input a test can construct rather than only on those earlier checks allow.
-            raise EdgeIndexOutOfBounds(f"edge_index out of [0,{N})")
-    # `legal_graph` is used by BOTH check 9 and check 11 and used to be computed twice.
-    legal_graph = _graph_of(legal_offsets, Lg) if Lg > 0 else None
-
-    # 9. ScatterGatherCrossesGraph
-    if Lg > 0:
-        # RANGE FIRST: the fancy index below WRAPS a negative row silently and raises a bare
-        # `IndexError` — outside the GraphContractError family — for a row >= N. `min`/`max`
-        # over the WHOLE array, not the endpoints: check 13 runs LAST, so nothing has
-        # established ascent here and a rogue middle row would go straight through.
-        lo_row, hi_row = int(legal_node_gather.min()), int(legal_node_gather.max())
-        if lo_row < 0 or hi_row >= N:
-            raise ScatterGatherCrossesGraph(
-                f"legal_node_gather outside [0,{N}): [{lo_row}, {hi_row}] — a row that is "
-                "in no graph at all, not merely in the wrong one"
-            )
-        node_graph = _graph_of(node_offsets, N)
-        gather_g = node_graph[legal_node_gather]
-        if np.any(gather_g != legal_graph):
-            raise ScatterGatherCrossesGraph("legal_node_gather points into another graph")
-
-    # 10. ScatterSlotOutOfBounds — slot >= 362 or (negative and != -1).
-    bad = (policy_dst_slot >= 362) | (
-        (policy_dst_slot < 0) & (policy_dst_slot != _OFF_WINDOW_SLOT)
-    )
-    if np.any(bad):
-        raise ScatterSlotOutOfBounds(
-            "policy_dst_slot out of [0,362) and not the -1 sentinel"
-        )
-
-    # 11. ScatterSlotAliasing — within one graph, two legal nodes share a slot.
-    if Lg > 0 and legal_graph is not None:
-        # `np.unique` answers "are there duplicates" by SORTING. The keys are bounded BY
-        # CONSTRUCTION (`graph * 400 + slot`, both bounds from checks 4 and 10), so a count over
-        # that known range answers it in one pass — measured x15, the largest check in the stage.
-        in_win = policy_dst_slot != _OFF_WINDOW_SLOT
-        keys = (legal_graph[in_win].astype(np.int64) * 400
-                + policy_dst_slot[in_win].astype(np.int64))
-        if keys.size and int(np.bincount(keys, minlength=B * 400).max()) > 1:
-            raise ScatterSlotAliasing("two legal nodes in one graph map to the same slot")
-
-    # 12. EmptyLegalSet
-    if np.any(np.diff(legal_offsets) == 0):
-        raise EmptyLegalSet("a graph has an empty legal set")
-
-    # 13. GatherNotStrictlyIncreasing — ascending, hence unique, hence order-equivalent to the
-    # boolean mask built from it. True by construction, asserted anyway because it is the
-    # invariant the per-legal-node output ORDER rests on and no other check covers order.
-    if Lg > 1 and np.any(np.diff(legal_node_gather) <= 0):
-        first = int(np.argmin(np.diff(legal_node_gather) > 0))
-        raise GatherNotStrictlyIncreasing(
-            f"legal_node_gather not strictly increasing at i={first + 1}: "
-            f"{int(legal_node_gather[first])} -> {int(legal_node_gather[first + 1])}"
-        )
+    if B < 0:
+        raise BatchCountMismatch(f"n_graphs={B} sizes no array")
+    return N, E
 
 
 def _require_dtype(arr: np.ndarray, want, name: str) -> None:

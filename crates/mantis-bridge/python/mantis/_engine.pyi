@@ -539,6 +539,33 @@ def verify_edge_geometry(
     edge_feat_dim: int,
     win_length: int,
 ) -> None: ...
+def collate_pack(
+    n_graphs: int,
+    node_feat: numpy.ndarray,
+    edge_index: numpy.ndarray,
+    edge_attr: numpy.ndarray,
+    node_offsets: numpy.ndarray,
+    edge_offsets: numpy.ndarray,
+    legal_offsets: numpy.ndarray,
+    legal_node_gather: numpy.ndarray,
+    policy_dst_slot: numpy.ndarray,
+    n_nodes_checksum: numpy.ndarray,
+    n_stones: numpy.ndarray,
+    window_center: numpy.ndarray,
+    current_player: numpy.ndarray,
+    out_x: numpy.ndarray,
+    out_edge_index: numpy.ndarray,
+    out_edge_attr: numpy.ndarray,
+    out_legal_offsets: numpy.ndarray,
+    out_legal_node_gather: numpy.ndarray,
+    out_node_offsets: numpy.ndarray,
+    out_n_stones: numpy.ndarray,
+    node_feat_dim: int,
+    edge_feat_dim: int,
+    threads: int,
+) -> tuple[str, str] | None:
+    """Graph-wire checks 4-13 and the pack into the `out_*` views, GIL released; a refusal is `(class, message)`; RuntimeError on a wiring break."""
+    ...
 def mcts_pool_overflow_count() -> int: ...
 def mcts_max_armed_sims() -> int:
     """The largest sim budget the MCTS node pool can serve (AUDIT-1 F-21).

@@ -2,6 +2,7 @@
 //! `submit_graph_and_wait`, producer `pop_graph_batch` + `submit_graph_results`) and
 //! [`wire::GraphWire`], the block-diagonal fuse tensor with a single-read `take()`.
 
+pub mod collate;
 pub mod eval_cache;
 pub mod graph;
 pub mod wire;
