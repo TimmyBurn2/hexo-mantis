@@ -50,6 +50,7 @@ def _serve_with_checked_launch(compile_trunk: bool, plant: Callable[[], None] | 
                              edge_geometry_check=resolve_edge_geometry_check(config),
                              compile_trunk=compile_trunk)
     launch, calls, caught = server._launch_pop, [], []
+    frames_before = server.batch_timing_snapshot()["compile"]["frames_ok"]
     if checked == 1:
         # Compile, autotune and library handles happen here, eagerly: the checked first pop is left with the capture.
         _prewarm(server, spec, _positions(config["identity"]["encoding"]))
@@ -71,7 +72,6 @@ def _serve_with_checked_launch(compile_trunk: bool, plant: Callable[[], None] | 
             torch.cuda.set_sync_debug_mode("default")
 
     server._launch_pop = checked_launch  # type: ignore[method-assign]
-    frames_before = server.batch_timing_snapshot()["compile"]["frames_ok"]
     server.start()
     positions = _positions(config["identity"]["encoding"])
     try:
@@ -110,11 +110,17 @@ def _prewarm(server: InferenceServer, spec: Any, positions: list[Any]) -> None:
     submit.join(timeout=10.0)
 
 
-@pytest.mark.parametrize("compile_trunk", [False, pytest.param(True, marks=pytest.mark.slow)], ids=["eager", "compiled"])
-def test_a_pop_that_captures_its_bucket_launches_without_a_host_sync(compile_trunk: bool) -> None:
+def test_a_pop_that_captures_its_bucket_launches_without_a_host_sync() -> None:
     """The bucket's warm-ups and capture run on the serving thread's first pop: none of it may wait on the device."""
-    caught = _serve_with_checked_launch(compile_trunk, checked=1)
+    caught = _serve_with_checked_launch(False, checked=1)
     assert not caught, f"a capturing pop synchronised with the device: {caught}"
+
+
+@pytest.mark.slow
+def test_a_compiled_pop_that_captures_its_bucket_launches_without_a_host_sync() -> None:
+    """The same first pop through the compiled trunk the box serves with."""
+    caught = _serve_with_checked_launch(True, checked=1)
+    assert not caught, f"a capturing compiled pop synchronised with the device: {caught}"
 
 
 def test_the_instrument_reds_on_a_planted_sync() -> None:
