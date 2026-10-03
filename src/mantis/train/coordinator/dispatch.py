@@ -247,7 +247,7 @@ def _build_graph_parts(
     # loss exactly — NOT `1/M` and NOT `B_m/B`.
     policy_denominator, value_denominator = graph_loss_denominators(
         policy_row_weight, masked_valid, n_graphs)
-    # The rows a `train.value_target_lambda` mix reaches (value-supervised, with a root value) and moves (v != z).
+    # The rows a `train.value_target_search_weight` mix reaches (value-supervised, with a root value) and moves (v != z).
     reached = (masked_valid != 0) & (np.asarray(targets.root_value_valid) != 0)
     moved = reached & (np.asarray(targets.root_value) != np.asarray(targets.outcomes))
     return {

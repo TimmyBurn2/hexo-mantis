@@ -1,4 +1,4 @@
-"""`train.value_target_lambda`: the value target is λ·v_search + (1−λ)·z on a row with a root value, z on the rest."""
+"""`train.value_target_search_weight`: the value target is w·v_search + (1−w)·z on a row with a search value, z on the rest."""
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -39,7 +39,7 @@ def _ring(*, roots: bool = True, outcomes: list[float] | None = None) -> HexgBuf
 
 
 def _value_loss(tmp_path: Path, ring: HexgBuffer, lam: float, *, train: bool) -> float:
-    trainer = H.tiny_graph_trainer(tmp_path, value_target_lambda=lam, checkpoint_interval=0)
+    trainer = H.tiny_graph_trainer(tmp_path, value_target_search_weight=lam, checkpoint_interval=0)
     step: Callable[..., dict[str, float]] = run_declared_train_step if train else run_declared_eval_step
     kw: dict[str, Any] = {"augment": False} if train else {}
     out = step(trainer, ring, H.GSPEC, batch_size=len(_ROWS), caps_provider=lambda: _CAPS,
@@ -71,7 +71,7 @@ def test_the_mix_reaches_only_rows_with_a_root_value() -> None:
 def test_at_lambda_zero_the_trainer_is_byte_equal_whatever_the_rows_root_values(tmp_path: Path) -> None:
     """The v2 trainer at λ = 0: rows with and without root values train to the same bits, losses and weights alike."""
     def run(ring: HexgBuffer) -> tuple[list[dict[str, str]], bytes]:
-        trainer = H.tiny_graph_trainer(tmp_path, value_target_lambda=0.0, checkpoint_interval=0)
+        trainer = H.tiny_graph_trainer(tmp_path, value_target_search_weight=0.0, checkpoint_interval=0)
         replay = H.ReplayWireBuffer(ring, len(_ROWS))
         steps = []
         for _ in range(3):
@@ -96,7 +96,7 @@ def test_a_lambda_above_zero_mixes_only_rows_with_a_root_value_and_the_planted_b
         _assert_the_mix_trains_its_own_target(tmp_path)
 
 
-def test_the_eval_step_reads_z_whatever_lambda(tmp_path: Path) -> None:
+def test_the_eval_step_reads_z_whatever_the_weight(tmp_path: Path) -> None:
     """A reading must not reward the lever: the forward-only value loss at λ > 0 is the λ = 0 one, bit for bit."""
     assert _value_loss(tmp_path, _ring(), _LAM, train=False) == _value_loss(tmp_path, _ring(), 0.0, train=False)
 
@@ -104,7 +104,7 @@ def test_the_eval_step_reads_z_whatever_lambda(tmp_path: Path) -> None:
 def test_the_step_event_counts_the_value_rows_the_mix_reaches_and_moves(tmp_path: Path) -> None:
     """The mix's fire-rate: value-supervised rows with a root value (reached), those with v != z (moved), λ echoed."""
     sink = H.SpySink()
-    trainer = H.tiny_graph_trainer(tmp_path, sink=sink, value_target_lambda=_LAM, checkpoint_interval=0)
+    trainer = H.tiny_graph_trainer(tmp_path, sink=sink, value_target_search_weight=_LAM, checkpoint_interval=0)
     replay = H.ReplayWireBuffer(_ring(), len(_ROWS))
     run_declared_train_step(trainer, replay, H.GSPEC, batch_size=len(_ROWS), augment=False,
                             caps_provider=lambda: _CAPS, sample_threads_provider=lambda: 1)
@@ -113,4 +113,4 @@ def test_the_step_event_counts_the_value_rows_the_mix_reaches_and_moves(tmp_path
     assert int(rooted.sum()) == 4 and sorted(np.asarray(t.outcomes).tolist()) == sorted(z for z, _v, _ok in _ROWS)
     event = sink.named("trainer_step")[0]
     assert (event["root_value_rows"], event["root_value_rows_moved"]) == (3, 2)
-    assert event["value_target_lambda"] == _LAM
+    assert event["value_target_search_weight"] == _LAM

@@ -213,14 +213,37 @@ impl MCTSTree {
     /// off that node's own raw value.
     #[must_use]
     pub fn node_completed_qvalues(&self, node_idx: u32, sigma: QSigma) -> Vec<f32> {
-        let node = &self.pool[node_idx as usize];
-        if !node.is_expanded() {
+        if !self.pool[node_idx as usize].is_expanded() {
             return Vec::new();
         }
+        let raw = self
+            .raw_values
+            .get(node_idx as usize)
+            .copied()
+            .unwrap_or(0.0);
+        completed_q::mctx_completed_qvalues(&self.node_cq_children(node_idx), raw, sigma)
+    }
+
+    /// Σ π′·completedQ at the root, π′ the improved policy `get_improved_policy_ls` exports before any audit edit.
+    #[must_use]
+    pub fn improved_policy_value(&self, sigma: QSigma) -> Option<f32> {
+        if !self.pool[0].is_expanded() {
+            return None;
+        }
+        completed_q::mctx_improved_policy_value(
+            &self.node_cq_children(0),
+            self.root_raw_value(),
+            sigma,
+        )
+    }
+
+    /// An expanded node's children as completed-Q inputs, in child order, Q flipped into the node's frame.
+    fn node_cq_children(&self, node_idx: u32) -> Vec<completed_q::CqChild> {
+        let node = &self.pool[node_idx as usize];
         let first = node.first_child as usize;
         let n_ch = node.n_children as usize;
         let q_sign: f32 = if node.moves_remaining == 1 { -1.0 } else { 1.0 };
-        let children: Vec<completed_q::CqChild> = (first..first + n_ch)
+        (first..first + n_ch)
             .map(|i| {
                 let child = &self.pool[i];
                 let visits = child.n_visits;
@@ -234,13 +257,7 @@ impl MCTSTree {
                     },
                 }
             })
-            .collect();
-        let raw = self
-            .raw_values
-            .get(node_idx as usize)
-            .copied()
-            .unwrap_or(0.0);
-        completed_q::mctx_completed_qvalues(&children, raw, sigma)
+            .collect()
     }
 
     /// The root children Sequential Halving actually VISITED, as axial cells — the sparse

@@ -775,6 +775,14 @@ pub(crate) fn play_one_move(
             .fetch_add(1, Ordering::Relaxed);
     }
 
+    // The search's value of the root: Σ π′·completedQ under a completed-Q search, W/N under PUCT (which has no π′); a
+    // degenerate π′ reads NaN, which the record refuses as run-fatal.
+    let search_value = if ctx.search_kind.completed_q_target() {
+        tree.improved_policy_value(ctx.sigma).unwrap_or(f32::NAN)
+    } else {
+        tree.root_value()
+    };
+
     if let Some(stats) = search_stats {
         // The root as the search left it — only the visited children, Q in the root's view —
         // the record the census cannot read from the ring.
@@ -794,14 +802,15 @@ pub(crate) fn play_one_move(
             tree.root_value(),
             root_raw,
             children,
+            search_value,
         ));
     }
 
-    // A proven root carries the proof's value, every other row its search's W/N; both are the mover's frame.
+    // A proven root carries the proof's value, every other row its search's value; both are the mover's frame.
     let root_value = match (decided, decided_lost) {
         (Some(_), _) => 1.0,
         (None, true) => -1.0,
-        (None, false) => tree.root_value(),
+        (None, false) => search_value,
     };
 
     // ── Record position (BEFORE apply_move) ──

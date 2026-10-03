@@ -179,9 +179,9 @@ CONSUMER_REGISTRY = {
         "against search.kind by RunConfig._policy_target_matches_the_search_kind and by "
         "_assert_policy_target_consistency, and carried on the checkpoint stamp"
     ),
-    "train.value_target_lambda": (
-        "TrainHParams.from_config -> Trainer._value_target -> losses.value_target: the value head's target "
-        "λ·root_value + (1−λ)·z on rows whose flag is set, z elsewhere, in the train and the eval step"
+    "train.value_target_search_weight": (
+        "TrainHParams.from_config -> Trainer._value_target -> losses.value_target: the train step's value target "
+        "w·root_value + (1−w)·z on rows whose flag is set (the ring's search value), z elsewhere; the eval step reads z"
     ),
     "train.value_mask_redraw_p": (
         "TrainHParams.from_config (with the run seed) -> dispatch._graph_step -> _build_graph_parts -> "

@@ -233,8 +233,8 @@ units.
   self-play, at the stone that wins the game the search always plays the winning move, yet its W/N is
   ≤ 0 in about 31 % of those positions (264 of 842): Gumbel's halving forces visits onto losing
   children (19 of 64 on the winning move, 18 on the next) and W/N averages them in. It agrees with
-  REG-1's 0a (completed Q beats W/N) and bears on `train.value_target_lambda`, which mixes exactly this
-  value into the target.
+  REG-1's 0a (completed Q beats W/N); the ring's root-value field held exactly this value until RUN11-PRE moved it to
+  Σπ′·completedQ (the weight `train.value_target_search_weight` mixes into the target).
 - **Self-play records carry the actor's step** from the first sync on; only games before it say −1.
   No producer gap.
 - **The operator's main checkout runs a stale engine** (built 2026-09-29), so `make analyzer`'s

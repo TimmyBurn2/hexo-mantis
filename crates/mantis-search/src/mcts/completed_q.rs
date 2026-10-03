@@ -43,21 +43,8 @@ pub struct QSigma {
     pub rescale: bool,
 }
 
-/// Mctx's completed Q-values: mixed-value completion off the RAW root value (`raw_value` is the
-/// net's own estimate, NOT `W/N`), min-max rescaled iff `sigma.rescale`, then visit-scaled.
-/// All-unvisited is a constant vector (zeros under the rescale), and softmax gives the prior.
-pub(super) fn mctx_completed_qvalues(
-    children: &[CqChild],
-    raw_value: f32,
-    sigma: QSigma,
-) -> Vec<f32> {
-    /// Mctx's `epsilon` for the rescale denominator.
-    const EPSILON: f32 = 1e-8;
-
-    if children.is_empty() {
-        return Vec::new();
-    }
-
+/// The completion stage alone, in VALUE units: a visited child's `q_val`, an unvisited one's `v_mix`, and `max_n`.
+fn completed_values(children: &[CqChild], raw_value: f32) -> (Vec<f32>, u32) {
     let mut sum_n: u32 = 0;
     let mut max_n: u32 = 0;
     let mut sum_probs = 0.0f32;
@@ -82,10 +69,48 @@ pub(super) fn mctx_completed_qvalues(
     };
     let v_mix = sum_n_f.mul_add(weighted_q, raw_value) / (sum_n_f + 1.0);
 
-    let mut completed: Vec<f32> = children
+    let completed = children
         .iter()
         .map(|ch| if ch.visits > 0 { ch.q_val } else { v_mix })
         .collect();
+    (completed, max_n)
+}
+
+/// Σ π′·completedQ in value units (before σ), f64-summed and clamped to [-1, 1]; `None` where the masses are empty.
+pub(super) fn mctx_improved_policy_value(
+    children: &[CqChild],
+    raw_value: f32,
+    sigma: QSigma,
+) -> Option<f32> {
+    let masses = mctx_improved_policy_masses(children, raw_value, sigma);
+    if masses.is_empty() {
+        return None;
+    }
+    let (completed, _) = completed_values(children, raw_value);
+    let value: f64 = masses
+        .iter()
+        .zip(&completed)
+        .map(|(&m, &q)| f64::from(m) * f64::from(q))
+        .sum();
+    Some(value.clamp(-1.0, 1.0) as f32)
+}
+
+/// Mctx's completed Q-values: mixed-value completion off the RAW root value (`raw_value` is the
+/// net's own estimate, NOT `W/N`), min-max rescaled iff `sigma.rescale`, then visit-scaled.
+/// All-unvisited is a constant vector (zeros under the rescale), and softmax gives the prior.
+pub(super) fn mctx_completed_qvalues(
+    children: &[CqChild],
+    raw_value: f32,
+    sigma: QSigma,
+) -> Vec<f32> {
+    /// Mctx's `epsilon` for the rescale denominator.
+    const EPSILON: f32 = 1e-8;
+
+    if children.is_empty() {
+        return Vec::new();
+    }
+
+    let (mut completed, max_n) = completed_values(children, raw_value);
 
     let visit_scale = (sigma.c_visit + max_n as f32) * sigma.c_scale;
     if sigma.rescale {

@@ -198,15 +198,15 @@ def test_a_sampled_game_writes_the_eval_shaped_visits_plus_q_and_prior(tmp_path:
         terminal_reason="ply_cap", game_id_byte_hash="0" * 40, served_sims=64,
         move_arms=[(0, False), (64, False), (64, False)],
         search_stats=[
-            (1, 0.25, 0.1, [((1, 0), 40, 0.3, 0.5), ((2, 2), 24, -0.1, 0.25)]),
-            (2, -0.5, None, [((0, 1), 64, -0.5, 1.0)]),
+            (1, 0.25, 0.1, [((1, 0), 40, 0.3, 0.5), ((2, 2), 24, -0.1, 0.25)], 0.125),
+            (2, -0.5, None, [((0, 1), 64, -0.5, 1.0)], -0.5),
         ])
     recorder.stop()
     (record,) = list(iter_run_games(tmp_path, "testrun"))
     assert record["search_stats"] == [
-        {"ply": 1, "root_value": 0.25, "root_raw": 0.1,
+        {"ply": 1, "root_value": 0.25, "root_raw": 0.1, "search_value": 0.125,
          "visits": [[1, 0, 40], [2, 2, 24]], "q": [0.3, -0.1], "prior": [0.5, 0.25]},
-        {"ply": 2, "root_value": -0.5,
+        {"ply": 2, "root_value": -0.5, "search_value": -0.5,
          "visits": [[0, 1, 64]], "q": [-0.5], "prior": [1.0]},
     ]
     assert all("by" not in e for e in record["search_stats"])

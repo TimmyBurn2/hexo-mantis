@@ -112,10 +112,12 @@ means.
 * `search_stats` on self-play is written for a SAMPLED game only — `selfplay.search_stats_every`
   (contract v32) samples 1-in-N games per worker, and an un-sampled game carries NO key (absent is
   not empty). A sampled entry is
-  `{"ply", "root_value", "root_raw"?, "visits": [[q, r, n], …], "q": […], "prior": […]}`:
+  `{"ply", "root_value", "root_raw"?, "search_value", "visits": [[q, r, n], …], "q": […], "prior": […]}`:
   `visits` is the eval channel's shape, so a reader of one reads the other; `q` (the child's Q in
   the ROOT's perspective) and `prior` are PARALLEL to `visits`; `root_raw` is the net's own
-  post-quiescence root estimate and is present under the Gumbel kind only; `by` is absent (one net
+  post-quiescence root estimate and is present under the Gumbel kind only; `search_value` is the value the
+  ring row records before a proof overrides it — Σ π′·completedQ under Gumbel, W/N under PUCT, written since
+  RUN11-PRE (R384(a)) and absent on an older record; `by` is absent (one net
   plays both seats). From these the completed-Q target can be rebuilt under any σ, which the ring
   (masses + α) cannot give — the reason R355(d) orders the producer before run8. A record from
   before the producer carries no key on any game, and a reader states that rather than guessing.

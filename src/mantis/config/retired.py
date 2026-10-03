@@ -20,6 +20,7 @@ RETIRED_PATHS: frozenset[str] = frozenset({
     "train.policy_loss_trough_abort",
     "eval.gate.screen_games", "eval.gate.confirm_games", "eval.gate.screen_confirm_lo", "eval.gate.promotion_winrate",
     "train.hard_gn_threshold", "train.hard_gn_min_steps",
+    "train.value_target_lambda",
 })
 
 
@@ -30,6 +31,7 @@ RETIRED_NULL_POSTURES: frozenset[str] = frozenset({"eval.gate.sequential"})
 FOLDED_PATHS: dict[str, str] = {
     "train.total_steps": "train.scheduler_t_max",
     "selfplay.mcts.n_simulations": "selfplay.playout_cap.n_sims_full",
+    "train.value_target_lambda": "train.value_target_search_weight",
 }
 
 

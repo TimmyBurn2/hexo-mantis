@@ -75,7 +75,7 @@ train:
   augment: false
   terminal_eval_enabled: true
   policy_target: raw_visit_distribution
-  value_target_lambda: 0.0
+  value_target_search_weight: 0.0
   value_mask_redraw_p: 0.0
 selfplay:
   search:

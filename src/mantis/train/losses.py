@@ -42,12 +42,12 @@ def rebuild_sparse_target(
 
 
 def value_target(outcomes: torch.Tensor, root_value: torch.Tensor, root_value_valid: torch.Tensor,
-                 lam: float) -> torch.Tensor:
-    """`lam·root_value + (1 − lam)·outcomes` where the flag is set, else `outcomes`; at `lam == 0` it IS `outcomes`."""
-    if lam == 0.0:
+                 weight: float) -> torch.Tensor:
+    """`weight·root_value + (1 − weight)·outcomes` where the flag is set, else `outcomes`; at 0 it IS `outcomes`."""
+    if weight == 0.0:
         return outcomes
     z = outcomes.reshape(-1).to(torch.float32)
-    mixed = lam * root_value.reshape(-1).to(torch.float32) + (1.0 - lam) * z
+    mixed = weight * root_value.reshape(-1).to(torch.float32) + (1.0 - weight) * z
     return torch.where(root_value_valid.reshape(-1).bool(), mixed, z)
 
 

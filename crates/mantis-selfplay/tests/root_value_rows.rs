@@ -1,4 +1,4 @@
-//! A self-play row's root value is its own search's (bit-equal to the sampled search stats), or a proven root's proof value.
+//! A self-play row's root value is its own search's value (bit-equal to the sampled search stats), or a proven root's proof value.
 
 use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
@@ -131,8 +131,8 @@ fn paired(d: &Drove) -> Vec<(&GameResultRow, Vec<&GraphRecord>)> {
         .collect()
 }
 
-/// Every row of every sampled game, beside the search stats' entry for its ply.
-fn rows_beside_stats(d: &Drove) -> Vec<(f32, &GraphRecord)> {
+/// Every row of every sampled game, beside the search stats' search value and W/N for its ply.
+fn rows_beside_stats(d: &Drove) -> Vec<(f32, f32, &GraphRecord)> {
     let mut out = Vec::new();
     for (game, rows) in paired(d) {
         let stats = game
@@ -146,31 +146,43 @@ fn rows_beside_stats(d: &Drove) -> Vec<(f32, &GraphRecord)> {
                 s.0,
                 "the stats and the rows walk the same plies"
             );
-            out.push((s.1, r));
+            out.push((s.4, s.1, r));
         }
     }
     out
 }
 
-/// The cross-check pin: with no proof at the root the row's value IS the stats' W/N, bit for bit, on both arms.
+/// The cross-check pin: with no proof the row's value IS the stats' search value bit for bit (Σ π′·completedQ, PUCT's W/N).
 #[test]
 fn every_row_carries_its_own_searchs_root_value_bit_for_bit() {
     for kind in [SearchKind::Gumbel, SearchKind::Puct] {
         let d = drive(kind, None, 12, true, |_, g| g.len() >= 6);
         let pairs = rows_beside_stats(&d);
         assert!(pairs.len() >= 20, "{kind:?}: only {} rows", pairs.len());
-        let nonzero = pairs.iter().filter(|(_, r)| r.root_value != 0.0).count();
+        let nonzero = pairs.iter().filter(|(_, _, r)| r.root_value != 0.0).count();
         assert!(
             10 * nonzero >= 9 * pairs.len(),
             "{kind:?}: {nonzero} of {} values non-zero",
             pairs.len()
         );
-        let quick = pairs.iter().filter(|(_, r)| !r.is_full_search).count();
+        let quick = pairs.iter().filter(|(_, _, r)| !r.is_full_search).count();
         assert!(
             quick > 0 && quick < pairs.len(),
             "{kind:?}: both arms drew ({quick} quick)"
         );
-        for (stats_value, r) in &pairs {
+        let off_wn = pairs
+            .iter()
+            .filter(|(value, wn, _)| value.to_bits() != wn.to_bits())
+            .count();
+        match kind {
+            SearchKind::Gumbel => assert!(
+                10 * off_wn >= 9 * pairs.len(),
+                "Gumbel: only {off_wn} of {} values leave W/N",
+                pairs.len()
+            ),
+            SearchKind::Puct => assert_eq!(off_wn, 0, "PUCT has no π′: its value is W/N"),
+        }
+        for (stats_value, _wn, r) in &pairs {
             assert!(
                 r.root_value_valid,
                 "{kind:?} ply {}: a searched row has a root value",
@@ -193,7 +205,7 @@ fn a_proven_root_carries_the_proofs_value_and_every_other_row_its_searchs() {
         g.len() >= 4 && r["proof_stones_played"] > 0 && r["decided_lost"] > 0
     });
     let (mut won, mut lost) = (0u64, 0u64);
-    for (stats_value, r) in rows_beside_stats(&d) {
+    for (stats_value, _wn, r) in rows_beside_stats(&d) {
         assert!(r.root_value_valid);
         if r.root_value.to_bits() == stats_value.to_bits() {
             continue;

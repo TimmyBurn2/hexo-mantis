@@ -41,7 +41,7 @@ _MAX_SHARD_CLAIM_RETRIES = 64
 
 #: One searched ply of a sampled self-play game as the runner hands it over:
 #: `(ply, root_value, root_raw | None, [((q, r), visits, q_root_view, prior), ...])`.
-PositionStatsRow = tuple[int, float, float | None, list[tuple[tuple[int, int], int, float, float]]]
+PositionStatsRow = tuple[int, float, float | None, list[tuple[tuple[int, int], int, float, float]], float]
 
 #: The four channels a game can come from.
 CHANNELS = ("selfplay", "promotion", "external", "random_floor")
@@ -304,12 +304,13 @@ def selfplay_record(
 
 def _position_entry(
     ply: int, root_value: float, root_raw: float | None,
-    children: list[tuple[tuple[int, int], int, float, float]],
+    children: list[tuple[tuple[int, int], int, float, float]], search_value: float,
 ) -> dict[str, Any]:
-    """One searched ply of a sampled self-play game: the eval `visits` shape plus `q`/`prior`."""
+    """One searched ply of a sampled self-play game: the eval `visits` shape plus `q`/`prior` and the search value."""
     entry: dict[str, Any] = {"ply": int(ply), "root_value": float(root_value)}
     if root_raw is not None:
         entry["root_raw"] = float(root_raw)
+    entry["search_value"] = float(search_value)
     entry["visits"] = [[int(c[0]), int(c[1]), int(n)] for c, n, _q, _p in children]
     entry["q"] = [float(q) for _c, _n, q, _p in children]
     entry["prior"] = [float(p) for _c, _n, _q, p in children]

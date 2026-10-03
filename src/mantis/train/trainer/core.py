@@ -87,7 +87,7 @@ class TrainHParams:
     checkpoint_interval: int
     #: `model.aux_soft_policy` as `(temperature, weight)`; `None` is the explicit OFF.
     aux_soft_policy: tuple[float, float] | None
-    value_target_lambda: float
+    value_target_search_weight: float
     #: `train.value_mask_redraw_p` with the run seed as `(p, seed)`; `None` is the explicit OFF (p = 0).
     value_mask: tuple[float, int] | None
 
@@ -325,7 +325,7 @@ class Trainer:
                             explicit_mask=inputs.explicit_mask,
                             tail_mass=inputs.tail_mass,
                             denominator=policy_denominator)
-                        # z whatever `value_target_lambda`: a reading must not reward the lever.
+                        # z whatever `value_target_search_weight`: a reading must not reward the lever.
                         rows = inputs.value_rows
                         value_loss = _binned_value_loss(
                             bin_logits.index_select(0, rows), inputs.outcomes.index_select(0, rows),
@@ -520,7 +520,7 @@ class Trainer:
                                   # both reduced over the step's policy rows the same way.
                                   "policy_target_entropy": target_entropy_total,
                                   "policy_kl_target_vs_prior": policy_total - target_entropy_total,
-                                  "value_target_lambda": self.hp.value_target_lambda,
+                                  "value_target_search_weight": self.hp.value_target_search_weight,
                                   "value_mask_redraw_p": 0.0 if self.hp.value_mask is None else self.hp.value_mask[0],
                                   **self._aux_soft_policy_block(aux_total, aux_kl_total, head_norms)})
             self._maybe_periodic_checkpoint(result)
@@ -529,7 +529,7 @@ class Trainer:
     def _value_target(self, inputs: Any) -> torch.Tensor:
         """The train step's scalar value target; the eval step reads z, so no reading rewards the mix."""
         return value_target(inputs.outcomes, inputs.root_value, inputs.root_value_valid,
-                            self.hp.value_target_lambda)
+                            self.hp.value_target_search_weight)
 
     def _aux_soft_policy_terms(
         self, policy_logits: torch.Tensor, aux_logits: torch.Tensor, inputs: Any,

@@ -30,9 +30,9 @@ use crate::poison::lock_or_recover;
 use crate::queues::GraphQueue;
 use crate::replay::hexg::GraphRecord;
 
-/// One searched position of a sampled game: `(ply, root_value W/N, root_raw — Gumbel only,
-/// children as (cell, visits, q in the ROOT's view, prior) for every VISITED root child)`.
-pub type PositionStats = (u32, f32, Option<f32>, Vec<((i32, i32), u32, f32, f32)>);
+/// One searched position of a sampled game: `(ply, root W/N, root_raw — Gumbel only, every VISITED root child as
+/// (cell, visits, q in the ROOT's view, prior), the search value the ring row records unless a proof overrides it)`.
+pub type PositionStats = (u32, f32, Option<f32>, Vec<((i32, i32), u32, f32, f32)>, f32);
 
 /// Per-game result tuple consumed by [`SelfPlayRunner::drain_game_results`]: the ninth field is
 /// the arm each move was DRAWN at (opening plies `(0, false)`), the tenth a sampled game's stats.

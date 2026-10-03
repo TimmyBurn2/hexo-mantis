@@ -73,16 +73,16 @@ def test_a_sampled_self_play_record_reaches_the_shard(tmp_path: Path) -> None:
     searched = sum(1 for sims in record["move_sims"] if sims > 0)
     assert len(record["search_stats"]) == searched, "one entry per SEARCHED ply"
     for entry in record["search_stats"]:
-        assert set(entry) >= {"ply", "root_value", "root_raw", "visits", "q", "prior"}
+        assert set(entry) >= {"ply", "root_value", "root_raw", "search_value", "visits", "q", "prior"}
         assert entry["visits"], "a searched root has visited children"
         assert len(entry["q"]) == len(entry["visits"]) == len(entry["prior"])
         assert all(n >= 1 for _q, _r, n in entry["visits"])
-        assert -1.0 <= entry["root_value"] <= 1.0
+        assert -1.0 <= entry["root_value"] <= 1.0 and -1.0 <= entry["search_value"] <= 1.0
 
 
 @pytest.mark.integration
 def test_every_row_the_pool_pushes_carries_its_searchs_root_value(tmp_path: Path) -> None:
-    """Through the production drain every pushed row is flagged, and each (ply, root value) the shard recorded is a ring row's."""
+    """Through the production drain every pushed row is flagged, and each (ply, search value) the shard recorded is a ring row's."""
     spec = lookup(_ENCODING)
     arch = GnnArch(in_dim=int(spec.node_feat_dim), edge_dim=int(spec.edge_feat_dim), hidden=16, num_layers=1)
     recorder = GameRecorder(record_dir=tmp_path, run_id="e2e", seed=1)
@@ -103,5 +103,5 @@ def test_every_row_the_pool_pushes_carries_its_searchs_root_value(tmp_path: Path
     assert rows.header.size > 0, "the pool pushed no row inside the budget"
     assert rows.root_value_valid.tolist() == [1] * rows.header.size, "a searched self-play row carries its root value"
     in_ring = set(zip(rows.ply_index.tolist(), rows.root_value.tolist(), strict=True))
-    recorded = [(e["ply"], e["root_value"]) for g in iter_run_games(tmp_path, "e2e") for e in g["search_stats"]]
-    assert recorded and all(pair in in_ring for pair in recorded), "a recorded root value is no ring row's"
+    recorded = [(e["ply"], e["search_value"]) for g in iter_run_games(tmp_path, "e2e") for e in g["search_stats"]]
+    assert recorded and all(pair in in_ring for pair in recorded), "a recorded search value is no ring row's"

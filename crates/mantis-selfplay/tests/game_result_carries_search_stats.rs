@@ -77,9 +77,12 @@ fn one_in_n_games_carry_a_root_per_searched_ply_and_the_rest_carry_none() {
                     searched,
                     "one entry per SEARCHED ply of a {plies}-ply game"
                 );
-                for (i, (ply, root_value, root_raw, children)) in rows.iter().enumerate() {
+                for (i, (ply, root_value, root_raw, children, search_value)) in
+                    rows.iter().enumerate()
+                {
                     assert_eq!(*ply as usize, i, "plies are the searched moves in order");
                     assert!((-1.0..=1.0).contains(root_value));
+                    assert!((-1.0..=1.0).contains(search_value));
                     assert!(
                         root_raw.is_some(),
                         "the Gumbel kind stores the raw root value"
@@ -113,7 +116,7 @@ fn every_game_is_sampled_at_one_and_the_played_move_is_in_the_support() {
     for (_p, _w, moves, _wk, _t, _mn, _mx, _d, _arms, stats) in &games {
         let rows = stats.as_ref().expect("every=1 samples every game");
         // The row records what the search saw: the played move is among the visited candidates.
-        for (ply, _v, _raw, children) in rows {
+        for (ply, _v, _raw, children, _sv) in rows {
             let played = moves[*ply as usize];
             assert!(
                 children.iter().any(|c| c.0 == played),

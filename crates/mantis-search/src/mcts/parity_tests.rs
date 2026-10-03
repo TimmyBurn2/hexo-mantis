@@ -10,8 +10,8 @@
 use serde_json::Value;
 
 use super::completed_q::{
-    mctx_completed_qvalues, mctx_improved_policy_masses, mctx_interior_argmax_input, CqChild,
-    QSigma,
+    mctx_completed_qvalues, mctx_improved_policy_masses, mctx_improved_policy_value,
+    mctx_interior_argmax_input, CqChild, QSigma,
 };
 
 const REL_TOL: f32 = 2e-5;
@@ -354,4 +354,107 @@ fn the_no_rescale_arm_exports_the_prior_when_nothing_is_visited() {
     let masses = mctx_improved_policy_masses(&children, raw_value, sigma);
     let priors: Vec<f32> = children.iter().map(|c| c.prior).collect();
     assert_close("n5_all_unvisited", "raw-arm masses", &masses, &priors);
+}
+
+/// Two visited children and one unvisited, hand-completed: v_mix = (0.1 + 4 · 0.21875) / 5 = 0.195.
+fn hand_case() -> (Vec<CqChild>, f32, QSigma) {
+    let children = vec![
+        CqChild {
+            visits: 3,
+            prior: 0.5,
+            q_val: 0.5,
+        },
+        CqChild {
+            visits: 1,
+            prior: 0.3,
+            q_val: -0.25,
+        },
+        CqChild {
+            visits: 0,
+            prior: 0.2,
+            q_val: 0.0,
+        },
+    ];
+    let sigma = QSigma {
+        c_visit: 50.0,
+        c_scale: 1.0,
+        rescale: false,
+    };
+    (children, 0.1, sigma)
+}
+
+#[test]
+fn the_improved_policy_value_is_the_expectation_of_the_completion_in_value_units() {
+    let (children, raw, sigma) = hand_case();
+    let values = [0.5f64, -0.25, 0.195];
+    let logits: Vec<f64> = children
+        .iter()
+        .zip(values)
+        .map(|(ch, q)| f64::from(ch.prior).ln() + 53.0 * q)
+        .collect();
+    let top = logits.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let z: f64 = logits.iter().map(|l| (l - top).exp()).sum();
+    let want: f64 = logits
+        .iter()
+        .zip(values)
+        .map(|(l, q)| (l - top).exp() / z * q)
+        .sum();
+    let got = mctx_improved_policy_value(&children, raw, sigma).expect("three children");
+    assert!((f64::from(got) - want).abs() < 1e-6, "{got} against {want}");
+    let visit_mean = (3.0 * 0.5 + 1.0 * -0.25) / 4.0;
+    assert!(
+        (f64::from(got) - visit_mean).abs() > 0.05,
+        "{got} reads the visit mean"
+    );
+    let masses = mctx_improved_policy_masses(&children, raw, sigma);
+    let from_masses: f64 = masses
+        .iter()
+        .zip(values)
+        .map(|(&m, q)| f64::from(m) * q)
+        .sum();
+    assert!(
+        (f64::from(got) - from_masses).abs() < 1e-6,
+        "π′ is not the exported target's"
+    );
+}
+
+#[test]
+fn an_unsearched_root_values_at_its_raw_value_and_no_children_is_none() {
+    let (mut children, raw, sigma) = hand_case();
+    for ch in &mut children {
+        ch.visits = 0;
+    }
+    let got = mctx_improved_policy_value(&children, raw, sigma).expect("three children");
+    assert!((got - raw).abs() < 1e-7, "{got} against the raw {raw}");
+    assert_eq!(mctx_improved_policy_value(&[], raw, sigma), None);
+}
+
+#[test]
+fn the_value_never_leaves_the_unit_interval() {
+    for q in [1.0f32, -1.0] {
+        let children = vec![
+            CqChild {
+                visits: 7,
+                prior: 0.6,
+                q_val: q,
+            },
+            CqChild {
+                visits: 5,
+                prior: 0.4,
+                q_val: q,
+            },
+        ];
+        for rescale in [false, true] {
+            let sigma = QSigma {
+                c_visit: 50.0,
+                c_scale: 1.0,
+                rescale,
+            };
+            let got = mctx_improved_policy_value(&children, q, sigma).expect("two children");
+            assert!(
+                (-1.0..=1.0).contains(&got) && (got - q).abs() < 1e-6,
+                "{got} at q {q}"
+            );
+        }
+    }
 }
