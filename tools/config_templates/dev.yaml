@@ -159,6 +159,8 @@ selfplay:
   c_scale: 1.0
   q_rescale: true
   gumbel_m: 16
+  # The playout cap's quick arm's m, at most gumbel_m.
+  gumbel_m_quick: 16
   gumbel_explore_moves: 10
   # 1-in-N self-play games write per-position visits/Q/prior to the game record (2026-09-16); 0 off.
   search_stats_every: 8

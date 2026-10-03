@@ -126,6 +126,8 @@ pub(crate) struct MovePlayContext {
     pub(crate) temp_min: f32,
     pub(crate) sigma: QSigma,
     pub(crate) gumbel_m: usize,
+    /// The quick arm's `m`; the full arm searches at `gumbel_m`.
+    pub(crate) gumbel_m_quick: usize,
     pub(crate) gumbel_explore_moves: usize,
     pub(crate) dirichlet_alpha: f32,
     pub(crate) dirichlet_epsilon: f32,
@@ -637,7 +639,11 @@ pub(crate) fn play_one_move(
         ctx.dirichlet_enabled,
         ctx.dirichlet_alpha,
         ctx.dirichlet_epsilon,
-        ctx.gumbel_m,
+        if move_is_full_search {
+            ctx.gumbel_m
+        } else {
+            ctx.gumbel_m_quick
+        },
         ctx.sigma,
         running,
         rng,

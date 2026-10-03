@@ -239,6 +239,9 @@ CONSUMER_REGISTRY = {
         "SelfPlayHParams.from_config -> runner gumbel_m; and RoundSpec.gumbel_m -> "
         "DeployHeadPlayer, so the bar considers the same number of root actions the run did"
     ),
+    "selfplay.gumbel_m_quick": (
+        "SelfPlayHParams.from_config -> runner gumbel_m_quick -> play_one_move: the quick arm's Sequential Halving m"
+    ),
     "selfplay.gumbel_explore_moves": "SelfPlayHParams.from_config -> runner gumbel_explore_moves",
     "selfplay.search_stats_every":
         "SelfPlayHParams.from_config -> SelfPlayRunnerConfig.search_stats_every -> WorkerParams -> run_one_game's sample gate -> play_one_move's per-position root stats -> GameResultRow -> recorder (search_stats on 1-in-N self-play records, R355(d))",

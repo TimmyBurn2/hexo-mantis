@@ -11,7 +11,7 @@ _BLOCK = tactics_block({"kind": "strict_turn", "leaf_turns": 3, "leaf_nodes": 25
 
 
 def _config() -> SelfPlayRunnerConfig:
-    return SelfPlayRunnerConfig(n_workers=1, q_rescale=True, search_stats_every=0, encoding_name="gnn_axis_r8")
+    return SelfPlayRunnerConfig(n_workers=1, q_rescale=True, search_stats_every=0, gumbel_m_quick=16, encoding_name="gnn_axis_r8")
 
 
 def test_a_block_arms_the_runner_config_and_none_disarms_it() -> None:

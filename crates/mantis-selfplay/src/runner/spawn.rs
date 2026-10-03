@@ -136,6 +136,7 @@ impl SelfPlayRunner {
                 rescale: c.q_rescale,
             },
             gumbel_m: c.gumbel_m,
+            gumbel_m_quick: c.gumbel_m_quick,
             gumbel_explore_moves: c.gumbel_explore_moves,
             dirichlet_alpha: c.dirichlet_alpha,
             dirichlet_epsilon: c.dirichlet_epsilon,

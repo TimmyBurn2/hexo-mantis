@@ -34,7 +34,7 @@ VALID_SELFPLAY: dict = {
     "search": {"kind": "puct", "tactics": None},
     "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
     "c_visit": 50.0,
-    "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_explore_moves": 10, "search_stats_every": 8,
+    "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_m_quick": 16, "gumbel_explore_moves": 10, "search_stats_every": 8,
     "results_queue_cap": 10_000, "random_opening_plies": 0,
     "log_investigation_metrics": True,
     "mcts": dict(VALID_MCTS),
@@ -52,7 +52,7 @@ INFERENCE_FIELDS = sorted(VALID_INFERENCE)
 
 SELFPLAY_BOUND_VIOLATIONS: list[tuple[str, object]] = [
     ("n_workers", 0), ("leaf_batch_size", 0), ("max_game_moves", 0),
-    ("c_visit", 0.0), ("c_scale", 0.0), ("gumbel_m", 0),
+    ("c_visit", 0.0), ("c_scale", 0.0), ("gumbel_m", 0), ("gumbel_m_quick", 0), ("gumbel_m_quick", 17),
     ("gumbel_explore_moves", -1), ("search_stats_every", -1), ("results_queue_cap", 0),
     ("random_opening_plies", -1),
 ]

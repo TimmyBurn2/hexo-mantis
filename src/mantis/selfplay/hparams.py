@@ -101,6 +101,8 @@ class SelfPlayHParams:
     #: `selfplay.search_stats_every`, REQUIRED with no default: 1-in-N games record their roots.
     search_stats_every: int
     gumbel_m: int
+    #: `selfplay.gumbel_m_quick`: the quick arm's m.
+    gumbel_m_quick: int
     gumbel_explore_moves: int
     results_queue_cap: int
     random_opening_plies: int
@@ -151,6 +153,7 @@ class SelfPlayHParams:
             q_rescale=bool(sp["q_rescale"]),
             search_stats_every=int(sp["search_stats_every"]),
             gumbel_m=int(sp["gumbel_m"]),
+            gumbel_m_quick=int(sp["gumbel_m_quick"]),
             gumbel_explore_moves=int(sp["gumbel_explore_moves"]),
             results_queue_cap=int(sp["results_queue_cap"]),
             random_opening_plies=int(sp["random_opening_plies"]),
@@ -226,6 +229,7 @@ def build_runner_config(
         q_rescale=hp.q_rescale,
         search_stats_every=hp.search_stats_every,
         gumbel_m=hp.gumbel_m,
+        gumbel_m_quick=hp.gumbel_m_quick,
         gumbel_explore_moves=hp.gumbel_explore_moves,
         dirichlet_alpha=hp.dirichlet_alpha,
         dirichlet_epsilon=hp.dirichlet_epsilon,

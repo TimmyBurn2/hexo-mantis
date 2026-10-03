@@ -120,6 +120,7 @@ pub(crate) struct WorkerParams {
     pub(crate) temp_min: f32,
     pub(crate) sigma: QSigma,
     pub(crate) gumbel_m: usize,
+    pub(crate) gumbel_m_quick: usize,
     pub(crate) gumbel_explore_moves: usize,
     pub(crate) dirichlet_alpha: f32,
     pub(crate) dirichlet_epsilon: f32,

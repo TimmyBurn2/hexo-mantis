@@ -1,8 +1,8 @@
 # Contract: run config schema
 
-- version: v55
+- version: v56
 - owner: mantis.config.schema
-- status: LIVE since scaffold (WP0). Fifty-four steps since (v1 -> v55). Each through v6 is
+- status: LIVE since scaffold (WP0). Fifty-five steps since (v1 -> v56). Each through v6 is
   recorded as a named amendment in docs/design/repo_design.md §4; v7, v8 and v9 are NOT, and
   that is stated rather than implied — v7 landed without one, v8 (R242/ADJ-D12) inherited that
   gap rather than back-filling somebody else's amendment, and v9 records the same gap for
@@ -82,10 +82,11 @@ plays the deploy block too, deploy-matched (R378(d)); the v39 row's "without it"
 | v53 | ONE new REQUIRED leaf in `train`: `value_mask_redraw_p` (`float`, `ge=0`, `lt=1`, finite) — THE RE-DRAWN VALUE MASK (R384(a), RUN11-PRE L1a). Each train step keeps a Bernoulli(p) subset of its value-valid rows for the value loss, drawn afresh from (the run seed, the trainer step); the dropped rows' `value_valid` is zeroed BEFORE the whole-batch value denominator counts the rows, so a kept row weighs ≈ 1/p, REG-1's harness semantics. `0` is off (no draw is made, the trainer is the v52 trainer bit for bit); `1` is refused as a second spelling of off. The eval step and every reader never mask. The template mints `0.0`; every config is RE-MINTED through its own header and gains only that line. A stamp predating the leaf is logged as predating it, not refused. CONSUMER: `TrainHParams.from_config` (with `seed`) -> `dispatch._graph_step` -> `_build_graph_parts` -> `mantis.train.losses.redraw_value_mask`. Its fire-rate is the `trainer_step` event's `value_rows_valid` / `value_rows_kept` with the `value_mask_redraw_p` echo (event manifest v10) | R384(a); RUN11-PRE |
 | v54 | ONE new REQUIRED leaf in `train`: `training_steps_fill_ramp` (`bool`) — THE RING-FILL RAMP (R383(c), RUN11-PRE L1b). Under it the step budget's ratio is `training_steps_per_game × min(1, rows/capacity)`, the ring's own `size` over `replay_capacity` at each burst, and a burst may take NO step (the flat path's one-step floor would over-draw the early rows), so a row inserted at any fill is drawn `tspg·batch/rows_per_game` times over its stay, as a steady-state row is; `min_buf_size` stays the warm-up floor. `false` is the flat ratio, its one-step floor kept, bit for bit. The template mints `false`; every config is RE-MINTED through its own header and gains only that line. CONSUMER: `resolve_coordinator_knobs` -> `_step_coordinator_config` -> the step coordinator's O6 `_steps_budget(fill=)`. Pinned by `tests/train/test_steps_fill_ramp.py` (draws per row ± 2 % at every insertion fill, a planted one-step floor reds) | R383(c); RUN11-PRE |
 | v55 | ONE leaf RENAMED in `train`: `value_target_lambda` -> `value_target_search_weight` (same bounds, same consumer) — THE KEY WEIGHTS THE SEARCH (R383(e), restated by R384(a); RUN11-PRE L1c), because the ring's root-value field now stores the search's value: Σ π′·completedQ under a completed-Q search (π′ the improved policy the target exports, before any audit edit; Q completed in value units), W/N under PUCT, a proven root's ±1. `0` is z and the trainer is the v54 trainer bit for bit. The old path is RETIRED and FOLDED into the new leaf (`mantis.config.retired`), so a stamp carrying it loads with its weight; every config is RE-MINTED through its own header and changes only that line. The `trainer_step` echo is renamed with it (event manifest v11) | R384(a); RUN11-PRE |
+| v56 | ONE new REQUIRED leaf in `selfplay`: `gumbel_m_quick` (`int`, `ge=1`, at most `gumbel_m`) — THE QUICK ARM'S m (R384(d)'s arm 4, RUN11-PRE L1f). Under an armed playout cap the quick arm runs Sequential Halving over `gumbel_m_quick` root candidates and the full arm over `gumbel_m`; the ring's policy slots stay `gumbel_m`'s, so a wider quick m is refused at validation and again at the runner's boot. Inert under `search.kind: puct` and on an unarmed cap. The template mints `16` (= `gumbel_m`), so every config re-mints with that line and searches as at v55; a config minting `gumbel_m` below 16 re-mints `gumbel_m_quick` to its own m. CONSUMER: `SelfPlayHParams.from_config` -> `build_runner_config` -> the runner's `play_one_move` | R384(d); RUN11-PRE |
 
 ## Shape
 
-Thirteen top-level fields; **162 leaf key-paths** under the walker that descends nested blocks
+Thirteen top-level fields; **163 leaf key-paths** under the walker that descends nested blocks
 (including optional ones) and counts a `list[SubModel]` field as ONE leaf.
 
 | section | leaves | models |
@@ -100,7 +101,7 @@ Thirteen top-level fields; **162 leaf key-paths** under the walker that descends
 | `deploy` | 11 | `DeployConfig`, `SearchConfig`, `TacticsConfig`, `TacticsAuditConfig` |
 | `eval` | 26 | `EvalConfig`, `GateConfig`, `SequentialGateConfig`, `PlyCapAdjudicationConfig`, `StrengthFloorConfig` |
 | `train` | 41 | `TrainConfig`, `DrawRateAbortConfig`, `PlyCapAbortConfig`, `HeldoutGapConfig`, `MicrobatchCapsConfig` |
-| `selfplay` | 35 | `SelfplayConfig`, `SearchConfig`, `TacticsConfig`, `TacticsAuditConfig`, `MctsConfig`, `PlayoutCapConfig` |
+| `selfplay` | 36 | `SelfplayConfig`, `SearchConfig`, `TacticsConfig`, `TacticsAuditConfig`, `MctsConfig`, `PlayoutCapConfig` |
 | `inference` | 6 | `InferenceConfig`, `FusedGraphCapsConfig` |
 | `monitor` | 28 | `MonitorSchemaConfig`, `DrainCapsConfig`, `DiskGuardConfig` |
 

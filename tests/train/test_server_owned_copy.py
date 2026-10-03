@@ -26,7 +26,7 @@ _ENCODING = "gnn_axis_v1"
 def _pool_cfg() -> dict[str, Any]:
     selfplay: dict[str, Any] = {
         "search": {"kind": "puct", "tactics": None}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 32,
-        "c_visit": 50.0, "c_scale": 1.0, "q_rescale": True, "gumbel_m": 4, "gumbel_explore_moves": 10,
+        "c_visit": 50.0, "c_scale": 1.0, "q_rescale": True, "gumbel_m": 4, "gumbel_m_quick": 4, "gumbel_explore_moves": 10,
         "search_stats_every": 8, "results_queue_cap": 10_000, "random_opening_plies": 0,
         "log_investigation_metrics": False,
         "mcts": {"c_puct": 1.5, "fpu_reduction": 0.25, "quiescence_enabled": True,

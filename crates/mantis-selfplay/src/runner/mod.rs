@@ -281,6 +281,12 @@ impl SelfPlayRunner {
             config.search_kind.as_config_str(),
         )
         .map_err(|e| format!("SelfPlayRunner: {e}"))?;
+        if config.gumbel_m_quick == 0 || config.gumbel_m_quick > config.gumbel_m {
+            return Err(format!(
+                "SelfPlayRunner: gumbel_m_quick={} must be in 1..=gumbel_m={}: the ring's slot count is the full arm's m",
+                config.gumbel_m_quick, config.gumbel_m
+            ));
+        }
 
         let geometry =
             params::resolve_geometry(spec).map_err(|e| format!("SelfPlayRunner: {e}"))?;

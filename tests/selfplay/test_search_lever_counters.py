@@ -86,7 +86,7 @@ def drive() -> Iterator[_Drive]:
     """One Gumbel self-play drive with the playout cap armed at a fair coin between two budgets."""
     cfg = _engine.SelfPlayRunnerConfig(
         n_workers=_N_WORKERS, max_moves_per_game=4, n_simulations=_N_SIMS_FULL,
-        leaf_batch_size=4, quiescence_enabled=False, q_rescale=True, search_stats_every=0,
+        leaf_batch_size=4, quiescence_enabled=False, q_rescale=True, search_stats_every=0, gumbel_m_quick=4,
         gumbel_m=4, full_search_prob=0.5, n_sims_quick=_N_SIMS_QUICK,
         random_opening_plies=0, encoding_name=_ENCODING,
     )
@@ -190,7 +190,7 @@ def armed_drive() -> Iterator[_Drive]:
     """One PUCT self-play drive with a tactics block armed in every worker's tree."""
     cfg = _engine.SelfPlayRunnerConfig(
         n_workers=_N_WORKERS, max_moves_per_game=8, n_simulations=_N_SIMS_QUICK, leaf_batch_size=4,
-        quiescence_enabled=False, q_rescale=True, search_stats_every=0, random_opening_plies=0,
+        quiescence_enabled=False, q_rescale=True, search_stats_every=0, gumbel_m_quick=16, random_opening_plies=0,
         encoding_name="gnn_axis_r8",
     )
     cfg.search_kind = "puct"

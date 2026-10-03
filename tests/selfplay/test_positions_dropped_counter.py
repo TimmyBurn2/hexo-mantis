@@ -76,7 +76,7 @@ def drive() -> Iterator[_Drive]:
     """Self-play with a one-row results queue and NO drain, so every finished game overflows it."""
     cfg = _engine.SelfPlayRunnerConfig(
         n_workers=1, max_moves_per_game=4, n_simulations=4, leaf_batch_size=4,
-        quiescence_enabled=False, q_rescale=True, search_stats_every=0, results_queue_cap=_CAP,
+        quiescence_enabled=False, q_rescale=True, search_stats_every=0, gumbel_m_quick=16, results_queue_cap=_CAP,
         random_opening_plies=0, encoding_name="gnn_axis_v1",
     )
     runner = _engine.SelfPlayRunner(cfg)

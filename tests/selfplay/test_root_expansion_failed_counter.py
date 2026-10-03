@@ -45,7 +45,7 @@ def _stand_in(root_expansion_failed: int) -> SimpleNamespace:
 
 
 def test_the_engine_runner_has_the_getter_and_it_reads_zero_before_a_search() -> None:
-    cfg = SelfPlayRunnerConfig(n_workers=1, q_rescale=True, search_stats_every=0, encoding_name="gnn_axis_r8")
+    cfg = SelfPlayRunnerConfig(n_workers=1, q_rescale=True, search_stats_every=0, gumbel_m_quick=16, encoding_name="gnn_axis_r8")
     assert SelfPlayRunner(cfg).root_expansion_failed == 0
 
 

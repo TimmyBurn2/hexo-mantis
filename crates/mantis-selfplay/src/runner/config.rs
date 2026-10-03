@@ -35,6 +35,8 @@ pub struct SelfPlayRunnerConfig {
     /// mechanism, the interior selector AND the exported target's semantics together.
     pub search_kind: SearchKind,
     pub gumbel_m: usize,
+    /// The playout cap's quick arm's `m`, at most `gumbel_m` (whose slot count the ring stores).
+    pub gumbel_m_quick: usize,
     pub gumbel_explore_moves: usize,
     pub dirichlet_alpha: f32,
     pub dirichlet_epsilon: f32,
@@ -76,6 +78,7 @@ impl Default for SelfPlayRunnerConfig {
             q_rescale: true,
             search_kind: SearchKind::Puct,
             gumbel_m: 16,
+            gumbel_m_quick: 16,
             gumbel_explore_moves: 10,
             dirichlet_alpha: 0.3,
             dirichlet_epsilon: 0.25,

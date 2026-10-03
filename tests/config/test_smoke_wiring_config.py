@@ -31,6 +31,7 @@ REGIME = {
     "selfplay.q_rescale": False,
     "selfplay.mcts.dirichlet_enabled": False,
     "selfplay.gumbel_m": 4,
+    "selfplay.gumbel_m_quick": 4,
     "selfplay.playout_cap.full_search_prob": 0.25,
     "selfplay.playout_cap.n_sims_quick": 2,
     "selfplay.playout_cap.n_sims_full": 4,

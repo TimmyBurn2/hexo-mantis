@@ -99,6 +99,8 @@ class SelfplayConfig(StrictModel):
     c_scale: float = Field(gt=0)
     q_rescale: bool
     gumbel_m: int = Field(ge=1)
+    # The playout cap's quick arm's m; at most `gumbel_m`, whose count is the ring's policy slots.
+    gumbel_m_quick: int = Field(ge=1)
     gumbel_explore_moves: int = Field(ge=0)
     #: 1-in-N self-play games carry per-position search stats in the game record; 0 is off.
     search_stats_every: int = Field(ge=0)
@@ -110,6 +112,13 @@ class SelfplayConfig(StrictModel):
     log_investigation_metrics: bool = True
     mcts: MctsConfig
     playout_cap: PlayoutCapConfig
+
+    @model_validator(mode="after")
+    def _quick_m_within_m(self) -> "SelfplayConfig":
+        if self.gumbel_m_quick > self.gumbel_m:
+            raise ValueError(f"selfplay.gumbel_m_quick={self.gumbel_m_quick} exceeds gumbel_m={self.gumbel_m}: the ring "
+                             "stores the full arm's m policy slots, so a wider quick root would overflow them")
+        return self
 
 
 class FusedGraphCapsConfig(StrictModel):

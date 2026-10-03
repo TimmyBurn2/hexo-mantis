@@ -32,6 +32,7 @@
 # delta: selfplay.playout_cap.n_sims_full: 50 -> 4
 # delta: model.aux_soft_policy: null -> {target_temperature: 4.0, weight: 4.0}
 # delta: eval.gate.sequential: {mu0: 0.42, mu1: 0.52, alpha: 0.05, beta: 0.1, check_every_pairs: 8, min_pairs: 16, max_pairs: 104, at_max_pairs: promote} -> {mu0: 0.42, mu1: 0.52, alpha: 0.05, beta: 0.1, check_every_pairs: 2, min_pairs: 2, max_pairs: 2, at_max_pairs: promote}
+# delta: selfplay.gumbel_m_quick: 16 -> 4
 # delta: monitor.heartbeat_poll_interval_sec: 5.0 -> 0.5
 # delta: monitor.heartbeat_file_interval_sec: 15.0 -> 0.5
 # delta: identity.arch_kind: null -> GnnArchV2SoftPolicy
@@ -123,6 +124,7 @@ selfplay:
   c_scale: 1.0
   q_rescale: false
   gumbel_m: 4
+  gumbel_m_quick: 4
   gumbel_explore_moves: 10
   search_stats_every: 8
   random_opening_plies: 0
