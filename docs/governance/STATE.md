@@ -7,15 +7,42 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
-**R383 (2026-10-02): THE REUSE READING. LAW-19 is clarified (power guards nulls, the false-pass rate guards
-detections). Under it CENSUS-3 reads: run11's planned reuse (8 draws per row) over-fits the value head on held-out games
-and the 13-draw warm start is the worst point. REG-1 then RUN11-PRE are the last two reads before the mint; PERF-2 runs
-now, in parallel. RING-V3 is ratified; `dev` fast-forwards to `ring-v3` and census-3 rebases onto it.** run10 will not
-START (R376(c)). `configs/run10.yaml` stays the production config the instruments read until run11's mint replaces it.
-run11 arms the deploy block at its mint by the operator's word (R378(a)), and in self-play arm A's design, carried
-(R381(c), CARD-RUN11-DESIGN).
+**R384 (2026-10-04): THE RUN STARTS FROM THE READ. REG-1 is accepted: run11's value loss takes the re-drawn per-step
+mask at 1/8, the ring's root value stores Σπ′·completedQ with the proof override, and the calibrated floors are the
+halting rows. PERF-2 is ratified. The Bubble study is accepted as evidence; `book_v2` is CLOSED. RUN11-PRE is run11's
+first leg: four arms from run8@45k, the picked arm continuing as run11. `reg-1` rebases onto `dev`, gates and pushes.**
+run10 will not START (R376(c)). `configs/run10.yaml` stays the production config the instruments read until run11's
+mint replaces it. run11 arms the deploy block at its mint by the operator's word (R378(a)), and in self-play arm A's
+design, carried as a screen (R381(c) as re-stated by R384(c), CARD-RUN11-DESIGN).
 
-- **REG-1 EXITED 2026-10-03, awaiting the architect's ruling** (CARD-REG-1; branch `reg-1`; local records
+- **R384's order.**
+  - REG-1 accepted (R384(a), CARD-REG-1 CLOSED):
+    - run11's value loss uses a re-drawn per-step mask at p = 1/8 (CARD-VALUE-MASK-REDRAWN): effect of record −0.018
+      nats at 8 draws, policy unchanged, calibrated exams held;
+    - the ring's root-value field stores Σπ′·completedQ with the proof override (CARD-RING-V3-SEMANTICS);
+    - the calibrated floors T4 V 0.154 / DEF V_att 0.100 are the halting rows of record;
+    - the λ key is renamed to weight the search (0 = z) (CARD-RING-V3-KEY);
+    - killed for run11: shrinkage (a fractional target needs a warmed head, CARD-FRACTIONAL-VALUE-TARGET-WARMUP), the
+      head-LR factor, the fixed mask. The anchor stays unresolved.
+  - PERF-2 ratified (R384(b)); trainer contention is a reason to read the step rate live, not to wait.
+  - The Bubble study accepted as evidence on R383(f)'s terms (R384(c), CARD-BUBBLE-STUDY):
+    - `book_v2` CLOSED: no power case; the natural book stays deferred;
+    - R381(c)'s carry re-stated as A − parent ≈ +0.27, plain − parent ≈ −0.39, a screen;
+    - the production run is the default state from run11 on; the censuses' serial sequencing is the architect's error.
+  - RUN11-PRE (R384(d), CARD-RUN11-PRE) is run11's first leg, not a twin. Four arms from run8@45k under one
+    pre-registration: 2.4 steps/game mask off (control); 2.4 mask 1/8; 1.2 mask 1/8; 1.2 mask 1/8 with a 32-sim quick
+    arm at m 8. Matched wall-clock on matched hardware; the pick rule and halts are hashed before any arm starts; the
+    picked arm continues as run11 from its last save. Arming the configs is the operator's word.
+  - Bubble 185k against S and X, 288 pairs each, is recommended; running its weights is the operator's act. At or above
+    our shipped head it becomes the third ruler (R384(e), CARD-BUBBLE-RULER).
+  - Carded, not built before the start (R384(f)): within-turn tree reuse, head-to-head lever cells, the pair diagnostic,
+    the Six-trainer read, ruler hygiene, the calibrated search-value teacher, the all-vetoed target fix. ORIGIN-1 is
+    split: the deploy head plays the origin on an empty board now; the engine rule and canonicalisation land after the
+    start by pinned resume.
+  - Merge and boxes (R384(g)): `reg-1` rebased onto `dev` `9da49bdd` on 2026-10-04; gates and push owed
+    (CARD-REG-1-PUSH). Two matched boxes for the arms; renting is the operator's.
+
+- **REG-1 EXITED 2026-10-03, ACCEPTED by R384(a)** (CARD-REG-1; branch `reg-1`; local records
   `mantis-records/reg-1/` EXIT.md + READINGS.md).
   - GEN: run8@45k frozen under arm A's config, 6 514 games. In-distribution held-out split: 1 800 games of the same
     actor.

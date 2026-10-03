@@ -232,6 +232,8 @@ What the table also says, and the operator should read before choosing:
   much as the rule change buys in games. Leela Zero's 2019 selection-process proposal argued the
   same (a panel of fair openings, the Nunn-positions precedent), and chess testing moved to
   measured-balance books for the same reason in reverse (too many draws; UHO).
+  ANNOTATED by R384(c): the +11 pp is the 2q(1−q) chance floor (the excess read 0–1.5 pp over 26 389 pairs);
+  `book_v2` is CLOSED with no power case.
 - Since promotion feeds nothing but the deploy tag, the more permissive SPRT row (0.50/0.60,
   α = β = 0.05: promote a true +5 pp half the time, a true +10 pp 92 %) is arguably the better
   instrument: the anchor keeps up with the run, so each reading answers "better than the last

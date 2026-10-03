@@ -36,6 +36,26 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R384 (THE RUN STARTS FROM THE READ; 2026-10-04) — RUN11-PRE is run11's first leg
+
+- **CARD-BUBBLE-STUDY — ACCEPTED by R384(c) as evidence on R383(f)'s terms (rank and card, never adopt)** (local report
+  `mantis-records/research/BUBBLE_2026-10-02.md`). Its two corrections land as annotations: `book_v2` is CLOSED on
+  CARD-EVAL-ROUND-OVERRUN and R354, and R381(c)'s carry is re-stated on R381. Its lesson is adopted: the production run
+  is the default state from run11 on. The censuses' serial sequencing is the architect's error, on the ledger.
+- **CARD-BUBBLE-RULER — RECOMMENDED by R384(e): Bubble 185k against S and X, 288 pairs each.** Running its weights is
+  the operator's act. At or above our shipped head, it becomes the third ruler.
+- **CARD-REG-1-PUSH — ORDERED by R384(g): `reg-1` rebases onto `dev`, gates, pushes.** Rebased 2026-10-04 onto `dev`
+  `9da49bdd`; gates and push owed.
+- **CARDED by R384(f), not built before the start:**
+  - CARD-WITHIN-TURN-TREE-REUSE — within-turn tree reuse;
+  - CARD-HEAD-TO-HEAD-LEVER-CELLS — head-to-head lever cells;
+  - CARD-PAIR-DIAGNOSTIC — the pair diagnostic;
+  - CARD-SIX-TRAINER-READ — the Six-trainer read;
+  - CARD-RULER-HYGIENE — ruler hygiene;
+  - CARD-SEARCH-VALUE-TEACHER — the calibrated search-value teacher, gated on a warmed head
+    (CARD-FRACTIONAL-VALUE-TARGET-WARMUP);
+  - CARD-ALL-VETOED-TARGET — the all-vetoed target fix, evidence only; R380(b) stands.
+
 ## Opened by the PERF-2 packet (2026-10-03)
 
 - **CARD-PERF-TRAINER-CONTENTION — CARDED by PERF-2's L4: the trainer in the process costs serving a third.** At 1.2
@@ -54,8 +74,9 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by R383 (THE REUSE READING; 2026-10-02) — the last two reads before the mint
 
-- **CARD-REG-1 (CENSUS-3's proposed CARD-VALUE-REGULARISER) — EXITED 2026-10-03, awaiting the architect's ruling
-  (local records `mantis-records/reg-1/`).**
+- **CARD-REG-1 (CENSUS-3's proposed CARD-VALUE-REGULARISER) — CLOSED: ACCEPTED by R384(a). run11's value loss takes
+  the re-drawn per-step mask at p = 1/8; shrinkage, the head-LR factor and the fixed mask are killed for run11; the
+  anchor stays unresolved. EXITED 2026-10-03 (local records `mantis-records/reg-1/`).**
   - **The pick by the hashed rule:** the re-drawn per-step value mask at 1/8 (keep 0.1305, ≈ 1 value exposure per label
     at 8 policy draws).
     - Δ −0.0251 [−0.032, −0.018] calibration-free on in-distribution held-out games, effect of record −0.018,
@@ -91,13 +112,28 @@ Both were found by running the gate set rather than by reading it, and both are 
   - **Its two free reads:**
     - the field's semantics on run8's `search_stats` (CARD-RING-V3-SEMANTICS);
     - the calibrated exam floors (CARD-EXAMS-CALIBRATED).
-- **CARD-RUN11-PRE — ORDERED by R383(d), MINT-BLOCKING, after CARD-REG-1's exit: the step rate read live at matched
-  throughput on the instrument.** REG-1's exit asks it to run with the picked mask on, plus a mask-off control (a
+- **CARD-RUN11-PRE — RE-SPECIFIED by R384(d): run11's first leg, not a twin.**
+  - Four arms from run8@45k under one pre-registration:
+    1. 2.4 steps/game, mask off — the control;
+    2. 2.4, mask 1/8;
+    3. 1.2, mask 1/8;
+    4. 1.2, mask 1/8, quick arm 32 sims at m 8.
+  - Matched wall-clock on matched hardware (two matched boxes, R384(g); renting is the operator's).
+  - Read on the value instrument (paired lagged read + the GEN anchor), policy CE on fresh games, calibrated exams, ring
+    bands, positions/h; shipped-head cells v the parent at the end as a screen.
+  - The pick rule and halts are hashed before any arm starts; the picked arm continues as run11 from its last save.
+  - Arming the configs is the operator's word. Trainer contention is a reason to read the step rate live, not to wait
+    (R384(b)).
+
+  Was ORDERED by R383(d), MINT-BLOCKING, after CARD-REG-1's exit: the step rate read live at matched throughput on the
+  instrument. REG-1's exit asks it to run with the picked mask on, plus a mask-off control (a
   1/8 value gradient may track a moving actor more slowly, which a fixed-data census cannot price).
-- **CARD-VALUE-MASK-REDRAWN — PROPOSED by REG-1's exit, not built: the mint's trainer knob for REG-1's pick.** It is a
+- **CARD-VALUE-MASK-REDRAWN — ORDERED by R384(a) for RUN11-PRE's arms 2-4: run11's value loss uses it at p = 1/8. Was
+  PROPOSED by REG-1's exit, not built: the mint's trainer knob for REG-1's pick.** It is a
   seeded per-step mask on the sampled batch's `value_valid` at keep p, applied ahead of the whole-batch value
   denominator, so a kept row carries 1/p weight. A plain value-loss weight is a different, untested lever.
-- **CARD-FRACTIONAL-VALUE-TARGET-WARMUP — PROPOSED by REG-1's exit: concentrated interior value targets can kill the
+- **CARD-FRACTIONAL-VALUE-TARGET-WARMUP — CARDED by R384(a): a fractional target needs a warmed head; shrinkage is
+  killed for run11. Was PROPOSED by REG-1's exit: concentrated interior value targets can kill the
   parent's value head.**
   - The evidence: two-hot shrinkage (±0.8 / ±0.5) took a first loss of ≈ 73 and left 0 of 32 units.
   - The scope: λ > 0 mixes, CARD-SEARCH-VALUE-AUX and short-term value outputs need a head warm-up or a gentle start
@@ -109,15 +145,17 @@ Both were found by running the gate set rather than by reading it, and both are 
 - **CARD-WARMSTART-RING-FILL — ORDERED for the mint by R383(c).** Training steps per game scale with ring fill
   (tspg × rows/capacity), which holds draws per row at the steady state from the first row. R381(e)'s `min_buf_size`
   100k is withdrawn.
-- **CARD-EXAMS-CALIBRATED — LANDED 2026-10-03 by REG-1's free read 0b: floors of record are T4 V 0.154 and DEF V_att
+- **CARD-EXAMS-CALIBRATED — its floors are the HALTING ROWS of record by R384(a). LANDED 2026-10-03 by REG-1's free
+  read 0b: floors of record are T4 V 0.154 and DEF V_att
   0.100 (the mean − 3 SD over run8's seven panel saves, each net's T read on GEN's held-out ring).** On it, the parent
   reads 0.286 / 0.210 and the known-bad 0.11 / 0.09; the DEF separation is marginal. Was ORDERED by R383(a): T4 V and
   DEF V_att are read on calibrated values from now on, floors re-derived calibrated on run8's panel.
   - CENSUS-3's post-hoc read is V_cal = tanh(atanh V / T), with the net's held-out temperature.
   - On it the raw floor rewarded overconfidence: D8 0.382 → 0.208 calibrated, D2 0.352 → 0.321.
-- **CARD-RING-V3-KEY — ORDERED by R383(e), before any mint.** `train.value_target_lambda` is renamed to weight the
+- **CARD-RING-V3-KEY — ORDERED by R383(e), before any mint; restated by R384(a).** `train.value_target_lambda` is renamed to weight the
   search (0 = z). run11 trains at search weight 0; the field is recorded.
-- **CARD-RING-V3-SEMANTICS — OPENED by R383(e): what the root value field holds. READ 2026-10-03 by REG-1's 0a: on
+- **CARD-RING-V3-SEMANTICS — RULED by R384(a): the field stores Σπ′·completedQ with the proof override. OPENED by
+  R383(e): what the root value field holds. READ 2026-10-03 by REG-1's 0a: on
   run8's sampled undecided `search_stats` rows, Σπ′·completedQ beats root W/N against z by −0.011
   [−0.012, −0.010] in every band, and raw v is worst. The TD targets only read self-consistency. The producer follows
   at RUN11-PRE.** The field's semantics (root W/N v
@@ -136,7 +174,7 @@ Both were found by running the gate set rather than by reading it, and both are 
   - The local records carry their own lines: the training-path audit and LEVERS (KataGo's td horizons, Lc0's sampling
     ratios, C15's ≈ 75 Elo, hex pairing at k ≥ 7, the §8 swing as cell noise) and CENSUS-2's regime-check rings.
 - **CARDED by R383(f), from FORGE-2's survivors (derived numbers rank and card, never adopt):**
-  - **CARD-VALUE-HEAD-LR — FOLDED into CARD-REG-1** as its value-head LR arm.
+  - **CARD-VALUE-HEAD-LR — KILLED for run11 by R384(a). Was FOLDED into CARD-REG-1** as its value-head LR arm.
     - The head gets its own AdamW group.
     - `FlooredCosineAnnealingLR` holds one `eta_min` for every group, so the group's floor eta_min × m is set
       harness-side.
@@ -322,7 +360,7 @@ Both were found by running the gate set rather than by reading it, and both are 
     strength reading for a tactics-era net (LAW-15, R378(b)); the net alone is a report-only diagnostic pooled over at
     least two saves.
   - The recorded arms are TACTICS-SELFPLAY's A and B (`mantis-records/tactics-selfplay/`, local; CARD-TACTICS-SELFPLAY).
-- **CARD-PERF-2 — LANDED 2026-10-03 by the PERF-2 packet (L1 `bef8f04f`, L2 `7ad5208a`, L3 `355c7dc9`, L3b `e6b9e0e8`; L4 not landed): the production self-play loop on the 4080S box reads 235 455 positions/h against 164 422 (+43 %, IQRs [230 895, 243 870] and [158 910, 169 215]; games/h 2 580 against 1 807 at 91.3 and 91.0 plies per game). Was: runs NOW, in parallel, by R383(b): throughput (independent games per step) is a value lever. Was: runs after CARD-HYGIENE-1, on the desktop before the mint (R381(d)). Its order RULED by R379(e), following CENSUS-1's C2: the copies first, then the edge table, then
+- **CARD-PERF-2 — RATIFIED by R384(b), L1's miss and the operator's word recorded. LANDED 2026-10-03 by the PERF-2 packet (L1 `bef8f04f`, L2 `7ad5208a`, L3 `355c7dc9`, L3b `e6b9e0e8`; L4 not landed): the production self-play loop on the 4080S box reads 235 455 positions/h against 164 422 (+43 %, IQRs [230 895, 243 870] and [158 910, 169 215]; games/h 2 580 against 1 807 at 91.3 and 91.0 plies per game). Was: runs NOW, in parallel, by R383(b): throughput (independent games per step) is a value lever. Was: runs after CARD-HYGIENE-1, on the desktop before the mint (R381(d)). Its order RULED by R379(e), following CENSUS-1's C2: the copies first, then the edge table, then
   CUDA graphs.** R378(g) sequenced PERF-2 after CENSUS-1, which R379(d) accepts. C2 read the H2D copies as the largest
   part of the server's `launch` (33–38 %) and the compiled trunk's launch as nearly fixed per forward (≈ 3.5 ms)
   (`docs/design/measurements/CENSUS1_2026-09-29.md` §C2).
@@ -521,8 +559,9 @@ Both were found by running the gate set rather than by reading it, and both are 
   - Grants: the self-play path accepts `selfplay.search.tactics`, the witness gains its two cases, and a census-exempt
     twin config is minted through run10's header; the box, ≤ 12 box-h for P4 and T. No production config, no START
     and no priced act.
-- **CARD-ORIGIN-RULE — OPENED for the RUN11-PREP packet, whose leg ORIGIN-1 lands it (R377(g)); it gains by R383(f):
-  the forced ply-0 row does not train (FORGE-2 §5.8, as in Six).** The first stone
+- **CARD-ORIGIN-RULE — SPLIT by R384(f): the deploy head plays the origin on an empty board now; the engine rule and
+  canonicalisation land after run11's start by pinned resume. OPENED for the RUN11-PREP packet, whose leg ORIGIN-1
+  lands it (R377(g)); it gains by R383(f): the forced ply-0 row does not train (FORGE-2 §5.8, as in Six).** The first stone
   is the origin, as in the
   official rule and Six: the empty board's legal set is {origin}. Records and books are canonicalised by
   translation on load, and the frozen fixtures are re-pinned under grant. It touches the protected set's arena
@@ -601,7 +640,9 @@ Both were found by running the gate set rather than by reading it, and both are 
   are R381(e)'s, after CARD-HYGIENE-1, CARD-CENSUS-2 and CARD-PERF-2 (R381(d)); its value rows are CARD-CENSUS-3's
   picks, and nothing mints before CENSUS-3 reads and CARD-RING-V3 lands (R382(d)). R383: the parent's value head, wd
   1e-4 and search weight 0 (R383(a), (e)); `min_buf_size` withdrawn for the ring-fill warm start (R383(c)); the value
-  regulariser and the step rate are CARD-REG-1's and CARD-RUN11-PRE's, the last two reads before the mint (R383(d)).** Until run11's
+  regulariser and the step rate are CARD-REG-1's and CARD-RUN11-PRE's, the last two reads before the mint (R383(d)).
+  R384: the re-drawn value mask at 1/8 and Σπ′·completedQ in the ring (R384(a)); run11 is RUN11-PRE's picked arm,
+  continued from its last save (R384(d)); the production run is the default state from run11 on (R384(c)).** Until run11's
   mint replaces it,
   `configs/run10.yaml` stays the production config the instruments read; run10 will not START. The design
   carries:
@@ -1215,8 +1256,8 @@ recommended one; each is its own leg with a LAW-09 bench.
 - **CARD-EVAL-ROUND-OVERRUN — the eval round outlasted its cadence; the overrun itself is FIXED
   (resume mint `ce0a8ff6`: gate and rung at 256, `eval.max_plies` its own row, the band 0.5, the
   GSPRT). Still OPEN, from the same review:** the eval child emits no `batch_timing_snapshot()`
-  (LAW-18; needed before concurrency is touched), `book_v2` (the balanced book is worth +11 pp of
-  gate power), and the ruling that names "gate pair statistics" for the GSPRT.
+  (LAW-18; needed before concurrency is touched), `book_v2` (CLOSED by R384(c): the "+11 pp of
+  gate power" was the 2q(1−q) chance floor, so there is no power case), and the ruling that names "gate pair statistics" for the GSPRT.
 
 ## Opened by R350 (the block verdict)
 

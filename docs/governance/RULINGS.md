@@ -1,4 +1,4 @@
-# RULINGS — R23 to R383
+# RULINGS — R23 to R384
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R384.
+- Numbering continues from R346. The next ruling is R385.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,63 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R384 — THE RUN STARTS FROM THE READ
+Decision: verbatim below.
+
+> R384 — THE RUN STARTS FROM THE READ.
+> (a) REG-1 is accepted. run11's value loss uses a re-drawn per-step mask at p = 1/8 (effect
+> of record −0.018 nats at 8 draws; policy unchanged; calibrated exams held). The ring's
+> root-value field stores Σπ′·completedQ with the proof override (0a). The calibrated floors
+> T4 V 0.154 / DEF V_att 0.100 are the halting rows of record. The λ key is renamed to weight
+> the search (0 = z). Killed for run11: shrinkage (a fractional target needs a warmed head —
+> carded), the head-LR factor, the fixed mask. The anchor stays unresolved.
+> (b) PERF-2 is ratified; L1's miss and the operator's word are recorded. Trainer contention
+> is a reason to read the step rate live, not to wait.
+> (c) The Bubble study is accepted as evidence on R383(f)'s terms. Its two corrections land
+> by annotation: book_v2 is CLOSED (no power case; the natural book stays deferred);
+> R381(c)'s carry is re-stated as A − parent ≈ +0.27, plain − parent ≈ −0.39, a screen.
+> Its lesson is adopted: the production run is the default state from run11 on. The serial
+> sequencing of the censuses is the architect's error, on the ledger.
+> (d) RUN11-PRE is run11's first leg, not a twin. Four arms from run8@45k under one
+> pre-registration: (1) 2.4 steps/game, mask off — the control; (2) 2.4, mask 1/8; (3) 1.2,
+> mask 1/8; (4) 1.2, mask 1/8, quick arm 32 sims at m 8. Matched wall-clock on matched
+> hardware, read on the value instrument (paired lagged read + the GEN anchor), policy CE on
+> fresh games, calibrated exams, ring bands, positions/h; shipped-head cells v the parent at
+> the end as a screen. The pick rule and halts are hashed before any arm starts; the picked
+> arm continues as run11 from its last save. Arming the configs is the operator's word.
+> (e) Bubble 185k against S and X, 288 pairs each, is recommended; running its weights is the
+> operator's act. At or above our shipped head, it becomes the third ruler.
+> (f) Carded, not built before the start: within-turn tree reuse, head-to-head lever cells,
+> the pair diagnostic, the Six-trainer read, ruler hygiene, the calibrated search-value
+> teacher (gated on a warmed head), the all-vetoed target fix (evidence only; R380(b)
+> stands). ORIGIN-1: the deploy head plays the origin on an empty board now; the engine rule
+> and canonicalisation land after the start by pinned resume.
+> (g) reg-1 rebases onto dev, gates, pushes: yes. Two matched boxes for the arms; renting is
+> the operator's.
+
+Status: standing. Accepts REG-1 and sets run11's value rows by (a): the value loss takes a re-drawn per-step mask at
+p = 1/8 (effect of record −0.018 nats at 8 draws, policy unchanged, calibrated exams held); the ring's root-value field
+stores Σπ′·completedQ with the proof override (REG-1's 0a); the calibrated floors T4 V 0.154 / DEF V_att 0.100 are the
+halting rows of record; the λ key is renamed to weight the search (0 = z), restating R383(e); shrinkage (a fractional
+target needs a warmed head, carded), the head-LR factor and the fixed mask are killed for run11; the parent anchor
+stays unresolved. Ratifies PERF-2 with L1's miss and the operator's word recorded, and makes trainer contention a reason
+to read the step rate live, by (b). Accepts the Bubble study as evidence on R383(f)'s terms (rank and card, never
+adopt); lands its two corrections by annotation (`book_v2` CLOSED with no power case, the natural book still deferred;
+R381(c)'s carry re-stated as a screen, A − parent ≈ +0.27, plain − parent ≈ −0.39); adopts its lesson that the
+production run is the default state from run11 on; and records the censuses' serial sequencing as the architect's
+error, by (c). Re-specifies RUN11-PRE as run11's first leg, not a twin: four arms from run8@45k under one hashed
+pre-registration (2.4 mask off, the control; 2.4 mask 1/8; 1.2 mask 1/8; 1.2 mask 1/8 with a 32-sim quick arm at
+m 8), matched wall-clock on matched hardware, read on the value instrument, fresh-game policy CE, calibrated exams,
+ring bands and positions/h, shipped-head cells v the parent at the end as a screen; the picked arm continues as run11
+from its last save; arming the configs is the operator's word, by (d). Recommends Bubble 185k against S and X at 288
+pairs each, running its weights the operator's act, and makes it the third ruler at or above our shipped head, by (e).
+Cards seven items not built before the start and splits ORIGIN-1 (the deploy head plays the origin on an empty board
+now; the engine rule and canonicalisation land after the start by pinned resume), by (f). Orders reg-1 rebased onto
+dev, gated and pushed, and prices two matched boxes for the arms, renting the operator's, by (g). The packet it
+forwards is RUN11-PRE.
+
+---
 
 ### R383 — THE REUSE READING
 Decision: verbatim below.
@@ -91,6 +148,9 @@ FORGE-2: derived numbers from archived scripts over our own records rank and car
 land as annotations; five items are carded and the rest killed as run11 levers; ORIGIN-1 gains the untrained forced
 ply-0 row, by (f). Sets the merge order and prices REG-1's box need (≤ 40 box-h within a day), keep or stop the
 operator's, by (g). The packets it forwards are REG-1, RUN11-PRE and PERF-2.
+REG-1 is ACCEPTED by R384(a) and PERF-2 RATIFIED by R384(b). (d)'s RUN11-PRE is RE-SPECIFIED by R384(d): run11's
+first leg, four arms from run8@45k, not a twin. (e)'s producer follows its read: the field stores Σπ′·completedQ with
+the proof override (R384(a)).
 
 ---
 
@@ -194,6 +254,9 @@ and weight decay as CENSUS-2 reads them" is ANNOTATED by R382(d): run11's value 
 which holds draws per row at the steady state from the first row; CENSUS-3 read the 13-draw warm start as the worst
 point (R383(a)). (d)'s "reuse stays at 2.4 steps/game" is ANNOTATED by R383(a)-(d): 8 draws per row over-fits the
 value head on held-out games; REG-1 and RUN11-PRE read the regularisers and the step rate before the mint.
+(c)'s carry is ANNOTATED by R384(c) (the Bubble study's correction): TACTICS-SELFPLAY-3's 0.632 replays the same
+games, so the +0.65 does not replicate; the carry is re-stated as A − parent ≈ +0.27, plain − parent ≈ −0.39, a
+screen. (d)'s reuse is RE-READ by R384(d)'s arms (2.4 and 1.2 steps/game).
 
 ---
 
@@ -366,6 +429,8 @@ row's target and the played move. (f)'s rule stands.
 That re-search is RETRACTED by R380(b): a root whose every audited move is vetoed records no policy target and plays the
 audit's best hold; the row-wise mixture stands under test (R380(d)).
 The row-wise mixture is KILLED by R381(a); the feed of record is arm A's, no re-search and no mixing.
+(g)'s ORIGIN-1 is SPLIT by R384(f): the deploy head plays the origin on an empty board now; the engine rule and
+canonicalisation land after run11's start by pinned resume.
 
 ---
 
@@ -1727,6 +1792,8 @@ the eval-cost leg's exit record (`STATE.md` at `83667687`: the strix points BC 0
 Amends: nothing in R353; R349(e)'s "INVESTIGATION-1 as designed in §2–§3" is launched by (f) with
 the three added domains, and R350(g)'s re-aim at the trough is folded into (b)'s census.
 Status: standing.
+(d)'s `book_v2` is CLOSED by R384(c): the "+11 pp of gate power" was the 2q(1−q) chance floor (the excess read
+0–1.5 pp over 26 389 pairs), so it has no power case; the natural book stays deferred.
 
 ---
 
