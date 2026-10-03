@@ -53,7 +53,7 @@ class _ValueVisibleNet(torch.nn.Module):
         super().__init__()
         self.sign = float(sign)
 
-    def forward_batch(self, x, edge_index, edge_attr, legal_index, stone_mask, node_offsets):
+    def forward_batch(self, x, edge_index, edge_attr, legal_index, stone_mask, node_offsets, edge_vocab=None):
         n_graphs = int(node_offsets.shape[0]) - 1
         logits: list[float] = []
         values: list[float] = []

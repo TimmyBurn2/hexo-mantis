@@ -21,7 +21,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from mantis._engine import InferenceBatcher
+from mantis._engine import InferenceBatcher, edge_vocabulary
 from mantis.config.resolve.fused_graph_caps import (
     FusedGraphCapsSpec,
     resolve_fused_graph_caps,
@@ -282,7 +282,7 @@ class _PopRetirer(threading.Thread):
 
 
 class InferenceServer(threading.Thread):
-    """Thin Python inference loop backed by a Rust-owned batching queue."""
+    """Thin Python inference loop over a Rust-owned batching queue. Raises: ValueError (a posture outside inline|checker_thread, an encoding without graph geometry), TypeError (an encoding_spec of another type)."""
 
     def __init__(
         self,
@@ -415,6 +415,12 @@ class InferenceServer(threading.Thread):
 
         # bf16 UNCONDITIONALLY on the graph loop: fp16 GINE sum-aggregation overflows.
         self._amp_dtype = amp_dtype_for("graph")
+        # The served forward projects these rows, not every edge, and reads each edge's projection by its code.
+        win_length, edge_dim = self.encoding_spec.win_length, self.encoding_spec.edge_feat_dim
+        node_dim = self.encoding_spec.node_feat_dim
+        if win_length is None or edge_dim is None or node_dim is None:
+            raise ValueError(f"InferenceServer: encoding {self.encoding_spec.name!r} carries no graph geometry")
+        self._edge_vocab = torch.from_numpy(np.asarray(edge_vocabulary(win_length))).reshape(-1, edge_dim).to(device)
         # The eager call stays byte-identical to the pre-A4-3 one: no kwarg unless compiling.
         self._trunk_kwarg: dict[str, Any] = {} if self._trunk is None else {"trunk": self._trunk}
 
@@ -774,6 +780,7 @@ class InferenceServer(threading.Thread):
                     semantic="canary",
                     canary_period=geometry.canary_period,
                     deferred_edge_geometry=sink,
+                    coded_edges=True,
                 )
             except GraphContractError as exc:
                 # DUMP-ON-FIRE: the SLICE is what the check read, so the slice is what is
@@ -803,10 +810,11 @@ class InferenceServer(threading.Thread):
                     policy_logits, value, _bins = self.model.forward_batch(  # pyright: ignore[reportCallIssue]
                         batch.x,
                         batch.edge_index,
-                        batch.edge_attr,
+                        batch.edge_code,
                         batch.legal_node_gather,
                         stone_mask,
                         batch.node_offsets,
+                        edge_vocab=self._edge_vocab,
                         **self._trunk_kwarg,
                     )
             # Segment-softmax in float32 corrects reduced-precision drift and is segment-LOCAL,

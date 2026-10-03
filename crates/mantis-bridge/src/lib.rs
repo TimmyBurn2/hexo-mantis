@@ -20,7 +20,7 @@ fn _engine(m: &Bound<'_, PyModule>) -> PyResult<()> {
     board::register(m)?; // Board
     encoding::register(m)?; // RegistrySpec + all_specs/registry_sha/registry_sha_hex
     graph_contract::register(m)?; // verify_edge_geometry
-    collate::register(m)?; // collate_pack
+    collate::register(m)?; // collate_pack + edge_vocabulary
     mcts::register(m)?; // MCTSTree + SelectionDesync
     utils::register(m)?; // pool-overflow counters, armed-sims ceilings, graph_row_outcome
     inference::register(m)?; // InferenceBatcher + GraphWire + WireAlreadyConsumed

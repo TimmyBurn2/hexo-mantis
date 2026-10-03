@@ -79,7 +79,7 @@ def test_a_trunk_override_leaves_the_shared_module_eager_and_untouched(payload_f
         return net.representation(*args)
 
     via_spy = _forward(net, batch, trunk=spy)
-    assert calls == [4], "the V2 forward hands the trunk (x, edge_index, edge_attr, normalize_mask)"
+    assert calls == [5], "the V2 forward hands the trunk (x, edge_index, edge_attr, normalize_mask, edge_vocab)"
     after = _forward(net, batch)
     for a, b in zip(before, via_spy, strict=True):
         assert torch.equal(a, b)

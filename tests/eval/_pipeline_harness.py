@@ -130,7 +130,7 @@ class RuleNet(torch.nn.Module):
     segments and `assemble` zips against.
     """
 
-    def forward_batch(self, x, edge_index, edge_attr, legal_index, stone_mask, node_offsets):
+    def forward_batch(self, x, edge_index, edge_attr, legal_index, stone_mask, node_offsets, edge_vocab=None):
         n_graphs = int(node_offsets.shape[0]) - 1
         logits: list[float] = []
         for g in range(n_graphs):

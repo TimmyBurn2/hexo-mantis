@@ -228,11 +228,15 @@ def _measure_point(
     allocation retry or cache state makes a single reading unrepeatable."""
     import torch
 
+    from mantis._engine import edge_vocabulary
     from mantis.selfplay.graph_collate import (
         collate_graph_batch,
         segment_softmax,
         stone_mask_from_batch,
     )
+
+    # The server serves coded edges: the vocabulary's projections, never an [E, H] one per edge.
+    vocab = torch.from_numpy(np.asarray(edge_vocabulary(spec.win_length))).reshape(-1, spec.edge_feat_dim).to(device)
 
     peaks: list[int] = []
     allocated_abs: list[int] = []
@@ -253,7 +257,7 @@ def _measure_point(
             wire, expected_version=1, trunk_size=spec.trunk_size,
             win_length=spec.win_length, node_feat_dim=spec.node_feat_dim,
             edge_feat_dim=spec.edge_feat_dim, device=str(device), semantic="canary",
-            canary_period=64,
+            canary_period=64, coded_edges=True,
         )
         stone_mask = stone_mask_from_batch(batch)
         # `amp_dtype_for` is the ONE dtype authority; a literal `torch.bfloat16` beside it
@@ -264,8 +268,8 @@ def _measure_point(
             enabled=True,
         ):
             policy_logits, value, _bins = net.forward_batch(
-                batch.x, batch.edge_index, batch.edge_attr, batch.legal_node_gather,
-                stone_mask, batch.node_offsets,
+                batch.x, batch.edge_index, batch.edge_code, batch.legal_node_gather,
+                stone_mask, batch.node_offsets, edge_vocab=vocab,
             )
         probs = segment_softmax(policy_logits.float(), batch.legal_offsets)
         if not bool(torch.isfinite(probs).all()) or not bool(torch.isfinite(value).all()):

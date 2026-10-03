@@ -16,7 +16,7 @@ import torch
 from torch import Tensor
 
 from mantis.model.arch import GnnArchV2, GnnArchV2SoftPolicy
-from mantis.model.gine import PolicyHead, RepresentationNetwork, csr_edges
+from mantis.model.gine import PolicyHead, RepresentationNetwork
 from mantis.model.gnn import GnnNet, _node_offsets_to_batch_vec, segment_mean_with_fallback
 
 __all__ = ["GnnNetV2", "GnnNetV2SoftPolicy", "RepresentationNetworkV2", "segment_max_with_fallback"]
@@ -69,9 +69,10 @@ class RepresentationNetworkV2(RepresentationNetwork):
         edge_index: Tensor,
         edge_attr: Tensor,
         normalize_mask: Tensor | None = None,
+        edge_vocab: Tensor | None = None,
     ) -> Tensor:
         """`normalize_mask` is `(N,)` bool, True on nodes whose aggregation is degree-normalized;
-        `None` reproduces V1's forward exactly.
+        `None` reproduces V1's forward exactly. `edge_vocab` as V1's.
         """
         divisor = None
         if normalize_mask is not None and edge_index.shape[1] > 0:
@@ -82,12 +83,11 @@ class RepresentationNetworkV2(RepresentationNetwork):
                 normalize_mask, in_degree.clamp(min=1.0), torch.ones_like(in_degree)
             ).unsqueeze(-1)
 
-        edge_index, edge_attr, rowptr = csr_edges(edge_index, edge_attr, x.shape[0])
+        edge_index, projected_edge_attr, rowptr, code = self._edge_inputs(x, edge_index, edge_attr, edge_vocab)
         x = self.input_proj(x)
-        projected_edge_attr = self.edge_proj(edge_attr)
         hs: list[Tensor] = []
         for i in range(self.num_layers):
-            x = self.activation(self._layer(i, x, edge_index, projected_edge_attr, divisor, rowptr) + x)
+            x = self.activation(self._layer(i, x, edge_index, projected_edge_attr, divisor, rowptr, code) + x)
             hs.append(x)
         hs = [self.final_norm(h) for h in hs]
         return torch.cat(hs, dim=-1)
@@ -132,23 +132,24 @@ class GnnNetV2(GnnNet):
         node_offsets: Tensor | None = None,
         *,
         trunk: Callable[..., Tensor] | None = None,
+        edge_vocab: Tensor | None = None,
     ) -> tuple[Tensor, Tensor, Tensor]:
         """V1's contract shape and V1's returns; the readout and the trunk are V2's.
 
         Args:
-            x: `(N_total, in_dim)` node features.
-            edge_index: `(2, E_total)` int64, per-graph offsets already applied.
+            x, edge_index: `(N_total, in_dim)` node features; `(2, E_total)` int64, per-graph offsets already applied.
             edge_attr: `(E_total, edge_dim)` edge features.
             legal_index: `(Lg,)` int64 rows of the legal nodes, strictly ascending.
-            stone_mask: `(N_total,)` bool, True on stone nodes.
-            node_offsets: `(B+1,)` int64 ptr array; `None` means one graph.
-            trunk: a stand-in for `self.representation` over the same parameters; `None` is it.
+            stone_mask, node_offsets: `(N_total,)` bool, True on stone nodes; `(B+1,)` int64 ptr array, `None` one graph.
+            trunk: a stand-in for `self.representation` over the same parameters; `None` is it. `edge_vocab`: as V1's.
 
         Returns:
             `(policy_logits, value, bin_logits)`, as `GnnNet.forward_batch`.
+        Raises:
+            ValueError: `edge_vocab` under grad, which the coded path cannot serve (no backward).
         """
         legal_emb, pooled = self._readout(x, edge_index, edge_attr, legal_index, stone_mask,
-                                          node_offsets, trunk=trunk)
+                                          node_offsets, trunk=trunk, edge_vocab=edge_vocab)
         policy_logits = self.policy_head.mlp(legal_emb).squeeze(-1)
         value, bin_logits = self.value_head(pooled)
         return policy_logits, value, bin_logits
@@ -163,6 +164,7 @@ class GnnNetV2(GnnNet):
         node_offsets: Tensor | None,
         *,
         trunk: Callable[..., Tensor] | None,
+        edge_vocab: Tensor | None = None,
     ) -> tuple[Tensor, Tensor]:
         """The trunk pass and V2's readout, shared by every head set: `(legal_emb, pooled)`."""
         assert legal_index.dtype == torch.long, (
@@ -176,7 +178,7 @@ class GnnNetV2(GnnNet):
         num_graphs = node_offsets.shape[0] - 1
 
         real_mask = self.real_mask_from_batch(stone_mask, legal_index)
-        emb = (self.representation if trunk is None else trunk)(x, edge_index, edge_attr, ~real_mask)
+        emb = (self.representation if trunk is None else trunk)(x, edge_index, edge_attr, ~real_mask, edge_vocab)
         legal_emb = emb.index_select(0, legal_index)
 
         batch_vec = _node_offsets_to_batch_vec(node_offsets, n_total)

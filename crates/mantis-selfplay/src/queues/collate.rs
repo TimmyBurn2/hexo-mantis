@@ -5,7 +5,7 @@
 
 use std::fmt;
 
-use mantis_graph::OFF_WINDOW_SLOT;
+use mantis_graph::{edge_code, edge_vocabulary, EDGE_FEAT_DIM, OFF_WINDOW_SLOT};
 
 /// Policy slots `[0, POLICY_SLOTS)`; `OFF_WINDOW_SLOT` is the one negative slot the contract allows.
 const POLICY_SLOTS: i32 = 362;
@@ -25,6 +25,8 @@ pub enum StructuralKind {
     ScatterSlotAliasing,
     EmptyLegalSet,
     GatherNotStrictlyIncreasing,
+    /// Check 14's class: the coded pack refuses a row outside the edge vocabulary once checks 4–13 hold.
+    EdgeAttrGeometryMismatch,
 }
 
 impl StructuralKind {
@@ -42,6 +44,7 @@ impl StructuralKind {
             Self::ScatterSlotAliasing => "ScatterSlotAliasing",
             Self::EmptyLegalSet => "EmptyLegalSet",
             Self::GatherNotStrictlyIncreasing => "GatherNotStrictlyIncreasing",
+            Self::EdgeAttrGeometryMismatch => "EdgeAttrGeometryMismatch",
         }
     }
 }
@@ -89,11 +92,17 @@ pub struct WireRef<'a> {
     pub current_player: &'a [i8],
 }
 
-/// The seven device arrays, each sized exactly as its wire array; `n_stones` is widened to `i64`.
+/// Where the edges' features go: the rows themselves, or each row's code in `mantis_graph::edge_vocabulary`.
+pub enum EdgeOut<'a> {
+    Attr(&'a mut [f32]),
+    Code { codes: &'a mut [u8], win_length: u8 },
+}
+
+/// The seven device arrays, each sized as its wire array (codes: one per edge); `n_stones` is widened to `i64`.
 pub struct PackOut<'a> {
     pub x: &'a mut [f32],
     pub edge_index: &'a mut [i64],
-    pub edge_attr: &'a mut [f32],
+    pub edges: EdgeOut<'a>,
     pub legal_offsets: &'a mut [i64],
     pub legal_node_gather: &'a mut [i64],
     pub node_offsets: &'a mut [i64],
@@ -102,6 +111,9 @@ pub struct PackOut<'a> {
 
 /// Per non-empty graph: `(graph, src_lo, src_hi, dst_lo, dst_hi)` over its edge range.
 type EdgeSpan = (usize, i64, i64, i64, i64);
+
+/// One thread's spans and its first row outside the vocabulary.
+type EdgeShare = (Vec<EdgeSpan>, Option<String>);
 
 fn caller<T>(message: impl Into<String>) -> Result<T, PackError> {
     Err(PackError::Caller(message.into()))
@@ -117,7 +129,7 @@ fn at(offsets: &[i64], i: usize) -> Result<usize, PackError> {
         )
 }
 
-/// Checks 4–13 then the seven device arrays into `out` (edges over `threads`, same bytes at any count); `Caller` is a wiring break.
+/// Checks 4–13, then the arrays into `out` alike at any `threads`; a coded off-vocabulary row is refused last (check 14's class).
 pub fn pack_wire(
     w: &WireRef<'_>,
     out: &mut PackOut<'_>,
@@ -127,6 +139,13 @@ pub fn pack_wire(
 ) -> Result<(), PackError> {
     if node_feat_dim == 0 || edge_feat_dim == 0 {
         return caller("zero feature dim");
+    }
+    if let EdgeOut::Code { win_length, .. } = out.edges {
+        if edge_feat_dim != EDGE_FEAT_DIM || edge_vocabulary(win_length).is_none() {
+            return caller(format!(
+                "no edge vocabulary codes {edge_feat_dim}-wide rows at win_length {win_length}"
+            ));
+        }
     }
     if !w.node_feat.len().is_multiple_of(node_feat_dim)
         || !w.edge_attr.len().is_multiple_of(edge_feat_dim)
@@ -141,7 +160,10 @@ pub fn pack_wire(
     let shapes = [
         (out.x.len(), w.node_feat.len()),
         (out.edge_index.len(), w.edge_index.len()),
-        (out.edge_attr.len(), w.edge_attr.len()),
+        match &out.edges {
+            EdgeOut::Attr(attr) => (attr.len(), w.edge_attr.len()),
+            EdgeOut::Code { codes, .. } => (codes.len(), e),
+        },
         (out.legal_offsets.len(), w.legal_offsets.len()),
         (out.legal_node_gather.len(), w.legal_node_gather.len()),
         (out.node_offsets.len(), w.node_offsets.len()),
@@ -154,10 +176,15 @@ pub fn pack_wire(
     let lg = w.legal_node_gather.len();
     check_offsets(w, n, e, lg)?;
     check_checksums(w)?;
-    if e > 0 {
-        pack_edges(w, out, e, edge_feat_dim, n, threads)?;
-    }
+    let miss = if e > 0 {
+        pack_edges(w, out, e, edge_feat_dim, n, threads)?
+    } else {
+        None
+    };
     check_and_pack_gather(w, out, n)?;
+    if let Some(message) = miss {
+        return refuse(StructuralKind::EdgeAttrGeometryMismatch, message);
+    }
     out.x.copy_from_slice(w.node_feat);
     out.legal_offsets.copy_from_slice(w.legal_offsets);
     out.node_offsets.copy_from_slice(w.node_offsets);
@@ -260,7 +287,7 @@ fn check_checksums(w: &WireRef<'_>) -> Result<(), PackError> {
     Ok(())
 }
 
-/// Checks 7–8 over the copy: every edge endpoint inside `[0, N)` first, then inside its own graph's node range.
+/// Checks 7–8 over the copy (in `[0, N)`, then in its graph); coded, returns the first off-vocabulary row for the caller.
 fn pack_edges(
     w: &WireRef<'_>,
     out: &mut PackOut<'_>,
@@ -268,58 +295,37 @@ fn pack_edges(
     edge_feat_dim: usize,
     n_nodes: usize,
     threads: usize,
-) -> Result<(), PackError> {
+) -> Result<Option<String>, PackError> {
     let threads = if n_edges < PARALLEL_MIN_EDGES {
         1
     } else {
         threads.max(1)
     };
     let groups = edge_groups(w.edge_offsets, w.n_graphs, n_edges, threads)?;
-    let (src_in, dst_in) = w.edge_index.split_at(n_edges);
     let (mut src_out, mut dst_out) = out.edge_index.split_at_mut(n_edges);
-    let mut attr_out: &mut [f32] = out.edge_attr;
+    let (mut feat_out, win_length) = match &mut out.edges {
+        EdgeOut::Attr(attr) => (EdgeChunk::Attr(attr), 0),
+        EdgeOut::Code { codes, win_length } => (EdgeChunk::Code(codes), *win_length),
+    };
     let mut jobs = Vec::with_capacity(groups.len());
     for &(g0, g1) in &groups {
         let (e0, e1) = (at(w.edge_offsets, g0)?, at(w.edge_offsets, g1)?);
         let (src, src_rest) = std::mem::take(&mut src_out).split_at_mut(e1 - e0);
         let (dst, dst_rest) = std::mem::take(&mut dst_out).split_at_mut(e1 - e0);
-        let (attr, attr_rest) =
-            std::mem::take(&mut attr_out).split_at_mut((e1 - e0) * edge_feat_dim);
-        (src_out, dst_out, attr_out) = (src_rest, dst_rest, attr_rest);
-        jobs.push((g0, g1, e0, src, dst, attr));
+        let (feat, feat_rest) = feat_out.split_at(e1 - e0, edge_feat_dim);
+        (src_out, dst_out, feat_out) = (src_rest, dst_rest, feat_rest);
+        jobs.push((g0, g1, e0, src, dst, feat));
     }
-    let run = |(g0, g1, base, src, dst, attr): (
-        usize,
-        usize,
-        usize,
-        &mut [i64],
-        &mut [i64],
-        &mut [f32],
-    )| {
-        let end = base + src.len();
-        src.copy_from_slice(&src_in[base..end]);
-        dst.copy_from_slice(&dst_in[base..end]);
-        attr.copy_from_slice(&w.edge_attr[base * edge_feat_dim..end * edge_feat_dim]);
-        let mut spans: Vec<EdgeSpan> = Vec::new();
-        for g in g0..g1 {
-            let (lo, hi) = (at(w.edge_offsets, g)?, at(w.edge_offsets, g + 1)?);
-            if hi > lo {
-                let (slo, shi) = min_max(&src_in[lo..hi]);
-                let (dlo, dhi) = min_max(&dst_in[lo..hi]);
-                spans.push((g, slo, shi, dlo, dhi));
-            }
-        }
-        Ok::<_, PackError>(spans)
-    };
+    let run = |job: ShareJob<'_>| pack_share(w, job, edge_feat_dim, win_length);
     let run = &run;
     let mut jobs = jobs.into_iter();
     let first = jobs.next();
     // The first share runs on the calling thread; every other is joined before any error propagates.
-    let shares: Vec<Result<Vec<EdgeSpan>, PackError>> = std::thread::scope(|scope| {
+    let shares: Vec<Result<EdgeShare, PackError>> = std::thread::scope(|scope| {
         let handles: Vec<_> = jobs
             .map(|job| std::thread::Builder::new().spawn_scoped(scope, move || run(job)))
             .collect();
-        let mut shares = vec![first.map_or_else(|| Ok(Vec::new()), run)];
+        let mut shares = vec![first.map_or_else(|| Ok((Vec::new(), None)), run)];
         for handle in handles {
             shares.push(match handle {
                 Ok(h) => h
@@ -333,8 +339,11 @@ fn pack_edges(
         shares
     });
     let mut spans: Vec<EdgeSpan> = Vec::new();
+    let mut misses: Vec<Option<String>> = Vec::new();
     for share in shares {
-        spans.extend(share?);
+        let (s, m) = share?;
+        spans.extend(s);
+        misses.push(m);
     }
     let n = i64::try_from(n_nodes).map_err(|_| PackError::Caller("N past i64".into()))?;
     let lo = spans.iter().map(|s| s.1.min(s.3)).min().unwrap_or(0);
@@ -354,7 +363,80 @@ fn pack_edges(
             );
         }
     }
-    Ok(())
+    Ok(misses.into_iter().flatten().next())
+}
+
+/// One thread's graphs `[g0, g1)`, their first edge, and its slices of the edge outputs.
+type ShareJob<'a> = (
+    usize,
+    usize,
+    usize,
+    &'a mut [i64],
+    &'a mut [i64],
+    EdgeChunk<'a>,
+);
+
+/// Copy (or code) one share of the edges and read each of its non-empty graphs' endpoint spans.
+fn pack_share(
+    w: &WireRef<'_>,
+    (g0, g1, base, src, dst, feat): ShareJob<'_>,
+    edge_feat_dim: usize,
+    win_length: u8,
+) -> Result<EdgeShare, PackError> {
+    let n_edges = w.edge_index.len() / 2;
+    let (src_in, dst_in) = w.edge_index.split_at(n_edges);
+    let end = base + src.len();
+    let mut miss: Option<String> = None;
+    src.copy_from_slice(&src_in[base..end]);
+    dst.copy_from_slice(&dst_in[base..end]);
+    let rows = &w.edge_attr[base * edge_feat_dim..end * edge_feat_dim];
+    match feat {
+        EdgeChunk::Attr(attr) => attr.copy_from_slice(rows),
+        EdgeChunk::Code(codes) => {
+            for (k, (code, row)) in codes.iter_mut().zip(rows.chunks(edge_feat_dim)).enumerate() {
+                let Some(c) = edge_code(row, win_length) else {
+                    miss = Some(format!(
+                        "edge {} attr {row:?} is outside the edge vocabulary (win_length {win_length})",
+                        base + k
+                    ));
+                    break;
+                };
+                *code = c;
+            }
+        }
+    }
+    let mut spans: Vec<EdgeSpan> = Vec::new();
+    for g in g0..g1 {
+        let (lo, hi) = (at(w.edge_offsets, g)?, at(w.edge_offsets, g + 1)?);
+        if hi > lo {
+            let (slo, shi) = min_max(&src_in[lo..hi]);
+            let (dlo, dhi) = min_max(&dst_in[lo..hi]);
+            spans.push((g, slo, shi, dlo, dhi));
+        }
+    }
+    Ok((spans, miss))
+}
+
+/// One thread's share of the edge-feature output.
+enum EdgeChunk<'a> {
+    Attr(&'a mut [f32]),
+    Code(&'a mut [u8]),
+}
+
+impl EdgeChunk<'_> {
+    /// The first `edges` edges' share, and the rest.
+    fn split_at(self, edges: usize, edge_feat_dim: usize) -> (Self, Self) {
+        match self {
+            Self::Attr(a) => {
+                let (head, tail) = a.split_at_mut(edges * edge_feat_dim);
+                (Self::Attr(head), Self::Attr(tail))
+            }
+            Self::Code(c) => {
+                let (head, tail) = c.split_at_mut(edges);
+                (Self::Code(head), Self::Code(tail))
+            }
+        }
+    }
 }
 
 /// Contiguous graph ranges of about `E / threads` edges each, at most `threads` of them, each holding a graph.

@@ -114,12 +114,12 @@ class AugRoundTripMismatch(GraphContractError):
     pass
 
 
-#: The classes the Rust pack names its refusals by (checks 4-13).
-_STRUCTURAL_ERRORS: dict[str, type[GraphContractError]] = {
+#: The classes the Rust pack names its refusals by: checks 4-13, and check 14's for a coded row outside the vocabulary.
+_PACK_ERRORS: dict[str, type[GraphContractError]] = {
     cls.__name__: cls for cls in (
         BatchCountMismatch, OffsetsNonMonotonic, NodeCountChecksum, EdgeIndexOutOfBounds,
         EdgeCrossesGraphBoundary, ScatterGatherCrossesGraph, ScatterSlotOutOfBounds,
-        ScatterSlotAliasing, EmptyLegalSet, GatherNotStrictlyIncreasing,
+        ScatterSlotAliasing, EmptyLegalSet, GatherNotStrictlyIncreasing, EdgeAttrGeometryMismatch,
     )
 }
 
@@ -186,7 +186,7 @@ class GraphBatch:
 
     x: Any  # torch.Tensor (N, 11) float
     edge_index: Any  # (2, E) int64
-    edge_attr: Any  # (E, 5) float
+    edge_attr: Any  # (E, 5) float; None from a coded collate
     legal_offsets: Any  # (B+1,) int64
     legal_node_gather: Any  # (Lg,) int64 (global rows)
     node_offsets: Any  # (B+1,) int64
@@ -194,6 +194,7 @@ class GraphBatch:
     n_graphs: int = 0
     device: str = "cpu"
     extra: dict = field(default_factory=dict)
+    edge_code: Any = None  # (E,) uint8 rows of the edge vocabulary, from a coded collate
 
 
 # Canary cadence for the semantic layer: the trainer runs "full", self-play runs "canary" —
@@ -335,13 +336,14 @@ def collate_graph_batch(
     allow_oracle_builder: bool = False,
     target_argmax_cells: Sequence[tuple[int, int] | None] | None = None,
     deferred_edge_geometry: list[EdgeGeometryCheck] | None = None,
+    coded_edges: bool = False,
 ) -> GraphBatch:
     """Validate and collate one block-diagonal graph wire into a `GraphBatch`.
 
     `semantic`: "full" (trainer), "canary" (hot path — first + every Nth) or "off". The
     structural layer always runs full, and any mismatch raises a NAMED `GraphContractError`.
     `deferred_edge_geometry`: a sink for check 14 — when given, the check is appended to it
-    instead of run, exactly when it would have run, for the caller's checker thread.
+    instead of run, exactly when it would have run, for the caller's checker thread. `coded_edges`: each edge's vocabulary code, not its row.
 
     THE FOUR GEOMETRY PARAMETERS ARE REQUIRED: they are the EXPECTED geometry the wire is
     checked against, so a default is a silent expectation and a payload re-captured at another
@@ -400,17 +402,24 @@ def collate_graph_batch(
     pinned = torch.device(device).type == "cuda"
     staged = _stage_block((
         (node_feat.size, torch.float32), (edge_index.size, torch.int64),
-        (edge_attr.size, torch.float32), (legal_offsets.size, torch.int64),
-        (legal_node_gather.size, torch.int64), (node_offsets.size, torch.int64),
-        (n_stones.size, torch.int64),
+        (E, torch.uint8) if coded_edges else (edge_attr.size, torch.float32),
+        (legal_offsets.size, torch.int64), (legal_node_gather.size, torch.int64),
+        (node_offsets.size, torch.int64), (n_stones.size, torch.int64),
     ), pinned)
+    out = _numpy_views(staged)
     refusal = _collate_pack(
         B, node_feat, edge_index, edge_attr, node_offsets, edge_offsets, legal_offsets,
         legal_node_gather, policy_dst_slot, n_nodes_checksum, n_stones, window_center,
-        current_player, *_numpy_views(staged), node_feat_dim, edge_feat_dim, _PACK_THREADS,
+        current_player, out[0], out[1], None if coded_edges else out[2],
+        out[2] if coded_edges else None, out[3], out[4], out[5], out[6], node_feat_dim,
+        edge_feat_dim, win_length, _PACK_THREADS,
     )
     if refusal is not None:
-        raise _STRUCTURAL_ERRORS[refusal[0]](refusal[1])
+        if refusal[0] == EdgeAttrGeometryMismatch.__name__:
+            # Check 14 names the row's geometric fault; the vocabulary only knows the row has no code.
+            EdgeGeometryCheck(node_feat, node_coords, edge_index, edge_attr, node_offsets, current_player,
+                              node_feat_dim, edge_feat_dim, win_length).run()
+        raise _PACK_ERRORS[refusal[0]](refusal[1])
 
     # --- resolver step 3b: SEMANTIC/GEOMETRIC layer (4) — mode-gated ---
     run_semantic = semantic == "full" or (
@@ -425,11 +434,12 @@ def collate_graph_batch(
         )
 
     # --- resolver step 4: the block's arrays on the device (edge_index already global) ---
-    x, ei, ea, lo, lg, no, ns = _ship(staged, device)
+    x, ei, edges, lo, lg, no, ns = _ship(staged, device)
     return GraphBatch(
         x=x.reshape(N, node_feat_dim),
         edge_index=ei.reshape(2, E),
-        edge_attr=ea.reshape(E, edge_feat_dim),
+        edge_attr=None if coded_edges else edges.reshape(E, edge_feat_dim),
+        edge_code=edges if coded_edges else None,
         legal_offsets=lo,
         legal_node_gather=lg,
         node_offsets=no,

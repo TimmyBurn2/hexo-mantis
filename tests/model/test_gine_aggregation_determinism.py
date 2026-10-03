@@ -1,24 +1,28 @@
-"""The graph aggregation is deterministic on CUDA, served and trained, within one bf16 ulp of fp64 at the op, and no less accurate end to end; (ii) reads the parent via MANTIS_PERF_CHECKPOINT / MANTIS_PERF_EVENTS."""
+# >300 justify (R8): the aggregation's determinism, its ulp band, the end-to-end guard and the coded served forward's
+# parity read ONE parent fixture and its real batches; split, each file would re-derive the batches it pins against.
+"""The graph aggregation is deterministic on CUDA, served (per edge and coded) and trained, within one bf16 ulp of fp64 at the op, no less accurate end to end, and the coded served forward is the per-edge one bit for bit; (ii) reads the parent via MANTIS_PERF_CHECKPOINT / MANTIS_PERF_EVENTS."""
 from __future__ import annotations
 
 import importlib.util
 from collections.abc import Callable
 import os
+import threading
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 import torch
 
 from _gine_oracle import (SumFn, aggregating_with, capturing, exact_sum, fp64_sum, index_add_aggregation,
                           index_add_sum, message, synthetic_batch)
-from mantis._engine import InferenceBatcher
+from mantis._engine import InferenceBatcher, edge_vocabulary
 from mantis.config.census import production_configs
 from mantis.config.loader import load_config
 from mantis.encoding import lookup
 from mantis.model import arch_from_spec_and_config, build_net
 from mantis.model.gine import csr_edges, gine_message_sum
-from mantis.selfplay.inference_server import InferenceServer
+from mantis.selfplay.graph_collate import collate_graph_batch, graph_wire_from_rust, stone_mask_from_batch
 from mantis.train.checkpoints import load_checkpoint
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -39,21 +43,29 @@ def _assert_jitter_is_possible() -> None:
         "deterministic mode is on (leaked by an earlier test): the atomic path would not jitter, so nothing is read")
 
 
-def _served(net: torch.nn.Module, b: dict[str, torch.Tensor], trunk: Any = None) -> tuple[torch.Tensor, ...]:
-    kwargs = {} if trunk is None else {"trunk": trunk}
+def _served(net: torch.nn.Module, b: dict[str, torch.Tensor], trunk: Any = None,
+            vocab: torch.Tensor | None = None) -> tuple[torch.Tensor, ...]:
+    kwargs: dict[str, Any] = {} if trunk is None else {"trunk": trunk}
+    edges = b["edge_attr"] if vocab is None else b["edge_code"]
+    if vocab is not None:
+        kwargs["edge_vocab"] = vocab
     with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
-        return net.forward_batch(b["x"], b["edge_index"], b["edge_attr"], b["legal_index"],
+        return net.forward_batch(b["x"], b["edge_index"], edges, b["legal_index"],
                                  b["stone_mask"], b["node_offsets"], **kwargs)
 
 
+@pytest.mark.parametrize("coded", [False, True], ids=["per_edge", "coded"])
 @pytest.mark.parametrize("compiled", [False, True], ids=["eager", "compiled"])
-def test_i_the_same_batch_serves_bit_identically(compiled: bool) -> None:
+def test_i_the_same_batch_serves_bit_identically(compiled: bool, coded: bool) -> None:
     """Dense random-init messages into a dummy hot spot: the regime where the bf16 atomics disagree with themselves."""
     _assert_jitter_is_possible()
     net, b = _net().eval(), synthetic_batch("cuda")
+    gen = torch.Generator().manual_seed(11)
+    b["edge_code"] = torch.randint(0, 91, (b["edge_attr"].shape[0],), generator=gen, dtype=torch.uint8).cuda()
+    vocab = torch.randn(91, 5, generator=gen).cuda() if coded else None
     torch._dynamo.reset()
     trunk = torch.compile(net.representation, dynamic=True) if compiled else None
-    first, second = _served(net, b, trunk), _served(net, b, trunk)
+    first, second = _served(net, b, trunk, vocab), _served(net, b, trunk, vocab)
     for name, x, y in zip(("logits", "value", "bins"), first, second, strict=True):
         assert torch.equal(x, y), f"{name} differs on a repeat: max |Δ| {float((x - y).abs().max()):.4g}"
 
@@ -95,8 +107,8 @@ def test_i_the_same_batch_trains_bit_identically() -> None:
     assert worst == 0.0, f"a gradient differs on a repeat: max |Δ| {worst:.4g}"
 
 
-def _real_batches(net: torch.nn.Module, config: dict[str, Any], n_batches: int) -> list[tuple]:
-    """Real B-64 batches of distinct positions, captured from the real server exactly as it forwards them."""
+def _real_payloads(config: dict[str, Any], n_batches: int) -> list[Any]:
+    """Real B-64 wires of distinct positions, fused by the real batcher, as payloads either collate reads."""
     spec = importlib.util.spec_from_file_location("bench_server_under_test", _REPO / "tools" / "bench_server.py")
     assert spec is not None and spec.loader is not None
     bench = importlib.util.module_from_spec(spec)
@@ -104,27 +116,40 @@ def _real_batches(net: torch.nn.Module, config: dict[str, Any], n_batches: int) 
     pool = bench.positions_from_events(Path(os.environ["MANTIS_PERF_EVENTS"]),
                                        config["identity"]["encoding"], limit=20000)
     probe = bench.distinct_positions(pool, 64 * n_batches)
-    got: list[tuple] = []
-    forward = net.forward_batch
-
-    def record(*args: Any, **kwargs: Any) -> Any:
-        got.append(tuple(a.detach().clone() if torch.is_tensor(a) else a for a in args))
-        return forward(*args, **kwargs)
-
-    net.forward_batch = record
     lspec = lookup(config["identity"]["encoding"])
     batcher = InferenceBatcher(encoding_spec=lspec)
-    server = InferenceServer(net, torch.device("cuda"), config, batcher=batcher, encoding_spec=lspec,
-                             compile_trunk=False)
-    server.start()
-    try:
-        for i in range(n_batches):
-            batcher.submit_graphs_and_wait(probe[64 * i: 64 * (i + 1)], 1)
-    finally:
-        server.stop()
-        server.join(timeout=30.0)
-        del net.forward_batch
+    got: list[tuple] = []
+    for i in range(n_batches):
+        submit = threading.Thread(target=batcher.submit_graphs_and_wait, args=(probe[64 * i: 64 * (i + 1)], 1))
+        submit.start()
+        ids, wire = batcher.next_graph_batch(64, 100)
+        while not ids:  # an empty pop means the submit has not queued yet
+            ids, wire = batcher.next_graph_batch(64, 100)
+        assert len(ids) == 64, f"the batcher popped {len(ids)} of the 64 positions; (ii) is pre-stated over B-64"
+        payload = graph_wire_from_rust(wire)
+        got.append(payload)
+        counts = np.diff(np.asarray(payload.legal_offsets))
+        batcher.submit_graph_inference_results(ids, np.repeat(1.0 / counts, counts).astype(np.float32),
+                                               np.asarray(payload.legal_offsets), np.zeros(64, np.float32))
+        submit.join()
     return got
+
+
+def _collate(payload: Any, config: dict[str, Any], *, coded: bool) -> Any:
+    lspec = lookup(config["identity"]["encoding"])
+    return collate_graph_batch(payload, device="cuda", semantic="off", trunk_size=lspec.trunk_size,
+                               win_length=lspec.win_length, node_feat_dim=lspec.node_feat_dim,
+                               edge_feat_dim=lspec.edge_feat_dim, coded_edges=coded)
+
+
+def _real_batches(net: torch.nn.Module, config: dict[str, Any], n_batches: int) -> list[tuple]:
+    """The real B-64 wires collated per edge, as the trainer and every reader forward them."""
+    out = []
+    for payload in _real_payloads(config, n_batches):
+        batch = _collate(payload, config, coded=False)
+        out.append((batch.x, batch.edge_index, batch.edge_attr, batch.legal_node_gather,
+                    stone_mask_from_batch(batch), batch.node_offsets))
+    return out
 
 
 def _outputs(net: torch.nn.Module, args: tuple, amp: bool) -> tuple[torch.Tensor, torch.Tensor]:
@@ -265,3 +290,29 @@ def test_ii_b_the_mean_logit_error_is_no_worse_than_the_old_paths_worst(parent, 
     print(f"(ii-b) {arm}: mean |Δlogit| {got:.5g} vs the bf16 `index_add_` worst of {_REPEATS} {max(old):.5g} "
           f"(range {min(old):.5g}..{max(old):.5g})")
     assert got <= max(old), f"{arm}: mean |Δlogit| {got:.5g} > the bf16 `index_add_` worst {max(old):.5g}"
+
+
+@_NEEDS_PARENT
+@pytest.mark.parametrize("compiled", [False, True], ids=["eager", "compiled"])
+def test_ii_c_the_coded_served_forward_is_the_per_edge_forward_bit_for_bit(compiled: bool) -> None:
+    """The served path projects the edge vocabulary, not every edge: on the parent's real batches its outputs are the per-edge forward's, bits included."""
+    config = load_config(production_configs(_REPO)[0]).model_dump()
+    ck = load_checkpoint(Path(os.environ["MANTIS_PERF_CHECKPOINT"]))
+    assert ck.metadata.arch is not None
+    net = build_net(ck.metadata.arch)
+    net.load_state_dict(ck.model_state)
+    net = net.cuda().eval()
+    lspec = lookup(config["identity"]["encoding"])
+    vocab = torch.from_numpy(np.asarray(edge_vocabulary(lspec.win_length))).reshape(-1, 5).cuda()
+    torch._dynamo.reset()
+    trunk = torch.compile(net.representation, dynamic=True) if compiled else None
+    for payload in _real_payloads(config, 8):
+        plain, coded = _collate(payload, config, coded=False), _collate(payload, config, coded=True)
+        want = _served(net, {"x": plain.x, "edge_index": plain.edge_index, "edge_attr": plain.edge_attr,
+                             "legal_index": plain.legal_node_gather, "stone_mask": stone_mask_from_batch(plain),
+                             "node_offsets": plain.node_offsets}, trunk)
+        got = _served(net, {"x": coded.x, "edge_index": coded.edge_index, "edge_code": coded.edge_code,
+                            "legal_index": coded.legal_node_gather, "stone_mask": stone_mask_from_batch(coded),
+                            "node_offsets": coded.node_offsets}, trunk, vocab)
+        for name, x, y in zip(("logits", "value", "bins"), want, got, strict=True):
+            assert torch.equal(x, y), f"{name}: max |Δ| {float((x - y).abs().max()):.4g}"

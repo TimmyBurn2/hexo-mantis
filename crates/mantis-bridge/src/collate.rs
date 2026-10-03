@@ -1,19 +1,20 @@
 //! `collate_pack`: `pack_wire` over numpy views with the GIL released, a refusal returned as `(class_name, message)`.
 
-use numpy::{PyReadonlyArray1, PyReadwriteArray1};
-use pyo3::exceptions::PyRuntimeError;
+use numpy::{IntoPyArray, PyArray1, PyReadonlyArray1, PyReadwriteArray1};
+use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 
-use mantis_selfplay::queues::collate::{pack_wire, PackError, PackOut, WireRef};
+use mantis_graph::edge_vocabulary as vocabulary;
+use mantis_selfplay::queues::collate::{pack_wire, EdgeOut, PackError, PackOut, WireRef};
 
-/// Checks 4–13 and the pack into the `out_*` views, which must not overlap; `RuntimeError` is a wiring break.
+/// Checks 4–13 and the pack into the `out_*` views (exactly one of attr and code), which must not overlap; `RuntimeError` is a wiring break.
 #[pyfunction]
 #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
 #[pyo3(signature = (
     n_graphs, node_feat, edge_index, edge_attr, node_offsets, edge_offsets, legal_offsets,
     legal_node_gather, policy_dst_slot, n_nodes_checksum, n_stones, window_center, current_player,
-    out_x, out_edge_index, out_edge_attr, out_legal_offsets, out_legal_node_gather, out_node_offsets,
-    out_n_stones, node_feat_dim, edge_feat_dim, threads,
+    out_x, out_edge_index, out_edge_attr, out_edge_code, out_legal_offsets, out_legal_node_gather,
+    out_node_offsets, out_n_stones, node_feat_dim, edge_feat_dim, win_length, threads,
 ))]
 pub(crate) fn collate_pack(
     py: Python<'_>,
@@ -32,15 +33,30 @@ pub(crate) fn collate_pack(
     current_player: PyReadonlyArray1<'_, i8>,
     mut out_x: PyReadwriteArray1<'_, f32>,
     mut out_edge_index: PyReadwriteArray1<'_, i64>,
-    mut out_edge_attr: PyReadwriteArray1<'_, f32>,
+    out_edge_attr: Option<PyReadwriteArray1<'_, f32>>,
+    out_edge_code: Option<PyReadwriteArray1<'_, u8>>,
     mut out_legal_offsets: PyReadwriteArray1<'_, i64>,
     mut out_legal_node_gather: PyReadwriteArray1<'_, i64>,
     mut out_node_offsets: PyReadwriteArray1<'_, i64>,
     mut out_n_stones: PyReadwriteArray1<'_, i64>,
     node_feat_dim: usize,
     edge_feat_dim: usize,
+    win_length: u8,
     threads: usize,
 ) -> PyResult<Option<(&'static str, String)>> {
+    let (mut attr_view, mut code_view) = (out_edge_attr, out_edge_code);
+    let edges = match (&mut attr_view, &mut code_view) {
+        (Some(attr), None) => EdgeOut::Attr(attr.as_slice_mut()?),
+        (None, Some(codes)) => EdgeOut::Code {
+            codes: codes.as_slice_mut()?,
+            win_length,
+        },
+        _ => {
+            return Err(PyValueError::new_err(
+                "collate_pack: exactly one of out_edge_attr and out_edge_code",
+            ))
+        }
+    };
     let wire = WireRef {
         n_graphs,
         node_feat: node_feat.as_slice()?,
@@ -59,7 +75,7 @@ pub(crate) fn collate_pack(
     let mut out = PackOut {
         x: out_x.as_slice_mut()?,
         edge_index: out_edge_index.as_slice_mut()?,
-        edge_attr: out_edge_attr.as_slice_mut()?,
+        edges,
         legal_offsets: out_legal_offsets.as_slice_mut()?,
         legal_node_gather: out_legal_node_gather.as_slice_mut()?,
         node_offsets: out_node_offsets.as_slice_mut()?,
@@ -73,8 +89,21 @@ pub(crate) fn collate_pack(
     }
 }
 
-/// Register `collate_pack` into `_engine`.
+/// The edge vocabulary at `win_length`, flat `(V * 5,)` in code order; `ValueError` when it has none.
+#[pyfunction]
+pub(crate) fn edge_vocabulary(
+    py: Python<'_>,
+    win_length: u8,
+) -> PyResult<Bound<'_, PyArray1<f32>>> {
+    let rows = vocabulary(win_length).ok_or_else(|| {
+        PyValueError::new_err(format!("no edge vocabulary at win_length {win_length}"))
+    })?;
+    Ok(rows.concat().into_pyarray(py))
+}
+
+/// Register `collate_pack` and `edge_vocabulary` into `_engine`.
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(collate_pack, m)?)?;
+    m.add_function(wrap_pyfunction!(edge_vocabulary, m)?)?;
     Ok(())
 }

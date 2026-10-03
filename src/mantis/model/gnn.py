@@ -127,6 +127,7 @@ class GnnNet(nn.Module):
         node_offsets: Tensor | None = None,
         *,
         trunk: Callable[..., Tensor] | None = None,
+        edge_vocab: Tensor | None = None,
     ) -> tuple[Tensor, Tensor, Tensor]:
         """Run a grad-capable forward over a disjoint-union batch of collated graphs.
 
@@ -134,15 +135,15 @@ class GnnNet(nn.Module):
             x:            (N_total, in_dim) node features (all graphs concatenated).
             edge_index:   (2, E_total) int64, per-graph node offsets already applied.
             edge_attr:    (E_total, edge_dim) edge features.
-            legal_index:  (Lg,) int64 rows of the legal-move nodes, strictly ascending. A bool
-                          mask here FAILS CLOSED, never slowly and never silently.
+            legal_index:  (Lg,) int64 rows of the legal-move nodes, strictly ascending; a bool mask FAILS CLOSED.
             stone_mask:   (N_total,) bool — True on stone nodes (for value pooling).
             node_offsets: (B+1,) int64 non-decreasing ptr array; `None` == one graph.
             trunk:        a stand-in for `self.representation` over the same parameters, or `None`.
+            edge_vocab:   (V, edge_dim) every edge row by code; `edge_attr` is then each edge's code (serving only).
         Returns:
-            policy_logits: (num_legal_total,) per-legal-node logits, in gather order.
-            value:        (B, 1) decoded value per graph, in [-1, 1].
-            bin_logits:   (B, n_value_bins) raw dist65 bin logits per graph.
+            `(policy_logits (num_legal_total,) in gather order, value (B, 1) in [-1, 1], bin_logits (B, n_value_bins))`.
+        Raises:
+            ValueError: `edge_vocab` under grad, which the coded path cannot serve (no backward).
         """
         assert legal_index.dtype == torch.long, (
             f"legal_index must be int64 rows (the contract's legal_node_gather), got "
@@ -154,7 +155,7 @@ class GnnNet(nn.Module):
         if node_offsets is None:
             node_offsets = torch.tensor([0, n_total], dtype=torch.long, device=device)
 
-        emb = (self.representation if trunk is None else trunk)(x, edge_index, edge_attr)
+        emb = (self.representation if trunk is None else trunk)(x, edge_index, edge_attr, edge_vocab)
         # Sync-free gather: `emb[bool_mask]` runs `aten::nonzero`, which host-syncs on CUDA,
         # while `index_select` knows its length from `legal_index.numel()`. Byte-identical
         # because both are row copies and the wire's gather is strictly ascending.

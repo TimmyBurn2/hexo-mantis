@@ -19,6 +19,9 @@
     clippy::too_many_lines
 )]
 
+mod edge_vocab;
+pub use edge_vocab::{edge_attr_row, edge_code, edge_vocabulary};
+
 use std::collections::{HashMap, HashSet};
 use std::hash::{BuildHasherDefault, Hasher};
 
@@ -49,7 +52,11 @@ impl Hasher for FnvHasher {
     }
     #[inline]
     fn write(&mut self, bytes: &[u8]) {
-        let mut h = if self.0 == 0 { 0xcbf2_9ce4_8422_2325 } else { self.0 };
+        let mut h = if self.0 == 0 {
+            0xcbf2_9ce4_8422_2325
+        } else {
+            self.0
+        };
         for &b in bytes {
             h ^= u64::from(b);
             h = h.wrapping_mul(0x0000_0100_0000_01b3);
@@ -60,7 +67,11 @@ impl Hasher for FnvHasher {
     fn write_i64(&mut self, i: i64) {
         // Direct i64 path: the map keys are all packed coords, so avoid the
         // byte loop entirely on the hot lookups.
-        let mut h = if self.0 == 0 { 0xcbf2_9ce4_8422_2325 } else { self.0 };
+        let mut h = if self.0 == 0 {
+            0xcbf2_9ce4_8422_2325
+        } else {
+            self.0
+        };
         h ^= i as u64;
         h = h.wrapping_mul(0x0000_0100_0000_01b3);
         self.0 = h;
@@ -302,7 +313,13 @@ impl CoordIndex {
             let (q, r) = (coords[i * 2], coords[i * 2 + 1]);
             cells[((q - q0) as usize) * w + (r - r0) as usize] = i as u32;
         }
-        Some(Self { q0, r0, w, h, cells })
+        Some(Self {
+            q0,
+            r0,
+            w,
+            h,
+            cells,
+        })
     }
 
     #[inline]
@@ -313,7 +330,11 @@ impl CoordIndex {
             return None;
         }
         let v = self.cells[(dq as usize) * self.w + dr as usize];
-        if v == u32::MAX { None } else { Some(v) }
+        if v == u32::MAX {
+            None
+        } else {
+            Some(v)
+        }
     }
 }
 
@@ -350,7 +371,10 @@ impl StoneIndex {
         let (q0, q1, r0, r1) = (q0 - reach, q1 + reach, r0 - reach, r1 + reach);
         let w = (r1 - r0 + 1) as usize;
         let h = (q1 - q0 + 1) as usize;
-        if w.saturating_mul(h) > DENSE_INDEX_CELLS_PER_NODE.saturating_mul(stones.len()).max(4096)
+        if w.saturating_mul(h)
+            > DENSE_INDEX_CELLS_PER_NODE
+                .saturating_mul(stones.len())
+                .max(4096)
         {
             return None;
         }
@@ -358,7 +382,13 @@ impl StoneIndex {
         for &(q, r, p) in stones {
             cells[((q - q0) as usize) * w + (r - r0) as usize] = p;
         }
-        Some(Self { q0, r0, w, h, cells })
+        Some(Self {
+            q0,
+            r0,
+            w,
+            h,
+            cells,
+        })
     }
 
     #[inline]
@@ -510,8 +540,10 @@ fn legal_moves_from_stones(
             }
         }
     }
-    let mut seen: FnvSet<i64> =
-        FnvSet::with_capacity_and_hasher(stones.len() * offsets.len(), BuildHasherDefault::default());
+    let mut seen: FnvSet<i64> = FnvSet::with_capacity_and_hasher(
+        stones.len() * offsets.len(),
+        BuildHasherDefault::default(),
+    );
     // Same upper bound as `seen` (predecessor review): every candidate is a
     // stone×offset cell, minus stones and duplicates.
     let mut legal: Vec<(i32, i32)> = Vec::with_capacity(stones.len() * offsets.len());
@@ -542,7 +574,11 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
         "BuildParams: win_length {} outside supported 1..=32 (threat cells buffer bound)",
         params.win_length
     );
-    assert!(params.trunk_size >= 1, "BuildParams: trunk_size {} < 1", params.trunk_size);
+    assert!(
+        params.trunk_size >= 1,
+        "BuildParams: trunk_size {} < 1",
+        params.trunk_size
+    );
     let win_length = params.win_length as usize;
     let radius = i32::from(params.radius);
     let window = (params.win_length - 1) as usize; // axis-walk depth
@@ -575,7 +611,10 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
     let n = n_real + 1;
     // Dedup key `(src<<34)|(dst<<2)|axis` gives src 30 bits, dst 32 — injective only while
     // node ids < 2^30 (>=1e9 nodes is unreachable, OOM long before); this makes the ceiling explicit.
-    assert!(n < (1 << 30), "node count {n} exceeds the 30-bit dedup key budget");
+    assert!(
+        n < (1 << 30),
+        "node count {n} exceeds the 30-bit dedup key budget"
+    );
     let dummy_idx = n_real as u32;
     let fdim = NODE_FEAT_DIM;
 
@@ -735,7 +774,14 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
     }
 
     // --- dedup axis edges: key (src, dst, axis_idx), keep FIRST ---
-    dedup_axis_edges(&mut edge_src, &mut edge_dst, &mut edge_attr, &edge_key, n_real, window);
+    dedup_axis_edges(
+        &mut edge_src,
+        &mut edge_dst,
+        &mut edge_attr,
+        &edge_key,
+        n_real,
+        window,
+    );
 
     // --- legacy dummy edges: bidirectional to all real nodes, all-zero attr ---
     for i in 0..n_real as u32 {
@@ -773,7 +819,10 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
 
     let g = AxisGraph {
         node_feat: NodeFeat(features),
-        edge_index: EdgeIndex { src: edge_src, dst: edge_dst },
+        edge_index: EdgeIndex {
+            src: edge_src,
+            dst: edge_dst,
+        },
         edge_attr: EdgeAttr(edge_attr),
         legal_mask,
         stone_mask,
@@ -792,11 +841,7 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
 
 #[inline]
 fn push_attr(edge_attr: &mut Vec<f32>, axis_idx: usize, signed_dist: f32, src_player: f32) {
-    let mut a = [0.0f32; EDGE_FEAT_DIM];
-    a[axis_idx] = 1.0;
-    a[3] = signed_dist;
-    a[4] = src_player;
-    edge_attr.extend_from_slice(&a);
+    edge_attr.extend_from_slice(&edge_attr_row(axis_idx, signed_dist, src_player));
 }
 
 /// The oracle's `axis_idx_of(a)`: the one-hot axis of an attr.
@@ -868,24 +913,36 @@ fn verify_contract(g: &AxisGraph, n_stones: usize, n_legal: usize, params: &Buil
     assert!(
         g.n_nodes_checksum as usize == n && n == n_stones + n_legal + 1,
         "NodeCountChecksum: declared {} vs N {} (stones {} + legal {} + 1)",
-        g.n_nodes_checksum, n, n_stones, n_legal
+        g.n_nodes_checksum,
+        n,
+        n_stones,
+        n_legal
     );
     assert!(
         g.node_feat.0.len() == n * NODE_FEAT_DIM && g.node_coords.len() == 2 * n,
         "NodeFeatDimMismatch: node_feat len {} (want {}), node_coords len {} (want {})",
-        g.node_feat.0.len(), n * NODE_FEAT_DIM, g.node_coords.len(), 2 * n
+        g.node_feat.0.len(),
+        n * NODE_FEAT_DIM,
+        g.node_coords.len(),
+        2 * n
     );
     assert!(
         g.legal_mask.len() == n && g.stone_mask.len() == n,
         "NodeFeatDimMismatch: mask lens {}/{} != N {}",
-        g.legal_mask.len(), g.stone_mask.len(), n
+        g.legal_mask.len(),
+        g.stone_mask.len(),
+        n
     );
     assert!(
         g.edge_attr.0.len() == EDGE_FEAT_DIM * n_edges,
         "EdgeAttrDimMismatch: edge_attr len {} != 5*E {}",
-        g.edge_attr.0.len(), EDGE_FEAT_DIM * n_edges
+        g.edge_attr.0.len(),
+        EDGE_FEAT_DIM * n_edges
     );
-    assert!(g.builder_impl == BUILDER_IMPL_NATIVE, "NonNativeSampleBuilder: impl tag != 1");
+    assert!(
+        g.builder_impl == BUILDER_IMPL_NATIVE,
+        "NonNativeSampleBuilder: impl tag != 1"
+    );
     // n_legal > 0 holds unconditionally: `legal_moves_from_stones` dense-mirrors the empty
     // board with a 25-cell fallback, so `|| n_stones == 0` below is a vacuous defensive disjunct.
     assert!(
@@ -923,7 +980,11 @@ fn verify_contract(g: &AxisGraph, n_stones: usize, n_legal: usize, params: &Buil
         let dr = g.node_coords[d as usize * 2 + 1] - g.node_coords[s as usize * 2 + 1];
         // src_player from the wire: stone row's own/opp column x current_player.
         let src_player = if g.stone_mask[s as usize] {
-            if g.node_feat.0[s as usize * NODE_FEAT_DIM] == 1.0 { cur_f } else { -cur_f }
+            if g.node_feat.0[s as usize * NODE_FEAT_DIM] == 1.0 {
+                cur_f
+            } else {
+                -cur_f
+            }
         } else {
             0.0
         };
@@ -944,7 +1005,9 @@ fn verify_contract(g: &AxisGraph, n_stones: usize, n_legal: usize, params: &Buil
     assert!(
         g.legal_node_gather.len() == n_legal && g.policy_scatter_index.0.len() == n_legal,
         "GatherNotLegalNode: gather/slot lens {}/{} != n_legal {}",
-        g.legal_node_gather.len(), g.policy_scatter_index.0.len(), n_legal
+        g.legal_node_gather.len(),
+        g.policy_scatter_index.0.len(),
+        n_legal
     );
     let half = (trunk_sz - 1) / 2;
     let n_slots = (trunk_sz * trunk_sz) as usize;
@@ -953,7 +1016,8 @@ fn verify_contract(g: &AxisGraph, n_stones: usize, n_legal: usize, params: &Buil
         assert!(
             (row as usize) >= n_stones && (row as usize) < n_stones + n_legal,
             "GatherNotLegalNode: gather[{i}] = {row} outside [{}, {})",
-            n_stones, n_stones + n_legal
+            n_stones,
+            n_stones + n_legal
         );
         let q = g.node_coords[row as usize * 2];
         let r = g.node_coords[row as usize * 2 + 1];
@@ -1002,10 +1066,14 @@ mod tests {
         // region, 25 cells around the origin — and NOT the oracle's vacuous `[]`.
         let g = build_axis_graph(&StoneList::default(), &BuildParams::V1_GEOMETRY);
         assert_eq!(g.n_stones, 0);
-        assert_eq!(g.legal_node_gather.len(), 25, "empty board must yield the dense 5x5 = 25 legal cells");
+        assert_eq!(
+            g.legal_node_gather.len(),
+            25,
+            "empty board must yield the dense 5x5 = 25 legal cells"
+        );
         assert_eq!(g.num_nodes(), 25 + 1); // 25 legal + 1 dummy, no stones
-        // Axis-window edges DO form among the 25 empty-kind legal nodes: the walk-stop rule
-        // only stops on a Stone neighbor (none here), so adjacent cells within the window link.
+                                           // Axis-window edges DO form among the 25 empty-kind legal nodes: the walk-stop rule
+                                           // only stops on a Stone neighbor (none here), so adjacent cells within the window link.
         assert!(g.num_edges() > 0);
         assert_eq!(g.window_center, (0, 0));
 
@@ -1019,18 +1087,33 @@ mod tests {
         let mut got: Vec<(i32, i32)> = g
             .legal_node_gather
             .iter()
-            .map(|&row| (g.node_coords[row as usize * 2], g.node_coords[row as usize * 2 + 1]))
+            .map(|&row| {
+                (
+                    g.node_coords[row as usize * 2],
+                    g.node_coords[row as usize * 2 + 1],
+                )
+            })
             .collect();
         got.sort_unstable();
-        assert_eq!(got, expected, "empty-board legal cell set must byte-match dense's 5x5 fallback");
+        assert_eq!(
+            got, expected,
+            "empty-board legal cell set must byte-match dense's 5x5 fallback"
+        );
 
         // Radius-independence: the dense reference's empty-board branch ignores
         // `legal_move_radius`, so a very different `radius` must not change the fallback shape.
         let g2 = build_axis_graph(
             &StoneList::default(),
-            &BuildParams { radius: 1, ..BuildParams::V1_GEOMETRY },
+            &BuildParams {
+                radius: 1,
+                ..BuildParams::V1_GEOMETRY
+            },
         );
-        assert_eq!(g2.legal_node_gather.len(), 25, "empty-board fallback must be radius-independent, like dense");
+        assert_eq!(
+            g2.legal_node_gather.len(),
+            25,
+            "empty-board fallback must be radius-independent, like dense"
+        );
     }
 
     #[test]
@@ -1052,21 +1135,39 @@ mod tests {
         }
         expected.sort_unstable();
 
-        let params = BuildParams { radius: radius as u16, ..BuildParams::V1_GEOMETRY };
-        let g = build_axis_graph(&StoneList { stones: vec![(sq, sr, 1)] }, &params);
+        let params = BuildParams {
+            radius: radius as u16,
+            ..BuildParams::V1_GEOMETRY
+        };
+        let g = build_axis_graph(
+            &StoneList {
+                stones: vec![(sq, sr, 1)],
+            },
+            &params,
+        );
         assert_eq!(g.n_stones, 1);
         let mut got: Vec<(i32, i32)> = g
             .legal_node_gather
             .iter()
-            .map(|&row| (g.node_coords[row as usize * 2], g.node_coords[row as usize * 2 + 1]))
+            .map(|&row| {
+                (
+                    g.node_coords[row as usize * 2],
+                    g.node_coords[row as usize * 2 + 1],
+                )
+            })
             .collect();
         got.sort_unstable();
-        assert_eq!(got, expected, "1-stone legal cell set must match dense's own hex-ball formula");
+        assert_eq!(
+            got, expected,
+            "1-stone legal cell set must match dense's own hex-ball formula"
+        );
     }
 
     #[test]
     fn single_stone_smoke() {
-        let stones = StoneList { stones: vec![(0, 0, 1)] };
+        let stones = StoneList {
+            stones: vec![(0, 0, 1)],
+        };
         let g = build_axis_graph(&stones, &BuildParams::V1_GEOMETRY);
         assert_eq!(g.n_stones, 1);
         assert!(g.num_nodes() > 1); // 1 stone + legal ring + dummy
@@ -1080,11 +1181,15 @@ mod tests {
         // The oracle takes a dict, so a repeated coord collapses to ONE node
         // with the LAST player. The builder must match on the whole domain.
         let g_dup = build_axis_graph(
-            &StoneList { stones: vec![(0, 0, 1), (2, 0, -1), (0, 0, -1)] },
+            &StoneList {
+                stones: vec![(0, 0, 1), (2, 0, -1), (0, 0, -1)],
+            },
             &BuildParams::V1_GEOMETRY,
         );
         let g_dedup = build_axis_graph(
-            &StoneList { stones: vec![(0, 0, -1), (2, 0, -1)] },
+            &StoneList {
+                stones: vec![(0, 0, -1), (2, 0, -1)],
+            },
             &BuildParams::V1_GEOMETRY,
         );
         assert_eq!(g_dup.n_stones, 2);
@@ -1099,7 +1204,9 @@ mod tests {
     fn verify_contract_dies_loud_on_slot_aliasing() {
         // Two policy rows claiming one slot must panic in every profile: the canonical-slot
         // check makes aliasing-with-honest-geometry impossible, so this duplicates a gather row.
-        let stones = StoneList { stones: vec![(0, 0, 1), (1, 0, -1)] };
+        let stones = StoneList {
+            stones: vec![(0, 0, 1), (1, 0, -1)],
+        };
         let params = BuildParams::V1_GEOMETRY;
         let mut g = build_axis_graph(&stones, &params);
         let idx: Vec<usize> = g
@@ -1123,7 +1230,9 @@ mod tests {
     fn verify_contract_dies_loud_on_edge_attr_permutation() {
         // ADV-8 (the contract's headline semantic payload): an edge_attr row
         // inconsistent with its endpoints' geometry must be a NAMED panic.
-        let stones = StoneList { stones: vec![(0, 0, 1), (1, 0, -1)] };
+        let stones = StoneList {
+            stones: vec![(0, 0, 1), (1, 0, -1)],
+        };
         let params = BuildParams::V1_GEOMETRY;
         let mut g = build_axis_graph(&stones, &params);
         // flip the signed_dist of the first real (non-dummy) edge
@@ -1136,7 +1245,9 @@ mod tests {
     fn slot_and_gather_contract_invariants() {
         // gather rows land in the legal subrange; slots are canonical or the
         // documented off-window sentinel.
-        let stones = StoneList { stones: vec![(0, 0, 1), (1, 0, -1), (0, 1, 1)] };
+        let stones = StoneList {
+            stones: vec![(0, 0, 1), (1, 0, -1), (0, 1, 1)],
+        };
         let g = build_axis_graph(&stones, &BuildParams::V1_GEOMETRY);
         let ns = g.n_stones as usize;
         for (i, &row) in g.legal_node_gather.iter().enumerate() {

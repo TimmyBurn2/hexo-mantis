@@ -16,9 +16,9 @@ _NUM_WARPS = 2
 
 if triton is not None:
     @triton.jit
-    def _message_sum_fwd(xs_ptr, e_ptr, src_ptr, rowptr_ptr, div_ptr, out_ptr, H,
+    def _message_sum_fwd(xs_ptr, e_ptr, src_ptr, rowptr_ptr, div_ptr, code_ptr, out_ptr, H,
                          BLOCK_H: tl.constexpr, BLOCK_E: tl.constexpr, ROUND_BF16: tl.constexpr,
-                         HAS_DIV: tl.constexpr):
+                         HAS_DIV: tl.constexpr, CODED: tl.constexpr):
         v = tl.program_id(0).to(tl.int64)
         start = tl.load(rowptr_ptr + v)
         end = tl.load(rowptr_ptr + v + 1)
@@ -31,7 +31,11 @@ if triton is not None:
             s = tl.load(src_ptr + j, mask=m, other=0)
             m2 = m[:, None] & hm[None, :]
             xv = tl.load(xs_ptr + s[:, None] * H + h[None, :], mask=m2, other=0.0).to(tl.float32)
-            ev = tl.load(e_ptr + j[:, None] * H + h[None, :], mask=m2, other=0.0).to(tl.float32)
+            if CODED:
+                row = tl.load(code_ptr + j, mask=m, other=0).to(tl.int64)
+            else:
+                row = j
+            ev = tl.load(e_ptr + row[:, None] * H + h[None, :], mask=m2, other=0.0).to(tl.float32)
             pre = xv + ev
             if ROUND_BF16:
                 pre = pre.to(tl.bfloat16).to(tl.float32)
@@ -90,15 +94,17 @@ def _div_arg(divisor: Tensor | None, like: Tensor) -> Tensor:
     return like.new_empty(0, dtype=torch.float32) if divisor is None else divisor.reshape(-1).float().contiguous()
 
 
-def message_sum(xs: Tensor, e: Tensor, src: Tensor, rowptr: Tensor, divisor: Tensor | None) -> Tensor:
-    """`out[v] = round(Σ_{dst-sorted edges j of v} relu(round(xs[src_j] + e_j)) / divisor[v])`, fp32 inside."""
+def message_sum(xs: Tensor, e: Tensor, src: Tensor, rowptr: Tensor, divisor: Tensor | None,
+                code: Tensor | None = None) -> Tensor:
+    """`out[v] = round(Σ_{dst-sorted edges j of v} relu(round(xs[src_j] + e_j)) / divisor[v])`, fp32 inside; `e_j` is `e[code[j]]` given `code`."""
     n, h = xs.shape
     out = torch.empty((n, h), dtype=xs.dtype, device=xs.device)
     if n:
-        _message_sum_fwd[(n,)](xs.contiguous(), e.contiguous(), src, rowptr, _div_arg(divisor, xs), out, h,
+        _message_sum_fwd[(n,)](xs.contiguous(), e.contiguous(), src, rowptr, _div_arg(divisor, xs),
+                               src if code is None else code, out, h,
                                BLOCK_H=triton.next_power_of_2(h), BLOCK_E=_BLOCK_E,
                                ROUND_BF16=xs.dtype == torch.bfloat16, HAS_DIV=divisor is not None,
-                               num_warps=_NUM_WARPS)
+                               CODED=code is not None, num_warps=_NUM_WARPS)
     return out
 
 

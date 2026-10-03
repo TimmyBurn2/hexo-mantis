@@ -555,16 +555,21 @@ def collate_pack(
     current_player: numpy.ndarray,
     out_x: numpy.ndarray,
     out_edge_index: numpy.ndarray,
-    out_edge_attr: numpy.ndarray,
+    out_edge_attr: numpy.ndarray | None,
+    out_edge_code: numpy.ndarray | None,
     out_legal_offsets: numpy.ndarray,
     out_legal_node_gather: numpy.ndarray,
     out_node_offsets: numpy.ndarray,
     out_n_stones: numpy.ndarray,
     node_feat_dim: int,
     edge_feat_dim: int,
+    win_length: int,
     threads: int,
 ) -> tuple[str, str] | None:
     """Graph-wire checks 4-13 and the pack into the `out_*` views, GIL released; a refusal is `(class, message)`; RuntimeError on a wiring break."""
+    ...
+def edge_vocabulary(win_length: int) -> numpy.ndarray:
+    """Every edge_attr row the builder can emit at `win_length`, flat `(V * 5,)` in code order."""
     ...
 def mcts_pool_overflow_count() -> int: ...
 def mcts_max_armed_sims() -> int:

@@ -162,7 +162,7 @@ class SentinelGraphNet(torch.nn.Module):
         self.calls: list[tuple[int, int]] = []
         self._oom_on_call = oom_on_call
 
-    def forward_batch(self, x, edge_index, edge_attr, legal_index, stone_mask, node_offsets):
+    def forward_batch(self, x, edge_index, edge_attr, legal_index, stone_mask, node_offsets, edge_vocab=None):
         self.calls.append((int(x.shape[0]), int(edge_index.shape[1])))
         if self._oom_on_call is not None and len(self.calls) == self._oom_on_call:
             raise torch.cuda.OutOfMemoryError(
@@ -326,7 +326,7 @@ class FiniteGraphNet(torch.nn.Module):
         self.nonfinite = nonfinite
         self.calls: list[tuple[int, ...]] = []
 
-    def forward_batch(self, x, edge_index, edge_attr, legal_index, stone_mask, node_offsets):
+    def forward_batch(self, x, edge_index, edge_attr, legal_index, stone_mask, node_offsets, edge_vocab=None):
         self.calls.append(tuple(x.shape))
         n_legal = int(legal_index.numel())  # rows, not a dense mask
         b = int(node_offsets.shape[0]) - 1

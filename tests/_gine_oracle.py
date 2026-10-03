@@ -16,7 +16,9 @@ SumFn = Callable[[Tensor, Tensor, int, "Tensor | None"], Tensor]
 def forward_with(sum_fn: SumFn) -> Callable[..., Tensor]:
     """`_GINEConv.forward` with its message, gather and update as at fc37f3f2 and the aggregation swapped for `sum_fn`."""
     def forward(self: _GINEConv, x: Tensor, edge_index: Tensor, edge_attr: Tensor,
-                agg_divisor: Tensor | None = None, rowptr: Tensor | None = None) -> Tensor:
+                agg_divisor: Tensor | None = None, rowptr: Tensor | None = None,
+                edge_code: Tensor | None = None) -> Tensor:
+        assert edge_code is None, "the oracles model the per-edge path; a coded forward has no oracle here"
         n = x.shape[0]
         if edge_index.shape[1] == 0:
             agg = x.new_zeros((n, x.shape[1]))
@@ -72,7 +74,9 @@ def index_add_aggregation() -> AbstractContextManager[None]:
 def capturing(into: list[tuple[Tensor, Tensor, Tensor, Tensor, int, Tensor | None]]) -> AbstractContextManager[None]:
     """The bf16 `index_add_` aggregation, appending each layer's real `(xs, e, src, dst, n, divisor)` to `into` on the host."""
     def forward(self: _GINEConv, x: Tensor, edge_index: Tensor, edge_attr: Tensor,
-                agg_divisor: Tensor | None = None, rowptr: Tensor | None = None) -> Tensor:
+                agg_divisor: Tensor | None = None, rowptr: Tensor | None = None,
+                edge_code: Tensor | None = None) -> Tensor:
+        assert edge_code is None, "the oracles model the per-edge path; a coded forward has no oracle here"
         if edge_index.shape[1] > 0:
             e = self.lin(edge_attr)
             into.append((x.to(e.dtype).detach().cpu(), e.detach().cpu(), edge_index[0].cpu(), edge_index[1].cpu(),
