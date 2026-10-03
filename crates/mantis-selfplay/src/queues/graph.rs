@@ -372,23 +372,14 @@ impl GraphQueue {
     }
 }
 
-/// Build one leaf's axis graph from its stones, running the seam guards.
-///
-/// Returns `Result<AxisGraph, String>` so the build error REASON can travel to the failed waiter.
-/// The guard messages are VERBATIM:
-/// `current_player` and each stone player in {-1, +1}; `moves_remaining` in [0, 255] before the
-/// `u8` cast; each stone's `|q|,|r|` below `i32::MAX - radius`.
-///
-/// # Errors
-/// Returns `Err(reason)` on any seam-guard violation or a non-native builder tag.
-pub fn build_leaf_graph(
+/// The seam guards on one leaf request, VERBATIM: players in {-1, +1}, `moves_remaining` in [0, 255] before
+/// the `u8` cast, each stone's `|q|,|r|` below `i32::MAX - radius`; `Err(reason)` names the first violation.
+pub fn check_leaf_request(
     stones: &[(i64, i64, i64)],
     current_player: i64,
     moves_remaining: i64,
-    win_length: u8,
     radius: u16,
-    trunk_size: i32,
-) -> Result<AxisGraph, String> {
+) -> Result<(), String> {
     if current_player != 1 && current_player != -1 {
         return Err(format!(
             "graph request: current_player {current_player} out of range (expected +1 / -1)"
@@ -401,7 +392,6 @@ pub fn build_leaf_graph(
         ));
     }
     let bound = i64::from(i32::MAX) - i64::from(radius) - 1;
-    let mut typed: Vec<(i32, i32, i8)> = Vec::with_capacity(stones.len());
     for &(q, r, p) in stones {
         if q.abs() > bound || r.abs() > bound {
             return Err(format!(
@@ -414,8 +404,27 @@ pub fn build_leaf_graph(
                 "graph request: stone player {p} out of range (expected +1 / -1)"
             ));
         }
-        typed.push((q as i32, r as i32, p as i8));
     }
+    Ok(())
+}
+
+/// Build one leaf's axis graph from its stones, after [`check_leaf_request`]'s seam guards.
+///
+/// # Errors
+/// Returns `Err(reason)` on any seam-guard violation or a non-native builder tag.
+pub fn build_leaf_graph(
+    stones: &[(i64, i64, i64)],
+    current_player: i64,
+    moves_remaining: i64,
+    win_length: u8,
+    radius: u16,
+    trunk_size: i32,
+) -> Result<AxisGraph, String> {
+    check_leaf_request(stones, current_player, moves_remaining, radius)?;
+    let typed: Vec<(i32, i32, i8)> = stones
+        .iter()
+        .map(|&(q, r, p)| (q as i32, r as i32, p as i8))
+        .collect();
     let params = BuildParams {
         win_length,
         radius,

@@ -286,7 +286,6 @@ class InferenceBatcher:
     def eval_cache_keys(
         self,
         positions: list[tuple[list[tuple[int, int, int]], int, int]],
-        n_threads: int = 1,
     ) -> list[str]: ...
 
 # --------------------------------------------------------------------------- #

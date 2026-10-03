@@ -7,8 +7,11 @@ pub mod eval_cache;
 pub mod graph;
 pub mod wire;
 
-pub use eval_cache::{CachedEval, EvalCache, GraphKey, EVAL_CACHE_BYTES, EVAL_CACHE_CAPACITY};
+pub use eval_cache::{
+    CachedEval, EvalCache, LeafKey, EVAL_CACHE_BYTES, EVAL_CACHE_CAPACITY, EVAL_CACHE_SHARDS,
+};
 pub use graph::{
-    build_leaf_graph, build_leaf_graphs_batch, saturation_threshold, GraphQueue, LeafRequest,
+    build_leaf_graph, build_leaf_graphs_batch, check_leaf_request, saturation_threshold,
+    GraphQueue, LeafRequest,
 };
 pub use wire::{GraphWire, GraphWireArrays, WireAlreadyConsumed};

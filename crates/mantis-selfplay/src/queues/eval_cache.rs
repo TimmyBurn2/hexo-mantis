@@ -1,71 +1,50 @@
-//! The per-net eval cache: a leaf whose hashed `AxisGraph` this net version already evaluated replays it.
+//! The per-net eval cache: a leaf whose position this net version already evaluated replays it, unbuilt.
 
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
 use fxhash::FxHashMap;
-use mantis_graph::AxisGraph;
+use mantis_core::board::zobrist::splitmix64_next;
+use mantis_graph::BUILDER_IMPL_NATIVE;
 use mantis_search::LegalSetPolicy;
-use sha2::{Digest, Sha256};
 
 use crate::poison::lock_or_recover;
+use crate::queues::graph::check_leaf_request;
 
 /// Entries across all shards.
 pub const EVAL_CACHE_CAPACITY: usize = 32_768;
 /// Bytes across all shards, counted per entry by [`CachedEval::bytes`].
 pub const EVAL_CACHE_BYTES: usize = 256 << 20;
-const SHARDS: usize = 16;
+/// Shards the cache splits its entries and bytes over, by key.
+pub const EVAL_CACHE_SHARDS: usize = 16;
 
-/// The identity of one encoded input: a SHA-256 prefix over every `AxisGraph` field.
+/// The identity of one leaf's evaluation: a Zobrist key over every input `build_leaf_graph` reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct GraphKey(u128);
+pub struct LeafKey(u128);
 
-impl GraphKey {
-    /// The digest of every field of `g`, each length-prefixed so no two layouts share bytes.
-    #[must_use]
-    pub fn of(g: &AxisGraph) -> Self {
-        // Destructured, so a field added to the encoded input fails to compile until it is keyed.
-        let AxisGraph {
-            node_feat,
-            edge_index,
-            edge_attr,
-            legal_mask,
-            stone_mask,
-            policy_scatter_index,
-            node_coords,
-            legal_node_gather,
-            n_stones,
-            n_nodes_checksum,
-            window_center,
-            current_player,
-            builder_impl,
-        } = g;
-        let mut buf: Vec<u8> = Vec::with_capacity(
-            4 * (node_feat.0.len() + edge_attr.0.len() + 2 * edge_index.src.len())
-                + 4 * (policy_scatter_index.0.len() + node_coords.len() + legal_node_gather.len())
-                + legal_mask.len()
-                + stone_mask.len()
-                + 128,
-        );
-        put_words(&mut buf, node_feat.0.iter().map(|x| x.to_bits()));
-        put_words(&mut buf, edge_index.src.iter().copied());
-        put_words(&mut buf, edge_index.dst.iter().copied());
-        put_words(&mut buf, edge_attr.0.iter().map(|x| x.to_bits()));
-        put_words(&mut buf, legal_mask.iter().map(|&b| u32::from(b)));
-        put_words(&mut buf, stone_mask.iter().map(|&b| u32::from(b)));
-        put_words(&mut buf, policy_scatter_index.0.iter().map(|&x| x as u32));
-        put_words(&mut buf, node_coords.iter().map(|&x| x as u32));
-        put_words(&mut buf, legal_node_gather.iter().copied());
-        buf.extend_from_slice(&n_stones.to_le_bytes());
-        buf.extend_from_slice(&n_nodes_checksum.to_le_bytes());
-        buf.extend_from_slice(&window_center.0.to_le_bytes());
-        buf.extend_from_slice(&window_center.1.to_le_bytes());
-        buf.extend_from_slice(&current_player.to_le_bytes());
-        buf.push(*builder_impl);
-        let digest = Sha256::digest(&buf);
-        let mut prefix = [0u8; 16];
-        prefix.copy_from_slice(&digest[..16]);
-        Self(u128::from_le_bytes(prefix))
+impl LeafKey {
+    /// The key of `build_leaf_graph`'s request after its seam guards; `Err` is the builder's own refusal, verbatim.
+    pub fn of(
+        stones: &[(i64, i64, i64)],
+        current_player: i64,
+        moves_remaining: i64,
+        win_length: u8,
+        radius: u16,
+        trunk_size: i32,
+    ) -> Result<Self, String> {
+        check_leaf_request(stones, current_player, moves_remaining, radius)?;
+        let geometry = u64::from(win_length)
+            | (u64::from(radius) << 8)
+            | (u64::from(trunk_size as u32) << 24)
+            | (u64::from(BUILDER_IMPL_NATIVE) << 56);
+        let mut key = word(SIDE_TAG, current_player as u64)
+            ^ word(LEFT_TAG, moves_remaining as u64)
+            ^ word(GEOMETRY_TAG, geometry);
+        // An XOR over the stones: order-free; the stones must be distinct cells, as a `Board`'s are (a pair cancels).
+        for &(q, r, p) in stones {
+            key ^= stone_word(q, r, p);
+        }
+        Ok(Self(key))
     }
 
     /// The key as 32 lowercase hex digits.
@@ -75,16 +54,29 @@ impl GraphKey {
     }
 
     fn shard(self) -> usize {
-        (self.0 % SHARDS as u128) as usize
+        (self.0 % EVAL_CACHE_SHARDS as u128) as usize
     }
 }
 
-/// Appends a length prefix and then each word little-endian.
-fn put_words(buf: &mut Vec<u8>, words: impl ExactSizeIterator<Item = u32>) {
-    buf.extend_from_slice(&(words.len() as u64).to_le_bytes());
-    for w in words {
-        buf.extend_from_slice(&w.to_le_bytes());
-    }
+/// One stone's word, injective by construction: the low half a bijection of the cell, the high half of cell and owner.
+fn stone_word(q: i64, r: i64, player: i64) -> u128 {
+    let cell = (u64::from(q as u32) << 32) | u64::from(r as u32);
+    let (mut low, mut high) = (cell, cell ^ if player == 1 { P1_TAG } else { P2_TAG });
+    (u128::from(splitmix64_next(&mut high)) << 64) | u128::from(splitmix64_next(&mut low))
+}
+
+const P1_TAG: u64 = 0x5031_5354_4f4e_4501;
+const P2_TAG: u64 = 0x5032_5354_4f4e_4502;
+const SIDE_TAG: u64 = 0x5349_4445_0000_0001;
+const LEFT_TAG: u64 = 0x4c45_4654_0000_0002;
+const GEOMETRY_TAG: u64 = 0x4745_4f4d_0000_0003;
+
+/// A 128-bit word for `value` under `tag`, from two draws of one splitmix64 stream.
+fn word(tag: u64, value: u64) -> u128 {
+    let mut state = tag ^ value.wrapping_mul(0x9e37_79b9_7f4a_7c15);
+    let lo = splitmix64_next(&mut state);
+    let hi = splitmix64_next(&mut state);
+    (u128::from(hi) << 64) | u128::from(lo)
 }
 
 /// One served evaluation: the policy row, the value and the builder's window centre.
@@ -107,7 +99,7 @@ impl CachedEval {
         };
         let overflow_slot = std::mem::size_of::<((i32, i32), f32)>() + 1;
         std::mem::size_of::<Self>()
-            + 2 * std::mem::size_of::<GraphKey>()
+            + 2 * std::mem::size_of::<LeafKey>()
             + self.policy.dense.capacity() * std::mem::size_of::<f32>()
             + buckets * overflow_slot
             + 16
@@ -118,8 +110,8 @@ impl CachedEval {
 struct Shard {
     version: u64,
     bytes: usize,
-    map: FxHashMap<GraphKey, CachedEval>,
-    order: VecDeque<GraphKey>,
+    map: FxHashMap<LeafKey, CachedEval>,
+    order: VecDeque<LeafKey>,
 }
 
 impl Shard {
@@ -144,9 +136,11 @@ impl EvalCache {
     #[must_use]
     pub fn new(capacity: usize, byte_budget: usize) -> Self {
         Self {
-            shards: (0..SHARDS).map(|_| Mutex::new(Shard::default())).collect(),
-            per_shard: capacity / SHARDS,
-            per_shard_bytes: byte_budget / SHARDS,
+            shards: (0..EVAL_CACHE_SHARDS)
+                .map(|_| Mutex::new(Shard::default()))
+                .collect(),
+            per_shard: capacity / EVAL_CACHE_SHARDS,
+            per_shard_bytes: byte_budget / EVAL_CACHE_SHARDS,
         }
     }
 
@@ -156,7 +150,7 @@ impl EvalCache {
 
     /// The evaluation `key` received under net `version`, if this cache holds it.
     #[must_use]
-    pub fn get(&self, key: GraphKey, version: u64) -> Option<CachedEval> {
+    pub fn get(&self, key: LeafKey, version: u64) -> Option<CachedEval> {
         if self.off() {
             return None;
         }
@@ -168,7 +162,7 @@ impl EvalCache {
     }
 
     /// Stores `eval` under `version`; a newer version clears the shard, an entry past its budget is refused.
-    pub fn put(&self, key: GraphKey, version: u64, eval: CachedEval) {
+    pub fn put(&self, key: LeafKey, version: u64, eval: CachedEval) {
         let size = eval.bytes();
         if self.off() || size > self.per_shard_bytes {
             return;

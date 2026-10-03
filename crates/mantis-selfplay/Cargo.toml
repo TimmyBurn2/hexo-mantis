@@ -27,7 +27,6 @@ mantis-search = { path = "../mantis-search" }
 half = "2"
 # HEXG sample vmap (FxHashMap over rotated visit-map keys).
 fxhash = "0.2"
-sha2 = "0.10"
 # HARD pin: major MUST match mantis-search (StdRng via chacha20 + rand_core 0.10).
 # A silent resolve to rand 0.9 breaks the fixed-seed sample streams the bench +
 # O-31 depend on.
@@ -38,6 +37,8 @@ criterion = { workspace = true }
 # `Board::from_stones` static-position builder for the ported in-src record
 # tests (o1/ls/dws3) — test-only, additive, OFF for `cargo build` (R2 clean).
 mantis-core = { path = "../mantis-core", features = ["test-fixtures"] }
+# The SHA-256 over the built graph that keyed the cache before the position key: the drive pin's oracle.
+sha2 = "0.10"
 
 # WP6 Metric (1) — the gated build_leaf_graph microbench (WP6-owned wrapper).
 [[bench]]

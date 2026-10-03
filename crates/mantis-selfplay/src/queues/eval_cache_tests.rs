@@ -14,83 +14,136 @@ fn eval(v: f32, dense: usize) -> CachedEval {
     }
 }
 
-fn graph(stones: &[(i64, i64, i64)], player: i64, moves_remaining: i64) -> AxisGraph {
-    build_leaf_graph(stones, player, moves_remaining, 6, 6, 19).expect("a legal test position")
+fn key(n: u128) -> LeafKey {
+    LeafKey(n)
 }
 
-fn key(n: u128) -> GraphKey {
-    GraphKey(n)
+/// One `build_leaf_graph` request, every input it reads.
+#[derive(Clone)]
+struct Request {
+    stones: Vec<(i64, i64, i64)>,
+    player: i64,
+    left: i64,
+    win_length: u8,
+    radius: u16,
+    trunk: i32,
 }
 
-#[test]
-fn the_same_encoded_input_is_the_same_key_in_any_stone_order() {
-    let a = graph(&[(0, 0, 1), (1, 0, -1), (0, 1, -1)], 1, 2);
-    let b = graph(&[(0, 1, -1), (0, 0, 1), (1, 0, -1)], 1, 2);
-    assert_eq!(GraphKey::of(&a), GraphKey::of(&b));
-}
-
-/// The planted-incomplete-key control: every field of the encoded input must move the key.
-#[test]
-fn every_field_of_the_encoded_input_moves_the_key() {
-    let base = graph(&[(0, 0, 1), (1, 0, -1), (0, 1, -1)], 1, 2);
-    let k = GraphKey::of(&base);
-    let mut arms: Vec<(&str, AxisGraph)> = Vec::new();
-    let mut g = base.clone();
-    g.node_feat.0[0] += 1.0;
-    arms.push(("node_feat", g));
-    let mut g = base.clone();
-    g.edge_index.src[0] ^= 1;
-    arms.push(("edge_index.src", g));
-    let mut g = base.clone();
-    g.edge_index.dst[0] ^= 1;
-    arms.push(("edge_index.dst", g));
-    let mut g = base.clone();
-    g.edge_attr.0[0] += 1.0;
-    arms.push(("edge_attr", g));
-    let mut g = base.clone();
-    g.legal_mask[0] = !g.legal_mask[0];
-    arms.push(("legal_mask", g));
-    let mut g = base.clone();
-    g.stone_mask[0] = !g.stone_mask[0];
-    arms.push(("stone_mask", g));
-    let mut g = base.clone();
-    g.policy_scatter_index.0[0] += 1;
-    arms.push(("policy_scatter_index", g));
-    let mut g = base.clone();
-    g.node_coords[0] += 1;
-    arms.push(("node_coords", g));
-    let mut g = base.clone();
-    g.legal_node_gather[0] += 1;
-    arms.push(("legal_node_gather", g));
-    let mut g = base.clone();
-    g.n_stones += 1;
-    arms.push(("n_stones", g));
-    let mut g = base.clone();
-    g.n_nodes_checksum += 1;
-    arms.push(("n_nodes_checksum", g));
-    let mut g = base.clone();
-    g.window_center.0 += 1;
-    arms.push(("window_center.q", g));
-    let mut g = base.clone();
-    g.window_center.1 += 1;
-    arms.push(("window_center.r", g));
-    let mut g = base.clone();
-    g.current_player = -g.current_player;
-    arms.push(("current_player", g));
-    let mut g = base.clone();
-    g.builder_impl ^= 1;
-    arms.push(("builder_impl", g));
-    for (field, g) in &arms {
-        assert_ne!(GraphKey::of(g), k, "{field} does not move the key");
+fn request() -> Request {
+    Request {
+        stones: vec![(0, 0, 1), (1, 0, -1), (0, 1, -1)],
+        player: 1,
+        left: 2,
+        win_length: 6,
+        radius: 6,
+        trunk: 19,
     }
 }
 
+fn leaf_key(r: &Request) -> LeafKey {
+    LeafKey::of(&r.stones, r.player, r.left, r.win_length, r.radius, r.trunk)
+        .expect("a legal request")
+}
+
+/// Request pairs that differ in ONE builder input each, named by it.
+fn one_input_apart() -> Vec<(&'static str, Request, Request)> {
+    let base = request();
+    let with = |f: &dyn Fn(&mut Request)| {
+        let mut r = base.clone();
+        f(&mut r);
+        r
+    };
+    vec![
+        (
+            "stone added",
+            base.clone(),
+            with(&|r| r.stones.push((2, -1, 1))),
+        ),
+        ("stone moved", base.clone(), with(&|r| r.stones[0].0 += 1)),
+        // Off the ±9 table a seed of `q·M1 ^ r·M2` keys a cell like its reflection: the pair that showed it.
+        (
+            "stone reflected off the table",
+            with(&|r| r.stones.push((1, 10, 1))),
+            with(&|r| r.stones.push((-1, -10, 1))),
+        ),
+        ("stone owner", base.clone(), with(&|r| r.stones[0].2 = -1)),
+        ("current_player", base.clone(), with(&|r| r.player = -1)),
+        ("moves_remaining", base.clone(), with(&|r| r.left = 1)),
+        ("win_length", base.clone(), with(&|r| r.win_length = 5)),
+        ("radius", base.clone(), with(&|r| r.radius = 8)),
+        ("trunk_size", base.clone(), with(&|r| r.trunk = 21)),
+    ]
+}
+
+/// The first pair `key` gives one key; `None` when it separates them all.
+fn first_unseparated(key: &dyn Fn(&Request) -> LeafKey) -> Option<&'static str> {
+    one_input_apart()
+        .into_iter()
+        .find(|(_, a, b)| key(a) == key(b))
+        .map(|(name, _, _)| name)
+}
+
 #[test]
-fn positions_one_stone_or_one_side_apart_are_different_keys() {
-    let stones = [(0, 0, 1), (1, 0, -1), (0, 1, -1)];
-    let k = GraphKey::of(&graph(&stones, 1, 2));
-    assert_ne!(k, GraphKey::of(&graph(&stones, 1, 1)));
-    assert_ne!(k, GraphKey::of(&graph(&stones[..2], 1, 2)));
+fn the_key_separates_every_input_the_builder_reads() {
+    let build = |r: &Request| {
+        build_leaf_graph(&r.stones, r.player, r.left, r.win_length, r.radius, r.trunk)
+            .expect("legal")
+    };
+    for (name, a, b) in one_input_apart() {
+        assert_ne!(
+            build(&a),
+            build(&b),
+            "{name} is not an input of the built graph"
+        );
+    }
+    assert_eq!(first_unseparated(&leaf_key), None);
+}
+
+/// PLANTED BREAK: a key that omits `moves_remaining` must red on the pair that differs only there.
+#[test]
+fn a_key_blind_to_moves_remaining_is_caught() {
+    let blind = |r: &Request| {
+        LeafKey::of(&r.stones, r.player, 0, r.win_length, r.radius, r.trunk).expect("legal")
+    };
+    assert_eq!(first_unseparated(&blind), Some("moves_remaining"));
+}
+
+#[test]
+fn one_position_in_any_stone_order_is_one_key() {
+    let a = request();
+    let mut b = request();
+    b.stones.reverse();
+    assert_eq!(leaf_key(&a), leaf_key(&b));
+}
+
+#[test]
+fn the_key_refuses_exactly_what_the_builder_refuses() {
+    let base = request();
+    let bad = [
+        Request {
+            player: 0,
+            ..base.clone()
+        },
+        Request {
+            left: 256,
+            ..base.clone()
+        },
+        Request {
+            stones: vec![(0, 0, 2)],
+            ..base.clone()
+        },
+        Request {
+            stones: vec![(i64::from(i32::MAX), 0, 1)],
+            ..base
+        },
+    ];
+    for r in &bad {
+        let built = build_leaf_graph(&r.stones, r.player, r.left, r.win_length, r.radius, r.trunk)
+            .expect_err("the builder refuses");
+        let keyed = LeafKey::of(&r.stones, r.player, r.left, r.win_length, r.radius, r.trunk)
+            .expect_err("the key refuses");
+        assert_eq!(keyed, built);
+    }
 }
 
 /// The stale-version control: an entry is served only under the version that computed it.
@@ -123,18 +176,22 @@ fn a_newer_version_drops_the_older_entries() {
 
 #[test]
 fn the_entry_count_never_exceeds_the_capacity() {
-    let cache = EvalCache::new(SHARDS * 4, EVAL_CACHE_BYTES);
+    let cache = EvalCache::new(EVAL_CACHE_SHARDS * 4, EVAL_CACHE_BYTES);
     for i in 0..10_000u128 {
         cache.put(key(i), 0, eval(0.0, 4));
     }
-    assert!(cache.len() <= SHARDS * 4, "held {} entries", cache.len());
+    assert!(
+        cache.len() <= EVAL_CACHE_SHARDS * 4,
+        "held {} entries",
+        cache.len()
+    );
     assert!(!cache.is_empty());
 }
 
 #[test]
 fn the_byte_budget_is_enforced_at_insert() {
     let one = eval(0.0, 362).bytes();
-    let budget = SHARDS * one * 3;
+    let budget = EVAL_CACHE_SHARDS * one * 3;
     let cache = EvalCache::new(EVAL_CACHE_CAPACITY, budget);
     for i in 0..10_000u128 {
         cache.put(key(i), 0, eval(0.0, 362));

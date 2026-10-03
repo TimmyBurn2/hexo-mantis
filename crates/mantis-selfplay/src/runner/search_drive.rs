@@ -21,7 +21,7 @@ use mantis_search::{
 };
 
 use crate::poison::lock_or_recover;
-use crate::queues::{build_leaf_graph, CachedEval, GraphKey, GraphQueue};
+use crate::queues::{build_leaf_graph, CachedEval, GraphQueue, LeafKey};
 use crate::records;
 use crate::replay::hexg::GraphRecord;
 
@@ -281,8 +281,8 @@ fn select_for(
     }
 }
 
-/// Builds ONE axis graph per evaluated leaf, replays the eval cache's hits, submits the misses in
-/// ONE `submit_graphs_and_wait`, and expands against the BUILDER's per-leaf `window_center`.
+/// Keys each evaluated leaf by its position, replays the cache's hits, builds ONE axis graph per miss,
+/// submits the misses in ONE `submit_graphs_and_wait`, and expands against the BUILDER's `window_center`.
 /// Returns `(served leaves, unserved descents)`: a descent can end at the table or at a decided leaf.
 ///
 /// # Errors
@@ -313,7 +313,7 @@ fn infer_and_expand_graph(
     let version = infer.model_version.load(Ordering::Acquire);
     let cache = infer.graph_queue.eval_cache();
     let mut served: Vec<Option<CachedEval>> = Vec::with_capacity(leaves.len());
-    let mut miss_keys: Vec<(usize, GraphKey)> = Vec::new();
+    let mut miss_keys: Vec<(usize, LeafKey)> = Vec::new();
     let mut graphs = Vec::new();
     for (i, leaf) in leaves.iter().enumerate() {
         // Order is irrelevant: the builder coordinate-sorts. `Cell`/`Player` are `#[repr(i8)]`.
@@ -323,31 +323,32 @@ fn infer_and_expand_graph(
             .collect();
         let current_player = leaf.current_player as i64;
         let moves_remaining = i64::from(leaf.moves_remaining);
-        let g = match build_leaf_graph(
+        // Seam guard tripped (unreachable for a valid self-play board). NOT routed through
+        // `seam_or_shutdown`: a build guard is a pure function of the board, so a closed
+        // queue cannot cause it and cannot excuse it. The key runs the builder's guards first.
+        let built = |reason| InferenceSeamFailure::new("graph", "build_leaf_graph", reason);
+        let key = LeafKey::of(
             &stones,
             current_player,
             moves_remaining,
             win_length,
             radius,
             agg_trunk_sz,
-        ) {
-            Ok(g) => g,
-            // Seam guard tripped (unreachable for a valid self-play board). NOT routed through
-            // `seam_or_shutdown`: a build guard is a pure function of the board, so a closed
-            // queue cannot cause it and cannot excuse it.
-            Err(reason) => {
-                return Err(InferenceSeamFailure::new(
-                    "graph",
-                    "build_leaf_graph",
-                    reason,
-                ))
-            }
-        };
-        let key = GraphKey::of(&g);
+        )
+        .map_err(built)?;
         if let Some(hit) = cache.get(key, version) {
             served.push(Some(hit));
             continue;
         }
+        let g = build_leaf_graph(
+            &stones,
+            current_player,
+            moves_remaining,
+            win_length,
+            radius,
+            agg_trunk_sz,
+        )
+        .map_err(built)?;
         served.push(None);
         miss_keys.push((i, key));
         graphs.push(g);
@@ -1127,3 +1128,7 @@ mod explore_gate_tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "leaf_key_drive_tests.rs"]
+mod leaf_key_drive_tests;
