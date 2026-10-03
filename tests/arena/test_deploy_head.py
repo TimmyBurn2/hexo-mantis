@@ -57,7 +57,25 @@ def _head(kind: str, **over):
 
 
 def _board():
-    return Board.with_encoding_name("gnn_axis_v1")
+    """The board after the origin stone: an empty board is played unsearched, so a search test starts one ply in."""
+    board = Board.with_encoding_name("gnn_axis_v1")
+    board.apply_move(0, 0)
+    return board
+
+
+@pytest.mark.parametrize("kind", ["puct", "gumbel"])
+def test_on_an_empty_board_the_head_plays_the_origin_unsearched(kind: str):
+    """The first stone is the origin, as the official rule plays it: no search runs and no budget is spent."""
+    calls = []
+
+    def counting(board, _calls=calls):
+        _calls.append(1)
+        return _uniform_infer(board)
+
+    player = _head(kind, expand_fn=dense_expand(counting))
+    player.new_game()
+    assert player.select_move(Board.with_encoding_name("gnn_axis_v1")) == (0, 0)
+    assert (player.last_root, player.last_sims, calls) == (None, 0, [])
 
 
 @pytest.mark.parametrize("kind", ["puct", "gumbel"])

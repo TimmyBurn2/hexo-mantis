@@ -89,6 +89,7 @@ def test_the_trace_is_in_p1s_perspective_with_gaps_for_the_unsearched_and_termin
     assert [r["ply"] for r in rows] == [0, 1, 2, 3]
     assert rows[1]["to_move"] == "p2" and rows[1]["raw"] == pytest.approx(-0.01) and rows[1]["root"] is None
     rows = instruments.trace(eng, [(0, 0), (1, 0)], 4)
+    assert rows[0]["root"] is None and rows[0]["raw"] is not None, "ply 0 is the origin, played unsearched"
     assert rows[2]["to_move"] == "p2", "p2 still holds the turn's second stone at ply 2"
     assert rows[2]["root"] == pytest.approx(-0.25) and rows[2]["ms"] == 2.0
     rows = instruments.trace(eng, positions["SIX"], 0)

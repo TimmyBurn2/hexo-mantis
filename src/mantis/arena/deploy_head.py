@@ -126,16 +126,21 @@ class DeployHeadPlayer:
     def select_move(self, board: Any) -> tuple[int, int]:
         """Search `n_sims` DESCENTS and return the move this run's search kind picks.
 
-        The budget counts every descent, the root's own among them: leaves RETURNED, inline descents and table hits;
-        armed tactics play a decided root stone unsearched, and the audit may swap the searched move for a hold.
+        The budget counts every descent, the root's own among them: leaves RETURNED, inline descents and table hits; an
+        empty board plays the origin, armed tactics a decided stone, both unsearched; the audit may swap in a hold.
 
         Raises:
             ValueError: no root children to pick from, or armed tactics at a radius below 5.
             RuntimeError: the root's tactics refused (`MCTSTree.root_offence`).
         """
+        self.last_tactics = None
+        if not board.get_stones():
+            # The first stone is the origin, as the official rule plays it.
+            self.last_root, self.last_sims = None, 0
+            self._move_index += 1
+            return (0, 0)
         tree = self._tree if self._tree is not None else self._fresh_tree()
         self._tree = tree
-        self.last_tactics = None
         tree.new_game(board)
         decided = tree.root_offence() if self._tactics is not None else None
         if decided is not None:

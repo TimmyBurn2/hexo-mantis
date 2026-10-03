@@ -16,6 +16,8 @@ def test_the_head_reads_the_solver_override_on_a_win1_position_in_the_movers_vie
     assert one["perspective"] == "to_move" and one["position"]["to_move"] == "p1"
     assert one["search"]["root_value"] == pytest.approx(1.0), "1 leaf: the root's own value is the quiescence override"
     assert one["search"]["quiescence_fires"] >= 1
+    empty = analysis.analyze(mantis_engine, [], 16)
+    assert empty["search"] == {"absent": "an empty board: the deploy head plays the origin unsearched"}
     sixteen = analysis.analyze(mantis_engine, positions["WIN1"], 16)
     assert sixteen["search"]["root_value"] > 0.5
     assert -1.0 <= sixteen["raw"]["value"] <= 1.0 and sixteen["raw"]["derivation"].startswith("quiescence-off")

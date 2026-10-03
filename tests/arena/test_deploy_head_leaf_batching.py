@@ -42,7 +42,9 @@ def _play_one_move(*, n_sims: int, leaf_batch_size: int) -> tuple[list[int], Dep
         expand_fn=_counting_expand_fn(calls), n_sims=n_sims, leaf_batch_size=leaf_batch_size, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None, puct=MINTED_PUCT,
     )
     player.new_game()
-    player.select_move(Board.with_encoding_name(_ENCODING))
+    board = Board.with_encoding_name(_ENCODING)
+    board.apply_move(0, 0)  # an empty board is played unsearched
+    player.select_move(board)
     return calls, player
 
 

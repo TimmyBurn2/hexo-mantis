@@ -83,7 +83,7 @@ def trace(engine: Any, moves: list[tuple[int, int]], sims: int) -> list[dict[str
         raw = engine.raw_read(pos.board)
         row: dict[str, Any] = {"ply": ply, "to_move": to_move, "raw": round(p1_view(raw.value, to_move), 4),
                                "root": None}
-        if sims >= 1:
+        if sims >= 1 and ply > 0:  # ply 0 is the origin, played unsearched
             s = engine.search(pos.board, sims)
             row["root"] = round(p1_view(s.root_value, to_move), 4)
             row["ms"] = round(s.ms, 1)

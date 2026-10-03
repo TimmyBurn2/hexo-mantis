@@ -79,8 +79,10 @@ def analyze(engine: Any, moves: list[tuple[int, int]], sims: int, *, symmetry: b
                    symmetry=absent if symmetry else {"absent": "not requested"})
     else:
         raw = raw_record(engine.raw_read(pos.board), engine.raw_derivation)
-        search: dict[str, Any] = (search_record(engine.search(pos.board, sims), sims, engine.head_derivation)
-                                  if sims >= 1 else {"absent": "sims=0 (raw only)"})
+        search: dict[str, Any] = (
+            {"absent": "sims=0 (raw only)"} if sims < 1
+            else {"absent": "an empty board: the deploy head plays the origin unsearched"} if not moves
+            else search_record(engine.search(pos.board, sims), sims, engine.head_derivation))
         rec.update(raw=raw, search=search,
                    tactics=tactics_record(pos.board, engine.radius, raw["argmax"], search.get("argmax")),
                    symmetry=sweep(engine, moves) if symmetry else {"absent": "not requested"})
