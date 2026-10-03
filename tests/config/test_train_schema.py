@@ -31,6 +31,7 @@ VALID_TRAIN_PAYLOAD: dict = {
     "min_buf_size": 1,
     "replay_capacity": 100_000,
     "training_steps_per_game": 1.0,
+    "training_steps_fill_ramp": False,
     "max_train_burst": 1,
     "batch_size": 256,
     # Two inseparable members: `batch_size` bounds graphs, not E and N, which drive memory.

@@ -1,8 +1,8 @@
 # Contract: run config schema
 
-- version: v53
+- version: v54
 - owner: mantis.config.schema
-- status: LIVE since scaffold (WP0). Fifty-two steps since (v1 -> v53). Each through v6 is
+- status: LIVE since scaffold (WP0). Fifty-three steps since (v1 -> v54). Each through v6 is
   recorded as a named amendment in docs/design/repo_design.md §4; v7, v8 and v9 are NOT, and
   that is stated rather than implied — v7 landed without one, v8 (R242/ADJ-D12) inherited that
   gap rather than back-filling somebody else's amendment, and v9 records the same gap for
@@ -80,10 +80,11 @@ plays the deploy block too, deploy-matched (R378(d)); the v39 row's "without it"
 | v51 | FOUR leaves DELETED from `eval.gate` (`screen_games`, `confirm_games`, `screen_confirm_lo`, `promotion_winrate`) and `eval.gate.sequential` made a required block, `null` no longer admitted: the GSPRT is the gate's one promotion rule (the training-path audit's §7 item 5; HYGIENE-1, under the operator's grant). The screen/confirm arithmetic leaves `mantis.eval.aggregate`, whose one `aggregate_gate` reads the GSPRT's games and verdict; the frontier tool's model cells play a fixed-N match as a GSPRT that cannot stop before its last pair. The template carries run10's block, so run10 loses only the four leaves; the smokes mint a two-pair block. The four paths join `RETIRED_PATHS`, and a stamp's `sequential: null` reads as predating the leaf (`RETIRED_NULL_POSTURES`). The block's `min_pairs`/`max_pairs` floor rises from 1 to 2 (`mantis.util.constants.GSPRT_MIN_PAIRS`, which the LLR itself needs), so a block every round would fail on is refused at mint | operator grant; HYGIENE-1 |
 | v52 | ONE new REQUIRED leaf in `train`: `value_target_lambda` (`float`, `ge=0`, `le=1`, finite) — THE VALUE-TARGET MIX (R382(c)-(d), RING-V3). The value head's target on a row whose search left a root value (HEXG v3's `root_value_valid`) is `λ·root_value + (1−λ)·z`; on every other row, a v2 ring's and a row no search produced, it is `z`; a game with no winner still trains no value. The template mints `0.0`, at which `mantis.train.losses.value_target` returns the outcome tensor ITSELF, so the trainer is the v2 trainer bit for bit; every config is RE-MINTED through its own header and gains only that line. A stamp predating the leaf is logged as predating it, not refused. CONSUMER: `TrainHParams.from_config` -> `Trainer._value_target` -> `mantis.train.losses.value_target`, in the TRAIN step only: the eval step (the held-out witness, the BC route's held-out) reads z whatever λ, so no reading rewards the lever. At λ > 0 the `heldout_gap` event's train side is the mixed-target CE, so its `gap_value` is not z against z and rules on nothing; a train-side z-CE is carded. Its fire-rate is the `trainer_step` event's `root_value_rows` / `root_value_rows_moved`, with λ echoed (event manifest v9) | R382(d); RING-V3 |
 | v53 | ONE new REQUIRED leaf in `train`: `value_mask_redraw_p` (`float`, `ge=0`, `lt=1`, finite) — THE RE-DRAWN VALUE MASK (R384(a), RUN11-PRE L1a). Each train step keeps a Bernoulli(p) subset of its value-valid rows for the value loss, drawn afresh from (the run seed, the trainer step); the dropped rows' `value_valid` is zeroed BEFORE the whole-batch value denominator counts the rows, so a kept row weighs ≈ 1/p, REG-1's harness semantics. `0` is off (no draw is made, the trainer is the v52 trainer bit for bit); `1` is refused as a second spelling of off. The eval step and every reader never mask. The template mints `0.0`; every config is RE-MINTED through its own header and gains only that line. A stamp predating the leaf is logged as predating it, not refused. CONSUMER: `TrainHParams.from_config` (with `seed`) -> `dispatch._graph_step` -> `_build_graph_parts` -> `mantis.train.losses.redraw_value_mask`. Its fire-rate is the `trainer_step` event's `value_rows_valid` / `value_rows_kept` with the `value_mask_redraw_p` echo (event manifest v10) | R384(a); RUN11-PRE |
+| v54 | ONE new REQUIRED leaf in `train`: `training_steps_fill_ramp` (`bool`) — THE RING-FILL RAMP (R383(c), RUN11-PRE L1b). Under it the step budget's ratio is `training_steps_per_game × min(1, rows/capacity)`, the ring's own `size` over `replay_capacity` at each burst, and a burst may take NO step (the flat path's one-step floor would over-draw the early rows), so a row inserted at any fill is drawn `tspg·batch/rows_per_game` times over its stay, as a steady-state row is; `min_buf_size` stays the warm-up floor. `false` is the flat ratio, its one-step floor kept, bit for bit. The template mints `false`; every config is RE-MINTED through its own header and gains only that line. CONSUMER: `resolve_coordinator_knobs` -> `_step_coordinator_config` -> the step coordinator's O6 `_steps_budget(fill=)`. Pinned by `tests/train/test_steps_fill_ramp.py` (draws per row ± 2 % at every insertion fill, a planted one-step floor reds) | R383(c); RUN11-PRE |
 
 ## Shape
 
-Thirteen top-level fields; **161 leaf key-paths** under the walker that descends nested blocks
+Thirteen top-level fields; **162 leaf key-paths** under the walker that descends nested blocks
 (including optional ones) and counts a `list[SubModel]` field as ONE leaf.
 
 | section | leaves | models |
@@ -97,7 +98,7 @@ Thirteen top-level fields; **161 leaf key-paths** under the walker that descends
 | `model` | 4 | `ModelConfig`, `GnnWidthsConfig`, `AuxSoftPolicyConfig` |
 | `deploy` | 11 | `DeployConfig`, `SearchConfig`, `TacticsConfig`, `TacticsAuditConfig` |
 | `eval` | 26 | `EvalConfig`, `GateConfig`, `SequentialGateConfig`, `PlyCapAdjudicationConfig`, `StrengthFloorConfig` |
-| `train` | 40 | `TrainConfig`, `DrawRateAbortConfig`, `PlyCapAbortConfig`, `HeldoutGapConfig`, `MicrobatchCapsConfig` |
+| `train` | 41 | `TrainConfig`, `DrawRateAbortConfig`, `PlyCapAbortConfig`, `HeldoutGapConfig`, `MicrobatchCapsConfig` |
 | `selfplay` | 35 | `SelfplayConfig`, `SearchConfig`, `TacticsConfig`, `TacticsAuditConfig`, `MctsConfig`, `PlayoutCapConfig` |
 | `inference` | 6 | `InferenceConfig`, `FusedGraphCapsConfig` |
 | `monitor` | 28 | `MonitorSchemaConfig`, `DrainCapsConfig`, `DiskGuardConfig` |

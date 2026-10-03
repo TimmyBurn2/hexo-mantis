@@ -846,7 +846,8 @@ def strip_and_restamp(
             # The step-coordinator knobs, at the template's own numbers.
             "eval_interval": 1000, "log_interval": 1000,
             "min_buf_size": 1, "replay_capacity": 100_000,
-            "training_steps_per_game": 1.0, "max_train_burst": 1, "batch_size": 256,
+            "training_steps_per_game": 1.0, "training_steps_fill_ramp": False,
+            "max_train_burst": 1, "batch_size": 256,
             # (`train.microbatch_caps` is ARCH-SCOPED and is spliced in below, on the graph
             # route only: an unconditional literal would write a graph cap into a grid config.)
             "augment": False, "terminal_eval_enabled": True,

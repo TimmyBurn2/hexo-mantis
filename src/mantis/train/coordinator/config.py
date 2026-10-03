@@ -183,6 +183,8 @@ class StepCoordinatorConfig:
     min_buf_size: int
     capacity: int
     training_steps_per_game: float
+    #: Scale the ratio by the ring's fill (`buffer.size / capacity`); a burst may then take no step.
+    training_steps_fill_ramp: bool
     max_train_burst: int
     batch_size: int
     augment: bool

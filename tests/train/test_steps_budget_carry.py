@@ -10,7 +10,7 @@ def _bursts(games: list[int], ratio: float, burst: int) -> list[int]:
     carry = 0.0
     out = []
     for n in games:
-        steps, carry = _steps_budget(n, ratio, burst, carry)
+        steps, carry = _steps_budget(n, ratio, burst, carry, fill=None)
         assert 0.0 <= carry < 1.0
         out.append(steps)
     return out
@@ -36,9 +36,9 @@ def test_an_integer_ratio_is_unchanged_from_the_round_rule() -> None:
 
 
 def test_the_ceiling_drops_its_excess_and_the_floor_borrows_nothing() -> None:
-    steps, carry = _steps_budget(3, 2.0, 4, 0.0)
+    steps, carry = _steps_budget(3, 2.0, 4, 0.0, fill=None)
     assert (steps, carry) == (4, 0.0), "a ceiling, not a debt: the two dropped steps are not carried"
-    steps, carry = _steps_budget(1, 0.3, 8, 0.0)
+    steps, carry = _steps_budget(1, 0.3, 8, 0.0, fill=None)
     assert steps == 1 and carry == pytest.approx(0.3), "below one step the burst is still one, and the fraction stays"
 
 

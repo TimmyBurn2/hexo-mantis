@@ -90,6 +90,7 @@ train:
   min_buf_size: 1
   replay_capacity: 100000
   training_steps_per_game: 4.0
+  training_steps_fill_ramp: false
   max_train_burst: 4
   batch_size: 32
   microbatch_caps:

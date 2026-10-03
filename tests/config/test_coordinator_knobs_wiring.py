@@ -54,6 +54,7 @@ _DISTINGUISHABLE: dict[str, Any] = {
     "min_buf_size": 29,
     "replay_capacity": 31_337,
     "training_steps_per_game": 2.5,
+    "training_steps_fill_ramp": True,
     "max_train_burst": 7,
     "batch_size": 41,
     "augment": True,
@@ -385,6 +386,16 @@ def test_training_steps_per_game_and_max_train_burst_set_the_step_budget() -> No
     assert _drive(burst_bound, steps=1, games=3)[0].steps_run == 4, (
         "the burst ceiling must bind when the ratio would exceed it"
     )
+
+
+def test_the_fill_ramp_scales_the_budget_by_the_rings_own_fill() -> None:
+    """`train.training_steps_fill_ramp` -> `step.py` O6: 2.0 steps/game × (1 000 / 4 000 rows) over 4 games is 2 steps."""
+    ramped = _coordinator(training_steps_per_game=2.0, max_train_burst=100, capacity=4000,
+                          training_steps_fill_ramp=True)
+    assert _drive(ramped, steps=1, games=4)[0].steps_run == 2
+    flat = _coordinator(training_steps_per_game=2.0, max_train_burst=100, capacity=4000,
+                        training_steps_fill_ramp=False)
+    assert _drive(flat, steps=1, games=4)[0].steps_run == 8
 
 
 def test_batch_size_is_the_batch_the_sampler_is_asked_for() -> None:

@@ -9,11 +9,12 @@ import math
 
 
 def _steps_budget(
-    new_games: int, training_steps_per_game: float, max_train_burst: int, carry: float,
+    new_games: int, training_steps_per_game: float, max_train_burst: int, carry: float, *, fill: float | None,
 ) -> tuple[int, float]:
-    """Per-burst training-step budget `(min(max(1, floor(carry + games * ratio)), burst), the fraction floored off)`."""
+    """Per-burst step budget `(min(floor(carry + games·ratio), burst), the fraction floored off)`, at least 1 unless `fill` (rows/capacity) ramps the ratio by min(1, fill)."""
     # The carry is what makes a fractional ratio hold long-run: 98 % of run8's bursts saw ONE new
     # game, where a per-burst round() realised integers only (2.5 -> 2). The ceiling drops, never owes.
-    total = round(carry + new_games * training_steps_per_game, 9)  # 2.9999999999999996 floors to 3
+    ratio = training_steps_per_game if fill is None else training_steps_per_game * min(1.0, fill)
+    total = round(carry + new_games * ratio, 9)  # 2.9999999999999996 floors to 3
     want = math.floor(total)
-    return min(max(1, want), max_train_burst), total - want
+    return min(want if fill is not None else max(1, want), max_train_burst), total - want

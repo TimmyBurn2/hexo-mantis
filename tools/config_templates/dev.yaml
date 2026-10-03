@@ -121,6 +121,8 @@ train:
   min_buf_size: 1
   replay_capacity: 100000
   training_steps_per_game: 1.0
+  # Scale the steps per game by the ring's fill (rows/capacity) while it fills; false is the flat ratio.
+  training_steps_fill_ramp: false
   max_train_burst: 1
   batch_size: 256
   # `microbatch_caps` — the GRAPH training step's memory bound (WP12-R F2,

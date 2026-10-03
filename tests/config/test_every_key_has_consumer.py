@@ -146,6 +146,9 @@ CONSUMER_REGISTRY = {
     "train.training_steps_per_game":
         "resolve_coordinator_knobs -> _step_coordinator_config -> step.py O6"
         " _steps_budget(new_games, this, max_train_burst)",
+    "train.training_steps_fill_ramp":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py O6"
+        " _steps_budget(fill=buffer.size / capacity): the ratio scaled by the ring's fill",
     "train.max_train_burst":
         "resolve_coordinator_knobs -> _step_coordinator_config -> step.py O6 _steps_budget"
         " ceiling",

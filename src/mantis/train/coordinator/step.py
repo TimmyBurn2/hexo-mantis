@@ -450,6 +450,7 @@ class StepCoordinator:
         # O6: compute the training-step budget + advance bookkeeping.
         steps_budget, self._steps_budget_carry = _steps_budget(
             new_games, cfg.training_steps_per_game, cfg.max_train_burst, self._steps_budget_carry,
+            fill=self.buffer.size / cfg.capacity if cfg.training_steps_fill_ramp else None,
         )
         self.last_train_game_count = self._games_played
 

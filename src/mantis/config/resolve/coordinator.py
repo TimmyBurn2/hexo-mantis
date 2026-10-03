@@ -36,6 +36,7 @@ class CoordinatorKnobsSpec:
     min_buf_size: int
     capacity: int
     training_steps_per_game: float
+    training_steps_fill_ramp: bool
     max_train_burst: int
     batch_size: int
     augment: bool
@@ -51,6 +52,7 @@ def resolve_coordinator_knobs(train_section: Any) -> CoordinatorKnobsSpec:
         min_buf_size=int(train_section.min_buf_size),
         capacity=int(train_section.replay_capacity),
         training_steps_per_game=float(train_section.training_steps_per_game),
+        training_steps_fill_ramp=bool(train_section.training_steps_fill_ramp),
         max_train_burst=int(train_section.max_train_burst),
         batch_size=int(train_section.batch_size),
         augment=bool(train_section.augment),

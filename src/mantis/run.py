@@ -383,6 +383,7 @@ def _step_coordinator_config(
         min_buf_size=knobs.min_buf_size,
         capacity=knobs.capacity,
         training_steps_per_game=knobs.training_steps_per_game,
+        training_steps_fill_ramp=knobs.training_steps_fill_ramp,
         max_train_burst=knobs.max_train_burst,
         batch_size=knobs.batch_size,
         augment=knobs.augment,
