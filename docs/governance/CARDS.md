@@ -45,8 +45,7 @@ Both were found by running the gate set rather than by reading it, and both are 
 - **CARD-BUBBLE-RULER — RECOMMENDED by R384(e): Bubble 185k against S and X, 288 pairs each.** Running its weights is
   the operator's act. At or above our shipped head, it becomes the third ruler.
 - **CARD-REG-1-PUSH — PUSHED 2026-10-04 (`origin/dev` = `ad3682d7`). ORDERED by R384(g): `reg-1` rebases onto `dev`,
-  gates, pushes.** Rebased 2026-10-04 onto `dev` `9da49bdd`. No gates log of the rebased tip is in the local records;
-  RUN11-PRE's L1-exit `make gates` runs over it.
+  gates, pushes.** Rebased 2026-10-04 onto `dev` `9da49bdd`; local gates 24/24 green on `ad3682d7` before the push.
 - **CARDED by R384(f), not built before the start** (the RUN11-PRE packet's names in brackets):
   - CARD-WITHIN-TURN-TREE-REUSE [CARD-TREE-REUSE-TURN] — within-turn tree reuse;
   - CARD-HEAD-TO-HEAD-LEVER-CELLS [CARD-H2H-LEVER-CELLS] — head-to-head lever cells;

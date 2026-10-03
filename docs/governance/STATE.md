@@ -44,7 +44,7 @@ design, carried as a screen (R381(c) as re-stated by R384(c), CARD-RUN11-DESIGN)
     split: the deploy head plays the origin on an empty board now; the engine rule and canonicalisation land after the
     start by pinned resume.
   - Merge and boxes (R384(g)): `reg-1` rebased onto `dev` `9da49bdd` and pushed on 2026-10-04 (`origin/dev` =
-    `ad3682d7`, CARD-REG-1-PUSH); RUN11-PRE's L1-exit gates run over it. Two matched boxes for the arms; renting is the
+    `ad3682d7`, local gates 24/24 green on it, CARD-REG-1-PUSH). Two matched boxes for the arms; renting is the
     operator's.
   - **RUN11-PRE IN PROGRESS from 2026-10-04** (CARD-RUN11-PRE; branch `run11-pre`; local records
     `mantis-records/run11-pre/`): L1 (the mask, the ramp, the field and key, the origin at deploy, the run monitor, the
