@@ -39,8 +39,12 @@ design, carried as a screen (R381(c) as re-stated by R384(c), CARD-RUN11-DESIGN)
     the Six-trainer read, ruler hygiene, the calibrated search-value teacher, the all-vetoed target fix. ORIGIN-1 is
     split: the deploy head plays the origin on an empty board now; the engine rule and canonicalisation land after the
     start by pinned resume.
-  - Merge and boxes (R384(g)): `reg-1` rebased onto `dev` `9da49bdd` on 2026-10-04; gates and push owed
-    (CARD-REG-1-PUSH). Two matched boxes for the arms; renting is the operator's.
+  - Merge and boxes (R384(g)): `reg-1` rebased onto `dev` `9da49bdd` and pushed on 2026-10-04 (`origin/dev` =
+    `ad3682d7`, CARD-REG-1-PUSH); RUN11-PRE's L1-exit gates run over it. Two matched boxes for the arms; renting is the
+    operator's.
+  - **RUN11-PRE IN PROGRESS from 2026-10-04** (CARD-RUN11-PRE; branch `run11-pre`; local records
+    `mantis-records/run11-pre/`): L1 (the mask, the ramp, the field and key, the origin at deploy, the run monitor, the
+    drafted arm configs, the prereg) on the desktop, then L2's arms on two matched boxes. No arm is armed or started.
 
 - **REG-1 EXITED 2026-10-03, ACCEPTED by R384(a)** (CARD-REG-1; branch `reg-1`; local records
   `mantis-records/reg-1/` EXIT.md + READINGS.md).
