@@ -15,10 +15,21 @@ START (R376(c)). `configs/run10.yaml` stays the production config the instrument
 run11 arms the deploy block at its mint by the operator's word (R378(a)), and in self-play arm A's design, carried
 (R381(c), CARD-RUN11-DESIGN).
 
-- **REG-1 IN PROGRESS** (CARD-REG-1; branch `reg-1` from `census-3`'s tip `7b8d6a6e`, the combined tip R383(g) orders):
-  GEN self-plays run8@45k frozen under arm A's config on the box, then the arms at 8 draws per row read on its
-  in-distribution held-out split. Its first commit lands R383(f)'s record corrections (CARD-FORGE2-ANNOTATIONS) and
-  the cards R383 names. Records: `mantis-records/reg-1/` (local).
+- **REG-1 EXITED 2026-10-03, awaiting the architect's ruling** (CARD-REG-1; branch `reg-1`; local records
+  `mantis-records/reg-1/` EXIT.md + READINGS.md).
+  - GEN: run8@45k frozen under arm A's config, 6 514 games. In-distribution held-out split: 1 800 games of the same
+    actor.
+  - Arms: 5 seeds at 8 draws per row.
+  - The known-bad passes: +0.069 against a 2·SD of 0.009.
+  - The pick by the hashed rule is the re-drawn per-step value mask at 1/8: −0.025 [−0.032, −0.018] calibration-free
+    held-out value, effect of record −0.018. Policy is unchanged and the calibrated exams hold.
+  - The direction holds at 4 draws: −0.015.
+  - R1 v R2 reads "distinct boards", resolved but under 0.012.
+  - Two-hot shrinkage kills the parent's value head. The value-head lr factor shows no effect of 0.012 or more, and the
+    parent anchor is unresolved.
+  - 0a: Σπ′·completedQ beats root W/N against z by 0.011.
+  - The calibrated floors (T4 V 0.154, DEF V_att 0.100) are of record on GEN's held-out.
+  - RUN11-PRE follows the ruling, with the mask on and a mask-off control.
 
 - **R383's order.**
   - The clarification (R383(a)):
@@ -310,4 +321,4 @@ R381, on that branch at `9e962173`. The HYGIENE-1 line was added 2026-10-01 at i
 branch `hygiene-1` from origin/dev `b1e34aa4`, which also repaired the two stale "unpushed" branch lines, and updated
 2026-10-01 at its exit from its exit record (local), on that branch. The current phase was rewritten 2026-10-02 at R383 from the CENSUS-3 exit record
 (local), on branch `census-3` rebased onto `ring-v3` (`5b607454`). The REG-1 line was added 2026-10-02 at its packet's first commit, on
-branch `reg-1` from `7b8d6a6e`.
+branch `reg-1` from `7b8d6a6e`, and updated 2026-10-03 at its exit from its exit record (local), on that branch.

@@ -54,9 +54,24 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by R383 (THE REUSE READING; 2026-10-02) — the last two reads before the mint
 
-- **CARD-REG-1 (CENSUS-3's proposed CARD-VALUE-REGULARISER) — ORDERED by R383(d), MINT-BLOCKING: the regularisers at
-  run11's reuse, the first of the last two reads before the mint. IN PROGRESS 2026-10-02: the REG-1 packet, branch
-  `reg-1`.**
+- **CARD-REG-1 (CENSUS-3's proposed CARD-VALUE-REGULARISER) — EXITED 2026-10-03, awaiting the architect's ruling
+  (local records `mantis-records/reg-1/`).**
+  - **The pick by the hashed rule:** the re-drawn per-step value mask at 1/8 (keep 0.1305, ≈ 1 value exposure per label
+    at 8 policy draws).
+    - Δ −0.0251 [−0.032, −0.018] calibration-free on in-distribution held-out games, effect of record −0.018,
+      Bonferroni-clear.
+    - Policy Δ −0.0003. Calibrated exams 0.289 / 0.295, against floors of 0.154 / 0.100.
+    - The whole gain sits in plies > 40.
+  - **At 4 draws the direction holds:** −0.015.
+  - **The other masks are detections:** fixed 1/8 −0.0185, re-drawn 1/4 −0.0173, fixed 1/4 −0.0140.
+  - **R1 v R2:** "distinct boards", resolved but under 0.012.
+  - **Two-hot shrinkage** kills the parent's value head (0 of 32 units).
+  - **The value-head lr factor** shows no effect of 0.012 or more.
+  - **The 0.5 parent anchor** is unresolved.
+  - Census box-h 48.4 against the packet's 36, by the operator's extension.
+
+  Was ORDERED by R383(d), MINT-BLOCKING: the regularisers at run11's reuse, the first of the last two reads before
+  the mint.
   - **Data:** fresh parent games under run11's regime, read at run11's reuse (8 draws per row). GEN self-plays
     run8@45k frozen under arm A's tactics config (F2 out), with the v3 producer, ≤ 4 box-h.
   - **Instrument:** an IN-DISTRIBUTION held-out split (unseen games from the train actors' window, split by game id),
@@ -77,18 +92,35 @@ Both were found by running the gate set rather than by reading it, and both are 
     - the field's semantics on run8's `search_stats` (CARD-RING-V3-SEMANTICS);
     - the calibrated exam floors (CARD-EXAMS-CALIBRATED).
 - **CARD-RUN11-PRE — ORDERED by R383(d), MINT-BLOCKING, after CARD-REG-1's exit: the step rate read live at matched
-  throughput on the instrument.** Its packet follows REG-1's exit. CENSUS-3 read generalisation on fixed rings, not
+  throughput on the instrument.** REG-1's exit asks it to run with the picked mask on, plus a mask-off control (a
+  1/8 value gradient may track a moving actor more slowly, which a fixed-data census cannot price).
+- **CARD-VALUE-MASK-REDRAWN — PROPOSED by REG-1's exit, not built: the mint's trainer knob for REG-1's pick.** It is a
+  seeded per-step mask on the sampled batch's `value_valid` at keep p, applied ahead of the whole-batch value
+  denominator, so a kept row carries 1/p weight. A plain value-loss weight is a different, untested lever.
+- **CARD-FRACTIONAL-VALUE-TARGET-WARMUP — PROPOSED by REG-1's exit: concentrated interior value targets can kill the
+  parent's value head.**
+  - The evidence: two-hot shrinkage (±0.8 / ±0.5) took a first loss of ≈ 73 and left 0 of 32 units.
+  - The scope: λ > 0 mixes, CARD-SEARCH-VALUE-AUX and short-term value outputs need a head warm-up or a gentle start
+    first.
+  - REG-1's 0.5 anchor (spread fractional targets) survived, so the trigger is not mapped.
+- **CARD-LABEL-NOISE — PROPOSED by REG-1's exit: re-drawn ±1 flips at 0.25 read the best held-out value point estimate
+  (−0.026), but leave the head badly underconfident (T 0.38).** It is a lever of its own, not run11's. Its packet follows REG-1's exit. CENSUS-3 read generalisation on fixed rings, not
   learning per hour.
 - **CARD-WARMSTART-RING-FILL — ORDERED for the mint by R383(c).** Training steps per game scale with ring fill
   (tspg × rows/capacity), which holds draws per row at the steady state from the first row. R381(e)'s `min_buf_size`
   100k is withdrawn.
-- **CARD-EXAMS-CALIBRATED — ORDERED by R383(a): T4 V and DEF V_att are read on calibrated values from now on, floors
-  re-derived calibrated on run8's panel.**
+- **CARD-EXAMS-CALIBRATED — LANDED 2026-10-03 by REG-1's free read 0b: floors of record are T4 V 0.154 and DEF V_att
+  0.100 (the mean − 3 SD over run8's seven panel saves, each net's T read on GEN's held-out ring).** On it, the parent
+  reads 0.286 / 0.210 and the known-bad 0.11 / 0.09; the DEF separation is marginal. Was ORDERED by R383(a): T4 V and
+  DEF V_att are read on calibrated values from now on, floors re-derived calibrated on run8's panel.
   - CENSUS-3's post-hoc read is V_cal = tanh(atanh V / T), with the net's held-out temperature.
   - On it the raw floor rewarded overconfidence: D8 0.382 → 0.208 calibrated, D2 0.352 → 0.321.
 - **CARD-RING-V3-KEY — ORDERED by R383(e), before any mint.** `train.value_target_lambda` is renamed to weight the
   search (0 = z). run11 trains at search weight 0; the field is recorded.
-- **CARD-RING-V3-SEMANTICS — OPENED by R383(e): what the root value field holds.** The field's semantics (root W/N v
+- **CARD-RING-V3-SEMANTICS — OPENED by R383(e): what the root value field holds. READ 2026-10-03 by REG-1's 0a: on
+  run8's sampled undecided `search_stats` rows, Σπ′·completedQ beats root W/N against z by −0.011
+  [−0.012, −0.010] in every band, and raw v is worst. The TD targets only read self-consistency. The producer follows
+  at RUN11-PRE.** The field's semantics (root W/N v
   Σπ′·completedQ) are read on run8's `search_stats` at 0 box-h (REG-1's free read 0a), and the producer follows the
   read. If `search_stats` lacks the children's π′ or completed Q, the read waits for RUN11-PRE's producer.
 - **CARD-FORGE2-ANNOTATIONS — LANDED 2026-10-02 by R383(f): FORGE-2's corrections to the record are annotations**
@@ -125,7 +157,13 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by R382 (THE BLIND METRIC; 2026-10-01) — the value instrument, then CENSUS-3
 
-- **CARD-VALUE-INSTRUMENT — LANDED 2026-10-02 as `tools/value_instrument` (read/compare; branch `census-3`), the value
+- **CARD-VALUE-INSTRUMENT — EXTENDED 2026-10-03 by REG-1 under its grant:
+  - a cross-fitted Platt CE;
+  - `calibrated`;
+  - `compare` CIs with detection, TOST and per-band rows;
+  - a `lagged` read between one run's saves (run11's monitor);
+  - an `exams` read at the held-out temperature.
+  It was LANDED 2026-10-02 as `tools/value_instrument` (read/compare; branch `census-3`), the value
   reading of record by R383(a); its T4 V and DEF V_att read on calibrated values from R383(a) (CARD-EXAMS-CALIBRATED).
   Was ORDERED by R382(b); it reads its known-bad before any arm runs.** Calibration-free
   held-out value CE with the temperature fitted on disjoint games, AUC, the temperature and the train/held-out gap as
