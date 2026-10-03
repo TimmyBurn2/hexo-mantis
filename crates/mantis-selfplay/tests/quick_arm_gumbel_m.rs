@@ -83,7 +83,7 @@ fn widest_roots(games: &[GameResultRow]) -> (usize, usize) {
 fn a_quick_root_visits_at_most_its_own_m_and_a_full_root_more() {
     let (full, quick) = widest_roots(&drive(M_QUICK, 6));
     assert!(
-        quick >= 2 && quick <= M_QUICK,
+        (2..=M_QUICK).contains(&quick),
         "the quick arm visited {quick} root children at m {M_QUICK}"
     );
     assert!(
