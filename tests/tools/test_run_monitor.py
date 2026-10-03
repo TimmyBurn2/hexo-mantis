@@ -162,7 +162,7 @@ def test_an_unarmed_monitor_records_the_halt_and_signals_nothing(tmp_path: Path)
     run = _run_dir(tmp_path, pid=2**22 + 7)
     monitor = _monitor(tmp_path, run, _Readers(fail_at=3000), halt=False)
     record = monitor.read_save(3000, _save(run, 3000, range(0, 4)), 20.0)
-    assert record["halting_rows"] and json.loads((tmp_path / "records" / "HALT.json").read_text())["armed"] is False
+    assert record["halting_rows"] and json.loads((tmp_path / "records" / "HALT.json").read_text(encoding="utf-8"))["armed"] is False
 
 
 def test_a_stop_reads_its_final_save_once_its_ring_lands(tmp_path: Path) -> None:

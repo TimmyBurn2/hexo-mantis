@@ -1,3 +1,4 @@
+// >300 justify (R8): the drive, the stats pairing and the 0a rebuild are one cross-check of one producer.
 //! A self-play row's root value is its own search's value (bit-equal to the sampled search stats), or a proven root's proof value.
 
 use std::collections::HashMap;
