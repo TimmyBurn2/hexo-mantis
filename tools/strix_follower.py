@@ -21,6 +21,7 @@ from mantis.bots.six import CACHE_ENTRIES as SIX_CACHE_ENTRIES
 from mantis.bots.six import pin_record as six_pin_record
 from mantis.bots.strix import _pin as strix_pin_record
 from mantis.config.resolve.tactics import ARMS, arm_from_file
+from mantis.monitor.event_tail import EventTail
 from mantis.util.hashing import sha256_file
 
 EQUAL_WORK = "equal_work"
@@ -75,36 +76,6 @@ def triggers_from_rows(rows: Iterator[Mapping[str, Any]], cadence: int, *,
         elif promotions and event == "eval_round_complete" and row.get("promoted") is True:
             out.append(Trigger(step, "promotion", None))
     return out
-
-
-class EventTail:
-    """Reads only the NEW lines of every `events_<run_id>_seg*.jsonl` in `logs/`, in segment order."""
-
-    def __init__(self, run_dir: Path, run_id: str) -> None:
-        self.logs = run_dir / "logs"
-        self.prefix = f"events_{run_id}_seg"
-        self.offsets: dict[Path, int] = {}
-
-    def read_new(self) -> list[dict[str, Any]]:
-        rows: list[dict[str, Any]] = []
-        for path in sorted(self.logs.glob(f"{self.prefix}*.jsonl")):
-            start = self.offsets.get(path, 0)
-            with path.open("rb") as fh:
-                fh.seek(start)
-                data = fh.read()
-            # A partial last line (the writer mid-append) is left for the next read.
-            end = data.rfind(b"\n") + 1
-            self.offsets[path] = start + end
-            for line in data[:end].splitlines():
-                if not any(name.encode() in line for name in TRIGGER_EVENTS):
-                    continue
-                try:
-                    row = json.loads(line)
-                except ValueError:
-                    continue
-                if isinstance(row, dict) and row.get("event") in TRIGGER_EVENTS:
-                    rows.append(row)
-        return rows
 
 
 def resolve_checkpoint(run_dir: Path, run_id: str, trigger: Trigger) -> Path | None:
@@ -265,7 +236,7 @@ class Follower:
         self.clock, self.log, self.host_load = clock, log, host_load
         #: The candidate's A/B arm (`None`: the config's own block) and the bridge block it resolved to.
         self.arm, self.tactics = arm, None if tactics is None else dict(tactics)
-        self.tail = EventTail(run_dir, run_id)
+        self.tail = EventTail(run_dir, run_id, TRIGGER_EVENTS)
         self.pending: dict[int, Trigger] = {}
         self.fired: list[Path] = []
 

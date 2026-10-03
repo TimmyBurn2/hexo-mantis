@@ -12,6 +12,7 @@ import pytest
 from _toolpath import load_module_by_path
 
 from mantis.config.census import production_configs
+from mantis.monitor.event_tail import EventTail
 
 _REPO = Path(__file__).resolve().parents[2]
 _RUN = "runx"
@@ -139,7 +140,7 @@ def test_the_tail_reads_only_new_lines_and_follows_a_new_segment(follower_mod, t
     run = _run_dir(tmp_path)
     _plant(run, [{"event": "periodic_checkpoint_save", "step": 15000, "path": "p"},
                  {"event": "trainer_step", "step": 1}])
-    tail = follower_mod.EventTail(run, _RUN)
+    tail = EventTail(run, _RUN, follower_mod.TRIGGER_EVENTS)
     assert [r["step"] for r in tail.read_new()] == [15000]
     assert tail.read_new() == []
     _plant(run, [{"event": "eval_round_complete", "step": 3000, "promoted": True}], seg=2)
