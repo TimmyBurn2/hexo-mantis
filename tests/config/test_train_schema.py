@@ -40,6 +40,7 @@ VALID_TRAIN_PAYLOAD: dict = {
     "selfplay_stall_timeout_sec": 1800.0,
     "policy_target": "raw_visit_distribution",
     "value_target_lambda": 0.0,
+    "value_mask_redraw_p": 0.0,
     "ema": {"enabled": False, "decay": 0.999, "update_every": 10},
     "ply_cap_abort": None,
     "heldout_gap": None,
@@ -82,6 +83,10 @@ BOUND_VIOLATIONS: list[tuple[str, object]] = [
     ("value_target_lambda", -0.1),
     ("value_target_lambda", 1.5),
     ("value_target_lambda", float("nan")),
+    # a keep probability: keeping every row is the off posture's second spelling, and nothing is not a mask
+    ("value_mask_redraw_p", -0.125),
+    ("value_mask_redraw_p", 1.0),
+    ("value_mask_redraw_p", float("nan")),
 ]
 
 LITERAL_VIOLATIONS: list[tuple[str, object]] = [

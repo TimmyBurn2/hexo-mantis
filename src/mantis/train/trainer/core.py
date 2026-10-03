@@ -88,6 +88,8 @@ class TrainHParams:
     #: `model.aux_soft_policy` as `(temperature, weight)`; `None` is the explicit OFF.
     aux_soft_policy: tuple[float, float] | None
     value_target_lambda: float
+    #: `train.value_mask_redraw_p` with the run seed as `(p, seed)`; `None` is the explicit OFF (p = 0).
+    value_mask: tuple[float, int] | None
 
     @classmethod
     def from_config(cls, config: Any) -> TrainHParams:
@@ -96,7 +98,7 @@ class TrainHParams:
 
         Raises:
             ValueError: no `train` section, or a policy target that disagrees with
-                `search.kind`. KeyError: a required `train` member is missing.
+                `search.kind`. KeyError: a required `train` member, or the run seed under a value mask, is missing.
         """
         cfg = config if isinstance(config, dict) else {}
         train = cfg.get("train")
@@ -106,12 +108,14 @@ class TrainHParams:
                 "closure) — no flat legacy training keys are read anymore."
             )
         _assert_policy_target_consistency(train, (cfg.get("selfplay") or {}).get("search") or {})
-        fields = set(cls.__dataclass_fields__) - {"aux_soft_policy"}
+        fields = set(cls.__dataclass_fields__) - {"aux_soft_policy", "value_mask"}
         kwargs = {k: train[k] for k in fields}
         aux = resolve_aux_soft_policy(cfg)
+        p = float(train["value_mask_redraw_p"])
         return cls(
             **kwargs,
             aux_soft_policy=None if aux is None else (aux.temperature, aux.weight),
+            value_mask=None if p == 0.0 else (p, int(cfg["seed"])),
         )
 
 
@@ -235,6 +239,11 @@ class Trainer:
         # Keys the resume F1 defer preserved (empty on a fresh run).
         self.f1_deferred_keys: frozenset[str] = frozenset()
         self.loaded_from_full_checkpoint = False
+
+    @property
+    def value_mask(self) -> tuple[float, int] | None:
+        """The train step's value mask `(p, seed)`, `None` when off: the dispatcher draws it, this step echoes p."""
+        return self.hp.value_mask
 
     @staticmethod
     def _derive_arch(config: Any) -> ModelArch:
@@ -512,6 +521,7 @@ class Trainer:
                                   "policy_target_entropy": target_entropy_total,
                                   "policy_kl_target_vs_prior": policy_total - target_entropy_total,
                                   "value_target_lambda": self.hp.value_target_lambda,
+                                  "value_mask_redraw_p": 0.0 if self.hp.value_mask is None else self.hp.value_mask[0],
                                   **self._aux_soft_policy_block(aux_total, aux_kl_total, head_norms)})
             self._maybe_periodic_checkpoint(result)
         return result

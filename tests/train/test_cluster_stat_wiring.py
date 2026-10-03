@@ -40,6 +40,7 @@ class _Trainer:
         self.step = 0
         self.model = object()
         self.device = "cpu"
+        self.value_mask = None
 
     def _loss(self) -> dict[str, float]:
         return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,

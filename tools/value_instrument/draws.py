@@ -89,7 +89,7 @@ def read(model: Any, config: dict[str, Any], ring_path: Path, *, seed: int, batc
     for _ in range(batches):
         built = _build_graph_parts(stub, buf, spec, batch_size=BATCH, augment=False,
                                    caps_provider=lambda: resolve_microbatch_caps(config),
-                                   sample_threads_provider=lambda: threads)
+                                   sample_threads_provider=lambda: threads, value_mask=None)
         for make in built["parts"]:
             for k, v in _rows(model, make()).items():
                 cols.setdefault(k, []).append(v)

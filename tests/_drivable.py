@@ -9,11 +9,12 @@ from typing import Any, Callable
 
 
 class DrivableTrainerStub:
-    """The ONE trainer double: the declared entry points plus `device`; `actor_sd` and `inference_sd` are DISTINCT so a root that hands the deploy view to the actors reds."""
+    """The ONE trainer double: the declared entry points plus `device` and an off `value_mask`; `actor_sd` and `inference_sd` are DISTINCT so a root that hands the deploy view to the actors reds."""
 
     def __init__(self, *, step: int = 0, on_step: Any = None, model: Any = None) -> None:
         self.step = step
         self.device = "cpu"
+        self.value_mask = None
         self.model = object() if model is None else model
         self.on_step = on_step
         self.saves: list = []

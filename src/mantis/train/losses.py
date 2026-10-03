@@ -6,6 +6,7 @@ import math
 from collections.abc import Sequence
 from typing import Any
 
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -48,6 +49,16 @@ def value_target(outcomes: torch.Tensor, root_value: torch.Tensor, root_value_va
     z = outcomes.reshape(-1).to(torch.float32)
     mixed = lam * root_value.reshape(-1).to(torch.float32) + (1.0 - lam) * z
     return torch.where(root_value_valid.reshape(-1).bool(), mixed, z)
+
+
+#: The value mask's own stream beside every other draw keyed on the run seed.
+_VALUE_MASK_STREAM = 0x564D534B
+
+
+def redraw_value_mask(value_valid: np.ndarray, p: float, seed: int, step: int) -> np.ndarray:
+    """`value_valid` with each row kept at probability `p`, drawn afresh from `(seed, step)`; a dropped row trains no value."""
+    keep = np.random.default_rng([_VALUE_MASK_STREAM, seed % 2**64, step]).random(len(value_valid)) < p
+    return np.where(keep, value_valid, np.zeros_like(value_valid))
 
 
 def graph_policy_row_weights(is_full_search: Any) -> torch.Tensor:

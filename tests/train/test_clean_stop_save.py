@@ -76,6 +76,7 @@ class _Trainer:
         self.step = step
         self.model = object()
         self.device = "cpu"
+        self.value_mask = None
         self.attempts = 0
         self.saves = 0
         self._raises = raises

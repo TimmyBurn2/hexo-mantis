@@ -94,6 +94,7 @@ class _Trainer:
         self.step = 0
         self.model = object()
         self.device = "cpu"
+        self.value_mask = None
 
     def train_step_from_graph_batch(self, **kwargs: Any) -> dict[str, float]:
         self.step += 1

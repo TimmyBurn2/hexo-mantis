@@ -127,6 +127,7 @@ def _build_graph_parts(
     trainer: Any, buffer: Any, spec: Any, *,
     batch_size: int, augment: bool,
     caps_provider: Callable[[], Any], sample_threads_provider: Callable[[], int],
+    value_mask: tuple[float, int] | None,
 ) -> dict[str, Any]:
     """One sampled graph batch, prepared for a step — the kwargs BOTH step routes take.
 
@@ -166,6 +167,7 @@ def _build_graph_parts(
         exclude_alpha_full_rows,
         graph_loss_denominators,
         graph_policy_row_weights,
+        redraw_value_mask,
     )
 
     # ONE read of each member, into a local: the `train.microbatch_caps` reader census is frozen
@@ -189,6 +191,11 @@ def _build_graph_parts(
     policy_row_weight, alpha_full_excluded = exclude_alpha_full_rows(
         policy_row_weight, np.asarray(targets.tail_mass, dtype=np.float32)
     )
+    # The train route's `(p, seed)` mask, drawn BEFORE the whole-batch denominator counts the rows: a kept row weighs ≈ 1/p.
+    masked_valid = np.asarray(targets.value_valid)
+    value_rows_valid = int(np.count_nonzero(masked_valid))
+    if value_mask is not None:
+        masked_valid = redraw_value_mask(masked_valid, value_mask[0], value_mask[1], int(trainer.step))
 
     def _make(g0: int, g1: int):
         def _materialise():
@@ -216,7 +223,7 @@ def _build_graph_parts(
                 except Exception:  # noqa: BLE001 — a dump may NEVER replace the contract failure
                     _LOG.exception("F-816-37 train-path dump-on-fire raised")
                 raise
-            value_valid = np.asarray(tsl.value_valid, dtype=np.uint8)
+            value_valid = np.asarray(masked_valid[g0:g1], dtype=np.uint8)
             (policy_target, explicit_mask, tail_mass, outcomes, valid, root_value, root_value_valid,
              row_weight, value_rows) = ship_host_arrays([
                 np.asarray(tsl.policy_target, dtype=np.float32), np.asarray(tsl.explicit_mask, dtype=np.uint8),
@@ -239,9 +246,9 @@ def _build_graph_parts(
     # The WHOLE step's denominators, computed ONCE, so the micro-batch parts sum to the un-split
     # loss exactly — NOT `1/M` and NOT `B_m/B`.
     policy_denominator, value_denominator = graph_loss_denominators(
-        policy_row_weight, np.asarray(targets.value_valid), n_graphs)
+        policy_row_weight, masked_valid, n_graphs)
     # The rows a `train.value_target_lambda` mix reaches (value-supervised, with a root value) and moves (v != z).
-    reached = (np.asarray(targets.value_valid) != 0) & (np.asarray(targets.root_value_valid) != 0)
+    reached = (masked_valid != 0) & (np.asarray(targets.root_value_valid) != 0)
     moved = reached & (np.asarray(targets.root_value) != np.asarray(targets.outcomes))
     return {
         "parts": tuple(_make(g0, g1) for g0, g1 in plan),
@@ -254,7 +261,9 @@ def _build_graph_parts(
         "batch_composition": {**_batch_composition(buffer),
                               "policy_rows_excluded_alpha_full": alpha_full_excluded,
                               "root_value_rows": int(np.count_nonzero(reached)),
-                              "root_value_rows_moved": int(np.count_nonzero(moved))},
+                              "root_value_rows_moved": int(np.count_nonzero(moved)),
+                              "value_rows_valid": value_rows_valid,
+                              "value_rows_kept": int(np.count_nonzero(masked_valid))},
     }
 
 
@@ -263,10 +272,11 @@ def _graph_step(
     batch_size: int, augment: bool,
     caps_provider: Callable[[], Any], sample_threads_provider: Callable[[], int],
 ) -> dict[str, float]:
-    """One gradient update from a freshly sampled graph batch."""
+    """One gradient update from a freshly sampled graph batch, under the trainer's value mask."""
     return trainer.train_step_from_graph_batch(**_build_graph_parts(
         trainer, buffer, spec, batch_size=batch_size, augment=augment,
         caps_provider=caps_provider, sample_threads_provider=sample_threads_provider,
+        value_mask=trainer.value_mask,
     ))
 
 
@@ -311,4 +321,5 @@ def run_declared_eval_step(
     return trainer.eval_step_from_graph_batch(**_build_graph_parts(
         trainer, buffer, spec, batch_size=batch_size, augment=False,
         caps_provider=caps_provider, sample_threads_provider=sample_threads_provider,
+        value_mask=None,
     ))

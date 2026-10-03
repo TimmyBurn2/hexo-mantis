@@ -180,6 +180,10 @@ CONSUMER_REGISTRY = {
         "TrainHParams.from_config -> Trainer._value_target -> losses.value_target: the value head's target "
         "λ·root_value + (1−λ)·z on rows whose flag is set, z elsewhere, in the train and the eval step"
     ),
+    "train.value_mask_redraw_p": (
+        "TrainHParams.from_config (with the run seed) -> dispatch._graph_step -> _build_graph_parts -> "
+        "losses.redraw_value_mask: the train step's value rows kept at p, re-drawn per step, before the denominator"
+    ),
     # Every selfplay/mcts/playout_cap/inference leaf's live consumer is
     # SelfPlayHParams.from_config / InferenceHParams.from_config, reading the nested sections.
     "train.heldout_gap.ring": "resolve_heldout_gap -> HeldoutSlice.open in mantis.run (the frozen slice's ring file; R366(c), v37; null = the explicit OFF)",

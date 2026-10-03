@@ -28,6 +28,7 @@ class FakeTrainer:
         self.step = 0
         self.model = object()
         self.device = "cpu"
+        self.value_mask = None
 
     # The double conforms to the DECLARED seam: typed entry points plus `device`.
     def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:

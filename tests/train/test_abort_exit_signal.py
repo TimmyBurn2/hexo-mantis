@@ -50,6 +50,7 @@ class _Trainer:
         self.step = 0
         self.model = object()
         self.device = "cpu"
+        self.value_mask = None
         self.saves = 0
         # A REAL directory: the O3 arm writes a resume sidecar beside the checkpoint, and a fake
         # `checkpoint_dir` would leave the resumable leg unexercised.

@@ -27,6 +27,8 @@ class TrainerLike(Protocol):
     #: The resume-bundle publisher the coordinator INSTALLS on the trainer — declared because an
     #: undeclared write is the same hidden coupling as an undeclared read.
     bundle_publisher: Any
+    #: The train step's value mask `(p, seed)`, `None` off; the dispatcher draws it ahead of the value denominator.
+    value_mask: tuple[float, int] | None
 
     def train_step_from_graph_batch(self, **kwargs: Any) -> dict[str, float]: ...
     #: The FORWARD-ONLY sibling, declared here because `dispatch.py` reaches it through the same

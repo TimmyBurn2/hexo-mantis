@@ -143,6 +143,8 @@ train:
   policy_target: raw_visit_distribution
   # The value target's mix toward the search's root value on rows that carry one; 0.0 is pure z.
   value_target_lambda: 0.0
+  # The value loss keeps each value-valid row at this probability, re-drawn every step; 0.0 is off.
+  value_mask_redraw_p: 0.0
 selfplay:
   search:
     kind: puct

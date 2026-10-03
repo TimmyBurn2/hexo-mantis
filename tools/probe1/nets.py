@@ -76,7 +76,7 @@ def sample_parts(buffer: HexgBuffer, config: dict[str, Any], spec: Any, *, batch
     caps = resolve_microbatch_caps(config)
     return _build_graph_parts(
         _Stub(), buffer, spec, batch_size=batch_size, augment=False,
-        caps_provider=lambda: caps, sample_threads_provider=lambda: threads)
+        caps_provider=lambda: caps, sample_threads_provider=lambda: threads, value_mask=None)
 
 
 @torch.no_grad()

@@ -220,3 +220,6 @@ class TrainConfig(StrictModel):
     policy_target: Literal["raw_visit_distribution", "completed_improved_policy"]
     # The value target: `λ·v_search + (1−λ)·z` on a row with a root value, z elsewhere; 0 is pure z.
     value_target_lambda: float = Field(ge=0, le=1, allow_inf_nan=False)
+    # The value loss's keep probability per value-valid row, re-drawn every step; 0 is off (keeping all is not a
+    # second spelling of off, hence `lt=1`).
+    value_mask_redraw_p: float = Field(ge=0, lt=1, allow_inf_nan=False)
