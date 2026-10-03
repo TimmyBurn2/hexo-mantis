@@ -122,12 +122,14 @@ class BucketedForward:
         return outputs
 
     def _capture(self, batch: GraphBatch) -> tuple[torch.cuda.CUDAGraph, tuple[Tensor, Tensor]]:
-        """Warm up on the serving stream, whose cache takes the activations back, then capture on this forward's own stream, without the device-wide sync and cache release `torch.cuda.graph` adds."""
+        """Warm up on the serving stream, release the cache (the capturing pop's one device wait), then capture on this forward's own stream."""
         current = torch.cuda.current_stream(self._device)
         stream = self._capture_stream
         with _CAPTURE_LOCK:
             for _ in range(_WARMUP):
                 self._serve(batch)
+            # A capture cannot free cached blocks, so a cache filling the card (the trainer's) would fail it: free it first.
+            torch.cuda.empty_cache()
             stream.wait_stream(current)
             with torch.cuda.stream(stream):
                 graph = torch.cuda.CUDAGraph()

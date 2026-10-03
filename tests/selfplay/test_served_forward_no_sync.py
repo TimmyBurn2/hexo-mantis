@@ -110,17 +110,30 @@ def _prewarm(server: InferenceServer, spec: Any, positions: list[Any]) -> None:
     submit.join(timeout=10.0)
 
 
-def test_a_pop_that_captures_its_bucket_launches_without_a_host_sync() -> None:
-    """The bucket's warm-ups and capture run on the serving thread's first pop: none of it may wait on the device."""
-    caught = _serve_with_checked_launch(False, checked=1)
+def _capturing_pop(compile_trunk: bool, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The first pop under sync-debug "error", which cannot see the allocator's own syncs: the cache release is counted."""
+    releases: list[int] = []
+    release = torch.cuda.empty_cache
+
+    def counted() -> None:
+        releases.append(1)
+        release()
+
+    monkeypatch.setattr(torch.cuda, "empty_cache", counted)
+    caught = _serve_with_checked_launch(compile_trunk, checked=1)
     assert not caught, f"a capturing pop synchronised with the device: {caught}"
+    assert len(releases) == 1, f"{len(releases)} cache releases for the one bucket the pop captured"
+
+
+def test_a_pop_that_captures_its_bucket_launches_without_a_host_sync(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The bucket's warm-ups and capture run on the serving thread's first pop: its one device wait is the cache release."""
+    _capturing_pop(False, monkeypatch)
 
 
 @pytest.mark.slow
-def test_a_compiled_pop_that_captures_its_bucket_launches_without_a_host_sync() -> None:
+def test_a_compiled_pop_that_captures_its_bucket_launches_without_a_host_sync(monkeypatch: pytest.MonkeyPatch) -> None:
     """The same first pop through the compiled trunk the box serves with."""
-    caught = _serve_with_checked_launch(True, checked=1)
-    assert not caught, f"a capturing compiled pop synchronised with the device: {caught}"
+    _capturing_pop(True, monkeypatch)
 
 
 def test_the_instrument_reds_on_a_planted_sync() -> None:
