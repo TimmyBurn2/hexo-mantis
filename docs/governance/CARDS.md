@@ -57,13 +57,52 @@ Both were found by running the gate set rather than by reading it, and both are 
     (CARD-FRACTIONAL-VALUE-TARGET-WARMUP);
   - CARD-ALL-VETOED-TARGET — the all-vetoed target fix, evidence only; R380(b) stands.
 
+## Opened by the PERF-3 packet (2026-10-04) — batch prep, the cache key, trainer syncs
+
+- **CARD-PERF-3-PACKET — EXITED 2026-10-04 (branch `perf-3`, unpushed; local records `mantis-records/perf-3/`): L2
+  and L3 LANDED, L1 CARDED. The production loop with the trainer reads 156 340 -> 170 940 positions/h (+9.3 %, IQRs
+  [153 840, 160 785] and [164 250, 179 760]).** L0's profile ranked L2, L1, L3: the loop is latency-bound, popping at half
+  a batch (B 36) with the workers ~85 % blocked on inference and ~8 of 32 CPUs busy.
+  - L2 (`6ed55ef3`): the eval cache keys a leaf by a Zobrist over every input `build_leaf_graph` reads, before any
+    build; a hit skips the build and no SHA-256 is taken. Per-leaf worker CPU of the touched stages 908 -> 523 µs,
+    workers 5.0 -> 3.5 cores. A seeded 10 869-leaf drive misses exactly the leaves the graph hash missed. R370(c) rules
+    "a hash of the encoded input"; this hashes the builder's inputs: an annotation is OWED to the operator.
+  - L3 (`f7d40604`): the trainer step's host syncs 23 -> M + 1 (2 at production shape); serving step 484.5 -> 396.8 ms
+    (-18 %), idle flat; losses, events and weights byte-equal over 4 steps on sm_86 and sm_89.
+  - L1: CARD-PERF-COLLATE-2.
+- **CARD-TRAINER-ONE-READ-GUARD — CARDED by PERF-3: one device read per step needs the protected microbatch guard moved
+  after the backward.** The guard skips a non-finite microbatch BEFORE its backward, so it reads the device once per
+  microbatch. Deferring it (backward always, the verdict read with the clip norm, a redo of the finite parts when one is
+  not) keeps the outcome but moves a protected mechanism: a ruling's call.
+- **CARD-PERF-TRAINER-PREFETCH — CARDED by PERF-3's L0: an idle trainer's GPU is busy 66 % of its step.** The ring
+  sample (40 ms) and the collate (45 ms, 35 of it Python semantic checks) run serially before each step's forward. A
+  prefetching thread would overlap them with the previous step's GPU work; at a fixed trainer rate in the shared
+  process its production effect is the GIL and CPU it moves, unmeasured.
+- **CARD-PERF-LOOP-SPREAD — CARDED by PERF-3: the production loop's between-run spread is wider than its IQR.** Five
+  base runs of one tree over one night read 148 200 - 162 190 positions/h (~±5 %) while each run's 1-minute IQR is
+  ~3-6 %. A landing read of production takes interleaved A/B runs (two per arm) or pools them. The scratch
+  per-leaf counters read ~5 % low themselves (32 workers' atomics on one cache line).
+- **CARD-PERF-B128 — MEASURED by PERF-3's L4(b), no lever.** Under the bucketed served forward B 128 serves 4 374
+  [4 347, 4 927] leaves/s against ~5 200 at B 64: the minted caps split a B-128 pop into two parts and the slice costs
+  ~9 ms of a 20.9 ms launch. Its drift against B 64 on 512 positions: 3 logits differ (max 0.125), values exact, 0
+  argmax or sign flips; LAW-06 (ii-b) 0.043450 at both, inside the 0.0511 line.
+
 ## Opened by the PERF-2 packet (2026-10-03)
 
 - **CARD-PERF-TRAINER-CONTENTION — CARDED by PERF-2's L4: the trainer in the process costs serving a third.** At 1.2
   trainer steps/s the loop reads 149-156k positions/h against 235k alone, the device wait per pop 3.97 -> 6.6 ms. A
   highest-priority serving stream does not move it (-1 %). Untried: pacing the trainer against serving, a second
-  process under MPS, the trainer's kernel sizes.
-- **CARD-PERF-COLLATE-2 — CARDED by PERF-2: after L3 the server's launch is its collate.** Per B-64 pop the pack takes
+  process under MPS, the trainer's kernel sizes. PERF-3 (2026-10-04): its L3 removes the step's per-scalar syncs (each
+  one waited on the shared stream's serving work), so the serving step falls -18 % and the in-loop step 0.392 ->
+  0.357 s at the same 1.2 steps/s; its L4(a) reads the check-14 thread at 1.1 % of trainer wall (0.357 vs 0.353 s off,
+  positions/h +1.7 % inside the IQR, 0.64 cores) — under the 5 % that would earn a ruling request.
+- **CARD-PERF-COLLATE-2 — CARDED by PERF-2: after L3 the server's launch is its collate. PERF-3's L1 (a second server
+  thread on the one queue, branch `perf-3-l1` `0e834fa5`) NOT LANDED: B-64 cell +5.0 % (A-B-A +4.3 %) against a +10 %
+  line; one production pair +5.4 % (IQRs disjoint, inside the loop's between-run spread). Pops shrink (B 64 -> 54 in the
+  cell, 37 -> 31 in the loop) as two consumers split the queue. A revival owes its review's findings: a LAW-18
+  thread/overlap counter, a dump stamp unique across threads, the event manifest's `pipeline` block, locked test
+  batchers. The ready-block design is out: a device block fused past the wire payload breaks what the 1-in-1 checks
+  verify.** Per B-64 pop the pack takes
   3.51 ms and the semantic checks 1.83 of a 6.72 ms launch. Coding edges by value in the pack costs 1.45 ms over L1's
   copy; the builder emitting codes on the wire removes it (a wire contract change). The semantic checks 15-16 can
   follow the structural ones into the Rust pass. The pack's 4-thread split reads inside the IQR of one thread under 32
@@ -590,7 +629,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   negating a number flips every bit above its lowest set one, so `(q, r)` and `(-q, -r)` collide whenever
   `tz(r) == tz(q) + 1` (2 680 pairs within ±64; L1's review). `Board::zobrist_hash` keys the MCTS transposition
   table with it. The tactics solver no longer does: it keys stones by its own injective `grid::stone_key`, after a
-  table keyed by core's carried a proven win to a reflected position. Fixing core re-mints the pinned values of
+  table keyed by core's carried a proven win to a reflected position. The eval cache's key (PERF-3's L2) keys stones by
+  its own injective word too, after its review met the same collision there. Fixing core re-mints the pinned values of
   `crates/mantis-core/tests/golden_replay.rs`.
 - **CARD-TACTICS-BUILD-HASH — OPENED by R378(h); was CARDED: the engine does not carry the hash of the sources it
   was built from.** A
@@ -835,7 +875,9 @@ Grounds and numbers: the FINISH records (timing, reviews) outside the tree; STAT
   stamping. The loop-with-trainer reading (games/h, trainer steps/h, GPU split, peaks, one profile)
   is owed; it needs either run10's own preflight (which vests a stamp a twin can inherit) or a ruling
   on a stampless measurement path.
-- **CARD-PERF-CACHE-KEY-HASH — the eval cache's key cost.** The key is SHA-256 over the whole encoded
+- **CARD-PERF-CACHE-KEY-HASH — LANDED 2026-10-04 by PERF-3's L2 (`6ed55ef3`): the key is a Zobrist over the builder's
+  inputs taken before any build (per-leaf touched CPU 908 -> 523 µs, the SHA's 280 µs gone); R370(c)'s wording is owed
+  an annotation. Was: the eval cache's key cost.** The key is SHA-256 over the whole encoded
   graph (~0.35–0.6 MB per mid-game leaf, copied into one buffer first); with the cache on, the box loop
   went GPU-bound → CPU-bound (GPU 91 → 72–76 %). Whether the hash is part of the CPU bound is
   unmeasured: bench `GraphKey::of` or profile the workers, then try streaming the fields into the hasher
