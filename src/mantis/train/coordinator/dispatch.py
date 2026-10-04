@@ -48,6 +48,8 @@ class GraphStepInputs:
     #: The per-row POLICY weight: 1 on a full-search row, 0 on a fast-arm one.
     policy_row_weight: Any
     n_graphs: int
+    #: `value_valid`'s nonzero rows, ascending, found on the host from the same array, so the loss reads no mask.
+    value_rows: Any
 
 
 class RepresentationRouteError(TypeError):
@@ -147,12 +149,12 @@ def _build_graph_parts(
             "buffer disagree; build the buffer from the declared identity"
         )
     import numpy as np
-    import torch
 
     from mantis.selfplay.graph_collate import (
         GraphContractError,
         collate_graph_batch,
         graph_wire_from_rust,
+        ship_host_arrays,
         stone_mask_from_batch,
     )
     from mantis.selfplay.graph_wire_split import (
@@ -214,26 +216,22 @@ def _build_graph_parts(
                 except Exception:  # noqa: BLE001 — a dump may NEVER replace the contract failure
                     _LOG.exception("F-816-37 train-path dump-on-fire raised")
                 raise
+            value_valid = np.asarray(tsl.value_valid, dtype=np.uint8)
+            (policy_target, explicit_mask, tail_mass, outcomes, valid, root_value, root_value_valid,
+             row_weight, value_rows) = ship_host_arrays([
+                np.asarray(tsl.policy_target, dtype=np.float32), np.asarray(tsl.explicit_mask, dtype=np.uint8),
+                np.asarray(tsl.tail_mass, dtype=np.float32), np.asarray(tsl.outcomes, dtype=np.float32),
+                value_valid, np.asarray(tsl.root_value, dtype=np.float32),
+                np.asarray(tsl.root_value_valid, dtype=np.uint8), policy_row_weight[g0:g1].numpy(),
+                np.flatnonzero(value_valid)], str(device))
             return GraphStepInputs(
                 x=batch.x, edge_index=batch.edge_index, edge_attr=batch.edge_attr,
                 legal_index=batch.legal_node_gather, stone_mask=stone_mask_from_batch(batch),
                 node_offsets=batch.node_offsets, legal_offsets=batch.legal_offsets,
-                policy_target=torch.from_numpy(
-                    np.asarray(tsl.policy_target, dtype=np.float32)).to(device),
-                explicit_mask=torch.from_numpy(
-                    np.asarray(tsl.explicit_mask, dtype=np.uint8)).to(device),
-                tail_mass=torch.from_numpy(
-                    np.asarray(tsl.tail_mass, dtype=np.float32)).to(device),
-                outcomes=torch.from_numpy(
-                    np.asarray(tsl.outcomes, dtype=np.float32)).to(device),
-                value_valid=torch.from_numpy(
-                    np.asarray(tsl.value_valid, dtype=np.uint8)).to(device),
-                root_value=torch.from_numpy(
-                    np.asarray(tsl.root_value, dtype=np.float32)).to(device),
-                root_value_valid=torch.from_numpy(
-                    np.asarray(tsl.root_value_valid, dtype=np.uint8)).to(device),
-                policy_row_weight=policy_row_weight[g0:g1].clone().to(device),
-                n_graphs=g1 - g0,
+                policy_target=policy_target, explicit_mask=explicit_mask, tail_mass=tail_mass,
+                outcomes=outcomes, value_valid=valid, root_value=root_value,
+                root_value_valid=root_value_valid, policy_row_weight=row_weight, n_graphs=g1 - g0,
+                value_rows=value_rows,
             )
 
         return _materialise

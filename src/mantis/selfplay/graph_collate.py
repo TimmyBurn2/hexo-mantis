@@ -488,6 +488,18 @@ def _ship(staged: list[Any], device: str, out: Sequence[Any] | None = None) -> l
     return [t.to(device, non_blocking=True) for t in staged]
 
 
+def ship_host_arrays(arrays: Sequence[np.ndarray], device: str) -> list[Any]:
+    """Host arrays on `device` through ONE staged block, pinned for CUDA, each copy queued with no host wait."""
+    import torch
+
+    flat = [np.ascontiguousarray(a).reshape(-1) for a in arrays]
+    staged = _stage_block(tuple((a.size, torch.from_numpy(a[:0]).dtype) for a in flat),
+                          torch.device(device).type == "cuda")
+    for view, a in zip(_numpy_views(staged), flat, strict=True):
+        view[...] = a
+    return [t.reshape(np.shape(a)) for t, a in zip(_ship(staged, device), arrays, strict=True)]
+
+
 def _collate_pack(*args: Any) -> tuple[str, str] | None:
     """Checks 4-13 and the pack, in Rust with the GIL released; a refusal is `(class name, message)`."""
     from mantis._engine import collate_pack
@@ -722,6 +734,7 @@ __all__ = [
     "ScatterSlotCanonicalMismatch",
     "ScatterSlotOutOfBounds",
     "collate_graph_batch",
+    "ship_host_arrays",
     "graph_wire_from_rust",
     "reset_semantic_canary",
     "segment_ids",

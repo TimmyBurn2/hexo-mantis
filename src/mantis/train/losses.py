@@ -3,6 +3,7 @@ loss; the trainer sums `policy_loss + value_loss` (`trainer/core.py`)."""
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from typing import Any
 
 import torch
@@ -208,13 +209,16 @@ def clip_and_step(
     model: nn.Module,
     fp16: bool,
     max_grad_norm: float,
-) -> float:
+    read_with: Sequence[torch.Tensor] = (),
+) -> tuple[float, list[float]]:
     """The CLIP+STEP half — run ONCE per training step, on the ACCUMULATED gradient. Clipping is
-    NONLINEAR in the whole gradient and the pre-clip norm it returns is an ARMED GATE'S INPUT, so
-    clipping per micro-batch would rescale a live abort threshold by an invisible M."""
+    NONLINEAR in the whole gradient and the pre-clip norm feeds the spike alert and the refusal, so
+    per-micro-batch clipping would scale both by an invisible M. It and `read_with` share ONE read."""
     if fp16:
         scaler.unscale_(optimizer)
-    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm).item()
+    norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+    host = torch.cat([norm.reshape(1).float(), *(t.reshape(-1).float() for t in read_with)]).tolist()
+    grad_norm, rest = host[0], host[1:]
     if not math.isfinite(grad_norm):
         # The pre-clip norm is a COMPLETE detector (`sqrt(sum of squares)`: finite means every
         # entry is finite). `clip_grad_norm_` has already scaled the gradients by a non-finite
@@ -224,11 +228,11 @@ def clip_and_step(
             # The scaler still gets its update, so its inf-driven backoff keeps working;
             # `scaler.step` is what is skipped, not the scaler's bookkeeping.
             scaler.update()
-        return grad_norm
+        return grad_norm, rest
     if fp16:
         scaler.step(optimizer)
         scaler.update()
     else:
         optimizer.step()
-    return grad_norm
+    return grad_norm, rest
 

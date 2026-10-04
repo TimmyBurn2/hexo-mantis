@@ -317,8 +317,9 @@ class Trainer:
                             tail_mass=inputs.tail_mass,
                             denominator=policy_denominator)
                         # z whatever `value_target_lambda`: a reading must not reward the lever.
+                        rows = inputs.value_rows
                         value_loss = _binned_value_loss(
-                            bin_logits, inputs.outcomes, value_mask=inputs.value_valid,
+                            bin_logits.index_select(0, rows), inputs.outcomes.index_select(0, rows),
                             denominator=value_denominator)
                         loss = policy_loss + value_loss
                     if torch.isfinite(loss):
@@ -345,12 +346,11 @@ class Trainer:
     ) -> dict[str, float]:
         """One gradient update from a PARTITIONED graph batch. bf16 autocast.
 
-        `parts` is a Sequence of ZERO-ARG CALLABLES and that is load-bearing: `Sequence` gives
-        `len()` without consuming anything, and the callables keep materialisation LAZY — already
-        collated batches would all be resident at once, defeating the cap while passing every
-        count-based oracle. ONE OPTIMIZER STEP PER TRAINING STEP: clipping is nonlinear in the
-        whole gradient and `grad_norm` is the spike alert's input. SINGLE TAIL, seven keys — a path
-        returning a dict without `grad_norm` would read as a refused step to the coordinator.
+        `parts` is a Sequence of ZERO-ARG CALLABLES, load-bearing: `len()` consumes nothing and the
+        callables keep materialisation LAZY, so one micro-batch is resident at a time. ONE OPTIMIZER
+        STEP PER TRAINING STEP: clipping is nonlinear in the whole gradient and `grad_norm` feeds the
+        spike alert. SINGLE TAIL, seven keys: a dict without `grad_norm` reads as a refused step.
+        Raises: GraphEmptyBatchError — no micro-batch; ValueError — bin_logits rows are not the part's graphs.
         """
         if len(parts) == 0:
             raise GraphEmptyBatchError(
@@ -366,16 +366,16 @@ class Trainer:
         contributing = 0
         # Every row's tail mass alpha, collected across the split so the reading is the STEP's
         # distribution and not one part's.
-        tail_alphas: list[float] = []
+        tail_masses: list[torch.Tensor] = []
+        # Each contributing microbatch's loss scalars, left on the device until the step's one read.
+        stats: list[list[torch.Tensor]] = []
         target_entropy_total = 0.0
         policy_entropy_total = 0.0
         aux_total = 0.0
         aux_kl_total = 0.0
         for make in parts:
             inputs = make()
-            tail_alphas.extend(
-                float(v) for v in inputs.tail_mass.detach().reshape(-1).tolist()
-            )
+            tail_masses.append(inputs.tail_mass.detach().reshape(-1))
             with autocast(device_type=self.device.type, dtype=self.amp_dtype,
                           enabled=self._autocast_enabled):
                 # `forward_batch_heads` is GnnNet's real method; `nn.Module.__getattr__` types
@@ -396,8 +396,10 @@ class Trainer:
                     full_search_mask=inputs.policy_row_weight,
                     explicit_mask=inputs.explicit_mask, tail_mass=inputs.tail_mass,
                     denominator=policy_denominator)
-                value_loss = _binned_value_loss(bin_logits, self._value_target(inputs),
-                                                value_mask=inputs.value_valid,
+                # The host-found rows, not `value_mask`: a boolean index reads the device, forward and back.
+                rows = inputs.value_rows
+                value_loss = _binned_value_loss(bin_logits.index_select(0, rows),
+                                                self._value_target(inputs).index_select(0, rows),
                                                 denominator=value_denominator)
                 loss = policy_loss + value_loss
                 aux_loss: torch.Tensor | None = None
@@ -406,9 +408,9 @@ class Trainer:
                     aux_loss, aux_kl = self._aux_soft_policy_terms(
                         policy_logits, aux_logits, inputs, policy_denominator)
                     loss = loss + self.hp.aux_soft_policy[1] * aux_loss
-            # A NaN/inf microbatch loss would NaN every weight via the clip coefficient: SKIPPED
-            # (its gradient is undefined) and COUNTED, since dropped microbatches hide on loss alone.
-            if not torch.isfinite(loss) or not torch.isfinite(policy_loss):
+            # A NaN/inf microbatch loss would NaN every weight via the clip coefficient: SKIPPED before
+            # its backward (a microbatch's one device read) and COUNTED, since dropped ones hide on loss alone.
+            if not bool(torch.isfinite(torch.stack([loss.detach().float(), policy_loss.detach().float()])).all()):
                 self.nonfinite_loss_microbatches += 1
                 if (self.nonfinite_loss_microbatches <= 5
                         or self.nonfinite_loss_microbatches % 50 == 0):
@@ -422,26 +424,42 @@ class Trainer:
                 continue
             backward_accumulate(loss, self.scaler, self._scaler_enabled)
             contributing += 1
-            target_entropy_total += float(target_entropy.item())
-            policy_entropy_total += float(model_entropy.item())
-            loss_total += loss.item()
-            policy_total += policy_loss.item()
-            value_total += value_loss.item()
+            row = [target_entropy, model_entropy, loss, policy_loss, value_loss]
             if aux_loss is not None and aux_kl is not None:
-                aux_total += aux_loss.item()
-                aux_kl_total += aux_kl.item()
+                row += [aux_loss, aux_kl]
+            stats.append([t.detach().float().reshape(1) for t in row])
+            del row
             del inputs, policy_logits, bin_logits, policy_loss, value_loss, loss, target_entropy
             del model_entropy, aux_logits, aux_loss, aux_kl
 
         # Stepped only WITH a gradient: not when every micro-batch skipped (a zeroed `.grad` still
         # lets momentum move the weights), nor on a non-finite gradient from a FINITE loss.
-        head_norms = self._policy_head_grad_norms() if (contributing and len(self._base_model().policy_heads()) > 1) else None  # pyright: ignore[reportCallIssue]
+        norm_tensors = self._policy_head_grad_norms() if (contributing and len(self._base_model().policy_heads()) > 1) else None  # pyright: ignore[reportCallIssue]
+        head_norms: dict[str, float] | None = None
+        tail_alphas: list[float] = []
         if contributing == 0:
             grad_norm = float("nan")
             self.optimizer.zero_grad(set_to_none=True)
         else:
-            grad_norm = clip_and_step(self.optimizer, self.scaler, self.model,
-                                      self._scaler_enabled, float(self.hp.grad_clip))
+            reads = [t for row in stats for t in row] + list((norm_tensors or {}).values()) + tail_masses
+            grad_norm, host = clip_and_step(self.optimizer, self.scaler, self.model,
+                                            self._scaler_enabled, float(self.hp.grad_clip), read_with=reads)
+            at = 0
+            # Python-float sums in microbatch order: the totals are byte-equal to reading each scalar alone.
+            for row in stats:
+                values, at = host[at:at + len(row)], at + len(row)
+                target_entropy_total += values[0]
+                policy_entropy_total += values[1]
+                loss_total += values[2]
+                policy_total += values[3]
+                value_total += values[4]
+                if len(values) == 7:
+                    aux_total += values[5]
+                    aux_kl_total += values[6]
+            if norm_tensors is not None:
+                head_norms = dict(zip(norm_tensors, host[at:at + len(norm_tensors)], strict=True))
+                at += len(norm_tensors)
+            tail_alphas = host[at:]
         stepped = math.isfinite(grad_norm)
         if stepped:
             self.step += 1
@@ -526,14 +544,14 @@ class Trainer:
             aux_kl = (per_graph * mask).sum() / policy_denominator
         return aux_loss, aux_kl
 
-    def _policy_head_grad_norms(self) -> dict[str, float]:
-        """The pre-clip L2 gradient norm over each policy head's OWN parameters — the twin's witness for the weight envelope (aux ≈ main), read before `clip_and_step`."""
+    def _policy_head_grad_norms(self) -> dict[str, torch.Tensor]:
+        """The pre-clip L2 gradient norm over each policy head's OWN parameters — the twin's witness for the weight envelope (aux ≈ main), queued before `clip_and_step` reads it."""
         base = self._base_model()
-        out: dict[str, float] = {}
+        out: dict[str, torch.Tensor] = {}
         for name in base.policy_heads():  # pyright: ignore[reportCallIssue]
             module: nn.Module = getattr(base, name)
             grads = [p.grad.detach().float().norm() ** 2 for p in module.parameters() if p.grad is not None]
-            out[f"{name}_grad_norm"] = float(torch.stack(grads).sum().sqrt().item()) if grads else 0.0
+            out[f"{name}_grad_norm"] = torch.stack(grads).sum().sqrt() if grads else torch.zeros((), device=self.device)
         return out
 
     def _aux_soft_policy_block(
