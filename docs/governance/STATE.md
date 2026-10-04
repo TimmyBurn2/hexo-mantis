@@ -56,7 +56,10 @@ design, carried as a screen (R381(c) as re-stated by R384(c), CARD-RUN11-DESIGN)
     outside `configs/`. run10's ring bands would halt arm A's regime at its first save, so the prereg re-derives them
     on every arm-A-family ring on record. **ARMED 2026-10-04 on the operator's word** (§11 of the prereg; the four
     configs `configs/run11a1..a4.yaml`; box B is an unmatched second box, so arms 3→4 run on box A and arms 1→2 on box
-    B at matched self-play work). **The prereg is HASHED: sha256 `3fdf5092b10cc5fbcf35c4213a2a0b186550a839886e4ec2e79f7e86b7ff17d0`.** No arm is started.
+    B at matched self-play work). **The prereg is HASHED: sha256 `3fdf5092b10cc5fbcf35c4213a2a0b186550a839886e4ec2e79f7e86b7ff17d0`.** Five preflights
+    passed; **arm 3 is LIVE on box A since 2026-10-04 10:50 CEST (8 h) and arm 1 on box B since 10:58 CEST (9.74 h =
+    8 h / r, r = 0.821 on arm 1's config)**; arms 4 and 2 follow on the same boxes. The deviations from the hashed
+    prereg (cells on the desktop, the monitor's card cap 0.45, paired preflights) are recorded for the exit.
 
 - **REG-1 EXITED 2026-10-03, ACCEPTED by R384(a)** (CARD-REG-1; branch `reg-1`; local records
   `mantis-records/reg-1/` EXIT.md + READINGS.md).
