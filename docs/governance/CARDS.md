@@ -65,8 +65,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   a batch (B 36) with the workers ~85 % blocked on inference and ~8 of 32 CPUs busy.
   - L2 (`6ed55ef3`): the eval cache keys a leaf by a Zobrist over every input `build_leaf_graph` reads, before any
     build; a hit skips the build and no SHA-256 is taken. Per-leaf worker CPU of the touched stages 908 -> 523 µs,
-    workers 5.0 -> 3.5 cores. A seeded 10 869-leaf drive misses exactly the leaves the graph hash missed. R370(c) rules
-    "a hash of the encoded input"; this hashes the builder's inputs: an annotation is OWED to the operator.
+    workers 5.0 -> 3.5 cores. A seeded 10 869-leaf drive misses exactly the leaves the graph hash missed. R370(c)'s "a hash of
+    the encoded input" is annotated (A1, the operator's word to merge).
   - L3 (`f7d40604`): the trainer step's host syncs 23 -> M + 1 (2 at production shape); serving step 484.5 -> 396.8 ms
     (-18 %), idle flat; losses, events and weights byte-equal over 4 steps on sm_86 and sm_89.
   - L1: CARD-PERF-COLLATE-2.
@@ -876,8 +876,8 @@ Grounds and numbers: the FINISH records (timing, reviews) outside the tree; STAT
   is owed; it needs either run10's own preflight (which vests a stamp a twin can inherit) or a ruling
   on a stampless measurement path.
 - **CARD-PERF-CACHE-KEY-HASH — LANDED 2026-10-04 by PERF-3's L2 (`6ed55ef3`): the key is a Zobrist over the builder's
-  inputs taken before any build (per-leaf touched CPU 908 -> 523 µs, the SHA's 280 µs gone); R370(c)'s wording is owed
-  an annotation. Was: the eval cache's key cost.** The key is SHA-256 over the whole encoded
+  inputs taken before any build (per-leaf touched CPU 908 -> 523 µs, the SHA's 280 µs gone); R370(c) annotated (A1).
+  Was: the eval cache's key cost.** The key is SHA-256 over the whole encoded
   graph (~0.35–0.6 MB per mid-game leaf, copied into one buffer first); with the cache on, the box loop
   went GPU-bound → CPU-bound (GPU 91 → 72–76 %). Whether the hash is part of the CPU bound is
   unmeasured: bench `GraphKey::of` or profile the workers, then try streaming the fields into the hasher

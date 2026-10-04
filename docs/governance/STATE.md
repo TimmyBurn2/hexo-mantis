@@ -17,7 +17,7 @@ design, carried as a screen (R381(c) as re-stated by R384(c), CARD-RUN11-DESIGN)
 
 - **PERF-3 EXITED 2026-10-04 (branch `perf-3`, unpushed; CARD-PERF-3-PACKET):** L2 (the cache key) and L3 (one trainer
   read per step) LANDED, L1 (a second server thread) CARDED; the production loop with the trainer 156 340 -> 170 940
-  positions/h (+9.3 %). R370(c)'s cache-key wording is owed an annotation. Landing into run11 follows its prereg's
+  positions/h (+9.3 %). R370(c)'s cache-key wording is annotated (A1) on the operator's word to merge. Landing into run11 follows its prereg's
   resume rule, on the operator's word.
 - **R384's order.**
   - REG-1 accepted (R384(a), CARD-REG-1 CLOSED):

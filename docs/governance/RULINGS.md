@@ -607,6 +607,10 @@ Decision: verbatim below.
 > (i) R369(a)'s launch conditions apply to FINISH's exit tip.
 
 Status: standing. Adds LAW-19 by (b), extended to power by R375(d); amends R369(d) by (c) and R369(a)'s tip by (i).
+ANNOTATION A1 (2026-10-04, PERF-3's L2, merged on the operator's word "you may merge yes"): (c)'s "a hash of the
+encoded input" reads "a key over the inputs the encoder reads" — a Zobrist over the stones, the side to move,
+moves_remaining and the builder's geometry, taken before any build; the encoded input is a pure function of them,
+and a seeded 10 869-leaf drive pins the key's misses equal to the encoded-input hash's. The rest of (c) stands.
 
 ---
 
