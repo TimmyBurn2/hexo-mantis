@@ -120,7 +120,7 @@ def test_nonfinite_graph_output_submits_failure_and_releases_waiters(
     device, monkeypatch
 ) -> None:
     batch = hand_built_batch()
-    monkeypatch.setattr(collate_mod, "collate_graph_batch", lambda *a, **kw: batch)
+    H.stub_collate(monkeypatch, lambda *a, **kw: batch)
 
     batcher = CountingGraphBatcher(wire_for(), [2])
     server = _graph_server(device, batcher, model=FiniteGraphNet(nonfinite=True))
@@ -139,7 +139,7 @@ def test_nonfinite_graph_output_submits_failure_and_releases_waiters(
 def test_finite_graph_output_submits_results(device, monkeypatch) -> None:
     """Prove the clean twin: the same harness with finite outputs submits results, no failure."""
     batch = hand_built_batch()
-    monkeypatch.setattr(collate_mod, "collate_graph_batch", lambda *a, **kw: batch)
+    H.stub_collate(monkeypatch, lambda *a, **kw: batch)
 
     batcher = CountingGraphBatcher(wire_for(), [2])
     server = _graph_server(device, batcher)
@@ -163,7 +163,7 @@ def test_finite_graph_output_submits_results(device, monkeypatch) -> None:
 @pytest.mark.cuda
 def test_graph_loop_emits_one_heartbeat_per_batch(device, monkeypatch) -> None:
     batch = hand_built_batch()
-    monkeypatch.setattr(collate_mod, "collate_graph_batch", lambda *a, **kw: batch)
+    H.stub_collate(monkeypatch, lambda *a, **kw: batch)
 
     beats: list[str] = []
     batcher = CountingGraphBatcher(wire_for(), [2, 2, 2])
@@ -176,7 +176,7 @@ def test_graph_loop_emits_one_heartbeat_per_batch(device, monkeypatch) -> None:
 @pytest.mark.cuda
 def test_graph_loop_default_heartbeat_none_emits_nothing(device, monkeypatch) -> None:
     batch = hand_built_batch()
-    monkeypatch.setattr(collate_mod, "collate_graph_batch", lambda *a, **kw: batch)
+    H.stub_collate(monkeypatch, lambda *a, **kw: batch)
 
     batcher = CountingGraphBatcher(wire_for(), [2, 2])
     server = _graph_server(device, batcher)
@@ -190,7 +190,7 @@ def test_heartbeat_not_emitted_for_a_failed_batch(device, monkeypatch) -> None:
     def _boom(*_a, **_kw):
         raise RuntimeError("collate exploded")
 
-    monkeypatch.setattr(collate_mod, "collate_graph_batch", _boom)
+    H.stub_collate(monkeypatch, _boom)
     beats: list[str] = []
     batcher = CountingGraphBatcher(wire_for(), [2])
     server = _graph_server(device, batcher, heartbeat=beats.append)
@@ -295,7 +295,7 @@ def _run_graph_loop_with_spy(
     batch = hand_built_batch()
     spy = _CollateSpy(batch)
     resets: list[int] = []
-    monkeypatch.setattr(collate_mod, "collate_graph_batch", spy)
+    H.stub_collate(monkeypatch, spy)
     monkeypatch.setattr(collate_mod, "reset_semantic_canary", lambda: resets.append(1))
 
     batcher = CountingGraphBatcher(wire_for(), [2] * n_batches)

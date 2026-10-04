@@ -96,11 +96,14 @@ _Q6_TABLE: list[tuple[str, list[tuple[str, str]], tuple[int, int, int]]] = [
     # MEMORY-BOUNDED PLAN (M = 1 whenever the caps do not bind), so its count follows the minted
     # cap. Not optional either: the bound is on the PEAK, so parts run one at a time.
 
-    # A4-4: the PARTS loop is walked at launch and again at retire, so the summed `for` is 2.
+    # A4-4: the PARTS loop is walked at launch and again at retire, so the summed `for` is 2. Two server threads
+    # split launch into a stage outside the forward lock and an enqueue inside it, each walking the parts: 3.
     ("InferenceServer._run_graph_loop",
      [("inference_server.py", "InferenceServer._run_graph_loop"),
-      ("inference_server.py", "InferenceServer._launch_pop"),
-      ("inference_server.py", "InferenceServer._retire")], (2, 1, 0)),
+      ("inference_server.py", "InferenceServer._serve_pops"),
+      ("inference_server.py", "InferenceServer._stage_pop"),
+      ("inference_server.py", "InferenceServer._enqueue_pop"),
+      ("inference_server.py", "InferenceServer._retire")], (3, 1, 0)),
     ("InferenceServer.load_state_dict_safe",
      [("inference_server.py", "InferenceServer.load_state_dict_safe")], (0, 0, 0)),
     # DOWN-RATCHET `(3, 1, 2)` -> `(2, 1, 2)`: the dense push and its recency loop are deleted.

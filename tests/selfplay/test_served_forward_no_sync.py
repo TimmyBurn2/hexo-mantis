@@ -1,4 +1,4 @@
-"""One served forward's CPU stage never blocks on the device: `set_sync_debug_mode("error")` over `_launch_pop`."""
+"""One served forward's CPU stage never blocks on the device: `set_sync_debug_mode("error")` over `_stage_pop` and `_enqueue_pop`."""
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -49,29 +49,33 @@ def _serve_with_checked_launch(compile_trunk: bool, plant: Callable[[], None] | 
     server = InferenceServer(net, torch.device("cuda"), config, batcher=batcher, encoding_spec=spec,
                              edge_geometry_check=resolve_edge_geometry_check(config),
                              compile_trunk=compile_trunk)
-    launch, calls, caught = server._launch_pop, [], []
+    stage, enqueue, calls, caught = server._stage_pop, server._enqueue_pop, [], []
     frames_before = server.batch_timing_snapshot()["compile"]["frames_ok"]
     if checked == 1:
         # Compile, autotune and library handles happen here, eagerly: the checked first pop is left with the capture.
         _prewarm(server, spec, _positions(config["identity"]["encoding"]))
 
-    def checked_launch(*args: Any) -> Any:
-        calls.append(1)
-        if len(calls) != checked:
-            return launch(*args)
-        torch.cuda.synchronize()
-        torch.cuda.set_sync_debug_mode("error")
-        try:
-            if plant is not None:
-                plant()
-            return launch(*args)
-        except RuntimeError as exc:
-            caught.append(exc)
-            raise
-        finally:
-            torch.cuda.set_sync_debug_mode("default")
+    def checked_step(step: Any) -> Any:
+        def run(*args: Any) -> Any:
+            if step is stage:
+                calls.append(1)
+            if len(calls) != checked:
+                return step(*args)
+            torch.cuda.synchronize()
+            torch.cuda.set_sync_debug_mode("error")
+            try:
+                if plant is not None and step is stage:
+                    plant()
+                return step(*args)
+            except RuntimeError as exc:
+                caught.append(exc)
+                raise
+            finally:
+                torch.cuda.set_sync_debug_mode("default")
+        return run
 
-    server._launch_pop = checked_launch  # type: ignore[method-assign]
+    server._stage_pop = checked_step(stage)  # type: ignore[method-assign]
+    server._enqueue_pop = checked_step(enqueue)  # type: ignore[method-assign]
     server.start()
     positions = _positions(config["identity"]["encoding"])
     try:

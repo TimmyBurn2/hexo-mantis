@@ -102,7 +102,8 @@ def test_fg7_04_a_mid_plan_failure_submits_nothing_and_fails_every_id(
 
 #: The loop's failure surface since A4-4 spans the loop and its two pipeline stages plus the
 #: one failure path they share; the census walks their union, not the loop body alone.
-_LOOP_FUNCTIONS = ("_run_graph_loop", "_launch_pop", "_retire", "_retire_or_fail", "_fail_pop")
+_LOOP_FUNCTIONS = ("_run_graph_loop", "_serve_pops", "_stage_pop", "_enqueue_pop", "_retire", "_retire_or_fail",
+                   "_fail_pop")
 
 
 def _graph_loop_ast() -> ast.Module:

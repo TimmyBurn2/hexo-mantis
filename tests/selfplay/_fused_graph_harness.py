@@ -15,7 +15,9 @@ differ between the split and un-split drives for a CORRECT implementation.
 """
 from __future__ import annotations
 
+import threading
 import time
+from collections.abc import Callable
 from typing import Any
 
 import numpy as np
@@ -156,15 +158,17 @@ class SentinelGraphNet(torch.nn.Module):
     and nothing downstream of the server checks `values[i]` ordering at all.
     """
 
-    def __init__(self, *, oom_on_call: int | None = None) -> None:
+    def __init__(self, *, oom_on_call: int | None = None, oom_on_uid: int | None = None) -> None:
         super().__init__()
         self.dummy = torch.nn.Parameter(torch.zeros(1))
         self.calls: list[tuple[int, int]] = []
         self._oom_on_call = oom_on_call
+        self._oom_on_uid = oom_on_uid
 
     def forward_batch(self, x, edge_index, edge_attr, legal_index, stone_mask, node_offsets, edge_vocab=None):
         self.calls.append((int(x.shape[0]), int(edge_index.shape[1])))
-        if self._oom_on_call is not None and len(self.calls) == self._oom_on_call:
+        hit_uid = self._oom_on_uid is not None and bool((x[:, 0] == self._oom_on_uid).any())
+        if hit_uid or (self._oom_on_call is not None and len(self.calls) == self._oom_on_call):
             raise torch.cuda.OutOfMemoryError(
                 "CUDA out of memory. Tried to allocate 1.72 GiB (simulated)"
             )
@@ -183,17 +187,20 @@ class ScriptedGraphBatcher:
 
     def __init__(self, pops: list[GraphWirePayload]) -> None:
         self._pops = list(pops)
+        # The server's two threads pop it at once: the check-then-pop is one step.
+        self._lock = threading.Lock()
         self.server: InferenceServer | None = None
         self.results: list[tuple] = []
         self.failures: list[tuple[list[int], str]] = []
         self.closed = 0
 
     def next_graph_batch(self, batch_size: int, max_wait_ms: float):
-        if not self._pops:
-            assert self.server is not None, "the batcher must be bound to its server"
-            self.server._stop_event.set()
-            return [], None
-        payload = self._pops.pop(0)
+        with self._lock:
+            if not self._pops:
+                assert self.server is not None, "the batcher must be bound to its server"
+                self.server._stop_event.set()
+                return [], None
+            payload = self._pops.pop(0)
         return list(range(1, int(payload.n_graphs) + 1)), payload
 
     def submit_graph_inference_results(self, ids, probs, offsets, values) -> None:
@@ -233,6 +240,14 @@ def graph_cfg(
     return {"inference": inference, "encoding": "gnn_axis_v1"}
 
 
+def stub_collate(monkeypatch: Any, collate: Callable[..., Any]) -> None:
+    """Stand `collate` in for the server's staged collate: the stage call returns its batch, the ship passes it on."""
+    import mantis.selfplay.graph_collate as collate_mod
+
+    monkeypatch.setattr(collate_mod, "stage_graph_batch", collate)
+    monkeypatch.setattr(collate_mod, "ship_graph_batch", lambda staged, *_a, **_kw: staged)
+
+
 def drive_one_pop(
     monkeypatch: Any,
     payload: GraphWirePayload,
@@ -243,9 +258,7 @@ def drive_one_pop(
     batch_size: int = 64,
 ) -> tuple[InferenceServer, ScriptedGraphBatcher, torch.nn.Module]:
     """Run the REAL `_run_graph_loop` over one pop, returning `(server, batcher, net)`."""
-    import mantis.selfplay.graph_collate as collate_mod
-
-    monkeypatch.setattr(collate_mod, "collate_graph_batch", collate_from_payload)
+    stub_collate(monkeypatch, collate_from_payload)
     model = net if net is not None else SentinelGraphNet()
     batcher = ScriptedGraphBatcher([payload])
     server = InferenceServer(
@@ -345,6 +358,7 @@ class CountingGraphBatcher:
         self._wire = wire
         self._counts = list(counts)
         self._wait_s = wait_s
+        self._lock = threading.Lock()
         self.server: InferenceServer | None = None
         self.results: list[tuple] = []
         self.failures: list[tuple[list[int], str]] = []
@@ -354,11 +368,13 @@ class CountingGraphBatcher:
     def next_graph_batch(self, batch_size: int, max_wait_ms: float):
         if self._wait_s:
             time.sleep(self._wait_s)
-        if not self._counts:
-            assert self.server is not None
-            self.server._stop_event.set()
-            return [], None
-        return list(range(1, self._counts.pop(0) + 1)), self._wire
+        with self._lock:
+            if not self._counts:
+                assert self.server is not None
+                self.server._stop_event.set()
+                return [], None
+            count = self._counts.pop(0)
+        return list(range(1, count + 1)), self._wire
 
     def submit_graph_inference_results(self, ids, probs, offsets, values) -> None:
         self.results.append((list(ids), probs, offsets, values))

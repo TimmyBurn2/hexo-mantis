@@ -322,6 +322,19 @@ def _payload_from_getters(gw: Any) -> GraphWirePayload:
     )
 
 
+@dataclass(frozen=True)
+class StagedGraphBatch:
+    """One wire checked and packed into its host block (pinned for CUDA); `ship_graph_batch` puts it on the device."""
+
+    staged: list[Any]
+    n_graphs: int
+    n_nodes: int
+    n_edges: int
+    node_feat_dim: int
+    edge_feat_dim: int
+    coded_edges: bool
+
+
 def collate_graph_batch(
     wire: Any,
     expected_version: int = 1,
@@ -340,12 +353,43 @@ def collate_graph_batch(
     pad_to: tuple[int, int, int, int] | None = None,
     device_out: Sequence[Any] | None = None,
 ) -> GraphBatch:
-    """Validate and collate one block-diagonal graph wire into a `GraphBatch`.
+    """`stage_graph_batch` then `ship_graph_batch` onto `device` or into `device_out`; Raises: GraphContractError, RuntimeError (as staged)."""
+    import torch  # deferred: keeps this module import-safe in torch-free envs
+
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    staged = stage_graph_batch(
+        wire, expected_version, trunk_size=trunk_size, win_length=win_length,
+        node_feat_dim=node_feat_dim, edge_feat_dim=edge_feat_dim, device=device, semantic=semantic,
+        canary_period=canary_period, allow_oracle_builder=allow_oracle_builder,
+        target_argmax_cells=target_argmax_cells, deferred_edge_geometry=deferred_edge_geometry,
+        coded_edges=coded_edges, pad_to=pad_to)
+    return ship_graph_batch(staged, device, device_out)
+
+
+def stage_graph_batch(
+    wire: Any,
+    expected_version: int = 1,
+    *,
+    trunk_size: int,
+    win_length: int,
+    node_feat_dim: int,
+    edge_feat_dim: int,
+    device: str,
+    semantic: str = "full",
+    canary_period: int = 64,
+    allow_oracle_builder: bool = False,
+    target_argmax_cells: Sequence[tuple[int, int] | None] | None = None,
+    deferred_edge_geometry: list[EdgeGeometryCheck] | None = None,
+    coded_edges: bool = False,
+    pad_to: tuple[int, int, int, int] | None = None,
+) -> StagedGraphBatch:
+    """Validate one block-diagonal graph wire and pack it into a host block, touching no device.
 
     `semantic`: "full" (trainer), "canary" (hot path — first + every Nth) or "off". The
     structural layer always runs full, and any mismatch raises a NAMED `GraphContractError`.
     `deferred_edge_geometry`: a sink for check 14 — when given, the check is appended to it
-    instead of run, exactly when it would have run, for the caller's checker thread. `coded_edges`: each edge's vocabulary code, not its row; `pad_to` `(graphs, nodes, edges, legal)`: one padding graph to those sizes; `device_out`: the flat tensors to fill.
+    instead of run, exactly when it would have run, for the caller's checker thread. `coded_edges`: each edge's vocabulary code, not its row; `pad_to` `(graphs, nodes, edges, legal)`: one padding graph to those sizes; `device`: whose type pins the block.
 
     THE FOUR GEOMETRY PARAMETERS ARE REQUIRED: they are the EXPECTED geometry the wire is
     checked against, so a default is a silent expectation and a payload re-captured at another
@@ -356,9 +400,6 @@ def collate_graph_batch(
         RuntimeError: the staged block and the wire disagree in the Rust pack, a wiring break, never a contract error.
     """
     import torch  # deferred: keeps this module import-safe in torch-free envs
-
-    if device is None:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # --- resolver step 1: contract-version handshake (§2.3) ---
     cv = int(wire.contract_version)
@@ -435,18 +476,23 @@ def collate_graph_batch(
             edge_feat_dim, target_argmax_cells, deferred_edge_geometry,
         )
 
-    # --- resolver step 4: the block's arrays on the device (edge_index already global) ---
-    x, ei, edges, lo, lg, no, ns = _ship(staged, device, device_out)
+    return StagedGraphBatch(staged=staged, n_graphs=B_out, n_nodes=N_out, n_edges=E_out,
+                            node_feat_dim=node_feat_dim, edge_feat_dim=edge_feat_dim, coded_edges=coded_edges)
+
+
+def ship_graph_batch(s: StagedGraphBatch, device: str, device_out: Sequence[Any] | None = None) -> GraphBatch:
+    """Resolver step 4: the staged arrays on `device` or copied into `device_out`; Raises: RuntimeError, OutOfMemoryError."""
+    x, ei, edges, lo, lg, no, ns = _ship(s.staged, device, device_out)
     return GraphBatch(
-        x=x.reshape(N_out, node_feat_dim),
-        edge_index=ei.reshape(2, E_out),
-        edge_attr=None if coded_edges else edges.reshape(E_out, edge_feat_dim),
-        edge_code=edges if coded_edges else None,
+        x=x.reshape(s.n_nodes, s.node_feat_dim),
+        edge_index=ei.reshape(2, s.n_edges),
+        edge_attr=None if s.coded_edges else edges.reshape(s.n_edges, s.edge_feat_dim),
+        edge_code=edges if s.coded_edges else None,
         legal_offsets=lo,
         legal_node_gather=lg,
         node_offsets=no,
         n_stones=ns,
-        n_graphs=B_out,
+        n_graphs=s.n_graphs,
         device=device,
     )
 
@@ -733,12 +779,15 @@ __all__ = [
     "ScatterSlotAliasing",
     "ScatterSlotCanonicalMismatch",
     "ScatterSlotOutOfBounds",
+    "StagedGraphBatch",
     "collate_graph_batch",
-    "ship_host_arrays",
     "graph_wire_from_rust",
     "reset_semantic_canary",
     "segment_ids",
     "segment_softmax",
     "segment_sum",
+    "ship_graph_batch",
+    "ship_host_arrays",
+    "stage_graph_batch",
     "stone_mask_from_batch",
 ]

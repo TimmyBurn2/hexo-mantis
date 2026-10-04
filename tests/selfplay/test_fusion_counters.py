@@ -147,9 +147,7 @@ def test_fg4_07_the_lever_stays_visible_at_zero_on_the_producing_path(monkeypatc
 def test_fg4_07_the_instrument_is_defined_before_the_first_forward(monkeypatch) -> None:
     """Before the first forward the caps are known, the counters are zero and the
     distributions are `None` — no division by zero, no fabricated zero."""
-    import mantis.selfplay.graph_collate as collate_mod
-
-    monkeypatch.setattr(collate_mod, "collate_graph_batch", H.collate_from_payload)
+    H.stub_collate(monkeypatch, H.collate_from_payload)
     server = InferenceServer(
         H.SentinelGraphNet(), torch.device("cpu"), H.graph_cfg(4_500_000, 170_000),
         batcher=H.ScriptedGraphBatcher([]), encoding_spec=H.GRAPH_SPEC,

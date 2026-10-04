@@ -180,6 +180,28 @@ class _InFlightPop:
     event: Any = None
 
 
+@dataclass
+class _StagedPart:
+    """One part checked and packed on the host, with the sizes its forward and its bookkeeping read."""
+
+    staged: Any
+    bucket: Bucket | None
+    n_nodes: int
+    n_edges: int
+    n_legal: int
+    n_graphs: int
+
+
+@dataclass
+class _StagedPop:
+    """One pop's parts staged by a server thread, before it takes the forward lock."""
+
+    request_ids: list[int]
+    legal_offsets: np.ndarray
+    parts: list[_StagedPart] = field(default_factory=list)
+    pending_checks: list[tuple[Any, Any, tuple[int, int]]] = field(default_factory=list)
+
+
 #: What a caller hands the server so a contract failure lands on disk. A CALLABLE and not a dict,
 #: because the context changes DURING the round and a snapshot would record the arming, not the fire.
 CollateDumpTarget = tuple[str, "Callable[[], dict[str, Any]]"]
@@ -247,7 +269,7 @@ class _EdgeGeometryChecker(threading.Thread):
 
 
 #: Pops launched and not yet dispatched: the one on the device plus the one being dispatched.
-#: The server thread blocks on a third, which bounds the un-dispatched inputs held on the device.
+#: A server thread blocks on a third, which bounds the un-dispatched inputs held on the device.
 _PIPELINE_DEPTH = 2
 
 
@@ -401,6 +423,12 @@ class InferenceServer(threading.Thread):
         self._batcher = batcher or InferenceBatcher(encoding_spec=self.encoding_spec)
         self._stop_event = threading.Event()
         self._weights_lock = threading.Lock()
+        # The server threads' shared counters: each recorder's read-modify-writes as one.
+        self._stats_lock = threading.Lock()
+        # The second server thread's own fire rate: each thread's launched pops, and stages begun beside another's.
+        self._thread_pops: dict[str, int] = {}
+        self._staging = 0
+        self._overlapped_stages = 0
         self._forward_count = 0
         self._total_requests = 0
         if self._compile_trunk:
@@ -482,19 +510,32 @@ class InferenceServer(threading.Thread):
 
     def _record_batch_wait(self, wait_s: float, n_requests: int) -> None:
         """Accumulate ONE served pop's collector wait and occupancy; aggregate, never emit."""
-        self._batch_wait_count += 1
-        self._batch_wait_total_s += wait_s
-        if self._batch_wait_min_s is None or wait_s < self._batch_wait_min_s:
-            self._batch_wait_min_s = wait_s
-        if self._batch_wait_max_s is None or wait_s > self._batch_wait_max_s:
-            self._batch_wait_max_s = wait_s
-        self._occupancy_total += n_requests
-        if self._occupancy_min is None or n_requests < self._occupancy_min:
-            self._occupancy_min = n_requests
-        if self._occupancy_max is None or n_requests > self._occupancy_max:
-            self._occupancy_max = n_requests
-        bucket = _pow2_bucket(n_requests)
-        self._occupancy_hist[bucket] = self._occupancy_hist.get(bucket, 0) + 1
+        with self._stats_lock:
+            self._batch_wait_count += 1
+            self._batch_wait_total_s += wait_s
+            if self._batch_wait_min_s is None or wait_s < self._batch_wait_min_s:
+                self._batch_wait_min_s = wait_s
+            if self._batch_wait_max_s is None or wait_s > self._batch_wait_max_s:
+                self._batch_wait_max_s = wait_s
+            self._occupancy_total += n_requests
+            if self._occupancy_min is None or n_requests < self._occupancy_min:
+                self._occupancy_min = n_requests
+            if self._occupancy_max is None or n_requests > self._occupancy_max:
+                self._occupancy_max = n_requests
+            bucket = _pow2_bucket(n_requests)
+            self._occupancy_hist[bucket] = self._occupancy_hist.get(bucket, 0) + 1
+
+    def _note_enqueued(self, n_requests: int) -> None:
+        """Count one served pop's requests; the run's first emits `first_inference_enqueued`."""
+        with self._stats_lock:
+            self._total_requests += n_requests
+            first, self._first_enqueued_emitted = not self._first_enqueued_emitted, True
+        if first and self._sink is not None:
+            self._sink.emit({
+                "event": "first_inference_enqueued",
+                "batch_size": n_requests,
+                "representation": "graph",
+            })
 
     def _dump_collate_failure(
         self, wire: Any, error: BaseException, span: tuple[int, int]
@@ -519,12 +560,13 @@ class InferenceServer(threading.Thread):
 
     def _record_collate(self, collate_s: float) -> None:
         """Accumulate ONE successful collate, counted separately from the wait sample."""
-        self._collate_count += 1
-        self._collate_total_s += collate_s
-        if self._collate_min_s is None or collate_s < self._collate_min_s:
-            self._collate_min_s = collate_s
-        if self._collate_max_s is None or collate_s > self._collate_max_s:
-            self._collate_max_s = collate_s
+        with self._stats_lock:
+            self._collate_count += 1
+            self._collate_total_s += collate_s
+            if self._collate_min_s is None or collate_s < self._collate_min_s:
+                self._collate_min_s = collate_s
+            if self._collate_max_s is None or collate_s > self._collate_max_s:
+                self._collate_max_s = collate_s
 
     def _record_gpu_wait(self, wait_s: float) -> None:
         """Accumulate ONE retired pop's device stage (the retirer picks it up at launch)."""
@@ -536,41 +578,46 @@ class InferenceServer(threading.Thread):
             self._gpu_wait_max_s = wait_s
 
     def _record_launch(self, launch_s: float) -> None:
-        """Accumulate ONE pop's CPU stage after the pop: plan, collate, forward launch, D2H queue."""
-        self._launch_count += 1
-        self._launch_total_s += launch_s
-        if self._launch_min_s is None or launch_s < self._launch_min_s:
-            self._launch_min_s = launch_s
-        if self._launch_max_s is None or launch_s > self._launch_max_s:
-            self._launch_max_s = launch_s
+        """Accumulate ONE pop's CPU stage after the pop, and count it to the server thread that launched it."""
+        name = threading.current_thread().name
+        with self._stats_lock:
+            self._thread_pops[name] = self._thread_pops.get(name, 0) + 1
+            self._launch_count += 1
+            self._launch_total_s += launch_s
+            if self._launch_min_s is None or launch_s < self._launch_min_s:
+                self._launch_min_s = launch_s
+            if self._launch_max_s is None or launch_s > self._launch_max_s:
+                self._launch_max_s = launch_s
 
     def _record_fusion_plan(self, n_parts: int, edge_hits: int, node_hits: int) -> None:
         """Accumulate ONE plan: `fusion_splits` counts POPS THAT SPLIT; `fusion_bound_hits` says
         which member forced each cut."""
-        if n_parts > 1:
-            self._fusion_splits += 1
-        self._fusion_bound_hits["edges"] += edge_hits
-        self._fusion_bound_hits["nodes"] += node_hits
+        with self._stats_lock:
+            if n_parts > 1:
+                self._fusion_splits += 1
+            self._fusion_bound_hits["edges"] += edge_hits
+            self._fusion_bound_hits["nodes"] += node_hits
 
     def _record_fusion_part(self, n_nodes: int, n_edges: int) -> None:
         """Accumulate ONE bounded forward's `(N, E)`, per PART — the part is where the cap applies."""
-        self._fusion_parts += 1
-        self._fused_edges_count += 1
-        self._fused_edges_total += n_edges
-        if self._fused_edges_min is None or n_edges < self._fused_edges_min:
-            self._fused_edges_min = n_edges
-        if self._fused_edges_max is None or n_edges > self._fused_edges_max:
-            self._fused_edges_max = n_edges
-        bucket_e = _pow2_bucket(n_edges)
-        self._fused_edges_hist[bucket_e] = self._fused_edges_hist.get(bucket_e, 0) + 1
-        self._fused_nodes_count += 1
-        self._fused_nodes_total += n_nodes
-        if self._fused_nodes_min is None or n_nodes < self._fused_nodes_min:
-            self._fused_nodes_min = n_nodes
-        if self._fused_nodes_max is None or n_nodes > self._fused_nodes_max:
-            self._fused_nodes_max = n_nodes
-        bucket_n = _pow2_bucket(n_nodes)
-        self._fused_nodes_hist[bucket_n] = self._fused_nodes_hist.get(bucket_n, 0) + 1
+        with self._stats_lock:
+            self._fusion_parts += 1
+            self._fused_edges_count += 1
+            self._fused_edges_total += n_edges
+            if self._fused_edges_min is None or n_edges < self._fused_edges_min:
+                self._fused_edges_min = n_edges
+            if self._fused_edges_max is None or n_edges > self._fused_edges_max:
+                self._fused_edges_max = n_edges
+            bucket_e = _pow2_bucket(n_edges)
+            self._fused_edges_hist[bucket_e] = self._fused_edges_hist.get(bucket_e, 0) + 1
+            self._fused_nodes_count += 1
+            self._fused_nodes_total += n_nodes
+            if self._fused_nodes_min is None or n_nodes < self._fused_nodes_min:
+                self._fused_nodes_min = n_nodes
+            if self._fused_nodes_max is None or n_nodes > self._fused_nodes_max:
+                self._fused_nodes_max = n_nodes
+            bucket_n = _pow2_bucket(n_nodes)
+            self._fused_nodes_hist[bucket_n] = self._fused_nodes_hist.get(bucket_n, 0) + 1
 
     def _fusion_snapshot(self) -> dict[str, Any] | None:
         """The `fusion` sub-block, or `None` with no caps resolved. `caps` travels WITH the
@@ -600,6 +647,8 @@ class InferenceServer(threading.Thread):
         """Cumulative-since-start snapshot of the graph loop's batching instrument. `batch_size`
         and `max_wait_ms` travel with it, since a wait or an occupancy is unreadable without the
         deadline and the denominator behind it; a reading with no sample is `None`, never 0."""
+        with self._stats_lock:
+            threads = {"pops": dict(self._thread_pops), "overlapped_stages": self._overlapped_stages}
         return {
             "representation": "graph",
             "batch_size": self._batch_size,
@@ -644,6 +693,7 @@ class InferenceServer(threading.Thread):
             # One pop in flight, and the wait its retire spent on the device.
             "pipeline": {
                 "depth": _PIPELINE_DEPTH,
+                "server_threads": threads,
                 "launch": _timing_agg(
                     self._launch_count, self._launch_total_s,
                     self._launch_min_s, self._launch_max_s,
@@ -701,69 +751,94 @@ class InferenceServer(threading.Thread):
             # Constructed at __init__ on the graph branch; a re-run after a stop needs a new one.
             retirer = self._retirer = _PopRetirer(self)
         retirer.start()
+        # The second server thread: this one and it pop the one queue, so one's collate runs beside the other's.
+        helper = threading.Thread(target=self._serve_pops, args=(geometry, retirer), daemon=True,
+                                  name="inference-server-2")
         try:
-            while not self._stop_event.is_set():
-                try:
-                    _t_wait_start = time.perf_counter()
-                    request_ids, wire = self._batcher.next_graph_batch(
-                        self._batch_size, self._max_wait_ms,
-                    )
-                    _wait_s = time.perf_counter() - _t_wait_start
-                    if not request_ids:
-                        # An empty pop is a deadline that expired with nothing queued: not a
-                        # served-batch wait, and it must not enter the wait mean.
-                        self._empty_polls += 1
-                        continue
-                    self._record_batch_wait(_wait_s, len(request_ids))
-                    if not self._first_enqueued_emitted:
-                        self._first_enqueued_emitted = True
-                        if self._sink is not None:
-                            self._sink.emit({
-                                "event": "first_inference_enqueued",
-                                "batch_size": len(request_ids),
-                                "representation": "graph",
-                            })
-                    self._total_requests += len(request_ids)
-                    # The depth bound: a third un-dispatched pop waits here for the retirer.
-                    retirer.slots.acquire()
-                    try:
-                        # Detect-and-halt one batch later: a check-14 failure found after its
-                        # batch was served is raised HERE, so this pop's waiters take it through
-                        # the loop's one failure path and the runner's latch fires as inline did.
-                        if self._deferred_contract_failure is not None:
-                            raise RuntimeError(
-                                f"deferred edge-geometry check failed: "
-                                f"{self._deferred_contract_failure}"
-                            ) from self._deferred_contract_failure
-                        _t_launch = time.perf_counter()
-                        launched = self._launch_pop(request_ids, wire, geometry)
-                        self._record_launch(time.perf_counter() - _t_launch)
-                        retirer.submit(launched)
-                    except Exception as exc:  # noqa: BLE001 — reported to Rust waiters
-                        retirer.slots.release()
-                        self._fail_pop(request_ids, exc)
-                except Exception:  # noqa: BLE001 — loop keeps serving next batch
-                    _LOG.exception("inference_server_graph_loop_error")
-                    if self._stop_event.is_set():
-                        break
+            helper.start()
+            self._serve_pops(geometry, retirer)
         finally:
-            # Everything launched is dispatched before the queues close under the waiters.
+            # Both server threads leave their loops, then everything launched is dispatched before
+            # the queues close under the waiters.
+            self._stop_event.set()
+            if helper.ident is not None:
+                helper.join()
             retirer.drain_and_stop()
             retirer.join()
             self._batcher.close()
+
+    def _serve_pops(self, geometry: _CollateGeometry, retirer: _PopRetirer) -> None:
+        """One server thread: pop and stage beside the others, then launch under the forward lock."""
+        while not self._stop_event.is_set():
+            try:
+                _t_wait_start = time.perf_counter()
+                request_ids, wire = self._batcher.next_graph_batch(
+                    self._batch_size, self._max_wait_ms,
+                )
+                _wait_s = time.perf_counter() - _t_wait_start
+                if not request_ids:
+                    # An empty pop is a deadline that expired with nothing queued: not a
+                    # served-batch wait, and it must not enter the wait mean.
+                    with self._stats_lock:
+                        self._empty_polls += 1
+                    continue
+                self._record_batch_wait(_wait_s, len(request_ids))
+                self._note_enqueued(len(request_ids))
+                slot = False
+                try:
+                    # Detect-and-halt one batch later: a check-14 failure found after its
+                    # batch was served is raised HERE, so this pop's waiters take it through
+                    # the loop's one failure path and the runner's latch fires as inline did.
+                    if self._deferred_contract_failure is not None:
+                        raise RuntimeError(
+                            f"deferred edge-geometry check failed: "
+                            f"{self._deferred_contract_failure}"
+                        ) from self._deferred_contract_failure
+                    _t_stage = time.perf_counter()
+                    staged = self._stage_counted(request_ids, wire, geometry)
+                    stage_s = time.perf_counter() - _t_stage
+                    # The depth bound: a third un-dispatched pop waits here for the retirer.
+                    slot = retirer.slots.acquire()
+                    with self._weights_lock:
+                        _t_launch = time.perf_counter()
+                        launched = self._enqueue_pop(staged)
+                        self._record_launch(stage_s + time.perf_counter() - _t_launch)
+                        # Handed over in the stream's order, so the retirer waits on events as they complete;
+                        # from here the retirer releases the slot.
+                        retirer.submit(launched)
+                        slot = False
+                except Exception as exc:  # noqa: BLE001 — reported to Rust waiters
+                    if slot:
+                        retirer.slots.release()
+                    self._fail_pop(request_ids, exc)
+            except Exception:  # noqa: BLE001 — loop keeps serving next batch
+                _LOG.exception("inference_server_graph_loop_error")
+                if self._stop_event.is_set():
+                    break
 
     def _serve(self, batch: Any) -> tuple[torch.Tensor, torch.Tensor]:
         """One part's `(probs, values)`, eager: the function every bucket captures."""
         return served_outputs(self.model, batch, self._edge_vocab, trunk=self._trunk, amp_dtype=self._amp_dtype)
 
-    def _launch_pop(
+    def _stage_counted(self, request_ids: list[int], wire: Any, geometry: _CollateGeometry) -> _StagedPop:
+        """`_stage_pop`, counting a stage begun while another server thread was staging; raises as it does."""
+        with self._stats_lock:
+            self._overlapped_stages += self._staging > 0
+            self._staging += 1
+        try:
+            return self._stage_pop(request_ids, wire, geometry)
+        finally:
+            with self._stats_lock:
+                self._staging -= 1
+
+    def _stage_pop(
         self, request_ids: list[int], wire: Any, geometry: _CollateGeometry,
-    ) -> _InFlightPop:
-        """The CPU stage of one pop: plan, collate, queue the forward and its D2H; raises."""
+    ) -> _StagedPop:
+        """The CPU stage of one pop, touching no device: plan, check and pack each part; raises."""
         from mantis.selfplay.graph_collate import (
             GraphContractError,
-            collate_graph_batch,
             graph_wire_from_rust,
+            stage_graph_batch,
         )
         from mantis.selfplay.graph_wire_split import plan_fused_forwards, slice_graph_wire
 
@@ -777,12 +852,11 @@ class InferenceServer(threading.Thread):
         self._record_fusion_plan(
             len(plan), *_fusion_bound_hits(plan, edge_counts, node_counts, caps),
         )
-        pop = _InFlightPop(
+        pop = _StagedPop(
             request_ids=request_ids,
             legal_offsets=np.ascontiguousarray(
                 np.asarray(payload.legal_offsets), dtype=np.int64),
         )
-        on_cuda = self.device.type == "cuda"
         for g0, g1 in plan:
             # A one-part plan IS the payload: the slice would copy `edge_index` (7 MB at B = 50)
             # and re-base every offset array to subtract zero, on the pipeline's bound stage.
@@ -793,7 +867,7 @@ class InferenceServer(threading.Thread):
             _t_collate_start = time.perf_counter()
             sink: list[Any] | None = [] if geometry.capture_checks else None
             try:
-                batch = collate_graph_batch(
+                staged = stage_graph_batch(
                     sub,
                     expected_version=1,
                     trunk_size=geometry.trunk_size,
@@ -807,7 +881,6 @@ class InferenceServer(threading.Thread):
                     coded_edges=True,
                     pad_to=None if bucket is None else (
                         bucket.n_graphs, bucket.n_nodes, bucket.n_edges, bucket.n_legal),
-                    device_out=None if bucket is None or self._graphs is None else self._graphs.inputs(bucket),
                 )
             except GraphContractError as exc:
                 # DUMP-ON-FIRE: the SLICE is what the check read, so the slice is what is
@@ -820,12 +893,26 @@ class InferenceServer(threading.Thread):
             if sink:
                 # One check per part: `_check_semantic` captures check 14 once.
                 pop.pending_checks.append((sink[0], sub, (g0, g1)))
+            pop.parts.append(_StagedPart(staged, bucket, n_part, e_part, lg_part, g1 - g0))
+        return pop
+
+    def _enqueue_pop(self, staged: _StagedPop) -> _InFlightPop:
+        """The device stage of one staged pop, under the forward lock: ship, forward and queue its D2H; raises."""
+        from mantis.selfplay.graph_collate import ship_graph_batch
+
+        pop = _InFlightPop(request_ids=staged.request_ids, legal_offsets=staged.legal_offsets,
+                           pending_checks=staged.pending_checks)
+        on_cuda = self.device.type == "cuda"
+        for part in staged.parts:
+            bucket = part.bucket
+            out = None if bucket is None or self._graphs is None else self._graphs.inputs(bucket)
+            batch = ship_graph_batch(part.staged, str(self.device), out)
             if self._forward_count == 0 and not pop.parts:
                 assert not self.model.training, (
                     "InferenceServer(graph) model entered hot loop in "
                     "train() mode; eval() should be set at __init__"
                 )
-            with self._weights_lock, torch.inference_mode():
+            with torch.inference_mode():
                 if bucket is None or self._graphs is None:
                     probs, values = self._serve(batch)
                     self._eager_parts += 1
@@ -834,19 +921,19 @@ class InferenceServer(threading.Thread):
                         raise RuntimeError("the collate did not fill the bucket's inputs; a replay would read stale ones")
                     probs, values = self._graphs.run(bucket, batch)
                     self._replayed_parts += 1
-                    self._padding[0] += n_part
+                    self._padding[0] += part.n_nodes
                     self._padding[1] += bucket.n_nodes
-                    self._padding[2] += e_part
+                    self._padding[2] += part.n_edges
                     self._padding[3] += bucket.n_edges
                     # The padding graph's rows sit past the part's own, sliced off before the copy.
-                    probs, values = probs[:lg_part], values[: g1 - g0]
+                    probs, values = probs[:part.n_legal], values[: part.n_graphs]
             # The D2H is queued behind the forward, into pinned host buffers on CUDA; nothing
             # here waits on the device. The finiteness gate runs on the host copy at retire.
             pop.parts.append((_to_host_async(probs, on_cuda), _to_host_async(values, on_cuda)))
-            self._record_fusion_part(n_part, e_part)
+            self._record_fusion_part(part.n_nodes, part.n_edges)
             # One FORWARD resident at a time: the allocator reuses this part's activations for
             # the next part's in stream order once the Python references are gone.
-            del sub, batch, probs, values
+            del batch, probs, values
         if on_cuda:
             pop.event = torch.cuda.Event()
             pop.event.record()

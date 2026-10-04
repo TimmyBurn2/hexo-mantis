@@ -70,20 +70,23 @@ class _PacedBatcher(H.ScriptedGraphBatcher):
     def __init__(self, pops) -> None:
         super().__init__(pops)
         self.handed_out = 0
+        # The server's two threads pace through one gate: the wait, the pop and the count are one step.
+        self._pace = threading.Lock()
 
     def next_graph_batch(self, batch_size: int, max_wait_ms: float):
         assert self.server is not None
-        checker = self.server._edge_geometry_checker
-        deadline = time.monotonic() + _DEADLINE_SEC
-        while len(self.results) + len(self.failures) < self.handed_out and time.monotonic() < deadline:
-            time.sleep(0.005)
-        served = len(self.results)  # only a SERVED pop hands the thread a check
-        if checker is not None and served:
-            while checker.processed < served and time.monotonic() < deadline:
+        with self._pace:
+            checker = self.server._edge_geometry_checker
+            deadline = time.monotonic() + _DEADLINE_SEC
+            while len(self.results) + len(self.failures) < self.handed_out and time.monotonic() < deadline:
                 time.sleep(0.005)
-        ids, payload = super().next_graph_batch(batch_size, max_wait_ms)
-        if ids:
-            self.handed_out += 1
+            served = len(self.results)  # only a SERVED pop hands the thread a check
+            if checker is not None and served:
+                while checker.processed < served and time.monotonic() < deadline:
+                    time.sleep(0.005)
+            ids, payload = super().next_graph_batch(batch_size, max_wait_ms)
+            if ids:
+                self.handed_out += 1
         return ids, payload
 
 

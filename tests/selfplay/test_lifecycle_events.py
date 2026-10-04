@@ -177,9 +177,7 @@ def test_first_record_drained_emits_on_first_non_empty_drain(monkeypatch) -> Non
 # first_inference_enqueued + first_inference_served (InferenceServer._run_graph_loop)
 def _drive_graph_pops(monkeypatch, pops: list[list[int]]) -> tuple[_RecordingSink, Any]:
     """Run the REAL graph loop over scripted pops (legal counts per graph) with a sink injected."""
-    import mantis.selfplay.graph_collate as collate_mod
-
-    monkeypatch.setattr(collate_mod, "collate_graph_batch", H.collate_from_payload)
+    H.stub_collate(monkeypatch, H.collate_from_payload)
     sink = _RecordingSink()
     batcher = H.ScriptedGraphBatcher(
         [H.build_payload(counts, uid_base=1 + 1000 * i) for i, counts in enumerate(pops)]
@@ -199,15 +197,16 @@ def test_first_inference_enqueued_emits_once(monkeypatch) -> None:
     """Producer test — the graph loop emits `first_inference_enqueued` on its first pop only."""
     sink, _ = _drive_graph_pops(monkeypatch, [[3, 4, 5], [2, 2]])
 
-    assert sink.named("first_inference_enqueued") == [
-        {"event": "first_inference_enqueued", "batch_size": 3, "representation": "graph"},
-    ]
+    # Two server threads pop at once: the first counted is either pop, and it alone emits.
+    (event,) = sink.named("first_inference_enqueued")
+    assert event in ({"event": "first_inference_enqueued", "batch_size": n, "representation": "graph"} for n in (3, 2))
 
 
 def test_first_inference_served_emits_once(monkeypatch) -> None:
     """Producer test — the retire stage emits `first_inference_served` on its first pop only."""
-    sink, _ = _drive_graph_pops(monkeypatch, [[3, 4, 5], [2, 2]])
+    sink, batcher = _drive_graph_pops(monkeypatch, [[3, 4, 5], [2, 2]])
 
+    # Two server threads: the first pop retired is whichever finished first, and it alone emits.
     assert sink.named("first_inference_served") == [
-        {"event": "first_inference_served", "batch_size": 3, "representation": "graph"},
+        {"event": "first_inference_served", "batch_size": len(batcher.results[0][0]), "representation": "graph"},
     ]

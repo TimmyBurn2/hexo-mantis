@@ -143,7 +143,9 @@ def test_distinct_pops_replayed_from_one_bucket_each_receive_their_own_outputs(p
     bucket = server._ladder[0]
     block = server.batch_timing_snapshot()["served_graphs"]
     assert block["captured"] == 1 and block["replayed_parts"] == 3 and block["eager_parts"] == 0
-    for (_ids, probs, _offsets, values), payload in zip(results, pops, strict=True):
+    # Two server threads: pops complete in either order, so each result is matched to its pop by its legal offsets.
+    for payload in pops:
+        ((_ids, probs, _offsets, values),) = [r for r in results if np.array_equal(r[2], payload.legal_offsets)]
         want_probs, want_values = _padded_eager(net, payload, bucket)
         assert np.array_equal(probs, want_probs) and np.array_equal(values, want_values)
 

@@ -22,7 +22,6 @@ from _fused_graph_harness import (
     server_cfg,
     wire_for,
 )
-import mantis.selfplay.graph_collate as collate_mod
 from mantis.selfplay.graph_collate import GraphBatch
 from mantis.selfplay.inference_server import InferenceServer
 from mantis.selfplay.pool_hooks import batch_fill_pct
@@ -50,7 +49,7 @@ def _run_graph_server(
             time.sleep(collate_s)
         return batch
 
-    monkeypatch.setattr(collate_mod, "collate_graph_batch", _collate)
+    H.stub_collate(monkeypatch, _collate)
     batcher = CountingGraphBatcher(wire_for(), counts, wait_s=wait_s)
     server = InferenceServer(
         FiniteGraphNet(), device, server_cfg(inference_batch_size=batch_size),
@@ -80,8 +79,8 @@ def test_the_graph_loop_measures_its_own_collector_wait_and_collate_cost(
     assert snap["collate"]["count"] == 3
     assert snap["collate"]["min_ms"] >= 2.0
     # The stop-pop returned no requests: a deadline that expired empty is counted apart
-    # from the served waits, never folded into their mean.
-    assert snap["empty_polls"] == 1
+    # from the served waits, never folded into their mean — one per server thread that met it.
+    assert 1 <= snap["empty_polls"] <= 2
 
 
 def test_an_occupancy_histogram_separates_always_one_from_a_mixed_load(
@@ -107,7 +106,7 @@ def test_an_occupancy_histogram_separates_always_one_from_a_mixed_load(
 
 def test_the_instrument_is_defined_before_the_first_forward(device, monkeypatch) -> None:
     """Read before any batch: every derived reading is `None`, never a fabricated zero."""
-    monkeypatch.setattr(collate_mod, "collate_graph_batch", lambda *a, **kw: None)
+    H.stub_collate(monkeypatch, lambda *a, **kw: None)
     server = InferenceServer(
         FiniteGraphNet(), device, server_cfg(inference_batch_size=64),
         batcher=CountingGraphBatcher(wire_for(), []), encoding_spec=H.GRAPH_SPEC,

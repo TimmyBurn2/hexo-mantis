@@ -11,6 +11,7 @@ returned path's place, because a diagnostic that turned a named contract failure
 """
 from __future__ import annotations
 
+import itertools
 import json
 import time
 from pathlib import Path
@@ -27,6 +28,10 @@ _WIRE_FIELDS = (
 )
 
 
+#: A process-wide sequence in every dump name, so no two dumps share one.
+_DUMP_SEQ = itertools.count()
+
+
 def write_collate_dump(
     wire: Any, *, dump_dir: str | Path, context: dict[str, Any], error: BaseException,
 ) -> str | None:
@@ -41,7 +46,8 @@ def write_collate_dump(
     try:
         out = Path(dump_dir)
         out.mkdir(parents=True, exist_ok=True)
-        stamp = f"{context.get('round_id', 'noround')}_{int(time.time() * 1000)}"
+        # Two server threads can dump in one millisecond; the milliseconds stay last for the rate bar.
+        stamp = f"{context.get('round_id', 'noround')}_{next(_DUMP_SEQ)}_{int(time.time() * 1000)}"
         arrays: dict[str, Any] = {}
         for name in _WIRE_FIELDS:
             value = getattr(wire, name, None)
