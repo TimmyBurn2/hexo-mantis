@@ -33,12 +33,15 @@ def test_the_value_rows_loss_is_the_value_mask_loss_forward_and_backward() -> No
     assert not torch.equal(masked, by_rows(rows[:-1]))
 
 
-def test_each_part_carries_its_value_mask_as_host_found_rows(tmp_path) -> None:
-    trainer = H.tiny_graph_trainer(tmp_path)
+@pytest.mark.parametrize("value_mask", [None, (0.5, 20261004)])
+def test_each_part_carries_its_value_mask_as_host_found_rows(tmp_path, value_mask) -> None:
+    """The rows the loss reads are the part's value_valid, re-drawn value mask included."""
+    trainer = H.tiny_graph_trainer(tmp_path, value_mask=value_mask)
     replay = H.ReplayWireBuffer(H.uniform_graph_buffer(8), 4)
     caps = H.caps_for_exactly(replay.wire, 2)
     built = _build_graph_parts(trainer, replay, H.GSPEC, batch_size=4, augment=False,
-                               caps_provider=lambda: MicrobatchCapsSpec(*caps), sample_threads_provider=lambda: 1)
+                               caps_provider=lambda: MicrobatchCapsSpec(*caps), sample_threads_provider=lambda: 1,
+                               value_mask=trainer.value_mask)
     for make in built["parts"]:
         inputs = make()
         assert torch.equal(inputs.value_rows, torch.from_numpy(np.flatnonzero(inputs.value_valid.numpy())))
