@@ -46,9 +46,15 @@ design, carried as a screen (R381(c) as re-stated by R384(c), CARD-RUN11-DESIGN)
   - Merge and boxes (R384(g)): `reg-1` rebased onto `dev` `9da49bdd` and pushed on 2026-10-04 (`origin/dev` =
     `ad3682d7`, local gates 24/24 green on it, CARD-REG-1-PUSH). Two matched boxes for the arms; renting is the
     operator's.
-  - **RUN11-PRE IN PROGRESS from 2026-10-04** (CARD-RUN11-PRE; branch `run11-pre`; local records
-    `mantis-records/run11-pre/`): L1 (the mask, the ramp, the field and key, the origin at deploy, the run monitor, the
-    drafted arm configs, the prereg) on the desktop, then L2's arms on two matched boxes. No arm is armed or started.
+  - **RUN11-PRE: L1 LANDED on branch `run11-pre` (unpushed), gates.exit ALL GREEN on `6a1156b7`; L2 awaits the
+    operator's word and the second box** (CARD-RUN11-PRE; local records `mantis-records/run11-pre/`). Landed: the
+    re-drawn value mask (`train.value_mask_redraw_p`), the fill ramp (`train.training_steps_fill_ramp`), the ring's
+    search value Σπ′·completedQ with the key renamed `train.value_target_search_weight`, the origin at deploy, the quick
+    arm's own m (`selfplay.gumbel_m_quick`, its width in `search_levers`), the run monitor (`tools/run_monitor`).
+    Contract v56, event manifest v12. Two fresh reviews, findings fixed. The prereg
+    (`docs/design/RUN11_PREREG_2026-10-04.md`) is drafted, unarmed and unhashed; the four arm configs are drafted
+    outside `configs/`. run10's ring bands would halt arm A's regime at its first save, so the prereg re-derives them
+    on every arm-A-family ring on record. No arm is armed or started.
 
 - **REG-1 EXITED 2026-10-03, ACCEPTED by R384(a)** (CARD-REG-1; branch `reg-1`; local records
   `mantis-records/reg-1/` EXIT.md + READINGS.md).

@@ -151,7 +151,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   - **Its two free reads:**
     - the field's semantics on run8's `search_stats` (CARD-RING-V3-SEMANTICS);
     - the calibrated exam floors (CARD-EXAMS-CALIBRATED).
-- **CARD-RUN11-PRE — IN PROGRESS from 2026-10-04: its packet is RUN11-PRE (architect, 2026-10-03), branch `run11-pre`.
+- **CARD-RUN11-PRE — L1 LANDED 2026-10-04 on branch `run11-pre` (gates.exit green on `6a1156b7`); L2 awaits the
+  operator's word and the second box. Its packet is RUN11-PRE (architect, 2026-10-03).
   RE-SPECIFIED by R384(d): run11's first leg, not a twin.**
   - The packet's legs: L1 on the desktop (L1a the mask, L1b the ramp, L1c the field and the key, L1d the origin at
     deploy, L1e the run monitor, L1f the template and the four drafted arm configs, L1g the prereg); L2 the arms on two
