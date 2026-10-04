@@ -41,11 +41,12 @@ def _with(home: str, block: Any) -> dict[str, Any]:
 
 
 @pytest.mark.parametrize("path", _CONFIGS, ids=lambda p: p.name)
-def test_every_minted_config_states_the_explicit_off_in_both_homes(path: Path) -> None:
-    config = load_config(str(path))
-    assert config.deploy.search.tactics is None
-    assert config.selfplay.search.tactics is None
-    assert resolve_deploy_tactics(config.model_dump()) is None
+def test_every_minted_config_states_the_off_or_the_block_of_record_alike_in_both_homes(path: Path) -> None:
+    """A config states its posture in both homes: the explicit off, or the deploy block of record armed alike."""
+    config = load_config(str(path)).model_dump()
+    deploy, selfplay = config["deploy"]["search"]["tactics"], config["selfplay"]["search"]["tactics"]
+    assert deploy == selfplay and deploy in (None, _BLOCK), f"{path.name}: deploy {deploy}, self-play {selfplay}"
+    assert (resolve_deploy_tactics(config) is None) == (deploy is None)
 
 
 def test_the_key_is_required_not_defaulted() -> None:
