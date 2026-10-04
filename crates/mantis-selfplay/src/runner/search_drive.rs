@@ -70,6 +70,9 @@ pub(crate) struct MoveAccumulators<'a> {
     /// The Gumbel round's width; zero on a PUCT run, whose reader omits the mean.
     pub(crate) gumbel_round_leaves: &'a AtomicU64,
     pub(crate) gumbel_rounds: &'a AtomicU64,
+    /// The quick arm's share of those two terms: its own width, set by its own m.
+    pub(crate) gumbel_quick_round_leaves: &'a AtomicU64,
+    pub(crate) gumbel_quick_rounds: &'a AtomicU64,
     /// Root Dirichlet applications; zero on a Gumbel run by construction.
     pub(crate) dirichlet_root_fires: &'a AtomicU64,
     pub(crate) positions_generated: &'a AtomicUsize,
@@ -158,6 +161,8 @@ pub(crate) enum MoveOutcome {
 pub(crate) struct GumbelRoundCounters<'a> {
     pub(crate) round_leaves: &'a AtomicU64,
     pub(crate) rounds: &'a AtomicU64,
+    /// The same two terms counted again for a quick-arm search; `None` on a full one.
+    pub(crate) quick: Option<(&'a AtomicU64, &'a AtomicU64)>,
     /// The PUCT arm's root-noise fires ride the same handle; the Gumbel arm never touches it.
     pub(crate) dirichlet_root_fires: &'a AtomicU64,
 }
@@ -512,6 +517,10 @@ fn run_mcts_search(
                 // not in the run cannot be told from one issuing a leaf per trip.
                 rounds.round_leaves.fetch_add(n as u64, Ordering::Relaxed);
                 rounds.rounds.fetch_add(1, Ordering::Relaxed);
+                if let Some((leaves, count)) = rounds.quick {
+                    leaves.fetch_add(n as u64, Ordering::Relaxed);
+                    count.fetch_add(1, Ordering::Relaxed);
+                }
                 spent += n;
             }
             McTSSearchResult::Completed(Some(state), root_sims + spent)
@@ -652,6 +661,10 @@ pub(crate) fn play_one_move(
         GumbelRoundCounters {
             round_leaves: accumulators.gumbel_round_leaves,
             rounds: accumulators.gumbel_rounds,
+            quick: (!move_is_full_search).then_some((
+                accumulators.gumbel_quick_round_leaves,
+                accumulators.gumbel_quick_rounds,
+            )),
             dirichlet_root_fires: accumulators.dirichlet_root_fires,
         },
     );

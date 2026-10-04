@@ -20,7 +20,7 @@ def _rstats() -> RunnerStats:
     return RunnerStats(
         games_completed=0, positions_generated=0, x_wins=0, o_wins=0, draws=0,
         model_version=0, mcts_quiescence_fires=0, mcts_mean_depth=5.0,
-        mcts_mean_root_concentration=0.1, pcr_full_moves=0, pcr_quick_moves=0, gumbel_round_leaves=0, gumbel_rounds=0,
+        mcts_mean_root_concentration=0.1, pcr_full_moves=0, pcr_quick_moves=0, gumbel_round_leaves=0, gumbel_rounds=0, gumbel_quick_round_leaves=0, gumbel_quick_rounds=0,
     )
 
 

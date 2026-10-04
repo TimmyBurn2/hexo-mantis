@@ -31,7 +31,10 @@ _WANT_POSITIONS = 48
 _TIMEOUT_S = 120.0
 #: Transcribed, not read off the subject: a consistent rename must not satisfy the oracle.
 _LEVERS = ("pcr_full_moves", "pcr_quick_moves", "gumbel_round_leaves", "gumbel_rounds",
-           "served_leaves_total", "gpu_evals_total", "tt_hits_total")
+           "gumbel_quick_round_leaves", "gumbel_quick_rounds", "served_leaves_total", "gpu_evals_total",
+           "tt_hits_total")
+#: The quick arm's m, below the full arm's 4, so the two widths can be told apart.
+_M_QUICK = 2
 _REPO = Path(__file__).resolve().parents[2]
 
 
@@ -86,7 +89,7 @@ def drive() -> Iterator[_Drive]:
     """One Gumbel self-play drive with the playout cap armed at a fair coin between two budgets."""
     cfg = _engine.SelfPlayRunnerConfig(
         n_workers=_N_WORKERS, max_moves_per_game=4, n_simulations=_N_SIMS_FULL,
-        leaf_batch_size=4, quiescence_enabled=False, q_rescale=True, search_stats_every=0, gumbel_m_quick=4,
+        leaf_batch_size=4, quiescence_enabled=False, q_rescale=True, search_stats_every=0, gumbel_m_quick=_M_QUICK,
         gumbel_m=4, full_search_prob=0.5, n_sims_quick=_N_SIMS_QUICK,
         random_opening_plies=0, encoding_name=_ENCODING,
     )
@@ -134,6 +137,15 @@ def test_the_real_runner_publishes_the_gumbel_round_width(drive: _Drive) -> None
         f"round width terms out of range: {st.gumbel_round_leaves} leaves / "
         f"{st.gumbel_rounds} rounds over {drawn} searches"
     )
+
+
+def test_the_quick_arms_rounds_are_counted_apart_at_its_own_m(drive: _Drive) -> None:
+    """The quick arm's share of the width terms: some rounds, never wider than its m, narrower than the full arm's."""
+    st = drive.stats
+    assert 0 < st.gumbel_quick_rounds < st.gumbel_rounds, f"{st.gumbel_quick_rounds} of {st.gumbel_rounds} rounds"
+    assert st.gumbel_quick_rounds <= st.gumbel_quick_round_leaves <= _M_QUICK * st.gumbel_quick_rounds
+    full_leaves, full_rounds = st.gumbel_round_leaves - st.gumbel_quick_round_leaves, st.gumbel_rounds - st.gumbel_quick_rounds
+    assert full_leaves / full_rounds > st.gumbel_quick_round_leaves / st.gumbel_quick_rounds
 
 
 def test_the_real_runner_publishes_the_eval_cache_fire_rate(drive: _Drive) -> None:

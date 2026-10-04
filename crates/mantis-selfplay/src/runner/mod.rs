@@ -99,6 +99,9 @@ pub struct RunnerStatsSnapshot {
     /// quotient: BOTH are zero on a PUCT run.
     pub gumbel_round_leaves: u64,
     pub gumbel_rounds: u64,
+    /// The quick arm's share of the two terms (the quick arm's m sets its width).
+    pub gumbel_quick_round_leaves: u64,
+    pub gumbel_quick_rounds: u64,
     /// Root Dirichlet applications (the PUCT arm's site); 0 under Gumbel — a pin, not a bridge field.
     pub dirichlet_root_fires: u64,
     /// Moves whose exported policy target carried off-window (overflow) mass.
@@ -168,6 +171,8 @@ pub struct SelfPlayRunner {
     pcr_quick_moves: Arc<AtomicU64>,
     gumbel_round_leaves: Arc<AtomicU64>,
     gumbel_rounds: Arc<AtomicU64>,
+    gumbel_quick_round_leaves: Arc<AtomicU64>,
+    gumbel_quick_rounds: Arc<AtomicU64>,
     dirichlet_root_fires: Arc<AtomicU64>,
 
     export_offwindow_mass_moves: Arc<AtomicU64>,
@@ -334,6 +339,8 @@ impl SelfPlayRunner {
             pcr_quick_moves: Arc::new(AtomicU64::new(0)),
             gumbel_round_leaves: Arc::new(AtomicU64::new(0)),
             gumbel_rounds: Arc::new(AtomicU64::new(0)),
+            gumbel_quick_round_leaves: Arc::new(AtomicU64::new(0)),
+            gumbel_quick_rounds: Arc::new(AtomicU64::new(0)),
             dirichlet_root_fires: Arc::new(AtomicU64::new(0)),
             export_offwindow_mass_moves: Arc::new(AtomicU64::new(0)),
             root_expansion_failed: Arc::new(AtomicU64::new(0)),
@@ -454,6 +461,8 @@ impl SelfPlayRunner {
             pcr_quick_moves: self.pcr_quick_moves.load(Ordering::Relaxed),
             gumbel_round_leaves: self.gumbel_round_leaves.load(Ordering::Relaxed),
             gumbel_rounds: self.gumbel_rounds.load(Ordering::Relaxed),
+            gumbel_quick_round_leaves: self.gumbel_quick_round_leaves.load(Ordering::Relaxed),
+            gumbel_quick_rounds: self.gumbel_quick_rounds.load(Ordering::Relaxed),
             dirichlet_root_fires: self.dirichlet_root_fires.load(Ordering::Relaxed),
             export_offwindow_mass_moves: self.export_offwindow_mass_moves.load(Ordering::Relaxed),
             root_expansion_failed: self.root_expansion_failed.load(Ordering::Relaxed),
@@ -677,6 +686,8 @@ mod seam_roundtrip {
         r.pcr_quick_moves.store(38, Ordering::Relaxed);
         r.gumbel_round_leaves.store(39, Ordering::Relaxed);
         r.gumbel_rounds.store(40, Ordering::Relaxed);
+        r.gumbel_quick_round_leaves.store(51, Ordering::Relaxed);
+        r.gumbel_quick_rounds.store(52, Ordering::Relaxed);
         r.dirichlet_root_fires.store(41, Ordering::Relaxed);
         r.export_offwindow_mass_moves.store(22, Ordering::Relaxed);
         r.root_expansion_failed.store(43, Ordering::Relaxed);
@@ -706,6 +717,8 @@ mod seam_roundtrip {
             pcr_quick_moves: 38,
             gumbel_round_leaves: 39,
             gumbel_rounds: 40,
+            gumbel_quick_round_leaves: 51,
+            gumbel_quick_rounds: 52,
             dirichlet_root_fires: 41,
             export_offwindow_mass_moves: 22,
             root_expansion_failed: 43,

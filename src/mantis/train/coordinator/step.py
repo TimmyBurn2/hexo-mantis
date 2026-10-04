@@ -91,7 +91,7 @@ _POSITIONS_COUNTER = "positions_generated"
 #: the TT hits, published beside the target-integrity block over the same snapshot and `positions_delta`.
 _SEARCH_LEVER_COUNTERS: tuple[str, ...] = (
     "pcr_full_moves", "pcr_quick_moves", "gumbel_round_leaves", "gumbel_rounds",
-    "served_leaves_total", "gpu_evals_total", "tt_hits_total",
+    "gumbel_quick_round_leaves", "gumbel_quick_rounds", "served_leaves_total", "gpu_evals_total", "tt_hits_total",
 )
 
 # The draw-rate ring has no depth constant: capacity is derived at the point of use, so no

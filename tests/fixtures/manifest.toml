@@ -204,8 +204,9 @@ path = "selfplay/pool/runner_config_goldens.json"
 # Re-cut by HYGIENE-1 (contract v41): `train.draw_reward` and `train.ply_cap_value` left the tree with their kwargs.
 # Re-cut by HYGIENE-1 (contract v42): game-level fast games (`fast_prob`, `fast_sims`, `standard_sims`) left the tree.
 # Re-cut by HYGIENE-1 (contract v43): `selfplay.mcts.n_simulations` folded into `playout_cap.n_sims_full`, the runner's `n_simulations`.
-# Re-cut by RUN11-PRE (contract v56): `selfplay.gumbel_m_quick` is a REQUIRED leaf beside `gumbel_m`, carried to the ctor.
-sha256 = "b8e1f1640acde792cbf8ac41ef117d0d737c700b13762150effa689b8085acae"
+# Re-cut by RUN11-PRE (contract v56): `selfplay.gumbel_m_quick` is a REQUIRED leaf beside `gumbel_m`, carried to the ctor;
+# `full_config` carries 12 against its m 24, so a swap of the two shows.
+sha256 = "256f0a401c9fdd2ddc038f89b866b1b7114e3743b8818c93a02f67dbf7344beb"
 added_by = "WP-SP"
 
 [[required]]

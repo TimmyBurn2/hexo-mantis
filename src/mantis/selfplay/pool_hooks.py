@@ -115,6 +115,9 @@ class RunnerStats:
     pcr_quick_moves: int
     gumbel_round_leaves: int
     gumbel_rounds: int
+    # The quick arm's share of the two width terms, its own m's fire-rate.
+    gumbel_quick_round_leaves: int
+    gumbel_quick_rounds: int
     # Target-integrity counters: an idle lever stays VISIBLE at 0.
     export_offwindow_mass_moves: int = 0
     target_integrity_defects: int = 0
@@ -169,6 +172,8 @@ def runner_stats(pool: Any) -> RunnerStats:
         pcr_quick_moves=int(r.pcr_quick_moves),
         gumbel_round_leaves=int(r.gumbel_round_leaves),
         gumbel_rounds=int(r.gumbel_rounds),
+        gumbel_quick_round_leaves=int(r.gumbel_quick_round_leaves),
+        gumbel_quick_rounds=int(r.gumbel_quick_rounds),
         served_leaves_total=int(r.served_leaves_total),
         gpu_evals_total=int(r.gpu_evals_total),
         tt_hits_total=int(r.tt_hits_total),

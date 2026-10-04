@@ -96,6 +96,9 @@ pub(crate) struct WorkerStats {
     /// terms of a mean, so a lever silently back at one leaf per round trip shows in-run.
     pub(crate) gumbel_round_leaves: Arc<AtomicU64>,
     pub(crate) gumbel_rounds: Arc<AtomicU64>,
+    /// The quick arm's share of the two width terms.
+    pub(crate) gumbel_quick_round_leaves: Arc<AtomicU64>,
+    pub(crate) gumbel_quick_rounds: Arc<AtomicU64>,
     /// Root Dirichlet applications, counted at the PUCT arm's mix-in site (0 under Gumbel).
     pub(crate) dirichlet_root_fires: Arc<AtomicU64>,
     // Target-integrity fire-rate counters.

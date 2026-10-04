@@ -387,6 +387,15 @@ impl PySelfPlayRunner {
     pub fn gumbel_rounds(&self) -> u64 {
         self.snapshot().gumbel_rounds
     }
+    /// The quick arm's share of `gumbel_round_leaves` / `gumbel_rounds`: its own width, set by its own m.
+    #[getter]
+    pub fn gumbel_quick_round_leaves(&self) -> u64 {
+        self.snapshot().gumbel_quick_round_leaves
+    }
+    #[getter]
+    pub fn gumbel_quick_rounds(&self) -> u64 {
+        self.snapshot().gumbel_quick_rounds
+    }
 
     #[getter]
     pub fn export_offwindow_mass_moves(&self) -> u64 {

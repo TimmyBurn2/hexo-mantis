@@ -41,7 +41,7 @@ def _iteration_complete() -> dict[str, Any]:
     rstats = RunnerStats(
         games_completed=1, positions_generated=4, x_wins=1, o_wins=0, draws=0, model_version=0,
         mcts_quiescence_fires=0, mcts_mean_depth=1.0, mcts_mean_root_concentration=0.5,
-        pcr_full_moves=4, pcr_quick_moves=0, gumbel_round_leaves=8, gumbel_rounds=4)
+        pcr_full_moves=4, pcr_quick_moves=0, gumbel_round_leaves=8, gumbel_rounds=4, gumbel_quick_round_leaves=0, gumbel_quick_rounds=0)
     pool = SimpleNamespace(search_kind="gumbel", avg_game_length=4.0, x_winrate=1.0,
                            o_winrate=0.0, draw_rate=0.0, sims_per_sec=None, batch_fill_pct=0.0)
     emit_iteration_complete_event(
