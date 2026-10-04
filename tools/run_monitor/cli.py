@@ -8,6 +8,8 @@ import sys
 import time
 from pathlib import Path
 
+import torch
+
 from mantis.monitor.event_tail import EventTail
 
 from .monitor import (
@@ -34,20 +36,25 @@ def _floors(text: str) -> dict[str, float]:
 
 
 def setup_of(a: argparse.Namespace) -> Setup:
-    """The command line as a `Setup`. Raises: ValueError (malformed floors)."""
+    """The command line as a `Setup`. Raises: ValueError (malformed floors, a line that is not positive)."""
+    if not a.line > 0:
+        raise ValueError(f"--line must be positive, got {a.line}")
     return Setup(run_dir=a.run_dir, run_id=a.run_id, out=a.out, gen_ring=a.gen_ring, gen_sha256=a.gen_sha256,
-                 exams=a.exams, exams_sha256=a.exams_sha256, bands=a.bands, floors=_floors(a.floors),
-                 parent=a.parent, batches=a.batches, device=a.device, threads=a.threads, halt=a.halt)
+                 exams=a.exams, exams_sha256=a.exams_sha256, bands=a.bands, bands_sha256=a.bands_sha256,
+                 floors=_floors(a.floors), line=a.line, parent=a.parent, batches=a.batches, device=a.device,
+                 threads=a.threads, halt=a.halt)
 
 
 def follow(monitor: Monitor, tail: EventTail, poll_s: float, final_timeout_s: float) -> int:
-    """Read every save as its event lands until the run stops, aborts or a halting row fires; 0 on a stop, 3 on a halt."""
+    """Read every save as its event lands until the run stops or dies (0) or a halting row fires (3)."""
     while True:
         monitor.on_events(tail.read_new())
+        monitor.beat()
         if monitor.state.halted:
             return 3
-        if monitor.state.final_step is not None:
+        if monitor.final_step is not None or not monitor.run_alive():
             monitor.final_save(final_timeout_s)
+            monitor.beat()
             return 3 if monitor.state.halted else 0
         time.sleep(poll_s)
 
@@ -64,10 +71,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--exams", type=Path, required=True)
     ap.add_argument("--exams-sha256", required=True)
     ap.add_argument("--bands", type=Path, required=True, help="the pre-registration carrying [ring_audit.bands]")
+    ap.add_argument("--bands-sha256", required=True)
     ap.add_argument("--floors", required=True, help="EXAM=FLOOR,... on the calibrated exam means")
+    ap.add_argument("--line", type=float, required=True, help="the value line of the lagged read, nats")
     ap.add_argument("--parent", type=Path, required=True, help="the first save's lagged net")
     ap.add_argument("--batches", type=int, required=True)
     ap.add_argument("--device", required=True)
+    ap.add_argument("--gpu-mem-fraction", type=float, required=True, help="the monitor's cap on the card (cuda)")
     ap.add_argument("--threads", type=int, required=True)
     ap.add_argument("--halt", action="store_true", help="send the run ONE SIGTERM when a halting row fires")
     ap.add_argument("--poll-sec", type=float, default=30.0)
@@ -79,16 +89,18 @@ def main(argv: list[str] | None = None) -> int:
     try:
         setup = setup_of(a)
         inputs_pinned(setup)
-    except ValueError as exc:
+    except (ValueError, OSError) as exc:
         print(f"run_monitor: {exc}", file=sys.stderr)
         return 2
+    if setup.device.startswith("cuda"):
+        torch.cuda.set_per_process_memory_fraction(a.gpu_mem_fraction)
     monitor = Monitor(setup, Readers(value=value_read(setup), exams=exams_read(setup), bands=bands_read))
     (setup.out / "setup.json").write_text(json.dumps({k: str(v) for k, v in vars(a).items()}, indent=1), encoding="utf-8")
     if a.mode == "once":
         if a.ckpt is None or a.step is None:
             print("run_monitor: once needs --ckpt and --step", file=sys.stderr)
             return 2
-        record = monitor.read_save(a.step, a.ckpt, time.time())
+        record = monitor.read_save(a.step, a.ckpt, time.time(), stopping=True)
         print(json.dumps({"step": a.step, "halting_rows": record["halting_rows"], "exams": record["exams"]}, indent=1))
         return 3 if record["halting_rows"] else 0
     return follow(monitor, EventTail(setup.run_dir, setup.run_id, EVENTS), a.poll_sec, a.final_timeout_sec)

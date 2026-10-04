@@ -1,20 +1,20 @@
 """One run's monitor: every save read on the value instrument, the calibrated exams and the ring bands, its halting rows decided."""
-# >300 justify (R8): the save's reads, the lagged pairing across saves, the rates over the monitor's idle windows and
+# >300 justify (R8): the save's reads, the lagged pairing across saves, the persisted state a restart resumes from and
 # the halt are one record per save; split, a halting row could be decided on a reading the record does not hold.
 from __future__ import annotations
 
 import importlib
 import json
 import logging
-import os
 import shutil
-import signal
 import time
 from argparse import Namespace
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+
+import torch
 
 from mantis.diagnostics.ring_audit import audit, check_bands, event_rows, load_bands
 from mantis.diagnostics.ring_reader import load_ring
@@ -23,6 +23,7 @@ from mantis.util.loadpkg import load_tools_package
 
 from .exams import load_positions, read_values
 from .rings import max_game_id, unseen_ring
+from .rules import counter_row, halt_run, halting_rows, rates, run_pid
 
 load_tools_package("value_instrument")
 _vi = importlib.import_module("value_instrument.cli")
@@ -49,7 +50,9 @@ class Setup:
     exams: Path
     exams_sha256: str
     bands: Path
+    bands_sha256: str
     floors: dict[str, float]
+    line: float
     parent: Path
     batches: int
     device: str
@@ -67,40 +70,36 @@ class Readers:
 
 
 @dataclass
-class _Save:
-    step: int
-    ckpt: Path
-    ring: Path | None
-    max_gid: int | None
-
-
-@dataclass
 class State:
-    """The monitor's memory across saves: the last read save, its ring copy, the busy windows and the rate counters."""
+    """What a restarted monitor resumes from (`state.json`): the last read save, its lagged net, the busy windows."""
 
-    last: _Save | None = None
+    last_step: int | None = None
+    last_ckpt: str | None = None
+    last_ring: str | None = None
+    last_max_gid: int | None = None
     last_saved_ts: float | None = None
-    lagged_net: Path | None = None
-    busy: list[tuple[float, float]] = field(default_factory=list)
-    counters: list[dict[str, float]] = field(default_factory=list)
+    lagged_net: str | None = None
+    busy: list[list[float]] = field(default_factory=list)
     halted: bool = False
-    #: A stop's step, set by its event: the run's final save lands after the event that announces it.
-    final_step: int | None = None
-    ended: bool = False
+    aborts: list[str] = field(default_factory=list)
 
 
 def value_read(setup: Setup) -> Callable[[Path, Path, Path, Path | None], dict[str, Any]]:
-    """The instrument of record's `read` at the setup's draws; `(ckpt, held-out ring, out, train ring) -> body`."""
+    """The instrument of record's `read` at the setup's draws, the card's cache released after it; `(ckpt, held-out, out, train) -> body`."""
     def read(ckpt: Path, ring: Path, out: Path, train: Path | None) -> dict[str, Any]:
         out.parent.mkdir(parents=True, exist_ok=True)
-        return _vi.read(Namespace(ckpt=ckpt, heldout=ring, train=train, out=out, seed=_vi.HELDOUT_SEED,
-                                  train_seed=_vi.TRAIN_SEED, fold_seed=_vi.FOLD_SEED, batches=setup.batches,
-                                  threads=setup.threads, device=setup.device))
+        try:
+            return _vi.read(Namespace(ckpt=ckpt, heldout=ring, train=train, out=out, seed=_vi.HELDOUT_SEED,
+                                      train_seed=_vi.TRAIN_SEED, fold_seed=_vi.FOLD_SEED, batches=setup.batches,
+                                      threads=setup.threads, device=setup.device))
+        finally:
+            if setup.device.startswith("cuda"):
+                torch.cuda.empty_cache()
     return read
 
 
 def exams_read(setup: Setup) -> Callable[[Path, Path, dict[str, float]], dict[str, Any]]:
-    """Each exam's values calibrated at the save's GEN temperature against its floor; `(ckpt, gen_read, floors) -> rows`."""
+    """Each exam's values calibrated at the save's GEN temperature against its floor; `(ckpt, gen_read, floors) -> rows`. Raises: ValueError, OSError (the positions file)."""
     positions = load_positions(setup.exams)
 
     def read(ckpt: Path, gen_read: Path, floors: dict[str, float]) -> dict[str, Any]:
@@ -116,191 +115,209 @@ def exams_read(setup: Setup) -> Callable[[Path, Path, dict[str, float]], dict[st
 
 
 def bands_read(ring: Path, events: Path | None, bands: Path) -> dict[str, Any]:
-    """The ring audit's rows on a save's ring and the band misses; a banded row the ring cannot measure is a miss."""
+    """The ring audit's rows on a save's ring and the band misses; a banded row the ring cannot measure is a miss. Raises: ValueError, OSError."""
     loaded = load_ring(ring)
     rows = audit(loaded) + event_rows(events, ring_size=int(loaded.header.size))
     misses, unknown = check_bands(rows, load_bands(bands))
     return {"rows": {r.key: r.value for r in rows}, "misses": misses + [f"{k}: no such audit row" for k in unknown]}
 
 
-def halting_rows(exams: dict[str, Any], bands: dict[str, Any]) -> list[str]:
-    """Every halting row that fired: an exam's calibrated mean below its floor, a ring band outside."""
-    fired = [f"{exam} calibrated {row['calibrated_mean']:.4f} below the floor {row['floor']}"
-             for exam, row in exams.items() if not row["holds"]]
-    return fired + [f"ring band {miss}" for miss in bands["misses"]]
-
-
-def rates(counters: list[dict[str, float]], since: float, until: float,
-          busy: list[tuple[float, float]]) -> dict[str, Any]:
-    """Games, positions and steps per hour between two saves, over the whole span and over the monitor's idle windows."""
-    rows = [c for c in counters if since <= c["ts"] <= until]
-    out: dict[str, Any] = {"span_h": (until - since) / 3600.0, "rows": len(rows)}
-    if len(rows) < 2:
-        return {**out, "note": "NOT MEASURED: fewer than two iteration rows in the span"}
-    keys = ("games_total", "positions_produced_total", "step")
-    total = {k: rows[-1][k] - rows[0][k] for k in keys}
-    hours = (rows[-1]["ts"] - rows[0]["ts"]) / 3600.0
-    idle = dict.fromkeys(keys, 0.0)
-    idle_h = 0.0
-    for a, b in zip(rows, rows[1:], strict=False):
-        if any(a["ts"] < hi and b["ts"] > lo for lo, hi in busy):
-            continue
-        idle_h += (b["ts"] - a["ts"]) / 3600.0
-        for k in keys:
-            idle[k] += b[k] - a[k]
-    names = {"games_total": "games_per_h", "positions_produced_total": "positions_per_h", "step": "steps_per_h"}
-    out.update({names[k]: total[k] / hours if hours > 0 else None for k in keys})
-    out["idle_h"] = idle_h
-    out.update({f"idle_{names[k]}": idle[k] / idle_h if idle_h > 0 else None for k in keys})
-    return out
-
-
-def halt_run(run_dir: Path, run_id: str) -> dict[str, Any]:
-    """ONE SIGTERM to the run's process (its heartbeat's pid): the run saves, then exits; a second would tear it down. Raises: OSError, KeyError, ValueError."""
-    beat = json.loads((run_dir / "logs" / f"heartbeat_{run_id}.json").read_text(encoding="utf-8"))
-    pid = int(beat["pid"])
-    os.kill(pid, signal.SIGTERM)
-    return {"pid": pid, "signal": "SIGTERM", "ts": time.time()}
-
-
 class Monitor:
-    """Reads each save once, in step order, and pairs it with its lagged net on the games produced after it."""
+    """Reads each save once, in step order, pairs it with its lagged net on the games produced after it, and survives a restart."""
 
-    def __init__(self, setup: Setup, readers: Readers, state: State | None = None) -> None:
+    def __init__(self, setup: Setup, readers: Readers) -> None:
         self.setup = setup
         self.readers = readers
-        self.state = state or State(lagged_net=setup.parent)
         for sub in ("saves", "reads", "work"):
             (setup.out / sub).mkdir(parents=True, exist_ok=True)
+        path = setup.out / "state.json"
+        self.state = State(**json.loads(path.read_text(encoding="utf-8"))) if path.is_file() else State(
+            lagged_net=str(setup.parent))
+        # A halt on record is never re-sent, whatever the state file says.
+        self.state.halted = self.state.halted or (setup.out / "HALT.json").is_file()
+        self.counters: list[dict[str, float]] = []
+        self.final_step: int | None = None
 
     def _log(self, row: dict[str, Any]) -> None:
         with (self.setup.out / "monitor.jsonl").open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(row, allow_nan=False) + "\n")
+            fh.write(json.dumps({"ts": time.time(), **row}, allow_nan=False) + "\n")
+
+    def _persist(self) -> None:
+        tmp = self.setup.out / "state.json.tmp"
+        tmp.write_text(json.dumps(asdict(self.state), indent=1), encoding="utf-8")
+        tmp.replace(self.setup.out / "state.json")
+
+    def beat(self) -> None:
+        """The monitor's own liveness, for the watcher: written every poll."""
+        (self.setup.out / "monitor_alive.json").write_text(json.dumps(
+            {"ts": time.time(), "last_step": self.state.last_step, "halted": self.state.halted}), encoding="utf-8")
+
+    def run_alive(self) -> bool:
+        """Whether the run's process is up; before its first heartbeat a run counts as up."""
+        beat = self.setup.run_dir / "logs" / f"heartbeat_{self.setup.run_id}.json"
+        return not beat.is_file() or run_pid(self.setup.run_dir, self.setup.run_id) is not None
 
     def _events_file(self) -> Path | None:
         found = sorted((self.setup.run_dir / "logs").glob(f"events_{self.setup.run_id}_seg*.jsonl"))
         return found[-1] if found else None
 
-    def on_events(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Fold a batch of event rows in: counters kept, every save read, every stop recorded; returns the save records."""
-        done = []
+    def on_events(self, rows: list[dict[str, Any]]) -> None:
+        """Fold a batch of event rows in: counters kept, every save not yet read read once, every stop recorded."""
         for row in rows:
             event = row.get("event")
-            if event == "iteration_complete" and isinstance(row.get("ts"), int | float):
-                self.state.counters.append({k: float(row.get(k) or 0) for k in
-                                            ("ts", "games_total", "positions_produced_total", "step")})
+            if event == "iteration_complete":
+                counters = counter_row(row)
+                if counters is not None:
+                    self.counters.append(counters)
             elif event in ("hard_abort", "hard_abort_after_stop"):
-                self._log({"event": "run_hard_abort", "rule": row.get("rule"), "step": row.get("step"),
-                           "message": row.get("message")})
-            elif event == "periodic_checkpoint_save" and isinstance(row.get("path"), str) and not self.state.halted:
-                done.append(self.read_save(int(row["step"]), Path(row["path"]), float(row.get("ts") or time.time())))
-            elif event in _STOPS:
-                self._log({"event": f"run_{event}", "step": row.get("step")})
-                if isinstance(row.get("step"), int):
-                    self.state.final_step = int(row["step"])
-        return done
+                key = f"{event}:{row.get('rule')}:{row.get('step')}"
+                if key not in self.state.aborts:
+                    self.state.aborts.append(key)
+                    self._persist()
+                    self._log({"event": "run_hard_abort", "rule": row.get("rule"), "step": row.get("step"),
+                               "message": row.get("message")})
+            elif event == "periodic_checkpoint_save" and isinstance(row.get("path"), str):
+                step = int(row["step"])
+                if not self.state.halted and (self.state.last_step is None or step > self.state.last_step):
+                    self.read_guarded(step, Path(row["path"]), float(row.get("ts") or time.time()), stopping=False)
+            elif event in _STOPS and isinstance(row.get("step"), int):
+                self.final_step = int(row["step"])
 
-    def final_save(self, timeout_s: float, poll_s: float = 5.0) -> dict[str, Any] | None:
-        """Read the stop's save once its ring lands (a save already read is not re-read); `None` past `timeout_s`."""
-        step = self.state.final_step
-        self.state.ended = True
-        if step is None or self.state.halted or (self.state.last is not None and self.state.last.step == step):
-            return None
+    def final_save(self, timeout_s: float, poll_s: float = 5.0) -> None:
+        """After a stop or a dead run: read the newest save past the last one read once its ring lands; it is never signalled."""
+        if self.state.halted:
+            return
         deadline = time.time() + timeout_s
-        while time.time() < deadline:
-            found = sorted((self.setup.run_dir / "checkpoints").glob(f"{self.setup.run_id}_{step:08d}_*.ckpt"))
-            if found and Path(f"{found[-1]}.ring.bin").is_file():
-                return self.read_save(step, found[-1], time.time())
+        while True:
+            newest = self._newest_unread()
+            if newest is not None and (Path(f"{newest[1]}.ring.bin").is_file() or time.time() >= deadline):
+                self.read_guarded(newest[0], newest[1], time.time(), stopping=True)
+                return
+            if time.time() >= deadline:
+                self._log({"event": "final_save_missing", "step": self.final_step, "timeout_s": timeout_s})
+                return
             time.sleep(poll_s)
-        self._log({"event": "final_save_missing", "step": step, "timeout_s": timeout_s})
-        return None
 
-    def read_save(self, step: int, ckpt: Path, saved_ts: float) -> dict[str, Any]:
-        """One save: the GEN read, the exams at its temperature, the bands, the rates, the previous save's lagged read; may halt."""
+    def _newest_unread(self) -> tuple[int, Path] | None:
+        found = [(step, p) for p in (self.setup.run_dir / "checkpoints").glob(f"{self.setup.run_id}_*_*.ckpt")
+                 if (step := _step_of(p)) is not None and (self.state.last_step is None or step > self.state.last_step)]
+        return max(found) if found else None
+
+    def read_guarded(self, step: int, ckpt: Path, saved_ts: float, *, stopping: bool) -> dict[str, Any] | None:
+        """`read_save`, with a failure recorded and the follow kept alive: one bad read must not end the halting guard."""
+        try:
+            return self.read_save(step, ckpt, saved_ts, stopping=stopping)
+        except Exception:  # noqa: BLE001 — a failed read is recorded; ending here would end the halting guard
+            _LOG.exception("save %s: the read failed", step)
+            self._log({"event": "save_read_failed", "step": step, "ckpt": str(ckpt)})
+            copy = self.setup.out / "work" / f"ring_{step:08d}.bin"
+            try:
+                self._advance(step, ckpt, copy if copy.is_file() else None, saved_ts)
+            except Exception:  # noqa: BLE001 — the same guard: the next save still gets read
+                _LOG.exception("save %s: advancing past the failed read failed", step)
+            return None
+
+    def read_save(self, step: int, ckpt: Path, saved_ts: float, *, stopping: bool) -> dict[str, Any]:
+        """One save: the GEN read, the exams at its temperature, the bands, the rates, the previous save's lagged read; may halt. Raises: whatever a read raises."""
         s, out = self.setup, self.setup.out
-        record_path = out / "saves" / f"{step:08d}.json"
         t0 = time.time()
         ring = Path(f"{ckpt}.ring.bin")
         copy = out / "work" / f"ring_{step:08d}.bin"
-        have_ring = ring.is_file()
-        if have_ring:
-            shutil.copyfile(ring, copy)
+        have_ring = ring.is_file() and _copy(ring, copy)
         gen_read = out / "reads" / f"gen_{step:08d}.json"
         gen = self.readers.value(ckpt, s.gen_ring, gen_read, None)
         exams = self.readers.exams(ckpt, gen_read, s.floors)
         bands = self.readers.bands(copy, self._events_file(), s.bands) if have_ring else {
-            "rows": {}, "misses": ["NOT MEASURED: the save carries no ring"]}
+            "rows": {}, "misses": [], "not_measured": "the save's ring was gone before the monitor read it"}
+        ov = gen["heldout"]["overall"]
         record: dict[str, Any] = {
-            "step": step, "ckpt": str(ckpt), "ckpt_sha256": sha256_file(ckpt), "saved_ts": saved_ts,
-            "gen": {"cf_ce": gen["heldout"]["overall"]["cf_ce"], "temperature": gen["heldout"]["overall"]["temperature"],
-                    "auc": gen["heldout"]["overall"]["auc"], "policy_ce": gen["heldout"]["policy_ce"],
+            "step": step, "ckpt": str(ckpt), "ckpt_sha256": sha256_file(ckpt), "saved_ts": saved_ts, "final": stopping,
+            "gen": {"cf_ce": ov["cf_ce"], "temperature": ov["temperature"], "auc": ov["auc"],
+                    "policy_ce": gen["heldout"]["policy_ce"],
                     "bands": {b: gen["heldout"][b] for b in ("plies_0_10", "plies_11_40", "plies_41_up")},
                     "read": str(gen_read)},
             "exams": exams, "ring_bands": bands,
         }
-        if self.state.last is not None and have_ring:
-            record["lagged_of"] = self._lagged(self.state.last, copy)
+        if self.state.last_step is not None and have_ring:
+            record["lagged_of"] = self._lagged(copy)
         since = self.state.last_saved_ts
         if since is None:
-            since = self.state.counters[0]["ts"] if self.state.counters else saved_ts
-        record["rates"] = rates(self.state.counters, since, saved_ts, self.state.busy)
+            since = self.counters[0]["ts"] if self.counters else saved_ts
+        record["rates"] = rates(self.counters, since, saved_ts, [(a, b) for a, b in self.state.busy])
         record["halting_rows"] = fired = halting_rows(exams, bands)
-        self.state.busy.append((t0, time.time()))
+        self.state.busy.append([t0, time.time()])
         record["monitor_busy_s"] = round(time.time() - t0, 1)
-        record_path.write_text(json.dumps(record, indent=1, allow_nan=False), encoding="utf-8")
-        self._log({"event": "save_read", "step": step, "halting_rows": fired, "record": str(record_path)})
-        self._advance(_Save(step, ckpt, copy if have_ring else None,
-                            max_game_id(copy) if have_ring else None), saved_ts)
+        (out / "saves" / f"{step:08d}.json").write_text(json.dumps(record, indent=1, allow_nan=False), encoding="utf-8")
+        self._log({"event": "save_read", "step": step, "final": stopping, "halting_rows": fired})
+        self._advance(step, ckpt, copy if have_ring else None, saved_ts)
         if fired:
-            self._halt(step, fired)
+            self._halt(step, fired, stopping=stopping)
         return record
 
-    def _lagged(self, prev: _Save, later_ring: Path) -> dict[str, Any]:
-        """The previous save and ITS lagged net, both read on the games produced after the previous save."""
-        if prev.max_gid is None or self.state.lagged_net is None:
-            return {"note": "NOT MEASURED: the previous save carried no ring"}
-        unseen = self.setup.out / "work" / f"unseen_{prev.step:08d}.bin"
-        meta = unseen_ring(later_ring, prev.max_gid, unseen)
-        cur = self.setup.out / "reads" / f"unseen_{prev.step:08d}_current.json"
-        lag = self.setup.out / "reads" / f"unseen_{prev.step:08d}_lagged.json"
-        own = self.readers.value(prev.ckpt, unseen, cur, prev.ring)
-        self.readers.value(self.state.lagged_net, unseen, lag, None)
-        paired = _vi.lagged(Namespace(current=cur, lagged=lag, effect=0.012))
-        unseen.unlink(missing_ok=True)
+    def _lagged(self, later_ring: Path) -> dict[str, Any]:
+        """The last read save and ITS lagged net, both read on the games produced after that save."""
+        prev, ring = int(self.state.last_step or 0), self.state.last_ring
+        if self.state.last_max_gid is None or ring is None or self.state.lagged_net is None:
+            return {"step": prev, "note": "NOT MEASURED: the previous save carried no ring"}
+        unseen = self.setup.out / "work" / f"unseen_{prev:08d}.bin"
+        try:
+            meta = unseen_ring(later_ring, self.state.last_max_gid, unseen)
+        except ValueError as exc:
+            return {"step": prev, "note": f"NOT MEASURED: {exc}"}
+        cur = self.setup.out / "reads" / f"unseen_{prev:08d}_current.json"
+        lag = self.setup.out / "reads" / f"unseen_{prev:08d}_lagged.json"
+        try:
+            own = self.readers.value(Path(str(self.state.last_ckpt)), unseen, cur, Path(ring))
+            self.readers.value(Path(self.state.lagged_net), unseen, lag, None)
+            paired = _vi.lagged(Namespace(current=cur, lagged=lag, effect=self.setup.line))
+        finally:
+            unseen.unlink(missing_ok=True)
         ov = own["heldout"]["overall"]
-        return {"step": prev.step, "lagged_net": str(self.state.lagged_net), "unseen": meta,
+        return {"step": prev, "lagged_net": self.state.lagged_net, "unseen": meta,
                 "current": {"cf_ce": ov["cf_ce"], "temperature": ov["temperature"], "auc": ov["auc"],
                             "policy_ce": own["heldout"]["policy_ce"], "gap": own.get("gap")},
                 "diff": paired["diff"], "ci": paired["ci"], "se_game": paired["se_game"], "games": paired["games"],
                 "detection": paired["detection"], "worse": paired["worse"],
                 "bands": {b: {k: v.get(k) for k in ("diff", "ci", "n")} for b, v in paired["bands"].items()}}
 
-    def _advance(self, save: _Save, saved_ts: float) -> None:
-        if self.state.last is not None:
-            self.state.lagged_net = self.state.last.ckpt
-        self.state.last = save
-        self.state.last_saved_ts = saved_ts
-        copies = sorted((self.setup.out / "work").glob("ring_*.bin"))
-        for old in copies[:-_RING_COPIES]:
+    def _advance(self, step: int, ckpt: Path, ring: Path | None, saved_ts: float) -> None:
+        if self.state.last_ckpt is not None:
+            self.state.lagged_net = self.state.last_ckpt
+        self.state.last_step, self.state.last_ckpt, self.state.last_saved_ts = step, str(ckpt), saved_ts
+        self.state.last_ring = None if ring is None else str(ring)
+        self.state.last_max_gid = None if ring is None else max_game_id(ring)
+        for old in sorted((self.setup.out / "work").glob("ring_*.bin"))[:-_RING_COPIES]:
             old.unlink()
+        self._persist()
 
-    def _halt(self, step: int, fired: list[str]) -> None:
+    def _halt(self, step: int, fired: list[str], *, stopping: bool) -> None:
         self.state.halted = True
-        body: dict[str, Any] = {"step": step, "halting_rows": fired, "armed": self.setup.halt}
-        if self.setup.halt:
-            body["sent"] = halt_run(self.setup.run_dir, self.setup.run_id)
+        self._persist()
+        body: dict[str, Any] = {"step": step, "halting_rows": fired, "armed": self.setup.halt, "final_save": stopping}
+        if self.setup.halt and not stopping:
+            body["signal"] = halt_run(self.setup.run_dir, self.setup.run_id)
         (self.setup.out / "HALT.json").write_text(json.dumps(body, indent=1), encoding="utf-8")
         self._log({"event": "halt", **body})
         _LOG.error("halting row fired at step %s: %s", step, fired)
 
 
+def _copy(src: Path, dst: Path) -> bool:
+    shutil.copyfile(src, dst)
+    return True
+
+
+def _step_of(ckpt: Path) -> int | None:
+    parts = ckpt.name.rsplit("_", 2)
+    return int(parts[-2]) if len(parts) == 3 and parts[-2].isdigit() else None
+
+
 def inputs_pinned(setup: Setup) -> None:
-    """Refuse a GEN ring or exam set that is not the pinned one. Raises: ValueError."""
-    for path, want in ((setup.gen_ring, setup.gen_sha256), (setup.exams, setup.exams_sha256)):
+    """Refuse a GEN ring, exam set or bands file that is not the pinned one. Raises: ValueError, OSError."""
+    for path, want in ((setup.gen_ring, setup.gen_sha256), (setup.exams, setup.exams_sha256),
+                       (setup.bands, setup.bands_sha256)):
         got = sha256_file(path)
         if got != want:
             raise ValueError(f"{path} hashes {got}, not the pinned {want}")
 
 
-__all__ = ["EVENTS", "Monitor", "Readers", "Setup", "State", "bands_read", "exams_read", "halt_run", "halting_rows",
-           "inputs_pinned", "rates", "value_read"]
+__all__ = ["EVENTS", "Monitor", "Readers", "Setup", "State", "bands_read", "exams_read", "inputs_pinned", "value_read"]
