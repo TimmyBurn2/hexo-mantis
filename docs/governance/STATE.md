@@ -21,6 +21,14 @@ in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c
   2026-10-05 10:35:40 UTC (12:35 CEST) at step 32 201 with its 500 000-position ring, and RUN11-FRESH launched on
   box B at 10:43:17 UTC (12:43 CEST). Each passed its preflight on that tree first. The monitor's two-read rule
   (CARD-MONITOR-TWO-MISS) landed first (`3a41ca6b`..`e7e9e848`, a fresh review's findings fixed).
+  - **run11's going-forward read PASSED at 60 000** (prereg §13 A2), 2026-10-05 20:40 CEST. The X cells (six30_16,
+    288 pairs) read 32 201 0.759, 36k 0.747, 48k 0.701 and 60k 0.732. Their mean is +0.64 logit over the parent's
+    0.594, against the +0.17 line. The next read is at 72k, the mean of 36k–72k. The in-run gate promoted the 36k net
+    (0.703 over 32 pairs). No halting row has fired.
+  - **RUN11-FRESH's exam floors no longer halt, on the operator's word** (2026-10-05 17:25 CEST). Its monitor was
+    restarted with the floors at −1, so the exams are still read and recorded every save; the bands halt from 12k and
+    the aborts are as minted. Its gap rule fired at 27k (+0.071 and +0.078 over the 0.05 line); no consequence is
+    pre-stated for this line. Its first X cell read 0.207 at 12k.
   - **run11's envelope (a STATE line, no ruling; prereg §13 A5):** `train.training_steps_per_game` 2.4 at the resume,
     inside [1.2, 2.4], moved only by the gap rule (+0.05 at two consecutive saves → 1.2); `train.eval_interval` 36 000,
     inside [24 000, 48 000]; the monitor's card cap 0.45. Every other key is a re-mint with a ruling.

@@ -43,6 +43,7 @@ Both were found by running the gate set rather than by reading it, and both are 
   run11 continues arm 2 (2.4 steps/game, value mask 1/8; `run11a2`) from its final bundle (step 32 201, mirrored and
   hash-verified on the desktop) on box A, which runs nothing else (R385(f)).** Its config is unchanged, so its run id
   stays `run11a2` (prereg §13 A1); its envelope is §13 A5's and STATE's.
+  The going-forward read PASSED at 60k (+0.64 logit against the +0.17 line; STATE has the cells).
   RUN11-PRE's registered pick (arm 3) is set aside by ruling. The rate is a scalar inside the envelope [1.2, 2.4]: a
   memorisation gap above +0.05 at two consecutive saves drops it to 1.2 by STATE line. The going-forward read is the
   mean of four cells (the 32k final, 36k, 48k, 60k) above the parent's anchor by the line, then one cell every fourth
