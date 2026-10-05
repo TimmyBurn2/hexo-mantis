@@ -218,6 +218,16 @@ def mantis_engine(analyzer, mint_stamp, tmp_path_factory):
     engine.close()
 
 
+@pytest.fixture(scope="session")
+def dash_mantis_engine(dash, mint_stamp, tmp_path_factory):
+    """ONE tiny MantisEngine of the dash engine layer over a minted stamp, shared by every test that needs a real engine."""
+    engines = importlib.import_module("dash.engine.engines")
+    stamp = mint_stamp(tmp_path_factory.mktemp("dash_ckpt"))
+    engine = engines.MantisEngine(engines.discover([stamp.parent])[0], device="cpu", threads=2)
+    yield engine
+    engine.close()
+
+
 #: Hand-built positions the analyzer tests share (p1 = ply 0, then pairs): WIN1 — p1 to move holding an open five;
 #: CHECK — p2 to move against p1's open five (block set at both ends); SIX — p1's stone 12 completes six.
 ANALYZER_POSITIONS = {

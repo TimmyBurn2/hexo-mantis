@@ -2,9 +2,13 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
+from . import desk as desk_mod
+from .engine.dispatch import Dispatcher
+from .engine.engines import discover
 from .readers.events import EmptyRunRecord
 from .readers.record import RunRecord
 from .routes import GET
@@ -47,6 +51,15 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--bind", default=DEFAULT_BIND)
     serve.add_argument("--port", type=int, default=DEFAULT_PORT)
     serve.add_argument("--poll-sec", type=float, default=DEFAULT_POLL_SEC, help="how often the record is re-read")
+    once = sub.add_parser("once", help="one position read by one engine, the record printed as JSON")
+    once.add_argument("--checkpoints", action="append", type=Path, required=True, metavar="DIR")
+    once.add_argument("--strix", action="store_true")
+    once.add_argument("--device", default="cpu")
+    once.add_argument("--threads", type=int, default=None)
+    once.add_argument("--engine", required=True, help="an engine id (the checkpoint's stem)")
+    once.add_argument("--moves", default="", help="`q,r;q,r;…`")
+    once.add_argument("--sims", type=int, default=0, help="0 = the net only")
+    once.add_argument("--symmetry", action="store_true")
     freeze = sub.add_parser("freeze", help="the Run view as one self-contained HTML file")
     _inputs(freeze)
     freeze.add_argument("--compare", default=None, metavar="ID", help="a second run label to overlay")
@@ -82,6 +95,21 @@ def freeze(args: argparse.Namespace) -> int:
     return 0
 
 
+def once(args: argparse.Namespace) -> int:
+    """Read one position on one engine and print the record; 2 on a refusal (printed to stderr)."""
+    disp = Dispatcher(discover(args.checkpoints), device=args.device, threads=args.threads, strix=args.strix)
+    try:
+        out = disp.handle({"op": "analyze", "engine": args.engine, "moves": args.moves, "sims": args.sims,
+                           "symmetry": args.symmetry, "seq": 0})
+    finally:
+        disp.close()
+    if out["status"] != 200:
+        print(f"refused ({out['status']}): {out['body']['refused']}", file=sys.stderr)
+        return 2
+    print(json.dumps(out["body"]["record"], indent=1))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run the CLI; `serve` is the default subcommand."""
     args_in = list(sys.argv[1:] if argv is None else argv)
@@ -90,12 +118,18 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(args_in)
     if args.cmd == "freeze":
         return freeze(args)
+    if args.cmd == "once":
+        return once(args)
     try:
         records = records_of(args)
     except EmptyRunRecord as exc:
         print(f"dash: refused: {exc}", file=sys.stderr)
         return 2
-    return run_server(args, records, get_extra=GET)
+    desk = desk_mod.Desk(args.checkpoints, strix=args.strix, device=args.device, threads=args.threads) \
+        if args.checkpoints or args.strix else None
+    extra = {**GET, "analyzer": desk_mod.page(desk), "api/engines": desk_mod.engines(desk)}
+    return run_server(args, records, get_extra=extra, post_of=lambda hub: desk_mod.post(hub, desk),
+                      on_stop=desk.close if desk is not None else None)
 
 
 __all__ = ["DEFAULT_BIND", "DEFAULT_PORT", "build_parser", "freeze", "main", "records_of"]

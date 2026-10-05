@@ -181,7 +181,9 @@ def make_server(bind: str, port: int, hub: Hub, **routes: Any) -> ThreadingHTTPS
     return ThreadingHTTPServer((bind, port), handler_class(hub, **routes))
 
 
-def run_server(args: argparse.Namespace, records: list[RunRecord], **routes: Any) -> int:
+def run_server(args: argparse.Namespace, records: list[RunRecord], *, get_extra: dict[str, Callable[..., Reply]],
+               post_of: Callable[[Hub], Callable[[str, bytes], Reply]] | None = None,
+               on_stop: Callable[[], None] | None = None) -> int:
     """`serve`: the first read before the socket opens, then the poll thread and the server until interrupted."""
     hub = Hub(records)
     t0 = time.time()
@@ -192,7 +194,7 @@ def run_server(args: argparse.Namespace, records: list[RunRecord], **routes: Any
     stop = threading.Event()
     poller = threading.Thread(target=hub.follow, args=(args.poll_sec, stop), name="poll", daemon=True)
     poller.start()
-    httpd = make_server(args.bind, args.port, hub, **routes)
+    httpd = make_server(args.bind, args.port, hub, get_extra=get_extra, post=post_of(hub) if post_of else None)
     unsafe = "" if args.bind == "127.0.0.1" else "  (UNSAFE: not loopback — no auth, no TLS)"
     print(f"mantis dash on http://{args.bind}:{httpd.server_address[1]}/ — runs {', '.join(hub.labels)}; first read "
           f"{time.time() - t0:.1f} s; re-read every {args.poll_sec:g} s; Ctrl-C stops{unsafe}", flush=True)
@@ -203,4 +205,6 @@ def run_server(args: argparse.Namespace, records: list[RunRecord], **routes: Any
     finally:
         stop.set()
         httpd.server_close()
+        if on_stop is not None:
+            on_stop()
     return 0
