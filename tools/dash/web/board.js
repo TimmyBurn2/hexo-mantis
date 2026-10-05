@@ -12,6 +12,9 @@ window.Hex = (function () {
     return s;
   }
   const hex = (cls, c, rad, extra = '') => `<polygon class="${cls}" points="${hexPts(X(c[0], c[1]), Y(c[0], c[1]), rad)}" ${extra}/>`;
+  // One vertical half of a cell's hexagon, top corner to bottom corner, for a cell two nets share.
+  const half = (cls, c, left, rad = .86) => `<polygon class="${cls}" points="${(left ? [270, 210, 150, 90] : [270, 330, 30, 90])
+    .map(a => (X(c[0], c[1]) + rad * Math.cos(a * Math.PI / 180)).toFixed(3) + ',' + (Y(c[0], c[1]) + rad * Math.sin(a * Math.PI / 180)).toFixed(3)).join(' ')}"/>`;
 
   function pixelToHex(x, y) {
     const qf = SQ3 / 3 * x - y / 3, rf = 2 / 3 * y, sf = -qf - rf;
@@ -62,7 +65,11 @@ window.Hex = (function () {
     (sc.heat || []).forEach(h => { if (!placed.has(key(h.c))) out.push(hex(h.cls || 'heat', h.c, .26 + .56 * Math.sqrt(Math.max(0, Math.min(1, h.rel))))); });
     (sc.block || []).forEach(c => out.push(hex('block', c, .8)));
     (sc.win || []).forEach(c => { out.push(hex('wincell', c, .8)); out.push(hex('windot', c, .17)); });
-    (sc.ghosts || []).forEach(g => { if (!placed.has(key(g.c))) out.push(hex('ghost', g.c, .86)); });
+    (sc.ghosts || []).forEach(g => {
+      if (placed.has(key(g.c))) return;
+      if (g.cls === 'gab') out.push(half('ga', g.c, true), half('gb', g.c, false));
+      else out.push(hex(g.cls || 'ghost', g.c, .86));
+    });
     for (let i = 0; i < sc.ply; i++) out.push(hex(`s${sc.owners[i] + 1}`, sc.moves[i], .84));
     if (sc.winLine) {
       sc.winLine.forEach(c => out.push(hex('winrim', c, .84)));
@@ -81,7 +88,7 @@ window.Hex = (function () {
       if (h.label && !placed.has(key(h.c)) && !numbered.has(key(h.c))) out.push(`<text class="heatnum" x="${X(h.c[0], h.c[1]).toFixed(3)}" y="${Y(h.c[0], h.c[1]).toFixed(3)}">${h.label}</text>`);
     });
     (sc.ghosts || []).forEach(g => {
-      if (g.label && !placed.has(key(g.c))) out.push(`<text class="ghostnum" x="${X(g.c[0], g.c[1]).toFixed(3)}" y="${Y(g.c[0], g.c[1]).toFixed(3)}">${g.label}</text>`);
+      if (g.label && !placed.has(key(g.c))) out.push(`<text class="ghostnum${g.cls && g.cls !== 'ghost' ? ' on' : ''}" x="${X(g.c[0], g.c[1]).toFixed(3)}" y="${Y(g.c[0], g.c[1]).toFixed(3)}">${g.label}</text>`);
     });
     if (sc.focus) out.push(hex('focus', sc.focus, .95));
     out.push('<polygon class="hover" points=""/>');
@@ -152,9 +159,9 @@ window.Hex = (function () {
       const line = pts.map(p => `${X1(p.turn).toFixed(1)},${Y1(p.light).toFixed(1)}`).join(' ');
       g += `<polygon class="strip-light" points="${X1(pts[0].turn).toFixed(1)},${m.t + ih} ${line} ${X1(pts[pts.length - 1].turn).toFixed(1)},${m.t + ih}"/>`;
     }
-    g += `<line class="strip-mid" x1="0" x2="${W}" y1="${Y1(.5)}" y2="${Y1(.5)}"/>`;
+    g += `<line class="strip-mid" x1="0" x2="${W}" y1="${Y1(.5)}" y2="${Y1(.5)}"/><text class="tick" x="4" y="${Y1(.5) - 4}">50 %</text>`;
     pts.forEach(p => { if (p.cost != null && p.cost >= .3) g += `<path class="${p.cost >= .5 ? 'tick-red' : 'tick-amber'}" d="M${X1(p.turn) - 4},${m.t - 9} h8 l-4,6z"/>`; });
-    for (let t = 1; t <= T; t++) if (t === 1 || t === T || t % 5 === 0) g += `<text class="tick" x="${X1(t)}" y="${H - 3}" text-anchor="${t === 1 ? 'start' : t === T ? 'end' : 'middle'}">${t}</text>`;
+    for (let t = 1; t <= T; t++) if (t === 1 || t === T || (t % 5 === 0 && T - t >= 5)) g += `<text class="tick" x="${X1(t)}" y="${H - 3}" text-anchor="${t === 1 ? 'start' : t === T ? 'end' : 'middle'}">${t}</text>`;
     g += `<line class="cur" x1="0" x2="0" y1="${m.t - 2}" y2="${m.t + ih + 2}"/><rect class="hit" x="0" y="0" width="${W}" height="${H}" fill="transparent"/></svg><div class="tip"></div>`;
     host.innerHTML = g;
     const svg = host.querySelector('svg'), cur = svg.querySelector('.cur'), tip = host.querySelector('.tip');
@@ -174,12 +181,14 @@ window.Hex = (function () {
     return { setCur };
   }
 
-  const glyph = (cls, size = 14) => `<svg class="glyph" width="${size}" height="${size}" viewBox="-1.1 -1.1 2.2 2.2" aria-hidden="true"><polygon class="${cls}" points="${hexPts(0, 0, 1)}"/></svg>`;
+  const glyph = (cls, size = 14) => `<svg class="glyph" width="${size}" height="${size}" viewBox="-1.1 -1.1 2.2 2.2" aria-hidden="true">${cls === 'gab'
+    ? half('ga', [0, 0], true, 1) + half('gb', [0, 0], false, 1)
+    : `<polygon class="${cls}" points="${hexPts(0, 0, 1)}"/>`}</svg>`;
 
   function theme() {
     const btn = document.getElementById('theme');
     if (!btn) return;
-    const label = () => { btn.textContent = document.documentElement.dataset.theme === 'light' ? 'Dark' : 'Light'; };
+    const label = () => { const light = document.documentElement.dataset.theme === 'light'; btn.textContent = 'Theme'; btn.setAttribute('aria-label', light ? 'Switch to the dark theme' : 'Switch to the light theme'); };
     btn.addEventListener('click', () => {
       const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
       document.documentElement.dataset.theme = next;

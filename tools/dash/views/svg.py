@@ -14,13 +14,14 @@ _M = {"l": 40.0, "r": 10.0, "t": 8.0, "b": 22.0}
 
 @dataclass(frozen=True)
 class Line:
-    """A polyline in a run's or engine's colour class; `faint` draws it thin and dimmed (an earlier window)."""
+    """A polyline in a run's or engine's colour class; `faint` draws it thin and dimmed, `tag` labels its right end."""
 
     name: str
     cls: str
     pts: Sequence[tuple[float, float]]
     dash: bool = False
     faint: bool = False
+    tag: str = ""
 
 
 @dataclass(frozen=True)
@@ -33,16 +34,17 @@ class Band:
 
 @dataclass(frozen=True)
 class Dots:
-    """Points with 95 % whiskers `(x, y, lo, hi)`."""
+    """Points with 95 % whiskers `(x, y, lo, hi)`; `dx` nudges them sideways so two series at one step stay apart."""
 
     name: str
     cls: str
     pts: Sequence[tuple[float, float, float | None, float | None]]
+    dx: float = 0.0
 
 
 @dataclass(frozen=True)
 class Ref:
-    """A horizontal reference: a line at `y`, an optional band `lo..hi`, a label; `marked` draws it dashed in the warn tone."""
+    """A horizontal reference: a line at `y`, an optional band `lo..hi`, a label; `marked` dashes it in the warn tone, `alt` dots it."""
 
     y: float
     lo: float | None = None
@@ -50,6 +52,7 @@ class Ref:
     label: str = ""
     marked: bool = False
     end: bool = False
+    alt: bool = False
 
 
 @dataclass(frozen=True)
@@ -69,6 +72,8 @@ class Chart:
     y_fmt: Fmt = sig
     x_fmt: Fmt = short
     x_name: str = "step"
+    x_unit: str = "steps"
+    x_title: str = ""
     width: float = 250.0
     height: float = 140.0
     reach: float = 0.0
@@ -94,7 +99,8 @@ class Chart:
     def render(self) -> str:
         """The SVG followed by the crosshair's JSON (values only; the browser maps them, it never derives them)."""
         w, h = self.width, self.height
-        iw, ih = w - _M["l"] - _M["r"], h - _M["t"] - _M["b"]
+        m = {**_M, "b": _M["b"] + (13.0 if self.x_title else 0.0)}
+        iw, ih = w - m["l"] - m["r"], h - m["t"] - m["b"]
         x0, x1, y0, y1 = self.domains()
 
         def px(v: float) -> float:
@@ -104,21 +110,30 @@ class Chart:
             return _M["t"] + (1 - (v - y0) / ((y1 - y0) or 1.0)) * ih
 
         clip = "k" + hashlib.sha1(repr((self.title, x0, x1, y0, y1)).encode()).hexdigest()[:10]
-        out = [f'<svg viewBox="0 0 {w:.0f} {h:.0f}" role="img" aria-label="{esc(self.title)}">'
+        wide = ' class="wide"' if w > 300 else ""
+        out = [f'<svg viewBox="0 0 {w:.0f} {h:.0f}"{wide} role="img" aria-label="{esc(self.title)}">'
                f'<defs><clipPath id="{clip}"><rect x="{_M["l"]}" y="{_M["t"]}" width="{iw:.1f}" height="{ih:.1f}"/>'
                "</clipPath></defs>"]
-        for v in ticks(y0, y1, 3):
+        yt = ticks(y0, y1, 3)
+        y_text = shared_decimals(yt) if self.y_fmt is sig else [self.y_fmt(v) for v in yt]
+        for v, label in zip(yt, y_text, strict=True):
             out.append(f'<line class="gridline" x1="{_M["l"]}" x2="{w - _M["r"]}" y1="{py(v):.1f}" y2="{py(v):.1f}"/>'
-                       f'<text class="tick" x="{_M["l"] - 7}" y="{py(v) + 3.5:.1f}" text-anchor="end">{esc(self.y_fmt(v))}</text>')
+                       f'<text class="tick" x="{_M["l"] - 7}" y="{py(v) + 3.5:.1f}" text-anchor="end">{esc(label)}</text>')
         out.append(f'<line class="axisline" x1="{_M["l"]}" x2="{w - _M["r"]}" y1="{_M["t"] + ih:.1f}" y2="{_M["t"] + ih:.1f}"/>')
-        for v in ticks(x0, x1, 4):
-            out.append(f'<text class="tick" x="{px(v):.1f}" y="{h - 6:.1f}" text-anchor="middle">{esc(self.x_fmt(v))}</text>')
+        xt = ticks(x0, x1, 4)
+        for i, v in enumerate(xt):
+            last = i == len(xt) - 1 and px(v) > w - _M["r"] - 40
+            label = f"{self.x_fmt(v)} {self.x_unit}" if i == len(xt) - 1 and self.x_unit else self.x_fmt(v)
+            out.append(f'<text class="tick" x="{w - _M["r"] if last else px(v):.1f}" y="{h - 6 - (m["b"] - _M["b"]):.1f}" '
+                       f'text-anchor="{"end" if last else "middle"}">{esc(label)}</text>')
+        if self.x_title:
+            out.append(f'<text class="tick" x="{_M["l"] + iw / 2:.1f}" y="{h - 3:.1f}" text-anchor="middle">{esc(self.x_title)}</text>')
         out.append(f'<g clip-path="url(#{clip})">')
         for r in self.refs:
             if r.lo is not None and r.hi is not None:
                 out.append(f'<rect class="refband" x="{_M["l"]}" width="{iw:.1f}" y="{py(r.hi):.1f}" '
                            f'height="{max(1.0, py(r.lo) - py(r.hi)):.1f}"/>')
-            out.append(f'<line class="{"refmark" if r.marked else "ref"}" x1="{_M["l"]}" x2="{w - _M["r"]}" '
+            out.append(f'<line class="{"refmark" if r.marked else "ref"}{" alt" if r.alt else ""}" x1="{_M["l"]}" x2="{w - _M["r"]}" '
                        f'y1="{py(r.y):.1f}" y2="{py(r.y):.1f}"/>')
         for b in self.bands:
             if b.pts:
@@ -133,27 +148,37 @@ class Chart:
             elif s.pts:
                 out.append(f'<circle class="dot {s.cls}" cx="{px(s.pts[0][0]):.1f}" cy="{py(s.pts[0][1]):.1f}" r="3.5"/>')
         out.append("</g>")
+        for s in self.lines:
+            if s.tag and s.pts:
+                x, y = s.pts[-1]
+                out.append(f'<text class="linetag {s.cls}" x="{px(x):.1f}" y="{py(y) - 4:.1f}" text-anchor="end">{esc(s.tag)}</text>')
         for r in self.refs:
             if r.label and r.end:
                 out.append(f'<text class="reflabel" x="{w - _M["r"]:.1f}" y="{py(r.y) - 5:.1f}" text-anchor="end">'
                            f'{esc(r.label)}</text>')
             elif r.label:
-                y = py(r.hi if r.hi is not None else r.y) - 5
-                out.append(f'<text class="reflabel" x="{_M["l"] + 6}" y="{y:.1f}">{esc(r.label)}</text>')
+                out.append(f'<text class="reflabel" x="{_M["l"] + 6}" y="{py(r.y) + 11:.1f}">{esc(r.label)}</text>')
         for d in self.dots:
             for x, y, lo, hi in d.pts:
+                cx = px(x) + d.dx
                 if lo is not None and hi is not None:
-                    out.append(f'<line class="whisk {d.cls}" x1="{px(x):.1f}" x2="{px(x):.1f}" y1="{py(lo):.1f}" y2="{py(hi):.1f}"/>')
-                out.append(f'<circle class="dot {d.cls}" cx="{px(x):.1f}" cy="{py(y):.1f}" r="4.5"/>')
+                    out.append(f'<line class="whisk {d.cls}" x1="{cx:.1f}" x2="{cx:.1f}" y1="{py(lo):.1f}" y2="{py(hi):.1f}"/>')
+                out.append(f'<circle class="dot {d.cls}" cx="{cx:.1f}" cy="{py(y):.1f}" r="4.5"/>')
         for x, label in self.marks:
             out.append(f'<path class="mark" d="M{px(x) - 4:.1f},{_M["t"] + ih:.1f} l4,-6 l4,6z"><title>{esc(label)}</title></path>')
         out.extend(self.extra)
         out.append("</svg>")
         series = [{"name": s.name, "cls": s.cls, "pts": [[_r(x), _r(y)] for x, y in s.pts]} for s in self.lines if not s.faint]
         series += [{"name": d.name, "cls": d.cls, "dots": True, "pts": [[_r(v) for v in p] for p in d.pts]} for d in self.dots]
-        data = {"x": [x0, x1], "y": [y0, y1], "w": w, "h": h, "m": _M, "xname": self.x_name, "series": series}
+        data = {"x": [x0, x1], "y": [y0, y1], "w": w, "h": h, "m": m, "xname": self.x_name, "series": series}
         blob = script_json(data)
         return "".join(out) + f'<script type="application/json" class="xh">{blob}</script>'
+
+
+def shared_decimals(values: Sequence[float]) -> list[str]:
+    """Axis labels at the fewest shared decimals that print every tick exactly: 0 / 5 / 10, 0.025 / 0.050."""
+    places = next((p for p in range(5) if all(abs(round(v, p) - v) < 1e-9 for v in values)), 4)
+    return [f"{v:,.{places}f}".replace(",", "\u202f").replace("-", "\u2212") for v in values]
 
 
 def _r(v: float | None) -> float | None:
@@ -162,13 +187,18 @@ def _r(v: float | None) -> float | None:
 
 
 def ticks(lo: float, hi: float, n: int) -> list[float]:
-    """Round tick values covering `lo..hi`, about `n` of them."""
+    """Round tick values covering `lo..hi`, about `n` of them and never fewer than two."""
     span = (hi - lo) or abs(hi) or 1.0
-    raw = span / n
-    mag = 10 ** math.floor(math.log10(raw))
-    step = next(m * mag for m in (1, 2, 2.5, 5, 10) if m * mag >= raw)
-    first = math.ceil(lo / step) * step
-    return [round(first + i * step, 12) for i in range(int((hi - first) / step + 1e-9) + 1)]
+    mag = 10 ** math.floor(math.log10(span / n))
+    steps = [m * mag for m in (0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10)]
+    i = next(k for k, step in enumerate(steps) if step >= span / n)
+    while True:
+        step = steps[i]
+        first = math.ceil(lo / step - 1e-9) * step
+        out = [round(first + k * step, 12) for k in range(int((hi - first) / step + 1e-9) + 1)]
+        if len(out) >= 2 or i == 0:
+            return out
+        i -= 1
 
 
 def bucket(pairs: Sequence[tuple[float, float]], n: int = 120) -> list[tuple[float, float, float, float]]:

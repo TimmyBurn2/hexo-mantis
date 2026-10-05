@@ -44,12 +44,20 @@ class Scene:
     heat: Sequence[tuple[Cell, float, str]] = ()
     win_cells: Sequence[Cell] = ()
     block_cells: Sequence[Cell] = ()
-    ghosts: Sequence[tuple[Cell, str]] = ()
+    ghosts: Sequence[tuple[Cell, str, str]] = ()
     win_line: Sequence[Cell] | None = None
 
 
 def _hex(cls: str, c: Cell, rad: float, extra: str = "") -> str:
     return f'<polygon class="{cls}" points="{hex_points(c, rad)}"{extra}/>'
+
+
+def _half(cls: str, c: Cell, *, left: bool) -> list[str]:
+    """One vertical half of a cell's hexagon, top corner to bottom corner, for a cell two nets share."""
+    cx, cy = xy(c)
+    corners = (270, 210, 150, 90) if left else (270, 330, 30, 90)
+    pts = " ".join(f"{cx + 0.86 * math.cos(math.radians(a)):.3f},{cy + 0.86 * math.sin(math.radians(a)):.3f}" for a in corners)
+    return [f'<polygon class="{cls}" points="{pts}"/>']
 
 
 def render(scene: Scene, label: str = "Board position") -> str:
@@ -78,9 +86,13 @@ def render(scene: Scene, label: str = "Board position") -> str:
         out.append(_hex("block", c, 0.8))
     for c in scene.win_cells:
         out.append(_hex("wincell", c, 0.8) + _hex("windot", c, 0.17))
-    for c, _label in scene.ghosts:
-        if c not in placed:
-            out.append(_hex("ghost", c, 0.86))
+    for c, _label, cls in scene.ghosts:
+        if c in placed:
+            continue
+        if cls == "gab":
+            out.extend(_half("ga", c, left=True) + _half("gb", c, left=False))
+        else:
+            out.append(_hex(cls, c, 0.86))
     for i in range(scene.ply):
         out.append(_hex(f"s{owner(i) + 1}", scene.moves[i], 0.84))
     if scene.win_line:
@@ -97,10 +109,11 @@ def render(scene: Scene, label: str = "Board position") -> str:
                 out.append(_hex(f"ltr{side}", c, 0.62))
         elif is_last:
             out.append(_hex(f"lt{side}", c, 0.2))
-    for c, label in scene.ghosts:
+    for c, label, cls in scene.ghosts:
         if label and c not in placed:
-            out.append(f'<text class="ghostnum" x="{xy(c)[0]:.3f}" y="{xy(c)[1]:.3f}">{esc(label)}</text>')
-    numbered = {c for c, label in scene.ghosts if label}
+            on = " on" if cls != "ghost" else ""
+            out.append(f'<text class="ghostnum{on}" x="{xy(c)[0]:.3f}" y="{xy(c)[1]:.3f}">{esc(label)}</text>')
+    numbered = {c for c, label, _cls in scene.ghosts if label}
     for c, _rel, text in scene.heat:
         if text and c not in placed and c not in numbered:
             out.append(f'<text class="heatnum" x="{xy(c)[0]:.3f}" y="{xy(c)[1]:.3f}">{esc(text)}</text>')
@@ -113,5 +126,5 @@ def heat_of(cands: Sequence[Sequence[Any]]) -> list[tuple[Cell, float, str]]:
     if not cands:
         return []
     top = max(float(c[2]) for c in cands) or 1.0
-    return [((int(c[0]), int(c[1])), float(c[2]) / top, str(round(float(c[2]) * 100)) if i < 3 and float(c[2]) >= 0.03 else "")
+    return [((int(c[0]), int(c[1])), float(c[2]) / top, f"{round(float(c[2]) * 100)}%" if i < 3 and float(c[2]) >= 0.03 else "")
             for i, c in enumerate(cands)]

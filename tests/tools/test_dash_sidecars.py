@@ -45,6 +45,22 @@ def test_every_unit_is_its_own_series_never_joined(sc, tmp_path):
     assert by_name == {"six30_16.full": [3000, 6000], "six30_16.off": [9000], "six455_128.full": [9000]}
 
 
+def test_a_checkpoint_read_twice_on_one_unit_keeps_the_reading_over_more_games(sc, tmp_path):
+    sidecar(tmp_path / "full_36k", "r1", 36000, 0.19, suffix="six455_128.full", **_six455(128))
+    sidecar(tmp_path / "screen_36k", "r1", 36000, 0.18, n=128, suffix="six455_128.full", **_six455(128))
+    sidecar(tmp_path / "smoke", "r1", 36000, 0.0, n=2, suffix="six455_128.full", **_six455(128))
+    cells, _ = sc.load([tmp_path])
+    assert [(c.step, c.wr, c.n) for c in cells] == [(36000, 0.19, 576)]
+
+
+def test_six_forfeits_are_left_out_of_the_reading_not_counted_as_our_wins(sc, tmp_path):
+    findings = {"count": 58, "first": ["six_forfeit_finding failed ply 6: bestmove none"]}
+    sidecar(tmp_path, "r1", 24000, 0.3715, six_findings=findings)
+    (cell,), _ = sc.load([tmp_path])
+    assert cell.forfeits == 58 and cell.n == 518
+    assert cell.wr == pytest.approx(156 / 518) and cell.lo == pytest.approx(0.262, abs=0.002) and cell.hi == pytest.approx(0.343, abs=0.002)
+
+
 def test_each_ruler_has_its_own_parent_on_the_same_unit(sc, tmp_path):
     sidecar(tmp_path, "r1", 3000, 0.70)
     sidecar(tmp_path, "r1", 3000, 0.40, suffix="six455_128.full", **_six455(128))

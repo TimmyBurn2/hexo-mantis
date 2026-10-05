@@ -5,15 +5,15 @@ from collections.abc import Sequence
 
 from ..readers.record import RunSnapshot
 from ..readers.sidecars import CELLS, LINE_LOGIT, Cell, Ruler
-from .charts import RUN_CLASSES, Key, figure, table
+from .charts import HIGHER, RUN_CLASSES, Goal, Key, figure, table
 from .fmt import esc, num, pct, short, signed
 from .stats import expit, separation
 from .svg import Chart, Dots, Line, Ref
 
-_WORD = {1: "stronger than", -1: "weaker than", 0: "not separable from"}
-_OWN = {1: "clearly stronger than", -1: "weaker than", 0: "not separable from"}
+_WORD = {1: "beats", -1: "trails", 0: "shows no clear difference from"}
+_OWN = _WORD
 #: Colour classes for the rulers on the logit chart, in the order they are listed.
-_RULER_CLASSES = ("c1", "c2", "c3", "cf")
+_RULER_CLASSES = ("c1", "c3", "cf", "cf")
 
 
 def _role(r: Ruler, declared: bool) -> str:
@@ -25,9 +25,9 @@ def _rule_note(snap: RunSnapshot) -> str:
     if snap.rule is None or snap.rule_matches == 1:
         return ""
     if snap.rule_matches == 0:
-        return f" The rule reads {esc(snap.rule)}, which has no cell yet; its going-forward read waits for one."
-    return (f" The rule's unit {esc(snap.rule)} names {snap.rule_matches} series: a unit changed (its Six or Strix pin, "
-            "tactics block or our sims), so the going-forward read is withheld until the rule names one.")
+        return f" The rule reads {esc(snap.rule)}, which has no cell yet."
+    return (f" The rule's unit {esc(snap.rule)} matches {snap.rule_matches} series (a pin, tactics block or sims changed), "
+            "so the going-forward read is withheld.")
 
 
 def _lead(rulers: Sequence[Ruler]) -> Ruler | None:
@@ -43,33 +43,42 @@ def verdict(snap: RunSnapshot) -> tuple[str, str]:
     """The sentence and its aside; each word gated by its interval, the going-forward read only on the rule's ruler."""
     lead = _lead(snap.rulers)
     if lead is None or not lead.line:
-        return "No strength reading in this run's record yet.", "A cell sidecar for one of the run's checkpoints would start the line."
+        return "No strength reading yet.", "The first cell sidecar starts the line."
     last, first = lead.line[-1], lead.line[0]
     parts = []
     if lead.parent is not None:
         vs = separation(last.wr, last.n, lead.parent.wr, lead.parent.n)
-        parts.append(f"{short(last.step)} is <strong>{_WORD[vs.sign]}</strong> its parent{' yet' if vs.sign == 0 else ''}")
+        parts.append(f"{short(last.step)} <strong>{_WORD[vs.sign]}</strong> its parent")
     if len(lead.line) > 1:
         own = separation(last.wr, last.n, first.wr, first.n)
-        parts.append(f"{'and ' if parts else short(last.step) + ' is '}{_OWN[own.sign]} its own {short(first.step)}")
-    sentence = (", ".join(parts) + f" on {esc(lead.name)}.") if parts else \
-        f"{short(last.step)} is the run's only cell on {esc(lead.name)}, and it has no parent there to read against."
-    aside = f"On {esc(lead.name)} ({_role(lead, snap.rule is not None)}) it wins {pct(last.wr, 1)} of {num(last.n)} games"
-    if lead.parent is not None:
-        aside += f"; the parent ({esc(_parent_name(lead.parent))}) won {pct(lead.parent.wr, 1)}"
-    aside += ". A word needs the 95 % interval on the difference to exclude zero."
+        parts.append(f"{_OWN[own.sign]} {short(first.step)}" if parts else f"{short(last.step)} {_OWN[own.sign]} {short(first.step)}")
+    role = f" ({_role(lead, True)})" if snap.rule is not None else ""
+    sentence = (" and ".join(parts) + f" on {esc(lead.name)}{role}.") if parts else \
+        f"{short(last.step)} wins <strong>{pct(last.wr, 1)}</strong> on {esc(lead.name)}{role}. No parent cell to compare."
+    lines = [f"{short(last.step)}: {pct(last.wr, 1)} of {num(last.n)} games"
+             + (f", {num(last.forfeits)} Six forfeits left out." if last.forfeits else ".")
+             + (f" Parent {esc(_parent_name(lead.parent))}: {pct(lead.parent.wr, 1)}." if lead.parent is not None else "")]
     gf = lead.going_forward if lead.rule else None
     if gf is not None:
         mean, used = gf
-        aside += (f" Going forward: the mean of the last {used} cell{'s' if used > 1 else ''} is {signed(mean)} logit over the parent, "
-                  f"{'above' if mean > LINE_LOGIT else 'below'} the line at {signed(LINE_LOGIT)}"
-                  + ("" if used >= CELLS else f" ({used} of {CELLS} cells so far)") + ".")
-    others = [(r, r.parent) for r in snap.rulers if r is not lead and r.line and r.parent is not None]
-    if others:
-        aside += (" Report-only: " if snap.rule is not None else " Other rulers: ") + "; ".join(
-            f"{esc(r.name)} {signed(r.line[-1].logit - p.logit)} logit over its parent at {short(r.line[-1].step)}"
-            for r, p in others if p is not None) + "."
-    return sentence, aside + _rule_note(snap) + _ladder_text(snap)
+        lines.append(f"Mean of the last {used} cell{'s' if used > 1 else ''}: {signed(mean)} logit over the parent, "
+                     f"{'above' if mean > LINE_LOGIT else 'below'} the {signed(LINE_LOGIT)} bar"
+                     + ("" if used >= CELLS else f" (the rule averages {CELLS})") + ".")
+    lines += [f"{esc(r.name)} at {short(r.line[-1].step)}: {signed(r.line[-1].logit - p.logit)} logit over its parent."
+              for r, p in ((r, r.parent) for r in snap.rulers if r is not lead and r.line) if p is not None]
+    lines += [x for x in (_rule_note(snap).strip(), _ladder_text(snap).strip()) if x]
+    return sentence, "<br>".join(lines)
+
+
+def _compared(snaps: Sequence[RunSnapshot], lead: Ruler) -> str:
+    """Each compared run's latest cell on the lead ruler's unit, one line apiece."""
+    out = ""
+    for x in snaps[1:]:
+        twin = next((r for r in x.rulers if r.unit == lead.unit and r.line), None)
+        if twin is not None:
+            c = twin.line[-1]
+            out += f'<span class="{RUN_CLASSES[snaps.index(x)]}">{esc(x.label)} at {short(c.step)}: {pct(c.wr, 1)} of {num(c.n)} games.</span><br>'
+    return out
 
 
 def _ladder_text(snap: RunSnapshot) -> str:
@@ -77,18 +86,17 @@ def _ladder_text(snap: RunSnapshot) -> str:
     if rungs is None:
         return ""
     if not rungs.note.startswith("read"):
-        return f" The ruler ladder: {esc(rungs.note)}."
-    text = f" The comparison ruler is {esc(rungs.current or 'not named')}" + (
-        f", streak {rungs.streak}" if rungs.streak is not None else "") + "."
+        return f" Ladder: {esc(rungs.note)}."
+    text = f" Ladder ruler: {esc(rungs.current or 'not named')}" + (f", streak {rungs.streak}" if rungs.streak is not None else "") + "."
     if rungs.note != "read":
         text += f" The ladder file {esc(rungs.note[len('read, but '):])}."
     for change, pairs in snap.bridges:
-        text += f" It escalated from {esc(change.frm)} to {esc(change.to)} at {short(change.step)}"
+        text += f" Moved up from {esc(change.frm)} to {esc(change.to)} at {short(change.step)}"
         if pairs:
             a, b = pairs[-1]
-            text += f"; bridge: {short(a.step)} read {pct(a.wr)} on {esc(change.frm)} and {pct(b.wr)} on {esc(change.to)}."
+            text += f"; bridge {short(a.step)}: {pct(a.wr)} on {esc(change.frm)}, {pct(b.wr)} on {esc(change.to)}."
         else:
-            text += "; no checkpoint is read on both rungs yet."
+            text += "; no checkpoint read on both rungs yet."
     return text
 
 
@@ -116,22 +124,22 @@ def _rule_panel(snaps: Sequence[RunSnapshot], lead: Ruler, xmax: float) -> str:
         gf = lead.going_forward if lead.rule else None
         if gf is not None:
             mean, used = gf
-            refs.append(Ref(expit(lead.parent.logit + LINE_LOGIT), label=f"parent {signed(LINE_LOGIT)} logit", marked=True, end=True))
+            refs.append(Ref(expit(lead.parent.logit + LINE_LOGIT), label="bar", marked=True, end=True))
             last = lead.line[-used:]
             level = expit(lead.parent.logit + mean)
             lines.append(Line(f"mean of the last {used}", "c1", [(float(last[0].step), level), (float(last[-1].step), level)], dash=True))
-            keys += [Key("going-forward line", glyph="dash"), Key(f"mean of the last {used} cell{'s' if used > 1 else ''}", "c1", "dash")]
+            keys += [Key(f"bar, parent {signed(LINE_LOGIT)} logit", "warn", "dash"), Key(f"mean of the last {used}", "c1", "dash")]
     marks = _marks(head)
     if marks:
         keys.append(Key("promotion or ruler change", glyph="mark"))
     chart = Chart(title, lines=lines, dots=dots, refs=refs, marks=marks, y_fmt=lambda v: pct(v), width=400, height=220,
                   y_floor=0.0, y_ceil=1.0, x_domain=(0.0, xmax))
-    definition = (f"{lead.label}; {_role(lead, head.rule is not None)}. Whiskers are each cell's 95 % interval over distinct games; "
-                  "the table names each cell's host load.")
-    return figure(title, chart, definition, now=pct(lead.line[-1].wr), keys=keys)
+    definition = f"{lead.label}. Whiskers: 95 % interval. Beats or trails only when the difference's interval excludes 0."
+    nows = [(pct(d.pts[-1][1]) if d.pts else "", d.cls) for d in dots]
+    return figure(title, chart, definition, goal=HIGHER, now=pct(lead.line[-1].wr), nows=nows, keys=keys)
 
 
-def _logit_panel(head: RunSnapshot, xmax: float) -> str:
+def _logit_panel(head: RunSnapshot, xmax: float, only: str) -> str:
     declared = head.rule is not None
     dots, keys = [], []
     drawn = [(r, r.parent) for r in head.rulers if r.parent is not None and r.line]
@@ -144,29 +152,29 @@ def _logit_panel(head: RunSnapshot, xmax: float) -> str:
             d, hw_c = c.logit - base, c.logit_half_width
             hw = None if hw_c is None else (hw_c * hw_c + hw_p * hw_p) ** 0.5
             pts.append((float(c.step), d, None if hw is None else d - hw, None if hw is None else d + hw))
-        dots.append(Dots(r.name, cls, pts))
+        dots.append(Dots(r.name, cls, pts, dx=(i - (len(drawn) - 1) / 2) * 6))
         keys.append(Key(f"{r.name}, {_role(r, declared)}", cls, "dot"))
-    refs = [Ref(0.0, label="each ruler's parent")]
+    refs = [Ref(0.0, label="parent")]
     if any(r.rule for r in head.rulers):
-        refs.append(Ref(LINE_LOGIT, label=f"the rule's line {signed(LINE_LOGIT)}", marked=True, end=True))
-    missing = [r.name for r in head.rulers if r.parent is None]
-    definition = ("Each ruler's cells as logit(win rate) minus the logit of the parent's win rate on the same ruler, so "
-                  "rulers of different strength read on one axis; never pooled or joined. Whiskers combine the cell's and "
-                  "the parent's intervals; a reading of 0 or 1 is moved half a game in.")
+        refs.append(Ref(LINE_LOGIT, label=f"bar {signed(LINE_LOGIT)}", marked=True))
+    missing = [r.name for r in head.rulers if r.parent is None] if any(r.parent is not None for r in head.rulers) else []
+    definition = "Logit of the win rate minus the parent's on the same ruler, so rulers of different strength share one axis."
     if missing:
-        definition += f" No parent cell on {', '.join(missing)}, so it is in the table only."
-    rows = [[r.name, _role(r, declared), num(c.step), pct(c.wr, 1), f"{pct(c.lo, 1)} – {pct(c.hi, 1)}", num(c.n),
+        definition += f" No parent cell on {', '.join(missing)}: table only."
+    goal = Goal("up", "higher is better, 0 is the parent")
+    rows = [[r.name, _role(r, declared), num(c.step), pct(c.wr, 1), f"{pct(c.lo, 1)} to {pct(c.hi, 1)}",
+             num(c.n) + (f" ({num(c.forfeits)} forfeits left out)" if c.forfeits else ""),
              signed(c.logit - r.parent.logit) if r.parent is not None else "—", c.regime]
             for r in head.rulers for c in r.line]
-    rows += [[r.name, "parent", num(r.parent.step), pct(r.parent.wr, 1), f"{pct(r.parent.lo, 1)} – {pct(r.parent.hi, 1)}",
+    rows += [[r.name, "parent", num(r.parent.step), pct(r.parent.wr, 1), f"{pct(r.parent.lo, 1)} to {pct(r.parent.hi, 1)}",
               num(r.parent.n), "+0.00", r.parent.regime] for r in head.rulers if r.parent is not None]
     twin = table(["ruler", "role", "step", "win rate", "95 % interval", "games", "logit over parent", "host load"], rows)
     if not dots:
-        return figure("Every ruler, over its parent", None, definition, twin=twin,
-                      gap=("No ruler has a parent cell yet.", "Each ruler needs the parent's checkpoint read on it."))
+        return figure("Every ruler against its parent", None, definition, goal=goal, only=only, twin=twin,
+                      gap=("No ruler has a parent cell yet.", "Read the parent's checkpoint on a ruler to draw it."))
     chart = Chart("every ruler", dots=dots, refs=refs, marks=_marks(head), y_fmt=lambda v: signed(v), width=400, height=220,
                   x_domain=(0.0, xmax))
-    return figure("Every ruler, over its parent", chart, definition, keys=keys, twin=twin)
+    return figure("Every ruler against its parent", chart, definition, goal=goal, only=only, keys=keys, twin=twin)
 
 
 def section(snaps: Sequence[RunSnapshot]) -> tuple[str, str, str]:
@@ -175,8 +183,8 @@ def section(snaps: Sequence[RunSnapshot]) -> tuple[str, str, str]:
     sentence, aside = verdict(head)
     lead = _lead(head.rulers)
     if lead is None:
-        return sentence, aside, figure("Win rate against the rulers", None, "Six and Strix cells, each unit its own series.",
-                                       gap=("No ruler reading in this run's record.", "The follower writes one sidecar per cell "
-                                            "beside the checkpoint; none was found under the cell directories given."))
+        return sentence, aside, figure("Win rate against the rulers", None, goal=HIGHER,
+                                       gap=("No ruler reading for this run.", "No cell sidecar under the --cells directories."))
     xmax = max([float(x.events.live_steps or 0) for x in snaps] + [float(c.step) for r in head.rulers for c in r.line])
-    return sentence, aside, _rule_panel(snaps, lead, xmax) + _logit_panel(head, xmax)
+    aside = (_compared(snaps, lead) + aside).removesuffix("<br>")
+    return sentence, aside, _rule_panel(snaps, lead, xmax) + _logit_panel(head, xmax, head.label if len(snaps) > 1 else "")

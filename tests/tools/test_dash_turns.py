@@ -24,9 +24,9 @@ def test_a_turn_start_carries_both_stones_and_a_sentence_for_each(gv, dash):
     GameView = importlib.import_module("dash.readers.games").GameView
     body = gv.payload(GameView.from_record(game("g", six_in_a_row_for_p1(), stats=_STATS)), "r1", None)
     turn = body["pos"][3]["turn"]
-    assert turn["stones"] == [[1, 0], [2, 0]] and [t[0] for t in turn["texts"]] == ["First stone", "Second stone"]
-    assert "its most-visited move" in turn["texts"][0][1] and "with 40 % of the visits" in turn["texts"][1][1]
-    assert "turn" not in body["pos"][4] and body["pos"][0]["turn"]["texts"][0][0] == "The stone"
+    assert turn["stones"] == [[1, 0], [2, 0]] and [t[0] for t in turn["texts"]] == ["Stone 1", "Stone 2"]
+    assert "the top move" in turn["texts"][0][1] and "40 % of the visits" in turn["texts"][1][1]
+    assert "turn" not in body["pos"][4] and body["pos"][0]["turn"]["texts"][0][0] == "Stone"
     assert body["pos"][3]["where"] == "<b>Turn 3</b> of 7, Light to place two stones"
     assert body["htttx"]["head"] == "version[1];" and tuple(body["htttx"]["turns"][1]) == (3, 5, "2. [1,0][2,0];", "2. [1,0];")
 
@@ -40,7 +40,7 @@ def test_the_transport_steps_from_turn_start_to_turn_start(gv):
 
 def test_a_few_stones_are_framed_on_a_board_of_at_least_the_minimum_area(dash):
     board = importlib.import_module("dash.views.board")
-    svg = board.render(board.Scene(moves=[(0, 0)], ply=1, ghosts=[((1, 0), "1"), ((2, 0), "2")]))
+    svg = board.render(board.Scene(moves=[(0, 0)], ply=1, ghosts=[((1, 0), "1", "ghost"), ((2, 0), "2", "ghost")]))
     _x, _y, w, h = (float(v) for v in re.search(r'viewBox="([^"]+)"', svg).group(1).split())
     assert w >= board.MIN_W - 1e-6 and h >= board.MIN_H - 1e-6
     assert '<text class="ghostnum"' in svg and ">1<" in svg and ">2<" in svg
@@ -49,7 +49,7 @@ def test_a_few_stones_are_framed_on_a_board_of_at_least_the_minimum_area(dash):
 def test_a_numbered_stone_takes_its_cells_label_from_the_policy_percent(dash):
     board = importlib.import_module("dash.views.board")
     svg = board.render(board.Scene(moves=[(0, 0)], ply=1, heat=[((1, 0), 1.0, "42"), ((3, 0), 0.5, "21")],
-                                   ghosts=[((1, 0), "1"), ((2, 0), "2")]))
+                                   ghosts=[((1, 0), "1", "ghost"), ((2, 0), "2", "ghost")]))
     assert ">42<" not in svg and ">21<" in svg and ">1<" in svg
 
 
@@ -83,7 +83,8 @@ def test_each_nets_whole_turn_is_named_and_the_same_turn_said_once(text):
     both = text.compose(_rec(pa), _rec(pa, step=3000), None, None, None, turn_a=turn([(0, 1), (1, 1)], searched=True),
                         turn_b=turn([(0, 1), (1, 1)]))
     assert "Both nets play (0, 1) then (1, 1)." in both["verdict"] and both["turn"]["a"] == [[0, 1], [1, 1]]
-    assert both["turn"]["note"] == "The numbered stones are r at 45k's turn, from its search."
+    assert both["turn"]["note"] == "Numbered: each net's turn, the reading net's from its search."
+    assert both["turn"]["ghosts"] == [[0, 1, "1", "gab"], [1, 1, "2", "gab"]]
     split = text.compose(_rec(pa), _rec(pa, step=3000), None, None, None, turn_a=turn([(0, 1), (1, 1)]),
                          turn_b=turn([(0, 1), (2, 2)]))
     assert "r at 45k plays (0, 1) then (1, 1); r at 3k plays (0, 1) then (2, 2)." in split["verdict"]
@@ -168,7 +169,7 @@ def test_the_import_form_opens_the_game_or_keeps_the_text_and_reads_nothing(dash
 
     good = routes.post(dash_game_hub, None)("/analyzer", b"htttx=version%5B1%5D%3B%0A1.+%5B1%2C0%5D%5B2%2C0%5D%3B")
     html = good.body.decode("utf-8")
-    assert good.status == 200 and "An imported game, 3 stones" in html and '"id":"imported"' in html
+    assert good.status == 200 and "Imported game, 3 stones" in html and '"id":"imported"' in html
     bad = routes.post(dash_game_hub, desk_of)("/analyzer", b"htttx=1.+%5B0%2C0%5D%5B1%2C0%5D%3B%3Cb%3E").body.decode("utf-8")
     assert '<p class="refused">turn 1: (0, 0) is already occupied</p>' in bad and "1. [0,0][1,0];&lt;b&gt;</textarea>" in bad
     huge = routes.post(dash_game_hub, desk_of)("/analyzer", b"htttx=" + b"x" * (routes.MAX_IMPORT + 1)).body.decode("utf-8")

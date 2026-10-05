@@ -16,7 +16,7 @@
     const top = Math.max(1e-9, ...cands.map(c => c[2]));
     return {
       moves: G.moves, owners: G.owners, turns: G.turn_of, ply, frame: G.moves, numbers: L.num,
-      heat: cands.map((c, i) => ({ c: [c[0], c[1]], rel: c[2] / top, label: i < 3 && c[2] >= .03 ? String(Math.round(c[2] * 100)) : '' })),
+      heat: cands.map((c, i) => ({ c: [c[0], c[1]], rel: c[2] / top, label: i < 3 && c[2] >= .03 ? `${Math.round(c[2] * 100)}%` : '' })),
       win: L.tac && t && t.cls === 'win' ? t.cells : [], block: L.tac && t && t.cls === 'block' ? t.cells : [],
       ghosts: end || !L.search ? [] : turnStones || [{ c: G.moves[ply], label: '' }], winLine: end ? G.win : null,
     };
@@ -33,18 +33,21 @@
     if (pos.turn || pos.think) {
       const s = el('section'), th = pos.turn || pos.think;
       if (pos.turn) {
-        s.append(el('h2', null, 'What the bot played this turn'));
+        s.append(el('h2', null, 'Played this turn'));
         pos.turn.texts.forEach(([label, text]) => { const p = trusted('p', 'say', ` ${text}`); p.prepend(el('strong', null, `${label}.`)); s.append(p); });
-      } else s.append(el('h2', null, 'What the bot thought'), trusted('p', 'say', th.text));
+        if (pos.turn.how) s.append(el('p', 'muted small', pos.turn.how));
+      } else s.append(el('h2', null, 'Search at this stone'), trusted('p', 'say', th.text));
       if (th.light != null) {
+        s.append(el('p', 'muted small', 'Win chance, from the search'));
         const wc = el('div', 'wc'), bar = el('span', 'bar'), fill = el('i');
         fill.style.width = (th.light * 100) + '%'; bar.append(fill);
         wc.append(el('span', null, `Light ${Math.round(th.light * 100)} %`), bar, el('span', null, `${Math.round((1 - th.light) * 100)} % Dark`));
         s.append(wc);
       }
-      if (th.second) s.append(el('p', 'muted small', 'Second stone of the turn: the search averages its forced visits here, so its value reads low and the strip skips it.'));
+      if (th.second) s.append(el('p', 'muted small', 'Second stone: its value reads low from forced visits, so the strip skips it.'));
       if (th.cands.length) {
-        const tb = el('table', 'cands'), head = el('tr'); ['Cell', 'Visits', ''].forEach(h => head.append(el('th', null, h)));
+        if (pos.turn && pos.turn.stones.length > 1) s.append(el('p', 'muted small', 'For stone 1.'));
+        const tb = el('table', 'cands'), head = el('tr'); ['Cell', 'Visit share', ''].forEach(h => head.append(el('th', null, h)));
         tb.append(el('thead')); tb.tHead.append(head); const body = el('tbody');
         th.cands.forEach(c => {
           const tr = el('tr'), bar = el('div', 'b'), fill = el('i'); fill.style.width = Math.max(2, c[2] * 78) + '%';
@@ -100,7 +103,7 @@
   function keys() {
     const k = (g, t) => { const s = el('span'); s.innerHTML = g; s.append(t); return s; };
     $('keys').replaceChildren(k(H.glyph('s1'), 'Light'), k(H.glyph('s2'), 'Dark'), k(H.glyph('windot', 12), 'win available'),
-      k(H.glyph('block'), 'must block'), k(H.glyph('heat'), 'where the search looked'), k(H.glyph('ghost'), 'the stones played this turn, in order'));
+      k(H.glyph('block'), 'must block'), k(H.glyph('heat'), 'where the search looked'), k(H.glyph('ghost'), 'stones played this turn'));
   }
 
   function wire() {

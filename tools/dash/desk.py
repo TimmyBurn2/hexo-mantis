@@ -61,11 +61,12 @@ class Desk:
         """The engine rows; no engine is touched."""
         return self.dispatcher.rows()
 
-    def default_pair(self) -> tuple[str | None, str | None]:
-        """The newest loadable net to read and the one before it to compare."""
+    def default_pair(self, run_id: str | None = None) -> tuple[str | None, str | None]:
+        """The newest loadable net to read and the one before it to compare, from `run_id`'s nets when it has any."""
         from .engine.engines import MANTIS
-        loadable = [r["id"] for r in self.rows() if r.get("kind") == MANTIS]
-        return (loadable[-1] if loadable else None), (loadable[-2] if len(loadable) > 1 else None)
+        loadable = [r for r in self.rows() if r.get("kind") == MANTIS]
+        own = [r["id"] for r in loadable if r.get("run_id") == run_id] or [r["id"] for r in loadable]
+        return (own[-1] if own else None), (own[-2] if len(own) > 1 else None)
 
     def _submit(self, engine: str, moves: list[tuple[int, int]], sims: int, client: str,
                 symmetry: bool = False) -> dict[str, Any]:
@@ -93,7 +94,7 @@ class Desk:
         return Turn([first] + ([second] if second is not None else []), searched=searched, ms=ms)
 
     def read(self, a: str, b: str | None, moves: list[tuple[int, int]], ctx: Context, *, sims: int = 0,
-             symmetry: bool = False, client: str = "page") -> tuple[int, dict[str, Any]]:
+             symmetry: bool = False, client: str = "page", names: dict[str, str] | None = None) -> tuple[int, dict[str, Any]]:
         """A's record (at `sims`, the symmetry sweep when asked) and B's raw read, each net's whole turn, composed into the panel."""
         first = self._submit(a, moves, sims, client, symmetry)
         if first["status"] != 200 or first["body"].get("superseded"):
@@ -113,7 +114,8 @@ class Desk:
         except htttx.NotationRefused:
             notation = None
         where = analyzer_view.where(moves, (rec_a.get("position") or {}).get("winner"))
-        panel = {**compose(rec_a, rec_b, ctx.entry, ctx.nxt, ctx.second, turn_a=turn_a, turn_b=turn_b), "a_id": a, "b_id": b,
+        panel = {**compose(rec_a, rec_b, ctx.entry, ctx.nxt, ctx.second, turn_a=turn_a, turn_b=turn_b, names=names),
+                 "a_id": a, "b_id": b,
                  "where": where, "htttx": notation, "htttx_moved": htttx.moved(moves), **turn_facts(len(moves))}
         return 200, {"ok": True, "panel": panel, "record": rec_a, "context": ctx.__dict__}
 

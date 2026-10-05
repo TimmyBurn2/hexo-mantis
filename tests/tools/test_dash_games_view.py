@@ -51,28 +51,28 @@ def test_every_position_has_its_sentences_and_the_final_one_closes_the_list(gv, 
 def test_a_played_cell_outside_the_recorded_visits_reads_a_dash_never_zero(text, GameView):
     view = GameView.from_record(_game())
     out = text.thought(view, 3, set(), False)
-    assert "outside the recorded visits (—)" in out["text"] and "0 %" not in out["text"]
+    assert "not among the recorded visits" in out["text"] and "0 %" not in out["text"]
 
 
 def test_the_played_cell_and_its_share_and_the_second_stone_flag(text, GameView):
     view = GameView.from_record(_game())
     first = text.thought(view, 1, {(0, 5)}, False)
-    assert first["text"] == "Full search, 10 visits. It played (0, 5), its most-visited move."
+    assert first["text"] == "(0, 5), the top move. Full search, 10 sims."
     assert first["cands"][0] == [0, 5, 0.9, ["played", "blocks"]] and first["light"] == pytest.approx(0.4)
     assert first["second"] is False
     second = text.thought(view, 4, set(), False)
-    assert second["second"] is True and "with 25\u202f% of the visits" in second["text"]
+    assert second["second"] is True and "25\u202f% of the visits" in second["text"]
 
 
 def test_an_opening_stone_and_an_unsampled_game_say_why_there_is_no_search(text, GameView):
     view = GameView.from_record(_game())
-    assert text.thought(view, 2, set(), False)["text"].startswith("An opening stone")
+    assert text.thought(view, 2, set(), False)["text"].startswith("Opening stone")
     unsampled = GameView.from_record(game("g2", six_in_a_row_for_p1()))
-    assert "not sampled" in text.thought(unsampled, 4, set(), False)["text"]
+    assert "Not sampled" in text.thought(unsampled, 4, set(), False)["text"]
 
 
-@pytest.mark.parametrize(("step", "kind", "net"), [(-1, "actor", "before the actor's first sync"),
-                                                   (36000, "actor", "r1 at 36k, the actor's copy"),
+@pytest.mark.parametrize(("step", "kind", "net"), [(-1, "actor", "before the first sync"),
+                                                   (36000, "actor", "r1 at 36k (self-play copy)"),
                                                    (32201, "round", "r1 at 32.2k")])
 def test_the_net_that_played_is_named_as_the_record_says(text, GameView, step, kind, net):
     view = GameView.from_record(game("g", [[0, 0]], step=step, step_kind=kind))
@@ -80,7 +80,7 @@ def test_the_net_that_played_is_named_as_the_record_says(text, GameView, step, k
 
 
 def test_the_shard_hour_reads_in_central_european_time(text):
-    assert text.hour_of("games_r1_seg0003_2026100510.jsonl") == "5 Oct, the hour from 12:00 CEST"
+    assert text.hour_of("games_r1_seg0003_2026100510.jsonl") == "5 Oct, 12:00–13:00 CEST"
     assert text.hour_of("nonsense.jsonl") is None
 
 

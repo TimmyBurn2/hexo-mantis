@@ -59,19 +59,19 @@ def _lag(step: int, diff: float, lo: float, hi: float, gap: float = 0.01) -> dic
             "current": {"gap": {"cf_ce": gap}}}
 
 
-@pytest.mark.parametrize(("diff", "lo", "hi", "word"), [(-0.011, -0.017, -0.005, "better than"),
-                                                        (0.011, 0.005, 0.017, "worse than"),
-                                                        (-0.002, -0.006, 0.003, "not separable from")])
+@pytest.mark.parametrize(("diff", "lo", "hi", "word"), [(-0.011, -0.017, -0.005, "beats its lagged net by 0.011 nats (95 % interval 0.005 to 0.017)"),
+                                                        (0.011, 0.005, 0.017, "trails its lagged net by 0.011"),
+                                                        (-0.002, -0.006, 0.003, "shows no clear difference from its lagged net")])
 def test_the_lagged_reads_word_appears_only_past_its_interval(dash, value, tmp_path, diff, lo, hi, word):
     root = _records(tmp_path, [_save(3000), _save(6000, lagged_of=_lag(3000, diff, lo, hi))])
     _, aside, _ = value.section([_snap(dash, _record(tmp_path), records=root)])
-    assert f"reads {word} its lagged net" in aside
+    assert word in aside
 
 
 def test_the_cross_entropy_is_stated_without_a_direction_word(dash, value, tmp_path):
     root = _records(tmp_path, [_save(3000), _save(36000)])
     sentence, _, _ = value.section([_snap(dash, _record(tmp_path), records=root)])
-    assert "down from" not in sentence and "up from" not in sentence and "it read 0.560 at 3k" in sentence
+    assert "down from" not in sentence and "up from" not in sentence and "(0.560 at 3k)" in sentence
 
 
 def test_the_gap_is_drawn_at_the_save_it_belongs_to(dash, value, tmp_path):
@@ -87,30 +87,31 @@ def test_no_temperature_and_no_exam_are_sentences_never_empty_axes(dash, value, 
     root = _records(tmp_path, [_save(3000, gen=gen, exams=unread), _save(6000, gen=gen, exams=unread)])
     _, _, panels = value.section([_snap(dash, _record(tmp_path), records=root)])
     temp = panels[panels.index("<h3>Temperature</h3>"):]
-    assert "Not measured at any save yet." in temp[:600] and "No exam measured at any save yet." in panels
+    exam = panels[panels.index("<h3>Exam T4_V, calibrated</h3>"):]
+    assert "Not measured at any save yet." in temp[:900] and "Not measured at any save yet." in exam[:900] and "<svg" not in exam[:900]
 
 
 def test_records_given_with_no_save_read_say_so(dash, value, tmp_path):
     root = _records(tmp_path, [])
     sentence, aside, panels = value.section([_snap(dash, _record(tmp_path), records=root)])
-    assert sentence == "No save has been read yet." and "No save read yet." in panels and "--records" not in panels
+    assert sentence == "No save read yet." and "No save read yet." in panels and "--records" not in panels
 
 
 @pytest.mark.parametrize(("halt", "phrase"), [
     ({"step": 6000, "halting_rows": ["T4_V twice"], "armed": True, "final_save": False, "signal": {"sent": True}},
-     "the monitor signalled the run"),
+     "The monitor signalled the run"),
     ({"step": 6000, "halting_rows": ["T4_V twice"], "armed": False, "final_save": False}, "was not armed to signal")])
 def test_a_halt_on_record_leads_and_says_whether_the_run_was_signalled(dash, value, tmp_path, halt, phrase):
     root = _records(tmp_path, [_save(6000)], HALT=halt)
     sentence, _, _ = value.section([_snap(dash, _record(tmp_path), records=root)])
-    assert sentence.startswith("<strong>A halting row fired</strong> at 6 000") and phrase in sentence
+    assert sentence.startswith("<strong>Halt at 6\u202f000</strong>: T4_V twice.") and phrase in sentence
 
 
 def test_a_gap_rule_that_fired_stays_on_the_page_after_the_gap_falls(dash, value, tmp_path):
     root = _records(tmp_path, [_save(9000)], GAP_RULE={"step": 9000, "gap": 0.06, "line": 0.05, "over": [6000, 9000],
                                                        "fired": True})
-    _, aside, _ = value.section([_snap(dash, _record(tmp_path), records=root)])
-    assert "The gap rule fired at 9 000 (saves 6k, 9k above the line)" in aside
+    sentence, aside, _ = value.section([_snap(dash, _record(tmp_path), records=root)])
+    assert "Gap rule fired at 9k.</strong>" in sentence and "6k and 9k above the gap line" in aside
 
 
 def test_the_reach_names_no_turn_instead_of_none(dash, value):
@@ -118,7 +119,7 @@ def test_the_reach_names_no_turn_instead_of_none(dash, value):
     curve = horizon.Curve(share=(None,) * 31, n=(0,) * 31)
     h = horizon.Horizon(curve, curve, curve, curve, None, 3, 10, 2, (0, 1), (8, 9))
     text = value._reach(h)
-    assert "None" not in text and "3 turns out" in text and "first fifth, no turn" in text
+    assert "None" not in text and "3 turns out" in text and "Early in the run it never did." in text
 
 
 def test_an_armed_halt_whose_signal_was_not_sent_says_why(dash, value, tmp_path):
@@ -126,4 +127,4 @@ def test_an_armed_halt_whose_signal_was_not_sent_says_why(dash, value, tmp_path)
             "signal": {"sent": False, "reason": "the run was already gone"}}
     root = _records(tmp_path, [_save(6000)], HALT=halt)
     sentence, _, _ = value.section([_snap(dash, _record(tmp_path), records=root)])
-    assert "its signal was not sent (the run was already gone)" in sentence
+    assert "armed but sent no signal (the run was already gone)" in sentence

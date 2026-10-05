@@ -13,7 +13,7 @@ from .fmt import ZONE, cell, esc, num, pct, short
 
 NAME = ("Light", "Dark")
 KIND = {"selfplay": "Self-play", "promotion": "Gate", "external": "External", "random_floor": "Random"}
-_ARM = {"full": "Full search", "fast": "Fast search", "opening": "An opening stone"}
+_ARM = {"full": "Full search", "fast": "Fast search", "opening": "Opening stone"}
 #: Candidates listed per searched stone.
 CANDIDATES = 7
 
@@ -45,7 +45,7 @@ def hour_of(shard_name: str) -> str | None:
     if len(stem) != 10 or not (stem.isascii() and stem.isdigit()):
         return None
     start = datetime.strptime(stem, "%Y%m%d%H").replace(tzinfo=UTC).astimezone(ZONE)
-    return f"{start.day} {start:%b}, the hour from {start:%H:%M} {start.tzname()}"
+    return f"{start.day} {start:%b}, {start:%H}:00–{(start.hour + 1) % 24:02d}:00 {start.tzname()}"
 
 
 def facts(g: GameView, run_label: str, hour: str | None) -> list[tuple[str, str]]:
@@ -53,17 +53,17 @@ def facts(g: GameView, run_label: str, hour: str | None) -> list[tuple[str, str]
     rows = [("Kind", KIND.get(g.channel, g.channel) + {"promotion": " against the anchor", "external": f" against {g.rung}",
                                                         "random_floor": " against a random player"}.get(g.channel, ""))]
     if g.candidate is not None:
-        rows.append(("Seats", f"the candidate plays {NAME[0 if g.candidate == 1 else 1]}"))
+        rows.append(("Seats", f"candidate plays {NAME[0 if g.candidate == 1 else 1]}"))
     if g.step is None:
         net = "not recorded"
     elif g.step < 0:
-        net = "before the actor's first sync"
+        net = "before the first sync"
     else:
-        net = f"{run_label} at {short(g.step)}" + (", the actor's copy" if g.step_kind == "actor" else "")
+        net = f"{run_label} at {short(g.step)}" + (" (self-play copy)" if g.step_kind == "actor" else "")
     rows.append(("Net", net))
-    search = {"recorded": "recorded at the searched stones", "absent": "not sampled for this game",
-              "none": "no player exposed a search root", "empty": "recorded, but the candidate never moved"}[g.stats_field]
-    rows.append(("Search", search + (f", {num(g.served_sims)} sims served" if g.served_sims else "")))
+    search = {"recorded": "recorded", "absent": "not sampled", "none": "no search root exposed",
+              "empty": "recorded, candidate never moved"}[g.stats_field]
+    rows.append(("Search", search + (f", {num(g.served_sims)} sims on full turns" if g.served_sims else "")))
     if hour or g.worker is not None:
         rows.append(("Recorded", ", ".join(x for x in (hour, None if g.worker is None else f"worker {g.worker}") if x)))
     return rows
@@ -87,11 +87,11 @@ def thought(g: GameView, ply: int, cls_cells: set[tuple[int, int]], wins: bool) 
     """What the recorded search did at `ply`: a sentence, Light's chance, the candidates with tags; or why nothing is shown."""
     entry = g.stats.get(ply)
     if entry is None:
-        why = {"absent": "This game was not sampled for search stats; tick With search to list the games that were.",
-               "none": "No player exposed a search root in this game.",
+        why = {"absent": "Not sampled for search stats. Tick With search to list the games that were.",
+               "none": "No search root exposed in this game.",
                "empty": "The candidate never moved in this game."}.get(g.stats_field, "No search recorded at this stone.")
         if g.arms is not None and g.arms[ply] == "opening":
-            why = "An opening stone: the runner placed it without a search."
+            why = "Opening stone, placed without a search."
         return {"text": why, "light": None, "cands": [], "second": False}
     visits = sorted(([int(v[0]), int(v[1]), int(v[2])] for v in entry.get("visits") or [] if len(v) == 3), key=lambda v: -v[2])
     total = sum(v[2] for v in visits)
@@ -99,14 +99,16 @@ def thought(g: GameView, ply: int, cls_cells: set[tuple[int, int]], wins: bool) 
     share = {(v[0], v[1]): v[2] / total for v in visits} if total else {}
     arm = _ARM.get(g.arms[ply], "Search") if g.arms is not None else "Search"
     by = f" by the {esc(entry['by'])}" if entry.get("by") else ""
+    how = f"{arm}, {num(total)} sims{by}."
     if not visits:
-        text = f"{arm}{by}: the root's support was empty, so no visit is recorded."
+        pick, how = f"{arm}{by}: no visits recorded.", ""
     elif played == (visits[0][0], visits[0][1]):
-        text = f"{arm}, {num(total)} visits{by}. It played {cell(*played)}, its most-visited move."
+        pick = f"{cell(*played)}, the top move."
     elif played in share:
-        text = f"{arm}, {num(total)} visits{by}. It played {cell(*played)}, with {pct(share[played])} of the visits."
+        pick = f"{cell(*played)}, {pct(share[played])} of the visits."
     else:
-        text = f"{arm}, {num(total)} visits{by}. It played {cell(*played)}, outside the recorded visits (—)."
+        pick = f"{cell(*played)}, not among the recorded visits."
+    text = f"{pick} {how}".strip()
     v = entry.get("root_value")
     light = None
     if isinstance(v, (int, float)) and not isinstance(v, bool):
@@ -116,7 +118,7 @@ def thought(g: GameView, ply: int, cls_cells: set[tuple[int, int]], wins: bool) 
     cands = [[q, r, round(n / total, 4) if total else 0.0,
               [t for t, on in (("played", (q, r) == played), (tag, (q, r) in cls_cells)) if on]]
              for q, r, n in visits[:CANDIDATES]]
-    return {"text": text, "light": light, "cands": cands, "second": not first_of_turn(ply)}
+    return {"text": text, "pick": pick, "how": how, "light": light, "cands": cands, "second": not first_of_turn(ply)}
 
 
 def where(g: GameView, ply: int) -> str:
@@ -133,11 +135,14 @@ def turn_thought(g: GameView, start: int, cls_cells: set[tuple[int, int]], wins:
     """The turn the bot played from `start`: each stone's search in a sentence, the first stone's candidates and chance."""
     plies = [p for p in range(start, start + turn_size(start)) if p < len(g.moves)]
     first = thought(g, start, cls_cells, wins)
-    texts = [["The stone" if len(plies) == 1 else "First stone", first["text"]]]
-    if len(plies) == 2:
-        texts.append(["Second stone", thought(g, start + 1, set(), False)["text"]])
-    return {"texts": texts, "light": first["light"], "cands": first["cands"], "second": first["second"],
-            "stones": [list(g.moves[p]) for p in plies]}
+    second = thought(g, start + 1, set(), False) if len(plies) == 2 else None
+    # Two stones searched alike say the search once, under both picks.
+    shared = second is not None and first.get("how") and first.get("how") == second.get("how")
+    texts = [["Stone" if len(plies) == 1 else "Stone 1", first["pick"] if shared else first["text"]]]
+    if second is not None:
+        texts.append(["Stone 2", second["pick"] if shared else second["text"]])
+    return {"texts": texts, "how": first["how"].replace(" sims", " sims each") if shared else "", "light": first["light"],
+            "cands": first["cands"], "second": first["second"], "stones": [list(g.moves[p]) for p in plies]}
 
 
 def turning(tp: Point | None, game_id: str) -> str:

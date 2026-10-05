@@ -11,7 +11,7 @@
   function theme() {
     const btn = document.getElementById('theme');
     if (!btn) return;
-    const label = () => { btn.textContent = document.documentElement.dataset.theme === 'light' ? 'Dark' : 'Light'; };
+    const label = () => { const light = document.documentElement.dataset.theme === 'light'; btn.textContent = 'Theme'; btn.setAttribute('aria-label', light ? 'Switch to the dark theme' : 'Switch to the light theme'); };
     btn.addEventListener('click', () => {
       const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
       document.documentElement.dataset.theme = next;

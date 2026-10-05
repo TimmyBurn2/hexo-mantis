@@ -317,3 +317,17 @@ units.
   stone. A game that does not open on the origin (self-play games open anywhere) is moved whole so that its first
   stone is the origin, which the rules do not notice, and the button says so. A won position's line says it is
   final, not whose turn it is. The Analyzer's routes moved to `analyzer_routes.py` with the import.
+- **2026-10-05, the copy pass (operator's asks).** Every chart says which way is good, on a line under its title: lower
+  or higher is better, best near a target (temperature near 1, first mover near 50 %), keep above or below a line, or
+  a note for what is watched rather than scored (entropy, gradient norm, the learning rate, game length). The copy is
+  short and plain: a headline per section, then short lines, one caption line per chart where the title does not
+  already say it, no em dashes. In a comparison each chart's header carries every run's latest value in its colour,
+  and a chart that draws one run says so. A header shows the value its smoothed line ends on. Each exam has its own
+  chart with its own floor, the ply bands are named at their line ends, and the gradient-norm chart marks each spike
+  warning. The training summary
+  states losses without a verdict; their tags still say lower is better. Two reader rules came with it. A checkpoint
+  read twice on one unit keeps the reading over more games, so a screen or smoke run never hides a full cell. A Six
+  cell's forfeits (`six_findings.count`, games the sidecar counts as our wins) are left out of its win rate and
+  interval and stated. The Analyzer picks its two nets from drop-downs grouped by run, names nets by the Run view's
+  run label, defaults to the game's own run, steps to the start or end of the line (Home, End), and draws each net's
+  turn in its colour: the reading net blue, the compared net orange, a cell both chose split half and half.

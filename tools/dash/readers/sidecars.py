@@ -16,6 +16,19 @@ CELLS = 4
 LINE_LOGIT = 0.17
 
 
+Z95 = 1.96
+
+
+def wilson(k: int, n: int) -> tuple[float, float]:
+    """The Wilson 95 % interval of k successes in n; (0, 1) for n = 0."""
+    if n <= 0:
+        return 0.0, 1.0
+    p, z2 = k / n, Z95 * Z95
+    centre = (p + z2 / (2 * n)) / (1 + z2 / n)
+    half = Z95 * math.sqrt(p * (1 - p) / n + z2 / (4 * n * n)) / (1 + z2 / n)
+    return max(0.0, centre - half), min(1.0, centre + half)
+
+
 def logit(p: float, n: int | None = None) -> float:
     """log(p / (1 − p)); with `n` games a reading of 0 or 1 is moved half a game in, else it is clamped at 1e-6."""
     edge = 0.5 / n if n else 1e-6
@@ -40,6 +53,7 @@ class Cell:
     hi: float | None
     n: int
     regime: str
+    forfeits: int = 0
 
     @property
     def logit(self) -> float:
@@ -87,19 +101,27 @@ def parse(path: Path, raw: Any) -> Cell | None:
     if isinstance(six, dict):
         family = "six"
         unit = ("six", *common, str(six.get("commit")), str(six.get("net_sha256")), str(six.get("nodes")))
-        label = f"ours {ours.get('search_kind')}-{ours.get('sims')} vs Six gen {six.get('generation')} @ {six.get('nodes')} nodes, tactics {tactics}"
+        label = (f"Ours: {str(ours.get('search_kind')).upper()}, {ours.get('sims')} sims, tactics {tactics}. "
+                 f"Six: gen {six.get('generation')}, {six.get('nodes')} nodes")
     elif isinstance(strix, dict):
         family = "strix"
         unit = ("strix", *common, str(strix.get("commit")), str(strix.get("checkpoint_sha256")), str(strix.get("sims")),
                 str(strix.get("solver", "on")), str(strix.get("radius")))
-        label = (f"ours {ours.get('search_kind')}-{ours.get('sims')} vs Strix {strix.get('sims')} sims, solver "
-                 f"{strix.get('solver', 'on')}" + ("" if strix.get("radius") is None else f", r{strix.get('radius')}"))
+        label = (f"Ours: {str(ours.get('search_kind')).upper()}, {ours.get('sims')} sims. Strix: {strix.get('sims')} sims, solver "
+                 f"{strix.get('solver', 'on')}" + ("" if strix.get("radius") is None else f", radius {strix.get('radius')}"))
     else:
         return None
     stem = str(raw.get("checkpoint") or path.name.split(".ckpt")[0]).split(".ckpt")[0]
+    lo, hi = _num(raw.get("wr_ci_lower")), _num(raw.get("wr_ci_upper"))
+    findings = raw.get("six_findings") if family == "six" else None
+    forfeits = _int(findings.get("count")) if isinstance(findings, dict) else None
+    if forfeits and 0 < forfeits < n:
+        # The sidecar counts each Six forfeit as our win; the reading here is over the real games only.
+        wins, n = max(0, round(wr * n) - forfeits), n - forfeits
+        wr, (lo, hi) = wins / n, wilson(wins, n)
     return Cell(run_id=str(raw.get("run_id")), stem=stem, step=step, family=family, unit_field=field,
-                name=field if arm is None else f"{field}.{arm}", unit=unit, label=label, wr=wr,
-                lo=_num(raw.get("wr_ci_lower")), hi=_num(raw.get("wr_ci_upper")), n=n, regime=str(raw.get("regime", "?")))
+                name=field if arm is None else f"{field}.{arm}", unit=unit, label=label, wr=wr, lo=lo, hi=hi, n=n,
+                regime=str(raw.get("regime", "?")), forfeits=forfeits or 0)
 
 
 def load(dirs: Iterable[Path]) -> tuple[list[Cell], list[str]]:
@@ -127,7 +149,12 @@ def load(dirs: Iterable[Path]) -> tuple[list[Cell], list[str]]:
                 skipped.append(f"{path.name}: no step, win rate, distinct games or opponent")
             else:
                 cells.append(cell)
-    unique = {(c.stem, c.unit): c for c in cells}
+    # One checkpoint read twice on one unit: the reading over more games stands, so a screen or smoke never hides a full cell.
+    unique: dict[tuple[str, tuple[str, ...]], Cell] = {}
+    for c in cells:
+        held = unique.get((c.stem, c.unit))
+        if held is None or c.n > held.n:
+            unique[(c.stem, c.unit)] = c
     return sorted(unique.values(), key=lambda c: (c.run_id, c.step, c.name)), skipped
 
 

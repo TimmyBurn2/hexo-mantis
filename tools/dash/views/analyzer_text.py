@@ -1,6 +1,7 @@
 """The Analyzer panel composed from engine records: the verdict, win chances, the three lenses and the candidates, all derived here."""
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -12,11 +13,11 @@ Cell = tuple[int, int]
 TOP = 7
 
 
-def name_of(record: dict[str, Any]) -> str:
+def name_of(record: dict[str, Any], names: Mapping[str, str] | None = None) -> str:
     """A net as the pages name it: its run and step (`run11a2 at 33k`), or the engine's id."""
     card = record.get("engine") or {}
     if card.get("run_id") is not None and card.get("step") is not None:
-        return f"{card['run_id']} at {short(card['step'])}"
+        return f"{(names or {}).get(card['run_id'], card['run_id'])} at {short(card['step'])}"
     return str(card.get("id", "engine"))
 
 
@@ -57,6 +58,22 @@ class Turn:
     ms: float = 0.0
 
 
+def ghosts(turn_a: Turn, turn_b: Turn) -> list[list[Any]]:
+    """Each net's turn as board marks `[q, r, label, cls]`: A's `ga`, B's `gb`, a cell both chose `gab`; numbered in a two-stone turn."""
+    marks: dict[Cell, dict[str, str]] = {}
+    for who, t in (("a", turn_a), ("b", turn_b)):
+        for i, c in enumerate(t.stones):
+            marks.setdefault((int(c[0]), int(c[1])), {})[who] = str(i + 1) if len(t.stones) > 1 else ""
+    out: list[list[Any]] = []
+    for (q, r), by in marks.items():
+        la, lb = by.get("a"), by.get("b")
+        if la is not None and lb is not None:
+            out.append([q, r, la if la == lb else f"{la}/{lb}", "gab"])
+        else:
+            out.append([q, r, la if la is not None else lb, "ga" if la is not None else "gb"])
+    return out
+
+
 def _plays(name: str, turn: Turn) -> str:
     said = f"{esc(name)} plays {' then '.join(cell(*c) for c in turn.stones)}"
     return said + (f", its second stone not read ({esc(turn.unread)})" if turn.unread else "")
@@ -64,7 +81,7 @@ def _plays(name: str, turn: Turn) -> str:
 
 def compose(a: dict[str, Any], b: dict[str, Any] | None, game_entry: dict[str, Any] | None,
             game_next: Cell | None, game_second: Cell | None, *, turn_a: Turn | None = None,
-            turn_b: Turn | None = None) -> dict[str, Any]:
+            turn_b: Turn | None = None, names: Mapping[str, str] | None = None) -> dict[str, Any]:
     """The panel for one position: `a` is read, `b` compared; `game_entry` is the game's recorded search at this ply, if on its line."""
     pos = a.get("position") or {}
     mover = 0 if pos.get("to_move") == "p1" else 1
@@ -72,7 +89,7 @@ def compose(a: dict[str, Any], b: dict[str, Any] | None, game_entry: dict[str, A
     cls, tcells = tac.get("class"), [(int(c[0]), int(c[1])) for c in tac.get("cells") or []]
     me, them = NAME[mover], NAME[1 - mover]
     pa, pb = _policy(a), _policy(b)
-    na, nb = name_of(a), name_of(b) if b is not None else None
+    na, nb = name_of(a, names), name_of(b, names) if b is not None else None
     if nb == na:
         na, nb = f"{na} ({(a.get('engine') or {}).get('sha8', 'A')})", f"{nb} ({((b or {}).get('engine') or {}).get('sha8', 'B')})"
     first = {na: max(pa, key=lambda c: pa[c]) if pa else None}
@@ -109,6 +126,11 @@ def compose(a: dict[str, Any], b: dict[str, Any] | None, game_entry: dict[str, A
                  for c in (game_next, game_second) if c is not None}
         game_line = f"In the game {me} played {cell(*game_next)}{marks[game_next]}"
         game_line += f" and then {cell(*game_second)}{marks[game_second]}." if game_second else "."
+        played = [c for c in (game_next, game_second) if c is not None]
+        if played == list(map(tuple, turn_a.stones)):
+            game_line = f"The game played the same{' cell' if len(played) == 1 else ' cells, in the same order'}."
+        elif len(played) == 2 and set(played) == set(map(tuple, turn_a.stones)):
+            game_line = "The game played the same cells, in the other order."
     shares, search_source = _search_shares(a, game_entry)
     union = sorted(set(pa) | set(pb)) if b is not None else []
     diff = [[c[0], c[1], round(pa.get(c, 0.0) - pb.get(c, 0.0), 5)] for c in union]
@@ -122,11 +144,17 @@ def compose(a: dict[str, Any], b: dict[str, Any] | None, game_entry: dict[str, A
         chances.append({"label": nb, "cls": "c2", "light": _light(b, mover)})
     if game_entry is not None and isinstance(game_entry.get("v"), (int, float)):
         mine = (max(-1.0, min(1.0, float(game_entry["v"]))) + 1) / 2
-        chances.append({"label": "game", "cls": "cf", "light": round(mine if mover == 0 else 1 - mine, 4)})
+        chances.append({"label": "game's search", "cls": "cf", "light": round(mine if mover == 0 else 1 - mine, 4)})
     return {"verdict": verdict, "game_line": game_line, "chances": chances, "a": na, "b": nb,
             "lens": {"net": [[c[0], c[1], pa[c]] for c in ranked], "search": [[c[0], c[1], s] for c, s in shares.items()],
                      "diff": diff}, "search_source": search_source, "rows": rows,
             "tactics": {"cls": cls, "cells": [list(c) for c in tcells]}, "mover": mover,
             "turn": {"a": [list(c) for c in turn_a.stones], "b": [list(c) for c in turn_b.stones], "second_ms": turn_a.ms,
-                     "note": (f"The numbered stones are {na}'s turn, from its {'search' if turn_a.searched else 'policy'}."
-                              if len(turn_a.stones) > 1 else "")}}
+                     "ghosts": ghosts(turn_a, turn_b), "note": _turn_note(na, nb, turn_a, turn_b)}}
+
+
+def _turn_note(na: str, nb: str | None, turn_a: Turn, turn_b: Turn) -> str:
+    """Where the numbered stones come from; the key under the board names each colour."""
+    if not turn_a.stones:
+        return ""
+    return "Numbered: each net's turn" + (", the reading net's from its search." if turn_a.searched else ".")

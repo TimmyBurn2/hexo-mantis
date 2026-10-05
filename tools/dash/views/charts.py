@@ -13,12 +13,25 @@ RUN_CLASSES = ("c1", "c2", "c3")
 
 @dataclass(frozen=True)
 class Key:
-    """One legend entry: its label, colour class, glyph (`line`, `dash`, `dot`, `band`, `mark`) and an off-reason."""
+    """One legend entry: its label, colour class, glyph (`line`, `dash`, `dot`, `band`, `mark`, `faint`) and an off-reason."""
 
     label: str
     cls: str = "cf"
     glyph: str = "line"
     off: str = ""
+
+
+@dataclass(frozen=True)
+class Goal:
+    """Which way a chart is good: `down`, `up`, `near` a target, or `watch` (no better way), and the words for it."""
+
+    way: str
+    words: str
+
+
+LOWER = Goal("down", "lower is better")
+HIGHER = Goal("up", "higher is better")
+_GLYPH = {"down": "↓", "up": "↑", "near": "◎", "watch": "∿"}
 
 
 def legend(keys: Sequence[Key]) -> str:
@@ -27,8 +40,8 @@ def legend(keys: Sequence[Key]) -> str:
         return ""
     parts = []
     for k in keys:
-        glyph = {"line": "", "dash": "dash", "dot": "dot", "band": "band", "mark": "mk"}[k.glyph]
-        off = f" — {esc(k.off)}" if k.off else ""
+        glyph = {"line": "", "dash": "dash", "dot": "dot", "band": "band", "mark": "mk", "faint": "faint"}[k.glyph]
+        off = f" ({esc(k.off)})" if k.off else ""
         parts.append(f'<span class="{k.cls}{" off" if k.off else ""}"><i class="{glyph}"></i>'
                      f'<span class="lbl">{esc(k.label)}{off}</span></span>')
     return f'<div class="legend">{"".join(parts)}</div>'
@@ -43,17 +56,25 @@ def table(head: Sequence[str], rows: Sequence[Sequence[str]]) -> str:
     return f'<details><summary>Table</summary><table class="data"><thead><tr>{th}</tr></thead><tbody>{body}</tbody></table></details>'
 
 
-def figure(title: str, chart: Chart | None, definition: str, *, now: str = "", keys: Sequence[Key] = (),
-           twin: str = "", gap: tuple[str, str] | None = None) -> str:
-    """One figure; a `gap` replaces the plot with its two sentences, never an empty axis."""
+def figure(title: str, chart: Chart | None, definition: str = "", *, goal: Goal | None = None, now: str = "",
+           nows: Sequence[tuple[str, str]] = (), only: str = "", keys: Sequence[Key] = (), twin: str = "",
+           gap: tuple[str, str] | None = None) -> str:
+    """One figure; `nows` gives each compared run's latest value, `only` names the one run a panel draws, a `gap` replaces the plot."""
     if gap is not None:
         plot = f'<div class="gap"><strong>{esc(gap[0])}</strong>{esc(gap[1])}</div>'
     elif chart is None:
         plot = '<div class="gap"><strong>Nothing to draw.</strong>No series reached this chart.</div>'
     else:
         plot = chart.render()
-    return (f'<figure class="chart"><div class="head"><h3>{esc(title)}</h3><span class="now">{esc(now)}</span></div>'
-            f'{legend(keys)}<div class="plot">{plot}</div><figcaption>{esc(definition)}</figcaption>{twin}</figure>')
+    scope = f'<span class="only">{esc(only)} only</span>' if only else ""
+    aim = (f'<p class="goal {goal.way}"><span class="g" aria-hidden="true">{_GLYPH[goal.way]}</span>{esc(goal.words)}{scope}</p>'
+           if goal is not None else "")
+    caption = f"<figcaption>{esc(definition)}</figcaption>" if definition else ""
+    many = len(nows) > 1
+    latest = "".join(f'<b class="{cls}">{esc(v)}</b>' for v, cls in nows if v) if many else esc(now)
+    return (f'<figure class="chart"><div class="head{" many" if many else ""}"><h3>{esc(title)}</h3>{"" if goal else scope}'
+            f'<span class="now">{latest}</span></div>'
+            f'{aim}{legend(keys)}<div class="plot">{plot}</div>{caption}{twin}</figure>')
 
 
 def smoothed(name: str, cls: str, pairs: Sequence[tuple[float, float]], *, band: bool) -> tuple[Line, Band | None, float]:

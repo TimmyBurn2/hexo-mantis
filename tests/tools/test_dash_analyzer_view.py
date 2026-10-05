@@ -41,7 +41,7 @@ def test_the_verdict_names_the_forced_move_and_what_each_net_does(text):
 def test_the_games_search_rides_only_on_the_games_line(text):
     entry = {"v": 0.5, "top": [[-6, -1, 30], [0, 0, 10]], "n": 40}
     on = text.compose(_record(A), None, entry, (-6, -4), (-6, -1))
-    assert on["search_source"] == "the game's recorded search" and on["chances"][-1]["label"] == "game"
+    assert on["search_source"] == "the game's recorded search" and on["chances"][-1]["label"] == "game's search"
     assert on["game_line"] == "In the game Dark played (−6, −4) and then (−6, −1) (a block)."
     off = text.compose(_record(A), None, None, None, None)
     assert off["lens"]["search"] == [] and off["search_source"] == "" and len(off["chances"]) == 1
@@ -79,7 +79,7 @@ def test_without_engines_the_page_says_how_to_start_and_the_api_refuses(dash, da
     routes, hub = importlib.import_module("dash.analyzer_routes"), dash_game_hub
     page = routes.page(None)(hub, ["analyzer"], {"run": ["r1"], "g": ["g1"], "ply": ["4"]})
     html = page.body.decode("utf-8")
-    assert page.status == 200 and "No engines loaded." in html and "--checkpoints" in html
+    assert page.status == 200 and "No nets loaded." in html and "--checkpoints" in html
     assert len(__import__("re").findall(r'class="s[12]"', html.split('<svg class="board"')[1].split("</svg>")[0])) == 4
     out = routes.post(hub, None)("/api/read", b"{}")
     assert out.status == 503

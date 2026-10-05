@@ -21,6 +21,11 @@ def _digits(value: str) -> bool:
     return value.isascii() and value.isdigit()
 
 
+def names(hub: Hub) -> dict[str, str]:
+    """Each served run's id to the label its Run view uses, so the Analyzer names nets the same way."""
+    return {rec.run_id: rec.label for rec in hub.records.values()}
+
+
 def _render(hub: Hub, desk_of: DeskOf, q: dict[str, str], body: dict[str, Any] | None,
             imported: list[tuple[int, int]] | None = None, refusal: tuple[str, str] | None = None) -> Reply:
     """The page at `ply` along the game (a recorded or an imported line), first read here; a refused import reads nothing."""
@@ -30,14 +35,16 @@ def _render(hub: Hub, desk_of: DeskOf, q: dict[str, str], body: dict[str, Any] |
     moves = line[:ply]
     panel, refused = None, None
     if desk is not None:
-        a, b = q.get("a") or desk.default_pair()[0], q.get("b") or desk.default_pair()[1]
+        rec = hub.records.get(q.get("run") or "")
+        first, second = desk.default_pair(rec.run_id if rec is not None else None)
+        a, b = q.get("a") or first, q.get("b") or second
         if a:
             ctx = context(hub, q.get("run"), q.get("g") if body else None, moves, imported)
-            status, out = desk.read(a, b if b != a else None, moves, ctx, client=f"render-{uuid.uuid4().hex}")
+            status, out = desk.read(a, b if b != a else None, moves, ctx, client=f"render-{uuid.uuid4().hex}", names=names(hub))
             panel, refused = (out.get("panel"), None) if status == 200 else (None, out.get("refused"))
     slim = ({"id": body["id"], "channel": body["channel"], "moves": body["moves"]} if body else
             {"id": "imported", "channel": "imported", "moves": [list(m) for m in imported]} if imported else None)
-    html = analyzer_view.page(hub.labels, desk.rows() if desk else None, slim, moves, panel, refused, q, refusal)
+    html = analyzer_view.page(hub.labels, desk.rows() if desk else None, slim, moves, panel, refused, q, refusal, names(hub))
     return Reply(200, "text/html; charset=utf-8", html.encode("utf-8"))
 
 
@@ -99,7 +106,7 @@ def post(hub: Hub, desk_of: DeskOf) -> Any:
             return as_json(400, {"seq": req.get("seq"), "ok": False, "refused": str(exc)})
         ctx = context(hub, req.get("run"), req.get("g"), moves, line)
         status, out = desk.read(str(req["a"]), req.get("b") or None, moves, ctx, sims=int(req.get("sims") or 0),
-                                symmetry=bool(req.get("symmetry")), client=str(req.get("client") or "page"))
+                                symmetry=bool(req.get("symmetry")), client=str(req.get("client") or "page"), names=names(hub))
         return as_json(status, {**out, "seq": req.get("seq")})
     return handle
 

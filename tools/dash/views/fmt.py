@@ -56,8 +56,11 @@ def sig(value: float | None) -> str:
 
 
 def signed(value: float, digits: int = 2) -> str:
-    """A difference with its sign always shown: +0.17, −0.04."""
-    return ("+" if value >= 0 else MINUS) + f"{abs(value):.{digits}f}"
+    """A difference with its sign always shown: +0.17, −0.04; one that rounds to zero carries none."""
+    text = f"{abs(value):.{digits}f}"
+    if float(text) == 0:
+        return text
+    return ("+" if value >= 0 else MINUS) + text
 
 
 def cell(q: int, r: int) -> str:

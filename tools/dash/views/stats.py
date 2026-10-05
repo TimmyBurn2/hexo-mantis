@@ -4,9 +4,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from ..readers.sidecars import logit
+from ..readers.sidecars import Z95, logit, wilson
 
-Z95 = 1.96
 __all__ = ["Separation", "expit", "logit", "separation", "wilson"]
 
 
@@ -28,16 +27,6 @@ def separation(p_a: float, n_a: int, p_b: float, n_b: int) -> Separation:
     var = (p_a * (1 - p_a) / max(n_a, 1)) + (p_b * (1 - p_b) / max(n_b, 1))
     se, d = math.sqrt(var), p_a - p_b
     return Separation(d, d - Z95 * se, d + Z95 * se)
-
-
-def wilson(k: int, n: int) -> tuple[float, float]:
-    """The Wilson 95 % interval of k successes in n; (0, 1) for n = 0."""
-    if n <= 0:
-        return 0.0, 1.0
-    p, z2 = k / n, Z95 * Z95
-    centre = (p + z2 / (2 * n)) / (1 + z2 / n)
-    half = Z95 * math.sqrt(p * (1 - p) / n + z2 / (4 * n * n)) / (1 + z2 / n)
-    return max(0.0, centre - half), min(1.0, centre + half)
 
 
 def expit(x: float) -> float:

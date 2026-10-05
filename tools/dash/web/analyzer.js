@@ -23,7 +23,7 @@
       return rows.filter(r => Math.abs(r[2]) / top >= .04).map(r => ({ c: [r[0], r[1]], rel: Math.abs(r[2]) / top, cls: r[2] >= 0 ? 'heat' : 'heat2', label: '' }));
     }
     const top = Math.max(1e-9, ...rows.map(r => r[2]));
-    return rows.map((r, i) => ({ c: [r[0], r[1]], rel: r[2] / top, label: i < 3 && r[2] >= .03 ? String(Math.round(r[2] * 100)) : '' }));
+    return rows.map((r, i) => ({ c: [r[0], r[1]], rel: r[2] / top, label: i < 3 && r[2] >= .03 ? `${Math.round(r[2] * 100)}%` : '' }));
   }
 
   function draw() {
@@ -31,7 +31,7 @@
     H.draw(svg, { moves: shown.moves, owners: shown.owners, turns: shown.turns, ply: shown.moves.length,
       frame: game.length ? game : shown.moves, numbers: num, heat: heat(), win: t && t.cls === 'win' ? t.cells : [],
       block: t && t.cls === 'block' ? t.cells : [],
-      ghosts: panel && lens !== 'diff' ? panel.turn.a.map((c, i, all) => ({ c, label: all.length > 1 ? String(i + 1) : '' })) : [] });
+      ghosts: panel && lens !== 'diff' ? panel.turn.ghosts.map(g => ({ c: [g[0], g[1]], label: g[2], cls: g[3] })) : [] });
   }
 
   function source(ctx) {
@@ -55,7 +55,7 @@
     });
     if (!panel.b && lens === 'diff') lens = 'net';
     const seg = $('lens'); seg.replaceChildren();
-    [['net', 'Net'], ['search', 'Search']].concat(panel.b ? [['diff', `${panel.a} vs ${panel.b}`]] : []).forEach(([k, label]) => {
+    [['net', 'Net'], ['search', 'Search']].concat(panel.b ? [['diff', 'Difference']] : []).forEach(([k, label]) => {
       const btn = el('button', null, label); btn.type = 'button'; btn.dataset.lens = k; btn.setAttribute('aria-pressed', String(k === lens));
       btn.onclick = () => { lens = k; readout(); draw(); };
       seg.append(btn);
@@ -67,21 +67,21 @@
       const tr = el('tr'); tr.dataset.c = `${r[0]},${r[1]}`;
       tr.append(el('td', 'num', H.fmtC(r)), el('td', 'num', pct(r[2])));
       if (panel.b) tr.append(el('td', 'num', r[3] == null ? '—' : pct(r[3])));
-      tr.append(el('td', 'num', r[4] == null ? '—' : pct(r[4])));
+      tr.append(el('td', 'num', r[4] == null ? '' : pct(r[4])));
       const tags = el('td'); r[5].forEach(t => tags.append(el('span', `tag ${t}`, t))); tr.append(tags);
       tr.onmouseenter = () => H.hoverAt(svg, r); tr.onmouseleave = () => H.hoverAt(svg, null);
       tr.onclick = () => place([r[0], r[1]]);
       tb.append(tr);
     });
-    $('lensnote').textContent = { net: `Where ${panel.a} wants to play before any search: its policy, bigger is more. ${panel.turn.note}`,
-      search: (panel.search_source ? `Visits of ${panel.search_source}, bigger is more.` : 'No search here yet: run one below, or step onto the game’s line.') + ` ${panel.turn.note}`,
-      diff: `Blue where ${panel.a} puts more weight, orange where ${panel.b} does.` }[lens];
+    $('lensnote').textContent = { net: `Policy before search. ${panel.turn.note}`,
+      search: (panel.search_source ? `Visits of ${panel.search_source}.` : 'No search here yet. Run one below, or step onto the game’s line.') + ` ${panel.turn.note}`,
+      diff: `Blue: ${panel.a} puts more weight there. Orange: ${panel.b} does.` }[lens];
     $('where').innerHTML = panel.where;  // server-composed
-    document.querySelectorAll('#engines .eng').forEach(e => {
-      const role = e.dataset.id === a ? 'reading' : e.dataset.id === b ? 'compare' : '';
-      e.setAttribute('aria-pressed', String(Boolean(role))); e.classList.toggle('c1', role === 'reading'); e.classList.toggle('c2', role === 'compare');
-      e.querySelector('small').textContent = role;
-    });
+    if ($('netA')) { $('netA').value = a || ''; $('netB').value = b || ''; }
+    const k = (g, t) => { const s = el('span'); s.innerHTML = g; s.append(t); return s; };
+    const shared = panel.turn.ghosts.some(g => g[3] === 'gab');
+    $('keys').replaceChildren(...[panel.turn.a.length ? k(H.glyph('ga'), panel.a) : null,
+      panel.b && panel.turn.b.length ? k(H.glyph('gb'), panel.b) : null, shared ? k(H.glyph('gab'), 'both') : null].filter(Boolean));
   }
 
   async function read(extra = {}) {
@@ -138,15 +138,17 @@
       } else return;
       read();
     };
+    $('first').onclick = () => { if (moves.length) { moves = []; redo = []; read(); } };
+    $('last').onclick = () => { if (game.length && !same(moves, game)) { moves = game.slice(); redo = []; read(); } };
     $('undo').onclick = () => { if (moves.length) { moves.pop(); redo = []; read(); } };
     if ($('back')) $('back').onclick = () => { moves = game.slice(0, S.ply); redo = []; read(); };
     $('lNum').onclick = () => { num = !num; $('lNum').setAttribute('aria-pressed', String(num)); draw(); };
     $('lTac').onclick = () => { tac = !tac; $('lTac').setAttribute('aria-pressed', String(tac)); draw(); };
     document.querySelectorAll('#lens button').forEach(btn => btn.onclick = () => { lens = btn.dataset.lens; readout(); draw(); });
-    document.querySelectorAll('#engines .eng').forEach(chip => chip.onclick = () => {
-      if (chip.dataset.id === a) return;
-      b = a; a = chip.dataset.id; read();
-    });
+    if ($('netA')) {
+      $('netA').onchange = () => { a = $('netA').value; if (b === a) b = null; read(); };
+      $('netB').onchange = () => { b = $('netB').value || null; if (b === a) b = null; read(); };
+    }
     if ($('search')) $('search').onclick = () => read({ sims: +$('sims').value });
     if ($('sym')) $('sym').onclick = () => read({ symmetry: true });
     // An import reads with the nets now chosen.
@@ -166,9 +168,10 @@
     document.addEventListener('keydown', e => {
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
       if (e.key === 'ArrowLeft') $('prev').click(); else if (e.key === 'ArrowRight') $('next').click();
+      else if (e.key === 'Home') $('first').click(); else if (e.key === 'End') $('last').click();
       else if (e.key === 'u') $('undo').click();
     });
   }
 
-  H.theme(); wire(); draw();
+  H.theme(); wire(); if (panel) readout(); draw();
 })();

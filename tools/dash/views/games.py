@@ -21,7 +21,7 @@ _GLYPH = '<svg class="glyph" width="14" height="14" viewBox="-1.1 -1.1 2.2 2.2" 
 _ICON = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="{d}" fill="currentColor"/></svg>'
 _TRANSPORT = (("first", "First turn", "M2 2h2v10H2zM12 2v10L5 7z"), ("prev", "Previous turn", "M11 2v10L4 7z"),
               ("next", "Next turn", "M3 2v10l7-5z"), ("last", "Final position", "M10 2h2v10h-2zM2 2v10l7-5z"))
-_SEARCH = ('<svg class="search-ico" width="14" height="12" viewBox="0 0 14 12" aria-label="search recorded"><rect x="0" y="6" '
+_SEARCH = ('<svg class="search-ico" width="14" height="12" viewBox="0 0 14 12" aria-label="search recorded"><title>search recorded</title><rect x="0" y="6" '
            'width="3" height="6" rx="1"/><rect x="5" y="2" width="3" height="10" rx="1"/><rect x="10" y="4" width="3" height="8" rx="1"/></svg>')
 
 
@@ -57,17 +57,19 @@ def turn_facts(plies: int) -> dict[str, list[int]]:
 
 
 def row_html(row: dict[str, Any], run: str, selected: bool, query: dict[str, str]) -> str:
-    """One list row: the winner's stone, the kind, the net's step, the stones, the search glyph; every value escaped."""
+    """One list row: the winner's stone and name, the kind when unfiltered, the net's step, the stones, the search glyph."""
     res, term = row.get("res"), row.get("term")
     win = glyph("s1" if res == "p1" else "s2") if res in ("p1", "p2") else '<span class="muted" title="no winner">–</span>'
-    sub = {"promotion": "vs anchor", "external": f"vs {row.get('rung', '?')}"}.get(str(row.get("ch")), "")
-    sub += " cap" if term == "ply_cap" else ""
+    ch = str(row.get("ch"))
+    notes = [x for x in (None if query.get("kind") else dict(KINDS).get(ch, ch),
+                         {"promotion": "vs anchor", "external": f"vs {row.get('rung', '?')}"}.get(ch),
+                         "at the cap" if term == "ply_cap" else None) if x]
+    who = {"p1": "Light", "p2": "Dark"}.get(str(res), "No winner")
     step = row.get("step")
     net = short(step) if isinstance(step, int) and step >= 0 else '<span class="muted">—</span>'
     href = "?" + urlencode({**query, "g": row["id"]})
-    label = dict(KINDS).get(str(row.get("ch")), str(row.get("ch")))
     return (f'<a class="lrow" role="option" aria-selected="{"true" if selected else "false"}" href="{esc(href)}" '
-            f'data-id="{esc(row["id"])}"><span>{win}</span><span class="kind">{esc(label)}<small>{esc(sub)}</small></span>'
+            f'data-id="{esc(row["id"])}"><span>{win}</span><span class="kind">{who}<small>{esc(", ".join(notes))}</small></span>'
             f'<span class="r">{net}</span><span class="r">{num(row.get("pl"))}</span>'
             f'<span>{_SEARCH if row.get("stats") else ""}</span></a>')
 
@@ -108,8 +110,8 @@ def _stage(body: dict[str, Any] | None, ply: int) -> str:
     turn = pos.get("turn")
     think = (turn or pos.get("think")) or {}
     t = body["tactics"][ply] if not end else None
-    ghosts = ([(tuple(c), str(i + 1)) for i, c in enumerate(turn["stones"])] if turn and len(turn["stones"]) > 1
-              else [(moves[ply], "")] if not end else [])
+    ghosts = ([(tuple(c), str(i + 1), "ghost") for i, c in enumerate(turn["stones"])] if turn and len(turn["stones"]) > 1
+              else [(moves[ply], "", "ghost")] if not end else [])
     scene = board.Scene(moves=moves, ply=ply, frame=moves, heat=board.heat_of(think.get("cands") or []),
                         win_cells=[tuple(c) for c in t["cells"]] if t and t["cls"] == "win" else [],
                         block_cells=[tuple(c) for c in t["cells"]] if t and t["cls"] == "block" else [],
@@ -120,11 +122,12 @@ def _stage(body: dict[str, Any] | None, ply: int) -> str:
     nav = "".join(f'<a class="btn" href="?{esc(urlencode({**base, "ply": targets[i]}))}" id="{i}" aria-label="{a}">'
                   f"{_ICON.format(d=d)}</a>" for i, a, d in _TRANSPORT)
     return (f'<section class="stage" aria-label="Board"><div class="boardwrap">{board.render(scene)}{board.ZOOM}</div>'
-            f'<div class="keys" id="keys"></div><div class="trace" id="trace"></div>'
+            f'<div class="keys" id="keys"></div><p class="tracehead">Light\'s win chance by turn, from the search</p>'
+            f'<div class="trace" id="trace"></div>'
             f'<div class="transport">{nav}<button class="btn" id="play" type="button" hidden>Play</button>'
             f'<span class="where" id="where">{pos["where"]}</span><div class="layers">'
             '<button class="btn" id="lNum" type="button" aria-pressed="false">Turn numbers</button>'
-            '<button class="btn" id="lSearch" type="button" aria-pressed="true">Bot\'s search</button>'
+            '<button class="btn" id="lSearch" type="button" aria-pressed="true">Search</button>'
             '<button class="btn" id="lTac" type="button" aria-pressed="true">Threats</button></div></div></section>')
 
 
@@ -139,9 +142,10 @@ def _panel(body: dict[str, Any] | None, ply: int, run: str) -> str:
         parts.append(f'<section><h2>Turn {turn_of(ply)}</h2><div class="tacline">{pos["threat"]}</div></section>')
     if pos.get("turn"):
         lines = "".join(f'<p class="say"><strong>{esc(label)}.</strong> {text}</p>' for label, text in pos["turn"]["texts"])
-        parts.append(f"<section><h2>What the bot played this turn</h2>{lines}</section>")
+        lines += f'<p class="muted small">{esc(pos["turn"]["how"])}</p>' if pos["turn"].get("how") else ""
+        parts.append(f"<section><h2>Played this turn</h2>{lines}</section>")
     elif pos.get("think"):
-        parts.append(f'<section><h2>What the bot thought</h2><p class="say">{pos["think"]["text"]}</p></section>')
+        parts.append(f'<section><h2>Search at this stone</h2><p class="say">{pos["think"]["text"]}</p></section>')
     href = f"/analyzer?{urlencode({'run': run, 'g': body['id'], 'ply': ply})}"
     parts.append(f'<section><div class="actions"><a class="btn" href="{esc(href)}">Open in Analyzer</a></div></section>')
     return f'<aside class="panel" id="panel" aria-label="Game details">{"".join(parts)}</aside>'
@@ -160,7 +164,7 @@ def page(run: str, runs: tuple[str, ...], present: list[str], listing: Page, que
                 f'{esc(listing.next_cursor)}">Load {WINDOW} more</a>')
     data = script_json({"run": run, "game": body, "ply": ply, "query": query, "next": listing.next_cursor})
     html = (f'<main class="games"><aside class="list" aria-label="Games">{_filters(run, present, query, total, listing.total)}'
-            '<div class="lhead"><span title="Winner">W</span><span>Game</span><span>Net</span><span>Stones</span><span></span>'
+            '<div class="lhead"><span></span><span>Winner</span><span>Net</span><span>Stones</span><span></span>'
             f'</div><div class="scroller" id="scroller" role="listbox">{rows}{more}</div></aside>{_stage(body, ply)}'
             f'{_panel(body, ply, run)}</main><script type="application/json" id="state">{data}</script>')
     return render(f"mantis {run} games", Shell("games", runs, run), html, scripts=("board.js", "games.js"), app=True)

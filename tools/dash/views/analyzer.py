@@ -17,13 +17,14 @@ _ICON = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><pat
 
 def _source(body: dict[str, Any] | None, moves: list[Any], q: dict[str, str]) -> str:
     if body is None:
-        return '<div class="source" id="source">A position typed in: click the board to place stones.</div>'
+        return '<div class="source" id="source">Your own position. Click the board to place stones.</div>'
     back_button = '<button class="btn" id="back" type="button" hidden>Back to the game</button>'
     if body["id"] == "imported":
-        return (f'<div class="source" id="source">An imported game, {len(body["moves"])} stones'
+        return (f'<div class="source" id="source">Imported game, {len(body["moves"])} stones'
                 f'<span class="chip" id="line">On the game\'s line</span>{back_button}</div>')
     back = esc(f"/run/{quote(q.get('run', ''), safe='')}/games?" + urlencode({"g": body["id"], "ply": len(moves)}))
-    return (f'<div class="source" id="source">From {esc(body["channel"])} game <a href="{back}">{esc(body["id"][:12])}</a>'
+    kind = {"selfplay": "self-play", "promotion": "gate", "external": "external", "random_floor": "random"}.get(body["channel"], body["channel"])
+    return (f'<div class="source" id="source">From {esc(kind)} game <a href="{back}">{esc(body["id"][:12])}</a>'
             '<span class="chip" id="line">On the game\'s line</span><button class="btn" id="back" type="button" hidden>'
             "Back to the game</button></div>")
 
@@ -42,25 +43,39 @@ def _import(refusal: tuple[str, str] | None, panel: dict[str, Any] | None) -> st
     """The htttx import form, read at the game's end with the nets now chosen; a refusal is stated with the text kept."""
     why, text = refusal or ("", "")
     nets = "".join(f'<input type="hidden" name="{k}" value="{esc(panel[f"{k}_id"] or "")}">' for k in ("a", "b")) if panel else ""
-    return (f'<section><details class="import"{" open" if refusal else ""}><summary>Import a game (htttx)</summary>'
+    return (f'<section><details class="import"{" open" if refusal else ""}><summary>Import a HeXO game (htttx)</summary>'
             f'<form method="post" action="/analyzer" id="importform">{nets}<textarea name="htttx" rows="6" spellcheck="false" '
             f'placeholder="version[1];&#10;1. [1,-2][-1,1];&#10;2. [0,1][-1,0];">{esc(text)}</textarea>'
             '<button class="btn" type="submit">Load</button></form>'
             + (f'<p class="refused">{esc(why)}</p>' if why else "") + "</details></section>")
 
 
-def _nets(rows: list[dict[str, Any]] | None, panel: dict[str, Any] | None) -> str:
+def _net_label(run: str, row: dict[str, Any]) -> str:
+    return f"{run} at {short(row['step'])}" if row.get("step") is not None else str(row["id"])
+
+
+def _nets(rows: list[dict[str, Any]] | None, panel: dict[str, Any] | None, names: dict[str, str]) -> str:
+    """Two pickers, Reading and Compare, each listing the loadable nets by run, newest first."""
     if rows is None:
-        return ('<section><h2>Nets</h2><div class="gap"><strong>No engines loaded.</strong>Start the server with '
-                "--checkpoints DIR (stamped checkpoints; --strix adds the vendored strix pin) to read positions.</div></section>")
-    chips = []
+        return ('<section><h2>Nets</h2><div class="gap"><strong>No nets loaded.</strong>Start the server with '
+                "--checkpoints DIR to read positions (--strix adds the strix pin).</div></section>")
+    groups: dict[str, list[dict[str, Any]]] = {}
     for r in rows:
-        role = "reading" if panel and r["id"] == panel.get("a_id") else "compare" if panel and r["id"] == panel.get("b_id") else ""
-        cls = " c1" if role == "reading" else " c2" if role == "compare" else ""
-        label = f"{r['run_id']} at {short(r['step'])}" if r.get("run_id") and r.get("step") is not None else str(r["id"])
-        chips.append(f'<button class="eng{cls}" type="button" data-id="{esc(r["id"])}" aria-pressed="{"true" if role else "false"}" '
-                     f'title="{esc(r["id"])} {esc(r.get("note") or "")}"><i></i>{esc(label)} <small>{role}</small></button>')
-    return f'<section><h2>Nets</h2><div class="engines" id="engines">{"".join(chips)}</div></section>'
+        if r.get("kind") != "snapshot_gap":
+            groups.setdefault(names.get(str(r.get("run_id")), str(r.get("run_id") or "other")), []).append(r)
+
+    def options(chosen: str | None) -> str:
+        out = []
+        for run, members in groups.items():
+            opts = "".join(f'<option value="{esc(r["id"])}"{" selected" if r["id"] == chosen else ""}>{esc(_net_label(run, r))}</option>'
+                           for r in reversed(members))
+            out.append(f'<optgroup label="{esc(run)}">{opts}</optgroup>')
+        return "".join(out)
+    a, b = (panel or {}).get("a_id"), (panel or {}).get("b_id")
+    return ('<section><h2>Nets</h2><div class="nets">'
+            f'<label class="c1"><i></i>Reading<select class="btn" id="netA">{options(a)}</select></label>'
+            f'<label class="c2"><i></i>Compare<select class="btn" id="netB"><option value="">none</option>{options(b)}</select></label>'
+            "</div></section>")
 
 
 def _read(panel: dict[str, Any] | None, refused: str | None, moves: list[Any]) -> str:
@@ -68,7 +83,7 @@ def _read(panel: dict[str, Any] | None, refused: str | None, moves: list[Any]) -
     if panel is None:
         verdict = esc(refused) if refused else "Pick a net to read this position."
         return (f'<section><h2>Turn {turn_of(len(moves))}</h2><p class="verdict" id="verdict">{verdict}</p>'
-                '<p class="say" id="gameline"></p></section><section><h2>Win chance from the value head</h2>'
+                '<p class="say" id="gameline"></p></section><section><h2>Win chance</h2>'
                 '<div class="wcs" id="chances"></div></section><section><h2>On the board</h2><div class="seg" id="lens"></div>'
                 '<p class="muted small" id="lensnote"></p><table class="cands" id="cands"><thead></thead><tbody></tbody></table>'
                 "</section>")
@@ -81,38 +96,42 @@ def _read(panel: dict[str, Any] | None, refused: str | None, moves: list[Any]) -
     rows = "".join(
         f'<tr data-c="{r[0]},{r[1]}"><td class="num">{cell(r[0], r[1])}</td><td class="num">{pct(r[2])}</td>'
         + (f'<td class="num">{pct(r[3])}</td>' if panel["b"] else "")
-        + f'<td class="num">{pct(r[4]) if r[4] is not None else "—"}</td>'
+        + f'<td class="num">{pct(r[4]) if r[4] is not None else ""}</td>'
         + "<td>" + "".join(f'<span class="tag {t}">{t}</span>' for t in r[5]) + "</td></tr>" for r in panel["rows"])
-    lenses = [("net", "Net"), ("search", "Search")] + ([("diff", f"{esc(panel['a'])} vs {esc(panel['b'])}")] if panel["b"] else [])
+    lenses = [("net", "Net"), ("search", "Search")] + ([("diff", "Difference")] if panel["b"] else [])
     seg = "".join(f'<button type="button" data-lens="{k}" aria-pressed="{"true" if k == "net" else "false"}">{label}</button>'
                   for k, label in lenses)
     return (f'<section><h2>Turn {turn_of(len(moves))}</h2><p class="verdict" id="verdict">{panel["verdict"]}</p>'
             f'<p class="say" id="gameline">{panel["game_line"] or ""}</p></section>'
-            f'<section><h2>Win chance from the value head</h2><div class="wcs" id="chances">{bars}</div>'
-            '<p class="muted small">Raw head values mapped to a chance, not calibrated; "game" is the recorded search\'s root value.</p></section>'
+            f'<section><h2>Win chance</h2><div class="wcs" id="chances">{bars}</div>'
+            '<p class="muted small">Value heads are uncalibrated.</p></section>'
             f'<section><h2>On the board</h2><div class="seg" id="lens">{seg}</div><p class="muted small" id="lensnote">'
-            f'Where {esc(panel["a"])} wants to play before any search: its policy, bigger is more. {esc(panel["turn"]["note"])}</p>'
+            f'Policy before search. {esc(panel["turn"]["note"])}</p>'
             f'<table class="cands" id="cands"><thead><tr>{"".join(f"<th>{h}</th>" for h in head)}</tr></thead><tbody>{rows}</tbody></table></section>')
 
 
 def page(runs: tuple[str, ...], rows: list[dict[str, Any]] | None, body: dict[str, Any] | None, moves: list[Any],
-         panel: dict[str, Any] | None, refused: str | None, q: dict[str, str], refusal: tuple[str, str] | None = None) -> str:
+         panel: dict[str, Any] | None, refused: str | None, q: dict[str, str], refusal: tuple[str, str] | None = None,
+         names: dict[str, str] | None = None) -> str:
     """The whole Analyzer view; the first read rides inline so the page draws it without a request."""
     tac = (panel or {}).get("tactics") or {}
     heat = [((int(c[0]), int(c[1])), float(c[2]) / max((x[2] for x in panel["lens"]["net"]), default=1.0) if panel else 0.0, "")
             for c in (panel["lens"]["net"] if panel else [])]
-    turn = ((panel or {}).get("turn") or {}).get("a") or []
+    marks = ((panel or {}).get("turn") or {}).get("ghosts") or []
     scene = board.Scene(moves=moves, ply=len(moves), frame=[tuple(m) for m in body["moves"]] if body else moves,
                         heat=heat, win_cells=[tuple(c) for c in tac.get("cells", [])] if tac.get("cls") == "win" else [],
                         block_cells=[tuple(c) for c in tac.get("cells", [])] if tac.get("cls") == "block" else [],
-                        ghosts=[(tuple(c), str(i + 1) if len(turn) > 1 else "") for i, c in enumerate(turn)])
+                        ghosts=[((int(m[0]), int(m[1])), str(m[2]), str(m[3])) for m in marks])
     data = script_json({"runs": runs, "run": q.get("run"), "g": q.get("g") if body and body["id"] != "imported" else None,
                         "game": body, "moves": moves, "panel": panel, "engines": rows, "ply": len(moves),
                         "starts": turn_facts(MAX_STONES)["turn_starts"], **turn_facts(len(moves))})
     stage = (f'<section class="stage" aria-label="Board">{_source(body, moves, q)}<div class="boardwrap">{board.render(scene)}{board.ZOOM}</div>'
              '<div class="keys" id="keys"></div><div class="transport">'
+             f'<button class="btn" id="first" type="button" aria-label="Start of the game">{_ICON.format(d="M2 2h2v10H2zM12 2v10L5 7z")}</button>'
              f'<button class="btn" id="prev" type="button" aria-label="Previous turn">{_ICON.format(d="M11 2v10L4 7z")}</button>'
              f'<button class="btn" id="next" type="button" aria-label="Next turn">{_ICON.format(d="M3 2v10l7-5z")}</button>'
+             f'<button class="btn" id="last" type="button" aria-label="End of the game"{"" if body else " hidden"}>'
+             f'{_ICON.format(d="M10 2h2v10h-2zM2 2v10l7-5z")}</button>'
              f'<button class="btn" id="undo" type="button">Undo</button><span class="where" id="where">{panel["where"] if panel else where(moves)}</span>'
              '<div class="layers"><button class="btn" id="lNum" type="button" aria-pressed="false">Turn numbers</button>'
              '<button class="btn" id="lTac" type="button" aria-pressed="true">Threats</button></div></div></section>')
@@ -121,7 +140,7 @@ def page(runs: tuple[str, ...], rows: list[dict[str, Any]] | None, body: dict[st
              + '</select><button class="btn" id="search" type="button">Search</button><button class="btn" id="sym" type="button">'
              'Symmetry check</button><button class="btn" id="copy" type="button">Copy position</button></div>'
              '<p class="muted small" id="deeper"></p></section>') if rows is not None else ""
-    side = (f'<aside class="panel" id="panel" aria-label="Analysis">{_nets(rows, panel)}<div id="read">'
+    side = (f'<aside class="panel" id="panel" aria-label="Analysis">{_nets(rows, panel, names or {})}<div id="read">'
             f'{_read(panel, refused, moves)}</div>{tools}{_import(refusal, panel)}</aside>')
     html = f'<main class="an">{stage}{side}</main><script type="application/json" id="state">{data}</script>'
     return render("mantis analyzer", Shell("analyzer", runs, q.get("run")), html, scripts=("board.js", "analyzer.js"), app=True)

@@ -74,23 +74,22 @@ def _ruled(dash, tmp_path: Path, mine: list[tuple[int, float]], parent: float | 
 
 
 @pytest.mark.parametrize(("latest", "parent", "word"), [
-    (0.76, 0.59, "stronger than"), (0.45, 0.59, "weaker than"), (0.61, 0.59, "not separable from")])
+    (0.76, 0.59, "beats"), (0.45, 0.59, "trails"), (0.61, 0.59, "shows no clear difference from")])
 def test_a_strength_word_appears_only_when_its_interval_excludes_zero(dash, strength, tmp_path, latest, parent, word):
     sentence, aside = strength.verdict(_ruled(dash, tmp_path, [(3000, 0.60), (6000, latest)], parent))
-    assert f"<strong>{word}</strong> its parent" in sentence
-    assert ("yet" in sentence) == (word == "not separable from")
-    assert "exclude zero" in aside and "(the rule)" in aside
+    assert f"<strong>{word}</strong> its parent" in sentence and "(the rule)" in sentence
+    assert "beats" not in aside and "trails" not in aside
 
 
 def test_the_going_forward_read_states_its_cells_and_side_of_the_line(dash, strength, tmp_path):
     _, aside = strength.verdict(_ruled(dash, tmp_path, [(32201, 0.759)], 0.594))
-    assert "mean of the last 1 cell is +0.77 logit" in aside and "above the line at +0.17" in aside
-    assert "(1 of 4 cells so far)" in aside
+    assert "Mean of the last 1 cell: +0.77 logit over the parent" in aside and "above the +0.17 bar" in aside
+    assert "(the rule averages 4)" in aside
 
 
 def test_no_cell_is_a_stated_gap_never_an_empty_axis(dash, strength, tmp_path):
     _, _, html = strength.section([_snap(dash, _record(tmp_path))])
-    assert "No ruler reading in this run" in html and "<svg" not in html
+    assert "No ruler reading for this run" in html and "<svg" not in html
 
 
 def test_report_only_rulers_read_in_logit_over_their_own_parent(dash, strength, tmp_path):
@@ -103,8 +102,8 @@ def test_report_only_rulers_read_in_logit_over_their_own_parent(dash, strength, 
     record = importlib.import_module("dash.readers.record")
     snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), rule="six30_16").poll()
     _, aside, html = strength.section([snap])
-    assert "Report-only: six455_128.full +0.65 logit over its parent" in aside
-    assert "Every ruler, over its parent" in html and "six455_128.full, report-only" in html and "six30_16.full, the rule" in html
+    assert "six455_128.full at 300: +0.65 logit over its parent" in aside
+    assert "Every ruler against its parent" in html and "six455_128.full, report-only" in html and "six30_16.full, the rule" in html
 
 
 @pytest.mark.parametrize(("every", "expected"), [(2, "balanced sides"), (3, "the second player favoured"),
@@ -125,7 +124,7 @@ def test_too_few_games_for_the_window_is_a_gap_not_a_share(dash, series, tmp_pat
 def test_losses_carry_no_verdict(dash, series, tmp_path):
     sentence, aside, panels = series.training([_snap(dash, _record(tmp_path))])
     assert not re.search(r"improv|better|worse|lower|higher", sentence)
-    assert "never scored" in aside and "1 warning" in sentence and "300" in sentence
+    assert "not strength" in aside and "1 gradient-norm spike" in sentence and "300" in sentence
 
 
 def test_an_unrecorded_series_is_a_sentence_in_place_of_a_chart(dash, series, tmp_path):
@@ -187,7 +186,7 @@ def test_an_ambiguous_rule_is_stated_and_its_going_forward_read_withheld(dash, s
     record = importlib.import_module("dash.readers.record")
     snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), rule="six30_16").poll()
     _, aside = strength.verdict(snap)
-    assert "names 2 series" in aside and "withheld" in aside and "Going forward" not in aside
+    assert "matches 2 series" in aside and "withheld" in aside and "Last " not in aside
 
 
 def test_a_declared_rule_with_no_cell_keeps_the_others_report_only(dash, strength, tmp_path):
@@ -196,8 +195,8 @@ def test_a_declared_rule_with_no_cell_keeps_the_others_report_only(dash, strengt
     sidecar(cells, "r1", 300, 0.45, suffix="six455_128.full", **extra)
     record = importlib.import_module("dash.readers.record")
     snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), rule="six30_16").poll()
-    _, aside = strength.verdict(snap)
-    assert "(report-only)" in aside and "reads six30_16, which has no cell yet" in aside
+    sentence, aside = strength.verdict(snap)
+    assert "(report-only)" in sentence and "reads six30_16, which has no cell yet" in aside
 
 
 def test_the_logit_whisker_carries_the_parents_interval_too(dash, strength, tmp_path):
@@ -206,7 +205,7 @@ def test_the_logit_whisker_carries_the_parents_interval_too(dash, strength, tmp_
     sidecar(cells, "p0", 45000, 0.111, n=288, wr_ci_lower=0.08, wr_ci_upper=0.145)
     record = importlib.import_module("dash.readers.record")
     snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), rule="six30_16").poll()
-    blob = re.findall(r'<script type="application/json" class="xh">(.*?)</script>', strength._logit_panel(snap, 400.0))[0]
+    blob = re.findall(r'<script type="application/json" class="xh">(.*?)</script>', strength._logit_panel(snap, 400.0, ""))[0]
     import json as _json
     (pt,) = _json.loads(blob)["series"][0]["pts"]
     assert pt[2] < 0 < pt[3], "the difference's interval contains zero, as separation() says"

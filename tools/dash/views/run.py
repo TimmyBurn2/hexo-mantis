@@ -26,12 +26,12 @@ def status(snap: RunSnapshot, now: float | None, failure: str | None = None) -> 
         seg_fact = f'<span class="fact">segment <b>{seg.number}</b>since {esc(since)}</span>'
     beat = "heartbeat" if state == "live" else "last heartbeat"
     beat_ts = snap.beat.wall_ts if now is None else snap.beat.beat_ts
-    fail = (f'<span class="fact warn">the last read failed (<b>{esc(failure)}</b>); this is the read before it</span>'
+    fail = (f'<span class="fact warn">last read failed (<b>{esc(failure)}</b>), showing the one before</span>'
             if failure else "")
     return (f'<div class="status"><span class="state {state}"><span class="dot"></span>{_STATE[state]}</span>'
             f'<span class="fact"><b>{num(ev.live_steps)}</b>steps</span>'
             f'<span class="fact"><b>{num(ev.games.count)}</b>games</span>'
-            f'<span class="fact"><b>{num(saves[-1]) if saves else "—"}</b>last save</span>{seg_fact}'
+            f'<span class="fact"><b>{short(saves[-1]) if saves else "none"}</b>last save</span>{seg_fact}'
             f'<span class="fact">{beat} <b>{esc(when(beat_ts))}</b></span>{fail}'
             f'<span class="fact{" warn" if alerts else ""}"><b>{alerts or "No"}</b>{"warning" if alerts == 1 else "warnings"}'
             "</span></div>")
@@ -77,7 +77,9 @@ def details(snap: RunSnapshot) -> str:
               ("Event inventory", ["event", "rows"], [[k, num(v)] for k, v in inventory])]
     body = "".join(f"<div><h4>{esc(title)}</h4>{table(head, rows) if rows else '<p class=muted>none</p>'}</div>"
                    for title, head, rows in blocks)
-    summary = f"{len(rounds)} gate rounds, {len(ev.segments)} segments, {len(ev.counts)} event kinds"
+    def count(n: int, word: str) -> str:
+        return f"{n} {word}{'' if n == 1 else 's'}"
+    summary = f"{count(len(rounds), 'gate round')}, {count(len(ev.segments), 'segment')}, {count(len(ev.counts), 'event kind')}"
     return (f'<details class="record"><summary>Record details <span>{esc(summary)}</span></summary>'
             f'<div class="record-body">{body}</div></details>')
 
@@ -90,9 +92,9 @@ def page(snaps: Sequence[RunSnapshot], *, runs: tuple[str, ...], now: float | No
     value = run_value.section(snaps)
     train = run_series.training(snaps)
     play = run_series.selfplay(snaps)
-    source = f"as of {when(head.events.last_ts)}, the record's last event"
-    foot = (f"Frozen from {esc(head.label)}'s record {esc(source)}. It reads files only and is the same bytes for the same record."
-            if frozen else f"Read from {esc(head.label)}'s record {esc(source)}. The server reads files only; a reload is the refresh.")
+    source = esc(when(head.events.last_ts))
+    foot = (f"Frozen copy of {esc(head.label)}, record as of {source}." if frozen
+            else f"{esc(head.label)} record as of {source}.")
     body = (f'<main class="wrap">{status(head, now, failure)}'
             + _section("strength", "Is it getting stronger?", *strength, layout="two")
             + _section("value", "Is the value head learning?", *value, layout="grid")
