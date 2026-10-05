@@ -42,6 +42,12 @@ DISSOLVED_PATHS: dict[str, str] = {
                          "refuted S-PREFUSE harness; falsified.md names its last commit",
     "docs/slim/": "dissolved at SLIM-FIX's close (R368); the exit record is "
                          "docs/audits/SLIM_FIX_EXIT_2026-09-25.md and the files live in git history",
+    "tools/dashboard": "retired by DASH-2's last phase; tools/dash serves the Run view",
+    "tools/run_dashboard.py": "retired by DASH-2's last phase; tools/dash.py freeze writes the record's page",
+    "tools/viewer": "retired by DASH-2's last phase; tools/dash serves the Games view",
+    "tools/game_viewer.py": "retired by DASH-2's last phase; tools/dash.py serves the games",
+    "tools/analyzer": "retired by DASH-2's last phase; its engine layer lives in tools/dash/engine",
+    "tools/position_analyzer.py": "retired by DASH-2's last phase; tools/dash.py once reads one position",
 }
 
 

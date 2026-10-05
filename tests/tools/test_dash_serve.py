@@ -66,7 +66,7 @@ def _get(url: str) -> tuple[int, str, dict[str, str]]:
 
     opener = urllib.request.build_opener(_NoRedirect)
     try:
-        with opener.open(url, timeout=10) as resp:
+        with opener.open(url, timeout=10) as resp:  # encoding-gate: ok -- an HTTP response, decoded below
             return resp.status, resp.read().decode("utf-8"), dict(resp.headers)
     except urllib.error.HTTPError as err:
         return err.code, err.read().decode("utf-8"), dict(err.headers)

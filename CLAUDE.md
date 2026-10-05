@@ -77,10 +77,10 @@ rule is stated once, here or in docs/governance/LAWS.md.
 
 ## Deliberately absent
 
-- Display surfaces. A display builds against docs/contracts/event_manifest.md. The ruled
-  exceptions connect to no live run and add no producer: `make dash` (a loopback server over run
-  records, monitor records, cell sidecars and stamped checkpoints, with a one-file freeze), and
-  until it retires them `make dashboard`, `make viewer` and `make analyzer`. A panel with no
-  producer is drawn as a stated gap, never as a zero.
+- Display surfaces. A display builds against docs/contracts/event_manifest.md. One ruled
+  exception exists, and it connects to no live run and adds no producer: `make dash`, a loopback
+  server over run records, monitor records, cell sidecars and stamped checkpoints (Run, Games and
+  Analyzer views, and a one-file freeze of the Run view). A panel with no producer is drawn as a
+  stated gap, never as a zero.
 - Submodules and loose weights (vendoring is vendor/pins.toml only), requirements.txt (uv.lock
   is the lock) and setup scripts (`uv sync` is the bootstrap).

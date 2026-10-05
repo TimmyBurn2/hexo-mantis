@@ -654,6 +654,8 @@ ADDED (v7 → v8). `docs/contracts/run_config_schema.md` is the version authorit
 
 ### AMENDMENT — an OFFLINE, FILE-BASED run report is admitted; every display surface stays absent
 
+**CLOSED 2026-10-05:** `tools/run_dashboard.py` and `tools/dashboard/` are retired at DASH-2's last phase (the amendment at the foot of this file); the text stays as history.
+
 **R333(d), REPAIR-3 Leg 4.** §1 says display surfaces are deliberately absent and names the
 §4.7 JSONL channels as the contract any future display builds against. A run dashboard is
 ordered. Under R9 that is a deviation from this file and it lands as an amendment, in the same
@@ -691,6 +693,8 @@ commit as the tool, rather than as drift.
 
 ### AMENDMENT — R352(g), VIEWER-1: the game viewer is ADMITTED on the dashboard's terms
 
+**CLOSED 2026-10-05:** `tools/game_viewer.py` and `tools/viewer/` are retired at DASH-2's last phase; its Games view replaces them. The text stays as history.
+
 **R352(g).** §1 and the R333(d) amendment above keep the game viewer on the "stays absent"
 list. R352(g) orders it, over the GAME-RECORD-1 shards, "served from the mirror". Under R9 that
 is a deviation from this file and it lands as an amendment in the same commit as the tool.
@@ -720,6 +724,8 @@ is a deviation from this file and it lands as an amendment in the same commit as
 ---
 
 ### AMENDMENT — R356(d): the dashboard reads a THIRD input, the strix follower's sidecars
+
+**CLOSED 2026-10-05:** the dashboard is retired at DASH-2's last phase; DASH-2 reads the same sidecars through `--cells`. The text stays as history.
 
 **R356(d).** The R333(d) amendment above says the dashboard "reads the §4.7 JSONL stream and,
 when given one, the run's `eval_ladder_state.json`". R356(d) orders an external-points panel —
@@ -1170,6 +1176,8 @@ entry" it widens to two.
 
 ### AMENDMENT — R363, ANALYZER-1: an interactive position analyzer is ADMITTED on the viewer's terms plus one loopback socket
 
+**CLOSED 2026-10-05:** `tools/position_analyzer.py` and `tools/analyzer/` are retired at DASH-2's last phase; the engine layer lives on unchanged in `tools/dash/engine/`. The text stays as history.
+
 **R363.** §1 keeps display surfaces absent because each would WATCH A RUN: the R333(d)
 criterion is coupling, not sockets, and every tool admitted so far happened to need neither.
 ANALYZER-1 is a position analyzer: a position in (typed, pasted, or a deep link), one or more
@@ -1279,5 +1287,5 @@ it keeps `docs/design/observatory_design.md` §3–§4 and replaces its views.
 5. **Contracts #11 and §4.7 are unchanged.** It reads the event stream, the game record, the monitor's save records
    (keys pinned against the monitor's real output) and the follower's sidecars; it adds no row to any of them.
 
-The R333(d), R352(g) and R363 amendments stay as history and gain a closing line when the last phase retires their
-tools.
+The R333(d), R352(g), R356(d) and R363 amendments stay as history, each with a closing line since the last phase
+retired their tools (2026-10-05).

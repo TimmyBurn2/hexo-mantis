@@ -134,43 +134,9 @@ def local_puller(tmp_path_factory) -> Iterator[Path]:
 
 
 @pytest.fixture(scope="session")
-def dashboard():
-    """The `tools/dashboard` package, with its submodules importable as `dashboard.<name>`."""
-    return load_tools_package("dashboard")
-
-
-@pytest.fixture(scope="session")
-def reader(dashboard):
-    """The `dashboard.reader` submodule every dashboard-facing test module reads through."""
-    return importlib.import_module("dashboard.reader")
-
-
-@pytest.fixture(scope="session")
-def html(dashboard):
-    return importlib.import_module("dashboard.html")
-
-
-@pytest.fixture(scope="session")
-def external(dashboard):
-    return importlib.import_module("dashboard.external")
-
-
-@pytest.fixture(scope="session")
-def viewer():
-    """The `tools/viewer` package (VIEWER-1), with its submodules importable as `viewer.<name>`."""
-    return load_tools_package("viewer")
-
-
-@pytest.fixture(scope="session")
 def ladder():
     """The `tools/ladder` package (LADDER-1), with its submodules importable as `ladder.<name>`."""
     return load_tools_package("ladder")
-
-
-@pytest.fixture(scope="session")
-def analyzer():
-    """The `tools/analyzer` package (ANALYZER-1), with its submodules importable as `analyzer.<name>`."""
-    return load_tools_package("analyzer")
 
 
 @pytest.fixture(scope="session")
@@ -206,16 +172,6 @@ def mint_analyzer_stamp(directory: Path, *, run_id: str = "an1", step: int = 7, 
 def mint_stamp():
     """The stamp minter as a fixture, so analyzer tests share one recipe without importing each other."""
     return mint_analyzer_stamp
-
-
-@pytest.fixture(scope="session")
-def mantis_engine(analyzer, mint_stamp, tmp_path_factory):
-    """ONE tiny MantisEngine over a minted stamp for every analyzer test that needs a real engine."""
-    engines = importlib.import_module("analyzer.engines")
-    stamp = mint_stamp(tmp_path_factory.mktemp("analyzer_ckpt"))
-    engine = engines.MantisEngine(engines.discover([stamp.parent])[0], device="cpu", threads=2)
-    yield engine
-    engine.close()
 
 
 @pytest.fixture(scope="session")

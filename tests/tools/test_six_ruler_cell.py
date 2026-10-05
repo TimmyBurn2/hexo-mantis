@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import logging
 from pathlib import Path
@@ -129,7 +130,12 @@ def test_the_six_pin_is_read_off_the_pin_file(follower) -> None:
     assert follower.opponent_pin("equal_work")["checkpoint"] == "checkpoint_00237000.pt"
 
 
-def test_the_dashboard_draws_the_six_rung_as_its_own_series(follower, external, tmp_path: Path) -> None:
+@pytest.fixture(scope="module")
+def sidecars(dash):
+    return importlib.import_module("dash.readers.sidecars")
+
+
+def test_the_dash_reads_the_six_rung_as_its_own_series(follower, sidecars, tmp_path: Path) -> None:
     ck = tmp_path / "checkpoints"
     ck.mkdir()
     ckpt = ck / "run8_00045000_deadbeef.ckpt"
@@ -143,13 +149,11 @@ def test_the_dashboard_draws_the_six_rung_as_its_own_series(follower, external, 
     (ck / f"{ckpt.name}.six30_16.json").write_text(json.dumps(six), encoding="utf-8")
     (ck / f"{ckpt.name}.strix256.json").write_text(json.dumps(strix), encoding="utf-8")
     (ck / f"{ckpt.name}.six30_16.failed.json").write_text("{}", encoding="utf-8")
-    points, note = external.load_external_points([ck])
-    labels = sorted(external.series_by_unit(points))
-    assert labels == ["run8 · equal_work: ours PUCT-256 vs strix 256 sims",
-                      "run8 · six30_16: ours PUCT-256 vs Six gen 30 @ 16 nodes"]
-    assert "2 sidecar(s) read" in note and "failed cell, not a receipt" in note
-    six_point = next(p for p in points if p.unit == "six30_16")
-    assert six_point.opponent == "Six gen 30" and "vs Six gen 30" in external.gap_statement(six_point)
+    cells, skipped = sidecars.load([ck])
+    assert sorted(c.family for c in cells) == ["six", "strix"] and len({c.unit for c in cells}) == 2
+    assert any("a failed cell" in s for s in skipped)
+    six_cell = next(c for c in cells if c.family == "six")
+    assert "vs Six gen 30 @ 16 nodes" in six_cell.label and six_cell.regime == "IDLE"
 
 
 def test_the_real_producers_lines_read_back_through_the_frontier(frontier, tmp_path: Path,

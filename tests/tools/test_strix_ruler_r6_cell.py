@@ -1,6 +1,7 @@
 """The RULER-R6 cell: strix at its trained placement_radius 6, threaded from the follower's unit to the driver's load."""
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import json
 from pathlib import Path
@@ -73,7 +74,12 @@ def test_the_follower_unit_composes_the_cell_and_names_its_sidecar(follower) -> 
     assert follower.sidecar_path(Path("/x/a.ckpt"), "ruler_r6").name == "a.ckpt.strix256_r6.json"
 
 
-def test_the_sidecar_records_the_radius_and_the_dashboard_labels_it(follower, external, tmp_path: Path) -> None:
+@pytest.fixture(scope="module")
+def sidecars(dash):
+    return importlib.import_module("dash.readers.sidecars")
+
+
+def test_the_sidecar_records_the_radius_and_the_dash_labels_it(follower, sidecars, tmp_path: Path) -> None:
     ckpt = tmp_path / "run8_00045000_deadbeef.ckpt"
     ckpt.write_bytes(b"w")
     record = {"label": "l", "cell": {"step": 45000, "concurrency": 8}, "rc": 0, "wall_sec": 1.0,
@@ -85,7 +91,5 @@ def test_the_sidecar_records_the_radius_and_the_dashboard_labels_it(follower, ex
     on = follower.sidecar_record(ckpt, unit="equal_work", trigger="once", record=record, regime_name="IDLE",
                                  regime_evidence={}, run_id="run8", started=0.0, finished=1.0, pin={})
     assert "radius" not in on["strix"]
-    point = external.parse_sidecar(Path("x.json"), json.loads(json.dumps(body)))
-    assert point is not None and point.radius == 6
-    assert point.unit_label == "run8 · ruler_r6: ours PUCT-256 vs strix 256 sims, strix @ r6"
-    assert external.parse_sidecar(Path("y.json"), on).radius is None
+    r6 = sidecars.parse(Path("x.json"), json.loads(json.dumps(body)))
+    assert r6 is not None and r6.label.endswith(", r6") and r6.unit != sidecars.parse(Path("y.json"), on).unit

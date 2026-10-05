@@ -10,8 +10,8 @@ from typing import Any
 from mantis._engine import Board
 from mantis.util.loadpkg import load_tools_package
 
-load_tools_package("analyzer")
-_engines = importlib.import_module("analyzer.engines")
+load_tools_package("dash")
+_engines = importlib.import_module("dash.engine.engines")
 
 
 def load_positions(path: Path) -> list[dict[str, Any]]:

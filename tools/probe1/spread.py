@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from analyzer.engines import MANTIS, MantisEngine, discover
-from analyzer.instruments import sweep
+from dash.engine.engines import MANTIS, MantisEngine, discover
+from dash.engine.instruments import sweep
 
 
 def spread_series(checkpoint_dir: Path, positions: list[dict[str, Any]], *, threads: int,

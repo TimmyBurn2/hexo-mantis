@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import importlib
-import inspect
 import json
 
 import pytest
@@ -86,10 +85,3 @@ def test_the_payload_carries_visits_by_count_tactics_per_position_and_the_strip(
     assert len(body["tactics"]) == len(view.moves) and body["tactics"][11]["cls"] == "win"
     assert [c["turn"] for c in body["chances"]] == [1, 2, 3] and body["turns"] == 7
     assert view.step == -1 and json.dumps(body)
-
-
-def test_the_hex_facts_are_the_viewers_until_it_is_retired(dash, viewer):
-    ours = importlib.import_module("dash.readers.hexlogic")
-    theirs = importlib.import_module("viewer.hexlogic")
-    for name in ("owner", "win_line"):
-        assert inspect.getsource(getattr(ours, name)) == inspect.getsource(getattr(theirs, name))

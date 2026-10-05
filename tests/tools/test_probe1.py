@@ -19,7 +19,7 @@ _K2_SEQ = [(0, 0), (1, 0), (0, 1), (3, 3), (-3, 3), (2, -4), (-2, 6)]  # seven: 
 
 @pytest.fixture(scope="module")
 def probe1() -> Any:
-    load_tools_package("analyzer")
+    load_tools_package("dash")
     load_tools_package("probe1")
     return importlib.import_module("probe1.rings"), importlib.import_module("probe1.readings")
 

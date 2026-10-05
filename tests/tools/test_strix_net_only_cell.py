@@ -1,6 +1,7 @@
 """The NET-ONLY cell: strix with its root VCF solver OFF, threaded from the follower's unit to the driver's load."""
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import json
 from pathlib import Path
@@ -89,7 +90,12 @@ def test_the_follower_unit_composes_the_cell_and_names_its_sidecar(follower) -> 
     assert follower.sidecar_path(Path("/x/a.ckpt"), "net_only").name == "a.ckpt.strix256_nosolver.json"
 
 
-def test_the_sidecar_records_the_solver_state_and_the_dashboard_labels_it(follower, external, tmp_path: Path) -> None:
+@pytest.fixture(scope="module")
+def sidecars(dash):
+    return importlib.import_module("dash.readers.sidecars")
+
+
+def test_the_sidecar_records_the_solver_state_and_the_dash_labels_it(follower, sidecars, tmp_path: Path) -> None:
     ckpt = tmp_path / "run8_00042000_deadbeef.ckpt"
     ckpt.write_bytes(b"w")
     record = {"label": "l", "cell": {"step": 42000, "concurrency": 8}, "rc": 0, "wall_sec": 1.0,
@@ -101,9 +107,10 @@ def test_the_sidecar_records_the_solver_state_and_the_dashboard_labels_it(follow
     on = follower.sidecar_record(ckpt, unit="equal_work", trigger="once", record=record, regime_name="IDLE",
                                  regime_evidence={}, run_id="run8", started=0.0, finished=1.0, pin={})
     assert on["strix"]["solver"] == "on"
-    point = external.parse_sidecar(Path("x.json"), json.loads(json.dumps(body)))
-    assert point is not None and point.unit_label == "run8 · net_only: ours PUCT-256 vs strix 256 sims, solver OFF"
-    assert external.parse_sidecar(Path("y.json"), on).unit_label == "run8 · equal_work: ours PUCT-256 vs strix 256 sims"
+    off_cell = sidecars.parse(Path("x.json"), json.loads(json.dumps(body)))
+    on_cell = sidecars.parse(Path("y.json"), on)
+    assert off_cell is not None and "solver off" in off_cell.label and "solver on" in on_cell.label
+    assert off_cell.unit != on_cell.unit, "the solver state splits the unit: never one series"
 
 
 def test_follow_reads_the_equal_work_unit_only(follower) -> None:

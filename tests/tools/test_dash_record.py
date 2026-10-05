@@ -1,4 +1,4 @@
-"""The dash run record: parity with tools/dashboard's reader, liveness from the heartbeat, one snapshot over every input."""
+"""The dash run record: series equal to the record's own rows, liveness from the heartbeat, one snapshot over every input."""
 from __future__ import annotations
 
 import importlib
@@ -36,21 +36,22 @@ def liveness(dash):
     return importlib.import_module("dash.readers.liveness")
 
 
-def _parity(dash_snapshot, old) -> None:
-    for key in _KEYS:
-        assert dash_snapshot.series(*key).pairs() == old.series(*key), key
-    games = old.rows("game_complete")
-    assert dash_snapshot.games.count == len(games)
-    assert list(dash_snapshot.games.cap) == [1 if g.get("terminal_reason") == "ply_cap" else 0 for g in games]
-    assert sum(1 for w in dash_snapshot.games.winner if w == 0) == sum(1 for g in games if g.get("winner") == 0)
+def _expected(rows: list[dict], event: str, key: str) -> list[tuple[float, float]]:
+    return [(float(r["step"]), float(r[key])) for r in rows if r.get("event") == event and key in r]
 
 
-def test_the_series_and_game_columns_equal_the_dashboards_on_a_full_shaped_record(dash, reader, tmp_path):
+def test_the_series_and_game_columns_equal_the_records_own_rows(dash, tmp_path):
     events = importlib.import_module("dash.readers.events")
     rows = [segment_start("r1", 1), *trainer_rows(range(1, 200)), *iteration_rows(range(1, 200, 4)),
             *game_rows(120, cap_every=9)]
-    path = write_segment(tmp_path / "logs", "r1", 1, rows)
-    _parity(events.EventTail(tmp_path / "logs", "r1").poll(), reader.load_record(path))
+    write_segment(tmp_path / "logs", "r1", 1, rows)
+    snap = events.EventTail(tmp_path / "logs", "r1").poll()
+    for event, x, key in _KEYS:
+        assert snap.series(event, x, key).pairs() == _expected(rows, event, key), key
+    games = [r for r in rows if r["event"] == "game_complete"]
+    assert snap.games.count == len(games)
+    assert list(snap.games.cap) == [1 if g["terminal_reason"] == "ply_cap" else 0 for g in games]
+    assert list(snap.games.winner) == [g["winner"] for g in games]
 
 
 @pytest.mark.parametrize(("age", "state"), [(30.0, "live"), (1200.0, "stale"), (7200.0, "stopped")])
