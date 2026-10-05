@@ -270,3 +270,16 @@ units.
   §10.4: the mockups and rival reports are in `mantis-records/dash2/`. The horizon's windows are the first and last
   fifth of the sampled games in record order (a run of a few shards has no fifth of shards). The Games list labels
   each kind by its channel (Self-play, Gate, External with its rung, Random).
+- **2026-10-05, delta (b) extended (operator, relayed by the RUN11-GO session and recorded in the packet): several
+  rulers and a ladder.** Every sidecar unit is its own series with its own parent anchor (the parent's sidecar on
+  the same unit); none is pooled or joined across units. The pre-registered rule's unit is a server input
+  (`--rule-unit ID=UNIT`, matched against the sidecar's `unit` or `unit.arm`); every other unit is labelled
+  report-only, and the going-forward band is drawn on the rule's unit only. The Run view shows the rule's ruler in win
+  rate with the parent and going-forward bands, and every ruler as logit(win rate) − logit(parent's win rate on that
+  ruler), with win rate, interval and the cell's host load in the table. The ruler ladder's state file
+  (`--ladder ID=FILE`: `{current_unit, streak, history, changes}`) marks rung changes on the x axis and names the
+  bridge pair, the same checkpoint read on both rungs; a missing file is a stated gap. A sidecar without `eff_n` is
+  refused, never read on its raw game count (LAW-04).
+- **2026-10-05, build decisions (continued).** The tokens live once, in `web/dash.css` (§7.1's `views/tokens.py` is
+  not a separate module: one stylesheet serves the served and the frozen form). The status line's steps are the live
+  segment's own: a run resumed from an earlier save reads its new life, not the dead one's maximum.

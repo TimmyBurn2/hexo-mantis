@@ -196,7 +196,7 @@ class ShardIndex:
                 for raw in lines:
                     self._feed(shard, line_start, raw)
                     line_start += len(raw) + 1
-        shard.held, shard.offset = held, offset
+                shard.held, shard.offset = held, offset
 
     def _feed(self, shard: Shard, offset: int, raw: bytes) -> None:
         text = raw.strip()
@@ -209,12 +209,22 @@ class ShardIndex:
             return
         if not isinstance(row, dict) or row.get("record") in ("shard_opened", "shard_closed"):
             return
+        probe = ShardRows()
+        try:
+            probe.append(offset, row)
+        except (TypeError, ValueError):
+            shard.skipped += 1
+            return
         self._where[str(row.get("game_id"))] = (shard.ordinal, len(shard.rows))
         shard.rows.append(offset, row)
         for observe in self.observers:
-            observe(row)
+            try:
+                observe(row)
+            except (TypeError, ValueError):
+                shard.skipped += 1
 
     def locate(self, game_id: str) -> tuple[int, int] | None:
+        """`(shard ordinal, row)` of a game, or None."""
         return self._where.get(game_id)
 
     def fetch(self, game_id: str) -> dict[str, Any] | None:

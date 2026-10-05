@@ -35,6 +35,7 @@ class GameView:
 
     @classmethod
     def from_record(cls, game: dict[str, Any]) -> GameView:
+        """One record read. Raises: TypeError, ValueError (a move that is not two integers)."""
         moves = [(int(q), int(r)) for q, r in (game.get("moves") or [])]
         line = win_line([list(m) for m in moves])
         win = [(q, r) for q, r in line] if line is not None else None

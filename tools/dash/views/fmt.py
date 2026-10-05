@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import html
+import json
 import math
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -15,6 +16,12 @@ NBSP = "\u202f"
 def esc(value: object) -> str:
     """Any value as HTML text, quotes included: nothing from a record reaches a page unescaped."""
     return html.escape(str(value), quote=True)
+
+
+def script_json(value: object) -> str:
+    """JSON for an inline `<script>`: `<`, `>` and `&` escaped, so no record string can close the element or open a comment."""
+    text = json.dumps(value, separators=(",", ":"))
+    return text.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 
 
 def num(value: float | int | None, digits: int = 0) -> str:

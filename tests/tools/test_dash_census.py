@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import ast
-import importlib
-import socket
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -31,14 +31,21 @@ def test_no_mantis_module_imports_tools_or_the_dash_package():
     assert offenders == []
 
 
-def test_importing_every_dash_module_binds_no_socket(dash, monkeypatch):
-    def refuse(*_args, **_kwargs):
-        raise AssertionError("a socket was bound at import")
-
-    monkeypatch.setattr(socket.socket, "bind", refuse)
-    for path in sorted(PACKAGE.rglob("*.py")):
-        name = ".".join(("dash", *path.relative_to(PACKAGE).with_suffix("").parts)).removesuffix(".__init__")
-        importlib.import_module(name)
+def test_importing_every_dash_module_binds_no_socket():
+    script = (
+        "import importlib, socket, sys\n"
+        "from pathlib import Path\n"
+        "from mantis.util.loadpkg import load_tools_package\n"
+        "def refuse(*a, **k):\n    raise SystemExit('a socket was bound at import')\n"
+        "socket.socket.bind = refuse\n"
+        "root = Path(sys.argv[1])\n"
+        "load_tools_package('dash', repo_root=root)\n"
+        "pkg = root / 'tools' / 'dash'\n"
+        "for p in sorted(pkg.rglob('*.py')):\n"
+        "    importlib.import_module('.'.join(('dash', *p.relative_to(pkg).with_suffix('').parts)).removesuffix('.__init__'))\n"
+        "print('ok')\n")
+    out = subprocess.run([sys.executable, "-c", script, str(REPO_ROOT)], capture_output=True, text=True, timeout=300)
+    assert out.returncode == 0 and out.stdout.strip() == "ok", out.stderr[-2000:]
 
 
 @pytest.mark.parametrize("path", sorted(PACKAGE.rglob("*.py")), ids=lambda p: str(p.relative_to(PACKAGE)))

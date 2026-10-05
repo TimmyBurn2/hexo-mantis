@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import quote
 
 from .fmt import esc
 
@@ -29,7 +30,7 @@ class Shell:
 def _href(view: str, run: str | None) -> str:
     if view == "analyzer":
         return "/analyzer"
-    return f"/run/{esc(run)}" + ("/games" if view == "games" else "") if run else "/"
+    return esc(f"/run/{quote(run, safe='')}" + ("/games" if view == "games" else "")) if run else "/"
 
 
 def _bar(shell: Shell) -> str:

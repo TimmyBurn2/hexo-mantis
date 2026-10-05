@@ -162,3 +162,29 @@ def test_a_malformed_input_is_refused_by_name(dash, argv):
     cli = importlib.import_module("dash.cli")
     with pytest.raises(SystemExit):
         cli.records_of(cli.build_parser().parse_args(argv))
+
+
+def test_the_page_cache_holds_only_served_runs_whatever_the_query(serve, record, tmp_path):
+    hub = serve.Hub([record.RunRecord("r1", _run(tmp_path)), record.RunRecord("r2", _run(tmp_path, "r2"))])
+    hub.poll_once()
+    for i in range(50):
+        hub.run_page("r1", f"x{i}", time.time())
+    hub.run_page("r1", "r2", time.time())
+    assert set(hub._pages) == {("r1", None), ("r1", "r2")}  # noqa: SLF001
+
+
+def test_a_failed_read_is_drawn_as_one_not_as_a_stopped_run(serve, record, tmp_path, monkeypatch):
+    rec = record.RunRecord("r1", _run(tmp_path))
+    hub = serve.Hub([rec])
+    hub.poll_once()
+    monkeypatch.setattr(rec, "poll", lambda: (_ for _ in ()).throw(OSError("vanished mid-copy")))
+    hub.poll_once()
+    html = hub.run_page("r1", None, time.time() + 7200).decode("utf-8")
+    assert 'class="state unread"' in html and "the last read failed" in html and 'class="state stopped"' not in html
+
+
+def test_a_label_with_a_space_round_trips_through_its_own_links(serve, record, tmp_path):
+    hub = serve.Hub([record.RunRecord("run eleven", _run(tmp_path))])
+    hub.poll_once()
+    assert serve.route_get(hub, "/").location == "/run/run%20eleven"
+    assert serve.route_get(hub, "/run/run%20eleven").status == 200

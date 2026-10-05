@@ -74,9 +74,9 @@ class EventTail:
                 held = lines.pop()
                 for raw in lines:
                     self._feed_line(raw)
-        self.offsets[path] = offset
-        if held:
-            self.held[path] = held
+                self.offsets[path], self.held[path] = offset, held
+        if not self.held.get(path):
+            self.held.pop(path, None)
 
     def _feed_line(self, raw: bytes) -> None:
         text = raw.strip()
@@ -90,5 +90,9 @@ class EventTail:
         if not isinstance(row, dict):
             self.unparseable += 1
             return
-        self._reducers.feed(row)
+        try:
+            self._reducers.feed(row)
+        except (TypeError, ValueError):
+            self.unparseable += 1
+            return
         self.rows_read += 1

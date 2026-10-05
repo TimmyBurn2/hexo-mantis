@@ -1,4 +1,4 @@
-"""Strength from the follower's cell sidecars: one series per unit, the parent joined by its checkpoint stem, the going-forward read."""
+"""Strength from the follower's cell sidecars: one series per unit, each with its own parent, never pooled or joined across units."""
 from __future__ import annotations
 
 import hashlib
@@ -16,14 +16,22 @@ CELLS = 4
 LINE_LOGIT = 0.17
 
 
+def logit(p: float) -> float:
+    """log(p / (1 − p)), clamped away from 0 and 1."""
+    q = min(max(p, 1e-6), 1 - 1e-6)
+    return math.log(q / (1 - q))
+
+
 @dataclass(frozen=True)
 class Cell:
-    """One sidecar: whose checkpoint, at which step, the opponent family, the unit it was read in, and its reading."""
+    """One sidecar: whose checkpoint, at which step, the unit it was read in (`name` for the page, `unit` for identity), its reading."""
 
     run_id: str
     stem: str
     step: int
     family: str
+    unit_field: str
+    name: str
     unit: tuple[str, ...]
     label: str
     wr: float
@@ -31,12 +39,10 @@ class Cell:
     hi: float | None
     n: int
     regime: str
-    path: str
 
     @property
     def logit(self) -> float:
-        p = min(max(self.wr, 1e-6), 1 - 1e-6)
-        return math.log(p / (1 - p))
+        return logit(self.wr)
 
 
 def _int(v: Any) -> int | None:
@@ -47,26 +53,28 @@ def _num(v: Any) -> float | None:
     return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) else None
 
 
-def _tactics(raw: dict[str, Any]) -> str:
+def _tactics(raw: dict[str, Any]) -> tuple[str | None, str]:
     """The tactics arm and its block's hash: two blocks under one arm name are two instruments."""
     t = raw.get("tactics")
     if not isinstance(t, dict):
-        return "no tactics"
+        return None, "no tactics"
     block = t.get("block")
     digest = "" if block is None else hashlib.sha256(json.dumps(block, sort_keys=True).encode()).hexdigest()[:8]
-    return f"{t.get('arm') or 'config'} {digest}".strip()
+    arm = str(t.get("arm") or "config")
+    return arm, f"{arm} {digest}".strip()
 
 
 def parse(path: Path, raw: Any) -> Cell | None:
-    """A cell from one sidecar's JSON, or None when a field the series needs is absent."""
+    """A cell from one sidecar's JSON, or None when a field the series needs is absent (distinct games included)."""
     if not isinstance(raw, dict):
         return None
-    step, wr, ours = _int(raw.get("step")), _num(raw.get("wr")), raw.get("ours") or {}
+    step, wr, ours, n = _int(raw.get("step")), _num(raw.get("wr")), raw.get("ours") or {}, _int(raw.get("eff_n"))
     six, strix = raw.get("six"), raw.get("strix")
-    if step is None or wr is None or not isinstance(ours, dict):
+    if step is None or wr is None or n is None or not isinstance(ours, dict):
         return None
-    tactics = _tactics(raw)
-    common = (str(raw.get("unit")), str(ours.get("search_kind")), str(ours.get("sims")), tactics)
+    arm, tactics = _tactics(raw)
+    field = str(raw.get("unit"))
+    common = (field, str(ours.get("search_kind")), str(ours.get("sims")), tactics)
     if isinstance(six, dict):
         family = "six"
         unit = ("six", *common, str(six.get("commit")), str(six.get("net_sha256")), str(six.get("nodes")))
@@ -79,11 +87,10 @@ def parse(path: Path, raw: Any) -> Cell | None:
                  f"{strix.get('solver', 'on')}" + ("" if strix.get("radius") is None else f", r{strix.get('radius')}"))
     else:
         return None
-    n = _int(raw.get("eff_n")) or _int(raw.get("games")) or 0
     stem = str(raw.get("checkpoint") or path.name.split(".ckpt")[0]).split(".ckpt")[0]
-    return Cell(run_id=str(raw.get("run_id")), stem=stem, step=step, family=family, unit=unit, label=label, wr=wr,
-                lo=_num(raw.get("wr_ci_lower")), hi=_num(raw.get("wr_ci_upper")), n=n,
-                regime=str(raw.get("regime", "?")), path=str(path))
+    return Cell(run_id=str(raw.get("run_id")), stem=stem, step=step, family=family, unit_field=field,
+                name=field if arm is None else f"{field}.{arm}", unit=unit, label=label, wr=wr,
+                lo=_num(raw.get("wr_ci_lower")), hi=_num(raw.get("wr_ci_upper")), n=n, regime=str(raw.get("regime", "?")))
 
 
 def load(dirs: Iterable[Path]) -> tuple[list[Cell], list[str]]:
@@ -93,7 +100,7 @@ def load(dirs: Iterable[Path]) -> tuple[list[Cell], list[str]]:
     seen: set[Path] = set()
     for root in dirs:
         if not root.is_dir():
-            skipped.append(f"{root} is not a directory")
+            skipped.append(f"a --cells directory named {root.name} does not exist")
             continue
         for path in sorted({p for g in GLOBS for p in root.rglob(g)}):
             if path in seen:
@@ -108,22 +115,25 @@ def load(dirs: Iterable[Path]) -> tuple[list[Cell], list[str]]:
                 skipped.append(f"{path.name}: {type(exc).__name__}")
                 continue
             if cell is None:
-                skipped.append(f"{path.name}: no step, win rate or opponent")
+                skipped.append(f"{path.name}: no step, win rate, distinct games or opponent")
             else:
                 cells.append(cell)
     unique = {(c.stem, c.unit): c for c in cells}
-    return sorted(unique.values(), key=lambda c: (c.run_id, c.step, c.label)), skipped
+    return sorted(unique.values(), key=lambda c: (c.run_id, c.step, c.name)), skipped
 
 
 @dataclass(frozen=True)
-class Strength:
-    """One family's panel for one run: its line (one unit), the other-unit cells, the parent cell in the line's unit."""
+class Ruler:
+    """One unit's series for one run: its cells by step, the parent's cell in the same unit, whether the run's rule reads it."""
 
+    name: str
+    unit_field: str
     family: str
+    unit: tuple[str, ...]
+    label: str
     line: tuple[Cell, ...]
-    other: tuple[Cell, ...]
     parent: Cell | None
-    parent_other: Cell | None
+    rule: bool
 
     @property
     def going_forward(self) -> tuple[float, int] | None:
@@ -134,17 +144,25 @@ class Strength:
         return sum(c.logit for c in last) / len(last) - self.parent.logit, len(last)
 
 
-def strength(cells: list[Cell], family: str, run_id: str, parent_stem: str | None) -> Strength:
-    """The run's cells of one family: the unit with the most cells (the newest on a tie) is the line, the rest are other units."""
-    own = [c for c in cells if c.family == family and c.run_id == run_id]
+def rulers(cells: list[Cell], run_id: str, parent_stem: str | None, rule: str | None) -> tuple[Ruler, ...]:
+    """Every unit the run has a cell in, as its own series; the rule's unit first, then Six before Strix, then by name."""
     by_unit: dict[tuple[str, ...], list[Cell]] = {}
-    for c in own:
-        by_unit.setdefault(c.unit, []).append(c)
-    parents = [c for c in cells if c.family == family and parent_stem is not None and c.stem == parent_stem]
-    if not by_unit:
-        return Strength(family, (), (), None, parents[0] if parents else None)
-    unit = max(by_unit, key=lambda u: (len(by_unit[u]), max(c.step for c in by_unit[u])))
-    line = tuple(sorted(by_unit[unit], key=lambda c: c.step))
-    other = tuple(sorted((c for c in own if c.unit != unit), key=lambda c: c.step))
-    parent = next((c for c in parents if c.unit == unit), None)
-    return Strength(family, line, other, parent, None if parent else (parents[0] if parents else None))
+    for c in cells:
+        if c.run_id == run_id:
+            by_unit.setdefault(c.unit, []).append(c)
+    out = []
+    for unit, own in by_unit.items():
+        head = own[0]
+        parent = next((c for c in cells if parent_stem is not None and c.stem == parent_stem and c.unit == unit), None)
+        out.append(Ruler(name=head.name, unit_field=head.unit_field, family=head.family, unit=unit, label=head.label,
+                         line=tuple(sorted(own, key=lambda c: c.step)), parent=parent,
+                         rule=rule is not None and rule in (head.name, head.unit_field)))
+    return tuple(sorted(out, key=lambda r: (not r.rule, r.family != "six", r.name)))
+
+
+def bridges(cells: list[Cell], run_id: str, units: tuple[str, str]) -> list[tuple[Cell, Cell]]:
+    """Checkpoints of the run read on both units (by name or unit field): the same net on two rungs of the ladder."""
+    def on(u: str) -> dict[str, Cell]:
+        return {c.stem: c for c in cells if c.run_id == run_id and u in (c.name, c.unit_field)}
+    a, b = on(units[0]), on(units[1])
+    return [(a[s], b[s]) for s in sorted(set(a) & set(b), key=lambda s: a[s].step)]

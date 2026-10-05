@@ -22,6 +22,7 @@ class Key:
 
 
 def legend(keys: Sequence[Key]) -> str:
+    """The legend row; an entry with an off-reason is drawn disabled with the reason beside it."""
     if not keys:
         return ""
     parts = []

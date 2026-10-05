@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from types import MappingProxyType
 from typing import Any
-from urllib.parse import parse_qs, quote, urlsplit
+from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 from .readers.record import RunRecord, RunSnapshot
 from .views import run as run_view
@@ -35,10 +35,12 @@ class Reply:
 
 
 def text(status: int, message: str) -> Reply:
+    """A plain-text reply."""
     return Reply(status, "text/plain; charset=utf-8", message.encode("utf-8"))
 
 
 def as_json(status: int, body: Any) -> Reply:
+    """A JSON reply."""
     return Reply(status, "application/json", json.dumps(body, separators=(",", ":")).encode("utf-8"))
 
 
@@ -64,7 +66,7 @@ class Hub:
             try:
                 fresh[label] = rec.poll()
                 self.failures.pop(label, None)
-            except (OSError, RuntimeError, ValueError) as exc:
+            except (OSError, RuntimeError, ValueError, TypeError, KeyError) as exc:
                 _LOG.exception("poll of %s failed; its previous snapshot stays", label)
                 self.failures[label] = f"{type(exc).__name__} at {time.strftime('%H:%M:%S')}"
         with self._lock:
@@ -72,19 +74,25 @@ class Hub:
             self.generation += 1
 
     def snapshots(self) -> MappingProxyType[str, RunSnapshot]:
+        """The current snapshots, one mapping swapped whole by the poll thread."""
         with self._lock:
             return self._snaps
 
+    def _current(self) -> tuple[MappingProxyType[str, RunSnapshot], int]:
+        with self._lock:
+            return self._snaps, self.generation
+
     def run_page(self, label: str, compare: str | None, now: float) -> bytes:
-        """The Run view of `label` (`compare` overlaid), rendered once per snapshot and re-rendered past the TTL."""
-        snaps = self.snapshots()
-        generation = self.generation
-        key = (label, compare)
+        """The Run view of `label` (a served `compare` overlaid), cached per snapshot and served runs only, re-rendered past the TTL."""
+        snaps, generation = self._current()
+        other = compare if compare in snaps and compare != label else None
+        key = (label, other)
         cached = self._pages.get(key)
         if cached is not None and cached[0] == generation and now - cached[1] < PAGE_TTL_SEC:
             return cached[2]
-        chosen = [snaps[label]] + ([snaps[compare]] if compare is not None and compare in snaps and compare != label else [])
-        body = run_view.page(chosen, runs=self.labels, now=now).encode("utf-8")
+        chosen = [snaps[label]] + ([snaps[other]] if other is not None else [])
+        body = run_view.page(chosen, runs=self.labels, now=now, failure=self.failures.get(label)).encode("utf-8")
+        self._pages = {k: v for k, v in self._pages.items() if v[0] == generation}
         self._pages[key] = (generation, now, body)
         return body
 
@@ -112,7 +120,7 @@ def static(name: str) -> Reply:
 def route_get(hub: Hub, raw_path: str, extra: dict[str, Callable[..., Reply]] | None = None) -> Reply:
     """GET dispatch over the path's segments; every unknown name is a 404."""
     split = urlsplit(raw_path)
-    parts = [p for p in split.path.split("/") if p]
+    parts = [unquote(p) for p in split.path.split("/") if p]
     query = parse_qs(split.query)
     if not parts:
         return Reply(302, "text/plain", b"", f"/run/{quote(hub.labels[0])}")
@@ -184,7 +192,7 @@ def make_server(bind: str, port: int, hub: Hub, **routes: Any) -> ThreadingHTTPS
 def run_server(args: argparse.Namespace, records: list[RunRecord], *, get_extra: dict[str, Callable[..., Reply]],
                post_of: Callable[[Hub], Callable[[str, bytes], Reply]] | None = None,
                on_stop: Callable[[], None] | None = None) -> int:
-    """`serve`: the first read before the socket opens, then the poll thread and the server until interrupted."""
+    """`serve`: the first read before the socket opens, then the poll thread and the server until interrupted. Raises: OSError (the bind)."""
     hub = Hub(records)
     t0 = time.time()
     hub.poll_once()

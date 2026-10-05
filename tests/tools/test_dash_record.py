@@ -90,7 +90,8 @@ def test_one_poll_reads_events_games_records_and_cells_into_one_snapshot(record,
     snap = record.RunRecord("label", run, tmp_path / "records", (cells,)).poll()
     assert snap.run_id == "r1" and snap.label == "label" and snap.events.live_segment.started["pid"] == 2
     assert snap.games_indexed == 1 and snap.horizon.games == 1
-    assert snap.six.parent.wr == 0.59 and [c.step for c in snap.six.line] == [30] and not snap.strix.line
+    (ruler,) = snap.rulers
+    assert ruler.parent.wr == 0.59 and [c.step for c in ruler.line] == [30] and ruler.family == "six"
     assert snap.records.saves == () and snap.beat.state(time.time()) == "live"
 
 
@@ -109,3 +110,23 @@ def test_several_runs_in_one_logs_dir_are_resolved_by_the_configs_run_id(record,
     events = importlib.import_module("dash.readers.events")
     with pytest.raises(events.EmptyRunRecord, match="names none"):
         record.RunRecord("x", run)
+
+
+def test_the_freeze_reads_the_writers_clock_never_the_files_mtime(dash, tmp_path):
+    view = importlib.import_module("dash.views.run")
+    record = importlib.import_module("dash.readers.record")
+    run = _run(tmp_path)
+    beat = run / "logs" / "heartbeat_r1.json"
+    os.utime(beat, (1.0e9, 1.0e9))
+    first = view.status(record.RunRecord("x", run).poll(), None)
+    os.utime(beat, (1.5e9, 1.5e9))
+    assert view.status(record.RunRecord("x", run).poll(), None) == first
+
+
+def test_a_position_further_out_than_the_chart_is_not_counted(dash):
+    horizon = importlib.import_module("dash.readers.horizon")
+    red = horizon.HorizonReducer()
+    moves = [[i, 0] for i in range(2 * (horizon.K_MAX + 3))]
+    red(game("long", moves, result="p1", stats=[{"ply": 0, "root_value": 0.5}, {"ply": len(moves) - 1, "root_value": 0.5}]))
+    rows = list(red._games[0])  # noqa: SLF001
+    assert len(rows) == 3 and rows[0] == 0

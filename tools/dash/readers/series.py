@@ -87,16 +87,15 @@ class SeriesView:
 
 
 class Games:
-    """Per-game facts in stream order, one column each; `winner` −2 is an undecodable winner, `step` −1 before any step."""
+    """Per-game facts in stream order, one column each; `winner` −2 is undecodable, `step` −1 before its segment's first step, plies NaN when absent."""
 
-    __slots__ = ("plies", "winner", "cap", "step", "hashes")
+    __slots__ = ("plies", "winner", "cap", "step")
 
     def __init__(self) -> None:
         self.plies: array[float] = array("d")
         self.winner: array[int] = array("b")
         self.cap: array[int] = array("b")
         self.step: array[int] = array("q")
-        self.hashes: list[str] = []
 
     @property
     def count(self) -> int:
@@ -106,19 +105,20 @@ class Games:
         """A copy of every column, so a snapshot never sees a game fed after it."""
         out = Games()
         out.plies, out.winner, out.cap = array("d", self.plies), array("b", self.winner), array("b", self.cap)
-        out.step, out.hashes = array("q", self.step), list(self.hashes)
+        out.step = array("q", self.step)
         return out
 
 
 @dataclass(frozen=True)
 class Segment:
-    """One life of the run: its number, its start row (None when the segment wrote none), its rows and time span."""
+    """One life of the run: its number, its start row (None when the segment wrote none), its rows, time span and largest step."""
 
     number: int
     started: Mapping[str, Any] | None
     rows: int
     first_ts: float | None
     last_ts: float | None
+    steps_max: int | None
 
 
 @dataclass(frozen=True)
@@ -151,6 +151,12 @@ class Snapshot:
         """The newest segment: a resumed run's current life, whatever its earlier segments did."""
         return self.segments[-1] if self.segments else None
 
+    @property
+    def live_steps(self) -> int | None:
+        """The live segment's largest step: a run resumed from an earlier save reads its new life, not the dead one's maximum."""
+        seg = self.live_segment
+        return seg.steps_max if seg is not None and seg.steps_max is not None else self.steps_max
+
 
 class Reducers:
     """Feed rows in stream order, segment by segment; `snapshot()` hands out a frozen view no later feed can change."""
@@ -171,9 +177,10 @@ class Reducers:
     def enter_segment(self, number: int) -> None:
         """Attribute the rows fed from now on to segment `number`."""
         self._segment = number
-        self._segments.setdefault(number, [None, 0, None, None])
+        self._segments.setdefault(number, [None, 0, None, None, None])
 
     def feed(self, row: dict[str, Any]) -> None:
+        """Reduce one row; a field of the wrong type reads as absent, never as a zero."""
         name = str(row.get("event", "?"))
         self._counts[name] += 1
         ts = finite(row.get("ts"))
@@ -191,6 +198,9 @@ class Reducers:
         step = row.get("step")
         if isinstance(step, int) and not isinstance(step, bool):
             self._steps_max = step if self._steps_max is None else max(self._steps_max, step)
+            if self._segment is not None:
+                seg = self._segments[self._segment]
+                seg[4] = step if seg[4] is None else max(seg[4], step)
         if name == "game_complete":
             self._feed_game(row)
         elif name in ("trainer_step", "iteration_complete", "disk_free"):
@@ -213,21 +223,22 @@ class Reducers:
             if key in row:
                 self._dropped["game_complete"] += 1
         plies = finite(row.get("moves"))
-        self._games.plies.append(plies if plies is not None else 0.0)
-        self._games.winner.append(_WINNER_CODE.get(row.get("winner"), -2))
+        winner = row.get("winner")
+        code = _WINNER_CODE.get(winner, -2) if isinstance(winner, int) and not isinstance(winner, bool) else -2
+        seg_step = self._segments[self._segment][4] if self._segment is not None else self._steps_max
+        self._games.plies.append(plies if plies is not None else math.nan)
+        self._games.winner.append(code)
         self._games.cap.append(1 if row.get("terminal_reason") == "ply_cap" else 0)
-        self._games.step.append(self._steps_max if self._steps_max is not None else -1)
-        digest = row.get("game_id_byte_hash")
-        if digest:
-            self._games.hashes.append(str(digest))
+        self._games.step.append(seg_step if seg_step is not None else -1)
 
     def snapshot(self) -> Snapshot:
+        """The frozen view as of the rows fed so far."""
         return Snapshot(
             _rows=MappingProxyType({k: list(v) for k, v in self._rows.items()}),
             _last=MappingProxyType(dict(self._last)),
             _series=MappingProxyType({k: v.view() for k, v in self._series.items()}),
             games=self._games.copy(), counts=MappingProxyType(dict(self._counts)),
             dropped_fields=MappingProxyType(dict(self._dropped)),
-            segments=tuple(Segment(n, s[0], s[1], s[2], s[3]) for n, s in sorted(self._segments.items())),
+            segments=tuple(Segment(n, s[0], s[1], s[2], s[3], s[4]) for n, s in sorted(self._segments.items())),
             first_ts=self._first_ts, last_ts=self._last_ts, steps_max=self._steps_max,
         )

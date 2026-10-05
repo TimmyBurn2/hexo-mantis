@@ -12,10 +12,11 @@ STALE_SEC = 3600.0
 
 @dataclass(frozen=True)
 class Liveness:
-    """The newest evidence of the run's heartbeat (None when there is no heartbeat file) and its source."""
+    """The newest evidence of the run's heartbeat (None without a file), its source, and the writer's own `wall_ts` alone."""
 
     beat_ts: float | None
     source: str
+    wall_ts: float | None = None
 
     def state(self, now: float) -> str:
         """`live`, `stale`, `stopped`, or `unknown` without a heartbeat file."""
@@ -40,5 +41,5 @@ def read(logs_dir: Path, run_id: str) -> Liveness:
     except (OSError, ValueError):
         wall = None
     if wall is not None and wall > mtime:
-        return Liveness(wall, f"{path.name} wall_ts")
-    return Liveness(mtime, f"{path.name} mtime")
+        return Liveness(wall, f"{path.name} wall_ts", wall)
+    return Liveness(mtime, f"{path.name} mtime", wall)

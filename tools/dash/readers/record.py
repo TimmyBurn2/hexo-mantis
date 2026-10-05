@@ -10,7 +10,7 @@ import yaml
 
 from mantis.util.yaml_io import DuplicateKeyError, parse_config_yaml
 
-from . import liveness, saves, sidecars
+from . import ladder, liveness, saves, sidecars
 from .events import EmptyRunRecord, EventTail, record_run_ids
 from .horizon import Horizon, HorizonReducer
 from .series import Snapshot
@@ -26,8 +26,9 @@ class RunSnapshot:
     events: Snapshot
     horizon: Horizon | None
     records: saves.Records | None
-    six: sidecars.Strength
-    strix: sidecars.Strength
+    rulers: tuple[sidecars.Ruler, ...]
+    ladder: ladder.Ladder | None
+    bridges: tuple[tuple[ladder.Change, tuple[tuple[sidecars.Cell, sidecars.Cell], ...]], ...]
     cells_skipped: tuple[str, ...]
     parent_stem: str | None
     beat: liveness.Liveness
@@ -52,9 +53,11 @@ def parent_stem(run_dir: Path) -> tuple[str | None, str]:
 class RunRecord:
     """Binds one run's inputs; `poll()` reads what is new and returns a fresh `RunSnapshot`; the shard index is shared under `lock`."""
 
-    def __init__(self, label: str, run_dir: Path, records_dir: Path | None = None,
-                 cells: tuple[Path, ...] = ()) -> None:
+    def __init__(self, label: str, run_dir: Path, records_dir: Path | None = None, cells: tuple[Path, ...] = (), *,
+                 rule: str | None = None, ladder_file: Path | None = None) -> None:
+        """Bind the run's inputs. Raises: EmptyRunRecord (no event segment, or several runs none named), OSError."""
         self.label, self.run_dir, self.records_dir, self.cells = label, Path(run_dir), records_dir, cells
+        self.rule, self.ladder_file = rule, ladder_file
         ids = record_run_ids(self.run_dir / "logs")
         if not ids:
             raise EmptyRunRecord(f"{self.run_dir / 'logs'} holds no events_<run>_seg*.jsonl")
@@ -83,9 +86,10 @@ class RunRecord:
             horizon, indexed = self.horizon.read(), self.games.total
         records = saves.load(self.records_dir) if self.records_dir is not None else None
         cells, skipped = sidecars.load(self.cells)
+        rungs = ladder.read(self.ladder_file)
+        bridges = tuple((c, tuple(sidecars.bridges(cells, self.run_id, (c.frm, c.to)))) for c in (rungs.changes if rungs else ()))
         return RunSnapshot(
             label=self.label, run_id=self.run_id, events=events, horizon=horizon, records=records,
-            six=sidecars.strength(cells, "six", self.run_id, self.parent_stem),
-            strix=sidecars.strength(cells, "strix", self.run_id, self.parent_stem),
+            rulers=sidecars.rulers(cells, self.run_id, self.parent_stem, self.rule), ladder=rungs, bridges=bridges,
             cells_skipped=tuple(skipped), parent_stem=self.parent_stem,
             beat=liveness.read(self.run_dir / "logs", self.run_id), games_indexed=indexed)

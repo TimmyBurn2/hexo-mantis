@@ -137,3 +137,22 @@ def test_a_record_without_policy_entropy_keeps_that_series_empty_not_zero(events
     snap = events.EventTail(logs, "r1").poll()
     assert len(snap.series("trainer_step", "step", "policy_entropy")) == 0
     assert snap.series("trainer_step", "step", "policy_entropy").last() is None
+
+
+def test_a_malformed_row_is_counted_once_and_never_fed_again(events, tmp_path):
+    logs = tmp_path / "logs"
+    rows = [*trainer_rows(range(1, 11)), {"event": "game_complete", "winner": [1], "moves": "x"}]
+    write_segment(logs, "r1", 1, rows)
+    tail = events.EventTail(logs, "r1")
+    for _ in range(3):
+        snap = tail.poll()
+    assert len(snap.series("trainer_step", "step", "lr")) == 10 and snap.games.count == 1
+    assert list(snap.games.winner) == [-2] and str(snap.games.plies[0]) == "nan"
+
+
+def test_a_resumed_run_reads_its_live_lifes_steps_not_the_dead_ones_maximum(events, tmp_path):
+    logs = tmp_path / "logs"
+    write_segment(logs, "r1", 1, [segment_start("r1", 1), *trainer_rows(range(3000, 3500))])
+    write_segment(logs, "r1", 2, [segment_start("r1", 2), *trainer_rows(range(3001, 3100)), *game_rows(1)])
+    snap = events.EventTail(logs, "r1").poll()
+    assert snap.steps_max == 3499 and snap.live_steps == 3099 and list(snap.games.step) == [3099]

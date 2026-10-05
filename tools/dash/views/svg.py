@@ -2,12 +2,11 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
-from .fmt import esc, short, sig
+from .fmt import esc, script_json, short, sig
 
 Fmt = Callable[[float], str]
 _M = {"l": 40.0, "r": 10.0, "t": 8.0, "b": 22.0}
@@ -153,7 +152,7 @@ class Chart:
         series = [{"name": s.name, "cls": s.cls, "pts": [[_r(x), _r(y)] for x, y in s.pts]} for s in self.lines if not s.faint]
         series += [{"name": d.name, "cls": d.cls, "dots": True, "pts": [[_r(v) for v in p] for p in d.pts]} for d in self.dots]
         data = {"x": [x0, x1], "y": [y0, y1], "w": w, "h": h, "m": _M, "xname": self.x_name, "series": series}
-        blob = json.dumps(data, separators=(",", ":")).replace("</", "<\\/")
+        blob = script_json(data)
         return "".join(out) + f'<script type="application/json" class="xh">{blob}</script>'
 
 

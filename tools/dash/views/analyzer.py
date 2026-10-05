@@ -1,13 +1,12 @@
 """The Analyzer view: the board with one lens, the source line, the nets, the verdict, win chances, candidates and the deeper tools."""
 from __future__ import annotations
 
-import json
 from typing import Any
 from urllib.parse import urlencode
 
 from ..readers.hexlogic import first_of_turn, owner, turn_of
 from . import board
-from .fmt import cell, esc, pct, short
+from .fmt import cell, esc, pct, script_json, short
 from .games_text import NAME
 from .page import Shell, render
 
@@ -83,8 +82,8 @@ def page(runs: tuple[str, ...], rows: list[dict[str, Any]] | None, body: dict[st
                         block_cells=[tuple(c) for c in tac.get("cells", [])] if tac.get("cls") == "block" else [],
                         ghost=tuple(first) if first else None)
     slim = {"id": body["id"], "channel": body["channel"], "moves": body["moves"]} if body else None
-    data = json.dumps({"runs": runs, "run": q.get("run"), "g": q.get("g"), "game": slim, "moves": moves, "panel": panel,
-                       "engines": rows}, separators=(",", ":")).replace("</", "<\\/")
+    data = script_json({"runs": runs, "run": q.get("run"), "g": q.get("g"), "game": slim, "moves": moves, "panel": panel,
+                        "engines": rows})
     stage = (f'<section class="stage" aria-label="Board">{_source(body, moves, q)}<div class="boardwrap">{board.render(scene)}</div>'
              '<div class="keys" id="keys"></div><div class="transport">'
              f'<button class="btn" id="prev" type="button" aria-label="Previous stone">{_ICON.format(d="M11 2v10L4 7z")}</button>'

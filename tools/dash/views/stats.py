@@ -4,7 +4,10 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+from ..readers.sidecars import logit
+
 Z95 = 1.96
+__all__ = ["Separation", "expit", "logit", "separation", "wilson"]
 
 
 @dataclass(frozen=True)
@@ -37,10 +40,6 @@ def wilson(k: int, n: int) -> tuple[float, float]:
     return max(0.0, centre - half), min(1.0, centre + half)
 
 
-def logit(p: float) -> float:
-    q = min(max(p, 1e-6), 1 - 1e-6)
-    return math.log(q / (1 - q))
-
-
 def expit(x: float) -> float:
+    """The inverse of `logit`: a logit back to a probability."""
     return 1.0 / (1.0 + math.exp(-x))

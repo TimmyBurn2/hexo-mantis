@@ -138,3 +138,15 @@ def test_a_light_row_keeps_absent_facts_absent_and_the_records_minus_one_step(sh
     row = index.page(None, 1).rows[0]
     assert row["step"] == -1 and row["w"] == 3 and "rung" not in row and row["stats"] is False
     assert index.channels() == ["selfplay"]
+
+
+def test_a_malformed_game_is_skipped_once_and_never_doubles_the_index(shards, tmp_path):
+    games = tmp_path / "games"
+    path = write_shard(games, "r1", 1, "2026100510", _games(2), closed=False)
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"game_id": "bad", "moves": 7, "plies": "x"}) + "\n")
+    seen: list[str] = []
+    index = shards.ShardIndex(games, "r1", observers=(lambda g: seen.append(g["game_id"]),))
+    for _ in range(3):
+        index.poll()
+    assert index.total == 2 and seen == ["g0", "g1"] and index.shards[0].skipped == 1

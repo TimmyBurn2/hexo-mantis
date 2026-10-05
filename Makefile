@@ -44,10 +44,10 @@ gates:
 gates.exit:
 	bash tools/ci_gates/run_all.sh --with-slow
 
-#   make dash RUNS="run11=<run dir>" [RECORDS="run11=<monitor records>"] [CELLS="<dir> …"] [CHECKPOINTS="<dir> …"] [STRIX=1]
+#   make dash RUNS="id=<run dir>" [RECORDS="id=<dir>"] [CELLS="<dir> …"] [RULES="id=<unit>"] [LADDERS="id=<file>"] [CHECKPOINTS="<dir> …"] [STRIX=1]
 #   loopback only by default (DASH-2); open http://127.0.0.1:$(or $(PORT),8765)/ or tunnel it with ssh -L
 dash:
-	UV_NO_SYNC=1 $(UV) run python tools/dash.py serve $(foreach r,$(RUNS),--run "$(r)") $(foreach r,$(RECORDS),--records "$(r)") $(foreach d,$(CELLS),--cells "$(d)") $(foreach d,$(CHECKPOINTS),--checkpoints "$(d)") $(if $(STRIX),--strix,) $(if $(PORT),--port "$(PORT)",) $(if $(THREADS),--threads "$(THREADS)",)
+	UV_NO_SYNC=1 $(UV) run python tools/dash.py serve $(foreach r,$(RUNS),--run "$(r)") $(foreach r,$(RECORDS),--records "$(r)") $(foreach d,$(CELLS),--cells "$(d)") $(foreach r,$(RULES),--rule-unit "$(r)") $(foreach r,$(LADDERS),--ladder "$(r)") $(foreach d,$(CHECKPOINTS),--checkpoints "$(d)") $(if $(STRIX),--strix,) $(if $(PORT),--port "$(PORT)",) $(if $(THREADS),--threads "$(THREADS)",)
 
 bench:
 	cargo bench -p mantis-core --bench smoke_bench --locked -- --warm-up-time 0.5 --measurement-time 1

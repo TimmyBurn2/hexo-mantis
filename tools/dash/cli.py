@@ -35,6 +35,9 @@ def _inputs(p: argparse.ArgumentParser) -> None:
     p.add_argument("--records", action="append", metavar="ID=DIR", help="the run monitor's records for that label")
     p.add_argument("--cells", action="append", type=Path, default=[], metavar="DIR",
                    help="a directory searched for cell sidecars (<ckpt>.six30_16*.json, <ckpt>.strix*.json); repeatable")
+    p.add_argument("--rule-unit", action="append", metavar="ID=UNIT",
+                   help="the ruler that run's pre-registered rule reads (a sidecar's unit); every other ruler is report-only")
+    p.add_argument("--ladder", action="append", metavar="ID=FILE", help="that run's ruler-ladder state file")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -68,19 +71,22 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def records_of(args: argparse.Namespace) -> list[RunRecord]:
-    """One `RunRecord` per `--run`, in order. Raises: SystemExit (no run, a malformed pair), EmptyRunRecord."""
+    """One `RunRecord` per `--run`, in order. Raises: SystemExit (no run, a malformed pair), EmptyRunRecord, OSError."""
     runs = _pairs(args.run, "--run")
     if not runs:
         raise SystemExit("give at least one --run ID=DIR")
-    monitor = _pairs(args.records, "--records")
-    unknown = sorted(set(monitor) - set(runs))
-    if unknown:
-        raise SystemExit(f"--records names no served run: {', '.join(unknown)}")
-    return [RunRecord(label, path, monitor.get(label), tuple(args.cells)) for label, path in runs.items()]
+    monitor, ladders = _pairs(args.records, "--records"), _pairs(args.ladder, "--ladder")
+    rules = {k: str(v) for k, v in _pairs(args.rule_unit, "--rule-unit").items()}
+    for flag, given in (("--records", monitor), ("--ladder", ladders), ("--rule-unit", rules)):
+        unknown = sorted(set(given) - set(runs))
+        if unknown:
+            raise SystemExit(f"{flag} names no served run: {', '.join(unknown)}")
+    return [RunRecord(label, path, monitor.get(label), tuple(args.cells), rule=rules.get(label), ladder_file=ladders.get(label))
+            for label, path in runs.items()]
 
 
 def freeze(args: argparse.Namespace) -> int:
-    """Write the Run view of the first run (the `--compare` one overlaid) to `--out`; 2 on a refused record."""
+    """Write the Run view of the first run (the `--compare` one overlaid) to `--out`; 2 on a refused record. Raises: OSError."""
     try:
         records = records_of(args)
         snaps = {r.label: r.poll() for r in records}

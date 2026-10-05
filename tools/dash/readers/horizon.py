@@ -7,7 +7,7 @@ from typing import Any
 
 from .hexlogic import first_of_turn, owner, turn_of
 
-#: Turns to the end the chart reaches; a later position is counted at this cap.
+#: Turns to the end the chart reaches; a position further out is not counted.
 K_MAX = 30
 #: Agreement the reach is read at, and the positions a turn needs before it is drawn.
 REACH_SHARE = 0.90
@@ -60,9 +60,12 @@ class HorizonReducer:
             ply, v = entry.get("ply") if isinstance(entry, dict) else None, entry.get("root_value") if isinstance(entry, dict) else None
             if not isinstance(ply, int) or isinstance(v, bool) or not isinstance(v, (int, float)) or not first_of_turn(ply):
                 continue
+            k = last_turn - turn_of(ply)
+            if k > K_MAX:
+                continue
             won = owner(ply) == winner
             agrees = (v > 0) if won else (v < 0)
-            rows.extend((min(K_MAX, last_turn - turn_of(ply)), int(won), int(agrees)))
+            rows.extend((k, int(won), int(agrees)))
         if rows:
             self._games.append(rows)
             step = game.get("step")

@@ -18,12 +18,15 @@ PINNED: tuple[str, ...] = (
     "lagged_of.worse", "lagged_of.current.gap.cf_ce", "rates", "halting_rows", "reported_rows", "armed_floors",
     "floors_live", "gap_rule.gap", "gap_rule.line", "gap_rule.fired",
 )
+#: The keys the page reads off `HALT.json` and `GAP_RULE.json`, pinned against the monitor's real output too.
+PINNED_HALT: tuple[str, ...] = ("step", "halting_rows", "armed", "final_save")
+PINNED_GAP_RULE: tuple[str, ...] = ("step", "gap", "line", "over", "fired")
 
 
-def missing_keys(raw: dict[str, Any]) -> list[str]:
-    """The pinned keys a save record lacks (a present key holding null is present: null is "not measured")."""
+def missing_keys(raw: dict[str, Any], pinned: tuple[str, ...] = PINNED) -> list[str]:
+    """The pinned keys a record lacks (a present key holding null is present: null is "not measured")."""
     out: list[str] = []
-    for path in PINNED:
+    for path in pinned:
         head, _, rest = path.partition(".*.")
         nodes = [(head, raw)] if not rest else [(f"{head}.{k}", v) for k, v in _dict(raw.get(head)).items()] or [
             (f"{head}.?", {})]
@@ -157,7 +160,7 @@ def _json(path: Path) -> Any:
 
 
 def load(records_dir: Path) -> Records:
-    """The monitor's records under `records_dir`; an unparseable save is skipped and named, never read as zeros."""
+    """The monitor's records under `records_dir`; an unparseable save is skipped and named, never read as zeros. Raises: OSError."""
     saves: list[Save] = []
     skipped: list[str] = []
     folder = records_dir / "saves"

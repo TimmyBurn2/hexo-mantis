@@ -1,16 +1,15 @@
 """The Games view: an app frame with the list window, the board with its strip and transport, the panel in sentences."""
 from __future__ import annotations
 
-import json
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 from ..readers import chances
 from ..readers.games import GameView
 from ..readers.hexlogic import owner, turn_of
 from ..readers.shards import Page
 from . import board, games_text
-from .fmt import esc, num, short
+from .fmt import esc, num, script_json, short
 from .page import Shell, render
 
 KINDS = (("selfplay", "Self-play"), ("promotion", "Gate"), ("external", "External"), ("random_floor", "Random"))
@@ -69,7 +68,7 @@ def _filters(run: str, present: list[str], query: dict[str, str], total: int, sh
     order = "".join(f'<option value="{k}"{" selected" if query.get("sort", "newest") == k else ""}>{label}</option>'
                     for k, label in SORT_LABEL)
     search = " checked" if query.get("search") == "1" else ""
-    return (f'<form class="filters" method="get" action="/run/{esc(run)}/games"><div class="seg" role="group" '
+    return (f'<form class="filters" method="get" action="/run/{esc(quote(run, safe=""))}/games"><div class="seg" role="group" '
             f'aria-label="Kind of game">{chips}</div><input type="hidden" name="kind" value="{esc(query.get("kind", ""))}">'
             f'<div class="row"><label><input type="checkbox" name="search" value="1"{search}> With search</label>'
             f'<select class="btn" name="winner" aria-label="Winner">{winner}</select>'
@@ -131,8 +130,7 @@ def page(run: str, runs: tuple[str, ...], present: list[str], listing: Page, que
         q = {k: v for k, v in query.items() if k in ("kind", "search", "winner", "sort")}
         more = (f'<a class="btn more" href="?{esc(urlencode({**q, "after": listing.next_cursor}))}" data-after="'
                 f'{esc(listing.next_cursor)}">Load {WINDOW} more</a>')
-    data = json.dumps({"run": run, "game": body, "ply": ply, "query": query, "next": listing.next_cursor},
-                      separators=(",", ":")).replace("</", "<\\/")
+    data = script_json({"run": run, "game": body, "ply": ply, "query": query, "next": listing.next_cursor})
     html = (f'<main class="games"><aside class="list" aria-label="Games">{_filters(run, present, query, total, listing.total)}'
             '<div class="lhead"><span title="Winner">W</span><span>Game</span><span>Net</span><span>Stones</span><span></span>'
             f'</div><div class="scroller" id="scroller" role="listbox">{rows}{more}</div></aside>{_stage(body, ply)}'
