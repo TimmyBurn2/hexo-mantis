@@ -38,8 +38,10 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by R385 (THE RUN STARTS; THE RULE IS RETIRED; 2026-10-05) — run11 continues arm 2, RUN11-FRESH beside it
 
-- **CARD-RUN11-CONTINUE — ORDERED by R385(a): run11 continues arm 2 (2.4 steps/game, value mask 1/8; `run11a2`) from
-  its final bundle (step 32 201, mirrored and hash-verified on the desktop) on box A, which runs nothing else (R385(f)).**
+- **CARD-RUN11 (was CARD-RUN11-CONTINUE; the RUN11-GO packet's name) — ORDERED by R385(a), RUNNING from its launch:
+  run11 continues arm 2 (2.4 steps/game, value mask 1/8; `run11a2`) from its final bundle (step 32 201, mirrored and
+  hash-verified on the desktop) on box A, which runs nothing else (R385(f)).** Its config is unchanged, so its run id
+  stays `run11a2` (prereg §13 A1); its envelope is §13 A5's and STATE's.
   RUN11-PRE's registered pick (arm 3) is set aside by ruling. The rate is a scalar inside the envelope [1.2, 2.4]: a
   memorisation gap above +0.05 at two consecutive saves drops it to 1.2 by STATE line. The going-forward read is the
   mean of four cells (the 32k final, 36k, 48k, 60k) above the parent's anchor by the line, then one cell every fourth
@@ -55,8 +57,10 @@ Both were found by running the gate set rather than by reading it, and both are 
   setting replaces the random init. Read on the same monitor and cells; viable if it reaches the parent's X anchor
   within 48 h. Its result is the evidence for run12's parent, nothing more.
 - **CARD-RUN11-STATUS-24H — ORDERED by R385(f): a one-screen status every 24 h** over run11, RUN11-FRESH and the cells.
-- **The quick-arm lever (RUN11-PRE's arm 4, 32 sims at m 8) — CLOSED by R385(c):** 1.145× against the prereg's 1.15,
-  and its final-save T4 row fired. Cheap placements are CARD-WITHIN-TURN-TREE-REUSE's.
+- **CARD-QUICK-ARM-SIMS (the quick-arm lever, RUN11-PRE's arm 4, 32 sims at m 8) — CLOSED by R385(c):** 1.145×
+  against the prereg's 1.15, and its final-save T4 row fired. Cheap placements are CARD-WITHIN-TURN-TREE-REUSE's.
+- **CARD-RATE-FORK — OPENED by the RUN11-GO packet, later: a paired fork of run11 at one save into a 1.2 and a 2.4
+  steps/game branch.** Not built and not ordered; it reads the rate at matched start, which RUN11-PRE could not.
 
 ## Opened by R384 (THE RUN STARTS FROM THE READ; 2026-10-04) — RUN11-PRE is run11's first leg
 

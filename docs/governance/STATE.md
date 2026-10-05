@@ -15,6 +15,13 @@ parent.** run10 will not START (R376(c)). run11 is arm 2's run (`configs/run11a2
 from its last save; at this commit it is ORDERED, not yet live. run11 carries the deploy block of record (R378(a)) and
 in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c), CARD-RUN11-DESIGN).
 
+- **RUN11-GO (the architect's packet of 2026-10-05) enacts R385.** run11 = arm 2 continued (CARD-RUN11) on box A;
+  RUN11-FRESH (CARD-RUN11-FRESH) on box B; cells on the desktop. The prereg carries R385 as §13's annotations (A1–A5);
+  its first 16 568 bytes still hash to `3fdf5092…`. Neither line is live at this commit. The monitor's two-read rule
+  (CARD-MONITOR-TWO-MISS) lands before either launches.
+  - **run11's envelope (a STATE line, no ruling; prereg §13 A5):** `train.training_steps_per_game` 2.4 at the resume,
+    inside [1.2, 2.4], moved only by the gap rule (+0.05 at two consecutive saves → 1.2); `train.eval_interval` 36 000,
+    inside [24 000, 48 000]; the monitor's card cap 0.45. Every other key is a re-mint with a ruling.
 - **R385's order.**
   - RUN11-PRE accepted (R385(a), CARD-RUN11-PRE CLOSED). The pick rule's inputs were degenerate (L̄ saturates inside
     8 h; the tie-break read one save's jitter), so the registered pick (arm 3) is set aside by ruling, the architect's
@@ -407,4 +414,5 @@ branch `hygiene-1` from origin/dev `b1e34aa4`, which also repaired the two stale
 (local), on branch `census-3` rebased onto `ring-v3` (`5b607454`). The REG-1 line was added 2026-10-02 at its packet's first commit, on
 branch `reg-1` from `7b8d6a6e`, and updated 2026-10-03 at its exit from its exit record (local), on that branch.
 The current phase was rewritten 2026-10-05 at R385 from the RUN11-PRE exit record (local), on branch `run11-pre` at
-`33548d66` over `origin/dev` `0aca1e1a`; the same edit repaired the run, box, configs and latest-ruling lines.
+`33548d66` over `origin/dev` `0aca1e1a`; the same edit repaired the run, box, configs and latest-ruling lines. The
+RUN11-GO lines were added 2026-10-05 at its packet's first commit, on branch `run11-go` from `origin/dev` `94040bfa`.
