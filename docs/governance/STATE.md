@@ -17,8 +17,10 @@ in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c
 
 - **RUN11-GO (the architect's packet of 2026-10-05) enacts R385.** run11 = arm 2 continued (CARD-RUN11) on box A;
   RUN11-FRESH (CARD-RUN11-FRESH) on box B; cells on the desktop. The prereg carries R385 as §13's annotations (A1–A5);
-  its first 16 568 bytes still hash to `3fdf5092…`. Neither line is live at this commit. The monitor's two-read rule
-  (CARD-MONITOR-TWO-MISS) lands before either launches.
+  its first 16 568 bytes still hash to `3fdf5092…`. **Both lines are LIVE on `8d169abb`:** run11 resumed on box A
+  2026-10-05 10:35:40 UTC (12:35 CEST) at step 32 201 with its 500 000-position ring, and RUN11-FRESH launched on
+  box B at 10:43:17 UTC (12:43 CEST). Each passed its preflight on that tree first. The monitor's two-read rule
+  (CARD-MONITOR-TWO-MISS) landed first (`3a41ca6b`..`e7e9e848`, a fresh review's findings fixed).
   - **run11's envelope (a STATE line, no ruling; prereg §13 A5):** `train.training_steps_per_game` 2.4 at the resume,
     inside [1.2, 2.4], moved only by the gap rule (+0.05 at two consecutive saves → 1.2); `train.eval_interval` 36 000,
     inside [24 000, 48 000]; the monitor's card cap 0.45. Every other key is a re-mint with a ruling.
@@ -319,8 +321,9 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
 
 ## The run
 
-- **No run is live; run11 is ORDERED (R385(a)):** arm 2 (`run11a2`) continues from its final save, 32 201, on box A,
-  and RUN11-FRESH from random init on box B (R385(e)). The four RUN11-PRE arms ran 2026-10-04 10:50 → 2026-10-05
+- **run11 is LIVE (R385(a)):** arm 2 (`run11a2`, config unchanged) resumed from its final save, 32 201, on box A at
+  2026-10-05 12:35 CEST. RUN11-FRESH (`run11fresh`, random init) has been LIVE on box B since 12:43 CEST (R385(e)).
+  This line said ORDERED until the launch. The four RUN11-PRE arms ran 2026-10-04 10:50 → 2026-10-05
   06:40 CEST; their runs, cells and box records are in the operator's mirror (`run11-pre/`). run7 stopped at step 83 482 on 2026-09-18 (the stop is recorded by commit
   `8cb5ca6a`; `docs/design/measurements/EVAL_COST_2026-09-19.md` reads its rounds) and run8 at 55 170 on
   2026-09-21 (R365); run9 was never started and its config is deleted (R365(a), R367). The strength

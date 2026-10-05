@@ -38,7 +38,8 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by R385 (THE RUN STARTS; THE RULE IS RETIRED; 2026-10-05) — run11 continues arm 2, RUN11-FRESH beside it
 
-- **CARD-RUN11 (was CARD-RUN11-CONTINUE; the RUN11-GO packet's name) — ORDERED by R385(a), RUNNING from its launch:
+- **CARD-RUN11 (was CARD-RUN11-CONTINUE; the RUN11-GO packet's name) — RUNNING since 2026-10-05 12:35 CEST (box A,
+  `8d169abb`), ORDERED by R385(a):
   run11 continues arm 2 (2.4 steps/game, value mask 1/8; `run11a2`) from its final bundle (step 32 201, mirrored and
   hash-verified on the desktop) on box A, which runs nothing else (R385(f)).** Its config is unchanged, so its run id
   stays `run11a2` (prereg §13 A1); its envelope is §13 A5's and STATE's.
@@ -46,12 +47,14 @@ Both were found by running the gate set rather than by reading it, and both are 
   memorisation gap above +0.05 at two consecutive saves drops it to 1.2 by STATE line. The going-forward read is the
   mean of four cells (the 32k final, 36k, 48k, 60k) above the parent's anchor by the line, then one cell every fourth
   save (R385(b)); the desktop plays the cells. Later levers land by the prereg's resume rule (R385(d)).
-- **CARD-MONITOR-TWO-MISS — ORDERED by R385(b), owed before run11's monitor resumes with `--halt`: an exam floor halts
+- **CARD-MONITOR-TWO-MISS — LANDED 2026-10-05 (`3a41ca6b`..`e7e9e848`, a fresh review's findings fixed), before
+  either line launched. ORDERED by R385(b), owed before run11's monitor resumes with `--halt`: an exam floor halts
   on two consecutive misses (one miss arms, the next fires, a pass disarms).** `tools/run_monitor` at `0aca1e1a` fires
   a halting row on one miss. The same ruling makes L̄ report-only, reads arm comparisons as means over the last k saves
   (level, gap, policy CE) with cells pooled over ≥ 2 checkpoints, and makes matched work matched positions.
   RUN11-FRESH's floors report until first passed, then halt under this rule (R385(e)).
-- **CARD-RUN11-FRESH — ORDERED by R385(e): rebootstrap answered by an arm, not for run11. On box B: arm 2's recipe and
+- **CARD-RUN11-FRESH — RUNNING since 2026-10-05 12:43 CEST (box B, `configs/run11fresh.yaml`). ORDERED by R385(e):
+  rebootstrap answered by an arm, not for run11. On box B: arm 2's recipe and
   net shape, random init, no parent, an empty ring, the fill ramp.** Exam floors report-only until first passed, then
   halting under (b). The cap/draw abort is its early halt; if it fires inside the first hours, the BC start at F-07's
   setting replaces the random init. Read on the same monitor and cells; viable if it reaches the parent's X anchor
