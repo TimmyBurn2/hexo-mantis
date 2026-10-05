@@ -1,17 +1,15 @@
-"""The Analyzer's desk: the engines behind the one analyst thread, a position read by one net and compared with another, the routes."""
+"""The Analyzer's desk: the engines behind the one analyst thread, a position read by one net and compared with another."""
 from __future__ import annotations
 
-import json
 import threading
-import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .engine.position import PositionRefused, parse_moves
+from .readers import htttx
 from .routes import game_payload
-from .serve import Hub, Reply, as_json, text
+from .serve import Hub
 from .views import analyzer as analyzer_view
 from .views.analyzer_text import compose
 from .views.games import turn_facts
@@ -69,23 +67,45 @@ class Desk:
         loadable = [r["id"] for r in self.rows() if r.get("kind") == MANTIS]
         return (loadable[-1] if loadable else None), (loadable[-2] if len(loadable) > 1 else None)
 
+    def _submit(self, engine: str, moves: list[tuple[int, int]], sims: int, client: str,
+                symmetry: bool = False) -> dict[str, Any]:
+        text_moves = ";".join(f"{q},{r}" for q, r in moves)
+        return self.analyst.submit({"op": "analyze", "engine": engine, "moves": text_moves, "sims": sims,
+                                    "symmetry": symmetry, "client": client})
+
+    def turn(self, engine: str, moves: list[tuple[int, int]], rec: dict[str, Any], sims: int,
+             client: str) -> list[tuple[int, int]]:
+        """The stones the engine plays for the rest of the turn: its choice now, and with two to place its choice after it."""
+        pos = rec.get("position") or {}
+        first = _choice(rec)
+        if pos.get("winner") or first is None:
+            return []
+        if pos.get("moves_remaining") != 2:
+            return [first]
+        out = self._submit(engine, [*moves, first], sims, client)
+        second = _choice(out["body"].get("record") or {}) if out["status"] == 200 else None
+        return [first] + ([second] if second is not None else [])
+
     def read(self, a: str, b: str | None, moves: list[tuple[int, int]], ctx: Context, *, sims: int = 0,
              symmetry: bool = False, client: str = "page") -> tuple[int, dict[str, Any]]:
-        """A's record (at `sims`, with the symmetry sweep when asked) and B's raw read, composed into the panel."""
-        text_moves = ";".join(f"{q},{r}" for q, r in moves)
-        first = self.analyst.submit({"op": "analyze", "engine": a, "moves": text_moves, "sims": sims,
-                                     "symmetry": symmetry, "client": client})
+        """A's record (at `sims`, the symmetry sweep when asked) and B's raw read, each net's whole turn, composed into the panel."""
+        first = self._submit(a, moves, sims, client, symmetry)
         if first["status"] != 200 or first["body"].get("superseded"):
             return first["status"], first["body"]
-        rec_b = None
+        rec_a, rec_b, turn_b = first["body"]["record"], None, []
         if b:
-            second = self.analyst.submit({"op": "analyze", "engine": b, "moves": text_moves, "sims": 0, "client": client})
+            second = self._submit(b, moves, 0, client)
             if second["status"] != 200:
                 return second["status"], second["body"]
             rec_b = second["body"].get("record")
-        rec_a = first["body"]["record"]
-        panel = {**compose(rec_a, rec_b, ctx.entry, ctx.nxt, ctx.second), "a_id": a, "b_id": b,
-                 "where": analyzer_view.where(moves), **turn_facts(len(moves))}
+            turn_b = self.turn(b, moves, rec_b or {}, 0, client)
+        turn_a = self.turn(a, moves, rec_a, sims, client)
+        try:
+            notation: str | None = htttx.write(moves)
+        except htttx.NotationRefused:
+            notation = None
+        panel = {**compose(rec_a, rec_b, ctx.entry, ctx.nxt, ctx.second, turn_a=turn_a, turn_b=turn_b),
+                 "a_id": a, "b_id": b, "where": analyzer_view.where(moves), "htttx": notation, **turn_facts(len(moves))}
         return 200, {"ok": True, "panel": panel, "record": rec_a, "context": ctx.__dict__}
 
     def close(self) -> None:
@@ -118,88 +138,27 @@ class LazyDesk:
 DeskOf = Callable[[], Desk] | None
 
 
-def _digits(text: str) -> bool:
-    return text.isascii() and text.isdigit()
+def _choice(rec: dict[str, Any]) -> tuple[int, int] | None:
+    """The record's own choice: its search's when it searched, else the net's highest prior."""
+    for block in ("search", "raw"):
+        best = (rec.get(block) or {}).get("argmax")
+        if isinstance(best, list) and len(best) == 2:
+            return int(best[0]), int(best[1])
+    return None
 
 
-def context(hub: Hub, run: str | None, game_id: str | None, moves: list[tuple[int, int]]) -> Context:
-    """The position against its game: on the line, or a variation N stones off it; the game's search only on the line."""
+def context(hub: Hub, run: str | None, game_id: str | None, moves: list[tuple[int, int]],
+            line_moves: list[tuple[int, int]] | None = None) -> Context:
+    """The position against its game (a recorded one, else an imported line): on it, or N stones off; recorded search only on it."""
     rec = hub.records.get(run or "")
     body = game_payload(hub, rec, game_id) if rec is not None and game_id else None
-    if body is None:
+    if body is None and not line_moves:
         return Context(run, None, False, 0, None, None, None)
-    line = [tuple(m) for m in body["moves"]]
+    line = [tuple(m) for m in body["moves"]] if body is not None else list(line_moves or [])
     common = next((i for i, (x, y) in enumerate(zip(moves, line, strict=False)) if x != y), min(len(moves), len(line)))
     on = common == len(moves)
     ply = len(moves)
     nxt = line[ply] if on and ply < len(line) else None
     second = line[ply + 1] if nxt is not None and ply % 2 == 1 and ply + 1 < len(line) else None
-    return Context(run, game_id, on, len(moves) - common, body["stats"].get(str(ply)) if on else None, nxt, second)
-
-
-def page(desk_of: DeskOf) -> Any:
-    """`GET /analyzer?run=&g=&ply=&a=&b=`: the board and, with engines, the first read rendered server-side."""
-    def handle(hub: Hub, parts: list[str], raw: dict[str, list[str]]) -> Reply:
-        desk = desk_of() if desk_of is not None else None
-        q = {k: v[0] for k, v in raw.items() if v}
-        run, gid = q.get("run"), q.get("g")
-        rec = hub.records.get(run or "")
-        body = game_payload(hub, rec, gid) if rec is not None and gid else None
-        if gid and body is None:
-            return text(404, f"no game {gid!r} in run {run!r}")
-        game_moves = [tuple(m) for m in body["moves"]] if body else []
-        ply = min(len(game_moves), int(q["ply"])) if _digits(q.get("ply", "")) else len(game_moves)
-        moves = game_moves[:ply]
-        panel, refused = None, None
-        if desk is not None:
-            a, b = q.get("a") or desk.default_pair()[0], q.get("b") or desk.default_pair()[1]
-            if a:
-                status, out = desk.read(a, b if b != a else None, moves, context(hub, run, gid, moves),
-                                        client=f"render-{uuid.uuid4().hex}")
-                panel, refused = (out.get("panel"), None) if status == 200 else (None, out.get("refused"))
-        html = analyzer_view.page(hub.labels, desk.rows() if desk else None, body, moves, panel, refused, q)
-        return Reply(200, "text/html; charset=utf-8", html.encode("utf-8"))
-    return handle
-
-
-def post(hub: Hub, desk_of: DeskOf) -> Any:
-    """`POST /api/read` (the composed panel) and `POST /api/analyze` (the analyzer's own request, unchanged)."""
-    def handle(path: str, raw: bytes) -> Reply:
-        desk = desk_of() if desk_of is not None else None
-        if desk is None:
-            return as_json(503, {"ok": False, "refused": "no engines: start the server with --checkpoints"})
-        try:
-            req = json.loads(raw)
-            if not isinstance(req, dict):
-                raise ValueError
-        except ValueError:
-            return as_json(400, {"ok": False, "refused": "the body is not a JSON object"})
-        if path == "/api/analyze":
-            why = checked(req, "engine", "client")
-            if why:
-                return as_json(400, {"seq": req.get("seq"), "ok": False, "refused": why})
-            req["op"] = "analyze"
-            out = desk.analyst.submit(req)
-            return as_json(int(out["status"]), out["body"])
-        if path != "/api/read":
-            return as_json(404, {"ok": False, "refused": f"no route {path}"})
-        why = checked(req, "a", "b", "run", "g", "client") or (None if req.get("a") else "a names no engine")
-        if why:
-            return as_json(400, {"seq": req.get("seq"), "ok": False, "refused": why})
-        try:
-            moves = parse_moves(req.get("moves", ""))
-        except PositionRefused as exc:
-            return as_json(400, {"seq": req.get("seq"), "ok": False, "refused": str(exc)})
-        ctx = context(hub, req.get("run"), req.get("g"), moves)
-        status, out = desk.read(str(req["a"]), req.get("b") or None, moves, ctx, sims=int(req.get("sims") or 0),
-                                symmetry=bool(req.get("symmetry")), client=str(req.get("client") or "page"))
-        return as_json(status, {**out, "seq": req.get("seq")})
-    return handle
-
-
-def engines(desk_of: DeskOf) -> Any:
-    """`GET /api/engines`: the desk's rows, or none when the server was started without nets."""
-    def handle(hub: Hub, parts: list[str], raw: dict[str, list[str]]) -> Reply:
-        desk = desk_of() if desk_of is not None else None
-        return as_json(200, {"engines": desk.rows() if desk else [], "started": desk is not None})
-    return handle
+    entry = body["stats"].get(str(ply)) if on and body is not None else None
+    return Context(run, game_id if body is not None else None, on, len(moves) - common, entry, nxt, second)

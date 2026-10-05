@@ -7,7 +7,7 @@
   const client = 'p' + Math.random().toString(36).slice(2) + Date.now().toString(36);
   const svg = document.querySelector('.boardwrap svg');
   // `shown` is the position the current panel was read for; `moves` is where the reader is going.
-  let shown = { moves: S.moves.slice(), owners: S.owners, turns: S.turn_of }, panel = S.panel;
+  let shown = { moves: S.moves.slice(), owners: S.owners, turns: S.turn_of, starts: S.turn_starts }, panel = S.panel;
   let moves = S.moves.slice(), redo = [], lens = 'net', num = false, tac = true, seq = 0;
   let a = panel ? panel.a_id : null, b = panel ? panel.b_id : null;
 
@@ -30,7 +30,8 @@
     const t = panel && tac ? panel.tactics : null;
     H.draw(svg, { moves: shown.moves, owners: shown.owners, turns: shown.turns, ply: shown.moves.length,
       frame: game.length ? game : shown.moves, numbers: num, heat: heat(), win: t && t.cls === 'win' ? t.cells : [],
-      block: t && t.cls === 'block' ? t.cells : [], ghost: panel && lens === 'net' ? panel.first : null });
+      block: t && t.cls === 'block' ? t.cells : [],
+      ghosts: panel && lens !== 'diff' ? panel.turn.a.map((c, i, all) => ({ c, label: all.length > 1 ? String(i + 1) : '' })) : [] });
   }
 
   function source(ctx) {
@@ -90,7 +91,8 @@
     const tick = setInterval(() => { if (status && mine === seq) status.textContent = `Reading… ${((Date.now() - started) / 1000).toFixed(1)} s`; }, 200);
     try {
       const r = await fetch('/api/read', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ a, b, moves: want.map(c => c.join(',')).join(';'), run: S.run, g: S.g, seq: mine, client, ...extra }) });
+        body: JSON.stringify({ a, b, moves: want.map(c => c.join(',')).join(';'), run: S.run, g: S.g, seq: mine, client,
+          line: !S.g && game.length ? game.map(c => c.join(',')).join(';') : null, ...extra }) });
       const out = await r.json();
       if (out.superseded || mine !== seq) return;
       if (!r.ok || !out.ok) {
@@ -98,7 +100,7 @@
         if (status) status.textContent = `Refused: ${out.refused || r.status}. The board is back at the last position read.`;
         draw(); return;
       }
-      panel = out.panel; shown = { moves: want, owners: panel.owners, turns: panel.turn_of };
+      panel = out.panel; shown = { moves: want, owners: panel.owners, turns: panel.turn_of, starts: panel.turn_starts };
       source(out.context); readout(); draw();
       if (status) status.textContent = deeper(out.record, extra);
     } finally { clearInterval(tick); }
@@ -116,14 +118,21 @@
   }
 
   function wire() {
-    svg.addEventListener('click', e => place(H.cellAt(svg, e)));
+    H.viewport(svg, document.querySelector('.boardwrap .zoom'));
+    svg.addEventListener('click', e => { if (!svg._dragged) place(H.cellAt(svg, e)); });
     svg.addEventListener('pointermove', e => H.hoverAt(svg, H.cellAt(svg, e)));
     svg.addEventListener('pointerleave', () => H.hoverAt(svg, null));
-    $('prev').onclick = () => { if (moves.length) { redo.push(moves.pop()); read(); } };
+    // Prev and next walk whole turns: back to the turn's start before this position, forward a turn on the line.
+    $('prev').onclick = () => {
+      if (!moves.length) return;
+      const target = Math.max(0, ...shown.starts.filter(p => p < moves.length));
+      redo.push(moves.slice(target)); moves = moves.slice(0, target); read();
+    };
     $('next').onclick = () => {
-      if (redo.length) moves.push(redo.pop());
-      else if (moves.length < game.length && same(game.slice(0, moves.length), moves)) moves.push(game[moves.length]);
-      else return;
+      if (redo.length) moves = moves.concat(redo.pop());
+      else if (moves.length < game.length && same(game.slice(0, moves.length), moves)) {
+        moves = game.slice(0, Math.min(...S.line_starts.filter(p => p > moves.length)));
+      } else return;
       read();
     };
     $('undo').onclick = () => { if (moves.length) { moves.pop(); redo = []; read(); } };
@@ -137,7 +146,11 @@
     });
     if ($('search')) $('search').onclick = () => read({ sims: +$('sims').value });
     if ($('sym')) $('sym').onclick = () => read({ symmetry: true });
-    if ($('copy')) $('copy').onclick = () => { navigator.clipboard && navigator.clipboard.writeText(shown.moves.map(c => c.join(',')).join(';')); $('copy').textContent = 'Copied'; };
+    if ($('copy')) $('copy').onclick = () => {
+      const text = panel && panel.htttx ? panel.htttx : shown.moves.map(c => c.join(',')).join(';');
+      if (navigator.clipboard) navigator.clipboard.writeText(text);
+      $('copy').textContent = panel && panel.htttx ? 'Copied as htttx' : 'Copied';
+    };
     document.addEventListener('keydown', e => {
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
       if (e.key === 'ArrowLeft') $('prev').click(); else if (e.key === 'ArrowRight') $('next').click();

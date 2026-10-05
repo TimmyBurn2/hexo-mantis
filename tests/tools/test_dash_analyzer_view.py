@@ -93,11 +93,11 @@ def test_a_variation_off_the_line_drops_the_games_search(dash, tmp_path):
 def test_without_engines_the_page_says_how_to_start_and_the_api_refuses(dash, tmp_path):
     desk = importlib.import_module("dash.desk")
     hub = _hub(tmp_path)
-    page = desk.page(None)(hub, ["analyzer"], {"run": ["r1"], "g": ["g1"], "ply": ["4"]})
+    page = importlib.import_module("dash.analyzer_routes").page(None)(hub, ["analyzer"], {"run": ["r1"], "g": ["g1"], "ply": ["4"]})
     html = page.body.decode("utf-8")
     assert page.status == 200 and "No engines loaded." in html and "--checkpoints" in html
     assert len(__import__("re").findall(r'class="s[12]"', html.split('<svg class="board"')[1].split("</svg>")[0])) == 4
-    out = desk.post(hub, None)("/api/read", b"{}")
+    out = importlib.import_module("dash.analyzer_routes").post(hub, None)("/api/read", b"{}")
     assert out.status == 503
 
 
@@ -132,7 +132,7 @@ def test_a_read_with_a_list_field_is_refused_by_name(dash, tmp_path):
         analyst = None
 
     for body in (b'{"a": "x", "run": ["r1"]}', b'{"a": "x", "b": [1]}', b'{"b": "y"}', b'{"a": "x", "sims": -1}'):
-        out = desk.post(hub, lambda: Fake())("/api/read", body)
+        out = importlib.import_module("dash.analyzer_routes").post(hub, lambda: Fake())("/api/read", body)
         assert out.status == 400, body
 
 

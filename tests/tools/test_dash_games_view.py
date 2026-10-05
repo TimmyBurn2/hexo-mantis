@@ -129,7 +129,7 @@ def test_the_position_at_a_ply_carries_exactly_that_many_stones_without_script(s
     status, html = _get(f"{server}/run/r1/games?g=g1&ply=5")
     board = re.search(r'<svg class="board".*?</svg>', html, re.S).group(0)
     assert status == 200 and len(re.findall(r'class="s[12]"', board)) == 5
-    assert "<b>Turn 4</b> of 7, Dark places stone 1 of 2" in html
+    assert "<b>Turn 4</b> of 7, Dark to place two stones" in html
 
 
 def test_the_list_offers_only_the_channels_present_and_the_inline_game_parses(server):

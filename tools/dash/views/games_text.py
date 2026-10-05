@@ -120,11 +120,24 @@ def thought(g: GameView, ply: int, cls_cells: set[tuple[int, int]], wins: bool) 
 
 
 def where(g: GameView, ply: int) -> str:
-    """The transport's line: which turn, who places which stone, or the final position."""
+    """The transport's line: at a turn's start whose turn and how many stones, mid-turn which stone, or the final position."""
     if ply >= len(g.moves):
         return f"<b>Final position</b>, turn {g.turns}"
-    stone = 1 if first_of_turn(ply) else 2
-    return f"<b>Turn {turn_of(ply)}</b> of {g.turns}, {NAME[owner(ply)]} places stone {stone} of {1 if ply == 0 else 2}"
+    if first_of_turn(ply):
+        return (f"<b>Turn {turn_of(ply)}</b> of {g.turns}, {NAME[owner(ply)]} to place "
+                f"{'one stone' if ply == 0 else 'two stones'}")
+    return f"<b>Turn {turn_of(ply)}</b> of {g.turns}, {NAME[owner(ply)]} places stone 2 of 2"
+
+
+def turn_thought(g: GameView, start: int, cls_cells: set[tuple[int, int]], wins: bool) -> dict[str, Any]:
+    """The turn the bot played from `start`: each stone's search in a sentence, the first stone's candidates and chance."""
+    plies = [start] + ([start + 1] if start > 0 and start + 1 < len(g.moves) else [])
+    first = thought(g, start, cls_cells, wins)
+    texts = [["The stone" if len(plies) == 1 else "First stone", first["text"]]]
+    if len(plies) == 2:
+        texts.append(["Second stone", thought(g, start + 1, set(), False)["text"]])
+    return {"texts": texts, "light": first["light"], "cands": first["cands"], "second": first["second"],
+            "stones": [list(g.moves[p]) for p in plies]}
 
 
 def turning(tp: Point | None, game_id: str) -> str:

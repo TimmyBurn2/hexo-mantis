@@ -19,8 +19,12 @@ SORT_LABEL = (("newest", "Newest"), ("longest", "Longest"), ("shortest", "Shorte
 WINDOW = 200
 _GLYPH = '<svg class="glyph" width="14" height="14" viewBox="-1.1 -1.1 2.2 2.2" aria-hidden="true"><polygon class="{c}" points="{p}"/></svg>'
 _ICON = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="{d}" fill="currentColor"/></svg>'
-_TRANSPORT = (("first", "First stone", "M2 2h2v10H2zM12 2v10L5 7z"), ("prev", "Previous stone", "M11 2v10L4 7z"),
-              ("next", "Next stone", "M3 2v10l7-5z"), ("last", "Last stone", "M10 2h2v10h-2zM2 2v10l7-5z"))
+_TRANSPORT = (("first", "First turn", "M2 2h2v10H2zM12 2v10L5 7z"), ("prev", "Previous turn", "M11 2v10L4 7z"),
+              ("next", "Next turn", "M3 2v10l7-5z"), ("last", "Final position", "M10 2h2v10h-2zM2 2v10l7-5z"))
+#: Zoom controls over a board; the script wires them, a page without script has the whole board framed.
+ZOOM = ('<div class="zoom" aria-label="Zoom"><button class="btn" type="button" data-zoom="in" aria-label="Zoom in">+</button>'
+        '<button class="btn" type="button" data-zoom="out" aria-label="Zoom out">−</button>'
+        '<button class="btn" type="button" data-zoom="fit" aria-label="Fit the board">Fit</button></div>')
 _SEARCH = ('<svg class="search-ico" width="14" height="12" viewBox="0 0 14 12" aria-label="search recorded"><rect x="0" y="6" '
            'width="3" height="6" rx="1"/><rect x="5" y="2" width="3" height="10" rx="1"/><rect x="10" y="4" width="3" height="8" rx="1"/></svg>')
 
@@ -37,7 +41,10 @@ def payload(g: GameView, run_label: str, hour: str | None) -> dict[str, Any]:
     pos = []
     for ply, t in enumerate(readings):
         think = games_text.thought(g, ply, set(t.cells), t.cls == "win")
-        pos.append({"where": games_text.where(g, ply), "threat": games_text.threat(t), "think": think})
+        row = {"where": games_text.where(g, ply), "threat": games_text.threat(t), "think": think}
+        if first_of_turn(ply):
+            row["turn"] = games_text.turn_thought(g, ply, set(t.cells), t.cls == "win")
+        pos.append(row)
     pos.append({"where": games_text.where(g, len(g.moves)), "threat": None, "think": None})
     tp = chances.turning_point(chances.points(g.stats))
     body.update(run=run_label, head=games_text.headline(g), facts=games_text.facts(g, run_label, hour),
@@ -86,24 +93,35 @@ def _filters(run: str, present: list[str], query: dict[str, str], total: int, sh
             f'aria-label="Go to game id"></div><div class="count muted">{num(shown)} of {num(total)} games</div></form>')
 
 
+def _neighbours(starts: list[int], end: int, ply: int) -> tuple[int, int]:
+    """The turn starts before and after `ply` (the final position counts as one), for turn-by-turn stepping."""
+    stops = starts + [end]
+    prev = max((p for p in stops if p < ply), default=0)
+    nxt = min((p for p in stops if p > ply), default=end)
+    return prev, nxt
+
+
 def _stage(body: dict[str, Any] | None, ply: int) -> str:
     if body is None:
         return '<section class="stage"><div class="gap"><strong>No game selected.</strong>Pick one from the list.</div></section>'
     moves = [tuple(m) for m in body["moves"]]
     end = ply >= len(moves)
     pos = body["pos"][min(ply, len(moves))]
-    think = pos.get("think") or {}
+    turn = pos.get("turn")
+    think = (turn or pos.get("think")) or {}
     t = body["tactics"][ply] if not end else None
+    ghosts = ([(tuple(c), str(i + 1)) for i, c in enumerate(turn["stones"])] if turn and len(turn["stones"]) > 1
+              else [(moves[ply], "")] if not end else [])
     scene = board.Scene(moves=moves, ply=ply, frame=moves, heat=board.heat_of(think.get("cands") or []),
                         win_cells=[tuple(c) for c in t["cells"]] if t and t["cls"] == "win" else [],
                         block_cells=[tuple(c) for c in t["cells"]] if t and t["cls"] == "block" else [],
-                        ghost=moves[ply] if not end else None,
-                        win_line=[tuple(c) for c in body["win"]] if end and body["win"] else None)
+                        ghosts=ghosts, win_line=[tuple(c) for c in body["win"]] if end and body["win"] else None)
     base = {"g": body["id"]}
-    targets = {"first": 0, "prev": max(0, ply - 1), "next": min(len(moves), ply + 1), "last": len(moves)}
+    prev, nxt = _neighbours(body["turn_starts"], len(moves), ply)
+    targets = {"first": 0, "prev": prev, "next": nxt, "last": len(moves)}
     nav = "".join(f'<a class="btn" href="?{esc(urlencode({**base, "ply": targets[i]}))}" id="{i}" aria-label="{a}">'
                   f"{_ICON.format(d=d)}</a>" for i, a, d in _TRANSPORT)
-    return (f'<section class="stage" aria-label="Board"><div class="boardwrap">{board.render(scene)}</div>'
+    return (f'<section class="stage" aria-label="Board"><div class="boardwrap">{board.render(scene)}{ZOOM}</div>'
             f'<div class="keys" id="keys"></div><div class="trace" id="trace"></div>'
             f'<div class="transport">{nav}<button class="btn" id="play" type="button" hidden>Play</button>'
             f'<span class="where" id="where">{pos["where"]}</span><div class="layers">'
@@ -121,7 +139,10 @@ def _panel(body: dict[str, Any] | None, ply: int, run: str) -> str:
              + (f'<p class="say">{body["turning"]}</p>' if body["turning"] else "") + f'<dl class="facts">{facts}</dl></section>']
     if pos.get("threat"):
         parts.append(f'<section><h2>Turn {turn_of(ply)}</h2><div class="tacline">{pos["threat"]}</div></section>')
-    if pos.get("think"):
+    if pos.get("turn"):
+        lines = "".join(f'<p class="say"><strong>{esc(label)}.</strong> {text}</p>' for label, text in pos["turn"]["texts"])
+        parts.append(f"<section><h2>What the bot played this turn</h2>{lines}</section>")
+    elif pos.get("think"):
         parts.append(f'<section><h2>What the bot thought</h2><p class="say">{pos["think"]["text"]}</p></section>')
     href = f"/analyzer?{urlencode({'run': run, 'g': body['id'], 'ply': ply})}"
     parts.append(f'<section><div class="actions"><a class="btn" href="{esc(href)}">Open in Analyzer</a></div></section>')

@@ -51,7 +51,7 @@ class _Desk:
 @pytest.fixture()
 def server(dash, analyst, tmp_path):
     serve = importlib.import_module("dash.serve")
-    desk = importlib.import_module("dash.desk")
+    routes = importlib.import_module("dash.analyzer_routes")
     record = importlib.import_module("dash.readers.record")
     write_segment(tmp_path / "logs", "r1", 1, [segment_start("r1", 1), *trainer_rows(range(1, 5))])
     write_config(tmp_path, "r1", None)
@@ -61,7 +61,7 @@ def server(dash, analyst, tmp_path):
     worker = analyst.Analyst(stub, timeout_sec=2.0)
     worker.start()
     fake = _Desk(worker)
-    httpd = serve.make_server("127.0.0.1", 0, hub, get_extra={"api/engines": desk.engines(lambda: fake)}, post=desk.post(hub, lambda: fake))
+    httpd = serve.make_server("127.0.0.1", 0, hub, get_extra={"api/engines": routes.engines(lambda: fake)}, post=routes.post(hub, lambda: fake))
     t = threading.Thread(target=httpd.serve_forever, daemon=True)
     t.start()
     yield httpd, stub

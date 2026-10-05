@@ -292,3 +292,15 @@ units.
   50 KB) and the server keeps 24 of them. The owner rule appears twice in the package: in the moved engine layer
   (`engine/position.py`, unchanged by design) and in the readers. Gate 10 records the retired tools under
   `DISSOLVED_PATHS`, as it records every removed path, rather than finding no reference to them in history.
+- **2026-10-05, after deployment (operator's asks): turns, a movable board, htttx.** The transports step by turn: the
+  arrows and the buttons go from one turn's start to the next, and Shift with an arrow steps one stone in Games. At a
+  turn's start Games says what the bot did with each of its stones, and the board numbers them 1 and 2. The Analyzer
+  reads each net's whole turn: its choice now and, with two stones to place, its choice on the position after that
+  one. The choice is the search's when it searched, else the net's highest prior. So the second stone costs a second
+  read at the same depth. The read net's two stones are drawn numbered, and both nets' turns are named in the verdict.
+  Every board pans by dragging and zooms with the wheel or its +, − and Fit buttons. A drag never places a stone, and
+  the view survives stepping. A board shows at least 15 cells across and 13 rows down, so a few stones are never
+  drawn huge. The Analyzer imports a game in the HeXO site's htttx notation (`version[1];`, then `N. [q,r][q,r];` a
+  turn, after the origin stone the site places): `POST /analyzer` replays it through the engine's board and refuses
+  a line, a number or a stone that does not replay, naming it. Its routes moved to `analyzer_routes.py` with the
+  import. "Copy position" copies htttx whenever the position starts at the origin.

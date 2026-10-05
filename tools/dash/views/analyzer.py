@@ -7,7 +7,7 @@ from urllib.parse import quote, urlencode
 from ..readers.hexlogic import first_of_turn, owner, turn_of
 from . import board
 from .fmt import cell, esc, pct, script_json, short
-from .games import turn_facts
+from .games import ZOOM, turn_facts
 from .games_text import NAME
 from .page import Shell, render
 
@@ -17,6 +17,10 @@ _ICON = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><pat
 def _source(body: dict[str, Any] | None, moves: list[Any], q: dict[str, str]) -> str:
     if body is None:
         return '<div class="source" id="source">A position typed in: click the board to place stones.</div>'
+    back_button = '<button class="btn" id="back" type="button" hidden>Back to the game</button>'
+    if body["id"] == "imported":
+        return (f'<div class="source" id="source">An imported game, {len(body["moves"])} stones'
+                f'<span class="chip" id="line">On the game\'s line</span>{back_button}</div>')
     back = esc(f"/run/{quote(q.get('run', ''), safe='')}/games?" + urlencode({"g": body["id"], "ply": len(moves)}))
     return (f'<div class="source" id="source">From {esc(body["channel"])} game <a href="{back}">{esc(body["id"][:12])}</a>'
             '<span class="chip" id="line">On the game\'s line</span><button class="btn" id="back" type="button" hidden>'
@@ -24,10 +28,20 @@ def _source(body: dict[str, Any] | None, moves: list[Any], q: dict[str, str]) ->
 
 
 def where(moves: list[Any]) -> str:
-    """The transport's line for the position: whose turn, which stone of it."""
+    """The transport's line for the position: whose turn and how many stones, or which stone of a turn begun."""
     ply = len(moves)
-    stone = 1 if first_of_turn(ply) else 2
-    return f"<b>Turn {turn_of(ply)}</b>, {NAME[owner(ply)]} places stone {stone} of {1 if ply == 0 else 2}"
+    if first_of_turn(ply):
+        return f"<b>Turn {turn_of(ply)}</b>, {NAME[owner(ply)]} to place {'one stone' if ply == 0 else 'two stones'}"
+    return f"<b>Turn {turn_of(ply)}</b>, {NAME[owner(ply)]} places stone 2 of 2"
+
+
+def _import(error: str | None) -> str:
+    """The htttx import form: one game pasted in, read at its end; a refusal is stated beside it."""
+    note = f'<p class="refused">{esc(error)}</p>' if error else ""
+    return (f'<section><details class="import"{" open" if error else ""}><summary>Import a game (htttx)</summary>'
+            '<form method="post" action="/analyzer"><textarea name="htttx" rows="6" spellcheck="false" '
+            'placeholder="version[1];&#10;1. [1,-2][-1,1];&#10;2. [0,1][-1,0];"></textarea>'
+            f'<button class="btn" type="submit">Load</button></form>{note}</details></section>')
 
 
 def _nets(rows: list[dict[str, Any]] | None, panel: dict[str, Any] | None) -> str:
@@ -77,23 +91,24 @@ def _read(panel: dict[str, Any] | None, refused: str | None, moves: list[Any]) -
 
 
 def page(runs: tuple[str, ...], rows: list[dict[str, Any]] | None, body: dict[str, Any] | None, moves: list[Any],
-         panel: dict[str, Any] | None, refused: str | None, q: dict[str, str]) -> str:
+         panel: dict[str, Any] | None, refused: str | None, q: dict[str, str], import_error: str | None = None) -> str:
     """The whole Analyzer view; the first read rides inline so the page draws it without a request."""
     tac = (panel or {}).get("tactics") or {}
     heat = [((int(c[0]), int(c[1])), float(c[2]) / max((x[2] for x in panel["lens"]["net"]), default=1.0) if panel else 0.0, "")
             for c in (panel["lens"]["net"] if panel else [])]
-    first = (panel or {}).get("first")
+    turn = ((panel or {}).get("turn") or {}).get("a") or []
     scene = board.Scene(moves=moves, ply=len(moves), frame=[tuple(m) for m in body["moves"]] if body else moves,
                         heat=heat, win_cells=[tuple(c) for c in tac.get("cells", [])] if tac.get("cls") == "win" else [],
                         block_cells=[tuple(c) for c in tac.get("cells", [])] if tac.get("cls") == "block" else [],
-                        ghost=tuple(first) if first else None)
-    slim = {"id": body["id"], "channel": body["channel"], "moves": body["moves"]} if body else None
-    data = script_json({"runs": runs, "run": q.get("run"), "g": q.get("g"), "game": slim, "moves": moves, "panel": panel,
-                        "engines": rows, "ply": len(moves), **turn_facts(len(moves))})
-    stage = (f'<section class="stage" aria-label="Board">{_source(body, moves, q)}<div class="boardwrap">{board.render(scene)}</div>'
+                        ghosts=[(tuple(c), str(i + 1) if len(turn) > 1 else "") for i, c in enumerate(turn)])
+    line = len(body["moves"]) if body else 0
+    data = script_json({"runs": runs, "run": q.get("run"), "g": q.get("g") if body and body["id"] != "imported" else None,
+                        "game": body, "moves": moves, "panel": panel, "engines": rows, "ply": len(moves),
+                        "line_starts": turn_facts(line)["turn_starts"] + [line], **turn_facts(len(moves))})
+    stage = (f'<section class="stage" aria-label="Board">{_source(body, moves, q)}<div class="boardwrap">{board.render(scene)}{ZOOM}</div>'
              '<div class="keys" id="keys"></div><div class="transport">'
-             f'<button class="btn" id="prev" type="button" aria-label="Previous stone">{_ICON.format(d="M11 2v10L4 7z")}</button>'
-             f'<button class="btn" id="next" type="button" aria-label="Next stone">{_ICON.format(d="M3 2v10l7-5z")}</button>'
+             f'<button class="btn" id="prev" type="button" aria-label="Previous turn">{_ICON.format(d="M11 2v10L4 7z")}</button>'
+             f'<button class="btn" id="next" type="button" aria-label="Next turn">{_ICON.format(d="M3 2v10l7-5z")}</button>'
              f'<button class="btn" id="undo" type="button">Undo</button><span class="where" id="where">{where(moves)}</span>'
              '<div class="layers"><button class="btn" id="lNum" type="button" aria-pressed="false">Turn numbers</button>'
              '<button class="btn" id="lTac" type="button" aria-pressed="true">Threats</button></div></div></section>')
@@ -103,6 +118,6 @@ def page(runs: tuple[str, ...], rows: list[dict[str, Any]] | None, body: dict[st
              'Symmetry check</button><button class="btn" id="copy" type="button">Copy position</button></div>'
              '<p class="muted small" id="deeper"></p></section>') if rows is not None else ""
     side = (f'<aside class="panel" id="panel" aria-label="Analysis">{_nets(rows, panel)}<div id="read">'
-            f'{_read(panel, refused, moves)}</div>{tools}</aside>')
+            f'{_read(panel, refused, moves)}</div>{tools}{_import(import_error)}</aside>')
     html = f'<main class="an">{stage}{side}</main><script type="application/json" id="state">{data}</script>'
     return render("mantis analyzer", Shell("analyzer", runs, q.get("run")), html, scripts=("board.js", "analyzer.js"), app=True)

@@ -4,20 +4,21 @@
   const H = window.Hex, $ = id => document.getElementById(id);
   const S = JSON.parse($('state').textContent);
   const L = { num: false, search: true, tac: true };
-  let G = S.game, ply = S.ply, timer = null, strip = null;
+  let G = S.game, ply = S.ply, timer = null, strip = null, view = null;
 
   function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function trusted(tag, cls, html) { const e = el(tag, cls); e.innerHTML = html; return e; }  // server-escaped sentences only
 
   function scene() {
-    const end = ply >= G.moves.length, pos = G.pos[Math.min(ply, G.moves.length)], think = pos.think || {};
+    const end = ply >= G.moves.length, pos = G.pos[Math.min(ply, G.moves.length)], think = pos.turn || pos.think || {};
     const t = end ? null : G.tactics[ply], cands = L.search && !end ? (think.cands || []) : [];
+    const turnStones = pos.turn && pos.turn.stones.length > 1 ? pos.turn.stones.map((c, i) => ({ c, label: String(i + 1) })) : null;
     const top = Math.max(1e-9, ...cands.map(c => c[2]));
     return {
       moves: G.moves, owners: G.owners, turns: G.turn_of, ply, frame: G.moves, numbers: L.num,
       heat: cands.map((c, i) => ({ c: [c[0], c[1]], rel: c[2] / top, label: i < 3 && c[2] >= .03 ? String(Math.round(c[2] * 100)) : '' })),
       win: L.tac && t && t.cls === 'win' ? t.cells : [], block: L.tac && t && t.cls === 'block' ? t.cells : [],
-      ghost: !end && L.search ? G.moves[ply] : null, winLine: end ? G.win : null,
+      ghosts: end || !L.search ? [] : turnStones || [{ c: G.moves[ply], label: '' }], winLine: end ? G.win : null,
     };
   }
 
@@ -29,8 +30,12 @@
     const dl = el('dl', 'facts'); G.facts.forEach(([k, v]) => dl.append(el('dt', null, k), el('dd', null, v))); game.append(dl);
     box.append(game);
     if (pos.threat) { const s = el('section'); s.append(el('h2', null, `Turn ${G.turn_of[ply]}`), trusted('div', 'tacline', pos.threat)); box.append(s); }
-    if (pos.think) {
-      const s = el('section'), th = pos.think; s.append(el('h2', null, 'What the bot thought'), trusted('p', 'say', th.text));
+    if (pos.turn || pos.think) {
+      const s = el('section'), th = pos.turn || pos.think;
+      if (pos.turn) {
+        s.append(el('h2', null, 'What the bot played this turn'));
+        pos.turn.texts.forEach(([label, text]) => { const p = trusted('p', 'say', ` ${text}`); p.prepend(el('strong', null, `${label}.`)); s.append(p); });
+      } else s.append(el('h2', null, 'What the bot thought'), trusted('p', 'say', th.text));
       if (th.light != null) {
         const wc = el('div', 'wc'), bar = el('span', 'bar'), fill = el('i');
         fill.style.width = (th.light * 100) + '%'; bar.append(fill);
@@ -81,7 +86,7 @@
   async function open(id) {
     const r = await fetch(`/api/run/${encodeURIComponent(S.run)}/game/${encodeURIComponent(id)}`);
     if (!r.ok) return;
-    G = (await r.json()).game; ply = G.moves.length;
+    G = (await r.json()).game; ply = G.moves.length; if (view) view.reset();
     document.querySelectorAll('.lrow').forEach(x => x.setAttribute('aria-selected', String(x.dataset.id === id)));
     drawStrip(); render();
   }
@@ -89,21 +94,22 @@
   function keys() {
     const k = (g, t) => { const s = el('span'); s.innerHTML = g; s.append(t); return s; };
     $('keys').replaceChildren(k(H.glyph('s1'), 'Light'), k(H.glyph('s2'), 'Dark'), k(H.glyph('windot', 12), 'win available'),
-      k(H.glyph('block'), 'must block'), k(H.glyph('heat'), 'where the search looked'), k(H.glyph('ghost'), 'stone played next'));
+      k(H.glyph('block'), 'must block'), k(H.glyph('heat'), 'where the search looked'), k(H.glyph('ghost'), 'the stones played this turn, in order'));
   }
 
   function wire() {
     const svg = document.querySelector('.boardwrap svg'); svg.id = 'board-svg';
+    view = H.viewport(svg, document.querySelector('.boardwrap .zoom'));
     svg.addEventListener('pointermove', e => H.hoverAt(svg, H.cellAt(svg, e)));
     svg.addEventListener('pointerleave', () => H.hoverAt(svg, null));
-    [['first', () => go(0)], ['prev', () => go(ply - 1)], ['next', () => go(ply + 1)], ['last', () => go(G.moves.length)]]
+    [['first', () => go(0)], ['prev', () => stepTurn(-1)], ['next', () => stepTurn(1)], ['last', () => go(G.moves.length)]]
       .forEach(([id, f]) => { $(id).onclick = e => { e.preventDefault(); f(); }; });
     const play = $('play'); play.hidden = false;
     play.onclick = () => {
       if (timer) { clearInterval(timer); timer = null; play.textContent = 'Play'; return; }
       if (ply >= G.moves.length) go(0);
       play.textContent = 'Pause';
-      timer = setInterval(() => { if (ply >= G.moves.length) { play.click(); return; } go(ply + 1); }, 450);
+      timer = setInterval(() => { if (ply >= G.moves.length) { play.click(); return; } stepTurn(1); }, 700);
     };
     [['lNum', 'num'], ['lSearch', 'search'], ['lTac', 'tac']].forEach(([id, k]) => {
       $(id).onclick = () => { L[k] = !L[k]; $(id).setAttribute('aria-pressed', String(L[k])); render(); };
@@ -116,8 +122,8 @@
     document.addEventListener('keydown', e => {
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
       const rows = [...document.querySelectorAll('.lrow')], i = rows.findIndex(r => r.dataset.id === G.id);
-      if (e.key === 'ArrowRight') { if (e.shiftKey) stepTurn(1); else go(ply + 1); }
-      else if (e.key === 'ArrowLeft') { if (e.shiftKey) stepTurn(-1); else go(ply - 1); }
+      if (e.key === 'ArrowRight') { if (e.shiftKey) go(ply + 1); else stepTurn(1); }
+      else if (e.key === 'ArrowLeft') { if (e.shiftKey) go(ply - 1); else stepTurn(-1); }
       else if (e.key === 'Home') go(0);
       else if (e.key === 'End') go(G.moves.length);
       else if (e.key === ' ') { e.preventDefault(); play.click(); }

@@ -46,8 +46,13 @@ def _search_shares(record: dict[str, Any] | None, game_entry: dict[str, Any] | N
     return {}, ""
 
 
+def _stones(turn: list[Cell] | tuple[Cell, ...]) -> str:
+    return " then ".join(cell(*c) for c in turn)
+
+
 def compose(a: dict[str, Any], b: dict[str, Any] | None, game_entry: dict[str, Any] | None,
-            game_next: Cell | None, game_second: Cell | None) -> dict[str, Any]:
+            game_next: Cell | None, game_second: Cell | None, *, turn_a: list[Cell] | tuple[Cell, ...] = (),
+            turn_b: list[Cell] | tuple[Cell, ...] = ()) -> dict[str, Any]:
     """The panel for one position: `a` is read, `b` compared; `game_entry` is the game's recorded search at this ply, if on its line."""
     pos = a.get("position") or {}
     mover = 0 if pos.get("to_move") == "p1" else 1
@@ -80,6 +85,11 @@ def compose(a: dict[str, Any], b: dict[str, Any] | None, game_entry: dict[str, A
         else:
             verdict += " " + " ".join(f"{esc(n)} {'does' if c in tcells else 'does not'} {act} with its first choice, {cell(*c)}."
                                       for n, c in picks.items())
+    if turn_a:
+        if b is not None and turn_b and list(turn_a) == list(turn_b):
+            verdict += f" Both nets play {_stones(turn_a)}."
+        else:
+            verdict += f" {esc(na)} plays {_stones(turn_a)}" + (f"; {esc(nb)} plays {_stones(turn_b)}" if turn_b else "") + "."
     game_line = None
     if game_next is not None:
         marks = {c: " (a block)" if cls == "block" and c in tcells else " (a win)" if cls == "win" and c in tcells else ""
@@ -101,7 +111,7 @@ def compose(a: dict[str, Any], b: dict[str, Any] | None, game_entry: dict[str, A
         mine = (max(-1.0, min(1.0, float(game_entry["v"]))) + 1) / 2
         chances.append({"label": "game", "cls": "cf", "light": round(mine if mover == 0 else 1 - mine, 4)})
     return {"verdict": verdict, "game_line": game_line, "chances": chances, "a": na, "b": nb,
-            "first": [list(c) if c else None for c in first.values()][0],
             "lens": {"net": [[c[0], c[1], pa[c]] for c in ranked], "search": [[c[0], c[1], s] for c, s in shares.items()],
                      "diff": diff}, "search_source": search_source, "rows": rows,
-            "tactics": {"cls": cls, "cells": [list(c) for c in tcells]}, "mover": mover}
+            "tactics": {"cls": cls, "cells": [list(c) for c in tcells]}, "mover": mover,
+            "turn": {"a": [list(c) for c in turn_a], "b": [list(c) for c in turn_b]}}

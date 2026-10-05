@@ -11,6 +11,8 @@ from .fmt import esc
 
 _SQ3 = math.sqrt(3.0)
 Cell = tuple[int, int]
+#: The smallest area a board shows, so a few stones are never drawn huge: about 15 cells across, 13 rows down.
+MIN_W, MIN_H = _SQ3 * 15, 1.5 * 13
 
 
 def xy(c: Cell) -> tuple[float, float]:
@@ -36,7 +38,7 @@ class Scene:
     heat: Sequence[tuple[Cell, float, str]] = ()
     win_cells: Sequence[Cell] = ()
     block_cells: Sequence[Cell] = ()
-    ghost: Cell | None = None
+    ghosts: Sequence[tuple[Cell, str]] = ()
     win_line: Sequence[Cell] | None = None
 
 
@@ -50,12 +52,15 @@ def render(scene: Scene, label: str = "Board position") -> str:
     xs, ys = [xy(c)[0] for c in frame], [xy(c)[1] for c in frame]
     pad = 2.6
     x0, x1, y0, y1 = min(xs) - pad, max(xs) + pad, min(ys) - pad, max(ys) + pad
+    if x1 - x0 < MIN_W:
+        x0, x1 = (x0 + x1 - MIN_W) / 2, (x0 + x1 + MIN_W) / 2
+    if y1 - y0 < MIN_H:
+        y0, y1 = (y0 + y1 - MIN_H) / 2, (y0 + y1 + MIN_H) / 2
     placed = {tuple(m): i for i, m in enumerate(scene.moves[:scene.ply])}
     out = [f'<svg class="board" viewBox="{x0:.3f} {y0:.3f} {x1 - x0:.3f} {y1 - y0:.3f}" preserveAspectRatio="xMidYMid meet" '
            f'role="img" aria-label="{esc(label)}">']
-    qs, rs = [c[0] for c in frame], [c[1] for c in frame]
-    for r in range(min(rs) - 4, max(rs) + 5):
-        for q in range(min(qs) - 8, max(qs) + 9):
+    for r in range(math.floor(y0 / 1.5) - 1, math.ceil(y1 / 1.5) + 2):
+        for q in range(math.floor(x0 / _SQ3 - r / 2) - 1, math.ceil(x1 / _SQ3 - r / 2) + 2):
             x, y = xy((q, r))
             if x0 - 1 <= x <= x1 + 1 and y0 - 1 <= y <= y1 + 1:
                 out.append(_hex("cell", (q, r), 0.95, f' data-c="{q},{r}"'))
@@ -66,8 +71,9 @@ def render(scene: Scene, label: str = "Board position") -> str:
         out.append(_hex("block", c, 0.8))
     for c in scene.win_cells:
         out.append(_hex("wincell", c, 0.8) + _hex("windot", c, 0.17))
-    if scene.ghost is not None and scene.ghost not in placed:
-        out.append(_hex("ghost", scene.ghost, 0.86))
+    for c, _label in scene.ghosts:
+        if c not in placed:
+            out.append(_hex("ghost", c, 0.86))
     for i in range(scene.ply):
         out.append(_hex(f"s{owner(i) + 1}", scene.moves[i], 0.84))
     if scene.win_line:
@@ -84,8 +90,12 @@ def render(scene: Scene, label: str = "Board position") -> str:
                 out.append(_hex(f"ltr{side}", c, 0.62))
         elif is_last:
             out.append(_hex(f"lt{side}", c, 0.2))
+    for c, label in scene.ghosts:
+        if label and c not in placed:
+            out.append(f'<text class="ghostnum" x="{xy(c)[0]:.3f}" y="{xy(c)[1]:.3f}">{esc(label)}</text>')
+    numbered = {c for c, label in scene.ghosts if label}
     for c, _rel, text in scene.heat:
-        if text and c not in placed:
+        if text and c not in placed and c not in numbered:
             out.append(f'<text class="heatnum" x="{xy(c)[0]:.3f}" y="{xy(c)[1]:.3f}">{esc(text)}</text>')
     out.append("</svg>")
     return "".join(out)

@@ -21,24 +21,44 @@ window.Hex = (function () {
     return [q, r];
   }
 
-  /* scene: {moves, owners, turns, ply, frame, numbers, heat:[{c, rel, label, cls}], win, block, ghost, winLine, focus}; owners and turns come from the server */
-  function draw(svg, sc) {
-    const frame = sc.frame && sc.frame.length ? sc.frame : (sc.moves.length ? sc.moves : [[0, 0]]);
+  // The smallest area a board shows, so a few stones are never drawn huge: about 15 cells across, 13 rows down.
+  const MIN_W = SQ3 * 15, MIN_H = 1.5 * 13;
+
+  /* The frame's box, padded and grown to the minimum area. */
+  function baseBox(frame) {
     const xs = frame.map(c => X(c[0], c[1])), ys = frame.map(c => Y(c[0], c[1])), pad = 2.6;
-    const x0 = Math.min(...xs) - pad, x1 = Math.max(...xs) + pad, y0 = Math.min(...ys) - pad, y1 = Math.max(...ys) + pad;
-    svg.setAttribute('viewBox', `${x0} ${y0} ${x1 - x0} ${y1 - y0}`);
+    let x0 = Math.min(...xs) - pad, x1 = Math.max(...xs) + pad, y0 = Math.min(...ys) - pad, y1 = Math.max(...ys) + pad;
+    if (x1 - x0 < MIN_W) { const m = (x0 + x1) / 2; x0 = m - MIN_W / 2; x1 = m + MIN_W / 2; }
+    if (y1 - y0 < MIN_H) { const m = (y0 + y1) / 2; y0 = m - MIN_H / 2; y1 = m + MIN_H / 2; }
+    return { x0, y0, w: x1 - x0, h: y1 - y0 };
+  }
+
+  /* scene: {moves, owners, turns, ply, frame, numbers, heat:[{c, rel, label, cls}], win, block, ghosts:[{c, label}], winLine, focus};
+     owners and turns come from the server. The view (pan and zoom) lives on the svg and survives redraws. */
+  function draw(svg, sc) {
+    svg._scene = sc;
+    const frame = sc.frame && sc.frame.length ? sc.frame : (sc.moves.length ? sc.moves : [[0, 0]]);
+    const base = baseBox(frame), v = svg._view || { k: 1, dx: 0, dy: 0 };
+    const w = base.w / v.k, h = base.h / v.k;
+    const x0 = base.x0 + (base.w - w) / 2 + v.dx, y0 = base.y0 + (base.h - h) / 2 + v.dy, x1 = x0 + w, y1 = y0 + h;
+    svg.setAttribute('viewBox', `${x0} ${y0} ${w} ${h}`);
     svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
     const out = [], placed = new Set();
     for (let i = 0; i < sc.ply; i++) placed.add(key(sc.moves[i]));
-    const qs = frame.map(c => c[0]), rs = frame.map(c => c[1]);
-    for (let r = Math.min(...rs) - 4; r <= Math.max(...rs) + 4; r++) for (let q = Math.min(...qs) - 8; q <= Math.max(...qs) + 8; q++) {
-      const x = X(q, r), y = Y(q, r);
-      if (x >= x0 - 1 && x <= x1 + 1 && y >= y0 - 1 && y <= y1 + 1) out.push(hex('cell', [q, r], .95, `data-c="${q},${r}"`));
+    // Cover the box at any aspect: one hex height of margin, rows by r, columns by q at each row.
+    const span = Math.max(w, h);
+    const cy = (y0 + y1) / 2, cx = (x0 + x1) / 2;
+    for (let r = Math.floor((cy - span) / 1.5) - 1; r <= Math.ceil((cy + span) / 1.5) + 1; r++) {
+      const qa = Math.floor((cx - span) / SQ3 - r / 2) - 1, qb = Math.ceil((cx + span) / SQ3 - r / 2) + 1;
+      for (let q = qa; q <= qb; q++) {
+        const x = X(q, r), y = Y(q, r);
+        if (x >= x0 - 1 && x <= x1 + 1 && y >= y0 - 1 && y <= y1 + 1) out.push(hex('cell', [q, r], .95, `data-c="${q},${r}"`));
+      }
     }
     (sc.heat || []).forEach(h => { if (!placed.has(key(h.c))) out.push(hex(h.cls || 'heat', h.c, .26 + .56 * Math.sqrt(Math.max(0, Math.min(1, h.rel))))); });
     (sc.block || []).forEach(c => out.push(hex('block', c, .8)));
     (sc.win || []).forEach(c => { out.push(hex('wincell', c, .8)); out.push(hex('windot', c, .17)); });
-    if (sc.ghost && !placed.has(key(sc.ghost))) out.push(hex('ghost', sc.ghost, .86));
+    (sc.ghosts || []).forEach(g => { if (!placed.has(key(g.c))) out.push(hex('ghost', g.c, .86)); });
     for (let i = 0; i < sc.ply; i++) out.push(hex(`s${sc.owners[i] + 1}`, sc.moves[i], .84));
     if (sc.winLine) {
       sc.winLine.forEach(c => out.push(hex('winrim', c, .84)));
@@ -52,12 +72,51 @@ window.Hex = (function () {
         if (isLast) out.push(hex(`ltr${o}`, c, .62));
       } else if (isLast) out.push(hex(`lt${o}`, c, .2));
     }
+    const numbered = new Set((sc.ghosts || []).filter(g => g.label).map(g => key(g.c)));
     (sc.heat || []).forEach(h => {
-      if (h.label && !placed.has(key(h.c))) out.push(`<text class="heatnum" x="${X(h.c[0], h.c[1]).toFixed(3)}" y="${Y(h.c[0], h.c[1]).toFixed(3)}">${h.label}</text>`);
+      if (h.label && !placed.has(key(h.c)) && !numbered.has(key(h.c))) out.push(`<text class="heatnum" x="${X(h.c[0], h.c[1]).toFixed(3)}" y="${Y(h.c[0], h.c[1]).toFixed(3)}">${h.label}</text>`);
+    });
+    (sc.ghosts || []).forEach(g => {
+      if (g.label && !placed.has(key(g.c))) out.push(`<text class="ghostnum" x="${X(g.c[0], g.c[1]).toFixed(3)}" y="${Y(g.c[0], g.c[1]).toFixed(3)}">${g.label}</text>`);
     });
     if (sc.focus) out.push(hex('focus', sc.focus, .95));
     out.push('<polygon class="hover" points=""/>');
     svg.innerHTML = out.join('');
+  }
+
+  /* Pan by dragging, zoom with the wheel or the +, − and Fit buttons; a drag never counts as a click on the board. */
+  function viewport(svg, controls) {
+    svg._view = { k: 1, dx: 0, dy: 0 };
+    const redraw = () => { if (svg._scene) draw(svg, svg._scene); };
+    const unit = () => { const r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal; return Math.max(vb.width / r.width, vb.height / r.height); };
+    const zoom = (f, ex, ey) => {
+      const v = svg._view, k = Math.min(12, Math.max(0.25, v.k * f));
+      if (ex !== undefined) {
+        const pt = svg.createSVGPoint(); pt.x = ex; pt.y = ey;
+        const p = pt.matrixTransform(svg.getScreenCTM().inverse()), vb = svg.viewBox.baseVal;
+        const cx = vb.x + vb.width / 2, cy = vb.y + vb.height / 2, s = 1 - v.k / k;
+        v.dx += (p.x - cx) * s; v.dy += (p.y - cy) * s;
+      }
+      v.k = k; redraw();
+    };
+    svg.addEventListener('wheel', e => { e.preventDefault(); zoom(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX, e.clientY); }, { passive: false });
+    let drag = null;
+    svg.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, moved: false }; });
+    svg.addEventListener('pointermove', e => {
+      if (!drag || !(e.buttons & 1)) return;
+      const ddx = e.clientX - drag.x, ddy = e.clientY - drag.y;
+      if (!drag.moved && Math.hypot(ddx, ddy) < 5) return;
+      if (!drag.moved) { drag.moved = true; svg.setPointerCapture(e.pointerId); svg.classList.add('panning'); }
+      const u = unit(); svg._view.dx -= ddx * u; svg._view.dy -= ddy * u; drag.x = e.clientX; drag.y = e.clientY; redraw();
+    });
+    const end = () => { if (drag && drag.moved) { svg._dragged = true; setTimeout(() => { svg._dragged = false; }, 0); } drag = null; svg.classList.remove('panning'); };
+    svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end);
+    if (controls) {
+      controls.querySelector('[data-zoom="in"]').onclick = () => zoom(1.25);
+      controls.querySelector('[data-zoom="out"]').onclick = () => zoom(1 / 1.25);
+      controls.querySelector('[data-zoom="fit"]').onclick = () => { svg._view = { k: 1, dx: 0, dy: 0 }; redraw(); };
+    }
+    return { reset: () => { svg._view = { k: 1, dx: 0, dy: 0 }; } };
   }
 
   function cellAt(svg, e) {
@@ -114,5 +173,5 @@ window.Hex = (function () {
     label();
   }
 
-  return { X, Y, key, NAME, fmtC, hexPts, draw, cellAt, hoverAt, trace, glyph, theme };
+  return { X, Y, key, NAME, fmtC, hexPts, draw, viewport, cellAt, hoverAt, trace, glyph, theme };
 })();

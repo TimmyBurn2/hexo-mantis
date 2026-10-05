@@ -6,6 +6,7 @@ import json
 import sys
 from pathlib import Path
 
+from . import analyzer_routes
 from . import desk as desk_mod
 from .readers.events import EmptyRunRecord
 from .readers.record import RunRecord
@@ -135,8 +136,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     desk = desk_mod.LazyDesk(args.checkpoints, strix=args.strix, device=args.device, threads=args.threads) \
         if args.checkpoints or args.strix else None
-    extra = {**GET, "analyzer": desk_mod.page(desk), "api/engines": desk_mod.engines(desk)}
-    return run_server(args, records, get_extra=extra, post_of=lambda hub: desk_mod.post(hub, desk),
+    extra = {**GET, "analyzer": analyzer_routes.page(desk), "api/engines": analyzer_routes.engines(desk)}
+    return run_server(args, records, get_extra=extra, post_of=lambda hub: analyzer_routes.post(hub, desk),
                       on_stop=desk.close if desk is not None else None)
 
 
