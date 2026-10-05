@@ -24,6 +24,10 @@ in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c
   - **run11's envelope (a STATE line, no ruling; prereg §13 A5):** `train.training_steps_per_game` 2.4 at the resume,
     inside [1.2, 2.4], moved only by the gap rule (+0.05 at two consecutive saves → 1.2); `train.eval_interval` 36 000,
     inside [24 000, 48 000]; the monitor's card cap 0.45. Every other key is a re-mint with a ruling.
+- **DASH-2 LANDED 2026-10-05** (`293b3277..83a5c1e6`, CARDS DASH-2; the amendment's ruling number is owed, `R<nnn>`):
+  `make dash` is the one display. It reads a run directory, the monitor's records and the cell sidecars and serves the
+  Run, Games and Analyzer views; run11's rule reads `six30_16` (`--rule-unit`), every other ruler is report-only. The
+  dashboard, the viewer and the analyzer are retired.
 - **R385's order.**
   - RUN11-PRE accepted (R385(a), CARD-RUN11-PRE CLOSED). The pick rule's inputs were degenerate (L̄ saturates inside
     8 h; the tie-break read one save's jitter), so the registered pick (arm 3) is set aside by ruling, the architect's
