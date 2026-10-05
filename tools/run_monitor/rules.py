@@ -68,7 +68,9 @@ def rates(counters: list[dict[str, float]], since: float, until: float,
 
 
 def is_run(pid: int, run_id: str) -> bool:
-    """Whether `pid` is a live process whose command line names the run id (a reused pid is another process)."""
+    """Whether `pid` is a live process, not this one, whose command line names the run id (a reused pid is another process)."""
+    if pid == os.getpid():
+        return False
     try:
         cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
     except OSError:

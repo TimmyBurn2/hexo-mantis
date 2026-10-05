@@ -267,12 +267,13 @@ class Monitor:
             self._halt(step, fired, stopping=stopping)
         (out / "saves" / f"{step:08d}.json").write_text(json.dumps(record, indent=1, allow_nan=False), encoding="utf-8")
         self._log({"event": "save_read", "step": step, "final": stopping, "halting_rows": fired,
-                   "reported_rows": decided["reported"], "armed_floors": decided["armed"]})
+                   "reported_rows": decided["reported"], "armed_floors": decided["armed"],
+                   "unread_floors": sorted(exam for exam, row in exams.items() if row["holds"] is None)})
         self.state.armed_floors, self.state.floors_live = decided["armed"], decided["floors_live"]
         self.state.gap_over = rule["over"]
-        self._advance(step, ckpt, copy if have_ring else None, saved_ts)
         if rule["fired"]:
             self._gap_fired(step, rule)
+        self._advance(step, ckpt, copy if have_ring else None, saved_ts)
         return record
 
     def _gen_and_exams(self, step: int, ckpt: Path) -> tuple[dict[str, Any], dict[str, Any]]:
