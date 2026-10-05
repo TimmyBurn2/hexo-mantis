@@ -94,7 +94,7 @@ in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c
     (`docs/design/RUN11_PREREG_2026-10-04.md`) is drafted, unarmed and unhashed; the four arm configs are drafted
     outside `configs/`. run10's ring bands would halt arm A's regime at its first save, so the prereg re-derives them
     on every arm-A-family ring on record. **ARMED 2026-10-04 on the operator's word** (§11 of the prereg; the four
-    configs `configs/run11a1..a4.yaml`; box B is an unmatched second box, so arms 3→4 run on box A and arms 1→2 on box
+    configs `configs/run11a1.yaml` to `configs/run11a4.yaml`; box B is an unmatched second box, so arms 3→4 run on box A and arms 1→2 on box
     B at matched self-play work). **The prereg is HASHED: sha256 `3fdf5092b10cc5fbcf35c4213a2a0b186550a839886e4ec2e79f7e86b7ff17d0`.** Five preflights
     passed; **all four arms ran their registered hours (2026-10-04 10:50 → 2026-10-05 06:40 CEST)**; the mechanical pick is arm 3,
     decided inside the noise of its tie-breaks; arm 4 is not pickable (a final-save T4 row). **run11 was NOT started on the
@@ -344,7 +344,8 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
 ## Configs
 
 The committed configs are `configs/run10.yaml`, RUN11-PRE's four arms `configs/run11a1.yaml` to `configs/run11a4.yaml`
-(arm 2's is run11's, R385(a)), `configs/dev_example.yaml`, `configs/smoke_preflight_armed.yaml` and
+(arm 2's is run11's, R385(a)), RUN11-FRESH's `configs/run11fresh.yaml` (arm 2's header replayed with no
+`identity.warm_start`, run id `run11fresh`; nothing else differs, by `tools/config_diff.py --expect`), `configs/dev_example.yaml`, `configs/smoke_preflight_armed.yaml` and
 `configs/smoke_wiring.yaml`; this line omitted the arms until R385's record. Production is a CENSUS, never a
 list: `mantis.config.census.production_configs` (every `configs/` file minus its `EXEMPT_CONFIGS`
 rows, which carry their grounds). run7's and run8's configs were deleted at `8b00b4dd` (R368(e)),
