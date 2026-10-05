@@ -173,6 +173,12 @@ def analyzer():
     return load_tools_package("analyzer")
 
 
+@pytest.fixture(scope="session")
+def dash():
+    """The `tools/dash` package of THIS checkout, with its submodules importable as `dash.<name>`."""
+    return load_tools_package("dash", repo_root=REPO_ROOT)
+
+
 def mint_analyzer_stamp(directory: Path, *, run_id: str = "an1", step: int = 7, deploy_kind: str | None = None,
                         encoding: str | None = None) -> Path:
     """A stamped checkpoint of a tiny GnnArchV2 over dev_example's config (test_arch_stamp_authority's recipe)."""
