@@ -114,7 +114,7 @@ class Chart:
         out = [f'<svg viewBox="0 0 {w:.0f} {h:.0f}"{wide} role="img" aria-label="{esc(self.title)}">'
                f'<defs><clipPath id="{clip}"><rect x="{_M["l"]}" y="{_M["t"]}" width="{iw:.1f}" height="{ih:.1f}"/>'
                "</clipPath></defs>"]
-        yt = ticks(y0, y1, 3)
+        yt = ticks(y0, y1, 4)
         y_text = shared_decimals(yt) if self.y_fmt is sig else [self.y_fmt(v) for v in yt]
         for v, label in zip(yt, y_text, strict=True):
             out.append(f'<line class="gridline" x1="{_M["l"]}" x2="{w - _M["r"]}" y1="{py(v):.1f}" y2="{py(v):.1f}"/>'

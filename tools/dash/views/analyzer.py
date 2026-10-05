@@ -78,6 +78,10 @@ def _nets(rows: list[dict[str, Any]] | None, panel: dict[str, Any] | None, names
             "</div></section>")
 
 
+def _search_head(panel: dict[str, Any]) -> str:
+    return "Game's search" if str(panel.get("search_source", "")).startswith("the game's") else "Search"
+
+
 def _read(panel: dict[str, Any] | None, refused: str | None, moves: list[Any]) -> str:
     """The read's skeleton, always present so the script can fill it; filled here when the server made the first read."""
     if panel is None:
@@ -92,11 +96,11 @@ def _read(panel: dict[str, Any] | None, refused: str | None, moves: list[Any]) -
         + (f'<span>Light {pct(c["light"])}</span><span class="bar"><i style="width:{c["light"] * 100:.1f}%"></i></span>'
            f'<span>{pct(1 - c["light"])} Dark</span>' if c["light"] is not None else '<span class="muted">not read</span><span></span><span></span>')
         + "</div>" for c in panel["chances"])
-    head = ["Cell", esc(panel["a"])] + ([esc(panel["b"])] if panel["b"] else []) + ["Search", ""]
+    head = ["Cell", esc(panel["a"])] + ([esc(panel["b"])] if panel["b"] else []) + [_search_head(panel), ""]
     rows = "".join(
-        f'<tr data-c="{r[0]},{r[1]}"><td class="num">{cell(r[0], r[1])}</td><td class="num">{pct(r[2])}</td>'
-        + (f'<td class="num">{pct(r[3])}</td>' if panel["b"] else "")
-        + f'<td class="num">{pct(r[4]) if r[4] is not None else ""}</td>'
+        f'<tr data-c="{r[0]},{r[1]}"><td class="num">{cell(r[0], r[1])}</td><td class="pct">{pct(r[2])}</td>'
+        + (f'<td class="pct">{pct(r[3])}</td>' if panel["b"] else "")
+        + f'<td class="pct">{pct(r[4]) if r[4] is not None else ""}</td>'
         + "<td>" + "".join(f'<span class="tag {t}">{t}</span>' for t in r[5]) + "</td></tr>" for r in panel["rows"])
     lenses = [("net", "Net"), ("search", "Search")] + ([("diff", "Difference")] if panel["b"] else [])
     seg = "".join(f'<button type="button" data-lens="{k}" aria-pressed="{"true" if k == "net" else "false"}">{label}</button>'

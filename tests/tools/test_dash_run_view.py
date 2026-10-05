@@ -84,7 +84,7 @@ def test_a_strength_word_appears_only_when_its_interval_excludes_zero(dash, stre
 def test_the_going_forward_read_states_its_cells_and_side_of_the_line(dash, strength, tmp_path):
     _, aside = strength.verdict(_ruled(dash, tmp_path, [(32201, 0.759)], 0.594))
     assert "Mean of the last 1 cell: +0.77 logit over the parent" in aside and "above the +0.17 bar" in aside
-    assert "(the rule averages 4)" in aside
+    assert "The rule needs 4 cells; 1 is read." in aside
 
 
 def test_no_cell_is_a_stated_gap_never_an_empty_axis(dash, strength, tmp_path):

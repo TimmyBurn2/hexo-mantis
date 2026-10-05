@@ -94,7 +94,7 @@ def page(snaps: Sequence[RunSnapshot], *, runs: tuple[str, ...], now: float | No
     play = run_series.selfplay(snaps)
     source = esc(when(head.events.last_ts))
     foot = (f"Frozen copy of {esc(head.label)}, record as of {source}." if frozen
-            else f"{esc(head.label)} record as of {source}.")
+            else ", ".join(f"{esc(x.label)} record as of {esc(when(x.events.last_ts))}" for x in snaps) + ".")
     body = (f'<main class="wrap">{status(head, now, failure)}'
             + _section("strength", "Is it getting stronger?", *strength, layout="two")
             + _section("value", "Is the value head learning?", *value, layout="grid")

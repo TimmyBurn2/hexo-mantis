@@ -86,8 +86,8 @@ def test_no_temperature_and_no_exam_are_sentences_never_empty_axes(dash, value, 
     gen = {"cf_ce": 0.69, "temperature": None, "auc": 0.5, "policy_ce": 2.3, "bands": {}}
     root = _records(tmp_path, [_save(3000, gen=gen, exams=unread), _save(6000, gen=gen, exams=unread)])
     _, _, panels = value.section([_snap(dash, _record(tmp_path), records=root)])
-    temp = panels[panels.index("<h3>Temperature</h3>"):]
-    exam = panels[panels.index("<h3>Exam T4_V, calibrated</h3>"):]
+    temp = panels[panels.index(">Temperature</h3>"):]
+    exam = panels[panels.index(">T4_V exam</h3>"):]
     assert "Not measured at any save yet." in temp[:900] and "Not measured at any save yet." in exam[:900] and "<svg" not in exam[:900]
 
 
@@ -119,7 +119,7 @@ def test_the_reach_names_no_turn_instead_of_none(dash, value):
     curve = horizon.Curve(share=(None,) * 31, n=(0,) * 31)
     h = horizon.Horizon(curve, curve, curve, curve, None, 3, 10, 2, (0, 1), (8, 9))
     text = value._reach(h)
-    assert "None" not in text and "3 turns out" in text and "Early in the run it never did." in text
+    assert "None" not in text and "3 turns out in the last fifth" in text and "never in the first" in text
 
 
 def test_an_armed_halt_whose_signal_was_not_sent_says_why(dash, value, tmp_path):

@@ -9,7 +9,7 @@ from ..readers.games import GameView
 from ..readers.hexlogic import first_of_turn, owner, turn_of
 from ..readers.shards import Page
 from . import board, games_text
-from .fmt import esc, num, script_json, short
+from .fmt import esc, num, script_json
 from .page import Shell, render
 
 KINDS = (("selfplay", "Self-play"), ("promotion", "Gate"), ("external", "External"), ("random_floor", "Random"))
@@ -66,7 +66,7 @@ def row_html(row: dict[str, Any], run: str, selected: bool, query: dict[str, str
                          "at the cap" if term == "ply_cap" else None) if x]
     who = {"p1": "Light", "p2": "Dark"}.get(str(res), "No winner")
     step = row.get("step")
-    net = short(step) if isinstance(step, int) and step >= 0 else '<span class="muted">—</span>'
+    net = f"{step / 1000:.1f}k" if isinstance(step, int) and step >= 0 else '<span class="muted">—</span>'
     href = "?" + urlencode({**query, "g": row["id"]})
     return (f'<a class="lrow" role="option" aria-selected="{"true" if selected else "false"}" href="{esc(href)}" '
             f'data-id="{esc(row["id"])}"><span>{win}</span><span class="kind">{who}<small>{esc(", ".join(notes))}</small></span>'

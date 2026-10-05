@@ -72,7 +72,7 @@ def figure(title: str, chart: Chart | None, definition: str = "", *, goal: Goal 
     caption = f"<figcaption>{esc(definition)}</figcaption>" if definition else ""
     many = len(nows) > 1
     latest = "".join(f'<b class="{cls}">{esc(v)}</b>' for v, cls in nows if v) if many else esc(now)
-    return (f'<figure class="chart"><div class="head{" many" if many else ""}"><h3>{esc(title)}</h3>{"" if goal else scope}'
+    return (f'<figure class="chart"><div class="head{" many" if many else ""}"><h3 title="{esc(title)}">{esc(title)}</h3>{"" if goal else scope}'
             f'<span class="now">{latest}</span></div>'
             f'{aim}{legend(keys)}<div class="plot">{plot}</div>{caption}{twin}</figure>')
 

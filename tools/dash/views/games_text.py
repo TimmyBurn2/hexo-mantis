@@ -63,7 +63,7 @@ def facts(g: GameView, run_label: str, hour: str | None) -> list[tuple[str, str]
     rows.append(("Net", net))
     search = {"recorded": "recorded", "absent": "not sampled", "none": "no search root exposed",
               "empty": "recorded, candidate never moved"}[g.stats_field]
-    rows.append(("Search", search + (f", {num(g.served_sims)} sims on full turns" if g.served_sims else "")))
+    rows.append(("Search", search + (f", {num(g.served_sims)} sims, fewer on fast turns" if g.served_sims else "")))
     if hour or g.worker is not None:
         rows.append(("Recorded", ", ".join(x for x in (hour, None if g.worker is None else f"worker {g.worker}") if x)))
     return rows

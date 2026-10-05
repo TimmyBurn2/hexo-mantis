@@ -63,7 +63,7 @@ def verdict(snap: RunSnapshot) -> tuple[str, str]:
         mean, used = gf
         lines.append(f"Mean of the last {used} cell{'s' if used > 1 else ''}: {signed(mean)} logit over the parent, "
                      f"{'above' if mean > LINE_LOGIT else 'below'} the {signed(LINE_LOGIT)} bar"
-                     + ("" if used >= CELLS else f" (the rule averages {CELLS})") + ".")
+                     + "." + ("" if used >= CELLS else f" The rule needs {CELLS} cells; {used} {'is' if used == 1 else 'are'} read."))
     lines += [f"{esc(r.name)} at {short(r.line[-1].step)}: {signed(r.line[-1].logit - p.logit)} logit over its parent."
               for r, p in ((r, r.parent) for r in snap.rulers if r is not lead and r.line) if p is not None]
     lines += [x for x in (_rule_note(snap).strip(), _ladder_text(snap).strip()) if x]
@@ -76,8 +76,12 @@ def _compared(snaps: Sequence[RunSnapshot], lead: Ruler) -> str:
     for x in snaps[1:]:
         twin = next((r for r in x.rulers if r.unit == lead.unit and r.line), None)
         if twin is not None:
-            c = twin.line[-1]
-            out += f'<span class="{RUN_CLASSES[snaps.index(x)]}">{esc(x.label)} at {short(c.step)}: {pct(c.wr, 1)} of {num(c.n)} games.</span><br>'
+            c, first = twin.line[-1], twin.line[0]
+            said = f"{esc(x.label)} at {short(c.step)}: {pct(c.wr, 1)} of {num(c.n)} games"
+            said += f", {num(c.forfeits)} Six forfeits left out." if c.forfeits else "."
+            if len(twin.line) > 1:
+                said += f" {_OWN[separation(c.wr, c.n, first.wr, first.n).sign].capitalize()} {short(first.step)}."
+            out += f'<br><span class="{RUN_CLASSES[snaps.index(x)]}">{said}</span>'
     return out
 
 
@@ -171,7 +175,7 @@ def _logit_panel(head: RunSnapshot, xmax: float, only: str) -> str:
     twin = table(["ruler", "role", "step", "win rate", "95 % interval", "games", "logit over parent", "host load"], rows)
     if not dots:
         return figure("Every ruler against its parent", None, definition, goal=goal, only=only, twin=twin,
-                      gap=("No ruler has a parent cell yet.", "Read the parent's checkpoint on a ruler to draw it."))
+                      gap=("No ruler has a parent cell yet.", "Read the parent's save on a ruler to draw it."))
     chart = Chart("every ruler", dots=dots, refs=refs, marks=_marks(head), y_fmt=lambda v: signed(v), width=400, height=220,
                   x_domain=(0.0, xmax))
     return figure("Every ruler against its parent", chart, definition, goal=goal, only=only, keys=keys, twin=twin)
@@ -186,5 +190,5 @@ def section(snaps: Sequence[RunSnapshot]) -> tuple[str, str, str]:
         return sentence, aside, figure("Win rate against the rulers", None, goal=HIGHER,
                                        gap=("No ruler reading for this run.", "No cell sidecar under the --cells directories."))
     xmax = max([float(x.events.live_steps or 0) for x in snaps] + [float(c.step) for r in head.rulers for c in r.line])
-    aside = (_compared(snaps, lead) + aside).removesuffix("<br>")
+    aside += _compared(snaps, lead)
     return sentence, aside, _rule_panel(snaps, lead, xmax) + _logit_panel(head, xmax, head.label if len(snaps) > 1 else "")

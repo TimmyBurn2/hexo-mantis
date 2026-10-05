@@ -74,8 +74,8 @@ def ghosts(turn_a: Turn, turn_b: Turn) -> list[list[Any]]:
     return out
 
 
-def _plays(name: str, turn: Turn) -> str:
-    said = f"{esc(name)} plays {' then '.join(cell(*c) for c in turn.stones)}"
+def _plays(name: str, turn: Turn, cls: str) -> str:
+    said = f'<span class="{cls}">{esc(name)}</span> plays {" then ".join(cell(*c) for c in turn.stones)}'
     return said + (f", its second stone not read ({esc(turn.unread)})" if turn.unread else "")
 
 
@@ -119,13 +119,14 @@ def compose(a: dict[str, Any], b: dict[str, Any] | None, game_entry: dict[str, A
         if b is not None and turn_a.stones == turn_b.stones and not (turn_a.unread or turn_b.unread):
             verdict += f" Both nets play {' then '.join(cell(*c) for c in turn_a.stones)}."
         else:
-            verdict += " " + "; ".join(_plays(n, t) for n, t in ((na, turn_a), (nb, turn_b)) if n is not None and t.stones) + "."
+            verdict += " " + "; ".join(_plays(n, t, c) for n, t, c in ((na, turn_a, "c1"), (nb, turn_b, "c2"))
+                                       if n is not None and t.stones) + "."
     game_line = None
     if game_next is not None:
         marks = {c: " (a block)" if cls == "block" and c in tcells else " (a win)" if cls == "win" and c in tcells else ""
                  for c in (game_next, game_second) if c is not None}
-        game_line = f"In the game {me} played {cell(*game_next)}{marks[game_next]}"
-        game_line += f" and then {cell(*game_second)}{marks[game_second]}." if game_second else "."
+        game_line = f"In the game, {me} played {cell(*game_next)}{marks[game_next]}"
+        game_line += f" then {cell(*game_second)}{marks[game_second]}." if game_second else "."
         played = [c for c in (game_next, game_second) if c is not None]
         if played == list(map(tuple, turn_a.stones)):
             game_line = f"The game played the same{' cell' if len(played) == 1 else ' cells, in the same order'}."

@@ -42,7 +42,7 @@ def test_the_games_search_rides_only_on_the_games_line(text):
     entry = {"v": 0.5, "top": [[-6, -1, 30], [0, 0, 10]], "n": 40}
     on = text.compose(_record(A), None, entry, (-6, -4), (-6, -1))
     assert on["search_source"] == "the game's recorded search" and on["chances"][-1]["label"] == "game's search"
-    assert on["game_line"] == "In the game Dark played (−6, −4) and then (−6, −1) (a block)."
+    assert on["game_line"] == "In the game, Dark played (−6, −4) then (−6, −1) (a block)."
     off = text.compose(_record(A), None, None, None, None)
     assert off["lens"]["search"] == [] and off["search_source"] == "" and len(off["chances"]) == 1
 

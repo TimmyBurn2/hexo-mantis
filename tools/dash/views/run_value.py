@@ -67,9 +67,9 @@ def _verdict(rec: Records) -> tuple[str, str]:
         elif lo > 0:
             word = f"trails its lagged net by {lag.diff:.3f} nats (95 % interval {lo:.3f} to {hi:.3f})"
         else:
-            word = (f"shows no clear difference from its lagged net ({signed(lag.diff, 3)} nats, "
+            word = (f"shows no clear difference from its lagged net (cross-entropy {signed(lag.diff, 3)} nats, "
                     f"95 % interval {signed(lo, 3)} to {signed(hi, 3)})")
-        aside = f"On the games after its save, {short(lag.step)} {word}.<br>"
+        aside = f"{short(lag.step)} {word} on the games after its save.<br>"
     series = gaps(rec.saves)
     line = next((s.gap_line for s in reversed(rec.saves) if s.gap_line is not None), None)
     if series and line is not None:
@@ -113,20 +113,22 @@ def _instrument(snaps: Sequence[RunSnapshot]) -> list[str]:
            _metric(snaps, runs, "Temperature", "temperature", "Fitted per save. Above 1, the head is overconfident.",
                    Goal("near", "best near 1"), _no_temperature)]
     band_lines = [Line(_BAND_NAMES[b], "c1", [(float(s.step), v) for s in first.saves if (v := s.bands.get(b)) is not None],
-                       dash=i == 1, faint=i == 0, tag=_BAND_NAMES[b]) for i, b in enumerate(PLY_BANDS)]
+                       dash=i == 1, faint=i == 0) for i, b in enumerate(PLY_BANDS)]
     drawn = any(ln.pts for ln in band_lines)
     only = head.label if len(snaps) > 1 else ""
     band_chart = Chart("by ply band", lines=band_lines, x_domain=x_span(snaps)) if drawn else None
-    out.append(figure("Held-out cross-entropy by ply band", band_chart, goal=LOWER, only=only,
+    out.append(figure("Held-out cross-entropy by ply", band_chart, goal=LOWER, only=only,
+                      keys=[Key(_BAND_NAMES[b], "c1", ("faint", "dash", "line")[i]) for i, b in enumerate(PLY_BANDS)],
                       gap=None if drawn else ("Not measured at any save yet.", "No band was read.")))
-    series = gaps(first.saves)
     line = next((s.gap_line for s in reversed(first.saves) if s.gap_line is not None), None)
-    refs = [Ref(line, label="rule line", marked=True, end=True)] if line is not None else []
-    gap_chart = Chart("gap", lines=[Line("gap", "c1", series)], refs=refs, x_domain=x_span(snaps)) if series else None
+    refs = [Ref(line, label=f"gap rule {line:.2f}", marked=True)] if line is not None else []
+    gap_lines = [Line(x.label, cls, pts) for x, rec, cls in runs if (pts := gaps(rec.saves))]
+    gap_chart = Chart("gap", lines=gap_lines, refs=refs, x_domain=x_span(snaps)) if gap_lines else None
+    nows = [(signed(g[-1][1], 3) if (g := gaps(rec.saves)) else "", cls) for _x, rec, cls in runs]
     out.append(figure("Train/held-out gap", gap_chart, "Read on the games after each save.",
-                      goal=Goal("down", "lower is better, keep below the line"), only=only,
-                      now=signed(series[-1][1], 3) if series else "",
-                      gap=None if series else ("No gap read yet.", "A save's gap is read with the save after it.")))
+                      goal=Goal("down", f"lower is better, stay under {line:.2f}" if line is not None else "lower is better"),
+                      now=nows[0][0], nows=nows, keys=[Key(x.label, cls) for x, _r, cls in runs] if len(runs) > 1 else [],
+                      gap=None if gap_lines else ("No gap read yet.", "A save's gap is read with the save after it.")))
     out.extend(_exams(snaps, first, only))
     return out
 
@@ -134,7 +136,7 @@ def _instrument(snaps: Sequence[RunSnapshot]) -> list[str]:
 def _exams(snaps: Sequence[RunSnapshot], rec: Records, only: str) -> list[str]:
     """One small chart per exam, each with its own floor; the table twin rides on the last."""
     names = sorted({k for s in rec.saves for k in s.exams})
-    goal = Goal("up", "higher is better, keep above the floor")
+    goal = Goal("up", "higher is better, above the floor")
 
     def state(e: Any) -> str:
         return "not measured" if e is None or e.holds is None else "holds" if e.holds else "misses"
@@ -150,7 +152,7 @@ def _exams(snaps: Sequence[RunSnapshot], rec: Records, only: str) -> list[str]:
         floor = next((s.exams[exam].floor for s in reversed(rec.saves) if exam in s.exams and s.exams[exam].floor is not None), None)
         refs = [Ref(floor, label="floor", marked=True, end=True)] if floor is not None else []
         chart = Chart(exam, lines=[Line(exam, "c1", pts)], refs=refs, x_domain=x_span(snaps)) if pts else None
-        out.append(figure(f"Exam {exam}, calibrated", chart, "Calibrated mean. A break is an unmeasured save.", goal=goal, only=only,
+        out.append(figure(f"{exam} exam", chart, "Calibrated mean. A break is an unmeasured save.", goal=goal, only=only,
                           now=num(pts[-1][1], 3) if pts else "", twin=twin if i == len(names) - 1 else "",
                           gap=None if pts else ("Not measured at any save yet.", _no_temperature(rec))))
     return out
@@ -191,17 +193,13 @@ def _horizon(h: Horizon | None, only: str) -> str:
 def _reach(h: Horizon | None) -> str:
     if h is None:
         return ""
-    if h.late_reach is None:
-        return f"The search never calls the winner at {pct(REACH_SHARE)}."
 
-    def turns(r: int) -> str:
-        return f"{r} turn{'s' if r != 1 else ''}"
-    said = f"The search calls the winner {turns(h.late_reach)} out at {pct(REACH_SHARE)}"
-    if h.early_reach == h.late_reach:
-        return f"{said}, unchanged since early in the run."
-    if h.early_reach is None:
-        return f"{said}. Early in the run it never did."
-    return f"{said}, {'up' if h.late_reach > h.early_reach else 'down'} from {h.early_reach} early in the run."
+    def turns(r: int | None) -> str:
+        return "never" if r is None else f"{r} turn{'s' if r != 1 else ''} out"
+    if h.late_reach is None and h.early_reach is None:
+        return f"The search never calls the winner at {pct(REACH_SHARE)}."
+    return (f"The search calls the winner at {pct(REACH_SHARE)} {turns(h.late_reach)} in the last fifth of sampled games, "
+            f"{turns(h.early_reach)} in the first.")
 
 
 def section(snaps: Sequence[RunSnapshot]) -> tuple[str, str, str]:
@@ -221,5 +219,7 @@ def section(snaps: Sequence[RunSnapshot]) -> tuple[str, str, str]:
         rec = x.records
         if rec is not None and rec.saves and rec.saves[-1].cf_ce is not None:
             line = f"{esc(x.label)}: held-out cross-entropy {rec.saves[-1].cf_ce:.3f} at {short(rec.saves[-1].step)}."
-            aside = f'<span class="{RUN_CLASSES[i]}">{line}</span><br>{aside}'.removesuffix("<br>")
+            if rec.gap_rule is not None:
+                line += f" Gap rule fired at {short(rec.gap_rule.get('step'))}."
+            aside = "<br>".join(t for t in (aside, f'<span class="{RUN_CLASSES[i]}">{line}</span>') if t)
     return sentence, aside, "".join(_instrument(snaps)) + _horizon(head.horizon, head.label if len(snaps) > 1 else "")

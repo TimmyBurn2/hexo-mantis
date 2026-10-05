@@ -60,14 +60,15 @@
       btn.onclick = () => { lens = k; readout(); draw(); };
       seg.append(btn);
     });
-    const head = el('tr'); ['Cell', panel.a].concat(panel.b ? [panel.b] : [], ['Search', '']).forEach(h => head.append(el('th', null, h)));
+    const searchHead = (panel.search_source || '').startsWith("the game's") ? "Game's search" : 'Search';
+    const head = el('tr'); ['Cell', panel.a].concat(panel.b ? [panel.b] : [], [searchHead, '']).forEach(h => head.append(el('th', null, h)));
     $('cands').tHead.replaceChildren(head);
     const tb = $('cands').tBodies[0]; tb.replaceChildren();
     panel.rows.forEach(r => {
       const tr = el('tr'); tr.dataset.c = `${r[0]},${r[1]}`;
-      tr.append(el('td', 'num', H.fmtC(r)), el('td', 'num', pct(r[2])));
-      if (panel.b) tr.append(el('td', 'num', r[3] == null ? '—' : pct(r[3])));
-      tr.append(el('td', 'num', r[4] == null ? '' : pct(r[4])));
+      tr.append(el('td', 'num', H.fmtC(r)), el('td', 'pct', pct(r[2])));
+      if (panel.b) tr.append(el('td', 'pct', r[3] == null ? '' : pct(r[3])));
+      tr.append(el('td', 'pct', r[4] == null ? '' : pct(r[4])));
       const tags = el('td'); r[5].forEach(t => tags.append(el('span', `tag ${t}`, t))); tr.append(tags);
       tr.onmouseenter = () => H.hoverAt(svg, r); tr.onmouseleave = () => H.hoverAt(svg, null);
       tr.onclick = () => place([r[0], r[1]]);

@@ -16,7 +16,7 @@ _ALERT = {"grad_norm_spike": "gradient-norm spike", "loss_increase_window": "los
 WINDOW = 2000
 _TRAIN = (("value_loss", "Value loss", "Smoothed. Band: range per bucket.", LOWER, "trainer_step"),
           ("policy_loss", "Policy loss", "Against the search target.", LOWER, "trainer_step"),
-          ("policy_entropy", "Policy entropy", "Nats, on training rows.", Goal("watch", "slow fall is normal, a sharp drop is collapse"),
+          ("policy_entropy", "Policy entropy", "Nats, on training rows.", Goal("watch", "falls slowly, a cliff is collapse"),
            "trainer_step"),
           ("grad_norm", "Gradient norm", "Before clipping. ▲ marks a spike warning.", Goal("watch", "steady is good, spikes are warnings"),
            "trainer_step"),
@@ -129,6 +129,12 @@ def training(snaps: Sequence[RunSnapshot]) -> tuple[str, str, str]:
     if value is not None and policy is not None:
         trend = f"Smoothed, value loss {sig(value[0])} → {sig(value[1])} and policy loss {sig(policy[0])} → {sig(policy[1])}.<br>"
     aside = (f"Warnings: {notes}.<br>" if notes else "") + trend + "Losses track the fit to moving targets, not strength."
+    for i, x in enumerate(snaps[1:], 1):
+        theirs = x.events.rows("training_alert")
+        stops = sum(len(x.events.rows(n)) for n in ("hard_abort", "hard_abort_after_stop"))
+        said = f"{stops} abort{'s' if stops != 1 else ''}" if stops else "no aborts"
+        said += f", {len(theirs)} warning{'s' if len(theirs) != 1 else ''}: " + ", ".join(short(a.get("step")) for a in theirs[:6]) if theirs else ", no warnings"
+        aside += f'<br><span class="{RUN_CLASSES[i]}">{esc(x.label)}: {said}.</span>'
     spikes = [(float(a["step"]), f"gradient-norm spike at {num(a['step'])}") for a in alerts
               if a.get("rule") == "grad_norm_spike" and isinstance(a.get("step"), int)]
     panels = "".join(_multiple(snaps, event, key, title, definition, goal,
@@ -141,7 +147,7 @@ def training(snaps: Sequence[RunSnapshot]) -> tuple[str, str, str]:
 def selfplay(snaps: Sequence[RunSnapshot]) -> tuple[str, str, str]:
     head = snaps[0].events
     first_html, first = _share_chart(
-        snaps, "First mover wins", f"Last {num(WINDOW)} decided games.", Goal("near", "best near 50 %"),
+        snaps, "First player wins", f"Last {num(WINDOW)} decided games.", Goal("near", "best near 50 %"),
         lambda x: (lambda i: None if x.events.games.winner[i] not in (0, 1) else int(x.events.games.winner[i] == 0)),
         refs=(Ref(0.5),))
     cap_html, cap = _share_chart(snaps, "Games ending at the cap", f"Last {num(WINDOW)} games.", LOWER,
@@ -164,6 +170,6 @@ def selfplay(snaps: Sequence[RunSnapshot]) -> tuple[str, str, str]:
             aside = f'<span class="{RUN_CLASSES[i]}">{esc(x.label)}: {num(other)} games an hour.</span><br>{aside}'
     panels = first_html + cap_html + "".join(
         _multiple(snaps, "iteration_complete", key, title, definition, goal,
-                  fmt=lambda v: num(v))
+                  fmt=(lambda v: short(v)) if "positions" in key else (lambda v: num(v)))
         for key, title, definition, goal in _PLAY)
     return sentence, aside.removesuffix("<br>"), panels

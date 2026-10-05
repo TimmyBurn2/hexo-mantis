@@ -87,9 +87,10 @@ def test_each_nets_whole_turn_is_named_and_the_same_turn_said_once(text):
     assert both["turn"]["ghosts"] == [[0, 1, "1", "gab"], [1, 1, "2", "gab"]]
     split = text.compose(_rec(pa), _rec(pa, step=3000), None, None, None, turn_a=turn([(0, 1), (1, 1)]),
                          turn_b=turn([(0, 1), (2, 2)]))
-    assert "r at 45k plays (0, 1) then (1, 1); r at 3k plays (0, 1) then (2, 2)." in split["verdict"]
+    assert ('<span class="c1">r at 45k</span> plays (0, 1) then (1, 1); <span class="c2">r at 3k</span> plays (0, 1) then (2, 2).'
+            in split["verdict"])
     cut = text.compose(_rec(pa), None, None, None, None, turn_a=turn([(0, 1)], unread="the analyst did not answer"))
-    assert "r at 45k plays (0, 1), its second stone not read (the analyst did not answer)." in cut["verdict"]
+    assert "r at 45k</span> plays (0, 1), its second stone not read (the analyst did not answer)." in cut["verdict"]
 
 
 class _Analyst:
