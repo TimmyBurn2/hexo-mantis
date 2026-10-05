@@ -10,7 +10,7 @@ from typing import Any
 from mantis._engine import Board
 from mantis.util.loadpkg import load_tools_package
 
-load_tools_package("dash")
+load_tools_package("dash", repo_root=Path(__file__).resolve().parents[2])
 _engines = importlib.import_module("dash.engine.engines")
 
 

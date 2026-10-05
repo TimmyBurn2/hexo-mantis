@@ -273,3 +273,51 @@ def test_the_reach_names_no_turn_instead_of_none(dash, value):
     h = horizon.Horizon(curve, curve, curve, curve, None, 3, 10, 2, (0, 1), (8, 9))
     text = value._reach(h)
     assert "None" not in text and "3 turns out" in text and "first fifth, no turn" in text
+
+
+def test_an_ambiguous_rule_is_stated_and_its_going_forward_read_withheld(dash, strength, tmp_path):
+    cells = tmp_path / "cells"
+    sidecar(cells, "r1", 300, 0.76)
+    sidecar(cells, "r1", 350, 0.50, six={"commit": "newpin", "net_sha256": "beef", "generation": 30, "nodes": 16})
+    sidecar(cells, "p0", 45000, 0.59)
+    record = importlib.import_module("dash.readers.record")
+    snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), rule="six30_16").poll()
+    _, aside = strength.verdict(snap)
+    assert "names 2 series" in aside and "withheld" in aside and "Going forward" not in aside
+
+
+def test_a_declared_rule_with_no_cell_keeps_the_others_report_only(dash, strength, tmp_path):
+    cells = tmp_path / "cells"
+    extra = {"unit": "six455_128", "six": {"commit": "c0ffee", "net_sha256": "g455", "generation": 455, "nodes": 128}}
+    sidecar(cells, "r1", 300, 0.45, suffix="six455_128.full", **extra)
+    record = importlib.import_module("dash.readers.record")
+    snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), rule="six30_16").poll()
+    _, aside = strength.verdict(snap)
+    assert "(report-only)" in aside and "reads six30_16, which has no cell yet" in aside
+
+
+def test_the_logit_whisker_carries_the_parents_interval_too(dash, strength, tmp_path):
+    cells = tmp_path / "cells"
+    sidecar(cells, "r1", 300, 0.16, n=288, wr_ci_lower=0.12, wr_ci_upper=0.20)
+    sidecar(cells, "p0", 45000, 0.111, n=288, wr_ci_lower=0.08, wr_ci_upper=0.145)
+    record = importlib.import_module("dash.readers.record")
+    snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), rule="six30_16").poll()
+    blob = re.findall(r'<script type="application/json" class="xh">(.*?)</script>', strength._logit_panel(snap, 400.0))[0]
+    import json as _json
+    (pt,) = _json.loads(blob)["series"][0]["pts"]
+    assert pt[2] < 0 < pt[3], "the difference's interval contains zero, as separation() says"
+
+
+def test_no_script_derives_a_turn_or_an_owner():
+    web = REPO_ROOT / "tools" / "dash" / "web"
+    for name in ("board.js", "games.js", "analyzer.js"):
+        code = (web / name).read_text(encoding="utf-8")
+        assert "turnOf" not in code and ">> 1" not in code and "% 2" not in code, name
+
+
+def test_an_armed_halt_whose_signal_was_not_sent_says_why(dash, value, tmp_path):
+    halt = {"step": 6000, "halting_rows": ["T4_V twice"], "armed": True, "final_save": False,
+            "signal": {"sent": False, "reason": "the run was already gone"}}
+    root = _records(tmp_path, [_save(6000)], HALT=halt)
+    sentence, _, _ = value.section([_snap(dash, _record(tmp_path), records=root)])
+    assert "its signal was not sent (the run was already gone)" in sentence

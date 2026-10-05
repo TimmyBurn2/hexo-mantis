@@ -1642,9 +1642,9 @@ names what closed it, so every live cite resolves here.
   `eval_round_complete.gate` carries the gate's rule fields.
   `tests/eval/test_gate_fields_ride_the_round_complete_row.py`
 - `CARD-SEALBOT-TT-SEAT` — CLOSED 2026-09-15 on the A/B's reading, R353(b), `7e0a424c`
-  (`SEALBOT_TT_AB_2026-09-14.md`); the rung itself was deleted by R362. `tools/dashboard/tier2.py`
+  (`SEALBOT_TT_AB_2026-09-14.md`); the rung itself was deleted by R362, and its dashboard row retired with the dashboard (DASH-2).
 - `CARD-SELFPLAY-SEARCH-STATS` — LANDED 2026-09-16 by R355(d), `18eb4f4e`:
-  `selfplay.search_stats_every` samples self-play games into the record. `tools/viewer/html.py`
+  `selfplay.search_stats_every` samples self-play games into the record. `tools/dash/views/games_text.py`
 - `CARD-SERVER-OWNED-COPY` — LANDED 2026-09-21 by R366(b), `857187af`: the inference server serves
   its own copy, which `ActorSync` writes and the learner never reads. `src/mantis/train/checkpoints.py`
 - `CARD-STAMP-FLOOR` — CLOSED 2026-09-11, decided by matrix, `652b9f02`: the preflight burst is a

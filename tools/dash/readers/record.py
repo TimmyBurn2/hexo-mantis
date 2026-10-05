@@ -27,6 +27,8 @@ class RunSnapshot:
     horizon: Horizon | None
     records: saves.Records | None
     rulers: tuple[sidecars.Ruler, ...]
+    rule: str | None
+    rule_matches: int
     ladder: ladder.Ladder | None
     bridges: tuple[tuple[ladder.Change, tuple[tuple[sidecars.Cell, sidecars.Cell], ...]], ...]
     cells_skipped: tuple[str, ...]
@@ -88,8 +90,9 @@ class RunRecord:
         cells, skipped = sidecars.load(self.cells)
         rungs = ladder.read(self.ladder_file)
         bridges = tuple((c, tuple(sidecars.bridges(cells, self.run_id, (c.frm, c.to)))) for c in (rungs.changes if rungs else ()))
+        rulers, matches = sidecars.rulers(cells, self.run_id, self.parent_stem, self.rule)
         return RunSnapshot(
-            label=self.label, run_id=self.run_id, events=events, horizon=horizon, records=records,
-            rulers=sidecars.rulers(cells, self.run_id, self.parent_stem, self.rule), ladder=rungs, bridges=bridges,
+            label=self.label, run_id=self.run_id, events=events, horizon=horizon, records=records, rulers=rulers,
+            rule=self.rule, rule_matches=matches, ladder=rungs, bridges=bridges,
             cells_skipped=tuple(skipped), parent_stem=self.parent_stem,
             beat=liveness.read(self.run_dir / "logs", self.run_id), games_indexed=indexed)

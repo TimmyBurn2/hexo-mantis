@@ -16,9 +16,10 @@ CELLS = 4
 LINE_LOGIT = 0.17
 
 
-def logit(p: float) -> float:
-    """log(p / (1 − p)), clamped away from 0 and 1."""
-    q = min(max(p, 1e-6), 1 - 1e-6)
+def logit(p: float, n: int | None = None) -> float:
+    """log(p / (1 − p)); with `n` games a reading of 0 or 1 is moved half a game in, else it is clamped at 1e-6."""
+    edge = 0.5 / n if n else 1e-6
+    q = min(max(p, edge), 1 - edge)
     return math.log(q / (1 - q))
 
 
@@ -42,7 +43,15 @@ class Cell:
 
     @property
     def logit(self) -> float:
-        return logit(self.wr)
+        """The win rate's logit, half a game in from 0 and 1."""
+        return logit(self.wr, self.n)
+
+    @property
+    def logit_half_width(self) -> float | None:
+        """Half the interval's width in logit (each bound half a game in), or None without both bounds."""
+        if self.lo is None or self.hi is None:
+            return None
+        return (logit(self.hi, self.n) - logit(self.lo, self.n)) / 2
 
 
 def _int(v: Any) -> int | None:
@@ -144,20 +153,29 @@ class Ruler:
         return sum(c.logit for c in last) / len(last) - self.parent.logit, len(last)
 
 
-def rulers(cells: list[Cell], run_id: str, parent_stem: str | None, rule: str | None) -> tuple[Ruler, ...]:
-    """Every unit the run has a cell in, as its own series; the rule's unit first, then Six before Strix, then by name."""
+def _tag(unit: tuple[str, ...]) -> str:
+    return hashlib.sha256("|".join(unit).encode()).hexdigest()[:6]
+
+
+def rulers(cells: list[Cell], run_id: str, parent_stem: str | None, rule: str | None) -> tuple[tuple[Ruler, ...], int]:
+    """Every unit as its own series (same-named units told apart by a hash), and how many units the rule names: it marks only one."""
     by_unit: dict[tuple[str, ...], list[Cell]] = {}
     for c in cells:
         if c.run_id == run_id:
             by_unit.setdefault(c.unit, []).append(c)
+    names: dict[str, int] = {}
+    for own in by_unit.values():
+        names[own[0].name] = names.get(own[0].name, 0) + 1
+    matched = [u for u, own in by_unit.items() if rule is not None and rule in (own[0].name, own[0].unit_field)]
     out = []
     for unit, own in by_unit.items():
         head = own[0]
         parent = next((c for c in cells if parent_stem is not None and c.stem == parent_stem and c.unit == unit), None)
-        out.append(Ruler(name=head.name, unit_field=head.unit_field, family=head.family, unit=unit, label=head.label,
+        name = head.name if names[head.name] == 1 else f"{head.name} #{_tag(unit)}"
+        out.append(Ruler(name=name, unit_field=head.unit_field, family=head.family, unit=unit, label=head.label,
                          line=tuple(sorted(own, key=lambda c: c.step)), parent=parent,
-                         rule=rule is not None and rule in (head.name, head.unit_field)))
-    return tuple(sorted(out, key=lambda r: (not r.rule, r.family != "six", r.name)))
+                         rule=len(matched) == 1 and unit == matched[0]))
+    return tuple(sorted(out, key=lambda r: (not r.rule, r.family != "six", r.name))), len(matched)
 
 
 def bridges(cells: list[Cell], run_id: str, units: tuple[str, str]) -> list[tuple[Cell, Cell]]:

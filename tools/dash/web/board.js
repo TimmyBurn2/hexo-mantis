@@ -3,7 +3,6 @@ window.Hex = (function () {
   'use strict';
   const SQ3 = Math.sqrt(3), X = (q, r) => SQ3 * (q + r / 2), Y = (q, r) => 1.5 * r;
   const key = c => c[0] + ',' + c[1];
-  const turnOf = p => (p + 1 >> 1) + 1;
   const NAME = ['Light', 'Dark'];
   const MINUS = '−', fmtC = c => `(${String(c[0]).replace('-', MINUS)}, ${String(c[1]).replace('-', MINUS)})`;
 
@@ -22,7 +21,7 @@ window.Hex = (function () {
     return [q, r];
   }
 
-  /* scene: {moves, owners, ply, frame, numbers, heat:[{c, rel, label, cls}], win:[c], block:[c], ghost:c, winLine:[c], focus:c} */
+  /* scene: {moves, owners, turns, ply, frame, numbers, heat:[{c, rel, label, cls}], win, block, ghost, winLine, focus}; owners and turns come from the server */
   function draw(svg, sc) {
     const frame = sc.frame && sc.frame.length ? sc.frame : (sc.moves.length ? sc.moves : [[0, 0]]);
     const xs = frame.map(c => X(c[0], c[1])), ys = frame.map(c => Y(c[0], c[1])), pad = 2.6;
@@ -45,11 +44,11 @@ window.Hex = (function () {
       sc.winLine.forEach(c => out.push(hex('winrim', c, .84)));
       out.push(`<polyline class="winline" points="${sc.winLine.map(c => X(c[0], c[1]).toFixed(3) + ',' + Y(c[0], c[1]).toFixed(3)).join(' ')}"/>`);
     }
-    const lastTurn = sc.ply ? turnOf(sc.ply - 1) : 0;
+    const lastTurn = sc.ply ? sc.turns[sc.ply - 1] : 0;
     for (let i = 0; i < sc.ply; i++) {
-      const c = sc.moves[i], o = sc.owners[i] + 1, isLast = turnOf(i) === lastTurn;
+      const c = sc.moves[i], o = sc.owners[i] + 1, isLast = sc.turns[i] === lastTurn;
       if (sc.numbers) {
-        out.push(`<text class="n${o}" x="${X(c[0], c[1]).toFixed(3)}" y="${Y(c[0], c[1]).toFixed(3)}">${turnOf(i)}</text>`);
+        out.push(`<text class="n${o}" x="${X(c[0], c[1]).toFixed(3)}" y="${Y(c[0], c[1]).toFixed(3)}">${sc.turns[i]}</text>`);
         if (isLast) out.push(hex(`ltr${o}`, c, .62));
       } else if (isLast) out.push(hex(`lt${o}`, c, .2));
     }
@@ -115,5 +114,5 @@ window.Hex = (function () {
     label();
   }
 
-  return { X, Y, key, turnOf, NAME, fmtC, hexPts, draw, cellAt, hoverAt, trace, glyph, theme };
+  return { X, Y, key, NAME, fmtC, hexPts, draw, cellAt, hoverAt, trace, glyph, theme };
 })();

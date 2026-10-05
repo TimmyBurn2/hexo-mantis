@@ -30,8 +30,12 @@ def _halt(rec: Records) -> str | None:
     if halt is None:
         return None
     rows = "; ".join(esc(r) for r in halt.get("halting_rows") or [])
-    sent = (halt.get("signal") or {}).get("sent") if isinstance(halt.get("signal"), dict) else None
-    how = ("and the monitor signalled the run to save and stop" if halt.get("armed") is True and sent
+    raw_signal = halt.get("signal")
+    signal: dict[str, Any] = raw_signal if isinstance(raw_signal, dict) else {}
+    sent = signal.get("sent")
+    how = ("and the monitor signalled the run to save and stop" if halt.get("armed") is True and sent is True
+           else f"and the monitor was armed, but its signal was not sent ({esc(signal.get('reason') or 'no reason given')})"
+           if halt.get("armed") is True and sent is False
            else "but the monitor was not armed to signal the run" if halt.get("armed") is False
            else "at the run's own final save" if halt.get("final_save") else "and no signal is on record")
     return f"<strong>A halting row fired</strong> at {num(halt.get('step'))}, {how}: {rows}."

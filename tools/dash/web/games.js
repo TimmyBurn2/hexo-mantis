@@ -14,7 +14,7 @@
     const t = end ? null : G.tactics[ply], cands = L.search && !end ? (think.cands || []) : [];
     const top = Math.max(1e-9, ...cands.map(c => c[2]));
     return {
-      moves: G.moves, owners: G.owners, ply, frame: G.moves, numbers: L.num,
+      moves: G.moves, owners: G.owners, turns: G.turn_of, ply, frame: G.moves, numbers: L.num,
       heat: cands.map((c, i) => ({ c: [c[0], c[1]], rel: c[2] / top, label: i < 3 && c[2] >= .03 ? String(Math.round(c[2] * 100)) : '' })),
       win: L.tac && t && t.cls === 'win' ? t.cells : [], block: L.tac && t && t.cls === 'block' ? t.cells : [],
       ghost: !end && L.search ? G.moves[ply] : null, winLine: end ? G.win : null,
@@ -28,7 +28,7 @@
     if (G.turning) { const tp = trusted('p', 'say', G.turning); tp.querySelector('a').onclick = e => { e.preventDefault(); go(+e.target.dataset.ply); }; game.append(tp); }
     const dl = el('dl', 'facts'); G.facts.forEach(([k, v]) => dl.append(el('dt', null, k), el('dd', null, v))); game.append(dl);
     box.append(game);
-    if (pos.threat) { const s = el('section'); s.append(el('h2', null, `Turn ${H.turnOf(ply)}`), trusted('div', 'tacline', pos.threat)); box.append(s); }
+    if (pos.threat) { const s = el('section'); s.append(el('h2', null, `Turn ${G.turn_of[ply]}`), trusted('div', 'tacline', pos.threat)); box.append(s); }
     if (pos.think) {
       const s = el('section'), th = pos.think; s.append(el('h2', null, 'What the bot thought'), trusted('p', 'say', th.text));
       if (th.light != null) {
@@ -61,16 +61,22 @@
     row.append(a, copy); act.append(row); box.append(act);
   }
 
+  const turnAt = p => (p >= G.moves.length ? G.turns : G.turn_of[p]);
   function render() {
     H.draw($('board-svg'), scene());
     $('where').innerHTML = G.pos[Math.min(ply, G.moves.length)].where;  // server-composed
-    if (strip) strip.setCur(H.turnOf(Math.max(0, ply >= G.moves.length ? ply - 1 : ply)));
+    if (strip) strip.setCur(turnAt(ply));
     history.replaceState(null, '', `?${new URLSearchParams({ ...S.query, g: G.id, ply })}`);
     panel();
   }
   function go(p) { ply = Math.min(G.moves.length, Math.max(0, p)); render(); }
-  function goTurn(t) { const i = G.moves.findIndex((_, k) => H.turnOf(k) === t); go(i < 0 ? G.moves.length : i); }
-  function drawStrip() { strip = H.trace($('trace'), { pts: G.chances, turns: G.turns, turn: H.turnOf(Math.max(0, ply - 1)), onTurn: goTurn }); }
+  function goTurn(t) { go(t >= 1 && t <= G.turn_starts.length ? G.turn_starts[t - 1] : G.moves.length); }
+  function stepTurn(dir) {
+    const starts = G.turn_starts.concat([G.moves.length]);
+    const next = dir > 0 ? starts.find(p => p > ply) : starts.filter(p => p < ply).pop();
+    go(next === undefined ? (dir > 0 ? G.moves.length : 0) : next);
+  }
+  function drawStrip() { strip = H.trace($('trace'), { pts: G.chances, turns: G.turns, turn: turnAt(ply), onTurn: goTurn }); }
 
   async function open(id) {
     const r = await fetch(`/api/run/${encodeURIComponent(S.run)}/game/${encodeURIComponent(id)}`);
@@ -110,8 +116,8 @@
     document.addEventListener('keydown', e => {
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
       const rows = [...document.querySelectorAll('.lrow')], i = rows.findIndex(r => r.dataset.id === G.id);
-      if (e.key === 'ArrowRight') go(ply + (e.shiftKey ? 2 : 1));
-      else if (e.key === 'ArrowLeft') go(ply - (e.shiftKey ? 2 : 1));
+      if (e.key === 'ArrowRight') { if (e.shiftKey) stepTurn(1); else go(ply + 1); }
+      else if (e.key === 'ArrowLeft') { if (e.shiftKey) stepTurn(-1); else go(ply - 1); }
       else if (e.key === 'Home') go(0);
       else if (e.key === 'End') go(G.moves.length);
       else if (e.key === ' ') { e.preventDefault(); play.click(); }
@@ -125,16 +131,8 @@
     const q = new URLSearchParams({ ...S.query, after: button.dataset.after });
     const r = await fetch(`/api/run/${encodeURIComponent(S.run)}/games?${q}`);
     if (!r.ok) return;
-    const page = await r.json(), at = button;
-    page.rows.forEach(row => {
-      const a = el('a', 'lrow'); a.dataset.id = row.id; a.href = `?${new URLSearchParams({ ...S.query, g: row.id })}`;
-      a.setAttribute('role', 'option'); a.setAttribute('aria-selected', 'false');
-      const win = el('span'); win.innerHTML = row.res === 'p1' || row.res === 'p2' ? H.glyph(row.res === 'p1' ? 's1' : 's2') : '–';
-      const kind = el('span', 'kind', ({ selfplay: 'Self-play', promotion: 'Gate', external: 'External', random_floor: 'Random' })[row.ch] || row.ch);
-      a.append(win, kind, el('span', 'r', row.step >= 0 ? (row.step >= 1000 ? (row.step / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(row.step)) : '—'),
-        el('span', 'r', String(row.pl)), el('span', null, row.stats ? '·' : ''));
-      at.before(a);
-    });
+    const page = await r.json();
+    page.html.forEach(row => button.insertAdjacentHTML('beforebegin', row));  // rows rendered and escaped by the server
     if (page.next) button.dataset.after = page.next; else button.remove();
   }
 

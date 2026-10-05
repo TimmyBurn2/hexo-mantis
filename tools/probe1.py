@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import importlib
+from pathlib import Path
 
 from mantis.util.loadpkg import load_tools_package
 
-load_tools_package("dash")
+load_tools_package("dash", repo_root=Path(__file__).resolve().parents[1])
 load_tools_package("probe1")
 _cli = importlib.import_module("probe1.cli")
 

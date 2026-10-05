@@ -14,14 +14,14 @@ Item = tuple[dict[str, Any], Future[dict[str, Any]]]
 
 
 def supersession_key(request: dict[str, Any]) -> tuple[Any, ...]:
-    """`(client, engine, op, raw|search)`: a newer request with the same key replaces a queued one; `engines` never."""
+    """`(client, engine, op, raw|search)` as text, so any request hashes; a newer one with the same key replaces a queued one."""
     if request.get("op") == "engines":
         return ("engines", id(request))
     try:
         tier = "raw" if int(request.get("sims", 0) or 0) == 0 else "search"
     except (TypeError, ValueError, OverflowError):
         tier = "search"
-    return request.get("client"), request.get("engine"), request.get("op"), tier
+    return repr(request.get("client")), repr(request.get("engine")), repr(request.get("op")), tier
 
 
 class Analyst:
@@ -35,6 +35,7 @@ class Analyst:
         self._thread = threading.Thread(target=self._loop, name="analyst", daemon=True)
 
     def start(self) -> None:
+        """Start the one worker thread."""
         self._thread.start()
 
     def stop(self) -> None:

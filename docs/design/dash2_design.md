@@ -283,3 +283,12 @@ units.
 - **2026-10-05, build decisions (continued).** The tokens live once, in `web/dash.css` (§7.1's `views/tokens.py` is
   not a separate module: one stylesheet serves the served and the frozen form). The status line's steps are the live
   segment's own: a run resumed from an earlier save reads its new life, not the dead one's maximum.
+- **2026-10-05, after the second review.** The Analyzer's routes are `GET /analyzer`, `GET /api/engines`, `POST
+  /api/read` (a position read by one net and compared with another, the panel composed server-side) and `POST
+  /api/analyze` (the old analyzer's request, unchanged); the old `POST /trace` has no caller and is dropped (the engine
+  layer keeps its op, moved unchanged). Keys live in `games.js` and `analyzer.js` (no separate `keys.js`). The browser
+  steps with turn facts the server sends (each stone's owner and turn, each turn's first ply); it derives none. A game's
+  payload carries every position's sentences, so a 256-ply sampled game is about 160 KB (above observatory §3.6's
+  50 KB) and the server keeps 24 of them. The owner rule appears twice in the package: in the moved engine layer
+  (`engine/position.py`, unchanged by design) and in the readers. Gate 10 records the retired tools under
+  `DISSOLVED_PATHS`, as it records every removed path, rather than finding no reference to them in history.

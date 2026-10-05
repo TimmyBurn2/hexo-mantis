@@ -42,8 +42,8 @@ the child loaded), both read before the child plays; then the candidate's rows s
 `proof_games_lost` / `proof_games_drawn`: each game in which the candidate found a root proof and did not win, with
 its termination. Such a game is a refuted claim, a continuation the search lost after the proof's turn, or a ply-cap
 draw, and is read game by game. The engine hash names what played; the module hash names the tree it was meant to
-be built from (a build-time hash is `CARD-TACTICS-BUILD-HASH`). The dashboard draws each arm, and each block under it
-(its hash's first 8 hex), as its own series.
+be built from (a build-time hash is `CARD-TACTICS-BUILD-HASH`). The dash reads each arm, and each block under it
+(its hash's first 8 hex), as its own ruler.
 
 The run5 decision document carried that run's choices and is DELETED with its config
 (R346(f)): a decision document whose subject config is not in the tree
@@ -124,7 +124,7 @@ and are folded in here, because a reader of any ladder reading needs them:
   pin's commit, the engine, network and runtime sha256s the engines re-verified at start, the generation, the
   nodes, `cache_entries`, the provider, the engine starts, the searches and the stale second stones,
   all read off the child's log — and `six_findings`, the forfeits. A cell whose engines played any
-  other bytes than the pin's, or more than one engine, runtime or network, writes `.failed.json`, not a receipt. The dashboard draws it as its own series beside strix's (the R356(d) amendment).
+  other bytes than the pin's, or more than one engine, runtime or network, writes `.failed.json`, not a receipt. The dash reads it as its own ruler beside strix's (the DASH-2 amendment).
 - **Vendoring.** External engines are pinned by commit sha in `vendor/pins.toml` and fetched
   by `make vendor`, which CLONES and does not build. A pin's release assets (each a url and a
   sha256; an archive with `unpack`, a member of one with `from`) are fetched only by

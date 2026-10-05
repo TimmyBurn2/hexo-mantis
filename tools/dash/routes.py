@@ -11,7 +11,7 @@ from .views import games as games_view
 from .views.games_text import hour_of
 
 #: Game payloads a server keeps, newest use last.
-PAYLOADS = 64
+PAYLOADS = 24
 
 
 def _query(raw: dict[str, list[str]], channels: list[str]) -> dict[str, str]:
@@ -36,7 +36,7 @@ def _listing(rec: RunRecord, query: dict[str, str], after: str | None, n: int) -
 
 
 def game_payload(hub: Hub, rec: RunRecord, game_id: str) -> dict[str, Any] | None:
-    """One game's payload by id, computed once and kept; None when the run has no such game. Raises: OSError."""
+    """One game's payload by id, computed once and kept; None when the run has no such game. Raises: OSError, TypeError, ValueError."""
     key = (rec.label, game_id)
     with hub.payload_lock:
         if key in hub.payloads:
@@ -59,7 +59,7 @@ def game_payload(hub: Hub, rec: RunRecord, game_id: str) -> dict[str, Any] | Non
 def _ply(raw: dict[str, list[str]], body: dict[str, Any] | None) -> int:
     end = len(body["moves"]) if body else 0
     value = (raw.get("ply") or [""])[0]
-    return min(end, max(0, int(value))) if value.isdigit() else end
+    return min(end, max(0, int(value))) if value.isascii() and value.isdigit() else end
 
 
 def games_page(hub: Hub, parts: list[str], raw: dict[str, list[str]]) -> Reply:
@@ -90,10 +90,12 @@ def api_run(hub: Hub, parts: list[str], raw: dict[str, list[str]]) -> Reply:
         with rec.lock:
             channels = rec.games.channels()
         n = (raw.get("n") or ["200"])[0]
-        listing, _present, total = _listing(rec, _query(raw, channels), (raw.get("after") or [None])[0],
-                                            min(games_view.WINDOW, int(n) if n.isdigit() else games_view.WINDOW))
-        return as_json(200, {"ok": True, "rows": listing.rows, "next": listing.next_cursor, "total": listing.total,
-                             "games": total})
+        query = _query(raw, channels)
+        listing, _present, total = _listing(rec, query, (raw.get("after") or [None])[0],
+                                            min(games_view.WINDOW, int(n) if n.isascii() and n.isdigit() else games_view.WINDOW))
+        html = [games_view.row_html(r, rec.label, False, query) for r in listing.rows]
+        return as_json(200, {"ok": True, "rows": listing.rows, "html": html, "next": listing.next_cursor,
+                             "total": listing.total, "games": total})
     if parts[3] == "game" and len(parts) == 5:
         body = game_payload(hub, rec, parts[4])
         return as_json(200, {"ok": True, "game": body}) if body else as_json(404, {"ok": False, "refused": "no such game"})

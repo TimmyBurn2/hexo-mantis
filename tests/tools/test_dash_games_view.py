@@ -134,7 +134,7 @@ def test_the_position_at_a_ply_carries_exactly_that_many_stones_without_script(s
 
 def test_the_list_offers_only_the_channels_present_and_the_inline_game_parses(server):
     status, html = _get(f"{server}/run/r1/games")
-    assert status == 200 and ">Gate</button>" in html and ">External</button>" not in html
+    assert status == 200 and ">Gate</a>" in html and ">External</a>" not in html
     state = json.loads(re.search(r'<script type="application/json" id="state">(.*?)</script>', html, re.S).group(1))
     assert state["game"]["id"] == 'x"<b>' and 'x"<b>' not in html.replace('x\\"<b>', "")
 
@@ -154,3 +154,16 @@ def test_the_api_window_is_capped_and_filters_by_channel(server):
 def test_a_query_value_outside_its_set_is_dropped_never_echoed(server):
     status, html = _get(f"{server}/run/r1/games?kind=%3Cscript%3E&winner=zz&sort=sideways")
     assert status == 200 and "<script>" not in html.split("<body")[1].split('<script type="application/json"')[0]
+
+
+def test_all_clears_the_kind_filter_and_a_unicode_digit_is_never_a_ply(server):
+    status, html = _get(f"{server}/run/r1/games?kind=promotion")
+    all_link = re.search(r'<a href="\?([^"]*)" aria-pressed="false">All</a>', html).group(1)
+    assert status == 200 and "kind" not in all_link
+    assert _get(f"{server}/run/r1/games?g=g1&ply=%C2%B2")[0] == 200
+    assert _get(f"{server}/api/run/r1/games?n=%C2%B2")[0] == 200
+
+
+def test_load_more_rows_are_the_servers_own_rows(server):
+    page = json.loads(_get(f"{server}/api/run/r1/games?n=1")[1])
+    assert len(page["html"]) == 1 and page["html"][0].startswith('<a class="lrow"')

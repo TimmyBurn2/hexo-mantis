@@ -19,6 +19,7 @@ CANDIDATES = 7
 
 
 def cells(cs: list[tuple[int, int]] | tuple[tuple[int, int], ...], join: str) -> str:
+    """Cells as a phrase: `(1, 2)`, `(1, 2) or (3, 4)`, `(1, 2), (3, 4) or (5, 6)`."""
     items = [cell(q, r) for q, r in cs]
     return items[0] if len(items) == 1 else ", ".join(items[:-1]) + f" {join} " + items[-1]
 
@@ -41,7 +42,7 @@ def headline(g: GameView) -> str:
 def hour_of(shard_name: str) -> str | None:
     """The shard's UTC hour (`games_<run>_seg<n>_<YYYYMMDDHH>.jsonl`) in Central European time."""
     stem = shard_name.rsplit("_", 1)[-1].split(".")[0]
-    if len(stem) != 10 or not stem.isdigit():
+    if len(stem) != 10 or not (stem.isascii() and stem.isdigit()):
         return None
     start = datetime.strptime(stem, "%Y%m%d%H").replace(tzinfo=UTC).astimezone(ZONE)
     return f"{start.day} {start:%b}, the hour from {start:%H:%M} {start.tzname()}"

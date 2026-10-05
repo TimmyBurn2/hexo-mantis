@@ -269,6 +269,6 @@ class ShardIndex:
 def _cursor(text: str | None) -> tuple[int, int] | None:
     """`(shard ordinal, row)` from `"o.i"`: a game's place, stable while the open shard grows."""
     parts = (text or "").split(".")
-    if len(parts) != 2 or not all(p.isdigit() for p in parts):
+    if len(parts) != 2 or not all(p.isascii() and p.isdigit() for p in parts):
         return None
     return int(parts[0]), int(parts[1])

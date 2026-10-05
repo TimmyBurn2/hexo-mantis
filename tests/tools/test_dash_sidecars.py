@@ -41,7 +41,7 @@ def test_every_unit_is_its_own_series_never_joined(sc, tmp_path):
     sidecar(tmp_path, "r1", 9000, 0.90, tactics={**TACTICS, "arm": "off"}, suffix="six30_16.off")
     sidecar(tmp_path, "r1", 9000, 0.40, suffix="six455_128.full", **_six455(128))
     cells, _ = sc.load([tmp_path])
-    by_name = {r.name: [c.step for c in r.line] for r in sc.rulers(cells, "r1", None, None)}
+    by_name = {r.name: [c.step for c in r.line] for r in sc.rulers(cells, "r1", None, None)[0]}
     assert by_name == {"six30_16.full": [3000, 6000], "six30_16.off": [9000], "six455_128.full": [9000]}
 
 
@@ -51,7 +51,7 @@ def test_each_ruler_has_its_own_parent_on_the_same_unit(sc, tmp_path):
     sidecar(tmp_path / "parent", "p0", 45000, 0.59)
     sidecar(tmp_path / "parent", "p0", 45000, 0.30, suffix="six455_128.full", **_six455(128))
     cells, _ = sc.load([tmp_path])
-    parents = {r.name: r.parent.wr for r in sc.rulers(cells, "r1", PARENT, None)}
+    parents = {r.name: r.parent.wr for r in sc.rulers(cells, "r1", PARENT, None)[0]}
     assert parents == {"six30_16.full": 0.59, "six455_128.full": 0.30}
 
 
@@ -59,7 +59,7 @@ def test_a_parent_read_in_another_unit_never_anchors_the_line(sc, tmp_path):
     sidecar(tmp_path, "r1", 3000, 0.70)
     sidecar(tmp_path, "p0", 45000, 0.59, ours={"search_kind": "puct", "sims": 512})
     cells, _ = sc.load([tmp_path])
-    (only,) = sc.rulers(cells, "r1", PARENT, "six30_16")
+    (only,), _ = sc.rulers(cells, "r1", PARENT, "six30_16")
     assert only.parent is None and only.going_forward is None
 
 
@@ -69,9 +69,9 @@ def test_the_rule_is_named_by_unit_field_or_full_name_and_listed_first(sc, tmp_p
     sidecar(tmp_path, "r1", 3000, 0.12, family="strix")
     cells, _ = sc.load([tmp_path])
     for rule in ("six30_16", "six30_16.full"):
-        listed = sc.rulers(cells, "r1", None, rule)
+        listed, _ = sc.rulers(cells, "r1", None, rule)
         assert listed[0].name == "six30_16.full" and listed[0].rule and not any(r.rule for r in listed[1:])
-    assert [r.family for r in sc.rulers(cells, "r1", None, None)] == ["six", "six", "strix"]
+    assert [r.family for r in sc.rulers(cells, "r1", None, None)[0]] == ["six", "six", "strix"]
 
 
 def test_the_going_forward_read_is_the_mean_logit_of_the_last_four_cells_over_the_parents(sc, tmp_path):
@@ -79,7 +79,7 @@ def test_the_going_forward_read_is_the_mean_logit_of_the_last_four_cells_over_th
         sidecar(tmp_path, "r1", step, wr)
     sidecar(tmp_path, "p0", 45000, 0.59)
     cells, _ = sc.load([tmp_path])
-    mean, used = sc.rulers(cells, "r1", PARENT, "six30_16")[0].going_forward
+    mean, used = sc.rulers(cells, "r1", PARENT, "six30_16")[0][0].going_forward
     expected = sum(_logit(p) for p in (0.60, 0.62, 0.64, 0.66)) / 4 - _logit(0.59)
     assert used == 4 and mean == pytest.approx(expected)
 
@@ -88,7 +88,7 @@ def test_fewer_than_four_cells_read_with_those_available(sc, tmp_path):
     sidecar(tmp_path, "r1", 32201, 0.759)
     sidecar(tmp_path, "p0", 45000, 0.594)
     cells, _ = sc.load([tmp_path])
-    mean, used = sc.rulers(cells, "r1", PARENT, "six30_16")[0].going_forward
+    mean, used = sc.rulers(cells, "r1", PARENT, "six30_16")[0][0].going_forward
     assert used == 1 and mean == pytest.approx(_logit(0.759) - _logit(0.594))
 
 
@@ -113,7 +113,7 @@ def test_one_sidecar_copied_into_two_directories_counts_once_and_another_run_nev
     (tmp_path / "b" / a.name).write_text(a.read_text(encoding="utf-8"), encoding="utf-8")
     sidecar(tmp_path / "b", "r2", 6000, 0.30)
     cells, _ = sc.load([tmp_path / "a", tmp_path / "b"])
-    assert len(cells) == 2 and [c.run_id for r in sc.rulers(cells, "r1", None, None) for c in r.line] == ["r1"]
+    assert len(cells) == 2 and [c.run_id for r in sc.rulers(cells, "r1", None, None)[0] for c in r.line] == ["r1"]
 
 
 def test_a_bridge_is_one_checkpoint_read_on_both_rungs(sc, tmp_path):
@@ -132,7 +132,8 @@ def test_the_ladder_state_is_read_and_its_absence_is_a_stated_gap(ladder, tmp_pa
                                 "changes": [{"step": 48000, "from": "six455_128", "to": "six455_256"}, {"bad": 1}]}),
                     encoding="utf-8")
     read = ladder.read(path)
-    assert read.current == "six455_256" and read.streak == 0 and read.cells == 1 and read.note == "read"
+    assert read.current == "six455_256" and read.streak == 0 and read.cells == 1
+    assert read.note == "read, but 1 change row(s) lack step, from or to"
     assert [(c.step, c.frm, c.to) for c in read.changes] == [(48000, "six455_128", "six455_256")]
     assert ladder.read(tmp_path / "absent.json").note == "the ladder file is not there yet"
     (tmp_path / "bad.json").write_text("{", encoding="utf-8")
@@ -145,3 +146,34 @@ def test_the_parent_stem_is_read_from_the_identity_warm_start(record, tmp_path):
     write_config(tmp_path / "fresh", "r2", None)
     stem, note = record.parent_stem(tmp_path / "fresh")
     assert stem is None and "no parent" in note
+
+
+def test_a_rule_naming_two_units_marks_neither_and_the_names_are_told_apart(sc, tmp_path):
+    sidecar(tmp_path, "r1", 36000, 0.76)
+    sidecar(tmp_path, "r1", 39000, 0.50, six={**SIX, "commit": "newpin"})
+    cells, _ = sc.load([tmp_path])
+    listed, matches = sc.rulers(cells, "r1", None, "six30_16")
+    assert matches == 2 and not any(r.rule for r in listed)
+    assert len({r.name for r in listed}) == 2 and all(r.name.startswith("six30_16.full #") for r in listed)
+
+
+def test_a_rule_naming_no_unit_yet_marks_none(sc, tmp_path):
+    sidecar(tmp_path, "r1", 3000, 0.40, suffix="six455_128.full", **_six455(128))
+    cells, _ = sc.load([tmp_path])
+    listed, matches = sc.rulers(cells, "r1", None, "six30_16")
+    assert matches == 0 and not any(r.rule for r in listed)
+
+
+def test_a_reading_at_zero_is_moved_half_a_game_in_never_to_minus_fourteen(sc, tmp_path):
+    sidecar(tmp_path, "r1", 3000, 0.0, n=288, wr_ci_lower=0.0, wr_ci_upper=0.0)
+    (cell,) = sc.load([tmp_path])[0]
+    assert cell.logit == pytest.approx(_logit(0.5 / 288)) and cell.logit > -7 and cell.logit_half_width == 0.0
+
+
+def test_malformed_ladder_fields_are_named_never_raised(ladder, tmp_path):
+    path = tmp_path / "ladder_state.json"
+    path.write_text(json.dumps({"current_unit": 7, "changes": 5, "history": "x"}), encoding="utf-8")
+    read = ladder.read(path)
+    assert read.changes == () and read.current is None and "changes is not a list" in read.note
+    path.write_text(json.dumps({"changes": [{"step": 1, "from_unit": "a", "to": "b"}]}), encoding="utf-8")
+    assert ladder.read(path).note == "read, but 1 change row(s) lack step, from or to"

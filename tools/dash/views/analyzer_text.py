@@ -55,9 +55,12 @@ def compose(a: dict[str, Any], b: dict[str, Any] | None, game_entry: dict[str, A
     cls, tcells = tac.get("class"), [(int(c[0]), int(c[1])) for c in tac.get("cells") or []]
     me, them = NAME[mover], NAME[1 - mover]
     pa, pb = _policy(a), _policy(b)
-    first = {name_of(a): max(pa, key=lambda c: pa[c]) if pa else None}
-    if b is not None:
-        first[name_of(b)] = max(pb, key=lambda c: pb[c]) if pb else None
+    na, nb = name_of(a), name_of(b) if b is not None else None
+    if nb == na:
+        na, nb = f"{na} ({(a.get('engine') or {}).get('sha8', 'A')})", f"{nb} ({((b or {}).get('engine') or {}).get('sha8', 'B')})"
+    first = {na: max(pa, key=lambda c: pa[c]) if pa else None}
+    if b is not None and nb is not None:
+        first[nb] = max(pb, key=lambda c: pb[c]) if pb else None
     if cls == "terminal":
         verdict = f"<strong>{NAME[0 if pos.get('winner') == 'p1' else 1]} has six in a row</strong>: the game is over."
     elif cls == "win":
@@ -91,14 +94,14 @@ def compose(a: dict[str, Any], b: dict[str, Any] | None, game_entry: dict[str, A
     tag = "wins" if cls == "win" else "blocks"
     rows = [[c[0], c[1], round(pa.get(c, 0.0), 4), None if b is None else round(pb.get(c, 0.0), 4),
              round(shares[c], 4) if c in shares else None, [tag] if c in tcells else []] for c in listed]
-    chances = [{"label": name_of(a), "cls": "c1", "light": _light(a, mover)}]
+    chances = [{"label": na, "cls": "c1", "light": _light(a, mover)}]
     if b is not None:
-        chances.append({"label": name_of(b), "cls": "c2", "light": _light(b, mover)})
+        chances.append({"label": nb, "cls": "c2", "light": _light(b, mover)})
     if game_entry is not None and isinstance(game_entry.get("v"), (int, float)):
         mine = (max(-1.0, min(1.0, float(game_entry["v"]))) + 1) / 2
         chances.append({"label": "game", "cls": "cf", "light": round(mine if mover == 0 else 1 - mine, 4)})
-    return {"verdict": verdict, "game_line": game_line, "chances": chances, "a": name_of(a),
-            "b": None if b is None else name_of(b), "first": [list(c) if c else None for c in first.values()][0],
+    return {"verdict": verdict, "game_line": game_line, "chances": chances, "a": na, "b": nb,
+            "first": [list(c) if c else None for c in first.values()][0],
             "lens": {"net": [[c[0], c[1], pa[c]] for c in ranked], "search": [[c[0], c[1], s] for c, s in shares.items()],
                      "diff": diff}, "search_source": search_source, "rows": rows,
             "tactics": {"cls": cls, "cells": [list(c) for c in tcells]}, "mover": mover}

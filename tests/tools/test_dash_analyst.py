@@ -183,3 +183,18 @@ def test_a_timeout_is_a_504(analyst):
         worker.stop()
 
 
+
+
+@pytest.mark.parametrize("body", [{"engine": ["x"], "moves": "", "sims": 0}, {"engine": "e1", "moves": "", "sims": 10**9},
+                                  {"engine": "e1", "client": {"a": 1}, "moves": "", "sims": 0}])
+def test_a_malformed_request_is_refused_by_name_and_the_analyst_lives_on(server, body):
+    httpd, _stub = server
+    port = httpd.server_address[1]
+    status, out = _post(port, "/api/analyze", body)
+    assert status == 400 and out["refused"]
+    status, out = _post(port, "/api/analyze", {"engine": "e1", "moves": "0,0", "sims": 0, "client": "c", "seq": 2})
+    assert status == 200 and out["ok"] is True
+
+
+def test_the_supersession_key_hashes_any_value(analyst):
+    assert hash(analyst.supersession_key({"client": ["x"], "engine": {"a": 1}, "op": "analyze", "sims": [1]}))

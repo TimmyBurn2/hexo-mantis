@@ -14,10 +14,12 @@ Cell = tuple[int, int]
 
 
 def xy(c: Cell) -> tuple[float, float]:
+    """The pointy-top centre of an axial cell."""
     return _SQ3 * (c[0] + c[1] / 2), 1.5 * c[1]
 
 
 def hex_points(c: Cell, rad: float) -> str:
+    """The polygon points of a hexagon of radius `rad` around a cell."""
     cx, cy = xy(c)
     return " ".join(f"{cx + rad * math.cos(math.radians(60 * i - 30)):.3f},{cy + rad * math.sin(math.radians(60 * i - 30)):.3f}"
                     for i in range(6))

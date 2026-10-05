@@ -6,7 +6,7 @@ from urllib.parse import quote, urlencode
 
 from ..readers import chances
 from ..readers.games import GameView
-from ..readers.hexlogic import owner, turn_of
+from ..readers.hexlogic import first_of_turn, owner, turn_of
 from ..readers.shards import Page
 from . import board, games_text
 from .fmt import esc, num, script_json, short
@@ -26,6 +26,7 @@ _SEARCH = ('<svg class="search-ico" width="14" height="12" viewBox="0 0 14 12" a
 
 
 def glyph(cls: str) -> str:
+    """A small hexagon in a stone or mark class, for lists and legends."""
     return _GLYPH.format(c=cls, p=board.hex_points((0, 0), 1.0).replace("0.000,", "0,"))
 
 
@@ -40,11 +41,18 @@ def payload(g: GameView, run_label: str, hour: str | None) -> dict[str, Any]:
     pos.append({"where": games_text.where(g, len(g.moves)), "threat": None, "think": None})
     tp = chances.turning_point(chances.points(g.stats))
     body.update(run=run_label, head=games_text.headline(g), facts=games_text.facts(g, run_label, hour),
-                turning=games_text.turning(tp, g.game_id), pos=pos, owners=[owner(i) for i in range(len(g.moves))])
+                turning=games_text.turning(tp, g.game_id), pos=pos, **turn_facts(len(g.moves)))
     return body
 
 
+def turn_facts(plies: int) -> dict[str, list[int]]:
+    """Who placed each stone, the turn it belongs to, and each turn's first ply: the browser steps with these, never derives them."""
+    return {"owners": [owner(i) for i in range(plies)], "turn_of": [turn_of(i) for i in range(plies)],
+            "turn_starts": [i for i in range(plies) if first_of_turn(i)]}
+
+
 def row_html(row: dict[str, Any], run: str, selected: bool, query: dict[str, str]) -> str:
+    """One list row: the winner's stone, the kind, the net's step, the stones, the search glyph; every value escaped."""
     res, term = row.get("res"), row.get("term")
     win = glyph("s1" if res == "p1" else "s2") if res in ("p1", "p2") else '<span class="muted" title="no winner">–</span>'
     sub = {"promotion": "vs anchor", "external": f"vs {row.get('rung', '?')}"}.get(str(row.get("ch")), "")
@@ -61,8 +69,9 @@ def row_html(row: dict[str, Any], run: str, selected: bool, query: dict[str, str
 
 def _filters(run: str, present: list[str], query: dict[str, str], total: int, shown: int) -> str:
     kinds = [("", "All")] + [(k, label) for k, label in KINDS if k in present]
-    chips = "".join(f'<button name="kind" value="{k}" aria-pressed="{"true" if query.get("kind", "") == k else "false"}">'
-                    f"{label}</button>" for k, label in kinds)
+    rest = {k: v for k, v in query.items() if k in ("search", "winner", "sort")}
+    chips = "".join(f'<a href="?{esc(urlencode({**rest, **({"kind": k} if k else {})}))}" '
+                    f'aria-pressed="{"true" if query.get("kind", "") == k else "false"}">{label}</a>' for k, label in kinds)
     winner = "".join(f'<option value="{k}"{" selected" if query.get("winner", "") == k else ""}>{label}</option>'
                      for k, label in WINNER_LABEL)
     order = "".join(f'<option value="{k}"{" selected" if query.get("sort", "newest") == k else ""}>{label}</option>'

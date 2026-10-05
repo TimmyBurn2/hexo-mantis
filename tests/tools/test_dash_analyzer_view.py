@@ -122,3 +122,23 @@ def test_the_engine_layer_loads_only_on_the_first_analyzer_request(tmp_path):
               "lazy(); after = 'torch' in sys.modules\nlazy.close()\nprint(before, after)\n")
     out = subprocess.run([sys.executable, "-c", script, str(root)], capture_output=True, text=True, timeout=300)
     assert out.returncode == 0 and out.stdout.split() == ["False", "True"], out.stderr[-2000:]
+
+
+def test_a_read_with_a_list_field_is_refused_by_name(dash, tmp_path):
+    desk = importlib.import_module("dash.desk")
+    hub = _hub(tmp_path)
+
+    class Fake:
+        analyst = None
+
+    for body in (b'{"a": "x", "run": ["r1"]}', b'{"a": "x", "b": [1]}', b'{"b": "y"}', b'{"a": "x", "sims": -1}'):
+        out = desk.post(hub, lambda: Fake())("/api/read", body)
+        assert out.status == 400, body
+
+
+def test_two_nets_with_one_name_are_told_apart(text):
+    a = _record(A)
+    b = _record(B)
+    a["engine"]["sha8"], b["engine"]["sha8"] = "aaaa1111", "bbbb2222"
+    panel = text.compose(a, b, None, None, None)
+    assert panel["a"] != panel["b"] and "aaaa1111" in panel["a"] and "does not block" in panel["verdict"]

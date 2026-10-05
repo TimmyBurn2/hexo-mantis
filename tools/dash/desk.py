@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import threading
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,9 +14,22 @@ from .routes import game_payload
 from .serve import Hub, Reply, as_json, text
 from .views import analyzer as analyzer_view
 from .views.analyzer_text import compose
+from .views.games import turn_facts
 
-#: How long a request waits on the analyst before it is answered 504.
+#: How long a request waits on the analyst before it is answered 504, and the deepest search a request may ask for.
 TIMEOUT_SEC = 120.0
+MAX_SIMS = 4096
+
+
+def checked(req: dict[str, Any], *keys: str) -> str | None:
+    """Why a request is refused: a named field of the wrong type, or `sims` outside 0..`MAX_SIMS`; None when it is sound."""
+    for key in keys:
+        if req.get(key) is not None and not isinstance(req[key], str):
+            return f"{key} must be text, got {type(req[key]).__name__}"
+    sims = req.get("sims", 0)
+    if sims is not None and (isinstance(sims, bool) or not isinstance(sims, int) or not 0 <= sims <= MAX_SIMS):
+        return f"sims must be an integer from 0 to {MAX_SIMS}, got {sims!r}"
+    return None
 
 
 @dataclass(frozen=True)
@@ -46,6 +60,7 @@ class Desk:
         self.analyst.start()
 
     def rows(self) -> list[dict[str, Any]]:
+        """The engine rows; no engine is touched."""
         return self.dispatcher.rows()
 
     def default_pair(self) -> tuple[str | None, str | None]:
@@ -70,10 +85,11 @@ class Desk:
             rec_b = second["body"].get("record")
         rec_a = first["body"]["record"]
         panel = {**compose(rec_a, rec_b, ctx.entry, ctx.nxt, ctx.second), "a_id": a, "b_id": b,
-                 "where": analyzer_view.where(moves)}
+                 "where": analyzer_view.where(moves), **turn_facts(len(moves))}
         return 200, {"ok": True, "panel": panel, "record": rec_a, "context": ctx.__dict__}
 
     def close(self) -> None:
+        """Stop the analyst; the engines close on its thread."""
         self.analyst.stop()
 
 
@@ -94,11 +110,16 @@ class LazyDesk:
             return self._desk
 
     def close(self) -> None:
+        """Close the desk if it was ever built."""
         if self._desk is not None:
             self._desk.close()
 
 
 DeskOf = Callable[[], Desk] | None
+
+
+def _digits(text: str) -> bool:
+    return text.isascii() and text.isdigit()
 
 
 def context(hub: Hub, run: str | None, game_id: str | None, moves: list[tuple[int, int]]) -> Context:
@@ -127,13 +148,14 @@ def page(desk_of: DeskOf) -> Any:
         if gid and body is None:
             return text(404, f"no game {gid!r} in run {run!r}")
         game_moves = [tuple(m) for m in body["moves"]] if body else []
-        ply = min(len(game_moves), int(q["ply"])) if q.get("ply", "").isdigit() else len(game_moves)
+        ply = min(len(game_moves), int(q["ply"])) if _digits(q.get("ply", "")) else len(game_moves)
         moves = game_moves[:ply]
         panel, refused = None, None
         if desk is not None:
             a, b = q.get("a") or desk.default_pair()[0], q.get("b") or desk.default_pair()[1]
             if a:
-                status, out = desk.read(a, b if b != a else None, moves, context(hub, run, gid, moves))
+                status, out = desk.read(a, b if b != a else None, moves, context(hub, run, gid, moves),
+                                        client=f"render-{uuid.uuid4().hex}")
                 panel, refused = (out.get("panel"), None) if status == 200 else (None, out.get("refused"))
         html = analyzer_view.page(hub.labels, desk.rows() if desk else None, body, moves, panel, refused, q)
         return Reply(200, "text/html; charset=utf-8", html.encode("utf-8"))
@@ -153,19 +175,24 @@ def post(hub: Hub, desk_of: DeskOf) -> Any:
         except ValueError:
             return as_json(400, {"ok": False, "refused": "the body is not a JSON object"})
         if path == "/api/analyze":
+            why = checked(req, "engine", "client")
+            if why:
+                return as_json(400, {"seq": req.get("seq"), "ok": False, "refused": why})
             req["op"] = "analyze"
             out = desk.analyst.submit(req)
             return as_json(int(out["status"]), out["body"])
         if path != "/api/read":
             return as_json(404, {"ok": False, "refused": f"no route {path}"})
+        why = checked(req, "a", "b", "run", "g", "client") or (None if req.get("a") else "a names no engine")
+        if why:
+            return as_json(400, {"seq": req.get("seq"), "ok": False, "refused": why})
         try:
             moves = parse_moves(req.get("moves", ""))
-            sims = int(req.get("sims") or 0)
-        except (PositionRefused, TypeError, ValueError) as exc:
-            return as_json(400, {"ok": False, "refused": str(exc) or "bad sims"})
+        except PositionRefused as exc:
+            return as_json(400, {"seq": req.get("seq"), "ok": False, "refused": str(exc)})
         ctx = context(hub, req.get("run"), req.get("g"), moves)
-        status, out = desk.read(str(req.get("a")), req.get("b") or None, moves, ctx, sims=max(0, sims),
-                                symmetry=bool(req.get("symmetry")), client=str(req.get("client", "page")))
+        status, out = desk.read(str(req["a"]), req.get("b") or None, moves, ctx, sims=int(req.get("sims") or 0),
+                                symmetry=bool(req.get("symmetry")), client=str(req.get("client") or "page"))
         return as_json(status, {**out, "seq": req.get("seq")})
     return handle
 

@@ -74,7 +74,9 @@ def records_of(args: argparse.Namespace) -> list[RunRecord]:
     if not runs:
         raise SystemExit("give at least one --run ID=DIR")
     monitor, ladders = _pairs(args.records, "--records"), _pairs(args.ladder, "--ladder")
-    rules = {k: str(v) for k, v in _pairs(args.rule_unit, "--rule-unit").items()}
+    rules = {raw.partition("=")[0]: raw.partition("=")[2] for raw in args.rule_unit or [] if raw.partition("=")[1]}
+    if len(rules) != len(args.rule_unit or []):
+        raise SystemExit("--rule-unit wants ID=UNIT")
     for flag, given in (("--records", monitor), ("--ladder", ladders), ("--rule-unit", rules)):
         unknown = sorted(set(given) - set(runs))
         if unknown:
