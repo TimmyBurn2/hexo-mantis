@@ -102,7 +102,7 @@ def compose(a: dict[str, Any], b: dict[str, Any] | None, game_entry: dict[str, A
         if b is not None and turn_a.stones == turn_b.stones and not (turn_a.unread or turn_b.unread):
             verdict += f" Both nets play {' then '.join(cell(*c) for c in turn_a.stones)}."
         else:
-            verdict += " " + "; ".join(_plays(n, t) for n, t in ((na, turn_a), (nb, turn_b)) if t.stones) + "."
+            verdict += " " + "; ".join(_plays(n, t) for n, t in ((na, turn_a), (nb, turn_b)) if n is not None and t.stones) + "."
     game_line = None
     if game_next is not None:
         marks = {c: " (a block)" if cls == "block" and c in tcells else " (a win)" if cls == "win" and c in tcells else ""

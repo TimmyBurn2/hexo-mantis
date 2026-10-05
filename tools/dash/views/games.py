@@ -42,7 +42,7 @@ def payload(g: GameView, run_label: str, hour: str | None) -> dict[str, Any]:
             row["turn"] = games_text.turn_thought(g, ply, set(t.cells), t.cls == "win")
         pos.append(row)
     pos.append({"where": games_text.where(g, len(g.moves)), "threat": None, "think": None})
-    cells = [tuple(m) for m in g.moves]
+    cells = [(int(m[0]), int(m[1])) for m in g.moves]
     notation = {"head": htttx.HEADER, "turns": htttx.turns(cells), "moved": htttx.moved(cells)}
     tp = chances.turning_point(chances.points(g.stats))
     body.update(run=run_label, head=games_text.headline(g), facts=games_text.facts(g, run_label, hour),
