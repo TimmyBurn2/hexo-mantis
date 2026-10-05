@@ -105,8 +105,8 @@ def parse(path: Path, raw: Any) -> Cell | None:
     if isinstance(six, dict):
         family = "six"
         unit = ("six", *common, str(six.get("commit")), str(six.get("net_sha256")), str(six.get("nodes")))
-        label = (f"Ours: {str(ours.get('search_kind')).upper()}, {ours.get('sims')} sims, tactics {tactics}. "
-                 f"Six: gen {six.get('generation')}, {six.get('nodes')} nodes")
+        label = (f"Ours: {str(ours.get('search_kind')).upper()}, {ours.get('sims')} sims, "
+                 f"{tactics if arm is None else 'tactics ' + tactics}. Six: gen {six.get('generation')}, {six.get('nodes')} nodes")
     elif isinstance(strix, dict):
         family = "strix"
         unit = ("strix", *common, str(strix.get("commit")), str(strix.get("checkpoint_sha256")), str(strix.get("sims")),

@@ -92,4 +92,4 @@ def test_the_sidecar_records_the_radius_and_the_dash_labels_it(follower, sidecar
                                  regime_evidence={}, run_id="run8", started=0.0, finished=1.0, pin={})
     assert "radius" not in on["strix"]
     r6 = sidecars.parse(Path("x.json"), json.loads(json.dumps(body)))
-    assert r6 is not None and r6.label.endswith(", r6") and r6.unit != sidecars.parse(Path("y.json"), on).unit
+    assert r6 is not None and r6.label.endswith(", radius 6") and r6.unit != sidecars.parse(Path("y.json"), on).unit
