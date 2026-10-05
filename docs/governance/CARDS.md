@@ -36,6 +36,28 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R385 (THE RUN STARTS; THE RULE IS RETIRED; 2026-10-05) — run11 continues arm 2, RUN11-FRESH beside it
+
+- **CARD-RUN11-CONTINUE — ORDERED by R385(a): run11 continues arm 2 (2.4 steps/game, value mask 1/8; `run11a2`) from
+  its final bundle (step 32 201, mirrored and hash-verified on the desktop) on box A, which runs nothing else (R385(f)).**
+  RUN11-PRE's registered pick (arm 3) is set aside by ruling. The rate is a scalar inside the envelope [1.2, 2.4]: a
+  memorisation gap above +0.05 at two consecutive saves drops it to 1.2 by STATE line. The going-forward read is the
+  mean of four cells (the 32k final, 36k, 48k, 60k) above the parent's anchor by the line, then one cell every fourth
+  save (R385(b)); the desktop plays the cells. Later levers land by the prereg's resume rule (R385(d)).
+- **CARD-MONITOR-TWO-MISS — ORDERED by R385(b), owed before run11's monitor resumes with `--halt`: an exam floor halts
+  on two consecutive misses (one miss arms, the next fires, a pass disarms).** `tools/run_monitor` at `0aca1e1a` fires
+  a halting row on one miss. The same ruling makes L̄ report-only, reads arm comparisons as means over the last k saves
+  (level, gap, policy CE) with cells pooled over ≥ 2 checkpoints, and makes matched work matched positions.
+  RUN11-FRESH's floors report until first passed, then halt under this rule (R385(e)).
+- **CARD-RUN11-FRESH — ORDERED by R385(e): rebootstrap answered by an arm, not for run11. On box B: arm 2's recipe and
+  net shape, random init, no parent, an empty ring, the fill ramp.** Exam floors report-only until first passed, then
+  halting under (b). The cap/draw abort is its early halt; if it fires inside the first hours, the BC start at F-07's
+  setting replaces the random init. Read on the same monitor and cells; viable if it reaches the parent's X anchor
+  within 48 h. Its result is the evidence for run12's parent, nothing more.
+- **CARD-RUN11-STATUS-24H — ORDERED by R385(f): a one-screen status every 24 h** over run11, RUN11-FRESH and the cells.
+- **The quick-arm lever (RUN11-PRE's arm 4, 32 sims at m 8) — CLOSED by R385(c):** 1.145× against the prereg's 1.15,
+  and its final-save T4 row fired. Cheap placements are CARD-WITHIN-TURN-TREE-REUSE's.
+
 ## Opened by R384 (THE RUN STARTS FROM THE READ; 2026-10-04) — RUN11-PRE is run11's first leg
 
 - **CARD-BUBBLE-STUDY — ACCEPTED by R384(c) as evidence on R383(f)'s terms (rank and card, never adopt)** (local report
@@ -47,7 +69,8 @@ Both were found by running the gate set rather than by reading it, and both are 
 - **CARD-REG-1-PUSH — PUSHED 2026-10-04 (`origin/dev` = `ad3682d7`). ORDERED by R384(g): `reg-1` rebases onto `dev`,
   gates, pushes.** Rebased 2026-10-04 onto `dev` `9da49bdd`; local gates 24/24 green on `ad3682d7` before the push.
 - **CARDED by R384(f), not built before the start** (the RUN11-PRE packet's names in brackets):
-  - CARD-WITHIN-TURN-TREE-REUSE [CARD-TREE-REUSE-TURN] — within-turn tree reuse;
+  - CARD-WITHIN-TURN-TREE-REUSE [CARD-TREE-REUSE-TURN] — within-turn tree reuse; RE-STATED by R385(c) as the
+    cheap-placement lever, carded for a pinned resume after the start;
   - CARD-HEAD-TO-HEAD-LEVER-CELLS [CARD-H2H-LEVER-CELLS] — head-to-head lever cells;
   - CARD-PAIR-DIAGNOSTIC — the pair diagnostic;
   - CARD-SIX-TRAINER-READ — the Six-trainer read;
@@ -58,8 +81,8 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by the PERF-3 packet (2026-10-04) — batch prep, the cache key, trainer syncs
 
-- **CARD-PERF-3-PACKET — EXITED 2026-10-04 (branch `perf-3`, unpushed; local records `mantis-records/perf-3/`): L2
-  and L3 LANDED, L1 CARDED. The production loop with the trainer reads 156 340 -> 170 940 positions/h (+9.3 %, IQRs
+- **CARD-PERF-3-PACKET — RATIFIED by R385(d); the arms ran on this code, so run11 needs no landing. EXITED 2026-10-04,
+  merged and pushed at `e6d1fb61` (local records `mantis-records/perf-3/`): L2 and L3 LANDED, L1 CARDED. The production loop with the trainer reads 156 340 -> 170 940 positions/h (+9.3 %, IQRs
   [153 840, 160 785] and [164 250, 179 760]).** L0's profile ranked L2, L1, L3: the loop is latency-bound, popping at half
   a batch (B 36) with the workers ~85 % blocked on inference and ~8 of 32 CPUs busy.
   - L2 (`6ed55ef3`): the eval cache keys a leaf by a Zobrist over every input `build_leaf_graph` reads, before any
@@ -101,7 +124,12 @@ Both were found by running the gate set rather than by reading it, and both are 
   cell, 37 -> 31 in the loop) as two consumers split the queue. A revival owes its review's findings: a LAW-18
   thread/overlap counter, a dump stamp unique across threads, the event manifest's `pipeline` block, locked test
   batchers. The ready-block design is out: a device block fused past the wire payload breaks what the 1-in-1 checks
-  verify.** Per B-64 pop the pack takes
+  verify. CARDED WITH ITS BRANCH by R385(d): the revival `perf-3-l1b` (`402b0372` on `dev` `e6d1fb61`, every review
+  finding fixed, gates 21/21, a fresh review clean) read NOT PROVEN by its pre-stated rule on box A, run8@45k with the
+  trainer at 1.2 steps/s, medians of 5 one-minute windows: dev 172 320, L1 174 420, L1 188 580, dev 177 119
+  positions/h. Each L1 loop above each dev loop FAILS (174 420 < 177 119); the pooled +3.9 % (+3.4 % whole-window)
+  passes its +3 %; the LAW-18 counter was not read in production. Both windows put L1 at +4 to +5 %, inside the
+  loop's ±5 % run-to-run spread (CARD-PERF-LOOP-SPREAD).** Per B-64 pop the pack takes
   3.51 ms and the semantic checks 1.83 of a 6.72 ms launch. Coding edges by value in the pack costs 1.45 ms over L1's
   copy; the builder emitting codes on the wire removes it (a wire contract change). The semantic checks 15-16 can
   follow the structural ones into the Rust pass. The pack's 4-thread split reads inside the IQR of one thread under 32
@@ -151,9 +179,10 @@ Both were found by running the gate set rather than by reading it, and both are 
   - **Its two free reads:**
     - the field's semantics on run8's `search_stats` (CARD-RING-V3-SEMANTICS);
     - the calibrated exam floors (CARD-EXAMS-CALIBRATED).
-- **CARD-RUN11-PRE — L1 LANDED 2026-10-04 on branch `run11-pre` (gates.exit green on `6a1156b7`); L2 awaits the
-  operator's word and the second box. Its packet is RUN11-PRE (architect, 2026-10-03).
-  RE-SPECIFIED by R384(d): run11's first leg, not a twin.**
+- **CARD-RUN11-PRE — CLOSED: ACCEPTED by R385(a), its registered pick (arm 3) set aside by ruling; run11 continues
+  arm 2 (CARD-RUN11-CONTINUE). EXITED 2026-10-05 (local records `mantis-records/run11-pre/` EXIT.md + DONE_REPORT.md):
+  four arms ran their registered hours; L1 pushed with the arming at `0aca1e1a`, gates.exit green on `6a1156b7`. Its
+  packet is RUN11-PRE (architect, 2026-10-03). RE-SPECIFIED by R384(d): run11's first leg, not a twin.**
   - The packet's legs: L1 on the desktop (L1a the mask, L1b the ramp, L1c the field and the key, L1d the origin at
     deploy, L1e the run monitor, L1f the template and the four drafted arm configs, L1g the prereg); L2 the arms on two
     matched boxes, ≤ 40 box-h plus preflights.
@@ -191,7 +220,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   R383(c).** Training steps per game scale with ring fill
   (tspg × rows/capacity), which holds draws per row at the steady state from the first row. R381(e)'s `min_buf_size`
   100k is withdrawn.
-- **CARD-EXAMS-CALIBRATED — its floors are the HALTING ROWS of record by R384(a). LANDED 2026-10-03 by REG-1's free
+- **CARD-EXAMS-CALIBRATED — its floors are the HALTING ROWS of record by R384(a), halting on two consecutive misses by
+  R385(b) (CARD-MONITOR-TWO-MISS). LANDED 2026-10-03 by REG-1's free
   read 0b: floors of record are T4 V 0.154 and DEF V_att
   0.100 (the mean − 3 SD over run8's seven panel saves, each net's T read on GEN's held-out ring).** On it, the parent
   reads 0.286 / 0.210 and the known-bad 0.11 / 0.09; the DEF separation is marginal. Was ORDERED by R383(a): T4 V and

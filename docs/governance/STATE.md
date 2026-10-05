@@ -7,18 +7,50 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
-**R384 (2026-10-04): THE RUN STARTS FROM THE READ. REG-1 is accepted: run11's value loss takes the re-drawn per-step
-mask at 1/8, the ring's root value stores Σπ′·completedQ with the proof override, and the calibrated floors are the
-halting rows. PERF-2 is ratified. The Bubble study is accepted as evidence; `book_v2` is CLOSED. RUN11-PRE is run11's
-first leg: four arms from run8@45k, the picked arm continuing as run11. `reg-1` rebases onto `dev`, gates and pushes.**
-run10 will not START (R376(c)). `configs/run10.yaml` stays the production config the instruments read until run11's
-mint replaces it. run11 arms the deploy block at its mint by the operator's word (R378(a)), and in self-play arm A's
-design, carried as a screen (R381(c) as re-stated by R384(c), CARD-RUN11-DESIGN).
+**R385 (2026-10-05): THE RUN STARTS; THE RULE IS RETIRED. RUN11-PRE is accepted and its registered pick (arm 3) is
+set aside by ruling: run11 continues arm 2 (2.4 steps/game, value mask 1/8) from its final bundle on box A. Exam floors
+halt on two consecutive misses; L̄ is report-only; matched work is matched positions. The quick-arm lever is closed.
+PERF-3 is ratified. RUN11-FRESH (arm 2's recipe from random init, no parent) runs on box B as evidence for run12's
+parent.** run10 will not START (R376(c)). run11 is arm 2's run (`configs/run11a2.yaml`, run id `run11a2`) continued
+from its last save; at this commit it is ORDERED, not yet live. run11 carries the deploy block of record (R378(a)) and
+in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c), CARD-RUN11-DESIGN).
 
-- **PERF-3 EXITED 2026-10-04 (branch `perf-3`, unpushed; CARD-PERF-3-PACKET):** L2 (the cache key) and L3 (one trainer
-  read per step) LANDED, L1 (a second server thread) CARDED; the production loop with the trainer 156 340 -> 170 940
-  positions/h (+9.3 %). R370(c)'s cache-key wording is annotated (A1) on the operator's word to merge. Landing into run11 follows its prereg's
-  resume rule, on the operator's word.
+- **R385's order.**
+  - RUN11-PRE accepted (R385(a), CARD-RUN11-PRE CLOSED). The pick rule's inputs were degenerate (L̄ saturates inside
+    8 h; the tie-break read one save's jitter), so the registered pick (arm 3) is set aside by ruling, the architect's
+    error. run11 continues arm 2 from its final bundle (step 32 201, mirrored and hash-verified on the desktop) on box
+    A (CARD-RUN11-CONTINUE). The grounds:
+    - the mask replicated live: arm 2's gap +0.012 against arm 1's +0.066, its GEN value lower at 10 of 10 same-step saves;
+    - arms 2 and 3 tie on value and policy at matched games;
+    - strength favours 2.4 at every matched pair, +0.44 logit pooled, one seed each: a labelled judgment.
+  - The rate envelope (R385(a)): steps per game is a scalar inside [1.2, 2.4]. A memorisation gap above +0.05 at two
+    consecutive saves drops it to 1.2 by STATE line.
+  - The instruments (R385(b), CARD-MONITOR-TWO-MISS):
+    - an exam floor halts on two consecutive misses: one miss arms, the next fires, a pass disarms;
+    - arm comparisons read level, gap and policy CE as means over the last k saves, and cells pooled over ≥ 2
+      checkpoints;
+    - L̄ is report-only; matched work is matched positions;
+    - run11's going-forward read: the mean of four cells (the 32k final, 36k, 48k, 60k) above the parent's anchor by
+      the line, then one cell every fourth save.
+  - The quick-arm lever is CLOSED (R385(c)): arm 4 read 1.145× against the prereg's 1.15, and its T4 row fired. Cheap
+    placements are within-turn tree reuse (CARD-WITHIN-TURN-TREE-REUSE), carded for a pinned resume after the start.
+  - PERF-3 RATIFIED (R385(d)): L2 and L3 landed, L1 is carded with its branch (`perf-3-l1b`, CARD-PERF-COLLATE-2). The
+    arms ran on this code, so run11 needs no landing. Later levers land by the prereg's resume rule.
+  - RUN11-FRESH (R385(e), CARD-RUN11-FRESH) answers rebootstrap by an arm, not for run11. On box B: arm 2's recipe and
+    net shape, random init, no parent, an empty ring, the fill ramp.
+    - Exam floors report-only until first passed, then halting under (b).
+    - The cap/draw abort is its early halt; if it fires inside the first hours, the BC start at F-07's setting replaces
+      the random init.
+    - Read on the same monitor and cells; viable if it reaches the parent's X anchor within 48 h. Its result is the
+      evidence for run12's parent, nothing more.
+  - Operations (R385(f)): box A is run11's and runs nothing else; box B is the fresh line's; the desktop plays cells and
+    reads. A one-screen status every 24 h (CARD-RUN11-STATUS-24H). The two STATE commits (`c8ef691f`, `33548d66`) and
+    PERF-3's card numbers push now.
+
+- **PERF-3 EXITED 2026-10-04, RATIFIED by R385(d)** (merged and pushed to `origin/dev` at `e6d1fb61`;
+  CARD-PERF-3-PACKET): L2 (the cache key) and L3 (one trainer read per step) LANDED, L1 (a second server thread)
+  CARDED; the production loop with the trainer 156 340 -> 170 940 positions/h (+9.3 %). R370(c)'s cache-key wording is
+  annotated (A1) on the operator's word to merge. L1's revival (`perf-3-l1b`) read NOT PROVEN by its pre-stated rule.
 - **R384's order.**
   - REG-1 accepted (R384(a), CARD-REG-1 CLOSED):
     - run11's value loss uses a re-drawn per-step mask at p = 1/8 (CARD-VALUE-MASK-REDRAWN): effect of record −0.018
@@ -46,8 +78,8 @@ design, carried as a screen (R381(c) as re-stated by R384(c), CARD-RUN11-DESIGN)
   - Merge and boxes (R384(g)): `reg-1` rebased onto `dev` `9da49bdd` and pushed on 2026-10-04 (`origin/dev` =
     `ad3682d7`, local gates 24/24 green on it, CARD-REG-1-PUSH). Two matched boxes for the arms; renting is the
     operator's.
-  - **RUN11-PRE: L1 LANDED on branch `run11-pre` (unpushed), gates.exit ALL GREEN on `6a1156b7`; L2 awaits the
-    operator's word and the second box** (CARD-RUN11-PRE; local records `mantis-records/run11-pre/`). Landed: the
+  - **RUN11-PRE EXITED 2026-10-05, ACCEPTED by R385(a): L1 pushed with the arming at `0aca1e1a`, gates.exit ALL GREEN
+    on `6a1156b7`** (CARD-RUN11-PRE; local records `mantis-records/run11-pre/` EXIT.md + DONE_REPORT.md). Landed: the
     re-drawn value mask (`train.value_mask_redraw_p`), the fill ramp (`train.training_steps_fill_ramp`), the ring's
     search value Σπ′·completedQ with the key renamed `train.value_target_search_weight`, the origin at deploy, the quick
     arm's own m (`selfplay.gumbel_m_quick`, its width in `search_levers`), the run monitor (`tools/run_monitor`).
@@ -280,7 +312,9 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
 
 ## The run
 
-- **No run is live.** run7 stopped at step 83 482 on 2026-09-18 (the stop is recorded by commit
+- **No run is live; run11 is ORDERED (R385(a)):** arm 2 (`run11a2`) continues from its final save, 32 201, on box A,
+  and RUN11-FRESH from random init on box B (R385(e)). The four RUN11-PRE arms ran 2026-10-04 10:50 → 2026-10-05
+  06:40 CEST; their runs, cells and box records are in the operator's mirror (`run11-pre/`). run7 stopped at step 83 482 on 2026-09-18 (the stop is recorded by commit
   `8cb5ca6a`; `docs/design/measurements/EVAL_COST_2026-09-19.md` reads its rounds) and run8 at 55 170 on
   2026-09-21 (R365); run9 was never started and its config is deleted (R365(a), R367). The strength
   series and every cell on record are in the measurement records named below.
@@ -290,9 +324,10 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
   conditions were R370(i)'s and R371(c)'s. R376(b) prices every bar from a panel. SEAM-2 may merge before
   any run starts (R375(e) lifts R368(j)'s hold). Read a config's values from the file itself and diff two
   with `tools/config_diff.py`; STATE does not restate minted rows.
-- **A box is still rented** (2026-09-24: an RTX 4080 SUPER host, the operator's, R11; PERF-ADA made it the run box; DECIDE-1,
-  SIX-RUNG's witness and TACTICS-DEPLOY's A/B ran there, and TACTICS-SELFPLAY's P4 and twin hold a grant of ≤ 12
-  box-h on it; this line said SIX-RUNG left it idle and clean until R378's record); the previous instance was
+- **Two boxes are rented, the operator's** (R385(f)): box A (RTX 4080 SUPER, Ryzen 9 9950X; RUN11-PRE's arms 3 and 4
+  ran there) is run11's and runs nothing else; box B (RTX 5070 Ti, Ryzen 9 5900XT; arms 1 and 2, unmatched to box A,
+  so they ran matched self-play work) is RUN11-FRESH's. The
+  desktop plays cells and reads. This line said one box was rented until R385's record. An earlier instance was
   destroyed on 2026-09-21 (R365, annotated by R367(d)); the operator's mirror (`tools/mirror_pull.py`) holds run7's and run8's
   artifacts, run10's parent and the ring its held-out slice reads. The run10 box criterion and its
   admission bench are R367(e), run with `tools/bench_server.py` per the prereg's §6; any admission
@@ -301,8 +336,9 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
 
 ## Configs
 
-The committed configs are `configs/run10.yaml`, `configs/dev_example.yaml`,
-`configs/smoke_preflight_armed.yaml` and `configs/smoke_wiring.yaml`. Production is a CENSUS, never a
+The committed configs are `configs/run10.yaml`, RUN11-PRE's four arms `configs/run11a1.yaml` to `configs/run11a4.yaml`
+(arm 2's is run11's, R385(a)), `configs/dev_example.yaml`, `configs/smoke_preflight_armed.yaml` and
+`configs/smoke_wiring.yaml`; this line omitted the arms until R385's record. Production is a CENSUS, never a
 list: `mantis.config.census.production_configs` (every `configs/` file minus its `EXEMPT_CONFIGS`
 rows, which carry their grounds). run7's and run8's configs were deleted at `8b00b4dd` (R368(e)),
 run6's by R369's packet (W0).
@@ -310,7 +346,7 @@ run6's by R369's packet (W0).
 ## Where things live
 
 - Open work: `docs/governance/CARDS.md` (swept in W6; derived there, never enumerated here).
-- Rulings: `docs/governance/RULINGS.md`; the latest is R382.
+- Rulings: `docs/governance/RULINGS.md`; the latest is R385 (this line said R382 until R385's record).
 - Laws and the protected set: `docs/governance/LAWS.md`, whose protected set names each
   invariant's pinning tests (R370(f)); `tests/test_protected_set_pins.py` fails if one is gone.
   Falsified work: `docs/governance/falsified.md`.
@@ -370,3 +406,5 @@ branch `hygiene-1` from origin/dev `b1e34aa4`, which also repaired the two stale
 2026-10-01 at its exit from its exit record (local), on that branch. The current phase was rewritten 2026-10-02 at R383 from the CENSUS-3 exit record
 (local), on branch `census-3` rebased onto `ring-v3` (`5b607454`). The REG-1 line was added 2026-10-02 at its packet's first commit, on
 branch `reg-1` from `7b8d6a6e`, and updated 2026-10-03 at its exit from its exit record (local), on that branch.
+The current phase was rewritten 2026-10-05 at R385 from the RUN11-PRE exit record (local), on branch `run11-pre` at
+`33548d66` over `origin/dev` `0aca1e1a`; the same edit repaired the run, box, configs and latest-ruling lines.

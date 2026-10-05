@@ -1,4 +1,4 @@
-# RULINGS — R23 to R384
+# RULINGS — R23 to R385
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R385.
+- Numbering continues from R346. The next ruling is R386.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,61 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R385 — THE RUN STARTS; THE RULE IS RETIRED
+Decision: verbatim below.
+
+> R385 — THE RUN STARTS; THE RULE IS RETIRED.
+> (a) RUN11-PRE is accepted. Its pick rule's inputs were degenerate — L̄ saturates inside 8 h
+> and the tie-break read one save's jitter — so the registered pick (arm 3) is set aside by
+> ruling; the error is the architect's. run11 continues arm 2 (2.4 steps/game, value mask
+> 1/8) from its final bundle on box A: the mask replicated live (10/10 saves, gap +0.012 v
+> +0.066), arms 2 and 3 tie on value and policy at matched games, and strength favours 2.4
+> at every matched pair (+0.44 pooled, one seed each — a labelled judgment). The rate is a
+> scalar inside the envelope [1.2, 2.4]: a memorisation gap above +0.05 at two consecutive
+> saves drops it to 1.2 by STATE line.
+> (b) Instruments: an exam floor halts on two consecutive misses (one arms, the next fires, a
+> pass disarms); arm comparisons read level, gap and policy CE as means over the last k saves
+> and cells pooled over ≥ 2 checkpoints; L̄ is report-only; matched work is matched positions.
+> The going-forward read is the mean of four cells (32k final + 36k, 48k, 60k) above the
+> parent's anchor by the line, then every fourth save.
+> (c) The quick-arm lever is closed (1.145× v 1.15; T4 fired). Cheap placements are
+> within-turn tree reuse, carded for a pinned resume after the start.
+> (d) PERF-3 is ratified: L2 and L3 landed; L1 carded with its branch; the arms ran on this
+> code, so run11 needs no landing. Later levers land by the prereg's resume rule.
+> (e) Rebootstrap is answered by an arm, not for run11. RUN11-FRESH runs on box B: arm 2's
+> recipe and net shape, random init, no parent, empty ring, the ramp; exam floors report-only
+> until first passed, then halting under (b); the cap/draw abort is its early halt — if it
+> fires inside the first hours, the BC start at F-07's setting replaces it. Read on the same
+> monitor and cells; viable if it reaches the parent's X anchor within 48 h. Its result is
+> the evidence for run12's parent, nothing more.
+> (f) Operations: box A is run11's and runs nothing else; box B is the fresh line's; the
+> desktop plays cells and reads. A one-screen status every 24 h. The two STATE commits and
+> PERF-3's card numbers push now.
+
+Status: standing. Accepts RUN11-PRE and sets its registered pick (arm 3) aside by ruling, the architect's error, by
+(a): the pick rule's inputs were degenerate (L̄ saturates inside 8 h; the tie-break read one save's jitter). run11
+continues arm 2 (2.4 steps/game, value mask 1/8) from its final bundle on box A, on three grounds: the mask replicated
+live (10/10 saves, gap +0.012 against arm 1's +0.066), arms 2 and 3 tie on value and policy at matched games, and
+strength favours 2.4 at every matched pair (+0.44 logit pooled, one seed each, a labelled judgment). The steps-per-game
+rate is a scalar inside the envelope [1.2, 2.4] (R382(f)'s STATE-line re-mint): a memorisation gap above +0.05 at two
+consecutive saves drops it to 1.2 by STATE line. Sets the instruments by (b): an exam floor halts on two consecutive
+misses (one arms, the next fires, a pass disarms); arm comparisons read level, gap and policy CE as means over the last
+k saves, and cells pooled over ≥ 2 checkpoints; L̄ is report-only; matched work is matched positions; run11's
+going-forward read is the mean of four cells (the 32k final, 36k, 48k, 60k) above the parent's anchor by the line, then
+one cell every fourth save. Closes the quick-arm lever (arm 4 read 1.145× against the prereg's 1.15, and its T4 row
+fired) and makes cheap placements within-turn tree reuse, carded for a pinned resume after the start, by (c). Ratifies
+PERF-3 by (d): L2 and L3 landed, L1 is carded with its branch; the arms ran on that code, so run11 needs no landing,
+and later levers land by the prereg's resume rule. Answers rebootstrap by an arm, not for run11, by (e): RUN11-FRESH
+on box B takes arm 2's recipe and net shape with random init, no parent, an empty ring and the fill ramp; its exam
+floors report until first passed, then halt under (b); the cap/draw abort is its early halt, and if it fires inside the
+first hours the BC start at F-07's setting (`docs/governance/falsified.md`) replaces the random init; it reads on the
+same monitor and cells, is viable if it reaches the parent's X anchor within 48 h, and is evidence for run12's parent,
+nothing more. Sets the operations by (f): box A is run11's and runs nothing else, box B is the fresh line's, the desktop
+plays cells and reads; a one-screen status every 24 h; the two STATE commits (`c8ef691f`, `33548d66`) and PERF-3's card
+numbers push now. The packets it forwards are run11's continuation and RUN11-FRESH.
+
+---
 
 ### R384 — THE RUN STARTS FROM THE READ
 Decision: verbatim below.
@@ -90,6 +145,11 @@ Cards seven items not built before the start and splits ORIGIN-1 (the deploy hea
 now; the engine rule and canonicalisation land after the start by pinned resume), by (f). Orders reg-1 rebased onto
 dev, gated and pushed, and prices two matched boxes for the arms, renting the operator's, by (g). The packet it
 forwards is RUN11-PRE.
+RUN11-PRE is ACCEPTED by R385(a). (d)'s registered pick (arm 3) is SET ASIDE by R385(a), the pick rule's inputs being
+degenerate (L̄ saturates inside 8 h; the tie-break read one save's jitter), the architect's error; run11 continues arm 2
+from its final bundle. (d)'s matched wall-clock is RE-STATED by R385(b): matched work is matched positions. (a)'s
+halting rows halt on two consecutive misses by R385(b). (d)'s quick arm (arm 4) is CLOSED by R385(c), and (f)'s
+within-turn tree reuse is RE-STATED by it as the cheap-placement lever, carded for a pinned resume after the start.
 
 ---
 
@@ -611,6 +671,7 @@ ANNOTATION A1 (2026-10-04, PERF-3's L2, merged on the operator's word "you may m
 encoded input" reads "a key over the inputs the encoder reads" — a Zobrist over the stones, the side to move,
 moves_remaining and the builder's geometry, taken before any build; the encoded input is a pure function of them,
 and a seeded 10 869-leaf drive pins the key's misses equal to the encoded-input hash's. The rest of (c) stands.
+A1's PERF-3 is RATIFIED by R385(d): L2 (this key) and L3 landed, L1 is carded with its branch.
 
 ---
 
