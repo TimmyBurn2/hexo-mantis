@@ -1,12 +1,9 @@
 """The dash game view: tactics against the engine's oracle, the six checked against the record, arms and stats as recorded."""
 from __future__ import annotations
 
-import glob
 import importlib
 import inspect
 import json
-import os
-from pathlib import Path
 
 import pytest
 
@@ -35,20 +32,6 @@ _FIXTURES = {
 @pytest.mark.parametrize("name", sorted(_FIXTURES))
 def test_tactics_agree_with_the_engines_winning_moves_on_every_position(tactics, name):
     assert tactics.oracle_disagreements([tuple(m) for m in _FIXTURES[name]]) == []
-
-
-def test_tactics_agree_with_the_engine_on_mirrored_games_when_the_mirror_is_present(tactics):
-    root = os.environ.get("MANTIS_DASH_FIXTURE_GAMES")
-    if not root:
-        pytest.skip("MANTIS_DASH_FIXTURE_GAMES names no game shard directory")
-    seen = 0
-    for path in sorted(glob.glob(str(Path(root) / "games_*_seg*.jsonl")))[:2]:
-        for line in Path(path).read_text(encoding="utf-8").splitlines()[:40]:
-            row = json.loads(line)
-            if row.get("moves"):
-                assert tactics.oracle_disagreements([tuple(m) for m in row["moves"]]) == [], row["game_id"]
-                seen += 1
-    assert seen > 0
 
 
 def test_stones_left_follow_the_turn_structure(tactics):

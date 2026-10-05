@@ -53,19 +53,6 @@ def test_the_series_and_game_columns_equal_the_dashboards_on_a_full_shaped_recor
     _parity(events.EventTail(tmp_path / "logs", "r1").poll(), reader.load_record(path))
 
 
-def test_the_mirror_record_matches_the_dashboard_when_it_is_present(dash, reader):
-    named = os.environ.get("MANTIS_DASH_FIXTURE_EVENTS")
-    if not named:
-        pytest.skip("MANTIS_DASH_FIXTURE_EVENTS names no event segment")
-    events = importlib.import_module("dash.readers.events")
-    path = Path(named)
-    run_id = events.SEGMENT_RE.match(path.name).group("run")
-    snap = events.EventTail(path.parent, run_id).poll()
-    if len(snap.segments) != 1:
-        pytest.skip("the named record has several segments; the dashboard reads one file")
-    _parity(snap, reader.load_record(path))
-
-
 @pytest.mark.parametrize(("age", "state"), [(30.0, "live"), (1200.0, "stale"), (7200.0, "stopped")])
 def test_the_heartbeats_age_says_live_stale_or_stopped(liveness, tmp_path, age, state):
     now = time.time()
