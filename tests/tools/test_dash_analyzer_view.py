@@ -107,3 +107,18 @@ def test_a_real_engine_reads_through_the_desk_path(dash, dash_mantis_engine, pos
     panel = importlib.import_module("dash.views.analyzer_text").compose(rec, None, None, None, None)
     assert panel["tactics"]["cls"] == "block" and panel["verdict"].startswith("<strong>Dark must block</strong>")
     assert panel["rows"] and all(r[4] is None for r in panel["rows"])
+
+
+def test_the_engine_layer_loads_only_on_the_first_analyzer_request(tmp_path):
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    script = ("import importlib, sys\nfrom pathlib import Path\nfrom mantis.util.loadpkg import load_tools_package\n"
+              "load_tools_package('dash', repo_root=Path(sys.argv[1]))\n"
+              "desk = importlib.import_module('dash.desk')\nimportlib.import_module('dash.cli')\n"
+              "lazy = desk.LazyDesk([], strix=False, device='cpu', threads=1)\nbefore = 'torch' in sys.modules\n"
+              "lazy(); after = 'torch' in sys.modules\nlazy.close()\nprint(before, after)\n")
+    out = subprocess.run([sys.executable, "-c", script, str(root)], capture_output=True, text=True, timeout=300)
+    assert out.returncode == 0 and out.stdout.split() == ["False", "True"], out.stderr[-2000:]

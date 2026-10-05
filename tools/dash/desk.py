@@ -2,13 +2,12 @@
 from __future__ import annotations
 
 import json
+import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .analyst import Analyst
-from .engine.dispatch import Dispatcher
-from .engine.engines import MANTIS, discover
 from .engine.position import PositionRefused, parse_moves
 from .routes import game_payload
 from .serve import Hub, Reply, as_json, text
@@ -36,6 +35,11 @@ class Desk:
     """Owns the dispatcher and its analyst; `None` engines means the Analyzer was started without checkpoints."""
 
     def __init__(self, checkpoints: list[Path], *, strix: bool, device: str, threads: int | None) -> None:
+        """Discover the nets and start the analyst. Raises: OSError (an unreadable checkpoint directory)."""
+        # The engine layer (torch) is the optional dependency: it loads only when the Analyzer is given nets.
+        from .analyst import Analyst
+        from .engine.dispatch import Dispatcher
+        from .engine.engines import discover
         infos = discover(checkpoints) if checkpoints else []
         self.dispatcher = Dispatcher(infos, device=device, threads=threads, strix=strix)
         self.analyst = Analyst(self.dispatcher.handle, timeout_sec=TIMEOUT_SEC, on_stop=self.dispatcher.close)
@@ -45,6 +49,8 @@ class Desk:
         return self.dispatcher.rows()
 
     def default_pair(self) -> tuple[str | None, str | None]:
+        """The newest loadable net to read and the one before it to compare."""
+        from .engine.engines import MANTIS
         loadable = [r["id"] for r in self.rows() if r.get("kind") == MANTIS]
         return (loadable[-1] if loadable else None), (loadable[-2] if len(loadable) > 1 else None)
 
@@ -71,6 +77,30 @@ class Desk:
         self.analyst.stop()
 
 
+class LazyDesk:
+    """The desk built on the first Analyzer request: a server nobody asks to analyse never loads the engine layer."""
+
+    def __init__(self, checkpoints: list[Path], *, strix: bool, device: str, threads: int | None) -> None:
+        self._args = (checkpoints, strix, device, threads)
+        self._desk: Desk | None = None
+        self._lock = threading.Lock()
+
+    def __call__(self) -> Desk:
+        """The desk, built once. Raises: OSError (an unreadable checkpoint directory)."""
+        with self._lock:
+            if self._desk is None:
+                checkpoints, strix, device, threads = self._args
+                self._desk = Desk(checkpoints, strix=strix, device=device, threads=threads)
+            return self._desk
+
+    def close(self) -> None:
+        if self._desk is not None:
+            self._desk.close()
+
+
+DeskOf = Callable[[], Desk] | None
+
+
 def context(hub: Hub, run: str | None, game_id: str | None, moves: list[tuple[int, int]]) -> Context:
     """The position against its game: on the line, or a variation N stones off it; the game's search only on the line."""
     rec = hub.records.get(run or "")
@@ -86,9 +116,10 @@ def context(hub: Hub, run: str | None, game_id: str | None, moves: list[tuple[in
     return Context(run, game_id, on, len(moves) - common, body["stats"].get(str(ply)) if on else None, nxt, second)
 
 
-def page(desk: Desk | None) -> Any:
+def page(desk_of: DeskOf) -> Any:
     """`GET /analyzer?run=&g=&ply=&a=&b=`: the board and, with engines, the first read rendered server-side."""
     def handle(hub: Hub, parts: list[str], raw: dict[str, list[str]]) -> Reply:
+        desk = desk_of() if desk_of is not None else None
         q = {k: v[0] for k, v in raw.items() if v}
         run, gid = q.get("run"), q.get("g")
         rec = hub.records.get(run or "")
@@ -109,9 +140,10 @@ def page(desk: Desk | None) -> Any:
     return handle
 
 
-def post(hub: Hub, desk: Desk | None) -> Any:
+def post(hub: Hub, desk_of: DeskOf) -> Any:
     """`POST /api/read` (the composed panel) and `POST /api/analyze` (the analyzer's own request, unchanged)."""
     def handle(path: str, raw: bytes) -> Reply:
+        desk = desk_of() if desk_of is not None else None
         if desk is None:
             return as_json(503, {"ok": False, "refused": "no engines: start the server with --checkpoints"})
         try:
@@ -138,7 +170,9 @@ def post(hub: Hub, desk: Desk | None) -> Any:
     return handle
 
 
-def engines(desk: Desk | None) -> Any:
+def engines(desk_of: DeskOf) -> Any:
+    """`GET /api/engines`: the desk's rows, or none when the server was started without nets."""
     def handle(hub: Hub, parts: list[str], raw: dict[str, list[str]]) -> Reply:
+        desk = desk_of() if desk_of is not None else None
         return as_json(200, {"engines": desk.rows() if desk else [], "started": desk is not None})
     return handle

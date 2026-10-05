@@ -7,8 +7,6 @@ import sys
 from pathlib import Path
 
 from . import desk as desk_mod
-from .engine.dispatch import Dispatcher
-from .engine.engines import discover
 from .readers.events import EmptyRunRecord
 from .readers.record import RunRecord
 from .routes import GET
@@ -102,7 +100,9 @@ def freeze(args: argparse.Namespace) -> int:
 
 
 def once(args: argparse.Namespace) -> int:
-    """Read one position on one engine and print the record; 2 on a refusal (printed to stderr)."""
+    """Read one position on one engine and print the record; 2 on a refusal (printed to stderr). Raises: OSError."""
+    from .engine.dispatch import Dispatcher  # the engine layer (torch) is the optional dependency
+    from .engine.engines import discover
     disp = Dispatcher(discover(args.checkpoints), device=args.device, threads=args.threads, strix=args.strix)
     try:
         out = disp.handle({"op": "analyze", "engine": args.engine, "moves": args.moves, "sims": args.sims,
@@ -131,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
     except EmptyRunRecord as exc:
         print(f"dash: refused: {exc}", file=sys.stderr)
         return 2
-    desk = desk_mod.Desk(args.checkpoints, strix=args.strix, device=args.device, threads=args.threads) \
+    desk = desk_mod.LazyDesk(args.checkpoints, strix=args.strix, device=args.device, threads=args.threads) \
         if args.checkpoints or args.strix else None
     extra = {**GET, "analyzer": desk_mod.page(desk), "api/engines": desk_mod.engines(desk)}
     return run_server(args, records, get_extra=extra, post_of=lambda hub: desk_mod.post(hub, desk),

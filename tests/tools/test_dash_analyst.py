@@ -61,7 +61,7 @@ def server(dash, analyst, tmp_path):
     worker = analyst.Analyst(stub, timeout_sec=2.0)
     worker.start()
     fake = _Desk(worker)
-    httpd = serve.make_server("127.0.0.1", 0, hub, get_extra={"api/engines": desk.engines(fake)}, post=desk.post(hub, fake))
+    httpd = serve.make_server("127.0.0.1", 0, hub, get_extra={"api/engines": desk.engines(lambda: fake)}, post=desk.post(hub, lambda: fake))
     t = threading.Thread(target=httpd.serve_forever, daemon=True)
     t.start()
     yield httpd, stub
