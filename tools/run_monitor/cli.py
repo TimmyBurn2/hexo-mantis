@@ -49,14 +49,17 @@ def setup_of(a: argparse.Namespace) -> Setup:
 
 
 def follow(monitor: Monitor, tail: EventTail, poll_s: float, final_timeout_s: float) -> int:
-    """Read every save as its event lands until the run stops or dies (0) or a halting row fires (3)."""
+    """Read every save as its event lands until the run stops or stays dead for the final timeout (0), or a row halts (3)."""
+    dead_since: float | None = None
     while True:
         monitor.on_events(tail.read_new())
         monitor.beat()
         if monitor.state.halted:
             return 3
-        if monitor.final_step is not None or not monitor.run_alive():
-            monitor.final_save(final_timeout_s)
+        # A run looking dead may be a resume starting under a stale heartbeat: its new segment's pid revives it.
+        dead_since = None if monitor.run_alive() else (dead_since or time.time())
+        if monitor.final_step is not None or (dead_since is not None and time.time() - dead_since >= final_timeout_s):
+            monitor.final_save(final_timeout_s if monitor.final_step is not None else 0.0)
             monitor.beat()
             return 3 if monitor.state.halted else 0
         time.sleep(poll_s)

@@ -14,17 +14,19 @@ _RATE_NAMES = {"games_total": "games_per_h", "positions_produced_total": "positi
 
 def verdict(exams: dict[str, Any], bands: dict[str, Any], *, armed: list[str], floors_live: bool,
             bands_live: bool) -> dict[str, Any]:
-    """A floor's miss arms it, its next miss fires, a pass disarms; a miss before the floors (or bands) are live is reported."""
+    """A floor's miss arms it, its next miss fires, a pass disarms, an unread floor keeps its state. Raises: KeyError (a malformed row)."""
+    unread = {exam for exam, row in exams.items() if row["holds"] is None}
     misses = {exam: f"{exam} calibrated {row['calibrated_mean']:.4f} below the floor {row['floor']}"
-              for exam, row in exams.items() if not row["holds"]}
+              for exam, row in exams.items() if exam not in unread and not row["holds"]}
     second = {exam for exam in misses if floors_live and exam in armed}
     fired = [f"{misses[exam]}, its second miss in a row" for exam in sorted(second)]
     reported = [text for exam, text in misses.items() if exam not in second]
     band_rows = [f"ring band {miss}" for miss in bands["misses"]]
     fired, reported = (fired + band_rows, reported) if bands_live else (fired, reported + band_rows)
-    # The first save that passes every floor makes the floors live; a floor misses into `armed` only once live.
-    return {"fired": fired, "reported": reported, "armed": sorted(misses) if floors_live else [],
-            "floors_live": floors_live or not misses}
+    # Before the floors are live every miss only reports; they go live at the first save that reads and passes them all.
+    return {"fired": fired, "reported": reported,
+            "armed": sorted(set(misses) | (set(armed) & unread)) if floors_live else [],
+            "floors_live": floors_live or (bool(exams) and not unread and not misses)}
 
 
 def gap_rule(gap: float | None, over: list[int], step: int, line: float) -> dict[str, Any]:
@@ -65,15 +67,23 @@ def rates(counters: list[dict[str, float]], since: float, until: float,
     return out
 
 
+def is_run(pid: int, run_id: str) -> bool:
+    """Whether `pid` is a live process whose command line names the run id (a reused pid is another process)."""
+    try:
+        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
+    except OSError:
+        return False
+    return run_id in cmdline
+
+
 def run_pid(run_dir: Path, run_id: str) -> int | None:
     """The run's live process from its heartbeat, `None` when there is none or the pid is no longer the run (exited, or reused)."""
     try:
         beat = json.loads((run_dir / "logs" / f"heartbeat_{run_id}.json").read_text(encoding="utf-8"))
         pid = int(beat["pid"])
-        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
     except (OSError, KeyError, TypeError, ValueError):
         return None
-    return pid if run_id in cmdline else None
+    return pid if is_run(pid, run_id) else None
 
 
 def halt_run(run_dir: Path, run_id: str) -> dict[str, Any]:
@@ -88,4 +98,4 @@ def halt_run(run_dir: Path, run_id: str) -> dict[str, Any]:
     return {"sent": True, "pid": pid, "signal": "SIGTERM", "ts": time.time()}
 
 
-__all__ = ["counter_row", "gap_rule", "halt_run", "rates", "run_pid", "verdict"]
+__all__ = ["counter_row", "gap_rule", "halt_run", "is_run", "rates", "run_pid", "verdict"]

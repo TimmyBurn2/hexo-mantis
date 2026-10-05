@@ -60,10 +60,12 @@ _GOOD = {"T4_V": _exam(0.29, 0.154), "DEF_V_att": _exam(0.21, 0.100)}
 
 
 class _Readers:
-    """Reads with no net: a fixed GEN body, exams that fail at the chosen steps, a chosen gap, clean bands, a raise."""
+    """Reads with no net: a GEN body (no temperature where chosen), exams failing where chosen, a gap, bands, a raise."""
 
-    def __init__(self, fail_at: tuple[int, ...] = (), raise_at: int | None = None, gap: float = 0.0) -> None:
+    def __init__(self, fail_at: tuple[int, ...] = (), raise_at: int | None = None, gap: float = 0.0,
+                 no_skill_at: tuple[int, ...] = (), band_miss_at: tuple[int, ...] = (), nan_rows: bool = False) -> None:
         self.fail_at, self.raise_at, self.gap, self.values = fail_at, raise_at, gap, []
+        self.no_skill_at, self.band_miss_at, self.nan_rows = no_skill_at, band_miss_at, nan_rows
 
     def value(self, ckpt: Path, ring: Path, out: Path, train: Path | None) -> dict[str, Any]:
         if self.raise_at is not None and f"_{self.raise_at:08d}_" in ckpt.name:
@@ -71,7 +73,8 @@ class _Readers:
             raise RuntimeError("CUDA out of memory (planted)")
         self.values.append((ckpt.name, ring.name, None if train is None else train.name))
         band = {"n": 10, "cf_ce": 0.6}
-        body = {"heldout": {"overall": {"cf_ce": 0.6, "temperature": 2.0, "auc": 0.7}, "policy_ce": 2.3,
+        t = None if train is None and any(f"_{x:08d}_" in ckpt.name for x in self.no_skill_at) else 2.0
+        body = {"heldout": {"overall": {"cf_ce": 0.6, "temperature": t, "auc": 0.7}, "policy_ce": 2.3,
                             "plies_0_10": band, "plies_11_40": band, "plies_41_up": band}}
         return body if train is None else {**body, "gap": {"cf_ce": self.gap}}
 
@@ -80,7 +83,9 @@ class _Readers:
         return {"T4_V": _exam(0.10 if low else 0.29, floors["T4_V"]), "DEF_V_att": _exam(0.21, floors["DEF_V_att"])}
 
     def bands(self, ring: Path, events: Path | None, bands: Path) -> dict[str, Any]:
-        return {"rows": {}, "misses": []}
+        miss = any(ring.name == f"ring_{x:08d}.bin" for x in self.band_miss_at)
+        rows = {"unwritable": float("nan")} if miss and self.nan_rows else {}
+        return {"rows": rows, "misses": ["cap_rate: 0.07 not lt 0.05"] if miss else []}
 
 
 def _run_dir(tmp_path: Path, pid: int) -> Path:
@@ -217,9 +222,9 @@ def test_a_failed_read_is_recorded_and_the_next_save_is_still_read(
     run = _run_dir(tmp_path, proc.pid)
     _no_lagged(monkeypatch, [])
     c1, c2 = _save(run, 3000, range(0, 4)), _save(run, 6000, range(2, 8))
+    c1.unlink()  # the checkpoint's own bytes are gone: the read itself fails, not one reader
     _events(run, [_saved(3000, c1), _saved(6000, c2)])
-    _monitor(tmp_path, run, _Readers(raise_at=3000), halt=True).on_events(
-        EventTail(run, _RUN, mon.EVENTS).read_new())
+    _monitor(tmp_path, run, _Readers(), halt=True).on_events(EventTail(run, _RUN, mon.EVENTS).read_new())
     log = [json.loads(x) for x in (tmp_path / "records" / "monitor.jsonl").read_text(encoding="utf-8").splitlines()]
     assert [r["event"] for r in log] == ["save_read_failed", "save_read"]
     assert (tmp_path / "records" / "saves" / "00006000.json").is_file()
@@ -230,7 +235,7 @@ def test_a_run_that_died_without_a_stop_event_has_its_newest_save_read_and_the_f
     _save(run, 5100, range(0, 4))
     monitor = _monitor(tmp_path, run, _Readers(), halt=True)
     assert not monitor.run_alive()
-    assert cli.follow(monitor, EventTail(run, _RUN, mon.EVENTS), 0.0, 5.0) == 0
+    assert cli.follow(monitor, EventTail(run, _RUN, mon.EVENTS), 0.1, 1.0) == 0
     assert (tmp_path / "records" / "saves" / "00005100.json").is_file()
     assert json.loads((tmp_path / "records" / "monitor_alive.json").read_text(encoding="utf-8"))["last_step"] == 5100
 
@@ -282,24 +287,67 @@ def test_a_resumed_run_is_followed_past_its_earlier_stop_and_its_first_save_pair
     assert stop.name in {v[0] for v in readers.values}
 
 
-def test_floors_report_until_their_first_pass_then_halt_on_two_reads_across_a_restart(
+def test_floors_report_until_their_first_pass_then_halt_on_two_reads_across_a_restart_and_an_unread_save(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, victim: Any) -> None:
+    """3000 misses (reported), 6000 passes (live), 9000 misses (armed); restart; 12000's GEN read fails; 15000 fires."""
+    proc, count = victim
+    run = _run_dir(tmp_path, proc.pid)
+    _no_lagged(monkeypatch, [])
+    steps = (3000, 6000, 9000, 12000, 15000)
+    ckpts = {step: _save(run, step, range(2 * i, 2 * i + 4)) for i, step in enumerate(steps)}
+    readers = _Readers(fail_at=(3000, 9000, 12000, 15000), raise_at=12000)
+    _events(run, [_saved(step, ckpts[step]) for step in steps[:3]])
+    _monitor(tmp_path, run, readers, halt=True, first_pass=True).on_events(EventTail(run, _RUN, mon.EVENTS).read_new())
+    early = json.loads((tmp_path / "records" / "saves" / "00003000.json").read_text(encoding="utf-8"))
+    assert early["halting_rows"] == [] and early["reported_rows"] and early["floors_live"] is False
+    armed = json.loads((tmp_path / "records" / "saves" / "00009000.json").read_text(encoding="utf-8"))
+    assert armed["armed_floors"] == ["T4_V"] and not (tmp_path / "records" / "HALT.json").exists()
+    _events(run, [_saved(step, ckpts[step]) for step in steps[3:]])
+    _monitor(tmp_path, run, readers, halt=True, first_pass=True).on_events(EventTail(run, _RUN, mon.EVENTS).read_new())
+    time.sleep(0.3)
+    unread = json.loads((tmp_path / "records" / "saves" / "00012000.json").read_text(encoding="utf-8"))
+    assert unread["exams"]["T4_V"]["holds"] is None and unread["armed_floors"] == ["T4_V"], "an unread save keeps the arm"
+    assert json.loads((tmp_path / "records" / "HALT.json").read_text(encoding="utf-8"))["step"] == 15000
+    assert _sigterms(count) == 1
+
+
+def test_a_gen_read_with_no_skill_leaves_the_floors_unread_and_a_band_miss_still_halts(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch, victim: Any) -> None:
     proc, count = victim
     run = _run_dir(tmp_path, proc.pid)
     _no_lagged(monkeypatch, [])
-    ckpts = {step: _save(run, step, range(2 * i, 2 * i + 4)) for i, step in enumerate((3000, 6000, 9000, 12000, 15000))}
-    readers = _Readers(fail_at=(3000, 6000, 12000, 15000))
-    _events(run, [_saved(3000, ckpts[3000]), _saved(6000, ckpts[6000]), _saved(9000, ckpts[9000])])
-    _monitor(tmp_path, run, readers, halt=True, first_pass=True).on_events(EventTail(run, _RUN, mon.EVENTS).read_new())
-    early = json.loads((tmp_path / "records" / "saves" / "00006000.json").read_text(encoding="utf-8"))
-    assert early["halting_rows"] == [] and early["reported_rows"] and early["floors_live"] is False
-    assert json.loads((tmp_path / "records" / "saves" / "00009000.json").read_text(encoding="utf-8"))["floors_live"]
-    _events(run, [_saved(12000, ckpts[12000]), _saved(15000, ckpts[15000])])
-    restarted = _monitor(tmp_path, run, readers, halt=True, first_pass=True)
-    restarted.on_events(EventTail(run, _RUN, mon.EVENTS).read_new())
+    c1, c2 = _save(run, 3000, range(0, 4)), _save(run, 6000, range(2, 8))
+    _events(run, [_saved(3000, c1), _saved(6000, c2)])
+    readers = _Readers(fail_at=(3000,), no_skill_at=(3000, 6000), band_miss_at=(6000,))
+    _monitor(tmp_path, run, readers, halt=True).on_events(EventTail(run, _RUN, mon.EVENTS).read_new())
     time.sleep(0.3)
-    assert json.loads((tmp_path / "records" / "HALT.json").read_text(encoding="utf-8"))["step"] == 15000
+    first = json.loads((tmp_path / "records" / "saves" / "00003000.json").read_text(encoding="utf-8"))
+    assert first["gen"]["temperature"] is None and first["exams"]["T4_V"]["holds"] is None
+    assert first["halting_rows"] == [] and first["armed_floors"] == []
+    halt = json.loads((tmp_path / "records" / "HALT.json").read_text(encoding="utf-8"))
+    assert halt["step"] == 6000 and halt["halting_rows"] == ["ring band cap_rate: 0.07 not lt 0.05"]
     assert _sigterms(count) == 1
+
+
+def test_a_resume_under_a_stale_heartbeat_is_followed_by_its_new_segments_pid(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, victim: Any) -> None:
+    proc, _count = victim
+    run = _run_dir(tmp_path, 2**22 + 7)  # the earlier life's heartbeat: its process is gone
+    _no_lagged(monkeypatch, [])
+    c1 = _save(run, 3000, range(0, 4))
+    _events(run, [_saved(3000, c1), {"event": "shutdown_save", "step": 3000}])
+    _events(run, [{"event": "run_segment_started", "segment": 2, "pid": proc.pid}], segment=2)
+    monitor = _monitor(tmp_path, run, _Readers(), halt=True)
+    follower = threading.Thread(target=cli.follow, args=(monitor, EventTail(run, _RUN, mon.EVENTS), 0.1, 1.0))
+    follower.start()
+    time.sleep(2.5)
+    assert follower.is_alive(), "the follow ended on the earlier life's heartbeat"
+    c2, _c3 = _save(run, 6000, range(2, 8)), _save(run, 7000, range(4, 10))
+    _events(run, [_saved(6000, c2), {"event": "shutdown_save", "step": 7000}], segment=2)
+    follower.join(timeout=10)
+    assert not follower.is_alive()
+    saves = sorted(p.name for p in (tmp_path / "records" / "saves").iterdir())
+    assert saves == ["00003000.json", "00006000.json", "00007000.json"]
 
 
 def test_the_gap_rule_records_its_verdict_and_never_signals_the_run(
@@ -313,3 +361,16 @@ def test_the_gap_rule_records_its_verdict_and_never_signals_the_run(
     rule = json.loads((tmp_path / "records" / "GAP_RULE.json").read_text(encoding="utf-8"))
     assert rule["over"] == [3000, 6000] and rule["fired"] and rule["step"] == 9000
     assert _sigterms(count) == 0 and not (tmp_path / "records" / "HALT.json").exists()
+
+
+def test_a_halt_is_sent_even_when_its_save_record_cannot_be_written(tmp_path: Path, victim: Any) -> None:
+    proc, count = victim
+    run = _run_dir(tmp_path, proc.pid)
+    c1 = _save(run, 3000, range(0, 4))
+    _events(run, [_saved(3000, c1)])
+    readers = _Readers(band_miss_at=(3000,), nan_rows=True)  # the band rows carry a NaN the record refuses
+    _monitor(tmp_path, run, readers, halt=True).on_events(EventTail(run, _RUN, mon.EVENTS).read_new())
+    time.sleep(0.3)
+    assert not (tmp_path / "records" / "saves" / "00003000.json").exists()
+    assert json.loads((tmp_path / "records" / "HALT.json").read_text(encoding="utf-8"))["step"] == 3000
+    assert _sigterms(count) == 1

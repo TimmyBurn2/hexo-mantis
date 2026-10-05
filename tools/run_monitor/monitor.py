@@ -23,7 +23,7 @@ from mantis.util.loadpkg import load_tools_package
 
 from .exams import load_positions, read_values
 from .rings import max_game_id, unseen_ring
-from .rules import counter_row, gap_rule, halt_run, rates, run_pid, verdict
+from .rules import counter_row, gap_rule, halt_run, is_run, rates, run_pid, verdict
 
 load_tools_package("value_instrument")
 _vi = importlib.import_module("value_instrument.cli")
@@ -36,6 +36,7 @@ EVENTS = ("periodic_checkpoint_save", "iteration_complete", "hard_abort", "hard_
 _STOPS = ("shutdown_save", "clean_stop_save")
 #: Ring copies kept in the work dir: the save being read and the one before it, which the lagged read needs.
 _RING_COPIES = 2
+_PLY_BANDS = ("plies_0_10", "plies_11_40", "plies_41_up")
 
 
 @dataclass(frozen=True)
@@ -145,6 +146,7 @@ class Monitor:
         self.state.halted = self.state.halted or (setup.out / "HALT.json").is_file()
         self.counters: list[dict[str, float]] = []
         self.final_step: int | None = None
+        self.segment_pid: int | None = None
 
     def _log(self, row: dict[str, Any]) -> None:
         with (self.setup.out / "monitor.jsonl").open("a", encoding="utf-8") as fh:
@@ -161,9 +163,10 @@ class Monitor:
             {"ts": time.time(), "last_step": self.state.last_step, "halted": self.state.halted}), encoding="utf-8")
 
     def run_alive(self) -> bool:
-        """Whether the run's process is up; before its first heartbeat a run counts as up."""
+        """Whether the run is up: its heartbeat's process, or the one its newest segment started under; before a heartbeat, up."""
         beat = self.setup.run_dir / "logs" / f"heartbeat_{self.setup.run_id}.json"
-        return not beat.is_file() or run_pid(self.setup.run_dir, self.setup.run_id) is not None
+        return (not beat.is_file() or run_pid(self.setup.run_dir, self.setup.run_id) is not None
+                or (self.segment_pid is not None and is_run(self.segment_pid, self.setup.run_id)))
 
     def _events_file(self) -> Path | None:
         found = sorted((self.setup.run_dir / "logs").glob(f"events_{self.setup.run_id}_seg*.jsonl"))
@@ -194,6 +197,7 @@ class Monitor:
                     self.final_step = int(row["step"])
             elif event == "run_segment_started":
                 self.final_step = None
+                self.segment_pid = row["pid"] if isinstance(row.get("pid"), int) else None
 
     def final_save(self, timeout_s: float, poll_s: float = 5.0) -> None:
         """After a stop or a dead run: read the newest save past the last one read once its ring lands; it is never signalled."""
@@ -230,53 +234,80 @@ class Monitor:
             return None
 
     def read_save(self, step: int, ckpt: Path, saved_ts: float, *, stopping: bool) -> dict[str, Any]:
-        """One save: the GEN read, the exams at its temperature, the bands, the rates, the previous save's lagged read; may halt. Raises: whatever a read raises."""
+        """One save: the GEN read, the exams at its temperature, the bands, the rates, the previous save's lagged read; may halt. Raises: OSError, KeyError."""
         s, out = self.setup, self.setup.out
         t0 = time.time()
         ring = Path(f"{ckpt}.ring.bin")
         copy = out / "work" / f"ring_{step:08d}.bin"
         have_ring = ring.is_file() and _copy(ring, copy)
-        gen_read = out / "reads" / f"gen_{step:08d}.json"
-        gen = self.readers.value(ckpt, s.gen_ring, gen_read, None)
-        exams = self.readers.exams(ckpt, gen_read, s.floors)
-        bands = self.readers.bands(copy, self._events_file(), s.bands) if have_ring else {
+        gen, exams = self._gen_and_exams(step, ckpt)
+        bands = self._bands(step, copy) if have_ring else {
             "rows": {}, "misses": [], "not_measured": "the save's ring was gone before the monitor read it"}
-        ov = gen["heldout"]["overall"]
         record: dict[str, Any] = {
             "step": step, "ckpt": str(ckpt), "ckpt_sha256": sha256_file(ckpt), "saved_ts": saved_ts, "final": stopping,
-            "gen": {"cf_ce": ov["cf_ce"], "temperature": ov["temperature"], "auc": ov["auc"],
-                    "policy_ce": gen["heldout"]["policy_ce"],
-                    "bands": {b: gen["heldout"][b] for b in ("plies_0_10", "plies_11_40", "plies_41_up")},
-                    "read": str(gen_read)},
-            "exams": exams, "ring_bands": bands,
+            "gen": gen, "exams": exams, "ring_bands": bands,
         }
         if self.state.last_step is not None and have_ring:
-            record["lagged_of"] = self._lagged(copy)
-        gap = record.get("lagged_of", {}).get("current", {}).get("gap")
-        record["gap_rule"] = rule = gap_rule(None if gap is None else gap["cf_ce"], self.state.gap_over,
-                                             int(record.get("lagged_of", {}).get("step", step)), s.gap_line)
+            record["lagged_of"] = self._lagged_guarded(copy)
         since = self.state.last_saved_ts
         if since is None:
             since = self.counters[0]["ts"] if self.counters else saved_ts
         record["rates"] = rates(self.counters, since, saved_ts, [(a, b) for a, b in self.state.busy])
         decided = verdict(exams, bands, armed=self.state.armed_floors, floors_live=bool(self.state.floors_live),
                           bands_live=step >= s.bands_from_step)
-        record["halting_rows"] = fired = decided["fired"]
-        record["reported_rows"], record["armed_floors"] = decided["reported"], decided["armed"]
-        record["floors_live"] = decided["floors_live"]
-        self.state.armed_floors, self.state.floors_live = decided["armed"], decided["floors_live"]
-        self.state.gap_over = rule["over"]
+        lagged = record.get("lagged_of") or {}
+        gap = (lagged.get("current") or {}).get("gap") or {}
+        rule = gap_rule(gap.get("cf_ce"), self.state.gap_over, int(lagged.get("step", step)), s.gap_line)
+        fired = decided["fired"]
+        record.update({"halting_rows": fired, "reported_rows": decided["reported"], "armed_floors": decided["armed"],
+                       "floors_live": decided["floors_live"], "gap_rule": rule})
         self.state.busy.append([t0, time.time()])
         record["monitor_busy_s"] = round(time.time() - t0, 1)
+        if fired:  # first: a record that fails to write must not cost the guard its signal
+            self._halt(step, fired, stopping=stopping)
         (out / "saves" / f"{step:08d}.json").write_text(json.dumps(record, indent=1, allow_nan=False), encoding="utf-8")
         self._log({"event": "save_read", "step": step, "final": stopping, "halting_rows": fired,
                    "reported_rows": decided["reported"], "armed_floors": decided["armed"]})
+        self.state.armed_floors, self.state.floors_live = decided["armed"], decided["floors_live"]
+        self.state.gap_over = rule["over"]
+        self._advance(step, ckpt, copy if have_ring else None, saved_ts)
         if rule["fired"]:
             self._gap_fired(step, rule)
-        self._advance(step, ckpt, copy if have_ring else None, saved_ts)
-        if fired:
-            self._halt(step, fired, stopping=stopping)
         return record
+
+    def _gen_and_exams(self, step: int, ckpt: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+        """The GEN read and the exams at its temperature; a failed read, or a read with no temperature, leaves every floor unread."""
+        s = self.setup
+        gen_read = s.out / "reads" / f"gen_{step:08d}.json"
+        try:
+            body = self.readers.value(ckpt, s.gen_ring, gen_read, None)
+        except Exception:  # noqa: BLE001 — a failed GEN read leaves the floors unread; the bands must still decide
+            _LOG.exception("save %s: the GEN read failed", step)
+            return {"not_measured": "the GEN read failed"}, _unread(s.floors, "the GEN read failed")
+        ov, held = body["heldout"]["overall"], body["heldout"]
+        gen = {"cf_ce": ov["cf_ce"], "temperature": ov["temperature"], "auc": ov["auc"], "policy_ce": held["policy_ce"],
+               "bands": {b: held[b] for b in _PLY_BANDS}, "read": str(gen_read)}
+        if ov["temperature"] is None:
+            return gen, _unread(s.floors, "the GEN read fit no temperature: a net with no skill calibrates nothing")
+        try:
+            return gen, self.readers.exams(ckpt, gen_read, s.floors)
+        except Exception:  # noqa: BLE001 — the same: the floors stay unread and the bands still decide
+            _LOG.exception("save %s: the exams failed", step)
+            return gen, _unread(s.floors, "the exams read failed")
+
+    def _bands(self, step: int, ring: Path) -> dict[str, Any]:
+        try:
+            return self.readers.bands(ring, self._events_file(), self.setup.bands)
+        except Exception:  # noqa: BLE001 — a failed audit leaves the bands unread; the floors must still decide
+            _LOG.exception("save %s: the ring audit failed", step)
+            return {"rows": {}, "misses": [], "not_measured": "the ring audit failed"}
+
+    def _lagged_guarded(self, later_ring: Path) -> dict[str, Any]:
+        try:
+            return self._lagged(later_ring)
+        except Exception:  # noqa: BLE001 — the lagged read only reports; it must not take the halting rows down
+            _LOG.exception("the lagged read of save %s failed", self.state.last_step)
+            return {"step": int(self.state.last_step or 0), "note": "NOT MEASURED: the lagged read failed"}
 
     def _lagged(self, later_ring: Path) -> dict[str, Any]:
         """The last read save and ITS lagged net, both read on the games produced after that save."""
@@ -315,8 +346,10 @@ class Monitor:
         self._persist()
 
     def _gap_fired(self, step: int, rule: dict[str, Any]) -> None:
-        """The gap rule's verdict for the operator: a rate re-mint is owed; the run is never signalled for it."""
-        (self.setup.out / "GAP_RULE.json").write_text(json.dumps({"step": step, **rule}, indent=1), encoding="utf-8")
+        """The gap rule's verdict for the operator, its first firing kept: a rate re-mint is owed; the run is never signalled."""
+        first = self.setup.out / "GAP_RULE.json"
+        if not first.is_file():
+            first.write_text(json.dumps({"step": step, **rule}, indent=1), encoding="utf-8")
         self._log({"event": "gap_rule_fired", "step": step, **rule})
         _LOG.warning("the gap rule fired at step %s: saves %s above %s", step, rule["over"], rule["line"])
 
@@ -329,6 +362,10 @@ class Monitor:
         (self.setup.out / "HALT.json").write_text(json.dumps(body, indent=1), encoding="utf-8")
         self._log({"event": "halt", **body})
         _LOG.error("halting row fired at step %s: %s", step, fired)
+
+
+def _unread(floors: dict[str, float], why: str) -> dict[str, Any]:
+    return {exam: {"floor": floor, "calibrated_mean": None, "holds": None, "not_measured": why} for exam, floor in floors.items()}
 
 
 def _copy(src: Path, dst: Path) -> bool:

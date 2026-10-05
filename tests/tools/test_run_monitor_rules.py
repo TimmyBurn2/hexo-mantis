@@ -44,6 +44,9 @@ def _assert_the_two_read_rule(check: Any) -> None:
     before = _verdict(check, _LOW, [], [], floors_live=False)
     assert before["fired"] == [] and before["armed"] == [] and before["floors_live"] is False
     assert _verdict(check, _GOOD, [], [], floors_live=False)["floors_live"] is True, "the first pass makes floors live"
+    unread = {**_LOW, "T4_V": {"floor": 0.154, "calibrated_mean": None, "holds": None}}
+    assert _verdict(check, unread, [], ["T4_V"])["armed"] == ["DEF_V_att", "T4_V"], "an unread floor keeps its arm"
+    assert _verdict(check, {**_GOOD, "T4_V": unread["T4_V"]}, [], [], floors_live=False)["floors_live"] is False
 
 
 _BROKEN = {
@@ -54,6 +57,8 @@ _BROKEN = {
         set(rules.verdict(e, b, **k)["armed"]) | set(k["armed"]))},
     "floors live from the start": lambda e, b, **k: rules.verdict(e, b, **{**k, "floors_live": True}),
     "bands live from the start": lambda e, b, **k: rules.verdict(e, b, **{**k, "bands_live": True}),
+    "an unread floor disarms": lambda e, b, **k: {**rules.verdict(e, b, **k), "armed": sorted(
+        set(rules.verdict(e, b, **k)["armed"]) - {x for x, row in e.items() if row["holds"] is None})},
 }
 
 

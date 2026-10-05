@@ -27,15 +27,15 @@ def vi() -> Any:
     return tuple(importlib.import_module(f"value_instrument.{m}") for m in ("metrics", "draws", "cli"))
 
 
-def _planted(path: Path, n: int = 48) -> R.Ring:
-    """n one-visit rows under a 16-visit header, each with a distinct tail mass, three rows per game."""
+def _planted(path: Path, n: int = 48, wins_in: int = 2) -> R.Ring:
+    """n one-visit rows under a 16-visit header, each with a distinct tail mass, three rows per game; one win in `wins_in`."""
     buf = _engine.HexgBuffer(64, _ENCODING, 16)
     board = _engine.Board.with_encoding_name(_ENCODING)
     board.apply_move(0, 0)
     for i in range(n):
         tail = 0.01 * (i + 1)
         buf.push_graph_position(list(board.get_stones()), [(1, 0, 1.0 - tail)], int(board.current_player),
-                                int(board.moves_remaining), 1, True, 1.0 if i % 2 else -1.0, True, 20, i // 3, tail)
+                                int(board.moves_remaining), 1, True, 1.0 if i % wins_in else -1.0, True, 20, i // 3, tail)
     buf.save_to_path(str(path))
     return R.load_ring(path)
 
@@ -238,3 +238,16 @@ def test_exams_calibrates_at_the_read_temperature_reads_the_floor_and_refuses(vi
     with pytest.raises(ValueError, match="no held-out temperature"):
         cli.exams(ns(read=cold))
     assert cli.main(["exams", "--read", str(cold), "--rows", str(rows), "--field", "v"]) == 2
+
+
+def test_read_with_a_train_ring_carries_the_gap_the_run_monitor_reads(vi, mint_stamp, tmp_path: Path) -> None:
+    """PRODUCER: the run monitor's gap rule reads `gap.cf_ce`, held-out minus train; a renamed key or a flipped sign reds."""
+    cli = vi[2]
+    ckpt = mint_stamp(tmp_path / "ck", encoding=_ENCODING)
+    _planted(tmp_path / "held.ring.bin")
+    _planted(tmp_path / "train.ring.bin", n=36, wins_in=4)  # another outcome rate, so the two CEs differ
+    body = cli.read(argparse.Namespace(ckpt=ckpt, heldout=tmp_path / "held.ring.bin", train=tmp_path / "train.ring.bin",
+                                       out=tmp_path / "read.json", seed=cli.HELDOUT_SEED, train_seed=cli.TRAIN_SEED,
+                                       fold_seed=cli.FOLD_SEED, batches=1, threads=2, device="cpu"))
+    held, train = body["heldout"]["overall"]["cf_ce"], body["train"]["overall"]["cf_ce"]
+    assert held != pytest.approx(train, abs=1e-3) and body["gap"]["cf_ce"] == pytest.approx(held - train), (held, train)
