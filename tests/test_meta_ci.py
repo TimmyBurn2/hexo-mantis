@@ -16,9 +16,9 @@ def test_the_makefile_dispatches_exactly_the_declared_target_set():
     }
     assert targets == {
         "build", "build.cuda", "build.native", "test", "test.integration", "lint", "lint.rust",
-        # `gates` is the everyday set; `gates.exit` adds the slow tier; `dashboard`/`viewer` render a record; `analyzer`
-        # serves on loopback; `vendor.strix` builds strix's venv; `vendor.six` fetches Six's assets.
-        "gates", "gates.exit", "dashboard", "viewer", "analyzer",
+        # `gates` is the everyday set; `gates.exit` adds the slow tier; `dash` serves run records on loopback;
+        # `vendor.strix` builds strix's venv; `vendor.six` fetches Six's assets.
+        "gates", "gates.exit", "dash",
         "bench", "bench.baseline", "check.wasm", "vendor", "vendor.strix", "vendor.six",
         "clean",
     }
