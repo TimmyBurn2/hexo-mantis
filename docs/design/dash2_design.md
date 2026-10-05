@@ -248,3 +248,25 @@ units.
 3. Keeping the one-file freeze (§7.4) or dropping it with `make dashboard`.
 4. Where the mockups and the four rival reports go: `mantis-records/dash2/` (they are in the session
    scratchpad now).
+
+## 11. Annotations (the tree moved after 2026-10-03)
+
+- **2026-10-05, delta (a): the value-head panel has a producer.** `tools/run_monitor` writes one record per save at
+  `<records>/saves/<step:08d>.json`, plus `HALT.json` and `GAP_RULE.json`. The server takes them as `--records
+  ID=DIR` beside the run directory and draws §2's value panel from them instead of a stated gap: calibrated held-out
+  CE, AUC and temperature per save, CE by ply band, the exams against their floors, the train/held-out gap against
+  the gap rule's line, the lagged read. The keys it reads are pinned against the monitor's real output (LAW-07). A
+  null temperature or `holds: null` is "not measured", never a zero.
+- **2026-10-05, delta (b): strength is read against Six first.** The primary panel is Six (`<ckpt>.six30_16*.json`;
+  run11's cells are `.six30_16.full.json`, 288 pairs). Strix is a second panel only where a run has strix sidecars.
+  The going-forward read is drawn as a marked band: the mean logit of the last four cells of the line against the
+  parent's logit + 0.17 (fewer than four, those available, stated). The cells come from `--cells DIR` (repeatable),
+  joined to a run by the sidecar's `run_id`. The parent is the stem of `identity.warm_start.checkpoint` (§2 said
+  `warm_start.checkpoint`; the key lives under `identity`).
+- **2026-10-05, delta (c): a resumed run has several segments.** The readers take every `events_<run>_seg*.jsonl` in
+  segment order, and the status line reads the newest segment (a failed boot leaves a short segment between two
+  lives).
+- **2026-10-05, build decisions.** §10.2: the system font stack, nothing vendored. §10.3: the one-file freeze is kept.
+  §10.4: the mockups and rival reports are in `mantis-records/dash2/`. The horizon's windows are the first and last
+  fifth of the sampled games in record order (a run of a few shards has no fifth of shards). The Games list labels
+  each kind by its channel (Self-play, Gate, External with its rung, Random).
