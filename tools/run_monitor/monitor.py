@@ -23,16 +23,16 @@ from mantis.util.loadpkg import load_tools_package
 
 from .exams import load_positions, read_values
 from .rings import max_game_id, unseen_ring
-from .rules import counter_row, halt_run, halting_rows, rates, run_pid
+from .rules import counter_row, gap_rule, halt_run, rates, run_pid, verdict
 
 load_tools_package("value_instrument")
 _vi = importlib.import_module("value_instrument.cli")
 
 _LOG = logging.getLogger(__name__)
 
-#: The events the monitor reads: the saves, the rates' counters and the run's own stops.
+#: The events the monitor reads: the saves, the rates' counters, the run's own stops and each new life of the run.
 EVENTS = ("periodic_checkpoint_save", "iteration_complete", "hard_abort", "hard_abort_after_stop", "shutdown_save",
-          "clean_stop_save")
+          "clean_stop_save", "run_segment_started")
 _STOPS = ("shutdown_save", "clean_stop_save")
 #: Ring copies kept in the work dir: the save being read and the one before it, which the lagged read needs.
 _RING_COPIES = 2
@@ -58,6 +58,9 @@ class Setup:
     device: str
     threads: int
     halt: bool
+    gap_line: float
+    floors_from_first_pass: bool
+    bands_from_step: int
 
 
 @dataclass(frozen=True)
@@ -82,6 +85,9 @@ class State:
     busy: list[list[float]] = field(default_factory=list)
     halted: bool = False
     aborts: list[str] = field(default_factory=list)
+    armed_floors: list[str] = field(default_factory=list)
+    floors_live: bool | None = None
+    gap_over: list[int] = field(default_factory=list)
 
 
 def value_read(setup: Setup) -> Callable[[Path, Path, Path, Path | None], dict[str, Any]]:
@@ -133,6 +139,8 @@ class Monitor:
         path = setup.out / "state.json"
         self.state = State(**json.loads(path.read_text(encoding="utf-8"))) if path.is_file() else State(
             lagged_net=str(setup.parent))
+        if self.state.floors_live is None:
+            self.state.floors_live = not setup.floors_from_first_pass
         # A halt on record is never re-sent, whatever the state file says.
         self.state.halted = self.state.halted or (setup.out / "HALT.json").is_file()
         self.counters: list[dict[str, float]] = []
@@ -181,7 +189,11 @@ class Monitor:
                 if not self.state.halted and (self.state.last_step is None or step > self.state.last_step):
                     self.read_guarded(step, Path(row["path"]), float(row.get("ts") or time.time()), stopping=False)
             elif event in _STOPS and isinstance(row.get("step"), int):
-                self.final_step = int(row["step"])
+                # A stop at or before the last read save ended an earlier life of the run, already read.
+                if self.state.last_step is None or int(row["step"]) > self.state.last_step:
+                    self.final_step = int(row["step"])
+            elif event == "run_segment_started":
+                self.final_step = None
 
     def final_save(self, timeout_s: float, poll_s: float = 5.0) -> None:
         """After a stop or a dead run: read the newest save past the last one read once its ring lands; it is never signalled."""
@@ -240,15 +252,27 @@ class Monitor:
         }
         if self.state.last_step is not None and have_ring:
             record["lagged_of"] = self._lagged(copy)
+        gap = record.get("lagged_of", {}).get("current", {}).get("gap")
+        record["gap_rule"] = rule = gap_rule(None if gap is None else gap["cf_ce"], self.state.gap_over,
+                                             int(record.get("lagged_of", {}).get("step", step)), s.gap_line)
         since = self.state.last_saved_ts
         if since is None:
             since = self.counters[0]["ts"] if self.counters else saved_ts
         record["rates"] = rates(self.counters, since, saved_ts, [(a, b) for a, b in self.state.busy])
-        record["halting_rows"] = fired = halting_rows(exams, bands)
+        decided = verdict(exams, bands, armed=self.state.armed_floors, floors_live=bool(self.state.floors_live),
+                          bands_live=step >= s.bands_from_step)
+        record["halting_rows"] = fired = decided["fired"]
+        record["reported_rows"], record["armed_floors"] = decided["reported"], decided["armed"]
+        record["floors_live"] = decided["floors_live"]
+        self.state.armed_floors, self.state.floors_live = decided["armed"], decided["floors_live"]
+        self.state.gap_over = rule["over"]
         self.state.busy.append([t0, time.time()])
         record["monitor_busy_s"] = round(time.time() - t0, 1)
         (out / "saves" / f"{step:08d}.json").write_text(json.dumps(record, indent=1, allow_nan=False), encoding="utf-8")
-        self._log({"event": "save_read", "step": step, "final": stopping, "halting_rows": fired})
+        self._log({"event": "save_read", "step": step, "final": stopping, "halting_rows": fired,
+                   "reported_rows": decided["reported"], "armed_floors": decided["armed"]})
+        if rule["fired"]:
+            self._gap_fired(step, rule)
         self._advance(step, ckpt, copy if have_ring else None, saved_ts)
         if fired:
             self._halt(step, fired, stopping=stopping)
@@ -289,6 +313,12 @@ class Monitor:
         for old in sorted((self.setup.out / "work").glob("ring_*.bin"))[:-_RING_COPIES]:
             old.unlink()
         self._persist()
+
+    def _gap_fired(self, step: int, rule: dict[str, Any]) -> None:
+        """The gap rule's verdict for the operator: a rate re-mint is owed; the run is never signalled for it."""
+        (self.setup.out / "GAP_RULE.json").write_text(json.dumps({"step": step, **rule}, indent=1), encoding="utf-8")
+        self._log({"event": "gap_rule_fired", "step": step, **rule})
+        _LOG.warning("the gap rule fired at step %s: saves %s above %s", step, rule["over"], rule["line"])
 
     def _halt(self, step: int, fired: list[str], *, stopping: bool) -> None:
         self.state.halted = True

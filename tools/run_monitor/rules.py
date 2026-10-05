@@ -1,4 +1,4 @@
-"""The monitor's decisions: which halting rows fired, the rates between two saves, and the one signal to a live run."""
+"""The monitor's decisions: which halting rows fired, the gap rule, the rates between two saves, the one signal to a live run."""
 from __future__ import annotations
 
 import json
@@ -12,11 +12,26 @@ _RATE_KEYS = ("games_total", "positions_produced_total", "step")
 _RATE_NAMES = {"games_total": "games_per_h", "positions_produced_total": "positions_per_h", "step": "steps_per_h"}
 
 
-def halting_rows(exams: dict[str, Any], bands: dict[str, Any]) -> list[str]:
-    """Every halting row that fired: an exam's calibrated mean below its floor, a ring band outside (an unmeasured ring is not a miss)."""
-    fired = [f"{exam} calibrated {row['calibrated_mean']:.4f} below the floor {row['floor']}"
-             for exam, row in exams.items() if not row["holds"]]
-    return fired + [f"ring band {miss}" for miss in bands["misses"]]
+def verdict(exams: dict[str, Any], bands: dict[str, Any], *, armed: list[str], floors_live: bool,
+            bands_live: bool) -> dict[str, Any]:
+    """A floor's miss arms it, its next miss fires, a pass disarms; a miss before the floors (or bands) are live is reported."""
+    misses = {exam: f"{exam} calibrated {row['calibrated_mean']:.4f} below the floor {row['floor']}"
+              for exam, row in exams.items() if not row["holds"]}
+    second = {exam for exam in misses if floors_live and exam in armed}
+    fired = [f"{misses[exam]}, its second miss in a row" for exam in sorted(second)]
+    reported = [text for exam, text in misses.items() if exam not in second]
+    band_rows = [f"ring band {miss}" for miss in bands["misses"]]
+    fired, reported = (fired + band_rows, reported) if bands_live else (fired, reported + band_rows)
+    # The first save that passes every floor makes the floors live; a floor misses into `armed` only once live.
+    return {"fired": fired, "reported": reported, "armed": sorted(misses) if floors_live else [],
+            "floors_live": floors_live or not misses}
+
+
+def gap_rule(gap: float | None, over: list[int], step: int, line: float) -> dict[str, Any]:
+    """The memorisation gap's rule: the saves in a row whose gap is above the line, firing at two; an unread gap leaves it."""
+    if gap is not None:
+        over = [*over, step] if gap > line else []
+    return {"gap": gap, "line": line, "over": over, "fired": len(over) >= 2}
 
 
 def counter_row(event: dict[str, Any]) -> dict[str, float] | None:
@@ -73,4 +88,4 @@ def halt_run(run_dir: Path, run_id: str) -> dict[str, Any]:
     return {"sent": True, "pid": pid, "signal": "SIGTERM", "ts": time.time()}
 
 
-__all__ = ["counter_row", "halt_run", "halting_rows", "rates", "run_pid"]
+__all__ = ["counter_row", "gap_rule", "halt_run", "rates", "run_pid", "verdict"]

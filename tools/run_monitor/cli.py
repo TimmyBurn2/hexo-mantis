@@ -36,13 +36,16 @@ def _floors(text: str) -> dict[str, float]:
 
 
 def setup_of(a: argparse.Namespace) -> Setup:
-    """The command line as a `Setup`. Raises: ValueError (malformed floors, a line that is not positive)."""
-    if not a.line > 0:
-        raise ValueError(f"--line must be positive, got {a.line}")
+    """The command line as a `Setup`. Raises: ValueError (malformed floors, a line that is not positive, a negative step)."""
+    if not a.line > 0 or not a.gap_line > 0:
+        raise ValueError(f"--line and --gap-line must be positive, got {a.line} and {a.gap_line}")
+    if a.bands_from_step < 0:
+        raise ValueError(f"--bands-from-step must be at least 0, got {a.bands_from_step}")
     return Setup(run_dir=a.run_dir, run_id=a.run_id, out=a.out, gen_ring=a.gen_ring, gen_sha256=a.gen_sha256,
                  exams=a.exams, exams_sha256=a.exams_sha256, bands=a.bands, bands_sha256=a.bands_sha256,
                  floors=_floors(a.floors), line=a.line, parent=a.parent, batches=a.batches, device=a.device,
-                 threads=a.threads, halt=a.halt)
+                 threads=a.threads, halt=a.halt, gap_line=a.gap_line,
+                 floors_from_first_pass=a.floors_from == "first-pass", bands_from_step=a.bands_from_step)
 
 
 def follow(monitor: Monitor, tail: EventTail, poll_s: float, final_timeout_s: float) -> int:
@@ -80,6 +83,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--gpu-mem-fraction", type=float, required=True, help="the monitor's cap on the card (cuda)")
     ap.add_argument("--threads", type=int, required=True)
     ap.add_argument("--halt", action="store_true", help="send the run ONE SIGTERM when a halting row fires")
+    ap.add_argument("--gap-line", type=float, required=True, help="the memorisation gap's line, nats")
+    ap.add_argument("--floors-from", choices=("start", "first-pass"), required=True,
+                    help="the exam floors halt from the first save, or from the first save that passes them all")
+    ap.add_argument("--bands-from-step", type=int, required=True, help="ring band misses before this step only report")
     ap.add_argument("--poll-sec", type=float, default=30.0)
     ap.add_argument("--final-timeout-sec", type=float, default=1800.0)
     ap.add_argument("--ckpt", type=Path, default=None, help="once: the checkpoint to read")
@@ -101,7 +108,8 @@ def main(argv: list[str] | None = None) -> int:
             print("run_monitor: once needs --ckpt and --step", file=sys.stderr)
             return 2
         record = monitor.read_save(a.step, a.ckpt, time.time(), stopping=True)
-        print(json.dumps({"step": a.step, "halting_rows": record["halting_rows"], "exams": record["exams"]}, indent=1))
+        print(json.dumps({"step": a.step, "halting_rows": record["halting_rows"], "reported_rows": record["reported_rows"],
+                          "exams": record["exams"]}, indent=1))
         return 3 if record["halting_rows"] else 0
     return follow(monitor, EventTail(setup.run_dir, setup.run_id, EVENTS), a.poll_sec, a.final_timeout_sec)
 

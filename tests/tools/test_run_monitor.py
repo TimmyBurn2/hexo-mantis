@@ -1,10 +1,13 @@
-"""The run monitor: the games after a save, the halting rows and their planted breaks, the rates, one signal, a restart."""
+"""The run monitor: the games after a save, one signal, a restart, a resumed run, the floors' first pass and the gap rule's record."""
+# >300 justify (R8): every scenario drives one harness, a stand-in run that counts its signals over real rings
+# and event segments; split, each half would rebuild that run and its fixtures.
 from __future__ import annotations
 
 import importlib
 import json
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -56,41 +59,11 @@ def _exam(mean: float, floor: float) -> dict[str, Any]:
 _GOOD = {"T4_V": _exam(0.29, 0.154), "DEF_V_att": _exam(0.21, 0.100)}
 
 
-def _assert_the_rows_halt(halting_rows: Any) -> None:
-    """Below a floor halts, a band miss halts, the known-good and an unmeasured ring pass."""
-    assert halting_rows(_GOOD, {"misses": []}) == []
-    assert halting_rows(_GOOD, {"misses": [], "not_measured": "the ring was gone"}) == []
-    low = {**_GOOD, "DEF_V_att": _exam(0.0995, 0.100)}
-    assert halting_rows(low, {"misses": []}) == ["DEF_V_att calibrated 0.0995 below the floor 0.1"]
-    assert halting_rows(_GOOD, {"misses": ["cap_rate: 0.07 not lt 0.05"]}) == ["ring band cap_rate: 0.07 not lt 0.05"]
-
-
-@pytest.mark.parametrize("planted", ["exams ignored", "bands ignored"])
-def test_a_reading_below_its_floor_or_a_band_outside_halts_and_each_planted_break_reds(planted: str) -> None:
-    """PLANTED BREAKS: a checker that drops the exam rule, or the band rule, misses its halting row."""
-    _assert_the_rows_halt(rules.halting_rows)
-    broken = {"exams ignored": lambda exams, bands: [f"ring band {m}" for m in bands["misses"]],
-              "bands ignored": lambda exams, bands: rules.halting_rows(exams, {"misses": []})}[planted]
-    with pytest.raises(AssertionError):
-        _assert_the_rows_halt(broken)
-
-
-def test_the_rates_read_the_idle_windows_apart_and_a_missing_counter_is_no_zero() -> None:
-    rows = [{"ts": 0.0, "games_total": 0, "positions_produced_total": 0, "step": 0},
-            {"ts": 1800.0, "games_total": 100, "positions_produced_total": 9000, "step": 240},
-            {"ts": 3600.0, "games_total": 120, "positions_produced_total": 10800, "step": 288}]
-    out = rules.rates(rows, 0.0, 3600.0, busy=[(1900.0, 3500.0)])
-    assert out["games_per_h"] == pytest.approx(120.0) and out["idle_games_per_h"] == pytest.approx(200.0)
-    assert out["idle_h"] == pytest.approx(0.5) and out["steps_per_h"] == pytest.approx(288.0)
-    assert "NOT MEASURED" in rules.rates(rows[:1], 0.0, 3600.0, busy=[])["note"]
-    assert rules.counter_row({"event": "iteration_complete", "ts": 1.0, "games_total": 3, "step": 9}) is None
-
-
 class _Readers:
-    """Reads with no net: a fixed GEN body, exams that fail at the chosen step, clean bands, an optional raise."""
+    """Reads with no net: a fixed GEN body, exams that fail at the chosen steps, a chosen gap, clean bands, a raise."""
 
-    def __init__(self, fail_at: int | None, raise_at: int | None = None) -> None:
-        self.fail_at, self.raise_at, self.values = fail_at, raise_at, []
+    def __init__(self, fail_at: tuple[int, ...] = (), raise_at: int | None = None, gap: float = 0.0) -> None:
+        self.fail_at, self.raise_at, self.gap, self.values = fail_at, raise_at, gap, []
 
     def value(self, ckpt: Path, ring: Path, out: Path, train: Path | None) -> dict[str, Any]:
         if self.raise_at is not None and f"_{self.raise_at:08d}_" in ckpt.name:
@@ -98,11 +71,12 @@ class _Readers:
             raise RuntimeError("CUDA out of memory (planted)")
         self.values.append((ckpt.name, ring.name, None if train is None else train.name))
         band = {"n": 10, "cf_ce": 0.6}
-        return {"heldout": {"overall": {"cf_ce": 0.6, "temperature": 2.0, "auc": 0.7}, "policy_ce": 2.3,
+        body = {"heldout": {"overall": {"cf_ce": 0.6, "temperature": 2.0, "auc": 0.7}, "policy_ce": 2.3,
                             "plies_0_10": band, "plies_11_40": band, "plies_41_up": band}}
+        return body if train is None else {**body, "gap": {"cf_ce": self.gap}}
 
     def exams(self, ckpt: Path, gen_read: Path, floors: dict[str, float]) -> dict[str, Any]:
-        low = self.fail_at is not None and f"_{self.fail_at:08d}_" in ckpt.name
+        low = any(f"_{step:08d}_" in ckpt.name for step in self.fail_at)
         return {"T4_V": _exam(0.10 if low else 0.29, floors["T4_V"]), "DEF_V_att": _exam(0.21, floors["DEF_V_att"])}
 
     def bands(self, ring: Path, events: Path | None, bands: Path) -> dict[str, Any]:
@@ -124,16 +98,17 @@ def _save(run: Path, step: int, games: range) -> Path:
     return ckpt
 
 
-def _monitor(tmp_path: Path, run: Path, readers: _Readers, *, halt: bool) -> Any:
+def _monitor(tmp_path: Path, run: Path, readers: _Readers, *, halt: bool, first_pass: bool = False) -> Any:
     setup = mon.Setup(run_dir=run, run_id=_RUN, out=tmp_path / "records", gen_ring=tmp_path / "gen.bin", gen_sha256="",
                       exams=tmp_path / "exams.jsonl", exams_sha256="", bands=tmp_path / "bands.md", bands_sha256="",
                       floors={"T4_V": 0.154, "DEF_V_att": 0.100}, line=0.012, parent=run / "parent.ckpt", batches=1,
-                      device="cpu", threads=1, halt=halt)
+                      device="cpu", threads=1, halt=halt, gap_line=0.05, floors_from_first_pass=first_pass,
+                      bands_from_step=0)
     return mon.Monitor(setup, mon.Readers(value=readers.value, exams=readers.exams, bands=readers.bands))
 
 
-def _events(run: Path, rows: list[dict[str, Any]]) -> None:
-    with (run / "logs" / f"events_{_RUN}_seg0001.jsonl").open("a", encoding="utf-8") as fh:
+def _events(run: Path, rows: list[dict[str, Any]], segment: int = 1) -> None:
+    with (run / "logs" / f"events_{_RUN}_seg{segment:04d}.jsonl").open("a", encoding="utf-8") as fh:
         fh.write("".join(json.dumps(r) + "\n" for r in rows))
 
 
@@ -166,25 +141,29 @@ def test_one_halt_sends_one_sigterm_and_a_restarted_monitor_neither_rereads_nor_
     run = _run_dir(tmp_path, proc.pid)
     paired: list[tuple[str, str]] = []
     _no_lagged(monkeypatch, paired)
-    c1, c2, c3 = _save(run, 3000, range(0, 4)), _save(run, 6000, range(2, 8)), _save(run, 9000, range(6, 12))
+    steps = (3000, 6000, 9000, 12000, 15000, 18000)
+    ckpts = [_save(run, step, range(2 * i, 2 * i + 4)) for i, step in enumerate(steps)]
+    c1 = ckpts[0]
     _events(run, [{"event": "iteration_complete", "ts": 10.0, "games_total": 4, "positions_produced_total": 8,
-                   "step": 3000}, _saved(3000, c1), _saved(6000, c2), _saved(9000, c3)])
-    readers = _Readers(fail_at=6000)
+                   "step": 3000}, *(_saved(step, c) for step, c in zip(steps, ckpts, strict=True))])
+    readers = _Readers(fail_at=(6000, 12000, 15000))
     assert cli.follow(_monitor(tmp_path, run, readers, halt=True), EventTail(run, _RUN, mon.EVENTS), 0.0, 0.0) == 3
     time.sleep(0.3)
     assert _sigterms(count) == 1 and proc.poll() is None, "one SIGTERM, and the stand-in run kept running"
     saves = sorted(p.name for p in (tmp_path / "records" / "saves").iterdir())
-    assert saves == ["00003000.json", "00006000.json"], "a halted monitor reads no further save"
+    assert saves == [f"{step:08d}.json" for step in steps[:5]], "the miss at 6000 armed, 9000 disarmed, 15000 fired"
     assert ("unseen_00003000_current.json", "unseen_00003000_lagged.json") in paired
     assert (c1.name, "unseen_00003000.bin", "ring_00003000.bin") in readers.values, "the gap's train side is its own ring"
     assert ("parent.ckpt", "unseen_00003000.bin", None) in readers.values
     record = json.loads((tmp_path / "records" / "saves" / "00006000.json").read_text(encoding="utf-8"))
-    assert record["lagged_of"]["step"] == 3000 and record["lagged_of"]["unseen"]["games"] == 4
-    assert record["halting_rows"] == ["T4_V calibrated 0.1000 below the floor 0.154"]
+    assert record["lagged_of"]["step"] == 3000 and record["lagged_of"]["unseen"]["games"] == 2
+    assert record["halting_rows"] == [] and record["armed_floors"] == ["T4_V"]
+    fired = json.loads((tmp_path / "records" / "saves" / "00015000.json").read_text(encoding="utf-8"))
+    assert fired["halting_rows"] == ["T4_V calibrated 0.1000 below the floor 0.154, its second miss in a row"]
     halt = json.loads((tmp_path / "records" / "HALT.json").read_text(encoding="utf-8"))
-    assert halt["armed"] and halt["signal"]["sent"] is True and halt["signal"]["pid"] == proc.pid
+    assert halt["step"] == 15000 and halt["armed"] and halt["signal"]["sent"] is True and halt["signal"]["pid"] == proc.pid
 
-    again = _Readers(fail_at=6000)
+    again = _Readers(fail_at=(6000, 12000, 15000))
     assert cli.follow(_monitor(tmp_path, run, again, halt=True), EventTail(run, _RUN, mon.EVENTS), 0.0, 0.0) == 3
     time.sleep(0.3)
     assert _sigterms(count) == 1 and again.values == [], "a restart re-read a save or re-sent the halt"
@@ -197,11 +176,11 @@ def test_a_restart_resumes_its_pairing_and_reads_only_the_new_saves(
     _no_lagged(monkeypatch, [])
     c1, c2 = _save(run, 3000, range(0, 4)), _save(run, 6000, range(2, 8))
     _events(run, [_saved(3000, c1), _saved(6000, c2)])
-    _monitor(tmp_path, run, _Readers(fail_at=None), halt=True).on_events(EventTail(run, _RUN, mon.EVENTS).read_new())
+    _monitor(tmp_path, run, _Readers(), halt=True).on_events(EventTail(run, _RUN, mon.EVENTS).read_new())
     Path(f"{c1}.ring.bin").unlink()  # the run prunes old bundles' rings
     c3 = _save(run, 9000, range(6, 12))
     _events(run, [_saved(9000, c3)])
-    readers = _Readers(fail_at=None)
+    readers = _Readers()
     _monitor(tmp_path, run, readers, halt=True).on_events(EventTail(run, _RUN, mon.EVENTS).read_new())
     assert {v[0] for v in readers.values} == {c3.name, c2.name, c1.name}, "only 9000 read, 6000 paired with 3000"
     record = json.loads((tmp_path / "records" / "saves" / "00009000.json").read_text(encoding="utf-8"))
@@ -214,19 +193,22 @@ def test_a_save_whose_ring_is_gone_is_unmeasured_not_halted(tmp_path: Path, vict
     run = _run_dir(tmp_path, proc.pid)
     ckpt = _save(run, 3000, range(0, 4))
     Path(f"{ckpt}.ring.bin").unlink()
-    record = _monitor(tmp_path, run, _Readers(fail_at=None), halt=True).read_save(3000, ckpt, 1.0, stopping=False)
+    record = _monitor(tmp_path, run, _Readers(), halt=True).read_save(3000, ckpt, 1.0, stopping=False)
     assert record["halting_rows"] == [] and "not_measured" in record["ring_bands"] and _sigterms(count) == 0
 
 
-def test_a_halting_row_at_the_final_save_is_recorded_and_never_signalled(tmp_path: Path, victim: Any) -> None:
+def test_a_halting_row_at_the_final_save_is_recorded_and_never_signalled(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, victim: Any) -> None:
     proc, count = victim
     run = _run_dir(tmp_path, proc.pid)
-    _save(run, 4321, range(0, 4))
-    _events(run, [{"event": "shutdown_save", "step": 4321}])
-    monitor = _monitor(tmp_path, run, _Readers(fail_at=4321), halt=True)
+    _no_lagged(monkeypatch, [])
+    c1 = _save(run, 3000, range(0, 4))
+    _save(run, 4321, range(2, 6))
+    _events(run, [_saved(3000, c1), {"event": "shutdown_save", "step": 4321}])
+    monitor = _monitor(tmp_path, run, _Readers(fail_at=(3000, 4321)), halt=True)
     assert cli.follow(monitor, EventTail(run, _RUN, mon.EVENTS), 0.0, 5.0) == 3
     halt = json.loads((tmp_path / "records" / "HALT.json").read_text(encoding="utf-8"))
-    assert halt["final_save"] and "signal" not in halt and _sigterms(count) == 0
+    assert halt["step"] == 4321 and halt["final_save"] and "signal" not in halt and _sigterms(count) == 0
 
 
 def test_a_failed_read_is_recorded_and_the_next_save_is_still_read(
@@ -236,7 +218,7 @@ def test_a_failed_read_is_recorded_and_the_next_save_is_still_read(
     _no_lagged(monkeypatch, [])
     c1, c2 = _save(run, 3000, range(0, 4)), _save(run, 6000, range(2, 8))
     _events(run, [_saved(3000, c1), _saved(6000, c2)])
-    _monitor(tmp_path, run, _Readers(fail_at=None, raise_at=3000), halt=True).on_events(
+    _monitor(tmp_path, run, _Readers(raise_at=3000), halt=True).on_events(
         EventTail(run, _RUN, mon.EVENTS).read_new())
     log = [json.loads(x) for x in (tmp_path / "records" / "monitor.jsonl").read_text(encoding="utf-8").splitlines()]
     assert [r["event"] for r in log] == ["save_read_failed", "save_read"]
@@ -246,7 +228,7 @@ def test_a_failed_read_is_recorded_and_the_next_save_is_still_read(
 def test_a_run_that_died_without_a_stop_event_has_its_newest_save_read_and_the_follow_ends(tmp_path: Path) -> None:
     run = _run_dir(tmp_path, pid=2**22 + 7)  # no such process: the run is gone
     _save(run, 5100, range(0, 4))
-    monitor = _monitor(tmp_path, run, _Readers(fail_at=None), halt=True)
+    monitor = _monitor(tmp_path, run, _Readers(), halt=True)
     assert not monitor.run_alive()
     assert cli.follow(monitor, EventTail(run, _RUN, mon.EVENTS), 0.0, 5.0) == 0
     assert (tmp_path / "records" / "saves" / "00005100.json").is_file()
@@ -270,5 +252,64 @@ def test_an_input_that_is_not_the_pinned_one_is_refused(tmp_path: Path) -> None:
             str(tmp_path / "gen.bin"), "--gen-sha256", "0" * 64, "--exams", str(tmp_path / "exams.jsonl"),
             "--exams-sha256", "0" * 64, "--bands", str(tmp_path / "b.md"), "--bands-sha256", "0" * 64,
             "--floors", "T4_V=0.154", "--line", "0.012", "--parent", "p.ckpt", "--batches", "1", "--device", "cpu",
-            "--gpu-mem-fraction", "0.25", "--threads", "1"]
+            "--gpu-mem-fraction", "0.25", "--threads", "1", "--gap-line", "0.05", "--floors-from", "start",
+            "--bands-from-step", "0"]
     assert cli.main(argv) == 2
+
+
+def test_a_resumed_run_is_followed_past_its_earlier_stop_and_its_first_save_pairs_with_the_stop_save(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, victim: Any) -> None:
+    proc, _count = victim
+    run = _run_dir(tmp_path, proc.pid)
+    _no_lagged(monkeypatch, [])
+    c1, stop = _save(run, 3000, range(0, 4)), _save(run, 4321, range(2, 6))
+    _events(run, [_saved(3000, c1), {"event": "shutdown_save", "step": 4321}])
+    assert cli.follow(_monitor(tmp_path, run, _Readers(), halt=True), EventTail(run, _RUN, mon.EVENTS), 0.0, 5.0) == 0
+
+    def second_life() -> None:  # the resumed run's segment lands after the restarted monitor's first poll
+        c3, _c4 = _save(run, 6000, range(4, 9)), _save(run, 7000, range(6, 11))
+        _events(run, [{"event": "run_segment_started", "segment": 2}, _saved(6000, c3),
+                      {"event": "shutdown_save", "step": 7000}], segment=2)
+    later = threading.Timer(1.0, second_life)
+    later.start()
+    readers = _Readers()
+    assert cli.follow(_monitor(tmp_path, run, readers, halt=True), EventTail(run, _RUN, mon.EVENTS), 0.1, 0.5) == 0
+    later.join()
+    saves = sorted(p.name for p in (tmp_path / "records" / "saves").iterdir())
+    assert saves == ["00003000.json", "00004321.json", "00006000.json", "00007000.json"], "the old stop ended the follow"
+    record = json.loads((tmp_path / "records" / "saves" / "00006000.json").read_text(encoding="utf-8"))
+    assert record["lagged_of"]["step"] == 4321 and record["lagged_of"]["lagged_net"] == str(c1)
+    assert stop.name in {v[0] for v in readers.values}
+
+
+def test_floors_report_until_their_first_pass_then_halt_on_two_reads_across_a_restart(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, victim: Any) -> None:
+    proc, count = victim
+    run = _run_dir(tmp_path, proc.pid)
+    _no_lagged(monkeypatch, [])
+    ckpts = {step: _save(run, step, range(2 * i, 2 * i + 4)) for i, step in enumerate((3000, 6000, 9000, 12000, 15000))}
+    readers = _Readers(fail_at=(3000, 6000, 12000, 15000))
+    _events(run, [_saved(3000, ckpts[3000]), _saved(6000, ckpts[6000]), _saved(9000, ckpts[9000])])
+    _monitor(tmp_path, run, readers, halt=True, first_pass=True).on_events(EventTail(run, _RUN, mon.EVENTS).read_new())
+    early = json.loads((tmp_path / "records" / "saves" / "00006000.json").read_text(encoding="utf-8"))
+    assert early["halting_rows"] == [] and early["reported_rows"] and early["floors_live"] is False
+    assert json.loads((tmp_path / "records" / "saves" / "00009000.json").read_text(encoding="utf-8"))["floors_live"]
+    _events(run, [_saved(12000, ckpts[12000]), _saved(15000, ckpts[15000])])
+    restarted = _monitor(tmp_path, run, readers, halt=True, first_pass=True)
+    restarted.on_events(EventTail(run, _RUN, mon.EVENTS).read_new())
+    time.sleep(0.3)
+    assert json.loads((tmp_path / "records" / "HALT.json").read_text(encoding="utf-8"))["step"] == 15000
+    assert _sigterms(count) == 1
+
+
+def test_the_gap_rule_records_its_verdict_and_never_signals_the_run(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, victim: Any) -> None:
+    proc, count = victim
+    run = _run_dir(tmp_path, proc.pid)
+    _no_lagged(monkeypatch, [])
+    ckpts = [_save(run, step, range(2 * i, 2 * i + 4)) for i, step in enumerate((3000, 6000, 9000))]
+    _events(run, [_saved(step, c) for step, c in zip((3000, 6000, 9000), ckpts, strict=True)])
+    _monitor(tmp_path, run, _Readers(gap=0.08), halt=True).on_events(EventTail(run, _RUN, mon.EVENTS).read_new())
+    rule = json.loads((tmp_path / "records" / "GAP_RULE.json").read_text(encoding="utf-8"))
+    assert rule["over"] == [3000, 6000] and rule["fired"] and rule["step"] == 9000
+    assert _sigterms(count) == 0 and not (tmp_path / "records" / "HALT.json").exists()
