@@ -7,9 +7,9 @@ from urllib.parse import quote, urlencode
 from ..readers.hexlogic import first_of_turn, owner, turn_of, turn_size
 from ..readers.htttx import MAX_STONES
 from . import board
-from .fmt import cell, esc, pct, script_json, short
+from .fmt import at, cell, esc, pct, script_json
 from .games import turn_facts
-from .games_text import NAME
+from .games_text import KIND, NAME
 from .page import Shell, render
 
 _ICON = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="{d}" fill="currentColor"/></svg>'
@@ -23,7 +23,7 @@ def _source(body: dict[str, Any] | None, moves: list[Any], q: dict[str, str]) ->
         return (f'<div class="source" id="source">Imported game, {len(body["moves"])} stones'
                 f'<span class="chip" id="line">On the game\'s line</span>{back_button}</div>')
     back = esc(f"/run/{quote(q.get('run', ''), safe='')}/games?" + urlencode({"g": body["id"], "ply": len(moves)}))
-    kind = {"selfplay": "self-play", "promotion": "gate", "external": "external", "random_floor": "random"}.get(body["channel"], body["channel"])
+    kind = str(KIND.get(body["channel"]) or body["channel"]).lower()
     return (f'<div class="source" id="source">From {esc(kind)} game <a href="{back}">{esc(body["id"][:12])}</a>'
             '<span class="chip" id="line">On the game\'s line</span><button class="btn" id="back" type="button" hidden>'
             "Back to the game</button></div>")
@@ -51,7 +51,7 @@ def _import(refusal: tuple[str, str] | None, panel: dict[str, Any] | None) -> st
 
 
 def _net_label(run: str, row: dict[str, Any]) -> str:
-    return f"{run} at {short(row['step'])}" if row.get("step") is not None else str(row["id"])
+    return at(run, row["step"]) if row.get("step") is not None else str(row["id"])
 
 
 def _nets(rows: list[dict[str, Any]] | None, panel: dict[str, Any] | None, names: dict[str, str]) -> str:
@@ -62,7 +62,9 @@ def _nets(rows: list[dict[str, Any]] | None, panel: dict[str, Any] | None, names
     groups: dict[str, list[dict[str, Any]]] = {}
     for r in rows:
         if r.get("kind") != "snapshot_gap":
-            groups.setdefault(names.get(str(r.get("run_id")), str(r.get("run_id") or "other")), []).append(r)
+            group = names.get(str(r.get("run_id")), str(r.get("run_id"))) if r.get("run_id") else str(r.get("kind", "other")).capitalize()
+            groups.setdefault(group, []).append(r)
+    gaps = sum(1 for r in rows if r.get("kind") == "snapshot_gap")
 
     def options(chosen: str | None) -> str:
         out = []
@@ -72,14 +74,12 @@ def _nets(rows: list[dict[str, Any]] | None, panel: dict[str, Any] | None, names
             out.append(f'<optgroup label="{esc(run)}">{opts}</optgroup>')
         return "".join(out)
     a, b = (panel or {}).get("a_id"), (panel or {}).get("b_id")
+    pick = "" if a else '<option value="" selected disabled>Pick a net</option>'
+    note = f'<p class="muted small">{gaps} unstamped snapshot{"s" if gaps != 1 else ""} cannot be read and are not listed.</p>' if gaps else ""
     return ('<section><h2>Nets</h2><div class="nets">'
-            f'<label class="c1"><i></i>Reading<select class="btn" id="netA">{options(a)}</select></label>'
+            f'<label class="c1"><i></i>Reading<select class="btn" id="netA">{pick}{options(a)}</select></label>'
             f'<label class="c2"><i></i>Compare<select class="btn" id="netB"><option value="">none</option>{options(b)}</select></label>'
-            "</div></section>")
-
-
-def _search_head(panel: dict[str, Any]) -> str:
-    return "Game's search" if str(panel.get("search_source", "")).startswith("the game's") else "Search"
+            f"</div>{note}</section>")
 
 
 def _read(panel: dict[str, Any] | None, refused: str | None, moves: list[Any]) -> str:
@@ -97,7 +97,7 @@ def _read(panel: dict[str, Any] | None, refused: str | None, moves: list[Any]) -
            f'<span>{pct(1 - c["light"])} Dark</span>' if c["light"] is not None else '<span class="muted">not read</span><span></span><span></span>')
         + "</div>" for c in panel["chances"])
     head = ['Cell', f'<span class="c1">{esc(panel["a"])}</span>'] + ([f'<span class="c2">{esc(panel["b"])}</span>'] if panel["b"] else []) + [
-        _search_head(panel), ""]
+        esc(panel["search_head"]), ""]
     rows = "".join(
         f'<tr data-c="{r[0]},{r[1]}"><td class="num">{cell(r[0], r[1])}</td><td class="pct">{pct(r[2])}</td>'
         + (f'<td class="pct">{pct(r[3])}</td>' if panel["b"] else "")

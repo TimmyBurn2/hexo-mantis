@@ -35,7 +35,7 @@ def test_the_verdict_names_the_forced_move_and_what_each_net_does(text):
     assert both["verdict"].startswith("<strong>Dark must block</strong> Light's four this turn, at (−6, −1) or (−2, −5).")
     assert "Both nets block with their first choice, (−6, −1)." in both["verdict"]
     split = text.compose(_record(A), _record(B, step=3000), None, None, None)
-    assert "r at 45k does block" in split["verdict"] and "r at 3k does not block with its first choice, (−4, 2)" in split["verdict"]
+    assert "r\u00a0at\u00a045k does block" in split["verdict"] and "r\u00a0at\u00a03k does not block with its first choice, (−4, 2)" in split["verdict"]
 
 
 def test_the_games_search_rides_only_on_the_games_line(text):

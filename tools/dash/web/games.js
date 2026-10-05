@@ -35,7 +35,7 @@
       if (pos.turn) {
         s.append(el('h2', null, 'Played this turn'));
         pos.turn.texts.forEach(([label, text]) => { const p = trusted('p', 'say', ` ${text}`); p.prepend(el('strong', null, `${label}.`)); s.append(p); });
-        if (pos.turn.how) s.append(el('p', 'muted small', pos.turn.how));
+        if (pos.turn.how) s.append(trusted('p', 'muted small', pos.turn.how));  // server-composed, escaped there
       } else s.append(el('h2', null, 'Search at this stone'), trusted('p', 'say', th.text));
       if (th.light != null) {
         s.append(el('p', 'muted small', 'Win chance, from the search'));

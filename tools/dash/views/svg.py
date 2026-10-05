@@ -6,7 +6,7 @@ import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
-from .fmt import esc, script_json, short, sig
+from .fmt import esc, num, script_json, short, sig
 
 Fmt = Callable[[float], str]
 _M = {"l": 40.0, "r": 10.0, "t": 8.0, "b": 22.0}
@@ -14,14 +14,13 @@ _M = {"l": 40.0, "r": 10.0, "t": 8.0, "b": 22.0}
 
 @dataclass(frozen=True)
 class Line:
-    """A polyline in a run's or engine's colour class; `faint` draws it thin and dimmed, `tag` labels its right end."""
+    """A polyline in a run's or engine's colour class; `faint` draws it thin and dimmed (an earlier window)."""
 
     name: str
     cls: str
     pts: Sequence[tuple[float, float]]
     dash: bool = False
     faint: bool = False
-    tag: str = ""
 
 
 @dataclass(frozen=True)
@@ -44,7 +43,7 @@ class Dots:
 
 @dataclass(frozen=True)
 class Ref:
-    """A horizontal reference: a line at `y`, an optional band `lo..hi`, a label; `marked` dashes it in the warn tone, `alt` dots it."""
+    """A horizontal reference: a line at `y`, an optional band `lo..hi`, a label; `marked` draws it dashed in the warn tone."""
 
     y: float
     lo: float | None = None
@@ -52,7 +51,6 @@ class Ref:
     label: str = ""
     marked: bool = False
     end: bool = False
-    alt: bool = False
 
 
 @dataclass(frozen=True)
@@ -119,6 +117,11 @@ class Chart:
         for v, label in zip(yt, y_text, strict=True):
             out.append(f'<line class="gridline" x1="{_M["l"]}" x2="{w - _M["r"]}" y1="{py(v):.1f}" y2="{py(v):.1f}"/>'
                        f'<text class="tick" x="{_M["l"] - 7}" y="{py(v) + 3.5:.1f}" text-anchor="end">{esc(label)}</text>')
+        for r in self.refs:
+            # A dashed rule line carries its value on the axis when no tick already sits there.
+            if r.marked and y0 <= r.y <= y1 and all(abs(py(r.y) - py(v)) > 9 for v in yt):
+                label = shared_decimals([*yt, r.y])[-1] if self.y_fmt is sig else self.y_fmt(r.y)
+                out.append(f'<text class="tick ref" x="{_M["l"] - 7}" y="{py(r.y) + 3.5:.1f}" text-anchor="end">{esc(label)}</text>')
         out.append(f'<line class="axisline" x1="{_M["l"]}" x2="{w - _M["r"]}" y1="{_M["t"] + ih:.1f}" y2="{_M["t"] + ih:.1f}"/>')
         xt = ticks(x0, x1, 4)
         for i, v in enumerate(xt):
@@ -133,7 +136,7 @@ class Chart:
             if r.lo is not None and r.hi is not None:
                 out.append(f'<rect class="refband" x="{_M["l"]}" width="{iw:.1f}" y="{py(r.hi):.1f}" '
                            f'height="{max(1.0, py(r.lo) - py(r.hi)):.1f}"/>')
-            out.append(f'<line class="{"refmark" if r.marked else "ref"}{" alt" if r.alt else ""}" x1="{_M["l"]}" x2="{w - _M["r"]}" '
+            out.append(f'<line class="{"refmark" if r.marked else "ref"}" x1="{_M["l"]}" x2="{w - _M["r"]}" '
                        f'y1="{py(r.y):.1f}" y2="{py(r.y):.1f}"/>')
         for b in self.bands:
             if b.pts:
@@ -148,10 +151,6 @@ class Chart:
             elif s.pts:
                 out.append(f'<circle class="dot {s.cls}" cx="{px(s.pts[0][0]):.1f}" cy="{py(s.pts[0][1]):.1f}" r="3.5"/>')
         out.append("</g>")
-        for s in self.lines:
-            if s.tag and s.pts:
-                x, y = s.pts[-1]
-                out.append(f'<text class="linetag {s.cls}" x="{px(x):.1f}" y="{py(y) - 4:.1f}" text-anchor="end">{esc(s.tag)}</text>')
         for r in self.refs:
             if r.label and r.end:
                 out.append(f'<text class="reflabel" x="{w - _M["r"]:.1f}" y="{py(r.y) - 5:.1f}" text-anchor="end">'
@@ -177,8 +176,8 @@ class Chart:
 
 def shared_decimals(values: Sequence[float]) -> list[str]:
     """Axis labels at the fewest shared decimals that print every tick exactly: 0 / 5 / 10, 0.025 / 0.050."""
-    places = next((p for p in range(5) if all(abs(round(v, p) - v) < 1e-9 for v in values)), 4)
-    return [f"{v:,.{places}f}".replace(",", "\u202f").replace("-", "\u2212") for v in values]
+    places = next((p for p in range(7) if all(abs(round(v, p) - v) < 1e-9 for v in values)), 6)
+    return [num(v, places) for v in values]
 
 
 def _r(v: float | None) -> float | None:

@@ -66,7 +66,7 @@ def figure(title: str, chart: Chart | None, definition: str = "", *, goal: Goal 
         plot = '<div class="gap"><strong>Nothing to draw.</strong>No series reached this chart.</div>'
     else:
         plot = chart.render()
-    scope = f'<span class="only">{esc(only)} only</span>' if only else ""
+    scope = f'<span class="only">Only {esc(only)} is drawn.</span>' if only else ""
     aim = (f'<p class="goal {goal.way}"><span class="g" aria-hidden="true">{_GLYPH[goal.way]}</span>{esc(goal.words)}</p>'
            if goal is not None else "")
     caption = f"<figcaption>{esc(definition)}{' ' if definition and only else ''}{scope}</figcaption>" if definition or only else ""

@@ -57,7 +57,7 @@ def test_a_played_cell_outside_the_recorded_visits_reads_a_dash_never_zero(text,
 def test_the_played_cell_and_its_share_and_the_second_stone_flag(text, GameView):
     view = GameView.from_record(_game())
     first = text.thought(view, 1, {(0, 5)}, False)
-    assert first["text"] == "(0, 5), the top move, 10 sims (full search)."
+    assert first["text"] == "(0, 5), top move, full 10 sims."
     assert first["cands"][0] == [0, 5, 0.9, ["played", "blocks"]] and first["light"] == pytest.approx(0.4)
     assert first["second"] is False
     second = text.thought(view, 4, set(), False)

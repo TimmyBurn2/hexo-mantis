@@ -45,20 +45,35 @@ def test_every_unit_is_its_own_series_never_joined(sc, tmp_path):
     assert by_name == {"six30_16.full": [3000, 6000], "six30_16.off": [9000], "six455_128.full": [9000]}
 
 
-def test_a_checkpoint_read_twice_on_one_unit_keeps_the_reading_over_more_games(sc, tmp_path):
-    sidecar(tmp_path / "full_36k", "r1", 36000, 0.19, suffix="six455_128.full", **_six455(128))
-    sidecar(tmp_path / "screen_36k", "r1", 36000, 0.18, n=128, suffix="six455_128.full", **_six455(128))
-    sidecar(tmp_path / "smoke", "r1", 36000, 0.0, n=2, suffix="six455_128.full", **_six455(128))
+@pytest.mark.parametrize("full_dir", ["a_full", "z_full"])
+def test_a_checkpoint_read_twice_on_one_unit_keeps_the_reading_over_more_games(sc, tmp_path, full_dir):
+    sidecar(tmp_path / full_dir, "r1", 36000, 0.19, suffix="six455_128.full", **_six455(128))
+    sidecar(tmp_path / "m_screen", "r1", 36000, 0.18, n=128, suffix="six455_128.full", **_six455(128))
+    sidecar(tmp_path / "n_smoke", "r1", 36000, 0.0, n=2, suffix="six455_128.full", **_six455(128))
     cells, _ = sc.load([tmp_path])
     assert [(c.step, c.wr, c.n) for c in cells] == [(36000, 0.19, 576)]
 
 
 def test_six_forfeits_are_left_out_of_the_reading_not_counted_as_our_wins(sc, tmp_path):
     findings = {"count": 58, "first": ["six_forfeit_finding failed ply 6: bestmove none"]}
-    sidecar(tmp_path, "r1", 24000, 0.3715, six_findings=findings)
+    sidecar(tmp_path, "r1", 24000, 0.3715, six_findings=findings, wins=214, draws=0, losses=362)
     (cell,), _ = sc.load([tmp_path])
     assert cell.forfeits == 58 and cell.n == 518
     assert cell.wr == pytest.approx(156 / 518) and cell.lo == pytest.approx(0.262, abs=0.002) and cell.hi == pytest.approx(0.343, abs=0.002)
+
+
+def test_a_forfeit_correction_scores_a_draw_as_half_a_game(sc, tmp_path):
+    sidecar(tmp_path, "r1", 24000, 0.105, n=100, six_findings={"count": 3}, wins=10, draws=1, losses=89)
+    (cell,), _ = sc.load([tmp_path])
+    assert cell.n == 97 and cell.wr == pytest.approx(7.5 / 97)
+
+
+@pytest.mark.parametrize(("over", "why"), [({"six_findings": {"count": 576}}, "every one of its 576 games is a Six forfeit"),
+                                           ({"six_findings": {"count": 5}, "games": 600}, "counted over 600 games")])
+def test_a_cell_its_forfeits_cannot_be_read_out_of_is_refused_by_name(sc, tmp_path, over, why):
+    sidecar(tmp_path, "r1", 24000, 0.5, **over)
+    cells, skipped = sc.load([tmp_path])
+    assert cells == [] and any(why in note for note in skipped)
 
 
 def test_each_ruler_has_its_own_parent_on_the_same_unit(sc, tmp_path):

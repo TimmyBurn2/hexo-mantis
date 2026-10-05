@@ -9,7 +9,7 @@ from ..readers.games import GameView
 from ..readers.hexlogic import first_of_turn, owner, turn_of
 from ..readers.shards import Page
 from . import board, games_text
-from .fmt import esc, num, script_json
+from .fmt import esc, kilo, num, script_json
 from .page import Shell, render
 
 KINDS = (("selfplay", "Self-play"), ("promotion", "Gate"), ("external", "External"), ("random_floor", "Random"))
@@ -66,7 +66,7 @@ def row_html(row: dict[str, Any], run: str, selected: bool, query: dict[str, str
                          "at the cap" if term == "ply_cap" else None) if x]
     who = {"p1": "Light", "p2": "Dark"}.get(str(res), "No winner")
     step = row.get("step")
-    net = f"{step / 1000:.1f}k" if isinstance(step, int) and step >= 0 else '<span class="muted">—</span>'
+    net = kilo(step) if isinstance(step, int) and step >= 0 else '<span class="muted">—</span>'
     href = "?" + urlencode({**query, "g": row["id"]})
     return (f'<a class="lrow" role="option" aria-selected="{"true" if selected else "false"}" href="{esc(href)}" '
             f'data-id="{esc(row["id"])}"><span>{win}</span><span class="kind">{who}<small>{esc(", ".join(notes))}</small></span>'
@@ -142,7 +142,7 @@ def _panel(body: dict[str, Any] | None, ply: int, run: str) -> str:
         parts.append(f'<section><h2>Turn {turn_of(ply)}</h2><div class="tacline">{pos["threat"]}</div></section>')
     if pos.get("turn"):
         lines = "".join(f'<p class="say"><strong>{esc(label)}.</strong> {text}</p>' for label, text in pos["turn"]["texts"])
-        lines += f'<p class="muted small">{esc(pos["turn"]["how"])}</p>' if pos["turn"].get("how") else ""
+        lines += f'<p class="muted small">{pos["turn"]["how"]}</p>' if pos["turn"].get("how") else ""
         parts.append(f"<section><h2>Played this turn</h2>{lines}</section>")
     elif pos.get("think"):
         parts.append(f'<section><h2>Search at this stone</h2><p class="say">{pos["think"]["text"]}</p></section>')

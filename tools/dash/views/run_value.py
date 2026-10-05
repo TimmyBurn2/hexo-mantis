@@ -12,7 +12,7 @@ from .fmt import esc, num, pct, short, signed
 from .run_series import x_span
 from .svg import Chart, Line, Ref
 
-_BAND_NAMES = {"plies_0_10": "plies 0–10", "plies_11_40": "plies 11–40", "plies_41_up": "plies 41+"}
+_BAND_NAMES = {"plies_0_10": "0–10", "plies_11_40": "11–40", "plies_41_up": "41+"}
 
 
 def _series(saves: Sequence[Save], attr: str) -> list[tuple[float, float]]:
@@ -77,7 +77,7 @@ def _verdict(rec: Records) -> tuple[str, str]:
     if rec.gap_rule is not None:
         over = " and ".join(short(s) for s in rec.gap_rule.get("over") or [])
         lead += f" <strong>Gap rule fired at {short(rec.gap_rule.get('step'))}.</strong>"
-        aside = f"{over} above the gap line: a learning-rate re-mint is due.<br>{exam_line}<br>" + aside
+        aside = f"{over} above the gap line: a learning-rate re\u2011mint is due.<br>{exam_line}<br>" + aside
     else:
         lead += f" {exam_line}"
     return (halted + " " + lead if halted else lead), aside.removesuffix("<br>")
@@ -118,7 +118,7 @@ def _instrument(snaps: Sequence[RunSnapshot]) -> list[str]:
     only = head.label if len(snaps) > 1 else ""
     band_chart = Chart("by ply band", lines=band_lines, x_domain=x_span(snaps)) if drawn else None
     out.append(figure("Held-out cross-entropy by ply", band_chart, goal=LOWER, only=only,
-                      keys=[Key(("0–10", "11–40", "41+ plies")[i], "c1", ("faint", "dash", "line")[i]) for i, _b in enumerate(PLY_BANDS)],
+                      keys=[Key(_BAND_NAMES[b], "c1", ("faint", "dash", "line")[i]) for i, b in enumerate(PLY_BANDS)],
                       gap=None if drawn else ("Not measured at any save yet.", "No band was read.")))
     line = next((s.gap_line for s in reversed(first.saves) if s.gap_line is not None), None)
     refs = [Ref(line, marked=True)] if line is not None else []
@@ -198,7 +198,8 @@ def _reach(h: Horizon | None) -> str:
         return f"The search never calls the winner at {pct(REACH_SHARE)}."
     early = "never" if h.early_reach is None else str(h.early_reach)
     if h.late_reach is None:
-        return f"The search never calls the winner at {pct(REACH_SHARE)} in the last fifth of sampled games; {early} turns out in the first."
+        out = "never" if h.early_reach is None else f"{h.early_reach} turn{'s' if h.early_reach != 1 else ''} out"
+        return f"The search never calls the winner at {pct(REACH_SHARE)} in the last fifth of sampled games; {out} in the first."
     return (f"The search calls the winner {h.late_reach} turn{'s' if h.late_reach != 1 else ''} out at {pct(REACH_SHARE)} "
             f"in the last fifth of sampled games, and {early} in the first.")
 

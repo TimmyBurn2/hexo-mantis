@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from .fmt import cell, esc, short
+from .fmt import at, cell, esc
 from .games_text import NAME, cells
 
 Cell = tuple[int, int]
@@ -17,7 +17,8 @@ def name_of(record: dict[str, Any], names: Mapping[str, str] | None = None) -> s
     """A net as the pages name it: its run and step (`run11a2 at 33k`), or the engine's id."""
     card = record.get("engine") or {}
     if card.get("run_id") is not None and card.get("step") is not None:
-        return f"{(names or {}).get(card['run_id'], card['run_id'])} at {short(card['step'])}"
+        run = str(card["run_id"])
+        return at((names or {}).get(run, run), card["step"])
     return str(card.get("id", "engine"))
 
 
@@ -68,7 +69,7 @@ def ghosts(turn_a: Turn, turn_b: Turn) -> list[list[Any]]:
     for (q, r), by in marks.items():
         la, lb = by.get("a"), by.get("b")
         if la is not None and lb is not None:
-            out.append([q, r, la if la == lb else f"{la}/{lb}", "gab"])
+            out.append([q, r, la if la == lb else f"{la}/{lb}" if la and lb else la or lb, "gab"])
         else:
             out.append([q, r, la if la is not None else lb, "ga" if la is not None else "gb"])
     return out
@@ -151,10 +152,11 @@ def compose(a: dict[str, Any], b: dict[str, Any] | None, game_entry: dict[str, A
                      "diff": diff}, "search_source": search_source, "rows": rows,
             "tactics": {"cls": cls, "cells": [list(c) for c in tcells]}, "mover": mover,
             "turn": {"a": [list(c) for c in turn_a.stones], "b": [list(c) for c in turn_b.stones], "second_ms": turn_a.ms,
-                     "ghosts": ghosts(turn_a, turn_b), "note": _turn_note(na, nb, turn_a, turn_b)}}
+                     "ghosts": ghosts(turn_a, turn_b), "note": _turn_note(turn_a)},
+            "search_head": "Game's search" if search_source.startswith("the game's") else "Search"}
 
 
-def _turn_note(na: str, nb: str | None, turn_a: Turn, turn_b: Turn) -> str:
+def _turn_note(turn_a: Turn) -> str:
     """Where the numbered stones come from; the key under the board names each colour."""
     if not turn_a.stones:
         return ""

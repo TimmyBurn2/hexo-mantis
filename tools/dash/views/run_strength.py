@@ -6,12 +6,11 @@ from collections.abc import Sequence
 from ..readers.record import RunSnapshot
 from ..readers.sidecars import CELLS, LINE_LOGIT, Cell, Ruler
 from .charts import HIGHER, RUN_CLASSES, Goal, Key, figure, table
-from .fmt import esc, num, pct, short, signed
+from .fmt import at, esc, num, pct, short, signed
 from .stats import expit, separation
 from .svg import Chart, Dots, Line, Ref
 
 _WORD = {1: "beats", -1: "trails", 0: "shows no clear difference from"}
-_OWN = _WORD
 #: Colour classes for the rulers on the logit chart, in the order they are listed.
 _RULER_CLASSES = ("c1", "c3", "cf", "cf")
 
@@ -36,7 +35,7 @@ def _lead(rulers: Sequence[Ruler]) -> Ruler | None:
 
 
 def _parent_name(c: Cell) -> str:
-    return f"{c.run_id} at {short(c.step)}"
+    return at(c.run_id, c.step)
 
 
 def verdict(snap: RunSnapshot) -> tuple[str, str]:
@@ -51,7 +50,7 @@ def verdict(snap: RunSnapshot) -> tuple[str, str]:
         parts.append(f"{short(last.step)} <strong>{_WORD[vs.sign]}</strong> its parent")
     if len(lead.line) > 1:
         own = separation(last.wr, last.n, first.wr, first.n)
-        parts.append(f"{_OWN[own.sign]} {short(first.step)}" if parts else f"{short(last.step)} {_OWN[own.sign]} {short(first.step)}")
+        parts.append(f"{_WORD[own.sign]} {short(first.step)}" if parts else f"{short(last.step)} {_WORD[own.sign]} {short(first.step)}")
     role = f" ({_role(lead, True)})" if snap.rule is not None else ""
     sentence = (" and ".join(parts) + f" on {esc(lead.name)}{role}.") if parts else \
         f"{short(last.step)} wins <strong>{pct(last.wr, 1)}</strong> on {esc(lead.name)}{role}. No parent cell to compare."
@@ -77,9 +76,11 @@ def _compared(snaps: Sequence[RunSnapshot], lead: Ruler) -> str:
         twin = next((r for r in x.rulers if r.unit == lead.unit and r.line), None)
         if twin is not None:
             c, first = twin.line[-1], twin.line[0]
-            verdict = (f"{short(c.step)} {_OWN[separation(c.wr, c.n, first.wr, first.n).sign]} {short(first.step)}. "
-                       if len(twin.line) > 1 else "")
-            said = f"{esc(x.label)}: {verdict}{pct(c.wr, 1)} of {num(c.n)} games at {short(c.step)}"
+            if len(twin.line) > 1:
+                said = (f"{esc(x.label)}: {short(c.step)} {_WORD[separation(c.wr, c.n, first.wr, first.n).sign]} {short(first.step)}, "
+                        f"{pct(c.wr, 1)} of {num(c.n)} games")
+            else:
+                said = f"{esc(x.label)} at {short(c.step)}: {pct(c.wr, 1)} of {num(c.n)} games"
             said += f", {num(c.forfeits)} Six forfeits left out." if c.forfeits else "."
             out += f'<br><span class="{RUN_CLASSES[snaps.index(x)]}">{said}</span>'
     return out
@@ -172,7 +173,7 @@ def _logit_panel(head: RunSnapshot, xmax: float, only: str) -> str:
              signed(c.logit - r.parent.logit) if r.parent is not None else "—", c.regime]
             for r in head.rulers for c in r.line]
     rows += [[r.name, "parent", num(r.parent.step), pct(r.parent.wr, 1), f"{pct(r.parent.lo, 1)} to {pct(r.parent.hi, 1)}",
-              num(r.parent.n), "+0.00", r.parent.regime] for r in head.rulers if r.parent is not None]
+              num(r.parent.n), signed(0.0), r.parent.regime] for r in head.rulers if r.parent is not None]
     twin = table(["ruler", "role", "step", "win rate", "95 % interval", "games", "logit over parent", "host load"], rows)
     if not dots:
         return figure("Every ruler against its parent", None, definition, goal=goal, only=only, twin=twin,

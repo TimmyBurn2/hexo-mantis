@@ -14,6 +14,7 @@ from .fmt import ZONE, cell, esc, num, pct, short
 NAME = ("Light", "Dark")
 KIND = {"selfplay": "Self-play", "promotion": "Gate", "external": "External", "random_floor": "Random"}
 _ARM = {"full": "Full search", "fast": "Fast search", "opening": "Opening stone"}
+_ARM_WORD = {"full": "full ", "fast": "fast "}
 #: Candidates listed per searched stone.
 CANDIDATES = 7
 
@@ -100,15 +101,16 @@ def thought(g: GameView, ply: int, cls_cells: set[tuple[int, int]], wins: bool) 
     arm = _ARM.get(g.arms[ply], "Search") if g.arms is not None else "Search"
     by = f" by the {esc(entry['by'])}" if entry.get("by") else ""
     how = f"{arm}, {num(total)} sims{by}."
+    word = _ARM_WORD.get(g.arms[ply], "") if g.arms is not None else ""
     if not visits:
         pick, how = f"{arm}{by}: no visits recorded", ""
     elif played == (visits[0][0], visits[0][1]):
-        pick = f"{cell(*played)}, the top move"
+        pick = f"{cell(*played)}, top move"
     elif played in share:
         pick = f"{cell(*played)}, {pct(share[played])} of the visits"
     else:
         pick = f"{cell(*played)}, not among the recorded visits"
-    text = f"{pick}, {num(total)} sims ({arm.lower()})." if how else f"{pick}."
+    text = f"{pick}, {word}{num(total)} sims{by}." if how else f"{pick}."
     pick += "."
     v = entry.get("root_value")
     light = None

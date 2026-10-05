@@ -37,6 +37,18 @@ def pct(value: float | None, digits: int = 0) -> str:
     return "—" if value is None else f"{num(100.0 * value, digits)}{NBSP}%"
 
 
+def kilo(value: float | int | None) -> str:
+    """Thousands at one decimal everywhere a column or rate is compared: 72.0k, 97.0k, 900."""
+    if value is None:
+        return "—"
+    return num(value) if abs(value) < 1000 else f"{value / 1000:.1f}".replace("-", MINUS) + "k"
+
+
+def at(run: str, step: float | int | None) -> str:
+    """A net named by run and step, kept on one line: run8 at 45k."""
+    return f"{run}\u00a0at\u00a0{short(step)}"
+
+
 def short(step: float | int | None) -> str:
     """A step count the way the axes read it: 45k, 50.8k, 900."""
     if step is None:

@@ -60,8 +60,7 @@
       btn.onclick = () => { lens = k; readout(); draw(); };
       seg.append(btn);
     });
-    const searchHead = (panel.search_source || '').startsWith("the game's") ? "Game's search" : 'Search';
-    const head = el('tr'); [['Cell', ''], [panel.a, 'c1']].concat(panel.b ? [[panel.b, 'c2']] : [], [[searchHead, ''], ['', '']])
+    const head = el('tr'); [['Cell', ''], [panel.a, 'c1']].concat(panel.b ? [[panel.b, 'c2']] : [], [[panel.search_head, ''], ['', '']])
       .forEach(([h, cls]) => { const th = el('th'); th.append(cls ? el('span', cls, h) : h); head.append(th); });
     $('cands').tHead.replaceChildren(head);
     const tb = $('cands').tBodies[0]; tb.replaceChildren();
@@ -140,7 +139,12 @@
       } else return;
       read();
     };
-    $('first').onclick = () => { if (moves.length) { moves = []; redo = []; read(); } };
+    // Back to the start a turn at a time onto the redo stack, so Next walks back over a typed position or a variation.
+    $('first').onclick = () => {
+      if (!moves.length) return;
+      while (moves.length) { const target = Math.max(0, ...S.starts.filter(p => p < moves.length)); redo.push(moves.slice(target)); moves = moves.slice(0, target); }
+      read();
+    };
     $('last').onclick = () => { if (game.length && !same(moves, game)) { moves = game.slice(); redo = []; read(); } };
     $('undo').onclick = () => { if (moves.length) { moves.pop(); redo = []; read(); } };
     if ($('back')) $('back').onclick = () => { moves = game.slice(0, S.ply); redo = []; read(); };

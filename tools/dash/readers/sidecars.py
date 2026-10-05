@@ -19,8 +19,12 @@ LINE_LOGIT = 0.17
 Z95 = 1.96
 
 
-def wilson(k: int, n: int) -> tuple[float, float]:
-    """The Wilson 95 % interval of k successes in n; (0, 1) for n = 0."""
+class CellRefused(ValueError):
+    """A sidecar whose reading cannot be stated honestly; the message says why."""
+
+
+def wilson(k: float, n: int) -> tuple[float, float]:
+    """The Wilson 95 % interval of k successes in n (a draw counts half); (0, 1) for n = 0."""
     if n <= 0:
         return 0.0, 1.0
     p, z2 = k / n, Z95 * Z95
@@ -114,19 +118,31 @@ def parse(path: Path, raw: Any) -> Cell | None:
     stem = str(raw.get("checkpoint") or path.name.split(".ckpt")[0]).split(".ckpt")[0]
     lo, hi = _num(raw.get("wr_ci_lower")), _num(raw.get("wr_ci_upper"))
     findings = raw.get("six_findings") if family == "six" else None
-    forfeits = _int(findings.get("count")) if isinstance(findings, dict) else None
-    if forfeits and 0 < forfeits < n:
-        # The sidecar counts each Six forfeit as our win; the reading here is over the real games only.
-        wins, n = max(0, round(wr * n) - forfeits), n - forfeits
-        wr, (lo, hi) = wins / n, wilson(wins, n)
+    forfeits = (_int(findings.get("count")) if isinstance(findings, dict) else None) or 0
+    if forfeits:
+        wr, lo, hi, n = _without_forfeits(raw, wr, n, forfeits)
     return Cell(run_id=str(raw.get("run_id")), stem=stem, step=step, family=family, unit_field=field,
                 name=field if arm is None else f"{field}.{arm}", unit=unit, label=label, wr=wr, lo=lo, hi=hi, n=n,
-                regime=str(raw.get("regime", "?")), forfeits=forfeits or 0)
+                regime=str(raw.get("regime", "?")), forfeits=forfeits)
+
+
+def _without_forfeits(raw: dict[str, Any], wr: float, n: int, forfeits: int) -> tuple[float, float, float, int]:
+    """The reading over the real games: the sidecar counts each Six forfeit as our win. Raises: CellRefused (no real game, or counts that do not line up)."""
+    games = _int(raw.get("games"))
+    if games is not None and games != n:
+        raise CellRefused(f"{forfeits} Six forfeits counted over {games} games, the reading over {n} distinct games")
+    if forfeits >= n:
+        raise CellRefused(f"every one of its {n} games is a Six forfeit")
+    wins, draws = _int(raw.get("wins")), _int(raw.get("draws")) or 0
+    score = (wins - forfeits + draws / 2) if wins is not None else wr * n - forfeits
+    real = n - forfeits
+    lo, hi = wilson(max(0.0, score), real)
+    return max(0.0, score) / real, lo, hi, real
 
 
 def load(dirs: Iterable[Path]) -> tuple[list[Cell], list[str]]:
     """Every sidecar under the directories (failed cells skipped and named), and the skip notes."""
-    cells: list[Cell] = []
+    cells: list[tuple[Cell, str, str]] = []
     skipped: list[str] = []
     seen: set[Path] = set()
     for root in dirs:
@@ -141,21 +157,26 @@ def load(dirs: Iterable[Path]) -> tuple[list[Cell], list[str]]:
                 skipped.append(f"{path.name}: a failed cell")
                 continue
             try:
-                cell = parse(path, json.loads(path.read_text(encoding="utf-8")))
+                raw = json.loads(path.read_text(encoding="utf-8"))
+                cell = parse(path, raw)
+            except CellRefused as exc:
+                skipped.append(f"{path.name}: {exc}")
+                continue
             except (OSError, ValueError) as exc:
                 skipped.append(f"{path.name}: {type(exc).__name__}")
                 continue
             if cell is None:
                 skipped.append(f"{path.name}: no step, win rate, distinct games or opponent")
             else:
-                cells.append(cell)
-    # One checkpoint read twice on one unit: the reading over more games stands, so a screen or smoke never hides a full cell.
-    unique: dict[tuple[str, tuple[str, ...]], Cell] = {}
-    for c in cells:
-        held = unique.get((c.stem, c.unit))
-        if held is None or c.n > held.n:
-            unique[(c.stem, c.unit)] = c
-    return sorted(unique.values(), key=lambda c: (c.run_id, c.step, c.name)), skipped
+                cells.append((cell, str(raw.get("finished_utc") or ""), str(path)))
+    # One checkpoint read twice on one unit: the reading over more games stands (a screen or smoke never hides a full cell),
+    # then the later-finished one, then the path, so the pick never depends on the order the directories were walked.
+    unique: dict[tuple[str, tuple[str, ...]], tuple[Cell, str, str]] = {}
+    for entry in cells:
+        c, held = entry[0], unique.get((entry[0].stem, entry[0].unit))
+        if held is None or (c.n, entry[1], entry[2]) > (held[0].n, held[1], held[2]):
+            unique[(c.stem, c.unit)] = entry
+    return sorted((e[0] for e in unique.values()), key=lambda c: (c.run_id, c.step, c.name)), skipped
 
 
 @dataclass(frozen=True)

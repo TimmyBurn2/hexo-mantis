@@ -25,7 +25,7 @@ def test_a_turn_start_carries_both_stones_and_a_sentence_for_each(gv, dash):
     body = gv.payload(GameView.from_record(game("g", six_in_a_row_for_p1(), stats=_STATS)), "r1", None)
     turn = body["pos"][3]["turn"]
     assert turn["stones"] == [[1, 0], [2, 0]] and [t[0] for t in turn["texts"]] == ["Stone 1", "Stone 2"]
-    assert "the top move" in turn["texts"][0][1] and "40 % of the visits" in turn["texts"][1][1]
+    assert "top move" in turn["texts"][0][1] and "40 % of the visits" in turn["texts"][1][1]
     assert "turn" not in body["pos"][4] and body["pos"][0]["turn"]["texts"][0][0] == "Stone"
     assert body["pos"][3]["where"] == "<b>Turn 3</b> of 7, Light to place two stones"
     assert body["htttx"]["head"] == "version[1];" and tuple(body["htttx"]["turns"][1]) == (3, 5, "2. [1,0][2,0];", "2. [1,0];")
@@ -87,10 +87,10 @@ def test_each_nets_whole_turn_is_named_and_the_same_turn_said_once(text):
     assert both["turn"]["ghosts"] == [[0, 1, "1", "gab"], [1, 1, "2", "gab"]]
     split = text.compose(_rec(pa), _rec(pa, step=3000), None, None, None, turn_a=turn([(0, 1), (1, 1)]),
                          turn_b=turn([(0, 1), (2, 2)]))
-    assert ('<span class="c1">r at 45k</span> plays (0, 1) then (1, 1); <span class="c2">r at 3k</span> plays (0, 1) then (2, 2).'
+    assert ('<span class="c1">r\u00a0at\u00a045k</span> plays (0, 1) then (1, 1); <span class="c2">r\u00a0at\u00a03k</span> plays (0, 1) then (2, 2).'
             in split["verdict"])
     cut = text.compose(_rec(pa), None, None, None, None, turn_a=turn([(0, 1)], unread="the analyst did not answer"))
-    assert "r at 45k</span> plays (0, 1), its second stone not read (the analyst did not answer)." in cut["verdict"]
+    assert "r\u00a0at\u00a045k</span> plays (0, 1), its second stone not read (the analyst did not answer)." in cut["verdict"]
 
 
 class _Analyst:
