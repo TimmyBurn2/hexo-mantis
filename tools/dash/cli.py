@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .readers.events import EmptyRunRecord
 from .readers.record import RunRecord
+from .routes import GET
 from .serve import run_server
 from .views import run as run_view
 
@@ -94,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
     except EmptyRunRecord as exc:
         print(f"dash: refused: {exc}", file=sys.stderr)
         return 2
-    return run_server(args, records)
+    return run_server(args, records, get_extra=GET)
 
 
 __all__ = ["DEFAULT_BIND", "DEFAULT_PORT", "build_parser", "freeze", "main", "records_of"]

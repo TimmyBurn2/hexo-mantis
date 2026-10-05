@@ -6,6 +6,7 @@ import json
 import logging
 import threading
 import time
+from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -52,6 +53,9 @@ class Hub:
         self.generation = 0
         self.failures: dict[str, str] = {}
         self._pages: dict[tuple[str, str | None], tuple[int, float, bytes]] = {}
+        #: Game payloads by `(run, game id)`; a game record never changes once written, so no entry goes stale.
+        self.payloads: OrderedDict[tuple[str, str], dict[str, Any]] = OrderedDict()
+        self.payload_lock = threading.Lock()
 
     def poll_once(self) -> None:
         """Read what is new in every run; a run whose read fails keeps its previous snapshot and the failure is logged."""
@@ -123,7 +127,13 @@ def route_get(hub: Hub, raw_path: str, extra: dict[str, Callable[..., Reply]] | 
             return text(404, f"no run {parts[1]!r}; served: {', '.join(hub.labels)}")
         compare = (query.get("compare") or [None])[0]
         return Reply(200, "text/html; charset=utf-8", hub.run_page(parts[1], compare, time.time()))
-    handler = (extra or {}).get(parts[0] if parts[0] != "api" or len(parts) < 2 else f"api/{parts[1]}")
+    if parts[0] == "run" and len(parts) == 3:
+        key = f"run/{parts[2]}"
+    elif parts[0] == "api" and len(parts) >= 2:
+        key = f"api/{parts[1]}"
+    else:
+        key = parts[0]
+    handler = (extra or {}).get(key)
     if handler is not None:
         return handler(hub, parts, query)
     return text(404, f"no route {split.path}")

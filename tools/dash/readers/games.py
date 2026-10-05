@@ -62,9 +62,13 @@ class GameView:
     def turns(self) -> int:
         return turn_of(len(self.moves) - 1) if self.moves else 0
 
-    def payload(self) -> dict[str, Any]:
+    def readings(self) -> list[tactics.Reading]:
+        """The engine's tactics for every position before a stone."""
+        return tactics.read_game(self.moves)
+
+    def payload(self, readings: list[tactics.Reading] | None = None) -> dict[str, Any]:
         """The JSON the board steps through: moves, the six, arms, stats as recorded, tactics per position, the strip."""
-        readings = tactics.read_game(self.moves)
+        readings = self.readings() if readings is None else readings
         pts = chances.points(self.stats)
         turning = chances.turning_point(pts)
         return {
