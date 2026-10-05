@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import quote, urlencode
 
-from ..readers import chances
+from ..readers import chances, htttx
 from ..readers.games import GameView
 from ..readers.hexlogic import first_of_turn, owner, turn_of
 from ..readers.shards import Page
@@ -21,10 +21,6 @@ _GLYPH = '<svg class="glyph" width="14" height="14" viewBox="-1.1 -1.1 2.2 2.2" 
 _ICON = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="{d}" fill="currentColor"/></svg>'
 _TRANSPORT = (("first", "First turn", "M2 2h2v10H2zM12 2v10L5 7z"), ("prev", "Previous turn", "M11 2v10L4 7z"),
               ("next", "Next turn", "M3 2v10l7-5z"), ("last", "Final position", "M10 2h2v10h-2zM2 2v10l7-5z"))
-#: Zoom controls over a board; the script wires them, a page without script has the whole board framed.
-ZOOM = ('<div class="zoom" aria-label="Zoom"><button class="btn" type="button" data-zoom="in" aria-label="Zoom in">+</button>'
-        '<button class="btn" type="button" data-zoom="out" aria-label="Zoom out">−</button>'
-        '<button class="btn" type="button" data-zoom="fit" aria-label="Fit the board">Fit</button></div>')
 _SEARCH = ('<svg class="search-ico" width="14" height="12" viewBox="0 0 14 12" aria-label="search recorded"><rect x="0" y="6" '
            'width="3" height="6" rx="1"/><rect x="5" y="2" width="3" height="10" rx="1"/><rect x="10" y="4" width="3" height="8" rx="1"/></svg>')
 
@@ -46,9 +42,11 @@ def payload(g: GameView, run_label: str, hour: str | None) -> dict[str, Any]:
             row["turn"] = games_text.turn_thought(g, ply, set(t.cells), t.cls == "win")
         pos.append(row)
     pos.append({"where": games_text.where(g, len(g.moves)), "threat": None, "think": None})
+    cells = [tuple(m) for m in g.moves]
+    notation = {"head": htttx.HEADER, "turns": htttx.turns(cells), "moved": htttx.moved(cells)}
     tp = chances.turning_point(chances.points(g.stats))
     body.update(run=run_label, head=games_text.headline(g), facts=games_text.facts(g, run_label, hour),
-                turning=games_text.turning(tp, g.game_id), pos=pos, **turn_facts(len(g.moves)))
+                turning=games_text.turning(tp, g.game_id), pos=pos, htttx=notation, **turn_facts(len(g.moves)))
     return body
 
 
@@ -121,7 +119,7 @@ def _stage(body: dict[str, Any] | None, ply: int) -> str:
     targets = {"first": 0, "prev": prev, "next": nxt, "last": len(moves)}
     nav = "".join(f'<a class="btn" href="?{esc(urlencode({**base, "ply": targets[i]}))}" id="{i}" aria-label="{a}">'
                   f"{_ICON.format(d=d)}</a>" for i, a, d in _TRANSPORT)
-    return (f'<section class="stage" aria-label="Board"><div class="boardwrap">{board.render(scene)}{ZOOM}</div>'
+    return (f'<section class="stage" aria-label="Board"><div class="boardwrap">{board.render(scene)}{board.ZOOM}</div>'
             f'<div class="keys" id="keys"></div><div class="trace" id="trace"></div>'
             f'<div class="transport">{nav}<button class="btn" id="play" type="button" hidden>Play</button>'
             f'<span class="where" id="where">{pos["where"]}</span><div class="layers">'

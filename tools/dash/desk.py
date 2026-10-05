@@ -11,7 +11,7 @@ from .readers import htttx
 from .routes import game_payload
 from .serve import Hub
 from .views import analyzer as analyzer_view
-from .views.analyzer_text import compose
+from .views.analyzer_text import Turn, compose
 from .views.games import turn_facts
 
 #: How long a request waits on the analyst before it is answered 504, and the deepest search a request may ask for.
@@ -73,18 +73,24 @@ class Desk:
         return self.analyst.submit({"op": "analyze", "engine": engine, "moves": text_moves, "sims": sims,
                                     "symmetry": symmetry, "client": client})
 
-    def turn(self, engine: str, moves: list[tuple[int, int]], rec: dict[str, Any], sims: int,
-             client: str) -> list[tuple[int, int]]:
+    def turn(self, engine: str, moves: list[tuple[int, int]], rec: dict[str, Any], sims: int, client: str) -> Turn:
         """The stones the engine plays for the rest of the turn: its choice now, and with two to place its choice after it."""
         pos = rec.get("position") or {}
-        first = _choice(rec)
+        first, searched = _choice(rec), bool((rec.get("search") or {}).get("argmax"))
         if pos.get("winner") or first is None:
-            return []
+            return Turn([])
         if pos.get("moves_remaining") != 2:
-            return [first]
-        out = self._submit(engine, [*moves, first], sims, client)
-        second = _choice(out["body"].get("record") or {}) if out["status"] == 200 else None
-        return [first] + ([second] if second is not None else [])
+            return Turn([first], searched=searched)
+        # Its own key: a follow-up never supersedes the next request's first read, only an older follow-up.
+        out = self._submit(engine, [*moves, first], sims, f"{client}:turn")
+        body = out["body"]
+        if out["status"] != 200 or body.get("superseded"):
+            why = "superseded" if body.get("superseded") else str(body.get("refused") or f"status {out['status']}")
+            return Turn([first], unread=why, searched=searched)
+        rec2 = body.get("record") or {}
+        second = _choice(rec2)
+        ms = float((rec2.get("search") or {}).get("ms") or 0.0)
+        return Turn([first] + ([second] if second is not None else []), searched=searched, ms=ms)
 
     def read(self, a: str, b: str | None, moves: list[tuple[int, int]], ctx: Context, *, sims: int = 0,
              symmetry: bool = False, client: str = "page") -> tuple[int, dict[str, Any]]:
@@ -92,20 +98,23 @@ class Desk:
         first = self._submit(a, moves, sims, client, symmetry)
         if first["status"] != 200 or first["body"].get("superseded"):
             return first["status"], first["body"]
-        rec_a, rec_b, turn_b = first["body"]["record"], None, []
+        rec_a, rec_b, turn_b = first["body"]["record"], None, None
         if b:
             second = self._submit(b, moves, 0, client)
-            if second["status"] != 200:
+            if second["status"] != 200 or second["body"].get("superseded"):
                 return second["status"], second["body"]
             rec_b = second["body"].get("record")
             turn_b = self.turn(b, moves, rec_b or {}, 0, client)
         turn_a = self.turn(a, moves, rec_a, sims, client)
+        if "superseded" in (turn_a.unread, turn_b.unread if turn_b else None):
+            return 200, {"superseded": True}
         try:
             notation: str | None = htttx.write(moves)
         except htttx.NotationRefused:
             notation = None
-        panel = {**compose(rec_a, rec_b, ctx.entry, ctx.nxt, ctx.second, turn_a=turn_a, turn_b=turn_b),
-                 "a_id": a, "b_id": b, "where": analyzer_view.where(moves), "htttx": notation, **turn_facts(len(moves))}
+        where = analyzer_view.where(moves, (rec_a.get("position") or {}).get("winner"))
+        panel = {**compose(rec_a, rec_b, ctx.entry, ctx.nxt, ctx.second, turn_a=turn_a, turn_b=turn_b), "a_id": a, "b_id": b,
+                 "where": where, "htttx": notation, "htttx_moved": htttx.moved(moves), **turn_facts(len(moves))}
         return 200, {"ok": True, "panel": panel, "record": rec_a, "context": ctx.__dict__}
 
     def close(self) -> None:

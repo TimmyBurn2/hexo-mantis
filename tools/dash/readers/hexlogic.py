@@ -46,3 +46,8 @@ def turn_of(ply: int) -> int:
 def first_of_turn(ply: int) -> bool:
     """Whether the ply is its turn's first stone: ply 0 and every odd ply."""
     return ply == 0 or ply % 2 == 1
+
+
+def turn_size(ply: int) -> int:
+    """How many stones the turn that starts at `ply` places: the opening stone alone, every later turn two."""
+    return 1 if ply == 0 else 2

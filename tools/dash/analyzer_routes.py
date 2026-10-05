@@ -22,9 +22,9 @@ def _digits(value: str) -> bool:
 
 
 def _render(hub: Hub, desk_of: DeskOf, q: dict[str, str], body: dict[str, Any] | None,
-            imported: list[tuple[int, int]] | None = None, import_error: str | None = None) -> Reply:
-    """The page at `ply` along the game (a recorded one or an imported line), the first read made here when there are nets."""
-    desk = desk_of() if desk_of is not None else None
+            imported: list[tuple[int, int]] | None = None, refusal: tuple[str, str] | None = None) -> Reply:
+    """The page at `ply` along the game (a recorded or an imported line), first read here; a refused import reads nothing."""
+    desk = desk_of() if desk_of is not None and refusal is None else None
     line = imported if imported is not None else [tuple(m) for m in body["moves"]] if body else []
     ply = min(len(line), int(q["ply"])) if _digits(q.get("ply", "")) else len(line)
     moves = line[:ply]
@@ -37,7 +37,7 @@ def _render(hub: Hub, desk_of: DeskOf, q: dict[str, str], body: dict[str, Any] |
             panel, refused = (out.get("panel"), None) if status == 200 else (None, out.get("refused"))
     slim = ({"id": body["id"], "channel": body["channel"], "moves": body["moves"]} if body else
             {"id": "imported", "channel": "imported", "moves": [list(m) for m in imported]} if imported else None)
-    html = analyzer_view.page(hub.labels, desk.rows() if desk else None, slim, moves, panel, refused, q, import_error)
+    html = analyzer_view.page(hub.labels, desk.rows() if desk else None, slim, moves, panel, refused, q, refusal)
     return Reply(200, "text/html; charset=utf-8", html.encode("utf-8"))
 
 
@@ -57,13 +57,13 @@ def page(desk_of: DeskOf) -> Any:
 def _import(hub: Hub, desk_of: DeskOf, raw: bytes) -> Reply:
     """`POST /analyzer` with an htttx game in the form's `htttx` field: the page at the game's end, or the refusal named."""
     if len(raw) > MAX_IMPORT:
-        return _render(hub, desk_of, {}, None, import_error=f"the game is longer than {MAX_IMPORT} bytes")
+        return _render(hub, desk_of, {}, None, refusal=(f"the game is longer than {MAX_IMPORT} bytes", ""))
     form = {k: v[0] for k, v in parse_qs(raw.decode("utf-8", "replace")).items() if v}
     try:
         moves = htttx.parse(form.get("htttx", ""))
     except htttx.NotationRefused as exc:
-        return _render(hub, desk_of, {}, None, import_error=str(exc))
-    return _render(hub, desk_of, {k: v for k, v in form.items() if k in ("a", "b", "ply")}, None, imported=moves)
+        return _render(hub, desk_of, {}, None, refusal=(str(exc), form.get("htttx", "")))
+    return _render(hub, desk_of, {k: v for k, v in form.items() if k in ("a", "b")}, None, imported=moves)
 
 
 def post(hub: Hub, desk_of: DeskOf) -> Any:

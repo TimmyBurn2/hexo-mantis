@@ -1,6 +1,7 @@
 """The Analyzer panel composed from engine records: the verdict, win chances, the three lenses and the candidates, all derived here."""
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Any
 
 from .fmt import cell, esc, short
@@ -46,13 +47,24 @@ def _search_shares(record: dict[str, Any] | None, game_entry: dict[str, Any] | N
     return {}, ""
 
 
-def _stones(turn: list[Cell] | tuple[Cell, ...]) -> str:
-    return " then ".join(cell(*c) for c in turn)
+@dataclass(frozen=True)
+class Turn:
+    """A net's stones for the rest of the turn, why its second went unread, whether search chose them, the second read's ms."""
+
+    stones: list[Cell] = field(default_factory=list)
+    unread: str | None = None
+    searched: bool = False
+    ms: float = 0.0
+
+
+def _plays(name: str, turn: Turn) -> str:
+    said = f"{esc(name)} plays {' then '.join(cell(*c) for c in turn.stones)}"
+    return said + (f", its second stone not read ({esc(turn.unread)})" if turn.unread else "")
 
 
 def compose(a: dict[str, Any], b: dict[str, Any] | None, game_entry: dict[str, Any] | None,
-            game_next: Cell | None, game_second: Cell | None, *, turn_a: list[Cell] | tuple[Cell, ...] = (),
-            turn_b: list[Cell] | tuple[Cell, ...] = ()) -> dict[str, Any]:
+            game_next: Cell | None, game_second: Cell | None, *, turn_a: Turn | None = None,
+            turn_b: Turn | None = None) -> dict[str, Any]:
     """The panel for one position: `a` is read, `b` compared; `game_entry` is the game's recorded search at this ply, if on its line."""
     pos = a.get("position") or {}
     mover = 0 if pos.get("to_move") == "p1" else 1
@@ -85,11 +97,12 @@ def compose(a: dict[str, Any], b: dict[str, Any] | None, game_entry: dict[str, A
         else:
             verdict += " " + " ".join(f"{esc(n)} {'does' if c in tcells else 'does not'} {act} with its first choice, {cell(*c)}."
                                       for n, c in picks.items())
-    if turn_a:
-        if b is not None and turn_b and list(turn_a) == list(turn_b):
-            verdict += f" Both nets play {_stones(turn_a)}."
+    turn_a, turn_b = turn_a or Turn(), turn_b or Turn()
+    if turn_a.stones:
+        if b is not None and turn_a.stones == turn_b.stones and not (turn_a.unread or turn_b.unread):
+            verdict += f" Both nets play {' then '.join(cell(*c) for c in turn_a.stones)}."
         else:
-            verdict += f" {esc(na)} plays {_stones(turn_a)}" + (f"; {esc(nb)} plays {_stones(turn_b)}" if turn_b else "") + "."
+            verdict += " " + "; ".join(_plays(n, t) for n, t in ((na, turn_a), (nb, turn_b)) if t.stones) + "."
     game_line = None
     if game_next is not None:
         marks = {c: " (a block)" if cls == "block" and c in tcells else " (a win)" if cls == "win" and c in tcells else ""
@@ -114,4 +127,6 @@ def compose(a: dict[str, Any], b: dict[str, Any] | None, game_entry: dict[str, A
             "lens": {"net": [[c[0], c[1], pa[c]] for c in ranked], "search": [[c[0], c[1], s] for c, s in shares.items()],
                      "diff": diff}, "search_source": search_source, "rows": rows,
             "tactics": {"cls": cls, "cells": [list(c) for c in tcells]}, "mover": mover,
-            "turn": {"a": [list(c) for c in turn_a], "b": [list(c) for c in turn_b]}}
+            "turn": {"a": [list(c) for c in turn_a.stones], "b": [list(c) for c in turn_b.stones], "second_ms": turn_a.ms,
+                     "note": (f"The numbered stones are {na}'s turn, from its {'search' if turn_a.searched else 'policy'}."
+                              if len(turn_a.stones) > 1 else "")}}

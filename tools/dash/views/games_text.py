@@ -7,7 +7,7 @@ from urllib.parse import urlencode
 
 from ..readers.chances import Point
 from ..readers.games import GameView
-from ..readers.hexlogic import first_of_turn, owner, turn_of
+from ..readers.hexlogic import first_of_turn, owner, turn_of, turn_size
 from ..readers.tactics import Reading
 from .fmt import ZONE, cell, esc, num, pct, short
 
@@ -125,13 +125,13 @@ def where(g: GameView, ply: int) -> str:
         return f"<b>Final position</b>, turn {g.turns}"
     if first_of_turn(ply):
         return (f"<b>Turn {turn_of(ply)}</b> of {g.turns}, {NAME[owner(ply)]} to place "
-                f"{'one stone' if ply == 0 else 'two stones'}")
+                f"{'one stone' if turn_size(ply) == 1 else 'two stones'}")
     return f"<b>Turn {turn_of(ply)}</b> of {g.turns}, {NAME[owner(ply)]} places stone 2 of 2"
 
 
 def turn_thought(g: GameView, start: int, cls_cells: set[tuple[int, int]], wins: bool) -> dict[str, Any]:
     """The turn the bot played from `start`: each stone's search in a sentence, the first stone's candidates and chance."""
-    plies = [start] + ([start + 1] if start > 0 and start + 1 < len(g.moves) else [])
+    plies = [p for p in range(start, start + turn_size(start)) if p < len(g.moves)]
     first = thought(g, start, cls_cells, wins)
     texts = [["The stone" if len(plies) == 1 else "First stone", first["text"]]]
     if len(plies) == 2:

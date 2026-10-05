@@ -293,14 +293,27 @@ units.
   (`engine/position.py`, unchanged by design) and in the readers. Gate 10 records the retired tools under
   `DISSOLVED_PATHS`, as it records every removed path, rather than finding no reference to them in history.
 - **2026-10-05, after deployment (operator's asks): turns, a movable board, htttx.** The transports step by turn: the
-  arrows and the buttons go from one turn's start to the next, and Shift with an arrow steps one stone in Games. At a
-  turn's start Games says what the bot did with each of its stones, and the board numbers them 1 and 2. The Analyzer
-  reads each net's whole turn: its choice now and, with two stones to place, its choice on the position after that
-  one. The choice is the search's when it searched, else the net's highest prior. So the second stone costs a second
-  read at the same depth. The read net's two stones are drawn numbered, and both nets' turns are named in the verdict.
-  Every board pans by dragging and zooms with the wheel or its +, − and Fit buttons. A drag never places a stone, and
-  the view survives stepping. A board shows at least 15 cells across and 13 rows down, so a few stones are never
-  drawn huge. The Analyzer imports a game in the HeXO site's htttx notation (`version[1];`, then `N. [q,r][q,r];` a
-  turn, after the origin stone the site places): `POST /analyzer` replays it through the engine's board and refuses
-  a line, a number or a stone that does not replay, naming it. Its routes moved to `analyzer_routes.py` with the
-  import. "Copy position" copies htttx whenever the position starts at the origin.
+  arrows and buttons go from one turn's start to the next, and Shift with an arrow steps one stone in Games. At a
+  turn's start Games says what the bot did with each of its stones and numbers them 1 and 2 on the board. The Analyzer
+  reads each net's whole turn: its choice now, and with two stones to place, its choice on the position after that
+  one. The choice is the search's when it searched, else the net's highest prior. The second stone costs a second
+  read at the same depth, under its own supersession key, and the status line states its cost. A second read that
+  fails is named in the verdict rather than shortening the turn unsaid. The read net's stones are drawn numbered
+  (the number displaces that cell's policy percent), and both nets' turns are named in the verdict.
+
+  Every board pans by dragging and zooms with the wheel or with its +, − and Fit buttons. The script unhides the
+  buttons; without it the whole board is framed. A drag never places a stone, and the view survives stepping. On a
+  touch screen, a drag pans only once zoomed, so at Fit a swipe still scrolls the page. A board shows at least 15
+  cells across and 13 rows down. Past 20 000 cells in view the empty grid is left out, the same in `board.py` and
+  `board.js`.
+
+  The Analyzer imports a game in the HeXO site's htttx notation as the site's own parser reads it: `;`-separated
+  statements, `version[1]` then `N. [q,r][q,r]` per turn, after the origin stone the site places. A code fence or
+  backticks around the paste are tolerated. Its `[q,r]` are mantis's `(q, r)`: the site draws them at its `(q + r,
+  −r)`, the inverse of the ladder receipt's map. `POST /analyzer` replays the game under the site's placement rule
+  (within 8 cells of a placed stone, the `gnn_axis_r8` board), at most 2 000 stones. It refuses a statement, a number
+  or a stone that does not replay, naming it. A refused import keeps the pasted text and loads no engine. "Copy
+  position" copies htttx in both views from lines the server writes, once the position has a turn after its first
+  stone. A game that does not open on the origin (self-play games open anywhere) is moved whole so that its first
+  stone is the origin, which the rules do not notice, and the button says so. A won position's line says it is
+  final, not whose turn it is. The Analyzer's routes moved to `analyzer_routes.py` with the import.

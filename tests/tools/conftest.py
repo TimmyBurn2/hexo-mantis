@@ -6,12 +6,14 @@ import json
 import os
 import shutil
 import threading
+import time
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
 from mantis.util.loadpkg import load_tools_package
+from _dash_record import game, segment_start, six_in_a_row_for_p1, trainer_rows, write_config, write_heartbeat, write_segment, write_shard
 from _toolpath import load_module_by_path
 from _xdist_share import worker_suffix
 
@@ -196,3 +198,19 @@ ANALYZER_POSITIONS = {
 @pytest.fixture(scope="session")
 def positions():
     return ANALYZER_POSITIONS
+
+
+@pytest.fixture
+def dash_game_hub(dash, tmp_path):
+    """A polled hub over one run `r1` holding one game `g1`, Light's six, with a recorded search at ply 3."""
+    serve = importlib.import_module("dash.serve")
+    record = importlib.import_module("dash.readers.record")
+    run = tmp_path / "r1"
+    write_segment(run / "logs", "r1", 1, [segment_start("r1", 1), *trainer_rows(range(1, 5))])
+    write_config(run, "r1", None)
+    write_heartbeat(run / "logs", "r1", time.time())
+    stats = [{"ply": 3, "root_value": 0.4, "visits": [[1, 0, 9]]}]
+    write_shard(run / "logs" / "games", "r1", 1, "2026100510", [game("g1", six_in_a_row_for_p1(), stats=stats)])
+    hub = serve.Hub([record.RunRecord("r1", run)])
+    hub.poll_once()
+    return hub

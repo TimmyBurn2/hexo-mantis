@@ -62,7 +62,13 @@
     const act = el('section'), row = el('div', 'actions'), a = el('a', 'btn', 'Open in Analyzer');
     a.href = `/analyzer?${new URLSearchParams({ run: S.run, g: G.id, ply })}`;
     const copy = el('button', 'btn', 'Copy position'); copy.type = 'button';
-    copy.onclick = () => { navigator.clipboard && navigator.clipboard.writeText(G.moves.slice(0, ply).map(c => c.join(',')).join(';')); copy.textContent = 'Copied'; };
+    copy.onclick = () => {
+      // The server's htttx lines for the turns begun before this position: whole when the turn is done, else its first stone.
+      const lines = G.htttx.turns.filter(t => t[0] < ply).map(t => (t[1] <= ply ? t[2] : t[3]));
+      const text = lines.length ? [G.htttx.head, ...lines, ''].join('\n') : G.moves.slice(0, ply).map(c => c.join(',')).join(';');
+      if (navigator.clipboard) navigator.clipboard.writeText(text);
+      copy.textContent = !lines.length ? 'Copied' : G.htttx.moved ? 'Copied as htttx, first stone moved to the origin' : 'Copied as htttx';
+    };
     row.append(a, copy); act.append(row); box.append(act);
   }
 

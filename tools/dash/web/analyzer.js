@@ -7,7 +7,7 @@
   const client = 'p' + Math.random().toString(36).slice(2) + Date.now().toString(36);
   const svg = document.querySelector('.boardwrap svg');
   // `shown` is the position the current panel was read for; `moves` is where the reader is going.
-  let shown = { moves: S.moves.slice(), owners: S.owners, turns: S.turn_of, starts: S.turn_starts }, panel = S.panel;
+  let shown = { moves: S.moves.slice(), owners: S.owners, turns: S.turn_of }, panel = S.panel;
   let moves = S.moves.slice(), redo = [], lens = 'net', num = false, tac = true, seq = 0;
   let a = panel ? panel.a_id : null, b = panel ? panel.b_id : null;
 
@@ -73,8 +73,8 @@
       tr.onclick = () => place([r[0], r[1]]);
       tb.append(tr);
     });
-    $('lensnote').textContent = { net: `Where ${panel.a} wants to play before any search: its policy, bigger is more.`,
-      search: panel.search_source ? `Visits of ${panel.search_source}, bigger is more.` : 'No search here yet: run one below, or step onto the game’s line.',
+    $('lensnote').textContent = { net: `Where ${panel.a} wants to play before any search: its policy, bigger is more. ${panel.turn.note}`,
+      search: (panel.search_source ? `Visits of ${panel.search_source}, bigger is more.` : 'No search here yet: run one below, or step onto the game’s line.') + ` ${panel.turn.note}`,
       diff: `Blue where ${panel.a} puts more weight, orange where ${panel.b} does.` }[lens];
     $('where').innerHTML = panel.where;  // server-composed
     document.querySelectorAll('#engines .eng').forEach(e => {
@@ -100,7 +100,7 @@
         if (status) status.textContent = `Refused: ${out.refused || r.status}. The board is back at the last position read.`;
         draw(); return;
       }
-      panel = out.panel; shown = { moves: want, owners: panel.owners, turns: panel.turn_of, starts: panel.turn_starts };
+      panel = out.panel; shown = { moves: want, owners: panel.owners, turns: panel.turn_of };
       source(out.context); readout(); draw();
       if (status) status.textContent = deeper(out.record, extra);
     } finally { clearInterval(tick); }
@@ -108,7 +108,10 @@
 
   function deeper(rec, extra) {
     if (extra.symmetry && rec.symmetry && rec.symmetry.n) return `Symmetry over ${rec.symmetry.n} maps: value spread ${rec.symmetry.spread}, first choice agrees ${rec.symmetry.argmax_agreement}.`;
-    if (extra.sims && rec.search && rec.search.sims) return `Search ${rec.search.sims} sims in ${(rec.search.ms / 1000).toFixed(1)} s: root value ${rec.search.root_value}, its choice ${H.fmtC(rec.search.argmax)}.`;
+    if (extra.sims && rec.search && rec.search.sims) {
+      const more = panel.turn.second_ms ? ` Its second stone took another search, ${(panel.turn.second_ms / 1000).toFixed(1)} s.` : '';
+      return `Search ${rec.search.sims} sims in ${(rec.search.ms / 1000).toFixed(1)} s: root value ${rec.search.root_value}, its choice ${H.fmtC(rec.search.argmax)}.${more}`;
+    }
     return '';
   }
 
@@ -122,16 +125,16 @@
     svg.addEventListener('click', e => { if (!svg._dragged) place(H.cellAt(svg, e)); });
     svg.addEventListener('pointermove', e => H.hoverAt(svg, H.cellAt(svg, e)));
     svg.addEventListener('pointerleave', () => H.hoverAt(svg, null));
-    // Prev and next walk whole turns: back to the turn's start before this position, forward a turn on the line.
+    // Prev and next walk whole turns, by the server's turn starts: back to the start before here, forward one on the line.
     $('prev').onclick = () => {
       if (!moves.length) return;
-      const target = Math.max(0, ...shown.starts.filter(p => p < moves.length));
+      const target = Math.max(0, ...S.starts.filter(p => p < moves.length));
       redo.push(moves.slice(target)); moves = moves.slice(0, target); read();
     };
     $('next').onclick = () => {
       if (redo.length) moves = moves.concat(redo.pop());
       else if (moves.length < game.length && same(game.slice(0, moves.length), moves)) {
-        moves = game.slice(0, Math.min(...S.line_starts.filter(p => p > moves.length)));
+        moves = game.slice(0, Math.min(game.length, ...S.starts.filter(p => p > moves.length)));
       } else return;
       read();
     };
@@ -146,10 +149,19 @@
     });
     if ($('search')) $('search').onclick = () => read({ sims: +$('sims').value });
     if ($('sym')) $('sym').onclick = () => read({ symmetry: true });
+    // An import reads with the nets now chosen.
+    if ($('importform')) $('importform').addEventListener('submit', () => {
+      const form = $('importform');
+      [['a', a], ['b', b]].forEach(([k, v]) => {
+        let input = form.elements[k];
+        if (!input) { input = el('input'); input.type = 'hidden'; input.name = k; form.prepend(input); }
+        input.value = v || '';
+      });
+    });
     if ($('copy')) $('copy').onclick = () => {
       const text = panel && panel.htttx ? panel.htttx : shown.moves.map(c => c.join(',')).join(';');
       if (navigator.clipboard) navigator.clipboard.writeText(text);
-      $('copy').textContent = panel && panel.htttx ? 'Copied as htttx' : 'Copied';
+      $('copy').textContent = !(panel && panel.htttx) ? 'Copied' : panel.htttx_moved ? 'Copied as htttx, first stone moved to the origin' : 'Copied as htttx';
     };
     document.addEventListener('keydown', e => {
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;

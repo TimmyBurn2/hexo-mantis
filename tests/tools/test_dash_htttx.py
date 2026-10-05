@@ -95,32 +95,69 @@ def test_the_game_replays_from_the_origin_and_ends_in_lights_six(htttx):
 
     moves = htttx.parse(GAME)
     assert len(moves) == 149 and moves[:3] == [(0, 0), (1, -2), (-1, 1)]
-    board = Board()
+    board = Board.with_encoding_name(htttx.SITE_RULES)
     for q, r in moves:
         board.apply_move(q, r)
     assert board.winner() == 1
+
+
+def test_htttx_cells_are_the_wire_cells_the_ladder_reads_off_the_sites_records(htttx, ladder):
+    # The site's own htttx parser places [q,r] at its board's (q + r, -r); the receipt maps that record back to the wire.
+    moves = htttx.parse(GAME)
+    record = {"moves": [{"moveNumber": i, "x": q + r, "y": -r, "playerId": "p1" if i == 0 else "p2"}
+                        for i, (q, r) in enumerate(moves)]}
+    assert [tuple(m[:2]) for m in ladder.receipt._wire_moves(record)] == moves
 
 
 def test_writing_a_parsed_game_gives_back_the_same_text(htttx):
     assert htttx.write(htttx.parse(GAME)) == GAME
 
 
-def test_a_position_ending_mid_turn_writes_a_last_turn_of_one_stone(htttx):
-    assert htttx.write([(0, 0), (1, 0), (2, 0), (3, 0)]) == "version[1];\n1. [1,0][2,0];\n2. [3,0];\n"
-    with pytest.raises(htttx.NotationRefused, match="origin"):
-        htttx.write([(1, 1)])
+def test_a_position_ending_mid_turn_writes_a_last_turn_of_one_stone_and_reads_back(htttx):
+    text = htttx.write([(0, 0), (1, 0), (2, 0), (3, 0)])
+    assert text == "version[1];\n1. [1,0][2,0];\n2. [3,0];\n"
+    assert htttx.parse(text) == [(0, 0), (1, 0), (2, 0), (3, 0)]
+    with pytest.raises(htttx.NotationRefused, match="a turn after the first stone"):
+        htttx.write([(0, 0)])
+
+
+def test_a_game_that_does_not_open_on_the_origin_is_moved_there_whole(htttx):
+    game = [(-1, -1), (0, -1), (2, 0), (-1, 0)]
+    assert htttx.moved(game) and not htttx.moved([(0, 0), (1, 0)])
+    assert htttx.write(game) == "version[1];\n1. [1,0][3,1];\n2. [0,1];\n"
+    assert htttx.parse(htttx.write(game)) == [(q + 1, r + 1) for q, r in game]
+
+
+def test_each_turns_line_carries_its_plies_whole_and_first_stone_alone(htttx):
+    assert htttx.turns([(0, 0), (1, 0), (2, 0), (3, 0)]) == [(1, 3, "1. [1,0][2,0];", "1. [1,0];"), (3, 4, "2. [3,0];", "2. [3,0];")]
+
+
+@pytest.mark.parametrize("text", [
+    "version[1]; 1. [1,0][2,0]; 2. [3,0][4,0];",
+    "version[1];\r\n1. [1,0][2,0];\r\n\r\n2. [3,0][4,0];\r\n",
+    "```\nversion[1];\n1. [1,0][2,0];\n2. [3,0][4,0];\n```",
+    "\ufeffVersion [1];\n1.[1,0] [2,0];\n2. [ 3 , 0 ][4,0]",
+    "1. [1,0][2,0]; 2. [3,0][4,0];",
+])
+def test_the_sites_statement_form_reads_however_it_was_pasted(htttx, text):
+    assert htttx.parse(text) == [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)]
 
 
 @pytest.mark.parametrize(("text", "why"), [
-    ("version[2];\n1. [1,0][2,0];", "only version\\[1\\]"),
+    ("version[2];\n1. [1,0][2,0];", "only htttx version 1"),
+    ("version[1];", "no turn"),
+    ("", "no turn"),
     ("1. [1,0][2,0];\n3. [4,0][5,0];", "numbered 3"),
     ("1. [1,0][2,0];\n2. hello;", "is not"),
     ("1. [1,0][1,0];", "already occupied"),
     ("1. [0,0][1,0];", "already occupied"),
     ("1. [1,0];\n2. [2,0][3,0];", "only the last turn"),
-    ("version[1];\n", "no turn"),
+    ("1. [1,0][2,0][3,0];", "places 3 stones"),
+    ("1. [9,0][1,0];", "more than 8 cells from every stone"),
+    ("1. [4,4][-5,-4];", r"\(-5, -4\) is more than 8"),
+    ("1. [99999999999,0][1,0];", "is not"),
 ])
-def test_a_text_that_does_not_replay_is_refused_by_line_and_rule(htttx, text, why):
+def test_a_text_that_does_not_replay_is_refused_by_turn_and_rule(htttx, text, why):
     with pytest.raises(htttx.NotationRefused, match=why):
         htttx.parse(text)
 
@@ -128,3 +165,9 @@ def test_a_text_that_does_not_replay_is_refused_by_line_and_rule(htttx, text, wh
 def test_a_stone_after_the_six_is_refused(htttx):
     with pytest.raises(htttx.NotationRefused, match="already won"):
         htttx.parse(GAME + "75. [20,20][21,21];\n")
+
+
+def test_a_game_past_the_sites_stone_cap_is_refused(htttx):
+    line = "".join(f"{n}. [{2 * n - 1},0][{2 * n},0];" for n in range(1, htttx.MAX_STONES // 2 + 1))
+    with pytest.raises(htttx.NotationRefused, match="more than 2000 stones"):
+        htttx.parse(line)

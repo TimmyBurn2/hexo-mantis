@@ -13,6 +13,12 @@ _SQ3 = math.sqrt(3.0)
 Cell = tuple[int, int]
 #: The smallest area a board shows, so a few stones are never drawn huge: about 15 cells across, 13 rows down.
 MIN_W, MIN_H = _SQ3 * 15, 1.5 * 13
+#: Past this many cells in view the empty grid is left out and only stones and marks are drawn.
+MAX_CELLS = 20000
+#: The board's zoom controls; hidden until the script wires them, the page without script framing the whole board.
+ZOOM = ('<div class="zoom" role="group" aria-label="Zoom" hidden><button class="btn" type="button" data-zoom="in" '
+        'aria-label="Zoom in">+</button><button class="btn" type="button" data-zoom="out" aria-label="Zoom out">−</button>'
+        '<button class="btn" type="button" data-zoom="fit" aria-label="Fit the board">Fit</button></div>')
 
 
 def xy(c: Cell) -> tuple[float, float]:
@@ -59,7 +65,8 @@ def render(scene: Scene, label: str = "Board position") -> str:
     placed = {tuple(m): i for i, m in enumerate(scene.moves[:scene.ply])}
     out = [f'<svg class="board" viewBox="{x0:.3f} {y0:.3f} {x1 - x0:.3f} {y1 - y0:.3f}" preserveAspectRatio="xMidYMid meet" '
            f'role="img" aria-label="{esc(label)}">']
-    for r in range(math.floor(y0 / 1.5) - 1, math.ceil(y1 / 1.5) + 2):
+    rows = range(math.floor(y0 / 1.5) - 1, math.ceil(y1 / 1.5) + 2) if (x1 - x0) * (y1 - y0) / (1.5 * _SQ3) <= MAX_CELLS else ()
+    for r in rows:
         for q in range(math.floor(x0 / _SQ3 - r / 2) - 1, math.ceil(x1 / _SQ3 - r / 2) + 2):
             x, y = xy((q, r))
             if x0 - 1 <= x <= x1 + 1 and y0 - 1 <= y <= y1 + 1:

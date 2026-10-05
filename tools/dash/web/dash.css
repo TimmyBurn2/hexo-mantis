@@ -264,7 +264,8 @@ svg.glyph { display: block; flex: none; }
 /* pan and zoom, the turn's numbered stones, the htttx import */
 .boardwrap .zoom { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; }
 .boardwrap .zoom .btn { min-width: 32px; justify-content: center; padding: 3px 8px; background: color-mix(in srgb, var(--surface) 85%, transparent); }
-svg.board { cursor: grab; touch-action: none; }
+svg.board { cursor: grab; }
+svg.board.zoomed { touch-action: none; }
 svg.board.panning { cursor: grabbing; }
 :is(.board, .glyph) .ghostnum { font-size: .62px; font-weight: 700; fill: var(--ink); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
 details.import summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--ink-3); }

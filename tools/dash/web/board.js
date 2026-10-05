@@ -23,6 +23,8 @@ window.Hex = (function () {
 
   // The smallest area a board shows, so a few stones are never drawn huge: about 15 cells across, 13 rows down.
   const MIN_W = SQ3 * 15, MIN_H = 1.5 * 13;
+  // Past this many cells in view the empty grid is left out and only stones and marks are drawn.
+  const MAX_CELLS = 20000;
 
   /* The frame's box, padded and grown to the minimum area. */
   function baseBox(frame) {
@@ -45,14 +47,16 @@ window.Hex = (function () {
     svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
     const out = [], placed = new Set();
     for (let i = 0; i < sc.ply; i++) placed.add(key(sc.moves[i]));
-    // Cover the box at any aspect: one hex height of margin, rows by r, columns by q at each row.
-    const span = Math.max(w, h);
-    const cy = (y0 + y1) / 2, cx = (x0 + x1) / 2;
-    for (let r = Math.floor((cy - span) / 1.5) - 1; r <= Math.ceil((cy + span) / 1.5) + 1; r++) {
-      const qa = Math.floor((cx - span) / SQ3 - r / 2) - 1, qb = Math.ceil((cx + span) / SQ3 - r / 2) + 1;
-      for (let q = qa; q <= qb; q++) {
-        const x = X(q, r), y = Y(q, r);
-        if (x >= x0 - 1 && x <= x1 + 1 && y >= y0 - 1 && y <= y1 + 1) out.push(hex('cell', [q, r], .95, `data-c="${q},${r}"`));
+    // The grid fills what the element shows: the viewBox widened to the element's aspect, as `meet` letterboxes it.
+    const el = svg.getBoundingClientRect(), aspect = el.width > 0 && el.height > 0 ? el.width / el.height : w / h;
+    const vw = Math.max(w, h * aspect), vh = Math.max(h, w / aspect), cx = x0 + w / 2, cy = y0 + h / 2;
+    const gx0 = cx - vw / 2 - 1, gx1 = cx + vw / 2 + 1, gy0 = cy - vh / 2 - 1, gy1 = cy + vh / 2 + 1;
+    if (vw * vh / (1.5 * SQ3) <= MAX_CELLS) {
+      for (let r = Math.floor(gy0 / 1.5); r <= Math.ceil(gy1 / 1.5); r++) {
+        for (let q = Math.floor(gx0 / SQ3 - r / 2); q <= Math.ceil(gx1 / SQ3 - r / 2); q++) {
+          const x = X(q, r);
+          if (x >= gx0 && x <= gx1) out.push(hex('cell', [q, r], .95, `data-c="${q},${r}"`));
+        }
       }
     }
     (sc.heat || []).forEach(h => { if (!placed.has(key(h.c))) out.push(hex(h.cls || 'heat', h.c, .26 + .56 * Math.sqrt(Math.max(0, Math.min(1, h.rel))))); });
@@ -84,10 +88,15 @@ window.Hex = (function () {
     svg.innerHTML = out.join('');
   }
 
-  /* Pan by dragging, zoom with the wheel or the +, − and Fit buttons; a drag never counts as a click on the board. */
+  /* Pan by dragging, zoom with the wheel or the +, − and Fit buttons; a drag never counts as a click on the board.
+     A touch drag pans only once zoomed, so at Fit a swipe still scrolls the page. */
   function viewport(svg, controls) {
     svg._view = { k: 1, dx: 0, dy: 0 };
-    const redraw = () => { if (svg._scene) draw(svg, svg._scene); };
+    let frame = 0;
+    const redraw = () => {
+      const v = svg._view; svg.classList.toggle('zoomed', v.k !== 1 || v.dx !== 0 || v.dy !== 0);
+      if (svg._scene && !frame) frame = requestAnimationFrame(() => { frame = 0; draw(svg, svg._scene); });
+    };
     const unit = () => { const r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal; return Math.max(vb.width / r.width, vb.height / r.height); };
     const zoom = (f, ex, ey) => {
       const v = svg._view, k = Math.min(12, Math.max(0.25, v.k * f));
@@ -99,7 +108,12 @@ window.Hex = (function () {
       }
       v.k = k; redraw();
     };
-    svg.addEventListener('wheel', e => { e.preventDefault(); zoom(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX, e.clientY); }, { passive: false });
+    svg.addEventListener('wheel', e => {
+      if (!e.deltaY) return;
+      e.preventDefault();
+      const px = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1);
+      zoom(Math.exp(-Math.max(-300, Math.min(300, px)) * 0.0015), e.clientX, e.clientY);
+    }, { passive: false });
     let drag = null;
     svg.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, moved: false }; });
     svg.addEventListener('pointermove', e => {
@@ -111,12 +125,14 @@ window.Hex = (function () {
     });
     const end = () => { if (drag && drag.moved) { svg._dragged = true; setTimeout(() => { svg._dragged = false; }, 0); } drag = null; svg.classList.remove('panning'); };
     svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end);
+    const fit = () => { svg._view = { k: 1, dx: 0, dy: 0 }; svg.classList.remove('zoomed'); };
     if (controls) {
+      controls.hidden = false;
       controls.querySelector('[data-zoom="in"]').onclick = () => zoom(1.25);
       controls.querySelector('[data-zoom="out"]').onclick = () => zoom(1 / 1.25);
-      controls.querySelector('[data-zoom="fit"]').onclick = () => { svg._view = { k: 1, dx: 0, dy: 0 }; redraw(); };
+      controls.querySelector('[data-zoom="fit"]').onclick = () => { fit(); redraw(); };
     }
-    return { reset: () => { svg._view = { k: 1, dx: 0, dy: 0 }; } };
+    return { reset: fit };
   }
 
   function cellAt(svg, e) {
