@@ -59,7 +59,7 @@ def _lag(step: int, diff: float, lo: float, hi: float, gap: float = 0.01) -> dic
             "current": {"gap": {"cf_ce": gap}}}
 
 
-@pytest.mark.parametrize(("diff", "lo", "hi", "word"), [(-0.011, -0.017, -0.005, "beats its lagged net by 0.011 nats (95 % interval 0.005 to 0.017)"),
+@pytest.mark.parametrize(("diff", "lo", "hi", "word"), [(-0.011, -0.017, -0.005, "beats its lagged net by 0.011 nats on the games after its save (95 % interval 0.005 to 0.017)"),
                                                         (0.011, 0.005, 0.017, "trails its lagged net by 0.011"),
                                                         (-0.002, -0.006, 0.003, "shows no clear difference from its lagged net")])
 def test_the_lagged_reads_word_appears_only_past_its_interval(dash, value, tmp_path, diff, lo, hi, word):
@@ -119,7 +119,7 @@ def test_the_reach_names_no_turn_instead_of_none(dash, value):
     curve = horizon.Curve(share=(None,) * 31, n=(0,) * 31)
     h = horizon.Horizon(curve, curve, curve, curve, None, 3, 10, 2, (0, 1), (8, 9))
     text = value._reach(h)
-    assert "None" not in text and "3 turns out in the last fifth" in text and "never in the first" in text
+    assert "None" not in text and "3 turns out at 90\u202f% in the last fifth" in text and "and never in the first" in text
 
 
 def test_an_armed_halt_whose_signal_was_not_sent_says_why(dash, value, tmp_path):

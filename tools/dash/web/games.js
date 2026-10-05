@@ -46,7 +46,7 @@
       }
       if (th.second) s.append(el('p', 'muted small', 'Second stone: its value reads low from forced visits, so the strip skips it.'));
       if (th.cands.length) {
-        const share = pos.turn && pos.turn.stones.length > 1 ? 'Visit share, stone 1' : 'Visit share';
+        const share = pos.turn && pos.turn.stones.length > 1 ? 'Stone 1 visits' : 'Visits';
         const tb = el('table', 'cands'), head = el('tr'); ['Cell', share, ''].forEach(h => head.append(el('th', null, h)));
         tb.append(el('thead')); tb.tHead.append(head); const body = el('tbody');
         th.cands.forEach(c => {

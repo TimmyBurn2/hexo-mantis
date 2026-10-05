@@ -96,7 +96,8 @@ def _read(panel: dict[str, Any] | None, refused: str | None, moves: list[Any]) -
         + (f'<span>Light {pct(c["light"])}</span><span class="bar"><i style="width:{c["light"] * 100:.1f}%"></i></span>'
            f'<span>{pct(1 - c["light"])} Dark</span>' if c["light"] is not None else '<span class="muted">not read</span><span></span><span></span>')
         + "</div>" for c in panel["chances"])
-    head = ["Cell", esc(panel["a"])] + ([esc(panel["b"])] if panel["b"] else []) + [_search_head(panel), ""]
+    head = ['Cell', f'<span class="c1">{esc(panel["a"])}</span>'] + ([f'<span class="c2">{esc(panel["b"])}</span>'] if panel["b"] else []) + [
+        _search_head(panel), ""]
     rows = "".join(
         f'<tr data-c="{r[0]},{r[1]}"><td class="num">{cell(r[0], r[1])}</td><td class="pct">{pct(r[2])}</td>'
         + (f'<td class="pct">{pct(r[3])}</td>' if panel["b"] else "")

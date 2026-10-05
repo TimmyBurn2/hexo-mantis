@@ -63,13 +63,13 @@ def _verdict(rec: Records) -> tuple[str, str]:
     if lag is not None and lag.ci is not None and lag.diff is not None:
         lo, hi = lag.ci
         if hi < 0:
-            word = f"beats its lagged net by {-lag.diff:.3f} nats (95 % interval {-hi:.3f} to {-lo:.3f})"
+            word = f"beats its lagged net by {-lag.diff:.3f} nats on the games after its save (95 % interval {-hi:.3f} to {-lo:.3f})"
         elif lo > 0:
-            word = f"trails its lagged net by {lag.diff:.3f} nats (95 % interval {lo:.3f} to {hi:.3f})"
+            word = f"trails its lagged net by {lag.diff:.3f} nats on the games after its save (95 % interval {lo:.3f} to {hi:.3f})"
         else:
-            word = (f"shows no clear difference from its lagged net (cross-entropy {signed(lag.diff, 3)} nats, "
-                    f"95 % interval {signed(lo, 3)} to {signed(hi, 3)})")
-        aside = f"{short(lag.step)} {word} on the games after its save.<br>"
+            word = (f"shows no clear difference from its lagged net on the games after its save (cross-entropy "
+                    f"{signed(lag.diff, 3)} nats, 95 % interval {signed(lo, 3)} to {signed(hi, 3)})")
+        aside = f"{short(lag.step)} {word}.<br>"
     series = gaps(rec.saves)
     line = next((s.gap_line for s in reversed(rec.saves) if s.gap_line is not None), None)
     if series and line is not None:
@@ -118,10 +118,10 @@ def _instrument(snaps: Sequence[RunSnapshot]) -> list[str]:
     only = head.label if len(snaps) > 1 else ""
     band_chart = Chart("by ply band", lines=band_lines, x_domain=x_span(snaps)) if drawn else None
     out.append(figure("Held-out cross-entropy by ply", band_chart, goal=LOWER, only=only,
-                      keys=[Key(_BAND_NAMES[b], "c1", ("faint", "dash", "line")[i]) for i, b in enumerate(PLY_BANDS)],
+                      keys=[Key(("0–10", "11–40", "41+ plies")[i], "c1", ("faint", "dash", "line")[i]) for i, _b in enumerate(PLY_BANDS)],
                       gap=None if drawn else ("Not measured at any save yet.", "No band was read.")))
     line = next((s.gap_line for s in reversed(first.saves) if s.gap_line is not None), None)
-    refs = [Ref(line, label=f"gap rule {line:.2f}", marked=True)] if line is not None else []
+    refs = [Ref(line, marked=True)] if line is not None else []
     gap_lines = [Line(x.label, cls, pts) for x, rec, cls in runs if (pts := gaps(rec.saves))]
     gap_chart = Chart("gap", lines=gap_lines, refs=refs, x_domain=x_span(snaps)) if gap_lines else None
     nows = [(signed(g[-1][1], 3) if (g := gaps(rec.saves)) else "", cls) for _x, rec, cls in runs]
@@ -194,12 +194,13 @@ def _reach(h: Horizon | None) -> str:
     if h is None:
         return ""
 
-    def turns(r: int | None) -> str:
-        return "never" if r is None else f"{r} turn{'s' if r != 1 else ''} out"
     if h.late_reach is None and h.early_reach is None:
         return f"The search never calls the winner at {pct(REACH_SHARE)}."
-    return (f"The search calls the winner at {pct(REACH_SHARE)} {turns(h.late_reach)} in the last fifth of sampled games, "
-            f"{turns(h.early_reach)} in the first.")
+    early = "never" if h.early_reach is None else str(h.early_reach)
+    if h.late_reach is None:
+        return f"The search never calls the winner at {pct(REACH_SHARE)} in the last fifth of sampled games; {early} turns out in the first."
+    return (f"The search calls the winner {h.late_reach} turn{'s' if h.late_reach != 1 else ''} out at {pct(REACH_SHARE)} "
+            f"in the last fifth of sampled games, and {early} in the first.")
 
 
 def section(snaps: Sequence[RunSnapshot]) -> tuple[str, str, str]:

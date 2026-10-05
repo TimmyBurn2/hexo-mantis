@@ -77,10 +77,10 @@ def _compared(snaps: Sequence[RunSnapshot], lead: Ruler) -> str:
         twin = next((r for r in x.rulers if r.unit == lead.unit and r.line), None)
         if twin is not None:
             c, first = twin.line[-1], twin.line[0]
-            said = f"{esc(x.label)} at {short(c.step)}: {pct(c.wr, 1)} of {num(c.n)} games"
+            verdict = (f"{short(c.step)} {_OWN[separation(c.wr, c.n, first.wr, first.n).sign]} {short(first.step)}. "
+                       if len(twin.line) > 1 else "")
+            said = f"{esc(x.label)}: {verdict}{pct(c.wr, 1)} of {num(c.n)} games at {short(c.step)}"
             said += f", {num(c.forfeits)} Six forfeits left out." if c.forfeits else "."
-            if len(twin.line) > 1:
-                said += f" {_OWN[separation(c.wr, c.n, first.wr, first.n).sign].capitalize()} {short(first.step)}."
             out += f'<br><span class="{RUN_CLASSES[snaps.index(x)]}">{said}</span>'
     return out
 
@@ -91,7 +91,8 @@ def _ladder_text(snap: RunSnapshot) -> str:
         return ""
     if not rungs.note.startswith("read"):
         return f" Ladder: {esc(rungs.note)}."
-    text = f" Ladder ruler: {esc(rungs.current or 'not named')}" + (f", streak {rungs.streak}" if rungs.streak is not None else "") + "."
+    text = f" Ladder ruler: {esc(rungs.current or 'not named')}" + (
+        f", streak {rungs.streak} toward the next rung" if rungs.streak is not None else "") + "."
     if rungs.note != "read":
         text += f" The ladder file {esc(rungs.note[len('read, but '):])}."
     for change, pairs in snap.bridges:

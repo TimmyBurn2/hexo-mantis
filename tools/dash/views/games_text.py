@@ -63,7 +63,7 @@ def facts(g: GameView, run_label: str, hour: str | None) -> list[tuple[str, str]
     rows.append(("Net", net))
     search = {"recorded": "recorded", "absent": "not sampled", "none": "no search root exposed",
               "empty": "recorded, candidate never moved"}[g.stats_field]
-    rows.append(("Search", search + (f", {num(g.served_sims)} sims, fewer on fast turns" if g.served_sims else "")))
+    rows.append(("Search", search + (f", up to {num(g.served_sims)} sims a stone" if g.served_sims else "")))
     if hour or g.worker is not None:
         rows.append(("Recorded", ", ".join(x for x in (hour, None if g.worker is None else f"worker {g.worker}") if x)))
     return rows
@@ -101,14 +101,15 @@ def thought(g: GameView, ply: int, cls_cells: set[tuple[int, int]], wins: bool) 
     by = f" by the {esc(entry['by'])}" if entry.get("by") else ""
     how = f"{arm}, {num(total)} sims{by}."
     if not visits:
-        pick, how = f"{arm}{by}: no visits recorded.", ""
+        pick, how = f"{arm}{by}: no visits recorded", ""
     elif played == (visits[0][0], visits[0][1]):
-        pick = f"{cell(*played)}, the top move."
+        pick = f"{cell(*played)}, the top move"
     elif played in share:
-        pick = f"{cell(*played)}, {pct(share[played])} of the visits."
+        pick = f"{cell(*played)}, {pct(share[played])} of the visits"
     else:
-        pick = f"{cell(*played)}, not among the recorded visits."
-    text = f"{pick} {how}".strip()
+        pick = f"{cell(*played)}, not among the recorded visits"
+    text = f"{pick}, {num(total)} sims ({arm.lower()})." if how else f"{pick}."
+    pick += "."
     v = entry.get("root_value")
     light = None
     if isinstance(v, (int, float)) and not isinstance(v, bool):

@@ -67,12 +67,12 @@ def figure(title: str, chart: Chart | None, definition: str = "", *, goal: Goal 
     else:
         plot = chart.render()
     scope = f'<span class="only">{esc(only)} only</span>' if only else ""
-    aim = (f'<p class="goal {goal.way}"><span class="g" aria-hidden="true">{_GLYPH[goal.way]}</span>{esc(goal.words)}{scope}</p>'
+    aim = (f'<p class="goal {goal.way}"><span class="g" aria-hidden="true">{_GLYPH[goal.way]}</span>{esc(goal.words)}</p>'
            if goal is not None else "")
-    caption = f"<figcaption>{esc(definition)}</figcaption>" if definition else ""
+    caption = f"<figcaption>{esc(definition)}{' ' if definition and only else ''}{scope}</figcaption>" if definition or only else ""
     many = len(nows) > 1
     latest = "".join(f'<b class="{cls}">{esc(v)}</b>' for v, cls in nows if v) if many else esc(now)
-    return (f'<figure class="chart"><div class="head{" many" if many else ""}"><h3 title="{esc(title)}">{esc(title)}</h3>{"" if goal else scope}'
+    return (f'<figure class="chart"><div class="head{" many" if many else ""}"><h3 title="{esc(title)}">{esc(title)}</h3>'
             f'<span class="now">{latest}</span></div>'
             f'{aim}{legend(keys)}<div class="plot">{plot}</div>{caption}{twin}</figure>')
 

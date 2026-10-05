@@ -61,7 +61,8 @@
       seg.append(btn);
     });
     const searchHead = (panel.search_source || '').startsWith("the game's") ? "Game's search" : 'Search';
-    const head = el('tr'); ['Cell', panel.a].concat(panel.b ? [panel.b] : [], [searchHead, '']).forEach(h => head.append(el('th', null, h)));
+    const head = el('tr'); [['Cell', ''], [panel.a, 'c1']].concat(panel.b ? [[panel.b, 'c2']] : [], [[searchHead, ''], ['', '']])
+      .forEach(([h, cls]) => { const th = el('th'); th.append(cls ? el('span', cls, h) : h); head.append(th); });
     $('cands').tHead.replaceChildren(head);
     const tb = $('cands').tBodies[0]; tb.replaceChildren();
     panel.rows.forEach(r => {

@@ -91,6 +91,23 @@ def _share_chart(snaps: Sequence[RunSnapshot], title: str, definition: str, goal
     return figure(title, chart, definition, goal=goal, now=nows[0][0], nows=nows, keys=keys), first
 
 
+def _alerts_said(aborts: list[dict], alerts: list[dict], *, bold: bool) -> tuple[str, str]:
+    """Aborts and warnings in a sentence (one kind is named, several are counted), and the kinds when several."""
+    words = f"{len(aborts)} abort{'s' if len(aborts) != 1 else ''}" if aborts else "No aborts"
+    kinds: dict[str, int] = {}
+    for a in alerts:
+        kind = _ALERT.get(str(a.get("rule")), str(a.get("rule") or "warning").replace("_", " "))
+        kinds[kind] = kinds.get(kind, 0) + 1
+    if not alerts:
+        return f"{words}, no warnings.", ""
+    named = [short(a.get("step")) for a in alerts[:6]]
+    steps = (", ".join(named[:-1]) + " and " + named[-1] if len(named) > 1 else named[0]) + (
+        f" and {len(alerts) - 6} more" if len(alerts) > 6 else "")
+    what = f"{len(alerts)} {next(iter(kinds)) if len(kinds) == 1 else 'warning'}{'s' if len(alerts) != 1 else ''}"
+    notes = ", ".join(f"{esc(k)} ×{n}" if n > 1 else esc(k) for k, n in kinds.items()) if len(kinds) > 1 else ""
+    return f"{words}. {f'<strong>{esc(what)}</strong>' if bold else esc(what)}: {steps}.", notes
+
+
 def _last_smoothed(snap: RunSnapshot, event: str, key: str) -> float | None:
     """A series' last smoothed value, the one its chart ends on and its header shows."""
     pairs = snap.events.series(event, "step", key).pairs()
@@ -108,33 +125,17 @@ def _ends(snap: RunSnapshot, key: str) -> tuple[float, float] | None:
 
 def training(snaps: Sequence[RunSnapshot]) -> tuple[str, str, str]:
     head = snaps[0].events
-    aborts = [r for name in ("hard_abort", "hard_abort_after_stop") for r in head.rows(name)]
     alerts = head.rows("training_alert")
-    words = f"{len(aborts)} abort{'s' if len(aborts) != 1 else ''}" if aborts else "No aborts"
-    kinds: dict[str, int] = {}
-    for a in alerts:
-        kind = _ALERT.get(str(a.get("rule")), str(a.get("rule") or "warning").replace("_", " "))
-        kinds[kind] = kinds.get(kind, 0) + 1
-    if alerts:
-        named = [short(a.get("step")) for a in alerts[:6]]
-        steps = (", ".join(named[:-1]) + " and " + named[-1] if len(named) > 1 else named[0]) + (
-            f" and {len(alerts) - 6} more" if len(alerts) > 6 else "")
-        what = next(iter(kinds)) if len(kinds) == 1 else "warning"
-        sentence = f"{words}. <strong>{len(alerts)} {esc(what)}{'s' if len(alerts) != 1 else ''}</strong>: {steps}."
-    else:
-        sentence = f"{words}, no warnings."
-    notes = ", ".join(f"{esc(k)} ×{n}" if n > 1 else esc(k) for k, n in kinds.items()) if len(kinds) > 1 else ""
+    sentence, notes = _alerts_said(head.rows("hard_abort") + head.rows("hard_abort_after_stop"), alerts, bold=True)
     trend = ""
     value, policy = _ends(snaps[0], "value_loss"), _ends(snaps[0], "policy_loss")
     if value is not None and policy is not None:
         trend = f"Smoothed, value loss {sig(value[0])} → {sig(value[1])} and policy loss {sig(policy[0])} → {sig(policy[1])}.<br>"
     aside = (f"Warnings: {notes}.<br>" if notes else "") + trend + "Losses track the fit to moving targets, not strength."
     for i, x in enumerate(snaps[1:], 1):
-        theirs = x.events.rows("training_alert")
-        stops = sum(len(x.events.rows(n)) for n in ("hard_abort", "hard_abort_after_stop"))
-        said = f"{stops} abort{'s' if stops != 1 else ''}" if stops else "no aborts"
-        said += f", {len(theirs)} warning{'s' if len(theirs) != 1 else ''}: " + ", ".join(short(a.get("step")) for a in theirs[:6]) if theirs else ", no warnings"
-        aside += f'<br><span class="{RUN_CLASSES[i]}">{esc(x.label)}: {said}.</span>'
+        theirs, _ = _alerts_said(x.events.rows("hard_abort") + x.events.rows("hard_abort_after_stop"),
+                                 x.events.rows("training_alert"), bold=False)
+        aside += f'<br><span class="{RUN_CLASSES[i]}">{esc(x.label)}: {theirs}</span>'
     spikes = [(float(a["step"]), f"gradient-norm spike at {num(a['step'])}") for a in alerts
               if a.get("rule") == "grad_norm_spike" and isinstance(a.get("step"), int)]
     panels = "".join(_multiple(snaps, event, key, title, definition, goal,
@@ -144,32 +145,36 @@ def training(snaps: Sequence[RunSnapshot]) -> tuple[str, str, str]:
     return sentence, aside, panels
 
 
+def _play_said(snap: RunSnapshot, *, bold: bool) -> str:
+    """One run's self-play in a sentence: throughput, which side the interval favours, the share at the cap."""
+    gph = _last_smoothed(snap, "iteration_complete", "games_per_hour")
+    rate = f"{num(gph)} games an hour" if gph is not None else "no throughput row yet"
+    parts = [f"<strong>{rate}</strong>" if bold else rate]
+    decided = [int(w == 0) for w in snap.events.games.winner if w in (0, 1)][-WINDOW:]
+    if len(decided) == WINDOW:
+        lo, hi = wilson(sum(decided), WINDOW)
+        slight = "slightly " if abs(sum(decided) / WINDOW - 0.5) < 0.05 else ""
+        parts.append("balanced sides" if lo <= 0.5 <= hi else f"the {'first' if lo > 0.5 else 'second'} player {slight}favoured")
+    cap = _rolling(snap, lambda i: int(snap.events.games.cap[i]))
+    if cap:
+        parts.append(f"{pct(cap[-1][1], 1)} of games at the cap")
+    said = ", ".join(parts[:-1]) + (" and " if len(parts) > 1 else "") + parts[-1] + "."
+    return said[0].upper() + said[1:] if not bold else said
+
+
 def selfplay(snaps: Sequence[RunSnapshot]) -> tuple[str, str, str]:
-    head = snaps[0].events
     first_html, first = _share_chart(
         snaps, "First player wins", f"Last {num(WINDOW)} decided games.", Goal("near", "best near 50 %"),
         lambda x: (lambda i: None if x.events.games.winner[i] not in (0, 1) else int(x.events.games.winner[i] == 0)),
         refs=(Ref(0.5),))
     cap_html, cap = _share_chart(snaps, "Games ending at the cap", f"Last {num(WINDOW)} games.", LOWER,
                                  lambda x: (lambda i: int(x.events.games.cap[i])))
-    gph = _last_smoothed(snaps[0], "iteration_complete", "games_per_hour")
-    parts = [f"<strong>{num(gph)} games an hour</strong>" if gph is not None else "No throughput row yet"]
-    decided = [int(w == 0) for w in head.games.winner if w in (0, 1)][-WINDOW:]
-    if len(decided) == WINDOW:
-        lo, hi = wilson(sum(decided), WINDOW)
-        share = sum(decided) / WINDOW
-        slight = "slightly " if abs(share - 0.5) < 0.05 else ""
-        parts.append("balanced sides" if lo <= 0.5 <= hi else f"the {'first' if lo > 0.5 else 'second'} player {slight}favoured")
-    if cap:
-        parts.append(f"{pct(cap[-1][1], 1)} of games at the cap")
-    sentence = ", ".join(parts[:-1]) + (" and " if len(parts) > 1 else "") + parts[-1] + "."
+    sentence = _play_said(snaps[0], bold=True)
     aside = "" if first else f"The side and cap shares need {num(WINDOW)} games."
     for i, x in enumerate(snaps[1:], 1):
-        other = _last_smoothed(x, "iteration_complete", "games_per_hour")
-        if other is not None:
-            aside = f'<span class="{RUN_CLASSES[i]}">{esc(x.label)}: {num(other)} games an hour.</span><br>{aside}'
+        aside += f'<br><span class="{RUN_CLASSES[i]}">{esc(x.label)}: {_play_said(x, bold=False)}</span>'
     panels = first_html + cap_html + "".join(
         _multiple(snaps, "iteration_complete", key, title, definition, goal,
                   fmt=(lambda v: short(v)) if "positions" in key else (lambda v: num(v)))
         for key, title, definition, goal in _PLAY)
-    return sentence, aside.removesuffix("<br>"), panels
+    return sentence, aside.removeprefix("<br>"), panels

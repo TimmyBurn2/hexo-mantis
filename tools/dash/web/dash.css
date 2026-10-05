@@ -307,3 +307,7 @@ svg.glyph .s1 { stroke: var(--ink-3); stroke-width: .08; }
 .aside .c1 { color: var(--run-1); } .aside .c2 { color: var(--run-2); } .aside .c3 { color: var(--run-3); }
 .cands td.pct { text-align: right; font-variant-numeric: tabular-nums; }
 .verdict .c1 { color: var(--run-1); } .verdict .c2 { color: var(--run-2); }
+.aside, p.verdict, figure.chart figcaption, .panel p.say { text-wrap: pretty; }
+.cands th:not(:first-child) { text-align: right; }
+.cands th .c1 { color: var(--run-1); } .cands th .c2 { color: var(--run-2); }
+figure.chart figcaption .only { margin-left: 2px; }
