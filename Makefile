@@ -1,4 +1,4 @@
-.PHONY: build build.cuda build.native test test.integration lint lint.rust gates gates.exit dashboard viewer analyzer bench bench.baseline check.wasm vendor vendor.strix vendor.six clean
+.PHONY: build build.cuda build.native test test.integration lint lint.rust gates gates.exit dash dashboard viewer analyzer bench bench.baseline check.wasm vendor vendor.strix vendor.six clean
 
 UV ?= uv
 
@@ -43,6 +43,11 @@ gates:
 # executed by no other gate, so this is the only invocation that covers the tree.
 gates.exit:
 	bash tools/ci_gates/run_all.sh --with-slow
+
+#   make dash RUNS="run11=<run dir>" [RECORDS="run11=<monitor records>"] [CELLS="<dir> …"] [CHECKPOINTS="<dir> …"] [STRIX=1]
+#   loopback only by default (DASH-2); open http://127.0.0.1:$(or $(PORT),8765)/ or tunnel it with ssh -L
+dash:
+	UV_NO_SYNC=1 $(UV) run python tools/dash.py serve $(foreach r,$(RUNS),--run "$(r)") $(foreach r,$(RECORDS),--records "$(r)") $(foreach d,$(CELLS),--cells "$(d)") $(foreach d,$(CHECKPOINTS),--checkpoints "$(d)") $(if $(STRIX),--strix,) $(if $(PORT),--port "$(PORT)",) $(if $(THREADS),--threads "$(THREADS)",)
 
 # THE RUN DASHBOARD. ONE command, an existing run record in, one self-contained
 # HTML file out. No server, no producer, no live connection to a run. A panel with no producer

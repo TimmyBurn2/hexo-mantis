@@ -1253,3 +1253,31 @@ proving 0 of 8 966 quiet positions (`docs/design/TACTICS_DESIGN_2026-09-28.md` �
    reading 4 (`tools/probe1.py proofs`, F-53's instrument) lived through `bd7bcde9`; a re-reading of any of
    F-38, F-39 or F-53 with that instrument starts from that commit, under LAW-02. The turn-level reading 4
    is TACTICS-SELFPLAY's (CARD-TACTICS-SELFPLAY).
+
+### AMENDMENT — R<nnn> (pending), DASH-2: one local server over the run record is admitted; the dashboard, the viewer and the analyzer's page it replaces are retired at its last phase
+
+**R344(d), discharged under `tools/`** (the ruling number that admits it is the operator's, pending). R344(d) ordered a
+read-only stdlib server over the run record, carrying the game viewer, loopback by default, and owed this amendment
+in the same commit as the socket (R9). The design is `docs/design/dash2_design.md` (2026-10-03, annotated 2026-10-05);
+it keeps `docs/design/observatory_design.md` §3–§4 and replaces its views.
+
+1. **What is admitted.** One loopback stdlib server, `tools/dash.py` (`make dash RUNS="id=<run dir> …" [RECORDS=…]
+   [CELLS=…] [CHECKPOINTS=…] [STRIX=1] [PORT=8765]`; the implementation is `tools/dash/`), reads run directories or
+   their mirror, the run monitor's records and the cell sidecars, and serves three views (Run, Games, Analyzer) and a
+   one-file freeze of the Run view. `--bind 0.0.0.0` exists and is documented as unsafe, never the default.
+2. **What it is not.** It watches a directory, never a process: no connection to a run, no producer, no signal, no
+   write into a run's directories; `src/mantis` gains no display code and `monitor` stays headless (a census test
+   pins the import direction and that importing the package opens no socket). Its Analyzer engines are the
+   analyzer's, admitted by R363 on the same terms, and start only when checkpoints are given.
+3. **The coupling rule of R333(d) is narrowed, not lifted.** What stays absent is any surface a run would have to know
+   about. A reader of a record's files is admitted on the record's own terms, whether it runs once (`freeze`) or
+   stays up (`serve`). §1's sentence naming `tools/run_dashboard.py` as the one admitted reader is superseded by this
+   amendment.
+4. **The rule it carries.** Absent is not zero on every page: a panel whose input has no producer, or whose series is
+   empty, says so in a sentence. Every number is derived in Python by a reader with a test; a verdict word appears
+   only when its interval excludes the null; losses are shown and never scored.
+5. **Contracts #11 and §4.7 are unchanged.** It reads the event stream, the game record, the monitor's save records
+   (keys pinned against the monitor's real output) and the follower's sidecars; it adds no row to any of them.
+
+The R333(d), R352(g) and R363 amendments stay as history and gain a closing line when the last phase retires their
+tools.
