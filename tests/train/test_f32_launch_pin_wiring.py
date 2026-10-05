@@ -147,18 +147,21 @@ def test_the_minted_warm_start_row_names_an_artifact_whose_hashes_AGREE(config_p
     """Both currencies must answer the same thing about the artifact the minted row names.
 
     LOUD-SKIPS rather than passing when the artifact is absent: `checkpoints/` is never tracked,
-    so a quiet pass on a missing file would be green everywhere and checked nowhere.
+    so a quiet pass on a missing file would be green everywhere and checked nowhere. A config
+    minted with no parent carries no row, and its launch pin must then derive to None.
     """
     from mantis.config.loader import load_config
     from mantis.model import build_net
     from mantis.train.checkpoints import load_checkpoint
+    from mantis.train.warmstart import resolve_bc_warm_start
 
     repo = _REPO
-    row = load_config(config_path).identity.warm_start
-    assert row is not None, (
-        f"{config_path.name} carries no `identity.warm_start`: the 4b pin act's row is missing, "
-        "and the launch pin it derives from would be None on the run that needs it"
-    )
+    config = load_config(config_path)
+    row = config.identity.warm_start
+    if row is None:
+        assert resolve_bc_warm_start(config.model_dump()) is None, (
+            f"{config_path.name} declares no `identity.warm_start`, yet a launch pin derives from it")
+        return
     artifact = repo / row.checkpoint
     if not artifact.is_file():
         pytest.skip(
