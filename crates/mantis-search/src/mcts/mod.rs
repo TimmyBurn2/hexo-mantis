@@ -75,6 +75,8 @@ pub struct MCTSTree {
     pub root_board: Board,
     pub(crate) c_puct: f32,
     pub(crate) virtual_loss: f32,
+    /// A pending child scores as a loss in its choosing parent's frame; off, a last-stone parent negates it whole.
+    pub(crate) pending_loss_chooser_frame: bool,
     /// KataGo-style dynamic FPU base: `fpu_value = parent_q - fpu_reduction *
     /// sqrt(explored_policy_mass)`, where the mass is the prior summed over visited children.
     /// 0.0 disables it (classical fixed FPU, Q=0 for unvisited).
@@ -162,6 +164,7 @@ impl MCTSTree {
             root_board: Board::new(),
             c_puct,
             virtual_loss,
+            pending_loss_chooser_frame: false,
             fpu_reduction,
             depth_accum: 0,
             sim_count: 0,
@@ -185,6 +188,16 @@ impl MCTSTree {
             tt_hits: 0,
             select_counters: SelectCounters::default(),
         }
+    }
+
+    /// Score pending children in the choosing parent's frame; set once per player, as `configure_search` is.
+    pub fn configure_pending_loss_frame(&mut self, chooser: bool) {
+        self.pending_loss_chooser_frame = chooser;
+    }
+
+    #[must_use]
+    pub fn pending_loss_chooser_frame(&self) -> bool {
+        self.pending_loss_chooser_frame
     }
 
     pub fn new_game(&mut self, board: Board) {

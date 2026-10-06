@@ -133,6 +133,7 @@ class DeployHeadPlayer:
         tree: under `gumbel` it allocates a per-node raw-value vector that does not change per
         ply, and the root calls below read the σ it set (one σ per tree)."""
         tree = MCTSTree(**self._puct.tree_kwargs())
+        tree.configure_pending_loss_frame(True)
         tree.configure_search(self._search_kind, self._c_visit, self._c_scale, self._q_rescale)
         tree.configure_tactics(self._tactics)
         return tree

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mantis._engine import Board
+from mantis._engine import Board, MCTSTree
 from mantis.arena.deploy_head import DeployHeadPlayer
 
 from _dense_expand import dense_expand
@@ -61,3 +61,12 @@ def test_the_round_fill_keeps_a_plain_board_on_its_budget() -> None:
         board.apply_move(q, r)
     head.select_move(board)
     assert head.last_sims == 256
+
+
+def test_the_deploy_heads_tree_alone_scores_pending_children_in_the_choosers_frame() -> None:
+    """Self-play's frame stays as it was until ruled; a bare tree (the dash, the ring audit) keeps it too."""
+    head = DeployHeadPlayer(expand_fn=dense_expand(_peaked_infer([])), n_sims=64, leaf_batch_size=8, c_visit=50.0,
+                            c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=7,
+                            tactics=None, puct=MINTED_PUCT)
+    assert head._fresh_tree().pending_loss_chooser_frame is True
+    assert MCTSTree(**MINTED_PUCT.tree_kwargs()).pending_loss_chooser_frame is False
