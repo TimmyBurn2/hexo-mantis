@@ -49,7 +49,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   becomes a two-read halt at < 10 % with a slope row; its exam floors stay report-only until first passed. Its curve
   against run11's at matched steps, on (c)'s instrument, is run12's parent evidence. The FRESH-2 packet runs it in
   another session; the cap band's two-read rule is monitor code, owed before the resume.
-- **CARD-INSTRUMENT-BREAK — ORDERED by R386(c): the instrument breaks once.**
+- **CARD-INSTRUMENT-BREAK — ORDERED by R386(c): the instrument breaks once. DEPLOY-1's L4 builds it, as
+  CARD-RULER-OF-RECORD and CARD-EVAL-OPENINGS-ARENA.**
   - The ruler of record is Six gen g at equal playouts per turn (ours 128 per stone, Six 256 per turn). g is the lowest
     generation that reads the shipped head inside [0.3, 0.7] on a 64-pair screen, re-picked upward with a three-save
     overlap when a panel leaves the band.
@@ -58,7 +59,10 @@ Both were found by running the gate set rather than by reading it, and both are 
     redraw, each opening twice with sides swapped) over 288 seeded draws; book_v1 retires.
   - The parent and three run11 saves are re-read on it, and the going-forward line is re-derived.
 - **CARD-DEPLOY-1 — ORDERED by R386(d): SEARCH-PERF-1's report
-  (`docs/design/research/SEARCH_PERF_2026-10-06.md`) lands as DEPLOY-1.**
+  (`docs/design/research/SEARCH_PERF_2026-10-06.md`) lands as DEPLOY-1. RUNNING 2026-10-06: the architect's DEPLOY-1
+  packet, branch `deploy-1` in `.wt/deploy-1`, cells on the desktop, no box; legs L1 (the free fixes), L2 (the cache),
+  L3 (the sign, #14's switch, #5's step (b), the producer-side verify), L4 (the instrument), L5 (the ladder's
+  posture).**
   - The free fixes: #1–#4, #9 and the collision stop.
   - The per-game exact cache (#6): R370(c) extends to eval paths, since a per-player per-game exact cache is a
     served-output identity, not a reading.
@@ -74,6 +78,52 @@ Both were found by running the gate set rather than by reading it, and both are 
   - Its exit states the two cards' owed rulings as one-line questions, which are then ruled (R386(f)).
 - **CARD-STALE-EXTENSION — ORDERED by R386(f): the main checkout's stale extension is rebuilt in a separate tree.**
   perf-3-l1b stays a branch, and search-perf-research has been fast-forwarded (`dev` at `ef25e64f`).
+
+## Opened by the DEPLOY-1 packet (2026-10-06) — the instrument's two halves, run12's encoding, the per-turn unit, the report's defects
+
+- **CARD-RULER-OF-RECORD — OPENED by DEPLOY-1 for R386(c), OWNED by its L4: the ruler of record is Six gen g at equal
+  playouts per turn (ours 128/stone, Six 256/turn).** L4 screens Six gens 150/200/250/300, 64 pairs each against
+  run11@156k's shipped head; g is the lowest inside [0.3, 0.7]. It then re-reads the parent, run11@108k, @132k and
+  @156k on (ruler g, the arena openings, L3's head), 288 pairs each, and S likewise once, and re-derives the
+  going-forward line (the parent's new anchor + the line). Every old reading stays in the records with its instrument
+  named.
+- **CARD-EVAL-OPENINGS-ARENA — OPENED by DEPLOY-1 for R386(c), OWNED by its L4: `tools/openings/arena_draw`, the arena
+  protocol exactly (the 18-cell region, odd plies, the 4-in-6 redraw, uniform over balanced draws), its unit tests
+  mirroring the arena's `opening.test.ts` cases.** 288 seeded arena-5 openings are the cell book and "1 ply" the plain
+  start; book_v1 retires, its file kept for re-reads.
+- **CARD-RUN12-ENCODING — OPENED by DEPLOY-1 for R386(d): #18, pruning empty→empty edges, is run12's encoding.** 84 %
+  of our edges join two empty cells (SEARCH_PERF §3.3 #18). It lands behind the seam (a new row in
+  `crates/mantis-encoding/src/registry.toml`, a schema key, LAW-08/11/12, gate 11) with a fine-tune pair: pruned
+  against an equal-recipe unpruned control (LAW-19), then equal-time cells. Not DEPLOY-1's to build.
+- **CARD-DEPLOY-UNIT-PER-TURN — OPENED by DEPLOY-1 for R386(d): #15 (one tree per turn, the second stone continuing
+  the chosen child) and SEARCH_PERF §7.2(l) (a per-turn deploy unit, Six's) wait for run12's design.** Both are
+  STRENGTH changes that move every strength series; both need a ruling on what a stone's budget counts and on the
+  served-sims witness for a re-rooted search (§3.6.2).
+- **CARD-SEARCH-PERF-HYGIENE — OPENED by DEPLOY-1: the SEARCH_PERF §7.5 defect list, one card, each row with its
+  owner.**
+  - D1 the virtual-loss frame at second-stone parents — DEPLOY-1 L3, with a test pinning the sign.
+  - D2 a select call burning its attempts after its first collision — DEPLOY-1 L1 (the exact stop).
+  - D3 `leaf_build_threads` resolving to 1 on single-game hosts — DEPLOY-1 L1 (#2).
+  - D4 the production trainer's ring sample on 1 thread (PERF-3's drivers used 10) — TRAIN-SPEED-1 (a cap lever).
+  - D5 the main checkout's stale `_engine.abi3.so` — CARD-STALE-EXTENSION, rebuilt once DEPLOY-1's re-base frees the
+    checkout from run11's cells.
+  - D6 `par.rs` dropping a worker's panic payload — DEPLOY-1 L1, before #2 runs wide.
+  - D7 no eval-path reader for a deferred check-14 failure — #5's step (a), after its proofs (R386(d)).
+  - D8 the protected F-816-37 plant cannot vouch for a posture change — #5's step (a), its check-14-only plant.
+  - D9 `gpu_wait` carrying a GIL re-entry and `queue_wait` the Rust fuse — TRAIN-SPEED-1 (read them as stage spans).
+  - D10 `audit_exhausted` counting only total-budget exhaustion — OPEN, unowned (a LAW-18 row for the next leg that
+    touches the audit).
+  - D11 the producer-side `verify_contract` at 13.2 % of a build — DEPLOY-1 L3 (retired where check 14 runs 1-in-1,
+    R386(d); its comment repaired).
+  - D12 the retirer's result submit holding the GIL — TRAIN-SPEED-1, parked by R386(e).
+  - D13 the self-play eval cache cleared at every actor sync — TRAIN-SPEED-1's knob sweep.
+  - D14 `inference_local.py`'s stale "threshold of 32" — DEPLOY-1 L1.
+  - D15 the CPU head profile's stale "32-leaf wake" — DEPLOY-1 L5 (a one-line annotation).
+  - D16 run11's EXIT re-read wording — REPAIRED by RUN11-GO's session (2026-10-06).
+  - D17 `queue_wait` read as slack in SEARCH-PERF-1's first draft — CORRECTED in the report.
+  - D18 F-44's R365(e) note ("UNREAD" trainer duty) — TRAIN-SPEED-1, by annotation (run11 reads 0.69).
+  - D19 CARD-PERF-TRAINER-CONTENTION carrying PERF-2's isolated numbers only — TRAIN-SPEED-1 (run11's −25 %).
+  - D20 A7's kill resting on PERF-2's split — TRAIN-SPEED-1, decided by §7.2(i)'s split, parked by R386(e).
 
 ## Opened by R385 (THE RUN STARTS; THE RULE IS RETIRED; 2026-10-05) — run11 continues arm 2, RUN11-FRESH beside it
 
@@ -116,15 +166,15 @@ Both were found by running the gate set rather than by reading it, and both are 
 - **CARD-RATE-FORK — OPENED by the RUN11-GO packet, later: a paired fork of run11 at one save into a 1.2 and a 2.4
   steps/game branch.** Not built and not ordered; it reads the rate at matched start, which RUN11-PRE could not.
 - **CARD-DEPLOY-BATCH-WAIT — OPENED by the RUN11-GO exit, not built: a single-game inference posture for the ladder
-  deploy and equal-time evals, apart from self-play's.** DEPLOY-1's free fixes (R386(d)) start with #1, the wake on
-  submission. The inference server waits up to
+  deploy and equal-time evals, apart from self-play's. OWNED by DEPLOY-1's L1 (#1, the wake on submission); the
+  ladder's forward cap is its L5.** The inference server waits up to
   `inference.inference_max_wait_ms` (10, tuned for self-play) for company, and caps each forward at `max_in_flight` =
   `selfplay.leaf_batch_size` 8.
   - In one game the wait costs about 1.75× per turn at 64–256 sims/stone (box B, same pairings).
   - The cap holds batched throughput at about 1 200 positions/s on the GPU and 44/s on the CPU, where Strix reaches
     about 100/s.
   - Measured with scratch overrides only (EXIT.md §5.4–5.5).
-- **CARD-SEARCH-PERF — CLOSED 2026-10-06: SEARCH-PERF-1 is ACCEPTED by R386(d) and lands as DEPLOY-1
+- **CARD-SEARCH-PERF — CLOSED 2026-10-06: SEARCH-PERF-1 is ACCEPTED by R386(d) and lands as the DEPLOY-1 packet
   (CARD-DEPLOY-1). OPENED by the RUN11-GO exit: the SEARCH-PERF-1 research packet (another session), our search
   against Six's.** At equal time Six gen455 does about 2–4× our nodes per second with a net about 16× ours. Its report
   is the card's output.

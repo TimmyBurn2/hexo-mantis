@@ -514,6 +514,8 @@ The row-wise mixture stands as one unmeasured lever under TACTICS-SELFPLAY-3 (R3
 its pass, or to arm A's feed as measured if the mixture dies (R380(d)).
 The mixture is KILLED by R381(a): the feed of record is arm A's, no re-search and no mixing. (a)'s self-play arming is
 CARRIED into run11, not adopted (R381(c)).
+(c)'s served-sims witness is RESTATED by R386(d) for the early stop (#14): `last_sims == n`, or a fired stop with the
+leader fixed; a deliberate stop is not (c)'s early-end defect.
 
 ---
 
@@ -560,6 +562,7 @@ The row-wise mixture is KILLED by R381(a); the feed of record is arm A's, no re-
 (g)'s ORIGIN-1 is SPLIT by R384(f): the deploy head plays the origin on an empty board now; the engine rule and
 canonicalisation land after run11's start by pinned resume.
 (h)'s ruler's book RETIRES by R386(c): book_v1 retires, and openings follow the arena protocol over 288 seeded draws.
+(h)'s random-opening share is DEFINED by R386(c)'s arena draw: a random opening is one the arena protocol draws.
 
 ---
 

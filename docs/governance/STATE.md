@@ -34,6 +34,10 @@ in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c
     (R370(c) extended to eval paths), the virtual-loss frame fix (#13, riding (c)'s break), the early stop as a
     per-consumer switch, #5's step (b). #10 is permitted for quick-arm decided roots only; #15, #16 and the per-turn
     deploy unit wait for run12's design; #18 is run12's encoding.
+  - **DEPLOY-1 (the architect's packet of 2026-10-06) is RUNNING** on branch `deploy-1` in `.wt/deploy-1`, a separate
+    tree: the main checkout serves run11's cells until L4's re-base lands. Cells run on the desktop under the cell
+    lock; no box. L1 the free fixes, L2 the per-game cache, L3 the sign with #14's switch and #5's step (b), L4 the
+    instrument (the arena openings, the ruler screen, the re-base), L5 the ladder's posture (CARD-DEPLOY-1).
   - The trainer's interference stays parked except a read-only GIL sample on the live loop, on the operator's leave
     (R386(e)). perf-3-l1b stays a branch; search-perf-research is fast-forwarded (`dev` at `ef25e64f`); the main
     checkout's stale extension is rebuilt in a separate tree (R386(f), CARD-STALE-EXTENSION).
@@ -491,3 +495,4 @@ The current phase was rewritten 2026-10-05 at R385 from the RUN11-PRE exit recor
 RUN11-GO lines were added 2026-10-05 at its packet's first commit, on branch `run11-go` from `origin/dev` `94040bfa`.
 The current phase was rewritten 2026-10-06 at R386 on `dev` = `origin/dev` = `ef25e64f`, with run11's pause read from
 box A; the same edit repaired the run, box and latest-ruling lines.
+The DEPLOY-1 line was added 2026-10-06 at its packet's first commit, on branch `deploy-1` over `dev` `c00bf352`.
