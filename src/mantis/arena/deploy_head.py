@@ -14,6 +14,7 @@ from collections.abc import Callable
 from typing import Any
 
 from mantis._engine import MCTSTree
+from mantis.arena.eval_cache import GameEvalCache
 from mantis.util.device import release_cuda_cache
 from mantis.util.puct import PuctConstants
 
@@ -51,6 +52,7 @@ class DeployHeadPlayer:
         gumbel_seed: int,
         tactics: dict[str, Any] | None,
         puct: PuctConstants,
+        eval_cache: GameEvalCache | None = None,
     ) -> None:
         # `c_visit`, `c_scale`, `q_rescale`, `leaf_batch_size` and `gumbel_m` are REQUIRED schema
         # keys, never defaulted: a default equal to today's minted value is still a second authority.
@@ -90,6 +92,8 @@ class DeployHeadPlayer:
         self.last_sims: int | None = None
         #: The LAST search's tactics rows (`MCTSTree.tactics_counters`), `None` with the module off.
         self.last_tactics: dict[str, int] | None = None
+        #: The per-game cache `expand_fn` serves through, emptied by `new_game`; `None` when it has none.
+        self._eval_cache = eval_cache
 
     def name(self) -> str:
         return "deploy_head"
@@ -100,12 +104,20 @@ class DeployHeadPlayer:
         return self._search_kind
 
     def new_game(self) -> None:
+        if self._eval_cache is not None:
+            self._eval_cache.new_game()
         self._tree = self._fresh_tree()
         self._game_index += 1
         self._move_index = 0
         self.last_root = None
         self.last_sims = None
         self.last_tactics = None
+
+    def search_rows(self) -> dict[str, int] | None:
+        """The head's levers' cumulative rows, each keyed by its lever (`cache_*`); `None` when it runs none."""
+        if self._eval_cache is None:
+            return None
+        return {f"cache_{k}": v for k, v in self._eval_cache.counters().items()}
 
     def _fresh_tree(self) -> MCTSTree:
         """A tree configured with the RUN's search kind and σ. `configure_search` runs ONCE per

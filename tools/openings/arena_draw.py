@@ -1,11 +1,6 @@
-"""The arena's opening draw, ported exactly (hexarena `packages/rules/src/opening.ts` at cf28a07), and the cell book minter.
+"""The arena's opening draw ported exactly (hexarena packages/rules/src/opening.ts@cf28a07), and the cell book minter.
 
-An opening of an odd count of plies: the origin, then each later ply on a cell within hex distance 2 of it that the index
-source picks among those still empty, owned by the ply's player; a draw with four of one player and none of the other in
-six consecutive cells of an axis is discarded whole and redrawn from ply 1, so the result is uniform over balanced draws.
-The arena's (x, y) are our axial (q, r), and its player 0 (the origin's) is our Player One.
-
-CLI: python tools/openings/arena_draw.py --seed S --plies P --n N --out PATH.json
+Its (x, y) are our (q, r) and its player 0 our Player One. CLI: --seed S --plies P --n N --out PATH.json
 """
 from __future__ import annotations
 
@@ -81,8 +76,7 @@ def _holds_threat(members: list[tuple[int, int]]) -> bool:
 
 
 def draw_opening(plies: int, index: IndexSource) -> list[Stone]:
-    """The arena's `drawOpening`: `plies` stones in ply order. Raises: ValueError — not an odd count in [1, 9], or
-    an index outside the bound it was asked for."""
+    """The arena's `drawOpening`, `plies` stones in ply order. Raises: ValueError — a bad length or index."""
     if not isinstance(plies, int) or isinstance(plies, bool) or plies < 1 or plies > MAX_OPENING_PLIES or plies % 2 == 0:
         raise ValueError(f"an opening is an odd count of plies from 1 to {MAX_OPENING_PLIES}, not {plies!r}")
     while True:
@@ -125,8 +119,7 @@ def _imul(a: int, b: int) -> int:
 
 
 def mint_arena_book(*, seed: int, plies: int, n: int) -> dict:
-    """`n` openings drawn in sequence off one `Mulberry32(seed)`, moves in ply order as our `[q, r]`. Raises:
-    ValueError — `n` not positive, or `plies` not a draw's length."""
+    """`n` draws in sequence off one `Mulberry32(seed)` as our `[q, r]`. Raises: ValueError — a bad `n` or length."""
     if n <= 0:
         raise ValueError(f"mint_arena_book: n={n} must be positive")
     rng = Mulberry32(seed)

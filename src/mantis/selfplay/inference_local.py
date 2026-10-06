@@ -110,11 +110,7 @@ class LocalInferenceEngine:
             self._graph_batcher = None
 
     def batch_timing_snapshot(self) -> dict[str, Any]:
-        """The serving loop's batching instrument, the submitter wake's fire count among it.
-
-        Raises:
-            RuntimeError: the engine was closed.
-        """
+        """The serving loop's batching instrument, the wake's fire count among it. Raises: RuntimeError — closed."""
         if self._graph_server is None:
             raise RuntimeError("LocalInferenceEngine.batch_timing_snapshot: the engine was closed")
         return self._graph_server.batch_timing_snapshot()
@@ -128,8 +124,28 @@ class LocalInferenceEngine:
         except Exception:  # noqa: BLE001 — best-effort GC-time cleanup, never raise
             pass
 
-    @torch.inference_mode()
+    @staticmethod
+    def positions_of(boards: list[Board]) -> list[tuple[list[tuple[int, int, int]], int, int]]:
+        """Each board as the `(stones, current_player, moves_remaining)` request the graph seam takes."""
+        return [(list(board.get_stones()), int(board.current_player), int(board.moves_remaining)) for board in boards]
+
+    def leaf_keys(self, positions: list[tuple[list[tuple[int, int, int]], int, int]]) -> list[str]:
+        """Self-play's exact eval-cache key per position, as hex. Raises: RuntimeError (closed), ValueError (a seam guard)."""
+        if self._graph_batcher is None:
+            raise RuntimeError("LocalInferenceEngine.leaf_keys: the engine was closed")
+        return self._graph_batcher.eval_cache_keys(positions)
+
     def infer_batch_ls(self, boards: list[Board]) -> tuple[
+        list[list[float]],
+        list[list[tuple[tuple[int, int], float]]],
+        list[float],
+        list[tuple[int, int]],
+    ]:
+        """`infer_positions_ls` over `boards`."""
+        return self.infer_positions_ls(self.positions_of(boards))
+
+    @torch.inference_mode()
+    def infer_positions_ls(self, positions: list[tuple[list[tuple[int, int, int]], int, int]]) -> tuple[
         list[list[float]],
         list[list[tuple[tuple[int, int], float]]],
         list[float],
@@ -140,20 +156,18 @@ class LocalInferenceEngine:
         were baked in and `Board` does not expose that centre to Python.
 
         Returns:
-            dense:    the in-window half per board (length `spec.policy_logit_count`).
-            overflow: the off-window half per board, `((q, r), prob)` entries. The wire ORDER
+            dense:    the in-window half per position (length `spec.policy_logit_count`).
+            overflow: the off-window half per position, `((q, r), prob)` entries. The wire ORDER
                       is an artifact of map iteration; the Rust consumer rebuilds a map.
-            values:   scalar value per board.
-            centers:  the builder's `(cq, cr)` window centre per board.
+            values:   scalar value per position.
+            centers:  the builder's `(cq, cr)` window centre per position.
 
+        Raises:
+            RuntimeError: the engine was closed before this call.
         """
-        if not boards:
+        if not positions:
             return [], [], [], []
 
-        positions = [
-            (list(board.get_stones()), int(board.current_player), int(board.moves_remaining))
-            for board in boards
-        ]
         batcher = self._graph_batcher
         if batcher is None:
             # Set on every graph __init__; None only after close().

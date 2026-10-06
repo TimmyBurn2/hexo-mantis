@@ -75,6 +75,12 @@ candidate's search exposed its root, on self-play for a SAMPLED game (the shape 
 turn: a turn's two stones are two calls). The stones it played with no search are `root_proofs_found +
 proof_stones_played + finishes_played`, one row per decided call; a record without the key is a game the module did
 not play in.
+`candidate_search` (eval, DEPLOY-1) is present iff the candidate's head ran a lever that reports rows: each lever's
+rows over that game, keyed by its prefix. `cache_*`, its per-game exact cache: `cache_calls` (expand calls),
+`cache_positions` (leaves asked for, = `cache_hits` + `cache_served` + `cache_in_batch_repeats`), `cache_hits`
+(answered from an earlier evaluation in the game), `cache_served` (positions the net evaluated),
+`cache_in_batch_repeats` (a key repeated inside one call, evaluated once) and `cache_all_hit_calls` (calls answered
+with no evaluation, a round trip saved).
 
 **`game_index` JOINS a record to its progress row.** The round's progress writer and this one
 are fed from ONE fan-out in loop order, so their per-round counters advance in lockstep and a

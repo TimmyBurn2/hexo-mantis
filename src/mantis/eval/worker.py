@@ -21,6 +21,7 @@ from typing import Any
 from mantis.arena.adjudicate import PlyCapAdjudicator
 from mantis.arena.books import round_openings
 from mantis.arena.deploy_head import DeployHeadPlayer
+from mantis.arena.eval_cache import GameEvalCache
 from mantis.arena.match import play_paired_match
 from mantis.arena.regime import RegimeKey
 from mantis.bots.protocol import RungUnresolvable
@@ -185,6 +186,7 @@ class _RoundGameRecords:
                 trajectory_hash=getattr(game_record, "trajectory_hash", None),
                 search_stats=getattr(game_record, "search_stats", None),
                 candidate_tactics=getattr(game_record, "candidate_tactics", None),
+                candidate_search=getattr(game_record, "candidate_search", None),
             ))
         return _record
 
@@ -239,7 +241,7 @@ def _model_sims_for_kind(spec: RoundSpec, kind: str) -> int:
                      "by R362(c) and no other kind plays through the rung block")
 
 
-def _graph_expand_fn(engine: LocalInferenceEngine, spec: EncodingSpec):
+def _graph_expand_fn(engine: LocalInferenceEngine | GameEvalCache, spec: EncodingSpec):
     """Decode and expand one graph leaf batch through `expand_and_backup_ls_graph` — the same
     producer, expand and frame self-play uses, with the builder's window centre threaded from the
     producer so the bridge's leaf/policy alignment cross-check is possible."""
@@ -259,11 +261,13 @@ def build_candidate_player(
 ) -> DeployHeadPlayer:
     """A closed match on the representation. Raises: EvalDecodeUnsupportedError if not graph."""
     if spec.representation == "graph":
-        return DeployHeadPlayer(expand_fn=_graph_expand_fn(engine, spec), n_sims=n_sims,
+        # One cache per player, so a game shares it with no other game on the engine.
+        cache = GameEvalCache(engine)
+        return DeployHeadPlayer(expand_fn=_graph_expand_fn(cache, spec), n_sims=n_sims,
                                 leaf_batch_size=leaf_batch_size,
                                 c_visit=c_visit, c_scale=c_scale, q_rescale=q_rescale,
                                 search_kind=search_kind, gumbel_m=gumbel_m,
-                                gumbel_seed=gumbel_seed, tactics=tactics, puct=puct)
+                                gumbel_seed=gumbel_seed, tactics=tactics, puct=puct, eval_cache=cache)
     raise EvalDecodeUnsupportedError(
         f"encoding {spec.name!r} declares representation={spec.representation!r}, which "
         f"this eval worker's decode entrance does not implement. The implemented arm is "

@@ -66,6 +66,8 @@ class GameRecord:
     #: The candidate's tactics rows summed over the stones it chose, with `stones` their count; `None` when the
     #: candidate exposes none (tactics off, or no deploy head).
     candidate_tactics: dict[str, int] | None
+    #: The candidate head's lever rows over this game (`DeployHeadPlayer.search_rows`); `None` when it runs none.
+    candidate_search: dict[str, int] | None = None
 
 
 def _trajectory_hash(moves: Iterable[tuple[int, int]]) -> str:
@@ -232,11 +234,14 @@ def _record_one(
         Exception: whatever the players' `select_move` or the board raises; nothing is caught
             here, so a defect in one game is not converted into a silently missing record.
     """
+    search_rows = getattr(candidate_player, "search_rows", lambda: None)
+    before = search_rows()
     winner, plies, moves, terminal, adjudication, stats, tactics = _play_one_game(
         candidate_player, opponent_bot, list(opening.moves),
         candidate_color=candidate_color, board_factory=board_factory,
         max_plies=max_plies, opening_id=str(opening.opening_id), adjudicator=adjudicator,
     )
+    after = search_rows()
     return GameRecord(
         regime_key=regime_key,
         opening_id=opening.opening_id,
@@ -249,6 +254,7 @@ def _record_one(
         adjudication=adjudication,
         search_stats=stats,
         candidate_tactics=tactics,
+        candidate_search=None if before is None or after is None else {k: after[k] - before[k] for k in after},
     )
 
 

@@ -343,6 +343,7 @@ def eval_record(
     trajectory_hash: str | None = None,
     search_stats: list[dict[str, Any]] | None = None,
     candidate_tactics: dict[str, int] | None = None,
+    candidate_search: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     """Build one eval-channel game as a record. `step` is the ROUND's step, distinguished by
     `step_kind` from self-play's actor step; `result` is SEAT-relative and `colors` says which
@@ -376,6 +377,8 @@ def eval_record(
         record["search_stats"] = search_stats
     if candidate_tactics is not None:
         record["candidate_tactics"] = candidate_tactics
+    if candidate_search is not None:
+        record["candidate_search"] = candidate_search
     return record
 
 

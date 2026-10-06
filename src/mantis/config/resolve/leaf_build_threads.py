@@ -9,8 +9,7 @@ rather than restating it: one place where the reservation can be wrong, one name
 Self-play workers are deliberately NOT covered — each is already one of `n_workers` threads
 building its own leaves, so widening one takes threads from the others and double-counts the
 reservation. The eval child is the case this exists for: one calling thread on an idle card.
-A host that runs no self-play (the ladder, the dash, a cell) reserves nothing for it: that is
-`resolve_standalone_leaf_build_threads`, and the run's own eval seam never calls it.
+A host that runs no self-play reserves nothing for it: `resolve_standalone_leaf_build_threads`.
 """
 import os
 from collections.abc import Mapping
@@ -48,10 +47,7 @@ def resolve_leaf_build_threads(full_config: Any, *, cpu_count: int | None = None
 def resolve_standalone_leaf_build_threads(
     full_config: Any, *, concurrency: int, cpu_count: int | None = None,
 ) -> int:
-    """Return the leaf-build width on a host that runs no self-play. Always >= 1.
-
-    The cores less the serving thread, shared by the `concurrency` games in flight, and at most one
-    leaf batch, since a select call returns no more leaves than that to build.
+    """The cores less the serving thread, shared by `concurrency` games in flight, at most one leaf batch. Always >= 1.
 
     Raises:
         MissingSampleThreadsInputError: the config carries no `selfplay.leaf_batch_size`.
