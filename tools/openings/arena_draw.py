@@ -27,6 +27,7 @@ IndexSource = Callable[[int], int]
 
 
 def hex_distance(a: Cell, b: Cell) -> int:
+    """Axial hex distance, the arena's `hexDistance`."""
     dx, dy = a[0] - b[0], a[1] - b[1]
     return (abs(dx) + abs(dy) + abs(dx + dy)) // 2
 
@@ -104,6 +105,7 @@ class Mulberry32:
         self._state = seed & 0xFFFFFFFF
 
     def next(self) -> float:
+        """The next float in [0, 1), mulberry32's step."""
         self._state = (self._state + 0x6D2B79F5) & 0xFFFFFFFF
         t = self._state
         t = _imul(t ^ (t >> 15), t | 1)
@@ -111,6 +113,7 @@ class Mulberry32:
         return ((t ^ (t >> 14)) & 0xFFFFFFFF) / 4294967296
 
     def int(self, bound: int) -> int:
+        """An index in [0, bound): floor(next() * bound)."""
         return int(self.next() * bound)
 
 
@@ -132,6 +135,7 @@ def mint_arena_book(*, seed: int, plies: int, n: int) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Mint `--n` openings to `--out`. Raises: ValueError (a bad `--n` or `--plies`), OSError (the write)."""
     ap = argparse.ArgumentParser(description="Mint a cell book of arena-protocol openings.")
     ap.add_argument("--seed", type=int, required=True)
     ap.add_argument("--plies", type=int, required=True)

@@ -40,7 +40,8 @@
   the quick arm's share of the round-width terms, so `selfplay.gumbel_m_quick` fires visibly.
   v13 (DEPLOY-1, R386(d)): `iteration_complete.inference_batching` gains a `wake` sub-block, the collector's pop
   reasons and the submitter wake's fire count, and its `served_graphs` sub-block gains `bucket_parts`;
-  `mcts_mean_depth` counts a select call's overlap once, where every repeat of it counted before.
+  `mcts_mean_depth` counts a select call's overlap once, where every repeat of it counted before; the batching block
+  gains `unverified_graph_builds`.
 
 ## Summary
 
@@ -349,6 +350,9 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   `threshold` (the leaf count met the saturation threshold), `all_submitted` (every declared submitter had a batch
   queued, so no further leaf could arrive: the submitter wake's own fire count), `deadline` and `closed`.
   Cumulative since server start, visible at 0; self-play reads `all_submitted` 0 by construction.
+  The block also carries `unverified_graph_builds`: the PROCESS's leaf builds, since it started, that skipped the
+  builder's own contract verify (a deploy engine whose collate runs check 14 on every batch before its launch). Self-play's
+  process reads 0; an eval worker's `serving` rows carry it, one process count shared by both its engines.
   And a `compile` SUB-BLOCK (PERF-A4 lever 3, LAW-18): `enabled` (the minted
   `inference.compile_trunk`), `unique_graphs` (Dynamo's own count of distinct compiled graphs
   since process start — a count still climbing after warm-up is the recompile storm the lever's

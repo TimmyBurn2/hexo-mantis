@@ -104,20 +104,24 @@ def test_every_consumer_states_its_switch(rel: str, switch: bool) -> None:
         assert stated is switch, (rel, call.lineno)
 
 
-@pytest.mark.parametrize("seed", range(8))
-def test_with_the_audit_armed_the_stop_never_moves_the_pre_audit_leader(seed: int) -> None:
+def test_with_the_audit_armed_the_stop_never_moves_the_pre_audit_leader() -> None:
     """The ruled guarantee: the visit leader the audit starts from; the audit's own fallbacks may differ (reported)."""
-
     blocks = [resolve_deploy_tactics(load_config(path).model_dump()) for path in production_configs(_REPO)]
     block = next((b for b in blocks if b is not None and b.get("audit")), None)
     assert block is not None, "some production config arms the deploy audit"
-    leaders = []
-    for switch in (False, True):
-        head = DeployHeadPlayer(expand_fn=dense_expand(_peaked), n_sims=256, leaf_batch_size=8, c_visit=50.0,
-                                c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=7,
-                                tactics=block, puct=MINTED_PUCT, early_stop=switch)
-        head.new_game()
-        head.select_move(_board(24 + seed, 100 + seed))
-        root = head.last_root
-        leaders.append(None if root is None else max(root[1], key=lambda c: c[3])[0])
-    assert leaders[0] == leaders[1]
+    searched_stops = 0
+    for seed in range(8):
+        leaders = []
+        for switch in (False, True):
+            head = DeployHeadPlayer(expand_fn=dense_expand(_peaked), n_sims=256, leaf_batch_size=8, c_visit=50.0,
+                                    c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=7,
+                                    tactics=block, puct=MINTED_PUCT, early_stop=switch)
+            head.new_game()
+            head.select_move(_board(24 + seed, 100 + seed))
+            root = head.last_root
+            leaders.append(None if root is None else max(root[1], key=lambda c: c[3])[0])
+        if head.last_stopped:
+            assert leaders[1] is not None, f"seed {seed}: a stop fired on a root the search never built"
+            searched_stops += 1
+        assert leaders[0] == leaders[1], f"seed {seed}"
+    assert searched_stops >= 1, "no seed stopped on a searched root, so the guarantee went unread"

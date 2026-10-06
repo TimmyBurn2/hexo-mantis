@@ -8,13 +8,14 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-#: v3: `stopped` per move, the searched stones the head's early stop ended (v2 added `opening` and `book_stones`).
+#: v3: `stopped` per move (the stones the head's early stop ended) and `serving`, the engine's rows over the game's span
+#: (v2 added `opening` and `book_stones`).
 RECEIPT_SCHEMA_VERSION = 3
 OUTCOMES = ("win", "loss", "aborted")
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 _REQUIRED = ("schema_version", "server", "game_id", "bot", "opponent", "side", "time_control", "rated",
              "sims_configured", "search", "opening", "moves", "rejections", "result", "plies", "plies_seen", "moves_full",
-             "wall_sec", "think_ms_total", "started_utc", "finished_utc", "server_clock")
+             "wall_sec", "think_ms_total", "started_utc", "finished_utc", "server_clock", "serving")
 _BOT_REQUIRED = ("name", "backend", "net_hash", "display_name", "profile_id")
 _OPENING_REQUIRED = ("book", "index", "opening_id", "relative", "off_book_at")
 _MOVE_REQUIRED = ("request_id", "stones", "time_limit", "placements", "sims", "ms", "server_date", "book_stones",
@@ -71,7 +72,7 @@ class GameReceipt:
                            "stopped": int(stopped)})
 
     def finish(self, *, winner: str | None, reason: str, finished: float,
-               finished_game: Mapping[str, Any] | None) -> dict[str, Any]:
+               finished_game: Mapping[str, Any] | None, serving: Mapping[str, Any] | None) -> dict[str, Any]:
         """The body: `outcome` from OUR side, `plies` and `moves_full` from the server's record when it has one. Raises: ReceiptError when it does not validate (the writer's own check)."""
         outcome = "aborted" if winner is None else ("win" if winner == self.side else "loss")
         last = self.moves[-1] if self.moves else None
@@ -95,6 +96,7 @@ class GameReceipt:
                 "first_move_date": self.moves[0]["server_date"] if self.moves else None,
                 "last_move_date": last["server_date"] if last is not None else None,
             },
+            "serving": None if serving is None else dict(serving),
         }
         validate_receipt(body)
         return body

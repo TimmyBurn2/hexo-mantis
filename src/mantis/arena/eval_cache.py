@@ -20,7 +20,7 @@ class GameEvalCache:
     """One player's evaluations in the game in play, keyed exactly as self-play's eval cache keys a leaf.
 
     A hit returns the outputs of the position's first evaluation in the game, which a later pop reproduces within the
-    served path's own spread (exactly, in DEPLOY-1's sm_86 dumps).
+    served path's own spread (bit for bit on sm_86, measured).
     """
 
     def __init__(self, engine: Any) -> None:

@@ -19,7 +19,7 @@ sha256 = "52943eabdfd911c36dcd9374da7d91f0a712b0d1eff47a99ab09a760b5088d06"
 file = "book_v2_pool_s20260915_p4.json"
 sha256 = "929e01938c1bbbba771d49e14dbd9f27f827ed0a683e5b43228fbf7371612987"
 
-# arena_s20261006_p5: the CELL BOOK of record (R386(c)): 288 openings drawn by the arena protocol (hexarena
+# arena_s20261006_p5: the CELL BOOK of record: 288 openings drawn by the arena protocol (hexarena
 # packages/rules/src/opening.ts@cf28a07: the origin, then four plies within hex distance 2, the 4-in-6 redraw, uniform
 # over balanced draws), off one mulberry32 stream, via tools/openings/arena_draw.py --seed 20261006 --plies 5 --n 288.
 # 285 distinct positions: the protocol draws with replacement. Pinned by tests/tools/test_arena_draw.py.

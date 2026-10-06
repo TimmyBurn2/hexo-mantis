@@ -21,7 +21,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from mantis._engine import InferenceBatcher, edge_vocabulary
+from mantis._engine import InferenceBatcher, edge_vocabulary, unverified_graph_builds
 from mantis.config.resolve.fused_graph_caps import (
     FusedGraphCapsSpec,
     resolve_fused_graph_caps,
@@ -634,6 +634,8 @@ class InferenceServer(threading.Thread):
             "empty_polls": self._empty_polls,
             # Why each non-empty pop returned; `all_submitted` is the submitter wake's fire count.
             "wake": {"submitters": self._batcher.graph_submitters, **self._batcher.graph_wake_counts()},
+            # This PROCESS's leaf builds that skipped the producer verify; self-play's process reads 0.
+            "unverified_graph_builds": unverified_graph_builds(),
             "fusion": self._fusion_snapshot(),
             # The check-14 lever: its posture and its own fire rate, visible at 0.
             "edge_geometry_check": {

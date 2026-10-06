@@ -57,12 +57,15 @@ def test_only_a_period_one_engine_builds_its_leaves_without_the_producer_verify(
     engine = _engine_at(period)
     try:
         before = _engine.unverified_graph_builds()
+        row_before = engine.batch_timing_snapshot()["unverified_graph_builds"]
         dense, _overflow, values, _centers = engine.infer_positions_ls(_POSITIONS)
         delta = _engine.unverified_graph_builds() - before
+        row_delta = engine.batch_timing_snapshot()["unverified_graph_builds"] - row_before
     finally:
         engine.close()
     assert len(dense) == len(values) == len(_POSITIONS)
     assert delta == (len(_POSITIONS) if skipped else 0), f"period {period}: {delta} unverified builds"
+    assert row_delta == delta, "the serving snapshot carries the builder's own count"
 
 
 def test_a_bare_batcher_call_keeps_the_producer_verify() -> None:

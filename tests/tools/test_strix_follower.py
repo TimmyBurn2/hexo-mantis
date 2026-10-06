@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 from _toolpath import load_module_by_path
 
+from mantis.arena.books import book_openings
 from mantis.config.census import production_configs
 from mantis.monitor.event_tail import EventTail
 
@@ -135,6 +136,24 @@ def test_the_cli_default_is_promotions_on_and_no_promotions_switches_it_off(foll
     assert follower_mod.main([*base, "--follow", "--promotions"]) == 0
     assert seen == [True, False, True]
 
+
+
+def test_a_book_unit_plays_its_whole_book_by_default_and_follows_at_no_other_count(follower_mod, monkeypatch,
+                                                                                    tmp_path: Path) -> None:
+    """The arena protocol is every opening twice, sides swapped; a smaller cell is a --once screen."""
+    seen: list[int] = []
+    monkeypatch.setattr(follower_mod, "_real_run_cell", lambda _config, _work: _FakeCells())
+    monkeypatch.setattr(follower_mod, "opponent_pin", lambda _unit: {})
+    monkeypatch.setattr(follower_mod.Follower, "follow", lambda self, _poll: seen.append(self.games))
+    monkeypatch.setattr(follower_mod.Follower, "read_one", lambda self, _ckpt, trigger: seen.append(self.games) or ("ok", None))
+    whole = 2 * len(book_openings(follower_mod.ARENA_BOOK))
+    base = ["--config", "c.yaml", "--run-dir", str(tmp_path), "--run-id", _RUN, "--work-dir", str(tmp_path / "w")]
+    unit = ["--unit", follower_mod.EQUAL_WORK_ARENA]
+    assert follower_mod.main([*base, *unit, "--follow"]) == 0
+    assert follower_mod.main([*base, *unit, "--once", str(tmp_path / "c.ckpt"), "--games", "128"]) == 0
+    assert seen == [whole, 128]
+    with pytest.raises(SystemExit):
+        follower_mod.main([*base, *unit, "--follow", "--games", "288"])
 
 def test_the_tail_reads_only_new_lines_and_follows_a_new_segment(follower_mod, tmp_path: Path) -> None:
     run = _run_dir(tmp_path)

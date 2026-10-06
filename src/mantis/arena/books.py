@@ -35,6 +35,10 @@ def _load_manifest(books_dir: Path) -> dict:
 
 
 def _load_book_openings(book_id: str, books_dir: Path) -> list[dict]:
+    return json.loads(_verified_book_bytes(book_id, books_dir))["openings"]
+
+
+def _verified_book_bytes(book_id: str, books_dir: Path) -> bytes:
     manifest = _load_manifest(books_dir)
     books = manifest.get("books", {})
     if book_id not in books:
@@ -51,8 +55,13 @@ def _load_book_openings(book_id: str, books_dir: Path) -> list[dict]:
             f"book {book_id!r} sha256 mismatch: expected {expected_sha}, got {actual_sha} "
             f"(tampered or stale book file: {book_file})"
         )
-    payload = json.loads(raw)
-    return payload["openings"]
+    return raw
+
+
+def book_sha256(book_id: str, *, books_dir: Path | str | None = None) -> str:
+    """The sha256 the manifest pins for `book_id`, checked against its file. Raises: BookError, as `book_openings`."""
+    directory = Path(books_dir) if books_dir is not None else _DEFAULT_BOOKS_DIR
+    return hashlib.sha256(_verified_book_bytes(book_id, directory)).hexdigest()
 
 
 def book_openings(book_id: str, *, books_dir: Path | str | None = None) -> list[Opening]:
@@ -136,4 +145,4 @@ def round_openings(
     ]
 
 
-__all__ = ["BookError", "Opening", "book_openings", "paired_openings", "round_openings"]
+__all__ = ["BookError", "Opening", "book_openings", "book_sha256", "paired_openings", "round_openings"]

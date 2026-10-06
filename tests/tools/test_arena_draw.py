@@ -1,14 +1,17 @@
 """`tools/openings/arena_draw.py` is the arena's opening draw, case for case with `packages/rules/test/opening.test.ts`
-at cf28a07, and draw for draw with the arena's own `drawOpening` (the fixture is its output, the generator in the
-DEPLOY-1 records)."""
+at cf28a07, and draw for draw with the arena's own `drawOpening` (the fixture is its output, its generator beside it)."""
 from __future__ import annotations
 
 import itertools
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 from _toolpath import load_module_by_path
+
+from mantis._engine import Board
+from mantis.arena.books import book_openings
 
 _REPO = Path(__file__).resolve().parents[2]
 A = load_module_by_path("arena_draw_t", _REPO / "tools" / "openings" / "arena_draw.py")
@@ -16,11 +19,11 @@ _FIXTURE = _REPO / "tests" / "fixtures" / "arena_draw" / "arena_draws_cf28a07.js
 ORIGIN = (0, 0, 0)
 
 
-def line(start, axis, players):
+def line(start: tuple[int, int], axis: tuple[int, int], players: list[int | None]) -> list[tuple[int, int, int]]:
     return [(start[0] + k * axis[0], start[1] + k * axis[1], p) for k, p in enumerate(players) if p is not None]
 
 
-def scripted(cells):
+def scripted(cells: list[tuple[int, int]]) -> tuple[Any, list[int]]:
     """Places `cells` in order, resolving each to its index among the region cells still empty."""
     bounds: list[int] = []
     taken: set = set()
@@ -64,7 +67,7 @@ def test_balance_accepts_bent_and_parallel_fours_the_empty_board_and_the_origin(
     assert A.is_balanced_opening([]) and A.is_balanced_opening([ORIGIN])
 
 
-def _fault(opening, plies):
+def _fault(opening: list[tuple[int, int, int]], plies: int) -> str | None:
     if len(opening) != plies:
         return f"{len(opening)} stones"
     if opening[0] != ORIGIN:
@@ -114,7 +117,7 @@ def test_even_lengths_zero_and_lengths_past_nine_are_refused(plies):
         A.draw_opening(plies, A.Mulberry32(1).int)
 
 
-def _count_rejected(plies):
+def _count_rejected(plies: int) -> tuple[int, int]:
     ones_n = ((plies - 1) // 2 + 1) // 2 * 2
     zeros_n = plies - 1 - ones_n
     positions = rejected = 0
@@ -163,10 +166,7 @@ def test_the_cell_book_is_the_minters_output_byte_for_byte(tmp_path):
 
 
 @pytest.mark.parametrize("encoding", ["gnn_axis_r8", "gnn_axis_v1"])
-def test_every_book_opening_replays_owned_by_ply_and_hands_player_two_a_whole_turn(encoding):
-    from mantis._engine import Board
-    from mantis.arena.books import book_openings
-
+def test_every_book_opening_replays_owned_by_ply_and_hands_player_two_a_whole_turn(encoding: str) -> None:
     openings = book_openings(_BOOK_ID)
     assert len(openings) == 288
     for opening in openings:

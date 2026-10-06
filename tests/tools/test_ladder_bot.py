@@ -86,7 +86,7 @@ def _receipt(ladder, tmp_path: Path) -> Path:
     wire = [(0, 0, "a"), (1, 0, "b"), (0, 1, "b"), (2, 0, "a"), (3, 0, "a"), (1, -1, "b"), (2, -1, "b"),
             (-1, 0, "a"), (-2, 0, "a"), (4, 0, "b"), (5, 0, "b")]
     moves = [{"moveNumber": i + 1, "playerId": p, "x": q + r, "y": -r, "timestamp": i} for i, (q, r, p) in enumerate(wire)]
-    body = r.finish(winner="o", reason="six-in-a-row", finished=1.0, finished_game={
+    body = r.finish(serving=None, winner="o", reason="six-in-a-row", finished=1.0, finished_game={
         "startedAt": 0, "finishedAt": 1, "moveCount": len(moves), "moves": moves,
         "gameResult": {"reason": "six-in-a-row", "winningPlayerId": "b", "abortedByPlayerId": None}, "players": []})
     return ladder.receipt.write_receipt(tmp_path, body)
@@ -123,12 +123,12 @@ def test_a_replay_whose_backend_spends_a_different_budget_than_recorded_fails(bo
     assert report.budget_misses == [{"request_id": 1, "sims": 7, "recorded": 8}, {"request_id": 2, "sims": 7, "recorded": 8}]
 
 
-
 def test_a_replay_whose_head_stops_where_the_receipt_did_not_fails(bot_mod, ladder, tmp_path: Path) -> None:
     body = ladder.receipt.read_receipt(_receipt(ladder, tmp_path))
     body["moves"][0]["stopped"] = 1
     report = bot_mod.replay_receipt(body, _ReplayBackend())
     assert report.stop_misses == [{"request_id": 1, "stopped": 0, "recorded": 1}] and not report.passed
+
 
 def test_a_turn_recorded_below_the_configured_budget_is_reported_and_must_replay_exactly(bot_mod, ladder, tmp_path: Path) -> None:
     """Both heads stop early on a DECIDED position (measured live 2026-09-19: strix's solver 3 of 512, mantis's PUCT tree 427 of 512 once every path hit a terminal) — reported, and the replay must reproduce it."""

@@ -550,10 +550,11 @@ def _device(name: str):
 
 
 def serving_rows(engine: LocalInferenceEngine) -> dict[str, Any]:
-    """An engine's serving levers' rows, cumulative: the submitter wake and the bucketed replay. Raises: RuntimeError —
-    the engine was closed."""
+    """An engine's serving rows, cumulative: the submitter wake, the bucketed replay and the process's unverified builds.
+    Raises: RuntimeError — the engine was closed."""
     snap = engine.batch_timing_snapshot()
-    return {"wake": snap["wake"], "served_graphs": snap["served_graphs"]}
+    return {"wake": snap["wake"], "served_graphs": snap["served_graphs"],
+            "unverified_graph_builds": snap["unverified_graph_builds"]}
 
 
 def _round_result(

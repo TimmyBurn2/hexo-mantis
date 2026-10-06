@@ -315,3 +315,9 @@ added_by = "TACTICS-DEPLOY"
 path = "arena_draw/arena_draws_cf28a07.json"
 sha256 = "149f378b1eee7fa3b21e9a6b39f0c75bd8f64ba887be3198f4f449d588c17c94"
 added_by = "DEPLOY-1 L4"
+
+[[required]]
+path = "arena_draw/arena_draws_cf28a07.gen.ts"
+# The JSON's generator, kept as provenance: the arena's own drawOpening off its prng helper.
+sha256 = "be1f406aadb3ca5bc787a8c59a5a60907a77bd240cdce61cb521aea16c90eba5"
+added_by = "DEPLOY-1 L4"

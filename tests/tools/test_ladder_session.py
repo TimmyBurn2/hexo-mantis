@@ -36,6 +36,9 @@ class _FakeBackend:
     def new_game(self, game_id: str) -> None:
         self.games.append(game_id)
 
+    def serving_rows(self) -> dict[str, Any]:
+        return {"wake": {"submitters": 1, "all_submitted": len(self.seen), "deadline": 0}}
+
     def select_turn(self, board: Any, forced=()):
         from ladder.backends import TurnResult  # noqa: PLC0415 — the package is loaded by the `ladder` fixture
 
@@ -96,6 +99,8 @@ def test_a_finished_game_leaves_one_receipt_under_the_net_hash_with_its_moves_an
     second = ladder.receipt.read_receipt(tmp_path / "receipts" / "a9a46c55" / "g_second.json")
     assert second["result"]["outcome"] == "win" and second["plies"] is None and second["plies_seen"] == 3
     assert second["opening"]["index"] == 0 and second["opening"]["off_book_at"] is None
+    assert receipt["serving"] == {"wake": {"submitters": 1, "all_submitted": 2, "deadline": 0}}, "the game's own span"
+    assert second["serving"] == {"wake": {"submitters": 1, "all_submitted": 1, "deadline": 0}}
     assert [(m["book_stones"], m["sims"], m["placements"]) for m in second["moves"]] == [(2, 0, [[2, -1], [0, -2]])]
 
 

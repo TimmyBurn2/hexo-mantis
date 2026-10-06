@@ -239,6 +239,7 @@ def test_every_round_result_carries_its_engines_serving_rows() -> None:
     class _Engine:
         def batch_timing_snapshot(self) -> dict:
             return {"wake": {"submitters": 8, "all_submitted": 3}, "served_graphs": {"bucket_parts": {"1025": 2}},
-                    "queue_wait": None}
+                    "unverified_graph_builds": 5, "queue_wait": None}
     assert worker.serving_rows(_Engine()) == {"wake": {"submitters": 8, "all_submitted": 3},
-                                              "served_graphs": {"bucket_parts": {"1025": 2}}}
+                                              "served_graphs": {"bucket_parts": {"1025": 2}},
+                                              "unverified_graph_builds": 5}

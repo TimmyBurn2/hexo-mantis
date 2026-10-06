@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from mantis.arena.books import book_openings, book_sha256
 from mantis.bots.six import CACHE_ENTRIES as SIX_CACHE_ENTRIES
 from mantis.bots.six import pin_record as six_pin_record
 from mantis.bots.strix import _pin as strix_pin_record
@@ -218,6 +219,7 @@ def sidecar_record(checkpoint: Path, *, unit: str, trigger: str, record: Mapping
         "unit": unit, "ours": {"search_kind": "puct", "sims": ours}, **opponent,
         # The book the unit names; null is the config's gate book, which every unit before the arena break played.
         "opening_book": cell.get("opening_book"),
+        "opening_book_sha256": None if cell.get("opening_book") is None else book_sha256(str(cell["opening_book"])),
         "trigger": trigger, "regime": regime_name, "regime_evidence": dict(regime_evidence),
         "games": readout.get("games"), "eff_n": readout.get("eff_n"), "pairs": readout.get("pairs"),
         "wins": readout.get("wins"), "losses": readout.get("losses"), "draws": readout.get("draws"),
@@ -372,7 +374,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--promotions", action=argparse.BooleanOptionalAction, default=True,
                     help="--follow: a cell on every promoted round too (R356(a)); "
                          "--no-promotions reads the cadence points only (R361(a))")
-    ap.add_argument("--games", type=int, default=288)
+    ap.add_argument("--games", type=int, default=None,
+                    help="games per cell (default: a book unit's whole book twice, sides swapped; else 288)")
     ap.add_argument("--concurrency", type=int, default=8)
     ap.add_argument("--poll-sec", type=float, default=300.0)
     ap.add_argument("--arm", choices=ARMS, default=None,
@@ -383,6 +386,10 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.follow and args.unit not in FOLLOW_UNITS:
         ap.error(f"--follow reads the ruler units {list(FOLLOW_UNITS)} only; every other unit is a --once cell")
+    whole = 2 * len(book_openings(BOOK_UNITS[args.unit])) if args.unit in BOOK_UNITS else None
+    games = args.games if args.games is not None else (whole or 288)
+    if args.follow and whole is not None and games != whole:
+        ap.error(f"--follow plays {args.unit}'s whole book ({whole} games); a smaller cell is a --once screen")
     armed = None
     if args.arm is not None:
         try:
@@ -393,7 +400,7 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--tactics-block names the block an --arm overlays; give the arm")
     follower = Follower(run_dir=args.run_dir, run_id=args.run_id,
                         run_cell=_real_run_cell(args.config, args.work_dir), unit=args.unit,
-                        cadence=args.cadence, promotions=args.promotions, games=args.games,
+                        cadence=args.cadence, promotions=args.promotions, games=games,
                         concurrency=args.concurrency, pin=opponent_pin(args.unit), arm=args.arm, tactics=armed,
                         standalone_host=args.standalone_host)
     if args.once is not None:

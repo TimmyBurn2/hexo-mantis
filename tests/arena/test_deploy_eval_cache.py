@@ -3,15 +3,15 @@ the player's new game, a key repeated inside one batch evaluated once."""
 from __future__ import annotations
 
 from dataclasses import dataclass
-
-from mantis.arena.eval_cache import GameEvalCache
 from types import SimpleNamespace
+
+import mantis.arena.eval_cache as ec
 from mantis._engine import Board
+from mantis.arena.deploy_head import DeployHeadPlayer
+from mantis.arena.eval_cache import GameEvalCache
 from mantis.arena.match import _record_one
 from mantis.monitor.game_record import eval_record
-from mantis.arena.deploy_head import DeployHeadPlayer
 from mantis.util.puct import PuctConstants
-import mantis.arena.eval_cache as ec
 
 
 @dataclass(frozen=True)
@@ -100,7 +100,6 @@ def test_a_hit_returns_what_the_evaluation_returned_bit_for_bit():
 
 
 def test_the_deploy_head_clears_its_cache_at_a_new_game_and_reports_each_moves_rows():
-
     engine = _Engine()
     cache = GameEvalCache(engine)
     cache.infer_batch_ls([A])
@@ -115,7 +114,6 @@ def test_the_deploy_head_clears_its_cache_at_a_new_game_and_reports_each_moves_r
 
 
 def test_past_its_cap_the_oldest_entry_goes_and_is_evaluated_again(monkeypatch):
-
     monkeypatch.setattr(ec, "MAX_ENTRIES", 2)
     engine = _Engine()
     cache = GameEvalCache(engine)
@@ -160,8 +158,6 @@ class _CachedLine:
 
 
 def test_a_game_record_carries_that_games_cache_rows_and_the_eval_record_writes_them():
-
-
     candidate = _CachedLine([(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0)])
     candidate.rows["hits"] = 40  # rows from an earlier game on the same player
     opponent = _CachedLine([(0, 3), (1, 3), (2, 3), (3, 3), (-3, 3), (-4, 3)])

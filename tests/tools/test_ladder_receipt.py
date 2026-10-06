@@ -24,7 +24,7 @@ def _body(ladder, **overrides: Any) -> dict[str, Any]:
                server_date="Sat, 19 Sep 2026 12:00:00 GMT", book_stones=1, stopped=0)
     r.add_move(request_id=2, stones=7, time_limit=45.0, placements=((-1, 0), (-1, 1)), sims=256, ms=790.0,
                server_date="Sat, 19 Sep 2026 12:00:03 GMT", book_stones=0, stopped=0)
-    body = r.finish(winner="o", reason="six-in-a-row", finished=1_789_800_009.5, finished_game={
+    body = r.finish(serving=None, winner="o", reason="six-in-a-row", finished=1_789_800_009.5, finished_game={
         "startedAt": 1789800000100, "finishedAt": 1789800009400, "moveCount": 11,
         "gameResult": {"reason": "six-in-a-row", "winningPlayerId": "b2", "abortedByPlayerId": None},
         "players": [{"playerId": "a1", "profileId": "p_me", "displayName": "Mantis", "elo": 1000, "eloChange": None, "isBot": True},
@@ -64,8 +64,8 @@ def test_a_win_and_an_abort_are_named_from_our_side(ladder) -> None:
         server="s", game_id="g", bot={"name": "n", "backend": "mantis", "net_hash": _NET, "display_name": "M", "profile_id": "p"},
         opponent={"display_name": "S", "profile_id": "q", "elo": None}, side="o", time_control={"mode": "unlimited"},
         rated=False, sims_configured=8, search={}, started=0.0, opening=_OPENING)
-    assert r.finish(winner="o", reason="surrender", finished=1.0, finished_game=None)["result"]["outcome"] == "win"
-    assert r.finish(winner=None, reason="aborted", finished=1.0, finished_game=None)["result"]["outcome"] == "aborted"
+    assert r.finish(serving=None, winner="o", reason="surrender", finished=1.0, finished_game=None)["result"]["outcome"] == "win"
+    assert r.finish(serving=None, winner=None, reason="aborted", finished=1.0, finished_game=None)["result"]["outcome"] == "aborted"
 
 
 def test_without_a_finished_game_record_the_plies_are_the_stones_we_saw_plus_ours(ladder) -> None:
@@ -75,7 +75,7 @@ def test_without_a_finished_game_record_the_plies_are_the_stones_we_saw_plus_our
         rated=False, sims_configured=256, search={}, started=0.0, opening=_OPENING)
     r.add_move(request_id=1, stones=1, time_limit=None, placements=((1, 0), (0, 1)), sims=0, ms=5.0, server_date=None,
                book_stones=2, stopped=0)
-    body = r.finish(winner="x", reason="six-in-a-row", finished=1.0, finished_game=None)
+    body = r.finish(serving=None, winner="x", reason="six-in-a-row", finished=1.0, finished_game=None)
     assert body["plies"] is None and body["plies_seen"] == 3 and body["moves_full"] is None
 
 
@@ -133,7 +133,7 @@ def test_a_rejected_move_is_recorded_with_the_servers_code_and_what_we_sent(ladd
         opponent={"display_name": "S", "profile_id": "q", "elo": 1000}, side="x", time_control={"mode": "unlimited"},
         rated=False, sims_configured=8, search={}, started=0.0, opening=_OPENING)
     r.add_rejection(request_id=3, placements=((0, 0), (1, 0)), code="occupied", message="That cell is already occupied.")
-    body = r.finish(winner="o", reason="surrender", finished=1.0, finished_game=None)
+    body = r.finish(serving=None, winner="o", reason="surrender", finished=1.0, finished_game=None)
     assert body["rejections"] == [{"request_id": 3, "placements": [[0, 0], [1, 0]], "code": "occupied",
                                    "message": "That cell is already occupied."}]
     assert _body(ladder)["rejections"] == []
@@ -145,7 +145,7 @@ def test_the_servers_racy_move_array_is_put_back_in_move_number_order(ladder) ->
         server="s", game_id="g", bot={"name": "n", "backend": "mantis", "net_hash": _NET, "display_name": "M", "profile_id": "p"},
         opponent={"display_name": "S", "profile_id": "q", "elo": 1000}, side="x", time_control={"mode": "unlimited"},
         rated=False, sims_configured=8, search={}, started=0.0, opening=_OPENING)
-    body = r.finish(winner="o", reason="six-in-a-row", finished=1.0, finished_game={
+    body = r.finish(serving=None, winner="o", reason="six-in-a-row", finished=1.0, finished_game={
         "startedAt": 0, "finishedAt": 1, "moveCount": 3,
         "gameResult": {"reason": "six-in-a-row", "winningPlayerId": "b", "abortedByPlayerId": None}, "players": [],
         "moves": [{"moveNumber": 2, "playerId": "a", "x": 0, "y": 0, "timestamp": 0},
@@ -161,4 +161,17 @@ def test_the_first_off_book_stone_count_is_kept_and_later_ones_do_not_move_it(la
         rated=False, sims_configured=8, search={}, started=0.0, opening=_OPENING)
     r.mark_off_book(stones=3)
     r.mark_off_book(stones=7)
-    assert r.finish(winner="o", reason="surrender", finished=1.0, finished_game=None)["opening"]["off_book_at"] == 3
+    assert r.finish(serving=None, winner="o", reason="surrender", finished=1.0, finished_game=None)["opening"]["off_book_at"] == 3
+
+
+def test_the_receipt_carries_the_games_serving_rows_and_needs_them_to_read_back(ladder) -> None:
+    r = ladder.receipt.GameReceipt(
+        server="s", game_id="g", bot={"name": "n", "backend": "mantis", "net_hash": _NET, "display_name": "M", "profile_id": "p"},
+        opponent={"display_name": "S", "profile_id": "q", "elo": 1000}, side="x", time_control={"mode": "unlimited"},
+        rated=False, sims_configured=8, search={}, started=0.0, opening=_OPENING)
+    rows = {"wake": {"submitters": 1, "threshold": 2, "all_submitted": 9, "deadline": 0, "closed": 0}}
+    body = r.finish(serving=rows, winner="o", reason="surrender", finished=1.0, finished_game=None)
+    assert body["serving"] == rows
+    del body["serving"]
+    with pytest.raises(ladder.receipt.ReceiptError, match="serving"):
+        ladder.receipt.validate_receipt(body)

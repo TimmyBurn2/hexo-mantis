@@ -82,8 +82,9 @@ fill's own reading). `stop_*`, its budget-aware early stop, on only where the co
 `stop_fired` (searches it ended) and `stop_saved` (the descents they left). `cache_*`, its per-game exact cache: `cache_calls` (expand calls),
 `cache_positions` (leaves asked for, = `cache_hits` + `cache_served` + `cache_in_batch_repeats`), `cache_hits`
 (answered from an earlier evaluation in the game), `cache_served` (positions the net evaluated),
-`cache_in_batch_repeats` (a key repeated inside one call, evaluated once) and `cache_all_hit_calls` (calls answered
-with no evaluation, a round trip saved).
+`cache_in_batch_repeats` (a key repeated inside one call, evaluated once), `cache_all_hit_calls` (calls answered
+with no evaluation, a round trip saved) and `cache_evicted` (entries dropped at the cache's cap, oldest first; a later
+miss on one is evaluated again).
 
 **`game_index` JOINS a record to its progress row.** The round's progress writer and this one
 are fed from ONE fan-out in loop order, so their per-round counters advance in lockstep and a
