@@ -87,9 +87,9 @@ Both were found by running the gate set rather than by reading it, and both are 
   @156k on (ruler g, the arena openings, L3's head), 288 pairs each, and S likewise once, and re-derives the
   going-forward line (the parent's new anchor + the line). Every old reading stays in the records with its instrument
   named.
-- **CARD-EVAL-OPENINGS-ARENA — OPENED by DEPLOY-1 for R386(c), OWNED by its L4: `tools/openings/arena_draw`, the arena
-  protocol exactly (the 18-cell region, odd plies, the 4-in-6 redraw, uniform over balanced draws), its unit tests
-  mirroring the arena's `opening.test.ts` cases.** 288 seeded arena-5 openings are the cell book and "1 ply" the plain
+- **CARD-EVAL-OPENINGS-ARENA — OPENED by DEPLOY-1 for R386(c), OWNED by its L4: an arena-draw tool under tools/ (its
+  path named here once tracked), the arena protocol exactly (the 18-cell region, odd plies, the 4-in-6 redraw, uniform
+  over balanced draws), its unit tests mirroring the arena's `opening.test.ts` cases.** 288 seeded arena-5 openings are the cell book and "1 ply" the plain
   start; book_v1 retires, its file kept for re-reads.
 - **CARD-RUN12-ENCODING — OPENED by DEPLOY-1 for R386(d): #18, pruning empty→empty edges, is run12's encoding.** 84 %
   of our edges join two empty cells (SEARCH_PERF §3.3 #18). It lands behind the seam (a new row in
