@@ -234,6 +234,58 @@ fn the_interior_score_moves_off_a_child_as_its_visits_accumulate() {
     );
 }
 
+/// The once-evaluated score is BIT-identical to the per-pass form it replaced (logit three
+/// times, exp twice per child), over seeded random children including floored and huge priors.
+#[test]
+fn the_interior_score_evaluated_once_is_bit_identical_to_the_per_pass_form() {
+    fn per_pass(priors: &[f32], completed: &[f32], visits: &[u32]) -> Vec<f32> {
+        let n = priors.len().min(completed.len()).min(visits.len());
+        if n == 0 {
+            return Vec::new();
+        }
+        let logit = |j: usize| priors[j].max(1e-8).ln() + completed[j];
+        let max_logit = (0..n).map(logit).fold(f32::NEG_INFINITY, f32::max);
+        if !max_logit.is_finite() {
+            return Vec::new();
+        }
+        let sum_exp: f32 = (0..n).map(|j| (logit(j) - max_logit).exp()).sum();
+        if sum_exp <= 0.0 {
+            return Vec::new();
+        }
+        let denom = 1.0 + visits[..n].iter().sum::<u32>() as f32;
+        (0..n)
+            .map(|j| (logit(j) - max_logit).exp() / sum_exp - visits[j] as f32 / denom)
+            .collect()
+    }
+    let mut state = 0x9E37_79B9_7F4A_7C15u64;
+    let mut next = || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        (state >> 40) as f32 / (1u64 << 24) as f32
+    };
+    for case in 0..2_000 {
+        let n = 1 + (case % 600);
+        let priors: Vec<f32> = (0..n)
+            .map(|j| match j % 7 {
+                0 => 0.0,
+                1 => next() * 1e-9,
+                _ => next(),
+            })
+            .collect();
+        let scale = [1.0f32, 50.0, 400.0][case % 3];
+        let completed: Vec<f32> = (0..n).map(|_| (next() - 0.5) * scale).collect();
+        let visits: Vec<u32> = (0..n).map(|_| (next() * 60.0) as u32).collect();
+        let want = per_pass(&priors, &completed, &visits);
+        let got = mctx_interior_argmax_input(&priors, &completed, &visits);
+        assert_eq!(
+            got.iter().map(|x| x.to_bits()).collect::<Vec<_>>(),
+            want.iter().map(|x| x.to_bits()).collect::<Vec<_>>(),
+            "case {case} (n {n}): the once-evaluated score drifted from the per-pass form"
+        );
+    }
+}
+
 /// The raw arm shares Mctx's completion: min-max of its output, times the visit scale, must
 /// be the fixture's rescaled vector (and the all-unvisited constant vector must map to zeros).
 #[test]

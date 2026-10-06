@@ -10,9 +10,10 @@
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 use mantis_core::board::Board;
 use mantis_core::BoardGeometry;
+use mantis_search::mcts::SearchKind;
 use mantis_search::mcts::TacticsConfig;
 use mantis_search::tactics::analyze;
-use mantis_search::{LegalSetPolicy, MCTSTree};
+use mantis_search::{LegalSetPolicy, MCTSTree, QSigma};
 
 /// `gnn_axis_v1`'s geometry (crates/mantis-encoding/src/registry.toml): radius 6, trunk 19,
 /// hence `policy_logit_count` 362 and a flat index ≥ 361 is exactly "off-window".
@@ -53,6 +54,36 @@ fn bench_mcts_simulations(c: &mut Criterion) {
             b.iter(|| {
                 tree.run_simulations_cpu_only(n as usize);
                 tree.reset();
+            });
+        });
+    }
+    group.finish();
+}
+
+/// The Gumbel interior selector under load: every descent is forced through the root's first
+/// child of a dispersed 16-stone position, so each simulation selects at that interior node (and
+/// below it as visits accumulate) rather than spreading one visit per root child.
+fn bench_gumbel_interior_select(c: &mut Criterion) {
+    let mut group = c.benchmark_group("gumbel_interior_select");
+    let sigma = QSigma {
+        c_visit: 50.0,
+        c_scale: 1.0,
+        rescale: false,
+    };
+    for &n in &[200usize, 800] {
+        group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, &n| {
+            let board = dispersed_board(16);
+            let mut tree = MCTSTree::new(1.5);
+            tree.configure_search(SearchKind::Gumbel, sigma);
+            b.iter(|| {
+                tree.new_game(board.clone());
+                tree.run_simulations_cpu_only(1);
+                let first = tree.pool[0].first_child;
+                tree.set_forced_root_child(Some(first))
+                    .expect("the root was expanded by the one simulation before it");
+                tree.run_simulations_cpu_only(n);
+                tree.set_forced_root_child(None)
+                    .expect("clearing the forced child cannot fail");
             });
         });
     }
@@ -208,6 +239,7 @@ fn bench_tactics_leaf(c: &mut Criterion) {
 criterion_group!(
     benches,
     bench_mcts_simulations,
+    bench_gumbel_interior_select,
     bench_expand_leaf,
     bench_tactics_leaf
 );

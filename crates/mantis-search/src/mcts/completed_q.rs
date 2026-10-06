@@ -184,17 +184,25 @@ pub(super) fn mctx_interior_argmax_input(
     if n == 0 {
         return Vec::new();
     }
-    let logit = |j: usize| priors[j].max(1e-8).ln() + completed[j];
-    let max_logit = (0..n).map(logit).fold(f32::NEG_INFINITY, f32::max);
+    // Each child's logit and its exp are evaluated ONCE, in the one buffer that becomes the
+    // output: the same f32 expressions in the same order, so the scores are bit-identical.
+    let mut scores: Vec<f32> = (0..n)
+        .map(|j| priors[j].max(1e-8).ln() + completed[j])
+        .collect();
+    let max_logit = scores.iter().copied().fold(f32::NEG_INFINITY, f32::max);
     if !max_logit.is_finite() {
         return Vec::new();
     }
-    let sum_exp: f32 = (0..n).map(|j| (logit(j) - max_logit).exp()).sum();
+    for s in &mut scores {
+        *s = (*s - max_logit).exp();
+    }
+    let sum_exp: f32 = scores.iter().sum();
     if sum_exp <= 0.0 {
         return Vec::new();
     }
     let denom = 1.0 + visits[..n].iter().sum::<u32>() as f32;
-    (0..n)
-        .map(|j| (logit(j) - max_logit).exp() / sum_exp - visits[j] as f32 / denom)
-        .collect()
+    for (s, &v) in scores.iter_mut().zip(&visits[..n]) {
+        *s = *s / sum_exp - v as f32 / denom;
+    }
+    scores
 }
