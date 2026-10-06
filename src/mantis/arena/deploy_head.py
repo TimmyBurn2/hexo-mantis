@@ -100,8 +100,8 @@ class DeployHeadPlayer:
         #: Whether the LAST search ended at that stop rather than at its budget.
         self.last_stopped = False
         #: The head's own lever rows, cumulative: stops and the descents they left, and the PUCT select calls.
-        self._rows = dict.fromkeys(("stop_fired", "stop_saved", "select_calls", "select_overlaps",
-                                    "select_network_leaves"), 0)
+        self._rows: dict[str, int] = dict.fromkeys(("stop_fired", "stop_saved", "select_calls", "select_overlaps",
+                                                    "select_network_leaves"), 0)
 
     def name(self) -> str:
         return "deploy_head"

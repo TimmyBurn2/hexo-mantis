@@ -53,6 +53,7 @@ from mantis.selfplay.pool_hooks import (
 )
 from mantis.selfplay.pool_hooks import update_checkpoint_step as _update_checkpoint_step
 from mantis.selfplay.pool_push import buffer_composition as _buffer_composition
+from mantis.selfplay.served_graphs import SELFPLAY_FLOOR_NODES
 
 _LOG = logging.getLogger(__name__)
 
@@ -151,6 +152,7 @@ class WorkerPool:
             # 63 chances in 64 of passing through untouched.
             collate_check_period=1,
             collate_dump=_collate_dump_target(config),
+            bucket_floor_nodes=SELFPLAY_FLOOR_NODES,
             # Where check 14 runs, read through its one resolver, never a literal.
             edge_geometry_check=resolve_edge_geometry_check(config),
             # A4-3: whether the serving trunk is compiled, read through its one resolver.

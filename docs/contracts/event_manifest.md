@@ -1,6 +1,6 @@
 # Contract: event manifest
 
-- version: v12
+- version: v13
 - owner: `mantis.monitor` (`manifest.py` + `producer_manifest.yaml`)
 - status: v4 — first filled by the run-safety subsystem port (WP13-A); the eval-pipeline rows
   (`eval_round` heartbeat, `eval_round_wall`/`eval_broken`) landed at WP11-A. R362(c)
@@ -38,6 +38,8 @@
   a pre-v11 record still carries the old name as data.
   v12 (RUN11-PRE, R384(d)): `iteration_complete.search_levers` gains `gumbel_quick_round_leaves` / `gumbel_quick_rounds`,
   the quick arm's share of the round-width terms, so `selfplay.gumbel_m_quick` fires visibly.
+  v13 (DEPLOY-1, R386(d)): `iteration_complete.inference_batching` gains a `wake` sub-block, the collector's pop
+  reasons and the submitter wake's fire count, and its `served_graphs` sub-block gains `bucket_parts`.
 
 ## Summary
 
@@ -338,7 +340,11 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   The block also carries a `served_graphs` SUB-BLOCK (LAW-18): `enabled` (a CUDA server replays captured buckets),
   `buckets` (the ladder's size), `captured` (buckets captured so far), `replayed_parts` and `eager_parts` (fused parts
   served by a replay and by the eager forward), and over the replayed parts `real_nodes`/`padded_nodes` and
-  `real_edges`/`padded_edges` (the padding's volume). Cumulative since server start, visible at 0.
+  `real_edges`/`padded_edges` (the padding's volume), and `bucket_parts` (replayed parts per bucket, keyed by the bucket's
+nodes: the rungs the pops ride). Cumulative since server start, visible at 0. A deploy engine's `wake` and
+`served_graphs` blocks reach the eval worker's result as `serving.candidate` and `serving.best` (the gate's anchor).
+- `iteration_complete.mcts_mean_depth` averages the depth of the descents a PUCT select call made. An overlap with a
+  pending leaf ends its call (every later attempt would repeat it), so it is counted once per call.
   The block also carries a `wake` SUB-BLOCK (LAW-18): `submitters` (the threads the batcher was told each block
   on one whole batch; `0` is undeclared, which is self-play's runner) and, over the non-empty pops, why each returned:
   `threshold` (the leaf count met the saturation threshold), `all_submitted` (every declared submitter had a batch

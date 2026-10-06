@@ -221,7 +221,8 @@ def run_cell(model: torch.nn.Module, device: torch.device, config: dict[str, Any
     graphs0, graphs1 = before.get("served_graphs"), after.get("served_graphs")
     if graphs0 is not None and graphs1 is not None:
         # A capture inside the window is launch time no steady state pays: the window's own deltas say if one happened.
-        row["served_graphs"] = {k: graphs1[k] - graphs0[k] for k in graphs1 if k not in ("enabled", "buckets")}
+        row["served_graphs"] = {k: graphs1[k] - graphs0[k] for k in graphs1
+                                if k not in ("enabled", "buckets", "bucket_parts")}
     row["window_leaves_per_s"] = [summarize(a, b, wall_s=tb - ta)["leaves_per_s"]
                                   for (a, ta), (b, tb) in zip(snaps, snaps[1:], strict=False)]
     row.update(zip(("leaves_per_s_q1", "leaves_per_s_median", "leaves_per_s_q3"),

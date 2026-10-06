@@ -20,7 +20,7 @@ class GameEvalCache:
     def __init__(self, engine: Any) -> None:
         self._engine = engine
         self._entries: dict[str, _Entry] = {}
-        self._rows = dict.fromkeys(_ROWS, 0)
+        self._rows: dict[str, int] = dict.fromkeys(_ROWS, 0)
 
     def new_game(self) -> None:
         self._entries.clear()

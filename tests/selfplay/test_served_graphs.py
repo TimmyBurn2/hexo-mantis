@@ -15,7 +15,7 @@ from mantis.selfplay.graph_wire_split import plan_fused_forwards, slice_graph_wi
 from mantis.selfplay.inference_server import InferenceServer
 from mantis.selfplay.served_graphs import (
     SELFPLAY_FLOOR_NODES,
-    SINGLE_GAME_FLOOR_NODES,
+    SMALL_POP_FLOOR_NODES,
     Bucket,
     BucketedForward,
     bucket_ladder,
@@ -51,9 +51,9 @@ def test_a_part_lands_in_the_smallest_bucket_that_holds_it_with_a_padding_node_t
 def test_a_single_game_ladder_continues_the_self_play_ladder_down_to_its_own_floor():
     """A lone game's pop of 1-8 leaves would pad ~9x into the self-play floor's 4 097-node bucket."""
     selfplay = bucket_ladder(_CAPS, batch_size=64, floor_nodes=SELFPLAY_FLOOR_NODES)
-    single = bucket_ladder(_CAPS, batch_size=64, floor_nodes=SINGLE_GAME_FLOOR_NODES)
+    single = bucket_ladder(_CAPS, batch_size=64, floor_nodes=SMALL_POP_FLOOR_NODES)
     assert single[-len(selfplay):] == selfplay, "the same rungs above the self-play floor"
-    assert SINGLE_GAME_FLOOR_NODES < single[0].n_nodes <= SINGLE_GAME_FLOOR_NODES * 1.25 + 1
+    assert SMALL_POP_FLOOR_NODES < single[0].n_nodes <= SMALL_POP_FLOOR_NODES * 1.25 + 1
     assert SELFPLAY_FLOOR_NODES < selfplay[0].n_nodes <= SELFPLAY_FLOOR_NODES * 1.25 + 1
 
 
@@ -66,7 +66,7 @@ def test_a_deploy_engines_server_takes_the_single_game_floor_and_self_plays_keep
     engine = LocalInferenceEngine(_net("cpu"), torch.device("cpu"), encoding_spec=spec, fused_graph_caps=_CAPS,
                                   inference_batching=InferenceBatchingSpec(64, 10), max_in_flight=8, submitters=1)
     try:
-        assert engine._graph_server._ladder == bucket_ladder(_CAPS, batch_size=64, floor_nodes=SINGLE_GAME_FLOOR_NODES)
+        assert engine._graph_server._ladder == bucket_ladder(_CAPS, batch_size=64, floor_nodes=SMALL_POP_FLOOR_NODES)
     finally:
         engine.close()
     server = InferenceServer(_net("cpu"), torch.device("cpu"), {"inference": {"inference_batch_size": 64, "inference_max_wait_ms": 10}},
@@ -271,3 +271,17 @@ def test_a_capture_finds_room_that_another_streams_cache_was_holding(
         torch.cuda.set_per_process_memory_fraction(prior)
     want = _padded_eager(net, GraphWirePayload(**payload_fields("b6")), bucket)
     assert np.array_equal(got[0][:len(want[0])], want[0]) and np.array_equal(got[1][:len(want[1])], want[1])
+
+
+def test_self_plays_pool_states_the_self_play_floor_and_a_floor_below_two_is_refused():
+    import ast
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[2] / "src/mantis/selfplay/pool.py").read_text(encoding="utf-8")
+    calls = [n for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Call)
+             and getattr(n.func, "id", getattr(n.func, "attr", None)) == "InferenceServer"]
+    assert len(calls) == 1
+    floor = {k.arg: k.value for k in calls[0].keywords}.get("bucket_floor_nodes")
+    assert isinstance(floor, ast.Name) and floor.id == "SELFPLAY_FLOOR_NODES"
+    with pytest.raises(ValueError):
+        bucket_ladder(_CAPS, batch_size=64, floor_nodes=1)

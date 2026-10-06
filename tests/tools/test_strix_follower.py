@@ -237,6 +237,15 @@ def test_once_reads_the_named_checkpoint_in_the_named_unit(follower_mod, tmp_pat
     assert f.read_one(ckpt, trigger="once") == ("receipted", out) and len(cells.calls) == 1
 
 
+@pytest.mark.parametrize("standalone", [False, True])
+def test_a_cell_says_its_host_is_standalone_only_on_the_operators_word(follower_mod, tmp_path: Path,
+                                                                     standalone: bool) -> None:
+    run = _run_dir(tmp_path)
+    cells = _FakeCells()
+    _follower(follower_mod, run, cells, standalone_host=standalone).read_one(_checkpoint(run, 42000), trigger="once")
+    assert cells.calls[0].get("standalone_host") is (True if standalone else None)
+
+
 @pytest.mark.parametrize("config_path", production_configs(_REPO), ids=lambda p: p.name)
 def test_the_equal_work_cell_composes_through_the_frontier_as_the_256_256_rung(
         follower_mod, tmp_path: Path, config_path: Path) -> None:

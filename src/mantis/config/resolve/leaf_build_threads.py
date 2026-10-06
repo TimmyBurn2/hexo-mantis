@@ -9,7 +9,7 @@ rather than restating it: one place where the reservation can be wrong, one name
 Self-play workers are deliberately NOT covered — each is already one of `n_workers` threads
 building its own leaves, so widening one takes threads from the others and double-counts the
 reservation. The eval child is the case this exists for: one calling thread on an idle card.
-A host that runs no self-play reserves nothing for it: `resolve_standalone_leaf_build_threads`.
+A host its caller asserts runs no self-play reserves nothing: `resolve_standalone_leaf_build_threads`.
 """
 import os
 from collections.abc import Mapping

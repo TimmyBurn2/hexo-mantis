@@ -18,8 +18,8 @@ from mantis.selfplay.graph_collate import GraphBatch, segment_softmax, stone_mas
 _RATIO = 1.25
 #: Self-play's smallest bucket: its pops of ~36 leaves rarely go lower, and a smaller part pads up to it.
 SELFPLAY_FLOOR_NODES = 4096
-#: A lone game's pops are 1-8 leaves, which the self-play floor pads ~9x; ~70 % of such a replay was padding.
-SINGLE_GAME_FLOOR_NODES = 1024
+#: A pop of a few games' leaves, which the self-play floor pads ~9x for one game (~70 % of such a replay was padding).
+SMALL_POP_FLOOR_NODES = 1024
 #: Eager runs before a capture, so compilation, autotuning and library handles happen outside the graph.
 _WARMUP = 2
 #: A padding node's self-loops are one serial walk in the fused kernel: a bucket gives each at most this many.
@@ -49,7 +49,9 @@ class Bucket:
 
 
 def bucket_ladder(caps: FusedGraphCapsSpec, *, batch_size: int, floor_nodes: int) -> tuple[Bucket, ...]:
-    """Smallest first: from the fused caps down by `_RATIO` while at least `floor_nodes` nodes; legal slots = nodes."""
+    """Smallest first: from the caps down by `_RATIO` while at least `floor_nodes` nodes. Raises: ValueError — a floor below 2."""
+    if floor_nodes < 2:
+        raise ValueError(f"bucket_ladder: floor_nodes={floor_nodes}; a ladder down to one node never ends")
     rungs: list[Bucket] = []
     while True:
         scale = _RATIO ** len(rungs)
@@ -149,5 +151,5 @@ class BucketedForward:
         return graph, outputs
 
 
-__all__ = ["SELFPLAY_FLOOR_NODES", "SINGLE_GAME_FLOOR_NODES", "Bucket", "BucketedForward", "ServedGraphCaptureError",
+__all__ = ["SELFPLAY_FLOOR_NODES", "SMALL_POP_FLOOR_NODES", "Bucket", "BucketedForward", "ServedGraphCaptureError",
            "bucket_ladder", "served_outputs"]

@@ -241,7 +241,7 @@ class Follower:
                  concurrency: int = 8, pin: Mapping[str, Any] | None = None,
                  clock: Callable[[], float] = time.time, log: Callable[[str], None] = print,
                  host_load: Callable[[], HostLoad] = read_host_load, arm: str | None = None,
-                 tactics: Mapping[str, Any] | None = None) -> None:
+                 tactics: Mapping[str, Any] | None = None, standalone_host: bool = False) -> None:
         self.run_dir, self.run_id, self.run_cell = run_dir, run_id, run_cell
         self.unit, self.cadence, self.promotions = unit, cadence, promotions
         self.games, self.concurrency = games, concurrency
@@ -249,6 +249,8 @@ class Follower:
         self.clock, self.log, self.host_load = clock, log, host_load
         #: The candidate's A/B arm (`None`: the config's own block) and the bridge block it resolved to.
         self.arm, self.tactics = arm, None if tactics is None else dict(tactics)
+        #: The operator's word that this host runs no self-play, so a cell may widen its leaf build.
+        self.standalone_host = bool(standalone_host)
         self.tail = EventTail(run_dir, run_id, TRIGGER_EVENTS)
         self.pending: dict[int, Trigger] = {}
         self.fired: list[Path] = []
@@ -270,6 +272,8 @@ class Follower:
                             concurrency=self.concurrency, label=label)
         if self.arm is not None:
             cell = {**cell, "tactics": self.tactics, "tactics_arm": self.arm}
+        if self.standalone_host:
+            cell = {**cell, "standalone_host": True}
         started = self.clock()
         regime_name, evidence = regime(self.run_dir, self.run_id, started, self.host_load())
         self.log(f"follower: {trigger} → {checkpoint.name} in {self.unit} ({regime_name})")
@@ -374,6 +378,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--arm", choices=ARMS, default=None,
                     help="the candidate's A/B arm over --tactics-block, named in the receipt; absent, the config's own")
     ap.add_argument("--tactics-block", type=Path, default=None, help="a search.tactics block (JSON)")
+    ap.add_argument("--standalone-host", action="store_true",
+                    help="this host runs no self-play: each game builds its leaves on its share of the cores")
     args = ap.parse_args(argv)
     if args.follow and args.unit not in FOLLOW_UNITS:
         ap.error(f"--follow reads the ruler units {list(FOLLOW_UNITS)} only; every other unit is a --once cell")
@@ -388,7 +394,8 @@ def main(argv: list[str] | None = None) -> int:
     follower = Follower(run_dir=args.run_dir, run_id=args.run_id,
                         run_cell=_real_run_cell(args.config, args.work_dir), unit=args.unit,
                         cadence=args.cadence, promotions=args.promotions, games=args.games,
-                        concurrency=args.concurrency, pin=opponent_pin(args.unit), arm=args.arm, tactics=armed)
+                        concurrency=args.concurrency, pin=opponent_pin(args.unit), arm=args.arm, tactics=armed,
+                        standalone_host=args.standalone_host)
     if args.once is not None:
         status, _path = follower.read_one(args.once.resolve(), trigger="once")
         return 1 if status == "failed" else 0

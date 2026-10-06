@@ -8,7 +8,7 @@ use mantis_selfplay::queues::{GraphQueue, WakeCounts};
 
 const BATCH: usize = 64;
 const SUPPLY: usize = 8;
-const WAIT_MS: u64 = 300;
+const WAIT_MS: u64 = 900;
 
 fn one_graph() -> AxisGraph {
     build_axis_graph(
@@ -71,7 +71,7 @@ fn an_undeclared_queue_keeps_the_deadline() {
     let (n, elapsed) = timed_pop(&q, BATCH);
     assert_eq!(n, 3);
     assert!(
-        elapsed >= Duration::from_millis(WAIT_MS - 10),
+        elapsed >= Duration::from_millis(WAIT_MS - 30),
         "an undeclared queue must not wake early ({elapsed:?})"
     );
     assert_eq!(
@@ -93,7 +93,7 @@ fn one_of_two_declared_submitters_waits_and_both_pop_at_once() {
     let (n, elapsed) = timed_pop(&q, BATCH);
     assert_eq!(n, 2);
     assert!(
-        elapsed >= Duration::from_millis(WAIT_MS - 10),
+        elapsed >= Duration::from_millis(WAIT_MS - 30),
         "one of two must wait ({elapsed:?})"
     );
 

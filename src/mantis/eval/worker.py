@@ -377,6 +377,7 @@ def _play_gate_block(
         max_in_flight=spec.leaf_batch_size,
         submitters=spec.concurrency,
         leaf_build_threads=spec.leaf_build_threads,
+        bucket_floor_nodes=spec.bucket_floor_nodes,
         collate_check_period=1,
         collate_dump=_collate_dump_target(spec, progress),
     )
@@ -424,7 +425,8 @@ def _play_gate_block(
             return [_agg_record(r) for r in batch]
 
         records, verdict = run_sequential_gate(_play_pairs, seq)
-        return {"records": list(records), "verdict": dataclasses.asdict(verdict)}
+        return {"records": list(records), "verdict": dataclasses.asdict(verdict),
+                "best_serving": serving_rows(best_engine)}
     finally:
         best_engine.close()
 
@@ -547,11 +549,18 @@ def _device(name: str):
     return torch.device(name)
 
 
+def serving_rows(engine: LocalInferenceEngine) -> dict[str, Any]:
+    """An engine's serving levers' rows, cumulative: the submitter wake and the bucketed replay. Raises: RuntimeError —
+    the engine was closed."""
+    snap = engine.batch_timing_snapshot()
+    return {"wake": snap["wake"], "served_graphs": snap["served_graphs"]}
+
+
 def _round_result(
     spec: RoundSpec, *, gate_result: dict | None, rungs_result: dict[str, Any],
     skipped_rungs: list[dict[str, str]], random_result: dict[str, Any],
     floor_payload: dict[str, Any] | None, adjudicator: PlyCapAdjudicator | None,
-    device_memory: dict[str, Any] | None = None,
+    device_memory: dict[str, Any] | None = None, serving: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build THE sidecar result — one shape, one place, both exit paths. `_REQUIRED_RESULT_KEYS`
     are unconditional; a posture key is attached iff it was armed, so a disarmed run's result
@@ -576,6 +585,9 @@ def _round_result(
         # UNCONDITIONAL on both exit paths: a round that stopped at the strength floor is
         # exactly a round whose term is small, so dropping it would bias the series.
         result["device_memory"] = device_memory
+    if serving is not None:
+        # Each engine's serving levers fire per pop: a cell and the gate read their rows here.
+        result["serving"] = serving
     return result
 
 
@@ -611,6 +623,7 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
         # The gate, the rungs and the serial floor phases share this engine: the widest declares.
         submitters=max(spec.concurrency, spec.rung_concurrency),
         leaf_build_threads=spec.leaf_build_threads,
+        bucket_floor_nodes=spec.bucket_floor_nodes,
         collate_check_period=1,
         collate_dump=_collate_dump_target(spec, progress),
     )
@@ -637,6 +650,7 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
                     random_result={"games": 0, "wr": None},
                     floor_payload=floor_payload, adjudicator=adjudicator,
                     device_memory=probe.payload(),
+                    serving={"candidate": serving_rows(candidate_engine), "best": None},
                 )
 
         gate_t0 = time.monotonic()
@@ -651,6 +665,7 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
         # anchor. Marked whichever branch it took.
         probe.mark("gate_block")
         gate_result: dict | None = None
+        best_serving = None if gate_records is None else gate_records["best_serving"]
         if gate_records is not None:
             verdict = gate_records["verdict"]
             gate_agg = aggregate_gate(gate_records["records"], spec.gate, verdict)
@@ -721,6 +736,7 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
             skipped_rungs=skipped_rungs, random_result=random_result,
             floor_payload=floor_payload, adjudicator=adjudicator,
             device_memory=probe.payload(),
+            serving={"candidate": serving_rows(candidate_engine), "best": best_serving},
         )
     finally:
         # Closed and INDEXED on every exit OUT OF THIS TRY (an open shard reads "no games"); a

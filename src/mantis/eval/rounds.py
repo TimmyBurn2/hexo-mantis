@@ -152,6 +152,8 @@ class RoundSpec:
     #: The EVAL leaf-graph build's width, derived in the parent because the child has no
     #: `RunConfig`. `1` is the serial path and the exact-parity control.
     leaf_build_threads: int
+    #: The smallest replay bucket's nodes for the child's engines: self-play's beside a run, smaller on a lone host.
+    bucket_floor_nodes: int
     #: The deploy head's MCTS leaf-batch width, so the eval child searches under the SAME regime
     #: the net's targets came from. NOT defaulted: a default silently restores the k=1 mismatch.
     leaf_batch_size: int

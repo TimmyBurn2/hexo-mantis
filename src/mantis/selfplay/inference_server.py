@@ -436,6 +436,8 @@ class InferenceServer(threading.Thread):
         self._eager_parts = 0
         # Replayed parts' real and padded nodes and edges: (real N, padded N, real E, padded E).
         self._padding = [0, 0, 0, 0]
+        #: Replayed parts per bucket, keyed by the bucket's nodes: which rungs the pops actually ride.
+        self._bucket_parts: dict[int, int] = {}
 
     @property
     def batcher(self) -> InferenceBatcher:
@@ -649,6 +651,7 @@ class InferenceServer(threading.Thread):
                 "padded_nodes": self._padding[1],
                 "real_edges": self._padding[2],
                 "padded_edges": self._padding[3],
+                "bucket_parts": {str(k): v for k, v in sorted(self._bucket_parts.items())},
             },
             # One pop in flight, and the wait its retire spent on the device.
             "pipeline": {
@@ -843,6 +846,7 @@ class InferenceServer(threading.Thread):
                         raise RuntimeError("the collate did not fill the bucket's inputs; a replay would read stale ones")
                     probs, values = self._graphs.run(bucket, batch)
                     self._replayed_parts += 1
+                    self._bucket_parts[bucket.n_nodes] = self._bucket_parts.get(bucket.n_nodes, 0) + 1
                     self._padding[0] += n_part
                     self._padding[1] += bucket.n_nodes
                     self._padding[2] += e_part

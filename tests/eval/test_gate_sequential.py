@@ -178,7 +178,7 @@ def _round_spec(tmp_path, sequential: dict, puct=MINTED_PUCT):
     )
     return RoundSpec(
         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, tactics=None,
-        max_plies=32, leaf_build_threads=1, concurrency=1, rung_concurrency=1,
+        max_plies=32, leaf_build_threads=1, bucket_floor_nodes=4096, concurrency=1, rung_concurrency=1,
         round_index=0, round_id="sequential_wiring", step=1, candidate_snapshot=str(candidate),
         best_snapshot=str(best), best_step=None, encoding=_ENC, worker_device="cpu",
         gate=gate, rung_jobs=[], random_floor_games=0,

@@ -132,7 +132,7 @@ def mint_arena_book(*, seed: int, plies: int, n: int) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap = argparse.ArgumentParser(description="Mint a cell book of arena-protocol openings.")
     ap.add_argument("--seed", type=int, required=True)
     ap.add_argument("--plies", type=int, required=True)
     ap.add_argument("--n", type=int, required=True)

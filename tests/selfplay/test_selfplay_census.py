@@ -108,8 +108,9 @@ _Q6_TABLE: list[tuple[str, list[tuple[str, str]], tuple[int, int, int]]] = [
      [("pool_drain.py", "run_stats_loop"),
       ("pool_push.py", "push_graph")], (2, 1, 2)),
     # The eval deploy head's one decode door: five per-board comprehensions, no per-item loop.
-    ("LocalInferenceEngine.infer_batch_ls",
-     [("inference_local.py", "LocalInferenceEngine.infer_batch_ls")], (0, 0, 5)),
+    ("LocalInferenceEngine.infer_positions_ls",
+     [("inference_local.py", "LocalInferenceEngine.infer_positions_ls"),
+      ("inference_local.py", "LocalInferenceEngine.positions_of")], (0, 0, 5)),
 ]
 
 

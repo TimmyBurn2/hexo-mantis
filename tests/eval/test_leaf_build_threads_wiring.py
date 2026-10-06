@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import ast
 import inspect
+import sys
 from pathlib import Path
 
 import pytest
@@ -188,28 +189,54 @@ def test_the_in_run_eval_beside_self_play_keeps_the_reservation() -> None:
     assert _calls(_REPO / "src/mantis/run.py", "resolve_leaf_build_threads") == 1
 
 
-@pytest.mark.parametrize("rel", ["tools/ladder/backends.py", "tools/dash/engine/engines.py", "tools/strength_frontier.py"])
-def test_every_standalone_single_game_host_takes_the_standalone_width(rel: str) -> None:
-    path = _REPO / rel
-    assert _calls(path, "resolve_standalone_leaf_build_threads") >= 1, rel
-    assert _calls(path, "resolve_leaf_build_threads") == 0, rel
+def test_only_the_ladder_widens_unasked_and_a_cell_widens_only_on_the_hosts_word() -> None:
+    """The ladder is a single-game host by construction; a cell or the dash may sit beside a run."""
+    assert _calls(_REPO / "tools/ladder/backends.py", "resolve_standalone_leaf_build_threads") == 1
+    assert _calls(_REPO / "tools/dash/engine/engines.py", "resolve_standalone_leaf_build_threads") == 0
+    assert _calls(_REPO / "tools/strix_follower.py", "resolve_standalone_leaf_build_threads") == 0
 
 
-def test_a_cell_resolves_its_width_at_its_own_concurrency() -> None:
-    """Eight games in flight share the host, so a cell's width is not a lone game's."""
-    import importlib.util
-    import sys
-
+@pytest.mark.parametrize("standalone", [False, True])
+def test_a_cell_keeps_the_reservation_unless_its_host_is_standalone(standalone: bool) -> None:
+    """Eight games in flight on a standalone host share it; beside a run a cell takes what the run has not promised."""
+    from mantis.config.census import production_configs
     from mantis.config.loader import load_config
-    from mantis.config.resolve.leaf_build_threads import resolve_standalone_leaf_build_threads
+    from mantis.config.resolve.leaf_build_threads import (
+        resolve_leaf_build_threads,
+        resolve_standalone_leaf_build_threads,
+    )
 
-    spec = importlib.util.spec_from_file_location("strength_frontier_t", _REPO / "tools/strength_frontier.py")
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("strength_frontier_wiring_t", _REPO / "tools/strength_frontier.py")
+    assert spec is not None and spec.loader is not None
     sf = importlib.util.module_from_spec(spec)
-    sys.modules["strength_frontier_t"] = sf
-    spec.loader.exec_module(sf)
-    config = load_config(_REPO / "configs/run11a2.yaml")
-    base = sf.base_round_spec(config, work_dir=Path("/nonexistent"))
-    cell = {"label": "c", "search_kind": "puct", "sims": 128, "games": 2, "opponent": "six",
-            "six_net": "gen0030", "six_nodes": 16, "concurrency": 8}
-    got = sf.cell_spec(cell, base, cell_dir=Path("/nonexistent"), config=config)
-    assert got.leaf_build_threads == resolve_standalone_leaf_build_threads(config.model_dump(), concurrency=8)
+    sys.modules["strength_frontier_wiring_t"] = sf
+    try:
+        spec.loader.exec_module(sf)
+        config = load_config(production_configs(_REPO)[0])
+        base = sf.base_round_spec(config, work_dir=Path("/nonexistent"))
+        cell = {"label": "c", "search_kind": "puct", "sims": 128, "games": 2, "opponent": "six",
+                "six_net": "gen0030", "six_nodes": 16, "concurrency": 8, **({"standalone_host": True} if standalone else {})}
+        got = sf.cell_spec(cell, base, cell_dir=Path("/nonexistent"), config=config)
+        dump = config.model_dump()
+        want = (resolve_standalone_leaf_build_threads(dump, concurrency=8) if standalone
+                else resolve_leaf_build_threads(dump))
+        assert got.leaf_build_threads == want
+    finally:
+        sys.modules.pop("strength_frontier_wiring_t", None)
+
+
+def test_every_round_result_carries_its_engines_serving_rows() -> None:
+    """Each engine's wake and bucket rows fire per pop, so every exit of the round reports them."""
+    tree = ast.parse((_REPO / "src" / "mantis" / "eval" / "worker.py").read_text(encoding="utf-8"))
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and getattr(n.func, "id", None) == "_round_result"]
+    assert len(calls) == 2 and all(any(k.arg == "serving" for k in c.keywords) for c in calls)
+    from mantis.eval import worker
+
+    class _Engine:
+        def batch_timing_snapshot(self) -> dict:
+            return {"wake": {"submitters": 8, "all_submitted": 3}, "served_graphs": {"bucket_parts": {"1025": 2}},
+                    "queue_wait": None}
+    assert worker.serving_rows(_Engine()) == {"wake": {"submitters": 8, "all_submitted": 3},
+                                              "served_graphs": {"bucket_parts": {"1025": 2}}}

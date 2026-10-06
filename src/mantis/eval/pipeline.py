@@ -42,6 +42,7 @@ from mantis.eval.rounds import (
     validate_worker_result,
 )
 from mantis.eval.snapshot import write_model_snapshot
+from mantis.selfplay.served_graphs import SELFPLAY_FLOOR_NODES
 from mantis.util.puct import PuctConstants
 
 _LOG = logging.getLogger(__name__)
@@ -498,6 +499,8 @@ class EvalPipeline:
             # Same seam and same reason: the leaf build's width is a HOST reservation and the
             # child has no config to derive one from.
             leaf_build_threads=self._leaf_build_threads,
+            # The run's own eval child serves beside self-play, on self-play's floor.
+            bucket_floor_nodes=SELFPLAY_FLOOR_NODES,
             # Same seam. Read straight off `cfg` rather than cached: it is one int with no
             # resolver, and a cached copy is the second authority these rows exist to remove.
             concurrency=cfg.concurrency,
