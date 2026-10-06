@@ -13,14 +13,21 @@ from mantis.encoding import lookup
 from mantis.selfplay.graph_collate import collate_graph_batch, GraphBatch, GraphWirePayload
 from mantis.selfplay.graph_wire_split import plan_fused_forwards, slice_graph_wire
 from mantis.selfplay.inference_server import InferenceServer
-from mantis.selfplay.served_graphs import Bucket, bucket_ladder, BucketedForward, served_outputs
+from mantis.selfplay.served_graphs import (
+    SELFPLAY_FLOOR_NODES,
+    SINGLE_GAME_FLOOR_NODES,
+    Bucket,
+    BucketedForward,
+    bucket_ladder,
+    served_outputs,
+)
 import mantis.selfplay.served_graphs as served_graphs
 
 _CAPS = FusedGraphCapsSpec(max_fused_edges=1_373_143, max_fused_nodes=56_645)
 
 
 def test_the_ladder_tops_out_at_the_caps_and_rises_geometrically():
-    ladder = bucket_ladder(_CAPS, batch_size=64)
+    ladder = bucket_ladder(_CAPS, batch_size=64, floor_nodes=SELFPLAY_FLOOR_NODES)
     top = ladder[-1]
     assert (top.n_nodes, top.n_edges, top.n_graphs) == (56_646, 1_373_143, 65)
     assert all(a.n_nodes < b.n_nodes and a.n_edges < b.n_edges for a, b in zip(ladder, ladder[1:]))
@@ -29,7 +36,7 @@ def test_the_ladder_tops_out_at_the_caps_and_rises_geometrically():
 
 
 def test_a_part_lands_in_the_smallest_bucket_that_holds_it_with_a_padding_node_to_spare():
-    ladder = bucket_ladder(_CAPS, batch_size=64)
+    ladder = bucket_ladder(_CAPS, batch_size=64, floor_nodes=SELFPLAY_FLOOR_NODES)
     small = ladder[0]
     assert Bucket.of(ladder, 64, small.n_nodes - 1, small.n_edges) == small
     assert Bucket.of(ladder, 64, small.n_nodes, small.n_edges) == ladder[1], "no padding node left"
@@ -39,6 +46,32 @@ def test_a_part_lands_in_the_smallest_bucket_that_holds_it_with_a_padding_node_t
     assert Bucket.of(ladder, 65, 10, 10) is None, "more graphs than the batch never fits"
     assert Bucket.of(ladder, 64, small.n_nodes - 1, 10) == ladder[1], "one padding node for 100k self-loops stalls a row"
 
+
+
+def test_a_single_game_ladder_continues_the_self_play_ladder_down_to_its_own_floor():
+    """A lone game's pop of 1-8 leaves would pad ~9x into the self-play floor's 4 097-node bucket."""
+    selfplay = bucket_ladder(_CAPS, batch_size=64, floor_nodes=SELFPLAY_FLOOR_NODES)
+    single = bucket_ladder(_CAPS, batch_size=64, floor_nodes=SINGLE_GAME_FLOOR_NODES)
+    assert single[-len(selfplay):] == selfplay, "the same rungs above the self-play floor"
+    assert SINGLE_GAME_FLOOR_NODES < single[0].n_nodes <= SINGLE_GAME_FLOOR_NODES * 1.25 + 1
+    assert SELFPLAY_FLOOR_NODES < selfplay[0].n_nodes <= SELFPLAY_FLOOR_NODES * 1.25 + 1
+
+
+def test_a_deploy_engines_server_takes_the_single_game_floor_and_self_plays_keeps_its_own():
+    from mantis.config.resolve.inference_batching import InferenceBatchingSpec
+    from mantis.selfplay.inference_local import LocalInferenceEngine
+    from test_edge_vocab_table import _net
+
+    spec = lookup("gnn_axis_v1")
+    engine = LocalInferenceEngine(_net("cpu"), torch.device("cpu"), encoding_spec=spec, fused_graph_caps=_CAPS,
+                                  inference_batching=InferenceBatchingSpec(64, 10), max_in_flight=8, submitters=1)
+    try:
+        assert engine._graph_server._ladder == bucket_ladder(_CAPS, batch_size=64, floor_nodes=SINGLE_GAME_FLOOR_NODES)
+    finally:
+        engine.close()
+    server = InferenceServer(_net("cpu"), torch.device("cpu"), {"inference": {"inference_batch_size": 64, "inference_max_wait_ms": 10}},
+                             encoding_spec=spec, fused_graph_caps=_CAPS)
+    assert server._ladder == bucket_ladder(_CAPS, batch_size=64, floor_nodes=SELFPLAY_FLOOR_NODES)
 
 @pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUDA: graph capture and replay")
@@ -52,7 +85,8 @@ def test_a_replayed_bucket_serves_the_padded_eager_forward_bit_for_bit_and_follo
     vocab = _vocab("cuda")
     real = _collate(payload_fields("b6"), "cuda", coded_edges=True)
     b, n, e, lg = _sizes(real)
-    ladder = bucket_ladder(FusedGraphCapsSpec(max_fused_edges=2 * e, max_fused_nodes=2 * n), batch_size=8)
+    ladder = bucket_ladder(FusedGraphCapsSpec(max_fused_edges=2 * e, max_fused_nodes=2 * n), batch_size=8,
+                           floor_nodes=SELFPLAY_FLOOR_NODES)
     bucket = Bucket.of(ladder, *_sizes(real)[:3])
     assert bucket is not None
     pad = (bucket.n_graphs, bucket.n_nodes, bucket.n_edges, bucket.n_legal)

@@ -16,8 +16,10 @@ from mantis.selfplay.graph_collate import GraphBatch, segment_softmax, stone_mas
 
 #: Each bucket holds this much more than the one below it, so a part pads by at most this factor.
 _RATIO = 1.25
-#: The smallest bucket's nodes: a smaller part pads up to it, which costs less than a capture of its own.
-_SMALLEST_NODES = 4096
+#: Self-play's smallest bucket: its pops of ~36 leaves rarely go lower, and a smaller part pads up to it.
+SELFPLAY_FLOOR_NODES = 4096
+#: A lone game's pops are 1-8 leaves, which the self-play floor pads ~9x; ~70 % of such a replay was padding.
+SINGLE_GAME_FLOOR_NODES = 1024
 #: Eager runs before a capture, so compilation, autotuning and library handles happen outside the graph.
 _WARMUP = 2
 #: A padding node's self-loops are one serial walk in the fused kernel: a bucket gives each at most this many.
@@ -46,13 +48,13 @@ class Bucket:
                      and b.n_edges - n_edges <= (b.n_nodes - n_nodes) * _PAD_EDGES_PER_SINK), None)
 
 
-def bucket_ladder(caps: FusedGraphCapsSpec, *, batch_size: int) -> tuple[Bucket, ...]:
-    """Smallest first: from the fused caps down by `_RATIO` while at least `_SMALLEST_NODES` nodes; legal slots = nodes."""
+def bucket_ladder(caps: FusedGraphCapsSpec, *, batch_size: int, floor_nodes: int) -> tuple[Bucket, ...]:
+    """Smallest first: from the fused caps down by `_RATIO` while at least `floor_nodes` nodes; legal slots = nodes."""
     rungs: list[Bucket] = []
     while True:
         scale = _RATIO ** len(rungs)
         nodes = math.ceil(caps.max_fused_nodes / scale)
-        if rungs and nodes < _SMALLEST_NODES:
+        if rungs and nodes < floor_nodes:
             return tuple(reversed(rungs))
         rungs.append(Bucket(batch_size + 1, nodes + 1, math.ceil(caps.max_fused_edges / scale), nodes + 1))
 
@@ -147,4 +149,5 @@ class BucketedForward:
         return graph, outputs
 
 
-__all__ = ["Bucket", "BucketedForward", "ServedGraphCaptureError", "bucket_ladder", "served_outputs"]
+__all__ = ["SELFPLAY_FLOOR_NODES", "SINGLE_GAME_FLOOR_NODES", "Bucket", "BucketedForward", "ServedGraphCaptureError",
+           "bucket_ladder", "served_outputs"]

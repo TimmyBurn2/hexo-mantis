@@ -13,6 +13,7 @@ from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.encoding import EncodingSpec
 from mantis.selfplay.hparams import is_graph_representation
+from mantis.selfplay.served_graphs import SINGLE_GAME_FLOOR_NODES
 
 
 class LocalInferenceEngine:
@@ -94,6 +95,8 @@ class LocalInferenceEngine:
             # PATH this engine serves, which the server cannot know.
             collate_check_period=self._collate_check_period,
             collate_dump=self._collate_dump,
+            # A deploy engine's pops are one or a few games' leaves, not self-play's ~36.
+            bucket_floor_nodes=SINGLE_GAME_FLOOR_NODES,
         )
         self._graph_server.start()
 

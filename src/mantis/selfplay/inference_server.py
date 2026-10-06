@@ -31,7 +31,13 @@ from mantis.encoding import resolve_from_config
 from mantis.model import amp_dtype_for
 from mantis.selfplay.hparams import InferenceHParams, is_graph_representation
 from mantis.selfplay.pool_hooks import EventSink
-from mantis.selfplay.served_graphs import Bucket, BucketedForward, bucket_ladder, served_outputs
+from mantis.selfplay.served_graphs import (
+    SELFPLAY_FLOOR_NODES,
+    Bucket,
+    BucketedForward,
+    bucket_ladder,
+    served_outputs,
+)
 
 _LOG = logging.getLogger(__name__)
 
@@ -300,6 +306,7 @@ class InferenceServer(threading.Thread):
         collate_dump: CollateDumpTarget | None = None,
         edge_geometry_check: str | None = None,
         compile_trunk: bool | None = None,
+        bucket_floor_nodes: int = SELFPLAY_FLOOR_NODES,
     ) -> None:
         super().__init__(daemon=True, name="inference-server")
         self.model = model
@@ -423,7 +430,7 @@ class InferenceServer(threading.Thread):
             raise ValueError(f"InferenceServer: encoding {self.encoding_spec.name!r} carries no graph geometry")
         self._edge_vocab = torch.from_numpy(np.asarray(edge_vocabulary(win_length))).reshape(-1, edge_dim).to(device)
         # On CUDA each part replays its padded shape bucket's captured forward: one launch, not one per kernel.
-        self._ladder = bucket_ladder(self._fused_caps, batch_size=self._batch_size)
+        self._ladder = bucket_ladder(self._fused_caps, batch_size=self._batch_size, floor_nodes=bucket_floor_nodes)
         self._graphs = BucketedForward(self._serve, device, node_feat_dim=node_dim) if device.type == "cuda" else None
         self._replayed_parts = 0
         self._eager_parts = 0
