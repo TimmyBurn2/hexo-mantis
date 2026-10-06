@@ -52,7 +52,8 @@ in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c
     - Single-game play loses about 1.75× per turn to the self-play batching wait (`inference.inference_max_wait_ms`
       10): CARD-DEPLOY-BATCH-WAIT. SEARCH-PERF-1 researches the rest: CARD-SEARCH-PERF.
   - Owed: R386 (EXIT.md §9). Box B's scratch patches are reverted (its tree is clean at `8d169abb`) and its records
-    are mirrored to `mantis-mirror/run11/versus/`. It may be destroyed (the operator's act).
+    are mirrored to `mantis-mirror/run11/versus/`. Since 17:50 CEST it is lent to SEARCH-PERF-1's benchmark (operator),
+    in that session's own scratch tree. It may be destroyed after that (the operator's act).
 - **DASH-2 LANDED 2026-10-05** (`293b3277..83a5c1e6`, CARDS DASH-2; the amendment's ruling number is owed, `R<nnn>`):
   `make dash` is the one display. It reads a run directory, the monitor's records and the cell sidecars and serves the
   Run, Games and Analyzer views; run11's rule reads `six30_16` (`--rule-unit`), every other ruler is report-only. The
