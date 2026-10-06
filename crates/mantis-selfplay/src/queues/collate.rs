@@ -5,7 +5,7 @@
 
 use std::fmt;
 
-use mantis_graph::{edge_code, edge_vocabulary, window_flat_idx, EDGE_FEAT_DIM, OFF_WINDOW_SLOT};
+use mantis_graph::{edge_code, edge_vocabulary, EDGE_FEAT_DIM, OFF_WINDOW_SLOT};
 
 /// Policy slots `[0, POLICY_SLOTS)`; `OFF_WINDOW_SLOT` is the one negative slot the contract allows.
 const POLICY_SLOTS: i32 = 362;
@@ -620,6 +620,18 @@ fn check_and_pack_gather(
     Ok(())
 }
 
+/// Check 16's canonical window slot of `(q, r)` about `(cq, cr)`, `OFF_WINDOW_SLOT` off-window, re-derived here rather
+/// than taken from the builder so a slot defect there cannot pass its own check; i64, so no `i32` input overflows.
+fn canonical_slot(q: i64, r: i64, cq: i64, cr: i64, trunk: i64) -> i64 {
+    let half = (trunk - 1) / 2;
+    let (wq, wr) = (q - cq + half, r - cr + half);
+    if (0..trunk).contains(&wq) && (0..trunk).contains(&wr) {
+        wq * trunk + wr
+    } else {
+        i64::from(OFF_WINDOW_SLOT)
+    }
+}
+
 /// Check 15 (every gather row inside its graph's legal rows, then every legal count), then check 16 (every slot canonical).
 fn check_legal_rows_and_slots(w: &WireRef<'_>, trunk_size: i32) -> Result<(), PackError> {
     let row_of = |v: i64| {
@@ -666,7 +678,7 @@ fn check_legal_rows_and_slots(w: &WireRef<'_>, trunk_size: i32) -> Result<(), Pa
             );
             let (slot, canon) = (
                 i64::from(w.policy_dst_slot[i]),
-                window_flat_idx(q, r, cq, cr, trunk),
+                canonical_slot(q, r, cq, cr, trunk),
             );
             if slot != canon {
                 return refuse(
