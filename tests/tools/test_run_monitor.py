@@ -28,7 +28,7 @@ rules = importlib.import_module("run_monitor.rules")
 rings = importlib.import_module("run_monitor.rings")
 cli = importlib.import_module("run_monitor.cli")
 
-_RUN = "monitoredrun7"
+_RUN = "monitoredrun"
 _ENC = "gnn_axis_v1"
 #: A stand-in run: counts every SIGTERM in a file and keeps running, so a second signal is seen, not survived.
 _VICTIM = ("import signal, sys, time\n"
@@ -497,3 +497,14 @@ def test_once_refuses_a_save_at_or_before_the_last_one_read(tmp_path: Path, monk
             "--device", "cpu", "--gpu-mem-fraction", "0.25", "--threads", "1", "--gap-line", "0.05", "--floors-from",
             "start", "--bands-from-step", "0", "--ckpt", str(tmp_path / "c.ckpt")]
     assert cli.main([*argv, "--step", "6000"]) == 2 and cli.main([*argv, "--step", "3000"]) == 2 and read == []
+    (tmp_path / "o" / "HALT.json").write_text(json.dumps({"step": 6000}), encoding="utf-8")
+    assert cli.main([*argv, "--step", "6000", "--resume-past-halt", "6000"]) == 2
+    assert (tmp_path / "o" / "HALT.json").is_file() and not (tmp_path / "o" / "setup.json").exists(), "refused first"
+
+
+def test_the_audits_unknown_band_names_its_key_as_the_rule_reads_it(tmp_path: Path) -> None:
+    """The producer: `bands_read` over a real ring words a band the audit has no row for, and `band_key` reads it back."""
+    (tmp_path / "bands.toml").write_text("[ring_audit.bands]\ncap_rate = { lt = 0.1 }\nabsent = { gt = 0 }\n",
+                                         encoding="utf-8")
+    out = mon.bands_read(_ring(tmp_path / "r.bin", range(0, 4)), None, tmp_path / "bands.toml")
+    assert "cap_rate" in out["rows"] and [rules.band_key(m) for m in out["misses"]] == ["absent"]

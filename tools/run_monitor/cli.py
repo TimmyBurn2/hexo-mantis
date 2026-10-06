@@ -71,8 +71,16 @@ def follow(monitor: Monitor, tail: EventTail, poll_s: float, final_timeout_s: fl
         time.sleep(poll_s)
 
 
+def _last_read(out: Path) -> int | None:
+    """The last save a monitor read into `out`, off its `state.json`; `None` before any."""
+    try:
+        return json.loads((out / "state.json").read_text(encoding="utf-8")).get("last_step")
+    except FileNotFoundError:
+        return None
+
+
 def main(argv: list[str] | None = None) -> int:
-    """The command line."""
+    """The command line. Raises: OSError, KeyError, ValueError (a malformed state file; `once`: its read's own)."""
     ap = argparse.ArgumentParser(prog="run_monitor")
     ap.add_argument("mode", choices=("follow", "once"))
     ap.add_argument("--run-dir", type=Path, required=True)
@@ -115,6 +123,11 @@ def main(argv: list[str] | None = None) -> int:
     if a.mode == "once" and (a.ckpt is None or a.step is None):
         print("run_monitor: once needs --ckpt and --step", file=sys.stderr)
         return 2
+    # Refused before the Monitor exists: building it may archive a halt.
+    last = _last_read(setup.out)
+    if a.mode == "once" and last is not None and a.step <= last:
+        print(f"run_monitor: step {a.step} is not past the last read save {last}", file=sys.stderr)
+        return 2
     if setup.device.startswith("cuda"):
         torch.cuda.set_per_process_memory_fraction(a.gpu_mem_fraction)
     try:
@@ -124,10 +137,6 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     (setup.out / "setup.json").write_text(json.dumps({k: str(v) for k, v in vars(a).items()}, indent=1), encoding="utf-8")
     if a.mode == "once":
-        last = monitor.state.last_step
-        if last is not None and a.step <= last:
-            print(f"run_monitor: step {a.step} is not past the last read save {last}", file=sys.stderr)
-            return 2
         record = monitor.read_save(a.step, a.ckpt, time.time(), stopping=True)
         print(json.dumps({"step": a.step, "halting_rows": record["halting_rows"], "reported_rows": record["reported_rows"],
                           "exams": record["exams"]}, indent=1))

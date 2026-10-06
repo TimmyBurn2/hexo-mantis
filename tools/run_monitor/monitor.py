@@ -257,7 +257,7 @@ class Monitor:
             return None
 
     def read_save(self, step: int, ckpt: Path, saved_ts: float, *, stopping: bool) -> dict[str, Any]:
-        """One save: the GEN read, the exams at its temperature, the bands, the rates, the previous save's lagged read; may halt. Raises: OSError, KeyError."""
+        """One save: the GEN read, the exams at its temperature, the bands, the rates, the previous save's lagged read; may halt. Raises: OSError, KeyError, ValueError (a NaN row the record refuses)."""
         s, out = self.setup, self.setup.out
         t0 = time.time()
         ring = Path(f"{ckpt}.ring.bin")
@@ -289,6 +289,8 @@ class Monitor:
         self.state.busy.append([t0, time.time()])
         if fired:  # first: a record that fails to write must not cost the guard its signal
             self._halt(step, fired, stopping=stopping)
+        if rule["fired"]:
+            self._gap_fired(step, rule)
         record.update({"halting_rows": fired, "reported_rows": decided["reported"], "armed_floors": decided["armed"],
                        "floors_live": decided["floors_live"], "armed_bands": decided["armed_bands"],
                        "band_trends": band_trends(bands["rows"], self._last_rows(), self.state.last_step,
@@ -299,8 +301,6 @@ class Monitor:
                    "reported_rows": decided["reported"], "armed_floors": decided["armed"],
                    "armed_bands": decided["armed_bands"],
                    "unread_floors": sorted(exam for exam, row in exams.items() if row["holds"] is None)})
-        if rule["fired"]:
-            self._gap_fired(step, rule)
         self._advance(step, ckpt, copy if have_ring else None, saved_ts)
         return record
 

@@ -104,8 +104,9 @@ _BROKEN_BANDS = {
     "an unread audit disarms": lambda e, b, **k: rules.verdict(e, {"misses": b["misses"]}, **k),
     "every band reads twice": lambda e, b, **k: rules.verdict(e, b, **{**k, "two_read_bands": frozenset(
         rules.band_key(m) for m in b["misses"]) | k["two_read_bands"]}),
-    "any arm fires any band": lambda e, b, **k: rules.verdict(e, b, **{
+    "any arm fires any band": lambda e, b, **k: {**rules.verdict(e, b, **{
         **k, "armed_bands": sorted(k["two_read_bands"]) if k["armed_bands"] else []}),
+        "armed_bands": rules.verdict(e, b, **k)["armed_bands"]},
 }
 
 
