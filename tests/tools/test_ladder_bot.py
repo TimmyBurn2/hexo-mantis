@@ -79,9 +79,9 @@ def _receipt(ladder, tmp_path: Path) -> Path:
         opponent={"display_name": "S", "profile_id": "q", "elo": 1000}, side="x", time_control={"mode": "unlimited"},
         rated=False, sims_configured=4, search={}, started=0.0, opening=_OPENING)
     r.add_move(request_id=1, stones=3, time_limit=None, placements=((2, 0), (3, 0)), sims=8, ms=2.0, server_date=None,
-               book_stones=1)
+               book_stones=1, stopped=0)
     r.add_move(request_id=2, stones=7, time_limit=None, placements=((-1, 0), (-2, 0)), sims=8, ms=2.0, server_date=None,
-               book_stones=0)
+               book_stones=0, stopped=0)
     # HeXO x,y for wire q,r: x = q + r, y = -r.
     wire = [(0, 0, "a"), (1, 0, "b"), (0, 1, "b"), (2, 0, "a"), (3, 0, "a"), (1, -1, "b"), (2, -1, "b"),
             (-1, 0, "a"), (-2, 0, "a"), (4, 0, "b"), (5, 0, "b")]
@@ -129,7 +129,7 @@ def test_a_turn_recorded_below_the_configured_budget_is_reported_and_must_replay
     body["moves"][1]["sims"] = 3
     report = bot_mod.replay_receipt(body, _ReplayBackend())  # the replay spends 8 where 3 was recorded
     assert report.budget_misses == [{"request_id": 2, "sims": 8, "recorded": 3}] and not report.passed
-    assert report.below_budget == [{"request_id": 2, "sims": 3, "configured": 8}]
+    assert report.below_budget == [{"request_id": 2, "sims": 3, "configured": 8, "stopped": 0}]
 
     class _Short(_ReplayBackend):
         def select_turn(self, board, forced=()):
@@ -138,7 +138,7 @@ def test_a_turn_recorded_below_the_configured_budget_is_reported_and_must_replay
 
     report = bot_mod.replay_receipt(body, _Short())
     assert report.passed and report.budget_misses == []
-    assert report.below_budget == [{"request_id": 2, "sims": 3, "configured": 8}]
+    assert report.below_budget == [{"request_id": 2, "sims": 3, "configured": 8, "stopped": 0}]
 
 
 def test_a_receipt_without_the_servers_move_list_cannot_be_replayed_and_says_so(bot_mod, ladder, tmp_path: Path) -> None:

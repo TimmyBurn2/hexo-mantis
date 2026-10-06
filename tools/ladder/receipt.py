@@ -8,8 +8,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-#: v2: the game's `opening` (book, index, id, relative stones, where it went off-book) and `book_stones` per move.
-RECEIPT_SCHEMA_VERSION = 2
+#: v3: `stopped` per move, the searched stones the head's early stop ended (v2 added `opening` and `book_stones`).
+RECEIPT_SCHEMA_VERSION = 3
 OUTCOMES = ("win", "loss", "aborted")
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 _REQUIRED = ("schema_version", "server", "game_id", "bot", "opponent", "side", "time_control", "rated",
@@ -17,7 +17,8 @@ _REQUIRED = ("schema_version", "server", "game_id", "bot", "opponent", "side", "
              "wall_sec", "think_ms_total", "started_utc", "finished_utc", "server_clock")
 _BOT_REQUIRED = ("name", "backend", "net_hash", "display_name", "profile_id")
 _OPENING_REQUIRED = ("book", "index", "opening_id", "relative", "off_book_at")
-_MOVE_REQUIRED = ("request_id", "stones", "time_limit", "placements", "sims", "ms", "server_date", "book_stones")
+_MOVE_REQUIRED = ("request_id", "stones", "time_limit", "placements", "sims", "ms", "server_date", "book_stones",
+                  "stopped")
 
 
 class ReceiptError(ValueError):
@@ -63,10 +64,11 @@ class GameReceipt:
 
     def add_move(self, *, request_id: int | None, stones: int, time_limit: float | None,
                  placements: tuple[tuple[int, int], tuple[int, int]], sims: int, ms: float,
-                 server_date: str | None, book_stones: int) -> None:
+                 server_date: str | None, book_stones: int, stopped: int) -> None:
         self.moves.append({"request_id": request_id, "stones": int(stones), "time_limit": time_limit,
                            "placements": [[int(q), int(r)] for q, r in placements], "sims": int(sims),
-                           "ms": float(ms), "server_date": server_date, "book_stones": int(book_stones)})
+                           "ms": float(ms), "server_date": server_date, "book_stones": int(book_stones),
+                           "stopped": int(stopped)})
 
     def finish(self, *, winner: str | None, reason: str, finished: float,
                finished_game: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -126,6 +128,8 @@ def validate_receipt(body: Mapping[str, Any]) -> None:
             raise ReceiptError(f"moves[{i}].sims {move['sims']!r} is not an integer")
         if move["book_stones"] not in (0, 1, 2):
             raise ReceiptError(f"moves[{i}].book_stones {move['book_stones']!r} is not 0, 1 or 2")
+        if move["stopped"] not in (0, 1, 2) or move["stopped"] + move["book_stones"] > 2:
+            raise ReceiptError(f"moves[{i}].stopped {move['stopped']!r} is not 0..2 searched stones")
     if body["result"].get("outcome") not in OUTCOMES:
         raise ReceiptError(f"result.outcome {body['result'].get('outcome')!r} is not one of {OUTCOMES}")
 

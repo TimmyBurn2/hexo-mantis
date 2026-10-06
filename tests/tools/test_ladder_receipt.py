@@ -21,9 +21,9 @@ def _body(ladder, **overrides: Any) -> dict[str, Any]:
         side="x", time_control={"mode": "unlimited"}, rated=False,
         sims_configured=256, search={"kind": "puct", "c_visit": 50.0}, started=1_789_800_000.0, opening=_OPENING)
     r.add_move(request_id=1, stones=3, time_limit=None, placements=((1, -1), (2, 0)), sims=256, ms=812.5,
-               server_date="Sat, 19 Sep 2026 12:00:00 GMT", book_stones=1)
+               server_date="Sat, 19 Sep 2026 12:00:00 GMT", book_stones=1, stopped=0)
     r.add_move(request_id=2, stones=7, time_limit=45.0, placements=((-1, 0), (-1, 1)), sims=256, ms=790.0,
-               server_date="Sat, 19 Sep 2026 12:00:03 GMT", book_stones=0)
+               server_date="Sat, 19 Sep 2026 12:00:03 GMT", book_stones=0, stopped=0)
     body = r.finish(winner="o", reason="six-in-a-row", finished=1_789_800_009.5, finished_game={
         "startedAt": 1789800000100, "finishedAt": 1789800009400, "moveCount": 11,
         "gameResult": {"reason": "six-in-a-row", "winningPlayerId": "b2", "abortedByPlayerId": None},
@@ -37,7 +37,7 @@ def _body(ladder, **overrides: Any) -> dict[str, Any]:
 
 def test_the_receipt_carries_the_packets_fields_and_the_full_move_list_in_wire_coordinates(ladder) -> None:
     body = _body(ladder)
-    assert body["schema_version"] == 2
+    assert body["schema_version"] == 3
     assert body["opening"] == {**_OPENING, "off_book_at": None}
     assert [m["book_stones"] for m in body["moves"]] == [1, 0]
     assert body["bot"]["name"] == "mantis:a9a46c55" and body["bot"]["net_hash"] == _NET
@@ -74,7 +74,7 @@ def test_without_a_finished_game_record_the_plies_are_the_stones_we_saw_plus_our
         opponent={"display_name": "M", "profile_id": "q", "elo": 1000}, side="o", time_control={"mode": "unlimited"},
         rated=False, sims_configured=256, search={}, started=0.0, opening=_OPENING)
     r.add_move(request_id=1, stones=1, time_limit=None, placements=((1, 0), (0, 1)), sims=0, ms=5.0, server_date=None,
-               book_stones=2)
+               book_stones=2, stopped=0)
     body = r.finish(winner="x", reason="six-in-a-row", finished=1.0, finished_game=None)
     assert body["plies"] is None and body["plies_seen"] == 3 and body["moves_full"] is None
 
@@ -94,15 +94,19 @@ def test_the_receipt_is_written_under_the_net_hash_and_reads_back(ladder, tmp_pa
     {"moves": [{"request_id": 1, "stones": 3, "time_limit": None, "placements": [[1, -1], [2, 0]], "sims": None,
                 "ms": 1.0, "server_date": None}]},
     {"result": {"winner": "o", "reason": "six-in-a-row", "outcome": "draw"}},
-    {"schema_version": 3},
+    {"schema_version": 2},
     {"opening": None},
     {"opening": {"book": "book_v1_s20260625_p4", "index": 3, "opening_id": "3"}},
     {"moves": [{"request_id": 1, "stones": 3, "time_limit": None, "placements": [[1, -1], [2, 0]], "sims": 256,
                 "ms": 1.0, "server_date": None, "book_stones": 3}]},
     {"moves": [{"request_id": 1, "stones": 3, "time_limit": None, "placements": [[1, -1], [2, 0]], "sims": 256,
                 "ms": 1.0, "server_date": None}]},
+    {"moves": [{"request_id": 1, "stones": 3, "time_limit": None, "placements": [[1, -1], [2, 0]], "sims": 256,
+                "ms": 1.0, "server_date": None, "book_stones": 1}]},
+    {"moves": [{"request_id": 1, "stones": 3, "time_limit": None, "placements": [[1, -1], [2, 0]], "sims": 256,
+                "ms": 1.0, "server_date": None, "book_stones": 1, "stopped": 2}]},
 ], ids=["net_hash", "one_placement", "no_sims", "draw_outcome", "schema", "no_opening", "opening_without_relative",
-        "three_book_stones", "no_book_stones"])
+        "three_book_stones", "no_book_stones", "no_stopped", "stopped_past_the_searched_stones"])
 def test_a_planted_break_is_refused_before_anything_reaches_disk(ladder, tmp_path: Path, plant: dict[str, Any]) -> None:
     with pytest.raises(ladder.receipt.ReceiptError):
         ladder.receipt.write_receipt(tmp_path, _body(ladder, **plant))
@@ -112,8 +116,8 @@ def test_a_planted_break_is_refused_before_anything_reaches_disk(ladder, tmp_pat
 def test_the_validator_is_what_stops_the_planted_break(ladder, tmp_path: Path, monkeypatch) -> None:
     """Mutation self-test: with the validator disarmed the same break lands on disk, so the refusal above is the validator's."""
     monkeypatch.setattr(ladder.receipt, "validate_receipt", lambda _body: None)
-    path = ladder.receipt.write_receipt(tmp_path, _body(ladder, schema_version=3))
-    assert json.loads(path.read_text(encoding="utf-8"))["schema_version"] == 3
+    path = ladder.receipt.write_receipt(tmp_path, _body(ladder, schema_version=2))
+    assert json.loads(path.read_text(encoding="utf-8"))["schema_version"] == 2
 
 
 def test_a_receipt_that_no_longer_reads_back_is_refused_by_the_reader(ladder, tmp_path: Path) -> None:

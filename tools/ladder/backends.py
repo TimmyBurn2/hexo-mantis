@@ -20,12 +20,13 @@ PRESET_SIMS: dict[str, int | None] = {"unit": None, "play": 64}
 
 @dataclass(frozen=True)
 class TurnResult:
-    """Two placements, the leaves spent on the SEARCHED ones (the backend's own count), the wall the pair took, and how many of the two the book forced."""
+    """Two placements, the leaves spent on the SEARCHED ones (the backend's own count), the wall the pair took, how many of the two the book forced, and how many searched ones the early stop ended."""
 
     placements: tuple[Cell, Cell]
     sims: int
     ms: float
     book_stones: int = 0
+    stopped: int = 0
 
 
 class Backend(Protocol):
@@ -59,14 +60,14 @@ def _resolve_sims(preset: str, unit_sims: int) -> int:
     return int(unit_sims) if override is None else int(override)
 
 
-def _two_stones(player: Any, board: Any, sims_of: Any, forced: tuple[Cell, ...] = ()) -> TurnResult:
+def _two_stones(player: Any, board: Any, sims_of: Any, forced: tuple[Cell, ...] = (), stopped_of: Any = None) -> TurnResult:
     """One compound turn through a half-ply `BotProtocol` player: the book's `forced` stones first (unsearched, up to two), each remaining stone chosen on the board after the one before. Raises: BackendError when a forced stone is not legal on the board (the book does not replay here — a bug, never a server rejection)."""
     if len(forced) > 2:
         raise BackendError(f"a compound turn takes two stones; {len(forced)} were forced")
     work = board.clone()
     t0 = time.perf_counter()
     placements: list[Cell] = []
-    spent = 0
+    spent = stopped = 0
     for i in range(2):
         if i < len(forced):
             q, r = int(forced[i][0]), int(forced[i][1])
@@ -76,10 +77,12 @@ def _two_stones(player: Any, board: Any, sims_of: Any, forced: tuple[Cell, ...] 
             move = player.select_move(work)
             q, r = int(move[0]), int(move[1])
             spent += int(sims_of())
+            stopped += int(bool(stopped_of())) if stopped_of is not None else 0
         work.apply_move(q, r)
         placements.append((q, r))
     ms = (time.perf_counter() - t0) * 1000.0
-    return TurnResult(placements=(placements[0], placements[1]), sims=spent, ms=round(ms, 3), book_stones=len(forced))
+    return TurnResult(placements=(placements[0], placements[1]), sims=spent, ms=round(ms, 3), book_stones=len(forced),
+                      stopped=stopped)
 
 
 class MantisBackend:
@@ -141,7 +144,9 @@ class MantisBackend:
             "torch_threads": torch.get_num_threads(),
             "encoding": self.encoding, "checkpoint": self.checkpoint.name, "step": self.step,
             "weights": self.weights, "leaf_batch_size": self._leaf_batch_size, "c_visit": self._c_visit, "c_scale": self._c_scale,
-            "q_rescale": self._q_rescale, "gumbel_m": self._gumbel_m}
+            "q_rescale": self._q_rescale, "gumbel_m": self._gumbel_m,
+            # The ladder plays the budget-aware stop; every other consumer of the head leaves it off.
+            "early_stop": True}
         self.seed: int | None = None
         self._head: Any = None
 
@@ -153,7 +158,7 @@ class MantisBackend:
         self._head = build_candidate_player(
             self._engine, self.sims, spec=self._spec, leaf_batch_size=self._leaf_batch_size, c_visit=self._c_visit,
             c_scale=self._c_scale, q_rescale=self._q_rescale, search_kind=self._search_kind, gumbel_m=self._gumbel_m,
-            gumbel_seed=self.seed, tactics=self._tactics, puct=self._puct)
+            gumbel_seed=self.seed, tactics=self._tactics, puct=self._puct, early_stop=True)
         self._head.new_game()
 
     def select_turn(self, board: Any, forced: tuple[Cell, ...] = ()) -> TurnResult:
@@ -161,7 +166,7 @@ class MantisBackend:
         if self._head is None:
             raise BackendError("select_turn before new_game: the head is seeded per game")
         head = self._head
-        return _two_stones(head, board, lambda: int(head.last_sims or 0), forced)
+        return _two_stones(head, board, lambda: int(head.last_sims or 0), forced, lambda: head.last_stopped)
 
     def close(self) -> None:
         self._head = None

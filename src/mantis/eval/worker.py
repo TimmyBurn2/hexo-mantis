@@ -257,9 +257,9 @@ def _graph_expand_fn(engine: LocalInferenceEngine | GameEvalCache, spec: Encodin
 def build_candidate_player(
     engine: LocalInferenceEngine, n_sims: int, *, spec: EncodingSpec, leaf_batch_size: int,
     c_visit: float, c_scale: float, q_rescale: bool, search_kind: str, gumbel_m: int,
-    gumbel_seed: int, tactics: dict[str, Any] | None, puct: PuctConstants,
+    gumbel_seed: int, tactics: dict[str, Any] | None, puct: PuctConstants, early_stop: bool,
 ) -> DeployHeadPlayer:
-    """A closed match on the representation. Raises: EvalDecodeUnsupportedError if not graph."""
+    """A closed match on the representation; `early_stop` is the consumer's switch. Raises: EvalDecodeUnsupportedError if not graph."""
     if spec.representation == "graph":
         # One cache per player, so a game shares it with no other game on the engine.
         cache = GameEvalCache(engine)
@@ -267,7 +267,8 @@ def build_candidate_player(
                                 leaf_batch_size=leaf_batch_size,
                                 c_visit=c_visit, c_scale=c_scale, q_rescale=q_rescale,
                                 search_kind=search_kind, gumbel_m=gumbel_m,
-                                gumbel_seed=gumbel_seed, tactics=tactics, puct=puct, eval_cache=cache)
+                                gumbel_seed=gumbel_seed, tactics=tactics, puct=puct, eval_cache=cache,
+                                early_stop=early_stop)
     raise EvalDecodeUnsupportedError(
         f"encoding {spec.name!r} declares representation={spec.representation!r}, which "
         f"this eval worker's decode entrance does not implement. The implemented arm is "
@@ -328,6 +329,7 @@ def _play_floor_probe(
         c_visit=spec.c_visit, c_scale=spec.c_scale, q_rescale=spec.q_rescale,
         search_kind=spec.search_kind, gumbel_m=spec.gumbel_m, gumbel_seed=spec.seed_base,
         tactics=spec.tactics, puct=spec.puct,
+        early_stop=False,
     )
     regime_key = RegimeKey(
         bot="random", variant=FLOOR_PROBE_VARIANT, model_sims=spec.random_model_sims,
@@ -387,6 +389,7 @@ def _play_gate_block(
                     c_visit=spec.c_visit, c_scale=spec.c_scale, q_rescale=spec.q_rescale,
                     search_kind=spec.search_kind, gumbel_m=spec.gumbel_m,
                     gumbel_seed=spec.seed_base, tactics=spec.tactics, puct=spec.puct,
+                    early_stop=False,
                 ),
                 build_candidate_player(
                     best_engine, spec.gate.deploy_sims, spec=encoding_spec,
@@ -394,6 +397,7 @@ def _play_gate_block(
                     c_visit=spec.c_visit, c_scale=spec.c_scale, q_rescale=spec.q_rescale,
                     search_kind=spec.search_kind, gumbel_m=spec.gumbel_m,
                     gumbel_seed=spec.seed_base, tactics=spec.tactics, puct=spec.puct,
+                    early_stop=False,
                 ),
             )
 
@@ -446,6 +450,7 @@ def _play_rung_block(
             c_visit=spec.c_visit, c_scale=spec.c_scale, q_rescale=spec.q_rescale,
             search_kind=spec.search_kind, gumbel_m=spec.gumbel_m, gumbel_seed=spec.seed_base,
             tactics=spec.tactics, puct=spec.puct,
+            early_stop=False,
         )
 
     # One (candidate, opponent) pair per game thread under `rung_concurrency` > 1: both carry
@@ -518,6 +523,7 @@ def _play_random_floor(
         c_visit=spec.c_visit, c_scale=spec.c_scale, q_rescale=spec.q_rescale,
         search_kind=spec.search_kind, gumbel_m=spec.gumbel_m, gumbel_seed=spec.seed_base,
         tactics=spec.tactics, puct=spec.puct,
+        early_stop=False,
     )
     regime_key = RegimeKey(
         bot="random", variant="raw", model_sims=spec.random_model_sims,

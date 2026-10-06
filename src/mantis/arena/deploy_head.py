@@ -53,6 +53,7 @@ class DeployHeadPlayer:
         tactics: dict[str, Any] | None,
         puct: PuctConstants,
         eval_cache: GameEvalCache | None = None,
+        early_stop: bool = False,
     ) -> None:
         # `c_visit`, `c_scale`, `q_rescale`, `leaf_batch_size` and `gumbel_m` are REQUIRED schema
         # keys, never defaulted: a default equal to today's minted value is still a second authority.
@@ -94,8 +95,13 @@ class DeployHeadPlayer:
         self.last_tactics: dict[str, int] | None = None
         #: The per-game cache `expand_fn` serves through, emptied by `new_game`; `None` when it has none.
         self._eval_cache = eval_cache
-        #: The head's own lever rows, cumulative: the PUCT select calls, their overlaps and their network leaves.
-        self._rows = dict.fromkeys(("select_calls", "select_overlaps", "select_network_leaves"), 0)
+        #: PUCT ends a search once its visit leader cannot be overtaken by the descents left; off, it spends them all.
+        self._early_stop = bool(early_stop)
+        #: Whether the LAST search ended at that stop rather than at its budget.
+        self.last_stopped = False
+        #: The head's own lever rows, cumulative: stops and the descents they left, and the PUCT select calls.
+        self._rows = dict.fromkeys(("stop_fired", "stop_saved", "select_calls", "select_overlaps",
+                                    "select_network_leaves"), 0)
 
     def name(self) -> str:
         return "deploy_head"
@@ -116,7 +122,7 @@ class DeployHeadPlayer:
         self.last_tactics = None
 
     def search_rows(self) -> dict[str, int]:
-        """The head's levers' cumulative rows, each keyed by its lever: `select_*`, and `cache_*` with a cache."""
+        """The head's levers' cumulative rows, each keyed by its lever: `stop_*`, `select_*`, and `cache_*` with a cache."""
         rows = dict(self._rows)
         if self._eval_cache is not None:
             rows.update({f"cache_{k}": v for k, v in self._eval_cache.counters().items()})
@@ -149,6 +155,7 @@ class DeployHeadPlayer:
             RuntimeError: the root's tactics refused (`MCTSTree.root_offence`).
         """
         self.last_tactics = None
+        self.last_stopped = False
         if not board.get_stones():
             # The first stone is the origin, as the official rule plays it.
             self.last_root, self.last_sims = None, 0
@@ -205,6 +212,11 @@ class DeployHeadPlayer:
         # of blocking round-trips changes. Clamped to the remaining budget so N is exact.
         while sims_done < self._n_sims:
             left = self._n_sims - sims_done
+            if self._early_stop and _leader_fixed(tree, left):
+                self.last_stopped = True
+                self._rows["stop_fired"] += 1
+                self._rows["stop_saved"] += left
+                break
             # Up to a batch of network leaves, refilled past table and solver descents, within the budget left.
             leaves = tree.select_leaves_filled(self._leaf_batch_size, left)
             unserved = tree.last_inline_descents() + tree.last_tt_hits()
@@ -235,6 +247,12 @@ class DeployHeadPlayer:
                 self._expand_fn(tree, leaves)
             spent += len(leaves) + unserved
         return tree.gumbel_root_best_move(), sims_done + spent
+
+
+def _leader_fixed(tree: MCTSTree, left: int) -> bool:
+    """No runner-up can reach the visit leader with `left` descents, so the most visited child is decided."""
+    top = tree.get_top_visits(2)
+    return len(top) == 1 or (len(top) == 2 and top[0][1] - top[1][1] > left)
 
 
 __all__ = ["ChildInfo", "DeployHeadPlayer", "ExpandFn"]

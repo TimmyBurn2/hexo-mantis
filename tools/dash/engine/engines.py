@@ -204,7 +204,7 @@ class MantisEngine:
                                         gumbel_seed=ANALYZER_GUMBEL_SEED, leaf_batch_size=hp.leaf_batch_size,
                                         c_visit=hp.c_visit, c_scale=hp.c_scale, q_rescale=hp.q_rescale,
                                         # The NET's search, tactics off: a stamp before v39 holds no block to read.
-                                        gumbel_m=hp.gumbel_m, tactics=None, puct=hp.puct)
+                                        gumbel_m=hp.gumbel_m, tactics=None, puct=hp.puct, early_stop=False)
         player.new_game()
         t0 = time.perf_counter()
         move = player.select_move(board)

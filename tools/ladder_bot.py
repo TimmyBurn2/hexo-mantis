@@ -28,7 +28,7 @@ def parse_time_control(text: str) -> dict[str, Any]:
 
 @dataclass
 class ReplayReport:
-    """What `--replay` found: the recorded moves and budgets reproduced or not (`mismatches`, `budget_misses`), the book stones re-derived from the receipt's opening or not (`book_misses`), and the turns recorded BELOW the configured sims for their searched stones (`below_budget`: a decided position — strix's root VCF solver answers in a few visits, mantis's PUCT tree stops once every path hits a terminal; measured live 2026-09-19 at 3 and 427 of 512 — reported, never a failure on its own; the replay must reproduce the count)."""
+    """What `--replay` found: the recorded moves and budgets reproduced or not (`mismatches`, `budget_misses`), the book stones re-derived from the receipt's opening or not (`book_misses`), and the turns recorded BELOW the configured sims for their searched stones (`below_budget`: a decided position — strix's root VCF solver answers in a few visits, mantis's PUCT tree stops once every path hits a terminal; measured live 2026-09-19 at 3 and 427 of 512 — or mantis's early stop, each row's `stopped` saying which; reported, never a failure on its own; the replay must reproduce the count)."""
 
     game_id: str
     backend: str
@@ -77,7 +77,7 @@ def replay_receipt(receipt: dict[str, Any], backend: Any) -> ReplayReport:
         configured = (2 - len(forced)) * int(receipt["sims_configured"])
         if int(move["sims"]) < configured:
             report.below_budget.append({"request_id": move["request_id"], "sims": int(move["sims"]),
-                                        "configured": configured})
+                                        "configured": configured, "stopped": int(move["stopped"])})
     return report
 
 

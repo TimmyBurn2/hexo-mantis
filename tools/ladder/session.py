@@ -180,7 +180,8 @@ class Session:
                     self.log(f"ladder: {game_id}: resign refused: {resign_exc}")
             return
         receipt.add_move(request_id=request_id, stones=len(cells), time_limit=limit, placements=turn.placements,
-                         sims=turn.sims, ms=turn.ms, server_date=result.server_date, book_stones=turn.book_stones)
+                         sims=turn.sims, ms=turn.ms, server_date=result.server_date, book_stones=turn.book_stones,
+                         stopped=turn.stopped)
 
     def _finish(self, event: dict[str, Any]) -> None:
         game_id = str(event["gameId"])

@@ -299,7 +299,7 @@ def run_witness(config_path: Path, arms: Sequence[ArmSpec], *, games: int,
                                        gumbel_m=cfg.selfplay.gumbel_m,
                                        # As the round's floor probe arms it.
                                        gumbel_seed=cfg.seed, tactics=resolve_deploy_tactics(dump),
-                                       puct=resolve_puct_constants(cfg)),
+                                       puct=resolve_puct_constants(cfg), early_stop=False),
                 resolve_bot("random", opponent_sims=sims)(
                     seed=cfg.eval.gate.seed_base),
                 paired_openings(cfg.eval.gate.opening_book, n_pairs=max(games // 2, 1),

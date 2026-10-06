@@ -71,6 +71,7 @@ def test_the_mantis_backend_is_named_by_its_net_hash_and_plays_at_the_configs_de
     assert backend.encoding == _ENC
     assert backend.search["kind"] == "puct"
     assert backend.search["tactics"] is None, "the minted null deploy block is reported, and played, as none"
+    assert backend.search["early_stop"] is True, "the ladder plays the budget-aware stop, and its receipt says so"
 
 
 def test_a_turn_is_two_distinct_legal_cells_and_the_heads_own_sims_count(ladder, mantis_backend) -> None:
