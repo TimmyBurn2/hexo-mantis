@@ -554,6 +554,7 @@ def verify_edge_geometry(
 def collate_pack(
     n_graphs: int,
     node_feat: numpy.ndarray,
+    node_coords: numpy.ndarray,
     edge_index: numpy.ndarray,
     edge_attr: numpy.ndarray,
     node_offsets: numpy.ndarray,
@@ -575,10 +576,12 @@ def collate_pack(
     out_n_stones: numpy.ndarray,
     node_feat_dim: int,
     edge_feat_dim: int,
+    trunk_size: int,
     win_length: int,
     threads: int,
+    pad_to: tuple[int, int, int, int] | None = None,
 ) -> tuple[str, str] | None:
-    """Graph-wire checks 4-13 and the pack into the `out_*` views, GIL released; a refusal is `(class, message)`; RuntimeError on a wiring break."""
+    """Graph-wire checks 4-13, 15-16 and the pack into the `out_*` views, GIL released; a refusal is `(class, message)`; RuntimeError on a wiring break."""
     ...
 def edge_vocabulary(win_length: int) -> numpy.ndarray:
     """Every edge_attr row the builder can emit at `win_length`, flat `(V * 5,)` in code order."""

@@ -73,10 +73,8 @@ def _semantic_args(fields: dict[str, Any], cells: Any) -> tuple:
     g = GEOMETRY
     return (
         fields["node_feat"], fields["node_coords"], fields["edge_index"],
-        fields["edge_attr"], fields["node_offsets"], fields["edge_offsets"],
-        fields["legal_offsets"], fields["legal_node_gather"], fields["policy_dst_slot"],
-        fields["n_nodes_checksum"], fields["n_stones"], fields["window_center"],
-        fields["current_player"], int(fields["n_graphs"]), g["trunk_size"],
+        fields["edge_attr"], fields["node_offsets"], fields["legal_offsets"],
+        fields["legal_node_gather"], fields["current_player"], int(fields["n_graphs"]),
         g["win_length"], g["node_feat_dim"], g["edge_feat_dim"], cells,
     )
 
@@ -179,7 +177,7 @@ def test_the_vectorized_check_still_fires(payload_fields) -> None:
 
 
 def test_check_17_still_runs_after_15_and_16(payload_fields) -> None:
-    """PRECEDENCE: a wire corrupt for BOTH check 16 and check 17 must raise 16's error."""
+    """PRECEDENCE: a wire corrupt for BOTH check 16 and check 17 must raise 16's error, from the pack."""
     fields = payload_fields("b6")
     B = int(fields["n_graphs"])
     fields["policy_dst_slot"] = np.asarray(fields["policy_dst_slot"]).copy()
@@ -187,7 +185,8 @@ def test_check_17_still_runs_after_15_and_16(payload_fields) -> None:
     cells: list[Any] = [None] * B
     cells[0] = (99_999, 99_999)
     with pytest.raises(Exception) as exc:  # noqa: PT011 - the point is WHICH class
-        _check_semantic(*_semantic_args(fields, cells))
+        collate_graph_batch(GraphWirePayload(**fields), semantic="full", device="cpu",
+                            target_argmax_cells=cells, **GEOMETRY)
     assert type(exc.value).__name__ == "ScatterSlotCanonicalMismatch", (
         f"precedence broke: got {type(exc.value).__name__}; check 16 must fire before 17"
     )

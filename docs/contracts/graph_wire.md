@@ -92,7 +92,8 @@ Build-side (`build_leaf_graph`, reasons now travel — D6):
 6. `graph request: non-native builder_impl (NonNativeSampleBuilder handshake)` — build-side handshake.
 
 Consumer-side structural (checks 1-3 in `graph_collate.py::_check_wire_shape`, checks 4-13 in the Rust
-pack `mantis_selfplay::queues::collate::pack_wire`, raised by the Python resolver under the same names; the served
+pack `mantis_selfplay::queues::collate::pack_wire`, raised by the Python resolver under the same names, as are checks
+15-16 (`GatherNotLegalNode`, `ScatterSlotCanonicalMismatch`), which the pack runs after them on every batch; the served
 (coded) collate also refuses, on every batch and in any semantic mode, a row outside `mantis_graph::edge_vocabulary`, as
 check 14's class with check 14's own diagnosis — a
 SEPARATE catalogue from the numbered wire list below, which is why it carries no number in it):

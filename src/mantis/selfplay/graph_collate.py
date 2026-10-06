@@ -7,9 +7,9 @@ Splitting them would break the "one place asserts the wire" property the ADV sui
 `collate_graph_batch` is the one-and-only consumer of the block-diagonal wire emitted by the
 Rust `InferenceBatcher.next_graph_batch`, imported by BOTH the self-play hot path and the
 promotion-gate eval path, and import-safe with no module-scope torch. It asserts the contract
-version and the native-builder handshake, runs the structural checks (always full; 4-13 in the
-Rust pack that fills ONE host block) and the semantic ones (canary on the hot path), then ships
-the block. Every mismatch raises a NAMED error; there is no silent fixed-width fallback anywhere.
+version and the native-builder handshake, runs checks 1-13, 15 and 16 (always full; 4-16 bar 14 in
+the Rust pack that fills ONE host block) and the semantic ones, 14 and 17 (canary on the hot path),
+then ships the block. Every mismatch raises a NAMED error; there is no silent fixed-width fallback anywhere.
 The OUTPUT is not a dense scatter — the InferenceServer segment-softmaxes and returns ragged probs.
 """
 from __future__ import annotations
@@ -22,7 +22,6 @@ from typing import Any
 import numpy as np
 
 # Contract-fixed schema widths; callers pass spec.* dims from the registry.
-_OFF_WINDOW_SLOT = -1
 _BUILDER_IMPL_NATIVE = 1
 
 
@@ -114,12 +113,13 @@ class AugRoundTripMismatch(GraphContractError):
     pass
 
 
-#: The classes the Rust pack names its refusals by: checks 4-13, and check 14's for a coded row outside the vocabulary.
+#: The classes the Rust pack names its refusals by: checks 4-13, 15 and 16, and check 14's for a coded row outside the vocabulary.
 _PACK_ERRORS: dict[str, type[GraphContractError]] = {
     cls.__name__: cls for cls in (
         BatchCountMismatch, OffsetsNonMonotonic, NodeCountChecksum, EdgeIndexOutOfBounds,
         EdgeCrossesGraphBoundary, ScatterGatherCrossesGraph, ScatterSlotOutOfBounds,
         ScatterSlotAliasing, EmptyLegalSet, GatherNotStrictlyIncreasing, EdgeAttrGeometryMismatch,
+        GatherNotLegalNode, ScatterSlotCanonicalMismatch,
     )
 }
 
@@ -214,21 +214,9 @@ def _canary_should_run(period: int) -> bool:
     return (n == 0) or (period > 0 and n % period == 0)
 
 
-# Geometry helper — byte-parity with the Rust builder's `window_flat_idx`, vectorized.
 #: Fills the `(B, 2)` cell array for graphs with no usable target cell (check 17). `int64`'s
 #: minimum cannot be a board coordinate, so a sentinel row never matches a real one.
 _CELL_SENTINEL: int = np.iinfo(np.int64).min
-
-
-def _canonical_slot_vec(
-    q: np.ndarray, r: np.ndarray, cq: np.ndarray, cr: np.ndarray, trunk: int
-) -> np.ndarray:
-    half = (trunk - 1) // 2
-    wq = q - cq + half
-    wr = r - cr + half
-    inside = (wq >= 0) & (wq < trunk) & (wr >= 0) & (wr < trunk)
-    slot = np.where(inside, wq * trunk + wr, _OFF_WINDOW_SLOT)
-    return slot.astype(np.int64)
 
 
 def _graph_of(offsets: np.ndarray, count: int) -> np.ndarray:
@@ -343,7 +331,7 @@ def collate_graph_batch(
     """Validate and collate one block-diagonal graph wire into a `GraphBatch`.
 
     `semantic`: "full" (trainer), "canary" (hot path — first + every Nth) or "off". The
-    structural layer always runs full, and any mismatch raises a NAMED `GraphContractError`.
+    structural layer and checks 15-16 always run full; any mismatch raises a NAMED `GraphContractError`.
     `deferred_edge_geometry`: a sink for check 14 — when given, the check is appended to it
     instead of run, exactly when it would have run, for the caller's checker thread. `coded_edges`: each edge's vocabulary code, not its row; `pad_to` `(graphs, nodes, edges, legal)`: one padding graph to those sizes; `device_out`: the flat tensors to fill.
 
@@ -395,7 +383,7 @@ def collate_graph_batch(
     current_player = _flat(wire.current_player)
     B = int(wire.n_graphs)
 
-    # --- resolver step 3a: STRUCTURAL layer (13) — always full; 4-13 run in the pack ---
+    # --- resolver step 3a: STRUCTURAL layer (13) and checks 15-16 — always full; 4-16 bar 14 run in the pack ---
     N, E = _check_wire_shape(
         node_feat, node_coords, edge_index, edge_attr, node_offsets, edge_offsets,
         legal_offsets, legal_node_gather, policy_dst_slot, n_nodes_checksum, n_stones,
@@ -409,12 +397,13 @@ def collate_graph_batch(
         (B_out + 1, torch.int64), (L_out, torch.int64), (B_out + 1, torch.int64), (B_out, torch.int64),
     ), pinned)
     out = _numpy_views(staged)
+    # Checks 15-16 run in the pack on every batch, stricter than the semantic layer's canary period.
     refusal = _collate_pack(
-        B, node_feat, edge_index, edge_attr, node_offsets, edge_offsets, legal_offsets,
+        B, node_feat, node_coords, edge_index, edge_attr, node_offsets, edge_offsets, legal_offsets,
         legal_node_gather, policy_dst_slot, n_nodes_checksum, n_stones, window_center,
         current_player, out[0], out[1], None if coded_edges else out[2],
         out[2] if coded_edges else None, out[3], out[4], out[5], out[6], node_feat_dim,
-        edge_feat_dim, win_length, _PACK_THREADS, pad_to,
+        edge_feat_dim, trunk_size, win_length, _PACK_THREADS, pad_to,
     )
     if refusal is not None:
         if refusal[0] == EdgeAttrGeometryMismatch.__name__:
@@ -423,16 +412,15 @@ def collate_graph_batch(
                               node_feat_dim, edge_feat_dim, win_length).run()
         raise _PACK_ERRORS[refusal[0]](refusal[1])
 
-    # --- resolver step 3b: SEMANTIC/GEOMETRIC layer (4) — mode-gated ---
+    # --- resolver step 3b: SEMANTIC/GEOMETRIC layer (14, 17) — mode-gated ---
     run_semantic = semantic == "full" or (
         semantic == "canary" and _canary_should_run(canary_period)
     )
     if run_semantic:
         _check_semantic(
-            node_feat, node_coords, edge_index, edge_attr, node_offsets, edge_offsets,
-            legal_offsets, legal_node_gather, policy_dst_slot, n_nodes_checksum, n_stones,
-            window_center, current_player, B, trunk_size, win_length, node_feat_dim,
-            edge_feat_dim, target_argmax_cells, deferred_edge_geometry,
+            node_feat, node_coords, edge_index, edge_attr, node_offsets, legal_offsets,
+            legal_node_gather, current_player, B, win_length, node_feat_dim, edge_feat_dim,
+            target_argmax_cells, deferred_edge_geometry,
         )
 
     # --- resolver step 4: the block's arrays on the device (edge_index already global) ---
@@ -501,7 +489,7 @@ def ship_host_arrays(arrays: Sequence[np.ndarray], device: str) -> list[Any]:
 
 
 def _collate_pack(*args: Any) -> tuple[str, str] | None:
-    """Checks 4-13 and the pack, in Rust with the GIL released; a refusal is `(class name, message)`."""
+    """Checks 4-13, 15-16 and the pack, in Rust with the GIL released; a refusal is `(class name, message)`."""
     from mantis._engine import collate_pack
 
     return collate_pack(*args)
@@ -560,16 +548,16 @@ def _require_dtype(arr: np.ndarray, want, name: str) -> None:
 
 # Semantic / geometric layer — points at the geometrically-correct thing.
 def _check_semantic(
-    node_feat, node_coords, edge_index, edge_attr, node_offsets, edge_offsets,
-    legal_offsets, legal_node_gather, policy_dst_slot, n_nodes_checksum, n_stones,
-    window_center, current_player, B, trunk_size, win_length, node_feat_dim,
-    edge_feat_dim, target_argmax_cells, deferred: list[EdgeGeometryCheck] | None = None,
+    node_feat: np.ndarray, node_coords: np.ndarray, edge_index: np.ndarray, edge_attr: np.ndarray,
+    node_offsets: np.ndarray, legal_offsets: np.ndarray, legal_node_gather: np.ndarray,
+    current_player: np.ndarray, B: int, win_length: int, node_feat_dim: int, edge_feat_dim: int,
+    target_argmax_cells: Sequence[tuple[int, int] | None] | None,
+    deferred: list[EdgeGeometryCheck] | None = None,
 ) -> None:
     N = node_feat.size // node_feat_dim
     E = edge_attr.size // edge_feat_dim
     Lg = legal_node_gather.size
-    # `coords` feeds checks 16/17; check 14's old Python prep is gone because
-    # `verify_edge_geometry` reads the raw flat arrays directly, zero-copy.
+    # `coords` feeds check 17; check 14 reads the raw flat arrays directly, zero-copy.
     coords = node_coords.reshape(N, 2).astype(np.int64)
 
     # 14. EdgeAttrGeometryMismatch — attrs re-derived from coords + player id in Rust over the
@@ -584,33 +572,6 @@ def _check_semantic(
             check.run()
         else:
             deferred.append(check)
-
-    # 15. GatherNotLegalNode — gather in the legal subrange (not stone/dummy).
-    if Lg > 0:
-        legal_graph = _graph_of(legal_offsets, Lg)
-        lo = node_offsets[legal_graph] + n_stones.astype(np.int64)[legal_graph]
-        hi = node_offsets[legal_graph + 1] - 1  # dummy row excluded
-        if np.any(legal_node_gather < lo) or np.any(legal_node_gather >= hi):
-            raise GatherNotLegalNode("legal_node_gather points at a stone or dummy node")
-        # per-graph legal count == checksum - n_stones - 1.
-        per_graph_legal = np.diff(legal_offsets)
-        expect_legal = n_nodes_checksum.astype(np.int64) - n_stones.astype(np.int64) - 1
-        if not np.array_equal(per_graph_legal, expect_legal):
-            raise GatherNotLegalNode("per-graph legal count != checksum - n_stones - 1")
-
-    # 16. ScatterSlotCanonicalMismatch — slot == canonical slot of the gathered coord.
-    if Lg > 0:
-        legal_graph = _graph_of(legal_offsets, Lg)
-        gcoord = coords[legal_node_gather]
-        wc = window_center.reshape(B, 2).astype(np.int64)
-        cq = wc[legal_graph, 0]
-        cr = wc[legal_graph, 1]
-        # plane-literal-ok: node_coords cols 0/1 = (q,r) axial (contract §2.1)
-        canon = _canonical_slot_vec(gcoord[:, 0], gcoord[:, 1], cq, cr, trunk_size)
-        if not np.array_equal(canon, policy_dst_slot.astype(np.int64)):
-            raise ScatterSlotCanonicalMismatch(
-                "policy_dst_slot != canonical window slot of the gathered (rotated) coord"
-            )
 
     # 17. AugRoundTripMismatch — runtime canary on the trainer path: the target-argmax cell must
     # map to a legal node whose slot equals the canonical slot of that cell's rotated coord.

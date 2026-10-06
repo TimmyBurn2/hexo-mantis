@@ -8,7 +8,7 @@ THE DISTINCTION THIS FILE EXISTS TO PIN, because blurring it would break the eng
 names TWO different things:
 
   * the **wire array** — `GraphWirePayload.node_coords`, flat `(N, 2)` axial `(q, r)`. It is very
-    much ALIVE: `graph_collate._check_semantic` reshapes it for checks 16/17, the compiled
+    much ALIVE: the Rust pack reads it for check 16, `_check_semantic` for check 17, the compiled
     `verify_edge_geometry` reads the raw flat array zero-copy, and `mantis-bridge`'s assemble path
     reads `graph.node_coords` directly (`inference.rs:597-598`). The wire contract is versioned and
     is NOT touched.

@@ -218,7 +218,7 @@ fn two_pass_build(stones_in: &StoneList, params: &BuildParams) -> AxisGraph {
     let mut legal_node_gather: Vec<u32> = Vec::with_capacity(n_legal);
     for (j, &(q, r)) in legal.iter().enumerate() {
         legal_node_gather.push((n_stones + j) as u32);
-        policy_scatter_index.push(window_flat_idx(q, r, wc.0, wc.1, params.trunk_size));
+        policy_scatter_index.push(slot_of(q, r, wc, params.trunk_size));
     }
 
     let g = AxisGraph {

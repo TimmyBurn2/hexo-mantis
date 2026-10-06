@@ -204,18 +204,25 @@ fn window_center(stones: &[(i32, i32, i8)]) -> (i32, i32) {
     ((min_q + max_q) / 2, (min_r + max_r) / 2)
 }
 
-/// The dense engine's `window_flat_idx_at_geom` — window-relative flat index, returned as an
-/// i32 slot with `OFF_WINDOW_SLOT` (-1) for off-window.
+/// The dense engine's `window_flat_idx_at_geom` as a slot, `OFF_WINDOW_SLOT` off-window; i64 so no `i32` input overflows it.
 #[inline]
-fn window_flat_idx(q: i32, r: i32, cq: i32, cr: i32, trunk_sz: i32) -> i32 {
+#[must_use]
+pub fn window_flat_idx(q: i64, r: i64, cq: i64, cr: i64, trunk_sz: i64) -> i64 {
     let half = (trunk_sz - 1) / 2;
     let wq = q - cq + half;
     let wr = r - cr + half;
     if wq >= 0 && wq < trunk_sz && wr >= 0 && wr < trunk_sz {
         wq * trunk_sz + wr
     } else {
-        OFF_WINDOW_SLOT
+        i64::from(OFF_WINDOW_SLOT)
     }
+}
+
+/// [`window_flat_idx`] over the builder's `i32` geometry, narrowed to the wire's `i32` slot.
+#[inline]
+fn slot_of(q: i32, r: i32, wc: (i32, i32), trunk_sz: i32) -> i32 {
+    let at = |v: i32| i64::from(v);
+    window_flat_idx(at(q), at(r), at(wc.0), at(wc.1), at(trunk_sz)) as i32
 }
 
 #[inline]
@@ -903,7 +910,7 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
     let mut legal_node_gather: Vec<u32> = Vec::with_capacity(n_legal);
     for (j, &(q, r)) in legal.iter().enumerate() {
         legal_node_gather.push((n_stones + j) as u32);
-        policy_scatter_index.push(window_flat_idx(q, r, wc.0, wc.1, params.trunk_size));
+        policy_scatter_index.push(slot_of(q, r, wc, params.trunk_size));
     }
 
     let g = AxisGraph {
@@ -1292,6 +1299,24 @@ mod tests {
         g.edge_attr.0[3] = -g.edge_attr.0[3];
         let (ns, nl) = (g.n_stones as usize, g.legal_node_gather.len());
         verify_contract(&g, ns, nl, &params);
+    }
+
+    #[test]
+    fn the_window_slot_takes_every_i32_input_without_overflow() {
+        let (lo, hi) = (i64::from(i32::MIN), i64::from(i32::MAX));
+        for (q, r, cq, cr) in [
+            (hi, lo, lo, hi),
+            (lo, hi, hi, lo),
+            (hi, hi, lo, lo),
+            (0, 0, lo, hi),
+        ] {
+            assert_eq!(
+                window_flat_idx(q, r, cq, cr, 19),
+                i64::from(OFF_WINDOW_SLOT)
+            );
+        }
+        assert_eq!(window_flat_idx(hi, lo, hi, lo, 19), 180);
+        assert_eq!(window_flat_idx(-9, 9, 0, 0, 19), 18);
     }
 
     #[test]

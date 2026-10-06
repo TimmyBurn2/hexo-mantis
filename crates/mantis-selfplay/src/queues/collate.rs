@@ -1,18 +1,18 @@
-// >300 justify (R8): the structural checks 4-13 and the pack they guard are one pass over one wire, kept beside
+// >300 justify (R8): the checks 4-13, 15 and 16 and the pack they guard are one pass over one wire, kept beside
 // each other so a check and the copy it licenses cannot drift apart.
 
-//! `pack_wire`: checks 4–13 of `docs/contracts/graph_wire.md`, in order and by the reader's class names, fused with the pack.
+//! `pack_wire`: checks 4–13, 15 and 16 of `docs/contracts/graph_wire.md`, in order and by the reader's class names, fused with the pack.
 
 use std::fmt;
 
-use mantis_graph::{edge_code, edge_vocabulary, EDGE_FEAT_DIM, OFF_WINDOW_SLOT};
+use mantis_graph::{edge_code, edge_vocabulary, window_flat_idx, EDGE_FEAT_DIM, OFF_WINDOW_SLOT};
 
 /// Policy slots `[0, POLICY_SLOTS)`; `OFF_WINDOW_SLOT` is the one negative slot the contract allows.
 const POLICY_SLOTS: i32 = 362;
 /// Below this many edges the copy runs on the calling thread: a spawn costs more than the share it would copy.
 const PARALLEL_MIN_EDGES: usize = 1 << 16;
 
-/// The structural contract errors, named as the Python reader's classes.
+/// The contract errors the pack refuses by, named as the Python reader's classes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StructuralKind {
     BatchCountMismatch,
@@ -27,6 +27,10 @@ pub enum StructuralKind {
     GatherNotStrictlyIncreasing,
     /// Check 14's class: the coded pack refuses a row outside the edge vocabulary once checks 4–13 hold.
     EdgeAttrGeometryMismatch,
+    /// Check 15: a gather row off its graph's legal rows, or a graph's legal count off its checksum.
+    GatherNotLegalNode,
+    /// Check 16: a slot that is not its cell's canonical window slot.
+    ScatterSlotCanonicalMismatch,
 }
 
 impl StructuralKind {
@@ -45,6 +49,8 @@ impl StructuralKind {
             Self::EmptyLegalSet => "EmptyLegalSet",
             Self::GatherNotStrictlyIncreasing => "GatherNotStrictlyIncreasing",
             Self::EdgeAttrGeometryMismatch => "EdgeAttrGeometryMismatch",
+            Self::GatherNotLegalNode => "GatherNotLegalNode",
+            Self::ScatterSlotCanonicalMismatch => "ScatterSlotCanonicalMismatch",
         }
     }
 }
@@ -78,6 +84,8 @@ fn refuse<T>(kind: StructuralKind, message: String) -> Result<T, PackError> {
 pub struct WireRef<'a> {
     pub n_graphs: usize,
     pub node_feat: &'a [f32],
+    /// `(q, r)` per node, flat `2N`.
+    pub node_coords: &'a [i32],
     /// `[src (E) ‖ dst (E)]`.
     pub edge_index: &'a [i64],
     pub edge_attr: &'a [f32],
@@ -138,12 +146,13 @@ fn at(offsets: &[i64], i: usize) -> Result<usize, PackError> {
         )
 }
 
-/// Checks 4–13, then the arrays into `out` alike at any `threads`; a coded off-vocabulary row is refused last (check 14's class).
+/// Checks 4–13, a coded row outside the vocabulary (check 14's class), then 15–16 at `trunk_size`, packing `out` alike at any `threads`.
 pub fn pack_wire(
     w: &WireRef<'_>,
     out: &mut PackOut<'_>,
     node_feat_dim: usize,
     edge_feat_dim: usize,
+    trunk_size: i32,
     threads: usize,
     pad: Option<PadTo>,
 ) -> Result<(), PackError> {
@@ -166,6 +175,9 @@ pub fn pack_wire(
     let e = w.edge_attr.len() / edge_feat_dim;
     if w.edge_index.len() != 2 * e {
         return caller("edge_index is not 2E (check 2 precedes the pack)");
+    }
+    if w.node_coords.len() != 2 * n {
+        return caller("node_coords is not 2N (check 1 precedes the pack)");
     }
     check_counts(w)?;
     let (b, lg) = (w.n_graphs, w.legal_node_gather.len());
@@ -206,6 +218,7 @@ pub fn pack_wire(
     if let Some(message) = miss {
         return refuse(StructuralKind::EdgeAttrGeometryMismatch, message);
     }
+    check_legal_rows_and_slots(w, trunk_size)?;
     out.x[..w.node_feat.len()].copy_from_slice(w.node_feat);
     out.legal_offsets[..=b].copy_from_slice(w.legal_offsets);
     out.node_offsets[..=b].copy_from_slice(w.node_offsets);
@@ -604,6 +617,67 @@ fn check_and_pack_gather(
         );
     }
     out.legal_node_gather[..lg].copy_from_slice(gather);
+    Ok(())
+}
+
+/// Check 15 (every gather row inside its graph's legal rows, then every legal count), then check 16 (every slot canonical).
+fn check_legal_rows_and_slots(w: &WireRef<'_>, trunk_size: i32) -> Result<(), PackError> {
+    let row_of = |v: i64| {
+        usize::try_from(v).map_err(|_| PackError::Caller("a gather row past check 9".into()))
+    };
+    for g in 0..w.n_graphs {
+        let (lo, hi) = (
+            w.node_offsets[g] + i64::from(w.n_stones[g]),
+            w.node_offsets[g + 1] - 1,
+        );
+        for i in at(w.legal_offsets, g)?..at(w.legal_offsets, g + 1)? {
+            let row = w.legal_node_gather[i];
+            if row < lo || row >= hi {
+                return refuse(
+                    StructuralKind::GatherNotLegalNode,
+                    format!(
+                        "legal_node_gather[{i}]={row} points at a stone or dummy node: graph {g}'s legal rows are [{lo}, {hi})"
+                    ),
+                );
+            }
+        }
+    }
+    for g in 0..w.n_graphs {
+        let count = w.legal_offsets[g + 1] - w.legal_offsets[g];
+        let want = i64::from(w.n_nodes_checksum[g]) - i64::from(w.n_stones[g]) - 1;
+        if count != want {
+            return refuse(
+                StructuralKind::GatherNotLegalNode,
+                format!("graph {g} holds {count} legal nodes, not n_nodes_checksum - n_stones - 1 = {want}"),
+            );
+        }
+    }
+    let trunk = i64::from(trunk_size);
+    for g in 0..w.n_graphs {
+        let (cq, cr) = (
+            i64::from(w.window_center[2 * g]),
+            i64::from(w.window_center[2 * g + 1]),
+        );
+        for i in at(w.legal_offsets, g)?..at(w.legal_offsets, g + 1)? {
+            let row = row_of(w.legal_node_gather[i])?;
+            let (q, r) = (
+                i64::from(w.node_coords[2 * row]),
+                i64::from(w.node_coords[2 * row + 1]),
+            );
+            let (slot, canon) = (
+                i64::from(w.policy_dst_slot[i]),
+                window_flat_idx(q, r, cq, cr, trunk),
+            );
+            if slot != canon {
+                return refuse(
+                    StructuralKind::ScatterSlotCanonicalMismatch,
+                    format!(
+                        "policy_dst_slot[{i}]={slot} is not {canon}, the canonical window slot of ({q},{r}) about graph {g}'s centre ({cq},{cr})"
+                    ),
+                );
+            }
+        }
+    }
     Ok(())
 }
 

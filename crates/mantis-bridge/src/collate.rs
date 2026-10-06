@@ -7,19 +7,21 @@ use pyo3::prelude::*;
 use mantis_graph::edge_vocabulary as vocabulary;
 use mantis_selfplay::queues::collate::{pack_wire, EdgeOut, PackError, PackOut, PadTo, WireRef};
 
-/// Checks 4–13 and the pack into the `out_*` views (exactly one of attr and code), which must not overlap; `RuntimeError` is a wiring break.
+/// Checks 4–13, 15–16 and the pack into the `out_*` views (exactly one of attr and code), which must not overlap; `RuntimeError` is a wiring break.
 #[pyfunction]
 #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
 #[pyo3(signature = (
-    n_graphs, node_feat, edge_index, edge_attr, node_offsets, edge_offsets, legal_offsets,
-    legal_node_gather, policy_dst_slot, n_nodes_checksum, n_stones, window_center, current_player,
-    out_x, out_edge_index, out_edge_attr, out_edge_code, out_legal_offsets, out_legal_node_gather,
-    out_node_offsets, out_n_stones, node_feat_dim, edge_feat_dim, win_length, threads, pad_to=None,
+    n_graphs, node_feat, node_coords, edge_index, edge_attr, node_offsets, edge_offsets,
+    legal_offsets, legal_node_gather, policy_dst_slot, n_nodes_checksum, n_stones, window_center,
+    current_player, out_x, out_edge_index, out_edge_attr, out_edge_code, out_legal_offsets,
+    out_legal_node_gather, out_node_offsets, out_n_stones, node_feat_dim, edge_feat_dim,
+    trunk_size, win_length, threads, pad_to=None,
 ))]
 pub(crate) fn collate_pack(
     py: Python<'_>,
     n_graphs: usize,
     node_feat: PyReadonlyArray1<'_, f32>,
+    node_coords: PyReadonlyArray1<'_, i32>,
     edge_index: PyReadonlyArray1<'_, i64>,
     edge_attr: PyReadonlyArray1<'_, f32>,
     node_offsets: PyReadonlyArray1<'_, i64>,
@@ -41,6 +43,7 @@ pub(crate) fn collate_pack(
     mut out_n_stones: PyReadwriteArray1<'_, i64>,
     node_feat_dim: usize,
     edge_feat_dim: usize,
+    trunk_size: i32,
     win_length: u8,
     threads: usize,
     pad_to: Option<(usize, usize, usize, usize)>,
@@ -67,6 +70,7 @@ pub(crate) fn collate_pack(
     let wire = WireRef {
         n_graphs,
         node_feat: node_feat.as_slice()?,
+        node_coords: node_coords.as_slice()?,
         edge_index: edge_index.as_slice()?,
         edge_attr: edge_attr.as_slice()?,
         node_offsets: node_offsets.as_slice()?,
@@ -89,7 +93,18 @@ pub(crate) fn collate_pack(
         n_stones: out_n_stones.as_slice_mut()?,
     };
     // Plain slices are `Send`; the numpy borrows above outlive the detached section.
-    match py.detach(|| pack_wire(&wire, &mut out, node_feat_dim, edge_feat_dim, threads, pad)) {
+    let pack = || {
+        pack_wire(
+            &wire,
+            &mut out,
+            node_feat_dim,
+            edge_feat_dim,
+            trunk_size,
+            threads,
+            pad,
+        )
+    };
+    match py.detach(pack) {
         Ok(()) => Ok(None),
         Err(PackError::Contract { kind, message }) => Ok(Some((kind.name(), message))),
         Err(caller @ PackError::Caller(_)) => Err(PyRuntimeError::new_err(caller.to_string())),

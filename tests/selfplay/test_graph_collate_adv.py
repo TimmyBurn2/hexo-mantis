@@ -462,13 +462,13 @@ def test_dtype_sweep_clean_twin(payload_fields):
 
 
 def _canary_trace(payload_fields, semantic: str, period: int, n_calls: int = 8) -> list[bool]:
-    """Drive the cadence with the corruption visible ONLY to the semantic layer, reporting which
-    call indices raised."""
+    """Drive the cadence with the corruption visible ONLY to the semantic layer (ADV-8's flip, an
+    attribute-row pack's check 14), reporting which call indices raised."""
     reset_semantic_canary()
     raised: list[bool] = []
     for _ in range(n_calls):
         fields = payload_fields("b6")
-        fields["window_center"][0] = fields["window_center"][0] + 1
+        fields["edge_attr"][3] = -fields["edge_attr"][3]
         try:
             _collate(fields, device="cpu", semantic=semantic, canary_period=period)
         except GraphContractError:

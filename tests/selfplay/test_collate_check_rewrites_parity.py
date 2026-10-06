@@ -64,7 +64,8 @@ def _wire(**over) -> GraphWirePayload:
     Geometry comes from the registry row, never from literals here.
     """
     node_feat = np.zeros(6 * 11, dtype=np.float32)
-    node_coords = np.zeros(6 * 2, dtype=np.int32)
+    # Each graph: two legal cells, (0, 0) and (0, 1), at window slots 180 and 181, then its dummy.
+    node_coords = np.array([0, 0, 0, 1, 0, 0] * 2, dtype=np.int32)
     edge_index = np.array([0, 1, 3, 4, 1, 0, 4, 3], dtype=np.int64)
     edge_attr = np.zeros(4 * 5, dtype=np.float32)
     edge_attr[0::5] = 1.0
@@ -79,10 +80,10 @@ def _wire(**over) -> GraphWirePayload:
         "node_offsets": np.array([0, 3, 6], dtype=np.int64),
         "edge_offsets": np.array([0, 2, 4], dtype=np.int64),
         "legal_offsets": np.array([0, 2, 4], dtype=np.int64),
-        "legal_node_gather": np.array([1, 2, 4, 5], dtype=np.int64),
-        "policy_dst_slot": np.array([10, 11, 12, 13], dtype=np.int32),
+        "legal_node_gather": np.array([0, 1, 3, 4], dtype=np.int64),
+        "policy_dst_slot": np.array([180, 181, 180, 181], dtype=np.int32),
         "n_nodes_checksum": np.array([3, 3], dtype=np.uint32),
-        "n_stones": np.array([1, 1], dtype=np.uint16),
+        "n_stones": np.array([0, 0], dtype=np.uint16),
         "window_center": np.zeros(4, dtype=np.int32),
         "current_player": np.array([1, -1], dtype=np.int8),
     }
@@ -143,14 +144,15 @@ def test_a_slot_alias_inside_ONE_graph_still_raises_ScatterSlotAliasing() -> Non
 
 def test_the_SAME_slot_in_DIFFERENT_graphs_is_still_legal() -> None:
     """Prove the same slot in different graphs is legal: the count key must keep the graph id."""
-    slots = np.array([10, 11, 10, 13], dtype=np.int32)
+    slots = np.array([180, 181, 180, 181], dtype=np.int32)
     assert _collate(_wire(policy_dst_slot=slots)).n_graphs == 2
 
 
 def test_repeated_OFF_WINDOW_slots_are_still_exempt_from_the_alias_check() -> None:
     """Prove repeated off-window `-1` slots are exempt: counting them would refuse every wide position."""
     slots = np.array([-1, -1, -1, -1], dtype=np.int32)
-    assert _collate(_wire(policy_dst_slot=slots)).n_graphs == 2
+    far = np.array([100, 0, 100, 0], dtype=np.int32)
+    assert _collate(_wire(policy_dst_slot=slots, window_center=far)).n_graphs == 2
 
 
 def test_the_alias_check_reaches_the_TOP_of_the_slot_range() -> None:

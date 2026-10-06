@@ -8,6 +8,7 @@ use crate::queues::{build_leaf_graph, GraphWire, GraphWireArrays};
 
 const NODE_DIM: usize = 11;
 const EDGE_DIM: usize = 5;
+const TRUNK: i32 = 19;
 
 fn wire(positions: &[&[(i64, i64, i64)]]) -> GraphWireArrays {
     let graphs: Vec<_> = positions
@@ -67,6 +68,7 @@ fn pack(a: &GraphWireArrays, out: &mut Out, threads: usize) -> Result<(), PackEr
     let w = WireRef {
         n_graphs: a.n_graphs,
         node_feat: &a.node_feat,
+        node_coords: &a.node_coords,
         edge_index: &a.edge_index,
         edge_attr: &a.edge_attr,
         node_offsets: &a.node_offsets,
@@ -88,7 +90,7 @@ fn pack(a: &GraphWireArrays, out: &mut Out, threads: usize) -> Result<(), PackEr
         node_offsets: &mut out.node_offsets,
         n_stones: &mut out.n_stones,
     };
-    pack_wire(&w, &mut o, NODE_DIM, EDGE_DIM, threads, None)
+    pack_wire(&w, &mut o, NODE_DIM, EDGE_DIM, TRUNK, threads, None)
 }
 
 fn kind_of(a: &GraphWireArrays) -> StructuralKind {
@@ -240,13 +242,188 @@ fn two_legal_nodes_of_one_graph_on_one_slot_alias() {
     assert_eq!(kind_of(&a), StructuralKind::ScatterSlotAliasing);
 }
 
+/// `a` with graph `g` centred far off its cells, so each of its slots is honestly the sentinel.
+fn off_window(mut a: GraphWireArrays, g: usize) -> GraphWireArrays {
+    let rows = usize::try_from(a.legal_offsets[g]).expect("offset")
+        ..usize::try_from(a.legal_offsets[g + 1]).expect("offset");
+    a.policy_dst_slot[rows].fill(-1);
+    a.window_center[2 * g] = i32::MIN;
+    a
+}
+
 #[test]
 fn the_off_window_sentinel_never_aliases() {
-    let mut a = three();
-    a.policy_dst_slot[0] = -1;
-    a.policy_dst_slot[1] = -1;
+    let a = off_window(three(), 0);
+    assert!(a.legal_offsets[1] >= 2, "two sentinels in one graph");
     let mut out = out_for(&a);
     pack(&a, &mut out, 1).expect("two sentinels are not an alias");
+}
+
+fn message_of(a: &GraphWireArrays) -> String {
+    let mut out = out_for(a);
+    match pack(a, &mut out, 1) {
+        Err(PackError::Contract { message, .. }) => message,
+        other => panic!("expected a contract error, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_gather_row_on_a_stone_or_the_dummy_is_not_a_legal_node() {
+    let mut a = three();
+    a.legal_node_gather[0] = a.node_offsets[0];
+    assert_eq!(kind_of(&a), StructuralKind::GatherNotLegalNode);
+    assert!(message_of(&a).contains("stone or dummy node"));
+    let mut b = three();
+    let last = b.legal_node_gather.len() - 1;
+    b.legal_node_gather[last] = b.node_offsets[3] - 1;
+    assert_eq!(kind_of(&b), StructuralKind::GatherNotLegalNode);
+}
+
+#[test]
+fn a_legal_count_off_its_checksum_is_not_a_legal_node() {
+    let mut a = three();
+    a.n_stones[0] -= 1;
+    assert_eq!(kind_of(&a), StructuralKind::GatherNotLegalNode);
+    assert!(
+        message_of(&a).contains("graph 0 holds"),
+        "{}",
+        message_of(&a)
+    );
+}
+
+#[test]
+fn a_slot_off_its_cells_canonical_window_slot_is_refused() {
+    let mut a = three();
+    a.window_center[2] += 1;
+    assert_eq!(kind_of(&a), StructuralKind::ScatterSlotCanonicalMismatch);
+    assert!(message_of(&a).contains("about graph 1's centre"));
+    let mut b = three();
+    let inside = b
+        .policy_dst_slot
+        .iter()
+        .position(|&s| s >= 0)
+        .expect("an in-window slot");
+    b.policy_dst_slot[inside] = -1;
+    assert_eq!(kind_of(&b), StructuralKind::ScatterSlotCanonicalMismatch);
+}
+
+#[test]
+fn checks_15_and_16_run_after_13_and_after_the_vocabulary_in_that_order() {
+    let mut order = three();
+    order.window_center[0] += 1;
+    order.legal_node_gather.swap(0, 1);
+    order.policy_dst_slot.swap(0, 1);
+    assert_eq!(kind_of(&order), StructuralKind::GatherNotStrictlyIncreasing);
+    let mut count = three();
+    count.window_center[0] += 1;
+    count.n_stones[2] -= 1;
+    assert_eq!(kind_of(&count), StructuralKind::GatherNotLegalNode);
+    let mut vocab = three();
+    vocab.window_center[0] += 1;
+    vocab.edge_attr[3] = 2.5;
+    let mut codes = vec![0u8; vocab.edge_attr.len() / EDGE_DIM];
+    match pack_coded(&vocab, &mut codes, 1) {
+        Err(PackError::Contract { kind, .. }) => {
+            assert_eq!(kind, StructuralKind::EdgeAttrGeometryMismatch);
+        }
+        other => panic!("expected EdgeAttrGeometryMismatch, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_padded_pack_checks_the_real_graphs_before_its_padding() {
+    let mut a = three();
+    a.window_center[4] -= 1;
+    let (b, n, e, lg) = (
+        a.n_graphs,
+        a.node_feat.len() / NODE_DIM,
+        a.edge_attr.len() / EDGE_DIM,
+        a.legal_node_gather.len(),
+    );
+    let pad = PadTo {
+        n_graphs: b + 1,
+        n_nodes: n + 2,
+        n_edges: e,
+        n_legal: lg + 1,
+    };
+    let mut out = Out {
+        x: vec![0.0; pad.n_nodes * NODE_DIM],
+        edge_index: vec![0; 2 * pad.n_edges],
+        edge_attr: vec![0.0; pad.n_edges * EDGE_DIM],
+        legal_offsets: vec![0; pad.n_graphs + 1],
+        legal_node_gather: vec![0; pad.n_legal],
+        node_offsets: vec![0; pad.n_graphs + 1],
+        n_stones: vec![0; pad.n_graphs],
+    };
+    let w = WireRef {
+        n_graphs: a.n_graphs,
+        node_feat: &a.node_feat,
+        node_coords: &a.node_coords,
+        edge_index: &a.edge_index,
+        edge_attr: &a.edge_attr,
+        node_offsets: &a.node_offsets,
+        edge_offsets: &a.edge_offsets,
+        legal_offsets: &a.legal_offsets,
+        legal_node_gather: &a.legal_node_gather,
+        policy_dst_slot: &a.policy_dst_slot,
+        n_nodes_checksum: &a.n_nodes_checksum,
+        n_stones: &a.n_stones,
+        window_center: &a.window_center,
+        current_player: &a.current_player,
+    };
+    let mut o = PackOut {
+        x: &mut out.x,
+        edge_index: &mut out.edge_index,
+        edges: EdgeOut::Attr(&mut out.edge_attr),
+        legal_offsets: &mut out.legal_offsets,
+        legal_node_gather: &mut out.legal_node_gather,
+        node_offsets: &mut out.node_offsets,
+        n_stones: &mut out.n_stones,
+    };
+    match pack_wire(&w, &mut o, NODE_DIM, EDGE_DIM, TRUNK, 1, Some(pad)) {
+        Err(PackError::Contract { kind, .. }) => {
+            assert_eq!(kind, StructuralKind::ScatterSlotCanonicalMismatch);
+        }
+        other => panic!("expected ScatterSlotCanonicalMismatch, got {other:?}"),
+    }
+}
+
+#[test]
+fn the_wrong_trunk_moves_every_canonical_slot() {
+    let a = three();
+    let mut out = out_for(&a);
+    let w = WireRef {
+        n_graphs: a.n_graphs,
+        node_feat: &a.node_feat,
+        node_coords: &a.node_coords,
+        edge_index: &a.edge_index,
+        edge_attr: &a.edge_attr,
+        node_offsets: &a.node_offsets,
+        edge_offsets: &a.edge_offsets,
+        legal_offsets: &a.legal_offsets,
+        legal_node_gather: &a.legal_node_gather,
+        policy_dst_slot: &a.policy_dst_slot,
+        n_nodes_checksum: &a.n_nodes_checksum,
+        n_stones: &a.n_stones,
+        window_center: &a.window_center,
+        current_player: &a.current_player,
+    };
+    let mut o = PackOut {
+        x: &mut out.x,
+        edge_index: &mut out.edge_index,
+        edges: EdgeOut::Attr(&mut out.edge_attr),
+        legal_offsets: &mut out.legal_offsets,
+        legal_node_gather: &mut out.legal_node_gather,
+        node_offsets: &mut out.node_offsets,
+        n_stones: &mut out.n_stones,
+    };
+    assert!(matches!(
+        pack_wire(&w, &mut o, NODE_DIM, EDGE_DIM, 25, 1, None),
+        Err(PackError::Contract {
+            kind: StructuralKind::ScatterSlotCanonicalMismatch,
+            ..
+        })
+    ));
 }
 
 #[test]
@@ -302,6 +479,7 @@ fn pack_coded(a: &GraphWireArrays, codes: &mut [u8], threads: usize) -> Result<(
     let w = WireRef {
         n_graphs: a.n_graphs,
         node_feat: &a.node_feat,
+        node_coords: &a.node_coords,
         edge_index: &a.edge_index,
         edge_attr: &a.edge_attr,
         node_offsets: &a.node_offsets,
@@ -326,7 +504,7 @@ fn pack_coded(a: &GraphWireArrays, codes: &mut [u8], threads: usize) -> Result<(
         node_offsets: &mut out.node_offsets,
         n_stones: &mut out.n_stones,
     };
-    pack_wire(&w, &mut o, NODE_DIM, EDGE_DIM, threads, None)
+    pack_wire(&w, &mut o, NODE_DIM, EDGE_DIM, TRUNK, threads, None)
 }
 
 #[test]
@@ -416,6 +594,7 @@ fn a_coded_pack_without_a_vocabulary_is_a_wiring_break_not_a_wire_defect() {
     let w = WireRef {
         n_graphs: a.n_graphs,
         node_feat: &a.node_feat,
+        node_coords: &a.node_coords,
         edge_index: &a.edge_index,
         edge_attr: &a.edge_attr,
         node_offsets: &a.node_offsets,
@@ -441,7 +620,7 @@ fn a_coded_pack_without_a_vocabulary_is_a_wiring_break_not_a_wire_defect() {
         n_stones: &mut out.n_stones,
     };
     assert!(matches!(
-        pack_wire(&w, &mut o, NODE_DIM, EDGE_DIM, 1, None),
+        pack_wire(&w, &mut o, NODE_DIM, EDGE_DIM, TRUNK, 1, None),
         Err(PackError::Caller(_))
     ));
 }
@@ -473,6 +652,7 @@ fn a_padded_pack_writes_the_real_arrays_then_one_padding_graph() {
     let w = WireRef {
         n_graphs: a.n_graphs,
         node_feat: &a.node_feat,
+        node_coords: &a.node_coords,
         edge_index: &a.edge_index,
         edge_attr: &a.edge_attr,
         node_offsets: &a.node_offsets,
@@ -497,7 +677,7 @@ fn a_padded_pack_writes_the_real_arrays_then_one_padding_graph() {
         node_offsets: &mut no,
         n_stones: &mut ns,
     };
-    pack_wire(&w, &mut o, NODE_DIM, EDGE_DIM, 2, Some(pad)).expect("a padded pack");
+    pack_wire(&w, &mut o, NODE_DIM, EDGE_DIM, TRUNK, 2, Some(pad)).expect("a padded pack");
     let as_i64 = |v: usize| i64::try_from(v).expect("small");
     assert_eq!(
         x[..n * NODE_DIM]
@@ -564,6 +744,7 @@ fn a_pad_that_leaves_no_padding_node_or_graph_is_a_caller_error() {
         let w = WireRef {
             n_graphs: a.n_graphs,
             node_feat: &a.node_feat,
+            node_coords: &a.node_coords,
             edge_index: &a.edge_index,
             edge_attr: &a.edge_attr,
             node_offsets: &a.node_offsets,
@@ -587,7 +768,7 @@ fn a_pad_that_leaves_no_padding_node_or_graph_is_a_caller_error() {
         };
         assert!(
             matches!(
-                pack_wire(&w, &mut o, NODE_DIM, EDGE_DIM, 1, Some(pad)),
+                pack_wire(&w, &mut o, NODE_DIM, EDGE_DIM, TRUNK, 1, Some(pad)),
                 Err(PackError::Caller(_))
             ),
             "{pad:?}"
@@ -622,6 +803,7 @@ fn padding_legal_entries_wrap_over_the_padding_nodes_when_they_outnumber_them() 
     let w = WireRef {
         n_graphs: a.n_graphs,
         node_feat: &a.node_feat,
+        node_coords: &a.node_coords,
         edge_index: &a.edge_index,
         edge_attr: &a.edge_attr,
         node_offsets: &a.node_offsets,
@@ -643,7 +825,7 @@ fn padding_legal_entries_wrap_over_the_padding_nodes_when_they_outnumber_them() 
         node_offsets: &mut out.node_offsets,
         n_stones: &mut out.n_stones,
     };
-    pack_wire(&w, &mut o, NODE_DIM, EDGE_DIM, 1, Some(pad)).expect("a padded pack");
+    pack_wire(&w, &mut o, NODE_DIM, EDGE_DIM, TRUNK, 1, Some(pad)).expect("a padded pack");
     let as_i64 = |v: usize| i64::try_from(v).expect("small");
     let tail: Vec<i64> = (0..7).map(|k| as_i64(n + k % 3)).collect();
     assert_eq!(&out.legal_node_gather[lg..], &tail[..]);
