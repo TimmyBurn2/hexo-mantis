@@ -92,7 +92,7 @@ class MantisBackend:
 
         from mantis.config.resolve.fused_graph_caps import resolve_fused_graph_caps
         from mantis.config.resolve.inference_batching import resolve_inference_batching
-        from mantis.config.resolve.leaf_build_threads import resolve_leaf_build_threads
+        from mantis.config.resolve.leaf_build_threads import resolve_standalone_leaf_build_threads
         from mantis.config.resolve.puct import resolve_puct_constants
         from mantis.config.resolve.tactics import resolve_deploy_tactics
         from mantis.encoding import lookup, normalize_encoding_name
@@ -127,7 +127,7 @@ class MantisBackend:
             inference_batching=resolve_inference_batching(dump) if graph else None,
             max_in_flight=int(config.selfplay.leaf_batch_size),
             submitters=1,  # one game at a time
-            leaf_build_threads=resolve_leaf_build_threads(dump) if graph else 1,
+            leaf_build_threads=resolve_standalone_leaf_build_threads(dump, concurrency=1) if graph else 1,
         )
         self.sims = _resolve_sims(preset, int(config.eval.gate.deploy_sims))
         self._leaf_batch_size = int(config.selfplay.leaf_batch_size)

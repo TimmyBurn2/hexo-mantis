@@ -148,3 +148,68 @@ def test_a_missing_reservation_input_RAISES_rather_than_defaulting() -> None:
         resolve_leaf_build_threads({"selfplay": {}}, cpu_count=8)
     with pytest.raises(MissingSampleThreadsInputError):
         resolve_leaf_build_threads({}, cpu_count=8)
+
+
+@pytest.mark.parametrize(("cores", "leaf_batch", "concurrency", "want"), [
+    (16, 8, 1, 8), (16, 8, 8, 1), (4, 8, 1, 3), (1, 8, 1, 1), (16, 4, 1, 4), (32, 8, 4, 7), (2, 8, 8, 1),
+])
+def test_the_standalone_width_shares_the_host_and_never_exceeds_a_leaf_batch(
+    cores: int, leaf_batch: int, concurrency: int, want: int,
+) -> None:
+    """A host running no self-play: the cores less the serving thread, shared by the games in flight,
+    at most one leaf batch (a wider pool has no leaf to build)."""
+    from mantis.config.resolve.leaf_build_threads import resolve_standalone_leaf_build_threads
+
+    cfg = {"selfplay": {"n_workers": 32, "leaf_batch_size": leaf_batch}}
+    assert resolve_standalone_leaf_build_threads(cfg, concurrency=concurrency, cpu_count=cores) == want
+
+
+def test_a_missing_standalone_input_RAISES_rather_than_defaulting() -> None:
+    from mantis.config.resolve.leaf_build_threads import resolve_standalone_leaf_build_threads
+    from mantis.config.resolve.sample_threads import MissingSampleThreadsInputError
+
+    with pytest.raises(MissingSampleThreadsInputError):
+        resolve_standalone_leaf_build_threads({"selfplay": {}}, concurrency=1, cpu_count=8)
+    with pytest.raises(ValueError):
+        resolve_standalone_leaf_build_threads({"selfplay": {"leaf_batch_size": 8}}, concurrency=0, cpu_count=8)
+
+
+def _calls(path: Path, name: str) -> int:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return sum(1 for node in ast.walk(tree) if isinstance(node, ast.Call)
+               and getattr(node.func, "id", getattr(node.func, "attr", None)) == name)
+
+
+def test_the_in_run_eval_beside_self_play_keeps_the_reservation() -> None:
+    """The pin: widening the build beside self-play takes cores from its workers, so the run's eval seam
+    never reaches the standalone width."""
+    for rel in ("src/mantis/run.py", "src/mantis/eval/pipeline.py", "src/mantis/eval/worker.py"):
+        assert _calls(_REPO / rel, "resolve_standalone_leaf_build_threads") == 0, rel
+    assert _calls(_REPO / "src/mantis/run.py", "resolve_leaf_build_threads") == 1
+
+
+@pytest.mark.parametrize("rel", ["tools/ladder/backends.py", "tools/dash/engine/engines.py", "tools/strength_frontier.py"])
+def test_every_standalone_single_game_host_takes_the_standalone_width(rel: str) -> None:
+    path = _REPO / rel
+    assert _calls(path, "resolve_standalone_leaf_build_threads") >= 1, rel
+    assert _calls(path, "resolve_leaf_build_threads") == 0, rel
+
+
+def test_a_cell_resolves_its_width_at_its_own_concurrency() -> None:
+    """Eight games in flight share the host, so a cell's width is not a lone game's."""
+    import importlib.util
+    import sys
+
+    from mantis.config.loader import load_config
+    from mantis.config.resolve.leaf_build_threads import resolve_standalone_leaf_build_threads
+
+    spec = importlib.util.spec_from_file_location("strength_frontier_t", _REPO / "tools/strength_frontier.py")
+    sf = importlib.util.module_from_spec(spec)
+    sys.modules["strength_frontier_t"] = sf
+    spec.loader.exec_module(sf)
+    config = load_config(_REPO / "configs/run11a2.yaml")
+    base = sf.base_round_spec(config, work_dir=Path("/nonexistent"))
+    cell = {"label": "c", "search_kind": "puct", "sims": 128, "games": 2, "opponent": "six",
+            "six_net": "gen0030", "six_nodes": 16, "concurrency": 8}
+    got = sf.cell_spec(cell, base, cell_dir=Path("/nonexistent"), config=config)
+    assert got.leaf_build_threads == resolve_standalone_leaf_build_threads(config.model_dump(), concurrency=8)

@@ -13,7 +13,7 @@ from mantis._engine import Board, MCTSTree
 from mantis.arena.deploy_head import ChildInfo
 from mantis.config.resolve.fused_graph_caps import resolve_fused_graph_caps
 from mantis.config.resolve.inference_batching import resolve_inference_batching
-from mantis.config.resolve.leaf_build_threads import resolve_leaf_build_threads
+from mantis.config.resolve.leaf_build_threads import resolve_standalone_leaf_build_threads
 from mantis.config.resolve.puct import PuctConstants, resolve_puct_constants
 from mantis.config.resolve.search import MissingSearchKindError, resolve_deploy_search_kind
 from mantis.encoding import lookup
@@ -171,7 +171,7 @@ class MantisEngine:
             net, torch.device(device), encoding_spec=self.spec, fused_graph_caps=resolve_fused_graph_caps(cfg),
             inference_batching=resolve_inference_batching(cfg), max_in_flight=self.hparams.leaf_batch_size,
             submitters=1,  # the analyst thread serialises every search on this engine
-            leaf_build_threads=resolve_leaf_build_threads(cfg))
+            leaf_build_threads=resolve_standalone_leaf_build_threads(cfg, concurrency=1))
         self._expand = _graph_expand_fn(self.engine, self.spec)
         self._raw_tree = MCTSTree(**replace(self.hparams.puct, quiescence_enabled=False).tree_kwargs())
         self._raw_tree.configure_search(self.search_kind, self.hparams.c_visit, self.hparams.c_scale,

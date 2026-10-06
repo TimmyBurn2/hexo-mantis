@@ -38,7 +38,7 @@ from mantis.config.resolve.allocator_posture import declared_allocator_posture, 
 from mantis.config.resolve.eval_posture import resolve_ply_cap_adjudication, resolve_strength_floor
 from mantis.config.resolve.fused_graph_caps import resolve_fused_graph_caps
 from mantis.config.resolve.inference_batching import resolve_inference_batching
-from mantis.config.resolve.leaf_build_threads import resolve_leaf_build_threads
+from mantis.config.resolve.leaf_build_threads import resolve_standalone_leaf_build_threads
 from mantis.config.resolve.puct import resolve_puct_constants
 from mantis.config.resolve.tactics import ARMS, arm_from_file, resolve_deploy_tactics
 from mantis.encoding import lookup
@@ -154,7 +154,7 @@ def base_round_spec(config: Any, *, work_dir: Path) -> RoundSpec:
         search_kind="", gumbel_m=config.selfplay.gumbel_m, tactics=resolve_deploy_tactics(dump),
         puct=resolve_puct_constants(config),
         inference_batching=resolve_inference_batching(dump) if graph else None,
-        leaf_build_threads=resolve_leaf_build_threads(dump) if graph else 1,
+        leaf_build_threads=resolve_standalone_leaf_build_threads(dump, concurrency=1) if graph else 1,
         concurrency=1, rung_concurrency=1,
         allocator_posture=(declared_allocator_posture(dump)
                            if governs_device(cfg.worker_device) else None),
@@ -230,6 +230,10 @@ def cell_spec(cell: Mapping[str, Any], base: RoundSpec, *, cell_dir: Path, confi
         game_record=GameRecordTarget(record_dir=str(cell_dir / "games"), run_id=_RUN_ID),
         concurrency=int(cell.get("concurrency", 1)),
         rung_concurrency=int(cell.get("concurrency", 1)),
+        # A cell's host runs no self-play; its games in flight share the build threads.
+        leaf_build_threads=(resolve_standalone_leaf_build_threads(
+            config.model_dump(), concurrency=int(cell.get("concurrency", 1)))
+            if config.identity.representation == "graph" else 1),
         # Against a ruler our head alone plays it; a snapshot opponent is our net's gate pair, armed alike.
         tactics=cell.get("tactics", base.tactics),
     )

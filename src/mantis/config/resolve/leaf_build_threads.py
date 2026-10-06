@@ -9,10 +9,20 @@ rather than restating it: one place where the reservation can be wrong, one name
 Self-play workers are deliberately NOT covered — each is already one of `n_workers` threads
 building its own leaves, so widening one takes threads from the others and double-counts the
 reservation. The eval child is the case this exists for: one calling thread on an idle card.
+A host that runs no self-play (the ladder, the dash, a cell) reserves nothing for it: that is
+`resolve_standalone_leaf_build_threads`, and the run's own eval seam never calls it.
 """
+import os
+from collections.abc import Mapping
 from typing import Any
 
-from mantis.config.resolve.sample_threads import resolve_sample_threads
+from mantis.config.resolve.sample_threads import (
+    MissingSampleThreadsInputError,
+    resolve_sample_threads,
+)
+
+#: The inference-server thread every engine starts.
+_SERVER_THREADS = 1
 
 
 def resolve_leaf_build_threads(full_config: Any, *, cpu_count: int | None = None) -> int:
@@ -35,4 +45,27 @@ def resolve_leaf_build_threads(full_config: Any, *, cpu_count: int | None = None
     return resolve_sample_threads(full_config, cpu_count=cpu_count)
 
 
-__all__ = ["resolve_leaf_build_threads"]
+def resolve_standalone_leaf_build_threads(
+    full_config: Any, *, concurrency: int, cpu_count: int | None = None,
+) -> int:
+    """Return the leaf-build width on a host that runs no self-play. Always >= 1.
+
+    The cores less the serving thread, shared by the `concurrency` games in flight, and at most one
+    leaf batch, since a select call returns no more leaves than that to build.
+
+    Raises:
+        MissingSampleThreadsInputError: the config carries no `selfplay.leaf_batch_size`.
+        ValueError: `concurrency` is below 1.
+    """
+    if int(concurrency) < 1:
+        raise ValueError(f"resolve_standalone_leaf_build_threads: concurrency={concurrency} games in flight")
+    section = full_config.get("selfplay") if isinstance(full_config, Mapping) else None
+    if not isinstance(section, Mapping) or "leaf_batch_size" not in section:
+        raise MissingSampleThreadsInputError(
+            "selfplay.leaf_batch_size is absent, so the standalone build width has no ceiling (LAW-11)")
+    cores = int(cpu_count) if cpu_count is not None else (os.cpu_count() or 1)
+    per_game = (cores - _SERVER_THREADS) // int(concurrency)
+    return max(1, min(int(section["leaf_batch_size"]), per_game))
+
+
+__all__ = ["resolve_leaf_build_threads", "resolve_standalone_leaf_build_threads"]
