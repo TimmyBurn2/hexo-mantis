@@ -1518,3 +1518,24 @@ fn a_full_batch_is_unaffected_by_the_unwind() {
     tree.expand_and_backup(&policies, &vec![0.0; n]);
     assert!(tree.pending.is_empty(), "every pending leaf was consumed");
 }
+
+#[test]
+fn a_select_call_stops_at_its_first_collision() {
+    // Planted break: drop the stop and every later attempt repeats the colliding descent, so
+    // `sim_count` reads 4n; the returned leaves and the pending virtual loss are the same either way.
+    let mut tree = MCTSTree::new(1.5);
+    tree.new_game(Board::new());
+    let leaves = tree
+        .select_leaves(4)
+        .expect("select_leaves: no desync on a fresh root");
+    assert_eq!(leaves.len(), 1, "the unexpanded root is the one leaf");
+    assert_eq!(tree.pending.len(), 1);
+    assert_eq!(
+        tree.sim_count, 2,
+        "one served descent and one collision, no repeats"
+    );
+    assert_eq!(
+        tree.pool[0].virtual_loss_count, 1,
+        "only the pending leaf's loss stands"
+    );
+}

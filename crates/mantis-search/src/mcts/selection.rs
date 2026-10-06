@@ -350,8 +350,9 @@ impl MCTSTree {
 
         while i < n && attempts < max_attempts {
             attempts += 1;
+            // An overlap leaves the tree as it found it, so every later attempt would repeat it.
             let Some(leaf_idx) = self.descend(&mut board, &mut diffs, &pending_ids)? else {
-                continue;
+                break;
             };
             let facts = match self.tactics_leaf(leaf_idx, &board) {
                 LeafCall::Inline => {
