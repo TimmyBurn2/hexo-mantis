@@ -288,6 +288,8 @@ class InferenceBatcher:
         self,
         positions: list[tuple[list[tuple[int, int, int]], int, int]],
         n_threads: int = 1,
+        *,
+        consumer_checks_every_batch: bool = False,
     ) -> list[
         tuple[list[float], list[tuple[tuple[int, int], float]], float, tuple[int, int]]
     ]: ...
@@ -605,6 +607,9 @@ def mcts_max_armed_sims_gumbel() -> int:
     """
 
 def take_mcts_pool_overflow_count() -> int: ...
+def unverified_graph_builds() -> int:
+    """Graph builds since process start that skipped the builder's own verify, read without resetting."""
+    ...
 def graph_row_outcome(
     rec_player: int,
     winner: int,

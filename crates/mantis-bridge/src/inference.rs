@@ -17,7 +17,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use mantis_encoding::RegistrySpec;
-use mantis_graph::{AxisGraph, BUILDER_IMPL_NATIVE};
+use mantis_graph::{AxisGraph, ProducerVerify, BUILDER_IMPL_NATIVE};
 use mantis_search::LegalSetPolicy;
 use mantis_selfplay::poison::lock_or_recover;
 use mantis_selfplay::queues::{
@@ -531,7 +531,7 @@ impl PyInferenceBatcher {
         n_threads: usize,
     ) -> PyResult<Vec<(Vec<f32>, Vec<((i32, i32), f32)>, f32)>> {
         Ok(self
-            .submit_graphs_and_wait_ls(py, positions, n_threads)?
+            .submit_graphs_and_wait_ls(py, positions, n_threads, false)?
             .into_iter()
             .map(|(dense, overflow, value, _center)| (dense, overflow, value))
             .collect())
@@ -567,23 +567,32 @@ impl PyInferenceBatcher {
     /// `g.window_center`, `Board` does not expose one to Python, and recomputing it would erase
     /// the only leaf/policy alignment cross-check there is. `n_threads` is the LEAF BUILD's
     /// width, `1` being the serial exact-parity control; the build runs inside `py.detach`,
-    /// because holding the GIL across it blocked the inference-server thread throughout.
+    /// because holding the GIL across it blocked the inference-server thread throughout. A caller
+    /// skips the builder's own verify only by naming `consumer_checks_every_batch`, a fact about its server.
     #[allow(clippy::type_complexity)]
-    #[pyo3(signature = (positions, n_threads = 1))]
+    #[pyo3(signature = (positions, n_threads = 1, *, consumer_checks_every_batch = false))]
     pub fn submit_graphs_and_wait_ls(
         &self,
         py: Python<'_>,
         positions: Vec<(Vec<(i64, i64, i64)>, i64, i64)>,
         n_threads: usize,
+        consumer_checks_every_batch: bool,
     ) -> PyResult<Vec<(Vec<f32>, Vec<((i32, i32), f32)>, f32, (i32, i32))>> {
         let (win_length, radius, trunk_size) = (
             self.graph_win_length,
             self.graph_radius,
             self.graph_trunk_size,
         );
+        let verify = if consumer_checks_every_batch {
+            ProducerVerify::ConsumerEveryBatch
+        } else {
+            ProducerVerify::Builder
+        };
         let graphs = py
             .detach(|| {
-                build_leaf_graphs_batch(&positions, win_length, radius, trunk_size, n_threads)
+                build_leaf_graphs_batch(
+                    &positions, win_length, radius, trunk_size, n_threads, verify,
+                )
             })
             .map_err(PyValueError::new_err)?;
         // The builder's own centre, captured BEFORE the graphs move into the detached loop.

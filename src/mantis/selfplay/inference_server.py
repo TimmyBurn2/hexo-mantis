@@ -455,6 +455,11 @@ class InferenceServer(threading.Thread):
             self._edge_geometry_checker.drain_and_stop()
 
     @property
+    def checks_every_batch_before_launch(self) -> bool:
+        """Whether every batch's collate runs check 14 inline before its launch, which a leaf's producer verify repeats."""
+        return self._collate_check_period == 1 and self._edge_geometry_check == "inline"
+
+    @property
     def deferred_contract_failure(self) -> BaseException | None:
         """A check-14 failure found AFTER its batch was served: run-fatal, read by the pool."""
         return self._deferred_contract_failure

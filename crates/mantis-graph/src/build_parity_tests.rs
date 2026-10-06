@@ -639,6 +639,44 @@ fn every_field_matches_the_two_pass_reference_on_the_edge_cases() {
     );
 }
 
+/// The one test in this binary that skips the verify, so the skip count's deltas are exact.
+#[test]
+fn a_build_that_skips_the_producer_verify_is_byte_identical_and_counted() {
+    let recorded = positions::read_positions_r8().unwrap_or_else(|e| panic!("{e}"));
+    let mut cases: Vec<(StoneList, BuildParams)> = Vec::new();
+    for p in &recorded {
+        for params in variants(p.to_move, p.moves_remaining) {
+            let stones = StoneList {
+                stones: p.stones.clone(),
+            };
+            cases.push((stones, params));
+        }
+    }
+    cases.extend(edge_cases().into_iter().map(|s| (s, variants(-1, 2)[0])));
+    let before = unverified_builds();
+    let mut mismatches = Vec::new();
+    for (c, (stones, params)) in cases.iter().enumerate() {
+        let verified = build_axis_graph(stones, params);
+        let skipped =
+            build_axis_graph_verified_by(stones, params, ProducerVerify::ConsumerEveryBatch);
+        if let Err(field) = same_bytes(&verified, &skipped) {
+            mismatches.push(format!("case {c}: field {field} differs"));
+        }
+    }
+    assert!(
+        mismatches.is_empty(),
+        "{} of {} builds differ:\n{}",
+        mismatches.len(),
+        cases.len(),
+        mismatches.join("\n")
+    );
+    assert_eq!(
+        unverified_builds() - before,
+        cases.len() as u64,
+        "each skipping build counts once and no verifying build counts"
+    );
+}
+
 /// One way to corrupt a built graph at edge `e`.
 type Mutation = fn(&mut AxisGraph, usize);
 

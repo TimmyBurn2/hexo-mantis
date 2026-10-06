@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 
-use mantis_graph::BUILDER_IMPL_NATIVE;
+use mantis_graph::{ProducerVerify, BUILDER_IMPL_NATIVE};
 use mantis_selfplay::queues::{
     build_leaf_graph, build_leaf_graphs_batch, LeafRequest as BatchRequest,
 };
@@ -159,6 +159,7 @@ fn leaf_graphs_batch(c: &mut Criterion) {
                         RADIUS,
                         TRUNK_SIZE,
                         n_threads,
+                        ProducerVerify::Builder,
                     )
                     .expect("corpus leaves build");
                     black_box(&graphs);

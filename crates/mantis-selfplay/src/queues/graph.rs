@@ -14,7 +14,10 @@ use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use fxhash::FxBuildHasher;
-use mantis_graph::{build_axis_graph, AxisGraph, BuildParams, StoneList, BUILDER_IMPL_NATIVE};
+use mantis_graph::{
+    build_axis_graph_verified_by, AxisGraph, BuildParams, ProducerVerify, StoneList,
+    BUILDER_IMPL_NATIVE,
+};
 use mantis_search::LegalSetPolicy;
 
 use super::eval_cache::{EvalCache, EVAL_CACHE_BYTES};
@@ -524,6 +527,23 @@ pub fn build_leaf_graph(
     radius: u16,
     trunk_size: i32,
 ) -> Result<AxisGraph, String> {
+    build_leaf_graph_verified_by(
+        stones,
+        current_player,
+        moves_remaining,
+        (win_length, radius, trunk_size),
+        ProducerVerify::Builder,
+    )
+}
+
+/// [`build_leaf_graph`] at the geometry `(win_length, radius, trunk_size)`, its producer verify as `verify` names.
+fn build_leaf_graph_verified_by(
+    stones: &[(i64, i64, i64)],
+    current_player: i64,
+    moves_remaining: i64,
+    (win_length, radius, trunk_size): (u8, u16, i32),
+    verify: ProducerVerify,
+) -> Result<AxisGraph, String> {
     check_leaf_request(stones, current_player, moves_remaining, radius)?;
     let typed: Vec<(i32, i32, i8)> = stones
         .iter()
@@ -536,7 +556,7 @@ pub fn build_leaf_graph(
         moves_remaining: moves_remaining as u8,
         trunk_size,
     };
-    let graph = build_axis_graph(&StoneList { stones: typed }, &params);
+    let graph = build_axis_graph_verified_by(&StoneList { stones: typed }, &params, verify);
     if graph.builder_impl != BUILDER_IMPL_NATIVE {
         return Err(
             "graph request: non-native builder_impl (NonNativeSampleBuilder handshake)".to_string(),
@@ -551,7 +571,7 @@ pub fn build_leaf_graph(
 /// which `i64` is which.
 pub type LeafRequest = (Vec<(i64, i64, i64)>, i64, i64);
 
-/// Build one leaf graph per position across at most `n_threads` OS threads, IN INDEX ORDER.
+/// Build one leaf graph per position across at most `n_threads` OS threads, IN INDEX ORDER, each verified as `verify` names.
 ///
 /// Each leaf touches only its own stone list; `n_threads <= 1` runs the serial path IN THIS THREAD.
 ///
@@ -564,12 +584,15 @@ pub fn build_leaf_graphs_batch(
     radius: u16,
     trunk_size: i32,
     n_threads: usize,
+    verify: ProducerVerify,
 ) -> Result<Vec<AxisGraph>, String> {
     crate::par::map_in_order(
         positions,
         n_threads,
         "graph request: a leaf-build worker thread panicked",
-        |p: &LeafRequest| build_leaf_graph(&p.0, p.1, p.2, win_length, radius, trunk_size),
+        |p: &LeafRequest| {
+            build_leaf_graph_verified_by(&p.0, p.1, p.2, (win_length, radius, trunk_size), verify)
+        },
     )
 }
 

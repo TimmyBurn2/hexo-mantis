@@ -24,6 +24,7 @@ pub use edge_vocab::{edge_attr_row, edge_code, edge_vocabulary};
 
 use std::collections::{HashMap, HashSet};
 use std::hash::{BuildHasherDefault, Hasher};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Per-node feature width: relative-7 base + 4 threat = 11.
 pub const NODE_FEAT_DIM: usize = 11;
@@ -679,12 +680,41 @@ impl NodeLookup {
     }
 }
 
+/// Who verifies a built graph's contract. No `Default`: the one skipping caller names its variant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProducerVerify {
+    /// The builder re-derives its payload and panics on a fault, as [`build_axis_graph`] always does.
+    Builder,
+    /// Skipped: the caller's collate runs checks 4–16 on every batch before its launch, check 14 inline.
+    ConsumerEveryBatch,
+}
+
+/// Builds since process start that skipped the producer verify; only the skipping path writes it.
+static UNVERIFIED_BUILDS: AtomicU64 = AtomicU64::new(0);
+
+/// How many builds since process start skipped the producer verify.
+#[must_use]
+pub fn unverified_builds() -> u64 {
+    UNVERIFIED_BUILDS.load(Ordering::Relaxed)
+}
+
 /// Build one axis-graph — the once-per-evaluated-leaf construction, a faithful port of
 /// `build_axis_graph_raw`. One payload per evaluated leaf, no parallelism inside; no
 /// search-time-incremental variant exists, and proposing one is falsified work.
 #[must_use]
 #[allow(clippy::missing_panics_doc)] // panics ARE the contract (verify_contract, die loud)
 pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGraph {
+    build_axis_graph_verified_by(stones_in, params, ProducerVerify::Builder)
+}
+
+/// [`build_axis_graph`] with its producer verify run or skipped as `verify` names; the bytes are the same either way.
+#[must_use]
+#[allow(clippy::missing_panics_doc)] // panics ARE the contract (verify_contract, die loud)
+pub fn build_axis_graph_verified_by(
+    stones_in: &StoneList,
+    params: &BuildParams,
+    verify: ProducerVerify,
+) -> AxisGraph {
     // Parameter-domain asserts: the threat window buffer is [i8; 64] = 2*wl-1 cells, so
     // wl <= 32 is the REAL bound — asserted upfront rather than left to an index panic.
     assert!(
@@ -931,7 +961,12 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
         current_player: to_move,
         builder_impl: BUILDER_IMPL_NATIVE,
     };
-    verify_contract(&g, n_stones, n_legal, params);
+    match verify {
+        ProducerVerify::Builder => verify_contract(&g, n_stones, n_legal, params),
+        ProducerVerify::ConsumerEveryBatch => {
+            UNVERIFIED_BUILDS.fetch_add(1, Ordering::Relaxed);
+        }
+    }
     g
 }
 
@@ -962,9 +997,9 @@ fn axis_step(dq: i32, dr: i32) -> Option<(usize, i32)> {
     })
 }
 
-/// ALWAYS-ON producer-side contract verification: once per built graph in EVERY profile,
-/// release included. A payload that fails PANICS with the NAMED contract error and is never
-/// emitted; the self-play worker dies with it. Measured at ~20 % of a build, past the 3 % budget.
+/// Producer-side contract verification, on in EVERY profile unless the caller names `ProducerVerify::ConsumerEveryBatch`.
+/// A payload that fails PANICS with the NAMED contract error and is never emitted; the self-play worker dies with it.
+/// Its measured cost is ~20 % of a build.
 ///
 /// The leaf-checkable subset of the 18 named checks; batch/wire-context checks belong to the
 /// collate resolver. `float_cmp` is allowed because the compared floats are EXACT constants

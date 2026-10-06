@@ -99,6 +99,8 @@ class LocalInferenceEngine:
             # A few games' leaves per pop; an engine beside self-play takes self-play's floor from its caller.
             bucket_floor_nodes=bucket_floor_nodes,
         )
+        # The builder's own verify repeats check 14 exactly where this collate runs it before every launch.
+        self._consumer_checks_every_batch = self._graph_server.checks_every_batch_before_launch
         self._graph_server.start()
 
     def close(self) -> None:
@@ -165,6 +167,7 @@ class LocalInferenceEngine:
 
         Raises:
             RuntimeError: the engine was closed before this call.
+            ValueError: a position fails the builder's seam guards, or its pop was refused (a contract error).
         """
         if not positions:
             return [], [], [], []
@@ -176,7 +179,9 @@ class LocalInferenceEngine:
                 "LocalInferenceEngine.infer_batch_ls: graph batcher is gone — the engine "
                 "was closed before this inference call."
             )
-        results = batcher.submit_graphs_and_wait_ls(positions, self._leaf_build_threads)
+        results = batcher.submit_graphs_and_wait_ls(
+            positions, self._leaf_build_threads,
+            consumer_checks_every_batch=self._consumer_checks_every_batch)
         dense = [d for d, _overflow, _value, _center in results]
         overflow = [list(o) for _dense, o, _value, _center in results]
         values = [float(v) for _dense, _overflow, v, _center in results]

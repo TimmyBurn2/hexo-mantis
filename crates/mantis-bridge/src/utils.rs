@@ -1,5 +1,5 @@
-//! Python-visible utilities: MCTS pool-overflow accessors, the armed-sims ceilings and the
-//! graph row-outcome helper.
+//! Python-visible utilities: MCTS pool-overflow accessors, the armed-sims ceilings, the
+//! graph row-outcome helper and the skipped-producer-verify count.
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -20,6 +20,12 @@ pub(crate) fn mcts_pool_overflow_count() -> u64 {
 #[pyfunction]
 pub(crate) fn take_mcts_pool_overflow_count() -> u64 {
     take_pool_overflow_count()
+}
+
+/// Graph builds since process start that skipped the builder's own verify, read without resetting.
+#[pyfunction]
+pub(crate) fn unverified_graph_builds() -> u64 {
+    mantis_graph::unverified_builds()
 }
 
 /// The `(outcome, value_valid)` a graph training row carries, from THE authority — exposed so a
@@ -92,6 +98,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(mcts_max_armed_sims_gumbel, m)?)?;
     m.add_function(wrap_pyfunction!(mcts_pool_overflow_count, m)?)?;
     m.add_function(wrap_pyfunction!(take_mcts_pool_overflow_count, m)?)?;
+    m.add_function(wrap_pyfunction!(unverified_graph_builds, m)?)?;
     m.add_function(wrap_pyfunction!(graph_row_outcome, m)?)?;
     Ok(())
 }

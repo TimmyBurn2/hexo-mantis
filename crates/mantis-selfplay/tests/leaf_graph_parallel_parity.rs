@@ -14,7 +14,7 @@
 //!    order. A chunked build that surfaced whichever worker failed first would name a
 //!    different position on a bad input, and a build error is a diagnostic.
 
-use mantis_graph::AxisGraph;
+use mantis_graph::{unverified_builds, AxisGraph, ProducerVerify};
 use mantis_selfplay::queues::{build_leaf_graph, build_leaf_graphs_batch, LeafRequest};
 
 mod common;
@@ -82,14 +82,28 @@ fn assert_same(a: &AxisGraph, b: &AxisGraph, idx: usize) {
 #[test]
 fn parallel_leaf_build_is_bit_identical_to_serial_at_every_width() {
     let positions = corpus(37);
-    let serial =
-        build_leaf_graphs_batch(&positions, WIN_LENGTH, RADIUS, TRUNK, 1).expect("serial build");
+    let serial = build_leaf_graphs_batch(
+        &positions,
+        WIN_LENGTH,
+        RADIUS,
+        TRUNK,
+        1,
+        ProducerVerify::Builder,
+    )
+    .expect("serial build");
     assert_eq!(serial.len(), positions.len());
     // Widths that do and do NOT divide the corpus evenly: an off-by-one in `div_ceil`
     // chunking shows up only on a ragged split.
     for threads in [2usize, 3, 4, 5, 8, 12, 37, 64] {
-        let par = build_leaf_graphs_batch(&positions, WIN_LENGTH, RADIUS, TRUNK, threads)
-            .unwrap_or_else(|e| panic!("threaded build at {threads} failed: {e}"));
+        let par = build_leaf_graphs_batch(
+            &positions,
+            WIN_LENGTH,
+            RADIUS,
+            TRUNK,
+            threads,
+            ProducerVerify::Builder,
+        )
+        .unwrap_or_else(|e| panic!("threaded build at {threads} failed: {e}"));
         assert_eq!(
             par.len(),
             serial.len(),
@@ -106,8 +120,15 @@ fn the_batch_builder_agrees_with_the_one_shot_builder_position_by_position() {
     // The batch entry point must not become a second builder. Driven against
     // `build_leaf_graph` itself so a divergence in either path is visible here.
     let positions = corpus(11);
-    let batch =
-        build_leaf_graphs_batch(&positions, WIN_LENGTH, RADIUS, TRUNK, 4).expect("threaded build");
+    let batch = build_leaf_graphs_batch(
+        &positions,
+        WIN_LENGTH,
+        RADIUS,
+        TRUNK,
+        4,
+        ProducerVerify::Builder,
+    )
+    .expect("threaded build");
     for (i, (stones, cp, mr)) in positions.iter().enumerate() {
         let one =
             build_leaf_graph(stones, *cp, *mr, WIN_LENGTH, RADIUS, TRUNK).expect("one-shot build");
@@ -121,8 +142,15 @@ fn the_order_is_index_order_and_a_reordering_would_be_visible() {
     // "identical in order" is a real constraint rather than one satisfied by every
     // permutation. Without this row the parity test would pass over a shuffled result.
     let positions = corpus(9);
-    let graphs =
-        build_leaf_graphs_batch(&positions, WIN_LENGTH, RADIUS, TRUNK, 3).expect("threaded build");
+    let graphs = build_leaf_graphs_batch(
+        &positions,
+        WIN_LENGTH,
+        RADIUS,
+        TRUNK,
+        3,
+        ProducerVerify::Builder,
+    )
+    .expect("threaded build");
     for i in 0..graphs.len() {
         for j in (i + 1)..graphs.len() {
             assert!(
@@ -141,8 +169,22 @@ fn a_bad_position_returns_the_same_error_serial_and_threaded() {
     // must survive the chunked path AND name the same position.
     let mut positions = corpus(20);
     positions[13].1 = 0;
-    let serial = build_leaf_graphs_batch(&positions, WIN_LENGTH, RADIUS, TRUNK, 1);
-    let threaded = build_leaf_graphs_batch(&positions, WIN_LENGTH, RADIUS, TRUNK, 6);
+    let serial = build_leaf_graphs_batch(
+        &positions,
+        WIN_LENGTH,
+        RADIUS,
+        TRUNK,
+        1,
+        ProducerVerify::Builder,
+    );
+    let threaded = build_leaf_graphs_batch(
+        &positions,
+        WIN_LENGTH,
+        RADIUS,
+        TRUNK,
+        6,
+        ProducerVerify::Builder,
+    );
     let serial_err = serial.expect_err("serial build must refuse current_player 0");
     let threaded_err = threaded.expect_err("threaded build must refuse current_player 0");
     assert!(serial_err.contains("current_player"), "{serial_err}");
@@ -155,8 +197,54 @@ fn a_bad_position_returns_the_same_error_serial_and_threaded() {
 #[test]
 fn an_empty_batch_is_empty_at_every_width() {
     for threads in [0usize, 1, 8] {
-        let out =
-            build_leaf_graphs_batch(&[], WIN_LENGTH, RADIUS, TRUNK, threads).expect("empty build");
+        let out = build_leaf_graphs_batch(
+            &[],
+            WIN_LENGTH,
+            RADIUS,
+            TRUNK,
+            threads,
+            ProducerVerify::Builder,
+        )
+        .expect("empty build");
         assert!(out.is_empty());
+    }
+}
+
+/// The one test in this binary that skips the verify, so the skip count's delta is exact.
+#[test]
+fn a_batch_that_skips_the_producer_verify_builds_the_same_graphs_and_counts_each() {
+    let positions = corpus(24);
+    let before = unverified_builds();
+    let skipped = build_leaf_graphs_batch(
+        &positions,
+        WIN_LENGTH,
+        RADIUS,
+        TRUNK,
+        3,
+        ProducerVerify::ConsumerEveryBatch,
+    )
+    .expect("skipping build");
+    let delta = unverified_builds() - before;
+    let verified = build_leaf_graphs_batch(
+        &positions,
+        WIN_LENGTH,
+        RADIUS,
+        TRUNK,
+        3,
+        ProducerVerify::Builder,
+    )
+    .expect("verifying build");
+    assert_eq!(
+        delta,
+        positions.len() as u64,
+        "each skipped leaf counted once"
+    );
+    assert_eq!(
+        unverified_builds() - before,
+        delta,
+        "a verifying build counted"
+    );
+    for (idx, (a, b)) in skipped.iter().zip(&verified).enumerate() {
+        assert_same(a, b, idx);
     }
 }
