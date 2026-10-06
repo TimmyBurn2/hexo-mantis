@@ -1,4 +1,4 @@
-# RULINGS — R23 to R386
+# RULINGS — R23 to R387
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R387.
+- Numbering continues from R346. The next ruling is R388.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,34 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R387 — THE RULER IS A LADDER
+Decision: verbatim below.
+
+> R387 — THE RULER IS A LADDER.
+> (a) R386(c)'s generation walk is annotated: at equal playouts per turn no Six generation
+> reads the shipped head inside [0.3, 0.7] (gens 150 and 200 ≈ 0.2 against run11@156k; the
+> generations are near-flat above 150), so the axis has no resolution. The ruler of record
+> is a node ladder on Six gen455 at `go nodes` N per turn against our 128/stone: rungs
+> 16, 32, 64, 128, 256, 512. Each save is read at the two rungs bracketing 50 %; N50
+> (log2-interpolated) is the series' number. The series' rung pair steps up when two
+> consecutive saves read above 0.7 at its upper rung, never down; the parent and the anchor
+> are re-read at the new pair (≤ 2 cells); one re-read at a new rung before it counts. The
+> going-forward line stays +0.17 logit at the pair's lower rung against the re-based parent
+> anchor there. S is the second ruler. Equal-work parity (gen455 at 256/turn) is read every
+> fourth panel as the milestone. Validity: on the re-base saves the ladder must order them
+> as S does, else the architect rules before the ladder is used. X stops after the re-base.
+> (b) #14: one flip in 512 (0.2 %, upper 95 % ≈ 1.1 %) is recorded; the ladder-only switch
+> stands; its strength read is the ladder's own rating window, no cell. #5(b) stands as a
+> posture change (GIL-free, bit-identical), not a speed lever. #9's stand-in miss is flagged;
+> it lands as the single CPU branch and is re-read on the real VPS at the ladder's next
+> deploy. The gens 250/300 screen is cancelled; the gen455 node screen (16/32/64/128 per
+> turn, 64 pairs each) takes its slot and the re-base follows it.
+
+Status: standing. ANNOTATES R386(c): the ruler of record is a node ladder on Six gen455 (rungs 16–512 nodes per turn
+against our 128 per stone), each save read at the two rungs bracketing 50 % with N50 its number; X stops after the
+re-base. Records #14's one flip in 512 with the ladder-only switch standing, keeps #5(b) as a posture change, and lands
+#9 as the single CPU branch with its stand-in miss flagged and a real-VPS re-read owed.
 
 ### R386 — THE FLOOR, THE FRESH LINE, THE INSTRUMENT
 Decision: verbatim below.
@@ -71,7 +99,8 @@ Decision: verbatim below.
 > research fast-forwards; the main checkout's stale extension is rebuilt in a separate tree.
 > The two cards' owed rulings are stated as one-line questions in DEPLOY-1's exit, then ruled.
 
-Status: standing. Accepts RUN11-GO by (a): run11 pauses at its next save with its bundle mirrored, and while it pauses
+Status: standing; (c)'s generation walk ANNOTATED by R387(a) (the ruler of record is a node ladder on Six gen455).
+Accepts RUN11-GO by (a): run11 pauses at its next save with its bundle mirrored, and while it pauses
 box A hosts TRAIN-SPEED-1's closed-loop A/Bs and the knob sweep; run11 then resumes with a second cosine cycle, 5e-4 →
 1e-4 over 54k steps, minted by this ruling and read by the next four ladder cells against the 108k–156k plateau mean (a
 climb by the line makes the floor the bound; otherwise run12 takes the budget); DASH-2 is admitted docs-only on R363's
