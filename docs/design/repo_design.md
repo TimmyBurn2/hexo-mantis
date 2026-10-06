@@ -1166,8 +1166,9 @@ entry" it widens to two.
    challenger's alternating `firstPlayer`) plays opening `m` in the book's file order, a CONVENTION
    BETWEEN OUR TWO BOTS because the server's challenge carries no opening field. Both bots
    translate the opening onto the server's auto-placed origin and play its prefix unsearched
-   (`tools/ladder/openings.py`; the receipt is schema v2 with the opening and `book_stones` per
-   move; `--replay` re-derives the forced stones from the receipt's opening). §3's "server
+   (`tools/ladder/openings.py`; the receipt is schema v3: v2's opening and `book_stones` per move,
+   then `stopped` per move and the game's `serving` rows; `--replay` re-derives the forced stones
+   from the receipt's opening and fails on a stop it does not reproduce). §3's "server
    openings" is thereby retired as a unit difference; the server's clock and the host's CPU remain.
    The admission test is ONE 288-game IDLE cell beside a follower cell on the same checkpoint. The
    64-sim `--preset play` R363 §0(5) allows is the ladder tool's own row, labelled on every receipt,
