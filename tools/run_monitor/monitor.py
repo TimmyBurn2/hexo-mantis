@@ -155,12 +155,14 @@ class Monitor:
         self.segment_pid: int | None = None
 
     def _past_halt(self, step: int) -> None:
-        """Archive the halt at `step` as `HALT_<step>.json` and follow on; a restart finds it archived. Raises: ValueError."""
+        """Archive the halt at `step` as `HALT_<step>.json` and follow on, every arm kept; a restart finds it archived. Raises: ValueError, OSError."""
         halt, archived = self.setup.out / "HALT.json", self.setup.out / f"HALT_{step:08d}.json"
         if halt.is_file():
             on_record = json.loads(halt.read_text(encoding="utf-8")).get("step")
             if on_record != step:
                 raise ValueError(f"the halt on record is at step {on_record}, not {step}: it is not cleared")
+            if self.state.last_step is None or self.state.last_step < step:
+                raise ValueError(f"the state never advanced past the halted save {step}: following on would re-read it")
             # The state first: a stop between the two leaves HALT.json in place, and the restart archives it again.
             self.state.halted = False
             self._persist()
@@ -281,37 +283,37 @@ class Monitor:
         gap = (lagged.get("current") or {}).get("gap") or {}
         rule = gap_rule(gap.get("cf_ce"), self.state.gap_over, int(lagged.get("step", step)), s.gap_line)
         fired = decided["fired"]
+        # Before the record: a record that fails to write must not cost a floor or a band its arm.
+        self.state.armed_floors, self.state.floors_live = decided["armed"], decided["floors_live"]
+        self.state.armed_bands, self.state.gap_over = decided["armed_bands"], rule["over"]
+        self.state.busy.append([t0, time.time()])
+        if fired:  # first: a record that fails to write must not cost the guard its signal
+            self._halt(step, fired, stopping=stopping)
         record.update({"halting_rows": fired, "reported_rows": decided["reported"], "armed_floors": decided["armed"],
                        "floors_live": decided["floors_live"], "armed_bands": decided["armed_bands"],
                        "band_trends": band_trends(bands["rows"], self._last_rows(), self.state.last_step,
                                                   s.two_read_bands),
-                       "gap_rule": rule})
-        self.state.busy.append([t0, time.time()])
-        record["monitor_busy_s"] = round(time.time() - t0, 1)
-        if fired:  # first: a record that fails to write must not cost the guard its signal
-            self._halt(step, fired, stopping=stopping)
+                       "gap_rule": rule, "monitor_busy_s": round(time.time() - t0, 1)})
         (out / "saves" / f"{step:08d}.json").write_text(json.dumps(record, indent=1, allow_nan=False), encoding="utf-8")
         self._log({"event": "save_read", "step": step, "final": stopping, "halting_rows": fired,
                    "reported_rows": decided["reported"], "armed_floors": decided["armed"],
                    "armed_bands": decided["armed_bands"],
                    "unread_floors": sorted(exam for exam, row in exams.items() if row["holds"] is None)})
-        self.state.armed_floors, self.state.floors_live = decided["armed"], decided["floors_live"]
-        self.state.armed_bands = decided["armed_bands"]
-        self.state.gap_over = rule["over"]
         if rule["fired"]:
             self._gap_fired(step, rule)
         self._advance(step, ckpt, copy if have_ring else None, saved_ts)
         return record
 
     def _last_rows(self) -> dict[str, Any] | None:
-        """The last read save's band rows off its own record; `None` when it has none (a failed read, a resume's first save)."""
+        """The last read save's band rows off its own record; `None` when there is none (no save read yet, its read failed)."""
         if self.state.last_step is None:
             return None
         try:
             body = json.loads((self.setup.out / "saves" / f"{self.state.last_step:08d}.json").read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return None
-        return (body.get("ring_bands") or {}).get("rows")
+        rows = (body.get("ring_bands") or {}).get("rows") if isinstance(body, dict) else None
+        return rows if isinstance(rows, dict) else None
 
     def _gen_and_exams(self, step: int, ckpt: Path) -> tuple[dict[str, Any], dict[str, Any]]:
         """The GEN read and the exams at its temperature; a failed read, or a read with no temperature, leaves every floor unread."""

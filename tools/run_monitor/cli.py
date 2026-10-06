@@ -112,17 +112,21 @@ def main(argv: list[str] | None = None) -> int:
     except (ValueError, OSError) as exc:
         print(f"run_monitor: {exc}", file=sys.stderr)
         return 2
+    if a.mode == "once" and (a.ckpt is None or a.step is None):
+        print("run_monitor: once needs --ckpt and --step", file=sys.stderr)
+        return 2
     if setup.device.startswith("cuda"):
         torch.cuda.set_per_process_memory_fraction(a.gpu_mem_fraction)
     try:
         monitor = Monitor(setup, Readers(value=value_read(setup), exams=exams_read(setup), bands=bands_read))
-    except ValueError as exc:
+    except (ValueError, OSError) as exc:
         print(f"run_monitor: {exc}", file=sys.stderr)
         return 2
     (setup.out / "setup.json").write_text(json.dumps({k: str(v) for k, v in vars(a).items()}, indent=1), encoding="utf-8")
     if a.mode == "once":
-        if a.ckpt is None or a.step is None:
-            print("run_monitor: once needs --ckpt and --step", file=sys.stderr)
+        last = monitor.state.last_step
+        if last is not None and a.step <= last:
+            print(f"run_monitor: step {a.step} is not past the last read save {last}", file=sys.stderr)
             return 2
         record = monitor.read_save(a.step, a.ckpt, time.time(), stopping=True)
         print(json.dumps({"step": a.step, "halting_rows": record["halting_rows"], "reported_rows": record["reported_rows"],

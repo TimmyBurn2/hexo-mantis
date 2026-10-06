@@ -89,7 +89,8 @@ class _Readers:
     def bands(self, ring: Path, events: Path | None, bands: Path) -> dict[str, Any]:
         cap = next((v for x, v in self.cap.items() if ring.name == f"ring_{x:08d}.bin"), None)
         if cap is not None:  # the cap rate against an upper band of 0.10, as the audit words its miss
-            return {"rows": {"cap_rate": cap}, "misses": [f"cap_rate: {cap:.6g} not lt 0.1"] if cap >= 0.10 else []}
+            rows = {"cap_rate": cap, **({"unwritable": float("nan")} if self.nan_rows else {})}
+            return {"rows": rows, "misses": [f"cap_rate: {cap:.6g} not lt 0.1"] if cap >= 0.10 else []}
         miss = any(ring.name == f"ring_{x:08d}.bin" for x in self.band_miss_at)
         rows = {"unwritable": float("nan")} if miss and self.nan_rows else {}
         return {"rows": rows, "misses": ["cap_rate: 0.07 not lt 0.05"] if miss else []}
@@ -452,3 +453,47 @@ def test_a_run_resumed_past_its_halt_is_followed_on_and_no_other_halt_is_cleared
         _monitor(tmp_path, run, _Readers(), halt=True, past_halt=3000)
     with pytest.raises(ValueError, match="no halt at step 4000"):
         _monitor(tmp_path / "elsewhere", run, _Readers(), halt=True, past_halt=4000)
+
+
+def test_a_band_armed_by_a_save_whose_record_failed_to_write_still_fires_at_its_next_miss(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, victim: Any) -> None:
+    proc, count = victim
+    run = _run_dir(tmp_path, proc.pid)
+    _no_lagged(monkeypatch, [])
+    cap = {3000: 0.11, 6000: 0.12}
+    ckpts = {step: _save(run, step, range(2 * i, 2 * i + 4)) for i, step in enumerate(cap)}
+    _events(run, [_saved(step, c) for step, c in ckpts.items()])
+    _monitor(tmp_path, run, _Readers(cap=cap, nan_rows=True), halt=True, two_read=frozenset({"cap_rate"})).on_events(
+        EventTail(run, _RUN, mon.EVENTS).read_new())
+    time.sleep(0.3)
+    assert not (tmp_path / "records" / "saves" / "00003000.json").exists(), "the planted NaN refuses the record"
+    halt = json.loads((tmp_path / "records" / "HALT.json").read_text(encoding="utf-8"))
+    assert halt["step"] == 6000 and _sigterms(count) == 1
+
+
+def test_a_halt_whose_save_the_state_never_advanced_past_is_not_cleared(tmp_path: Path) -> None:
+    run = _run_dir(tmp_path, pid=2**22 + 7)
+    monitor = _monitor(tmp_path, run, _Readers(), halt=True)
+    monitor.read_save(3000, _save(run, 3000, range(0, 4)), 1.0, stopping=False)
+    (tmp_path / "records" / "HALT.json").write_text(json.dumps({"step": 6000}), encoding="utf-8")
+    with pytest.raises(ValueError, match="never advanced past the halted save 6000"):
+        _monitor(tmp_path, run, _Readers(), halt=True, past_halt=6000)
+
+
+def test_once_refuses_a_save_at_or_before_the_last_one_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    files = {"gen.bin": b"x", "exams.jsonl": b'{"exam": "T4_V", "id": "a", "stones": [], "sign": 1}\n',
+             "bands.toml": b"[ring_audit.bands]\ncap_rate = { lt = 0.1 }\n"}
+    for name, body in files.items():
+        (tmp_path / name).write_bytes(body)
+    pin = {name: hashlib.sha256(body).hexdigest() for name, body in files.items()}
+    (tmp_path / "o").mkdir()
+    (tmp_path / "o" / "state.json").write_text(json.dumps({"last_step": 6000}), encoding="utf-8")
+    read: list[int] = []
+    monkeypatch.setattr(mon.Monitor, "read_save", lambda self, step, *a, **k: read.append(step))
+    argv = ["once", "--run-dir", str(tmp_path), "--run-id", _RUN, "--out", str(tmp_path / "o"), "--gen-ring",
+            str(tmp_path / "gen.bin"), "--gen-sha256", pin["gen.bin"], "--exams", str(tmp_path / "exams.jsonl"),
+            "--exams-sha256", pin["exams.jsonl"], "--bands", str(tmp_path / "bands.toml"), "--bands-sha256",
+            pin["bands.toml"], "--floors", "T4_V=0.154", "--line", "0.012", "--parent", "p.ckpt", "--batches", "1",
+            "--device", "cpu", "--gpu-mem-fraction", "0.25", "--threads", "1", "--gap-line", "0.05", "--floors-from",
+            "start", "--bands-from-step", "0", "--ckpt", str(tmp_path / "c.ckpt")]
+    assert cli.main([*argv, "--step", "6000"]) == 2 and cli.main([*argv, "--step", "3000"]) == 2 and read == []

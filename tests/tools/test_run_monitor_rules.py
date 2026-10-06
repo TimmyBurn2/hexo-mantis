@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from mantis.diagnostics.ring_audit import Row, check_bands
 from mantis.util.loadpkg import load_tools_package
 
 load_tools_package("run_monitor")
@@ -79,7 +80,7 @@ def _bands(check: Any, misses: list[str], armed_bands: list[str], *, bands_live:
            unread: bool = False) -> dict[str, Any]:
     bands: dict[str, Any] = {"misses": misses, **({"not_measured": "the ring audit failed"} if unread else {})}
     return check(_GOOD, bands, armed=[], floors_live=True, bands_live=bands_live,
-                 two_read_bands=frozenset({"cap_rate"}), armed_bands=armed_bands)
+                 two_read_bands=frozenset({"cap_rate", "draw_share"}), armed_bands=armed_bands)
 
 
 def _assert_the_two_read_bands(check: Any) -> None:
@@ -90,6 +91,8 @@ def _assert_the_two_read_bands(check: Any) -> None:
     assert _bands(check, [], ["cap_rate"])["armed_bands"] == [], "a pass disarms"
     assert _bands(check, [], ["cap_rate"], unread=True)["armed_bands"] == ["cap_rate"], "an unread audit keeps the arm"
     assert _bands(check, [_ONE_HOT], [])["fired"] == [f"ring band {_ONE_HOT}"], "a one-read band fires at once"
+    other = _bands(check, [_CAP], ["draw_share"])
+    assert other["fired"] == [] and other["armed_bands"] == ["cap_rate"], "another band's arm is not this band's"
     early = _bands(check, [_CAP], ["cap_rate"], bands_live=False)
     assert early["fired"] == [] and early["armed_bands"] == [] and early["reported"] == [f"ring band {_CAP}"]
 
@@ -101,6 +104,8 @@ _BROKEN_BANDS = {
     "an unread audit disarms": lambda e, b, **k: rules.verdict(e, {"misses": b["misses"]}, **k),
     "every band reads twice": lambda e, b, **k: rules.verdict(e, b, **{**k, "two_read_bands": frozenset(
         rules.band_key(m) for m in b["misses"]) | k["two_read_bands"]}),
+    "any arm fires any band": lambda e, b, **k: rules.verdict(e, b, **{
+        **k, "armed_bands": sorted(k["two_read_bands"]) if k["armed_bands"] else []}),
 }
 
 
@@ -112,13 +117,21 @@ def test_a_two_read_band_halts_on_its_second_miss_and_each_planted_break_reds(pl
         _assert_the_two_read_bands(_BROKEN_BANDS[planted])
 
 
+def test_the_band_a_miss_names_is_read_off_the_audits_own_miss_text() -> None:
+    """The producer: `check_bands` itself words a value miss, an unmeasured row and an unknown key."""
+    rows = [Row("cap_rate", 0.2, 10, "p", "a note"), Row("draw_share", None, 0, "p", "no supervised game")]
+    misses, unknown = check_bands(rows, {"cap_rate": ("lt", 0.1), "draw_share": ("lt", 0.1), "absent": ("gt", 0.0)})
+    assert [rules.band_key(m) for m in misses] == ["cap_rate", "draw_share"] and unknown == ["absent"]
+    assert rules.band_key("absent: no such audit row") == "absent"
+
+
 def test_a_band_trend_is_the_change_since_the_last_read_save_and_a_missing_reading_is_no_zero() -> None:
     keys = frozenset({"cap_rate", "draw_share"})
-    out = rules.band_trends({"cap_rate": 0.0545, "draw_share": 0.0}, {"cap_rate": 0.052, "draw_share": 0.0}, 69000, keys)
-    assert out["cap_rate"]["per_save"] == pytest.approx(0.0025) and out["cap_rate"]["previous_step"] == 69000
+    out = rules.band_trends({"cap_rate": 0.25, "draw_share": 0.0}, {"cap_rate": 0.125, "draw_share": 0.0}, 3000, keys)
+    assert out["cap_rate"]["per_save"] == pytest.approx(0.125) and out["cap_rate"]["previous_step"] == 3000
     assert out["draw_share"]["per_save"] == 0.0
-    first = rules.band_trends({"cap_rate": 0.0545}, None, None, keys)
-    assert "per_save" not in first["cap_rate"] and first["cap_rate"]["value"] == 0.0545
+    first = rules.band_trends({"cap_rate": 0.25}, None, None, keys)
+    assert "per_save" not in first["cap_rate"] and first["cap_rate"]["value"] == 0.25
     assert "NOT MEASURED" in first["draw_share"]["note"] and first["draw_share"]["value"] is None
     assert "per_save" not in rules.band_trends({"cap_rate": float("nan")}, {"cap_rate": 0.05}, 3000, keys)["cap_rate"]
 

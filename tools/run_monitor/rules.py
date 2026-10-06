@@ -15,30 +15,33 @@ _RATE_NAMES = {"games_total": "games_per_h", "positions_produced_total": "positi
 
 def verdict(exams: dict[str, Any], bands: dict[str, Any], *, armed: list[str], floors_live: bool,
             bands_live: bool, two_read_bands: frozenset[str], armed_bands: list[str]) -> dict[str, Any]:
-    """A floor or two-read band's miss arms it, its next miss fires, a pass disarms, an unread read keeps it; other bands fire at once. Raises: KeyError."""
+    """Floors and two-read bands decide by `_two_read`; every other band fires on one miss once the bands are live. Raises: KeyError."""
     unread = {exam for exam, row in exams.items() if row["holds"] is None}
     misses = {exam: f"{exam} calibrated {row['calibrated_mean']:.4f} below the floor {row['floor']}"
               for exam, row in exams.items() if exam not in unread and not row["holds"]}
-    second = {exam for exam in misses if floors_live and exam in armed}
-    fired = [f"{misses[exam]}, its second miss in a row" for exam in sorted(second)]
-    reported = [text for exam, text in misses.items() if exam not in second]
+    fired, reported, armed_now = _two_read(misses, armed, unread, floors_live)
     band_misses = {band_key(miss): f"ring band {miss}" for miss in bands["misses"]}
-    two_read = {key: text for key, text in band_misses.items() if key in two_read_bands}
-    band_second = {key for key in two_read if bands_live and key in armed_bands}
-    band_fired = [text for key, text in band_misses.items() if key not in two_read] + [
-        f"{two_read[key]}, its second miss in a row" for key in sorted(band_second)]
-    band_reported = [text for key, text in two_read.items() if key not in band_second]
-    if bands_live:
-        fired, reported = fired + band_fired, reported + band_reported
-    else:
-        reported = reported + band_fired + band_reported
+    once = [text for key, text in band_misses.items() if key not in two_read_bands]
     # An audit that read nothing keeps every band's arm, as an unread floor keeps its own.
     band_unread = set(armed_bands) if "not_measured" in bands else set()
+    band_fired, band_reported, band_armed = _two_read(
+        {key: text for key, text in band_misses.items() if key in two_read_bands}, armed_bands, band_unread, bands_live)
+    if bands_live:
+        fired, reported = fired + once + band_fired, reported + band_reported
+    else:
+        reported = reported + once + band_reported
     # Before the floors are live every miss only reports; they go live at the first save that reads and passes them all.
-    return {"fired": fired, "reported": reported,
-            "armed": sorted(set(misses) | (set(armed) & unread)) if floors_live else [],
-            "floors_live": floors_live or (bool(exams) and not unread and not misses),
-            "armed_bands": sorted(set(two_read) | band_unread) if bands_live else []}
+    return {"fired": fired, "reported": reported, "armed": armed_now,
+            "floors_live": floors_live or (bool(exams) and not unread and not misses), "armed_bands": band_armed}
+
+
+def _two_read(misses: dict[str, str], armed: list[str], unread: set[str],
+              live: bool) -> tuple[list[str], list[str], list[str]]:
+    """(fired, reported, armed): an armed name's miss fires, any other miss reports and arms, a pass disarms, an unread name keeps its arm; nothing arms before live."""
+    second = {name for name in misses if live and name in armed}
+    fired = [f"{misses[name]}, its second miss in a row" for name in sorted(second)]
+    reported = [text for name, text in misses.items() if name not in second]
+    return fired, reported, sorted(set(misses) | (set(armed) & unread)) if live else []
 
 
 def band_key(miss: str) -> str:
