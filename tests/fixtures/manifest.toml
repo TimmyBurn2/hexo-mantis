@@ -310,3 +310,8 @@ path = "tactics/turn_solver_goldens.jsonl"
 # Six's ThreatSolver (f2b5ec2) at 64 / 2, 2 000 / 8 and 20 000 / 8 on 551 of TACTICS-DESIGN's T2 positions.
 sha256 = "f6609f0ff7c7e93f7fc04c089d48e406bb5c8cefc9e8b33219c0f26bc90bde64"
 added_by = "TACTICS-DEPLOY"
+
+[[required]]
+path = "arena_draw/arena_draws_cf28a07.json"
+sha256 = "149f378b1eee7fa3b21e9a6b39f0c75bd8f64ba887be3198f4f449d588c17c94"
+added_by = "DEPLOY-1 L4"

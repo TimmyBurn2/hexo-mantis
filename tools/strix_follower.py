@@ -29,16 +29,26 @@ AS_SHIPPED = "as_shipped"
 NET_ONLY = "net_only"  # equal work with strix's root VCF solver OFF
 RULER_R6 = "ruler_r6"  # equal work with strix at its TRAINED placement_radius 6 (the driver's default is 8)
 SIX30_16 = "six30_16"  # ours PUCT-256 vs the Six ruler, gen 30 at 16 nodes
+EQUAL_WORK_ARENA = "equal_work_arena"  # equal work on the arena openings
+#: The arena protocol's cell book: every unit of the instrument after its one break plays it.
+ARENA_BOOK = "arena_s20261006_p5"
+#: The ruler's candidates at equal playouts per turn, ours 128 per stone against Six's 256 per turn, on ARENA_BOOK.
+SIX_EQ_UNITS: dict[str, tuple[str, int]] = {f"six{g}_eq": (f"gen0{g}", g) for g in (150, 200, 250, 300)}
 #: unit -> (our sims, the opponent's sims or nodes, sidecar suffix). A strix suffix names OUR sims: the 256 series.
 UNITS: dict[str, tuple[int, int, str]] = {EQUAL_WORK: (256, 256, "strix256"),
                                           AS_SHIPPED: (512, 128, "strix512"),
                                           NET_ONLY: (256, 256, "strix256_nosolver"),
                                           RULER_R6: (256, 256, "strix256_r6"),
-                                          SIX30_16: (256, 16, "six30_16")}
+                                          SIX30_16: (256, 16, "six30_16"),
+                                          EQUAL_WORK_ARENA: (256, 256, "strix256_arena"),
+                                          **{u: (128, 256, u) for u in SIX_EQ_UNITS}}
 SOLVER_OFF_UNITS = frozenset({NET_ONLY})  # every other unit is the rung on record
 RADIUS_UNITS: dict[str, int] = {RULER_R6: 6}  # every other unit rides the driver's default radius
-SIX_UNITS: dict[str, tuple[str, int]] = {SIX30_16: ("gen0030", 30)}  # unit -> (the pinned network, its generation)
-FOLLOW_UNITS = (EQUAL_WORK, SIX30_16)  # the rulers; every other unit is a --once cell
+#: unit -> (the pinned network, its generation)
+SIX_UNITS: dict[str, tuple[str, int]] = {SIX30_16: ("gen0030", 30), **SIX_EQ_UNITS}
+#: unit -> the opening book it plays; every other unit plays the config's gate book.
+BOOK_UNITS: dict[str, str] = {EQUAL_WORK_ARENA: ARENA_BOOK, **{u: ARENA_BOOK for u in SIX_EQ_UNITS}}
+FOLLOW_UNITS = (EQUAL_WORK, SIX30_16, EQUAL_WORK_ARENA, *SIX_EQ_UNITS)  # the rulers; every other unit is a --once cell
 _PLAYED_BYTES = ("engine_sha256", "net_sha256", "runtime_sha256")  # what a six receipt names as played
 TRIGGER_EVENTS = ("periodic_checkpoint_save", "eval_round_complete")
 #: A heartbeat younger than this at cell start names a live run in the evidence.
@@ -147,13 +157,14 @@ def compose_cell(checkpoint: Path, *, unit: str, step: int, games: int, concurre
                  label: str) -> dict[str, Any]:
     """The frontier cell for one checkpoint in one unit: PUCT ours, strix at its sims or Six at its nodes, paired games."""
     ours, theirs, _suffix = UNITS[unit]
+    book = {"opening_book": BOOK_UNITS[unit]} if unit in BOOK_UNITS else {}
     if unit in SIX_UNITS:
         return {"label": label, "candidate": str(checkpoint), "search_kind": "puct", "sims": ours, "opponent": "six",
                 "six_net": SIX_UNITS[unit][0], "six_nodes": theirs, "games": games, "step": step,
-                "concurrency": concurrency}
+                "concurrency": concurrency, **book}
     cell = {"label": label, "candidate": str(checkpoint), "search_kind": "puct", "sims": ours,
             "opponent": "strix", "strix_sims": theirs, "games": games, "step": step,
-            "concurrency": concurrency}
+            "concurrency": concurrency, **book}
     # A solver-ON, default-radius cell carries neither key, so it is byte-identical to every receipt on record.
     if unit in SOLVER_OFF_UNITS:
         return {**cell, "strix_solver": False}
@@ -205,6 +216,8 @@ def sidecar_record(checkpoint: Path, *, unit: str, trigger: str, record: Mapping
         "run_id": run_id, "checkpoint": checkpoint.name, "checkpoint_sha256": sha256_file(checkpoint),
         "step": cell.get("step"), "net_hash": candidate.get("net_hash"),
         "unit": unit, "ours": {"search_kind": "puct", "sims": ours}, **opponent,
+        # The book the unit names; null is the config's gate book, which every unit before the arena break played.
+        "opening_book": cell.get("opening_book"),
         "trigger": trigger, "regime": regime_name, "regime_evidence": dict(regime_evidence),
         "games": readout.get("games"), "eff_n": readout.get("eff_n"), "pairs": readout.get("pairs"),
         "wins": readout.get("wins"), "losses": readout.get("losses"), "draws": readout.get("draws"),

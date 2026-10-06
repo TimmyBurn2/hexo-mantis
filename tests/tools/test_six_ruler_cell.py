@@ -83,13 +83,37 @@ def test_the_child_log_yields_the_forfeits_and_the_provider(frontier) -> None:
 
 
 def test_the_follower_unit_composes_the_cell_and_names_its_receipt(follower) -> None:
-    assert follower.UNITS["six30_16"] == (256, 16, "six30_16") and follower.SIX_UNITS == {"six30_16": ("gen0030", 30)}
+    assert follower.UNITS["six30_16"] == (256, 16, "six30_16") and follower.SIX_UNITS["six30_16"] == ("gen0030", 30)
     cell = follower.compose_cell(Path("/x/run8_00045000_deadbeef.ckpt"), unit="six30_16", step=45000, games=288,
                                  concurrency=8, label="six30_16_run8_45000")
     assert {k: cell[k] for k in ("opponent", "six_net", "six_nodes", "sims", "search_kind")} == {
         "opponent": "six", "six_net": "gen0030", "six_nodes": 16, "sims": 256, "search_kind": "puct"}
-    assert "strix_sims" not in cell
+    assert "strix_sims" not in cell and "opening_book" not in cell, "the config's gate book, as every receipt on record"
     assert follower.sidecar_path(Path("/x/a.ckpt"), "six30_16").name == "a.ckpt.six30_16.json"
+
+
+@pytest.mark.parametrize(("unit", "net", "sha8"), [("six150_eq", "gen0150", "21672eeb"), ("six200_eq", "gen0200", "17328c43"),
+                                                   ("six250_eq", "gen0250", "250451cc"), ("six300_eq", "gen0300", "d9cc22c4")])
+def test_an_equal_playout_unit_plays_its_generation_at_256_per_turn_against_128_per_stone_on_the_arena_book(
+        follower, unit: str, net: str, sha8: str, tmp_path: Path) -> None:
+    assert follower.UNITS[unit] == (128, 256, unit) and follower.SIX_UNITS[unit] == (net, int(net[3:]))
+    cell = follower.compose_cell(Path("/x/r_00156000_deadbeef.ckpt"), unit=unit, step=156000, games=128,
+                                 concurrency=8, label=unit)
+    assert {k: cell[k] for k in ("sims", "six_net", "six_nodes", "opening_book")} == {
+        "sims": 128, "six_net": net, "six_nodes": 256, "opening_book": "arena_s20261006_p5"}
+    assert follower.opponent_pin(unit)["net_sha256"].startswith(sha8)
+    ckpt = tmp_path / "r_00156000_deadbeef.ckpt"
+    ckpt.write_bytes(b"w")
+    body = follower.sidecar_record(ckpt, unit=unit, trigger="once", record=_record(cell={"step": 1, "concurrency": 8,
+                                   **cell}), regime_name="IDLE", regime_evidence={}, run_id="r", started=0.0,
+                                   finished=1.0, pin={})
+    assert body["opening_book"] == "arena_s20261006_p5" and body["ours"]["sims"] == 128 and body["six"]["nodes"] == 256
+
+
+def test_equal_work_on_the_arena_book_is_s_at_its_own_budget(follower) -> None:
+    cell = follower.compose_cell(Path("/x/a.ckpt"), unit="equal_work_arena", step=1, games=576, concurrency=8, label="s")
+    assert (cell["sims"], cell["strix_sims"], cell["opening_book"]) == (256, 256, "arena_s20261006_p5")
+    assert "strix_radius" not in cell and "strix_solver" not in cell
 
 
 def _record(**over) -> dict:
@@ -116,7 +140,8 @@ def test_the_receipt_is_labelled_with_the_generation_the_nodes_and_the_provider(
 
 
 def test_follow_reads_the_ruler_units_only(follower) -> None:
-    assert set(follower.FOLLOW_UNITS) == {"equal_work", "six30_16"}
+    assert set(follower.FOLLOW_UNITS) == {"equal_work", "six30_16", "equal_work_arena", "six150_eq", "six200_eq",
+                                          "six250_eq", "six300_eq"}
     with pytest.raises(SystemExit):
         follower.main(["--config", "c", "--run-dir", "d", "--run-id", "r", "--work-dir", "w", "--follow",
                        "--unit", "net_only"])

@@ -85,3 +85,23 @@ path   = "six-assets/release/Six/runs/rl/gen-0455/net.onnx"
 url    = "https://github.com/CixMango/Six/releases/download/networks/gen-0030.onnx"
 sha256 = "4afcbb113f18ecfd602b28e8da080c71e91f576dea939b68590f255e60cb5a92"
 path   = "six-assets/gen-0030.onnx"
+
+[pins.six.assets.gen0150]
+url    = "https://github.com/CixMango/Six/releases/download/networks/gen-0150.onnx"
+sha256 = "21672eeb7c0d08ca0e6acaf78a7d8cc621b8bf7e906b33c7e6ab25168480efbc"
+path   = "six-assets/gen-0150.onnx"
+
+[pins.six.assets.gen0200]
+url    = "https://github.com/CixMango/Six/releases/download/networks/gen-0200.onnx"
+sha256 = "17328c43677eb40c3ad72c7d0984c9cfa3c962f905b20d2c2967f48ba4b25256"
+path   = "six-assets/gen-0200.onnx"
+
+[pins.six.assets.gen0250]
+url    = "https://github.com/CixMango/Six/releases/download/networks/gen-0250.onnx"
+sha256 = "250451cc433c06ffcb3307db1d3d4f03776588aece7a713f61e27fd48d178b47"
+path   = "six-assets/gen-0250.onnx"
+
+[pins.six.assets.gen0300]
+url    = "https://github.com/CixMango/Six/releases/download/networks/gen-0300.onnx"
+sha256 = "d9cc22c415059742f1b499eda2f53e9691e783de24f410da55d8bafe95f4788e"
+path   = "six-assets/gen-0300.onnx"
