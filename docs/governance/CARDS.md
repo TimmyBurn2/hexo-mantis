@@ -43,7 +43,9 @@ Both were found by running the gate set rather than by reading it, and both are 
   run11 continues arm 2 (2.4 steps/game, value mask 1/8; `run11a2`) from its final bundle (step 32 201, mirrored and
   hash-verified on the desktop) on box A, which runs nothing else (R385(f)).** Its config is unchanged, so its run id
   stays `run11a2` (prereg §13 A1); its envelope is §13 A5's and STATE's.
-  The going-forward read PASSED at 60k (+0.64 logit against the +0.17 line; STATE has the cells).
+  The going-forward read PASSED at 60k (+0.64 logit against the +0.17 line; STATE has the cells) and at every read
+  since, through +0.93 at 144k. The RUN11-GO packet EXITED 2026-10-06. The LR schedule ended at 108k, and the rulers
+  have flattened since (R386(f) owed).
   RUN11-PRE's registered pick (arm 3) is set aside by ruling. The rate is a scalar inside the envelope [1.2, 2.4]: a
   memorisation gap above +0.05 at two consecutive saves drops it to 1.2 by STATE line. The going-forward read is the
   mean of four cells (the 32k final, 36k, 48k, 60k) above the parent's anchor by the line, then one cell every fourth
@@ -54,17 +56,33 @@ Both were found by running the gate set rather than by reading it, and both are 
   a halting row on one miss. The same ruling makes L̄ report-only, reads arm comparisons as means over the last k saves
   (level, gap, policy CE) with cells pooled over ≥ 2 checkpoints, and makes matched work matched positions.
   RUN11-FRESH's floors report until first passed, then halt under this rule (R385(e)).
-- **CARD-RUN11-FRESH — RUNNING since 2026-10-05 12:43 CEST (box B, `configs/run11fresh.yaml`). ORDERED by R385(e):
+- **CARD-RUN11-FRESH — HALTED 2026-10-06 07:22 CEST at 69 000 by its cap band (0.052 against < 0.05; final save
+  69 954, resumable, mirrored). VIABLE by B4:** its 48 h cell, the halt save (B3: the newest save at launch + 48 h),
+  reads 0.609 against the parent's 0.594. This is a screen inside the noise, final at 2026-10-07 12:43 CEST unless
+  resumed. Whether to resume is R386(d). Was RUNNING from 2026-10-05 12:43 CEST (box B,
+  `configs/run11fresh.yaml`). ORDERED by R385(e):
   rebootstrap answered by an arm, not for run11. On box B: arm 2's recipe and
   net shape, random init, no parent, an empty ring, the fill ramp.** Exam floors report-only until first passed, then
   halting under (b). The cap/draw abort is its early halt; if it fires inside the first hours, the BC start at F-07's
   setting replaces the random init. Read on the same monitor and cells; viable if it reaches the parent's X anchor
   within 48 h. Its result is the evidence for run12's parent, nothing more.
 - **CARD-RUN11-STATUS-24H — ORDERED by R385(f): a one-screen status every 24 h** over run11, RUN11-FRESH and the cells.
+  The first is the RUN11-GO exit report (2026-10-06, `mantis-records/run11/EXIT.md`).
 - **CARD-QUICK-ARM-SIMS (the quick-arm lever, RUN11-PRE's arm 4, 32 sims at m 8) — CLOSED by R385(c):** 1.145×
   against the prereg's 1.15, and its final-save T4 row fired. Cheap placements are CARD-WITHIN-TURN-TREE-REUSE's.
 - **CARD-RATE-FORK — OPENED by the RUN11-GO packet, later: a paired fork of run11 at one save into a 1.2 and a 2.4
   steps/game branch.** Not built and not ordered; it reads the rate at matched start, which RUN11-PRE could not.
+- **CARD-DEPLOY-BATCH-WAIT — OPENED by the RUN11-GO exit, not built: a single-game inference posture for the ladder
+  deploy and equal-time evals, apart from self-play's.** The inference server waits up to
+  `inference.inference_max_wait_ms` (10, tuned for self-play) for company, and caps each forward at `max_in_flight` =
+  `selfplay.leaf_batch_size` 8.
+  - In one game the wait costs about 1.75× per turn at 64–256 sims/stone (box B, same pairings).
+  - The cap holds batched throughput at about 1 200 positions/s on the GPU and 44/s on the CPU, where Strix reaches
+    about 100/s.
+  - Measured with scratch overrides only (EXIT.md §5.4–5.5).
+- **CARD-SEARCH-PERF — OPENED by the RUN11-GO exit: the SEARCH-PERF-1 research packet (another session), our search
+  against Six's.** At equal time Six gen455 does about 2–4× our nodes per second with a net about 16× ours. Its report
+  is the card's output.
 
 ## Opened by R384 (THE RUN STARTS FROM THE READ; 2026-10-04) — RUN11-PRE is run11's first leg
 

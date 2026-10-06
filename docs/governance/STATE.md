@@ -17,7 +17,7 @@ in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c
 
 - **RUN11-GO (the architect's packet of 2026-10-05) enacts R385.** run11 = arm 2 continued (CARD-RUN11) on box A;
   RUN11-FRESH (CARD-RUN11-FRESH) on box B; cells on the desktop. The prereg carries R385 as §13's annotations (A1–A5);
-  its first 16 568 bytes still hash to `3fdf5092…`. **Both lines are LIVE on `8d169abb`:** run11 resumed on box A
+  its first 16 568 bytes still hash to `3fdf5092…`. **Both lines went LIVE on `8d169abb`:** run11 resumed on box A
   2026-10-05 10:35:40 UTC (12:35 CEST) at step 32 201 with its 500 000-position ring, and RUN11-FRESH launched on
   box B at 10:43:17 UTC (12:43 CEST). Each passed its preflight on that tree first. The monitor's two-read rule
   (CARD-MONITOR-TWO-MISS) landed first (`3a41ca6b`..`e7e9e848`, a fresh review's findings fixed).
@@ -32,6 +32,27 @@ in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c
   - **run11's envelope (a STATE line, no ruling; prereg §13 A5):** `train.training_steps_per_game` 2.4 at the resume,
     inside [1.2, 2.4], moved only by the gap rule (+0.05 at two consecutive saves → 1.2); `train.eval_interval` 36 000,
     inside [24 000, 48 000]; the monitor's card cap 0.45. Every other key is a re-mint with a ruling.
+  - **RUN11-GO EXITED 2026-10-06** (local records `mantis-records/run11/EXIT.md`). run11 stays LIVE on box A with no
+    halting row through 159k.
+    - Every going-forward read PASSED: +0.64 (60k), +0.64, +0.67, +0.77, +0.82, +0.90, +0.95 (132k), +0.93 (144k).
+    - The cosine schedule (`train.scheduler_t_max` 108 000) reached its floor at 108k. Since then X has held at
+      0.75–0.82 and the six455_128 ladder at 0.23–0.27 (R386(f) owed).
+  - **RUN11-FRESH HALTED 2026-10-06 07:22 CEST at 69 000 by its cap band.** The rate read 0.052 against < 0.05. The
+    final save 69 954 is resumable, mirrored and hash-verified.
+    - It is **VIABLE by B4.** B3's 48 h cell is the newest save at launch + 48 h, which is the halt save, and it
+      reads 0.609 against the parent's 0.594: a screen inside the anchor's noise, final at 2026-10-07 12:43 CEST
+      unless the line resumes.
+    - Its X curve on real games: 0.207 (12k), 0.301 (24k), 0.429 (36k), 0.519 (48k), 0.561 (60k, report-only).
+  - **Against the rivals** (report-only; run11@108k, 288 pairs, every solver on):
+    - equal playouts: Six gen455 0.130, Strix 0.405;
+    - our solver cut to theirs: 0.097 and 0.226;
+    - equal measured time: Six 0.045–0.076; Strix 0.484 (0.3 s per turn) and 0.391 (1 s) as configured, 0.545 and
+      0.637 with our batching wait at 0;
+    - SealBot d5, against the ladder deploy: 10–0.
+    - Single-game play loses about 1.75× per turn to the self-play batching wait (`inference.inference_max_wait_ms`
+      10): CARD-DEPLOY-BATCH-WAIT. SEARCH-PERF-1 researches the rest: CARD-SEARCH-PERF.
+  - Owed: R386 (EXIT.md §9). Box B's scratch patches are reverted (its tree is clean at `8d169abb`) and its records
+    are mirrored to `mantis-mirror/run11/versus/`. It may be destroyed (the operator's act).
 - **DASH-2 LANDED 2026-10-05** (`293b3277..83a5c1e6`, CARDS DASH-2; the amendment's ruling number is owed, `R<nnn>`):
   `make dash` is the one display. It reads a run directory, the monitor's records and the cell sidecars and serves the
   Run, Games and Analyzer views; run11's rule reads `six30_16` (`--rule-unit`), every other ruler is report-only. The
