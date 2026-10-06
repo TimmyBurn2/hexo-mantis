@@ -15,6 +15,7 @@ forward pass (MIT), reimplemented pure-torch. Licence-required, and it STAYS.
 """
 from __future__ import annotations
 
+import threading
 from typing import cast
 
 import torch
@@ -25,6 +26,9 @@ from torch.utils.checkpoint import checkpoint
 #: Table GEMMs run on at least this many rows, so they skip the small-M kernels that split a reduction (bit-equal to
 #: the per-edge forward on sm_86, pinned by the coded parity tests); codes in [V, rows) would read a bias-only row.
 _TABLE_ROWS = 1024
+#: Edges per CPU chunk: two [C, 128] fp32 buffers of 1 MiB stay cache-resident and the scatter's 4·C·8 B sort scratch stays under glibc's 128 KiB mmap threshold; the 2.1-2.5x per leaf at 8 threads was measured at this size.
+_CPU_CHUNK_EDGES = 2048
+_CPU_BUFFERS = threading.local()
 
 
 def csr_edges(edge_index: Tensor, edge_attr: Tensor, n: int) -> tuple[Tensor, Tensor, Tensor | None]:
@@ -41,7 +45,7 @@ def csr_edges(edge_index: Tensor, edge_attr: Tensor, n: int) -> tuple[Tensor, Te
 @torch.library.custom_op("mantis::gine_message_sum", mutates_args=())
 def gine_message_sum(xs: Tensor, e: Tensor, src: Tensor, dst: Tensor, rowptr: Tensor | None,
                      divisor: Tensor | None, code: Tensor | None = None) -> Tensor:
-    """Per-node Σ relu(xs[src] + e) / divisor in at least fp32, rounded once, atomic-free: a fused kernel over `csr_edges` on CUDA, `index_add_` on CPU; with `code`, `e` is a table and edge j reads its row `code[j]`.
+    """Per-node Σ relu(xs[src] + e) / divisor in at least fp32, rounded once, atomic-free: a fused kernel over `csr_edges` on CUDA, `index_add_` over edge chunks in edge order on CPU; with `code`, `e` is a table and edge j reads its row `code[j]`.
 
     Raises:
         ValueError: CUDA inputs without `csr_edges`' row pointer.
@@ -55,10 +59,34 @@ def gine_message_sum(xs: Tensor, e: Tensor, src: Tensor, dst: Tensor, rowptr: Te
         if xs.dtype not in (torch.bfloat16, torch.float16, torch.float32):
             raise TypeError(f"gine_message_sum's CUDA kernels sum bf16/fp16/fp32 in fp32; {xs.dtype} would narrow")
         return _gine_triton.message_sum(xs, e, src, rowptr, divisor, code)
+    return _cpu_message_sum(xs, e, src, dst, divisor, code)
+
+
+def _cpu_message_sum(xs: Tensor, e: Tensor, src: Tensor, dst: Tensor, divisor: Tensor | None,
+                     code: Tensor | None) -> Tensor:
+    """Contiguous edge chunks, in edge order, into one accumulator `index_add_` adds to in place: each row gets the unchunked sum's additions in its order, so the bits are its bits."""
     acc = torch.promote_types(torch.float32, xs.dtype)
-    msg = (xs.index_select(0, src) + (e if code is None else e.index_select(0, code.long()))).relu()
-    agg = torch.zeros((xs.shape[0], xs.shape[1]), dtype=acc).index_add_(0, dst, msg.to(acc))
+    gathered = xs.to(torch.promote_types(xs.dtype, e.dtype))
+    msg_buf, row_buf = _chunk_buffers(xs.shape[1], gathered.dtype, e.dtype)
+    rows = None if code is None else code.long()
+    agg = torch.zeros((xs.shape[0], xs.shape[1]), dtype=acc)
+    for k in range(0, src.shape[0], _CPU_CHUNK_EDGES):
+        m = min(_CPU_CHUNK_EDGES, src.shape[0] - k)
+        msg = torch.index_select(gathered, 0, src[k:k + m], out=msg_buf[:m])
+        msg.add_(e[k:k + m] if rows is None else torch.index_select(e, 0, rows[k:k + m], out=row_buf[:m]))
+        agg.index_add_(0, dst[k:k + m], msg.relu_().to(acc))
     return (agg if divisor is None else agg / divisor.to(acc)).to(xs.dtype)
+
+
+def _chunk_buffers(h: int, dtype: torch.dtype, e_dtype: torch.dtype) -> tuple[Tensor, Tensor]:
+    """This thread's `[C, h]` message and table-row buffers, reused across calls; made outside inference mode so a grad-mode call may write them."""
+    key = (h, dtype, e_dtype)
+    if getattr(_CPU_BUFFERS, "key", None) != key:
+        with torch.inference_mode(False):
+            _CPU_BUFFERS.bufs = (torch.empty((_CPU_CHUNK_EDGES, h), dtype=dtype),
+                                 torch.empty((_CPU_CHUNK_EDGES, h), dtype=e_dtype))
+        _CPU_BUFFERS.key = key
+    return _CPU_BUFFERS.bufs
 
 
 @gine_message_sum.register_fake
