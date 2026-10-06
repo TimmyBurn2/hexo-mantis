@@ -132,10 +132,11 @@ class MantisBackend:
         dump = config.model_dump()
         graph = config.identity.representation == "graph"
         self._spec = lookup(self.encoding)
+        batching = resolve_inference_batching(dump) if graph else None
         self._engine = LocalInferenceEngine(
             net, torch.device("cpu"), encoding_spec=self._spec,
             fused_graph_caps=resolve_fused_graph_caps(dump) if graph else None,
-            inference_batching=resolve_inference_batching(dump) if graph else None,
+            inference_batching=batching,
             max_in_flight=int(config.selfplay.leaf_batch_size),
             submitters=1,  # one game at a time
             # A host of its own (the ladder VPS) widens the build and takes the small-pop floor; beside a run, neither.
@@ -156,7 +157,10 @@ class MantisBackend:
             "encoding": self.encoding, "checkpoint": self.checkpoint.name, "step": self.step,
             "weights": self.weights, "leaf_batch_size": self._leaf_batch_size, "c_visit": self._c_visit, "c_scale": self._c_scale,
             "q_rescale": self._q_rescale, "gumbel_m": self._gumbel_m,
-            "early_stop": LADDER_EARLY_STOP and self._search_kind == "puct", "standalone_host": bool(standalone_host)}
+            "early_stop": LADDER_EARLY_STOP and self._search_kind == "puct", "standalone_host": bool(standalone_host),
+            # One game per engine: a pop wakes on the round's own submission, so the deadline is never waited out.
+            "collector": {"submitters": 1, "max_wait_ms": None if batching is None else batching.inference_max_wait_ms,
+                          "leaf_batch_size": self._leaf_batch_size}}
         self.seed: int | None = None
         self._head: Any = None
 
@@ -177,6 +181,10 @@ class MantisBackend:
             raise BackendError("select_turn before new_game: the head is seeded per game")
         head = self._head
         return _two_stones(head, board, lambda: int(head.last_sims or 0), forced, lambda: head.last_stopped)
+
+    def wake_counts(self) -> dict[str, int]:
+        """Why each of the engine's pops returned, since it started. Raises: RuntimeError (closed)."""
+        return dict(self._engine.batch_timing_snapshot()["wake"])
 
     def close(self) -> None:
         self._head = None

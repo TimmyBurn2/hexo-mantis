@@ -74,6 +74,22 @@ def test_the_mantis_backend_is_named_by_its_net_hash_and_plays_at_the_configs_de
     assert backend.search["early_stop"] is True, "the ladder plays the budget-aware stop, and its receipt says so"
 
 
+
+def test_the_receipt_stamps_the_single_game_collector_posture(mantis_backend) -> None:
+    backend, _net_hash, _checkpoint = mantis_backend
+    collector = backend.search["collector"]
+    assert collector["submitters"] == 1 and collector["leaf_batch_size"] == backend.search["leaf_batch_size"]
+    assert collector["max_wait_ms"] >= 0
+
+
+def test_a_ladder_turn_wakes_on_its_own_submission_never_on_the_collectors_deadline(mantis_backend) -> None:
+    """The single-game wait is 0 by the submitter wake; a literal 0 ms deadline would spin the serving thread."""
+    backend, _net_hash, _checkpoint = mantis_backend
+    backend.new_game("g_1")
+    backend.select_turn(_mid_game())
+    wake = backend.wake_counts()
+    assert wake["all_submitted"] > 0 and wake["deadline"] == 0  # a full round may meet the threshold first
+
 def test_a_turn_is_two_distinct_legal_cells_and_the_heads_own_sims_count(ladder, mantis_backend) -> None:
     backend, _net_hash, _checkpoint = mantis_backend
     backend.new_game("g_1")
