@@ -1,7 +1,9 @@
 """The early stop: a stopped PUCT search plays the whole budget's move and counts its stops; off, it spends all."""
 from __future__ import annotations
 
+import ast
 import random
+from pathlib import Path
 
 import pytest
 
@@ -10,6 +12,11 @@ from mantis.arena.deploy_head import DeployHeadPlayer
 
 from _dense_expand import dense_expand
 from _minted_puct import MINTED_PUCT
+from mantis.config.census import production_configs
+from mantis.config.loader import load_config
+from mantis.config.resolve.tactics import resolve_deploy_tactics
+
+_REPO = Path(__file__).resolve().parents[2]
 
 _STRIDE = 362
 
@@ -85,13 +92,32 @@ def test_the_switch_off_spends_every_descent_and_counts_no_stop() -> None:
                                              ("tools/ladder/backends.py", True)])
 def test_every_consumer_states_its_switch(rel: str, switch: bool) -> None:
     """The ladder plays the stop; cells, the in-run gate, the analyzer and the witness read whole budgets."""
-    import ast
-    from pathlib import Path
-
-    tree = ast.parse((Path(__file__).resolve().parents[2] / rel).read_text(encoding="utf-8"))
+    tree = ast.parse((_REPO / rel).read_text(encoding="utf-8"))
     calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
              and getattr(n.func, "id", getattr(n.func, "attr", None)) == "build_candidate_player"]
     assert calls, rel
+    constants = {n.targets[0].id: n.value.value for n in tree.body if isinstance(n, ast.Assign)
+                 and isinstance(n.targets[0], ast.Name) and isinstance(n.value, ast.Constant)}
     for call in calls:
         value = {k.arg: k.value for k in call.keywords}.get("early_stop")
-        assert isinstance(value, ast.Constant) and value.value is switch, (rel, call.lineno)
+        stated = value.value if isinstance(value, ast.Constant) else constants.get(getattr(value, "id", None))
+        assert stated is switch, (rel, call.lineno)
+
+
+@pytest.mark.parametrize("seed", range(8))
+def test_with_the_audit_armed_the_stop_never_moves_the_pre_audit_leader(seed: int) -> None:
+    """The ruled guarantee: the visit leader the audit starts from; the audit's own fallbacks may differ (reported)."""
+
+    blocks = [resolve_deploy_tactics(load_config(path).model_dump()) for path in production_configs(_REPO)]
+    block = next((b for b in blocks if b is not None and b.get("audit")), None)
+    assert block is not None, "some production config arms the deploy audit"
+    leaders = []
+    for switch in (False, True):
+        head = DeployHeadPlayer(expand_fn=dense_expand(_peaked), n_sims=256, leaf_batch_size=8, c_visit=50.0,
+                                c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=7,
+                                tactics=block, puct=MINTED_PUCT, early_stop=switch)
+        head.new_game()
+        head.select_move(_board(24 + seed, 100 + seed))
+        root = head.last_root
+        leaders.append(None if root is None else max(root[1], key=lambda c: c[3])[0])
+    assert leaders[0] == leaders[1]

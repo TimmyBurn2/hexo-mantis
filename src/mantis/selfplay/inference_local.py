@@ -13,7 +13,7 @@ from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.encoding import EncodingSpec
 from mantis.selfplay.hparams import is_graph_representation
-from mantis.selfplay.served_graphs import SMALL_POP_FLOOR_NODES
+from mantis.selfplay.served_graphs import SELFPLAY_FLOOR_NODES
 
 
 class LocalInferenceEngine:
@@ -43,7 +43,7 @@ class LocalInferenceEngine:
         collate_check_period: int | None = None,
         collate_dump: tuple[str, Callable[[], dict[str, Any]]] | None = None,
         leaf_build_threads: int = 1,
-        bucket_floor_nodes: int = SMALL_POP_FLOOR_NODES,
+        bucket_floor_nodes: int = SELFPLAY_FLOOR_NODES,
     ) -> None:
         self.model = model
         self.device = device
@@ -96,7 +96,7 @@ class LocalInferenceEngine:
             # PATH this engine serves, which the server cannot know.
             collate_check_period=self._collate_check_period,
             collate_dump=self._collate_dump,
-            # A few games' leaves per pop; an engine beside self-play takes self-play's floor from its caller.
+            # Self-play's floor unless the caller asserts its pops are a few games' leaves on a host of its own.
             bucket_floor_nodes=bucket_floor_nodes,
         )
         # The builder's own verify repeats check 14 exactly where this collate runs it before every launch.
@@ -144,7 +144,7 @@ class LocalInferenceEngine:
         list[float],
         list[tuple[int, int]],
     ]:
-        """`infer_positions_ls` over `boards`."""
+        """`infer_positions_ls` over `boards`. Raises: RuntimeError (closed), ValueError (a seam guard)."""
         return self.infer_positions_ls(self.positions_of(boards))
 
     @torch.inference_mode()

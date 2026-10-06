@@ -189,9 +189,11 @@ def test_the_in_run_eval_beside_self_play_keeps_the_reservation() -> None:
     assert _calls(_REPO / "src/mantis/run.py", "resolve_leaf_build_threads") == 1
 
 
-def test_only_the_ladder_widens_unasked_and_a_cell_widens_only_on_the_hosts_word() -> None:
-    """The ladder is a single-game host by construction; a cell or the dash may sit beside a run."""
-    assert _calls(_REPO / "tools/ladder/backends.py", "resolve_standalone_leaf_build_threads") == 1
+def test_nothing_widens_unasked_and_a_cell_or_the_ladder_widens_only_on_the_hosts_word() -> None:
+    """A cell, the ladder or the dash may sit beside a run; only the host's own word widens the build."""
+    for rel in ("tools/ladder/backends.py", "tools/strength_frontier.py"):
+        assert _calls(_REPO / rel, "resolve_standalone_leaf_build_threads") == 1, rel
+        assert _calls(_REPO / rel, "resolve_leaf_build_threads") >= 1, rel
     assert _calls(_REPO / "tools/dash/engine/engines.py", "resolve_standalone_leaf_build_threads") == 0
     assert _calls(_REPO / "tools/strix_follower.py", "resolve_standalone_leaf_build_threads") == 0
 

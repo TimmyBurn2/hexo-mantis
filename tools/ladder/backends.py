@@ -14,6 +14,9 @@ class BackendError(RuntimeError):
     """A backend that cannot be opened as asked; the reason names the missing or mismatched thing."""
 
 
+#: The ladder plays the budget-aware stop (PUCT only); every other consumer of the deploy head leaves it off.
+LADDER_EARLY_STOP = True
+
 #: The ONE preset beside the unit — the ladder tool's own row, labelled on every receipt, never a unit reading.
 PRESET_SIMS: dict[str, int | None] = {"unit": None, "play": 64}
 
@@ -90,18 +93,23 @@ class MantisBackend:
 
     backend = "mantis"
 
-    def __init__(self, config: Any, checkpoint: Path, *, threads: int | None, preset: str = "unit") -> None:
+    def __init__(self, config: Any, checkpoint: Path, *, threads: int | None, preset: str = "unit",
+                 standalone_host: bool = False) -> None:
         import torch
 
         from mantis.config.resolve.fused_graph_caps import resolve_fused_graph_caps
         from mantis.config.resolve.inference_batching import resolve_inference_batching
-        from mantis.config.resolve.leaf_build_threads import resolve_standalone_leaf_build_threads
+        from mantis.config.resolve.leaf_build_threads import (
+            resolve_leaf_build_threads,
+            resolve_standalone_leaf_build_threads,
+        )
         from mantis.config.resolve.puct import resolve_puct_constants
         from mantis.config.resolve.tactics import resolve_deploy_tactics
         from mantis.encoding import lookup, normalize_encoding_name
         from mantis.model import build_net
         from mantis.model.identity import net_param_hash
         from mantis.selfplay.inference_local import LocalInferenceEngine
+        from mantis.selfplay.served_graphs import SELFPLAY_FLOOR_NODES, SMALL_POP_FLOOR_NODES
         from mantis.train.checkpoints import deploy_state, load_checkpoint
 
         if threads is not None:
@@ -130,7 +138,10 @@ class MantisBackend:
             inference_batching=resolve_inference_batching(dump) if graph else None,
             max_in_flight=int(config.selfplay.leaf_batch_size),
             submitters=1,  # one game at a time
-            leaf_build_threads=resolve_standalone_leaf_build_threads(dump, concurrency=1) if graph else 1,
+            # A host of its own (the ladder VPS) widens the build and takes the small-pop floor; beside a run, neither.
+            leaf_build_threads=(1 if not graph else resolve_standalone_leaf_build_threads(dump, concurrency=1)
+                                if standalone_host else resolve_leaf_build_threads(dump)),
+            bucket_floor_nodes=SMALL_POP_FLOOR_NODES if standalone_host else SELFPLAY_FLOOR_NODES,
         )
         self.sims = _resolve_sims(preset, int(config.eval.gate.deploy_sims))
         self._leaf_batch_size = int(config.selfplay.leaf_batch_size)
@@ -145,8 +156,7 @@ class MantisBackend:
             "encoding": self.encoding, "checkpoint": self.checkpoint.name, "step": self.step,
             "weights": self.weights, "leaf_batch_size": self._leaf_batch_size, "c_visit": self._c_visit, "c_scale": self._c_scale,
             "q_rescale": self._q_rescale, "gumbel_m": self._gumbel_m,
-            # The ladder plays the budget-aware stop; every other consumer of the head leaves it off.
-            "early_stop": True}
+            "early_stop": LADDER_EARLY_STOP and self._search_kind == "puct", "standalone_host": bool(standalone_host)}
         self.seed: int | None = None
         self._head: Any = None
 
@@ -158,7 +168,7 @@ class MantisBackend:
         self._head = build_candidate_player(
             self._engine, self.sims, spec=self._spec, leaf_batch_size=self._leaf_batch_size, c_visit=self._c_visit,
             c_scale=self._c_scale, q_rescale=self._q_rescale, search_kind=self._search_kind, gumbel_m=self._gumbel_m,
-            gumbel_seed=self.seed, tactics=self._tactics, puct=self._puct, early_stop=True)
+            gumbel_seed=self.seed, tactics=self._tactics, puct=self._puct, early_stop=LADDER_EARLY_STOP)
         self._head.new_game()
 
     def select_turn(self, board: Any, forced: tuple[Cell, ...] = ()) -> TurnResult:
@@ -228,9 +238,10 @@ class StrixBackend:
         self._bot.close()
 
 
-def open_mantis(config: Any, checkpoint: Path, *, threads: int | None, preset: str = "unit") -> MantisBackend:
+def open_mantis(config: Any, checkpoint: Path, *, threads: int | None, preset: str = "unit",
+                standalone_host: bool = False) -> MantisBackend:
     """The mantis backend on `checkpoint` under `config`'s eval seam, at the unit's sims or a PRESET_SIMS row. Raises: BackendError when the stamp disagrees with the config's encoding, resolves no arch, or the preset is unknown."""
-    return MantisBackend(config, Path(checkpoint), threads=threads, preset=preset)
+    return MantisBackend(config, Path(checkpoint), threads=threads, preset=preset, standalone_host=standalone_host)
 
 
 def open_strix(*, sims: int, threads: int | None, preset: str = "unit") -> StrixBackend:

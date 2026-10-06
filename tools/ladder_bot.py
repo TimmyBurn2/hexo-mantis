@@ -37,11 +37,12 @@ class ReplayReport:
     budget_misses: list[dict[str, Any]] = field(default_factory=list)
     book_misses: list[dict[str, Any]] = field(default_factory=list)
     below_budget: list[dict[str, Any]] = field(default_factory=list)
+    stop_misses: list[dict[str, Any]] = field(default_factory=list)
     ms_per_turn: list[float] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:
-        return not self.mismatches and not self.budget_misses and not self.book_misses
+        return not self.mismatches and not self.budget_misses and not self.book_misses and not self.stop_misses
 
 
 def replay_receipt(receipt: dict[str, Any], backend: Any) -> ReplayReport:
@@ -71,6 +72,9 @@ def replay_receipt(receipt: dict[str, Any], backend: Any) -> ReplayReport:
         if replayed != move["placements"]:
             report.mismatches.append({"request_id": move["request_id"], "recorded": move["placements"],
                                       "replayed": replayed})
+        if int(turn.stopped) != int(move["stopped"]):
+            report.stop_misses.append({"request_id": move["request_id"], "stopped": int(turn.stopped),
+                                       "recorded": int(move["stopped"])})
         if int(turn.sims) != int(move["sims"]):
             report.budget_misses.append({"request_id": move["request_id"], "sims": int(turn.sims),
                                          "recorded": int(move["sims"])})
@@ -93,7 +97,7 @@ def _open_backend(args: argparse.Namespace, ladder: Any) -> Any:
         if args.config is None or args.checkpoint is None:
             raise SystemExit("--backend mantis needs --config (the run's eval seam) and --checkpoint")
         return ladder.backends.open_mantis(load_config(args.config), Path(args.checkpoint), threads=args.threads,
-                                           preset=args.preset)
+                                           preset=args.preset, standalone_host=args.standalone_host)
     return ladder.backends.open_strix(sims=args.sims, threads=args.threads, preset=args.preset)
 
 
@@ -106,6 +110,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--checkpoint", help="mantis: the stamped .ckpt to play")
     ap.add_argument("--sims", type=int, default=256, help="strix: sims per stone (the unit on record is 256)")
     ap.add_argument("--threads", type=int, default=None, help="torch threads for the backend (default: torch's)")
+    ap.add_argument("--standalone-host", action="store_true",
+                    help="mantis: this host runs no self-play, so the head builds its leaves on the cores it has")
     ap.add_argument("--preset", choices=sorted(ladder_presets()), default="unit",
                     help="unit: the config's deploy_sims / --sims (the reading on record); play: 64 sims, R363 §0(5), "
                          "labelled on every receipt, never a unit reading")
@@ -138,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
               f"mismatch(es), {len(report.budget_misses)} budget miss(es), {len(report.book_misses)} book miss(es), "
               f"{len(report.below_budget)} below budget, {mean_ms / 1000.0:.2f} s/turn -> "
               f"{'PASS' if report.passed else 'FAIL'}")
-        for row in report.mismatches + report.budget_misses + report.book_misses + report.below_budget:
+        for row in report.mismatches + report.budget_misses + report.book_misses + report.stop_misses + report.below_budget:
             print(f"  {row}")
         return 0 if report.passed else 1
 

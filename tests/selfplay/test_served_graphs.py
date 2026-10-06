@@ -57,18 +57,21 @@ def test_a_single_game_ladder_continues_the_self_play_ladder_down_to_its_own_flo
     assert SELFPLAY_FLOOR_NODES < selfplay[0].n_nodes <= SELFPLAY_FLOOR_NODES * 1.25 + 1
 
 
-def test_a_deploy_engines_server_takes_the_single_game_floor_and_self_plays_keeps_its_own():
+def test_an_engine_takes_the_small_pop_floor_only_when_asked_and_self_play_keeps_its_own():
     from mantis.config.resolve.inference_batching import InferenceBatchingSpec
     from mantis.selfplay.inference_local import LocalInferenceEngine
     from test_edge_vocab_table import _net
 
     spec = lookup("gnn_axis_v1")
-    engine = LocalInferenceEngine(_net("cpu"), torch.device("cpu"), encoding_spec=spec, fused_graph_caps=_CAPS,
-                                  inference_batching=InferenceBatchingSpec(64, 10), max_in_flight=8, submitters=1)
-    try:
-        assert engine._graph_server._ladder == bucket_ladder(_CAPS, batch_size=64, floor_nodes=SMALL_POP_FLOOR_NODES)
-    finally:
-        engine.close()
+    for asked, want in [(None, SELFPLAY_FLOOR_NODES), (SMALL_POP_FLOOR_NODES, SMALL_POP_FLOOR_NODES)]:
+        floor = {} if asked is None else {"bucket_floor_nodes": asked}
+        engine = LocalInferenceEngine(_net("cpu"), torch.device("cpu"), encoding_spec=spec, fused_graph_caps=_CAPS,
+                                      inference_batching=InferenceBatchingSpec(64, 10), max_in_flight=8, submitters=1,
+                                      **floor)
+        try:
+            assert engine._graph_server._ladder == bucket_ladder(_CAPS, batch_size=64, floor_nodes=want)
+        finally:
+            engine.close()
     server = InferenceServer(_net("cpu"), torch.device("cpu"), {"inference": {"inference_batch_size": 64, "inference_max_wait_ms": 10}},
                              encoding_spec=spec, fused_graph_caps=_CAPS)
     assert server._ladder == bucket_ladder(_CAPS, batch_size=64, floor_nodes=SELFPLAY_FLOOR_NODES)

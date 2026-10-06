@@ -4,17 +4,23 @@ from __future__ import annotations
 from array import array
 from typing import Any
 
-#: One served position: the in-window policy (f32 storage holds the f32 the net returned), the off-window half, the
-#: value and the builder's window centre.
-_Entry = tuple[array, tuple[tuple[tuple[int, int], float], ...], float, tuple[int, int]]
+#: One served position in f32 and i32 arrays (exactly the f32 the net returned): the in-window policy, the off-window
+#: cells flattened (q, r, q, r, ...) with their probabilities, the value and the builder's window centre.
+_Entry = tuple[array, array, array, float, tuple[int, int]]
+#: Policy rows, off-window rows, values and window centres, as the engine's `infer_batch_ls` returns them.
+_Served = tuple[list[list[float]], list[list[tuple[tuple[int, int], float]]], list[float], list[tuple[int, int]]]
 
-_ROWS = ("calls", "positions", "hits", "served", "in_batch_repeats", "all_hit_calls")
+#: A game's entries at most (~5 KB each at radius 8); past it the oldest goes, and a miss is evaluated again.
+MAX_ENTRIES = 8192
+
+_ROWS = ("calls", "positions", "hits", "served", "in_batch_repeats", "all_hit_calls", "evicted")
 
 
 class GameEvalCache:
     """One player's evaluations in the game in play, keyed exactly as self-play's eval cache keys a leaf.
 
-    A served output does not depend on the pop it rides in, so a hit returns what a fresh evaluation would.
+    A hit returns the outputs of the position's first evaluation in the game, which a later pop reproduces within the
+    served path's own spread (exactly, in DEPLOY-1's sm_86 dumps).
     """
 
     def __init__(self, engine: Any) -> None:
@@ -23,15 +29,15 @@ class GameEvalCache:
         self._rows: dict[str, int] = dict.fromkeys(_ROWS, 0)
 
     def new_game(self) -> None:
+        """Empty the cache: no game reads another's evaluations."""
         self._entries.clear()
 
     def counters(self) -> dict[str, int]:
-        """`positions` = `hits` + `served` + `in_batch_repeats`; `all_hit_calls` were answered with no evaluation."""
+        """`positions` = `hits` + `served` + `in_batch_repeats`; `all_hit_calls` evaluated nothing; `evicted` hit the cap."""
         return dict(self._rows)
 
-    def infer_batch_ls(self, boards: list[Any]) -> tuple[list[list[float]], list[list[tuple[tuple[int, int], float]]],
-                                                         list[float], list[tuple[int, int]]]:
-        """The engine's `infer_batch_ls` for `boards`, evaluating only keys this game has not seen, each once."""
+    def infer_batch_ls(self, boards: list[Any]) -> _Served:
+        """The engine's `infer_batch_ls`, each unseen key evaluated once. Raises: RuntimeError (closed), ValueError."""
         positions = self._engine.positions_of(boards)
         keys = self._engine.leaf_keys(positions)
         fresh: dict[str, int] = {}
@@ -43,10 +49,14 @@ class GameEvalCache:
             elif key not in fresh:
                 fresh[key] = len(submit)
                 submit.append(position)
+        served: dict[str, _Entry] = {}
         if submit:
             dense, overflow, values, centers = self._engine.infer_positions_ls(submit)
             for key, i in fresh.items():
-                self._entries[key] = (array("f", dense[i]), tuple(overflow[i]), float(values[i]), tuple(centers[i]))
+                served[key] = (array("f", dense[i]), array("i", [c for (cell, _p) in overflow[i] for c in cell]),
+                               array("f", [p for _cell, p in overflow[i]]), float(values[i]), tuple(centers[i]))
+        out = _unpack([served[key] if key in served else self._entries[key] for key in keys])
+        self._remember(served)
         rows = self._rows
         rows["calls"] += 1
         rows["positions"] += len(keys)
@@ -54,9 +64,24 @@ class GameEvalCache:
         rows["served"] += len(fresh)
         rows["in_batch_repeats"] += len(keys) - hits - len(fresh)
         rows["all_hit_calls"] += int(bool(keys) and not fresh)
-        entries = [self._entries[key] for key in keys]
-        return ([e[0].tolist() for e in entries], [list(e[1]) for e in entries], [e[2] for e in entries],
-                [e[3] for e in entries])
+        return out
+
+    def _remember(self, served: dict[str, _Entry]) -> None:
+        for key, entry in served.items():
+            if len(self._entries) >= MAX_ENTRIES:
+                del self._entries[next(iter(self._entries))]
+                self._rows["evicted"] += 1
+            self._entries[key] = entry
 
 
-__all__ = ["GameEvalCache"]
+def _unpack(entries: list[_Entry]) -> _Served:
+    dense, overflow, values, centers = [], [], [], []
+    for d, cells, probs, value, center in entries:
+        dense.append(d.tolist())
+        overflow.append([((cells[2 * j], cells[2 * j + 1]), p) for j, p in enumerate(probs.tolist())])
+        values.append(value)
+        centers.append(center)
+    return dense, overflow, values, centers
+
+
+__all__ = ["MAX_ENTRIES", "GameEvalCache"]

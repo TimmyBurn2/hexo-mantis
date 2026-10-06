@@ -39,7 +39,8 @@
   v12 (RUN11-PRE, R384(d)): `iteration_complete.search_levers` gains `gumbel_quick_round_leaves` / `gumbel_quick_rounds`,
   the quick arm's share of the round-width terms, so `selfplay.gumbel_m_quick` fires visibly.
   v13 (DEPLOY-1, R386(d)): `iteration_complete.inference_batching` gains a `wake` sub-block, the collector's pop
-  reasons and the submitter wake's fire count, and its `served_graphs` sub-block gains `bucket_parts`.
+  reasons and the submitter wake's fire count, and its `served_graphs` sub-block gains `bucket_parts`;
+  `mcts_mean_depth` counts a select call's overlap once, where every repeat of it counted before.
 
 ## Summary
 
@@ -340,11 +341,9 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   The block also carries a `served_graphs` SUB-BLOCK (LAW-18): `enabled` (a CUDA server replays captured buckets),
   `buckets` (the ladder's size), `captured` (buckets captured so far), `replayed_parts` and `eager_parts` (fused parts
   served by a replay and by the eager forward), and over the replayed parts `real_nodes`/`padded_nodes` and
-  `real_edges`/`padded_edges` (the padding's volume), and `bucket_parts` (replayed parts per bucket, keyed by the bucket's
-nodes: the rungs the pops ride). Cumulative since server start, visible at 0. A deploy engine's `wake` and
-`served_graphs` blocks reach the eval worker's result as `serving.candidate` and `serving.best` (the gate's anchor).
-- `iteration_complete.mcts_mean_depth` averages the depth of the descents a PUCT select call made. An overlap with a
-  pending leaf ends its call (every later attempt would repeat it), so it is counted once per call.
+  `real_edges`/`padded_edges` (the padding's volume), and `bucket_parts` (replayed parts per bucket, keyed by the
+  bucket's nodes: the rungs the pops ride). Cumulative since server start, visible at 0. A deploy engine's `wake` and
+  `served_graphs` blocks reach the eval worker's result as `serving.candidate` and `serving.best` (the gate's anchor).
   The block also carries a `wake` SUB-BLOCK (LAW-18): `submitters` (the threads the batcher was told each block
   on one whole batch; `0` is undeclared, which is self-play's runner) and, over the non-empty pops, why each returned:
   `threshold` (the leaf count met the saturation threshold), `all_submitted` (every declared submitter had a batch
@@ -373,6 +372,8 @@ nodes: the rungs the pops ride). Cumulative since server start, visible at 0. A 
   `non_blocking` from pinned staging), and a check-14 finding under `checker_thread` refuses
   every pop retired after it latched, so only pops already launched when the finding landed
   can have been served. `None` in a retired-grid-path record.
+- `iteration_complete.mcts_mean_depth` averages the depth of the descents a PUCT select call made. An overlap with a
+  pending leaf ends its call (every later attempt would repeat it), so it is counted once per call (from v13).
 - `stride5_spam` was **REMOVED** at close-out (operator directive B — a dead artifact of bad
   hyperparams that never occurs under current recipes).
 - `eval_round` joins the heartbeat sources at WP11-A (4th source): the eval pipeline's

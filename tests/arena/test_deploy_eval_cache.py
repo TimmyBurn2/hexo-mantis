@@ -5,6 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from mantis.arena.eval_cache import GameEvalCache
+from types import SimpleNamespace
+from mantis._engine import Board
+from mantis.arena.match import _record_one
+from mantis.monitor.game_record import eval_record
+from mantis.arena.deploy_head import DeployHeadPlayer
+from mantis.util.puct import PuctConstants
+import mantis.arena.eval_cache as ec
 
 
 @dataclass(frozen=True)
@@ -54,7 +61,7 @@ def test_a_position_seen_earlier_in_the_game_is_served_without_a_second_evaluati
     assert engine.submitted == [engine.positions_of([A, B])], "the second call evaluated nothing"
     assert again == tuple(list(reversed(col)) for col in first)
     assert cache.counters() == {"calls": 2, "positions": 4, "hits": 2, "served": 2, "in_batch_repeats": 0,
-                                "all_hit_calls": 1}
+                                "all_hit_calls": 1, "evicted": 0}
 
 
 def test_a_key_repeated_inside_one_batch_is_evaluated_once():
@@ -93,8 +100,6 @@ def test_a_hit_returns_what_the_evaluation_returned_bit_for_bit():
 
 
 def test_the_deploy_head_clears_its_cache_at_a_new_game_and_reports_each_moves_rows():
-    from mantis.arena.deploy_head import DeployHeadPlayer
-    from mantis.util.puct import PuctConstants
 
     engine = _Engine()
     cache = GameEvalCache(engine)
@@ -107,6 +112,31 @@ def test_the_deploy_head_clears_its_cache_at_a_new_game_and_reports_each_moves_r
     assert cache.infer_batch_ls([A]) is not None and len(engine.submitted) == 2, "the new game emptied the cache"
 
 
+
+
+def test_past_its_cap_the_oldest_entry_goes_and_is_evaluated_again(monkeypatch):
+
+    monkeypatch.setattr(ec, "MAX_ENTRIES", 2)
+    engine = _Engine()
+    cache = GameEvalCache(engine)
+    c = _Board(((0, 0, 1), (5, 5, -1)))
+    first = cache.infer_batch_ls([A, B, c])
+    assert cache.counters()["evicted"] == 1
+    assert cache.infer_batch_ls([B, c]) == tuple(col[1:] for col in first) and len(engine.submitted) == 1
+    assert cache.infer_batch_ls([A]) == tuple(col[:1] for col in first) and len(engine.submitted) == 2
+
+
+def test_an_off_window_half_and_a_centre_come_back_as_the_engine_gave_them():
+    class _Wide(_Engine):
+        def infer_positions_ls(self, positions):
+            dense, _overflow, values, centers = super().infer_positions_ls(positions)
+            overflow = [[((-9, 4), 0.125), ((7, -3), 0.0625)] for _ in positions]
+            return dense, overflow, values, centers
+
+    engine = _Wide()
+    cache = GameEvalCache(engine)
+    fresh = cache.infer_batch_ls([A])
+    assert cache.infer_batch_ls([A]) == fresh and fresh[1] == [[((-9, 4), 0.125), ((7, -3), 0.0625)]]
 
 class _CachedLine:
     """Plays its cells in order; its cumulative cache rows grow by one hit and one served position a move."""
@@ -130,11 +160,7 @@ class _CachedLine:
 
 
 def test_a_game_record_carries_that_games_cache_rows_and_the_eval_record_writes_them():
-    from types import SimpleNamespace
 
-    from mantis._engine import Board
-    from mantis.arena.match import _record_one
-    from mantis.monitor.game_record import eval_record
 
     candidate = _CachedLine([(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0)])
     candidate.rows["hits"] = 40  # rows from an earlier game on the same player

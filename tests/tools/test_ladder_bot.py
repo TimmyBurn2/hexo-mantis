@@ -123,6 +123,13 @@ def test_a_replay_whose_backend_spends_a_different_budget_than_recorded_fails(bo
     assert report.budget_misses == [{"request_id": 1, "sims": 7, "recorded": 8}, {"request_id": 2, "sims": 7, "recorded": 8}]
 
 
+
+def test_a_replay_whose_head_stops_where_the_receipt_did_not_fails(bot_mod, ladder, tmp_path: Path) -> None:
+    body = ladder.receipt.read_receipt(_receipt(ladder, tmp_path))
+    body["moves"][0]["stopped"] = 1
+    report = bot_mod.replay_receipt(body, _ReplayBackend())
+    assert report.stop_misses == [{"request_id": 1, "stopped": 0, "recorded": 1}] and not report.passed
+
 def test_a_turn_recorded_below_the_configured_budget_is_reported_and_must_replay_exactly(bot_mod, ladder, tmp_path: Path) -> None:
     """Both heads stop early on a DECIDED position (measured live 2026-09-19: strix's solver 3 of 512, mantis's PUCT tree 427 of 512 once every path hit a terminal) — reported, and the replay must reproduce it."""
     body = ladder.receipt.read_receipt(_receipt(ladder, tmp_path))

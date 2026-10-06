@@ -346,10 +346,10 @@ impl MCTSTree {
         self.pending.clear();
         self.inline_descents = 0;
         self.tt_hits = 0;
-        let mut boards = Vec::with_capacity(n);
+        let mut boards = Vec::with_capacity(network.min(n));
         // O(1) overlap dedup on leaf pool indices; the set lives only for this call.
         let mut pending_ids: FxHashSet<u32> = FxHashSet::default();
-        pending_ids.reserve(n);
+        pending_ids.reserve(network.min(n));
         let mut board = self.root_board.clone();
         let mut diffs: Vec<MoveDiff> = Vec::with_capacity(32);
 
