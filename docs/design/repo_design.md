@@ -1262,9 +1262,9 @@ proving 0 of 8 966 quiet positions (`docs/design/TACTICS_DESIGN_2026-09-28.md` �
    F-38, F-39 or F-53 with that instrument starts from that commit, under LAW-02. The turn-level reading 4
    is TACTICS-SELFPLAY's (CARD-TACTICS-SELFPLAY).
 
-### AMENDMENT — R<nnn> (pending), DASH-2: one local server over the run record is admitted; the dashboard, the viewer and the analyzer's page it replaces are retired at its last phase
+### AMENDMENT — R386, DASH-2: one local server over the run record is admitted; the dashboard, the viewer and the analyzer's page it replaces are retired at its last phase
 
-**R344(d), discharged under `tools/`** (the ruling number that admits it is the operator's, pending). R344(d) ordered a
+**R344(d), discharged under `tools/`** (admitted docs-only by R386(a), 2026-10-06, on R363's precedent). R344(d) ordered a
 read-only stdlib server over the run record, carrying the game viewer, loopback by default, and owed this amendment
 in the same commit as the socket (R9). The design is `docs/design/dash2_design.md` (2026-10-03, annotated 2026-10-05);
 it keeps `docs/design/observatory_design.md` §3–§4 and replaces its views.
@@ -1289,3 +1289,6 @@ it keeps `docs/design/observatory_design.md` §3–§4 and replaces its views.
 
 The R333(d), R352(g), R356(d) and R363 amendments stay as history, each with a closing line since the last phase
 retired their tools (2026-10-05).
+
+The ruling number is R386(a) (2026-10-06), which admitted it docs-only; box A's display is admitted read-only
+at the lowest priority, with no GPU.

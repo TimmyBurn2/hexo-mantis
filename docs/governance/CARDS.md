@@ -36,16 +36,58 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R386 (THE FLOOR, THE FRESH LINE, THE INSTRUMENT; 2026-10-06) — run11 pauses, the instrument breaks once, DEPLOY-1
+
+- **CARD-RUN11-CYCLE-2 — ORDERED by R386(a): run11 pauses at its next save (bundle mirrored) and resumes with a second
+  cosine cycle, 5e-4 → 1e-4 over 54k steps, minted by the ruling. PAUSED 2026-10-06 20:00 CEST at 174 008.** The next
+  four ladder cells read it against the 108k–156k plateau mean: a climb by the line makes the floor the bound;
+  otherwise run12 takes the budget. The mint is owed (`tools/mint_config.py`); box A runs TRAIN-SPEED-1 while run11
+  pauses.
+- **CARD-TRAIN-SPEED-1 — ORDERED by R386(a): box A hosts TRAIN-SPEED-1's closed-loop A/Bs and the knob sweep while
+  run11 pauses.** Box A's display stays up read-only at the lowest priority, with no GPU.
+- **CARD-RUN11-FRESH-RESUME — ORDERED by R386(b): RUN11-FRESH is VIABLE and resumes on box B for 48 h.** Its cap band
+  becomes a two-read halt at < 10 % with a slope row; its exam floors stay report-only until first passed. Its curve
+  against run11's at matched steps, on (c)'s instrument, is run12's parent evidence. The FRESH-2 packet runs it in
+  another session; the cap band's two-read rule is monitor code, owed before the resume.
+- **CARD-INSTRUMENT-BREAK — ORDERED by R386(c): the instrument breaks once.**
+  - The ruler of record is Six gen g at equal playouts per turn (ours 128 per stone, Six 256 per turn). g is the lowest
+    generation that reads the shipped head inside [0.3, 0.7] on a 64-pair screen, re-picked upward with a three-save
+    overlap when a panel leaves the band.
+  - S stays the second ruler; equal-time cells are a report row.
+  - Openings follow the arena protocol (the origin, plies drawn within hex distance 2, 5 plies, the 4-in-6 threat
+    redraw, each opening twice with sides swapped) over 288 seeded draws; book_v1 retires.
+  - The parent and three run11 saves are re-read on it, and the going-forward line is re-derived.
+- **CARD-DEPLOY-1 — ORDERED by R386(d): SEARCH-PERF-1's report
+  (`docs/design/research/SEARCH_PERF_2026-10-06.md`) lands as DEPLOY-1.**
+  - The free fixes: #1–#4, #9 and the collision stop.
+  - The per-game exact cache (#6): R370(c) extends to eval paths, since a per-player per-game exact cache is a
+    served-output identity, not a reading.
+  - The virtual-loss frame fix with B3's refill (#13), a defect. Its record is an equal-time pair against S before and
+    after, and it rides (c)'s break.
+  - The early stop (#14) as a per-consumer switch: on for the ladder, off for cells, the gate and analysis. The
+    served-sims witness reads `last_sims == n`, or a fired stop with the leader fixed.
+  - #5's step (b) now, and its step (a) after its proofs.
+  - The producer-side `verify_contract` retires where check 14 runs 1-in-1.
+  - #10 is permitted for quick-arm decided roots only (R275(b) relaxed for value-only rows).
+  - #15, #16 and the per-turn deploy unit wait for run12's design; #18 is run12's encoding, landed behind the seam with
+    a fine-tune pair.
+  - Its exit states the two cards' owed rulings as one-line questions, which are then ruled (R386(f)).
+- **CARD-STALE-EXTENSION — ORDERED by R386(f): the main checkout's stale extension is rebuilt in a separate tree.**
+  perf-3-l1b stays a branch, and search-perf-research has been fast-forwarded (`dev` at `ef25e64f`).
+
 ## Opened by R385 (THE RUN STARTS; THE RULE IS RETIRED; 2026-10-05) — run11 continues arm 2, RUN11-FRESH beside it
 
-- **CARD-RUN11 (was CARD-RUN11-CONTINUE; the RUN11-GO packet's name) — RUNNING since 2026-10-05 12:35 CEST (box A,
+- **CARD-RUN11 (was CARD-RUN11-CONTINUE; the RUN11-GO packet's name) — PAUSED 2026-10-06 20:00 CEST at 174 008 by
+  R386(a) (a resumable stop save right after the 174 000 bundle; CARD-RUN11-CYCLE-2 resumes it). RAN from 2026-10-05
+  12:35 CEST (box A,
   `8d169abb`), ORDERED by R385(a):
   run11 continues arm 2 (2.4 steps/game, value mask 1/8; `run11a2`) from its final bundle (step 32 201, mirrored and
   hash-verified on the desktop) on box A, which runs nothing else (R385(f)).** Its config is unchanged, so its run id
   stays `run11a2` (prereg §13 A1); its envelope is §13 A5's and STATE's.
   The going-forward read PASSED at 60k (+0.64 logit against the +0.17 line; STATE has the cells) and at every read
-  since, through +0.93 at 144k. The RUN11-GO packet EXITED 2026-10-06. The LR schedule ended at 108k, and the rulers
-  have flattened since (R386(f) owed).
+  since, through +0.93 at 144k. The RUN11-GO packet EXITED 2026-10-06 and is ACCEPTED by R386(a). The LR schedule
+  ended at 108k, and the rulers have flattened since. R386(a) pauses run11 at its next save and resumes it with a
+  second cosine cycle (CARD-RUN11-CYCLE-2).
   RUN11-PRE's registered pick (arm 3) is set aside by ruling. The rate is a scalar inside the envelope [1.2, 2.4]: a
   memorisation gap above +0.05 at two consecutive saves drops it to 1.2 by STATE line. The going-forward read is the
   mean of four cells (the 32k final, 36k, 48k, 60k) above the parent's anchor by the line, then one cell every fourth
@@ -59,7 +101,8 @@ Both were found by running the gate set rather than by reading it, and both are 
 - **CARD-RUN11-FRESH — HALTED 2026-10-06 07:22 CEST at 69 000 by its cap band (0.052 against < 0.05; final save
   69 954, resumable, mirrored). VIABLE by B4:** its 48 h cell, the halt save (B3: the newest save at launch + 48 h),
   reads 0.609 against the parent's 0.594. This is a screen inside the noise, final at 2026-10-07 12:43 CEST unless
-  resumed. Whether to resume is R386(d). Was RUNNING from 2026-10-05 12:43 CEST (box B,
+  resumed. R386(b) rules it VIABLE and resumes it on box B for 48 h (CARD-RUN11-FRESH-RESUME). Was RUNNING from
+  2026-10-05 12:43 CEST (box B,
   `configs/run11fresh.yaml`). ORDERED by R385(e):
   rebootstrap answered by an arm, not for run11. On box B: arm 2's recipe and
   net shape, random init, no parent, an empty ring, the fill ramp.** Exam floors report-only until first passed, then
@@ -73,14 +116,16 @@ Both were found by running the gate set rather than by reading it, and both are 
 - **CARD-RATE-FORK — OPENED by the RUN11-GO packet, later: a paired fork of run11 at one save into a 1.2 and a 2.4
   steps/game branch.** Not built and not ordered; it reads the rate at matched start, which RUN11-PRE could not.
 - **CARD-DEPLOY-BATCH-WAIT — OPENED by the RUN11-GO exit, not built: a single-game inference posture for the ladder
-  deploy and equal-time evals, apart from self-play's.** The inference server waits up to
+  deploy and equal-time evals, apart from self-play's.** DEPLOY-1's free fixes (R386(d)) start with #1, the wake on
+  submission. The inference server waits up to
   `inference.inference_max_wait_ms` (10, tuned for self-play) for company, and caps each forward at `max_in_flight` =
   `selfplay.leaf_batch_size` 8.
   - In one game the wait costs about 1.75× per turn at 64–256 sims/stone (box B, same pairings).
   - The cap holds batched throughput at about 1 200 positions/s on the GPU and 44/s on the CPU, where Strix reaches
     about 100/s.
   - Measured with scratch overrides only (EXIT.md §5.4–5.5).
-- **CARD-SEARCH-PERF — OPENED by the RUN11-GO exit: the SEARCH-PERF-1 research packet (another session), our search
+- **CARD-SEARCH-PERF — CLOSED 2026-10-06: SEARCH-PERF-1 is ACCEPTED by R386(d) and lands as DEPLOY-1
+  (CARD-DEPLOY-1). OPENED by the RUN11-GO exit: the SEARCH-PERF-1 research packet (another session), our search
   against Six's.** At equal time Six gen455 does about 2–4× our nodes per second with a net about 16× ours. Its report
   is the card's output.
 
@@ -143,7 +188,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   process under MPS, the trainer's kernel sizes. PERF-3 (2026-10-04): its L3 removes the step's per-scalar syncs (each
   one waited on the shared stream's serving work), so the serving step falls -18 % and the in-loop step 0.392 ->
   0.357 s at the same 1.2 steps/s; its L4(a) reads the check-14 thread at 1.1 % of trainer wall (0.357 vs 0.353 s off,
-  positions/h +1.7 % inside the IQR, 0.64 cores) — under the 5 % that would earn a ruling request.
+  positions/h +1.7 % inside the IQR, 0.64 cores) — under the 5 % that would earn a ruling request. PARKED by R386(e)
+  except its first step: a read-only GIL sample on the live loop, on the operator's leave.
 - **CARD-PERF-COLLATE-2 — CARDED by PERF-2: after L3 the server's launch is its collate. PERF-3's L1 (a second server
   thread on the one queue, branch `perf-3-l1` `0e834fa5`) NOT LANDED: B-64 cell +5.0 % (A-B-A +4.3 %) against a +10 %
   line; one production pair +5.4 % (IQRs disjoint, inside the loop's between-run spread). Pops shrink (B 64 -> 54 in the
@@ -1577,7 +1623,7 @@ below 8 re-opens this row. R343(a).
 
 | item | subject | status | last moved |
 |---|---|---|---|
-| DASH-2 | `make dash` (`tools/dash.py`, package `tools/dash/`), a read-only stdlib HTTP server over run records, loopback by default | LANDED 2026-10-05 (`293b3277..83a5c1e6`): Run, Games and Analyzer views over a run directory or its mirror, the run monitor's save records, the cell sidecars (every ruler its own series over its own parent; `--rule-unit`, `--ladder`) and stamped checkpoints, plus a one-file freeze of the Run view. `tools/dashboard`, `tools/viewer` and `tools/analyzer` are retired; the analyzer's engine layer lives on in `tools/dash/engine`. The R9 amendment is at the foot of repo_design.md, its ruling number owed by the operator (`R<nnn>`). Two fresh reviews' findings fixed (reports outside the tree). | R344(d) |
+| DASH-2 | `make dash` (`tools/dash.py`, package `tools/dash/`), a read-only stdlib HTTP server over run records, loopback by default | LANDED 2026-10-05 (`293b3277..83a5c1e6`): Run, Games and Analyzer views over a run directory or its mirror, the run monitor's save records, the cell sidecars (every ruler its own series over its own parent; `--rule-unit`, `--ladder`) and stamped checkpoints, plus a one-file freeze of the Run view. `tools/dashboard`, `tools/viewer` and `tools/analyzer` are retired; the analyzer's engine layer lives on in `tools/dash/engine`. The R9 amendment is at the foot of repo_design.md, admitted docs-only by R386(a); box A's display is admitted read-only at the lowest priority, no GPU. Two fresh reviews' findings fixed (reports outside the tree). | R344(d) |
 | RUNG-2 | new external rungs — strix first, shrimp second | strix LANDED (the frontier's cell, the `tools/strix_follower.py` equal-work 256/256 cell on every 15 000-step checkpoint (the per-promotion trigger withdrawn, R361(a))). shrimp HELD for an architect read on the R257 radius fence | R356(a), R359(e), R361(a) |
 | INCR-GRAPH / S-INCR-GRAPH | incremental axis-graph construction from the parent position | PARKED, after being elevated to the top of the floor lane at R325. A CANDIDATE, not a plan: gated on a Rust-criterion box measurement, falsifier pre-registered as F-19's own inequality (`delta_cost x depth < build_cost`). Outside F-17/F-19's measured scope — see `docs/governance/falsified.md` | R335(e) |
 | HOT-14 | cross-core ownership explains x1.66 of x6.84 | RE-OPENED when S-PREFUSE was refuted | R336(a) |

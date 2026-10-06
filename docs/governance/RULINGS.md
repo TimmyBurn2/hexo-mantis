@@ -1,4 +1,4 @@
-# RULINGS — R23 to R385
+# RULINGS — R23 to R386
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R386.
+- Numbering continues from R346. The next ruling is R387.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,69 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R386 — THE FLOOR, THE FRESH LINE, THE INSTRUMENT
+Decision: verbatim below.
+
+> R386 — THE FLOOR, THE FRESH LINE, THE INSTRUMENT.
+> (a) RUN11-GO is accepted. run11 pauses at its next save (bundle mirrored); box A hosts
+> TRAIN-SPEED-1's closed-loop A/Bs and the knob sweep while it pauses; run11 resumes with a
+> second cosine cycle, 5e-4 → 1e-4 over 54k steps, minted by this ruling, read by the next
+> four ladder cells against the 108k–156k plateau mean (climb by the line → the floor bound;
+> else run12 takes the budget). DASH-2 is admitted docs-only (the R363 precedent); box A's
+> display is admitted read-only at the lowest priority, no GPU.
+> (b) RUN11-FRESH is VIABLE and resumes on box B for 48 h: the cap band becomes a two-read
+> halt at < 10 % with a slope row; exam floors report-only until first passed stands. Its
+> curve against run11's at matched steps, on the new instrument, is run12's parent evidence.
+> (c) The instrument breaks once. The ruler of record is Six gen g at equal playouts per turn
+> (ours 128/stone, Six 256/turn), g the lowest generation reading the shipped head inside
+> [0.3, 0.7] on a 64-pair screen, re-picked upward with a three-save overlap when a panel
+> leaves the band; S stays the second ruler; equal-time cells are a report row. Openings:
+> the arena protocol (origin; plies drawn within hex distance 2; 5 plies; the 4-in-6 threat
+> redraw; each opening twice with sides swapped), 288 seeded draws; book_v1 retires. The
+> parent and three run11 saves are re-read on it; the going-forward line is re-derived.
+> (d) SEARCH-PERF-1 is accepted. Land as DEPLOY-1: the free fixes (#1–#4, #9, the collision
+> stop), the per-game exact cache (#6; R370(c) extends to eval paths: a per-player per-game
+> exact cache is a served-output identity, not a reading), the virtual-loss frame fix with
+> B3's refill (#13, a defect; equal-time pair v S before/after as the record; it rides (c)'s
+> break), the early stop (#14) as a per-consumer switch — ladder ON, cells, gate and analysis
+> OFF — with the served-sims witness restated as `last_sims == n` or a fired stop with the
+> leader fixed; #5 step (b) now, step (a) after its proofs. The producer-side verify_contract
+> retires where check 14 runs 1-in-1. #10 is permitted for quick-arm decided roots only
+> (R275(b) relaxed for value-only rows). #15, #16 and the per-turn deploy unit wait for
+> run12's design; #18 is run12's encoding, landed behind the seam with a fine-tune pair.
+> (e) The trainer's interference stays parked except its first step: a read-only GIL sample
+> on the live loop, on the operator's leave. (f) perf-3-l1b stays a branch; search-perf-
+> research fast-forwards; the main checkout's stale extension is rebuilt in a separate tree.
+> The two cards' owed rulings are stated as one-line questions in DEPLOY-1's exit, then ruled.
+
+Status: standing. Accepts RUN11-GO by (a): run11 pauses at its next save with its bundle mirrored, and while it pauses
+box A hosts TRAIN-SPEED-1's closed-loop A/Bs and the knob sweep; run11 then resumes with a second cosine cycle, 5e-4 →
+1e-4 over 54k steps, minted by this ruling and read by the next four ladder cells against the 108k–156k plateau mean (a
+climb by the line makes the floor the bound; otherwise run12 takes the budget); DASH-2 is admitted docs-only on R363's
+precedent, and box A's display read-only at the lowest priority with no GPU. Rules RUN11-FRESH VIABLE and resumes it on
+box B for 48 h by (b): its cap band becomes a two-read halt at < 10 % with a slope row, its exam floors stay report-only
+until first passed, and its curve against run11's at matched steps, on the new instrument, is run12's parent evidence.
+Breaks the instrument once by (c): the ruler of record is Six gen g at equal playouts per turn (ours 128 per stone, Six
+256 per turn), g the lowest generation reading the shipped head inside [0.3, 0.7] on a 64-pair screen, re-picked upward
+with a three-save overlap when a panel leaves the band; S stays the second ruler and equal-time cells are a report row;
+openings follow the arena protocol (the origin, plies drawn within hex distance 2, 5 plies, the 4-in-6 threat redraw,
+each opening twice with sides swapped) over 288 seeded draws, and book_v1 retires; the parent and three run11 saves are
+re-read on it and the going-forward line is re-derived. Accepts SEARCH-PERF-1 and orders it landed as DEPLOY-1 by (d):
+the free fixes (#1–#4, #9, the collision stop); the per-game exact cache (#6), R370(c) extended to eval paths (a
+per-player per-game exact cache is a served-output identity, not a reading); the virtual-loss frame fix with B3's refill
+(#13, a defect, its record an equal-time pair against S before and after, riding (c)'s break); the early stop (#14) as
+a per-consumer switch, on for the ladder and off for cells, the gate and analysis, its served-sims witness restated as
+`last_sims == n` or a fired stop with the leader fixed; #5's step (b) now and its step (a) after its proofs. (d) also
+retires the producer-side `verify_contract` where check 14 runs 1-in-1, permits #10 for quick-arm decided roots only
+(R275(b) relaxed for value-only rows), holds #15, #16 and the per-turn deploy unit for run12's design, and makes #18
+run12's encoding, landed behind the seam with a fine-tune pair. Parks the trainer's interference except its first step,
+a read-only GIL sample on the live loop on the operator's leave, by (e). Keeps perf-3-l1b a branch, fast-forwards
+search-perf-research and orders the main checkout's stale extension rebuilt in a separate tree by (f); the two cards'
+owed rulings are stated as one-line questions in DEPLOY-1's exit, then ruled. The work it forwards is TRAIN-SPEED-1,
+run11's second cycle, RUN11-FRESH's resume, the instrument's break and DEPLOY-1.
+
+---
 
 ### R385 — THE RUN STARTS; THE RULE IS RETIRED
 Decision: verbatim below.
@@ -88,6 +151,11 @@ same monitor and cells, is viable if it reaches the parent's X anchor within 48 
 nothing more. Sets the operations by (f): box A is run11's and runs nothing else, box B is the fresh line's, the desktop
 plays cells and reads; a one-screen status every 24 h; the two STATE commits (`c8ef691f`, `33548d66`) and PERF-3's card
 numbers push now. The packets it forwards are run11's continuation and RUN11-FRESH.
+run11 PAUSES at its next save by R386(a) and resumes with a second cosine cycle (5e-4 → 1e-4 over 54k steps), read by
+the next four ladder cells against the 108k–156k plateau mean. (f)'s box A is AMENDED by R386(a): while run11 pauses it
+hosts TRAIN-SPEED-1's closed-loop A/Bs and the knob sweep, and its display is admitted read-only at the lowest
+priority, no GPU. (b)'s going-forward read is RE-DERIVED on R386(c)'s instrument. (e)'s RUN11-FRESH is VIABLE by
+R386(b) and resumes on box B for 48 h, its cap band a two-read halt at < 10 % with a slope row.
 
 ---
 
@@ -491,6 +559,7 @@ audit's best hold; the row-wise mixture stands under test (R380(d)).
 The row-wise mixture is KILLED by R381(a); the feed of record is arm A's, no re-search and no mixing.
 (g)'s ORIGIN-1 is SPLIT by R384(f): the deploy head plays the origin on an empty board now; the engine rule and
 canonicalisation land after run11's start by pinned resume.
+(h)'s ruler's book RETIRES by R386(c): book_v1 retires, and openings follow the arena protocol over 288 seeded draws.
 
 ---
 
@@ -529,6 +598,9 @@ decisions) is the second. Arm A's tactics in self-play are CARRIED into run11, n
 ring bands and read by its process level on the shipped head against the parent's anchor.
 (e) CONSTRUED by R377(c): a descent that ends at a proven terminal is a simulation, and the served-sims witness counts it;
 and by R378(c): whatever backed the value (the net, the table or the solver), and the witness pins all three cases.
+(a)'s ruler is MOVED by R386(c): the ruler of record is Six gen g at equal playouts per turn (ours 128 per stone, Six
+256 per turn), g re-picked upward on a 64-pair screen; S stays the second ruler. (e)'s served-sims witness is RESTATED by
+R386(d) for the early stop (#14): `last_sims == n`, or a fired stop with the leader fixed.
 
 ---
 
@@ -672,6 +744,7 @@ encoded input" reads "a key over the inputs the encoder reads" — a Zobrist ove
 moves_remaining and the builder's geometry, taken before any build; the encoded input is a pure function of them,
 and a seeded 10 869-leaf drive pins the key's misses equal to the encoded-input hash's. The rest of (c) stands.
 A1's PERF-3 is RATIFIED by R385(d): L2 (this key) and L3 landed, L1 is carded with its branch.
+(c) is EXTENDED to eval paths by R386(d): a per-player per-game exact cache is a served-output identity, not a reading.
 
 ---
 
@@ -1212,6 +1285,7 @@ Status: standing — (a)'s "run8 continues to 45k; its cell decides" lacked "the
 at its last pre-registered read) and grants the stop. (b)'s PARENT RULE is APPLIED by R364(b)
 (the triple monotone → run8@45k); its "H1 re-set from the measured per-15k gain" is DISCHARGED by
 R364(c) — the gate is re-set as a regression guard, the gain being below what it can resolve.
+(c)'s LADDER unit `book_v1_s20260625_p4` loses its book: book_v1 RETIRES by R386(c).
 
 ---
 
@@ -4679,6 +4753,8 @@ Decision: (a) The R255 capacity derivation is CLEARED and regime-tagged — vali
 (c) The sims prereg row is BLOCKED on this fix landing; checkpoint interval, random floor, NaN arming, gate consecs and corpus are NOT blocked. (d) Trigger forensics ride the next box session — grep the five dead after-reps' logs before anything is deleted; a confirmed GPU-failure-under-batch-fusion routes to the CARD-RUN5-GPU-OOM class as its own item. (e) A post-fix bench re-run may legitimately yield numbers OR a loud named inference failure — the second is trigger confirmation, not a failed errand.
 Grounds: at 600/75 the defect is silent, so tripwire sensitivity is exactly what blocks the sims row.
 Status: standing [INLINE]
+(b)'s exporter conjunct is RELAXED by R386(d) for value-only rows: #10's zero-visit export is permitted for quick-arm
+decided roots only.
 
 ### R276 — Phase C exit adjudication (merge gate, grants, OOM routing, ply cap)
 Decision: (a) f816-scratch is approved for merge conditional on the closure-typing cite. (b) Sequential reviewer isolation is adopted as an R262 rider — concurrent review VOIDS the later verdict unless re-verified in an isolated worktree. (c) A retroactive per-event R43 grant for the target_latch_propagation.rs edit, disclosed same-event, never precedent. (d) F-816-2 is reclassified telemetry-only and the correction propagates to every artifact carrying "feeds an armed abort". (e) The capacity guard is retained as defense-in-depth. (f) The OOM trigger is CONFIRMED as F-816-10 in the CARD-RUN5-GPU-OOM class, with a design-first memory-bounded fusion packet authorized — loud and counted, no silent catch-and-retry without a counter and a cap — and the bench unit openly redefined as parent vs (Design A + memory bound) as ONE deployable unit, since Design A cannot run without the bound.
@@ -5054,6 +5130,8 @@ Status: standing — (f)'s 12 h block is SUPERSEDED, NOT WITHDRAWN, by R344 §0.
 Decision: Ratifies R343, holds the rate bar at R342(b)(iv)'s written 3-per-12 h because RESUME-1 delivered inside its box, and puts the anchor-pin collision between R343(c) and R343(d) on the ARCHITECT'S ledger with the fix (the pin follows launch mode). Orders the ring sampler SEEDED FROM `config.seed` — the cheaper alternative — and REFUSES capturing ChaCha state through rand's backend BY NAME as the coupling the crate's pin exists to prevent. ORDERS GAME-RECORD-1: every game saved from step 0 across self-play, promotion, external rung and random floor, one record per game with the move list in axial coordinates and per-position search stats on every eval-channel game and a 1-in-N sample of self-play, stored as append-only length-delimited msgpack shards per (run, hour) with fsync at close, no new hard dependency. ORDERS DASH-2: `mantis dash serve` as a read-only stdlib HTTP server over the run record, loopback by default, carrying the GAME VIEWER.
 Grounds: a run that does not write its games cannot be viewed, replayed or mined, so the producer must exist at step 0.
 Status: standing — (c)'s "1000 steps, both channels" is CORRECTED by R345, which holds `eval_interval` at 1000 and moves `gate.stride` to 3; §0.5's 25 001-step minimum supersedes R343(f)'s 12 h block [INLINE]
+(d)'s DASH-2 is ADMITTED docs-only by R386(a) on R363's precedent: the repo_design R9 amendment carries R386 where it
+said `R<nnn>`; box A's display is admitted read-only at the lowest priority, no GPU.
 
 ### R345 — AUDIT-2 accepted; run6 HELD for REPAIR-A2; sims and Gumbel separated
 Decision: Accepts AUDIT-2 as evidence and rules FOUR of its findings RUN-BREAKING for a promoting, resumable run — a non-finite gradient reaching `optimizer.step`, an arena that scores moves it never checked against the legal set, periodic checkpoints that are not continuation points beside a ring truncated in place on write, and a gate CI that resamples games rather than opening pairs on openings that repeat every round — so run6 is HELD for REPAIR-A2, seven severable legs in a two-day box, each carrying a planted break and a mutation self-test. Re-rules the GATE CADENCE on arithmetic: `eval_interval` held at 1000 and `gate.stride` moved to 3, correcting R344(c)'s "1000 for both channels" with the split-that-was-already-a-key on the ARCHITECT'S ledger. SEPARATES sims from Gumbel: run6 runs PUCT at 50 as the minted, gate-armed control arm, 96 REFUSED on projection, STRENGTH-FRONTIER-1 measuring the question at block end on run6's own frozen checkpoints, and GUMBEL-REPAIR-1 landing to Mctx invariants during the block but enabled in no run. REFUSES KLENT's search-free Shrimp target BY NAME. Its (e) annotates LAW-10 as GRID-ERA — the thresholds were measured on the dense threat-logit head, which `GnnNet` does not have, so the law has no producer on run6's lineage.

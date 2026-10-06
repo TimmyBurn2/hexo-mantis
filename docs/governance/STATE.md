@@ -7,13 +7,38 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
-**R385 (2026-10-05): THE RUN STARTS; THE RULE IS RETIRED. RUN11-PRE is accepted and its registered pick (arm 3) is
-set aside by ruling: run11 continues arm 2 (2.4 steps/game, value mask 1/8) from its final bundle on box A. Exam floors
-halt on two consecutive misses; L̄ is report-only; matched work is matched positions. The quick-arm lever is closed.
-PERF-3 is ratified. RUN11-FRESH (arm 2's recipe from random init, no parent) runs on box B as evidence for run12's
-parent.** run10 will not START (R376(c)). run11 is arm 2's run (`configs/run11a2.yaml`, run id `run11a2`) continued
-from its last save; at this commit it is ORDERED, not yet live. run11 carries the deploy block of record (R378(a)) and
+**R386 (2026-10-06): THE FLOOR, THE FRESH LINE, THE INSTRUMENT. RUN11-GO is accepted. run11 pauses at its next save
+and resumes with a second cosine cycle (5e-4 → 1e-4 over 54k steps); box A hosts TRAIN-SPEED-1 while it pauses.
+RUN11-FRESH is VIABLE and resumes on box B for 48 h under a two-read cap band at < 10 %. The instrument breaks once:
+the ruler of record becomes Six gen g at equal playouts per turn on the arena protocol's openings, and book_v1 retires.
+SEARCH-PERF-1 is accepted and lands as DEPLOY-1.** run10 will not START (R376(c)). run11 is arm 2's run
+(`configs/run11a2.yaml`, run id `run11a2`), continued from 32 201 under R385(a); at this commit it is PAUSED on box A
+at 174 008 (2026-10-06 20:00 CEST), its stop bundle resumable. run11 carries the deploy block of record (R378(a)) and
 in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c), CARD-RUN11-DESIGN).
+
+- **R386's order.**
+  - RUN11-GO accepted (R386(a)). run11 pauses at its next save, bundle mirrored, and resumes with a second cosine
+    cycle, 5e-4 → 1e-4 over 54k steps, minted by the ruling (CARD-RUN11-CYCLE-2; the mint is owed). The next four
+    ladder cells read it against the 108k–156k plateau mean: a climb by the line makes the floor the bound; otherwise
+    run12 takes the budget. While run11 pauses, box A hosts TRAIN-SPEED-1's closed-loop A/Bs and the knob sweep
+    (CARD-TRAIN-SPEED-1). DASH-2 is admitted docs-only; box A's display read-only at the lowest priority, no GPU.
+  - RUN11-FRESH is VIABLE (R386(b)) and resumes on box B for 48 h: the cap band becomes a two-read halt at < 10 % with a
+    slope row; exam floors stay report-only until first passed. Its curve against run11's at matched steps, on the new
+    instrument, is run12's parent evidence (CARD-RUN11-FRESH-RESUME; the FRESH-2 packet, another session).
+  - The instrument breaks once (R386(c), CARD-INSTRUMENT-BREAK). The ruler of record is Six gen g at equal playouts per
+    turn (ours 128/stone, Six 256/turn), g the lowest generation reading the shipped head inside [0.3, 0.7] on a
+    64-pair screen, re-picked upward with a three-save overlap. S stays the second ruler; equal-time cells are a report
+    row. Openings follow the arena protocol over 288 seeded draws; book_v1 retires. The parent and three run11 saves
+    are re-read on it, and the going-forward line is re-derived.
+  - SEARCH-PERF-1 accepted (R386(d)); it lands as DEPLOY-1 (CARD-DEPLOY-1): the free fixes, the per-game exact cache
+    (R370(c) extended to eval paths), the virtual-loss frame fix (#13, riding (c)'s break), the early stop as a
+    per-consumer switch, #5's step (b). #10 is permitted for quick-arm decided roots only; #15, #16 and the per-turn
+    deploy unit wait for run12's design; #18 is run12's encoding.
+  - The trainer's interference stays parked except a read-only GIL sample on the live loop, on the operator's leave
+    (R386(e)). perf-3-l1b stays a branch; search-perf-research is fast-forwarded (`dev` at `ef25e64f`); the main
+    checkout's stale extension is rebuilt in a separate tree (R386(f), CARD-STALE-EXTENSION).
+- **R385 (2026-10-05): THE RUN STARTS; THE RULE IS RETIRED.** RUN11-PRE accepted with its registered pick (arm 3) set
+  aside; run11 continued arm 2 on box A; RUN11-FRESH ran on box B. Its order is below.
 
 - **RUN11-GO (the architect's packet of 2026-10-05) enacts R385.** run11 = arm 2 continued (CARD-RUN11) on box A;
   RUN11-FRESH (CARD-RUN11-FRESH) on box B; cells on the desktop. The prereg carries R385 as §13's annotations (A1–A5);
@@ -32,11 +57,11 @@ in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c
   - **run11's envelope (a STATE line, no ruling; prereg §13 A5):** `train.training_steps_per_game` 2.4 at the resume,
     inside [1.2, 2.4], moved only by the gap rule (+0.05 at two consecutive saves → 1.2); `train.eval_interval` 36 000,
     inside [24 000, 48 000]; the monitor's card cap 0.45. Every other key is a re-mint with a ruling.
-  - **RUN11-GO EXITED 2026-10-06** (local records `mantis-records/run11/EXIT.md`). run11 stays LIVE on box A with no
-    halting row through 159k.
+  - **RUN11-GO EXITED 2026-10-06** (local records `mantis-records/run11/EXIT.md`). run11 ran on box A with no halting row
+    through 159k at the exit, and PAUSED at 174 008 on 2026-10-06 (R386(a)).
     - Every going-forward read PASSED: +0.64 (60k), +0.64, +0.67, +0.77, +0.82, +0.90, +0.95 (132k), +0.93 (144k).
     - The cosine schedule (`train.scheduler_t_max` 108 000) reached its floor at 108k. Since then X has held at
-      0.75–0.82 and the six455_128 ladder at 0.23–0.27 (R386(f) owed).
+      0.75–0.82 and the six455_128 ladder at 0.23–0.27. R386(a) answers it with a second cosine cycle.
   - **RUN11-FRESH HALTED 2026-10-06 07:22 CEST at 69 000 by its cap band.** The rate read 0.052 against < 0.05. The
     final save 69 954 is resumable, mirrored and hash-verified.
     - It is **VIABLE by B4.** B3's 48 h cell is the newest save at launch + 48 h, which is the halt save, and it
@@ -51,10 +76,10 @@ in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c
     - SealBot d5, against the ladder deploy: 10–0.
     - Single-game play loses about 1.75× per turn to the self-play batching wait (`inference.inference_max_wait_ms`
       10): CARD-DEPLOY-BATCH-WAIT. SEARCH-PERF-1 researches the rest: CARD-SEARCH-PERF.
-  - Owed: R386 (EXIT.md §9). Box B's scratch patches are reverted (its tree is clean at `8d169abb`) and its records
+  - R386 is recorded (RULINGS, 2026-10-06). Box B's scratch patches are reverted (its tree is clean at `8d169abb`) and its records
     are mirrored to `mantis-mirror/run11/versus/`. Since 17:50 CEST it is lent to SEARCH-PERF-1's benchmark (operator),
     in that session's own scratch tree. It may be destroyed after that (the operator's act).
-- **DASH-2 LANDED 2026-10-05** (`293b3277..83a5c1e6`, CARDS DASH-2; the amendment's ruling number is owed, `R<nnn>`):
+- **DASH-2 LANDED 2026-10-05** (`293b3277..83a5c1e6`, CARDS DASH-2; the amendment is admitted docs-only by R386(a)):
   `make dash` is the one display. It reads a run directory, the monitor's records and the cell sidecars and serves the
   Run, Games and Analyzer views; run11's rule reads `six30_16` (`--rule-unit`), every other ruler is report-only. The
   dashboard, the viewer and the analyzer are retired. It serves run11's live record on box A as the supervisor service
@@ -362,9 +387,12 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
 
 ## The run
 
-- **run11 is LIVE (R385(a)):** arm 2 (`run11a2`, config unchanged) resumed from its final save, 32 201, on box A at
-  2026-10-05 12:35 CEST. RUN11-FRESH (`run11fresh`, random init) has been LIVE on box B since 12:43 CEST (R385(e)).
-  This line said ORDERED until the launch. The four RUN11-PRE arms ran 2026-10-04 10:50 → 2026-10-05
+- **run11 is PAUSED (R386(a)):** arm 2 (`run11a2`, config unchanged) resumed from its final save, 32 201, on box A at
+  2026-10-05 12:35 CEST and ran to 174 008: one SIGTERM right after the 174 000 save's bundle published (2026-10-06
+  20:00 CEST) wrote a resumable stop save there. It resumes with R386(a)'s second cosine cycle. RUN11-FRESH
+  (`run11fresh`, random init) ran on box B from 2026-10-05 12:43 CEST until its cap band halted it on 2026-10-06 at
+  07:22 CEST, at 69 000 (final save 69 954); R386(b) resumes it for 48 h. This line said LIVE for both until R386's
+  record. The four RUN11-PRE arms ran 2026-10-04 10:50 → 2026-10-05
   06:40 CEST; their runs, cells and box records are in the operator's mirror (`run11-pre/`). run7 stopped at step 83 482 on 2026-09-18 (the stop is recorded by commit
   `8cb5ca6a`; `docs/design/measurements/EVAL_COST_2026-09-19.md` reads its rounds) and run8 at 55 170 on
   2026-09-21 (R365); run9 was never started and its config is deleted (R365(a), R367). The strength
@@ -376,7 +404,7 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
   any run starts (R375(e) lifts R368(j)'s hold). Read a config's values from the file itself and diff two
   with `tools/config_diff.py`; STATE does not restate minted rows.
 - **Two boxes are rented, the operator's** (R385(f)): box A (RTX 4080 SUPER, Ryzen 9 9950X; RUN11-PRE's arms 3 and 4
-  ran there) is run11's and runs nothing else; box B (RTX 5070 Ti, Ryzen 9 5900XT; arms 1 and 2, unmatched to box A,
+  ran there) is run11's; while run11 pauses it hosts TRAIN-SPEED-1 (R386(a)); box B (RTX 5070 Ti, Ryzen 9 5900XT; arms 1 and 2, unmatched to box A,
   so they ran matched self-play work) is RUN11-FRESH's. The
   desktop plays cells and reads. This line said one box was rented until R385's record. An earlier instance was
   destroyed on 2026-09-21 (R365, annotated by R367(d)); the operator's mirror (`tools/mirror_pull.py`) holds run7's and run8's
@@ -398,7 +426,7 @@ run6's by R369's packet (W0).
 ## Where things live
 
 - Open work: `docs/governance/CARDS.md` (swept in W6; derived there, never enumerated here).
-- Rulings: `docs/governance/RULINGS.md`; the latest is R385 (this line said R382 until R385's record).
+- Rulings: `docs/governance/RULINGS.md`; the latest is R386 (this line said R385 until R386's record).
 - Laws and the protected set: `docs/governance/LAWS.md`, whose protected set names each
   invariant's pinning tests (R370(f)); `tests/test_protected_set_pins.py` fails if one is gone.
   Falsified work: `docs/governance/falsified.md`.
@@ -461,3 +489,5 @@ branch `reg-1` from `7b8d6a6e`, and updated 2026-10-03 at its exit from its exit
 The current phase was rewritten 2026-10-05 at R385 from the RUN11-PRE exit record (local), on branch `run11-pre` at
 `33548d66` over `origin/dev` `0aca1e1a`; the same edit repaired the run, box, configs and latest-ruling lines. The
 RUN11-GO lines were added 2026-10-05 at its packet's first commit, on branch `run11-go` from `origin/dev` `94040bfa`.
+The current phase was rewritten 2026-10-06 at R386 on `dev` = `origin/dev` = `ef25e64f`, with run11's pause read from
+box A; the same edit repaired the run, box and latest-ruling lines.
