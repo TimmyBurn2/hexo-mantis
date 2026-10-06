@@ -1,5 +1,5 @@
 //! `mantis-graph` — axis-graph builder for the GNN encoding.
-//! >300 lines: one port of the oracle's single builder, kept whole so it diffs against it; tests/graph_parity.rs pins its bytes.
+//! >300 lines: the one builder with its lookups and its producer-side verify, kept whole; tests/graph_parity.rs pins its bytes.
 //!
 //! ONE dep-free source compiled to native and wasm32, `std::thread`/`rayon`/PyO3-free so it
 //! crosses the wasm boundary clean. A FAITHFUL port of the Python oracle
@@ -561,6 +561,117 @@ fn legal_moves_from_stones(
     legal
 }
 
+/// Marks a grid cell no stone's ball covers; radii below it leave every covered cell its distance.
+const BALL_OUTSIDE: u8 = u8::MAX;
+
+/// Each cell's hex distance to its nearest stone over the stones' bbox grown by the radius: 0 is a stone.
+struct BallGrid {
+    q0: i32,
+    r0: i32,
+    w: usize,
+    dist: Vec<u8>,
+}
+
+impl BallGrid {
+    /// `None` without stones, at a radius `BALL_OUTSIDE` cannot hold, or past `DENSE_INDEX_CELLS_PER_NODE` cells per hash-arm probe.
+    fn build(stones: &[(i32, i32, i8)], radius: i32) -> Option<Self> {
+        if stones.is_empty() || radius >= i32::from(BALL_OUTSIDE) {
+            return None;
+        }
+        let (mut q0, mut q1, mut r0, mut r1) = (i32::MAX, i32::MIN, i32::MAX, i32::MIN);
+        for &(q, r, _) in stones {
+            q0 = q0.min(q);
+            q1 = q1.max(q);
+            r0 = r0.min(r);
+            r1 = r1.max(r);
+        }
+        let span = |lo: i32, hi: i32| i64::from(hi) - i64::from(lo) + 1 + 2 * i64::from(radius);
+        let (h, w) = (span(q0, q1), span(r0, r1));
+        let ball = 3 * i64::from(radius) * (i64::from(radius) + 1) + 1;
+        let budget = (DENSE_INDEX_CELLS_PER_NODE as i64)
+            .saturating_mul(stones.len() as i64)
+            .saturating_mul(ball);
+        let cells = h.saturating_mul(w);
+        if cells > budget {
+            return None;
+        }
+        let (q0, r0, w) = (q0 - radius, r0 - radius, usize::try_from(w).ok()?);
+        let mut dist = vec![BALL_OUTSIDE; usize::try_from(cells).ok()?];
+        for &(sq, sr, _) in stones {
+            for dq in -radius..=radius {
+                let (lo, hi) = ((-radius).max(-radius - dq), radius.min(radius - dq));
+                let start = (sq + dq - q0) as usize * w + (sr + lo - r0) as usize;
+                let row = &mut dist[start..=start + (hi - lo) as usize];
+                for (cell, dr) in row.iter_mut().zip(lo..=hi) {
+                    *cell = (*cell).min(dq.abs().max(dr.abs()).max((dq + dr).abs()) as u8);
+                }
+            }
+        }
+        Some(Self { q0, r0, w, dist })
+    }
+
+    /// The covered non-stone cells in `(q, r)` order, each with its distance.
+    fn legal_cells(&self) -> (Vec<(i32, i32)>, Vec<i32>) {
+        let is_legal = |d: u8| d != 0 && d != BALL_OUTSIDE;
+        let n = self.dist.iter().filter(|&&d| is_legal(d)).count();
+        let (mut legal, mut dist) = (Vec::with_capacity(n), Vec::with_capacity(n));
+        for (qi, row) in self.dist.chunks_exact(self.w).enumerate() {
+            for (ri, &d) in row.iter().enumerate() {
+                if is_legal(d) {
+                    legal.push((self.q0 + qi as i32, self.r0 + ri as i32));
+                    dist.push(i32::from(d));
+                }
+            }
+        }
+        (legal, dist)
+    }
+}
+
+/// The legal cells in `(q, r)` order and each one's hex distance to its nearest stone (1 on the empty board).
+fn legal_cells(
+    stone_map: &FnvMap<i64, i8>,
+    stones: &[(i32, i32, i8)],
+    radius: i32,
+) -> (Vec<(i32, i32)>, Vec<i32>) {
+    if let Some(grid) = BallGrid::build(stones, radius) {
+        return grid.legal_cells();
+    }
+    let legal = legal_moves_from_stones(stone_map, stones, radius);
+    let nearest = |c: (i32, i32)| {
+        let d = stones.iter().map(|&(q, r, _)| hex_distance(c, (q, r)));
+        d.min().unwrap_or(1)
+    };
+    let dist = legal.iter().map(|&c| nearest(c)).collect();
+    (legal, dist)
+}
+
+/// Coordinate to node id: the dense table inside its budget, else a hash map.
+enum NodeLookup {
+    Dense(CoordIndex),
+    Hash(FnvMap<i64, u32>),
+}
+
+impl NodeLookup {
+    fn build(coords: &[i32], n_real: usize) -> Self {
+        if let Some(ix) = CoordIndex::build(coords, n_real) {
+            return Self::Dense(ix);
+        }
+        let mut map = FnvMap::with_capacity_and_hasher(n_real, BuildHasherDefault::default());
+        for i in 0..n_real {
+            map.insert(pack(coords[i * 2], coords[i * 2 + 1]), i as u32);
+        }
+        Self::Hash(map)
+    }
+
+    #[inline]
+    fn get(&self, q: i32, r: i32) -> Option<u32> {
+        match self {
+            Self::Dense(ix) => ix.get(q, r),
+            Self::Hash(map) => map.get(&pack(q, r)).copied(),
+        }
+    }
+}
+
 /// Build one axis-graph — the once-per-evaluated-leaf construction, a faithful port of
 /// `build_axis_graph_raw`. One payload per evaluated leaf, no parallelism inside; no
 /// search-time-incremental variant exists, and proposing one is falsified work.
@@ -598,7 +709,7 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
         .map(|(&k, &p)| ((k >> 32) as i32, k as u32 as i32, p))
         .collect();
     stones.sort_unstable_by_key(|&(q, r, _)| (q, r));
-    let legal = legal_moves_from_stones(&stone_map, &stones, radius);
+    let (legal, legal_dist) = legal_cells(&stone_map, &stones, radius);
 
     let player_feat: f32 = if cur == 1 { 1.0 } else { -1.0 };
     let own_is_p1 = player_feat > 0.0;
@@ -618,29 +729,22 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
     let dummy_idx = n_real as u32;
     let fdim = NODE_FEAT_DIM;
 
-    // Node coords + coord->idx + kind. Layout: [stones | legal | dummy].
+    // Node coords + kind. Layout: [stones | legal | dummy].
     let mut coords: Vec<i32> = Vec::with_capacity(n * 2);
     let mut node_kind: Vec<Kind> = Vec::with_capacity(n_real);
-    let mut coord_to_idx: FnvMap<i64, u32> =
-        FnvMap::with_capacity_and_hasher(n_real, BuildHasherDefault::default());
-    for (i, &(q, r, p)) in stones.iter().enumerate() {
+    for &(q, r, p) in &stones {
         coords.push(q);
         coords.push(r);
-        coord_to_idx.insert(pack(q, r), i as u32);
         node_kind.push(Kind::Stone(p));
     }
-    for (j, &(q, r)) in legal.iter().enumerate() {
-        let idx = (n_stones + j) as u32;
+    for &(q, r) in &legal {
         coords.push(q);
         coords.push(r);
-        coord_to_idx.insert(pack(q, r), idx);
         node_kind.push(Kind::Empty);
     }
     coords.push(0); // dummy
     coords.push(0);
-    // HOT-09. `coord_to_idx` stays as the fallback: `CoordIndex` returns `None` for a position
-    // whose bbox exceeds the O(n_real) budget, and the walk below asks whichever is present.
-    let coord_index = CoordIndex::build(&coords, n_real);
+    let lookup = NodeLookup::build(&coords, n_real);
 
     // centroid + spread over stones (f64, oracle-faithful).
     let (cq, cr, spread): (f64, f64, f64) = if n_stones > 0 {
@@ -687,16 +791,7 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
         features[base + l_empty] = 1.0;
         features[base + l_moves] = moves_feat;
         set_coords(&mut features, base, q, r);
-        let min_d = if stones.is_empty() {
-            1
-        } else {
-            let mut m = i32::MAX;
-            for &(sq, sr, _) in &stones {
-                m = m.min(hex_distance((q, r), (sq, sr)));
-            }
-            m
-        };
-        features[base + l_inv] = (1.0f64 / f64::from(min_d.max(1))) as f32;
+        features[base + l_inv] = (1.0f64 / f64::from(legal_dist[j].max(1))) as f32;
     }
 
     // Dummy features.
@@ -713,15 +808,18 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
         legal_mask[n_stones + j] = true;
     }
 
-    // --- Axis-window edges ---
-    // Upper bound: n_real nodes × 3 axes × 2 signs × window depth × 2 dirs.
-    let cap = n_real * 3 * 2 * window * 2 + n_real * 2;
+    // --- Axis-window edges, deduplicated as they are emitted ---
+    // Upper bound: one edge per (node, axis, sign, depth) key, plus the dummy pairs.
+    let cap = n_real * DEDUP_STRIDE_AXES as usize * window + n_real * 2;
     let mut edge_src: Vec<u32> = Vec::with_capacity(cap);
     let mut edge_dst: Vec<u32> = Vec::with_capacity(cap);
     let mut edge_attr: Vec<f32> = Vec::with_capacity(cap * EDGE_FEAT_DIM);
     // `(src, axis, sign, d)` partitions the axis edges identically to `(src, dst, axis)`, since
-    // `dst = src + sign*d*axis_delta`: the key is carried, LINEAR, not reconstructed by a quadratic scan.
-    let mut edge_key: Vec<u32> = Vec::with_capacity(cap);
+    // `dst = src + sign*d*axis_delta`; a key's first sighting in walk order is the edge kept.
+    let key_bits = n_real
+        .saturating_mul(DEDUP_STRIDE_AXES as usize)
+        .saturating_mul(window.max(1));
+    let mut seen = vec![0u64; key_bits.div_ceil(64)];
 
     for i in 0..n_real {
         let iq = coords[i * 2];
@@ -735,31 +833,32 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
                 for d in 1..=(window as i32) {
                     let tq = iq + sdq * d;
                     let tr = ir + sdr * d;
-                    let hit = match coord_index {
-                        Some(ref ix) => ix.get(tq, tr),
-                        None => coord_to_idx.get(&pack(tq, tr)).copied(),
-                    };
-                    let Some(j) = hit else {
+                    let Some(j) = lookup.get(tq, tr) else {
                         break;
                     };
                     let j_kind = node_kind[j as usize];
-                    let src_j = j_kind.player_feat();
                     let signed_dist = (d * sign) as f32;
-                    // i -> j
-                    edge_src.push(i as u32);
-                    edge_dst.push(j);
-                    push_attr(&mut edge_attr, axis_idx, signed_dist, src_i);
-                    // j -> i
-                    edge_src.push(j);
-                    edge_dst.push(i as u32);
-                    push_attr(&mut edge_attr, axis_idx, -signed_dist, src_j);
                     // The two directions get the SAME (axis, |d|) and OPPOSITE signs, which is
                     // why one stride serves both: the edge j->i is i->j walked the other way.
                     let sbit = u32::from(sign < 0);
                     let wd = window as u32;
                     let base = axis_idx as u32 * 2 * wd + (d - 1) as u32;
-                    edge_key.push(i as u32 * DEDUP_STRIDE_AXES * wd + base + sbit * wd);
-                    edge_key.push(j * DEDUP_STRIDE_AXES * wd + base + (1 - sbit) * wd);
+                    if first_sight(
+                        &mut seen,
+                        i as u32 * DEDUP_STRIDE_AXES * wd + base + sbit * wd,
+                    ) {
+                        edge_src.push(i as u32);
+                        edge_dst.push(j);
+                        push_attr(&mut edge_attr, axis_idx, signed_dist, src_i);
+                    }
+                    if first_sight(
+                        &mut seen,
+                        j * DEDUP_STRIDE_AXES * wd + base + (1 - sbit) * wd,
+                    ) {
+                        edge_src.push(j);
+                        edge_dst.push(i as u32);
+                        push_attr(&mut edge_attr, axis_idx, -signed_dist, j_kind.player_feat());
+                    }
                     // walk stopping
                     let should_stop = match i_kind {
                         Kind::Stone(ip) => matches!(j_kind, Kind::Stone(jp) if jp != ip),
@@ -772,16 +871,6 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
             }
         }
     }
-
-    // --- dedup axis edges: key (src, dst, axis_idx), keep FIRST ---
-    dedup_axis_edges(
-        &mut edge_src,
-        &mut edge_dst,
-        &mut edge_attr,
-        &edge_key,
-        n_real,
-        window,
-    );
 
     // --- legacy dummy edges: bidirectional to all real nodes, all-zero attr ---
     for i in 0..n_real as u32 {
@@ -844,63 +933,31 @@ fn push_attr(edge_attr: &mut Vec<f32>, axis_idx: usize, signed_dist: f32, src_pl
     edge_attr.extend_from_slice(&edge_attr_row(axis_idx, signed_dist, src_player));
 }
 
-/// The oracle's `axis_idx_of(a)`: the one-hot axis of an attr.
-#[inline]
-fn axis_idx_of(a: &[f32]) -> u8 {
-    if a[0] > 0.5 {
-        0
-    } else if a[1] > 0.5 {
-        1
-    } else {
-        2
-    }
-}
-
-/// Dedup by `(src, dst, axis_idx)` keeping the FIRST occurrence in insertion order. Compacts
-/// all three arrays IN PLACE so `edge_attr[e]` stays bound to `edge_index[:, e]`.
+/// Dedup keys per node and walk depth: 3 axes × 2 signs.
 const DEDUP_STRIDE_AXES: u32 = 6;
 
-fn dedup_axis_edges(
-    src: &mut Vec<u32>,
-    dst: &mut Vec<u32>,
-    attr: &mut Vec<f32>,
-    key_of: &[u32],
-    n_real: usize,
-    window: usize,
-) {
-    let e = src.len();
-    debug_assert_eq!(key_of.len(), e, "one carried dedup key per emitted edge");
-    // The key space is LINEAR in the node count and span-independent, so a bit per key is a few
-    // kilobytes; `saturating_mul` keeps a pathological geometry from wrapping into a small one.
-    let bits = n_real
-        .saturating_mul(DEDUP_STRIDE_AXES as usize)
-        .saturating_mul(window.max(1));
-    let mut seen = vec![0u64; bits.div_ceil(64)];
-    let mut w = 0usize; // write cursor for the compacted arrays
-    for rd in 0..e {
-        let k = key_of[rd] as usize;
-        let (word, bit) = (k >> 6, 1u64 << (k & 63));
-        if seen[word] & bit == 0 {
-            seen[word] |= bit;
-            if w != rd {
-                src[w] = src[rd];
-                dst[w] = dst[rd];
-                attr.copy_within(
-                    rd * EDGE_FEAT_DIM..rd * EDGE_FEAT_DIM + EDGE_FEAT_DIM,
-                    w * EDGE_FEAT_DIM,
-                );
-            }
-            w += 1;
-        }
-    }
-    src.truncate(w);
-    dst.truncate(w);
-    attr.truncate(w * EDGE_FEAT_DIM);
+/// Sets `key`'s bit and reports whether it was clear, so only a key's first edge is emitted.
+#[inline]
+fn first_sight(seen: &mut [u64], key: u32) -> bool {
+    let (word, bit) = ((key >> 6) as usize, 1u64 << (key & 63));
+    let clear = seen[word] & bit == 0;
+    seen[word] |= bit;
+    clear
+}
+
+/// The win axis a coordinate delta lies on and its signed length in steps, or `None` off every axis.
+#[inline]
+fn axis_step(dq: i32, dr: i32) -> Option<(usize, i32)> {
+    WIN_AXES.iter().enumerate().find_map(|(axis, &(aq, ar))| {
+        // Every axis component is 0 or ±1, so multiplying by one divides by it.
+        let k = if aq != 0 { dq * aq } else { dr * ar };
+        (k != 0 && dq == k * aq && dr == k * ar).then_some((axis, k))
+    })
 }
 
 /// ALWAYS-ON producer-side contract verification: once per built graph in EVERY profile,
 /// release included. A payload that fails PANICS with the NAMED contract error and is never
-/// emitted; the self-play worker dies with it. Measured well under the 3 % always-on budget.
+/// emitted; the self-play worker dies with it. Measured at ~20 % of a build, past the 3 % budget.
 ///
 /// The leaf-checkable subset of the 18 named checks; batch/wire-context checks belong to the
 /// collate resolver. `float_cmp` is allowed because the compared floats are EXACT constants
@@ -953,6 +1010,15 @@ fn verify_contract(g: &AxisGraph, n_stones: usize, n_legal: usize, params: &Buil
     let dummy_idx = (n - 1) as u32;
     let cur_f = f32::from(g.current_player);
     let window = i32::from(params.win_length) - 1;
+    // src_player from the wire, once per node: stone row's own/opp column x current_player.
+    let own = |s: usize| g.node_feat.0[s * NODE_FEAT_DIM] == 1.0;
+    let src_player: Vec<f32> = (0..n)
+        .map(|s| match (g.stone_mask[s], own(s)) {
+            (true, true) => cur_f,
+            (true, false) => -cur_f,
+            (false, _) => 0.0,
+        })
+        .collect();
     // Per-edge: bounds + EdgeAttrGeometryMismatch, recomputing expected attrs from the WIRE
     // arrays only, mirroring the resolver's check.
     for e in 0..n_edges {
@@ -971,31 +1037,15 @@ fn verify_contract(g: &AxisGraph, n_stones: usize, n_legal: usize, params: &Buil
             );
             continue;
         }
-        let axis = axis_idx_of(a) as usize;
-        let onehot_ok = (0..3).all(|k| a[k] == if k == axis { 1.0 } else { 0.0 });
-        let dist = a[3];
-        let di = dist as i32;
-        let (aq, ar) = WIN_AXES[axis];
         let dq = g.node_coords[d as usize * 2] - g.node_coords[s as usize * 2];
         let dr = g.node_coords[d as usize * 2 + 1] - g.node_coords[s as usize * 2 + 1];
-        // src_player from the wire: stone row's own/opp column x current_player.
-        let src_player = if g.stone_mask[s as usize] {
-            if g.node_feat.0[s as usize * NODE_FEAT_DIM] == 1.0 {
-                cur_f
-            } else {
-                -cur_f
-            }
-        } else {
-            0.0
-        };
+        let src_player = src_player[s as usize];
+        // The delta fixes the only row that passes: its axis one-hot, its non-zero in-window step, the source's player.
+        let row_ok = axis_step(dq, dr).is_some_and(|(axis, k)| {
+            k.abs() <= window && a == edge_attr_row(axis, k as f32, src_player).as_slice()
+        });
         assert!(
-            onehot_ok
-                && f64::from(dist) == f64::from(di)
-                && di != 0
-                && di.abs() <= window
-                && dq == di * aq
-                && dr == di * ar
-                && a[4] == src_player,
+            row_ok,
             "EdgeAttrGeometryMismatch: edge {e} ({s}->{d}) attrs {a:?} vs geometry \
              delta ({dq},{dr}), expected src_player {src_player}"
         );
@@ -1049,6 +1099,9 @@ fn verify_contract(g: &AxisGraph, n_stones: usize, n_legal: usize, params: &Buil
         }
     }
 }
+
+#[cfg(test)]
+mod build_parity_tests;
 
 #[cfg(test)]
 mod tests {

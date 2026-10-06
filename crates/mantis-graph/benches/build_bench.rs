@@ -17,7 +17,12 @@
 //! Median ns/pos is the headline number.
 
 // Fixture-bounded binary-fixture-parse casts; silence the pedantic cast lints.
-#![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_possible_wrap, clippy::doc_markdown)]
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::doc_markdown
+)]
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use mantis_graph::{build_axis_graph, BuildParams, StoneList};
@@ -26,6 +31,9 @@ use mantis_graph::{build_axis_graph, BuildParams, StoneList};
 #[path = "../tests/common/mod.rs"]
 #[allow(dead_code)]
 mod common;
+
+#[path = "../tests/common/positions.rs"]
+mod positions;
 
 fn load_positions() -> Vec<(StoneList, BuildParams)> {
     // The frozen predecessor self-play set = the fixture's `class == base` cases (320 corpus
@@ -47,18 +55,36 @@ fn load_positions() -> Vec<(StoneList, BuildParams)> {
             (StoneList { stones: c.stones }, params)
         })
         .collect();
-    assert!(set.len() == 320, "class==base must select exactly 320 cases, got {}", set.len());
+    assert!(
+        set.len() == 320,
+        "class==base must select exactly 320 cases, got {}",
+        set.len()
+    );
     set
 }
 
-fn bench_build(c: &mut Criterion) {
-    let set = load_positions();
-    let n = set.len();
+/// The recorded radius-8 leaf positions, each at its own side to move and stones to place.
+fn load_r8_positions() -> Vec<(StoneList, BuildParams)> {
+    let recorded = positions::read_positions_r8().unwrap_or_else(|e| panic!("{e}"));
+    recorded
+        .into_iter()
+        .map(|p| {
+            let params = BuildParams {
+                radius: 8,
+                current_player: p.to_move,
+                moves_remaining: p.moves_remaining,
+                ..BuildParams::V1_GEOMETRY
+            };
+            (StoneList { stones: p.stones }, params)
+        })
+        .collect()
+}
 
-    // Per-position throughput: one build per iteration, cycling the set so the
-    // reported time is ns/pos over the real distribution (mean 490 nodes).
+/// One build per iteration, cycling `set`, so the time is ns per position over its distribution.
+fn bench_per_position(c: &mut Criterion, group_name: &str, set: &[(StoneList, BuildParams)]) {
+    let n = set.len();
     let mut idx = 0usize;
-    let mut group = c.benchmark_group("axis_graph_build");
+    let mut group = c.benchmark_group(group_name);
     group.throughput(criterion::Throughput::Elements(1));
     group.bench_function("per_position", |b| {
         b.iter_batched(
@@ -67,11 +93,22 @@ fn bench_build(c: &mut Criterion) {
                 idx += 1;
                 &set[cur]
             },
-            |(stones, params)| build_axis_graph(std::hint::black_box(stones), std::hint::black_box(params)),
+            |(stones, params)| {
+                build_axis_graph(std::hint::black_box(stones), std::hint::black_box(params))
+            },
             BatchSize::SmallInput,
         );
     });
     group.finish();
+}
+
+fn bench_build(c: &mut Criterion) {
+    let set = load_positions();
+    let n = set.len();
+
+    // The predecessor set at radius 6 (mean 490 nodes), then the recorded radius-8 positions.
+    bench_per_position(c, "axis_graph_build", &set);
+    bench_per_position(c, "axis_graph_build_r8", &load_r8_positions());
 
     // Whole-set sweep: build all N once, for a stable aggregate median.
     let mut g2 = c.benchmark_group("axis_graph_build_full_set");
