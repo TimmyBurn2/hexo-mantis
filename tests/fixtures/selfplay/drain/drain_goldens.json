@@ -71,52 +71,52 @@
     3,
     [
      [
-      50,
-      true
+      0,
+      "opening"
      ],
      [
       50,
-      true
+      "full"
      ],
      [
       50,
-      true
+      "full"
+     ],
+     [
+      8,
+      "fast"
+     ],
+     [
+      0,
+      "decided"
      ],
      [
       50,
-      true
+      "full"
      ],
      [
       50,
-      true
+      "full"
      ],
      [
       50,
-      true
+      "full"
      ],
      [
       50,
-      true
+      "full"
      ],
      [
       50,
-      true
+      "full"
      ],
      [
       50,
-      true
+      "full"
      ],
      [
       50,
-      true
-     ],
-     [
-      50,
-      true
-     ],
-     [
-      50,
-      true
+      "full"
      ]
     ],
     [
@@ -167,19 +167,19 @@
     [
      [
       50,
-      true
+      "full"
      ],
      [
       50,
-      true
+      "full"
      ],
      [
       50,
-      true
+      "full"
      ],
      [
       50,
-      true
+      "full"
      ]
     ],
     null
@@ -209,15 +209,15 @@
     [
      [
       50,
-      true
+      "full"
      ],
      [
       50,
-      true
+      "full"
      ],
      [
       50,
-      true
+      "full"
      ]
     ],
     null
@@ -263,19 +263,19 @@
     [
      [
       50,
-      true
+      "full"
      ],
      [
       50,
-      true
+      "full"
      ],
      [
       50,
-      true
+      "full"
      ],
      [
       50,
-      true
+      "full"
      ]
     ],
     null
@@ -305,15 +305,15 @@
     [
      [
       50,
-      true
+      "full"
      ],
      [
       50,
-      true
+      "full"
      ],
      [
       50,
-      true
+      "full"
      ]
     ],
     null

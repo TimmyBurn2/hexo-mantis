@@ -42,8 +42,10 @@ pub const ARM_FULL: &str = "full";
 pub const ARM_FAST: &str = "fast";
 /// A quick-arm ply whose root tactics decided, played with no search.
 pub const ARM_DECIDED: &str = "decided";
+/// Every arm label a game record can carry; the bridge exports it as `MOVE_ARM_LABELS`.
+pub const MOVE_ARM_LABELS: [&str; 4] = [ARM_OPENING, ARM_FULL, ARM_FAST, ARM_DECIDED];
 
-/// One move's `(sims searched, arm label)`; the label is one of the four `ARM_*` constants.
+/// One move's `(sims searched, arm label)`; the label is one of [`MOVE_ARM_LABELS`].
 pub type MoveArm = (u32, &'static str);
 
 /// Per-game result tuple consumed by [`SelfPlayRunner::drain_game_results`]: the ninth field is

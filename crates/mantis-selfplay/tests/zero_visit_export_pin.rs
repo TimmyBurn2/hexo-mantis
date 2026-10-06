@@ -13,7 +13,7 @@
 //! Killers: `refuse_zero_visit_export` returning `Ok` unconditionally (both legs RED); summing
 //! ROOT visits instead of CHILD visits — the exact off-by-one the defect lived in, since the
 //! root backs up one visit to itself during expansion (both legs RED); calling the refusal AFTER
-//! the record dispatch (the positive control's ordering claim goes RED).
+//! the record dispatch (the positive control's ordering claim goes RED); skipping it on a quick draw (quick leg RED).
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -25,7 +25,8 @@ use mantis_core::{Cell, Player};
 use mantis_encoding::lookup_or_panic;
 use mantis_search::{LegalSetPolicy, MCTSTree};
 use mantis_selfplay::records::{refuse_zero_visit_export, TargetIntegrityError};
-use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
+use mantis_selfplay::replay::hexg::GraphRecord;
+use mantis_selfplay::runner::{RunnerStatsSnapshot, SelfPlayRunner, SelfPlayRunnerConfig};
 
 mod common;
 
@@ -168,25 +169,12 @@ fn an_unexpanded_root_is_refused_with_zero_children() {
 
 // PIN INDEPENDENCE: the end-to-end drive, with every inference HEALTHY
 
-#[test]
-fn the_exporter_pin_stops_a_zero_visit_run_with_the_seam_never_firing() {
+/// Drive `config` to the exporter latch with every inference served healthy; the counters it halted on, the rows drained.
+fn drive_to_the_latch(config: SelfPlayRunnerConfig) -> (RunnerStatsSnapshot, Vec<GraphRecord>) {
     let spec = lookup_or_panic("gnn_axis_v1");
     let n_actions = spec.policy_logit_count;
 
-    // sims=1 + batch=1: the single sim is the root expansion, every child carries 0 visits, and
-    // EVERY inference succeeds — nothing at the seam is wrong, which is the point.
-    let runner = SelfPlayRunner::new(SelfPlayRunnerConfig {
-        n_workers: 1,
-        max_moves_per_game: 20,
-        n_simulations: 1,
-        leaf_batch_size: 1,
-        dirichlet_enabled: false,
-        quiescence_enabled: false,
-        random_opening_plies: 8,
-        encoding_name: Some("gnn_axis_v1".to_string()),
-        ..Default::default()
-    })
-    .expect("gnn runner constructs");
+    let runner = SelfPlayRunner::new(config).expect("gnn runner constructs");
     assert!(
         runner.fatal_defect().is_none(),
         "fresh runner carries no defect"
@@ -239,9 +227,56 @@ fn the_exporter_pin_stops_a_zero_visit_run_with_the_seam_never_firing() {
          here would mean the two pins are not independently reachable, and the isolation \
          this row exists to prove would be an accident of the drive"
     );
+    (snap, drained)
+}
+
+#[test]
+fn the_exporter_pin_stops_a_zero_visit_run_with_the_seam_never_firing() {
+    // sims=1 + batch=1: the single sim is the root expansion, every child carries 0 visits, and
+    // EVERY inference succeeds — nothing at the seam is wrong, which is the point.
+    let (_, drained) = drive_to_the_latch(SelfPlayRunnerConfig {
+        n_workers: 1,
+        max_moves_per_game: 20,
+        n_simulations: 1,
+        leaf_batch_size: 1,
+        dirichlet_enabled: false,
+        quiescence_enabled: false,
+        random_opening_plies: 8,
+        encoding_name: Some("gnn_axis_v1".to_string()),
+        ..Default::default()
+    });
     assert!(
         drained.is_empty(),
         "{} record(s) reached the buffer from a search that visited nothing",
         drained.len()
+    );
+}
+
+#[test]
+fn the_exporter_pin_stops_a_zero_visit_quick_draw() {
+    // Tactics off, so every quick draw is searched at one sim (zero visits); the full arm's 800 back up visits. The
+    // latch must be the pin's at the FIRST quick draw: a capacity of 800 admits an early ply's prior-only target.
+    let (snap, drained) = drive_to_the_latch(SelfPlayRunnerConfig {
+        n_workers: 1,
+        max_moves_per_game: 20,
+        n_simulations: 800,
+        full_search_prob: 0.5,
+        n_sims_quick: 1,
+        leaf_batch_size: 1,
+        dirichlet_enabled: false,
+        quiescence_enabled: false,
+        random_opening_plies: 8,
+        encoding_name: Some("gnn_axis_v1".to_string()),
+        tactics: None,
+        ..Default::default()
+    });
+    assert_eq!(
+        snap.pcr_quick_moves, 1,
+        "the latch must fire at the run's first quick draw, not after {} of them",
+        snap.pcr_quick_moves
+    );
+    assert!(
+        drained.iter().all(|r| r.is_full_search),
+        "a quick-arm row reached the buffer from a search that visited nothing"
     );
 }

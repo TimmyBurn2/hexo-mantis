@@ -178,7 +178,8 @@ added_by = "WP-SP"
 path = "selfplay/drain/drain_goldens.json"
 # Re-pinned 2026-09-24: R368(d) re-captured the graph variants and deleted the dense ones and
 # the unread recent-buffer rows.
-sha256 = "329b3647b2287cace647ae9f11a0e86f2421fbfb856c10146fc2617569a9ee15"
+# Re-pinned 2026-10-06: the scripted rows' arms re-stated as the runner's `(sims, label)` pairs, game 0 carrying all four labels.
+sha256 = "642b69b24b855880cb98dc8071d4173dad3fa3f7833c473548dd5e643df2688b"
 added_by = "WP-SP"
 
 [[required]]

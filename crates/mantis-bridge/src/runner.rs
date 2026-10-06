@@ -11,12 +11,14 @@ use std::sync::Arc;
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use pyo3::types::{PyDict, PyTuple};
 
 use mantis_search::SearchKind;
 use mantis_selfplay::queues::EVAL_CACHE_CAPACITY;
 use mantis_selfplay::runner::config::SelfPlayRunnerConfig;
-use mantis_selfplay::runner::{DrainPoisoned, GameResultRow, RunnerStatsSnapshot, SelfPlayRunner};
+use mantis_selfplay::runner::{
+    DrainPoisoned, GameResultRow, RunnerStatsSnapshot, SelfPlayRunner, MOVE_ARM_LABELS,
+};
 
 use crate::inference::PyInferenceBatcher;
 use crate::mcts::tactics_config_of;
@@ -485,7 +487,7 @@ impl Drop for PySelfPlayRunner {
     }
 }
 
-/// Register the `SelfPlayRunnerConfig` and `SelfPlayRunner` pyclasses into `_engine`.
+/// Register the `SelfPlayRunnerConfig` and `SelfPlayRunner` pyclasses and the move-arm labels into `_engine`.
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PySelfPlayRunnerConfig>()?;
     m.add_class::<PySelfPlayRunner>()?;
@@ -493,6 +495,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "RunnerDrainPoisoned",
         m.py().get_type::<RunnerDrainPoisoned>(),
     )?;
+    m.add("MOVE_ARM_LABELS", PyTuple::new(m.py(), MOVE_ARM_LABELS)?)?;
     Ok(())
 }
 

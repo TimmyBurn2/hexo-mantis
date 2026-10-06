@@ -7,6 +7,7 @@ import json
 import pytest
 
 from _dash_record import game, six_in_a_row_for_p1
+from mantis._engine import MOVE_ARM_LABELS
 
 
 @pytest.fixture(scope="module")
@@ -65,6 +66,12 @@ def test_arms_are_read_only_when_parallel_to_the_moves(games):
     assert good.arms[1] == "full" and good.sims[2] == 64 and good.arms[-1] == "decided"
     short = games.GameView.from_record(game("b", moves, move_arms=["full"], move_sims=[320]))
     assert short.arms is None and short.sims is None
+
+
+def test_the_dashs_arm_labels_are_the_runners(games):
+    """The reader's label set and the view's label names key exactly the runner's labels: an unknown one blanks a game's arms."""
+    names = importlib.import_module("dash.views.games_text")._ARM
+    assert sorted(games._ARMS) == sorted(names) == sorted(MOVE_ARM_LABELS)
 
 
 @pytest.mark.parametrize(("stats", "state"), [("absent", "absent"), (None, "none"), ([], "empty"),

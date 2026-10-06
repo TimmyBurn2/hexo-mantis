@@ -73,7 +73,6 @@ def _schedule(name: str) -> tuple[float, float, int, int, LrCycle | None]:
 
 
 _SCHEDULES = sorted({_schedule(name) for name in _COSINE}, key=repr)
-_CYCLED = sorted(name for name in _COSINE if load_config(_CONFIGS / name).train.lr_cycle is not None)
 
 
 @pytest.mark.parametrize("name", _COSINE)
@@ -96,11 +95,11 @@ def test_every_cosine_config_builds_the_floored_schedule_from_its_own_rows(name:
                          ids=[f"lr{s[0]}-eta{s[1]}-T{s[2]}-budget{s[3]}-cycle{s[4] is not None}" for s in _SCHEDULES])
 def test_every_distinct_schedule_rises_only_at_its_declared_cycle(
         schedule: tuple[float, float, int, int, LrCycle | None]) -> None:
-    """Off each distinct schedule the configs declare: `lr` at 0, the midpoint at T/2, `eta_min` from T on, then a declared cycle's `lr` at its start, its midpoint and its floor; monotone non-increasing everywhere but that one step — one sweep per schedule, not per config."""
+    """Off each distinct schedule the configs declare: `lr` at 0, the midpoint at T/2, `eta_min` from T on, then a declared cycle's `lr` at its start, its midpoint and its floor, also through a restore at its start; monotone non-increasing everywhere but that one step — one sweep per schedule, not per config."""
     lr, eta_min, horizon, budget, cycle = schedule
     optimizer = torch.optim.AdamW([torch.nn.Parameter(torch.zeros(1))], lr=lr)
-    sweep = _lr_sweep(FlooredCosineAnnealingLR(optimizer, T_max=horizon, eta_min=eta_min, cycle=cycle),
-                      max(budget, horizon))
+    steps = max(budget, horizon) if cycle is None else max(budget, horizon, cycle.start + cycle.t_max + 1)
+    sweep = _lr_sweep(FlooredCosineAnnealingLR(optimizer, T_max=horizon, eta_min=eta_min, cycle=cycle), steps)
     end = len(sweep) if cycle is None else cycle.start
     assert sweep[0] == pytest.approx(lr)
     if horizon // 2 < end:
@@ -115,6 +114,14 @@ def test_every_distinct_schedule_rises_only_at_its_declared_cycle(
     assert sweep[cycle.start + cycle.t_max // 2] == pytest.approx(
         _cosine(cycle.lr, cycle.eta_min, cycle.t_max // 2, cycle.t_max), rel=1e-6)
     assert all(lr_ == pytest.approx(cycle.eta_min, rel=1e-6) for lr_ in sweep[cycle.start + cycle.t_max:])
+    first = FlooredCosineAnnealingLR(torch.optim.AdamW([torch.nn.Parameter(torch.zeros(1))], lr=lr),
+                                     T_max=horizon, eta_min=eta_min)
+    _lr_sweep(first, cycle.start)
+    resumed = FlooredCosineAnnealingLR(torch.optim.AdamW([torch.nn.Parameter(torch.zeros(1))], lr=lr),
+                                       T_max=horizon, eta_min=eta_min, cycle=cycle)
+    resumed.load_state_dict(first.state_dict())
+    assert resumed.optimizer.param_groups[0]["lr"] == cycle.lr, "restored at the start, before its first step"
+    assert _lr_sweep(resumed, cycle.t_max + 1) == [cycle.lr_at(cycle.start + k) for k in range(cycle.t_max + 2)]
 
 
 _CYCLE = LrCycle(start=60, lr=5e-4, eta_min=1e-4, t_max=20)
@@ -130,7 +137,7 @@ def test_a_cycle_restarts_at_its_start_and_floors_after_its_horizon() -> None:
 
 
 def test_the_cycle_is_the_configs_and_never_the_checkpoints() -> None:
-    """The saved state carries no cycle; a floored state restored at the start re-points the optimizer at the cycle's lr before the first resumed step (planted break: without the re-point that step runs at the saved floor)."""
+    """The saved state carries no cycle; a floored state restored at the start re-points the optimizer at the cycle's lr before the first resumed step, where torch's restore leaves the optimizer's own lr."""
     old = _floored(40, 1e-4)
     _lr_sweep(old, 60)
     state = old.state_dict()
@@ -139,10 +146,6 @@ def test_the_cycle_is_the_configs_and_never_the_checkpoints() -> None:
     new = _floored(40, 1e-4, cycle=_CYCLE)
     new.load_state_dict(state)
     assert new.optimizer.param_groups[0]["lr"] == 5e-4, "the first resumed step runs at the cycle's lr"
-    unpointed = _floored(40, 1e-4, cycle=_CYCLE)
-    torch.optim.lr_scheduler.LRScheduler.load_state_dict(unpointed, state)
-    unpointed.optimizer.load_state_dict(old.optimizer.state_dict())
-    assert unpointed.optimizer.param_groups[0]["lr"] == 1e-4, "the planted break keeps the floor"
 
 
 def test_a_resume_mid_cycle_continues_the_live_trace() -> None:
@@ -181,25 +184,3 @@ def test_the_launchers_resume_runs_the_launch_configs_cycle(tmp_path: Path, tiny
     assert trainer.step == 60 and trainer.scheduler.cycle == _CYCLE
     assert _lr_sweep(trainer.scheduler, 25) == [_CYCLE.lr_at(60 + k) for k in range(26)]
 
-
-@pytest.mark.parametrize("name", _CYCLED)
-def test_every_minted_cycle_traces_its_mint_from_its_start(name: str) -> None:
-    """A config's first cycle stepped to the minted start, its state restored into the cycled scheduler: the minted lr there, the cosine's midpoint, the minted floor at and after the horizon."""
-    lr, eta_min, horizon, _budget, cycle = _schedule(name)
-    assert cycle is not None
-    optimizer = torch.optim.AdamW([torch.nn.Parameter(torch.zeros(1))], lr=lr)
-    first = FlooredCosineAnnealingLR(optimizer, T_max=horizon, eta_min=eta_min)
-    _lr_sweep(first, cycle.start)
-    resumed = FlooredCosineAnnealingLR(torch.optim.AdamW([torch.nn.Parameter(torch.zeros(1))], lr=lr),
-                                       T_max=horizon, eta_min=eta_min, cycle=cycle)
-    resumed.load_state_dict(first.state_dict())
-    trace = [float(resumed.optimizer.param_groups[0]["lr"])]
-    for _ in range(cycle.t_max + 10):
-        resumed.optimizer.step()
-        resumed.step()
-        trace.append(float(resumed.optimizer.param_groups[0]["lr"]))
-    minted = load_config(_CONFIGS / name).train.lr_cycle
-    assert minted is not None
-    assert trace[0] == minted.lr
-    assert trace[minted.t_max // 2] == pytest.approx(_cosine(minted.lr, minted.eta_min, minted.t_max // 2, minted.t_max))
-    assert set(trace[minted.t_max:]) == {minted.eta_min}

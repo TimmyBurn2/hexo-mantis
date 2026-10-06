@@ -385,6 +385,7 @@ def test_recorder_receives_every_drained_game(run_drain, drain_goldens):
     """
     pool, _ = run_drain()
     expected = _variant(drain_goldens, "graph")["recorder_calls"]
+    arms = [row[8] for row in drain_goldens["_constants"]["games_batch"]]
 
     assert len(pool._recorder.records) == len(expected) == 6
     for i, (actual, want) in enumerate(
@@ -394,8 +395,9 @@ def test_recorder_receives_every_drained_game(run_drain, drain_goldens):
         assert [list(m) for m in actual["moves"]] == want["moves"], f"recorder call {i}: moves"
         assert actual["winner_code"] == want["winner_code"]
         assert actual["plies"] == want["plies"]
-        # The runner's per-move arms reach the recorder one per move, untouched.
-        assert len(actual["move_arms"]) == len(actual["moves"]), f"recorder call {i}: arms"
+        # The runner's per-move `(sims, label)` arms reach the recorder untouched, pair by pair.
+        assert [list(arm) for arm in actual["move_arms"]] == arms[i], f"recorder call {i}: arms"
+        assert len(actual["move_arms"]) == len(actual["moves"]), f"recorder call {i}: one arm per move"
         # The tenth field reaches the recorder untouched — `None` on an un-sampled game.
         assert json.loads(json.dumps(actual["search_stats"])) == want["search_stats"], (
             f"recorder call {i}: search_stats"

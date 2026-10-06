@@ -94,8 +94,8 @@ impl PyHexgBuffer {
         })
     }
 
-    /// Store one compact graph-position record, refusing over-capacity rows loudly and
-    /// non-distribution visit rows (but the quick value-only row) as `record_position_graph` does.
+    /// Store one graph-position record, refusing over-capacity and non-distribution rows as `record_position_graph` does.
+    /// The quick value-only row is admitted whatever its root value: `value_instrument` re-pushes rows without theirs.
     ///
     /// # Errors
     /// `ValueError` per the above; per-entry refusals surface from `push_record_impl`.

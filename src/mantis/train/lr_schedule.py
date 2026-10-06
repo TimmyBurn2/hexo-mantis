@@ -61,7 +61,7 @@ class FlooredCosineAnnealingLR(CosineAnnealingLR):
         return state
 
     def load_state_dict(self, state_dict: dict[str, Any]) -> None:
-        super().load_state_dict({k: v for k, v in state_dict.items() if k != "cycle"})
+        super().load_state_dict(state_dict)
         if (cycle := self._active_cycle()) is not None:
             lr = cycle.lr_at(self.last_epoch)
             for group in self.optimizer.param_groups:
