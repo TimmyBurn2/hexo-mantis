@@ -50,7 +50,7 @@ from mantis.train.losses import (
     soft_policy_target,
     value_target,
 )
-from mantis.train.lr_schedule import FlooredCosineAnnealingLR
+from mantis.train.lr_schedule import FlooredCosineAnnealingLR, LrCycle
 
 _LOG = logging.getLogger(__name__)
 
@@ -84,6 +84,8 @@ class TrainHParams:
     lr_schedule: str
     scheduler_t_max: int
     eta_min: float
+    #: `train.lr_cycle`, the declared second cosine cycle; `None` is the explicit OFF.
+    lr_cycle: LrCycle | None
     checkpoint_interval: int
     #: `model.aux_soft_policy` as `(temperature, weight)`; `None` is the explicit OFF.
     aux_soft_policy: tuple[float, float] | None
@@ -108,12 +110,15 @@ class TrainHParams:
                 "closure) — no flat legacy training keys are read anymore."
             )
         _assert_policy_target_consistency(train, (cfg.get("selfplay") or {}).get("search") or {})
-        fields = set(cls.__dataclass_fields__) - {"aux_soft_policy", "value_mask"}
+        fields = set(cls.__dataclass_fields__) - {"aux_soft_policy", "value_mask", "lr_cycle"}
         kwargs = {k: train[k] for k in fields}
         aux = resolve_aux_soft_policy(cfg)
         p = float(train["value_mask_redraw_p"])
+        cycle = train["lr_cycle"]
         return cls(
             **kwargs,
+            lr_cycle=None if cycle is None else LrCycle(start=int(cycle["start_step"]), lr=float(cycle["lr"]),
+                                                       eta_min=float(cycle["eta_min"]), t_max=int(cycle["t_max"])),
             aux_soft_policy=None if aux is None else (aux.temperature, aux.weight),
             value_mask=None if p == 0.0 else (p, int(cfg["seed"])),
         )
@@ -256,7 +261,7 @@ class Trainer:
             return None
         if schedule == "cosine":
             return FlooredCosineAnnealingLR(self.optimizer, T_max=max(1, int(self.hp.scheduler_t_max)),
-                                            eta_min=float(self.hp.eta_min), last_epoch=-1)
+                                            eta_min=float(self.hp.eta_min), last_epoch=-1, cycle=self.hp.lr_cycle)
         raise ValueError(f"Unsupported lr_schedule: {schedule}")
 
     def _base_model(self) -> nn.Module:

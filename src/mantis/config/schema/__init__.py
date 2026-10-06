@@ -36,7 +36,7 @@ from mantis.config.schema.selfplay import (
     PlayoutCapConfig,
     SelfplayConfig,
 )
-from mantis.config.schema.train import EmaConfig, HeldoutGapConfig, TrainConfig
+from mantis.config.schema.train import EmaConfig, HeldoutGapConfig, LrCycleConfig, TrainConfig
 
 __all__ = [
     "ARCH_SCOPED_KEYS",
@@ -67,6 +67,7 @@ __all__ = [
     "StrictModel",
     "EmaConfig",
     "HeldoutGapConfig",
+    "LrCycleConfig",
     "TrainConfig",
     "WarmStartConfig",
     "leaf_paths",

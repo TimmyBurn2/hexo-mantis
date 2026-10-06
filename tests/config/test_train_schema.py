@@ -19,6 +19,7 @@ VALID_TRAIN_PAYLOAD: dict = {
     "lr_schedule": "cosine",
     "scheduler_t_max": 1_000_000,
     "eta_min": 5e-4,
+    "lr_cycle": None,
     "checkpoint_interval": 0,
     "actor_sync_cadence_steps": 1,
     "max_train_steps": 1_000_000,

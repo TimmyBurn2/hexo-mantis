@@ -149,6 +149,22 @@ class HeldoutGapConfig(StrictModel):
     interval: int = Field(ge=1)
 
 
+class LrCycleConfig(StrictModel):
+    """A declared second cosine cycle: from trainer step `start_step` the LR is `lr` cosine-annealed to `eta_min` over `t_max` steps, then `eta_min`; config-owned, so a resume runs it whatever the checkpoint's scheduler state says."""
+
+    start_step: int = Field(ge=1)
+    lr: float = Field(gt=0, allow_inf_nan=False)
+    eta_min: float = Field(ge=0, allow_inf_nan=False)
+    t_max: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def _the_cycle_anneals_downward(self) -> "LrCycleConfig":
+        """Refuse a floor above the cycle's peak, which would anneal the LR upward."""
+        if self.eta_min > self.lr:
+            raise ValueError(f"train.lr_cycle.eta_min ({self.eta_min}) is above its lr ({self.lr})")
+        return self
+
+
 class TrainConfig(StrictModel):
     """Training hyperparameters. Every field REQUIRED — no terminal default anywhere in this
     class; the minted value in each `configs/*.yaml` is the sole default authority.
@@ -165,6 +181,8 @@ class TrainConfig(StrictModel):
     # The LR anneal's horizon (the floored cosine's T_max), never a run length: `max_train_steps` is that.
     scheduler_t_max: int = Field(ge=1)
     eta_min: float = Field(ge=0)
+    # The second cosine cycle's ARMING SURFACE, the `default=...` idiom: `null` is OFF (the floored cosine alone).
+    lr_cycle: LrCycleConfig | None = Field(default=...)
     checkpoint_interval: int = Field(ge=0)
     # Continuous actor-sync cadence in coordinator training steps. `ge=1` means NO disabled
     # value exists. Resolved only by `mantis.config.resolve.actor_sync`.
@@ -225,3 +243,16 @@ class TrainConfig(StrictModel):
     # The value loss's keep probability per value-valid row, re-drawn every step; 0 is off (keeping all is not a
     # second spelling of off, hence `lt=1`).
     value_mask_redraw_p: float = Field(ge=0, lt=1, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def _a_cycle_restarts_a_cosine_inside_the_run(self) -> "TrainConfig":
+        """Refuse a second cycle on a schedule that has no cosine, or one that starts at or past the run's last step."""
+        if self.lr_cycle is None:
+            return self
+        if self.lr_schedule != "cosine":
+            raise ValueError(f"train.lr_cycle restarts a cosine, but train.lr_schedule is {self.lr_schedule!r}")
+        if self.lr_cycle.start_step >= self.max_train_steps:
+            raise ValueError(
+                f"train.lr_cycle.start_step ({self.lr_cycle.start_step}) is not below train.max_train_steps "
+                f"({self.max_train_steps}), so the cycle would never run")
+        return self

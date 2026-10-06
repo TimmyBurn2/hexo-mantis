@@ -102,6 +102,10 @@ CONSUMER_REGISTRY = {
     "train.lr_schedule": "TrainHParams.from_config -> Trainer._build_scheduler",
     "train.scheduler_t_max": "TrainHParams.from_config -> Trainer._build_scheduler T_max",
     "train.eta_min": "TrainHParams.from_config -> Trainer._build_scheduler eta_min",
+    "train.lr_cycle.start_step": "TrainHParams.from_config -> LrCycle.start -> FlooredCosineAnnealingLR(cycle=) (null = OFF)",
+    "train.lr_cycle.lr": "TrainHParams.from_config -> LrCycle.lr -> FlooredCosineAnnealingLR(cycle=) (null = OFF)",
+    "train.lr_cycle.eta_min": "TrainHParams.from_config -> LrCycle.eta_min -> FlooredCosineAnnealingLR(cycle=) (null = OFF)",
+    "train.lr_cycle.t_max": "TrainHParams.from_config -> LrCycle.t_max -> FlooredCosineAnnealingLR(cycle=) (null = OFF)",
     "train.checkpoint_interval": "TrainHParams.from_config ->"
                                 " Trainer._maybe_periodic_checkpoint, the ONE periodic-save gate,"
                                 " called by BOTH the dense and the graph step tail (R173)",
