@@ -93,22 +93,23 @@ def test_the_follower_unit_composes_the_cell_and_names_its_receipt(follower) -> 
     assert follower.sidecar_path(Path("/x/a.ckpt"), "six30_16").name == "a.ckpt.six30_16.json"
 
 
-@pytest.mark.parametrize(("unit", "net", "sha8"), [("six150_eq", "gen0150", "21672eeb"), ("six200_eq", "gen0200", "17328c43"),
-                                                   ("six250_eq", "gen0250", "250451cc"), ("six300_eq", "gen0300", "d9cc22c4")])
-def test_an_equal_playout_unit_plays_its_generation_at_256_per_turn_against_128_per_stone_on_the_arena_book(
-        follower, unit: str, net: str, sha8: str, tmp_path: Path) -> None:
-    assert follower.UNITS[unit] == (128, 256, unit) and follower.SIX_UNITS[unit] == (net, int(net[3:]))
+@pytest.mark.parametrize("nodes", [16, 32, 64, 128, 256, 512])
+def test_a_ladder_rung_plays_gen455_at_its_nodes_per_turn_against_128_per_stone_on_the_arena_book(
+        follower, nodes: int, tmp_path: Path) -> None:
+    unit = f"ladder455_n{nodes}"
+    assert follower.UNITS[unit] == (128, nodes, unit) and follower.SIX_UNITS[unit] == ("gen0455", 455)
     cell = follower.compose_cell(Path("/x/r_00156000_deadbeef.ckpt"), unit=unit, step=156000, games=128,
                                  concurrency=8, label=unit)
     assert {k: cell[k] for k in ("sims", "six_net", "six_nodes", "opening_book")} == {
-        "sims": 128, "six_net": net, "six_nodes": 256, "opening_book": "arena_s20261006_p5"}
-    assert follower.opponent_pin(unit)["net_sha256"].startswith(sha8)
+        "sims": 128, "six_net": "gen0455", "six_nodes": nodes, "opening_book": "arena_s20261006_p5"}
+    assert follower.opponent_pin(unit)["net_sha256"].startswith("a934a8b1")
     ckpt = tmp_path / "r_00156000_deadbeef.ckpt"
     ckpt.write_bytes(b"w")
     body = follower.sidecar_record(ckpt, unit=unit, trigger="once", record=_record(cell={"step": 1, "concurrency": 8,
                                    **cell}), regime_name="IDLE", regime_evidence={}, run_id="r", started=0.0,
                                    finished=1.0, pin={})
-    assert body["opening_book"] == "arena_s20261006_p5" and body["ours"]["sims"] == 128 and body["six"]["nodes"] == 256
+    assert body["opening_book"] == "arena_s20261006_p5" and body["ours"]["sims"] == 128
+    assert body["six"]["nodes"] == nodes and body["six"]["generation"] == 455
     assert body["opening_book_sha256"] == "364c70c7b010d5cfbe24baa2a0c8eefe47fc3c6f3a5e8f5e572f62a8729a6451"
 
 
@@ -142,8 +143,8 @@ def test_the_receipt_is_labelled_with_the_generation_the_nodes_and_the_provider(
 
 
 def test_follow_reads_the_ruler_units_only(follower) -> None:
-    assert set(follower.FOLLOW_UNITS) == {"equal_work", "six30_16", "equal_work_arena", "six150_eq", "six200_eq",
-                                          "six250_eq", "six300_eq"}
+    assert set(follower.FOLLOW_UNITS) == {"equal_work", "six30_16", "equal_work_arena",
+                                          *(f"ladder455_n{n}" for n in (16, 32, 64, 128, 256, 512))}
     with pytest.raises(SystemExit):
         follower.main(["--config", "c", "--run-dir", "d", "--run-id", "r", "--work-dir", "w", "--follow",
                        "--unit", "net_only"])

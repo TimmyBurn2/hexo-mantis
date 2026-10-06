@@ -33,8 +33,8 @@ SIX30_16 = "six30_16"  # ours PUCT-256 vs the Six ruler, gen 30 at 16 nodes
 EQUAL_WORK_ARENA = "equal_work_arena"  # equal work on the arena openings
 #: The arena protocol's cell book: every unit of the instrument after its one break plays it.
 ARENA_BOOK = "arena_s20261006_p5"
-#: The ruler's candidates at equal playouts per turn, ours 128 per stone against Six's 256 per turn, on ARENA_BOOK.
-SIX_EQ_UNITS: dict[str, tuple[str, int]] = {f"six{g}_eq": (f"gen0{g}", g) for g in (150, 200, 250, 300)}
+#: The ruler of record, a node ladder: Six gen455 at N nodes per turn against ours 128 per stone, on ARENA_BOOK.
+LADDER_UNITS: dict[str, int] = {f"ladder455_n{n}": n for n in (16, 32, 64, 128, 256, 512)}
 #: unit -> (our sims, the opponent's sims or nodes, sidecar suffix). A strix suffix names OUR sims: the 256 series.
 UNITS: dict[str, tuple[int, int, str]] = {EQUAL_WORK: (256, 256, "strix256"),
                                           AS_SHIPPED: (512, 128, "strix512"),
@@ -42,14 +42,14 @@ UNITS: dict[str, tuple[int, int, str]] = {EQUAL_WORK: (256, 256, "strix256"),
                                           RULER_R6: (256, 256, "strix256_r6"),
                                           SIX30_16: (256, 16, "six30_16"),
                                           EQUAL_WORK_ARENA: (256, 256, "strix256_arena"),
-                                          **{u: (128, 256, u) for u in SIX_EQ_UNITS}}
+                                          **{u: (128, n, u) for u, n in LADDER_UNITS.items()}}
 SOLVER_OFF_UNITS = frozenset({NET_ONLY})  # every other unit is the rung on record
 RADIUS_UNITS: dict[str, int] = {RULER_R6: 6}  # every other unit rides the driver's default radius
 #: unit -> (the pinned network, its generation)
-SIX_UNITS: dict[str, tuple[str, int]] = {SIX30_16: ("gen0030", 30), **SIX_EQ_UNITS}
+SIX_UNITS: dict[str, tuple[str, int]] = {SIX30_16: ("gen0030", 30), **{u: ("gen0455", 455) for u in LADDER_UNITS}}
 #: unit -> the opening book it plays; every other unit plays the config's gate book.
-BOOK_UNITS: dict[str, str] = {EQUAL_WORK_ARENA: ARENA_BOOK, **{u: ARENA_BOOK for u in SIX_EQ_UNITS}}
-FOLLOW_UNITS = (EQUAL_WORK, SIX30_16, EQUAL_WORK_ARENA, *SIX_EQ_UNITS)  # the rulers; every other unit is a --once cell
+BOOK_UNITS: dict[str, str] = {EQUAL_WORK_ARENA: ARENA_BOOK, **{u: ARENA_BOOK for u in LADDER_UNITS}}
+FOLLOW_UNITS = (EQUAL_WORK, SIX30_16, EQUAL_WORK_ARENA, *LADDER_UNITS)  # the rulers; every other unit is a --once cell
 _PLAYED_BYTES = ("engine_sha256", "net_sha256", "runtime_sha256")  # what a six receipt names as played
 TRIGGER_EVENTS = ("periodic_checkpoint_save", "eval_round_complete")
 #: A heartbeat younger than this at cell start names a live run in the evidence.
