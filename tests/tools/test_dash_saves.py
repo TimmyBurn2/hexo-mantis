@@ -61,7 +61,7 @@ def _produce(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, temperature: float
                       exams=tmp_path / "e.jsonl", exams_sha256="", bands=tmp_path / "b.md", bands_sha256="",
                       floors={"T4_V": 0.154, "DEF_V_att": 0.1}, line=0.012, parent=run / "parent.ckpt", batches=1,
                       device="cpu", threads=1, halt=False, gap_line=0.05, floors_from_first_pass=False,
-                      bands_from_step=0)
+                      bands_from_step=0, two_read_bands=frozenset(), resume_past_halt=None)
     readers = _Readers(temperature)
     monitor = mon.Monitor(setup, mon.Readers(value=readers.value, exams=readers.exams, bands=readers.bands))
     for step, games in ((3000, range(0, 4)), (6000, range(2, 8))):
@@ -144,7 +144,8 @@ def test_the_monitors_real_halt_and_gap_rule_files_carry_their_pinned_keys(saves
     setup = mon.Setup(run_dir=run, run_id=_RUN, out=tmp_path / "records", gen_ring=tmp_path / "gen.bin", gen_sha256="",
                       exams=tmp_path / "e.jsonl", exams_sha256="", bands=tmp_path / "b.md", bands_sha256="",
                       floors={"T4_V": 0.154}, line=0.012, parent=run / "parent.ckpt", batches=1, device="cpu", threads=1,
-                      halt=False, gap_line=0.05, floors_from_first_pass=False, bands_from_step=10**9)
+                      halt=False, gap_line=0.05, floors_from_first_pass=False, bands_from_step=10**9,
+                      two_read_bands=frozenset(), resume_past_halt=None)
     readers = _Halting()
     monitor = mon.Monitor(setup, mon.Readers(value=readers.value, exams=readers.exams, bands=readers.bands))
     for step, games in ((3000, range(0, 4)), (6000, range(2, 8)), (9000, range(6, 12))):

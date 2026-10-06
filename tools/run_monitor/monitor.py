@@ -23,7 +23,7 @@ from mantis.util.loadpkg import load_tools_package
 
 from .exams import load_positions, read_values
 from .rings import max_game_id, unseen_ring
-from .rules import counter_row, gap_rule, halt_run, is_run, rates, run_pid, verdict
+from .rules import band_trends, counter_row, gap_rule, halt_run, is_run, rates, run_pid, verdict
 
 load_tools_package("value_instrument")
 _vi = importlib.import_module("value_instrument.cli")
@@ -62,6 +62,9 @@ class Setup:
     gap_line: float
     floors_from_first_pass: bool
     bands_from_step: int
+    two_read_bands: frozenset[str]
+    #: The step of a halt on record that a run resumed past: archived once, never cleared for any other step.
+    resume_past_halt: int | None
 
 
 @dataclass(frozen=True)
@@ -89,6 +92,7 @@ class State:
     armed_floors: list[str] = field(default_factory=list)
     floors_live: bool | None = None
     gap_over: list[int] = field(default_factory=list)
+    armed_bands: list[str] = field(default_factory=list)
 
 
 def value_read(setup: Setup) -> Callable[[Path, Path, Path, Path | None], dict[str, Any]]:
@@ -142,11 +146,28 @@ class Monitor:
             lagged_net=str(setup.parent))
         if self.state.floors_live is None:
             self.state.floors_live = not setup.floors_from_first_pass
+        if setup.resume_past_halt is not None:
+            self._past_halt(setup.resume_past_halt)
         # A halt on record is never re-sent, whatever the state file says.
         self.state.halted = self.state.halted or (setup.out / "HALT.json").is_file()
         self.counters: list[dict[str, float]] = []
         self.final_step: int | None = None
         self.segment_pid: int | None = None
+
+    def _past_halt(self, step: int) -> None:
+        """Archive the halt at `step` as `HALT_<step>.json` and follow on; a restart finds it archived. Raises: ValueError."""
+        halt, archived = self.setup.out / "HALT.json", self.setup.out / f"HALT_{step:08d}.json"
+        if halt.is_file():
+            on_record = json.loads(halt.read_text(encoding="utf-8")).get("step")
+            if on_record != step:
+                raise ValueError(f"the halt on record is at step {on_record}, not {step}: it is not cleared")
+            # The state first: a stop between the two leaves HALT.json in place, and the restart archives it again.
+            self.state.halted = False
+            self._persist()
+            halt.replace(archived)
+            self._log({"event": "halt_resumed_past", "step": step, "archived": archived.name})
+        elif not archived.is_file():
+            raise ValueError(f"no halt at step {step} on record in {self.setup.out}")
 
     def _log(self, row: dict[str, Any]) -> None:
         with (self.setup.out / "monitor.jsonl").open("a", encoding="utf-8") as fh:
@@ -254,13 +275,17 @@ class Monitor:
             since = self.counters[0]["ts"] if self.counters else saved_ts
         record["rates"] = rates(self.counters, since, saved_ts, [(a, b) for a, b in self.state.busy])
         decided = verdict(exams, bands, armed=self.state.armed_floors, floors_live=bool(self.state.floors_live),
-                          bands_live=step >= s.bands_from_step)
+                          bands_live=step >= s.bands_from_step, two_read_bands=s.two_read_bands,
+                          armed_bands=self.state.armed_bands)
         lagged = record.get("lagged_of") or {}
         gap = (lagged.get("current") or {}).get("gap") or {}
         rule = gap_rule(gap.get("cf_ce"), self.state.gap_over, int(lagged.get("step", step)), s.gap_line)
         fired = decided["fired"]
         record.update({"halting_rows": fired, "reported_rows": decided["reported"], "armed_floors": decided["armed"],
-                       "floors_live": decided["floors_live"], "gap_rule": rule})
+                       "floors_live": decided["floors_live"], "armed_bands": decided["armed_bands"],
+                       "band_trends": band_trends(bands["rows"], self._last_rows(), self.state.last_step,
+                                                  s.two_read_bands),
+                       "gap_rule": rule})
         self.state.busy.append([t0, time.time()])
         record["monitor_busy_s"] = round(time.time() - t0, 1)
         if fired:  # first: a record that fails to write must not cost the guard its signal
@@ -268,13 +293,25 @@ class Monitor:
         (out / "saves" / f"{step:08d}.json").write_text(json.dumps(record, indent=1, allow_nan=False), encoding="utf-8")
         self._log({"event": "save_read", "step": step, "final": stopping, "halting_rows": fired,
                    "reported_rows": decided["reported"], "armed_floors": decided["armed"],
+                   "armed_bands": decided["armed_bands"],
                    "unread_floors": sorted(exam for exam, row in exams.items() if row["holds"] is None)})
         self.state.armed_floors, self.state.floors_live = decided["armed"], decided["floors_live"]
+        self.state.armed_bands = decided["armed_bands"]
         self.state.gap_over = rule["over"]
         if rule["fired"]:
             self._gap_fired(step, rule)
         self._advance(step, ckpt, copy if have_ring else None, saved_ts)
         return record
+
+    def _last_rows(self) -> dict[str, Any] | None:
+        """The last read save's band rows off its own record; `None` when it has none (a failed read, a resume's first save)."""
+        if self.state.last_step is None:
+            return None
+        try:
+            body = json.loads((self.setup.out / "saves" / f"{self.state.last_step:08d}.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return (body.get("ring_bands") or {}).get("rows")
 
     def _gen_and_exams(self, step: int, ckpt: Path) -> tuple[dict[str, Any], dict[str, Any]]:
         """The GEN read and the exams at its temperature; a failed read, or a read with no temperature, leaves every floor unread."""
@@ -380,12 +417,15 @@ def _step_of(ckpt: Path) -> int | None:
 
 
 def inputs_pinned(setup: Setup) -> None:
-    """Refuse a GEN ring, exam set or bands file that is not the pinned one. Raises: ValueError, OSError."""
+    """Refuse a GEN ring, exam set or bands file that is not the pinned one, or a two-read band it does not band. Raises: ValueError, OSError."""
     for path, want in ((setup.gen_ring, setup.gen_sha256), (setup.exams, setup.exams_sha256),
                        (setup.bands, setup.bands_sha256)):
         got = sha256_file(path)
         if got != want:
             raise ValueError(f"{path} hashes {got}, not the pinned {want}")
+    unbanded = sorted(setup.two_read_bands - set(load_bands(setup.bands)))
+    if unbanded:
+        raise ValueError(f"--two-read-bands names {unbanded}, which {setup.bands} does not band")
 
 
 __all__ = ["EVENTS", "Monitor", "Readers", "Setup", "State", "bands_read", "exams_read", "inputs_pinned", "value_read"]

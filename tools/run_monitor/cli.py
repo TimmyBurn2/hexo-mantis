@@ -35,6 +35,11 @@ def _floors(text: str) -> dict[str, float]:
     return out
 
 
+def _names(text: str) -> frozenset[str]:
+    """`KEY,KEY` as a set; the empty string names none."""
+    return frozenset(part.strip() for part in text.split(",") if part.strip())
+
+
 def setup_of(a: argparse.Namespace) -> Setup:
     """The command line as a `Setup`. Raises: ValueError (malformed floors, a line that is not positive, a negative step)."""
     if not a.line > 0 or not a.gap_line > 0:
@@ -45,7 +50,8 @@ def setup_of(a: argparse.Namespace) -> Setup:
                  exams=a.exams, exams_sha256=a.exams_sha256, bands=a.bands, bands_sha256=a.bands_sha256,
                  floors=_floors(a.floors), line=a.line, parent=a.parent, batches=a.batches, device=a.device,
                  threads=a.threads, halt=a.halt, gap_line=a.gap_line,
-                 floors_from_first_pass=a.floors_from == "first-pass", bands_from_step=a.bands_from_step)
+                 floors_from_first_pass=a.floors_from == "first-pass", bands_from_step=a.bands_from_step,
+                 two_read_bands=_names(a.two_read_bands), resume_past_halt=a.resume_past_halt)
 
 
 def follow(monitor: Monitor, tail: EventTail, poll_s: float, final_timeout_s: float) -> int:
@@ -90,6 +96,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--floors-from", choices=("start", "first-pass"), required=True,
                     help="the exam floors halt from the first save, or from the first save that passes them all")
     ap.add_argument("--bands-from-step", type=int, required=True, help="ring band misses before this step only report")
+    ap.add_argument("--two-read-bands", default="",
+                    help="BAND,...: these bands halt on two misses in a row, as the floors do; every other on one")
+    ap.add_argument("--resume-past-halt", type=int, default=None,
+                    help="STEP: the halt on record at this step is archived and the resumed run followed on")
     ap.add_argument("--poll-sec", type=float, default=30.0)
     ap.add_argument("--final-timeout-sec", type=float, default=1800.0)
     ap.add_argument("--ckpt", type=Path, default=None, help="once: the checkpoint to read")
@@ -104,7 +114,11 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if setup.device.startswith("cuda"):
         torch.cuda.set_per_process_memory_fraction(a.gpu_mem_fraction)
-    monitor = Monitor(setup, Readers(value=value_read(setup), exams=exams_read(setup), bands=bands_read))
+    try:
+        monitor = Monitor(setup, Readers(value=value_read(setup), exams=exams_read(setup), bands=bands_read))
+    except ValueError as exc:
+        print(f"run_monitor: {exc}", file=sys.stderr)
+        return 2
     (setup.out / "setup.json").write_text(json.dumps({k: str(v) for k, v in vars(a).items()}, indent=1), encoding="utf-8")
     if a.mode == "once":
         if a.ckpt is None or a.step is None:

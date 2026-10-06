@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import signal
 import time
@@ -13,20 +14,54 @@ _RATE_NAMES = {"games_total": "games_per_h", "positions_produced_total": "positi
 
 
 def verdict(exams: dict[str, Any], bands: dict[str, Any], *, armed: list[str], floors_live: bool,
-            bands_live: bool) -> dict[str, Any]:
-    """A floor's miss arms it, its next miss fires, a pass disarms, an unread floor keeps its state. Raises: KeyError (a malformed row)."""
+            bands_live: bool, two_read_bands: frozenset[str], armed_bands: list[str]) -> dict[str, Any]:
+    """A floor or two-read band's miss arms it, its next miss fires, a pass disarms, an unread read keeps it; other bands fire at once. Raises: KeyError."""
     unread = {exam for exam, row in exams.items() if row["holds"] is None}
     misses = {exam: f"{exam} calibrated {row['calibrated_mean']:.4f} below the floor {row['floor']}"
               for exam, row in exams.items() if exam not in unread and not row["holds"]}
     second = {exam for exam in misses if floors_live and exam in armed}
     fired = [f"{misses[exam]}, its second miss in a row" for exam in sorted(second)]
     reported = [text for exam, text in misses.items() if exam not in second]
-    band_rows = [f"ring band {miss}" for miss in bands["misses"]]
-    fired, reported = (fired + band_rows, reported) if bands_live else (fired, reported + band_rows)
+    band_misses = {band_key(miss): f"ring band {miss}" for miss in bands["misses"]}
+    two_read = {key: text for key, text in band_misses.items() if key in two_read_bands}
+    band_second = {key for key in two_read if bands_live and key in armed_bands}
+    band_fired = [text for key, text in band_misses.items() if key not in two_read] + [
+        f"{two_read[key]}, its second miss in a row" for key in sorted(band_second)]
+    band_reported = [text for key, text in two_read.items() if key not in band_second]
+    if bands_live:
+        fired, reported = fired + band_fired, reported + band_reported
+    else:
+        reported = reported + band_fired + band_reported
+    # An audit that read nothing keeps every band's arm, as an unread floor keeps its own.
+    band_unread = set(armed_bands) if "not_measured" in bands else set()
     # Before the floors are live every miss only reports; they go live at the first save that reads and passes them all.
     return {"fired": fired, "reported": reported,
             "armed": sorted(set(misses) | (set(armed) & unread)) if floors_live else [],
-            "floors_live": floors_live or (bool(exams) and not unread and not misses)}
+            "floors_live": floors_live or (bool(exams) and not unread and not misses),
+            "armed_bands": sorted(set(two_read) | band_unread) if bands_live else []}
+
+
+def band_key(miss: str) -> str:
+    """The band a miss names: the audit writes every miss as `<key>: <reading>`."""
+    return miss.split(":", 1)[0]
+
+
+def band_trends(rows: dict[str, Any], previous: dict[str, Any] | None, previous_step: int | None,
+                keys: frozenset[str]) -> dict[str, Any]:
+    """Each named band's change since the last read save, `NOT MEASURED` where either reading is missing or not finite."""
+    out: dict[str, Any] = {}
+    for key in sorted(keys):
+        now, before = _finite(rows.get(key)), _finite((previous or {}).get(key))
+        if now is None or before is None:
+            out[key] = {"value": now, "previous_step": previous_step,
+                        "note": "NOT MEASURED: this save or the last read save has no reading"}
+            continue
+        out[key] = {"value": now, "previous": before, "previous_step": previous_step, "per_save": now - before}
+    return out
+
+
+def _finite(x: Any) -> float | None:
+    return float(x) if isinstance(x, int | float) and not isinstance(x, bool) and math.isfinite(x) else None
 
 
 def gap_rule(gap: float | None, over: list[int], step: int, line: float) -> dict[str, Any]:
@@ -100,4 +135,4 @@ def halt_run(run_dir: Path, run_id: str) -> dict[str, Any]:
     return {"sent": True, "pid": pid, "signal": "SIGTERM", "ts": time.time()}
 
 
-__all__ = ["counter_row", "gap_rule", "halt_run", "is_run", "rates", "run_pid", "verdict"]
+__all__ = ["band_key", "band_trends", "counter_row", "gap_rule", "halt_run", "is_run", "rates", "run_pid", "verdict"]

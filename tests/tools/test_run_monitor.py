@@ -3,6 +3,9 @@
 # and event segments; split, each half would rebuild that run and its fixtures.
 from __future__ import annotations
 
+import argparse
+import dataclasses
+import hashlib
 import importlib
 import json
 import subprocess
@@ -63,9 +66,10 @@ class _Readers:
     """Reads with no net: a GEN body (no temperature where chosen), exams failing where chosen, a gap, bands, a raise."""
 
     def __init__(self, fail_at: tuple[int, ...] = (), raise_at: int | None = None, gap: float = 0.0,
-                 no_skill_at: tuple[int, ...] = (), band_miss_at: tuple[int, ...] = (), nan_rows: bool = False) -> None:
+                 no_skill_at: tuple[int, ...] = (), band_miss_at: tuple[int, ...] = (), nan_rows: bool = False,
+                 cap: dict[int, float] | None = None) -> None:
         self.fail_at, self.raise_at, self.gap, self.values = fail_at, raise_at, gap, []
-        self.no_skill_at, self.band_miss_at, self.nan_rows = no_skill_at, band_miss_at, nan_rows
+        self.no_skill_at, self.band_miss_at, self.nan_rows, self.cap = no_skill_at, band_miss_at, nan_rows, cap or {}
 
     def value(self, ckpt: Path, ring: Path, out: Path, train: Path | None) -> dict[str, Any]:
         if self.raise_at is not None and f"_{self.raise_at:08d}_" in ckpt.name:
@@ -83,6 +87,9 @@ class _Readers:
         return {"T4_V": _exam(0.10 if low else 0.29, floors["T4_V"]), "DEF_V_att": _exam(0.21, floors["DEF_V_att"])}
 
     def bands(self, ring: Path, events: Path | None, bands: Path) -> dict[str, Any]:
+        cap = next((v for x, v in self.cap.items() if ring.name == f"ring_{x:08d}.bin"), None)
+        if cap is not None:  # the cap rate against an upper band of 0.10, as the audit words its miss
+            return {"rows": {"cap_rate": cap}, "misses": [f"cap_rate: {cap:.6g} not lt 0.1"] if cap >= 0.10 else []}
         miss = any(ring.name == f"ring_{x:08d}.bin" for x in self.band_miss_at)
         rows = {"unwritable": float("nan")} if miss and self.nan_rows else {}
         return {"rows": rows, "misses": ["cap_rate: 0.07 not lt 0.05"] if miss else []}
@@ -103,12 +110,13 @@ def _save(run: Path, step: int, games: range) -> Path:
     return ckpt
 
 
-def _monitor(tmp_path: Path, run: Path, readers: _Readers, *, halt: bool, first_pass: bool = False) -> Any:
+def _monitor(tmp_path: Path, run: Path, readers: _Readers, *, halt: bool, first_pass: bool = False,
+             two_read: frozenset[str] = frozenset(), past_halt: int | None = None) -> Any:
     setup = mon.Setup(run_dir=run, run_id=_RUN, out=tmp_path / "records", gen_ring=tmp_path / "gen.bin", gen_sha256="",
                       exams=tmp_path / "exams.jsonl", exams_sha256="", bands=tmp_path / "bands.md", bands_sha256="",
                       floors={"T4_V": 0.154, "DEF_V_att": 0.100}, line=0.012, parent=run / "parent.ckpt", batches=1,
                       device="cpu", threads=1, halt=halt, gap_line=0.05, floors_from_first_pass=first_pass,
-                      bands_from_step=0)
+                      bands_from_step=0, two_read_bands=two_read, resume_past_halt=past_halt)
     return mon.Monitor(setup, mon.Readers(value=readers.value, exams=readers.exams, bands=readers.bands))
 
 
@@ -262,6 +270,21 @@ def test_an_input_that_is_not_the_pinned_one_is_refused(tmp_path: Path) -> None:
     assert cli.main(argv) == 2
 
 
+def test_a_two_read_band_the_bands_file_does_not_band_is_refused(tmp_path: Path) -> None:
+    (tmp_path / "bands.toml").write_text("[ring_audit.bands]\ncap_rate = { lt = 0.1 }\n", encoding="utf-8")
+    pins = {name: hashlib.sha256((tmp_path / name).read_bytes()).hexdigest() for name in ("bands.toml",)}
+    setup = cli.setup_of(argparse.Namespace(
+        run_dir=tmp_path, run_id=_RUN, out=tmp_path / "o", gen_ring=tmp_path / "bands.toml",
+        gen_sha256=pins["bands.toml"], exams=tmp_path / "bands.toml", exams_sha256=pins["bands.toml"],
+        bands=tmp_path / "bands.toml", bands_sha256=pins["bands.toml"], floors="T4_V=0.154", line=0.012,
+        parent=Path("p.ckpt"), batches=1, device="cpu", threads=1, halt=True, gap_line=0.05, floors_from="start",
+        bands_from_step=0, two_read_bands="cap_rate, draw_share", resume_past_halt=None))
+    assert setup.two_read_bands == frozenset({"cap_rate", "draw_share"})
+    with pytest.raises(ValueError, match="draw_share"):
+        mon.inputs_pinned(setup)
+    mon.inputs_pinned(dataclasses.replace(setup, two_read_bands=frozenset({"cap_rate"})))
+
+
 def test_a_resumed_run_is_followed_past_its_earlier_stop_and_its_first_save_pairs_with_the_stop_save(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch, victim: Any) -> None:
     proc, _count = victim
@@ -374,3 +397,58 @@ def test_a_halt_is_sent_even_when_its_save_record_cannot_be_written(tmp_path: Pa
     assert not (tmp_path / "records" / "saves" / "00003000.json").exists()
     assert json.loads((tmp_path / "records" / "HALT.json").read_text(encoding="utf-8"))["step"] == 3000
     assert _sigterms(count) == 1
+
+
+def test_a_two_read_band_arms_then_fires_and_each_save_records_its_trend(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, victim: Any) -> None:
+    """3000 under the band; 6000 misses (armed); 9000 passes (disarmed); 12000 misses; 15000 misses and fires."""
+    proc, count = victim
+    run = _run_dir(tmp_path, proc.pid)
+    _no_lagged(monkeypatch, [])
+    cap = {3000: 0.05, 6000: 0.11, 9000: 0.09, 12000: 0.12, 15000: 0.13}
+    ckpts = {step: _save(run, step, range(2 * i, 2 * i + 4)) for i, step in enumerate(cap)}
+    _events(run, [_saved(step, c) for step, c in ckpts.items()])
+    _monitor(tmp_path, run, _Readers(cap=cap), halt=True, two_read=frozenset({"cap_rate"})).on_events(
+        EventTail(run, _RUN, mon.EVENTS).read_new())
+    time.sleep(0.3)
+
+    def record(step: int) -> dict[str, Any]:
+        return json.loads((tmp_path / "records" / "saves" / f"{step:08d}.json").read_text(encoding="utf-8"))
+    assert record(6000)["armed_bands"] == ["cap_rate"] and record(6000)["halting_rows"] == []
+    assert record(9000)["armed_bands"] == [] and record(12000)["armed_bands"] == ["cap_rate"]
+    assert record(15000)["halting_rows"] == ["ring band cap_rate: 0.13 not lt 0.1, its second miss in a row"]
+    assert record(9000)["band_trends"]["cap_rate"]["per_save"] == pytest.approx(-0.02)
+    assert record(9000)["band_trends"]["cap_rate"]["previous_step"] == 6000
+    assert "per_save" not in record(3000)["band_trends"]["cap_rate"], "the first save has no last read"
+    assert json.loads((tmp_path / "records" / "HALT.json").read_text(encoding="utf-8"))["step"] == 15000
+    assert _sigterms(count) == 1
+
+
+def test_a_run_resumed_past_its_halt_is_followed_on_and_no_other_halt_is_cleared(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, victim: Any) -> None:
+    proc, count = victim
+    run = _run_dir(tmp_path, proc.pid)
+    _no_lagged(monkeypatch, [])
+    c1, c2 = _save(run, 3000, range(0, 4)), _save(run, 6000, range(2, 8))
+    _events(run, [_saved(3000, c1), _saved(6000, c2)])
+    _monitor(tmp_path, run, _Readers(band_miss_at=(3000,)), halt=True).on_events(
+        EventTail(run, _RUN, mon.EVENTS).read_new())
+    time.sleep(0.3)
+    assert _sigterms(count) == 1 and not (tmp_path / "records" / "saves" / "00006000.json").exists()
+    with pytest.raises(ValueError, match="at step 3000, not 6000"):
+        _monitor(tmp_path, run, _Readers(), halt=True, past_halt=6000)
+    resumed = _monitor(tmp_path, run, _Readers(), halt=True, past_halt=3000)
+    assert not resumed.state.halted and (tmp_path / "records" / "HALT_00003000.json").is_file()
+    resumed.on_events(EventTail(run, _RUN, mon.EVENTS).read_new())
+    assert (tmp_path / "records" / "saves" / "00006000.json").is_file() and _sigterms(count) == 1
+    again = _monitor(tmp_path, run, _Readers(band_miss_at=(9000,)), halt=True, past_halt=3000)
+    assert not again.state.halted, "a restart finds its halt archived and follows on"
+    c3 = _save(run, 9000, range(6, 12))
+    _events(run, [_saved(9000, c3)])
+    again.on_events(EventTail(run, _RUN, mon.EVENTS).read_new())
+    time.sleep(0.3)
+    assert json.loads((tmp_path / "records" / "HALT.json").read_text(encoding="utf-8"))["step"] == 9000
+    with pytest.raises(ValueError, match="at step 9000, not 3000"):
+        _monitor(tmp_path, run, _Readers(), halt=True, past_halt=3000)
+    with pytest.raises(ValueError, match="no halt at step 4000"):
+        _monitor(tmp_path / "elsewhere", run, _Readers(), halt=True, past_halt=4000)
