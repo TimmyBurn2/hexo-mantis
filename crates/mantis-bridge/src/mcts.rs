@@ -248,6 +248,29 @@ impl PyMCTSTree {
             .collect()
     }
 
+    /// `select_leaves` until `network` net leaves are queued or `descents` spent. Raises: SelectionDesync, as it.
+    pub fn select_leaves_filled(
+        &mut self,
+        py: Python<'_>,
+        network: usize,
+        descents: usize,
+    ) -> PyResult<Vec<Py<PyBoard>>> {
+        let boards = py
+            .detach(|| self.inner.select_leaves_filled(network, descents))
+            .map_err(|desync| SelectionDesync::new_err(desync.to_string()))?;
+        self.pending_boards = boards.clone();
+        boards
+            .into_iter()
+            .map(|b| Py::new(py, PyBoard::from_inner(b)))
+            .collect()
+    }
+
+    /// This search's PUCT select rows: `(calls, calls ended at an overlap, network leaves queued)`.
+    pub fn select_counters(&self) -> (u64, u64, u64) {
+        let c = self.inner.select_counters();
+        (c.calls, c.overlaps, c.network_leaves)
+    }
+
     /// One leaf per FORCED root child with no transposition fast path (an expanded leaf is
     /// returned and re-backed-up). Raises ValueError for a child the root does not own.
     pub fn select_leaves_forced(

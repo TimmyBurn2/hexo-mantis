@@ -73,15 +73,15 @@ impl Node {
         }
     }
 
-    /// Mean value Q(s,a) adjusted for outstanding virtual losses.
+    /// Q(s,a) for the choosing parent (`flip`: the child's mover is the other player), a virtual loss a loss for it.
     #[inline]
-    pub fn q_value_vl(&self, penalty: f32) -> f32 {
+    pub fn q_value_vl(&self, penalty: f32, flip: bool) -> f32 {
         let effective_n = self.n_visits + self.virtual_loss_count;
         if effective_n == 0 {
             0.0
         } else {
-            let total_penalty = self.virtual_loss_count as f32 * penalty;
-            (self.w_value - total_penalty) / effective_n as f32
+            let w = if flip { -self.w_value } else { self.w_value };
+            (w - self.virtual_loss_count as f32 * penalty) / effective_n as f32
         }
     }
 

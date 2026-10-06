@@ -152,10 +152,9 @@ impl MCTSTree {
             // Unvisited: `fpu_value` is computed from the parent's own Q, so it is ALREADY in the
             // parent's to-move perspective and, unlike a visited child's Q, is never negated.
             fpu_value
-        } else if parent.moves_remaining == 1 {
-            -child.q_value_vl(self.virtual_loss)
         } else {
-            child.q_value_vl(self.virtual_loss)
+            // A child below a parent's last stone is the other player's position.
+            child.q_value_vl(self.virtual_loss, parent.moves_remaining == 1)
         };
 
         let u = self.c_puct * child.prior * sqrt_parent_n
@@ -334,6 +333,16 @@ impl MCTSTree {
     /// Virtual loss applied on the failing descent is UNWOUND before returning, so a caller that
     /// recovers does not leave the tree permanently penalising the path it walked.
     pub fn select_leaves(&mut self, n: usize) -> Result<Vec<Board>, SelectionDesync> {
+        self.select_leaves_filled(n, n)
+    }
+
+    /// `select_leaves` until `network` net leaves are queued or `descents` spent; errors as `select_leaves`.
+    pub fn select_leaves_filled(
+        &mut self,
+        network: usize,
+        descents: usize,
+    ) -> Result<Vec<Board>, SelectionDesync> {
+        let n = descents;
         self.pending.clear();
         self.inline_descents = 0;
         self.tt_hits = 0;
@@ -348,10 +357,12 @@ impl MCTSTree {
         let mut attempts = 0;
         let max_attempts = n * 4;
 
-        while i < n && attempts < max_attempts {
+        self.select_counters.calls += 1;
+        while i < n && boards.len() < network && attempts < max_attempts {
             attempts += 1;
             // An overlap leaves the tree as it found it, so every later attempt would repeat it.
             let Some(leaf_idx) = self.descend(&mut board, &mut diffs, &pending_ids)? else {
+                self.select_counters.overlaps += 1;
                 break;
             };
             let facts = match self.tactics_leaf(leaf_idx, &board) {
@@ -409,6 +420,7 @@ impl MCTSTree {
         debug_assert_eq!(board.ply, self.root_board.ply);
 
         self.count_descents(boards.len());
+        self.select_counters.network_leaves += boards.len() as u64;
         Ok(boards)
     }
 

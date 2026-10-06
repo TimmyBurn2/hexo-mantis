@@ -128,6 +128,16 @@ pub struct MCTSTree {
     pub(crate) inline_descents: usize,
     /// Descents the last select call backed up with the TT's value, unserved (`last_tt_hits`).
     pub(crate) tt_hits: usize,
+    /// This search's PUCT select calls: how many, how many ended at an overlap, and the net leaves they queued.
+    pub(crate) select_counters: SelectCounters,
+}
+
+/// One search's `select_leaves` rows, the round fill's own fire count: calls, overlaps, network leaves.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SelectCounters {
+    pub calls: u64,
+    pub overlaps: u64,
+    pub network_leaves: u64,
 }
 
 /// A leaf queued for the net: its node, its board, and the tactics facts its expansion reads (`None` off).
@@ -173,6 +183,7 @@ impl MCTSTree {
             tactics: None,
             inline_descents: 0,
             tt_hits: 0,
+            select_counters: SelectCounters::default(),
         }
     }
 
@@ -196,7 +207,14 @@ impl MCTSTree {
         self.transposition_table.clear();
         self.inline_descents = 0;
         self.tt_hits = 0;
+        self.select_counters = SelectCounters::default();
         self.reset_tactics_search();
+    }
+
+    /// This search's PUCT select rows since `new_game`.
+    #[must_use]
+    pub fn select_counters(&self) -> SelectCounters {
+        self.select_counters
     }
 
     pub fn root_visits(&self) -> u32 {

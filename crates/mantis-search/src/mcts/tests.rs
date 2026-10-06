@@ -272,7 +272,7 @@ fn test_virtual_loss_q_adjustment() {
         terminal_value: 0.0,
         virtual_loss_count: 2,
     };
-    let q = node.q_value_vl(VIRTUAL_LOSS_PENALTY);
+    let q = node.q_value_vl(VIRTUAL_LOSS_PENALTY, false);
     assert!(q.abs() < 1e-6, "Q should be 0.0: got {q}");
 }
 
@@ -762,7 +762,7 @@ fn test_cf6_fpu_sign_consistent_with_visited_child_at_both_mr() {
     // c1: visited child with a decisive own-frame Q, no virtual loss, so q_value_vl = w/n.
     tree.pool[c1 as usize].n_visits = 4;
     tree.pool[c1 as usize].w_value = 2.0; // own-frame Q = 2.0 / 4 = 0.5
-    let own_q = tree.pool[c1 as usize].q_value_vl(tree.virtual_loss);
+    let own_q = tree.pool[c1 as usize].q_value_vl(tree.virtual_loss, false);
     assert!((own_q - 0.5).abs() < 1e-6, "precondition: own_q = {own_q}");
     assert_eq!(tree.pool[c2 as usize].n_visits, 0);
 
@@ -1538,4 +1538,24 @@ fn a_select_call_stops_at_its_first_collision() {
         tree.pool[0].virtual_loss_count, 1,
         "only the pending leaf's loss stands"
     );
+}
+
+#[test]
+fn a_pending_child_loses_score_under_its_parent_at_both_stone_levels() {
+    // Planted break: negate the whole loss-adjusted Q at a second-stone parent and the loss turns into a bonus there.
+    for parent_moves_remaining in [2u8, 1] {
+        let (mut tree, a, _b) = setup_two_child_tree(1.5);
+        tree.pool[0].moves_remaining = parent_moves_remaining;
+        tree.pool[0].n_visits = 4;
+        tree.pool[a as usize].n_visits = 2;
+        tree.pool[a as usize].w_value = 0.6;
+        let sqrt_n = (tree.pool[0].n_visits as f32).sqrt();
+        let idle = tree.puct_score(a, 0, sqrt_n, 0.0);
+        tree.pool[a as usize].virtual_loss_count = 1;
+        let pending = tree.puct_score(a, 0, sqrt_n, 0.0);
+        assert!(
+            pending < idle,
+            "a pending child rose from {idle} to {pending} under a parent with {parent_moves_remaining} to place"
+        );
+    }
 }

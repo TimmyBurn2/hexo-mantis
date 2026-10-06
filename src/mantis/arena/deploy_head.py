@@ -94,6 +94,8 @@ class DeployHeadPlayer:
         self.last_tactics: dict[str, int] | None = None
         #: The per-game cache `expand_fn` serves through, emptied by `new_game`; `None` when it has none.
         self._eval_cache = eval_cache
+        #: The head's own lever rows, cumulative: the PUCT select calls, their overlaps and their network leaves.
+        self._rows = dict.fromkeys(("select_calls", "select_overlaps", "select_network_leaves"), 0)
 
     def name(self) -> str:
         return "deploy_head"
@@ -113,11 +115,12 @@ class DeployHeadPlayer:
         self.last_sims = None
         self.last_tactics = None
 
-    def search_rows(self) -> dict[str, int] | None:
-        """The head's levers' cumulative rows, each keyed by its lever (`cache_*`); `None` when it runs none."""
-        if self._eval_cache is None:
-            return None
-        return {f"cache_{k}": v for k, v in self._eval_cache.counters().items()}
+    def search_rows(self) -> dict[str, int]:
+        """The head's levers' cumulative rows, each keyed by its lever: `select_*`, and `cache_*` with a cache."""
+        rows = dict(self._rows)
+        if self._eval_cache is not None:
+            rows.update({f"cache_{k}": v for k, v in self._eval_cache.counters().items()})
+        return rows
 
     def _fresh_tree(self) -> MCTSTree:
         """A tree configured with the RUN's search kind and σ. `configure_search` runs ONCE per
@@ -181,6 +184,10 @@ class DeployHeadPlayer:
         else:
             move, spent = self._drive_puct(tree, sims_done)
         self.last_sims = spent
+        calls, overlaps, leaves = tree.select_counters()
+        self._rows["select_calls"] += calls
+        self._rows["select_overlaps"] += overlaps
+        self._rows["select_network_leaves"] += leaves
 
         children_info = tree.get_root_children_info()
         # Captured from the tree the decision read, so a recorded root always matches its move.
@@ -197,8 +204,9 @@ class DeployHeadPlayer:
         # Batched by `leaf_batch_size`, the SAME knob the self-play worker reads: only the number
         # of blocking round-trips changes. Clamped to the remaining budget so N is exact.
         while sims_done < self._n_sims:
-            current_batch = min(self._leaf_batch_size, self._n_sims - sims_done)
-            leaves = tree.select_leaves(current_batch)
+            left = self._n_sims - sims_done
+            # Up to a batch of network leaves, refilled past table and solver descents, within the budget left.
+            leaves = tree.select_leaves_filled(self._leaf_batch_size, left)
             unserved = tree.last_inline_descents() + tree.last_tt_hits()
             if not leaves and not unserved:
                 break
