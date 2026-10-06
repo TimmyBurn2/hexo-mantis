@@ -62,12 +62,12 @@ def test_the_default_nets_come_from_the_games_own_run_and_are_named_by_its_label
     assert text.name_of(record, {"run_a": "label"}) == "label at 6k" and text.name_of(record) == "run_a at 6k"
 
 
-def _run(root: Path, run_id: str, games_per_hour: float, parent: str | None = None) -> Path:
+def _run(root: Path, run_id: str, games_per_hour: float) -> Path:
     run = root / run_id
     rows = [segment_start(run_id, 1), *trainer_rows(range(1, 200)),
             *[{**r, "games_per_hour": games_per_hour} for r in iteration_rows(range(1, 200, 5))], *game_rows(2100)]
     write_segment(run / "logs", run_id, 1, rows)
-    write_config(run, run_id, parent)
+    write_config(run, run_id, None)
     write_heartbeat(run / "logs", run_id, time.time())
     write_shard(run / "logs" / "games", run_id, 1, "2026100510", [game("g", six_in_a_row_for_p1())])
     return run
@@ -82,19 +82,3 @@ def test_a_compared_runs_header_carries_each_runs_latest_value_in_its_colour(das
     assert '<b class="c1">800</b><b class="c2">2 300</b>' in head
     assert sentence.startswith("<strong>800 games an hour</strong>") and '<span class="c2">rb: 2 300 games an hour' in aside
 
-
-def test_each_ruler_with_a_parent_or_a_line_gets_its_own_win_rate_chart_and_a_lone_screen_cell_does_not(dash, tmp_path):
-    from _dash_record import sidecar
-
-    strength = importlib.import_module("dash.views.run_strength")
-    record = importlib.import_module("dash.readers.record")
-    cells, g455 = tmp_path / "cells", {"commit": "c0ffee", "net_sha256": "g455", "generation": 455}
-    sidecar(cells, "r1", 300, 0.76)
-    sidecar(cells, "p0", 45000, 0.59)
-    sidecar(cells, "r1", 300, 0.45, suffix="six455_128.full", unit="six455_128", six={**g455, "nodes": 128})
-    sidecar(cells, "p0", 45000, 0.30, suffix="six455_128.full", unit="six455_128", six={**g455, "nodes": 128})
-    sidecar(cells, "r1", 300, 0.20, n=128, suffix="six455_256.full", unit="six455_256", six={**g455, "nodes": 256})
-    snap = record.RunRecord("r1", _run(tmp_path, "r1", 900.0, "p0_00045000_abcd1234"), None, (cells,), rule="six30_16").poll()
-    _, _, html = strength.section([snap])
-    assert html.count(">Win rate against ") == 2 and ">Win rate against six455_128.full</h3>" in html
-    assert ">Win rate against six455_256.full</h3>" not in html and "six455_256.full" in html

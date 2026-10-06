@@ -1,4 +1,4 @@
-"""Is it getting stronger: the rule's ruler in win rate with its parent and going-forward bands, every ruler in logit over its own parent."""
+"""Is it getting stronger: each ruler in win rate over its own parent's band (the bar on the rule's), every ruler in logit."""
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -63,18 +63,24 @@ def verdict(snap: RunSnapshot) -> tuple[str, str]:
         lines.append(f"Mean of the last {used} cell{'s' if used > 1 else ''}: {signed(mean)} logit over the parent, "
                      f"{'above' if mean > LINE_LOGIT else 'below'} the {signed(LINE_LOGIT)} bar"
                      + "." + ("" if used >= CELLS else f" The rule needs {CELLS} cells; {used} {'is' if used == 1 else 'are'} read."))
-    lines += [f"{esc(r.name)} at {short(r.line[-1].step)}: {pct(r.line[-1].wr, 1)}, parent {pct(p.wr, 1)}, "
-              f"{signed(r.line[-1].logit - p.logit)} logit." for r, p in ((r, r.parent) for r in snap.rulers if r is not lead and r.line)
-              if p is not None]
+    lines += [f"{esc(r.name)} at {short(r.line[-1].step)}: {pct(r.line[-1].wr, 1)}"
+              + (f" ({num(r.line[-1].forfeits)} Six forfeits left out)" if r.line[-1].forfeits else "")
+              + f", parent {pct(p.wr, 1)}, {signed(r.line[-1].logit - p.logit)} logit over the parent."
+              for r, p in ((r, r.parent) for r in snap.rulers if r is not lead and r.line) if p is not None]
     lines += [x for x in (_rule_note(snap).strip(), _ladder_text(snap).strip()) if x]
     return sentence, "<br>".join(lines)
+
+
+def _twin(snap: RunSnapshot, unit: tuple[str, ...]) -> Ruler | None:
+    """The run's ruler on the same unit, when it has read a cell there."""
+    return next((r for r in snap.rulers if r.unit == unit and r.line), None)
 
 
 def _compared(snaps: Sequence[RunSnapshot], lead: Ruler) -> str:
     """Each compared run's latest cell on the lead ruler's unit, one line apiece."""
     out = ""
     for x in snaps[1:]:
-        twin = next((r for r in x.rulers if r.unit == lead.unit and r.line), None)
+        twin = _twin(x, lead.unit)
         if twin is not None:
             c, first = twin.line[-1], twin.line[0]
             if len(twin.line) > 1:
@@ -115,27 +121,25 @@ def _marks(snap: RunSnapshot) -> list[tuple[float, str]]:
     return marks
 
 
-def _winrate_panel(snaps: Sequence[RunSnapshot], lead: Ruler, xmax: float) -> str:
+def _winrate_panel(snaps: Sequence[RunSnapshot], ruler: Ruler, xmax: float, lead: bool) -> str:
     """One ruler in win rate with its own parent's band, every compared run's twin overlaid; the bar only on the rule's."""
     head = snaps[0]
-    title = f"Win rate against {lead.name}"
-    dots = [Dots(head.label, "c1", [(float(c.step), c.wr, c.lo, c.hi) for c in lead.line])]
-    for i, other in enumerate(snaps[1:], 1):
-        twin = next((r for r in other.rulers if r.unit == lead.unit), None)
-        if twin is not None:
-            dots.append(Dots(other.label, RUN_CLASSES[i], [(float(c.step), c.wr, c.lo, c.hi) for c in twin.line]))
-    drawn = {d.name for d in dots}
-    keys = [Key(x.label, RUN_CLASSES[i], "dot", off="" if x.label in drawn else "not read on this ruler") for i, x in enumerate(snaps)]
+    title = f"Win rate against {ruler.name}"
+    twins = [ruler, *(_twin(x, ruler.unit) for x in snaps[1:])]
+    dots = [Dots(x.label, RUN_CLASSES[i], [(float(c.step), c.wr, c.lo, c.hi) for c in t.line])
+            for i, (x, t) in enumerate(zip(snaps, twins, strict=True)) if t is not None]
+    keys = [Key(x.label, RUN_CLASSES[i], "dot", off="" if t is not None else "not read on this ruler")
+            for i, (x, t) in enumerate(zip(snaps, twins, strict=True))]
     refs, lines = [], []
-    if lead.parent is not None:
-        refs.append(Ref(lead.parent.wr, lead.parent.lo, lead.parent.hi, f"parent {_parent_name(lead.parent)}"))
+    if ruler.parent is not None:
+        refs.append(Ref(ruler.parent.wr, ruler.parent.lo, ruler.parent.hi, f"parent {_parent_name(ruler.parent)}"))
         keys.append(Key("parent, 95 % band", glyph="band"))
-        gf = lead.going_forward if lead.rule else None
+        gf = ruler.going_forward if ruler.rule else None
         if gf is not None:
             mean, used = gf
-            refs.append(Ref(expit(lead.parent.logit + LINE_LOGIT), label="bar", marked=True, end=True))
-            last = lead.line[-used:]
-            level = expit(lead.parent.logit + mean)
+            refs.append(Ref(expit(ruler.parent.logit + LINE_LOGIT), label="bar", marked=True, end=True))
+            last = ruler.line[-used:]
+            level = expit(ruler.parent.logit + mean)
             lines.append(Line(f"mean of the last {used}", "c1", [(float(last[0].step), level), (float(last[-1].step), level)], dash=True))
             keys += [Key(f"bar, parent {signed(LINE_LOGIT)} logit", "warn", "dash"), Key(f"mean of the last {used}", "c1", "dash")]
     marks = _marks(head)
@@ -143,10 +147,11 @@ def _winrate_panel(snaps: Sequence[RunSnapshot], lead: Ruler, xmax: float) -> st
         keys.append(Key("promotion or ruler change", glyph="mark"))
     chart = Chart(title, lines=lines, dots=dots, refs=refs, marks=marks, y_fmt=lambda v: pct(v), width=400, height=220,
                   y_floor=0.0, y_ceil=1.0, x_domain=(0.0, xmax))
-    definition = ("Report-only. " if not lead.rule and head.rule is not None else "") + (
-        f"{lead.label}. Whiskers: 95 % interval. Beats or trails only when the difference's interval excludes 0.")
-    nows = [(pct(d.pts[-1][1]) if d.pts else "", d.cls) for d in dots]
-    return figure(title, chart, definition, goal=HIGHER, now=pct(lead.line[-1].wr), nows=nows, keys=keys)
+    role = _role(ruler, head.rule is not None)
+    definition = ("Report-only. " if role == "report-only" else "") + f"{ruler.label}. Whiskers: 95 % interval." + (
+        " Beats or trails only when the difference's interval excludes 0." if lead else "")
+    nows = [(pct(t.line[-1].wr) if t is not None else "", RUN_CLASSES[i]) for i, t in enumerate(twins)]
+    return figure(title, chart, definition, goal=HIGHER, now=pct(ruler.line[-1].wr), nows=nows, keys=keys)
 
 
 def _logit_panel(head: RunSnapshot, xmax: float, only: str) -> str:
@@ -170,8 +175,8 @@ def _logit_panel(head: RunSnapshot, xmax: float, only: str) -> str:
     missing = [r.name for r in head.rulers if r.parent is None] if any(r.parent is not None for r in head.rulers) else []
     definition = "Logit of the win rate minus the parent's on the same ruler, so rulers of different strength share one axis."
     if missing:
-        definition += (f" No parent cell on {', '.join(missing)}: table only." if len(missing) <= 3
-                       else f" {len(missing)} rulers have no parent cell: table only.")
+        definition += (f" No parent cell on {', '.join(missing)}, so not drawn here." if len(missing) <= 3
+                       else f" {len(missing)} rulers have no parent cell, so are not drawn here.")
     goal = Goal("up", "higher is better, 0 is the parent")
     rows = [[r.name, _role(r, declared), num(c.step), pct(c.wr, 1), f"{pct(c.lo, 1)} to {pct(c.hi, 1)}",
              num(c.n) + (f" ({num(c.forfeits)} forfeits left out)" if c.forfeits else ""),
@@ -199,6 +204,7 @@ def section(snaps: Sequence[RunSnapshot]) -> tuple[str, str, str]:
     xmax = max([float(x.events.live_steps or 0) for x in snaps] + [float(c.step) for r in head.rulers for c in r.line])
     aside += _compared(snaps, lead)
     # Every other ruler worth a line gets its own win-rate chart; a lone screen cell with no parent stays in the table.
-    others = "".join(_winrate_panel(snaps, r, xmax) for r in head.rulers
+    others = "".join(_winrate_panel(snaps, r, xmax, lead=False) for r in head.rulers
                      if r is not lead and r.line and (r.parent is not None or len(r.line) > 1))
-    return sentence, aside, _winrate_panel(snaps, lead, xmax) + _logit_panel(head, xmax, head.label if len(snaps) > 1 else "") + others
+    return (sentence, aside, _winrate_panel(snaps, lead, xmax, lead=True) + _logit_panel(head, xmax, head.label if len(snaps) > 1 else "")
+            + others)

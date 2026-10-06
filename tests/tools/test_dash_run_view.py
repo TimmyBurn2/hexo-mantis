@@ -102,7 +102,7 @@ def test_report_only_rulers_read_in_logit_over_their_own_parent(dash, strength, 
     record = importlib.import_module("dash.readers.record")
     snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), rule="six30_16").poll()
     _, aside, html = strength.section([snap])
-    assert "six455_128.full at 300: 45.0\u202f%, parent 30.0\u202f%, +0.65 logit." in aside
+    assert "six455_128.full at 300: 45.0\u202f%, parent 30.0\u202f%, +0.65 logit over the parent." in aside
     assert "Win rate against six30_16.full" in html and "Win rate against six455_128.full" in html and "Report-only. " in html
     assert "Every ruler against its parent" in html and "six455_128.full, report-only" in html and "six30_16.full, the rule" in html
 
@@ -217,3 +217,57 @@ def test_no_script_derives_a_turn_or_an_owner():
     for name in ("board.js", "games.js", "analyzer.js"):
         code = (web / name).read_text(encoding="utf-8")
         assert "turnOf" not in code and ">> 1" not in code and "% 2" not in code, name
+
+
+_G455 = {"commit": "c0ffee", "net_sha256": "g455", "generation": 455}
+
+
+def _rulers_snap(dash, tmp_path, *, rule: str | None = "six30_16", compare: bool = False, screens: int = 0):
+    """The rule's ruler and a report-only six455_128 (each with a parent), a parentless two-cell six455_256, a lone screen cell."""
+    cells = tmp_path / "cells"
+    sidecar(cells, "r1", 300, 0.76)
+    sidecar(cells, "p0", 45000, 0.59)
+    for step, wr in ((300, 0.45), (600, 0.47)):
+        sidecar(cells, "r1", step, wr, suffix="six455_128.full", unit="six455_128", six={**_G455, "nodes": 128},
+                six_findings={"count": 4} if step == 600 else None)
+    sidecar(cells, "p0", 45000, 0.30, suffix="six455_128.full", unit="six455_128", six={**_G455, "nodes": 128})
+    for step in (300, 600):
+        sidecar(cells, "r1", step, 0.20, suffix="six455_256.full", unit="six455_256", six={**_G455, "nodes": 256})
+    sidecar(cells, "r1", 300, 0.10, n=128, suffix="six455_512.full", unit="six455_512", six={**_G455, "nodes": 512})
+    for k in range(screens):
+        sidecar(cells, "r1", 300, 0.1, n=128, suffix=f"six{k}_8.full", unit=f"six{k}_8", six={**_G455, "nodes": 8 + k})
+    record = importlib.import_module("dash.readers.record")
+    snaps = [record.RunRecord("r1", _record(tmp_path), None, (cells,), rule=rule).poll()]
+    if compare:
+        sidecar(tmp_path / "other_cells", "r2", 300, 0.5)
+        snaps.append(record.RunRecord("r2", _record(tmp_path, "r2"), None, (tmp_path / "other_cells",)).poll())
+    return snaps
+
+
+def _figure(html: str, title: str) -> str:
+    start = html.index(f">{title}</h3>")
+    return html[start:html.find("<figure", start)]
+
+
+def test_each_ruler_with_a_parent_or_a_line_gets_its_own_win_rate_chart_and_a_lone_cell_does_not(dash, strength, tmp_path):
+    sentence, aside, html = strength.section(_rulers_snap(dash, tmp_path))
+    assert html.count(">Win rate against ") == 3 and ">Win rate against six455_512.full</h3>" not in html
+    report = _figure(html, "Win rate against six455_128.full")
+    assert "Report-only. " in report and "bar, parent" not in report and "Beats or trails" not in report
+    assert "bar, parent" in _figure(html, "Win rate against six30_16.full")
+    assert "No parent cell on six455_256.full, six455_512.full, so not drawn here." in html
+    assert "six455_128.full at 600: 46.6\u202f% (4 Six forfeits left out), parent 30.0\u202f%" in aside
+
+
+def test_a_compared_run_with_no_cell_on_a_ruler_is_named_so_in_its_legend(dash, strength, tmp_path):
+    _, _, html = strength.section(_rulers_snap(dash, tmp_path, compare=True))
+    report = _figure(html, "Win rate against six455_128.full")
+    assert "r2 (not read on this ruler)" in report and "not read on this ruler" not in _figure(html, "Win rate against six30_16.full")
+
+
+def test_many_parentless_rulers_are_counted_and_no_rule_means_no_report_only_mark(dash, strength, tmp_path):
+    _, _, html = strength.section(_rulers_snap(dash, tmp_path, screens=3))
+    assert "5 rulers have no parent cell, so are not drawn here." in html
+    _, _, bare = strength.section(_rulers_snap(dash, tmp_path / "bare", rule=None))
+    assert "Report-only. " not in bare
+
