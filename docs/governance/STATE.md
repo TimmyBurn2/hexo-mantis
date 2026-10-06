@@ -36,11 +36,12 @@ in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c
   `make dash` is the one display. It reads a run directory, the monitor's records and the cell sidecars and serves the
   Run, Games and Analyzer views; run11's rule reads `six30_16` (`--rule-unit`), every other ruler is report-only. The
   dashboard, the viewer and the analyzer are retired. It serves run11's live record on box A as the supervisor service
-  `mantis_dash`, from a separate checkout at `ddba35a7` under the run's own venv (the run's tree untouched): nice 19,
+  `mantis_dash`, from a separate checkout at `a8f8d866` under the run's own venv (the run's tree untouched): nice 19,
   idle I/O, the Analyzer on CPU with 4 threads and no GPU, loopback behind the Caddy entry "Mantis Dash" with token
   auth. Measured there: idle 0.03 % of one core at 85 MB; 1.1 GB after the Analyzer's first read loads torch and the
   nets. Since `ddba35a7` the boards pan and zoom, both views step by turn, the Analyzer reads each net's whole turn
-  and imports htttx games. The stopgap "Mantis Observe" stays until the operator retires it.
+  and imports htttx games; since `a8f8d866` every chart says which way is good, compared runs read side by side, a
+  Six cell's forfeits are left out of its reading, and the Analyzer colours each net's turn. The stopgap "Mantis Observe" stays until the operator retires it.
 - **R385's order.**
   - RUN11-PRE accepted (R385(a), CARD-RUN11-PRE CLOSED). The pick rule's inputs were degenerate (L̄ saturates inside
     8 h; the tie-break read one save's jitter), so the registered pick (arm 3) is set aside by ruling, the architect's
