@@ -240,6 +240,7 @@ def _arm_engine(arm: ArmSpec, *, cfg: Any, dump: dict[str, Any], spec: Any,
         fused_graph_caps=resolve_fused_graph_caps(dump),
         inference_batching=resolve_inference_batching(dump),
         max_in_flight=cfg.selfplay.leaf_batch_size,
+        submitters=1,
         # The declared autocast dtype, resolved by `amp_dtype_for`; this site names no dtype.
         # 1-in-1 sampling: this driver is where the class fired, and the dump rides only when the
         # caller named an output location.

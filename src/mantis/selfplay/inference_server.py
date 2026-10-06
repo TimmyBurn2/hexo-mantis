@@ -618,6 +618,8 @@ class InferenceServer(threading.Thread):
             ),
             # An idle counter stays VISIBLE at 0 on the producing path.
             "empty_polls": self._empty_polls,
+            # Why each non-empty pop returned; `all_submitted` is the submitter wake's fire count.
+            "wake": {"submitters": self._batcher.graph_submitters, **self._batcher.graph_wake_counts()},
             "fusion": self._fusion_snapshot(),
             # The check-14 lever: its posture and its own fire rate, visible at 0.
             "edge_geometry_check": {

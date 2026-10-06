@@ -170,6 +170,7 @@ class MantisEngine:
         self.engine = LocalInferenceEngine(
             net, torch.device(device), encoding_spec=self.spec, fused_graph_caps=resolve_fused_graph_caps(cfg),
             inference_batching=resolve_inference_batching(cfg), max_in_flight=self.hparams.leaf_batch_size,
+            submitters=1,  # the analyst thread serialises every search on this engine
             leaf_build_threads=resolve_leaf_build_threads(cfg))
         self._expand = _graph_expand_fn(self.engine, self.spec)
         self._raw_tree = MCTSTree(**replace(self.hparams.puct, quiescence_enabled=False).tree_kwargs())

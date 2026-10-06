@@ -9,6 +9,8 @@ no-op and the close/idempotence contract on the server thread the engine owns.
 """
 from __future__ import annotations
 
+import time
+
 import numpy as np
 import torch
 
@@ -25,7 +27,7 @@ _CPU = torch.device("cpu")
 #: `InferenceServer` config with no `RunConfig`, so the bound is THREADED, never hardcoded.
 
 
-def _graph_engine() -> LocalInferenceEngine:
+def _graph_engine(*, max_wait_ms: int = 10, submitters: int = 1) -> LocalInferenceEngine:
     torch.manual_seed(20260723)
     net = build_net(
         GnnArch(
@@ -40,7 +42,8 @@ def _graph_engine() -> LocalInferenceEngine:
     net.eval()
     return LocalInferenceEngine(net, _CPU, encoding_spec=_GRAPH_SPEC,
                                 fused_graph_caps=_CAPS,
-                                inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10), max_in_flight=8, )
+                                inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=max_wait_ms),
+                                max_in_flight=8, submitters=submitters)
 
 
 # I-02 — graph branch
@@ -90,3 +93,28 @@ def test_graph_engine_close_stops_server_thread_and_is_idempotent() -> None:
     assert engine._graph_batcher is None
     assert not server_thread.is_alive()
     engine.close()  # idempotent — a second close must not raise
+
+
+def test_a_lone_declared_submitter_is_served_without_waiting_out_the_deadline() -> None:
+    """Three leaves sit below the threshold of 8; only the submitter wake serves them before 500 ms."""
+    engine = _graph_engine(max_wait_ms=500, submitters=1)
+    try:
+        engine.infer_batch_ls([Board()])
+        t0 = time.perf_counter()
+        engine.infer_batch_ls([Board() for _ in range(3)])
+        elapsed = time.perf_counter() - t0
+        assert elapsed < 0.25, f"{elapsed:.3f} s: the pop waited out its deadline"
+        wake = engine.batch_timing_snapshot()["wake"]
+        assert wake["submitters"] == 1
+        assert wake["all_submitted"] == 2 and wake["deadline"] == 0
+    finally:
+        engine.close()
+
+
+def test_an_engine_must_declare_at_least_one_submitter() -> None:
+    try:
+        _graph_engine(submitters=0)
+    except ValueError as exc:
+        assert "submitters" in str(exc)
+    else:
+        raise AssertionError("an engine with no declared submitter was built")

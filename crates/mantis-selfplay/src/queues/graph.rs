@@ -24,6 +24,45 @@ use crate::poison::lock_or_recover;
 struct PendingGraphRequest {
     id: u64,
     graph: AxisGraph,
+    /// The last request of its submitter's batch; its pop ends that batch's time in the queue.
+    ends_batch: bool,
+}
+
+/// The queued requests and how many submitters' batches they hold, under one lock.
+#[derive(Default)]
+struct GraphQueueState {
+    requests: VecDeque<PendingGraphRequest>,
+    queued_batches: usize,
+}
+
+impl GraphQueueState {
+    fn push_batch(&mut self, requests: impl IntoIterator<Item = PendingGraphRequest>) {
+        let before = self.requests.len();
+        self.requests.extend(requests);
+        if self.requests.len() > before {
+            if let Some(last) = self.requests.back_mut() {
+                last.ends_batch = true;
+            }
+            self.queued_batches += 1;
+        }
+    }
+}
+
+/// Why each non-empty pop returned; `all_submitted` is the submitter wake's own fire count.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct WakeCounts {
+    pub threshold: u64,
+    pub all_submitted: u64,
+    pub deadline: u64,
+    pub closed: u64,
+}
+
+#[derive(Default)]
+struct WakeCounters {
+    threshold: AtomicU64,
+    all_submitted: AtomicU64,
+    deadline: AtomicU64,
+    closed: AtomicU64,
 }
 
 /// Graph waiter payload — the ragged `(LegalSetPolicy, value)`.
@@ -36,7 +75,7 @@ struct GraphWaiter {
 }
 
 struct GraphInner {
-    queue: Mutex<VecDeque<PendingGraphRequest>>,
+    queue: Mutex<GraphQueueState>,
     queue_cv: Condvar,
     waiters: Mutex<HashMap<u64, Arc<GraphWaiter>, FxBuildHasher>>,
     next_id: AtomicU64,
@@ -48,6 +87,9 @@ struct GraphInner {
     /// because a worker blocks on its whole submitted batch. `0` means "not declared" and
     /// leaves the threshold at the raw half-batch — see [`saturation_threshold`].
     max_in_flight: usize,
+    /// Threads that each block on one whole batch (`0` = undeclared); all queued, no leaf can follow.
+    submitters: usize,
+    wakes: WakeCounters,
     /// The exact per-net evaluation cache every worker of the run shares.
     eval_cache: EvalCache,
 }
@@ -68,20 +110,27 @@ pub fn saturation_threshold(batch_size: usize, max_in_flight: usize) -> usize {
 }
 
 impl GraphInner {
-    fn new(contract_version: u32, max_in_flight: usize, eval_cache_capacity: usize) -> Self {
+    fn new(
+        contract_version: u32,
+        max_in_flight: usize,
+        submitters: usize,
+        eval_cache_capacity: usize,
+    ) -> Self {
         Self {
-            queue: Mutex::new(VecDeque::new()),
+            queue: Mutex::new(GraphQueueState::default()),
             queue_cv: Condvar::new(),
             waiters: Mutex::new(HashMap::with_hasher(FxBuildHasher::default())),
             next_id: AtomicU64::new(1),
             closed: AtomicBool::new(false),
             contract_version,
             max_in_flight,
+            submitters,
+            wakes: WakeCounters::default(),
             eval_cache: EvalCache::new(eval_cache_capacity, EVAL_CACHE_BYTES),
         }
     }
 
-    /// Pop up to `batch_size` requests, waiting at most `max_wait_ms` for the saturation threshold.
+    /// Pop up to `batch_size` requests, waiting at most `max_wait_ms` for the threshold or every submitter.
     fn pop_graph_batch_blocking(
         &self,
         batch_size: usize,
@@ -90,10 +139,19 @@ impl GraphInner {
         let deadline = Instant::now() + Duration::from_millis(max_wait_ms);
         let mut queue = lock_or_recover(&self.queue, None);
         let threshold = saturation_threshold(batch_size, self.max_in_flight);
-        while queue.len() < threshold && !self.closed.load(Ordering::SeqCst) {
+        let wake = loop {
+            if self.closed.load(Ordering::SeqCst) {
+                break &self.wakes.closed;
+            }
+            if queue.requests.len() >= threshold {
+                break &self.wakes.threshold;
+            }
+            if self.submitters > 0 && queue.queued_batches >= self.submitters {
+                break &self.wakes.all_submitted;
+            }
             let now = Instant::now();
             if now >= deadline {
-                break;
+                break &self.wakes.deadline;
             }
             let remaining = deadline.saturating_duration_since(now);
             let (q, _) = self
@@ -101,14 +159,18 @@ impl GraphInner {
                 .wait_timeout(queue, remaining)
                 .unwrap_or_else(PoisonError::into_inner);
             queue = q;
-        }
-        if queue.is_empty() {
+        };
+        if queue.requests.is_empty() {
             return Vec::new();
         }
-        let take = batch_size.min(queue.len());
+        wake.fetch_add(1, Ordering::Relaxed);
+        let take = batch_size.min(queue.requests.len());
         let mut out = Vec::with_capacity(take);
         for _ in 0..take {
-            if let Some(req) = queue.pop_front() {
+            if let Some(req) = queue.requests.pop_front() {
+                if req.ends_batch {
+                    queue.queued_batches = queue.queued_batches.saturating_sub(1);
+                }
                 out.push(req);
             }
         }
@@ -148,7 +210,43 @@ impl GraphQueue {
     #[must_use]
     pub fn with_eval_cache(contract_version: u32, max_in_flight: usize, capacity: usize) -> Self {
         Self {
-            inner: Arc::new(GraphInner::new(contract_version, max_in_flight, capacity)),
+            inner: Arc::new(GraphInner::new(
+                contract_version,
+                max_in_flight,
+                0,
+                capacity,
+            )),
+        }
+    }
+
+    /// A queue whose pop also wakes once each of `submitters` threads has its batch queued (`0`: never).
+    #[must_use]
+    pub fn for_submitters(contract_version: u32, max_in_flight: usize, submitters: usize) -> Self {
+        Self {
+            inner: Arc::new(GraphInner::new(
+                contract_version,
+                max_in_flight,
+                submitters,
+                0,
+            )),
+        }
+    }
+
+    /// The declared submitters (`0` = undeclared).
+    #[must_use]
+    pub fn submitters(&self) -> usize {
+        self.inner.submitters
+    }
+
+    /// Cumulative reasons the non-empty pops returned.
+    #[must_use]
+    pub fn wake_counts(&self) -> WakeCounts {
+        let w = &self.inner.wakes;
+        WakeCounts {
+            threshold: w.threshold.load(Ordering::Relaxed),
+            all_submitted: w.all_submitted.load(Ordering::Relaxed),
+            deadline: w.deadline.load(Ordering::Relaxed),
+            closed: w.closed.load(Ordering::Relaxed),
         }
     }
 
@@ -187,7 +285,11 @@ impl GraphQueue {
         }
         {
             let mut queue = lock_or_recover(&self.inner.queue, None);
-            queue.push_back(PendingGraphRequest { id, graph });
+            queue.push_batch([PendingGraphRequest {
+                id,
+                graph,
+                ends_batch: false,
+            }]);
             self.inner.queue_cv.notify_all();
         }
 
@@ -242,7 +344,11 @@ impl GraphQueue {
         for graph in graphs {
             let id = self.inner.next_id.fetch_add(1, Ordering::SeqCst);
             waiters.push(Arc::new(GraphWaiter::default()));
-            requests.push(PendingGraphRequest { id, graph });
+            requests.push(PendingGraphRequest {
+                id,
+                graph,
+                ends_batch: false,
+            });
         }
         if requests.is_empty() {
             return Vec::new();
@@ -255,9 +361,7 @@ impl GraphQueue {
         }
         {
             let mut queue = lock_or_recover(&self.inner.queue, None);
-            for req in requests {
-                queue.push_back(req);
-            }
+            queue.push_batch(requests);
             // ONE notify for N pushes — see the doc comment.
             self.inner.queue_cv.notify_all();
         }

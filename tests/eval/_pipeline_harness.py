@@ -154,7 +154,7 @@ def graph_engine():
     net.eval()
     engine = LocalInferenceEngine(net, torch.device("cpu"), encoding_spec=spec,
                                   fused_graph_caps=CAPS,
-                                  inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10), max_in_flight=8,
+                                  inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10), max_in_flight=8, submitters=1,
                                   )
     try:
         yield engine, spec

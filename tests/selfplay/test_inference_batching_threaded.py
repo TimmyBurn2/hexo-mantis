@@ -44,7 +44,7 @@ class _Net(torch.nn.Module):
 def _graph_engine(batching: InferenceBatchingSpec, max_in_flight: int) -> LocalInferenceEngine:
     return LocalInferenceEngine(
         _Net(), _CPU, encoding_spec=_GRAPH_SPEC, fused_graph_caps=_CAPS,
-        inference_batching=batching, max_in_flight=max_in_flight, )
+        inference_batching=batching, max_in_flight=max_in_flight, submitters=1, )
 
 
 @pytest.mark.parametrize(
@@ -105,7 +105,7 @@ def test_a_graph_engine_refuses_an_absent_batching_spec() -> None:
     with pytest.raises(ValueError, match="inference_batching"):
         LocalInferenceEngine(
             _Net(), _CPU, encoding_spec=_GRAPH_SPEC, fused_graph_caps=_CAPS,
-            inference_batching=None, max_in_flight=8, )
+            inference_batching=None, max_in_flight=8, submitters=1, )
 
 
 def test_the_resolver_refuses_an_absent_member() -> None:

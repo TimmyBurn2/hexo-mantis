@@ -126,6 +126,7 @@ class MantisBackend:
             fused_graph_caps=resolve_fused_graph_caps(dump) if graph else None,
             inference_batching=resolve_inference_batching(dump) if graph else None,
             max_in_flight=int(config.selfplay.leaf_batch_size),
+            submitters=1,  # one game at a time
             leaf_build_threads=resolve_leaf_build_threads(dump) if graph else 1,
         )
         self.sims = _resolve_sims(preset, int(config.eval.gate.deploy_sims))

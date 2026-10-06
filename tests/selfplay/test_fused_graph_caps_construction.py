@@ -31,6 +31,11 @@ _INFERENCE_LOCAL = _REPO / "src" / "mantis" / "selfplay" / "inference_local.py"
 
 
 class _DummyBatcher:
+    graph_submitters = 0
+
+    def graph_wake_counts(self) -> dict[str, int]:
+        return {"threshold": 0, "all_submitted": 0, "deadline": 0, "closed": 0}
+
     def close(self) -> None:
         return None
 
@@ -86,7 +91,7 @@ def test_fg6_06_the_threaded_caps_reach_the_engines_own_server() -> None:
     caps = FusedGraphCapsSpec(max_fused_edges=1_234_567, max_fused_nodes=89_012)
     engine = LocalInferenceEngine(net, _CPU, encoding_spec=H.GRAPH_SPEC,
                                   fused_graph_caps=caps,
-                                  inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10), max_in_flight=8,
+                                  inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10), max_in_flight=8, submitters=1,
                                   )
     try:
         assert engine._graph_server is not None

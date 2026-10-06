@@ -221,6 +221,11 @@ def test_fg5_04_a_complete_block_resolves_to_the_frozen_pair() -> None:
 
 
 class _DummyBatcher:
+    graph_submitters = 0
+
+    def graph_wake_counts(self) -> dict[str, int]:
+        return {"threshold": 0, "all_submitted": 0, "deadline": 0, "closed": 0}
+
     def close(self) -> None:
         return None
 

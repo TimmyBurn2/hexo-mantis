@@ -12,6 +12,6 @@ pub use eval_cache::{
 };
 pub use graph::{
     build_leaf_graph, build_leaf_graphs_batch, check_leaf_request, saturation_threshold,
-    GraphQueue, LeafRequest,
+    GraphQueue, LeafRequest, WakeCounts,
 };
 pub use wire::{GraphWire, GraphWireArrays, WireAlreadyConsumed};

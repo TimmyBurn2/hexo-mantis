@@ -454,7 +454,7 @@ def test_build_candidate_player_closed_match_refuses_an_unknown_representation()
         fused_graph_caps=CAPS,
         inference_batching=InferenceBatchingSpec(inference_batch_size=64,
                                                  inference_max_wait_ms=10),
-        max_in_flight=8, )
+        max_in_flight=8, submitters=1, )
     try:
         with pytest.raises(EvalDecodeUnsupportedError):
             worker.build_candidate_player(engine, 2, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, gumbel_seed=0, tactics=None, puct=MINTED_PUCT)

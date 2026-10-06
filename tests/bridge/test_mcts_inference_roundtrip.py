@@ -167,6 +167,10 @@ NOT_IN_THE_COMPAT_SURFACE: dict[str, str] = {
                            "it post-dates the compat list and belongs to the fused-graph caps",
     "lock_recoveries": "an instrument counter (poisoned-mutex recoveries), added by the "
                        "lock-recovery repair; nothing in the WP8 surface calls it",
+    "graph_submitters": "a CONSTRUCTION parameter read back: the threads that each block on one "
+                        "batch, from which the submitter wake derives",
+    "graph_wake_counts": "an instrument counter (why each pop returned), the submitter wake's "
+                         "fire count among it; nothing in the WP8 surface calls it",
 }
 
 

@@ -233,7 +233,7 @@ def test_a_cpu_smoke_plays_one_legal_game_from_the_warm_started_net(tmp_path: Pa
         net, torch.device("cpu"), encoding_spec=spec,
         fused_graph_caps=CAPS,
         inference_batching=InferenceBatchingSpec(inference_batch_size=8, inference_max_wait_ms=10),
-        max_in_flight=4, )
+        max_in_flight=4, submitters=1, )
     try:
         def _player() -> Any:
             # `n_sims` is small: a liveness smoke, not a search-quality measurement.

@@ -106,7 +106,7 @@ def _readout(seed: int) -> dict:
         fused_graph_caps=CAPS,
         inference_batching=InferenceBatchingSpec(inference_batch_size=64,
                                                 inference_max_wait_ms=10),
-        max_in_flight=8, )
+        max_in_flight=8, submitters=1, )
     try:
         openings = [
             Opening(opening_id="planted-win", moves=list(_WIN_LINE)),

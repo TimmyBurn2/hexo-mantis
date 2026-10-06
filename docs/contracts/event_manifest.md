@@ -339,6 +339,11 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   `buckets` (the ladder's size), `captured` (buckets captured so far), `replayed_parts` and `eager_parts` (fused parts
   served by a replay and by the eager forward), and over the replayed parts `real_nodes`/`padded_nodes` and
   `real_edges`/`padded_edges` (the padding's volume). Cumulative since server start, visible at 0.
+  The block also carries a `wake` SUB-BLOCK (LAW-18): `submitters` (the threads the batcher was told each block
+  on one whole batch; `0` is undeclared, which is self-play's runner) and, over the non-empty pops, why each returned:
+  `threshold` (the leaf count met the saturation threshold), `all_submitted` (every declared submitter had a batch
+  queued, so no further leaf could arrive: the submitter wake's own fire count), `deadline` and `closed`.
+  Cumulative since server start, visible at 0; self-play reads `all_submitted` 0 by construction.
   And a `compile` SUB-BLOCK (PERF-A4 lever 3, LAW-18): `enabled` (the minted
   `inference.compile_trunk`), `unique_graphs` (Dynamo's own count of distinct compiled graphs
   since process start — a count still climbing after warm-up is the recompile storm the lever's

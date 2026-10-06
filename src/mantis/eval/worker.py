@@ -369,6 +369,7 @@ def _play_gate_block(
         fused_graph_caps=spec.fused_graph_caps,
         inference_batching=spec.inference_batching,
         max_in_flight=spec.leaf_batch_size,
+        submitters=spec.concurrency,
         leaf_build_threads=spec.leaf_build_threads,
         collate_check_period=1,
         collate_dump=_collate_dump_target(spec, progress),
@@ -597,6 +598,8 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
         fused_graph_caps=spec.fused_graph_caps,
         inference_batching=spec.inference_batching,
         max_in_flight=spec.leaf_batch_size,
+        # The gate, the rungs and the serial floor phases share this engine: the widest declares.
+        submitters=max(spec.concurrency, spec.rung_concurrency),
         leaf_build_threads=spec.leaf_build_threads,
         collate_check_period=1,
         collate_dump=_collate_dump_target(spec, progress),

@@ -21,13 +21,12 @@ class LocalInferenceEngine:
     `encoding_spec`, `fused_graph_caps` and `inference_batching` are REQUIRED and keyword-only.
     This class hand-builds its `InferenceServer` config from a dict literal with no `RunConfig`,
     so a default here would be a value nobody minted on the one path with nothing to mint it
-    from. Measured: at the single-stream deploy head (supply 8 against a collector threshold of
-    32) the collector's own deadline is 1.76 of the eval path's 5.30 ms/sim, 33 %.
-    `max_in_flight` is the most graphs the caller can have in flight, and the collector's
-    saturation threshold derives from it.
+    from. `max_in_flight` is the most graphs the caller can have in flight, and the collector's
+    saturation threshold derives from it. `submitters` is the most threads that search on this
+    engine at once: a pop wakes once each has its batch queued, since no further leaf can come.
 
     Raises:
-        ValueError: `inference_batching` is None.
+        ValueError: `inference_batching` is None, or `submitters` is below 1.
     """
 
     def __init__(
@@ -39,6 +38,7 @@ class LocalInferenceEngine:
         fused_graph_caps: FusedGraphCapsSpec | None,
         inference_batching: InferenceBatchingSpec | None,
         max_in_flight: int,
+        submitters: int,
         collate_check_period: int | None = None,
         collate_dump: tuple[str, Callable[[], dict[str, Any]]] | None = None,
         leaf_build_threads: int = 1,
@@ -61,6 +61,11 @@ class LocalInferenceEngine:
         from mantis._engine import InferenceBatcher
         from mantis.selfplay.inference_server import InferenceServer
 
+        if int(submitters) < 1:
+            raise ValueError(
+                f"LocalInferenceEngine: `submitters={submitters}`; an engine is searched by at least "
+                "one thread, and an undeclared count would bring back the deadline wait."
+            )
         if inference_batching is None:
             raise ValueError(
                 "LocalInferenceEngine: `inference_batching=None`, and there is no literal "
@@ -70,7 +75,8 @@ class LocalInferenceEngine:
 
         # THREADED, never guessed: the collector's saturation threshold derives from it.
         self._graph_batcher = InferenceBatcher(
-            encoding_spec=self.encoding_spec, max_in_flight=max_in_flight)
+            encoding_spec=self.encoding_spec, max_in_flight=max_in_flight,
+            submitters=int(submitters))
         # `InferenceHParams.from_config` reads `config["inference"]` and this caller has no
         # `RunConfig`, so the rest are dataclass defaults handed explicitly.
         self._graph_server = InferenceServer(
@@ -99,6 +105,16 @@ class LocalInferenceEngine:
             self._graph_server.join(timeout=5.0)
             self._graph_server = None
             self._graph_batcher = None
+
+    def batch_timing_snapshot(self) -> dict[str, Any]:
+        """The serving loop's batching instrument, the submitter wake's fire count among it.
+
+        Raises:
+            RuntimeError: the engine was closed.
+        """
+        if self._graph_server is None:
+            raise RuntimeError("LocalInferenceEngine.batch_timing_snapshot: the engine was closed")
+        return self._graph_server.batch_timing_snapshot()
 
     def __del__(self) -> None:
         # The ONE sanctioned swallow in this package (census-allowlisted): a raising `__del__`

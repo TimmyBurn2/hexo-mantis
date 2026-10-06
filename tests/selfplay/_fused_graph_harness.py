@@ -188,6 +188,11 @@ class ScriptedGraphBatcher:
         self.failures: list[tuple[list[int], str]] = []
         self.closed = 0
 
+    graph_submitters = 0
+
+    def graph_wake_counts(self) -> dict[str, int]:
+        return {"threshold": 0, "all_submitted": 0, "deadline": 0, "closed": 0}
+
     def next_graph_batch(self, batch_size: int, max_wait_ms: float):
         if not self._pops:
             assert self.server is not None, "the batcher must be bound to its server"
@@ -350,6 +355,11 @@ class CountingGraphBatcher:
         self.failures: list[tuple[list[int], str]] = []
         self.closed = 0
         self.model_version = 0
+
+    graph_submitters = 0
+
+    def graph_wake_counts(self) -> dict[str, int]:
+        return {"threshold": 0, "all_submitted": 0, "deadline": 0, "closed": 0}
 
     def next_graph_batch(self, batch_size: int, max_wait_ms: float):
         if self._wait_s:

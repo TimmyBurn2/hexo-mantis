@@ -227,15 +227,19 @@ fn graph_params(spec: &'static RegistrySpec) -> Result<(u8, u16, i32, u32), Grap
 impl PyInferenceBatcher {
     /// Construct a batcher over `encoding_spec`. `max_in_flight` declares the most graphs
     /// callers can ever have queued at once and the collector's saturation threshold derives
-    /// from it — `0` is UNDECLARED, not a supply of zero.
+    /// from it — `0` is UNDECLARED, not a supply of zero; `submitters` likewise for the wake.
     #[new]
-    #[pyo3(signature = (encoding_spec, max_in_flight = 0))]
-    pub fn new(encoding_spec: PyRegistrySpec, max_in_flight: usize) -> PyResult<Self> {
+    #[pyo3(signature = (encoding_spec, max_in_flight = 0, submitters = 0))]
+    pub fn new(
+        encoding_spec: PyRegistrySpec,
+        max_in_flight: usize,
+        submitters: usize,
+    ) -> PyResult<Self> {
         let spec = encoding_spec.inner();
         let (win_length, radius, trunk_size, contract_version) =
             graph_params(spec).map_err(|e| PyValueError::new_err(e.to_string()))?;
         Ok(Self::from_parts(
-            GraphQueue::with_contract_version_and_supply(contract_version, max_in_flight),
+            GraphQueue::for_submitters(contract_version, max_in_flight, submitters),
             spec.policy_stride(),
             spec.representation.as_str(),
             win_length,
@@ -309,6 +313,23 @@ impl PyInferenceBatcher {
     #[getter]
     fn graph_max_in_flight(&self) -> usize {
         self.graph.max_in_flight()
+    }
+
+    /// The graph queue's declared submitters (`0` = undeclared).
+    #[getter]
+    fn graph_submitters(&self) -> usize {
+        self.graph.submitters()
+    }
+
+    /// Why the graph queue's non-empty pops returned, cumulative, keyed as `WakeCounts`' fields.
+    fn graph_wake_counts(&self) -> HashMap<&'static str, u64> {
+        let w = self.graph.wake_counts();
+        HashMap::from([
+            ("threshold", w.threshold),
+            ("all_submitted", w.all_submitted),
+            ("deadline", w.deadline),
+            ("closed", w.closed),
+        ])
     }
 
     pub fn spawn_mock_graph_games(&self, n_games: usize) -> PyResult<()> {
@@ -788,7 +809,7 @@ mod tests {
 
     #[test]
     fn seam_survives_a_poisoned_in_flight_lock_and_reports() {
-        let b = PyInferenceBatcher::new(PyRegistrySpec::from_static(gnn_spec()), 0)
+        let b = PyInferenceBatcher::new(PyRegistrySpec::from_static(gnn_spec()), 0, 0)
             .expect("the registry's graph row resolves");
         assert_eq!(
             b.lock_recoveries(),
@@ -834,7 +855,7 @@ mod tests {
     fn a_spec_batcher_derives_its_policy_width_from_the_spec() {
         // The sibling of `graph_batcher_reads_graph_params` on the DERIVED policy width.
         let spec = gnn_spec();
-        let b = PyInferenceBatcher::new(PyRegistrySpec::from_static(spec), 0)
+        let b = PyInferenceBatcher::new(PyRegistrySpec::from_static(spec), 0, 0)
             .expect("the registry's graph row resolves");
         assert_eq!(b.representation, "graph");
         assert_eq!(b.policy_len, spec.policy_stride());
@@ -843,7 +864,7 @@ mod tests {
 
     #[test]
     fn graph_batcher_reads_graph_params() {
-        let b = PyInferenceBatcher::new(PyRegistrySpec::from_static(gnn_spec()), 0)
+        let b = PyInferenceBatcher::new(PyRegistrySpec::from_static(gnn_spec()), 0, 0)
             .expect("the registry's graph row resolves");
         assert_eq!(b.representation, "graph");
         // These used to restate the row's own geometry by hand in the test whose subject is
@@ -863,7 +884,7 @@ mod tests {
 
     #[test]
     fn model_version_own_bump_and_get() {
-        let b = PyInferenceBatcher::new(PyRegistrySpec::from_static(gnn_spec()), 0)
+        let b = PyInferenceBatcher::new(PyRegistrySpec::from_static(gnn_spec()), 0, 0)
             .expect("the registry's graph row resolves");
         assert_eq!(b.model_version(), 0);
         assert_eq!(b.bump_model_version(), 1);
