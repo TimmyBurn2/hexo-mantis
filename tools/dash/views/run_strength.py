@@ -63,8 +63,9 @@ def verdict(snap: RunSnapshot) -> tuple[str, str]:
         lines.append(f"Mean of the last {used} cell{'s' if used > 1 else ''}: {signed(mean)} logit over the parent, "
                      f"{'above' if mean > LINE_LOGIT else 'below'} the {signed(LINE_LOGIT)} bar"
                      + "." + ("" if used >= CELLS else f" The rule needs {CELLS} cells; {used} {'is' if used == 1 else 'are'} read."))
-    lines += [f"{esc(r.name)} at {short(r.line[-1].step)}: {signed(r.line[-1].logit - p.logit)} logit over its parent."
-              for r, p in ((r, r.parent) for r in snap.rulers if r is not lead and r.line) if p is not None]
+    lines += [f"{esc(r.name)} at {short(r.line[-1].step)}: {pct(r.line[-1].wr, 1)}, parent {pct(p.wr, 1)}, "
+              f"{signed(r.line[-1].logit - p.logit)} logit." for r, p in ((r, r.parent) for r in snap.rulers if r is not lead and r.line)
+              if p is not None]
     lines += [x for x in (_rule_note(snap).strip(), _ladder_text(snap).strip()) if x]
     return sentence, "<br>".join(lines)
 
@@ -114,7 +115,8 @@ def _marks(snap: RunSnapshot) -> list[tuple[float, str]]:
     return marks
 
 
-def _rule_panel(snaps: Sequence[RunSnapshot], lead: Ruler, xmax: float) -> str:
+def _winrate_panel(snaps: Sequence[RunSnapshot], lead: Ruler, xmax: float) -> str:
+    """One ruler in win rate with its own parent's band, every compared run's twin overlaid; the bar only on the rule's."""
     head = snaps[0]
     title = f"Win rate against {lead.name}"
     dots = [Dots(head.label, "c1", [(float(c.step), c.wr, c.lo, c.hi) for c in lead.line])]
@@ -122,7 +124,8 @@ def _rule_panel(snaps: Sequence[RunSnapshot], lead: Ruler, xmax: float) -> str:
         twin = next((r for r in other.rulers if r.unit == lead.unit), None)
         if twin is not None:
             dots.append(Dots(other.label, RUN_CLASSES[i], [(float(c.step), c.wr, c.lo, c.hi) for c in twin.line]))
-    keys = [Key(x.label, RUN_CLASSES[i], "dot") for i, x in enumerate(snaps)]
+    drawn = {d.name for d in dots}
+    keys = [Key(x.label, RUN_CLASSES[i], "dot", off="" if x.label in drawn else "not read on this ruler") for i, x in enumerate(snaps)]
     refs, lines = [], []
     if lead.parent is not None:
         refs.append(Ref(lead.parent.wr, lead.parent.lo, lead.parent.hi, f"parent {_parent_name(lead.parent)}"))
@@ -140,7 +143,8 @@ def _rule_panel(snaps: Sequence[RunSnapshot], lead: Ruler, xmax: float) -> str:
         keys.append(Key("promotion or ruler change", glyph="mark"))
     chart = Chart(title, lines=lines, dots=dots, refs=refs, marks=marks, y_fmt=lambda v: pct(v), width=400, height=220,
                   y_floor=0.0, y_ceil=1.0, x_domain=(0.0, xmax))
-    definition = f"{lead.label}. Whiskers: 95 % interval. Beats or trails only when the difference's interval excludes 0."
+    definition = ("Report-only. " if not lead.rule and head.rule is not None else "") + (
+        f"{lead.label}. Whiskers: 95 % interval. Beats or trails only when the difference's interval excludes 0.")
     nows = [(pct(d.pts[-1][1]) if d.pts else "", d.cls) for d in dots]
     return figure(title, chart, definition, goal=HIGHER, now=pct(lead.line[-1].wr), nows=nows, keys=keys)
 
@@ -166,7 +170,8 @@ def _logit_panel(head: RunSnapshot, xmax: float, only: str) -> str:
     missing = [r.name for r in head.rulers if r.parent is None] if any(r.parent is not None for r in head.rulers) else []
     definition = "Logit of the win rate minus the parent's on the same ruler, so rulers of different strength share one axis."
     if missing:
-        definition += f" No parent cell on {', '.join(missing)}: table only."
+        definition += (f" No parent cell on {', '.join(missing)}: table only." if len(missing) <= 3
+                       else f" {len(missing)} rulers have no parent cell: table only.")
     goal = Goal("up", "higher is better, 0 is the parent")
     rows = [[r.name, _role(r, declared), num(c.step), pct(c.wr, 1), f"{pct(c.lo, 1)} to {pct(c.hi, 1)}",
              num(c.n) + (f" ({num(c.forfeits)} forfeits left out)" if c.forfeits else ""),
@@ -184,7 +189,7 @@ def _logit_panel(head: RunSnapshot, xmax: float, only: str) -> str:
 
 
 def section(snaps: Sequence[RunSnapshot]) -> tuple[str, str, str]:
-    """The verdict, the aside and the two panels; a run with no cell at all is one stated gap."""
+    """The verdict, the aside, the rule's win rate, every ruler in logit, then each other ruler's win rate; no cell is one gap."""
     head = snaps[0]
     sentence, aside = verdict(head)
     lead = _lead(head.rulers)
@@ -193,4 +198,7 @@ def section(snaps: Sequence[RunSnapshot]) -> tuple[str, str, str]:
                                        gap=("No ruler reading for this run.", "No cell sidecar under the --cells directories."))
     xmax = max([float(x.events.live_steps or 0) for x in snaps] + [float(c.step) for r in head.rulers for c in r.line])
     aside += _compared(snaps, lead)
-    return sentence, aside, _rule_panel(snaps, lead, xmax) + _logit_panel(head, xmax, head.label if len(snaps) > 1 else "")
+    # Every other ruler worth a line gets its own win-rate chart; a lone screen cell with no parent stays in the table.
+    others = "".join(_winrate_panel(snaps, r, xmax) for r in head.rulers
+                     if r is not lead and r.line and (r.parent is not None or len(r.line) > 1))
+    return sentence, aside, _winrate_panel(snaps, lead, xmax) + _logit_panel(head, xmax, head.label if len(snaps) > 1 else "") + others

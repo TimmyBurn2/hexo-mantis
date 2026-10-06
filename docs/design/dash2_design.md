@@ -333,3 +333,8 @@ units.
   A cell whose games are all forfeits, or whose forfeit count spans more games than its reading, is refused by name. The Analyzer picks its two nets from drop-downs grouped by run, names nets by the Run view's
   run label, defaults to the game's own run, steps to the start or end of the line (Home, End), and draws each net's
   turn in its colour: the reading net blue, the compared net orange, a cell both chose split half and half.
+- **2026-10-06, win rates for every ruler (operator's ask).** Beside the rule's ruler, every ruler with a parent cell
+  or more than one cell has its own win-rate chart with its parent's band, marked report-only, any compared run's twin
+  overlaid (a run with no cell on that ruler is named so in the legend). The logit chart stays for reading rulers of
+  different strength on one axis. Each report-only ruler's summary line gives its win rate, its parent's and the logit
+  between them. A lone screen cell with no parent stays in the table.

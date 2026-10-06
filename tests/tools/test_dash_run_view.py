@@ -102,7 +102,8 @@ def test_report_only_rulers_read_in_logit_over_their_own_parent(dash, strength, 
     record = importlib.import_module("dash.readers.record")
     snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), rule="six30_16").poll()
     _, aside, html = strength.section([snap])
-    assert "six455_128.full at 300: +0.65 logit over its parent" in aside
+    assert "six455_128.full at 300: 45.0\u202f%, parent 30.0\u202f%, +0.65 logit." in aside
+    assert "Win rate against six30_16.full" in html and "Win rate against six455_128.full" in html and "Report-only. " in html
     assert "Every ruler against its parent" in html and "six455_128.full, report-only" in html and "six30_16.full, the rule" in html
 
 
