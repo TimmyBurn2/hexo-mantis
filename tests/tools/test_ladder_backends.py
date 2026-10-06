@@ -86,7 +86,7 @@ def test_a_ladder_turn_wakes_on_its_own_submission_never_on_the_collectors_deadl
     backend, _net_hash, _checkpoint = mantis_backend
     backend.new_game("g_1")
     backend.select_turn(_mid_game())
-    wake = backend.serving_rows()["wake"]
+    wake = backend.wake_rows()
     assert wake["all_submitted"] > 0 and wake["deadline"] == 0  # a full round may meet the threshold first
     assert wake["submitters"] == backend.search["collector"]["submitters"] == 1, "the stamp reads the engine's own"
 

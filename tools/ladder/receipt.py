@@ -132,6 +132,9 @@ def validate_receipt(body: Mapping[str, Any]) -> None:
             raise ReceiptError(f"moves[{i}].book_stones {move['book_stones']!r} is not 0, 1 or 2")
         if move["stopped"] not in (0, 1, 2) or move["stopped"] + move["book_stones"] > 2:
             raise ReceiptError(f"moves[{i}].stopped {move['stopped']!r} is not 0..2 searched stones")
+    serving = body["serving"]
+    if serving is not None and not (isinstance(serving, Mapping) and isinstance(serving.get("wake"), Mapping)):
+        raise ReceiptError(f"serving {serving!r} is neither null nor the engine's wake rows")
     if body["result"].get("outcome") not in OUTCOMES:
         raise ReceiptError(f"result.outcome {body['result'].get('outcome')!r} is not one of {OUTCOMES}")
 

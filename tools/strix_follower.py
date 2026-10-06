@@ -158,7 +158,8 @@ def compose_cell(checkpoint: Path, *, unit: str, step: int, games: int, concurre
                  label: str) -> dict[str, Any]:
     """The frontier cell for one checkpoint in one unit: PUCT ours, strix at its sims or Six at its nodes, paired games."""
     ours, theirs, _suffix = UNITS[unit]
-    book = {"opening_book": BOOK_UNITS[unit]} if unit in BOOK_UNITS else {}
+    book = ({"opening_book": BOOK_UNITS[unit], "opening_book_sha256": book_sha256(BOOK_UNITS[unit])}
+            if unit in BOOK_UNITS else {})
     if unit in SIX_UNITS:
         return {"label": label, "candidate": str(checkpoint), "search_kind": "puct", "sims": ours, "opponent": "six",
                 "six_net": SIX_UNITS[unit][0], "six_nodes": theirs, "games": games, "step": step,
@@ -219,7 +220,7 @@ def sidecar_record(checkpoint: Path, *, unit: str, trigger: str, record: Mapping
         "unit": unit, "ours": {"search_kind": "puct", "sims": ours}, **opponent,
         # The book the unit names; null is the config's gate book, which every unit before the arena break played.
         "opening_book": cell.get("opening_book"),
-        "opening_book_sha256": None if cell.get("opening_book") is None else book_sha256(str(cell["opening_book"])),
+        "opening_book_sha256": cell.get("opening_book_sha256"),
         "trigger": trigger, "regime": regime_name, "regime_evidence": dict(regime_evidence),
         "games": readout.get("games"), "eff_n": readout.get("eff_n"), "pairs": readout.get("pairs"),
         "wins": readout.get("wins"), "losses": readout.get("losses"), "draws": readout.get("draws"),

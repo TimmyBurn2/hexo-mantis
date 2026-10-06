@@ -1,6 +1,7 @@
 """A PUCT round refills past table and solver descents to a batch of net leaves, within the budget left."""
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from mantis._engine import Board, MCTSTree
@@ -70,3 +71,14 @@ def test_the_deploy_heads_tree_alone_scores_pending_children_in_the_choosers_fra
                             tactics=None, puct=MINTED_PUCT)
     assert head._fresh_tree().pending_loss_chooser_frame is True
     assert MCTSTree(**MINTED_PUCT.tree_kwargs()).pending_loss_chooser_frame is False
+
+
+def test_the_deploy_head_is_the_only_production_caller_of_the_frame_setter() -> None:
+    """Self-play's trees, the dash's and the ring audit's keep the constructed frame; the bridge only passes it on."""
+    repo = Path(__file__).resolve().parents[2]
+    files = [*(repo / "src").rglob("*.py"), *(repo / "tools").rglob("*.py"), *(repo / "crates").glob("*/src/**/*.rs")]
+    callers = sorted(
+        p.relative_to(repo).as_posix() for p in files
+        if not p.name.endswith("tests.rs") and ".configure_pending_loss_frame(" in p.read_text(encoding="utf-8")
+    )
+    assert callers == ["crates/mantis-bridge/src/mcts.rs", "src/mantis/arena/deploy_head.py"]

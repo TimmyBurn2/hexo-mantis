@@ -96,19 +96,6 @@ pub fn gumbel_search_with_state(
     m: usize,
     c_scale: f32,
 ) -> (MCTSTree, MctxRootState) {
-    gumbel_search_in_frame(board, policy, seed, sims, m, c_scale, false)
-}
-
-/// [`gumbel_search_with_state`] with the tree's pending-loss frame set to `chooser_frame` first.
-pub fn gumbel_search_in_frame(
-    board: &Board,
-    policy: &[f32],
-    seed: u64,
-    sims: usize,
-    m: usize,
-    c_scale: f32,
-    chooser_frame: bool,
-) -> (MCTSTree, MctxRootState) {
     let sigma = QSigma {
         c_visit: C_VISIT,
         c_scale,
@@ -117,7 +104,6 @@ pub fn gumbel_search_in_frame(
     let mut tree = MCTSTree::new(1.5);
     tree.configure_quiescence(false, 0.0);
     tree.configure_search(SearchKind::Gumbel, sigma);
-    tree.configure_pending_loss_frame(chooser_frame);
     tree.new_game(board.clone());
 
     // ONE root leaf, charged against the budget as the self-play drive charges it.

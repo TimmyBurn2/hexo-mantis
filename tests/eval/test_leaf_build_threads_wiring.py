@@ -241,5 +241,8 @@ def test_every_round_result_carries_its_engines_serving_rows() -> None:
             return {"wake": {"submitters": 8, "all_submitted": 3}, "served_graphs": {"bucket_parts": {"1025": 2}},
                     "unverified_graph_builds": 5, "queue_wait": None}
     assert worker.serving_rows(_Engine()) == {"wake": {"submitters": 8, "all_submitted": 3},
-                                              "served_graphs": {"bucket_parts": {"1025": 2}},
-                                              "unverified_graph_builds": 5}
+                                              "served_graphs": {"bucket_parts": {"1025": 2}}}
+    for call in calls:
+        serving = next(k.value for k in call.keywords if k.arg == "serving")
+        keys = {k.value for k in serving.keys if isinstance(k, ast.Constant)}
+        assert "unverified_graph_builds" in keys, "the process's skipped verifies, once per round, on every exit"

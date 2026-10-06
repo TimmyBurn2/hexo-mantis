@@ -18,6 +18,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from mantis._engine import unverified_graph_builds
 from mantis.arena.adjudicate import PlyCapAdjudicator
 from mantis.arena.books import round_openings
 from mantis.arena.deploy_head import DeployHeadPlayer
@@ -550,11 +551,10 @@ def _device(name: str):
 
 
 def serving_rows(engine: LocalInferenceEngine) -> dict[str, Any]:
-    """An engine's serving rows, cumulative: the submitter wake, the bucketed replay and the process's unverified builds.
-    Raises: RuntimeError — the engine was closed."""
+    """An engine's serving levers' rows, cumulative: the submitter wake and the bucketed replay. Raises: RuntimeError —
+    the engine was closed."""
     snap = engine.batch_timing_snapshot()
-    return {"wake": snap["wake"], "served_graphs": snap["served_graphs"],
-            "unverified_graph_builds": snap["unverified_graph_builds"]}
+    return {"wake": snap["wake"], "served_graphs": snap["served_graphs"]}
 
 
 def _round_result(
@@ -651,7 +651,8 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
                     random_result={"games": 0, "wr": None},
                     floor_payload=floor_payload, adjudicator=adjudicator,
                     device_memory=probe.payload(),
-                    serving={"candidate": serving_rows(candidate_engine), "best": None},
+                    serving={"candidate": serving_rows(candidate_engine), "best": None,
+                             "unverified_graph_builds": unverified_graph_builds()},
                 )
 
         gate_t0 = time.monotonic()
@@ -737,7 +738,9 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
             skipped_rungs=skipped_rungs, random_result=random_result,
             floor_payload=floor_payload, adjudicator=adjudicator,
             device_memory=probe.payload(),
-            serving={"candidate": serving_rows(candidate_engine), "best": best_serving},
+            # The skipped verifies are the process's, both engines' and the floor probe's: stamped once, not per engine.
+            serving={"candidate": serving_rows(candidate_engine), "best": best_serving,
+                     "unverified_graph_builds": unverified_graph_builds()},
         )
     finally:
         # Closed and INDEXED on every exit OUT OF THIS TRY (an open shard reads "no games"); a

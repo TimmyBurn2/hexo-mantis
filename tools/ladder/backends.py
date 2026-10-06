@@ -48,17 +48,16 @@ class Backend(Protocol):
 
     def select_turn(self, board: Any, forced: tuple[Cell, ...] = ()) -> TurnResult: ...
 
-    def serving_rows(self) -> dict[str, Any] | None: ...
+    def wake_rows(self) -> dict[str, int] | None: ...
 
     def close(self) -> None: ...
 
 
-def serving_delta(start: Mapping[str, Any] | None, end: Mapping[str, Any] | None) -> dict[str, Any] | None:
-    """The wake counts a game's span added (`submitters` as declared); None when the backend has no rows."""
+def wake_delta(start: Mapping[str, int] | None, end: Mapping[str, int] | None) -> dict[str, int] | None:
+    """The wake counts a game's span added (`submitters` as declared); None for a backend with no engine to read."""
     if start is None or end is None:
         return None
-    wake = {k: (v if k == "submitters" else v - start["wake"].get(k, 0)) for k, v in end["wake"].items()}
-    return {"wake": wake}
+    return {k: (v if k == "submitters" else v - start.get(k, 0)) for k, v in end.items()}
 
 
 def seed_from_game_id(game_id: str) -> int:
@@ -170,7 +169,7 @@ class MantisBackend:
             "q_rescale": self._q_rescale, "gumbel_m": self._gumbel_m,
             "early_stop": LADDER_EARLY_STOP and self._search_kind == "puct", "standalone_host": bool(standalone_host),
             # One game per engine: a pop wakes on the round's own submission, so the deadline is never waited out.
-            "collector": {"submitters": None if batching is None else self._engine.batch_timing_snapshot()["wake"]["submitters"],
+            "collector": {"submitters": self._engine.batch_timing_snapshot()["wake"]["submitters"],
                           "max_wait_ms": None if batching is None else batching.inference_max_wait_ms,
                           "leaf_batch_size": self._leaf_batch_size}}
         self.seed: int | None = None
@@ -194,11 +193,9 @@ class MantisBackend:
         head = self._head
         return _two_stones(head, board, lambda: int(head.last_sims or 0), forced, lambda: head.last_stopped)
 
-    def serving_rows(self) -> dict[str, Any] | None:
-        """The engine's wake rows since it started (why each pop returned); None off the graph path. Raises: RuntimeError."""
-        if self.search["collector"]["submitters"] is None:
-            return None
-        return {"wake": dict(self._engine.batch_timing_snapshot()["wake"])}
+    def wake_rows(self) -> dict[str, int]:
+        """Why each of the engine's pops returned, since it started. Raises: RuntimeError (closed)."""
+        return dict(self._engine.batch_timing_snapshot()["wake"])
 
     def close(self) -> None:
         self._head = None
@@ -256,8 +253,8 @@ class StrixBackend:
         """The fence findings so far: every disagreement between the driver's legal set and ours."""
         return list(self._bot.findings)
 
-    def serving_rows(self) -> None:
-        """The driver runs its own search loop: no serving rows to read."""
+    def wake_rows(self) -> None:
+        """The driver runs its own search loop: no collector to read."""
         return None
 
     def close(self) -> None:

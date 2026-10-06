@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ladder.backends import serving_delta
+from ladder.backends import wake_delta
 from ladder.client import ApiError, LadderClient, MoveRejected
 from ladder.openings import LadderOpening, forced_stones, ladder_opening
 from ladder.receipt import GameReceipt, write_receipt
@@ -69,7 +69,7 @@ class Session:
         self.summary = SessionSummary()
         self._games: dict[str, GameReceipt] = {}
         self._openings: dict[str, LadderOpening] = {}
-        self._serving_at: dict[str, dict[str, Any] | None] = {}
+        self._wake_at: dict[str, dict[str, int] | None] = {}
         self._ordinals: dict[str, int] = {}
         self._account: dict[str, Any] = {}
         self._outgoing: str | None = None
@@ -133,7 +133,7 @@ class Session:
             sims_configured=int(self.backend.sims), search=dict(self.backend.search), started=self.clock(),
             opening=opening.to_record())
         self.backend.new_game(game_id)
-        self._serving_at[game_id] = self.backend.serving_rows()
+        self._wake_at[game_id] = self.backend.wake_rows()
         self.log(f"ladder: {game_id} started, playing {event['side']} vs {opponent.get('displayName')}, "
                  f"opening {opening.index} of {opening.book}")
 
@@ -190,7 +190,7 @@ class Session:
         game_id = str(event["gameId"])
         receipt = self._games.pop(game_id, None)
         self._openings.pop(game_id, None)
-        serving_at = self._serving_at.pop(game_id, None)
+        wake_at = self._wake_at.pop(game_id, None)
         winner, reason = event.get("winner"), str(event.get("reason"))
         if receipt is None:
             self.log(f"ladder: {game_id} finished ({reason}, winner {winner}) but its start was never seen; no receipt")
@@ -201,9 +201,9 @@ class Session:
                 self.log(f"ladder: {game_id}: finished-game record unavailable ({exc}); plies from what we saw")
                 record = None
             # The engine's rows over the game's span: any other game in flight shares the engine.
-            serving = serving_delta(serving_at, self.backend.serving_rows())
+            wake = wake_delta(wake_at, self.backend.wake_rows())
             body = receipt.finish(winner=winner, reason=reason, finished=self.clock(), finished_game=record,
-                                  serving=serving)
+                                  serving=None if wake is None else {"wake": wake})
             path = write_receipt(self.options.work_dir, body)
             self.summary.receipts.append(path)
             outcome = body["result"]["outcome"]

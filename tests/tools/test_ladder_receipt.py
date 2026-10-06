@@ -172,6 +172,9 @@ def test_the_receipt_carries_the_games_serving_rows_and_needs_them_to_read_back(
     rows = {"wake": {"submitters": 1, "threshold": 2, "all_submitted": 9, "deadline": 0, "closed": 0}}
     body = r.finish(serving=rows, winner="o", reason="surrender", finished=1.0, finished_game=None)
     assert body["serving"] == rows
+    for bad in ("x", {"wake": 3}):
+        with pytest.raises(ladder.receipt.ReceiptError, match="serving"):
+            ladder.receipt.validate_receipt({**body, "serving": bad})
     del body["serving"]
     with pytest.raises(ladder.receipt.ReceiptError, match="serving"):
         ladder.receipt.validate_receipt(body)

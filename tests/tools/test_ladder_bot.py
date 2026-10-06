@@ -55,6 +55,9 @@ class _ReplayBackend:
     def new_game(self, game_id: str) -> None:
         return None
 
+    def wake_rows(self) -> None:
+        return None
+
     def select_turn(self, board: Any, forced=()):
         from ladder.backends import TurnResult  # noqa: PLC0415
 

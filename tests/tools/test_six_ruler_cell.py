@@ -11,7 +11,6 @@ import pytest
 from _six_fake import fake_vendor
 from _toolpath import load_module_by_path
 
-from mantis.arena.books import book_sha256
 
 from mantis._engine import Board
 from mantis.bots.six import FINDING_LOG_MARKER, PROVIDER_LOG_MARKER, resolve_six
@@ -110,8 +109,7 @@ def test_an_equal_playout_unit_plays_its_generation_at_256_per_turn_against_128_
                                    **cell}), regime_name="IDLE", regime_evidence={}, run_id="r", started=0.0,
                                    finished=1.0, pin={})
     assert body["opening_book"] == "arena_s20261006_p5" and body["ours"]["sims"] == 128 and body["six"]["nodes"] == 256
-    assert body["opening_book_sha256"] == book_sha256("arena_s20261006_p5")
-    assert len(body["opening_book_sha256"]) == 64, "the book's manifest pin, verified against its file"
+    assert body["opening_book_sha256"] == "364c70c7b010d5cfbe24baa2a0c8eefe47fc3c6f3a5e8f5e572f62a8729a6451"
 
 
 def test_equal_work_on_the_arena_book_is_s_at_its_own_budget(follower) -> None:

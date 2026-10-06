@@ -36,8 +36,8 @@ class _FakeBackend:
     def new_game(self, game_id: str) -> None:
         self.games.append(game_id)
 
-    def serving_rows(self) -> dict[str, Any]:
-        return {"wake": {"submitters": 1, "all_submitted": len(self.seen), "deadline": 0}}
+    def wake_rows(self) -> dict[str, int]:
+        return {"submitters": 1, "all_submitted": len(self.seen), "deadline": 0}
 
     def select_turn(self, board: Any, forced=()):
         from ladder.backends import TurnResult  # noqa: PLC0415 — the package is loaded by the `ladder` fixture

@@ -352,7 +352,8 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   Cumulative since server start, visible at 0; self-play reads `all_submitted` 0 by construction.
   The block also carries `unverified_graph_builds`: the PROCESS's leaf builds, since it started, that skipped the
   builder's own contract verify (a deploy engine whose collate runs check 14 on every batch before its launch). Self-play's
-  process reads 0; an eval worker's `serving` rows carry it, one process count shared by both its engines.
+  process reads 0; an eval round's result carries it once as `serving.unverified_graph_builds` (the eval process's
+  count over both its engines and the floor probe), never in a per-engine row.
   And a `compile` SUB-BLOCK (PERF-A4 lever 3, LAW-18): `enabled` (the minted
   `inference.compile_trunk`), `unique_graphs` (Dynamo's own count of distinct compiled graphs
   since process start — a count still climbing after warm-up is the recompile storm the lever's

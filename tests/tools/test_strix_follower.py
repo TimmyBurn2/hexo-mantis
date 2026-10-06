@@ -93,6 +93,7 @@ def _follower(mod, run: Path, cells: _FakeCells, **kw):
 
 # triggers
 
+
 def test_triggers_are_cadence_multiples_and_promotions_only(follower_mod) -> None:
     rows = [
         {"event": "periodic_checkpoint_save", "step": 15000, "path": "/x/a.ckpt"},
@@ -137,7 +138,6 @@ def test_the_cli_default_is_promotions_on_and_no_promotions_switches_it_off(foll
     assert seen == [True, False, True]
 
 
-
 def test_a_book_unit_plays_its_whole_book_by_default_and_follows_at_no_other_count(follower_mod, monkeypatch,
                                                                                     tmp_path: Path) -> None:
     """The arena protocol is every opening twice, sides swapped; a smaller cell is a --once screen."""
@@ -154,6 +154,7 @@ def test_a_book_unit_plays_its_whole_book_by_default_and_follows_at_no_other_cou
     assert seen == [whole, 128]
     with pytest.raises(SystemExit):
         follower_mod.main([*base, *unit, "--follow", "--games", "288"])
+
 
 def test_the_tail_reads_only_new_lines_and_follows_a_new_segment(follower_mod, tmp_path: Path) -> None:
     run = _run_dir(tmp_path)
@@ -173,6 +174,7 @@ def test_the_tail_reads_only_new_lines_and_follows_a_new_segment(follower_mod, t
 
 
 # the producer test: planted event -> fires once; planted duplicate -> not twice
+
 
 def test_a_planted_cadence_event_fires_one_cell_and_writes_the_sidecar(follower_mod, tmp_path: Path) -> None:
     run = _run_dir(tmp_path)
