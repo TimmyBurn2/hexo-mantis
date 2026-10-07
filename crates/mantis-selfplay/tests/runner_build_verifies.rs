@@ -10,7 +10,6 @@ use mantis_graph::unverified_builds;
 use mantis_search::SearchKind;
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
-#[allow(dead_code)]
 mod common;
 
 const LEAF_BATCH: usize = 8;
