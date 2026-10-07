@@ -158,7 +158,7 @@ def _winrate_panel(snaps: Sequence[RunSnapshot], ruler: Ruler, xmax: float, lead
     chart = Chart(title, lines=lines, dots=dots, refs=refs, marks=marks, y_fmt=lambda v: pct(v), width=400, height=220,
                   y_floor=0.0, y_ceil=1.0, x_domain=(0.0, xmax))
     role = _role(ruler, head.rule is not None)
-    lead_in = "Report-only. " if role == "report-only" else f"{role[0].upper()}{role[1:]}. " if ruler.rule_until is not None else ""
+    lead_in = "Report-only. " if role == "report-only" else "" if ruler.rule or ruler.rule_until is None else f"T{role[1:]}. "
     definition = lead_in + f"{ruler.label}. Whiskers: 95 % interval." + (
         " Beats or trails only when the difference's interval excludes 0." if lead else "")
     nows = [(pct(t.line[-1].wr) if t is not None else "", RUN_CLASSES[i]) for i, t in enumerate(twins)]

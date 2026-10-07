@@ -62,3 +62,19 @@ def read(path: Path | None) -> Ladder | None:
     return Ladder(current=str(current) if isinstance(current, str) and current else None, streak=_int(raw.get("streak")),
                   changes=tuple(sorted(changes, key=lambda c: c.step)), cells=len(history),
                   note="read" if not notes else "read, but " + "; ".join(notes))
+
+
+def parse_rule(text: str) -> tuple[str, tuple[Change, ...]]:
+    """`UNIT[,UNIT@STEP…]`: the unit the rule reads now, and each switch from the unit before it. Raises: ValueError, naming the rule."""
+    units: list[str] = []
+    switches: list[Change] = []
+    for part in text.split(","):
+        unit, at, step = part.partition("@")
+        if not unit or bool(at) != bool(units) or (at and not (step.isascii() and step.isdigit())):
+            raise ValueError(f"the rule {text!r} wants UNIT[,UNIT@STEP…], its first unit without a step")
+        if units:
+            if int(step) <= (switches[-1].step if switches else 0) or unit == units[-1]:
+                raise ValueError(f"the rule {text!r} must switch at rising steps above 0, each time to another unit")
+            switches.append(Change(int(step), units[-1], unit))
+        units.append(unit)
+    return units[-1], tuple(switches)

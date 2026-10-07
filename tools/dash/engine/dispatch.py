@@ -1,6 +1,7 @@
 """The dispatcher: an engine registry and `handle(request) -> {status, body}`; no threads, no HTTP, one stated fallback."""
 from __future__ import annotations
 
+from collections import OrderedDict
 from typing import Any
 
 from .analysis import analyze
@@ -10,6 +11,8 @@ from .position import PositionRefused, parse_moves
 from .strix import StrixEngine, StrixRefused, strix_info
 
 OPS = ("engines", "analyze", "trace")
+#: Loaded engines kept at once; the least recently used one is closed past this, as new saves keep becoming the default.
+MAX_LOADED = 4
 #: The Board strix's card is built with when no mantis engine is loaded: the pinned rung's own fence (radius 8).
 STRIX_FALLBACK_ENCODING = "gnn_axis_r8"
 #: What a stamp or a net can raise while loading; each becomes a 503 naming the type, never a 500.
@@ -28,12 +31,20 @@ class Dispatcher:
         self._fixed = [strix_info()] if strix else []
         self.refresh(infos)
         self._device, self._threads = device, threads
-        self._loaded: dict[str, Any] = {}
+        self._loaded: OrderedDict[str, Any] = OrderedDict()
 
     def refresh(self, infos: list[EngineInfo]) -> None:
-        """Re-list the nets (a loaded engine stays cached); the registry is swapped whole, so a reader sees one list or the other."""
+        """Re-list the nets; a loaded engine stays cached. The list and its index are one attribute, swapped in one store."""
         rows = list(infos) + self._fixed
-        self.infos, self._by_id = rows, {info.id: info for info in rows}
+        self._registry = (rows, {info.id: info for info in rows})
+
+    @property
+    def infos(self) -> list[EngineInfo]:
+        """Every listed engine, in discovery order."""
+        return self._registry[0]
+
+    def _info(self, engine_id: str) -> EngineInfo | None:
+        return self._registry[1].get(engine_id)
 
     def rows(self) -> list[dict[str, Any]]:
         """`/engines`: every row as a dict (a strix row's `note` is its availability); touches no engine."""
@@ -41,6 +52,7 @@ class Dispatcher:
 
     def _engine(self, info: EngineInfo) -> Any:
         if info.id in self._loaded:
+            self._loaded.move_to_end(info.id)
             return self._loaded[info.id]
         if info.kind == SNAPSHOT_GAP:
             raise EngineLoadError(f"{info.id}: {info.note}")
@@ -55,6 +67,8 @@ class Dispatcher:
         except _LOAD_FAILURES as exc:
             raise EngineLoadError(f"{info.id}: {type(exc).__name__}: {exc}") from None
         self._loaded[info.id] = engine
+        while len(self._loaded) > MAX_LOADED:
+            self._loaded.popitem(last=False)[1].close()
         return engine
 
     def handle(self, request: dict[str, Any]) -> dict[str, Any]:
@@ -65,7 +79,7 @@ class Dispatcher:
             return {"status": 200, "body": {"engines": self.rows()}}
         if op not in OPS:
             return refusal(seq, 404, f"unknown op {op!r}; the ops are {', '.join(OPS)}")
-        info = self._by_id.get(str(request.get("engine")))
+        info = self._info(str(request.get("engine")))
         if info is None:
             return refusal(seq, 404, f"unknown engine {request.get('engine')!r}; see /engines")
         try:
@@ -98,4 +112,4 @@ class Dispatcher:
         self._loaded.clear()
 
 
-__all__ = ["OPS", "STRIX_FALLBACK_ENCODING", "Dispatcher", "refusal"]
+__all__ = ["MAX_LOADED", "OPS", "STRIX_FALLBACK_ENCODING", "Dispatcher", "refusal"]

@@ -103,3 +103,32 @@ def test_a_save_written_after_the_start_is_listed_on_the_next_refresh(dash, disp
     disp.refresh(engines.discover([d]))
     assert [r["step"] for r in disp.rows()] == [100, 200]
     assert disp.handle({"op": "analyze", "engine": "run9_00000200_feedf00d", "moves": "", "sims": 0, "seq": 1})["status"] == 503
+
+
+class _Fake:
+    closed: list[str] = []
+
+    def __init__(self, info, **_kw) -> None:
+        self.id = info.id
+
+    def close(self) -> None:
+        _Fake.closed.append(self.id)
+
+
+def test_a_refresh_keeps_loaded_engines_and_the_strix_row_and_the_cache_evicts_the_oldest(dash, dispatch, tmp_path, monkeypatch):
+    engines = importlib.import_module("dash.engine.engines")
+    monkeypatch.setattr(dispatch, "MantisEngine", _Fake)
+    d = tmp_path / "checkpoints"
+    d.mkdir()
+    names = [f"run9_{100 * k:08d}_deadbeef" for k in range(1, dispatch.MAX_LOADED + 2)]
+    (d / f"{names[0]}.ckpt").write_bytes(b"")
+    disp = dispatch.Dispatcher(engines.discover([d]), device="cpu", threads=1, strix=True)
+    first = disp._engine(disp._info(names[0]))  # noqa: SLF001
+    for name in names[1:]:
+        (d / f"{name}.ckpt").write_bytes(b"")
+    disp.refresh(engines.discover([d]))
+    assert "strix" in [r["id"] for r in disp.rows()] and disp._engine(disp._info(names[0])) is first  # noqa: SLF001
+    _Fake.closed.clear()
+    for name in names[1:]:
+        disp._engine(disp._info(name))  # noqa: SLF001
+    assert _Fake.closed == [names[0]]

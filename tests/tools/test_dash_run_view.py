@@ -279,11 +279,34 @@ def test_a_rule_switch_is_marked_its_former_rule_named_and_their_bridge_stated(d
     sidecar(cells, "r1", 300, 0.78)
     for step, wr in ((300, 0.30), (600, 0.33)):
         sidecar(cells, "r1", step, wr, suffix="ladder455_n16.full", unit="ladder455_n16", six={**_G455, "nodes": 16})
-    record, sc = importlib.import_module("dash.readers.record"), importlib.import_module("dash.readers.sidecars")
-    rule, switches = sc.parse_rule("six30_16,ladder455_n16@450")
+    record, ladder = importlib.import_module("dash.readers.record"), importlib.import_module("dash.readers.ladder")
+    rule, switches = ladder.parse_rule("six30_16,ladder455_n16@450")
     snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), rule=rule, switches=switches).poll()
     sentence, aside, html = strength.section([snap])
     assert "on ladder455_n16.full (the rule)" in sentence
     assert "The rule moved from six30_16 to ladder455_n16 at 450; bridge 300: 78\u202f% on six30_16, 30\u202f% on ladder455_n16." in aside
     assert "rule six30_16 → ladder455_n16 at 450" in html and "Win rate against six30_16.full" in html
     assert "The rule before 450. " in _figure(html, "Win rate against six30_16.full") and "the rule before 450" in html
+
+
+def test_right_after_a_switch_the_former_rule_leads_and_the_new_one_is_named_unread(dash, strength, tmp_path):
+    cells = tmp_path / "cells"
+    sidecar(cells, "r1", 150, 0.75)
+    sidecar(cells, "r1", 300, 0.78)
+    record, ladder = importlib.import_module("dash.readers.record"), importlib.import_module("dash.readers.ladder")
+    rule, switches = ladder.parse_rule("six30_16,ladder455_n16@450")
+    snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), rule=rule, switches=switches).poll()
+    sentence, aside = strength.verdict(snap)
+    assert "on six30_16.full (the rule before 450)" in sentence and "reads ladder455_n16, which has no cell yet" in aside
+    assert "no checkpoint read on both units yet" in aside and "Mean of the last" not in aside
+
+
+def test_a_rule_back_on_a_former_unit_reads_as_the_rule_with_no_former_lead_in(dash, strength, tmp_path):
+    cells = tmp_path / "cells"
+    for step in (150, 300):
+        sidecar(cells, "r1", step, 0.75)
+    record, ladder = importlib.import_module("dash.readers.record"), importlib.import_module("dash.readers.ladder")
+    rule, switches = ladder.parse_rule("six30_16,ladder455_n16@100,six30_16@200")
+    snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), rule=rule, switches=switches).poll()
+    _, _, html = strength.section([snap])
+    assert "The rule. " not in html and "(the rule)" in strength.verdict(snap)[0]

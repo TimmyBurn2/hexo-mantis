@@ -344,6 +344,7 @@ units.
   resume put the rule on the node ladder).** `--rule-unit ID=UNIT[,UNIT@STEP…]`: the rule reads the last unit, and each
   earlier unit is labelled "the rule before STEP" (no bar, no going-forward line); each switch is marked on the x axis
   and the summary names its bridge, the latest checkpoint read on both units, the way the ladder's rung changes are. The
-  opening book is part of a unit's identity (one unit name read on two books is two series) and the label names it. The
-  follower's `ladder455_n*` sidecars are read beside the six and strix ones. The Analyzer re-lists its checkpoint
-  directories on every engines read, so a save that lands while the server runs is offered without a restart.
+  rule's going-forward read counts only its cells from the last switch on (a re-read of an earlier save on the new unit
+  stays in the line, outside the read). The opening book is part of a unit's identity (one unit name read on two books
+  is two series) and the label names it. The Analyzer re-lists its checkpoint directories on every engines read, so a
+  save that lands while the server runs is offered without a restart, and keeps at most four nets loaded.

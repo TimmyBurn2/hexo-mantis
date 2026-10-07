@@ -1,6 +1,7 @@
 """The Analyzer's desk: the engines behind the one analyst thread, a position read by one net and compared with another."""
 from __future__ import annotations
 
+import logging
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -13,6 +14,8 @@ from .serve import Hub
 from .views import analyzer as analyzer_view
 from .views.analyzer_text import Turn, compose
 from .views.games import turn_facts
+
+_LOG = logging.getLogger(__name__)
 
 #: How long a request waits on the analyst before it is answered 504, and the deepest search a request may ask for.
 TIMEOUT_SEC = 120.0
@@ -52,15 +55,19 @@ class Desk:
         from .analyst import Analyst
         from .engine.dispatch import Dispatcher
         from .engine.engines import discover
-        self._checkpoints, self._discover = checkpoints, discover
+        self._checkpoints, self._discover, self._listing = checkpoints, discover, threading.Lock()
         self.dispatcher = Dispatcher(discover(checkpoints) if checkpoints else [], device=device, threads=threads, strix=strix)
         self.analyst = Analyst(self.dispatcher.handle, timeout_sec=TIMEOUT_SEC, on_stop=self.dispatcher.close)
         self.analyst.start()
 
     def rows(self) -> list[dict[str, Any]]:
-        """The engine rows, re-listed so a save that landed since shows; no engine is touched. Raises: OSError."""
+        """The engine rows, re-listed so a save that landed since shows (a failed listing keeps the last); no engine is touched."""
         if self._checkpoints:
-            self.dispatcher.refresh(self._discover(self._checkpoints))
+            with self._listing:
+                try:
+                    self.dispatcher.refresh(self._discover(self._checkpoints))
+                except OSError:
+                    _LOG.exception("re-listing the checkpoints failed; the previous list stays")
         return self.dispatcher.rows()
 
     def default_pair(self, run_id: str | None = None) -> tuple[str | None, str | None]:

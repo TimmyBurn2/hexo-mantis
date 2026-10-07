@@ -240,23 +240,24 @@ def _ladder16() -> dict:
     ("six30_16", "six30_16", []),
     ("six30_16,ladder455_n16@177000,ladder455_n128@200000", "ladder455_n128",
      [(177000, "six30_16", "ladder455_n16"), (200000, "ladder455_n16", "ladder455_n128")])])
-def test_a_rule_reads_as_its_unit_now_and_the_switches_before_it(sc, text, current, switches):
-    now, moved = sc.parse_rule(text)
+def test_a_rule_reads_as_its_unit_now_and_the_switches_before_it(ladder, text, current, switches):
+    now, moved = ladder.parse_rule(text)
     assert now == current and [(c.step, c.frm, c.to) for c in moved] == switches
 
 
-@pytest.mark.parametrize("text", ["", "a@5", "a,b", "a,b@x", "a,b@0", "a,b@200,c@100", "a,a@100", "a,@100", "a,,b@9"])
-def test_a_malformed_rule_is_refused_by_name(sc, text):
-    with pytest.raises(ValueError, match="rule"):
-        sc.parse_rule(text)
+@pytest.mark.parametrize("text", ["", "a@5", "a,b", "a,b@x", "a,b@0", "a,b@200,c@100", "a,a@100", "a,@100", "a,,b@9",
+                                  "a,b@\u00b2", "a,b@\u0661\u0660\u0660"])
+def test_a_malformed_rule_is_refused_by_name(ladder, text):
+    with pytest.raises(ValueError, match="the rule"):
+        ladder.parse_rule(text)
 
 
-def test_a_rule_switch_marks_the_former_rule_until_its_step_and_lists_it_second(sc, tmp_path):
+def test_a_rule_switch_marks_the_former_rule_until_its_step_and_lists_it_second(sc, ladder, tmp_path):
     sidecar(tmp_path, "r1", 168000, 0.78)
     sidecar(tmp_path, "r1", 168000, 0.23, suffix="six455_128.full", **_six455(128))
     sidecar(tmp_path, "r1", 177000, 0.31, suffix="ladder455_n16.full", **_ladder16())
     cells, _ = sc.load([tmp_path])
-    listed, matches = sc.rulers(cells, "r1", None, *sc.parse_rule("six30_16,ladder455_n16@177000"))
+    listed, matches = sc.rulers(cells, "r1", None, *ladder.parse_rule("six30_16,ladder455_n16@177000"))
     assert matches == 1 and [(r.name, r.rule, r.rule_until) for r in listed] == [
         ("ladder455_n16.full", True, None), ("six30_16.full", False, 177000), ("six455_128.full", False, None)]
 
@@ -267,3 +268,63 @@ def test_two_opening_books_are_two_instruments_and_the_label_names_the_book(sc, 
     cells, _ = sc.load([tmp_path])
     listed, _ = sc.rulers(cells, "r1", None, None)
     assert len(listed) == 2 and sorted("arena_p5 openings" in r.label for r in listed) == [False, True]
+
+
+def test_the_reader_loads_standalone_the_way_the_ladder_tool_loads_it(monkeypatch):
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[2] / "tools" / "dash" / "readers" / "sidecars.py"
+    spec = importlib.util.spec_from_file_location("sidecars_standalone", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, module)
+    spec.loader.exec_module(module)
+    assert callable(module.rulers) and callable(module.load)
+
+
+def test_a_former_rule_naming_two_series_marks_both(sc, ladder, tmp_path):
+    sidecar(tmp_path, "r1", 36000, 0.76)
+    sidecar(tmp_path, "r1", 39000, 0.50, six={**SIX, "commit": "newpin"})
+    sidecar(tmp_path, "r1", 177000, 0.31, suffix="ladder455_n16.full", **_ladder16())
+    cells, _ = sc.load([tmp_path])
+    listed, _ = sc.rulers(cells, "r1", None, *ladder.parse_rule("six30_16,ladder455_n16@177000"))
+    assert [r.rule_until for r in listed] == [None, 177000, 177000]
+
+
+def test_the_rules_going_forward_read_counts_only_cells_from_its_switch(sc, ladder, tmp_path):
+    for step, wr in ((108000, 0.30), (156000, 0.34), (177000, 0.29), (180000, 0.31)):
+        sidecar(tmp_path, "r1", step, wr, suffix="ladder455_n16.full", **_ladder16())
+    sidecar(tmp_path, "p0", 45000, 0.17, suffix="ladder455_n16.full", **_ladder16())
+    cells, _ = sc.load([tmp_path])
+    lead = sc.rulers(cells, "r1", PARENT, *ladder.parse_rule("six30_16,ladder455_n16@177000"))[0][0]
+    mean, used = lead.going_forward
+    assert lead.rule_since == 177000 and used == 2 and mean == pytest.approx((_logit(0.29) + _logit(0.31)) / 2 - _logit(0.17))
+
+
+def test_former_rules_are_listed_most_recent_first(sc, ladder, tmp_path):
+    sidecar(tmp_path, "r1", 3000, 0.7)
+    sidecar(tmp_path, "r1", 6000, 0.4, suffix="six455_128.full", **_six455(128))
+    sidecar(tmp_path, "r1", 9000, 0.3, suffix="ladder455_n16.full", **_ladder16())
+    cells, _ = sc.load([tmp_path])
+    listed, _ = sc.rulers(cells, "r1", None, *ladder.parse_rule("six455_128,six30_16@5000,ladder455_n16@8000"))
+    assert [(r.name, r.rule_until) for r in listed] == [
+        ("ladder455_n16.full", None), ("six30_16.full", 8000), ("six455_128.full", 5000)]
+
+
+def test_a_parent_read_on_another_book_never_anchors_the_line(sc, tmp_path):
+    sidecar(tmp_path, "r1", 3000, 0.31, suffix="ladder455_n16.full", **_ladder16())
+    other = {**_ladder16(), "opening_book": "book_v1", "opening_book_sha256": "aaaa1111"}
+    sidecar(tmp_path, "p0", 45000, 0.17, suffix="ladder455_n16.full", **other)
+    cells, _ = sc.load([tmp_path])
+    (only,), _ = sc.rulers(cells, "r1", PARENT, "ladder455_n16")
+    assert only.parent is None and only.going_forward is None
+
+
+def test_no_book_and_a_null_book_are_one_series(sc, tmp_path):
+    sidecar(tmp_path, "r1", 3000, 0.60)
+    sidecar(tmp_path, "r1", 6000, 0.62, opening_book=None, opening_book_sha256=None)
+    cells, _ = sc.load([tmp_path])
+    (only,), _ = sc.rulers(cells, "r1", None, None)
+    assert [c.step for c in only.line] == [3000, 6000] and "openings" not in only.label

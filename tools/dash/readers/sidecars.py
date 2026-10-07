@@ -7,9 +7,10 @@ import math
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from .ladder import Change
+if TYPE_CHECKING:  # the ladder tool loads this file alone, outside the package
+    from .ladder import Change
 
 #: The sidecars the follower writes beside a checkpoint: `<ckpt>.six30_16[.arm].json`, `<ckpt>.strix256[_r6].json`,
 #: `<ckpt>.ladder455_n16[.arm].json`; a test holds every follower unit to these.
@@ -198,34 +199,20 @@ class Ruler:
     parent: Cell | None
     rule: bool
     rule_until: int | None = None
+    rule_since: int | None = None
 
     @property
     def going_forward(self) -> tuple[float, int] | None:
-        """`(mean logit of the last cells − the parent's logit, cells used)`, or None without a parent or a cell."""
-        if self.parent is None or not self.line:
+        """`(mean logit of the last cells since the rule moved here − the parent's logit, cells used)`, or None."""
+        ruled = [c for c in self.line if self.rule_since is None or c.step >= self.rule_since]
+        if self.parent is None or not ruled:
             return None
-        last = self.line[-CELLS:]
+        last = ruled[-CELLS:]
         return sum(c.logit for c in last) / len(last) - self.parent.logit, len(last)
 
 
 def _tag(unit: tuple[str, ...]) -> str:
     return hashlib.sha256("|".join(unit).encode()).hexdigest()[:6]
-
-
-def parse_rule(text: str) -> tuple[str, tuple[Change, ...]]:
-    """`UNIT[,UNIT@STEP…]`: the unit the rule reads now, and each switch from the unit before it. Raises: ValueError, naming the rule."""
-    units: list[str] = []
-    switches: list[Change] = []
-    for part in text.split(","):
-        unit, at, step = part.partition("@")
-        if not unit or bool(at) != bool(units) or (at and not step.isdigit()):
-            raise ValueError(f"the rule {text!r} wants UNIT[,UNIT@STEP…], its first unit without a step")
-        if units:
-            if int(step) <= (switches[-1].step if switches else 0) or unit == units[-1]:
-                raise ValueError(f"the rule {text!r} must switch at rising steps above 0, each time to another unit")
-            switches.append(Change(int(step), units[-1], unit))
-        units.append(unit)
-    return units[-1], tuple(switches)
 
 
 def rulers(cells: list[Cell], run_id: str, parent_stem: str | None, rule: str | None,
@@ -243,7 +230,7 @@ def rulers(cells: list[Cell], run_id: str, parent_stem: str | None, rule: str | 
         return [k for k, own in by_unit.items() if u is not None and u in (own[0].name, own[0].unit_field)]
 
     matched = named(rule)
-    until = {former[0]: s.step for s in switches if len(former := named(s.frm)) == 1}
+    until = {former: s.step for s in switches for former in named(s.frm)}
     out = []
     for unit, own in by_unit.items():
         head = own[0]
@@ -251,8 +238,9 @@ def rulers(cells: list[Cell], run_id: str, parent_stem: str | None, rule: str | 
         name = head.name if names[head.name] == 1 else f"{head.name} #{_tag(unit)}"
         out.append(Ruler(name=name, unit_field=head.unit_field, family=head.family, unit=unit, label=head.label,
                          line=tuple(sorted(own, key=lambda c: c.step)), parent=parent,
-                         rule=len(matched) == 1 and unit == matched[0], rule_until=until.get(unit)))
-    return tuple(sorted(out, key=lambda r: (not r.rule, r.rule_until is None, r.family != "six", r.name))), len(matched)
+                         rule=len(matched) == 1 and unit == matched[0], rule_until=until.get(unit),
+                         rule_since=switches[-1].step if switches and unit in matched else None))
+    return tuple(sorted(out, key=lambda r: (not r.rule, -(r.rule_until or -1), r.family != "six", r.name))), len(matched)
 
 
 def bridges(cells: list[Cell], run_id: str, units: tuple[str, str]) -> list[tuple[Cell, Cell]]:

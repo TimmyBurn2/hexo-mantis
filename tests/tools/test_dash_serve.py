@@ -188,3 +188,12 @@ def test_a_label_with_a_space_round_trips_through_its_own_links(serve, record, t
     hub.poll_once()
     assert serve.route_get(hub, "/").location == "/run/run%20eleven"
     assert serve.route_get(hub, "/run/run%20eleven").status == 200
+
+
+def test_a_rule_switch_flag_reads_into_the_record_and_a_bad_one_names_the_rule(dash, tmp_path):
+    cli = importlib.import_module("dash.cli")
+    run = _run(tmp_path)
+    (rec,) = cli.records_of(cli.build_parser().parse_args(["serve", "--run", f"r1={run}", "--rule-unit", "r1=a,b@5"]))
+    assert rec.rule == "b" and [(c.step, c.frm, c.to) for c in rec.switches] == [(5, "a", "b")]
+    with pytest.raises(SystemExit, match="the rule 'a,b@0'"):
+        cli.records_of(cli.build_parser().parse_args(["serve", "--run", f"r1={run}", "--rule-unit", "r1=a,b@0"]))
