@@ -5,7 +5,7 @@
 # delta: identity.encoding: gnn_axis_v1 -> gnn_axis_r8
 # delta: allocator_posture: null -> expandable_segments
 # delta: inference.fused_graph_caps: {max_fused_edges: 57149441, max_fused_nodes: 1785921} -> {max_fused_edges: 1373143, max_fused_nodes: 56645}
-# delta: selfplay.n_workers: 1 -> 32
+# delta: selfplay.n_workers: 1 -> 48
 # delta: selfplay.max_game_moves: 128 -> 256
 # delta: selfplay.playout_cap.full_search_prob: 0.0 -> 0.25
 # delta: selfplay.playout_cap.n_sims_full: 50 -> 320
@@ -39,6 +39,7 @@
 # delta: selfplay.search.tactics: null -> {kind: strict_turn, leaf_turns: 3, leaf_nodes: 256, root_turns: 8, root_nodes: 20000, audit: {turns: 8, nodes: 2000, k: 4, m: 4, total_nodes: 40000}}
 # delta: deploy.search.tactics: null -> {kind: strict_turn, leaf_turns: 3, leaf_nodes: 256, root_turns: 8, root_nodes: 20000, audit: {turns: 8, nodes: 2000, k: 4, m: 4, total_nodes: 40000}}
 # delta: train.value_mask_redraw_p: 0.0 -> 0.125
+# delta: train.lr_cycle: null -> {start_step: 174008, lr: 0.0005, eta_min: 0.0001, t_max: 54000}
 # delta: eval.round_timeout_sec: 3600.0 -> 14400.0
 # delta: identity.arch_kind: null -> GnnArchV2SoftPolicy
 # delta: identity.warm_start: null -> {checkpoint: checkpoints/run8/run8_00045000_3bdedf76.ckpt, net_hash: 3aef78834b042d333400f12f6afb15e41cb716712f84386297bfbb1dd4126f42, reinit: [aux_policy_head]}
@@ -117,7 +118,11 @@ train:
   lr_schedule: cosine
   scheduler_t_max: 108000
   eta_min: 0.0001
-  lr_cycle: null
+  lr_cycle:
+    start_step: 174008
+    lr: 0.0005
+    eta_min: 0.0001
+    t_max: 54000
   checkpoint_interval: 3000
   actor_sync_cadence_steps: 50
   ema:
@@ -171,7 +176,7 @@ selfplay:
         k: 4
         m: 4
         total_nodes: 40000
-  n_workers: 32
+  n_workers: 48
   leaf_batch_size: 8
   max_game_moves: 256
   c_visit: 50.0
