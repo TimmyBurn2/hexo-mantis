@@ -118,13 +118,23 @@ and are folded in here, because a reader of any ladder reading needs them:
   and an illegal stone returns itself, both for the arena to FORFEIT, each counted and logged under
   `six_forfeit_finding`; a bot logs its searches and stale second stones under `six_engine_closed`
   when it closes. Its regime key reads `six:gen0030@16`. `tools/strix_follower.py` plays it as the `six30_16` unit (ours PUCT-256; `--once`,
-  or `--follow` on the same triggers as the equal-work unit, which with it are the two ruler units),
+  or `--follow` on the same triggers as the equal-work unit; the follower's `FOLLOW_UNITS` are the rulers),
   through `tools/strength_frontier.py`'s `six` cell (`six_net`, `six_nodes`). Its receipt is
   `<ckpt>.six30_16.json`, the strix receipt's fields with a `six` block in place of `strix` — the
   pin's commit, the engine, network and runtime sha256s the engines re-verified at start, the generation, the
   nodes, `cache_entries`, the provider, the engine starts, the searches and the stale second stones,
   all read off the child's log — and `six_findings`, the forfeits. A cell whose engines played any
   other bytes than the pin's, or more than one engine, runtime or network, writes `.failed.json`, not a receipt. The dash reads it as its own ruler beside strix's (the DASH-2 amendment).
+- **The ruler of record (R387; one rung, by the operator's word pending the architect's ratification).** The units
+  `ladder455_n{16,32,64,128,256,512}` play ours PUCT at 128 per stone against Six gen455 at N `go nodes` per turn on
+  the arena book `arena_s20261006_p5` (288 openings drawn by the arena's protocol, each twice with sides swapped: a cell
+  is 576 games; a smaller `--once` cell is a screen with its own receipt `<ckpt>.<unit>.screen<games>.<arm>.json`, so a
+  screen never stands for, or blocks, the save's cell). The series reads ONE rung: 16 first, stepping to 128 then 256
+  when two consecutive saves read above 0.7 there, never down; at a step the parent and the anchor are re-read at the
+  new rung, which counts after one move-identical re-read. `tools/ruler_ladder.py` reads a save's rung, and N50 between
+  two adjacent rungs as a report row only. S stays the second ruler: its arena unit `equal_work_arena` plays strix's net
+  on the GPU (the `<stem>@cuda` variant in strix's own `.venv-cuda`, `make vendor.strix.cuda`), measured move-identical
+  to the CPU on 580 games; every S unit on record before the break stays on the CPU.
 - **Vendoring.** External engines are pinned by commit sha in `vendor/pins.toml` and fetched
   by `make vendor`, which CLONES and does not build. A pin's release assets (each a url and a
   sha256; an archive with `unpack`, a member of one with `from`) are fetched only by
@@ -190,5 +200,9 @@ row says so and names what does run.
 | the follower fires ONE equal-work cell per cadence checkpoint and per promotion read off the event stream, a planted duplicate fires nothing, a promotion waits for its checkpoint, a failed cell leaves no receipt, the sidecar carries unit + regime + the net's hash and the checkpoint bytes are untouched | `tests/tools/test_strix_follower.py` | yes (the cell runner is a recording double; the unit's RoundSpec is composed through the real frontier) |
 | a strix cell composes the rung at the pinned checkpoint with its own sims and the candidate's on `rung_model_sims`; a production round refuses a strix job by name | `tests/tools/test_strength_frontier.py`, `tests/eval/test_strix_rung_sims.py` | yes |
 | each tactics arm resolves the one block or is refused by name; an arm's ruler cell arms the candidate only and writes its own receipt, whose `tactics` section carries the arm, the block, the sides it armed, the module hash and the summed rows with the proofs a game did not bear out; the dash reads an arm as its own unit, never on another's line | `tests/config/test_search_tactics.py`, `tests/tools/test_strength_frontier.py`, `tests/tools/test_strix_follower.py`, `tests/tools/test_dash_sidecars.py`; the gate pair's deploy-matched arming through the real worker, `tests/eval/test_game_record_eval_channel.py::test_an_armed_round_arms_both_gate_sides_and_every_record_carries_the_candidates_rows` | yes (the cell runner is a recording double; the worker round is real) |
+| a ladder rung composes gen455 at its nodes against 128 per stone on the arena book, and a book unit's screen writes its own receipt | `tests/tools/test_six_ruler_cell.py::test_a_ladder_rung_plays_gen455_at_its_nodes_per_turn_against_128_per_stone_on_the_arena_book`, `::test_a_screen_of_a_book_unit_never_shares_the_whole_book_cells_receipt` |
+| the ladder reader refuses a screen or a CI-less cell; N50 is flat, inverted or extrapolated by name | `tests/tools/test_ruler_ladder.py` |
+| GPU S carries `device` on the driver's load only for `@cuda`, the arena S unit asks for it and the units on record do not | `tests/tools/test_strix_gpu_cell.py` |
+| every follower unit's receipt matches a glob the dash reads | `tests/tools/test_dash_sidecars.py::test_every_follower_unit_writes_a_sidecar_the_dash_reads` |
 | the six30_16 unit composes the six cell; its receipt carries the generation, the nodes, the provider, the counters, the forfeits and the engine, network and runtime bytes the engines verified, and a cell that played other bytes is a failed cell; the real producer's log lines read back through the frontier; `--follow` reads the two ruler units only; the dash reads the rung as its own series | `tests/tools/test_six_ruler_cell.py` | yes (the cell runner is a double; the producer round trip runs the real `mantis.bots.six` against a fake engine) |
 | the REAL vendored strix plays 20 legal games end to end at the pinned commit | `tests/bots/test_strix_adapter.py::test_the_live_driver_plays_twenty_legal_games_end_to_end` | **no** — `@pytest.mark.integration`; LOUD SKIP naming the missing step without the vendored venv and checkpoint |

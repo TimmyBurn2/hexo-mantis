@@ -78,13 +78,19 @@ tests/test_protected_set_pins.py fails if a named test stops existing.
   backed the value, the net, the table or the solver, and the witness pins all three cases) —
   `crates/mantis-selfplay/tests/served_sims_exact.rs::both_kinds_serve_exactly_sixty_four`,
   `crates/mantis-selfplay/tests/served_sims_exact.rs::r8_at_fifty_sims_serves_exactly_fifty_per_search`,
-  `tests/arena/test_deploy_head_budget_spent.py::test_every_kind_spends_exactly_its_budget`
+  `tests/arena/test_deploy_head_budget_spent.py::test_every_kind_spends_exactly_its_budget`;
+  ANNOTATED by R386(d): where a consumer switches the budget-aware early stop on (the ladder alone), the witness is
+  `last_sims == n` or a fired stop with the visit leader fixed —
+  `tests/arena/test_deploy_head_early_stop.py::test_a_stop_fires_only_with_the_leader_fixed_and_is_counted`,
+  `tests/arena/test_deploy_head_early_stop.py::test_every_consumer_states_its_switch`
 - the suite's conformance sections (tests/model/conformance/ and the search-kind suite) —
   `tests/model/conformance/test_conformance_roster_guard.py::test_a_SHRUNKEN_roster_is_refused`,
   `crates/mantis-search/tests/search_kind_conformance.rs::a_gumbel_round_is_exactly_the_halving_phase_wide`
 - 1-in-1 collate checks —
   `tests/eval/test_f816_37_instrument.py::test_every_collate_path_asks_for_one_in_one`,
-  `tests/eval/test_f816_37_instrument.py::test_period_one_runs_the_semantic_layer_on_every_batch`
+  `tests/eval/test_f816_37_instrument.py::test_period_one_runs_the_semantic_layer_on_every_batch`;
+  ANNOTATED by R386(d)'s #5(b): checks 15 and 16 run in the Rust pack on every batch, whatever the period —
+  `tests/selfplay/test_pack_legal_and_slot_checks.py::test_checks_15_and_16_refuse_every_batch_whatever_the_canary`
 - arena legality —
   `tests/arena/test_legality_boundary.py::test_a_candidate_playing_off_the_legal_set_forfeits_and_the_move_is_not_applied`,
   `tests/arena/test_legality_boundary.py::test_an_opening_that_does_not_replay_is_a_fatal_corpus_error`

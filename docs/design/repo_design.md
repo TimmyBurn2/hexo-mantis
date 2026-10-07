@@ -1294,3 +1294,21 @@ retired their tools (2026-10-05).
 
 The ruling number is R386(a) (2026-10-06), which admitted it docs-only; box A's display is admitted read-only
 at the lowest priority, with no GPU.
+
+### AMENDMENT — R386(c), R387, DEPLOY-1: the instrument breaks once to arena openings, a Six gen455 rung and GPU S
+
+**The instrument of record moves, once** (DEPLOY-1, 2026-10-06/07). §SIX-RUNG's "`--follow` reads the two ruler units"
+is superseded: the follower's `FOLLOW_UNITS` are the rulers.
+
+1. **Openings.** The cell book is `arena_s20261006_p5`: 288 openings drawn by the arena's own protocol
+   (`tools/openings/arena_draw.py`, a draw-for-draw port of its `opening.ts` with its 16 test cases mirrored), each
+   played twice with sides swapped. `book_v1` stays for re-reads of the cells on record.
+2. **The ruler of record.** Six gen455 at N `go nodes` per turn against ours PUCT at 128 per stone, units
+   `ladder455_n{16..512}`. R387 ruled two bracketing rungs and N50; its screen read 16 to 128 nearly flat (0.344 to
+   0.242 at run11@156k), so by the operator's word, pending the architect, the series reads ONE rung, 16 first, stepping
+   to 128 then 256 on two consecutive saves above 0.7, never down. N50 survives as a report row in
+   `tools/ruler_ladder.py`.
+3. **S on the GPU.** The arena S unit plays strix's net on the GPU through strix's own `cuda` dependency group in a
+   `.venv-cuda` beside its CPU venv (`make vendor.strix.cuda`), named by a `<stem>@cuda` variant. On #13's 576-game cell
+   it was move-identical to the CPU, game for game, at ~9x the speed; the S units on record before the break stay on
+   the CPU. The ladder VPS is out of the instrument's reckoning: nothing runs there until a net is finished.
