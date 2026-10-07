@@ -271,3 +271,19 @@ def test_many_parentless_rulers_are_counted_and_no_rule_means_no_report_only_mar
     _, _, bare = strength.section(_rulers_snap(dash, tmp_path / "bare", rule=None))
     assert "Report-only. " not in bare
 
+
+
+def test_a_rule_switch_is_marked_its_former_rule_named_and_their_bridge_stated(dash, strength, tmp_path):
+    cells = tmp_path / "cells"
+    sidecar(cells, "r1", 150, 0.75)
+    sidecar(cells, "r1", 300, 0.78)
+    for step, wr in ((300, 0.30), (600, 0.33)):
+        sidecar(cells, "r1", step, wr, suffix="ladder455_n16.full", unit="ladder455_n16", six={**_G455, "nodes": 16})
+    record, sc = importlib.import_module("dash.readers.record"), importlib.import_module("dash.readers.sidecars")
+    rule, switches = sc.parse_rule("six30_16,ladder455_n16@450")
+    snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), rule=rule, switches=switches).poll()
+    sentence, aside, html = strength.section([snap])
+    assert "on ladder455_n16.full (the rule)" in sentence
+    assert "The rule moved from six30_16 to ladder455_n16 at 450; bridge 300: 78\u202f% on six30_16, 30\u202f% on ladder455_n16." in aside
+    assert "rule six30_16 → ladder455_n16 at 450" in html and "Win rate against six30_16.full" in html
+    assert "The rule before 450. " in _figure(html, "Win rate against six30_16.full") and "the rule before 450" in html

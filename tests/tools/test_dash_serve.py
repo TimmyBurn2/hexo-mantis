@@ -157,7 +157,7 @@ def test_the_server_binds_loopback_by_default(dash):
 
 
 @pytest.mark.parametrize("argv", [["serve", "--run", "nolabel"], ["serve", "--run", "a=/x", "--records", "b=/y"],
-                                  ["freeze", "--out", "o.html"]])
+                                  ["freeze", "--out", "o.html"], ["serve", "--run", "a=/x", "--rule-unit", "a=u,v@0"]])
 def test_a_malformed_input_is_refused_by_name(dash, argv):
     cli = importlib.import_module("dash.cli")
     with pytest.raises(SystemExit):

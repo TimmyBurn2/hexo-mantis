@@ -126,3 +126,16 @@ def test_two_nets_with_one_name_are_told_apart(text):
     a["engine"]["sha8"], b["engine"]["sha8"] = "aaaa1111", "bbbb2222"
     panel = text.compose(a, b, None, None, None)
     assert panel["a"] != panel["b"] and "aaaa1111" in panel["a"] and "does not block" in panel["verdict"]
+
+
+def test_the_desk_lists_a_save_that_lands_after_it_was_built(dash, tmp_path):
+    desk_mod = importlib.import_module("dash.desk")
+    d = tmp_path / "checkpoints"
+    d.mkdir()
+    (d / "run9_00000100_deadbeef.ckpt").write_bytes(b"")
+    desk = desk_mod.Desk([d], strix=False, device="cpu", threads=1)
+    try:
+        (d / "run9_00000200_feedf00d.ckpt").write_bytes(b"")
+        assert [r["step"] for r in desk.rows()] == [100, 200] and desk.default_pair("run9")[0] == "run9_00000200_feedf00d"
+    finally:
+        desk.close()

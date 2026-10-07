@@ -25,10 +25,15 @@ class Dispatcher:
     """Owns the engines (loaded on first use, cached) and answers one request at a time on the calling thread."""
 
     def __init__(self, infos: list[EngineInfo], *, device: str, threads: int | None, strix: bool = False) -> None:
-        self.infos = list(infos) + ([strix_info()] if strix else [])
-        self._by_id = {info.id: info for info in self.infos}
+        self._fixed = [strix_info()] if strix else []
+        self.refresh(infos)
         self._device, self._threads = device, threads
         self._loaded: dict[str, Any] = {}
+
+    def refresh(self, infos: list[EngineInfo]) -> None:
+        """Re-list the nets (a loaded engine stays cached); the registry is swapped whole, so a reader sees one list or the other."""
+        rows = list(infos) + self._fixed
+        self.infos, self._by_id = rows, {info.id: info for info in rows}
 
     def rows(self) -> list[dict[str, Any]]:
         """`/engines`: every row as a dict (a strix row's `note` is its availability); touches no engine."""

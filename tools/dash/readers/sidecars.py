@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .ladder import Change
+
 #: The sidecars the follower writes beside a checkpoint: `<ckpt>.six30_16[.arm].json`, `<ckpt>.strix256[_r6].json`,
 #: `<ckpt>.ladder455_n16[.arm].json`; a test holds every follower unit to these.
 GLOBS = ("*.six*.json", "*.strix*.json", "*.ladder*.json")
@@ -101,8 +103,9 @@ def parse(path: Path, raw: Any) -> Cell | None:
     if step is None or wr is None or n is None or not isinstance(ours, dict):
         return None
     arm, tactics = _tactics(raw)
-    field = str(raw.get("unit"))
-    common = (field, str(ours.get("search_kind")), str(ours.get("sims")), tactics)
+    field, book = str(raw.get("unit")), raw.get("opening_book")
+    # The openings are part of the instrument: one unit name over two books is two series.
+    common = (field, str(ours.get("search_kind")), str(ours.get("sims")), tactics, str(raw.get("opening_book_sha256") or book))
     if isinstance(six, dict):
         family = "six"
         unit = ("six", *common, str(six.get("commit")), str(six.get("net_sha256")), str(six.get("nodes")))
@@ -116,6 +119,8 @@ def parse(path: Path, raw: Any) -> Cell | None:
                  f"{strix.get('solver', 'on')}" + ("" if strix.get("radius") is None else f", radius {strix.get('radius')}"))
     else:
         return None
+    if book:
+        label += f". On {book} openings"
     stem = str(raw.get("checkpoint") or path.name.split(".ckpt")[0]).split(".ckpt")[0]
     lo, hi = _num(raw.get("wr_ci_lower")), _num(raw.get("wr_ci_upper"))
     findings = raw.get("six_findings") if family == "six" else None
@@ -182,7 +187,7 @@ def load(dirs: Iterable[Path]) -> tuple[list[Cell], list[str]]:
 
 @dataclass(frozen=True)
 class Ruler:
-    """One unit's series for one run: its cells by step, the parent's cell in the same unit, whether the run's rule reads it."""
+    """One unit's series for one run: its cells by step, its parent's cell, whether the rule reads it, when a switch moved it off."""
 
     name: str
     unit_field: str
@@ -192,6 +197,7 @@ class Ruler:
     line: tuple[Cell, ...]
     parent: Cell | None
     rule: bool
+    rule_until: int | None = None
 
     @property
     def going_forward(self) -> tuple[float, int] | None:
@@ -206,8 +212,25 @@ def _tag(unit: tuple[str, ...]) -> str:
     return hashlib.sha256("|".join(unit).encode()).hexdigest()[:6]
 
 
-def rulers(cells: list[Cell], run_id: str, parent_stem: str | None, rule: str | None) -> tuple[tuple[Ruler, ...], int]:
-    """Every unit as its own series (same-named units told apart by a hash), and how many units the rule names: it marks only one."""
+def parse_rule(text: str) -> tuple[str, tuple[Change, ...]]:
+    """`UNIT[,UNIT@STEP…]`: the unit the rule reads now, and each switch from the unit before it. Raises: ValueError, naming the rule."""
+    units: list[str] = []
+    switches: list[Change] = []
+    for part in text.split(","):
+        unit, at, step = part.partition("@")
+        if not unit or bool(at) != bool(units) or (at and not step.isdigit()):
+            raise ValueError(f"the rule {text!r} wants UNIT[,UNIT@STEP…], its first unit without a step")
+        if units:
+            if int(step) <= (switches[-1].step if switches else 0) or unit == units[-1]:
+                raise ValueError(f"the rule {text!r} must switch at rising steps above 0, each time to another unit")
+            switches.append(Change(int(step), units[-1], unit))
+        units.append(unit)
+    return units[-1], tuple(switches)
+
+
+def rulers(cells: list[Cell], run_id: str, parent_stem: str | None, rule: str | None,
+           switches: tuple[Change, ...] = ()) -> tuple[tuple[Ruler, ...], int]:
+    """Every unit as its own series (same-named ones told apart by a hash), and how many units the rule names: it marks only one."""
     by_unit: dict[tuple[str, ...], list[Cell]] = {}
     for c in cells:
         if c.run_id == run_id:
@@ -215,7 +238,12 @@ def rulers(cells: list[Cell], run_id: str, parent_stem: str | None, rule: str | 
     names: dict[str, int] = {}
     for own in by_unit.values():
         names[own[0].name] = names.get(own[0].name, 0) + 1
-    matched = [u for u, own in by_unit.items() if rule is not None and rule in (own[0].name, own[0].unit_field)]
+
+    def named(u: str | None) -> list[tuple[str, ...]]:
+        return [k for k, own in by_unit.items() if u is not None and u in (own[0].name, own[0].unit_field)]
+
+    matched = named(rule)
+    until = {former[0]: s.step for s in switches if len(former := named(s.frm)) == 1}
     out = []
     for unit, own in by_unit.items():
         head = own[0]
@@ -223,8 +251,8 @@ def rulers(cells: list[Cell], run_id: str, parent_stem: str | None, rule: str | 
         name = head.name if names[head.name] == 1 else f"{head.name} #{_tag(unit)}"
         out.append(Ruler(name=name, unit_field=head.unit_field, family=head.family, unit=unit, label=head.label,
                          line=tuple(sorted(own, key=lambda c: c.step)), parent=parent,
-                         rule=len(matched) == 1 and unit == matched[0]))
-    return tuple(sorted(out, key=lambda r: (not r.rule, r.family != "six", r.name))), len(matched)
+                         rule=len(matched) == 1 and unit == matched[0], rule_until=until.get(unit)))
+    return tuple(sorted(out, key=lambda r: (not r.rule, r.rule_until is None, r.family != "six", r.name))), len(matched)
 
 
 def bridges(cells: list[Cell], run_id: str, units: tuple[str, str]) -> list[tuple[Cell, Cell]]:

@@ -90,3 +90,16 @@ def test_help_shows_both_subcommands(dash, capsys):
     with pytest.raises(SystemExit) as exc:
         cli.main(["--help"])
     assert exc.value.code == 0 and "once" in capsys.readouterr().out
+
+
+def test_a_save_written_after_the_start_is_listed_on_the_next_refresh(dash, dispatch, tmp_path):
+    engines = importlib.import_module("dash.engine.engines")
+    d = tmp_path / "checkpoints"
+    d.mkdir()
+    (d / "run9_00000100_deadbeef.ckpt").write_bytes(b"")
+    disp = dispatch.Dispatcher(engines.discover([d]), device="cpu", threads=1)
+    (d / "run9_00000200_feedf00d.ckpt").write_bytes(b"")
+    assert [r["step"] for r in disp.rows()] == [100]
+    disp.refresh(engines.discover([d]))
+    assert [r["step"] for r in disp.rows()] == [100, 200]
+    assert disp.handle({"op": "analyze", "engine": "run9_00000200_feedf00d", "moves": "", "sims": 0, "seq": 1})["status"] == 503

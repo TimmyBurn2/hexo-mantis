@@ -52,13 +52,15 @@ class Desk:
         from .analyst import Analyst
         from .engine.dispatch import Dispatcher
         from .engine.engines import discover
-        infos = discover(checkpoints) if checkpoints else []
-        self.dispatcher = Dispatcher(infos, device=device, threads=threads, strix=strix)
+        self._checkpoints, self._discover = checkpoints, discover
+        self.dispatcher = Dispatcher(discover(checkpoints) if checkpoints else [], device=device, threads=threads, strix=strix)
         self.analyst = Analyst(self.dispatcher.handle, timeout_sec=TIMEOUT_SEC, on_stop=self.dispatcher.close)
         self.analyst.start()
 
     def rows(self) -> list[dict[str, Any]]:
-        """The engine rows; no engine is touched."""
+        """The engine rows, re-listed so a save that landed since shows; no engine is touched. Raises: OSError."""
+        if self._checkpoints:
+            self.dispatcher.refresh(self._discover(self._checkpoints))
         return self.dispatcher.rows()
 
     def default_pair(self, run_id: str | None = None) -> tuple[str | None, str | None]:

@@ -229,3 +229,41 @@ def test_strix_on_another_device_is_another_series(sc, tmp_path):
                   strix={**json.loads(cpu.read_text(encoding="utf-8"))["strix"], "device": "cuda"})
     a, b = (sc.parse(p, json.loads(p.read_text(encoding="utf-8"))) for p in (cpu, gpu))
     assert a is not None and b is not None and a.unit != b.unit
+
+
+def _ladder16() -> dict:
+    return {"unit": "ladder455_n16", "ours": {"search_kind": "puct", "sims": 128}, "opening_book": "arena_p5",
+            "opening_book_sha256": "364c70c7", "six": {**SIX, "generation": 455, "nodes": 16, "net_sha256": "g455"}}
+
+
+@pytest.mark.parametrize(("text", "current", "switches"), [
+    ("six30_16", "six30_16", []),
+    ("six30_16,ladder455_n16@177000,ladder455_n128@200000", "ladder455_n128",
+     [(177000, "six30_16", "ladder455_n16"), (200000, "ladder455_n16", "ladder455_n128")])])
+def test_a_rule_reads_as_its_unit_now_and_the_switches_before_it(sc, text, current, switches):
+    now, moved = sc.parse_rule(text)
+    assert now == current and [(c.step, c.frm, c.to) for c in moved] == switches
+
+
+@pytest.mark.parametrize("text", ["", "a@5", "a,b", "a,b@x", "a,b@0", "a,b@200,c@100", "a,a@100", "a,@100", "a,,b@9"])
+def test_a_malformed_rule_is_refused_by_name(sc, text):
+    with pytest.raises(ValueError, match="rule"):
+        sc.parse_rule(text)
+
+
+def test_a_rule_switch_marks_the_former_rule_until_its_step_and_lists_it_second(sc, tmp_path):
+    sidecar(tmp_path, "r1", 168000, 0.78)
+    sidecar(tmp_path, "r1", 168000, 0.23, suffix="six455_128.full", **_six455(128))
+    sidecar(tmp_path, "r1", 177000, 0.31, suffix="ladder455_n16.full", **_ladder16())
+    cells, _ = sc.load([tmp_path])
+    listed, matches = sc.rulers(cells, "r1", None, *sc.parse_rule("six30_16,ladder455_n16@177000"))
+    assert matches == 1 and [(r.name, r.rule, r.rule_until) for r in listed] == [
+        ("ladder455_n16.full", True, None), ("six30_16.full", False, 177000), ("six455_128.full", False, None)]
+
+
+def test_two_opening_books_are_two_instruments_and_the_label_names_the_book(sc, tmp_path):
+    sidecar(tmp_path, "r1", 3000, 0.60)
+    sidecar(tmp_path, "r1", 6000, 0.50, opening_book="arena_p5", opening_book_sha256="364c70c7")
+    cells, _ = sc.load([tmp_path])
+    listed, _ = sc.rulers(cells, "r1", None, None)
+    assert len(listed) == 2 and sorted("arena_p5 openings" in r.label for r in listed) == [False, True]

@@ -8,6 +8,7 @@ from pathlib import Path
 
 from . import analyzer_routes
 from . import desk as desk_mod
+from .readers import sidecars
 from .readers.events import EmptyRunRecord
 from .readers.record import RunRecord
 from .routes import GET
@@ -34,8 +35,9 @@ def _inputs(p: argparse.ArgumentParser) -> None:
     p.add_argument("--records", action="append", metavar="ID=DIR", help="the run monitor's records for that label")
     p.add_argument("--cells", action="append", type=Path, default=[], metavar="DIR",
                    help="a directory searched for cell sidecars (<ckpt>.six30_16*.json, <ckpt>.strix*.json); repeatable")
-    p.add_argument("--rule-unit", action="append", metavar="ID=UNIT",
-                   help="the ruler that run's pre-registered rule reads (a sidecar's unit); every other ruler is report-only")
+    p.add_argument("--rule-unit", action="append", metavar="ID=UNIT[,UNIT@STEP…]",
+                   help="the ruler that run's pre-registered rule reads (a sidecar's unit), and each later one from the step "
+                        "the rule moved to it; every other ruler is report-only")
     p.add_argument("--ladder", action="append", metavar="ID=FILE", help="that run's ruler-ladder state file")
 
 
@@ -78,11 +80,16 @@ def records_of(args: argparse.Namespace) -> list[RunRecord]:
     rules = {raw.partition("=")[0]: raw.partition("=")[2] for raw in args.rule_unit or [] if raw.partition("=")[1]}
     if len(rules) != len(args.rule_unit or []):
         raise SystemExit("--rule-unit wants ID=UNIT")
+    try:
+        schedules = {label: sidecars.parse_rule(text) for label, text in rules.items()}
+    except ValueError as exc:
+        raise SystemExit(f"--rule-unit: {exc}") from None
     for flag, given in (("--records", monitor), ("--ladder", ladders), ("--rule-unit", rules)):
         unknown = sorted(set(given) - set(runs))
         if unknown:
             raise SystemExit(f"{flag} names no served run: {', '.join(unknown)}")
-    return [RunRecord(label, path, monitor.get(label), tuple(args.cells), rule=rules.get(label), ladder_file=ladders.get(label))
+    return [RunRecord(label, path, monitor.get(label), tuple(args.cells), rule=schedules[label][0] if label in schedules else None,
+                      switches=schedules[label][1] if label in schedules else (), ladder_file=ladders.get(label))
             for label, path in runs.items()]
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from ..readers.ladder import Change
 from ..readers.record import RunSnapshot
 from ..readers.sidecars import CELLS, LINE_LOGIT, Cell, Ruler
 from .charts import HIGHER, RUN_CLASSES, Goal, Key, figure, table
@@ -16,7 +17,11 @@ _RULER_CLASSES = ("c1", "c3", "cf", "cf")
 
 
 def _role(r: Ruler, declared: bool) -> str:
-    return "the rule" if r.rule else "report-only" if declared else "no rule declared"
+    if r.rule:
+        return "the rule"
+    if r.rule_until is not None:
+        return f"the rule before {short(r.rule_until)}"
+    return "report-only" if declared else "no rule declared"
 
 
 def _rule_note(snap: RunSnapshot) -> str:
@@ -67,6 +72,7 @@ def verdict(snap: RunSnapshot) -> tuple[str, str]:
               + (f" ({num(r.line[-1].forfeits)} Six forfeits left out)" if r.line[-1].forfeits else "")
               + f", parent {pct(p.wr, 1)}, {signed(r.line[-1].logit - p.logit)} logit over the parent."
               for r, p in ((r, r.parent) for r in snap.rulers if r is not lead and r.line) if p is not None]
+    lines += [f"The rule moved from {esc(c.frm)} to {esc(c.to)} at {short(c.step)}{_bridge(c, pairs)}" for c, pairs in snap.switches]
     lines += [x for x in (_rule_note(snap).strip(), _ladder_text(snap).strip()) if x]
     return sentence, "<br>".join(lines)
 
@@ -104,13 +110,16 @@ def _ladder_text(snap: RunSnapshot) -> str:
     if rungs.note != "read":
         text += f" The ladder file {esc(rungs.note[len('read, but '):])}."
     for change, pairs in snap.bridges:
-        text += f" Moved up from {esc(change.frm)} to {esc(change.to)} at {short(change.step)}"
-        if pairs:
-            a, b = pairs[-1]
-            text += f"; bridge {short(a.step)}: {pct(a.wr)} on {esc(change.frm)}, {pct(b.wr)} on {esc(change.to)}."
-        else:
-            text += "; no checkpoint read on both rungs yet."
+        text += f" Moved up from {esc(change.frm)} to {esc(change.to)} at {short(change.step)}{_bridge(change, pairs)}"
     return text
+
+
+def _bridge(change: Change, pairs: tuple[tuple[Cell, Cell], ...]) -> str:
+    """The latest checkpoint read on both units of a change, or that none is yet."""
+    if not pairs:
+        return "; no checkpoint read on both units yet."
+    a, b = pairs[-1]
+    return f"; bridge {short(a.step)}: {pct(a.wr)} on {esc(change.frm)}, {pct(b.wr)} on {esc(change.to)}."
 
 
 def _marks(snap: RunSnapshot) -> list[tuple[float, str]]:
@@ -118,6 +127,7 @@ def _marks(snap: RunSnapshot) -> list[tuple[float, str]]:
              if r.get("promoted") is True and isinstance(r.get("step"), int)]
     if snap.ladder is not None:
         marks += [(float(c.step), f"ruler {c.frm} → {c.to} at {num(c.step)}") for c in snap.ladder.changes]
+    marks += [(float(c.step), f"rule {c.frm} → {c.to} at {num(c.step)}") for c, _ in snap.switches]
     return marks
 
 
@@ -148,7 +158,8 @@ def _winrate_panel(snaps: Sequence[RunSnapshot], ruler: Ruler, xmax: float, lead
     chart = Chart(title, lines=lines, dots=dots, refs=refs, marks=marks, y_fmt=lambda v: pct(v), width=400, height=220,
                   y_floor=0.0, y_ceil=1.0, x_domain=(0.0, xmax))
     role = _role(ruler, head.rule is not None)
-    definition = ("Report-only. " if role == "report-only" else "") + f"{ruler.label}. Whiskers: 95 % interval." + (
+    lead_in = "Report-only. " if role == "report-only" else f"{role[0].upper()}{role[1:]}. " if ruler.rule_until is not None else ""
+    definition = lead_in + f"{ruler.label}. Whiskers: 95 % interval." + (
         " Beats or trails only when the difference's interval excludes 0." if lead else "")
     nows = [(pct(t.line[-1].wr) if t is not None else "", RUN_CLASSES[i]) for i, t in enumerate(twins)]
     return figure(title, chart, definition, goal=HIGHER, now=pct(ruler.line[-1].wr), nows=nows, keys=keys)

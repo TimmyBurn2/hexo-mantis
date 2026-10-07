@@ -340,3 +340,10 @@ units.
   one axis; a ruler with no parent cell is not drawn there, which its caption says. Each report-only ruler's summary
   line gives its win rate (with any Six forfeits left out stated), its parent's and the logit between them. A single
   cell with no parent stays in the table.
+- **2026-10-07, the rule moves with the ruling (operator's ask, after run11's cycle-2 resume and the fresh line's
+  resume put the rule on the node ladder).** `--rule-unit ID=UNIT[,UNIT@STEP…]`: the rule reads the last unit, and each
+  earlier unit is labelled "the rule before STEP" (no bar, no going-forward line); each switch is marked on the x axis
+  and the summary names its bridge, the latest checkpoint read on both units, the way the ladder's rung changes are. The
+  opening book is part of a unit's identity (one unit name read on two books is two series) and the label names it. The
+  follower's `ladder455_n*` sidecars are read beside the six and strix ones. The Analyzer re-lists its checkpoint
+  directories on every engines read, so a save that lands while the server runs is offered without a restart.
