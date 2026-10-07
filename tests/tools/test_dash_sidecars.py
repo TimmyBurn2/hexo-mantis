@@ -268,6 +268,7 @@ def test_two_opening_books_are_two_instruments_and_the_label_names_the_book(sc, 
     cells, _ = sc.load([tmp_path])
     listed, _ = sc.rulers(cells, "r1", None, None)
     assert len(listed) == 2 and sorted("arena_p5 openings" in r.label for r in listed) == [False, True]
+    assert sorted(r.title for r in listed) == ["Six gen 30, 16 nodes", "Six gen 30, 16 nodes, arena openings"]
 
 
 def test_the_reader_loads_standalone_the_way_the_ladder_tool_loads_it(monkeypatch):

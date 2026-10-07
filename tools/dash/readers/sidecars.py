@@ -202,7 +202,7 @@ class Ruler:
     line: tuple[Cell, ...]
     parent: Cell | None
     rule: bool
-    title: str = ""
+    title: str
     rule_until: int | None = None
     rule_since: int | None = None
 

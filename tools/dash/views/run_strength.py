@@ -43,8 +43,8 @@ def _lead(rulers: Sequence[Ruler]) -> Ruler | None:
 
 
 def titles_of(snaps: Sequence[RunSnapshot]) -> dict[str, str]:
-    """Every unit any served run has read, by name and by unit field, to its ruler's title."""
-    return {k: r.title for x in snaps for r in x.rulers for k in (r.unit_field, r.name)}
+    """Every unit the page's runs have read, by name and by unit field, to its ruler's title; the first run's titles win."""
+    return {k: r.title for x in reversed(snaps) for r in x.rulers for k in (r.unit_field, r.name)}
 
 
 def _parent_name(c: Cell) -> str:
@@ -128,34 +128,40 @@ def _matched(mine: Ruler, theirs: Ruler | None) -> list[tuple[Cell, Cell]]:
 
 
 def _gap(pairs: Sequence[tuple[Cell, Cell]]) -> str:
-    """Two runs at the saves both read: every logit gap of the last `CELLS`, the latest's interval and its gated word."""
+    """Two runs at the saves both read: every logit gap of the last `CELLS`, and the latest's interval with the word it gates."""
     mine, theirs = pairs[-1]
-    word = _AHEAD[separation(mine.wr, mine.n, theirs.wr, theirs.n).sign]
-    d = mine.logit - theirs.logit
-    hw = ((mine.logit_half_width or 0.0) ** 2 + (theirs.logit_half_width or 0.0) ** 2) ** 0.5
+    d, hw_a, hw_b = mine.logit - theirs.logit, mine.logit_half_width, theirs.logit_half_width
+    if hw_a is None or hw_b is None:
+        latest, word = "no interval", _AHEAD[separation(mine.wr, mine.n, theirs.wr, theirs.n).sign]
+    else:
+        hw = (hw_a * hw_a + hw_b * hw_b) ** 0.5
+        latest, word = f"{signed(d - hw)} to {signed(d + hw)}", _AHEAD[1 if d - hw > 0 else -1 if d + hw < 0 else 0]
     if len(pairs) == 1:
-        return f"{pct(mine.wr, 1)} against {pct(theirs.wr, 1)}, {signed(d)} logit ({signed(d - hw)} to {signed(d + hw)}), {word}"
+        return f"{pct(mine.wr, 1)} against {pct(theirs.wr, 1)}, {signed(d)} logit ({latest}), {word}"
     shown = pairs[-CELLS:]
     gaps = ", ".join(signed(a.logit - b.logit) for a, b in shown)
-    return (f"{gaps} logit, {short(shown[0][0].step)} to {short(mine.step)} (the latest {signed(d - hw)} to {signed(d + hw)}), "
-            f"{word}")
+    return f"{gaps} logit, {short(shown[0][0].step)} to {short(mine.step)} (the latest {latest}), {word}"
 
 
 def _compared(snaps: Sequence[RunSnapshot], lead: Ruler) -> str:
     """Each compared run against this one at the saves both read: on the lead ruler, else on the ruler shared latest (unpaired)."""
     out = ""
     for i, x in enumerate(snaps[1:], start=1):
-        pairs, where = _matched(lead, _twin(x, lead.unit)), ""
+        twin = _twin(x, lead.unit)
+        pairs, where = _matched(lead, twin), ""
         if not pairs:
             shared = [(p, r) for r in snaps[0].rulers if (p := _matched(r, _twin(x, r.unit)))]
             if shared:
                 pairs, other = max(shared, key=lambda pr: pr[0][-1][0].step)
-                lead_name = "the rule's ruler" if lead.rule else "the ruler charted here"
-                where = f" on {esc(other.title)} (it has none on {lead_name} yet)"
+                ruler = "the rule's ruler" if lead.rule else "the ruler charted here"
+                missing = f"it has no cell on {ruler}" if twin is None else f"no save both read on {ruler}"
+                where = f" on {esc(other.title)} ({missing} yet)"
         if not pairs:
             said = f"{esc(x.label)} shares no save with this run on any ruler yet."
         else:
-            saves = f"the same save, {short(pairs[0][0].step)}" if len(pairs) == 1 else f"the {len(pairs)} saves both read"
+            n = len(pairs)
+            saves = (f"the same save, {short(pairs[0][0].step)}" if n == 1 else f"the {n} saves both read" if n <= CELLS
+                     else f"the last {CELLS} of the {n} saves both read")
             said = f"Against {esc(x.label)}{where}, at {saves}: {_gap(pairs)}; unpaired."
         out += f'<br><span class="{RUN_CLASSES[i]}">{said}</span>'
     return out
@@ -205,10 +211,14 @@ def _tables(snaps: Sequence[RunSnapshot], ruler: Ruler) -> str:
     return out
 
 
-def _now(r: Ruler, step: int) -> str:
-    """A ruler's win rate at `step` when it read that save, else its latest with the step named."""
-    c = next((c for c in r.line if c.step == step), r.line[-1])
-    return pct(c.wr) + ("" if c.step == step else f" at {short(c.step)}")
+def _value(c: Cell, latest: int) -> str:
+    """A win rate, with its save named when it is not the lead's latest."""
+    return pct(c.wr) + ("" if c.step == latest else f" at {short(c.step)}")
+
+
+def _at_save(r: Ruler, step: int) -> Cell:
+    """The ruler's cell at `step` when it read that save, else its latest."""
+    return next((c for c in r.line if c.step == step), r.line[-1])
 
 
 def _winrate_panel(snaps: Sequence[RunSnapshot], ruler: Ruler, xmax: float, *, lead: bool, latest: int) -> str:
@@ -240,9 +250,9 @@ def _winrate_panel(snaps: Sequence[RunSnapshot], ruler: Ruler, xmax: float, *, l
     lead_in = "Report-only. " if role == "report-only" else "" if ruler.rule or ruler.rule_until is None else f"T{role[1:]}. "
     definition = lead_in + f"{ruler.label}. Unit {ruler.name}. Whiskers: 95 % interval." + (
         " Beats or trails only when the difference's interval excludes 0." if lead else "")
-    own = ruler.line[-1].step
-    nows = [(_now(t, latest if t is ruler else own) if t is not None else "", RUN_CLASSES[i]) for i, t in enumerate(twins)]
-    return figure(title, chart, definition, goal=_WIN_RATE, now=_now(ruler, latest), nows=nows, keys=keys,
+    own = ruler.line[-1]
+    nows = [(_value(_at_save(t, own.step), latest) if t is not None else "", RUN_CLASSES[i]) for i, t in enumerate(twins)]
+    return figure(title, chart, definition, goal=_WIN_RATE, now=_value(own, latest), nows=nows, keys=keys,
                   twin=_tables(snaps, ruler))
 
 
@@ -251,7 +261,7 @@ def _natural(text: str) -> list[int | str]:
 
 
 def _oneoffs_panel(rulers: Sequence[Ruler]) -> str:
-    """Single reads with no parent, no second save and no twin to set them against: listed, never charted."""
+    """Single cells with no parent, no second save, no former rule and no compared run at that save: listed, never charted."""
     rows = [[r.title, num(c.step), pct(c.wr, 1), f"{pct(c.lo, 1)} to {pct(c.hi, 1)}", num(c.n)]
             for r in sorted(rulers, key=lambda r: _natural(r.title)) for c in r.line]
     return ('<div class="sheet"><h3>One-off reads</h3>'
@@ -259,8 +269,15 @@ def _oneoffs_panel(rulers: Sequence[Ruler]) -> str:
             + "<p>A single cell with nothing to set it against: a screen or a sweep.</p></div>")
 
 
-def _key(name: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+def _keys(rulers: Sequence[Ruler]) -> list[str]:
+    """One id-safe key per ruler, `r-` first so no ruler meets a fixed key, a counter on a slug two names share."""
+    seen: dict[str, int] = {}
+    out = []
+    for r in rulers:
+        slug = "r-" + re.sub(r"[^a-z0-9]+", "-", r.name.lower()).strip("-")
+        seen[slug] = seen.get(slug, 0) + 1
+        out.append(slug if seen[slug] == 1 else f"{slug}-{seen[slug]}")
+    return out
 
 
 def _readings_list(label: str, items: Sequence[Reading]) -> str:
@@ -288,20 +305,19 @@ def section(snaps: Sequence[RunSnapshot]) -> tuple[str, str, str]:
     charted = [r for r in others if r.rule_until is not None or r.parent is not None or len(r.line) > 1
                or any(_matched(r, _twin(x, r.unit)) for x in snaps[1:])]
     items = []
-    for r in charted:
-        notes = [_role(r, declared)] if declared else []
+    for key, r in zip(_keys(charted), charted, strict=True):
+        c, notes = r.line[-1], [_role(r, declared)] if declared else []
         if r.parent is not None:
-            c, p = r.line[-1], r.parent
+            p = r.parent
             notes.append(f"{_WORD[separation(c.wr, c.n, p.wr, p.n).sign]} its parent, {signed(c.logit - p.logit)} logit")
-        items.append(Reading(_key(r.name), r.title, _now(r, latest), ", ".join(notes),
+        items.append(Reading(key, r.title, _value(c, latest), ", ".join(notes),
                              _winrate_panel(snaps, r, xmax, lead=False, latest=latest)))
     oneoffs = [r for r in others if r not in charted]
     if oneoffs:
-        items.append(Reading("one-off", "One-off reads", f"{len(oneoffs)} cell{'s' if len(oneoffs) != 1 else ''}",
+        items.append(Reading("oneoffs", "One-off reads", f"{len(oneoffs)} cell{'s' if len(oneoffs) != 1 else ''}",
                              "screens and sweeps", _oneoffs_panel(oneoffs), wide=True))
     main = _winrate_panel(snaps, lead, xmax, lead=True, latest=latest)
     if not items:
         return sentence, aside, f'<div class="lead">{main}</div>'
     panels = "".join(f'<div class="sp{" full" if r.wide else ""}" id="sp-{r.key}">{r.panel}</div>' for r in items)
-    return (sentence, aside, f'<div class="lead">{main}{_readings_list(head.label, items)}</div>'
-            f'<div class="sp-grid" data-run="{esc(head.label)}">{panels}</div>')
+    return sentence, aside, f'<div class="lead">{main}{_readings_list(head.label, items)}</div><div class="sp-grid">{panels}</div>'

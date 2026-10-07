@@ -103,7 +103,7 @@ def test_a_report_only_ruler_is_a_reading_with_its_logit_over_its_parent(dash, s
     snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), rule="six30_16").poll()
     _, aside, html = strength.section([snap])
     assert "Six gen 455, 128 nodes" not in aside and "report-only, beats its parent, +0.65 logit" in html
-    assert '<a class="reading" href="#sp-six455-128-full" data-key="six455-128-full">' in html and 'id="sp-six455-128-full"' in html
+    assert '<a class="reading" href="#sp-r-six455-128-full" data-key="r-six455-128-full">' in html and 'id="sp-r-six455-128-full"' in html
     assert "Report-only. " in _figure(html, "Six gen 455, 128 nodes") and "bar, parent" in _figure(html, "Six gen 30, 16 nodes")
 
 
@@ -240,17 +240,18 @@ def _rulers_snap(dash, tmp_path, *, rule: str | None = "six30_16", compare: bool
 
 def _figure(html: str, title: str) -> str:
     start = html.index(f">{title}</h3>")
-    return html[start:html.find("<figure", start)]
+    return html[start:html.index("</figure>", start)]
 
 
 def test_a_ruler_with_a_parent_or_a_second_cell_gets_a_chart_and_a_lone_cell_a_table_row(dash, strength, tmp_path):
     _, aside, html = strength.section(_rulers_snap(dash, tmp_path))
-    assert html.count('<figure class="chart">') == 3 and 'id="sp-six455-512-full"' not in html
-    oneoffs = html[html.index('id="sp-one-off"'):]
+    assert html.count('<figure class="chart">') == 3 and 'id="sp-r-six455-512-full"' not in html
+    oneoffs = html[html.index('id="sp-oneoffs"'):]
     assert "One-off reads" in oneoffs and "<td>Six gen 455, 512 nodes</td>" in oneoffs and "<svg" not in oneoffs
     report = _figure(html, "Six gen 455, 128 nodes")
     assert "Report-only. " in report and "bar, parent" not in report and "4 forfeits left out" in report
     assert "report-only, beats its parent, +0.71 logit" in html and "Six gen 455, 128 nodes" not in aside
+    assert '<span class="v">47\u202f% at 600</span>' in html, "the row's value is the save its parent read is from"
 
 
 def test_a_compared_run_with_no_cell_on_a_ruler_is_named_so_in_its_legend(dash, strength, tmp_path):
@@ -323,8 +324,8 @@ def test_a_compared_run_off_the_lead_ruler_is_read_on_the_latest_ruler_both_shar
     snaps = [record.RunRecord("r1", _record(tmp_path), None, (cells,), rule=rule, switches=switches).poll(),
              record.RunRecord("r2", _record(tmp_path, "r2"), None, (tmp_path / "other",)).poll()]
     _, aside, html = strength.section(snaps)
-    assert "Against r2 on Six gen 30, 16 nodes (it has none on the rule's ruler yet), at the same save, 300: 76.0\u202f%" in aside
-    assert '<b class="c2">50\u202f%</b>' in _figure(html, "Six gen 30, 16 nodes")
+    assert "Against r2 on Six gen 30, 16 nodes (it has no cell on the rule's ruler yet), at the same save, 300: 76.0\u202f%" in aside
+    assert '<b class="c1">76\u202f% at 300</b><b class="c2">50\u202f% at 300</b>' in _figure(html, "Six gen 30, 16 nodes")
 
 
 def test_a_lone_cell_a_compared_run_also_read_is_charted_not_listed(dash, strength, tmp_path):
@@ -336,7 +337,7 @@ def test_a_lone_cell_a_compared_run_also_read_is_charted_not_listed(dash, streng
     snaps = [record.RunRecord("r1", _record(tmp_path), None, (cells,), rule="six30_16").poll(),
              record.RunRecord("r2", _record(tmp_path, "r2"), None, (tmp_path / "other",)).poll()]
     _, _, html = strength.section(snaps)
-    assert 'id="sp-six455-128-full"' in html and 'id="sp-one-off"' not in html
+    assert 'id="sp-r-six455-128-full"' in html and 'id="sp-oneoffs"' not in html
 
 
 def test_a_frozen_page_is_unscripted_so_every_reading_shows(dash):
@@ -346,7 +347,7 @@ def test_a_frozen_page_is_unscripted_so_every_reading_shows(dash):
     assert "classList.add('js')" in served and "classList.add('js')" not in frozen
 
 
-def test_a_compared_run_read_at_several_saves_gives_the_gap_at_the_first_and_now(dash, strength, tmp_path):
+def test_a_compared_run_read_at_several_saves_gives_every_gap_of_the_last_four(dash, strength, tmp_path):
     cells = tmp_path / "cells"
     for step, wr in ((300, 0.76), (600, 0.78)):
         sidecar(cells, "r1", step, wr)
@@ -356,3 +357,62 @@ def test_a_compared_run_read_at_several_saves_gives_the_gap_at_the_first_and_now
              record.RunRecord("r2", _record(tmp_path, "r2"), None, (tmp_path / "other",)).poll()]
     _, aside, _ = strength.section(snaps)
     assert "Against r2, at the 2 saves both read: +0.91, +0.94 logit, 300 to 600 (the latest +0." in aside and "ahead; unpaired." in aside
+
+
+def _pair(tmp_path, mine: list[tuple[int, float]], theirs: list[tuple[int, float]], n: int = 576):
+    record = importlib.import_module("dash.readers.record")
+    for step, wr in mine:
+        sidecar(tmp_path / "cells", "r1", step, wr, n=n)
+    for step, wr in theirs:
+        sidecar(tmp_path / "other", "r2", step, wr, n=n)
+    return [record.RunRecord("r1", _record(tmp_path), None, (tmp_path / "cells",), rule="six30_16").poll(),
+            record.RunRecord("r2", _record(tmp_path, "r2"), None, (tmp_path / "other",)).poll()]
+
+
+@pytest.mark.parametrize(("theirs", "word"), [(0.90, "behind"), (0.75, "level"), (0.50, "ahead")])
+def test_the_gap_word_is_gated_by_the_interval_it_prints(dash, strength, tmp_path, theirs, word):
+    _, aside, _ = strength.section(_pair(tmp_path, [(300, 0.76)], [(300, theirs)]))
+    assert f"), {word}; unpaired." in aside
+
+
+def test_more_than_four_shared_saves_list_the_last_four_and_say_so(dash, strength, tmp_path):
+    steps = [(s, 0.70) for s in (100, 200, 300, 400, 500, 600)]
+    _, aside, _ = strength.section(_pair(tmp_path, steps, [(s, 0.50) for s, _ in steps]))
+    assert "at the last 4 of the 6 saves both read: +0.85, +0.85, +0.85, +0.85 logit, 300 to 600 (the latest" in aside
+
+
+def test_a_compared_run_on_the_lead_ruler_at_other_saves_is_told_apart_from_none(dash, strength, tmp_path):
+    cells = tmp_path / "cells"
+    sidecar(cells, "r1", 300, 0.76)
+    sidecar(cells, "r1", 300, 0.31, suffix="ladder455_n16.full", unit="ladder455_n16", six={**_G455, "nodes": 16})
+    sidecar(tmp_path / "other", "r2", 300, 0.50)
+    sidecar(tmp_path / "other", "r2", 600, 0.70, suffix="ladder455_n16.full", unit="ladder455_n16", six={**_G455, "nodes": 16})
+    record, ladder = importlib.import_module("dash.readers.record"), importlib.import_module("dash.readers.ladder")
+    rule, switches = ladder.parse_rule("six30_16,ladder455_n16@250")
+    snaps = [record.RunRecord("r1", _record(tmp_path), None, (cells,), rule=rule, switches=switches).poll(),
+             record.RunRecord("r2", _record(tmp_path, "r2"), None, (tmp_path / "other",)).poll()]
+    _, aside, html = strength.section(snaps)
+    assert "(no save both read on the rule's ruler yet)" in aside
+    assert '<b class="c2">70\u202f% at 600</b>' in _figure(html, "Six gen 455, 16 nodes")
+
+
+def test_runs_that_share_no_save_say_so(dash, strength, tmp_path):
+    _, aside, _ = strength.section(_pair(tmp_path, [(300, 0.76)], [(600, 0.50)]))
+    assert "r2 shares no save with this run on any ruler yet." in aside
+
+
+def test_the_head_to_head_table_rows_carry_both_readings_and_the_difference(dash, strength, tmp_path):
+    _, _, html = strength.section(_pair(tmp_path, [(300, 0.76)], [(300, 0.50)]))
+    assert "<td>300</td><td>76.0\u202f%</td><td>50.0\u202f%</td><td>+26.0 pts</td>" in html and "<td>+1.15</td>" in html
+
+
+def test_two_rulers_slugging_alike_get_distinct_keys_and_titles(dash, strength, tmp_path):
+    cells = tmp_path / "cells"
+    sidecar(cells, "r1", 300, 0.76)
+    for unit in ("six455_128", "six455-128"):
+        for step in (300, 600):
+            sidecar(cells / unit, "r1", step, 0.4, suffix=f"{unit}.full", unit=unit, six={**_G455, "nodes": 128})
+    record = importlib.import_module("dash.readers.record")
+    _, _, html = strength.section([record.RunRecord("r1", _record(tmp_path), None, (cells,), rule="six30_16").poll()])
+    assert 'id="sp-r-six455-128-full"' in html and 'id="sp-r-six455-128-full-2"' in html
+    assert "Six gen 455, 128 nodes (six455_128.full)" in html and "Six gen 455, 128 nodes (six455-128.full)" in html

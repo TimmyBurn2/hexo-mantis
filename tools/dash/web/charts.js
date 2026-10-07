@@ -71,12 +71,14 @@
   function readings() {
     if (!document.documentElement.classList.contains('js')) return;
     document.querySelectorAll('.readings').forEach(group => {
-      const links = [...group.querySelectorAll('a.reading')], store = 'mantis-show:' + group.dataset.run;
+      const links = [...group.querySelectorAll('a.reading')].filter(a => document.getElementById('sp-' + a.dataset.key));
+      const keys = links.map(a => a.dataset.key), store = 'mantis-show:' + group.dataset.run;
       const panel = a => document.getElementById('sp-' + a.dataset.key);
       const hashed = (location.hash.match(/(?:^#|&)show=([^&]*)/) || [])[1];
-      let open = hashed !== undefined ? hashed.split(',').filter(Boolean) : null;
+      let open = hashed !== undefined ? decodeURIComponent(hashed).split(',') : null;
       if (open === null) { try { open = JSON.parse(localStorage.getItem(store) || '[]'); } catch (e) { open = []; } }
-      const apply = () => links.forEach(a => { const on = open.includes(a.dataset.key); a.setAttribute('aria-pressed', String(on)); panel(a).classList.toggle('on', on); });
+      open = (Array.isArray(open) ? open : []).filter(k => keys.includes(k));
+      const apply = () => links.forEach(a => { const on = open.includes(a.dataset.key); a.setAttribute('aria-expanded', String(on)); panel(a).classList.toggle('on', on); });
       const toggle = a => {
         const k = a.dataset.key, opening = !open.includes(k);
         open = opening ? [...open, k] : open.filter(x => x !== k);
@@ -97,6 +99,6 @@
 
   theme();
   picker();
-  readings();
   document.querySelectorAll('figure.chart .plot').forEach(crosshair);
+  readings();
 })();

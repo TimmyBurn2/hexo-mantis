@@ -11,6 +11,8 @@ WEB = Path(__file__).resolve().parent.parent / "web"
 VIEWS = (("run", "Run"), ("games", "Games"), ("analyzer", "Analyzer"))
 _MARK = ('<svg width="20" height="22" viewBox="0 0 20 22" aria-hidden="true"><path d="M10 1 19 6v10l-9 5-9-5V6z" '
          'fill="none" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="11" r="3.2" fill="currentColor"/></svg>')
+
+
 def _theme(scripted: bool) -> str:
     """Runs before first paint, so a stored theme never flashes the other one; a served page marks itself scripted."""
     mark = "d.classList.add('js');" if scripted else ""

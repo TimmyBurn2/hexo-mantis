@@ -358,4 +358,6 @@ units.
   last four on the same instrument. With Compare on, the aside gives the logit gap at each of the last four saves both runs
   read, the latest with its interval (unpaired), on the lead ruler or, when the compared run has none there, on the ruler
   both read latest; each panel's tables add the head-to-head at those saves. A rule switch is a dashed vertical line, apart
-  from the promotion marks.
+  from the promotion marks. The going-forward mean line is gone from the rule's chart (the aside states the mean, the bar
+  stays), which replaces the 10-05 entry's "the bar and the going-forward line". A reading's value, its parent read and its
+  compared runs' values come from one save, its latest, named when it is not the lead's.
