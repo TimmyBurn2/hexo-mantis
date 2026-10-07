@@ -234,8 +234,7 @@ fn the_interior_score_moves_off_a_child_as_its_visits_accumulate() {
     );
 }
 
-/// The once-evaluated score is BIT-identical to the per-pass form it replaced (logit three
-/// times, exp twice per child), over seeded random children including floored and huge priors.
+/// The once-evaluated score is BIT-identical to the per-pass form, over seeded children incl. floored and huge priors.
 #[test]
 fn the_interior_score_evaluated_once_is_bit_identical_to_the_per_pass_form() {
     fn per_pass(priors: &[f32], completed: &[f32], visits: &[u32]) -> Vec<f32> {

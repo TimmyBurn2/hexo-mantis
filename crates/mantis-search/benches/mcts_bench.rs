@@ -60,9 +60,7 @@ fn bench_mcts_simulations(c: &mut Criterion) {
     group.finish();
 }
 
-/// The Gumbel interior selector under load: every descent is forced through the root's first
-/// child of a dispersed 16-stone position, so each simulation selects at that interior node (and
-/// below it as visits accumulate) rather than spreading one visit per root child.
+/// The Gumbel interior selector under load: every descent is forced through one root child, so each one selects there.
 fn bench_gumbel_interior_select(c: &mut Criterion) {
     let mut group = c.benchmark_group("gumbel_interior_select");
     let sigma = QSigma {

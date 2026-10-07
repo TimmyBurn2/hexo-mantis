@@ -28,8 +28,7 @@ class LrCycle:
 class FlooredCosineAnnealingLR(CosineAnnealingLR):
     """Cosine from the base LR to `eta_min` over `T_max`, then `eta_min`; from a declared `cycle`'s start, that cycle.
 
-    The cycle is the config's, never the checkpoint's: it stays out of `state_dict`, and restoring a state at or past
-    its start re-points the optimizer at the cycle's LR, so a resume runs the declared cycle whatever was saved.
+    The cycle is the config's: it stays out of `state_dict`, and a restore past its start re-points the optimizer at it.
     """
 
     def __init__(self, optimizer: Optimizer, T_max: int, eta_min: float = 0.0, last_epoch: int = -1,
