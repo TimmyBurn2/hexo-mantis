@@ -25,7 +25,9 @@
 )]
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
-use mantis_graph::{build_axis_graph, BuildParams, StoneList};
+use mantis_graph::{
+    build_axis_graph, build_axis_graph_verified_by, BuildParams, ProducerVerify, StoneList,
+};
 
 // Shared dep-free fixture reader (same module the parity tests use).
 #[path = "../tests/common/mod.rs"]
@@ -81,7 +83,12 @@ fn load_r8_positions() -> Vec<(StoneList, BuildParams)> {
 }
 
 /// One build per iteration, cycling `set`, so the time is ns per position over its distribution.
-fn bench_per_position(c: &mut Criterion, group_name: &str, set: &[(StoneList, BuildParams)]) {
+fn bench_per_position(
+    c: &mut Criterion,
+    group_name: &str,
+    set: &[(StoneList, BuildParams)],
+    verify: ProducerVerify,
+) {
     let n = set.len();
     let mut idx = 0usize;
     let mut group = c.benchmark_group(group_name);
@@ -94,7 +101,11 @@ fn bench_per_position(c: &mut Criterion, group_name: &str, set: &[(StoneList, Bu
                 &set[cur]
             },
             |(stones, params)| {
-                build_axis_graph(std::hint::black_box(stones), std::hint::black_box(params))
+                build_axis_graph_verified_by(
+                    std::hint::black_box(stones),
+                    std::hint::black_box(params),
+                    verify,
+                )
             },
             BatchSize::SmallInput,
         );
@@ -107,8 +118,16 @@ fn bench_build(c: &mut Criterion) {
     let n = set.len();
 
     // The predecessor set at radius 6 (mean 490 nodes), then the recorded radius-8 positions.
-    bench_per_position(c, "axis_graph_build", &set);
-    bench_per_position(c, "axis_graph_build_r8", &load_r8_positions());
+    let r8 = load_r8_positions();
+    bench_per_position(c, "axis_graph_build", &set, ProducerVerify::Builder);
+    bench_per_position(c, "axis_graph_build_r8", &r8, ProducerVerify::Builder);
+    // Where the consumer re-runs the edge-geometry check on every batch, the builder's own verify is skipped.
+    bench_per_position(
+        c,
+        "axis_graph_build_r8_unverified",
+        &r8,
+        ProducerVerify::ConsumerEveryBatch,
+    );
 
     // Whole-set sweep: build all N once, for a stable aggregate median.
     let mut g2 = c.benchmark_group("axis_graph_build_full_set");
