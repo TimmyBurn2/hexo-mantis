@@ -87,7 +87,7 @@ def test_the_sidecar_records_the_radius_and_the_dash_labels_it(follower, sidecar
                                                                             "wr_ci_upper": 0.3, "games": 288, "eff_n": 288}}
     body = follower.sidecar_record(ckpt, unit="ruler_r6", trigger="once", record=record, regime_name="IDLE",
                                    regime_evidence={}, run_id="run8", started=0.0, finished=1.0, pin={})
-    assert body["strix"] == {"sims": 256, "solver": "on", "radius": 6}
+    assert body["strix"] == {"sims": 256, "solver": "on", "device": "cpu", "radius": 6}
     on = follower.sidecar_record(ckpt, unit="equal_work", trigger="once", record=record, regime_name="IDLE",
                                  regime_evidence={}, run_id="run8", started=0.0, finished=1.0, pin={})
     assert "radius" not in on["strix"]

@@ -20,7 +20,8 @@ PIN_NAME = "hexo-strix"
 #: Path segments below the vendor root, kept as segments so no path-shaped literal lives here.
 _VENDOR_TREE = ("external", "hexo-strix")
 _MODELS_DIR = ("external", "strix_models")
-_VENV_PYTHON = (".venv", "bin", "python")
+#: Each device's own venv in the vendored tree: CPU torch, or strix's `cuda` group (`vendor_build_strix.sh --cuda`).
+_DEVICE_VENVS = {"cpu": ".venv", "cuda": ".venv-cuda"}
 _DRIVER = ("tools", "strix_driver.py")
 BUILD_SCRIPT = "tools/vendor_build_strix.sh"
 
@@ -38,6 +39,8 @@ NET_ONLY_SUFFIX = ":net_only"
 #: `<stem>:r<N>` plays the pinned checkpoint, solver ON, at the driver's `placement_radius` N
 #: (strix trained at 6; every reading on record rides the default 8); the load line carries the key only there.
 RADIUS_SUFFIX = ":r"
+#: `<variant>@cuda` plays that variant with strix's net on the GPU (its own CUDA venv); every other line rides the CPU.
+DEVICE_SUFFIX = "@cuda"
 
 #: Every fence finding is ALSO logged under this marker: the bot instance dies with the eval
 #: child, and `tools/strength_frontier.py` counts the lines into the cell record.
@@ -192,8 +195,22 @@ def strix_availability() -> tuple[bool, str]:
     return True, ""
 
 
-def locate_strix() -> tuple[Path, Path, Path, Path, dict[str, Any]]:
-    """`(python, driver, cwd, checkpoint, pin)`, each refusal naming exactly its missing step.
+def venv_python(tree: Path, device: str) -> Path:
+    """The python of `device`'s venv inside the vendored strix tree."""
+    return tree / _DEVICE_VENVS[device] / "bin" / "python"
+
+
+def variant_device(variant: str) -> str:
+    """`cuda` for a `<variant>@cuda`, else `cpu`."""
+    return "cuda" if variant.endswith(DEVICE_SUFFIX) else "cpu"
+
+
+def _base_variant(variant: str) -> str:
+    return variant[: -len(DEVICE_SUFFIX)] if variant.endswith(DEVICE_SUFFIX) else variant
+
+
+def locate_strix(device: str = "cpu") -> tuple[Path, Path, Path, Path, dict[str, Any]]:
+    """`(python, driver, cwd, checkpoint, pin)` with `device`'s venv, each refusal naming exactly its missing step.
 
     Raises:
         RungUnresolvable: the vendor root, pin, tree, venv or checkpoint is absent, or the sha differs."""
@@ -211,12 +228,13 @@ def locate_strix() -> tuple[Path, Path, Path, Path, dict[str, Any]]:
         raise RungUnresolvable(rung="strix", reason=(
             f"{VENDOR_ABSENT_MARKER}: {'/'.join(_VENDOR_TREE)} is not fetched under vendor/; "
             "run `make vendor` from the repo root"))
-    python = tree.joinpath(*_VENV_PYTHON)
+    python = venv_python(tree, device)
     if not python.is_file():
+        flag = "" if device == "cpu" else f" --{device}"
         raise RungUnresolvable(rung="strix", reason=(
-            f"{VENV_ABSENT_MARKER}: no {'/'.join(_VENV_PYTHON)} under the vendored tree; run "
-            f"`bash {BUILD_SCRIPT}` from the repo root (it verifies the pinned sha, then builds "
-            "strix's own venv with CPU torch and its Rust engine)"))
+            f"{VENV_ABSENT_MARKER}: no {'/'.join((_DEVICE_VENVS[device], 'bin', 'python'))} under the vendored tree; run "
+            f"`bash {BUILD_SCRIPT}{flag}` from the repo root (it verifies the pinned sha, then builds "
+            f"strix's own {device} venv and its Rust engine)"))
     checkpoint = root.joinpath(*_MODELS_DIR) / str(pin["checkpoint"])
     if not checkpoint.is_file():
         raise RungUnresolvable(rung="strix", reason=(
@@ -229,6 +247,7 @@ def locate_strix() -> tuple[Path, Path, Path, Path, dict[str, Any]]:
 
 def variant_radius(variant: str, *, stem: str) -> int | None:
     """The `placement_radius` a `<stem>:r<N>` variant loads strix at, None otherwise; Raises: RungUnresolvable on a malformed N."""
+    variant = _base_variant(variant)
     if not variant.startswith(stem + RADIUS_SUFFIX):
         return None
     digits = variant[len(stem) + len(RADIUS_SUFFIX):]
@@ -243,6 +262,7 @@ def variant_solver(variant: str, *, stem: str) -> bool:
 
     Raises:
         RungUnresolvable: a variant the pin does not name."""
+    variant = _base_variant(variant)
     if variant in (stem, PIN_NAME) or variant_radius(variant, stem=stem) is not None:
         return True
     if variant == stem + NET_ONLY_SUFFIX:
@@ -254,11 +274,15 @@ def variant_solver(variant: str, *, stem: str) -> bool:
 
 
 def load_request(checkpoint: str, *, sims: int, variant: str, stem: str) -> dict[str, Any]:
-    """The driver's `load` line for one variant; `placement_radius` rides it on `<stem>:r<N>` ONLY, every other line byte-identical to the record."""
+    """The driver's `load` line; `placement_radius` only on `:r<N>`, `device` only on `@cuda`. Raises: RungUnresolvable."""
     request = {"op": "load", "checkpoint": checkpoint, "sims": int(sims), "m_actions": DEFAULT_M_ACTIONS,
                "disable_forcing_solver": not variant_solver(variant, stem=stem)}
     radius = variant_radius(variant, stem=stem)
-    return request if radius is None else {**request, "placement_radius": radius}
+    if radius is not None:
+        request["placement_radius"] = radius
+    if variant_device(variant) != "cpu":
+        request["device"] = variant_device(variant)
+    return request
 
 
 def resolve_strix(*, opponent_sims: int | None, variant: str) -> Any:
@@ -268,13 +292,15 @@ def resolve_strix(*, opponent_sims: int | None, variant: str) -> Any:
         RungUnresolvable: no sims, a variant the pin does not name, or a missing step."""
     if opponent_sims is None:
         raise RungUnresolvable(rung="strix", reason="strix rung declares no sims")
-    python, driver, cwd, checkpoint, pin = locate_strix()
+    device = variant_device(variant)
+    python, driver, cwd, checkpoint, pin = locate_strix(device)
     stem = str(pin["checkpoint"]).rsplit(".", 1)[0]
     solver_on = variant_solver(variant, stem=stem)
     radius = variant_radius(variant, stem=stem)
     sims = int(opponent_sims)
     request = load_request(str(checkpoint), sims=sims, variant=variant, stem=stem)
-    name = f"strix_{stem}_s{sims}" + ("" if solver_on else "_nosolver") + ("" if radius is None else f"_r{radius}")
+    name = (f"strix_{stem}_s{sims}" + ("" if solver_on else "_nosolver") + ("" if radius is None else f"_r{radius}")
+            + ("" if device == "cpu" else f"_{device}"))
 
     def _factory() -> StrixBot:
         transport = DriverTransport(python, driver, cwd)
@@ -288,8 +314,8 @@ def resolve_strix(*, opponent_sims: int | None, variant: str) -> Any:
 
 
 __all__ = [
-    "BUILD_SCRIPT", "CHECKPOINT_ABSENT_MARKER", "DEFAULT_M_ACTIONS", "DriverTransport", "FINDING_LOG_MARKER",
+    "BUILD_SCRIPT", "CHECKPOINT_ABSENT_MARKER", "DEFAULT_M_ACTIONS", "DEVICE_SUFFIX", "DriverTransport", "FINDING_LOG_MARKER",
     "NET_ONLY_SUFFIX", "PIN_ABSENT_MARKER", "PIN_NAME", "RADIUS_SUFFIX", "SHA_MISMATCH_MARKER", "StrixBot",
     "Transport", "VENDOR_ABSENT_MARKER", "VENV_ABSENT_MARKER", "find_vendor_root", "load_request", "locate_strix", "resolve_strix",
-    "strix_availability", "variant_radius", "variant_solver", "verify_checkpoint_sha",
+    "strix_availability", "variant_device", "variant_radius", "variant_solver", "venv_python", "verify_checkpoint_sha",
 ]

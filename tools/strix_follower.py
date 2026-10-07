@@ -45,6 +45,8 @@ UNITS: dict[str, tuple[int, int, str]] = {EQUAL_WORK: (256, 256, "strix256"),
                                           **{u: (128, n, u) for u, n in LADDER_UNITS.items()}}
 SOLVER_OFF_UNITS = frozenset({NET_ONLY})  # every other unit is the rung on record
 RADIUS_UNITS: dict[str, int] = {RULER_R6: 6}  # every other unit rides the driver's default radius
+#: Units whose strix runs on the GPU (its CUDA venv); every unit on record before the arena break stays on the CPU.
+GPU_STRIX_UNITS = frozenset({EQUAL_WORK_ARENA})
 #: unit -> (the pinned network, its generation)
 SIX_UNITS: dict[str, tuple[str, int]] = {SIX30_16: ("gen0030", 30), **{u: ("gen0455", 455) for u in LADDER_UNITS}}
 #: unit -> the opening book it plays; every other unit plays the config's gate book.
@@ -166,7 +168,7 @@ def compose_cell(checkpoint: Path, *, unit: str, step: int, games: int, concurre
                 "concurrency": concurrency, **book}
     cell = {"label": label, "candidate": str(checkpoint), "search_kind": "puct", "sims": ours,
             "opponent": "strix", "strix_sims": theirs, "games": games, "step": step,
-            "concurrency": concurrency, **book}
+            "concurrency": concurrency, **book, **({"strix_device": "cuda"} if unit in GPU_STRIX_UNITS else {})}
     # A solver-ON, default-radius cell carries neither key, so it is byte-identical to every receipt on record.
     if unit in SOLVER_OFF_UNITS:
         return {**cell, "strix_solver": False}
@@ -211,6 +213,7 @@ def sidecar_record(checkpoint: Path, *, unit: str, trigger: str, record: Mapping
                                     "six_findings": record.get("six_findings")}
     else:
         opponent = {"strix": {**dict(pin), "sims": theirs, "solver": "off" if unit in SOLVER_OFF_UNITS else "on",
+                              "device": "cuda" if unit in GPU_STRIX_UNITS else "cpu",
                               **({"radius": RADIUS_UNITS[unit]} if unit in RADIUS_UNITS else {})},
                     "strix_findings": record.get("strix_findings")}
     return {

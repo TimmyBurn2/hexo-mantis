@@ -167,8 +167,8 @@ def base_round_spec(config: Any, *, work_dir: Path) -> RoundSpec:
 
 
 def _strix_rung(config: Any, games: int, strix_sims: int, *, solver: bool = True,
-                radius: int | None = None) -> RungJob:
-    """The strix rung (RUNG-2) at `strix_sims` on the gate's book; `solver` False = `<stem>:net_only`, `radius` N = `<stem>:r<N>`."""
+                radius: int | None = None, device: str = "cpu") -> RungJob:
+    """The strix rung at `strix_sims`: `:net_only`, `:r<N>` or `@cuda` as asked. Raises: FrontierCellError."""
     from mantis.bots import strix as _strix
 
     pin = _strix._pin()
@@ -177,8 +177,11 @@ def _strix_rung(config: Any, games: int, strix_sims: int, *, solver: bool = True
     stem = str(pin["checkpoint"]).rsplit(".", 1)[0]
     if radius is not None and not solver:
         raise FrontierCellError("a strix cell names strix_radius or strix_solver false, not both (no such variant)")
+    if device not in ("cpu", "cuda"):
+        raise FrontierCellError(f"strix_device {device!r} is not cpu or cuda")
     variant = stem + (f"{_strix.RADIUS_SUFFIX}{int(radius)}" if radius is not None
                       else "" if solver else _strix.NET_ONLY_SUFFIX)
+    variant += "" if device == "cpu" else _strix.DEVICE_SUFFIX
     return _rung_job(config, STRIX, variant, strix_sims, games)
 
 
@@ -248,7 +251,8 @@ def cell_spec(cell: Mapping[str, Any], base: RoundSpec, *, cell_dir: Path, confi
         if "strix_sims" not in cell:
             raise FrontierCellError(f"{cell['label']}: a strix cell names strix_sims (its sims per move)")
         job = _strix_rung(config, games, int(cell["strix_sims"]), solver=bool(cell.get("strix_solver", True)),
-                          radius=None if cell.get("strix_radius") is None else int(cell["strix_radius"]))
+                          radius=None if cell.get("strix_radius") is None else int(cell["strix_radius"]),
+                          device=str(cell.get("strix_device", "cpu")))
         return replace(base, **common, rung_model_sims=sims, rung_jobs=[_rung_on_cell_book(job, cell)])
     if opponent == SIX:
         for key in ("six_net", "six_nodes"):
@@ -442,6 +446,7 @@ def format_row(record: Mapping[str, Any]) -> str:
     """One summary line per cell."""
     cell = record["cell"]
     sigma = "".join(f" {k}={cell[k]}" for k in ("c_scale", "q_rescale", "strix_sims", "strix_solver", "strix_radius",
+                                                 "strix_device",
                                                  "six_net", "six_nodes") if k in cell)
     head = f"{record['label']:<28} {cell['search_kind']:<6} {int(cell['sims']):>4}{sigma}"
     if record["rc"] != 0 or "readout" not in record:

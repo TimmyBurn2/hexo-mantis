@@ -1,4 +1,4 @@
-.PHONY: build build.cuda build.native test test.integration lint lint.rust gates gates.exit dash bench bench.baseline check.wasm vendor vendor.strix vendor.six clean
+.PHONY: build build.cuda build.native test test.integration lint lint.rust gates gates.exit dash bench bench.baseline check.wasm vendor vendor.strix vendor.strix.cuda vendor.six clean
 
 UV ?= uv
 
@@ -64,6 +64,10 @@ vendor:
 # The strix rung's venv (RUNG-2): CPU torch + hexo_rs inside the fetched pin; the checkpoint is placed by hand.
 vendor.strix:
 	bash tools/vendor_build_strix.sh
+
+# The GPU S cells' strix venv (strix's own `cuda` group) beside the CPU one.
+vendor.strix.cuda:
+	bash tools/vendor_build_strix.sh --cuda
 
 # The Six rung: its pin plus the release engine and networks, each verified by sha256 on arrival.
 vendor.six:

@@ -1,9 +1,6 @@
-"""The ruler ladder's reading: Six gen455 at N nodes per turn against ours 128 per stone, a save read at the two rungs
-bracketing 50 %, and its N50 — the node count where the logit of our win rate, linear in log2(N) between the two
-rungs, crosses zero.
+"""A save's N50 on the ruler ladder: where logit(win rate), linear in log2(nodes) between its two rungs, crosses zero.
 
-usage: ruler_ladder.py <checkpoint> --pair LO HI [--arm full]  (prints the save's row as JSON)
-"""
+usage: ruler_ladder.py <checkpoint> --pair LO HI [--arm full]"""
 from __future__ import annotations
 
 import argparse
@@ -47,10 +44,7 @@ def n50(lo_nodes: int, wr_lo: float, hi_nodes: int, wr_hi: float) -> N50:
 
 
 def pick_pair(screen: dict[int, float]) -> tuple[int, int]:
-    """The highest screened rung reading >= 0.5 and the rung above it; (16, 32) when even 16 reads below.
-
-    Raises: ValueError naming the rung to read next when the screen's top rung still reads >= 0.5.
-    """
+    """The highest rung reading >= 0.5 and the one above. Raises: ValueError naming the rung to read next."""
     read = sorted(screen)
     at_or_above = [n for n in read if screen[n] >= 0.5]
     if not at_or_above:
@@ -69,10 +63,7 @@ def _se(row: dict[str, Any]) -> float:
 
 
 def read_save(checkpoint: Path, pair: tuple[int, int], *, arm: str | None) -> dict[str, Any]:
-    """The save's raw rates at `pair`, its N50 and a 95 % interval drawn from each cell's logit CI (seeded).
-
-    Raises: FileNotFoundError naming a rung's missing sidecar; json.JSONDecodeError on a corrupt one.
-    """
+    """Raw rates, N50 and its seeded 95 % interval. Raises: FileNotFoundError (a rung), json.JSONDecodeError."""
     rows = {}
     for nodes in pair:
         unit = f"{UNIT_PREFIX}{nodes}"

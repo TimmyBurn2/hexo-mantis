@@ -28,6 +28,12 @@ fi
 # strix's pyproject makes cpu/cuda/rocm torch mutually exclusive groups; the rung plays on the
 # CPU by design (the card belongs to the run) and `--all-packages --extra train` pulls the
 # workspace members (hexo_rs is built by maturin) and torch_geometric.
+# --cuda builds strix's own `cuda` group into .venv-cuda beside the CPU venv: the GPU S cells' driver.
+if [ "${1:-}" = "--cuda" ]; then
+  (cd "$DEST" && UV_PROJECT_ENVIRONMENT=.venv-cuda uv sync --group cuda --no-group cpu --all-packages --extra train)
+  "$DEST/.venv-cuda/bin/python" -c 'import torch, hexo_rs, hexo_a0.model, torch_geometric; assert torch.cuda.is_available(), "no CUDA device"; print("vendor-build: strix cuda venv ok, torch", torch.__version__)'
+  exit 0
+fi
 (cd "$DEST" && uv sync --group cpu --all-packages --extra train)
 "$DEST/.venv/bin/python" -c 'import hexo_rs, hexo_a0.model, torch_geometric; print("vendor-build: strix venv ok, torch", __import__("torch").__version__)'
 mkdir -p vendor/external/strix_models
