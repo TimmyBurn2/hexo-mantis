@@ -58,8 +58,15 @@ Both were found by running the gate set rather than by reading it, and both are 
   - Openings follow the arena protocol (the origin, plies drawn within hex distance 2, 5 plies, the 4-in-6 threat
     redraw, each opening twice with sides swapped) over 288 seeded draws; book_v1 retires.
   - The parent and three run11 saves are re-read on it, and the going-forward line is re-derived.
+  - BUILT by DEPLOY-1 (2026-10-07); ANNOTATED by R387 and the operator's word (pending the architect): the ruler is ONE
+    rung of Six gen455, `ladder455_n16`, stepping 16 → 128 → 256; S plays on the GPU. Re-base at rung 16: parent
+    0.169, run11 108k/132k/156k 0.309/0.316/0.335 (anchor −1.591 logit, line −1.421). VALIDITY owed a ruling: the strict
+    four-rank match failed on the 132k–156k pair, unresolved on both instruments; the three resolved pairs agree.
 - **CARD-DEPLOY-1 — ORDERED by R386(d): SEARCH-PERF-1's report
-  (`docs/design/research/SEARCH_PERF_2026-10-06.md`) lands as DEPLOY-1. RUNNING 2026-10-06: the architect's DEPLOY-1
+  (`docs/design/research/SEARCH_PERF_2026-10-06.md`) lands as DEPLOY-1. EXITED 2026-10-07 on branch `deploy-1`
+  (push on the operator's word): L1 all six pass (a single-game GPU turn 535 → 251 ms), L2 move-identical, #13's pair
+  Δ 0.000 logit (no halt), D11 −20.6 %, #5(b) a posture not a speed lever, #9 landed with its stand-in miss flagged,
+  L5's VPS reads dropped (nothing runs on the VPS until a net is finished). Was: RUNNING 2026-10-06: the architect's DEPLOY-1
   packet, branch `deploy-1` in `.wt/deploy-1`, cells on the desktop, no box; legs L1 (the free fixes), L2 (the cache),
   L3 (the sign, #14's switch, #5's step (b), the producer-side verify), L4 (the instrument), L5 (the ladder's
   posture).**
@@ -86,11 +93,15 @@ Both were found by running the gate set rather than by reading it, and both are 
   run11@156k's shipped head; g is the lowest inside [0.3, 0.7]. It then re-reads the parent, run11@108k, @132k and
   @156k on (ruler g, the arena openings, L3's head), 288 pairs each, and S likewise once, and re-derives the
   going-forward line (the parent's new anchor + the line). Every old reading stays in the records with its instrument
-  named.
+  named. DONE as annotated under CARD-INSTRUMENT-BREAK: gens 150/200 read 0.180/0.211 (flat), the gen455 node screen
+  0.344/0.336/0.273/0.242 at 16/32/64/128 (flat), so one rung at 16; the validity ruling is owed.
 - **CARD-EVAL-OPENINGS-ARENA — OPENED by DEPLOY-1 for R386(c), OWNED by its L4: an arena-draw tool under tools/ (its
   path named here once tracked), the arena protocol exactly (the 18-cell region, odd plies, the 4-in-6 redraw, uniform
   over balanced draws), its unit tests mirroring the arena's `opening.test.ts` cases.** 288 seeded arena-5 openings are the cell book and "1 ply" the plain
-  start; book_v1 retires, its file kept for re-reads.
+  start; book_v1 retires, its file kept for re-reads. DONE: `tools/openings/arena_draw.py` matches the arena draw for
+  draw (941 draws) and mirrors its 16 cases; `arena_s20261006_p5` has 0 solver-forced openings and no colour bias
+  beyond chance. OPEN: "1 ply as the plain start" is not built (its reading is a question for the exit), and the in-run
+  gate still names `book_v1` in every production config (a mint at the next config change).
 - **CARD-RUN12-ENCODING — OPENED by DEPLOY-1 for R386(d): #18, pruning empty→empty edges, is run12's encoding.** 84 %
   of our edges join two empty cells (SEARCH_PERF §3.3 #18). It lands behind the seam (a new row in
   `crates/mantis-encoding/src/registry.toml`, a schema key, LAW-08/11/12, gate 11) with a fine-tune pair: pruned
@@ -101,6 +112,9 @@ Both were found by running the gate set rather than by reading it, and both are 
   served-sims witness for a re-rooted search (§3.6.2).
 - **CARD-SEARCH-PERF-HYGIENE — OPENED by DEPLOY-1: the SEARCH_PERF §7.5 defect list, one card, each row with its
   owner.**
+  DEPLOY-1's rows CLOSED 2026-10-07: D1 (the frame, gated to the deploy head and pinned at both stone levels), D2 (the
+  first-collision stop), D3 (the standalone width), D6 (the panic payload), D11 (the verify skip, −20.6 % a build), D14
+  (the stale threshold, gone with #1's rewrite), D15 (annotated in the CPU head profile).
   - D1 the virtual-loss frame at second-stone parents — DEPLOY-1 L3, with a test pinning the sign.
   - D2 a select call burning its attempts after its first collision — DEPLOY-1 L1 (the exact stop).
   - D3 `leaf_build_threads` resolving to 1 on single-game hosts — DEPLOY-1 L1 (#2).

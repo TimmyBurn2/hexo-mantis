@@ -34,10 +34,12 @@ in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c
     (R370(c) extended to eval paths), the virtual-loss frame fix (#13, riding (c)'s break), the early stop as a
     per-consumer switch, #5's step (b). #10 is permitted for quick-arm decided roots only; #15, #16 and the per-turn
     deploy unit wait for run12's design; #18 is run12's encoding.
-  - **DEPLOY-1 (the architect's packet of 2026-10-06) is RUNNING** on branch `deploy-1` in `.wt/deploy-1`, a separate
-    tree: the main checkout serves run11's cells until L4's re-base lands. Cells run on the desktop under the cell
-    lock; no box. L1 the free fixes, L2 the per-game cache, L3 the sign with #14's switch and #5's step (b), L4 the
-    instrument (the arena openings, the ruler screen, the re-base), L5 the ladder's posture (CARD-DEPLOY-1).
+  - **DEPLOY-1 EXITED 2026-10-07** on branch `deploy-1` (push on the operator's word; CARD-DEPLOY-1 has the results).
+    R387 (2026-10-07) made the ruler a node ladder on Six gen455; its screen read flat, so by the operator's word,
+    pending the architect, the ruler of record is ONE rung, `ladder455_n16` (stepping 16 → 128 → 256), with S on the
+    GPU. Re-base at rung 16: parent 0.169, run11's 108k–156k plateau 0.320. R387's validity read is owed a ruling (the
+    strict four-rank match failed on an unresolved pair; the three resolved pairs agree). Until then X stays the
+    reading line.
   - The trainer's interference stays parked except a read-only GIL sample on the live loop, on the operator's leave
     (R386(e)). perf-3-l1b stays a branch; search-perf-research is fast-forwarded (`dev` at `ef25e64f`); the main
     checkout's stale extension is rebuilt in a separate tree (R386(f), CARD-STALE-EXTENSION).
