@@ -103,7 +103,7 @@ class GameReceipt:
 
 
 def validate_receipt(body: Mapping[str, Any]) -> None:
-    """Refuse a body a reader could not trust (every field present, the net hash a sha256, the opening's five fields, two placements, an integer `sims` and a `book_stones` in 0..2 per move, an outcome from OUTCOMES). Raises: ReceiptError naming the first field that fails."""
+    """Refuse a body a reader could not trust (every field present, the net hash a sha256, the opening's five fields, two placements, an integer `sims`, a `book_stones` and a `stopped` in 0..2 per move, `serving` null or wake rows, an outcome from OUTCOMES). Raises: ReceiptError naming the first field that fails."""
     if body.get("schema_version") != RECEIPT_SCHEMA_VERSION:
         raise ReceiptError(f"schema_version {body.get('schema_version')!r} is not {RECEIPT_SCHEMA_VERSION}")
     for key in _REQUIRED:

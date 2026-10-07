@@ -1,7 +1,8 @@
-"""The strix rung adapter: the pinned `SootyOwl/hexo-strix` checkpoint as a
-fixed external reference, played by `tools/strix_driver.py` in the vendored tree's own venv
-(JSON lines; deterministic — strix's noise-off argmax-of-improved-policy acting). The fence is
-read at contact: every reply's legal set is compared with the board's and counted."""
+# >300 justify (R8): the vendored tree's locator, the variant grammar, the driver transport and the legality fence are one
+# adapter whose parts are only checkable against each other.
+"""The strix rung adapter: the pinned `SootyOwl/hexo-strix` checkpoint as a fixed external reference, played by
+`tools/strix_driver.py` in the vendored tree's own venv (JSON lines; noise-off argmax acting, deterministic on the CPU; a
+`@cuda` cell's GPU scatter may reorder, so its replay is measured, not promised). The fence counts every illegal reply."""
 from __future__ import annotations
 
 import json
@@ -196,7 +197,9 @@ def strix_availability() -> tuple[bool, str]:
 
 
 def venv_python(tree: Path, device: str) -> Path:
-    """The python of `device`'s venv inside the vendored strix tree."""
+    """The python of `device`'s venv inside the vendored strix tree. Raises: ValueError on a device with no venv."""
+    if device not in _DEVICE_VENVS:
+        raise ValueError(f"strix has no {device!r} venv (known: {sorted(_DEVICE_VENVS)})")
     return tree / _DEVICE_VENVS[device] / "bin" / "python"
 
 

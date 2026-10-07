@@ -62,6 +62,8 @@ max 10.5; total 43.5 s = **7.2 % of the wall** — one submitter of ≤ 8 leaves
 wake, so nearly every pop runs to the 10 ms deadline); `collate` 0.32 ms per pop (1.7 s total);
 `launch` (collate + the CPU forward) mean **103 ms** per pop, 562 s total; `gpu_wait` 0 (CPU,
 synchronous); occupancy 5.8 of 64 (fill 9 %); no fusion splits, no cap hits.
+ANNOTATED (DEPLOY-1, 2026-10-07): the 32-leaf wake no longer governs a single-game engine. Since ffacf2b5 a deploy
+engine declares its submitters and a pop wakes once each has its batch queued, so this deadline wait is gone there.
 
 **The play cell's argmax agreed with the unit cell's in 58 of 101 positions.** At 64 sims the head
 is a different player, not a faster copy; the receipt's `search.preset` label exists for that.

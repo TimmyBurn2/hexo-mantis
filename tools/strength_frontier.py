@@ -5,7 +5,7 @@ composition mirroring `mantis.run`'s eval seam, the parallel child runner, the p
 — are only checkable against each other; every game goes through `python -m mantis.eval.worker`.
 A cell: `label`, `candidate` (a checkpoint path, `bc_full` = every head of the BC checkpoint, or
 `bc_tp` = the BC net through the config's `identity.warm_start` seam), `search_kind`, `sims`, `games`,
-`opponent` (`strix` at its own `strix_sims` — RUNG-2; `six` at `six_nodes` on the pinned network `six_net`;
+`opponent` (`strix` at `strix_sims`, a variant named by `strix_solver`/`strix_radius`/`strix_device`; `six` at `six_nodes` on `six_net`;
 or a snapshot source played through the GATE block; the sealbot cell went with the sealbot rung), `gumbel_m`, `c_scale`/`q_rescale` (the
 deploy head's σ), `concurrency` (games in flight; 1 = the arena's serial loop), `opening_book` (a
 manifest id) and `seed_base` — all the config's when absent; BOOK_V2's replays vary the last two. No

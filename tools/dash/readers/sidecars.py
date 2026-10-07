@@ -9,8 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-#: The sidecars the follower writes beside a checkpoint: `<ckpt>.six30_16[.arm].json`, `<ckpt>.strix256[_r6].json`.
-GLOBS = ("*.six*.json", "*.strix*.json")
+#: The sidecars the follower writes beside a checkpoint: `<ckpt>.six30_16[.arm].json`, `<ckpt>.strix256[_r6].json`,
+#: `<ckpt>.ladder455_n16[.arm].json`; a test holds every follower unit to these.
+GLOBS = ("*.six*.json", "*.strix*.json", "*.ladder*.json")
 #: The going-forward read: the mean logit of the last `CELLS` cells against the parent's logit plus `LINE_LOGIT`.
 CELLS = 4
 LINE_LOGIT = 0.17
@@ -110,7 +111,7 @@ def parse(path: Path, raw: Any) -> Cell | None:
     elif isinstance(strix, dict):
         family = "strix"
         unit = ("strix", *common, str(strix.get("commit")), str(strix.get("checkpoint_sha256")), str(strix.get("sims")),
-                str(strix.get("solver", "on")), str(strix.get("radius")))
+                str(strix.get("solver", "on")), str(strix.get("radius")), str(strix.get("device", "cpu")))
         label = (f"Ours: {str(ours.get('search_kind')).upper()}, {ours.get('sims')} sims. Strix: {strix.get('sims')} sims, solver "
                  f"{strix.get('solver', 'on')}" + ("" if strix.get("radius") is None else f", radius {strix.get('radius')}"))
     else:

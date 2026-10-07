@@ -208,3 +208,24 @@ def test_malformed_ladder_fields_are_named_never_raised(ladder, tmp_path):
     assert read.changes == () and read.current is None and "changes is not a list" in read.note
     path.write_text(json.dumps({"changes": [{"step": 1, "from_unit": "a", "to": "b"}]}), encoding="utf-8")
     assert ladder.read(path).note == "read, but 1 change row(s) lack step, from or to"
+
+
+def test_every_follower_unit_writes_a_sidecar_the_dash_reads(sc) -> None:
+    """A census over the follower's units, so a new unit cannot drop out of the display unseen."""
+    import fnmatch
+    from pathlib import Path
+
+    from _toolpath import load_module_by_path
+
+    follower = load_module_by_path("strix_follower_globs", Path(__file__).resolve().parents[2] / "tools/strix_follower.py")
+    for unit in follower.UNITS:
+        name = follower.sidecar_path(Path("/x/r_00001000_abcd1234.ckpt"), unit, "full").name
+        assert any(fnmatch.fnmatch(name, g) for g in sc.GLOBS), unit
+
+
+def test_strix_on_another_device_is_another_series(sc, tmp_path):
+    cpu = sidecar(tmp_path, "r1", 3000, 0.4, family="strix", suffix="strix256_arena.cpu")
+    gpu = sidecar(tmp_path, "r1", 6000, 0.4, family="strix", suffix="strix256_arena.gpu",
+                  strix={**json.loads(cpu.read_text(encoding="utf-8"))["strix"], "device": "cuda"})
+    a, b = (sc.parse(p, json.loads(p.read_text(encoding="utf-8"))) for p in (cpu, gpu))
+    assert a is not None and b is not None and a.unit != b.unit

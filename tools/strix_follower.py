@@ -99,10 +99,18 @@ def resolve_checkpoint(run_dir: Path, run_id: str, trigger: Trigger) -> Path | N
     return found[0] if found else None
 
 
-def sidecar_path(checkpoint: Path, unit: str, arm: str | None = None) -> Path:
-    """The receipt beside the checkpoint; an A/B arm's names the arm, so no arm shadows another or the config's."""
+def whole_book(unit: str) -> int | None:
+    """A book unit's whole-book cell: every opening twice, sides swapped; None for a unit on the config's book."""
+    return 2 * len(book_openings(BOOK_UNITS[unit])) if unit in BOOK_UNITS else None
+
+
+def sidecar_path(checkpoint: Path, unit: str, arm: str | None = None, games: int | None = None) -> Path:
+    """The receipt beside the checkpoint; an arm's names the arm, and a book unit's screen its games, so neither shadows
+    the whole-book cell."""
     tag = "" if arm is None else f".{arm}"
-    return checkpoint.with_name(f"{checkpoint.name}.{UNITS[unit][2]}{tag}.json")
+    whole = whole_book(unit)
+    screen = "" if games is None or whole is None or games == whole else f".screen{games}"
+    return checkpoint.with_name(f"{checkpoint.name}.{UNITS[unit][2]}{screen}{tag}.json")
 
 
 @dataclass(frozen=True)
@@ -263,7 +271,7 @@ class Follower:
 
     def read_one(self, checkpoint: Path, *, trigger: str) -> tuple[str, Path]:
         """Play the cell unless its receipt exists: `(receipted|written|failed, path)`; Raises: ValueError — see below."""
-        out = sidecar_path(checkpoint, self.unit, self.arm)
+        out = sidecar_path(checkpoint, self.unit, self.arm, self.games)
         if out.exists():
             prior = json.loads(out.read_text(encoding="utf-8")).get("tactics") or {}
             if self.arm is not None and prior.get("block") != self.tactics:
@@ -390,7 +398,7 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.follow and args.unit not in FOLLOW_UNITS:
         ap.error(f"--follow reads the ruler units {list(FOLLOW_UNITS)} only; every other unit is a --once cell")
-    whole = 2 * len(book_openings(BOOK_UNITS[args.unit])) if args.unit in BOOK_UNITS else None
+    whole = whole_book(args.unit)
     games = args.games if args.games is not None else (whole or 288)
     if args.follow and whole is not None and games != whole:
         ap.error(f"--follow plays {args.unit}'s whole book ({whole} games); a smaller cell is a --once screen")

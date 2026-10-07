@@ -248,3 +248,12 @@ def test_a_cell_that_exits_without_an_error_names_its_rc(follower, tmp_path: Pat
                             host_load=lambda: follower.HostLoad(load_1m=0.0, cpu_count=16, gpu_util_pct=(0,)))
     status, path = run.read_one(ckpt, trigger="once")
     assert status == "failed" and "rc 1" in json.loads(path.read_text(encoding="utf-8"))["error"]
+
+
+def test_a_screen_of_a_book_unit_never_shares_the_whole_book_cells_receipt(follower) -> None:
+    """A 64-pair screen and the 288-pair cell of one save at one rung are two receipts, so the screen never blocks the cell."""
+    ck = Path("/x/r_00156000_deadbeef.ckpt")
+    whole = follower.sidecar_path(ck, "ladder455_n16", "full", games=576)
+    screen = follower.sidecar_path(ck, "ladder455_n16", "full", games=128)
+    assert whole == follower.sidecar_path(ck, "ladder455_n16", "full") and screen != whole and ".screen128" in screen.name
+    assert follower.sidecar_path(ck, "six30_16", "full", games=128) == follower.sidecar_path(ck, "six30_16", "full")

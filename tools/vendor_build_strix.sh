@@ -25,10 +25,13 @@ if [ "$HEAD_SHA" != "$PINNED_SHA" ]; then
   exit 3
 fi
 
-# strix's pyproject makes cpu/cuda/rocm torch mutually exclusive groups; the rung plays on the
-# CPU by design (the card belongs to the run) and `--all-packages --extra train` pulls the
-# workspace members (hexo_rs is built by maturin) and torch_geometric.
-# --cuda builds strix's own `cuda` group into .venv-cuda beside the CPU venv: the GPU S cells' driver.
+# strix's pyproject makes cpu/cuda/rocm torch mutually exclusive groups; the S units on record play the CPU group,
+# `--cuda` builds the `cuda` group into .venv-cuda beside it (the GPU S units), and `--all-packages --extra train`
+# pulls the workspace members (hexo_rs is built by maturin) and torch_geometric.
+case "${1:-}" in
+  ""|--cuda) ;;
+  *) echo "vendor-build: unknown argument ${1}; the one flag is --cuda" >&2; exit 2 ;;
+esac
 if [ "${1:-}" = "--cuda" ]; then
   (cd "$DEST" && UV_PROJECT_ENVIRONMENT=.venv-cuda uv sync --group cuda --no-group cpu --all-packages --extra train)
   "$DEST/.venv-cuda/bin/python" -c 'import torch, hexo_rs, hexo_a0.model, torch_geometric; assert torch.cuda.is_available(), "no CUDA device"; print("vendor-build: strix cuda venv ok, torch", torch.__version__)'
