@@ -11,9 +11,11 @@ WEB = Path(__file__).resolve().parent.parent / "web"
 VIEWS = (("run", "Run"), ("games", "Games"), ("analyzer", "Analyzer"))
 _MARK = ('<svg width="20" height="22" viewBox="0 0 20 22" aria-hidden="true"><path d="M10 1 19 6v10l-9 5-9-5V6z" '
          'fill="none" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="11" r="3.2" fill="currentColor"/></svg>')
-#: Runs before first paint, so a stored or preferred theme never flashes the other one.
-_THEME = ("<script>(function(){var t=null;try{t=localStorage.getItem('mantis-theme')}catch(e){}"
-          "if(t)document.documentElement.dataset.theme=t;})();</script>")
+def _theme(scripted: bool) -> str:
+    """Runs before first paint, so a stored theme never flashes the other one; a served page marks itself scripted."""
+    mark = "d.classList.add('js');" if scripted else ""
+    return (f"<script>(function(){{var d=document.documentElement,t=null;{mark}"
+            "try{t=localStorage.getItem('mantis-theme')}catch(e){}if(t)d.dataset.theme=t;})();</script>")
 
 
 @dataclass(frozen=True)
@@ -67,5 +69,5 @@ def render(title: str, shell: Shell, body: str, *, scripts: tuple[str, ...] = ()
         code = "".join(f'<script src="/static/{s}" defer></script>' for s in scripts)
     return ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-            f"<title>{esc(title)}</title>{_THEME}{style}</head>"
+            f"<title>{esc(title)}</title>{_theme(not shell.frozen)}{style}</head>"
             f'<body class="{"app" if app else "doc"}">{_bar(shell)}{body}{code}</body></html>')

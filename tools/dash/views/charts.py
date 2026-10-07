@@ -13,7 +13,7 @@ RUN_CLASSES = ("c1", "c2", "c3")
 
 @dataclass(frozen=True)
 class Key:
-    """One legend entry: its label, colour class, glyph (`line`, `dash`, `dot`, `band`, `mark`, `faint`) and an off-reason."""
+    """One legend entry: its label, colour class, glyph (`line`, `dash`, `dot`, `band`, `mark`, `switch`, `faint`), an off-reason."""
 
     label: str
     cls: str = "cf"
@@ -40,20 +40,21 @@ def legend(keys: Sequence[Key]) -> str:
         return ""
     parts = []
     for k in keys:
-        glyph = {"line": "", "dash": "dash", "dot": "dot", "band": "band", "mark": "mk", "faint": "faint"}[k.glyph]
+        glyph = {"line": "", "dash": "dash", "dot": "dot", "band": "band", "mark": "mk", "switch": "sw", "faint": "faint"}[k.glyph]
         off = f" ({esc(k.off)})" if k.off else ""
         parts.append(f'<span class="{k.cls}{" off" if k.off else ""}"><i class="{glyph}"></i>'
                      f'<span class="lbl">{esc(k.label)}{off}</span></span>')
     return f'<div class="legend">{"".join(parts)}</div>'
 
 
-def table(head: Sequence[str], rows: Sequence[Sequence[str]]) -> str:
-    """A table twin, closed by default; cells arrive already formatted and are escaped here."""
+def table(head: Sequence[str], rows: Sequence[Sequence[str]], summary: str = "Table", *, opened: bool = False) -> str:
+    """A table twin under its summary, closed unless `opened`; cells arrive already formatted and are escaped here."""
     if not rows:
         return ""
     th = "".join(f"<th>{esc(h)}</th>" for h in head)
     body = "".join("<tr>" + "".join(f"<td>{esc(c)}</td>" for c in r) + "</tr>" for r in rows)
-    return f'<details><summary>Table</summary><table class="data"><thead><tr>{th}</tr></thead><tbody>{body}</tbody></table></details>'
+    return (f'<details{" open" if opened else ""}><summary>{esc(summary)}</summary><table class="data"><thead><tr>{th}</tr>'
+            f'</thead><tbody>{body}</tbody></table></details>')
 
 
 def figure(title: str, chart: Chart | None, definition: str = "", *, goal: Goal | None = None, now: str = "",

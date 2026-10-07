@@ -67,7 +67,36 @@
     svg.addEventListener('pointerleave', leave);
   }
 
+  // The readings list: each link opens its panel below; the open set lives in the URL's #show= and, per run, in storage.
+  function readings() {
+    if (!document.documentElement.classList.contains('js')) return;
+    document.querySelectorAll('.readings').forEach(group => {
+      const links = [...group.querySelectorAll('a.reading')], store = 'mantis-show:' + group.dataset.run;
+      const panel = a => document.getElementById('sp-' + a.dataset.key);
+      const hashed = (location.hash.match(/(?:^#|&)show=([^&]*)/) || [])[1];
+      let open = hashed !== undefined ? hashed.split(',').filter(Boolean) : null;
+      if (open === null) { try { open = JSON.parse(localStorage.getItem(store) || '[]'); } catch (e) { open = []; } }
+      const apply = () => links.forEach(a => { const on = open.includes(a.dataset.key); a.setAttribute('aria-pressed', String(on)); panel(a).classList.toggle('on', on); });
+      const toggle = a => {
+        const k = a.dataset.key, opening = !open.includes(k);
+        open = opening ? [...open, k] : open.filter(x => x !== k);
+        apply();
+        if (opening) panel(a).scrollIntoView({ block: 'nearest' });
+        try { localStorage.setItem(store, JSON.stringify(open)); } catch (e) { /* storage refused: the toggles still work */ }
+        history.replaceState(null, '', location.pathname + location.search + (open.length ? '#show=' + open.join(',') : ''));
+      };
+      links.forEach(a => {
+        a.setAttribute('role', 'button');
+        a.setAttribute('aria-controls', 'sp-' + a.dataset.key);
+        a.addEventListener('click', ev => { ev.preventDefault(); toggle(a); });
+        a.addEventListener('keydown', ev => { if (ev.key === ' ') { ev.preventDefault(); toggle(a); } });
+      });
+      apply();
+    });
+  }
+
   theme();
   picker();
+  readings();
   document.querySelectorAll('figure.chart .plot').forEach(crosshair);
 })();

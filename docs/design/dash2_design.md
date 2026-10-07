@@ -348,3 +348,14 @@ units.
   stays in the line, outside the read). The opening book is part of a unit's identity (one unit name read on two books
   is two series) and the label names it. The Analyzer re-lists its checkpoint directories on every engines read, so a
   save that lands while the server runs is offered without a restart, and keeps at most four nets loaded.
+- **2026-10-07, the strength section is one chart and a list (operator's ask: cleaned up, expandable without bloat).** The
+  rule's ruler is the one chart drawn by default, at the shared chart size; beside it "More readings" lists every other ruler
+  (its latest win rate, with the save named when older than the lead's, its role, and its interval-gated read over its parent)
+  and one row for the one-off reads (single cells with nothing to set them against, a table). A row opens its panel below;
+  the open set persists per run and in the URL's `#show=`, and a frozen copy is unscripted, so every panel shows. A ruler is
+  named by its opponent ("Six gen 455, 16 nodes, arena openings"), the unit in its caption. The "every ruler against its
+  parent" logit chart is gone: each row carries its parent read. The headline sets the latest cell against the first of the
+  last four on the same instrument. With Compare on, the aside gives the logit gap at each of the last four saves both runs
+  read, the latest with its interval (unpaired), on the lead ruler or, when the compared run has none there, on the ruler
+  both read latest; each panel's tables add the head-to-head at those saves. A rule switch is a dashed vertical line, apart
+  from the promotion marks.

@@ -96,7 +96,7 @@ def page(snaps: Sequence[RunSnapshot], *, runs: tuple[str, ...], now: float | No
     foot = (f"Frozen copy of {esc(head.label)}, record as of {source}." if frozen
             else ", ".join(f"{esc(x.label)} record as of {esc(when(x.events.last_ts))}" for x in snaps) + ".")
     body = (f'<main class="wrap">{status(head, now, failure)}'
-            + _section("strength", "Is it getting stronger?", *strength, layout="two")
+            + _section("strength", "Is it getting stronger?", *strength, layout="stack")
             + _section("value", "Is the value head learning?", *value, layout="grid")
             + _section("training", "Is training stable?", *train, layout="grid")
             + _section("selfplay", "Is self-play healthy?", *play, layout="grid")

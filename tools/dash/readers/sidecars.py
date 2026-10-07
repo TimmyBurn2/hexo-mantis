@@ -62,6 +62,7 @@ class Cell:
     n: int
     regime: str
     forfeits: int = 0
+    title: str = ""
 
     @property
     def logit(self) -> float:
@@ -107,17 +108,20 @@ def parse(path: Path, raw: Any) -> Cell | None:
     field, book = str(raw.get("unit")), raw.get("opening_book")
     # The openings are part of the instrument: one unit name over two books is two series.
     common = (field, str(ours.get("search_kind")), str(ours.get("sims")), tactics, str(raw.get("opening_book_sha256") or book))
+    openings = f", {str(book).split('_')[0]} openings" if book else ""
     if isinstance(six, dict):
         family = "six"
         unit = ("six", *common, str(six.get("commit")), str(six.get("net_sha256")), str(six.get("nodes")))
         label = (f"Ours: {str(ours.get('search_kind')).upper()}, {ours.get('sims')} sims, "
                  f"{tactics if arm is None else 'tactics ' + tactics}. Six: gen {six.get('generation')}, {six.get('nodes')} nodes")
+        title = f"Six gen {six.get('generation')}, {six.get('nodes')} nodes{openings}"
     elif isinstance(strix, dict):
         family = "strix"
         unit = ("strix", *common, str(strix.get("commit")), str(strix.get("checkpoint_sha256")), str(strix.get("sims")),
                 str(strix.get("solver", "on")), str(strix.get("radius")), str(strix.get("device", "cpu")))
         label = (f"Ours: {str(ours.get('search_kind')).upper()}, {ours.get('sims')} sims. Strix: {strix.get('sims')} sims, solver "
                  f"{strix.get('solver', 'on')}" + ("" if strix.get("radius") is None else f", radius {strix.get('radius')}"))
+        title = f"Strix {strix.get('sims')} sims{openings}"
     else:
         return None
     if book:
@@ -130,7 +134,7 @@ def parse(path: Path, raw: Any) -> Cell | None:
         wr, lo, hi, n = _without_forfeits(raw, wr, n, forfeits)
     return Cell(run_id=str(raw.get("run_id")), stem=stem, step=step, family=family, unit_field=field,
                 name=field if arm is None else f"{field}.{arm}", unit=unit, label=label, wr=wr, lo=lo, hi=hi, n=n,
-                regime=str(raw.get("regime", "?")), forfeits=forfeits)
+                regime=str(raw.get("regime", "?")), forfeits=forfeits, title=title)
 
 
 def _without_forfeits(raw: dict[str, Any], wr: float, n: int, forfeits: int) -> tuple[float, float, float, int]:
@@ -198,6 +202,7 @@ class Ruler:
     line: tuple[Cell, ...]
     parent: Cell | None
     rule: bool
+    title: str = ""
     rule_until: int | None = None
     rule_since: int | None = None
 
@@ -223,8 +228,10 @@ def rulers(cells: list[Cell], run_id: str, parent_stem: str | None, rule: str | 
         if c.run_id == run_id:
             by_unit.setdefault(c.unit, []).append(c)
     names: dict[str, int] = {}
+    titles: dict[str, int] = {}
     for own in by_unit.values():
         names[own[0].name] = names.get(own[0].name, 0) + 1
+        titles[own[0].title] = titles.get(own[0].title, 0) + 1
 
     def named(u: str | None) -> list[tuple[str, ...]]:
         return [k for k, own in by_unit.items() if u is not None and u in (own[0].name, own[0].unit_field)]
@@ -236,7 +243,8 @@ def rulers(cells: list[Cell], run_id: str, parent_stem: str | None, rule: str | 
         head = own[0]
         parent = next((c for c in cells if parent_stem is not None and c.stem == parent_stem and c.unit == unit), None)
         name = head.name if names[head.name] == 1 else f"{head.name} #{_tag(unit)}"
-        out.append(Ruler(name=name, unit_field=head.unit_field, family=head.family, unit=unit, label=head.label,
+        title = head.title if titles[head.title] == 1 else f"{head.title} ({name})"
+        out.append(Ruler(name=name, unit_field=head.unit_field, family=head.family, unit=unit, label=head.label, title=title,
                          line=tuple(sorted(own, key=lambda c: c.step)), parent=parent,
                          rule=len(matched) == 1 and unit == matched[0], rule_until=until.get(unit),
                          rule_since=switches[-1].step if switches and unit in matched else None))

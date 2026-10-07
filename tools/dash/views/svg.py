@@ -63,6 +63,7 @@ class Chart:
     dots: Sequence[Dots] = ()
     refs: Sequence[Ref] = ()
     marks: Sequence[tuple[float, str]] = ()
+    switches: Sequence[tuple[float, str]] = ()
     x_domain: tuple[float, float] | None = None
     y_domain: tuple[float, float] | None = None
     y_floor: float | None = None
@@ -157,6 +158,10 @@ class Chart:
                            f'{esc(r.label)}</text>')
             elif r.label:
                 out.append(f'<text class="reflabel" x="{_M["l"] + 6}" y="{py(r.y) + 11:.1f}">{esc(r.label)}</text>')
+        for x, label in self.switches:
+            if x0 <= x <= x1:
+                out.append(f'<line class="switch" x1="{px(x):.1f}" x2="{px(x):.1f}" y1="{_M["t"]:.1f}" y2="{_M["t"] + ih:.1f}">'
+                           f'<title>{esc(label)}</title></line>')
         for d in self.dots:
             for x, y, lo, hi in d.pts:
                 cx = px(x) + d.dx
