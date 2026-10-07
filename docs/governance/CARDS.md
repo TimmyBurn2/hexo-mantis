@@ -38,13 +38,27 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by R386 (THE FLOOR, THE FRESH LINE, THE INSTRUMENT; 2026-10-06) — run11 pauses, the instrument breaks once, DEPLOY-1
 
-- **CARD-RUN11-CYCLE-2 — ORDERED by R386(a): run11 pauses at its next save (bundle mirrored) and resumes with a second
-  cosine cycle, 5e-4 → 1e-4 over 54k steps, minted by the ruling. PAUSED 2026-10-06 20:00 CEST at 174 008.** The next
-  four ladder cells read it against the 108k–156k plateau mean: a climb by the line makes the floor the bound;
-  otherwise run12 takes the budget. The mint is owed (`tools/mint_config.py`); box A runs TRAIN-SPEED-1 while run11
-  pauses.
-- **CARD-TRAIN-SPEED-1 — ORDERED by R386(a): box A hosts TRAIN-SPEED-1's closed-loop A/Bs and the knob sweep while
-  run11 pauses.** Box A's display stays up read-only at the lowest priority, with no GPU.
+- **CARD-RUN11-CYCLE-2 — ORDERED by R386(a); EXITED 2026-10-07 (local records `mantis-records/run11-cycle-2/`): run11
+  resumed 12:33 CEST from its 174 008 stop save on its second cosine cycle; the read says NO CLIMB — the floor was not
+  the bound, run12 takes the budget.** The mint: `train.lr_cycle` {174 008, 5e-4, 1e-4, 54 000} (the operator kept the
+  ruled 54k) and n_workers 48. The read (R387's rung 16 by the operator's word, pending the architect): 177k 0.293,
+  180k 0.306, 183k 0.311, 186k 0.368 → mean −0.759 logit against the plateau −0.754, line −0.584. The post-resume
+  saves are clean (exams held, no band miss, the gap under its line); the gate rounds at 180k and 216k promoted.
+  Every pre-v57 tree refuses the resumed run's checkpoints (`train.lr_cycle` extra_forbidden); the cell trees carry
+  the v57 schema.
+- **CARD-CYCLE-ANNEALED-READ — CARDED by RUN11-CYCLE-2: a rung-16 cell at the cycle's annealed end (228k) and after.**
+  The pre-registered window is the cycle's first 12k steps at LR 5.0 → 4.5e-4; 186k alone read +0.21 logit over the
+  plateau (SE 0.08). A report row for the architect, not a re-opening of the verdict.
+- **CARD-TRAIN-SPEED-1 — ORDERED by R386(a); EXITED 2026-10-07: box A's closed-loop A/Bs (4 interleaved pairs each, the
+  trainer closed-loop as production) and the knob sweep.** C8 (the Gumbel interior logits once, bit-identical,
+  criterion −13 %) LANDED; #10 (quick-arm decided roots unsearched, value-only rows, `unsearched_decided_rows`) +1.1 %
+  LANDED; DEPLOY-1's #4 builder +5.9 % LANDED; the ring-sample width 1 → 8 (step −23 %, positions/h −0.9 %) is a ready
+  lever, NOT landed (CARD-RING-SAMPLE-WIDTH). The sweep (+3 % rule): n_workers 32 → 48 +5.7 % LANDED; batch 96,
+  wait 5 ms, cache ×4 and sync cadence 75 did not clear it; solver budgets not run (~1 % of worker CPU). Realised
+  steps/game stayed ≥ 2.3 throughout; exams and bands in on every A/B ring.
+- **CARD-RING-SAMPLE-WIDTH — CARDED by TRAIN-SPEED-1: the trainer's ring sample at 8 threads, a cap lever.** It lands
+  (a trainer-side width; the in-run eval's leaf-build reservation unmoved) only when a change drops realised
+  steps/game below 2.3.
 - **CARD-RUN11-FRESH-RESUME — ORDERED by R386(b): RUN11-FRESH is VIABLE and resumes on box B for 48 h.** Its cap band
   becomes a two-read halt at < 10 % with a slope row; its exam floors stay report-only until first passed. Its curve
   against run11's at matched steps, on (c)'s instrument, is run12's parent evidence. The FRESH-2 packet runs it in
@@ -255,7 +269,11 @@ Both were found by running the gate set rather than by reading it, and both are 
   one waited on the shared stream's serving work), so the serving step falls -18 % and the in-loop step 0.392 ->
   0.357 s at the same 1.2 steps/s; its L4(a) reads the check-14 thread at 1.1 % of trainer wall (0.357 vs 0.353 s off,
   positions/h +1.7 % inside the IQR, 0.64 cores) — under the 5 % that would earn a ruling request. PARKED by R386(e)
-  except its first step: a read-only GIL sample on the live loop, on the operator's leave.
+  except its first step: a read-only GIL sample on the live loop, on the operator's leave. RUN11-CYCLE-2 (2026-10-06,
+  on a replica of run11's loop, run11 being paused; the operator's choice): the GIL is held 11.7 % of wall — the
+  server 5.5, the retirer 3.3 (its result submit), the trainer 1.3; the trainer's busy time is ~35 % its GIL-free ring
+  sample and ~44 % waiting on its own GPU work. The interference is the device: GIL-side remedies reach ≤ ~3 % each, A7's
+  revival line is unmet (~0.6 ms per pop); a 25 % lower trainer busy share (8 sample threads) moved self-play by −0.9 %.
 - **CARD-PERF-COLLATE-2 — CARDED by PERF-2: after L3 the server's launch is its collate. PERF-3's L1 (a second server
   thread on the one queue, branch `perf-3-l1` `0e834fa5`) NOT LANDED: B-64 cell +5.0 % (A-B-A +4.3 %) against a +10 %
   line; one production pair +5.4 % (IQRs disjoint, inside the loop's between-run spread). Pops shrink (B 64 -> 54 in the

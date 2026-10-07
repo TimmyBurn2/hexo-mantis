@@ -12,16 +12,19 @@ and resumes with a second cosine cycle (5e-4 → 1e-4 over 54k steps); box A hos
 RUN11-FRESH is VIABLE and resumes on box B for 48 h under a two-read cap band at < 10 %. The instrument breaks once:
 the ruler of record becomes Six gen g at equal playouts per turn on the arena protocol's openings, and book_v1 retires.
 SEARCH-PERF-1 is accepted and lands as DEPLOY-1.** run10 will not START (R376(c)). run11 is arm 2's run
-(`configs/run11a2.yaml`, run id `run11a2`), continued from 32 201 under R385(a); at this commit it is PAUSED on box A
-at 174 008 (2026-10-06 20:00 CEST), its stop bundle resumable. run11 carries the deploy block of record (R378(a)) and
+(`configs/run11a2.yaml`, run id `run11a2`), continued from 32 201 under R385(a); at this commit it RUNS on box A
+on its second cosine cycle, resumed 2026-10-07 12:33 CEST from its 174 008 stop save (RUN11-CYCLE-2). run11 carries the deploy block of record (R378(a)) and
 in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c), CARD-RUN11-DESIGN).
 
 - **R386's order.**
   - RUN11-GO accepted (R386(a)). run11 pauses at its next save, bundle mirrored, and resumes with a second cosine
-    cycle, 5e-4 → 1e-4 over 54k steps, minted by the ruling (CARD-RUN11-CYCLE-2; the mint is owed). The next four
-    ladder cells read it against the 108k–156k plateau mean: a climb by the line makes the floor the bound; otherwise
-    run12 takes the budget. While run11 pauses, box A hosts TRAIN-SPEED-1's closed-loop A/Bs and the knob sweep
-    (CARD-TRAIN-SPEED-1). DASH-2 is admitted docs-only; box A's display read-only at the lowest priority, no GPU.
+    cycle, 5e-4 → 1e-4 over 54k steps, minted by the ruling (CARD-RUN11-CYCLE-2). The mint landed as `train.lr_cycle`
+    (config contract v57; config-owned, so a resume runs it) with the sweep's `selfplay.n_workers` 48; run11 resumed
+    2026-10-07 12:33 CEST and its first logged LR matched the closed form. The read (rung 16, four post-resume saves
+    against the plateau mean −0.754 logit, line +0.17): 177k–186k mean −0.759 → NO CLIMB: the floor was not the bound;
+    run12 takes the budget. Beside it: the cells rise and 186k alone reads +0.21 over the plateau (a 228k report row is
+    carded). TRAIN-SPEED-1 (CARD-TRAIN-SPEED-1) EXITED on box A: C8, #10 and DEPLOY-1's #4 landed, the sweep moved
+    only n_workers 32 → 48; production since the resume runs ~+21 % trainer steps/h at 2.38 steps/game. DASH-2 is admitted docs-only; box A's display read-only at the lowest priority, no GPU.
   - RUN11-FRESH is VIABLE (R386(b)) and resumes on box B for 48 h: the cap band becomes a two-read halt at < 10 % with a
     slope row; exam floors stay report-only until first passed. Its curve against run11's at matched steps, on the new
     instrument, is run12's parent evidence (CARD-RUN11-FRESH-RESUME; the FRESH-2 packet, another session).
@@ -41,7 +44,8 @@ in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c
     operator's word, for the architect to ratify (the strict four-rank match failed only on a pair unresolved on both
     instruments; the three resolved pairs agree): the ladder is the reading line and X stops.
   - The trainer's interference stays parked except a read-only GIL sample on the live loop, on the operator's leave
-    (R386(e)). perf-3-l1b stays a branch; search-perf-research is fast-forwarded (`dev` at `ef25e64f`); the main
+    (R386(e)). run11 was already paused, so it ran on a replica loop (the operator's choice): the GIL is held 11.7 % of
+    wall, the trainer 1.3 % — the interference is the device, not the GIL (CARD-PERF-TRAINER-CONTENTION). perf-3-l1b stays a branch; search-perf-research is fast-forwarded (`dev` at `ef25e64f`); the main
     checkout's stale extension is rebuilt in a separate tree (R386(f), CARD-STALE-EXTENSION).
 - **R385 (2026-10-05): THE RUN STARTS; THE RULE IS RETIRED.** RUN11-PRE accepted with its registered pick (arm 3) set
   aside; run11 continued arm 2 on box A; RUN11-FRESH ran on box B. Its order is below.
