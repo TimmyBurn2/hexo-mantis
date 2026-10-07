@@ -245,8 +245,14 @@ class TrainConfig(StrictModel):
     value_mask_redraw_p: float = Field(ge=0, lt=1, allow_inf_nan=False)
 
     @model_validator(mode="after")
-    def _a_cycle_restarts_a_cosine(self) -> "TrainConfig":
-        """Refuse a second cycle on a schedule that has no cosine; one past the run's last step is never reached, as a horizon is."""
-        if self.lr_cycle is not None and self.lr_schedule != "cosine":
+    def _a_cycle_restarts_a_cosine_inside_the_run(self) -> "TrainConfig":
+        """Refuse a second cycle on a schedule with no cosine, or one starting at or past the run's last step (it would never run)."""
+        if self.lr_cycle is None:
+            return self
+        if self.lr_schedule != "cosine":
             raise ValueError(f"train.lr_cycle restarts a cosine, but train.lr_schedule is {self.lr_schedule!r}")
+        if self.lr_cycle.start_step >= self.max_train_steps:
+            raise ValueError(
+                f"train.lr_cycle.start_step ({self.lr_cycle.start_step}) is not below train.max_train_steps "
+                f"({self.max_train_steps}), so the cycle would never run")
         return self

@@ -53,9 +53,12 @@ def production(request: pytest.FixtureRequest) -> RunConfig:
 def _revalidated(config: RunConfig, section: str, key: str, value: object) -> RunConfig:
     """`dump -> mutate ONE key -> model_validate` — the loader's own final step, so every
     cross-field validator re-runs and every synthetic config here is one a run could be
-    launched from."""
+    launched from. A run shortened past its LR cycle's start drops the cycle, which is not the axis under test."""
     raw = config.model_dump()
     raw[section][key] = value
+    cycle = raw["train"]["lr_cycle"]
+    if cycle is not None and cycle["start_step"] >= raw["train"]["max_train_steps"]:
+        raw["train"]["lr_cycle"] = None
     return RunConfig.model_validate(raw)
 
 

@@ -89,6 +89,10 @@ BOUND_VIOLATIONS: list[tuple[str, object]] = [
     ("value_mask_redraw_p", -0.125),
     ("value_mask_redraw_p", 1.0),
     ("value_mask_redraw_p", float("nan")),
+    # a second cycle that starts at step 0, anneals upward, or has no horizon
+    ("lr_cycle", {"start_step": 0, "lr": 5e-4, "eta_min": 1e-4, "t_max": 10}),
+    ("lr_cycle", {"start_step": 10, "lr": 1e-4, "eta_min": 5e-4, "t_max": 10}),
+    ("lr_cycle", {"start_step": 10, "lr": 5e-4, "eta_min": 1e-4, "t_max": 0}),
 ]
 
 LITERAL_VIOLATIONS: list[tuple[str, object]] = [
@@ -163,3 +167,13 @@ def test_the_lr_horizon_is_one_required_int_with_no_null_fallback():
     """`scheduler_t_max` is the one horizon: a null no longer falls back to a second key."""
     with pytest.raises(ValidationError, match="scheduler_t_max"):
         TrainConfig.model_validate(_payload(scheduler_t_max=None))
+
+
+def test_a_second_cycle_is_refused_where_it_could_never_run() -> None:
+    """A cycle needs the cosine it restarts and a start before the run's last step; one step earlier constructs."""
+    cycle = {"start_step": 1_000_000, "lr": 5e-4, "eta_min": 1e-4, "t_max": 10}
+    with pytest.raises(ValidationError, match="lr_schedule"):
+        TrainConfig.model_validate(_payload(lr_schedule="none", lr_cycle=dict(cycle, start_step=10)))
+    with pytest.raises(ValidationError, match="would never run"):
+        TrainConfig.model_validate(_payload(lr_cycle=cycle))
+    assert TrainConfig.model_validate(_payload(lr_cycle=dict(cycle, start_step=999_999))).lr_cycle is not None
