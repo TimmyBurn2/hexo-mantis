@@ -1,3 +1,5 @@
+# >300 justify (R8): every Run-view section is tested over one synthetic run builder (_record, _ruled, _rulers_snap);
+# a split copies that builder, a second authority on what a run record looks like.
 """The Run view: verdict words only past their interval, gaps as sentences never zeros, losses unscored, a byte-identical freeze."""
 from __future__ import annotations
 

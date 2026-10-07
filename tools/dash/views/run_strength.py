@@ -1,3 +1,5 @@
+# >300 justify (R8): the verdict, the readings list and every panel read one ruler set through the same helpers
+# (_value, _gap, _matched); split, the save each number comes from would have two authorities.
 """Is it getting stronger: the rule's ruler in win rate beside a list of every other reading, each opened on demand."""
 from __future__ import annotations
 

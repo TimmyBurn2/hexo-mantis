@@ -1,3 +1,5 @@
+# >300 justify (R8): the strength reader's parse, series, rule and ladder cases share one sidecar fixture set, and each
+# case is evidence only against the same fixtures the others pass on.
 """The dash strength reader: one series per unit with its own parent, the rule marked, the going-forward read, the ladder."""
 from __future__ import annotations
 
