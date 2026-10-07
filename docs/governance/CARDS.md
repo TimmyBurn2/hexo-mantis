@@ -60,8 +60,10 @@ Both were found by running the gate set rather than by reading it, and both are 
   - The parent and three run11 saves are re-read on it, and the going-forward line is re-derived.
   - BUILT by DEPLOY-1 (2026-10-07); ANNOTATED by R387 and the operator's word (pending the architect): the ruler is ONE
     rung of Six gen455, `ladder455_n16`, stepping 16 → 128 → 256; S plays on the GPU. Re-base at rung 16: parent
-    0.169, run11 108k/132k/156k 0.309/0.316/0.335 (anchor −1.591 logit, line −1.421). VALIDITY owed a ruling: the strict
-    four-rank match failed on the 132k–156k pair, unresolved on both instruments; the three resolved pairs agree.
+    0.169, run11 108k/132k/156k 0.309/0.316/0.335 (anchor −1.591 logit, line −1.421). VALIDITY ACCEPTED by the
+    operator's word (2026-10-07, for the architect to ratify): the strict four-rank match failed only on the 132k–156k
+    pair, unresolved on both instruments; the three resolved pairs agree (tau 0.67). The ladder is the reading line; X
+    stops.
 - **CARD-DEPLOY-1 — ORDERED by R386(d): SEARCH-PERF-1's report
   (`docs/design/research/SEARCH_PERF_2026-10-06.md`) lands as DEPLOY-1. EXITED 2026-10-07 on branch `deploy-1`
   (push on the operator's word): L1 all six pass (a single-game GPU turn 535 → 251 ms), L2 move-identical, #13's pair

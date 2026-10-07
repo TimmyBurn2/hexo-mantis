@@ -37,9 +37,9 @@ in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c
   - **DEPLOY-1 EXITED 2026-10-07** on branch `deploy-1` (push on the operator's word; CARD-DEPLOY-1 has the results).
     R387 (2026-10-07) made the ruler a node ladder on Six gen455; its screen read flat, so by the operator's word,
     pending the architect, the ruler of record is ONE rung, `ladder455_n16` (stepping 16 → 128 → 256), with S on the
-    GPU. Re-base at rung 16: parent 0.169, run11's 108k–156k plateau 0.320. R387's validity read is owed a ruling (the
-    strict four-rank match failed on an unresolved pair; the three resolved pairs agree). Until then X stays the
-    reading line.
+    GPU. Re-base at rung 16: parent 0.169, run11's 108k–156k plateau 0.320. R387's validity read is ACCEPTED by the
+    operator's word, for the architect to ratify (the strict four-rank match failed only on a pair unresolved on both
+    instruments; the three resolved pairs agree): the ladder is the reading line and X stops.
   - The trainer's interference stays parked except a read-only GIL sample on the live loop, on the operator's leave
     (R386(e)). perf-3-l1b stays a branch; search-perf-research is fast-forwarded (`dev` at `ef25e64f`); the main
     checkout's stale extension is rebuilt in a separate tree (R386(f), CARD-STALE-EXTENSION).
