@@ -468,8 +468,8 @@ class SelfPlayRunner:
         self,
     ) -> list[
         tuple[
-            int, int, list[tuple[int, int]], int, int, int, int, int, list[tuple[int, bool]],
-            list[tuple[int, float, float | None, list[tuple[tuple[int, int], int, float, float]]]] | None,
+            int, int, list[tuple[int, int]], int, int, int, int, int, list[tuple[int, str]],
+            list[tuple[int, float, float | None, list[tuple[tuple[int, int], int, float, float]], float]] | None,
         ]
     ]: ...
     @property

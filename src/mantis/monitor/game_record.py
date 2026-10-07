@@ -263,13 +263,13 @@ def selfplay_record(
     worker_id: int,
     seed: int,
     served_sims: int,
-    move_arms: list[tuple[int, bool]],
+    move_arms: list[tuple[int, str]],
     game_id_byte_hash: str | None = None,
     search_stats: list[PositionStatsRow] | None = None,
 ) -> dict[str, Any]:
     """Build one self-play game as a record. `step` is the ACTOR step — the weights that played
     this game — and `step_kind` says so; `colors` is ABSENT (both seats are the same net);
-    `move_arms` is the runner's `(sims, is_full_search)` per move; `search_stats` is
+    `move_arms` is the runner's `(sims, arm label)` per move; `search_stats` is
     written for a SAMPLED game only and an un-sampled game carries no key.
     Raises: ValueError when `move_arms` and `moves` differ in length."""
     if len(move_arms) != len(moves):
@@ -291,8 +291,8 @@ def selfplay_record(
         "result": result,
         "termination": termination,
         "moves": _axial(moves),
-        "move_sims": [int(sims) for sims, _full in move_arms],
-        "move_arms": [_arm_label(int(sims), bool(full)) for sims, full in move_arms],
+        "move_sims": [int(sims) for sims, _arm in move_arms],
+        "move_arms": [str(arm) for _sims, arm in move_arms],
     }
     if game_id_byte_hash is not None:
         # The dedupe input, carried so effective-n is counted off the RECORD.
@@ -315,13 +315,6 @@ def _position_entry(
     entry["q"] = [float(q) for _c, _n, q, _p in children]
     entry["prior"] = [float(p) for _c, _n, _q, p in children]
     return entry
-
-
-def _arm_label(sims: int, is_full_search: bool) -> str:
-    """`opening` (no search), `full` or `fast` — the arm the runner drew."""
-    if sims == 0:
-        return "opening"
-    return "full" if is_full_search else "fast"
 
 
 def eval_record(

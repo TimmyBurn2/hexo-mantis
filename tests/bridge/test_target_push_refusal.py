@@ -6,11 +6,11 @@ dispatcher freeze addition FA-3): the FFI-side non-distribution push refusal, PY
 production Python route, pool_drain → pool_push) — unconstructibility is
 constructor-quantified, so it refuses non-distribution rows with the SAME typed
 semantics as `record_position_graph`: the `TargetIntegrityError` Display (variant name
-first) mapped to `ValueError`; `panic="unwind"` untouched. Census grounds for refusing
-ALL non-distribution rows on this face: the graph push face has NO legitimate
-zero/value-only form (graph quick-arm rows carry full mass — the frozen QA oracle
-pins it). Duplicate-coord rows stay admitted (caught loud at sample-align); per-entry
-NaN/negative refusals pre-date this loop in `push_record_impl`.
+first) mapped to `ValueError`; `panic="unwind"` untouched. Its ONE value-only form is a
+quick-arm row with no explicit entry and no tail (a decided root played unsearched, which
+trains no policy); every other empty or zero-sum row is refused. Duplicate-coord rows stay
+admitted (caught loud at sample-align); per-entry NaN/negative refusals pre-date this loop
+in `push_record_impl`.
 
 Killer: M-Q (bridge refusal removed → the refusal tests here and in the hexg.rs in-src
 bank red; the per-entry negative case stays red under M-Q via push_record_impl — its
@@ -65,6 +65,23 @@ def test_all_zero_row_refused_naming_empty_target() -> None:
 def test_empty_visit_list_refused_naming_empty_target() -> None:
     msg = _refusal([])
     assert "EmptyTarget" in msg, msg
+
+
+def _push_quick(hb: HexgBuffer, visits: list[tuple[int, int, float]], tail_mass: float) -> None:
+    hb.push_graph_position(STONES, visits, 1, 2, 3, False, 1.0, True, 4, tail_mass=tail_mass,
+                           root_value=1.0, root_value_valid=True)
+
+
+def test_the_value_only_quick_row_is_the_one_empty_shape_admitted() -> None:
+    """PLANTED BREAK: drop the face's admission and the first push reds; drop its tail conjunct and the second lands."""
+    hb = HexgBuffer(8, "gnn_axis_v1", 128)
+    _push_quick(hb, [], 0.0)
+    assert hb.size == 1
+    for visits, tail, variant in (([], 1.0, "EmptyTarget"), ([(2, 0, 0.0)], 0.0, "EmptyTarget"),
+                                  ([], math.nan, "MassNotUnity")):
+        with pytest.raises(ValueError, match=variant):
+            _push_quick(hb, visits, tail)
+    assert hb.size == 1, "a refused row must never reach the ring"
 
 
 def test_nan_and_negative_entries_stay_refused_per_entry() -> None:

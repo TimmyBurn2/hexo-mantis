@@ -25,10 +25,10 @@ use crate::queues::{build_leaf_graph, CachedEval, GraphQueue, LeafKey};
 use crate::records;
 use crate::replay::hexg::GraphRecord;
 
-use super::record::record_position_graph_dispatch;
+use super::record::{record_position_graph_dispatch, record_unsearched_dispatch};
 use super::stats::TacticsTotals;
 use super::tactics_move::{account_row, seal_tail, zero_vetoes, Seal, TargetEdit, Written};
-use super::PositionStats;
+use super::{MoveArm, PositionStats, ARM_DECIDED, ARM_FAST, ARM_FULL};
 
 /// A worker's inference seam, built once per worker thread; `Copy`, passed by value.
 #[derive(Clone, Copy)]
@@ -585,8 +585,8 @@ fn record_shortfall(searches: &AtomicU64, descents: &AtomicU64, budget: usize, s
     }
 }
 
-/// Orchestrate one full move: playout-cap selection, MCTS search, stat accumulation,
-/// target-policy build, sampling, position recording (BEFORE apply), and apply-move.
+/// Orchestrate one full move: playout-cap selection, MCTS search (none at a quick draw's decided root), stat
+/// accumulation, target-policy build, sampling, position recording (BEFORE apply), and apply-move.
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::too_many_lines)]
 pub(crate) fn play_one_move(
@@ -594,7 +594,7 @@ pub(crate) fn play_one_move(
     board: &mut Board,
     graph_records_vec: &mut Vec<GraphRecord>,
     move_history: &mut Vec<(i32, i32)>,
-    move_arms: &mut Vec<(u32, bool)>,
+    move_arms: &mut Vec<MoveArm>,
     search_stats: Option<&mut Vec<PositionStats>>,
     version_seen: &mut Vec<u64>,
     rng: &mut ThreadRng,
@@ -627,8 +627,8 @@ pub(crate) fn play_one_move(
 
     // ── MCTS Search ──
     tree.new_game(board.clone());
-    // The root offence: a finish, the owed proof stone or a new proof's first stone (`None` with tactics off). The
-    // root is searched all the same: its row records the search's own target, and the decided stone is played.
+    // The root offence: a finish, the owed proof stone or a new proof's first stone (`None` with tactics off). On the
+    // full arm the root is searched all the same, its row the search's own target; the decided stone is played.
     let decided = match tree.root_offence() {
         Ok(decided) => decided,
         // Counted by the tree (`proof_stone_illegal`); the search's own move stands.
@@ -638,6 +638,19 @@ pub(crate) fn play_one_move(
             return MoveOutcome::Break;
         }
     };
+    // A quick row trains no policy, so a decided quick root's search could change nothing its row or its move carries.
+    if let (false, Some(stone)) = (move_is_full_search, decided) {
+        return play_unsearched(
+            tree,
+            board,
+            graph_records_vec,
+            move_history,
+            move_arms,
+            stone,
+            accumulators,
+            fatal_latch,
+        );
+    }
 
     let search = run_mcts_search(
         tree,
@@ -864,6 +877,7 @@ pub(crate) fn play_one_move(
             tail_leaked: seal.as_ref().is_some_and(|s| s.leaked),
             tail_emptied: seal.as_ref().is_some_and(|s| s.no_policy),
             root_forced,
+            unsearched: false,
         };
         if let Err(leak) = account_row(accumulators.tactics_totals, &rows, &written, &vetoes) {
             fatal_latch.store(leak.to_string());
@@ -879,8 +893,59 @@ pub(crate) fn play_one_move(
     // `is_full_search` reaches the replay ring, not the record.
     move_arms.push((
         u32::try_from(move_sims).unwrap_or(u32::MAX),
-        move_is_full_search,
+        if move_is_full_search {
+            ARM_FULL
+        } else {
+            ARM_FAST
+        },
     ));
+    accumulators
+        .positions_generated
+        .fetch_add(1, Ordering::Relaxed);
+    MoveOutcome::Played
+}
+
+/// Play a quick draw's decided stone with no search: a value-only row at the proof's value, its root's rows, its arm.
+#[allow(clippy::too_many_arguments)]
+fn play_unsearched(
+    tree: &MCTSTree,
+    board: &mut Board,
+    graph_records_vec: &mut Vec<GraphRecord>,
+    move_history: &mut Vec<(i32, i32)>,
+    move_arms: &mut Vec<MoveArm>,
+    stone: (i32, i32),
+    accumulators: MoveAccumulators,
+    fatal_latch: FatalDefectLatch,
+) -> MoveOutcome {
+    if let Err(err) = record_unsearched_dispatch(board, graph_records_vec, 1.0) {
+        fatal_latch.store(err.to_string());
+        return MoveOutcome::Break;
+    }
+    let written = Written {
+        record: graph_records_vec.last(),
+        drawn_full: false,
+        decided: true,
+        decided_lost: false,
+        edit: TargetEdit::Unchanged,
+        tail_leaked: false,
+        tail_emptied: false,
+        root_forced: false,
+        unsearched: true,
+    };
+    if let Err(leak) = account_row(
+        accumulators.tactics_totals,
+        &tree.tactics_counters(),
+        &written,
+        &[],
+    ) {
+        fatal_latch.store(leak.to_string());
+        return MoveOutcome::Break;
+    }
+    if board.apply_move(stone.0, stone.1).is_err() {
+        return MoveOutcome::Break;
+    }
+    move_history.push(stone);
+    move_arms.push((0, ARM_DECIDED));
     accumulators
         .positions_generated
         .fetch_add(1, Ordering::Relaxed);

@@ -71,6 +71,13 @@ def test_an_opening_stone_and_an_unsampled_game_say_why_there_is_no_search(text,
     assert "Not sampled" in text.thought(unsampled, 4, set(), False)["text"]
 
 
+def test_a_decided_stone_says_tactics_placed_it_without_a_search(text, GameView):
+    arms = ["opening", "full", "decided"] + ["full", "fast"] * 4 + ["full"]
+    view = GameView.from_record(game("g3", six_in_a_row_for_p1(), stats=_STATS, move_arms=arms,
+                                     move_sims=[0, 320, 0] + [320, 64] * 4 + [320]))
+    assert text.thought(view, 2, set(), False)["text"].startswith("Decided stone")
+
+
 @pytest.mark.parametrize(("step", "kind", "net"), [(-1, "actor", "before the first sync"),
                                                    (36000, "actor", "r1 at 36k (self-play copy)"),
                                                    (32201, "round", "r1 at 32.2k")])

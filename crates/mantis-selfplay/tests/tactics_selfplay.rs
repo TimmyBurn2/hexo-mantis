@@ -146,7 +146,7 @@ fn a_decided_root_is_searched_then_plays_its_stone_and_the_owed_stone_follows() 
         println!("{kind:?} over {} plies: {rows:?}", drove.records.len());
         assert_eq!(
             drove.max_sims, SIMS as u64,
-            "{kind:?}: a decided root still spends its budget"
+            "{kind:?}: a decided root on the full arm (every move here) still spends its budget"
         );
         assert!(
             rows["root_proofs_found"] + rows["finishes_played"] > 0,
@@ -265,6 +265,7 @@ fn a_runner_without_a_block_sums_no_rows() {
         "vetoed_all_rows",
         "tail_emptied_rows",
         "tail_leak_rows",
+        "unsearched_decided_rows",
     ] {
         assert!(names.contains(want), "the totals name {want}");
     }

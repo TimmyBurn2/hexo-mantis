@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use mantis_encoding::lookup_or_panic;
 use mantis_search::SearchKind;
-use mantis_selfplay::runner::{GameResultRow, SelfPlayRunner, SelfPlayRunnerConfig};
+use mantis_selfplay::runner::{GameResultRow, SelfPlayRunner, SelfPlayRunnerConfig, ARM_FULL};
 
 mod common;
 
@@ -71,8 +71,12 @@ fn widest_roots(games: &[GameResultRow]) -> (usize, usize) {
             .as_ref()
             .expect("search_stats_every = 1 samples every game");
         let searched = game.8.iter().filter(|&&(sims, _)| sims > 0);
-        for (&(_, is_full), s) in searched.zip(stats) {
-            let widest = if is_full { &mut full } else { &mut quick };
+        for (&(_, arm), s) in searched.zip(stats) {
+            let widest = if arm == ARM_FULL {
+                &mut full
+            } else {
+                &mut quick
+            };
             *widest = (*widest).max(s.3.len());
         }
     }

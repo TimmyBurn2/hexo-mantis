@@ -55,7 +55,7 @@ class GameRecorder:
         terminal_reason: str,
         game_id_byte_hash: str,
         served_sims: int,
-        move_arms: list[tuple[int, bool]],
+        move_arms: list[tuple[int, str]],
         search_stats: list[PositionStatsRow] | None = None,
     ) -> None:
         """Write this game (`search_stats` only on a sampled game); never raises."""

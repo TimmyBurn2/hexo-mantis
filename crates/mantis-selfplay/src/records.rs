@@ -304,15 +304,8 @@ pub fn record_position_graph(
         });
     }
 
-    // Stones from the board's sparse occupied-cell map; order is irrelevant, since the rebuild
-    // coordinate-sorts. `Cell` is `#[repr(i8)]` (P1=1, P2=-1).
-    let mut stones: Vec<(i16, i16, i8)> = Vec::new();
-    for (&(q, r), &cell) in board.cells_iter() {
-        stones.push((q as i16, r as i16, cell as i8));
-    }
-
     Ok(crate::replay::hexg::GraphRecord {
-        stones,
+        stones: record_stones(board),
         visits,
         // Clamped, not merely cast: the f64 sum of positive masses can land a few ULP past 1.0,
         // and the push guard refuses anything outside 0..=1 by design.
@@ -328,6 +321,40 @@ pub fn record_position_graph(
         root_value: 0.0,         // placeholder → record_position_graph_dispatch
         root_value_valid: false, // placeholder → record_position_graph_dispatch
     })
+}
+
+/// Stones from the board's sparse occupied-cell map; order is irrelevant, since the rebuild coordinate-sorts.
+fn record_stones(board: &Board) -> Vec<(i16, i16, i8)> {
+    // `Cell` is `#[repr(i8)]` (P1=1, P2=-1).
+    board
+        .cells_iter()
+        .map(|(&(q, r), &cell)| (q as i16, r as i16, cell as i8))
+        .collect()
+}
+
+/// The one target-less row: a quick-arm root tactics decided, played unsearched, with no explicit entry and no tail.
+#[must_use]
+pub fn record_unsearched_value_row(
+    board: &Board,
+    current_player: i8,
+    moves_remaining: u8,
+    ply_index: u16,
+) -> crate::replay::hexg::GraphRecord {
+    crate::replay::hexg::GraphRecord {
+        stones: record_stones(board),
+        visits: Vec::new(),
+        tail_mass: 0.0,
+        current_player,
+        moves_remaining,
+        ply_index,
+        is_full_search: false,
+        outcome: 0.0,            // placeholder → finalize_graph_outcome
+        value_valid: true,       // placeholder → finalize_graph_outcome
+        game_length: 0,          // placeholder → finalize_graph_outcome
+        game_id: -1,             // placeholder → finalize_game_graph
+        root_value: 0.0,         // placeholder → record_unsearched_dispatch
+        root_value_valid: false, // placeholder → record_unsearched_dispatch
+    }
 }
 
 /// Stamp a row's outcome from the winner and its player, and its value mask from the reason: a game

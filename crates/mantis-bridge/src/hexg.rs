@@ -21,13 +21,17 @@ use mantis_selfplay::replay::hexg::{
 use crate::inference::{PyGraphWire, SeamFailure};
 
 /// `push_graph_position` is the SECOND public graph-record constructor, so it refuses
-/// non-distribution rows with the SAME typed semantics as `record_position_graph`: this face has
-/// no legitimate zero/value-only form.
+/// non-distribution rows with the SAME typed semantics as `record_position_graph`, but for its
+/// one value-only form: a quick-arm row with no explicit entry and no tail, which trains no policy.
 fn refuse_non_distribution_row(
     visits: &[(i16, i16, f32)],
     ply_index: u16,
     tail_mass: f32,
+    is_full_search: bool,
 ) -> Result<(), TargetIntegrityError> {
+    if visits.is_empty() && tail_mass == 0.0 && !is_full_search {
+        return Ok(());
+    }
     // The row's distribution is its explicit entries PLUS the tail mass alpha; judging the
     // explicit half alone would refuse every Gumbel row this constructor exists to admit.
     let sum: f64 = visits.iter().map(|&(_, _, p)| f64::from(p)).sum::<f64>() + f64::from(tail_mass);
@@ -91,7 +95,7 @@ impl PyHexgBuffer {
     }
 
     /// Store one compact graph-position record, refusing over-capacity rows loudly and
-    /// non-distribution visit rows with the same typed contract as `record_position_graph`.
+    /// non-distribution visit rows (but the quick value-only row) as `record_position_graph` does.
     ///
     /// # Errors
     /// `ValueError` per the above; per-entry refusals surface from `push_record_impl`.
@@ -114,7 +118,7 @@ impl PyHexgBuffer {
         root_value: f32,
         root_value_valid: bool,
     ) -> PyResult<()> {
-        refuse_non_distribution_row(&visits, ply_index, tail_mass)
+        refuse_non_distribution_row(&visits, ply_index, tail_mass, is_full_search)
             .map_err(|e| PyValueError::new_err(e.to_string()))?;
         let rec = GraphRecord {
             stones,
@@ -464,13 +468,65 @@ mod tests {
             // Sigma = 1.5 single positive entry, at the second constructor -> MassNotUnity.
             let e = text(push_row(py, &b, vec![(2, 0, 1.5)]).unwrap_err());
             assert!(e.contains("MassNotUnity") && e.contains("1.5"), "{e}");
-            // all-zero row → EmptyTarget (no value-only form on the graph face).
+            // all-zero row → EmptyTarget (the value-only form stores no entry at all).
             let e = text(push_row(py, &b, vec![(2, 0, 0.0), (3, 0, 0.0)]).unwrap_err());
             assert!(e.contains("EmptyTarget"), "{e}");
             // EMPTY visit list → EmptyTarget.
             let e = text(push_row(py, &b, vec![]).unwrap_err());
             assert!(e.contains("EmptyTarget"), "{e}");
             assert_eq!(b.size(py), 0, "no refused row may reach the ring");
+        });
+    }
+
+    fn push_shaped(
+        py: Python<'_>,
+        b: &PyHexgBuffer,
+        visits: Vec<(i16, i16, f32)>,
+        tail_mass: f32,
+        is_full_search: bool,
+    ) -> PyResult<()> {
+        let stones = vec![(0i16, 0i16, 1i8), (1, 0, -1), (0, 1, 1)];
+        b.push_graph_position(
+            py,
+            stones,
+            visits,
+            1,
+            2,
+            3,
+            is_full_search,
+            1.0,
+            true,
+            4,
+            -1,
+            tail_mass,
+            1.0,
+            true,
+        )
+    }
+
+    /// PLANTED BREAKS: drop the admission and the value-only row is refused; drop either conjunct and a near shape lands.
+    #[test]
+    fn push_admits_the_value_only_quick_row_alone_of_the_empty_shapes() {
+        Python::initialize();
+        Python::attach(|py| {
+            let text = |e: PyErr| e.value(py).to_string();
+            let b = PyHexgBuffer::new(8, "gnn_axis_v1", 128).unwrap();
+            push_shaped(py, &b, vec![], 0.0, false).expect("the value-only quick row is admitted");
+            assert_eq!(b.size(py), 1);
+            let e = text(push_shaped(py, &b, vec![], 1.0, false).unwrap_err());
+            assert!(e.contains("EmptyTarget"), "an empty row with a tail: {e}");
+            let e = text(push_shaped(py, &b, vec![], 0.0, true).unwrap_err());
+            assert!(e.contains("EmptyTarget"), "an empty full-search row: {e}");
+            let e = text(push_shaped(py, &b, vec![(2, 0, 0.0)], 0.0, false).unwrap_err());
+            assert!(e.contains("EmptyTarget"), "a zero-sum quick row: {e}");
+            let e = text(push_shaped(py, &b, vec![], f32::NAN, false).unwrap_err());
+            assert!(
+                e.contains("MassNotUnity"),
+                "an empty row with a NaN tail: {e}"
+            );
+            let e = text(push_shaped(py, &b, vec![(2, 0, f32::NAN)], 0.0, false).unwrap_err());
+            assert!(e.contains("MassNotUnity"), "a NaN quick row: {e}");
+            assert_eq!(b.size(py), 1, "no refused row may reach the ring");
         });
     }
 

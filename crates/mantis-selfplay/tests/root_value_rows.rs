@@ -11,12 +11,17 @@ use mantis_encoding::lookup_or_panic;
 use mantis_search::mcts::{AuditConfig, AuditMode, TacticsConfig};
 use mantis_search::SearchKind;
 use mantis_selfplay::replay::hexg::GraphRecord;
-use mantis_selfplay::runner::{GameResultRow, PositionStats, SelfPlayRunner, SelfPlayRunnerConfig};
+use mantis_selfplay::runner::{
+    GameResultRow, PositionStats, SelfPlayRunner, SelfPlayRunnerConfig, ARM_DECIDED, ARM_FAST,
+    ARM_FULL,
+};
 
 mod common;
 
 const ENCODING: &str = "gnn_axis_r8";
 const LEAF_BATCH: usize = 8;
+const SIMS_FULL: usize = 32;
+const SIMS_QUICK: usize = 8;
 
 /// The tactics block at test budgets, root offence armed so roots are decided.
 const BLOCK: TacticsConfig = TacticsConfig {
@@ -36,11 +41,12 @@ const BLOCK: TacticsConfig = TacticsConfig {
 
 type Rows = HashMap<&'static str, u64>;
 
-/// What a drive drained: the game rows (each sampled), the ring rows, and the summed tactics rows.
+/// What a drive drained: the game rows (each sampled), the ring rows, the summed tactics rows and the widest search.
 struct Drove {
     games: Vec<GameResultRow>,
     records: Vec<GraphRecord>,
     rows: Rows,
+    max_sims: u64,
 }
 
 /// One worker, every game sampled, both arms drawn, until `done` and then one more finished game (the one in flight).
@@ -55,8 +61,8 @@ fn drive(
     let runner = SelfPlayRunner::new(SelfPlayRunnerConfig {
         n_workers: 1,
         max_moves_per_game: ply_cap,
-        n_simulations: 32,
-        n_sims_quick: 8,
+        n_simulations: SIMS_FULL,
+        n_sims_quick: SIMS_QUICK,
         full_search_prob: 0.5,
         leaf_batch_size: LEAF_BATCH,
         random_opening_plies: 0,
@@ -109,6 +115,7 @@ fn drive(
         games,
         records,
         rows: totals(&runner),
+        max_sims: runner.stats_snapshot().max_sims_per_search,
     }
 }
 
@@ -132,7 +139,24 @@ fn paired(d: &Drove) -> Vec<(&GameResultRow, Vec<&GraphRecord>)> {
         .collect()
 }
 
-/// Every row of every sampled game, beside the search stats' entry for its ply.
+/// Assert `r` is a quick draw's unsearched decided row: no entry, no tail, the proof's value, a proven win's outcome.
+fn assert_value_only(r: &GraphRecord) {
+    let ply = r.ply_index;
+    assert!(
+        r.visits.is_empty() && r.tail_mass == 0.0 && !r.is_full_search,
+        "ply {ply}: an unsearched row carries a policy target"
+    );
+    assert!(
+        r.root_value_valid && r.root_value == 1.0,
+        "ply {ply}: an unsearched decided row reads {} and not the proof's +1",
+        r.root_value
+    );
+    if r.value_valid {
+        assert_eq!(r.outcome, 1.0, "ply {ply}: a proven win's mover lost");
+    }
+}
+
+/// Every searched row of every sampled game beside its ply's stats entry; every row of a `decided` ply is value-only.
 fn rows_beside_stats(d: &Drove) -> Vec<(&PositionStats, &GraphRecord)> {
     let mut out = Vec::new();
     for (game, rows) in paired(d) {
@@ -140,8 +164,16 @@ fn rows_beside_stats(d: &Drove) -> Vec<(&PositionStats, &GraphRecord)> {
             .9
             .as_ref()
             .expect("search_stats_every = 1 samples every game");
-        assert_eq!(stats.len(), rows.len(), "one ring row per searched ply");
-        for (s, r) in stats.iter().zip(rows) {
+        let (searched, unsearched): (Vec<&GraphRecord>, Vec<&GraphRecord>) = rows
+            .into_iter()
+            .partition(|r| game.8[usize::from(r.ply_index)].1 != ARM_DECIDED);
+        unsearched.into_iter().for_each(assert_value_only);
+        assert_eq!(
+            stats.len(),
+            searched.len(),
+            "one stats entry per searched ply"
+        );
+        for (s, r) in stats.iter().zip(searched) {
             assert_eq!(
                 u32::from(r.ply_index),
                 s.0,
@@ -296,15 +328,100 @@ fn a_proven_root_carries_the_proofs_value_and_every_other_row_its_searchs() {
     }
     let rows = &d.rows;
     println!("overrides +1 {won} / -1 {lost}: {rows:?}");
-    // Every decided search writes one row on either arm; a game in flight at `stop()` drops its rows.
+    // Every decided root writes one row, searched or not; a game in flight at `stop()` drops its rows.
     let decided = rows["finishes_played"] + rows["proof_stones_played"] + rows["root_proofs_found"];
+    let unsearched = d.records.iter().filter(|r| r.visits.is_empty()).count() as u64;
     assert!(
-        won > 0 && won <= decided,
-        "+1 overrides {won} against {decided} decided roots"
+        won > 0 && won + unsearched <= decided,
+        "+1 overrides {won} and {unsearched} unsearched rows against {decided} decided roots"
     );
     assert!(
         lost > 0 && lost <= rows["decided_lost"],
         "-1 overrides {lost} against {} lost roots",
         rows["decided_lost"]
+    );
+}
+
+/// PLANTED BREAKS: search every decided root and no `decided` ply drains; drop the row's count and the identity misses.
+#[test]
+fn a_quick_draws_decided_root_plays_unsearched_and_a_full_draws_is_still_searched() {
+    // Ends at 40 decided roots whatever their plies read, so a runner that searches them all reds here, not at the deadline.
+    let d = drive(SearchKind::Gumbel, Some(BLOCK), 80, false, |r, g| {
+        let decided_plies = g
+            .iter()
+            .flat_map(|game| game.8.iter())
+            .filter(|a| a.1 == ARM_DECIDED)
+            .count();
+        let decided = r["finishes_played"] + r["proof_stones_played"] + r["root_proofs_found"];
+        g.len() >= 4 && r["proven_root_rows"] > 0 && (decided_plies >= 4 || decided >= 40)
+    });
+    let rows = &d.rows;
+    println!("{rows:?}");
+    let (mut decided_plies, mut empty_rows) = (0u64, 0u64);
+    for (game, records) in paired(&d) {
+        let (arms, stats) = (&game.8, game.9.as_ref().expect("every game sampled"));
+        assert_eq!(
+            arms.len(),
+            records.len(),
+            "one row per ply, none opened at random"
+        );
+        let searched: Vec<u32> = stats.iter().map(|s| s.0).collect();
+        for r in records {
+            let ply = usize::from(r.ply_index);
+            let (sims, arm) = arms[ply];
+            let has_stats = searched.contains(&u32::from(r.ply_index));
+            match arm {
+                ARM_DECIDED => {
+                    decided_plies += 1;
+                    assert_eq!(sims, 0, "ply {ply}: an unsearched ply spent {sims} sims");
+                    assert!(!has_stats, "ply {ply}: an unsearched ply has a stats entry");
+                    assert_value_only(r);
+                }
+                ARM_FULL | ARM_FAST => {
+                    let budget = if arm == ARM_FULL {
+                        SIMS_FULL
+                    } else {
+                        SIMS_QUICK
+                    };
+                    assert_eq!(sims as usize, budget, "ply {ply}: {arm} at {sims} sims");
+                    assert!(has_stats, "ply {ply}: a searched ply has no stats entry");
+                    assert!(
+                        !r.visits.is_empty(),
+                        "ply {ply}: a searched row has no entry"
+                    );
+                }
+                other => panic!("ply {ply}: arm {other} in a game opened with no random ply"),
+            }
+            empty_rows += u64::from(r.visits.is_empty());
+        }
+    }
+    assert!(
+        decided_plies >= 4,
+        "only {decided_plies} decided plies drained"
+    );
+    assert_eq!(
+        empty_rows, decided_plies,
+        "every value-only row is a decided ply's"
+    );
+    // A game in flight at `stop()` drops its rows, never its counts: one worker, one game, at most its plies.
+    let counted = rows["unsearched_decided_rows"];
+    assert!(
+        decided_plies <= counted && counted <= decided_plies + 80,
+        "{decided_plies} drained unsearched rows against {counted} counted"
+    );
+    // Every decided root is one row of exactly one kind: searched with its policy on a full draw, else unsearched.
+    let decided = rows["finishes_played"] + rows["proof_stones_played"] + rows["root_proofs_found"];
+    assert_eq!(
+        rows["proven_root_rows"] + counted,
+        decided,
+        "decided roots against the full draws' proven rows and the quick draws' unsearched ones: {rows:?}"
+    );
+    assert!(
+        rows["proven_root_rows"] > 0,
+        "no full draw's decided root was searched"
+    );
+    assert_eq!(
+        d.max_sims, SIMS_FULL as u64,
+        "a full draw spends its whole budget"
     );
 }

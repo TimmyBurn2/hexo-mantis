@@ -31,7 +31,7 @@ def _game(i: int) -> dict[str, object]:
         result="p1" if i % 2 else "draw", plies=6 + i % 5,
         termination="six_in_a_row" if i % 2 else "ply_cap",
         worker_id=i % 4, seed=20260719, served_sims=50,
-        move_arms=[(50, True)] * (6 + i % 5),
+        move_arms=[(50, "full")] * (6 + i % 5),
         game_id_byte_hash=f"{i:040x}",
     )
 
@@ -163,12 +163,12 @@ def test_the_recorder_writes_one_record_per_game_with_the_actor_step(tmp_path: P
     recorder.maybe_record(
         game_id="pre-sync", moves=[(0, 0)], winner_code=0, plies=1, worker_id=0,
         terminal_reason="ply_cap", game_id_byte_hash="0" * 40, served_sims=50,
-        move_arms=[(50, True)] * 1)
+        move_arms=[(50, "full")] * 1)
     recorder.set_step(3000)
     recorder.maybe_record(
         game_id="post-sync", moves=[(0, 0), (1, 0)], winner_code=1, plies=2, worker_id=2,
         terminal_reason="six_in_a_row", game_id_byte_hash="1" * 40, served_sims=50,
-        move_arms=[(50, True)] * 2)
+        move_arms=[(50, "full")] * 2)
     recorder.stop()
 
     records = list(iter_run_games(tmp_path, "testrun"))
@@ -196,7 +196,7 @@ def test_a_sampled_game_writes_the_eval_shaped_visits_plus_q_and_prior(tmp_path:
     recorder.maybe_record(
         game_id="g", moves=[(0, 0), (1, 0), (0, 1)], winner_code=0, plies=3, worker_id=0,
         terminal_reason="ply_cap", game_id_byte_hash="0" * 40, served_sims=64,
-        move_arms=[(0, False), (64, False), (64, False)],
+        move_arms=[(0, "opening"), (64, "fast"), (64, "fast")],
         search_stats=[
             (1, 0.25, 0.1, [((1, 0), 40, 0.3, 0.5), ((2, 2), 24, -0.1, 0.25)], 0.125),
             (2, -0.5, None, [((0, 1), 64, -0.5, 1.0)], -0.5),
@@ -213,17 +213,17 @@ def test_a_sampled_game_writes_the_eval_shaped_visits_plus_q_and_prior(tmp_path:
 
 
 def test_the_recorder_writes_every_moves_arm_and_sims(tmp_path: Path) -> None:
-    """The record carries the arm the runner DREW per ply, never one inferred from `served_sims`."""
+    """The record carries the runner's own label per ply, so a decided ply's 0 sims never reads as an opening."""
     recorder = GameRecorder(record_dir=tmp_path, run_id="testrun", seed=1)
     recorder.maybe_record(
-        game_id="g", moves=[(0, 0), (1, 0), (0, 1), (2, 0)], winner_code=1, plies=4, worker_id=0,
+        game_id="g", moves=[(0, 0), (1, 0), (0, 1), (2, 0), (3, 0)], winner_code=1, plies=5, worker_id=0,
         terminal_reason="six_in_a_row", game_id_byte_hash="0" * 40, served_sims=64,
-        move_arms=[(0, False), (320, True), (64, False), (64, False)])
+        move_arms=[(0, "opening"), (320, "full"), (64, "fast"), (64, "fast"), (0, "decided")])
     recorder.stop()
 
     (record,) = list(iter_run_games(tmp_path, "testrun"))
-    assert record["move_sims"] == [0, 320, 64, 64]
-    assert record["move_arms"] == ["opening", "full", "fast", "fast"]
+    assert record["move_sims"] == [0, 320, 64, 64, 0]
+    assert record["move_arms"] == ["opening", "full", "fast", "fast", "decided"]
     assert len(record["move_arms"]) == len(record["moves"])
 
 
@@ -240,7 +240,7 @@ def test_an_undecodable_winner_code_is_unknown_and_NEVER_a_draw(
     recorder.maybe_record(
         game_id="g", moves=[(0, 0)], winner_code=winner_code, plies=1, worker_id=0,
         terminal_reason="unknown", game_id_byte_hash="0" * 40, served_sims=1,
-        move_arms=[(1, True)])
+        move_arms=[(1, "full")])
     recorder.stop()
     assert next(iter(iter_run_games(tmp_path, "testrun")))["result"] == expected
 

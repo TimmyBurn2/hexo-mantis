@@ -16,7 +16,7 @@ use crate::poison::lock_or_recover;
 use crate::records;
 use crate::replay::hexg::GraphRecord;
 
-use super::{GameResultRow, PositionStats};
+use super::{GameResultRow, MoveArm, PositionStats};
 
 /// Per-game terminal handler (warm path).
 ///
@@ -29,7 +29,7 @@ pub(crate) fn finalize_game_graph(
     max_moves: usize,
     graph_records: Vec<GraphRecord>,
     move_history: Vec<(i32, i32)>,
-    move_arms: Vec<(u32, bool)>,
+    move_arms: Vec<MoveArm>,
     search_stats: Option<Vec<PositionStats>>,
     version_seen: &[u64],
     results_queue_cap: usize,
@@ -143,7 +143,7 @@ fn push_recent_meta(
     plies: usize,
     winner_code: u8,
     move_history: Vec<(i32, i32)>,
-    move_arms: Vec<(u32, bool)>,
+    move_arms: Vec<MoveArm>,
     search_stats: Option<Vec<PositionStats>>,
     worker_id: usize,
     terminal_reason: u8,

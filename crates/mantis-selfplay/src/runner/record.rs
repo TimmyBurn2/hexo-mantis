@@ -42,3 +42,22 @@ pub(crate) fn record_position_graph_dispatch(
     graph_records_vec.push(rec);
     Ok(())
 }
+
+/// Record the value-only row of an unsearched decided root at the proof's value; `RootValueOutOfRange` past `[-1, 1]`.
+pub(crate) fn record_unsearched_dispatch(
+    board: &Board,
+    graph_records_vec: &mut Vec<GraphRecord>,
+    root_value: f32,
+) -> Result<(), TargetIntegrityError> {
+    let ply_index = board.ply.index() as u16;
+    let mut rec = records::record_unsearched_value_row(
+        board,
+        board.current_player as i8,
+        board.moves_remaining,
+        ply_index,
+    );
+    rec.root_value = records::refuse_root_value(root_value, ply_index)?;
+    rec.root_value_valid = true;
+    graph_records_vec.push(rec);
+    Ok(())
+}

@@ -48,7 +48,7 @@ class RecorderLike(Protocol):
         terminal_reason: str,
         game_id_byte_hash: str,
         served_sims: int,
-        move_arms: list[tuple[int, bool]],
+        move_arms: list[tuple[int, str]],
         search_stats: list[Any] | None,
     ) -> None: ...
 
@@ -85,7 +85,7 @@ class NullRecorder:
         terminal_reason: str,
         game_id_byte_hash: str,
         served_sims: int,
-        move_arms: list[tuple[int, bool]],
+        move_arms: list[tuple[int, str]],
         search_stats: list[Any] | None,
     ) -> None:
         return None

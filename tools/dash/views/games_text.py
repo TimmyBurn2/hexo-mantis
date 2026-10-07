@@ -13,7 +13,7 @@ from .fmt import ZONE, cell, esc, num, pct, short
 
 NAME = ("Light", "Dark")
 KIND = {"selfplay": "Self-play", "promotion": "Gate", "external": "External", "random_floor": "Random"}
-_ARM = {"full": "Full search", "fast": "Fast search", "opening": "Opening stone"}
+_ARM = {"full": "Full search", "fast": "Fast search", "opening": "Opening stone", "decided": "Decided stone"}
 _ARM_WORD = {"full": "full ", "fast": "fast "}
 #: Candidates listed per searched stone.
 CANDIDATES = 7
@@ -93,6 +93,8 @@ def thought(g: GameView, ply: int, cls_cells: set[tuple[int, int]], wins: bool) 
                "empty": "The candidate never moved in this game."}.get(g.stats_field, "No search recorded at this stone.")
         if g.arms is not None and g.arms[ply] == "opening":
             why = "Opening stone, placed without a search."
+        elif g.arms is not None and g.arms[ply] == "decided":
+            why = "Decided stone: tactics proved the win, so it was placed without a search."
         return {"text": why, "light": None, "cands": [], "second": False}
     visits = sorted(([int(v[0]), int(v[1]), int(v[2])] for v in entry.get("visits") or [] if len(v) == 3), key=lambda v: -v[2])
     total = sum(v[2] for v in visits)

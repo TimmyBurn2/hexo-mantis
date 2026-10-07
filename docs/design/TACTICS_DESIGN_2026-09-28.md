@@ -519,6 +519,8 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
     whatever its row holds, join the move rows; `emptied_target_rows` equals it while each such row has no policy.
     Amended 2026-10-01 (HYGIENE-1): `mixed_rows` left the tree with F2; `vetoed_all_rows` stays.
     `tail_emptied_rows` (a kind) and `tail_leak_rows` (a cross-count) join them with the tail seal.
+    Amended 2026-10-06 (R386(d)): `unsearched_decided_rows`, the quick draws' decided roots played unsearched, joins
+    them, the one move row a quick draw adds.
 - The served-sims witness pins DESCENTS per SEARCHED root: `descents == n_sims`, tactics on or off.
   - With tactics on: `served_leaves + solver_terminals + terminal_revisits == descents`, and
     `gpu_evals <= served_leaves`.
@@ -529,6 +531,9 @@ so the audit spans two calls. It is two `MCTSTree` methods, called by both drive
   - Amended in place 2026-09-29 (P0): with tactics on, `served_leaves + solver_terminals + terminal_revisits +
     table_hits == descents`; with tactics off, served + inline + table == descents, and the deploy head's test reads
     root visits, not infer calls. In self-play a decided root is searched (R378(e)), so it spends its budget too.
+  - Amended in place 2026-10-06 (R386(d)): only on the full arm. A quick draw's decided root plays its stone with
+    no search and serves 0 descents, its row value-only (no explicit entry, no tail, root value +1), counted on
+    `unsearched_decided_rows`; a quick row trains no policy, so the search could change nothing it carries.
   - Amended in place (TACTICS-SELFPLAY-2 F1): a re-searched root runs two searches, each spending exactly its budget
     (`max_sims_per_search` stays the budget), and both count, so a move's `descents` is `(1 + research_count) × n`;
     the deploy head's `last_sims` sums both. RETRACTED by R380(b): since TACTICS-SELFPLAY-3's L1 a move runs one

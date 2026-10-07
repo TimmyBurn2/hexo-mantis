@@ -35,7 +35,7 @@ use super::search_drive::{
     play_one_move, FatalDefectLatch, InferContext, MoveAccumulators, MoveOutcome, MovePlayContext,
 };
 use super::stats::WorkerStats;
-use super::{GameResultRow, PositionStats};
+use super::{GameResultRow, MoveArm, PositionStats, ARM_OPENING};
 
 /// Per-game-init scalar context. `Copy`.
 #[derive(Clone, Copy)]
@@ -76,8 +76,8 @@ struct PerGameInit {
     /// Per-game graph-record accumulator.
     graph_records: Vec<GraphRecord>,
     move_history: Vec<(i32, i32)>,
-    /// One `(sims, is_full_search)` per entry of `move_history`.
-    move_arms: Vec<(u32, bool)>,
+    /// One arm per entry of `move_history`.
+    move_arms: Vec<MoveArm>,
 }
 
 /// Per-worker thread entry. Owns its `MCTSTree`, RNG and per-game `Board`; builds the tree once,
@@ -384,7 +384,7 @@ fn run_one_game(
                 break;
             }
             move_history.push((mq, mr));
-            move_arms.push((0, false));
+            move_arms.push((0, ARM_OPENING));
             continue;
         }
 
@@ -450,7 +450,7 @@ fn init_per_game_board(
     // spec-derived geometry; there is no `Board::new()` fallback.
     let board = Board::with_geometry(board_geometry);
     let move_history: Vec<(i32, i32)> = Vec::with_capacity(init_ctx.max_moves);
-    let move_arms: Vec<(u32, bool)> = Vec::with_capacity(init_ctx.max_moves);
+    let move_arms: Vec<MoveArm> = Vec::with_capacity(init_ctx.max_moves);
     version_seen.clear();
 
     // `legal_move_radius_jitter` is KILLED: dead for every registry spec.

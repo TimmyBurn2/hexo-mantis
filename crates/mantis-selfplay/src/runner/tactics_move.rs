@@ -203,6 +203,8 @@ pub(crate) struct Written<'a> {
     pub(crate) tail_emptied: bool,
     /// The search restricted its root to the blocks.
     pub(crate) root_forced: bool,
+    /// A quick draw's decided root, played with no search: its row is value-only.
+    pub(crate) unsearched: bool,
 }
 
 /// Refuse a row whose tail leaks (run-fatal, counted nowhere), else sum the search's rows, its record's one kind and the two cross-counts.
@@ -216,6 +218,10 @@ pub(crate) fn account_row(
         refuse_tail_leak(rec, vetoes, written.root_forced)?;
     }
     totals.add_search(rows);
+    // Counted ahead of the full-draw filter: every one of these rows is a quick draw's.
+    if written.unsearched {
+        totals.add_move(MoveRow::UnsearchedDecided);
+    }
     let Some(rec) = written.record.filter(|_| written.drawn_full) else {
         return Ok(());
     };
@@ -355,6 +361,7 @@ mod tests {
             tail_leaked: false,
             tail_emptied: false,
             root_forced: false,
+            unsearched: false,
         };
         account_row(&totals, &TacticsCounters::default(), &written, &[]).expect("no tail, no leak");
         totals
@@ -541,6 +548,7 @@ mod tests {
             tail_leaked: true,
             tail_emptied: false,
             root_forced: false,
+            unsearched: false,
         };
         let refused = account_row(
             &totals,
@@ -554,6 +562,38 @@ mod tests {
             "a repeated veto is one cell"
         );
         assert!(totals.snapshot().iter().all(|&(_, v)| v == 0));
+    }
+
+    /// PLANTED BREAK: count it behind the full-draw filter and a quick draw's unsearched row reads nowhere.
+    #[test]
+    fn an_unsearched_decided_row_counts_on_its_own_row_beside_its_roots_rows() {
+        let totals = TacticsTotals::new();
+        let rec = row(false, 0.0, &[]);
+        let written = Written {
+            record: Some(&rec),
+            drawn_full: false,
+            decided: true,
+            decided_lost: false,
+            edit: TargetEdit::Unchanged,
+            tail_leaked: false,
+            tail_emptied: false,
+            root_forced: false,
+            unsearched: true,
+        };
+        let root = TacticsCounters {
+            root_proofs_found: 1,
+            ..TacticsCounters::default()
+        };
+        account_row(&totals, &root, &written, &[]).expect("no tail, no leak");
+        let counted: Vec<(&str, u64)> = totals
+            .snapshot()
+            .into_iter()
+            .filter(|&(_, v)| v > 0)
+            .collect();
+        assert_eq!(
+            counted,
+            vec![("root_proofs_found", 1), ("unsearched_decided_rows", 1)]
+        );
     }
 
     /// PLANTED BREAK: drop or swap either seal row's increment and its name reads wrong.
@@ -570,6 +610,7 @@ mod tests {
                 tail_leaked: leaked,
                 tail_emptied: emptied,
                 root_forced: false,
+                unsearched: false,
             };
             account_row(&totals, &TacticsCounters::default(), &written, &[]).expect("sealed");
             totals

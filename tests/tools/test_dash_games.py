@@ -60,9 +60,9 @@ def test_the_six_through_the_last_stone_is_checked_against_the_record(games):
 
 def test_arms_are_read_only_when_parallel_to_the_moves(games):
     moves = six_in_a_row_for_p1()
-    good = games.GameView.from_record(game("a", moves, move_arms=["opening"] + ["full", "fast"] * 5 + ["full"],
-                                           move_sims=[0] + [320, 64] * 5 + [320]))
-    assert good.arms[1] == "full" and good.sims[2] == 64
+    good = games.GameView.from_record(game("a", moves, move_arms=["opening"] + ["full", "fast"] * 5 + ["decided"],
+                                           move_sims=[0] + [320, 64] * 5 + [0]))
+    assert good.arms[1] == "full" and good.sims[2] == 64 and good.arms[-1] == "decided"
     short = games.GameView.from_record(game("b", moves, move_arms=["full"], move_sims=[320]))
     assert short.arms is None and short.sims is None
 

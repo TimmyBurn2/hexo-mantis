@@ -60,12 +60,13 @@ Self-play only: `worker_id`, `game_id_byte_hash` (LAW-04's dedupe input, carried
 is counted off the record rather than recomputed), and since R353(d) **`move_sims`** and
 **`move_arms`** — one entry per PLY, parallel to `moves`: the sims the runner searched that move
 at and the arm it DREW (`opening` for a random-opening ply that searched nothing, sims 0; `full`
-for the full budget; `fast` for the quick one). A self-play shard is three fast-arm moves in four
+for the full budget; `fast` for the quick one; `decided` for a quick-arm ply whose root tactics
+decided, played unsearched, sims 0, since R386(d)). A self-play shard is three fast-arm moves in four
 under playout-cap randomisation, and those moves are for value diversity, not strength: the viewer
-labels every stone with its arm so a reader tells the full-search moves apart. The arm is the
-runner's own per-move draw (`GameResultRow`'s last field), never inferred by comparing sims to
-`served_sims`. A record from before this producer carries neither key, and a reader states that
-absence rather than guessing.
+labels every stone with its arm so a reader tells the full-search moves apart. The label is the
+runner's own (`GameResultRow`'s ninth field, the `ARM_*` constants in `mantis_selfplay::runner`),
+never inferred from the sims or by comparing them to `served_sims`. A record from before this
+producer carries neither key, and a reader states that absence rather than guessing.
 
 Eval only: `rung`, `phase`, `game_index`, `colors` (`{candidate, opponent}` seats) and
 `trajectory_hash`. `search_stats` appears on BOTH channels since R355(d): on eval when the
@@ -121,7 +122,7 @@ means.
   dict would read like information.
 * `search_stats` on self-play is written for a SAMPLED game only — `selfplay.search_stats_every`
   (contract v32) samples 1-in-N games per worker, and an un-sampled game carries NO key (absent is
-  not empty). A sampled entry is
+  not empty). A `decided` ply searched nothing and has no entry. A sampled entry is
   `{"ply", "root_value", "root_raw"?, "search_value", "visits": [[q, r, n], …], "q": […], "prior": […]}`:
   `visits` is the eval channel's shape, so a reader of one reads the other; `q` (the child's Q in
   the ROOT's perspective) and `prior` are PARALLEL to `visits`; `root_raw` is the net's own

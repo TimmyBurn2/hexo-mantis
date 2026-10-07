@@ -34,8 +34,20 @@ use crate::replay::hexg::GraphRecord;
 /// (cell, visits, q in the ROOT's view, prior), the search value the ring row records unless a proof overrides it)`.
 pub type PositionStats = (u32, f32, Option<f32>, Vec<((i32, i32), u32, f32, f32)>, f32);
 
+/// A random-opening ply: no search.
+pub const ARM_OPENING: &str = "opening";
+/// A ply searched at the full arm's budget.
+pub const ARM_FULL: &str = "full";
+/// A ply searched at the quick arm's budget.
+pub const ARM_FAST: &str = "fast";
+/// A quick-arm ply whose root tactics decided, played with no search.
+pub const ARM_DECIDED: &str = "decided";
+
+/// One move's `(sims searched, arm label)`; the label is one of the four `ARM_*` constants.
+pub type MoveArm = (u32, &'static str);
+
 /// Per-game result tuple consumed by [`SelfPlayRunner::drain_game_results`]: the ninth field is
-/// the arm each move was DRAWN at (opening plies `(0, false)`), the tenth a sampled game's stats.
+/// each move's [`MoveArm`], the tenth a sampled game's stats.
 #[allow(clippy::type_complexity)] // the drain row IS this tuple; a struct would re-pack per game
 pub type GameResultRow = (
     usize,
@@ -46,7 +58,7 @@ pub type GameResultRow = (
     u64,
     u64,
     u32,
-    Vec<(u32, bool)>,
+    Vec<MoveArm>,
     Option<Vec<PositionStats>>,
 );
 

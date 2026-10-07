@@ -1,4 +1,4 @@
-//! The per-game result row carries every move's `(sims, is_full_search)` beside
+//! The per-game result row carries every move's `(sims, arm label)` beside
 //! `move_history` — the graph rows' flag reaches the replay ring, not the game record.
 
 use std::sync::atomic::AtomicUsize;
@@ -8,7 +8,9 @@ use std::time::{Duration, Instant};
 
 use mantis_encoding::lookup_or_panic;
 use mantis_search::SearchKind;
-use mantis_selfplay::runner::{GameResultRow, SelfPlayRunner, SelfPlayRunnerConfig};
+use mantis_selfplay::runner::{
+    GameResultRow, SelfPlayRunner, SelfPlayRunnerConfig, ARM_FAST, ARM_FULL, ARM_OPENING,
+};
 
 mod common;
 
@@ -73,10 +75,10 @@ fn every_move_carries_its_arm_and_both_arms_reach_the_row() {
             arms.len(),
             moves.len()
         );
-        for &(sims, is_full) in arms {
-            match (sims as usize, is_full) {
-                (N_SIMS_FULL, true) => full += 1,
-                (N_SIMS_QUICK, false) => quick += 1,
+        for &(sims, arm) in arms {
+            match (sims as usize, arm) {
+                (N_SIMS_FULL, ARM_FULL) => full += 1,
+                (N_SIMS_QUICK, ARM_FAST) => quick += 1,
                 other => panic!("an arm that is neither budget: {other:?}"),
             }
         }
@@ -92,7 +94,7 @@ fn random_opening_plies_carry_no_arm() {
     let games = drive(2, 6);
     for (_plies, _winner, moves, _worker, _term, _mn, _mx, _distinct, arms, _stats) in &games {
         assert_eq!(arms.len(), moves.len());
-        assert_eq!(&arms[..2], &[(0u32, false), (0u32, false)][..]);
+        assert_eq!(&arms[..2], &[(0u32, ARM_OPENING), (0u32, ARM_OPENING)][..]);
         for &(sims, _) in &arms[2..] {
             assert!(sims > 0, "a searched ply carries sims 0");
         }
