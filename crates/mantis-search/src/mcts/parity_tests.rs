@@ -509,3 +509,38 @@ fn the_value_never_leaves_the_unit_interval() {
         }
     }
 }
+
+/// The target keeps unity over thousands of unvisited children whose terms fall under half an f32 ulp.
+#[test]
+fn the_improved_policy_keeps_unity_over_thousands_of_unvisited_children() {
+    let sigma = QSigma {
+        c_visit: 50.0,
+        c_scale: 1.0,
+        rescale: false,
+    };
+    let n = 3616;
+    let prior = 1.0 / n as f32;
+    let mut children: Vec<CqChild> = (0..16)
+        .map(|i| CqChild {
+            visits: if i == 0 { 40 } else { 10 },
+            prior,
+            q_val: if i == 0 { 0.038 } else { -0.02 * i as f32 },
+        })
+        .collect();
+    children.extend(std::iter::repeat_n(
+        CqChild {
+            visits: 0,
+            prior,
+            q_val: 0.0,
+        },
+        n - 16,
+    ));
+    let total: f64 = mctx_improved_policy_masses(&children, 0.0, sigma)
+        .iter()
+        .map(|&m| f64::from(m))
+        .sum();
+    assert!(
+        (total - 1.0).abs() < 1e-6,
+        "the exported target sums to {total} over {n} children, not 1"
+    );
+}

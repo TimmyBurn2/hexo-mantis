@@ -153,14 +153,17 @@ pub(super) fn mctx_improved_policy_masses(
     if !max_logit.is_finite() {
         return Vec::new();
     }
-    let mut sum_exp = 0.0f32;
+    // The normalizer accumulates in f64: a sequential f32 sum drops every term under half an ulp of
+    // its running sum, so over thousands of children the masses missed unity past the tolerance.
+    let mut sum_exp = 0.0f64;
     for l in &mut logits {
         *l = (*l - max_logit).exp();
-        sum_exp += *l;
+        sum_exp += f64::from(*l);
     }
     if sum_exp <= 0.0 {
         return Vec::new();
     }
+    let sum_exp = sum_exp as f32;
     for l in &mut logits {
         *l /= sum_exp;
     }
