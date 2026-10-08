@@ -50,8 +50,10 @@ fn graph_build_is_rotation_free_and_deterministic() {
         (30, 0, -1),
         (31, 0, -1),
     ];
-    let g1 = build_leaf_graph(&stones, 1, 2, 6, 6, 19).expect("leaf builds");
-    let g2 = build_leaf_graph(&stones, 1, 2, 6, 6, 19).expect("leaf builds");
+    let g1 = build_leaf_graph(&stones, 1, 2, 6, 6, 19, mantis_graph::EmptyEdges::Kept)
+        .expect("leaf builds");
+    let g2 = build_leaf_graph(&stones, 1, 2, 6, 6, 19, mantis_graph::EmptyEdges::Kept)
+        .expect("leaf builds");
     assert_eq!(
         g1.node_coords, g2.node_coords,
         "graph build must be deterministic (rotation-free)"
@@ -164,7 +166,7 @@ fn strip_comments(src: &str) -> String {
 /// The graph inference must pass NO `sym_idx` to the builder.
 ///
 /// Read as an ARGUMENT LIST, not as a source line, so a rustfmt re-wrap cannot fake a break:
-/// `call_args` is insensitive to whitespace and to nothing else — a seventh argument, a renamed
+/// `call_args` is insensitive to whitespace and to nothing else — an eighth argument, a renamed
 /// argument or a reordering all still red.
 #[test]
 fn graph_build_call_passes_no_sym_idx() {
@@ -178,6 +180,7 @@ fn graph_build_call_passes_no_sym_idx() {
             "win_length".to_string(),
             "radius".to_string(),
             "agg_trunk_sz".to_string(),
+            "empty_edges".to_string(),
         ]),
         "graph build call must pass NO sym_idx (rotation-free at inference)",
     );

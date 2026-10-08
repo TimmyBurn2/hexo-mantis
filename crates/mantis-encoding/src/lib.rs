@@ -18,4 +18,7 @@ pub mod spec;
 pub use registry::{
     all_specs, lookup, lookup_or_panic, parse_encoding_toml, registry_sha, registry_sha_hex,
 };
-pub use spec::{PolicyPool, RegistrySpec, Representation, ValuePool};
+pub use spec::{
+    empty_edges_str, parse_empty_edges, EmptyEdges, PolicyPool, RegistrySpec, Representation,
+    ValuePool,
+};

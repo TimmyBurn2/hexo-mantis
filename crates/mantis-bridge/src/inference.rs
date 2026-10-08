@@ -17,7 +17,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use mantis_encoding::RegistrySpec;
-use mantis_graph::{AxisGraph, ProducerVerify, BUILDER_IMPL_NATIVE};
+use mantis_graph::{AxisGraph, EmptyEdges, ProducerVerify, BUILDER_IMPL_NATIVE};
 use mantis_search::LegalSetPolicy;
 use mantis_selfplay::poison::lock_or_recover;
 use mantis_selfplay::queues::{
@@ -136,6 +136,7 @@ pub struct PyInferenceBatcher {
     graph_win_length: u8,
     graph_radius: u16,
     graph_trunk_size: i32,
+    graph_empty_edges: EmptyEdges,
     graph_contract_version: u32,
     model_version: ModelVersionSrc,
     in_flight_graphs: Arc<Mutex<HashMap<u64, InFlightGraph>>>,
@@ -155,6 +156,7 @@ impl PyInferenceBatcher {
         graph_win_length: u8,
         graph_radius: u16,
         graph_trunk_size: i32,
+        graph_empty_edges: EmptyEdges,
         graph_contract_version: u32,
         model_version: ModelVersionSrc,
     ) -> Self {
@@ -165,6 +167,7 @@ impl PyInferenceBatcher {
             graph_win_length,
             graph_radius,
             graph_trunk_size,
+            graph_empty_edges,
             graph_contract_version,
             model_version,
             in_flight_graphs: Arc::new(Mutex::new(HashMap::new())),
@@ -180,7 +183,7 @@ impl PyInferenceBatcher {
         graph: GraphQueue,
         runner: Arc<SelfPlayRunner>,
     ) -> Self {
-        let (win_length, radius, trunk_size, contract_version) = graph_params(spec)
+        let (win_length, radius, trunk_size, empty_edges, contract_version) = graph_params(spec)
             .expect("SelfPlayRunner::new resolved this spec's geometry before the batcher exists");
         Self::from_parts(
             graph,
@@ -189,6 +192,7 @@ impl PyInferenceBatcher {
             win_length,
             radius,
             trunk_size,
+            empty_edges,
             contract_version,
             ModelVersionSrc::Runner(runner),
         )
@@ -212,12 +216,15 @@ impl PyInferenceBatcher {
 }
 
 /// The graph build params through the runner's one checked geometry resolver, never a truncating cast.
-fn graph_params(spec: &'static RegistrySpec) -> Result<(u8, u16, i32, u32), GraphGeometryError> {
+fn graph_params(
+    spec: &'static RegistrySpec,
+) -> Result<(u8, u16, i32, EmptyEdges, u32), GraphGeometryError> {
     let geometry = resolve_geometry(spec)?;
     Ok((
         geometry.win_length,
         geometry.graph_radius,
         geometry.agg_trunk_sz,
+        geometry.empty_edges,
         spec.contract_version
             .expect("validate guarantees contract_version for a graph spec"),
     ))
@@ -236,7 +243,7 @@ impl PyInferenceBatcher {
         submitters: usize,
     ) -> PyResult<Self> {
         let spec = encoding_spec.inner();
-        let (win_length, radius, trunk_size, contract_version) =
+        let (win_length, radius, trunk_size, empty_edges, contract_version) =
             graph_params(spec).map_err(|e| PyValueError::new_err(e.to_string()))?;
         Ok(Self::from_parts(
             GraphQueue::for_submitters(contract_version, max_in_flight, submitters),
@@ -245,6 +252,7 @@ impl PyInferenceBatcher {
             win_length,
             radius,
             trunk_size,
+            empty_edges,
             contract_version,
             ModelVersionSrc::Own(Arc::new(AtomicU64::new(0))),
         ))
@@ -303,6 +311,7 @@ impl PyInferenceBatcher {
             self.graph_win_length,
             self.graph_radius,
             self.graph_trunk_size,
+            self.graph_empty_edges,
         )
         .map_err(PyValueError::new_err)?;
         Ok(())
@@ -333,10 +342,11 @@ impl PyInferenceBatcher {
     }
 
     pub fn spawn_mock_graph_games(&self, n_games: usize) -> PyResult<()> {
-        let (win_length, radius, trunk_size) = (
+        let (win_length, radius, trunk_size, empty_edges) = (
             self.graph_win_length,
             self.graph_radius,
             self.graph_trunk_size,
+            self.graph_empty_edges,
         );
         for _ in 0..n_games {
             let graph_q = self.graph.clone();
@@ -350,7 +360,9 @@ impl PyInferenceBatcher {
                 for q in 30..35i64 {
                     stones.push((q, 0, -1));
                 }
-                if let Ok(graph) = build_leaf_graph(&stones, 1, 2, win_length, radius, trunk_size) {
+                if let Ok(graph) =
+                    build_leaf_graph(&stones, 1, 2, win_length, radius, trunk_size, empty_edges)
+                {
                     pending.fetch_add(1, Ordering::SeqCst);
                     if graph_q.submit_graph_and_wait(graph).is_ok() {
                         completed.fetch_add(1, Ordering::SeqCst);
@@ -553,6 +565,7 @@ impl PyInferenceBatcher {
                     self.graph_win_length,
                     self.graph_radius,
                     self.graph_trunk_size,
+                    self.graph_empty_edges,
                 )
                 .map(LeafKey::hex)
                 .map_err(PyValueError::new_err)
@@ -578,10 +591,11 @@ impl PyInferenceBatcher {
         n_threads: usize,
         consumer_checks_every_batch: bool,
     ) -> PyResult<Vec<(Vec<f32>, Vec<((i32, i32), f32)>, f32, (i32, i32))>> {
-        let (win_length, radius, trunk_size) = (
+        let (win_length, radius, trunk_size, empty_edges) = (
             self.graph_win_length,
             self.graph_radius,
             self.graph_trunk_size,
+            self.graph_empty_edges,
         );
         let verify = if consumer_checks_every_batch {
             ProducerVerify::ConsumerEveryBatch
@@ -591,7 +605,13 @@ impl PyInferenceBatcher {
         let graphs = py
             .detach(|| {
                 build_leaf_graphs_batch(
-                    &positions, win_length, radius, trunk_size, n_threads, verify,
+                    &positions,
+                    win_length,
+                    radius,
+                    trunk_size,
+                    empty_edges,
+                    n_threads,
+                    verify,
                 )
             })
             .map_err(PyValueError::new_err)?;
@@ -888,7 +908,12 @@ mod tests {
             spec.graph_radius.expect("graph row states graph_radius")
         );
         assert_eq!(b.graph_trunk_size as usize, spec.trunk_size);
+        assert_eq!(b.graph_empty_edges, spec.empty_edges);
         assert_eq!(b.graph_contract_version, 1);
+        let pruned = mantis_encoding::lookup_or_panic("gnn_axis_r8_pruned");
+        let b = PyInferenceBatcher::new(PyRegistrySpec::from_static(pruned), 0, 0)
+            .expect("the pruned row resolves");
+        assert_eq!(b.graph_empty_edges, EmptyEdges::Pruned);
     }
 
     #[test]
@@ -909,7 +934,8 @@ mod tests {
             .map(|q| (q, 0, 1))
             .chain((30..35i64).map(|q| (q, 0, -1)))
             .collect();
-        let graph = build_leaf_graph(&stones, 1, 2, 6, 6, 19).expect("valid graph");
+        let graph =
+            build_leaf_graph(&stones, 1, 2, 6, 6, 19, EmptyEdges::Kept).expect("valid graph");
         let mut wire = GraphWire::from_axis_graphs(&[graph], 1);
         let arrays = wire.take().expect("first fuse take");
         let gw = PyGraphWire::from_arrays(arrays);
@@ -943,7 +969,8 @@ mod tests {
             .map(|q| (q, 0, 1))
             .chain((30..35i64).map(|q| (q, 0, -1)))
             .collect();
-        let graph = build_leaf_graph(&stones, 1, 2, 6, 6, 19).expect("valid graph");
+        let graph =
+            build_leaf_graph(&stones, 1, 2, 6, 6, 19, EmptyEdges::Kept).expect("valid graph");
         let mut wire = GraphWire::from_axis_graphs(&[graph], 1);
         wire.take().expect("the first take yields the fused arrays");
 

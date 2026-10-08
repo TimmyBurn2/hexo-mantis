@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 
 use fxhash::FxBuildHasher;
 use mantis_graph::{
-    build_axis_graph_verified_by, AxisGraph, BuildParams, ProducerVerify, StoneList,
+    build_axis_graph_verified_by, AxisGraph, BuildParams, EmptyEdges, ProducerVerify, StoneList,
     BUILDER_IMPL_NATIVE,
 };
 use mantis_search::LegalSetPolicy;
@@ -526,22 +526,23 @@ pub fn build_leaf_graph(
     win_length: u8,
     radius: u16,
     trunk_size: i32,
+    empty_edges: EmptyEdges,
 ) -> Result<AxisGraph, String> {
     build_leaf_graph_verified_by(
         stones,
         current_player,
         moves_remaining,
-        (win_length, radius, trunk_size),
+        (win_length, radius, trunk_size, empty_edges),
         ProducerVerify::Builder,
     )
 }
 
-/// [`build_leaf_graph`] at the geometry `(win_length, radius, trunk_size)`, its producer verify as `verify` names.
+/// [`build_leaf_graph`] at the geometry `(win_length, radius, trunk_size, empty_edges)`, its producer verify as `verify` names.
 fn build_leaf_graph_verified_by(
     stones: &[(i64, i64, i64)],
     current_player: i64,
     moves_remaining: i64,
-    (win_length, radius, trunk_size): (u8, u16, i32),
+    (win_length, radius, trunk_size, empty_edges): (u8, u16, i32, EmptyEdges),
     verify: ProducerVerify,
 ) -> Result<AxisGraph, String> {
     check_leaf_request(stones, current_player, moves_remaining, radius)?;
@@ -555,6 +556,7 @@ fn build_leaf_graph_verified_by(
         current_player: current_player as i8,
         moves_remaining: moves_remaining as u8,
         trunk_size,
+        empty_edges,
     };
     let graph = build_axis_graph_verified_by(&StoneList { stones: typed }, &params, verify);
     if graph.builder_impl != BUILDER_IMPL_NATIVE {
@@ -583,6 +585,7 @@ pub fn build_leaf_graphs_batch(
     win_length: u8,
     radius: u16,
     trunk_size: i32,
+    empty_edges: EmptyEdges,
     n_threads: usize,
     verify: ProducerVerify,
 ) -> Result<Vec<AxisGraph>, String> {
@@ -591,7 +594,8 @@ pub fn build_leaf_graphs_batch(
         n_threads,
         "graph request: a leaf-build worker thread panicked",
         |p: &LeafRequest| {
-            build_leaf_graph_verified_by(&p.0, p.1, p.2, (win_length, radius, trunk_size), verify)
+            let geometry = (win_length, radius, trunk_size, empty_edges);
+            build_leaf_graph_verified_by(&p.0, p.1, p.2, geometry, verify)
         },
     )
 }
@@ -615,7 +619,8 @@ mod poison_tests {
     }
 
     fn empty_graph() -> mantis_graph::AxisGraph {
-        build_leaf_graph(&[], 1, 2, 6, 3, 19).expect("the empty board builds")
+        build_leaf_graph(&[], 1, 2, 6, 3, 19, mantis_graph::EmptyEdges::Kept)
+            .expect("the empty board builds")
     }
 
     /// Serve `want` requests with an `Err("served <id>")` reply each; gives up after two seconds.

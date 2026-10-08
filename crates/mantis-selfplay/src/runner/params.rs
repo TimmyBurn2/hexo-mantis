@@ -5,7 +5,7 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
-use mantis_encoding::{RegistrySpec, Representation};
+use mantis_encoding::{EmptyEdges, RegistrySpec, Representation};
 use mantis_search::{QSigma, SearchKind};
 
 use crate::queues::GraphQueue;
@@ -25,6 +25,8 @@ pub struct WorkerGeometry {
     pub win_length: u8,
     /// The leaf graph builder's axis-walk radius, resolved at boot likewise.
     pub graph_radius: u16,
+    /// Whether the leaf graph builder emits the edges between two empty cells, resolved at boot likewise.
+    pub empty_edges: EmptyEdges,
 }
 
 /// A graph spec whose builder geometry is absent or does not fit the builder's integer width.
@@ -80,6 +82,7 @@ pub fn resolve_geometry(spec: &'static RegistrySpec) -> Result<WorkerGeometry, G
             agg_trunk_sz: spec.trunk_size as i32,
             win_length: builder_key(spec, "win_length", spec.win_length)?,
             graph_radius: builder_key(spec, "graph_radius", spec.graph_radius)?,
+            empty_edges: spec.empty_edges,
         }),
     }
 }
@@ -162,6 +165,10 @@ mod geometry_tests {
         let g = resolve_geometry(spec).expect("a registry graph spec resolves");
         assert_eq!(Some(usize::from(g.win_length)), spec.win_length);
         assert_eq!(Some(usize::from(g.graph_radius)), spec.graph_radius);
+        assert_eq!(g.empty_edges, spec.empty_edges);
+        let pruned = mantis_encoding::lookup_or_panic("gnn_axis_r8_pruned");
+        let g = resolve_geometry(pruned).expect("the pruned row resolves");
+        assert_eq!(g.empty_edges, mantis_encoding::EmptyEdges::Pruned);
     }
 
     /// An absent or over-wide key is refused at boot by name, never at the first leaf by panic.

@@ -13,7 +13,7 @@
 use toml::Value;
 
 use super::{leak_str, parse_int_or_none};
-use crate::spec::{PolicyPool, RegistrySpec, Representation, ValuePool};
+use crate::spec::{parse_empty_edges, PolicyPool, RegistrySpec, Representation, ValuePool};
 
 /// The complete recognized key set (grid + graph). A key outside this set is an
 /// unknown-key parse error. Graph-only keys present on a grid entry are a
@@ -47,6 +47,7 @@ const KNOWN_KEYS: &[&str] = &[
     "win_axes",
     "contract_version",
     "builder_impl_required",
+    "empty_edges",
 ];
 
 /// Optional non-negative integer key. `None` if absent, `Some(i)` if a valid
@@ -240,6 +241,13 @@ pub(super) fn parse_one(name: &str, body: &Value) -> Result<RegistrySpec, String
     let win_axes = opt_int(table, "win_axes", &mut errs).map(|v| v as usize);
     let contract_version = opt_int(table, "contract_version", &mut errs).map(|v| v as u32);
     let builder_impl_required = opt_int(table, "builder_impl_required", &mut errs).map(|v| v as u8);
+    let empty_edges = get_str!("empty_edges").and_then(|s| match parse_empty_edges(s) {
+        Ok(e) => Some(e),
+        Err(e) => {
+            errs.push(format!("[encodings.{name}].empty_edges: {e}"));
+            None
+        }
+    });
 
     // plane_layout: array of strings.
     let plane_layout: Option<Vec<&'static str>> = match table.get("plane_layout") {
@@ -333,5 +341,6 @@ pub(super) fn parse_one(name: &str, body: &Value) -> Result<RegistrySpec, String
         win_axes,
         contract_version,
         builder_impl_required,
+        empty_edges: present(empty_edges, name, "empty_edges")?,
     })
 }

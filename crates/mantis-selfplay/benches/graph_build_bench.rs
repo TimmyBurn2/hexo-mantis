@@ -100,6 +100,7 @@ fn assert_one_build_per_leaf(corpus: &[LeafRequest]) {
             WIN_LENGTH,
             RADIUS,
             TRUNK_SIZE,
+            mantis_graph::EmptyEdges::Kept,
         )
         .expect("every corpus leaf builds (inputs in range)");
         assert_eq!(
@@ -132,6 +133,7 @@ fn graph_build_gnn_axis_v1_leafcorpus(c: &mut Criterion) {
                     WIN_LENGTH,
                     RADIUS,
                     TRUNK_SIZE,
+                    mantis_graph::EmptyEdges::Kept,
                 )
                 .expect("corpus leaf builds");
                 black_box(&g);
@@ -158,6 +160,7 @@ fn leaf_graphs_batch(c: &mut Criterion) {
                         WIN_LENGTH,
                         RADIUS,
                         TRUNK_SIZE,
+                        mantis_graph::EmptyEdges::Kept,
                         n_threads,
                         ProducerVerify::Builder,
                     )

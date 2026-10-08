@@ -616,6 +616,7 @@ fn sample_wire_matches_direct_builder_unaugmented() {
         current_player: rec.current_player,
         moves_remaining: rec.moves_remaining,
         trunk_size: 19,
+        empty_edges: mantis_graph::EmptyEdges::Kept,
     };
     let g = build_axis_graph(&StoneList { stones }, &params);
 
@@ -685,6 +686,7 @@ fn adv7_desync_is_caught_by_the_canary() {
         current_player: rec.current_player,
         moves_remaining: rec.moves_remaining,
         trunk_size: 19,
+        empty_edges: mantis_graph::EmptyEdges::Kept,
     };
     let g = build_axis_graph(&StoneList { stones }, &params);
 
@@ -1093,4 +1095,46 @@ fn persist_roundtrips_a_non_default_capacity_and_rejects_mismatch() {
         "mismatch must name both capacities: {err}"
     );
     let _ = std::fs::remove_file(&path);
+}
+
+/// Whether any edge of `g` joins two legal (empty) nodes.
+fn joins_two_empties(g: &AxisGraph) -> bool {
+    (0..g.num_edges()).any(|e| {
+        let (s, d) = (g.edge_index.src[e] as usize, g.edge_index.dst[e] as usize);
+        g.legal_mask[s] && g.legal_mask[d]
+    })
+}
+
+/// A ring crosses rows that differ only in the edge set and rebuilds under the READER's; another legal set refuses it.
+#[test]
+fn a_ring_crosses_the_edge_set_and_nothing_else() {
+    let mut r8 = HexgBuffer::new(8, "gnn_axis_r8", VISIT_CAP).unwrap();
+    for i in 0..4 {
+        r8.push_record_impl(&sample_record(), i).unwrap();
+    }
+    let path = unique_path("cross_edges");
+    r8.save_to_path_impl(path.to_str().unwrap()).unwrap();
+
+    let mut pruned = HexgBuffer::new(8, "gnn_axis_r8_pruned", VISIT_CAP).unwrap();
+    assert_eq!(
+        pruned.load_from_path_impl(path.to_str().unwrap()).unwrap(),
+        4
+    );
+    pruned.seed_sampler(3);
+    let (graphs, _) = pruned.sample_graph_batch_impl(4, true, 1).unwrap();
+    assert!(
+        graphs.iter().all(|g| !joins_two_empties(g)),
+        "the pruned reader rebuilt an empty pair"
+    );
+    r8.seed_sampler(3);
+    let (kept, _) = r8.sample_graph_batch_impl(4, true, 1).unwrap();
+    assert!(
+        kept.iter().all(joins_two_empties),
+        "the kept control built no empty pair"
+    );
+
+    let mut v1 = HexgBuffer::new(8, "gnn_axis_v1", VISIT_CAP).unwrap();
+    let err = v1.load_from_path_impl(path.to_str().unwrap()).unwrap_err();
+    assert!(err.contains("HEXG encoding mismatch"), "{err}");
+    let _ = std::fs::remove_file(path);
 }

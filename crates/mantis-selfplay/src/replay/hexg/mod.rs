@@ -22,7 +22,7 @@ use rand::rngs::StdRng;
 use rand::SeedableRng;
 
 use super::sym::N_SYMS;
-use mantis_encoding::RegistrySpec;
+use mantis_encoding::{EmptyEdges, RegistrySpec};
 
 /// Max stones per record slot. Over-cap push is a LOUD error.
 pub const MAX_STONES: usize = 256;
@@ -185,6 +185,7 @@ pub struct HexgBuffer {
     pub win_length: u8,
     pub radius: u16,
     pub trunk_size: i32,
+    pub empty_edges: EmptyEdges,
     pub contract_version: u32,
     /// Per-buffer visit-slot capacity, DERIVED at composition from the sims regime, never a
     /// literal.
@@ -283,6 +284,7 @@ impl HexgBuffer {
             win_length,
             radius,
             trunk_size: spec.trunk_size as i32,
+            empty_edges: geometry.empty_edges,
             contract_version,
             visit_capacity,
             stones_qr: vec![0i16; capacity * MAX_STONES * 2],

@@ -5,6 +5,8 @@
 
 mod validate;
 
+pub use mantis_graph::EmptyEdges;
+
 /// Value-head pooling mode (multi-window only). `None` for single-window.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ValuePool {
@@ -63,6 +65,26 @@ impl Representation {
     }
 }
 
+/// Parse the TOML `empty_edges` value; there is no default, so anything but the two names is an error.
+pub fn parse_empty_edges(s: &str) -> Result<EmptyEdges, String> {
+    match s {
+        "kept" => Ok(EmptyEdges::Kept),
+        "pruned" => Ok(EmptyEdges::Pruned),
+        other => Err(format!(
+            "empty_edges must be one of [kept,pruned]; got {other:?}"
+        )),
+    }
+}
+
+/// The TOML spelling of an `empty_edges` value.
+#[must_use]
+pub fn empty_edges_str(e: EmptyEdges) -> &'static str {
+    match e {
+        EmptyEdges::Kept => "kept",
+        EmptyEdges::Pruned => "pruned",
+    }
+}
+
 impl ValuePool {
     pub fn parse(s: &str) -> Result<Self, String> {
         match s {
@@ -105,7 +127,7 @@ impl PolicyPool {
 ///
 /// All `&'static` fields point at heap data leaked at registry init time, so addresses are
 /// stable for the process lifetime. Cheap to copy — pass by value or `&'static`.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct RegistrySpec {
     pub name: &'static str,
     pub board_size: usize,
@@ -157,6 +179,8 @@ pub struct RegistrySpec {
     /// Required builder_impl tag the resolver asserts (graph only). = 1 (native;
     /// = `mantis_graph::BUILDER_IMPL_NATIVE`).
     pub builder_impl_required: Option<u8>,
+    /// TOML key `empty_edges`; required: whether the builder emits the edges between two empty cells.
+    pub empty_edges: EmptyEdges,
 }
 
 impl RegistrySpec {
@@ -197,6 +221,18 @@ impl RegistrySpec {
     #[must_use]
     pub fn aux_stride(&self) -> usize {
         self.n_cells()
+    }
+
+    /// Whether a ring written under `writer` holds this row's records (stones, visits over the legal set): the rows differ at most in the edge set.
+    #[must_use]
+    pub fn reads_rings_of(&self, writer: &RegistrySpec) -> bool {
+        let as_self = RegistrySpec {
+            name: self.name,
+            notes: self.notes,
+            empty_edges: self.empty_edges,
+            ..*writer
+        };
+        as_self == *self
     }
 
     /// Policy stride = `policy_logit_count` (accessor for parity with the strides above).

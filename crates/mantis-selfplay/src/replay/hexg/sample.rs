@@ -162,6 +162,7 @@ impl HexgBuffer {
             current_player: 1, // overwritten per record
             moves_remaining: 2,
             trunk_size: self.trunk_size,
+            empty_edges: self.empty_edges,
         };
 
         let syms = self.draw_syms(&indices, augment);

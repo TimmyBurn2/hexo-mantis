@@ -1,9 +1,9 @@
-//! build(rot_s(board)) IS rot_s(build(board)) under all 12 D6 elements at radius 8 (RESEARCH-STRENGTH-1 App. A, pinned).
+//! build(rot_s(board)) IS rot_s(build(board)) under all 12 D6 elements at radius 8, empty edges kept or pruned (RESEARCH-STRENGTH-1 App. A, pinned).
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use mantis_graph::{
-    build_axis_graph, AxisGraph, BuildParams, StoneList, EDGE_FEAT_DIM, NODE_FEAT_DIM,
+    build_axis_graph, AxisGraph, BuildParams, EmptyEdges, StoneList, EDGE_FEAT_DIM, NODE_FEAT_DIM,
 };
 
 const R8: BuildParams = BuildParams {
@@ -12,6 +12,11 @@ const R8: BuildParams = BuildParams {
     current_player: 1,
     moves_remaining: 2,
     trunk_size: 19,
+    empty_edges: EmptyEdges::Kept,
+};
+const R8_PRUNED: BuildParams = BuildParams {
+    empty_edges: EmptyEdges::Pruned,
+    ..R8
 };
 const N_SYMS: usize = 12;
 /// The elements under which the empty board's fixed 5×5 axial square is invariant.
@@ -127,6 +132,15 @@ fn axis_spread(st: &[(i32, i32, i8)]) -> f64 {
 
 #[test]
 fn build_of_the_rotated_board_is_the_rotation_of_the_build_under_all_twelve_elements() {
+    assert_d6_lossless(&R8);
+}
+
+#[test]
+fn the_pruned_build_of_the_rotated_board_is_the_rotation_of_its_build_under_all_twelve_elements() {
+    assert_d6_lossless(&R8_PRUNED);
+}
+
+fn assert_d6_lossless(params: &BuildParams) {
     let mut rng = Lcg(20_260_918);
     let mut axis_maps: Vec<BTreeSet<(usize, usize, i32)>> = vec![BTreeSet::new(); N_SYMS];
     let mut total_edges = 0usize;
@@ -136,7 +150,7 @@ fn build_of_the_rotated_board_is_the_rotation_of_the_build_under_all_twelve_elem
             &StoneList {
                 stones: stones.clone(),
             },
-            &R8,
+            params,
         );
         let (s0, l0, e0) = (stone_set(&g0), legal_set(&g0), edge_map(&g0));
         total_edges += e0.len();
@@ -145,7 +159,7 @@ fn build_of_the_rotated_board_is_the_rotation_of_the_build_under_all_twelve_elem
                 &StoneList {
                     stones: rotate_stones(&stones, s),
                 },
-                &R8,
+                params,
             );
             let s0r: BTreeSet<_> = s0
                 .iter()

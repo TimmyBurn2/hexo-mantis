@@ -13,7 +13,7 @@ use rand::rngs::ThreadRng;
 use rand::RngExt;
 
 use mantis_core::Board;
-use mantis_encoding::RegistrySpec;
+use mantis_encoding::{EmptyEdges, RegistrySpec};
 use mantis_search::mcts::TacticsError;
 use mantis_search::{
     compute_move_temperature, ply_to_compound_move, LegalSetPolicy, MCTSTree, MctxRootState,
@@ -42,6 +42,7 @@ pub(crate) struct InferContext<'a> {
     /// The builder geometry `resolve_geometry` narrowed at boot; no leaf re-reads the spec.
     pub(crate) win_length: u8,
     pub(crate) graph_radius: u16,
+    pub(crate) empty_edges: EmptyEdges,
     /// Leaves expanded, and the ones of those the GPU served (the rest were exact cache hits).
     pub(crate) served_leaves: &'a AtomicU64,
     pub(crate) gpu_evals: &'a AtomicU64,
@@ -315,7 +316,8 @@ fn infer_and_expand_graph(
         return Ok((0, unserved));
     }
 
-    let (win_length, radius) = (infer.win_length, infer.graph_radius);
+    let (win_length, radius, empty_edges) =
+        (infer.win_length, infer.graph_radius, infer.empty_edges);
     // One version per batch; the server bumps it only after the new weights are in place.
     let version = infer.model_version.load(Ordering::Acquire);
     let cache = infer.graph_queue.eval_cache();
@@ -341,6 +343,7 @@ fn infer_and_expand_graph(
             win_length,
             radius,
             agg_trunk_sz,
+            empty_edges,
         )
         .map_err(built)?;
         if let Some(hit) = cache.get(key, version) {
@@ -354,6 +357,7 @@ fn infer_and_expand_graph(
             win_length,
             radius,
             agg_trunk_sz,
+            empty_edges,
         )
         .map_err(built)?;
         served.push(None);
@@ -1025,6 +1029,7 @@ mod forced_round_tests {
             running: &running,
             win_length: geometry.win_length,
             graph_radius: geometry.graph_radius,
+            empty_edges: geometry.empty_edges,
             served_leaves: &AtomicU64::new(0),
             gpu_evals: &AtomicU64::new(0),
             inline_descents: &AtomicU64::new(0),
@@ -1096,6 +1101,7 @@ mod forced_round_tests {
                 running: &running,
                 win_length: geometry.win_length,
                 graph_radius: geometry.graph_radius,
+                empty_edges: geometry.empty_edges,
                 served_leaves: &AtomicU64::new(0),
                 gpu_evals: &AtomicU64::new(0),
                 inline_descents: &AtomicU64::new(0),

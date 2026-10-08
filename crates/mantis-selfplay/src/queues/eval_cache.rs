@@ -5,7 +5,7 @@ use std::sync::Mutex;
 
 use fxhash::FxHashMap;
 use mantis_core::board::zobrist::splitmix64_next;
-use mantis_graph::BUILDER_IMPL_NATIVE;
+use mantis_graph::{EmptyEdges, BUILDER_IMPL_NATIVE};
 use mantis_search::LegalSetPolicy;
 
 use crate::poison::lock_or_recover;
@@ -31,6 +31,7 @@ impl LeafKey {
         win_length: u8,
         radius: u16,
         trunk_size: i32,
+        empty_edges: EmptyEdges,
     ) -> Result<Self, String> {
         check_leaf_request(stones, current_player, moves_remaining, radius)?;
         let geometry = u64::from(win_length)
@@ -39,7 +40,8 @@ impl LeafKey {
             | (u64::from(BUILDER_IMPL_NATIVE) << 56);
         let mut key = word(SIDE_TAG, current_player as u64)
             ^ word(LEFT_TAG, moves_remaining as u64)
-            ^ word(GEOMETRY_TAG, geometry);
+            ^ word(GEOMETRY_TAG, geometry)
+            ^ word(EDGES_TAG, u64::from(empty_edges == EmptyEdges::Pruned));
         // An XOR over the stones: order-free; the stones must be distinct cells, as a `Board`'s are (a pair cancels).
         for &(q, r, p) in stones {
             key ^= stone_word(q, r, p);
@@ -70,6 +72,7 @@ const P2_TAG: u64 = 0x5032_5354_4f4e_4502;
 const SIDE_TAG: u64 = 0x5349_4445_0000_0001;
 const LEFT_TAG: u64 = 0x4c45_4654_0000_0002;
 const GEOMETRY_TAG: u64 = 0x4745_4f4d_0000_0003;
+const EDGES_TAG: u64 = 0x4544_4745_0000_0004;
 
 /// A 128-bit word for `value` under `tag`, from two draws of one splitmix64 stream.
 fn word(tag: u64, value: u64) -> u128 {

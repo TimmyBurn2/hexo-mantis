@@ -160,6 +160,11 @@ impl PyRegistrySpec {
     pub fn contract_version(&self) -> Option<u32> {
         self.inner.contract_version
     }
+    /// Whether the builder emits the edges between two empty cells: `"kept"` or `"pruned"`.
+    #[getter]
+    pub fn empty_edges(&self) -> &'static str {
+        mantis_encoding::empty_edges_str(self.inner.empty_edges)
+    }
 
     /// Alias for `policy_logit_count`.
     #[getter]
@@ -287,7 +292,7 @@ mod tests {
         // Pin the registered set by NAME, with registry.toml as the authority.
         assert_eq!(
             via_fn,
-            vec!["gnn_axis_r8", "gnn_axis_v1"],
+            vec!["gnn_axis_r8", "gnn_axis_r8_pruned", "gnn_axis_v1"],
             "all_specs must expose exactly the registered encodings"
         );
     }

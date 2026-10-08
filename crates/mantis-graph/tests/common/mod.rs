@@ -10,7 +10,11 @@
 //! parametrized ONLY by the fixture-root path so the mutation self-tests
 //! exercise the IDENTICAL functions the parity gate calls.
 
-#![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_possible_wrap)]
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
+)]
 
 use std::path::{Path, PathBuf};
 
@@ -43,7 +47,10 @@ const DTYPE_NAMES: [&str; 6] = ["f32", "i32", "u32", "u16", "u8", "i8"];
 /// Lowercase hex SHA-256 of `data`, the manifest's hash format.
 #[must_use]
 pub fn sha256_hex(data: &[u8]) -> String {
-    Sha256::digest(data).iter().map(|b| format!("{b:02x}")).collect()
+    Sha256::digest(data)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 /// First index at which `a` and `b` differ (or where one ends); `None` if equal.
@@ -156,7 +163,11 @@ pub fn parse_manifest(root: &Path) -> Result<Manifest, String> {
     let path = root.join("manifest.tsv");
     let text = std::fs::read_to_string(&path)
         .map_err(|e| format!("manifest unreadable: {}: {e}", path.display()))?;
-    let mut m = Manifest { header: Vec::new(), files: Vec::new(), cases: Vec::new() };
+    let mut m = Manifest {
+        header: Vec::new(),
+        files: Vec::new(),
+        cases: Vec::new(),
+    };
     for (i, line) in text.lines().enumerate() {
         let line_no = i + 1;
         if line.is_empty() {
@@ -173,7 +184,10 @@ pub fn parse_manifest(root: &Path) -> Result<Manifest, String> {
         match cols[0] {
             "F" => {
                 if cols.len() != 4 {
-                    return Err(format!("manifest line {line_no}: F-row wants 4 columns, got {}", cols.len()));
+                    return Err(format!(
+                        "manifest line {line_no}: F-row wants 4 columns, got {}",
+                        cols.len()
+                    ));
                 }
                 m.files.push(FileRow {
                     path: cols[1].to_string(),
@@ -185,10 +199,16 @@ pub fn parse_manifest(root: &Path) -> Result<Manifest, String> {
             }
             "C" => {
                 if cols.len() != 7 {
-                    return Err(format!("manifest line {line_no}: C-row wants 7 columns, got {}", cols.len()));
+                    return Err(format!(
+                        "manifest line {line_no}: C-row wants 7 columns, got {}",
+                        cols.len()
+                    ));
                 }
                 if !DTYPE_NAMES.contains(&cols[3]) {
-                    return Err(format!("manifest line {line_no}: unknown dtype '{}'", cols[3]));
+                    return Err(format!(
+                        "manifest line {line_no}: unknown dtype '{}'",
+                        cols[3]
+                    ));
                 }
                 m.cases.push(CaseRow {
                     case_id: cols[1]
@@ -203,7 +223,11 @@ pub fn parse_manifest(root: &Path) -> Result<Manifest, String> {
                     sha256: cols[6].to_string(),
                 });
             }
-            kind => return Err(format!("manifest line {line_no}: unknown row kind '{kind}'")),
+            kind => {
+                return Err(format!(
+                    "manifest line {line_no}: unknown row kind '{kind}'"
+                ))
+            }
         }
     }
     let schema = m
@@ -348,9 +372,13 @@ pub fn serialize_input_record(c: &CaseInput) -> Vec<u8> {
 
 /// Read inputs.bin (magic MGPI, version 1). Short read = loud named error.
 pub fn read_inputs_bin(path: &Path) -> Result<Vec<CaseInput>, String> {
-    let bytes =
-        std::fs::read(path).map_err(|e| format!("inputs.bin unreadable: {}: {e}", path.display()))?;
-    let mut cur = Cur { b: &bytes, off: 0, name: path.display().to_string() };
+    let bytes = std::fs::read(path)
+        .map_err(|e| format!("inputs.bin unreadable: {}: {e}", path.display()))?;
+    let mut cur = Cur {
+        b: &bytes,
+        off: 0,
+        name: path.display().to_string(),
+    };
     let magic = cur.take(4, "magic")?;
     if magic != b"MGPI" {
         return Err(format!("{}: bad magic {magic:?}", path.display()));
@@ -365,7 +393,10 @@ pub fn read_inputs_bin(path: &Path) -> Result<Vec<CaseInput>, String> {
         cases.push(read_input_record(&mut cur)?);
     }
     if cur.off != bytes.len() {
-        return Err(format!("{}: trailing bytes after {n_cases} records", path.display()));
+        return Err(format!(
+            "{}: trailing bytes after {n_cases} records",
+            path.display()
+        ));
     }
     Ok(cases)
 }
@@ -392,9 +423,13 @@ pub struct Blob {
 /// Read one MGPB raw golden blob. Any short read (declared nbytes vs EOF) is a
 /// loud error naming the file.
 pub fn read_blob(path: &Path) -> Result<Blob, String> {
-    let bytes =
-        std::fs::read(path).map_err(|e| format!("blob absent/unreadable: {}: {e}", path.display()))?;
-    let mut cur = Cur { b: &bytes, off: 0, name: path.display().to_string() };
+    let bytes = std::fs::read(path)
+        .map_err(|e| format!("blob absent/unreadable: {}: {e}", path.display()))?;
+    let mut cur = Cur {
+        b: &bytes,
+        off: 0,
+        name: path.display().to_string(),
+    };
     let magic = cur.take(4, "magic")?;
     if magic != b"MGPB" {
         return Err(format!("{}: bad magic {magic:?}", path.display()));
@@ -407,7 +442,11 @@ pub fn read_blob(path: &Path) -> Result<Blob, String> {
     let ib_start = cur.off;
     let input = read_input_record(&mut cur)?;
     if input.case_id != case_id {
-        return Err(format!("{}: embedded input case_id {} != header {case_id}", path.display(), input.case_id));
+        return Err(format!(
+            "{}: embedded input case_id {} != header {case_id}",
+            path.display(),
+            input.case_id
+        ));
     }
     let input_block = bytes[ib_start..cur.off].to_vec();
     let n_fields = cur.u8v("n_fields")?;
@@ -422,7 +461,10 @@ pub fn read_blob(path: &Path) -> Result<Blob, String> {
             .to_string();
         let dtype_code = cur.u8v("dtype code")?;
         if !(1..=6).contains(&dtype_code) {
-            return Err(format!("{}: field {name}: unknown dtype code {dtype_code}", path.display()));
+            return Err(format!(
+                "{}: field {name}: unknown dtype code {dtype_code}",
+                path.display()
+            ));
         }
         let dtype = DTYPE_NAMES[(dtype_code - 1) as usize].to_string();
         let ndim = cur.u8v("ndim")? as usize;
@@ -433,7 +475,13 @@ pub fn read_blob(path: &Path) -> Result<Blob, String> {
         let nbytes = cur.u64v("payload_nbytes")? as usize;
         let payload_offset = cur.off;
         let payload = cur.take(nbytes, &format!("field {name} payload"))?.to_vec();
-        fields.push(BlobField { name, dtype, dims, payload, payload_offset });
+        fields.push(BlobField {
+            name,
+            dtype,
+            dims,
+            payload,
+            payload_offset,
+        });
     }
     if cur.off != bytes.len() {
         return Err(format!("{}: trailing bytes", path.display()));
@@ -442,14 +490,23 @@ pub fn read_blob(path: &Path) -> Result<Blob, String> {
     if names != FIELD_ORDER {
         return Err(format!("{}: field order drift: {names:?}", path.display()));
     }
-    Ok(Blob { case_id, input_block, input, fields })
+    Ok(Blob {
+        case_id,
+        input_block,
+        input,
+        fields,
+    })
 }
 
 /// Verify a blob's 14 fields against its manifest C-rows (dtype, shape, nbytes,
 /// payload sha). First mismatch is a loud error naming the case and field.
 pub fn check_blob_against_case_rows(blob: &Blob, rows: &[&CaseRow]) -> Result<(), String> {
     if rows.len() != 14 {
-        return Err(format!("case {}: {} C-rows, want 14", blob.case_id, rows.len()));
+        return Err(format!(
+            "case {}: {} C-rows, want 14",
+            blob.case_id,
+            rows.len()
+        ));
     }
     for (f, row) in blob.fields.iter().zip(rows.iter()) {
         if f.name != row.field {
@@ -534,13 +591,48 @@ pub fn canonical_fields(g: &AxisGraph) -> Vec<BuiltField> {
     let e = g.num_edges() as u64;
     let l = g.legal_node_gather.len() as u64;
     vec![
-        BuiltField { name: "node_feat", dtype: "f32", dims: vec![n, 11], payload: f32s(&g.node_feat.0) },
-        BuiltField { name: "edge_src", dtype: "u32", dims: vec![e], payload: u32s(&g.edge_index.src) },
-        BuiltField { name: "edge_dst", dtype: "u32", dims: vec![e], payload: u32s(&g.edge_index.dst) },
-        BuiltField { name: "edge_attr", dtype: "f32", dims: vec![e, 5], payload: f32s(&g.edge_attr.0) },
-        BuiltField { name: "legal_mask", dtype: "u8", dims: vec![n], payload: bools(&g.legal_mask) },
-        BuiltField { name: "stone_mask", dtype: "u8", dims: vec![n], payload: bools(&g.stone_mask) },
-        BuiltField { name: "node_coords", dtype: "i32", dims: vec![2 * n], payload: i32s(&g.node_coords) },
+        BuiltField {
+            name: "node_feat",
+            dtype: "f32",
+            dims: vec![n, 11],
+            payload: f32s(&g.node_feat.0),
+        },
+        BuiltField {
+            name: "edge_src",
+            dtype: "u32",
+            dims: vec![e],
+            payload: u32s(&g.edge_index.src),
+        },
+        BuiltField {
+            name: "edge_dst",
+            dtype: "u32",
+            dims: vec![e],
+            payload: u32s(&g.edge_index.dst),
+        },
+        BuiltField {
+            name: "edge_attr",
+            dtype: "f32",
+            dims: vec![e, 5],
+            payload: f32s(&g.edge_attr.0),
+        },
+        BuiltField {
+            name: "legal_mask",
+            dtype: "u8",
+            dims: vec![n],
+            payload: bools(&g.legal_mask),
+        },
+        BuiltField {
+            name: "stone_mask",
+            dtype: "u8",
+            dims: vec![n],
+            payload: bools(&g.stone_mask),
+        },
+        BuiltField {
+            name: "node_coords",
+            dtype: "i32",
+            dims: vec![2 * n],
+            payload: i32s(&g.node_coords),
+        },
         BuiltField {
             name: "policy_scatter_index",
             dtype: "i32",
@@ -553,7 +645,12 @@ pub fn canonical_fields(g: &AxisGraph) -> Vec<BuiltField> {
             dims: vec![l],
             payload: u32s(&g.legal_node_gather),
         },
-        BuiltField { name: "n_stones", dtype: "u16", dims: vec![1], payload: g.n_stones.to_le_bytes().to_vec() },
+        BuiltField {
+            name: "n_stones",
+            dtype: "u16",
+            dims: vec![1],
+            payload: g.n_stones.to_le_bytes().to_vec(),
+        },
         BuiltField {
             name: "n_nodes_checksum",
             dtype: "u32",
@@ -572,19 +669,36 @@ pub fn canonical_fields(g: &AxisGraph) -> Vec<BuiltField> {
             dims: vec![1],
             payload: g.current_player.to_le_bytes().to_vec(),
         },
-        BuiltField { name: "builder_impl", dtype: "u8", dims: vec![1], payload: vec![g.builder_impl] },
+        BuiltField {
+            name: "builder_impl",
+            dtype: "u8",
+            dims: vec![1],
+            payload: vec![g.builder_impl],
+        },
     ]
 }
 
-/// Build the graph for one fixture case input.
+/// Build the graph for one fixture case input, empty edges kept as the goldens were captured.
 #[must_use]
 pub fn build_case(c: &CaseInput) -> AxisGraph {
+    build_case_with(c, mantis_graph::EmptyEdges::Kept)
+}
+
+/// Build the graph for one fixture case input under `empty_edges`.
+#[must_use]
+pub fn build_case_with(c: &CaseInput, empty_edges: mantis_graph::EmptyEdges) -> AxisGraph {
     let params = mantis_graph::BuildParams {
         win_length: c.win_length,
         radius: c.radius,
         current_player: c.current_player,
         moves_remaining: c.moves_remaining,
         trunk_size: c.trunk_size,
+        empty_edges,
     };
-    mantis_graph::build_axis_graph(&mantis_graph::StoneList { stones: c.stones.clone() }, &params)
+    mantis_graph::build_axis_graph(
+        &mantis_graph::StoneList {
+            stones: c.stones.clone(),
+        },
+        &params,
+    )
 }

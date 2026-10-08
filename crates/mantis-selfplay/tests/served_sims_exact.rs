@@ -141,8 +141,28 @@ fn drive_kind(
     tactics: Option<TacticsConfig>,
     producer: Producer,
 ) -> Drive {
-    const ENCODING: &str = "gnn_axis_r8";
-    let spec = lookup_or_panic(ENCODING);
+    drive_kind_at(
+        "gnn_axis_r8",
+        kind,
+        n_simulations,
+        ply_cap,
+        want_records,
+        tactics,
+        producer,
+    )
+}
+
+/// [`drive_kind`] at the registry row `encoding`.
+fn drive_kind_at(
+    encoding: &str,
+    kind: SearchKind,
+    n_simulations: usize,
+    ply_cap: usize,
+    want_records: usize,
+    tactics: Option<TacticsConfig>,
+    producer: Producer,
+) -> Drive {
+    let spec = lookup_or_panic(encoding);
     let runner = SelfPlayRunner::new(SelfPlayRunnerConfig {
         n_workers: 1,
         max_moves_per_game: ply_cap,
@@ -154,7 +174,7 @@ fn drive_kind(
         dirichlet_enabled: true,
         search_kind: kind,
         quiescence_enabled: false,
-        encoding_name: Some(ENCODING.to_string()),
+        encoding_name: Some(encoding.to_string()),
         tactics,
         ..Default::default()
     })
@@ -316,5 +336,37 @@ fn both_kinds_serve_exactly_three_hundred_and_twenty() {
     for kind in [SearchKind::Puct, SearchKind::Gumbel] {
         let drive = drive_kind(kind, 320, 2, 2, None, Producer::Uniform);
         assert_exact(&format!("{kind:?}"), &drive, 320);
+    }
+}
+
+/// The pruned row serves exactly its budget on both kinds, with the net, the solver and the table each ending a descent.
+#[test]
+fn the_pruned_row_serves_exactly_its_budget_on_both_kinds() {
+    const PRUNED: &str = "gnn_axis_r8_pruned";
+    let drive = drive_graph(PRUNED, 50, 4, 8, None, Producer::Uniform);
+    assert_exact(PRUNED, &drive, 50);
+    for kind in [SearchKind::Puct, SearchKind::Gumbel] {
+        let drive = drive_kind_at(
+            PRUNED,
+            kind,
+            64,
+            60,
+            60,
+            Some(LEAF_TACTICS),
+            Producer::Compact,
+        );
+        assert_exact(&format!("{PRUNED} {kind:?} tactics on"), &drive, 64);
+        assert!(
+            drive.inline > 0,
+            "{kind:?}: no descent ended at a decided leaf"
+        );
+        let drive = drive_kind_at(PRUNED, kind, 64, 40, 24, None, Producer::Compact);
+        assert_exact(&format!("{PRUNED} {kind:?} transposing"), &drive, 64);
+        assert_eq!(
+            drive.table > 0,
+            kind == SearchKind::Puct,
+            "{kind:?}: {} table hits",
+            drive.table
+        );
     }
 }

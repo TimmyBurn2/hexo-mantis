@@ -19,6 +19,7 @@ from mantis.encoding.resolvers import (
 from mantis.encoding.resolvers import GNN_GRAPH_MARKER_KEY
 
 R8 = "gnn_axis_r8"
+R8_PRUNED = "gnn_axis_r8_pruned"
 V1 = "gnn_axis_v1"
 
 
@@ -58,12 +59,12 @@ def test_r328b_03_exactly_one_knob_differs_between_the_two_graph_rows() -> None:
         "knob so the r6/r8 comparison is a comparison; any other difference makes it two.")
 
 
-def test_r328b_04_the_roster_carries_both_graph_rows() -> None:
+def test_r328b_04_the_roster_carries_every_graph_row() -> None:
     """The conformance suite parametrises over `all_specs()`, so this is what makes every
-    tier run at radius 8 without a tier edit."""
+    tier run at radius 8, edges kept and pruned, without a tier edit."""
     graph = sorted(s.name for s in encoding.all_specs()
                    if getattr(s, "representation", "grid") == "graph")
-    assert graph == [R8, V1], f"graph roster is {graph}"
+    assert graph == [R8, R8_PRUNED, V1], f"graph roster is {graph}"
 
 
 # the marker branch the second graph row forced open

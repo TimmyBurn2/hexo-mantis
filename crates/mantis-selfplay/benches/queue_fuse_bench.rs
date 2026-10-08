@@ -83,6 +83,7 @@ fn build_pop_corpus_seeded(seed: u64) -> Vec<AxisGraph> {
                 WIN_LENGTH,
                 RADIUS,
                 TRUNK_SIZE,
+                mantis_graph::EmptyEdges::Kept,
             )
             .expect("every corpus leaf builds (inputs in range)"),
         );

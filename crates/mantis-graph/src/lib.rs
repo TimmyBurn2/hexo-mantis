@@ -158,6 +158,15 @@ pub struct StoneList {
     pub stones: Vec<(i32, i32, i8)>,
 }
 
+/// Whether the axis walk emits the edges that join two empty cells; the walk itself is the same either way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EmptyEdges {
+    /// Every axis edge the walk meets, as the oracle builds.
+    Kept,
+    /// No edge between two empty cells; an empty cell still reaches the stones past its empty neighbours.
+    Pruned,
+}
+
 /// Board/window parameters. `current_player` is the side to move (+1/-1; terminal is treated
 /// as -1, matching the oracle).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -168,6 +177,7 @@ pub struct BuildParams {
     pub moves_remaining: u8,
     /// Trunk side length for the policy-slot window (19 for v6/v7full).
     pub trunk_size: i32,
+    pub empty_edges: EmptyEdges,
 }
 
 impl BuildParams {
@@ -181,6 +191,7 @@ impl BuildParams {
         current_player: 1,
         moves_remaining: 2,
         trunk_size: 19,
+        empty_edges: EmptyEdges::Kept,
     };
 }
 
@@ -850,6 +861,7 @@ pub fn build_axis_graph_verified_by(
         .saturating_mul(DEDUP_STRIDE_AXES as usize)
         .saturating_mul(window.max(1));
     let mut seen = vec![0u64; key_bits.div_ceil(64)];
+    let prune = params.empty_edges == EmptyEdges::Pruned;
 
     for i in 0..n_real {
         let iq = coords[i * 2];
@@ -873,18 +885,24 @@ pub fn build_axis_graph_verified_by(
                     let sbit = u32::from(sign < 0);
                     let wd = window as u32;
                     let base = axis_idx as u32 * 2 * wd + (d - 1) as u32;
-                    if first_sight(
-                        &mut seen,
-                        i as u32 * DEDUP_STRIDE_AXES * wd + base + sbit * wd,
-                    ) {
+                    // A key names one (src, dst) pair, so an unmarked pruned key can never emit a kept edge.
+                    let emit = !(prune && i_kind == Kind::Empty && j_kind == Kind::Empty);
+                    if emit
+                        && first_sight(
+                            &mut seen,
+                            i as u32 * DEDUP_STRIDE_AXES * wd + base + sbit * wd,
+                        )
+                    {
                         edge_src.push(i as u32);
                         edge_dst.push(j);
                         push_attr(&mut edge_attr, axis_idx, signed_dist, src_i);
                     }
-                    if first_sight(
-                        &mut seen,
-                        j * DEDUP_STRIDE_AXES * wd + base + (1 - sbit) * wd,
-                    ) {
+                    if emit
+                        && first_sight(
+                            &mut seen,
+                            j * DEDUP_STRIDE_AXES * wd + base + (1 - sbit) * wd,
+                        )
+                    {
                         edge_src.push(j);
                         edge_dst.push(i as u32);
                         push_attr(&mut edge_attr, axis_idx, -signed_dist, j_kind.player_feat());
@@ -1054,6 +1072,7 @@ fn verify_contract(g: &AxisGraph, n_stones: usize, n_legal: usize, params: &Buil
             (false, _) => 0.0,
         })
         .collect();
+    let prune = params.empty_edges == EmptyEdges::Pruned;
     // Per-edge: bounds + EdgeAttrGeometryMismatch, recomputing expected attrs from the WIRE
     // arrays only, mirroring the resolver's check.
     for e in 0..n_edges {
@@ -1062,6 +1081,10 @@ fn verify_contract(g: &AxisGraph, n_stones: usize, n_legal: usize, params: &Buil
         assert!(
             (s as usize) < n && (d as usize) < n,
             "EdgeIndexOutOfBounds: edge {e} = ({s},{d}), N {n}"
+        );
+        assert!(
+            !(prune && g.legal_mask[s as usize] && g.legal_mask[d as usize]),
+            "PrunedEmptyEdge: edge {e} ({s}->{d}) joins two empty cells under EmptyEdges::Pruned"
         );
         let a = &g.edge_attr.0[e * EDGE_FEAT_DIM..e * EDGE_FEAT_DIM + EDGE_FEAT_DIM];
         if s == dummy_idx || d == dummy_idx {
@@ -1325,6 +1348,34 @@ mod tests {
         let mut g = build_axis_graph(&stones, &params);
         // flip the signed_dist of the first real (non-dummy) edge
         g.edge_attr.0[3] = -g.edge_attr.0[3];
+        let (ns, nl) = (g.n_stones as usize, g.legal_node_gather.len());
+        verify_contract(&g, ns, nl, &params);
+    }
+
+    #[test]
+    #[should_panic(expected = "PrunedEmptyEdge")]
+    fn verify_contract_dies_loud_on_an_empty_pair_under_pruned() {
+        // The planted edge is a real one from the kept build, so only the prune check can refuse it.
+        let stones = StoneList {
+            stones: vec![(0, 0, 1), (1, 0, -1), (0, 1, 1)],
+        };
+        let kept = build_axis_graph(&stones, &BuildParams::V1_GEOMETRY);
+        let params = BuildParams {
+            empty_edges: EmptyEdges::Pruned,
+            ..BuildParams::V1_GEOMETRY
+        };
+        let mut g = build_axis_graph(&stones, &params);
+        let e = (0..kept.num_edges())
+            .find(|&e| {
+                let (s, d) = (kept.edge_index.src[e], kept.edge_index.dst[e]);
+                kept.legal_mask[s as usize] && kept.legal_mask[d as usize]
+            })
+            .expect("the kept build joins two empty cells");
+        g.edge_index.src.push(kept.edge_index.src[e]);
+        g.edge_index.dst.push(kept.edge_index.dst[e]);
+        g.edge_attr
+            .0
+            .extend_from_slice(&kept.edge_attr.0[e * EDGE_FEAT_DIM..(e + 1) * EDGE_FEAT_DIM]);
         let (ns, nl) = (g.n_stones as usize, g.legal_node_gather.len());
         verify_contract(&g, ns, nl, &params);
     }

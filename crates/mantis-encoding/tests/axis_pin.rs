@@ -56,6 +56,30 @@ fn the_registry_refuses_a_win_length_the_engine_does_not_play() {
     assert!(parse_encoding_toml("gnn_wlok", &graph_body()).is_ok());
 }
 
+/// `empty_edges` has no default (LAW-11): absent or misspelt, the row is refused naming the key.
+#[test]
+fn the_registry_refuses_an_absent_or_unknown_empty_edges() {
+    use mantis_encoding::{parse_encoding_toml, EmptyEdges};
+
+    let absent = graph_body().replace("empty_edges             = \"kept\"\n", "");
+    let err = parse_encoding_toml("gnn_eeabsent", &absent)
+        .expect_err("an absent empty_edges must be REFUSED, never defaulted");
+    assert!(
+        err.contains("empty_edges"),
+        "the error must name the key: {err}"
+    );
+    let unknown = graph_body().replace("\"kept\"", "\"some\"");
+    let err = parse_encoding_toml("gnn_eeunknown", &unknown)
+        .expect_err("an unknown empty_edges must be REFUSED");
+    assert!(
+        err.contains("kept") && err.contains("pruned"),
+        "the error must name the two values: {err}"
+    );
+    let pruned = graph_body().replace("\"kept\"", "\"pruned\"");
+    let spec = parse_encoding_toml("gnn_eepruned", &pruned).expect("pruned is a registry value");
+    assert_eq!(spec.empty_edges, EmptyEdges::Pruned);
+}
+
 fn graph_body() -> String {
     r#"
 representation          = "graph"
@@ -83,7 +107,8 @@ win_axes                = 3
 contract_version        = 1
 builder_impl_required   = 1
 n_chain_planes          = 6
-schema_version          = 4
+empty_edges             = "kept"
+schema_version          = 5
 notes                   = "test"
 "#
     .to_string()
@@ -111,6 +136,10 @@ fn the_named_build_geometry_equals_the_registry_row_it_names() {
     assert_eq!(
         params.trunk_size as usize, spec.trunk_size,
         "BuildParams::V1_GEOMETRY.trunk_size disagrees with the row it is named for"
+    );
+    assert_eq!(
+        params.empty_edges, spec.empty_edges,
+        "BuildParams::V1_GEOMETRY.empty_edges disagrees with the row it is named for"
     );
 }
 

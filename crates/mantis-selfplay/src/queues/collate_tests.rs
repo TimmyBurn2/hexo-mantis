@@ -13,7 +13,10 @@ const TRUNK: i32 = 19;
 fn wire(positions: &[&[(i64, i64, i64)]]) -> GraphWireArrays {
     let graphs: Vec<_> = positions
         .iter()
-        .map(|stones| build_leaf_graph(stones, 1, 2, 6, 6, 19).expect("a legal test position"))
+        .map(|stones| {
+            build_leaf_graph(stones, 1, 2, 6, 6, 19, mantis_graph::EmptyEdges::Kept)
+                .expect("a legal test position")
+        })
         .collect();
     GraphWire::from_axis_graphs(&graphs, 1)
         .take()

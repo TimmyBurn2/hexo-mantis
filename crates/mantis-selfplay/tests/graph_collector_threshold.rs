@@ -20,7 +20,10 @@ fn threshold_is_clamped_to_the_declared_supply() {
     // The ledger's own configuration: inference_batch_size 64, dev's minted supply
     // n_workers 1 x leaf_batch_size 8 = 8.
     let derived = saturation_threshold(64, 8);
-    assert_eq!(derived, 8, "the threshold clamps to the supply, not the half-batch");
+    assert_eq!(
+        derived, 8,
+        "the threshold clamps to the supply, not the half-batch"
+    );
     assert_eq!(frozen_threshold(64), 32);
     assert!(
         derived < frozen_threshold(64),
@@ -46,13 +49,16 @@ fn undeclared_supply_keeps_the_frozen_threshold() {
 
 fn one_graph() -> mantis_graph::AxisGraph {
     build_axis_graph(
-        &StoneList { stones: vec![(0, 0, 1), (1, 0, -1), (2, 0, 1)] },
+        &StoneList {
+            stones: vec![(0, 0, 1), (1, 0, -1), (2, 0, 1)],
+        },
         &BuildParams {
             win_length: 6,
             radius: 6,
             current_player: 1,
             moves_remaining: 2,
             trunk_size: 19,
+            empty_edges: mantis_graph::EmptyEdges::Kept,
         },
     )
 }

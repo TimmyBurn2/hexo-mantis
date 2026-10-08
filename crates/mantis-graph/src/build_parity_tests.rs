@@ -502,6 +502,7 @@ fn variants(to_move: i8, moves_remaining: u8) -> [BuildParams; 6] {
             current_player,
             moves_remaining,
             trunk_size,
+            empty_edges: EmptyEdges::Kept,
         };
     [
         at(6, 8, 19, (to_move, moves_remaining)),

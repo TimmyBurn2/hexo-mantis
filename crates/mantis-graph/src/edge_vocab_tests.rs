@@ -1,7 +1,7 @@
 //! The vocabulary's size and order, its round trip through `edge_code`, and every built edge inside it.
 
 use super::*;
-use crate::{build_axis_graph, BuildParams, StoneList, EDGE_FEAT_DIM};
+use crate::{build_axis_graph, BuildParams, EmptyEdges, StoneList, EDGE_FEAT_DIM};
 
 #[test]
 fn the_vocabulary_is_the_dummy_then_every_axis_distance_and_player() {
@@ -71,6 +71,7 @@ fn every_edge_a_real_build_emits_is_in_the_vocabulary_bit_for_bit() {
                     current_player: 1,
                     moves_remaining: 2,
                     trunk_size: 19,
+                    empty_edges: EmptyEdges::Kept,
                 },
             );
             for row in g.edge_attr.0.chunks(EDGE_FEAT_DIM) {

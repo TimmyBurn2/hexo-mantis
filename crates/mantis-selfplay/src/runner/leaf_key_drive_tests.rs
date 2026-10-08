@@ -163,6 +163,7 @@ fn drive(cache_capacity: usize) -> Drive {
         running: &running,
         win_length: geometry.win_length,
         graph_radius: geometry.graph_radius,
+        empty_edges: geometry.empty_edges,
         served_leaves: &served,
         gpu_evals: &gpu,
         inline_descents: &inline,

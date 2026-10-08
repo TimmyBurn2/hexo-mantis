@@ -15,8 +15,13 @@ shape. Each `[encodings.<name>]` table carries `representation` (REQUIRED, no de
 spelled `"graph"` (a closed enum; `"grid"` is REFUSED BY NAME since the grid path's deletion,
 R346(f), `spec/mod.rs`), plus its shape fields and `n_chain_planes` (≥ 1). Unknown TOML
 keys are a parse error; missing required keys are a parse error; the validator collects ALL
-errors before reporting. The registered set is pruned to its live consumers — every entry
-is named by ≥ 1 config or ≥ 1 anchor artifact.
+errors before reporting. `empty_edges` (REQUIRED since schema v5, `"kept"` or `"pruned"`, no
+default) says whether the builder emits the axis edges joining two empty cells; under `"pruned"`
+the builder's producer verify refuses any such edge (`PrunedEmptyEdge`). The registered set is
+pruned to its live consumers — every entry is named by ≥ 1 config or ≥ 1 anchor artifact — with
+one stated exception: `gnn_axis_r8_pruned` (ENCODE-1, R388(f)) lands as a capability no config
+names until a run adopts it. Repaired 2026-10-08: no gate enforces the consumer claim (gate 11
+refuses silent encoding fallbacks and checks no consumer).
 
 ## Who asserts what where
 - `registry/parse.rs` — per-field parse + unknown-key reject + `representation` required

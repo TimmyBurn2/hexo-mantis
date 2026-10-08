@@ -1,12 +1,13 @@
-//! O-4..O-10, O-13 — registry census (pruned set), per-field pins on the two graph rows, and
-//! the derived field-diff that keeps `gnn_axis_r8` a one-knob edit of `gnn_axis_v1`.
+//! O-4..O-10, O-13 — registry census (pruned set), per-field pins on the graph rows, and the
+//! derived field-diffs that keep `gnn_axis_r8` a one-knob edit of `gnn_axis_v1` and
+//! `gnn_axis_r8_pruned` a one-knob edit of `gnn_axis_r8`.
 //!
 //! The three grid rows (`v6`, `v6w25`, `v6_live2_ls`) are pinned here as ABSENT, so a
 //! resurrected row fails the census rather than the encoder.
 
-use mantis_encoding::{all_specs, lookup, PolicyPool, Representation, ValuePool};
+use mantis_encoding::{all_specs, lookup, EmptyEdges, PolicyPool, Representation, ValuePool};
 
-const REGISTERED: [&str; 2] = ["gnn_axis_v1", "gnn_axis_r8"];
+const REGISTERED: [&str; 3] = ["gnn_axis_v1", "gnn_axis_r8", "gnn_axis_r8_pruned"];
 const ABSENT: [&str; 11] = [
     "v6",
     "v6w25",
@@ -39,7 +40,7 @@ fn census_exact_n_and_names() {
     );
     let mut names: Vec<&str> = all_specs().map(|s| s.name).collect();
     names.sort_unstable();
-    assert_eq!(names, ["gnn_axis_r8", "gnn_axis_v1"]);
+    assert_eq!(names, ["gnn_axis_r8", "gnn_axis_r8_pruned", "gnn_axis_v1"]);
     for n in REGISTERED {
         assert!(lookup(n).is_some(), "{n} must be registered");
     }
@@ -96,9 +97,10 @@ fn per_field_pins_gnn_axis_v1() {
     assert_eq!(s.contract_version, Some(1));
     assert_eq!(s.builder_impl_required, Some(1));
     assert_eq!(s.n_chain_planes, 6);
+    assert_eq!(s.empty_edges, EmptyEdges::Kept);
     assert_eq!(
-        s.schema_version, 4,
-        "graph entry schema_version = 4 (preserved)"
+        s.schema_version, 5,
+        "graph entry schema_version = 5 (empty_edges)"
     );
     assert_eq!(s.legal_move_radius, 6);
 }
@@ -137,9 +139,10 @@ fn per_field_pins_gnn_axis_r8() {
     assert_eq!(s.contract_version, Some(1));
     assert_eq!(s.builder_impl_required, Some(1));
     assert_eq!(s.n_chain_planes, 6);
+    assert_eq!(s.empty_edges, EmptyEdges::Kept);
     assert_eq!(
-        s.schema_version, 4,
-        "graph entry schema_version = 4 (preserved)"
+        s.schema_version, 5,
+        "graph entry schema_version = 5 (empty_edges)"
     );
     assert_eq!(
         s.legal_move_radius, 8,
@@ -148,70 +151,17 @@ fn per_field_pins_gnn_axis_r8() {
     );
 }
 
-/// Rust twin of `tests/encoding/test_r8_identity.py::test_r328b_03`: the two graph rows must
-/// differ in EXACTLY the radius pair and their identifying strings — `gnn_axis_r8` exists to move
-/// ONE knob, so a stray `win_length` or `policy_logit_count` difference makes the r6/r8
-/// comparison two comparisons.
-///
-/// DERIVED, not a typed field list: the walk is over the `{:#?}` dump `#[derive(Debug)]`
-/// generates, so a field ADDED to `RegistrySpec` joins both dumps automatically.
-#[test]
-fn the_two_graph_rows_differ_in_exactly_the_radius_pair() {
-    let v1 = format!(
-        "{:#?}",
-        lookup("gnn_axis_v1").expect("gnn_axis_v1 is registered")
-    );
-    let r8 = format!(
-        "{:#?}",
-        lookup("gnn_axis_r8").expect("gnn_axis_r8 is registered")
-    );
-    let (a, b): (Vec<&str>, Vec<&str>) = (v1.lines().collect(), r8.lines().collect());
+/// The fields two rows' `{:#?}` dumps differ in, DERIVED from the dump so a field added to `RegistrySpec` joins it unasked.
+fn differing_fields(a: &str, b: &str) -> Vec<String> {
+    let (la, lb): (Vec<&str>, Vec<&str>) = (a.lines().collect(), b.lines().collect());
     assert_eq!(
-        a.len(),
-        b.len(),
-        "the two dumps have different shapes, so no field-wise diff \
-         is possible:\n{v1}\n---\n{r8}"
+        la.len(),
+        lb.len(),
+        "the two dumps have different shapes, so no field-wise diff is possible:\n{a}\n---\n{b}"
     );
-    assert!(
-        a.len() > 15,
-        "the Debug dump collapsed to {} lines; this test would be vacuous",
-        a.len()
-    );
-
     // `{:#?}` breaks an `Option<usize>` over three lines, so a differing line is often the
     // INNER value rather than the field name. Carry the most recent `field:` line seen so a
     // difference is attributed to the field that owns it, and de-duplicate.
-    let mut field = String::new();
-    let mut differing: Vec<String> = Vec::new();
-    for (x, y) in a.iter().zip(b.iter()) {
-        let trimmed = x.trim();
-        if let Some((name, _)) = trimmed.split_once(':') {
-            if !name.contains(' ') && !name.is_empty() {
-                field = name.to_string();
-            }
-        }
-        if x != y && differing.last() != Some(&field) {
-            differing.push(field.clone());
-        }
-    }
-    differing.sort_unstable();
-    differing.dedup();
-    assert_eq!(
-        differing,
-        vec!["graph_radius", "legal_move_radius", "name", "notes"],
-        "the two graph rows differ in {differing:?}. This encoding exists to move ONE knob so \
-         the r6/r8 comparison IS a comparison; any other difference makes it two."
-    );
-}
-
-/// The field-diff's mutation self-test: the extractor must ATTRIBUTE a difference to the field that
-/// owns it, including one buried inside a multi-line `Option`. Driven on two hand-built dumps so
-/// the control does not need a mutated registry.
-#[test]
-fn the_field_diff_attributes_a_nested_difference_to_its_owning_field() {
-    let a = "Spec {\n    board_size: 19,\n    win_length: Some(\n        6,\n    ),\n}";
-    let b = "Spec {\n    board_size: 19,\n    win_length: Some(\n        7,\n    ),\n}";
-    let (la, lb): (Vec<&str>, Vec<&str>) = (a.lines().collect(), b.lines().collect());
     let mut field = String::new();
     let mut differing: Vec<String> = Vec::new();
     for (x, y) in la.iter().zip(lb.iter()) {
@@ -225,8 +175,76 @@ fn the_field_diff_attributes_a_nested_difference_to_its_owning_field() {
             differing.push(field.clone());
         }
     }
+    differing.sort_unstable();
+    differing.dedup();
+    differing
+}
+
+fn dump(name: &str) -> String {
+    let spec = lookup(name).unwrap_or_else(|| panic!("{name} is registered"));
+    let d = format!("{spec:#?}");
+    assert!(
+        d.lines().count() > 15,
+        "the Debug dump collapsed; the field-diff would be vacuous"
+    );
+    d
+}
+
+/// Rust twin of `tests/encoding/test_r8_identity.py::test_r328b_03`: the two graph rows must
+/// differ in EXACTLY the radius pair and their identifying strings — `gnn_axis_r8` exists to move
+/// ONE knob, so a stray `win_length` or `policy_logit_count` difference makes the r6/r8
+/// comparison two comparisons.
+#[test]
+fn the_two_graph_rows_differ_in_exactly_the_radius_pair() {
+    let differing = differing_fields(&dump("gnn_axis_v1"), &dump("gnn_axis_r8"));
     assert_eq!(
         differing,
+        vec!["graph_radius", "legal_move_radius", "name", "notes"],
+        "the two graph rows differ in {differing:?}. This encoding exists to move ONE knob so \
+         the r6/r8 comparison IS a comparison; any other difference makes it two."
+    );
+}
+
+/// `gnn_axis_r8_pruned` moves ONE knob off `gnn_axis_r8`, so the pruned-v-kept pair compares the edge set alone.
+#[test]
+fn the_pruned_row_differs_from_r8_in_exactly_its_edge_set() {
+    let differing = differing_fields(&dump("gnn_axis_r8"), &dump("gnn_axis_r8_pruned"));
+    assert_eq!(
+        differing,
+        vec!["empty_edges", "name", "notes"],
+        "gnn_axis_r8_pruned differs from gnn_axis_r8 in {differing:?}; any field but the edge set \
+         makes the pruned-v-kept pair two comparisons"
+    );
+    assert_eq!(
+        lookup("gnn_axis_r8_pruned").map(|s| s.empty_edges),
+        Some(EmptyEdges::Pruned)
+    );
+}
+
+/// Two rows read each other's rings exactly when they differ in nothing but the edges the builder emits.
+#[test]
+fn rings_cross_between_rows_only_across_the_edge_set() {
+    let (v1, r8, pruned) = (
+        lookup("gnn_axis_v1").expect("registered"),
+        lookup("gnn_axis_r8").expect("registered"),
+        lookup("gnn_axis_r8_pruned").expect("registered"),
+    );
+    assert!(r8.reads_rings_of(r8) && pruned.reads_rings_of(r8) && r8.reads_rings_of(pruned));
+    assert!(
+        !v1.reads_rings_of(r8) && !r8.reads_rings_of(v1) && !pruned.reads_rings_of(v1),
+        "a radius-6 row's legal set is not a radius-8 row's"
+    );
+}
+
+/// The field-diff's mutation self-test: the extractor must ATTRIBUTE a difference to the field that
+/// owns it, including one buried inside a multi-line `Option`. Driven on two hand-built dumps so
+/// the control does not need a mutated registry.
+#[test]
+fn the_field_diff_attributes_a_nested_difference_to_its_owning_field() {
+    let a = "Spec {\n    board_size: 19,\n    win_length: Some(\n        6,\n    ),\n}";
+    let b = "Spec {\n    board_size: 19,\n    win_length: Some(\n        7,\n    ),\n}";
+    assert_eq!(
+        differing_fields(a, b),
         vec!["win_length"],
         "a difference in the INNER line of a multi-line Option must be reported against \
          `win_length`, not against the bare value line — otherwise a real drift is reported \

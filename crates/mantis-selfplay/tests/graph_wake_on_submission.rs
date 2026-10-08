@@ -21,6 +21,7 @@ fn one_graph() -> AxisGraph {
             current_player: 1,
             moves_remaining: 2,
             trunk_size: 19,
+            empty_edges: mantis_graph::EmptyEdges::Kept,
         },
     )
 }

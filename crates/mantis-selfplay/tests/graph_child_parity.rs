@@ -96,6 +96,7 @@ fn check_position(src: &str, i: usize, with_priors: bool) {
         spec.win_length.expect("graph spec defines win_length") as u8,
         spec.graph_radius.expect("graph spec defines graph_radius") as u16,
         spec.trunk_size as i32,
+        spec.empty_edges,
     )
     .unwrap_or_else(|e| panic!("{id}: leaf graph build failed: {e}"));
     let wc = pairs(&ints(src, &key("window_center")));

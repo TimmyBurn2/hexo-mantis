@@ -97,6 +97,7 @@ pub(crate) fn run_worker_thread(
         agg_trunk_sz,
         win_length,
         graph_radius,
+        empty_edges,
     } = geometry;
     let WorkerStats {
         games_completed,
@@ -216,6 +217,7 @@ pub(crate) fn run_worker_thread(
         running: &running,
         win_length,
         graph_radius,
+        empty_edges,
         served_leaves: &served_leaves_total,
         gpu_evals: &gpu_evals_total,
         inline_descents: &inline_descents_total,

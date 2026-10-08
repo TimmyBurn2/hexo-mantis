@@ -5,8 +5,8 @@
 # RegistrySpec records keyed by name. `all_specs()` is the SOLE name source (no
 # hand-synced name list anywhere).
 #
-# Registered set (2 entries): gnn_axis_v1, gnn_axis_r8. The three GRID rows (v6, v6w25,
-# v6_live2_ls) were deleted with the dense path (R346(f)); `archive/grid-path` carries them.
+# Registered set (3 entries): gnn_axis_v1, gnn_axis_r8, gnn_axis_r8_pruned. The three GRID rows
+# (v6, v6w25, v6_live2_ls) were deleted with the dense path (R346(f)); `archive/grid-path` carries them.
 #
 # Every entry carries `representation` (REQUIRED — no default): "graph".
 # An absent representation is a parse error (LAW-11), never a default; "grid" is REFUSED by
@@ -14,6 +14,8 @@
 # `n_chain_planes` is a REQUIRED field (= 6 on all current encodings: 3 hex axes
 # × 2 players); it is the sole authority for the chain-plane stride (no source
 # constant / replay reach-through).
+# `empty_edges` is a REQUIRED field, "kept" or "pruned": whether the builder emits the axis
+# edges that join two empty cells (schema v5).
 #
 # Adding a new encoding:
 #   1. Append an [encodings.<name>] table with all required keys.
@@ -69,7 +71,8 @@ win_axes                = 3
 contract_version        = 1           # ragged-payload contract this encoding speaks
 builder_impl_required   = 1           # native tag the resolver asserts
 n_chain_planes          = 6
-schema_version          = 4
+empty_edges             = "kept"        # every axis edge the walk meets
+schema_version          = 5
 notes                   = "GNN axis-graph encoding. Ragged payload contract v1. Whole-board (no K-cluster); per-legal-node policy, no off-window drop. Builder = native axis-graph."
 
 # ---------------------------------------------------------------------------
@@ -116,5 +119,47 @@ win_axes                = 3
 contract_version        = 1           # ragged-payload contract this encoding speaks
 builder_impl_required   = 1           # native tag the resolver asserts
 n_chain_planes          = 6
-schema_version          = 4
+empty_edges             = "kept"        # every axis edge the walk meets
+schema_version          = 5
 notes                   = "GNN axis-graph encoding at radius 8 — the run6 identity (R328(b)). Ragged payload contract v1. Whole-board (no K-cluster); per-legal-node policy. Builder = native axis-graph."
+
+# ---------------------------------------------------------------------------
+# gnn_axis_r8_pruned — gnn_axis_r8 with no edge between two empty cells.
+# The walk is unchanged, so an empty cell still meets the first stone past its empty
+# neighbours on each ray; only the empty-to-empty edges (84 % of an r8 leaf's) are not
+# emitted. A legal cell with no stone on its six rays within five steps keeps only its
+# dummy edge, so its own node features alone place it. Nodes, features, the legal set,
+# the action space and the ring's records are gnn_axis_r8's: a NEW ROW because a stamp
+# carries encoding_name and not the edge set, so an edit to gnn_axis_r8 would move every
+# r8 net's input with nothing able to detect it.
+# ---------------------------------------------------------------------------
+[encodings.gnn_axis_r8_pruned]
+representation          = "graph"
+board_size              = 19          # action-space board (19×19+pass)
+trunk_size              = 19          # window_flat_idx origin for policy_dst_slot
+cluster_window_size     = "none"
+cluster_threshold       = "none"
+legal_move_radius       = 8           # matches graph_radius
+n_planes                = 0           # graph carries no dense planes
+plane_layout            = []
+policy_logit_count      = 362         # 19*19 + 1 — UNCHANGED action space
+has_pass_slot           = true
+is_multi_window         = false
+value_pool              = "none"
+policy_pool             = "none"
+sym_table_id            = "size_19"   # D6 aug reuses axis_perm
+kept_plane_indices      = []
+n_source_planes         = 0
+k_max                   = 1           # whole-board: one graph per leaf
+# ── schema-v4 graph fields (representation="graph" only) ──
+node_feat_dim           = 11          # relative-7 + threat-4 (mantis_graph::NODE_FEAT_DIM)
+edge_feat_dim           = 5           # axis one-hot(3) + signed_dist + src_player
+win_length              = 6
+graph_radius            = 8
+win_axes                = 3
+contract_version        = 1           # ragged-payload contract this encoding speaks
+builder_impl_required   = 1           # native tag the resolver asserts
+n_chain_planes          = 6
+empty_edges             = "pruned"    # no edge between two empty cells
+schema_version          = 5
+notes                   = "GNN axis-graph encoding at radius 8 with empty-to-empty edges pruned. Ragged payload contract v1. Whole-board (no K-cluster); per-legal-node policy. Builder = native axis-graph."

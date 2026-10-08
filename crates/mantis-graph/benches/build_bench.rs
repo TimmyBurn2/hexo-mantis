@@ -26,7 +26,8 @@
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use mantis_graph::{
-    build_axis_graph, build_axis_graph_verified_by, BuildParams, ProducerVerify, StoneList,
+    build_axis_graph, build_axis_graph_verified_by, BuildParams, EmptyEdges, ProducerVerify,
+    StoneList,
 };
 
 // Shared dep-free fixture reader (same module the parity tests use).
@@ -53,6 +54,7 @@ fn load_positions() -> Vec<(StoneList, BuildParams)> {
                 current_player: c.current_player,
                 moves_remaining: c.moves_remaining,
                 trunk_size: c.trunk_size,
+                empty_edges: EmptyEdges::Kept,
             };
             (StoneList { stones: c.stones }, params)
         })
@@ -66,7 +68,7 @@ fn load_positions() -> Vec<(StoneList, BuildParams)> {
 }
 
 /// The recorded radius-8 leaf positions, each at its own side to move and stones to place.
-fn load_r8_positions() -> Vec<(StoneList, BuildParams)> {
+fn load_r8_positions(empty_edges: EmptyEdges) -> Vec<(StoneList, BuildParams)> {
     let recorded = positions::read_positions_r8().unwrap_or_else(|e| panic!("{e}"));
     recorded
         .into_iter()
@@ -75,6 +77,7 @@ fn load_r8_positions() -> Vec<(StoneList, BuildParams)> {
                 radius: 8,
                 current_player: p.to_move,
                 moves_remaining: p.moves_remaining,
+                empty_edges,
                 ..BuildParams::V1_GEOMETRY
             };
             (StoneList { stones: p.stones }, params)
@@ -118,7 +121,7 @@ fn bench_build(c: &mut Criterion) {
     let n = set.len();
 
     // The predecessor set at radius 6 (mean 490 nodes), then the recorded radius-8 positions.
-    let r8 = load_r8_positions();
+    let r8 = load_r8_positions(EmptyEdges::Kept);
     bench_per_position(c, "axis_graph_build", &set, ProducerVerify::Builder);
     bench_per_position(c, "axis_graph_build_r8", &r8, ProducerVerify::Builder);
     // Where the consumer re-runs the edge-geometry check on every batch, the builder's own verify is skipped.
@@ -127,6 +130,12 @@ fn bench_build(c: &mut Criterion) {
         "axis_graph_build_r8_unverified",
         &r8,
         ProducerVerify::ConsumerEveryBatch,
+    );
+    bench_per_position(
+        c,
+        "axis_graph_build_r8_pruned",
+        &load_r8_positions(EmptyEdges::Pruned),
+        ProducerVerify::Builder,
     );
 
     // Whole-set sweep: build all N once, for a stable aggregate median.

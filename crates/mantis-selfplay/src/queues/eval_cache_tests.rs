@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::queues::build_leaf_graph;
+use mantis_graph::EmptyEdges;
 
 fn eval(v: f32, dense: usize) -> CachedEval {
     CachedEval {
@@ -27,6 +28,7 @@ struct Request {
     win_length: u8,
     radius: u16,
     trunk: i32,
+    empty_edges: EmptyEdges,
 }
 
 fn request() -> Request {
@@ -37,12 +39,21 @@ fn request() -> Request {
         win_length: 6,
         radius: 6,
         trunk: 19,
+        empty_edges: EmptyEdges::Kept,
     }
 }
 
 fn leaf_key(r: &Request) -> LeafKey {
-    LeafKey::of(&r.stones, r.player, r.left, r.win_length, r.radius, r.trunk)
-        .expect("a legal request")
+    LeafKey::of(
+        &r.stones,
+        r.player,
+        r.left,
+        r.win_length,
+        r.radius,
+        r.trunk,
+        r.empty_edges,
+    )
+    .expect("a legal request")
 }
 
 /// Request pairs that differ in ONE builder input each, named by it.
@@ -72,6 +83,11 @@ fn one_input_apart() -> Vec<(&'static str, Request, Request)> {
         ("win_length", base.clone(), with(&|r| r.win_length = 5)),
         ("radius", base.clone(), with(&|r| r.radius = 8)),
         ("trunk_size", base.clone(), with(&|r| r.trunk = 21)),
+        (
+            "empty_edges",
+            base.clone(),
+            with(&|r| r.empty_edges = EmptyEdges::Pruned),
+        ),
     ]
 }
 
@@ -86,8 +102,16 @@ fn first_unseparated(key: &dyn Fn(&Request) -> LeafKey) -> Option<&'static str> 
 #[test]
 fn the_key_separates_every_input_the_builder_reads() {
     let build = |r: &Request| {
-        build_leaf_graph(&r.stones, r.player, r.left, r.win_length, r.radius, r.trunk)
-            .expect("legal")
+        build_leaf_graph(
+            &r.stones,
+            r.player,
+            r.left,
+            r.win_length,
+            r.radius,
+            r.trunk,
+            r.empty_edges,
+        )
+        .expect("legal")
     };
     for (name, a, b) in one_input_apart() {
         assert_ne!(
@@ -103,7 +127,16 @@ fn the_key_separates_every_input_the_builder_reads() {
 #[test]
 fn a_key_blind_to_moves_remaining_is_caught() {
     let blind = |r: &Request| {
-        LeafKey::of(&r.stones, r.player, 0, r.win_length, r.radius, r.trunk).expect("legal")
+        LeafKey::of(
+            &r.stones,
+            r.player,
+            0,
+            r.win_length,
+            r.radius,
+            r.trunk,
+            r.empty_edges,
+        )
+        .expect("legal")
     };
     assert_eq!(first_unseparated(&blind), Some("moves_remaining"));
 }
@@ -138,10 +171,26 @@ fn the_key_refuses_exactly_what_the_builder_refuses() {
         },
     ];
     for r in &bad {
-        let built = build_leaf_graph(&r.stones, r.player, r.left, r.win_length, r.radius, r.trunk)
-            .expect_err("the builder refuses");
-        let keyed = LeafKey::of(&r.stones, r.player, r.left, r.win_length, r.radius, r.trunk)
-            .expect_err("the key refuses");
+        let built = build_leaf_graph(
+            &r.stones,
+            r.player,
+            r.left,
+            r.win_length,
+            r.radius,
+            r.trunk,
+            r.empty_edges,
+        )
+        .expect_err("the builder refuses");
+        let keyed = LeafKey::of(
+            &r.stones,
+            r.player,
+            r.left,
+            r.win_length,
+            r.radius,
+            r.trunk,
+            r.empty_edges,
+        )
+        .expect_err("the key refuses");
         assert_eq!(keyed, built);
     }
 }

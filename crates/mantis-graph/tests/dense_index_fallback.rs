@@ -14,7 +14,7 @@
 use std::collections::HashMap;
 
 use mantis_graph::{
-    axis_index_is_dense, build_axis_graph, coord_index_probe, BuildParams, StoneList,
+    axis_index_is_dense, build_axis_graph, coord_index_probe, BuildParams, EmptyEdges, StoneList,
     DENSE_INDEX_CELLS_PER_NODE,
 };
 
@@ -25,6 +25,7 @@ fn params() -> BuildParams {
         current_player: 1,
         moves_remaining: 100,
         trunk_size: 19,
+        empty_edges: EmptyEdges::Kept,
     }
 }
 

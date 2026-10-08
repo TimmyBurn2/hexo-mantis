@@ -46,7 +46,8 @@ fn mock_ls(n_legal: usize) -> LegalSetPolicy {
 
 fn valid_leaf() -> mantis_graph::AxisGraph {
     let stones = vec![(0i64, 0i64, 1i64), (30, 0, -1), (31, 0, -1)];
-    build_leaf_graph(&stones, 1, 2, 6, 6, 19).expect("valid leaf builds")
+    build_leaf_graph(&stones, 1, 2, 6, 6, 19, mantis_graph::EmptyEdges::Kept)
+        .expect("valid leaf builds")
 }
 
 #[test]
@@ -108,7 +109,7 @@ fn graph_fail_remaining_orphans_none() {
 #[test]
 fn graph_build_failure_reason_preserved_and_travels() {
     // build_leaf_graph returns the reason, NOT an `.ok()`-swallowed None.
-    let bad = build_leaf_graph(&[(0, 0, 1)], 2, 2, 6, 6, 19);
+    let bad = build_leaf_graph(&[(0, 0, 1)], 2, 2, 6, 6, 19, mantis_graph::EmptyEdges::Kept);
     let reason = bad.expect_err("bad current_player ⇒ build error");
     assert_eq!(
         reason,
@@ -465,7 +466,8 @@ fn build_leaf_graph_is_one_native_build_per_leaf() {
     // invocations; a per-iteration counter would count loop turns and pass tautologically.
     let builds = AtomicUsize::new(0);
     let build_once = |stones: &[(i64, i64, i64)]| {
-        let g = build_leaf_graph(stones, 1, 2, 6, 6, 19).expect("leaf builds");
+        let g = build_leaf_graph(stones, 1, 2, 6, 6, 19, mantis_graph::EmptyEdges::Kept)
+            .expect("leaf builds");
         builds.fetch_add(1, Ordering::Relaxed);
         g
     };

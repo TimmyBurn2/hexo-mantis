@@ -457,6 +457,7 @@ mod gnn_assemble_tests {
             current_player: 1,
             moves_remaining: 2,
             trunk_size: 19,
+            empty_edges: mantis_graph::EmptyEdges::Kept,
         };
         let g = build_axis_graph(&StoneList { stones }, &params);
         let legal_coords: Vec<(i32, i32)> = g
@@ -558,6 +559,7 @@ mod gnn_assemble_tests {
             current_player: 1,
             moves_remaining: 2,
             trunk_size: 19,
+            empty_edges: mantis_graph::EmptyEdges::Kept,
         };
         let g = build_axis_graph(&StoneList { stones }, &params);
         let slots = &g.policy_scatter_index.0;

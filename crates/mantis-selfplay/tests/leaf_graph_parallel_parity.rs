@@ -87,6 +87,7 @@ fn parallel_leaf_build_is_bit_identical_to_serial_at_every_width() {
         WIN_LENGTH,
         RADIUS,
         TRUNK,
+        mantis_graph::EmptyEdges::Kept,
         1,
         ProducerVerify::Builder,
     )
@@ -100,6 +101,7 @@ fn parallel_leaf_build_is_bit_identical_to_serial_at_every_width() {
             WIN_LENGTH,
             RADIUS,
             TRUNK,
+            mantis_graph::EmptyEdges::Kept,
             threads,
             ProducerVerify::Builder,
         )
@@ -125,13 +127,22 @@ fn the_batch_builder_agrees_with_the_one_shot_builder_position_by_position() {
         WIN_LENGTH,
         RADIUS,
         TRUNK,
+        mantis_graph::EmptyEdges::Kept,
         4,
         ProducerVerify::Builder,
     )
     .expect("threaded build");
     for (i, (stones, cp, mr)) in positions.iter().enumerate() {
-        let one =
-            build_leaf_graph(stones, *cp, *mr, WIN_LENGTH, RADIUS, TRUNK).expect("one-shot build");
+        let one = build_leaf_graph(
+            stones,
+            *cp,
+            *mr,
+            WIN_LENGTH,
+            RADIUS,
+            TRUNK,
+            mantis_graph::EmptyEdges::Kept,
+        )
+        .expect("one-shot build");
         assert_same(&one, &batch[i], i);
     }
 }
@@ -147,6 +158,7 @@ fn the_order_is_index_order_and_a_reordering_would_be_visible() {
         WIN_LENGTH,
         RADIUS,
         TRUNK,
+        mantis_graph::EmptyEdges::Kept,
         3,
         ProducerVerify::Builder,
     )
@@ -174,6 +186,7 @@ fn a_bad_position_returns_the_same_error_serial_and_threaded() {
         WIN_LENGTH,
         RADIUS,
         TRUNK,
+        mantis_graph::EmptyEdges::Kept,
         1,
         ProducerVerify::Builder,
     );
@@ -182,6 +195,7 @@ fn a_bad_position_returns_the_same_error_serial_and_threaded() {
         WIN_LENGTH,
         RADIUS,
         TRUNK,
+        mantis_graph::EmptyEdges::Kept,
         6,
         ProducerVerify::Builder,
     );
@@ -202,6 +216,7 @@ fn an_empty_batch_is_empty_at_every_width() {
             WIN_LENGTH,
             RADIUS,
             TRUNK,
+            mantis_graph::EmptyEdges::Kept,
             threads,
             ProducerVerify::Builder,
         )
@@ -220,6 +235,7 @@ fn a_batch_that_skips_the_producer_verify_builds_the_same_graphs_and_counts_each
         WIN_LENGTH,
         RADIUS,
         TRUNK,
+        mantis_graph::EmptyEdges::Kept,
         3,
         ProducerVerify::ConsumerEveryBatch,
     )
@@ -230,6 +246,7 @@ fn a_batch_that_skips_the_producer_verify_builds_the_same_graphs_and_counts_each
         WIN_LENGTH,
         RADIUS,
         TRUNK,
+        mantis_graph::EmptyEdges::Kept,
         3,
         ProducerVerify::Builder,
     )

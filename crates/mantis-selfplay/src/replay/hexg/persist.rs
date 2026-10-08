@@ -158,9 +158,13 @@ impl HexgBuffer {
         let name_len = cur.u32()? as usize;
         let name = cur.bytes(name_len)?;
         let name = std::str::from_utf8(name).map_err(|e| e.to_string())?;
-        if name != self.encoding.name {
+        let writer = mantis_encoding::registry::lookup(name).ok_or_else(|| {
+            format!("HEXG encoding mismatch: file '{name}' is not a registered encoding")
+        })?;
+        if !self.encoding.reads_rings_of(writer) {
             return Err(format!(
-                "HEXG encoding mismatch: file '{name}' != buffer '{}'",
+                "HEXG encoding mismatch: file '{name}' does not hold buffer '{}' records \
+                 (the two rows differ beyond the edges the builder emits)",
                 self.encoding.name
             ));
         }
