@@ -205,6 +205,8 @@ class Ruler:
     title: str
     rule_until: int | None = None
     rule_since: int | None = None
+    legacy: bool = False
+    second: bool = False
 
     @property
     def going_forward(self) -> tuple[float, int] | None:
@@ -221,8 +223,9 @@ def _tag(unit: tuple[str, ...]) -> str:
 
 
 def rulers(cells: list[Cell], run_id: str, parent_stem: str | None, rule: str | None,
-           switches: tuple[Change, ...] = ()) -> tuple[tuple[Ruler, ...], int]:
-    """Every unit as its own series (same-named ones told apart by a hash), and how many units the rule names: it marks only one."""
+           switches: tuple[Change, ...] = (), *, legacy: frozenset[str] = frozenset(),
+           second: str | None = None) -> tuple[tuple[Ruler, ...], int]:
+    """Every unit as its own series (names hashed apart, `legacy` and `second` tagged), and how many the rule names: it marks one."""
     by_unit: dict[tuple[str, ...], list[Cell]] = {}
     for c in cells:
         if c.run_id == run_id:
@@ -247,7 +250,9 @@ def rulers(cells: list[Cell], run_id: str, parent_stem: str | None, rule: str | 
         out.append(Ruler(name=name, unit_field=head.unit_field, family=head.family, unit=unit, label=head.label, title=title,
                          line=tuple(sorted(own, key=lambda c: c.step)), parent=parent,
                          rule=len(matched) == 1 and unit == matched[0], rule_until=until.get(unit),
-                         rule_since=switches[-1].step if switches and unit in matched else None))
+                         rule_since=switches[-1].step if switches and unit in matched else None,
+                         legacy=bool(legacy & {head.name, head.unit_field}),
+                         second=second is not None and second in (head.name, head.unit_field)))
     return tuple(sorted(out, key=lambda r: (not r.rule, -(r.rule_until or -1), r.family != "six", r.name))), len(matched)
 
 

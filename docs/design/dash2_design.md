@@ -273,7 +273,8 @@ units.
 - **2026-10-05, delta (b) extended (operator, relayed by the RUN11-GO session and recorded in the packet): several
   rulers and a ladder.** Every sidecar unit is its own series with its own parent anchor (the parent's sidecar on
   the same unit); none is pooled or joined across units. The pre-registered rule's unit is a server input
-  (`--rule-unit ID=UNIT`, matched against the sidecar's `unit` or `unit.arm`); every other unit is labelled
+  (`--rule-unit ID=UNIT`, retired 2026-10-08 for the records' units file, below; matched against the sidecar's `unit`
+  or `unit.arm`); every other unit is labelled
   report-only, and the going-forward band is drawn on the rule's unit only. The Run view shows the rule's ruler in win
   rate with the parent and going-forward bands, and every ruler as logit(win rate) − logit(parent's win rate on that
   ruler), with win rate, interval and the cell's host load in the table. The ruler ladder's state file
@@ -341,7 +342,8 @@ units.
   line gives its win rate (with any Six forfeits left out stated), its parent's and the logit between them. A single
   cell with no parent stays in the table.
 - **2026-10-07, the rule moves with the ruling (operator's ask, after run11's cycle-2 resume and the fresh line's
-  resume put the rule on the node ladder).** `--rule-unit ID=UNIT[,UNIT@STEP…]`: the rule reads the last unit, and each
+  resume put the rule on the node ladder).** `--rule-unit ID=UNIT[,UNIT@STEP…]` (since 2026-10-08 the units file's `rule`
+  key, below): the rule reads the last unit, and each
   earlier unit is labelled "the rule before STEP" (no bar, no going-forward line); each switch is marked on the x axis
   and the summary names its bridge, the latest checkpoint read on both units, the way the ladder's rung changes are. The
   rule's going-forward read counts only its cells from the last switch on (a re-read of an earlier save on the new unit
@@ -361,3 +363,12 @@ units.
   from the promotion marks. The going-forward mean line is gone from the rule's chart (the aside states the mean, the bar
   stays), which replaces the 10-05 entry's "the bar and the going-forward line". A reading's value, its parent read and its
   compared runs' values come from one save, its latest, named when it is not the lead's.
+- **2026-10-08, the units come from the records (R388(a)(e); the DEPLOY-2 packet's A3).** `--rule-unit` is retired.
+  The records' units file (`--ladder ID=FILE`), re-read at every poll, states the rule (`rule`, `UNIT[,UNIT@STEP…]` as
+  above), the second ruler (`second`), the units of record's former instruments tagged legacy (`legacy`) and the rung
+  state (`current_unit`, `streak`, `changes`, `history`); with no file the run declares no rule, and a field that does
+  not read is named in the ladder text, never guessed. A legacy unit's reading is labelled "legacy". The Run view lists
+  every save, newest first: the ruler of record's reading at that save (the unit the rule read there) and the second
+  ruler's, each with its interval, or "not read" or "ambiguous (N series)"; the monitor's GEN cf CE, T, gap and exams
+  held; positions/h save to save (a cell's cost on the run is a row in the box's records); and the gate round run at
+  that save.

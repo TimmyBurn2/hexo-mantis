@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import os
 import re
 import subprocess
@@ -46,18 +47,28 @@ def series(dash):
 
 
 def _record(tmp_path: Path, run_id: str = "r1", *, games: int = 2500, first_wins_every: int = 2, entropy: bool = True,
-            parent: str | None = "p0_00045000_abcd1234", label: str | None = None) -> Path:
+            parent: str | None = "p0_00045000_abcd1234", label: str | None = None, extra: tuple[dict, ...] = ()) -> Path:
     run = tmp_path / (label or run_id)
     rows = [segment_start(run_id, 1), *trainer_rows(range(1, 400), entropy=entropy), *iteration_rows(range(1, 400, 5)),
             *game_rows(games, first_wins_every=first_wins_every, cap_every=50),
             {"event": "training_alert", "rule": "grad_norm_spike", "message": "grad norm 10.3", "step": 300, "ts": 1300.0},
-            {"event": "periodic_checkpoint_save", "step": 300, "path": "x", "ts": 1300.0}]
+            {"event": "periodic_checkpoint_save", "step": 300, "path": "x", "ts": 1300.0}, *extra]
     write_segment(run / "logs", run_id, 1, rows)
     write_config(run, run_id, parent)
     write_heartbeat(run / "logs", run_id, time.time())
     write_shard(run / "logs" / "games", run_id, 1, "2026100510",
                 [game("a", six_in_a_row_for_p1(), stats=[{"ply": 0, "root_value": 0.2, "visits": []}])])
     return run
+
+
+def _units(directory: Path, rule: str | None, **more: object) -> Path | None:
+    """The records' units file naming `rule` (None: no file, so no rule declared)."""
+    if rule is None:
+        return None
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / "units.json"
+    path.write_text(json.dumps({"rule": rule, **more}), encoding="utf-8")
+    return path
 
 
 def _snap(dash, run: Path, *, cells: tuple[Path, ...] = (), records: Path | None = None, label: str = "r1"):
@@ -72,7 +83,7 @@ def _ruled(dash, tmp_path: Path, mine: list[tuple[int, float]], parent: float | 
     if parent is not None:
         sidecar(cells, "p0", 45000, parent, n=n)
     record = importlib.import_module("dash.readers.record")
-    return record.RunRecord("r1", _record(tmp_path), None, (cells,), rule="six30_16").poll()
+    return record.RunRecord("r1", _record(tmp_path), None, (cells,), ladder_file=_units(tmp_path, "six30_16")).poll()
 
 
 @pytest.mark.parametrize(("latest", "parent", "word"), [
@@ -102,7 +113,7 @@ def test_a_report_only_ruler_is_a_reading_with_its_logit_over_its_parent(dash, s
     sidecar(cells, "r1", 300, 0.45, suffix="six455_128.full", **extra)
     sidecar(cells, "p0", 45000, 0.30, suffix="six455_128.full", **extra)
     record = importlib.import_module("dash.readers.record")
-    snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), rule="six30_16").poll()
+    snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), ladder_file=_units(tmp_path, "six30_16")).poll()
     _, aside, html = strength.section([snap])
     assert "Six gen 455, 128 nodes" not in aside and "report-only, beats its parent, +0.65 logit" in html
     assert '<a class="reading" href="#sp-r-six455-128-full" data-key="r-six455-128-full">' in html and 'id="sp-r-six455-128-full"' in html
@@ -187,7 +198,7 @@ def test_an_ambiguous_rule_is_stated_and_its_going_forward_read_withheld(dash, s
     sidecar(cells, "r1", 350, 0.50, six={"commit": "newpin", "net_sha256": "beef", "generation": 30, "nodes": 16})
     sidecar(cells, "p0", 45000, 0.59)
     record = importlib.import_module("dash.readers.record")
-    snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), rule="six30_16").poll()
+    snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), ladder_file=_units(tmp_path, "six30_16")).poll()
     _, aside = strength.verdict(snap)
     assert "matches 2 series" in aside and "withheld" in aside and "Last " not in aside
 
@@ -197,7 +208,7 @@ def test_a_declared_rule_with_no_cell_keeps_the_others_report_only(dash, strengt
     extra = {"unit": "six455_128", "six": {"commit": "c0ffee", "net_sha256": "g455", "generation": 455, "nodes": 128}}
     sidecar(cells, "r1", 300, 0.45, suffix="six455_128.full", **extra)
     record = importlib.import_module("dash.readers.record")
-    snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), rule="six30_16").poll()
+    snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), ladder_file=_units(tmp_path, "six30_16")).poll()
     sentence, aside = strength.verdict(snap)
     assert "(report-only)" in sentence and "reads six30_16, which has no cell yet" in aside
 
@@ -233,7 +244,7 @@ def _rulers_snap(dash, tmp_path, *, rule: str | None = "six30_16", compare: bool
     for k in range(screens):
         sidecar(cells, "r1", 300, 0.1, n=128, suffix=f"six{k}_8.full", unit=f"six{k}_8", six={**_G455, "nodes": 8 + k})
     record = importlib.import_module("dash.readers.record")
-    snaps = [record.RunRecord("r1", _record(tmp_path), None, (cells,), rule=rule).poll()]
+    snaps = [record.RunRecord("r1", _record(tmp_path), None, (cells,), ladder_file=_units(tmp_path, rule)).poll()]
     if compare:
         sidecar(tmp_path / "other_cells", "r2", 300, 0.5)
         snaps.append(record.RunRecord("r2", _record(tmp_path, "r2"), None, (tmp_path / "other_cells",)).poll())
@@ -269,16 +280,14 @@ def test_lone_cells_are_counted_in_one_reading_and_no_rule_means_no_report_only_
     assert "Report-only. " not in bare and "report-only" not in bare
 
 
-
 def test_a_rule_switch_is_marked_its_former_rule_named_and_their_bridge_stated(dash, strength, tmp_path):
     cells = tmp_path / "cells"
     sidecar(cells, "r1", 150, 0.75)
     sidecar(cells, "r1", 300, 0.78)
     for step, wr in ((300, 0.30), (600, 0.33)):
         sidecar(cells, "r1", step, wr, suffix="ladder455_n16.full", unit="ladder455_n16", six={**_G455, "nodes": 16})
-    record, ladder = importlib.import_module("dash.readers.record"), importlib.import_module("dash.readers.ladder")
-    rule, switches = ladder.parse_rule("six30_16,ladder455_n16@450")
-    snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), rule=rule, switches=switches).poll()
+    record = importlib.import_module("dash.readers.record")
+    snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), ladder_file=_units(tmp_path, "six30_16,ladder455_n16@450")).poll()
     sentence, aside, html = strength.section([snap])
     assert "against Six gen 455, 16 nodes (the rule)" in sentence
     assert ("The rule moved here from Six gen 30, 16 nodes at 450; the 300 save reads 78\u202f% on the old ruler and "
@@ -291,9 +300,8 @@ def test_right_after_a_switch_the_former_rule_leads_and_the_new_one_is_named_unr
     cells = tmp_path / "cells"
     sidecar(cells, "r1", 150, 0.75)
     sidecar(cells, "r1", 300, 0.78)
-    record, ladder = importlib.import_module("dash.readers.record"), importlib.import_module("dash.readers.ladder")
-    rule, switches = ladder.parse_rule("six30_16,ladder455_n16@450")
-    snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), rule=rule, switches=switches).poll()
+    record = importlib.import_module("dash.readers.record")
+    snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), ladder_file=_units(tmp_path, "six30_16,ladder455_n16@450")).poll()
     sentence, aside = strength.verdict(snap)
     assert "against Six gen 30, 16 nodes (the rule before 450)" in sentence and "Mean of the last" not in aside
     assert "The rule moved from Six gen 30, 16 nodes to ladder455_n16 at 450; the run has no cell on it yet." in aside
@@ -304,9 +312,8 @@ def test_a_rule_back_on_a_former_unit_reads_as_the_rule_with_no_former_lead_in(d
     cells = tmp_path / "cells"
     for step in (150, 300):
         sidecar(cells, "r1", step, 0.75)
-    record, ladder = importlib.import_module("dash.readers.record"), importlib.import_module("dash.readers.ladder")
-    rule, switches = ladder.parse_rule("six30_16,ladder455_n16@100,six30_16@200")
-    snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), rule=rule, switches=switches).poll()
+    record = importlib.import_module("dash.readers.record")
+    snap = record.RunRecord("r1", _record(tmp_path), None, (cells,), ladder_file=_units(tmp_path, "six30_16,ladder455_n16@100,six30_16@200")).poll()
     _, _, html = strength.section([snap])
     assert "The rule. " not in html and "(the rule)" in strength.verdict(snap)[0]
 
@@ -321,9 +328,8 @@ def test_a_compared_run_off_the_lead_ruler_is_read_on_the_latest_ruler_both_shar
     sidecar(cells, "r1", 300, 0.76)
     sidecar(cells, "r1", 600, 0.31, suffix="ladder455_n16.full", unit="ladder455_n16", six={**_G455, "nodes": 16})
     sidecar(tmp_path / "other", "r2", 300, 0.50)
-    record, ladder = importlib.import_module("dash.readers.record"), importlib.import_module("dash.readers.ladder")
-    rule, switches = ladder.parse_rule("six30_16,ladder455_n16@450")
-    snaps = [record.RunRecord("r1", _record(tmp_path), None, (cells,), rule=rule, switches=switches).poll(),
+    record = importlib.import_module("dash.readers.record")
+    snaps = [record.RunRecord("r1", _record(tmp_path), None, (cells,), ladder_file=_units(tmp_path, "six30_16,ladder455_n16@450")).poll(),
              record.RunRecord("r2", _record(tmp_path, "r2"), None, (tmp_path / "other",)).poll()]
     _, aside, html = strength.section(snaps)
     assert "Against r2 on Six gen 30, 16 nodes (it has no cell on the rule's ruler yet), at the same save, 300: 76.0\u202f%" in aside
@@ -336,7 +342,7 @@ def test_a_lone_cell_a_compared_run_also_read_is_charted_not_listed(dash, streng
     sidecar(cells, "r1", 300, 0.17, suffix="six455_128.full", unit="six455_128", six={**_G455, "nodes": 128})
     sidecar(tmp_path / "other", "r2", 300, 0.26, suffix="six455_128.full", unit="six455_128", six={**_G455, "nodes": 128})
     record = importlib.import_module("dash.readers.record")
-    snaps = [record.RunRecord("r1", _record(tmp_path), None, (cells,), rule="six30_16").poll(),
+    snaps = [record.RunRecord("r1", _record(tmp_path), None, (cells,), ladder_file=_units(tmp_path, "six30_16")).poll(),
              record.RunRecord("r2", _record(tmp_path, "r2"), None, (tmp_path / "other",)).poll()]
     _, _, html = strength.section(snaps)
     assert 'id="sp-r-six455-128-full"' in html and 'id="sp-oneoffs"' not in html
@@ -355,7 +361,7 @@ def test_a_compared_run_read_at_several_saves_gives_every_gap_of_the_last_four(d
         sidecar(cells, "r1", step, wr)
         sidecar(tmp_path / "other", "r2", step, wr - 0.20)
     record = importlib.import_module("dash.readers.record")
-    snaps = [record.RunRecord("r1", _record(tmp_path), None, (cells,), rule="six30_16").poll(),
+    snaps = [record.RunRecord("r1", _record(tmp_path), None, (cells,), ladder_file=_units(tmp_path, "six30_16")).poll(),
              record.RunRecord("r2", _record(tmp_path, "r2"), None, (tmp_path / "other",)).poll()]
     _, aside, _ = strength.section(snaps)
     assert "Against r2, at the 2 saves both read: +0.91, +0.94 logit, 300 to 600 (the latest +0." in aside and "ahead; unpaired." in aside
@@ -367,7 +373,7 @@ def _pair(tmp_path, mine: list[tuple[int, float]], theirs: list[tuple[int, float
         sidecar(tmp_path / "cells", "r1", step, wr, n=n)
     for step, wr in theirs:
         sidecar(tmp_path / "other", "r2", step, wr, n=n)
-    return [record.RunRecord("r1", _record(tmp_path), None, (tmp_path / "cells",), rule="six30_16").poll(),
+    return [record.RunRecord("r1", _record(tmp_path), None, (tmp_path / "cells",), ladder_file=_units(tmp_path, "six30_16")).poll(),
             record.RunRecord("r2", _record(tmp_path, "r2"), None, (tmp_path / "other",)).poll()]
 
 
@@ -389,9 +395,8 @@ def test_a_compared_run_on_the_lead_ruler_at_other_saves_is_told_apart_from_none
     sidecar(cells, "r1", 300, 0.31, suffix="ladder455_n16.full", unit="ladder455_n16", six={**_G455, "nodes": 16})
     sidecar(tmp_path / "other", "r2", 300, 0.50)
     sidecar(tmp_path / "other", "r2", 600, 0.70, suffix="ladder455_n16.full", unit="ladder455_n16", six={**_G455, "nodes": 16})
-    record, ladder = importlib.import_module("dash.readers.record"), importlib.import_module("dash.readers.ladder")
-    rule, switches = ladder.parse_rule("six30_16,ladder455_n16@250")
-    snaps = [record.RunRecord("r1", _record(tmp_path), None, (cells,), rule=rule, switches=switches).poll(),
+    record = importlib.import_module("dash.readers.record")
+    snaps = [record.RunRecord("r1", _record(tmp_path), None, (cells,), ladder_file=_units(tmp_path, "six30_16,ladder455_n16@250")).poll(),
              record.RunRecord("r2", _record(tmp_path, "r2"), None, (tmp_path / "other",)).poll()]
     _, aside, html = strength.section(snaps)
     assert "(no save both read on the rule's ruler yet)" in aside
@@ -415,6 +420,107 @@ def test_two_rulers_slugging_alike_get_distinct_keys_and_titles(dash, strength, 
         for step in (300, 600):
             sidecar(cells / unit, "r1", step, 0.4, suffix=f"{unit}.full", unit=unit, six={**_G455, "nodes": 128})
     record = importlib.import_module("dash.readers.record")
-    _, _, html = strength.section([record.RunRecord("r1", _record(tmp_path), None, (cells,), rule="six30_16").poll()])
+    _, _, html = strength.section([record.RunRecord("r1", _record(tmp_path), None, (cells,), ladder_file=_units(tmp_path, "six30_16")).poll()])
     assert 'id="sp-r-six455-128-full"' in html and 'id="sp-r-six455-128-full-2"' in html
     assert "Six gen 455, 128 nodes (six455_128.full)" in html and "Six gen 455, 128 nodes (six455-128.full)" in html
+
+
+def test_a_rule_the_records_write_after_the_server_starts_is_read_at_the_next_poll(dash, strength, tmp_path):
+    cells = tmp_path / "cells"
+    sidecar(cells, "r1", 300, 0.78)
+    record = importlib.import_module("dash.readers.record")
+    run = record.RunRecord("r1", _record(tmp_path), None, (cells,), ladder_file=tmp_path / "units" / "units.json")
+    assert run.poll().rule is None
+    _units(tmp_path / "units", "six30_16")
+    snap = run.poll()
+    assert snap.rule == "six30_16" and snap.rulers[0].rule
+
+
+def test_a_unit_the_records_tag_legacy_reads_legacy_beside_the_rule(dash, strength, tmp_path):
+    cells = tmp_path / "cells"
+    for step, wr in ((300, 0.30), (600, 0.33)):
+        sidecar(cells, "r1", step, wr, suffix="ladder455_n16.full", unit="ladder455_n16", six={**_G455, "nodes": 16})
+        sidecar(cells, "r1", step, wr - 0.1, suffix="six455_128.full", unit="six455_128", six={**_G455, "nodes": 128})
+    record = importlib.import_module("dash.readers.record")
+    units = _units(tmp_path, "ladder455_n16", legacy=["six455_128"])
+    _, _, html = strength.section([record.RunRecord("r1", _record(tmp_path), None, (cells,), ladder_file=units).poll()])
+    assert "Legacy. " in _figure(html, "Six gen 455, 128 nodes") and '<span class="n">legacy</span>' in html
+
+
+def test_each_save_reads_its_ruler_of_record_the_second_ruler_the_monitor_rows_its_rate_and_its_gate_round(dash, view,
+                                                                                                         tmp_path):
+    cells = tmp_path / "cells"
+    sidecar(cells, "r1", 300, 0.31, suffix="ladder455_n16.full", unit="ladder455_n16", six={**_G455, "nodes": 16})
+    sidecar(cells, "r1", 300, 0.57, family="strix", suffix="strix256_arena.full", unit="equal_work_arena")
+    sidecar(cells, "r1", 300, 0.80)
+    rounds = ({"event": "eval_round_complete", "round_id": "g3", "step": 300, "promoted": False, "wall_sec": 900,
+               "ts": 1301.0},)
+    base = {"final": False, "gen": {"cf_ce": 0.5401, "temperature": 1.176, "auc": 0.78, "policy_ce": 2.2},
+            "exams": {"T4_V": {"calibrated_mean": 0.37, "floor": 0.154, "holds": True},
+                      "DEF_V_att": {"calibrated_mean": 0.05, "floor": 0.1, "holds": False}},
+            "gap_rule": {"gap": -0.0062, "line": 0.05, "over": [], "fired": False}}
+    records = tmp_path / "records" / "saves"
+    records.mkdir(parents=True)
+    (records / "00000300.json").write_text(json.dumps({**base, "step": 300, "saved_ts": 1300.0,
+                                                       "rates": {"positions_per_h": 200384.9}}), encoding="utf-8")
+    (records / "00000600.json").write_text(json.dumps({**base, "step": 600, "saved_ts": 1600.0,
+                                                       "rates": {"note": "NOT MEASURED: fewer than two iteration rows"}}),
+                                           encoding="utf-8")
+    record = importlib.import_module("dash.readers.record")
+    units = _units(tmp_path, "six30_16,ladder455_n16@250", second="equal_work_arena")
+    snap = record.RunRecord("r1", _record(tmp_path, extra=rounds), tmp_path / "records", (cells,), ladder_file=units).poll()
+    html = view.saves(snap)
+    rows = re.findall(r"<tr>(.*?)</tr>", html)
+    assert re.findall(r"<th>(.*?)</th>", html) == ["save", "ruler of record", "second ruler", "GEN cf CE", "T", "gap",
+                                                    "exams held", "positions/h save to save", "gate round"]
+    assert rows[2] == "".join(f"<td>{c}</td>" for c in (
+        "300", "31 % [27–35 %]", "57 % [53–61 %]", "0.540", "1.18", "−0.006", "1 of 2",
+        "200.4k", "g3 not promoted"))
+    assert rows[1] == "".join(f"<td>{c}</td>" for c in ("600", "not read", "not read", "0.540", "1.18", "−0.006",
+                                                        "1 of 2", "not measured", "—"))
+    assert "Six gen 455, 16 nodes" in html and "Strix 256 sims" in html, "the caption names both rulers"
+
+
+def test_a_unit_naming_two_series_reads_ambiguous_in_the_saves_table_never_one_of_them(dash, view, tmp_path):
+    cells = tmp_path / "cells"
+    sidecar(cells, "r1", 300, 0.31, suffix="ladder455_n16.full", unit="ladder455_n16", six={**_G455, "nodes": 16})
+    sidecar(cells, "r1", 600, 0.35, suffix="ladder455_n16.full", unit="ladder455_n16",
+            six={**_G455, "nodes": 16, "commit": "newpin"})
+    records = tmp_path / "records" / "saves"
+    records.mkdir(parents=True)
+    for step in (300, 600):
+        (records / f"{step:08d}.json").write_text(json.dumps({"step": step, "gen": {}, "exams": {}, "rates": {}}),
+                                                   encoding="utf-8")
+    record = importlib.import_module("dash.readers.record")
+    units = _units(tmp_path, "ladder455_n16")
+    snap = record.RunRecord("r1", _record(tmp_path), tmp_path / "records", (cells,), ladder_file=units).poll()
+    rows = re.findall(r"<tr>(.*?)</tr>", view.saves(snap))
+    assert all("<td>ambiguous (2 series)</td>" in row for row in rows[1:])
+    by_name = _units(tmp_path, "ladder455_n16.full")
+    snap = record.RunRecord("r1", _record(tmp_path), tmp_path / "records", (cells,), ladder_file=by_name).poll()
+    rows = re.findall(r"<tr>(.*?)</tr>", view.saves(snap))
+    assert all("<td>ambiguous (2 series)</td>" in row for row in rows[1:]), "a unit.arm name is matched past its hash tag"
+
+
+def test_a_declared_second_ruler_with_no_cell_is_named_in_the_saves_caption(dash, view, tmp_path):
+    cells = tmp_path / "cells"
+    sidecar(cells, "r1", 300, 0.31, suffix="ladder455_n16.full", unit="ladder455_n16", six={**_G455, "nodes": 16})
+    records = tmp_path / "records" / "saves"
+    records.mkdir(parents=True)
+    (records / "00000300.json").write_text(json.dumps({"step": 300, "gen": {}, "exams": {}, "rates": {}}), encoding="utf-8")
+    record = importlib.import_module("dash.readers.record")
+    units = _units(tmp_path, "ladder455_n16", second="equal_work_arena")
+    snap = record.RunRecord("r1", _record(tmp_path), tmp_path / "records", (cells,), ladder_file=units).poll()
+    assert "the second ruler equal_work_arena." in view.saves(snap)
+
+
+
+def test_the_declared_second_ruler_reads_as_such_never_report_only(dash, strength, tmp_path):
+    cells = tmp_path / "cells"
+    for step, wr in ((300, 0.30), (600, 0.33)):
+        sidecar(cells, "r1", step, wr, suffix="ladder455_n16.full", unit="ladder455_n16", six={**_G455, "nodes": 16})
+        sidecar(cells, "r1", step, wr + 0.2, family="strix", suffix="strix256_arena.full", unit="equal_work_arena")
+    record = importlib.import_module("dash.readers.record")
+    units = _units(tmp_path, "ladder455_n16", second="equal_work_arena")
+    _, _, html = strength.section([record.RunRecord("r1", _record(tmp_path), None, (cells,), ladder_file=units).poll()])
+    assert '<span class="n">the second ruler</span>' in html and "The second ruler. " in _figure(html, "Strix 256 sims")

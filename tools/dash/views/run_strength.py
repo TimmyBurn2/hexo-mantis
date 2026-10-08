@@ -36,6 +36,10 @@ def _role(r: Ruler, declared: bool) -> str:
         return "the rule"
     if r.rule_until is not None:
         return f"the rule before {short(r.rule_until)}"
+    if r.second:
+        return "the second ruler"
+    if r.legacy:
+        return "legacy"
     return "report-only" if declared else "no rule declared"
 
 
@@ -178,7 +182,7 @@ def _ladder_text(snap: RunSnapshot) -> str:
     text = f" Ladder ruler: {esc(rungs.current or 'not named')}" + (
         f", streak {rungs.streak} toward the next rung" if rungs.streak is not None else "") + "."
     if rungs.note != "read":
-        text += f" The ladder file {esc(rungs.note[len('read, but '):])}."
+        text += f" The units file: {esc(rungs.note[len('read, but '):])}."
     for change, pairs in snap.bridges:
         text += f" Moved up from {esc(change.frm)} to {esc(change.to)} at {short(change.step)}"
         if pairs:
@@ -249,7 +253,8 @@ def _winrate_panel(snaps: Sequence[RunSnapshot], ruler: Ruler, xmax: float, *, l
     chart = Chart(title, dots=dots, refs=refs, marks=marks, switches=switches, y_fmt=lambda v: pct(v), width=400, height=220,
                   y_floor=0.0, y_ceil=1.0, x_domain=(0.0, xmax))
     role = _role(ruler, head.rule is not None)
-    lead_in = "Report-only. " if role == "report-only" else "" if ruler.rule or ruler.rule_until is None else f"T{role[1:]}. "
+    lead_in = ({"report-only": "Report-only. ", "legacy": "Legacy. ", "the second ruler": "The second ruler. "}.get(role)
+               or ("" if ruler.rule or ruler.rule_until is None else f"T{role[1:]}. "))
     definition = lead_in + f"{ruler.label}. Unit {ruler.name}. Whiskers: 95 % interval." + (
         " Beats or trails only when the difference's interval excludes 0." if lead else "")
     own = ruler.line[-1]
@@ -308,7 +313,7 @@ def section(snaps: Sequence[RunSnapshot]) -> tuple[str, str, str]:
                or any(_matched(r, _twin(x, r.unit)) for x in snaps[1:])]
     items = []
     for key, r in zip(_keys(charted), charted, strict=True):
-        c, notes = r.line[-1], [_role(r, declared)] if declared else []
+        c, notes = r.line[-1], [_role(r, declared)] if declared or r.legacy or r.second else []
         if r.parent is not None:
             p = r.parent
             notes.append(f"{_WORD[separation(c.wr, c.n, p.wr, p.n).sign]} its parent, {signed(c.logit - p.logit)} logit")

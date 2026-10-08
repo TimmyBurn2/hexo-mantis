@@ -168,9 +168,31 @@ def test_the_ladder_state_is_read_and_its_absence_is_a_stated_gap(ladder, tmp_pa
     assert read.current == "six455_256" and read.streak == 0 and read.cells == 1
     assert read.note == "read, but 1 change row(s) lack step, from or to"
     assert [(c.step, c.frm, c.to) for c in read.changes] == [(48000, "six455_128", "six455_256")]
-    assert ladder.read(tmp_path / "absent.json").note == "the ladder file is not there yet"
+    assert ladder.read(tmp_path / "absent.json").note == "the units file is not there yet"
     (tmp_path / "bad.json").write_text("{", encoding="utf-8")
     assert "did not read" in ladder.read(tmp_path / "bad.json").note and ladder.read(None) is None
+
+
+def test_the_units_file_names_the_rule_its_switches_the_second_ruler_and_the_legacy_tags(ladder, tmp_path):
+    path = tmp_path / "units.json"
+    path.write_text(json.dumps({"rule": "six30_16,ladder455_n16@108000", "second": "equal_work_arena",
+                                "legacy": ["six30_16", "six455_128"], "current_unit": "ladder455_n16", "streak": 0,
+                                "changes": []}), encoding="utf-8")
+    read = ladder.read(path)
+    assert read.rule == "ladder455_n16" and read.note == "read"
+    assert [(c.step, c.frm, c.to) for c in read.switches] == [(108000, "six30_16", "ladder455_n16")]
+    assert read.second == "equal_work_arena" and read.legacy == frozenset({"six30_16", "six455_128"})
+
+
+def test_a_units_file_whose_rule_does_not_parse_declares_no_rule_and_says_why(ladder, tmp_path):
+    path = tmp_path / "units.json"
+    path.write_text(json.dumps({"rule": "a,b@0", "legacy": "six30_16", "second": 5}), encoding="utf-8")
+    read = ladder.read(path)
+    assert read.rule is None and read.switches == () and read.legacy == frozenset() and read.second is None
+    assert "the rule 'a,b@0' must switch at rising steps above 0" in read.note and "legacy is not a list" in read.note
+    assert "second is not a string" in read.note
+    path.write_text(json.dumps({"rule": 7}), encoding="utf-8")
+    assert ladder.read(path).rule is None and ladder.read(path).note == "read, but rule is not a string"
 
 
 def test_the_parent_stem_is_read_from_the_identity_warm_start(record, tmp_path):

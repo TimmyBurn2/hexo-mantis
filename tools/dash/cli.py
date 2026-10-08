@@ -8,7 +8,6 @@ from pathlib import Path
 
 from . import analyzer_routes
 from . import desk as desk_mod
-from .readers import ladder
 from .readers.events import EmptyRunRecord
 from .readers.record import RunRecord
 from .routes import GET
@@ -36,10 +35,9 @@ def _inputs(p: argparse.ArgumentParser) -> None:
     p.add_argument("--cells", action="append", type=Path, default=[], metavar="DIR",
                    help="a directory searched for cell sidecars (<ckpt>.six30_16*.json, <ckpt>.strix*.json, "
                         "<ckpt>.ladder455_n16*.json) at every poll; repeatable")
-    p.add_argument("--rule-unit", action="append", metavar="ID=UNIT[,UNIT@STEP…]",
-                   help="the ruler that run's pre-registered rule reads (a sidecar's unit), and each later one from the step "
-                        "the rule moved to it; every other ruler is report-only")
-    p.add_argument("--ladder", action="append", metavar="ID=FILE", help="that run's ruler-ladder state file")
+    p.add_argument("--ladder", action="append", metavar="ID=FILE",
+                   help="that run's units file from the records, re-read at every poll: the rule (UNIT[,UNIT@STEP…]), the "
+                        "second ruler, the legacy units and the rung state; with none, no rule is declared")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -78,19 +76,11 @@ def records_of(args: argparse.Namespace) -> list[RunRecord]:
     if not runs:
         raise SystemExit("give at least one --run ID=DIR")
     monitor, ladders = _pairs(args.records, "--records"), _pairs(args.ladder, "--ladder")
-    rules = {raw.partition("=")[0]: raw.partition("=")[2] for raw in args.rule_unit or [] if raw.partition("=")[1]}
-    if len(rules) != len(args.rule_unit or []):
-        raise SystemExit("--rule-unit wants ID=UNIT[,UNIT@STEP…]")
-    try:
-        schedules = {label: ladder.parse_rule(text) for label, text in rules.items()}
-    except ValueError as exc:
-        raise SystemExit(f"--rule-unit: {exc}") from None
-    for flag, given in (("--records", monitor), ("--ladder", ladders), ("--rule-unit", rules)):
+    for flag, given in (("--records", monitor), ("--ladder", ladders)):
         unknown = sorted(set(given) - set(runs))
         if unknown:
             raise SystemExit(f"{flag} names no served run: {', '.join(unknown)}")
-    return [RunRecord(label, path, monitor.get(label), tuple(args.cells), rule=schedules[label][0] if label in schedules else None,
-                      switches=schedules[label][1] if label in schedules else (), ladder_file=ladders.get(label))
+    return [RunRecord(label, path, monitor.get(label), tuple(args.cells), ladder_file=ladders.get(label))
             for label, path in runs.items()]
 
 

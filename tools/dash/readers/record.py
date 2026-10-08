@@ -63,10 +63,10 @@ class RunRecord:
     """Binds one run's inputs; `poll()` reads what is new and returns a fresh `RunSnapshot`; the shard index is shared under `lock`."""
 
     def __init__(self, label: str, run_dir: Path, records_dir: Path | None = None, cells: tuple[Path, ...] = (), *,
-                 rule: str | None = None, switches: tuple[ladder.Change, ...] = (), ladder_file: Path | None = None) -> None:
-        """Bind the run's inputs. Raises: EmptyRunRecord (no event segment, or several runs none named), OSError."""
+                 ladder_file: Path | None = None) -> None:
+        """Bind the run's inputs (the units file is read at each poll). Raises: EmptyRunRecord (no segment; runs unnamed), OSError."""
         self.label, self.run_dir, self.records_dir, self.cells = label, Path(run_dir), records_dir, cells
-        self.rule, self.switches, self.ladder_file = rule, switches, ladder_file
+        self.ladder_file = ladder_file
         ids = record_run_ids(self.run_dir / "logs")
         if not ids:
             raise EmptyRunRecord(f"{self.run_dir / 'logs'} holds no events_<run>_seg*.jsonl")
@@ -96,11 +96,14 @@ class RunRecord:
         records = saves.load(self.records_dir) if self.records_dir is not None else None
         cells, skipped = sidecars.load(self.cells)
         rungs = ladder.read(self.ladder_file)
+        rule, moved = (rungs.rule, rungs.switches) if rungs else (None, ())
         bridges = _bridged(cells, self.run_id, rungs.changes if rungs else ())
-        switches = _bridged(cells, self.run_id, self.switches)
-        rulers, matches = sidecars.rulers(cells, self.run_id, self.parent_stem, self.rule, self.switches)
+        switches = _bridged(cells, self.run_id, moved)
+        rulers, matches = sidecars.rulers(cells, self.run_id, self.parent_stem, rule, moved,
+                                          legacy=rungs.legacy if rungs else frozenset(),
+                                          second=rungs.second if rungs else None)
         return RunSnapshot(
             label=self.label, run_id=self.run_id, events=events, horizon=horizon, records=records, rulers=rulers,
-            rule=self.rule, rule_matches=matches, ladder=rungs, bridges=bridges, switches=switches,
+            rule=rule, rule_matches=matches, ladder=rungs, bridges=bridges, switches=switches,
             cells_skipped=tuple(skipped), parent_stem=self.parent_stem,
             beat=liveness.read(self.run_dir / "logs", self.run_id), games_indexed=indexed)

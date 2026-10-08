@@ -4,9 +4,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from ..readers.record import RunSnapshot
+from ..readers.sidecars import Cell, Ruler
 from . import run_series, run_strength, run_value
 from .charts import table
-from .fmt import esc, num, short, when
+from .fmt import esc, kilo, num, pct, short, sig, when
 from .page import Shell, render
 
 _STATE = {"live": "Live", "stale": "Stale", "stopped": "Stopped", "unknown": "No heartbeat", "frozen": "Frozen",
@@ -50,6 +51,58 @@ def _wall(sec: object) -> str:
     if not isinstance(sec, (int, float)) or isinstance(sec, bool):
         return "—"
     return f"{num(sec)} s" if sec < 120 else f"{num(sec / 60)} min"
+
+
+def _ruler(snap: RunSnapshot, unit: str | None) -> tuple[Ruler | None, str]:
+    """The one series `unit` names (an exact name first, else a unique unit field), or None and the cell's word for why."""
+    if unit is None:
+        return None, "not declared"
+    named = ([r for r in snap.rulers if r.name.split(" #")[0] == unit]
+             or [r for r in snap.rulers if r.unit_field == unit])
+    if len(named) > 1:
+        return None, f"ambiguous ({len(named)} series)"
+    return (named[0], "not read") if named else (None, "not read")
+
+
+def _ruled_at(snap: RunSnapshot, step: int) -> str | None:
+    """The unit the rule read at `step`: the first unit before its first switch, then each switch's unit from its step."""
+    unit = snap.switches[0][0].frm if snap.switches else snap.rule
+    for change, _ in snap.switches:
+        unit = change.to if step >= change.step else unit
+    return unit
+
+
+def _read(found: tuple[Ruler | None, str], step: int) -> str:
+    ruler, why = found
+    c: Cell | None = next((c for c in ruler.line if c.step == step), None) if ruler is not None else None
+    if c is None:
+        return why
+    return pct(c.wr) if c.lo is None or c.hi is None else f"{pct(c.wr)} [{num(100.0 * c.lo)}–{pct(c.hi)}]"
+
+
+def saves(snap: RunSnapshot) -> str:
+    """One row a save, newest first: the rule's and the second ruler's readings, the monitor's rows, the rate, the gate round."""
+    if snap.records is None or not snap.records.saves:
+        return ""
+    second = _ruler(snap, snap.ladder.second if snap.ladder is not None else None)
+    rounds: dict[int, list[str]] = {}
+    for r in snap.events.rows("eval_round_complete"):
+        if isinstance(r.get("step"), int):
+            rounds.setdefault(r["step"], []).append(f"{r.get('round_id', '')} {_outcome(r.get('promoted'))}".strip())
+    rows = []
+    for s in reversed(snap.records.saves):
+        held = sum(e.holds is True for e in s.exams.values())
+        rows.append([num(s.step), _read(_ruler(snap, _ruled_at(snap, s.step)), s.step), _read(second, s.step), sig(s.cf_ce),
+                     num(s.temperature, 2), sig(s.gap), f"{held} of {len(s.exams)}" if s.exams else "—",
+                     kilo(s.positions_per_h) if s.positions_per_h is not None else "not measured",
+                     "; ".join(rounds.get(s.step, [])) or "—"])
+    (lead, _), (other, _) = _ruler(snap, snap.rule), second
+    caption = (f"The ruler of record is {lead.title if lead else snap.rule or 'not declared'}; the second ruler "
+               f"{other.title if other else (snap.ladder.second if snap.ladder else None) or 'not declared'}. Newest save "
+               "first; a gate round shows at the save it ran on")
+    head = ["save", "ruler of record", "second ruler", "GEN cf CE", "T", "gap", "exams held", "positions/h save to save", "gate round"]
+    return (f'<details class="record" open><summary>Saves <span>{len(rows)} saves</span></summary>'
+            f'<div class="record-body"><div>{table(head, rows, caption, opened=True)}</div></div></details>')
 
 
 def details(snap: RunSnapshot) -> str:
@@ -100,7 +153,7 @@ def page(snaps: Sequence[RunSnapshot], *, runs: tuple[str, ...], now: float | No
             + _section("value", "Is the value head learning?", *value, layout="grid")
             + _section("training", "Is training stable?", *train, layout="grid")
             + _section("selfplay", "Is self-play healthy?", *play, layout="grid")
-            + details(head) + f'</main><footer class="wrap">{foot}</footer>')
+            + saves(head) + details(head) + f'</main><footer class="wrap">{foot}</footer>')
     shell = Shell("run", runs, head.label, snaps[1].label if len(snaps) > 1 else None, frozen)
     title = f"mantis {head.label} at {short(head.events.live_steps)}"
     return render(title, shell, body, scripts=("charts.js",))

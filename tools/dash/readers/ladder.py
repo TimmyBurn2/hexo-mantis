@@ -1,4 +1,4 @@
-"""The ruler ladder's state file: the comparison ruler now, its streak, the cells it read and the rung changes; absent is a stated gap."""
+"""The records' units file: the rule and its switches, the second ruler, the legacy tags and the rung state; absent is a stated gap."""
 from __future__ import annotations
 
 import json
@@ -19,13 +19,17 @@ class Change:
 
 @dataclass(frozen=True)
 class Ladder:
-    """`current` and `streak` as the file states them, and its rung changes in step order; `note` says why a field is missing."""
+    """The file's rule (its unit now and each switch), second ruler, legacy units and rung state; `note` names what did not read."""
 
     current: str | None
     streak: int | None
     changes: tuple[Change, ...]
     cells: int
     note: str
+    rule: str | None = None
+    switches: tuple[Change, ...] = ()
+    second: str | None = None
+    legacy: frozenset[str] = frozenset()
 
 
 def _int(v: Any) -> int | None:
@@ -37,17 +41,17 @@ def _num(v: Any) -> float | None:
 
 
 def read(path: Path | None) -> Ladder | None:
-    """The ladder at `path`; None when no ladder was given, a Ladder whose note names the gap when the file is unreadable."""
+    """The units file at `path`; None when none was given, a Ladder whose note names the gap when it is unreadable."""
     if path is None:
         return None
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        return Ladder(None, None, (), 0, "the ladder file is not there yet")
+        return Ladder(None, None, (), 0, "the units file is not there yet")
     except (OSError, ValueError) as exc:
-        return Ladder(None, None, (), 0, f"the ladder file did not read ({type(exc).__name__})")
+        return Ladder(None, None, (), 0, f"the units file did not read ({type(exc).__name__})")
     if not isinstance(raw, dict):
-        return Ladder(None, None, (), 0, "the ladder file is not an object")
+        return Ladder(None, None, (), 0, "the units file is not an object")
     rows, hist = raw.get("changes"), raw.get("history")
     bad = [k for k, v in (("changes", rows), ("history", hist)) if v is not None and not isinstance(v, list)]
     changes, skipped = [], 0
@@ -57,11 +61,22 @@ def read(path: Path | None) -> Ladder | None:
         else:
             skipped += 1
     history = [h for h in hist if isinstance(h, dict) and _num(h.get("wr")) is not None] if isinstance(hist, list) else []
+    legacy = raw.get("legacy")
+    bad += ["legacy"] if legacy is not None and not isinstance(legacy, list) else []
     notes = [f"{k} is not a list" for k in bad] + ([f"{skipped} change row(s) lack step, from or to"] if skipped else [])
-    current = raw.get("current_unit")
+    notes += [f"{k} is not a string" for k in ("rule", "second") if raw.get(k) is not None and not isinstance(raw[k], str)]
+    rule, switches = None, ()
+    if isinstance(raw.get("rule"), str):
+        try:
+            rule, switches = parse_rule(raw["rule"])
+        except ValueError as exc:
+            notes.append(str(exc))
+    current, second = raw.get("current_unit"), raw.get("second")
     return Ladder(current=str(current) if isinstance(current, str) and current else None, streak=_int(raw.get("streak")),
                   changes=tuple(sorted(changes, key=lambda c: c.step)), cells=len(history),
-                  note="read" if not notes else "read, but " + "; ".join(notes))
+                  note="read" if not notes else "read, but " + "; ".join(notes), rule=rule, switches=switches,
+                  second=second if isinstance(second, str) and second else None,
+                  legacy=frozenset(str(u) for u in legacy if isinstance(u, str)) if isinstance(legacy, list) else frozenset())
 
 
 def parse_rule(text: str) -> tuple[str, tuple[Change, ...]]:

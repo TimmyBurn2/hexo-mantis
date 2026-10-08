@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import os
 import re
 import threading
@@ -157,7 +158,7 @@ def test_the_server_binds_loopback_by_default(dash):
 
 
 @pytest.mark.parametrize("argv", [["serve", "--run", "nolabel"], ["serve", "--run", "a=/x", "--records", "b=/y"],
-                                  ["freeze", "--out", "o.html"], ["serve", "--run", "a=/x", "--rule-unit", "a=u,v@0"]])
+                                  ["freeze", "--out", "o.html"], ["serve", "--run", "a=/x", "--ladder", "b=/y"]])
 def test_a_malformed_input_is_refused_by_name(dash, argv):
     cli = importlib.import_module("dash.cli")
     with pytest.raises(SystemExit):
@@ -190,10 +191,13 @@ def test_a_label_with_a_space_round_trips_through_its_own_links(serve, record, t
     assert serve.route_get(hub, "/run/run%20eleven").status == 200
 
 
-def test_a_rule_switch_flag_reads_into_the_record_and_a_bad_one_names_the_rule(dash, tmp_path):
+def test_the_rule_comes_from_the_records_units_file_and_a_bad_one_is_named_not_served(dash, tmp_path):
     cli = importlib.import_module("dash.cli")
-    run = _run(tmp_path)
-    (rec,) = cli.records_of(cli.build_parser().parse_args(["serve", "--run", f"r1={run}", "--rule-unit", "r1=a,b@5"]))
-    assert rec.rule == "b" and [(c.step, c.frm, c.to) for c in rec.switches] == [(5, "a", "b")]
-    with pytest.raises(SystemExit, match="the rule 'a,b@0'"):
-        cli.records_of(cli.build_parser().parse_args(["serve", "--run", f"r1={run}", "--rule-unit", "r1=a,b@0"]))
+    run, units = _run(tmp_path), tmp_path / "units.json"
+    units.write_text(json.dumps({"rule": "a,b@5"}), encoding="utf-8")
+    (rec,) = cli.records_of(cli.build_parser().parse_args(["serve", "--run", f"r1={run}", "--ladder", f"r1={units}"]))
+    snap = rec.poll()
+    assert snap.rule == "b" and [(c.step, c.frm, c.to) for c, _ in snap.switches] == [(5, "a", "b")]
+    units.write_text(json.dumps({"rule": "a,b@0"}), encoding="utf-8")
+    snap = rec.poll()
+    assert snap.rule is None and "the rule 'a,b@0'" in snap.ladder.note

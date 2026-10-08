@@ -96,6 +96,8 @@ class Save:
     gap: float | None
     gap_line: float | None
     gap_fired: bool
+    positions_per_h: float | None = None
+    rates_note: str | None = None
 
 
 def _exam(raw: Any) -> Exam:
@@ -124,7 +126,7 @@ def _lagged(raw: Any) -> Lagged | None:
 
 def parse_save(raw: dict[str, Any]) -> Save:
     """A save record as `tools/run_monitor` writes it. Raises: KeyError, when the record carries no step."""
-    gen, bands, rule = _dict(raw.get("gen")), _dict(raw.get("ring_bands")), _dict(raw.get("gap_rule"))
+    gen, bands, rule, rates = (_dict(raw.get(k)) for k in ("gen", "ring_bands", "gap_rule", "rates"))
     per_band = _dict(gen.get("bands"))
     return Save(
         step=int(raw["step"]), saved_ts=_num(raw.get("saved_ts")), final=bool(raw.get("final")),
@@ -139,7 +141,8 @@ def parse_save(raw: dict[str, Any]) -> Save:
         reported_rows=tuple(str(r) for r in raw.get("reported_rows") or []),
         armed_floors=tuple(str(r) for r in raw.get("armed_floors") or []),
         floors_live=raw["floors_live"] if isinstance(raw.get("floors_live"), bool) else None,
-        gap=_num(rule.get("gap")), gap_line=_num(rule.get("line")), gap_fired=rule.get("fired") is True)
+        gap=_num(rule.get("gap")), gap_line=_num(rule.get("line")), gap_fired=rule.get("fired") is True,
+        positions_per_h=_num(rates.get("positions_per_h")), rates_note=str(rates["note"]) if rates.get("note") else None)
 
 
 @dataclass(frozen=True)
