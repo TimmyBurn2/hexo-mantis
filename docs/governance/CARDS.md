@@ -44,9 +44,18 @@ Both were found by running the gate set rather than by reading it, and both are 
   (the S units of record on the GPU, the 1-ply plain start, the in-run gate's arena book, self-play's PUCT frame, the
   best-save rule); A5 gates at each leg, a fresh review, gates.exit, the push on the operator's word. run11's tree and
   config are excluded; a cell started without the cap halts the packet. Local records `mantis-records/deploy-2/`.
+  EXITED 2026-10-08: A1 read (the floor binds), A2–A4 built, two fresh reviews fixed, gates.exit and gates green;
+  exit record `mantis-records/deploy-2/EXIT.md`.
 - **CARD-DASH-UNITS — OPENED by the DEPLOY-2 packet (A3): DASH-DYNAMIC lands and the dash reads its units from the
   records (the unit of record v legacy tags), served from box A behind the operator's tunnel.** Per save it shows rung
   16, S, the monitor's rows (GEN cf CE, T, gap, exams), positions/h and the gate rounds.
+  BUILT 2026-10-08 (DEPLOY-2 A3): DASH-DYNAMIC landed; `--rule-unit` retired for the records' units file (`rule`,
+  `second`, `legacy`, the rung state), read at every poll; the Run view lists every save with the ruler of record,
+  the second ruler, GEN cf CE, T, gap, exams held, positions/h save to save and the gate round. Box A serves it
+  (`mantis_dash`) from the deploy-2 tree.
+- **CARD-RUNG-STEP-IN-TREE — OPENED by DEPLOY-2's reviews: R388(a)'s step (two consecutive saves above 0.7 → the next
+  rung, never down) and the parent and anchor re-read at a step live only in box A's follower script.** They come into
+  the tree, one implementation the follower and the dash share, before run12's going-forward line can meet a step.
 
 ## Opened by R388 (THE FLOOR READ, THE LINEAGE, THE ENCODING; 2026-10-08) — one rung, the second floor read, FRESH-2 accepted, run12, ENCODE-1
 
@@ -54,6 +63,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   128/stone on the arena book (`ladder455_n16`).** It steps to 128 then 256 on two consecutive saves above 0.7, never
   down. S on the GPU is the second ruler; the S units of record move to the GPU (580/580 identical). Validity accepted
   (the 132k/156k pair unresolved on both). R387's N50 and equal-work parity read are withdrawn.
+  The S units of record play on the GPU (DEPLOY-2 A4); `equal_work`'s GPU cells open a new series beside its CPU ones,
+  a break in the label stated in the eval contract.
 - **CARD-FLOOR-READ-2 — ORDERED by R388(b), pre-stated: four rung-16 cells of run11 at 228k, 240k, 252k and 264k.**
   RUN11-CYCLE-2's verdict stands as pre-registered (its window, a warm restart read at its high-LR start, was the
   architect's error). The four cells' mean above the plateau (−0.754 logit) by +0.17 → the floor binds and run12's
@@ -61,6 +72,11 @@ Both were found by running the gate set rather than by reading it, and both are 
   OWNED by DEPLOY-2 A1 (the packet calls it CARD-CYCLE-ANNEALED-READ): box A, one cell at a time under a GPU-share
   cap pre-stated before the first cell (local records `mantis-records/deploy-2/PRESTATED.md`), S beside at 240k and
   264k, the operator told the moment the read is in.
+  READ 2026-10-08 (DEPLOY-2 A1): 228k/240k/252k/264k read 0.365/0.336/0.366/0.392 (logit −0.556/−0.681/−0.552/−0.437),
+  576 games each, no forfeits, each checkpoint the monitor's sha. Mean −0.557 against the plateau −0.754: +0.197 over
+  the +0.17 line → THE FLOOR BINDS, and run12's schedule is one cosine 5e-4 → 1e-4 over 300k. A thin pass: +0.027 over
+  the line, inside the four cells' ±0.09; with the plateau's own error the climb reads +0.20 [+0.07, +0.33]. S at 240k
+  and 264k is re-queued (CARD-EVAL-ON-BOX-A).
 - **CARD-FRESH-2-FINAL-CELLS — ORDERED by R388(c), low priority: close FRESH-2's record. HANDED to DEPLOY-2 (box A)
   2026-10-08 with the commands, the sha and the one-instrument-per-pair rule (local records
   `mantis-records/run11-fresh/fresh2/FINAL_CELLS_HANDOFF.md`).** The final save 139 933 is read
@@ -75,17 +91,28 @@ Both were found by running the gate set rather than by reading it, and both are 
   LANDS as `e7b9c9f3` with R388's record (a fresh review, no blockers).
 - **CARD-PUCT-FRAME-SELFPLAY — ORDERED by R388(c): self-play's PUCT frame takes #13's fix (one implementation), pinned.**
   OWNED by DEPLOY-2 A4.
+  BUILT 2026-10-08 (DEPLOY-2 A4): the switch is gone, both stone levels pinned, and a whole-tree golden recorded on the
+  base tree holds Gumbel bit-identical (a planted interior break moves it).
 - **CARD-RUN12 — ORDERED by R388(d): run12 = run11's best save by ladder-and-S agreement, on dev + fresh-2.** The arena
   book in the in-run gate; bookless evaluations from the origin stone alone (1 ply); 48 workers. It starts after
   CARD-FLOOR-READ-2's read, without waiting for ENCODE-1. Its going-forward line: four rung-16 cells above its parent's
   reading by +0.17, read every 12k; the two-read halts stay.
   Its best-save rule becomes a tool (DEPLOY-2 A4): the save first on rung 16 and S, else the first on rung 16 whose S
   interval holds the best S reading, the pick and both readings stated.
+  Its schedule by CARD-FLOOR-READ-2: one cosine 5e-4 → 1e-4 over 300k. Its parent: `tools/best_save.py` over run11's
+  rung-16 and S cells (on the re-base saves it picks 132k).
 - **CARD-EVAL-ON-BOX-A — ORDERED by R388(e): cells, followers and the dash feed run on box A under a GPU-share cap.** The
   run's positions/h during cells is a row; above a 10 % daily cost an eval box replaces it.
   OWNED by DEPLOY-2 A2 (the packet's CARD-EVALS-ON-BOX): the cell followers (rung of record every 12k, S every 24k,
   the legacy gen455@128 tagged on two saves then stopped), the records writer and the dash feed as box A units; the
   desktop mirror best-effort.
+  BUILT 2026-10-08 (DEPLOY-2 A2): supervisor units `mantis_cells` (the picker plays only checkpoints matching the
+  monitor's sha; a retry moves its stale work aside; a cap stop re-queues without an attempt; no cell starts while run11
+  is down) and `mantis_records` (sidecars, cost rows, the dash's units file). A rung cell takes ~25 min and holds run11
+  at 153–168k/h against its cell-free 200.4k/h (−16 to −23 % while it plays, ~3.6 % of a day at one per 12k). S at four
+  games in flight (one GPU strix process each) took the card to 203 MiB: 240k was stopped by the cap, 264k by hand,
+  run11 unharmed; S now plays two in flight behind 5 GB free, its daily share read off its first cells. The cap and its
+  four annotations: local records `mantis-records/deploy-2/PRESTATED.md`.
 - **CARD-BOX-B-DESTROY — ORDERED by R388(e): box B is destroyed after the fresh bundle's mirror is sha-verified (the
   operator's act).** VERIFIED 2026-10-08 07:22 CEST: the 139 933 bundle in the mirror matches its manifest and box B
   (checkpoint `284abc88…`); box B's remaining FRESH-2 records are swept into `mantis-mirror/run11-fresh/`. Box B is
@@ -193,6 +220,10 @@ Both were found by running the gate set rather than by reading it, and both are 
   gate still names `book_v1` in every production config (a mint at the next config change).
   ANSWERED by R388(d): bookless evaluations start from the origin stone alone (the 1-ply draw), and the in-run gate
   takes the arena book; both OWNED by DEPLOY-2 A4.
+  BUILT 2026-10-08 (DEPLOY-2 A4): a game with no opening plays `PLAIN_START`, pinned against the arena draw. The gate's
+  book stays out of the dev template (moving it re-mints every config minted from it, run11's included); by the
+  operator's word run12's mint states `eval.gate.opening_book: arena_s20261006_p5`, and the template moves when run11's
+  configs retire.
 - **CARD-RUN12-ENCODING — MOVED to CARD-ENCODE-1 by R388(f) (run12 starts without it). OPENED by DEPLOY-1 for R386(d):
   #18, pruning empty→empty edges, is run12's encoding.** 84 %
   of our edges join two empty cells (SEARCH_PERF §3.3 #18). It lands behind the seam (a new row in

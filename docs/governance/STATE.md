@@ -24,7 +24,9 @@ in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c
     parity read are withdrawn.
   - RUN11-CYCLE-2's verdict stands (R388(b)); a second floor read is pre-stated (CARD-FLOOR-READ-2): four rung-16 cells
     at 228k, 240k, 252k and 264k, their mean above the plateau (−0.754 logit) by +0.17 → the floor binds and run12's
-    schedule is one cosine 5e-4 → 1e-4 over 300k; else the floor stays and ENCODE-1 takes the budget.
+    schedule is one cosine 5e-4 → 1e-4 over 300k; else the floor stays and ENCODE-1 takes the budget. READ
+    2026-10-08: mean −0.557 logit, +0.197 over the plateau → THE FLOOR BINDS (thin: +0.027 over the line, inside the
+    cells' ±0.09); run12's schedule is one cosine 5e-4 → 1e-4 over 300k.
   - FRESH-2 is accepted (R388(c)): the lineage stands, and the fresh line is CLOSED. It ran on box B from its 69 954 halt
     bundle (2026-10-07 10:30 CEST) to 139 933, stopped on the operator's word on 2026-10-08 06:50 CEST. At matched steps
     84k–120k it trails run11 on every instrument: rung 16 −1.04 to −1.39 logit, X −0.76 to −1.03, gen455@128 −0.13 to
@@ -49,7 +51,10 @@ in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c
     A1 plays the floor read on box A under a GPU-share cap pre-stated before its first cell; A2 makes the followers,
     the records writer and the dash feed box A units; A3 lands DASH-DYNAMIC and the dash's units from the records
     (CARD-DASH-UNITS); A4 builds run12's inputs. Branch `deploy-2` on `r388-record`; local records
-    `mantis-records/deploy-2/`.
+    `mantis-records/deploy-2/`. EXITED 2026-10-08: the floor binds (above); box A runs the cell units under the cap
+    (S two in flight behind 5 GB free after four took the card to 203 MiB) and serves the dash with its units from the
+    records; self-play's PUCT frame, the 1-ply plain start, the S units on the GPU and the best-save tool landed; the
+    gate's arena book goes into run12's mint (the operator's word).
 - **R386's order.**
   - RUN11-GO accepted (R386(a)). run11 pauses at its next save, bundle mirrored, and resumes with a second cosine
     cycle, 5e-4 → 1e-4 over 54k steps, minted by the ruling (CARD-RUN11-CYCLE-2). The mint landed as `train.lr_cycle`
@@ -126,7 +131,8 @@ in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c
     in that session's own scratch tree. It may be destroyed after that (the operator's act).
 - **DASH-2 LANDED 2026-10-05** (`293b3277..83a5c1e6`, CARDS DASH-2; the amendment is admitted docs-only by R386(a)):
   `make dash` is the one display. It reads a run directory, the monitor's records and the cell sidecars and serves the
-  Run, Games and Analyzer views; run11's rule reads `six30_16` (`--rule-unit`), every other ruler is report-only. The
+  Run, Games and Analyzer views; run11's rule read `six30_16`
+  (`--rule-unit`, retired 2026-10-08 for the records' units file), every other ruler report-only. The
   dashboard, the viewer and the analyzer are retired. It serves run11's live record on box A as the supervisor service
   `mantis_dash`, from a separate checkout at `d4d5d1f5` under the run's own venv (the run's tree untouched): nice 19,
   idle I/O, the Analyzer on CPU with 4 threads and no GPU, loopback behind the Caddy entry "Mantis Dash" with token
@@ -537,3 +543,5 @@ RUN11-GO lines were added 2026-10-05 at its packet's first commit, on branch `ru
 The current phase was rewritten 2026-10-06 at R386 on `dev` = `origin/dev` = `ef25e64f`, with run11's pause read from
 box A; the same edit repaired the run, box and latest-ruling lines.
 The DEPLOY-1 line was added 2026-10-06 at its packet's first commit, on branch `deploy-1` over `dev` `c00bf352`.
+The DEPLOY-2 lines were added 2026-10-08 at its packet's first commit (`23fc20df`, over `77e23abc`) and updated at its
+exit on branch `deploy-2` at `7bec5f34`, the dash line repaired in place.
