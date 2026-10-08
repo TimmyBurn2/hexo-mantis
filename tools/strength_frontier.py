@@ -79,8 +79,8 @@ class FrontierCellError(ValueError):
     """A cell this driver cannot compose. Raised, never defaulted past."""
 
 
-def _snapshot_from_checkpoint(path: Path, out: Path) -> dict[str, Any]:
-    ck = load_checkpoint(path)
+def _snapshot_from_checkpoint(path: Path, out: Path, *, encoding: str) -> dict[str, Any]:
+    ck = load_checkpoint(path, declared_encoding=encoding)
     if ck.metadata.arch is None:
         raise FrontierCellError(f"{path}: the stamp resolves no arch, so the net cannot be rebuilt")
     net = build_net(ck.metadata.arch)
@@ -112,7 +112,7 @@ def _snapshot_bc_full(config: Any, out: Path) -> dict[str, Any]:
     declared = resolve_bc_warm_start(config.model_dump())
     if declared is None:
         raise FrontierCellError("the config declares no identity.warm_start; bc_full needs one")
-    info = _snapshot_from_checkpoint(declared.checkpoint, out)
+    info = _snapshot_from_checkpoint(declared.checkpoint, out, encoding=config.identity.encoding)
     if info["net_hash"] != declared.net_hash:
         raise FrontierCellError(
             f"{declared.checkpoint}: net hash {info['net_hash']} != declared {declared.net_hash}"
@@ -127,7 +127,7 @@ def build_snapshot(source: str, config: Any, out: Path) -> dict[str, Any]:
         return _snapshot_bc_full(config, out)
     if source == BC_TP:
         return _snapshot_bc_tp(config, out)
-    return _snapshot_from_checkpoint(Path(source), out)
+    return _snapshot_from_checkpoint(Path(source), out, encoding=config.identity.encoding)
 
 
 def base_round_spec(config: Any, *, work_dir: Path) -> RoundSpec:

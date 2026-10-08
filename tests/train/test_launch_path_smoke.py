@@ -96,7 +96,7 @@ def test_launch_path_smoke(tmp_path: Path) -> None:
     assert payload["kind"] == "full"
 
     # resume from it (build_net(metadata.arch) + restore optim/scaler/step)
-    tr2 = resume_trainer(Trainer, ckpt, fallback_config=config)
+    tr2 = resume_trainer(Trainer, ckpt, fallback_config=config, declared_encoding=None)
     assert tr2.loaded_from_full_checkpoint is True
     assert tr2.step == 2
     assert len(tr2.optimizer.param_groups) == 2

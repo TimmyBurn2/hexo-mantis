@@ -125,7 +125,7 @@ class MantisBackend:
         if threads is not None:
             torch.set_num_threads(int(threads))
         self.encoding = normalize_encoding_name(config.identity.encoding)
-        ck = load_checkpoint(checkpoint)
+        ck = load_checkpoint(checkpoint, declared_encoding=None)  # adopts the stamp, compared with the config's next
         if normalize_encoding_name(ck.metadata.encoding_name) != self.encoding:
             raise BackendError(f"{Path(checkpoint).name} is stamped for encoding {ck.metadata.encoding_name!r}; the "
                                f"config declares {config.identity.encoding!r} — the head plays the config's geometry")

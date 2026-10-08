@@ -12,6 +12,8 @@ import logging
 from collections.abc import Mapping
 from typing import Any
 
+from mantis.encoding import resolve_from_config
+
 _LOG = logging.getLogger(__name__)
 
 # Keys that MUST come from the CHECKPOINT on resume; the launch config wins for every other key.
@@ -114,13 +116,12 @@ def init_trainer(
             declared_keys=declared_keys,
         )
         return resume_trainer(
-            Trainer, checkpoint_path,
+            Trainer, checkpoint_path, declared_encoding=resolve_from_config(dict(config)).name,
             fallback_config=config, config_overrides=overrides,
             declared_keys=declared_keys, sink=sink, device=device,
         )
 
     from mantis.config.resolve import resolve_gnn_widths
-    from mantis.encoding import resolve_from_config
     from mantis.model import arch_from_spec_and_config, build_net
 
     # `resolve_from_config` reads the nested `identity.encoding` shape as well as the legacy flat

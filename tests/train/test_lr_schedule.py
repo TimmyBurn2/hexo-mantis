@@ -180,7 +180,7 @@ def test_the_launchers_resume_runs_the_launch_configs_cycle(tmp_path: Path, tiny
                            checkpoint_dir=tmp_path, kind="full")
     launch = _nested(lr=1e-3, scheduler_t_max=40, eta_min=1e-4,
                      lr_cycle={"start_step": 60, "lr": 5e-4, "eta_min": 1e-4, "t_max": 20})
-    trainer = resume_trainer(Trainer, path, config_overrides=build_resume_config_overrides(launch, launch))
+    trainer = resume_trainer(Trainer, path, config_overrides=build_resume_config_overrides(launch, launch), declared_encoding=None)
     assert trainer.step == 60 and trainer.scheduler.cycle == _CYCLE
     assert _lr_sweep(trainer.scheduler, 25) == [_CYCLE.lr_at(60 + k) for k in range(26)]
 

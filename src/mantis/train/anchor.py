@@ -241,7 +241,7 @@ def _build_anchor_model(
     raw = torch.load(path, weights_only=True, map_location="cpu")
     is_v2 = isinstance(raw, dict) and raw.get("schema_version") == _ck.CHECKPOINT_SCHEMA_VERSION
     ck = (
-        _ck.load_checkpoint(path, device=device)
+        _ck.load_checkpoint(path, device=device, declared_encoding=declared_encoding)
         if is_v2
         else _ck.load_legacy_weights(path, declared_encoding=declared_encoding)
     )

@@ -137,18 +137,18 @@ def test_the_shadow_rides_the_envelope_and_a_resume_restores_it(tmp_path: Path) 
     for _ in range(2):
         _step(trainer, buf)
     path = trainer.save_checkpoint()
-    ck = load_checkpoint(path)
+    ck = load_checkpoint(path, declared_encoding=None)
     assert ck.ema_state is not None and set(ck.ema_state) == set(ck.model_state)
     state, which = deploy_state(ck)
     assert which == "ema" and state_dict_param_hash(state) == state_dict_param_hash(trainer.ema_model.state_dict())
     assert state_dict_param_hash(ck.model_state) == state_dict_param_hash(trainer.model.state_dict())
-    resumed = resume_trainer(Trainer, path)
+    resumed = resume_trainer(Trainer, path, declared_encoding=None)
     assert resumed.ema_model is not None
     assert state_dict_param_hash(resumed.ema_model.state_dict()) == state_dict_param_hash(trainer.ema_model.state_dict())
 
     off = H.tiny_graph_trainer(tmp_path / "off", sink=H.SpySink())
     _step(off, buf)
-    off_ck = load_checkpoint(off.save_checkpoint())
+    off_ck = load_checkpoint(off.save_checkpoint(), declared_encoding=None)
     assert off_ck.ema_state is None and deploy_state(off_ck)[1] == "learner"
 
 
@@ -186,7 +186,7 @@ def test_a_resume_from_a_shadowless_stamp_reseeds_and_says_so(tmp_path: Path) ->
     path = off.save_checkpoint()
     sink = H.SpySink()
     on = resume_trainer(Trainer, path, config_overrides={"train": {"ema": {"enabled": True, "decay": 0.9, "update_every": 1}}},
-                        sink=sink)
+                        sink=sink, declared_encoding=None)
     assert on.ema_model is not None
     assert state_dict_param_hash(on.ema_model.state_dict()) == state_dict_param_hash(on.model.state_dict())
     assert [e["event"] for e in sink.events if e["event"] == "ema_shadow_reseeded"] == ["ema_shadow_reseeded"]

@@ -43,7 +43,7 @@ def _planted(path: Path, n: int = 48, wins_in: int = 2) -> R.Ring:
 def test_the_tracer_draws_the_slots_the_sampler_draws(vi, tmp_path: Path) -> None:
     d = vi[1]
     ring = _planted(tmp_path / "planted.ring.bin")
-    slot = d.trace(ring, seed=11, batches=3, threads=2)
+    slot = d.trace(ring, seed=11, batches=3, threads=2, encoding=_ENCODING)
     real = _engine.HexgBuffer(64, _ENCODING, 16)
     real.load_from_path(str(tmp_path / "planted.ring.bin"))
     real.seed_sampler(11)
@@ -70,7 +70,7 @@ def test_read_traces_every_draw_on_a_ring_below_its_visit_cap(vi, net_and_config
     path = tmp_path / "planted.ring.bin"
     ring = _planted(path)
     r = d.read(model, cfg, path, seed=7, batches=1, device=torch.device("cpu"), threads=2, dump_dir=tmp_path)
-    assert np.array_equal(r["slot"], d.trace(ring, seed=7, batches=1, threads=2))
+    assert np.array_equal(r["slot"], d.trace(ring, seed=7, batches=1, threads=2, encoding=_ENCODING))
     assert np.array_equal(r["z"], ring.outcome[r["slot"]]) and np.isfinite(r["u"]).all()
     assert not model.training
 

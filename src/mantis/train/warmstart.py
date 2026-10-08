@@ -107,7 +107,7 @@ def apply_bc_warm_start(model: Any, declared: BcWarmStart, *, spec: Any) -> BcTr
     raw = torch.load(declared.checkpoint, map_location="cpu", weights_only=True)
     is_v2 = isinstance(raw, dict) and raw.get("schema_version") == CHECKPOINT_SCHEMA_VERSION
     ck = (
-        load_checkpoint(declared.checkpoint)
+        load_checkpoint(declared.checkpoint, declared_encoding=getattr(spec, "name", None))
         if is_v2
         else load_legacy_weights(declared.checkpoint, declared_encoding=getattr(spec, "name", None))
     )

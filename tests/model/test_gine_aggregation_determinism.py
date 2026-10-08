@@ -169,7 +169,7 @@ def parent() -> tuple[torch.nn.Module, list[tuple], list[tuple]]:
     """The parent net, its 8 real B-64 batches, and every GINE layer's `(xs, e, src, dst, n, divisor)` on them."""
     _assert_jitter_is_possible()
     config = load_config(production_configs(_REPO)[0]).model_dump()
-    ck = load_checkpoint(Path(os.environ["MANTIS_PERF_CHECKPOINT"]))
+    ck = load_checkpoint(Path(os.environ["MANTIS_PERF_CHECKPOINT"]), declared_encoding=None)
     assert ck.metadata.arch is not None
     net = build_net(ck.metadata.arch)
     net.load_state_dict(ck.model_state)
@@ -297,7 +297,7 @@ def test_ii_b_the_mean_logit_error_is_no_worse_than_the_old_paths_worst(parent, 
 def test_ii_c_the_coded_served_forward_is_the_per_edge_forward_bit_for_bit(compiled: bool) -> None:
     """The served path projects the edge vocabulary, not every edge: on the parent's real batches its outputs are the per-edge forward's, bits included."""
     config = load_config(production_configs(_REPO)[0]).model_dump()
-    ck = load_checkpoint(Path(os.environ["MANTIS_PERF_CHECKPOINT"]))
+    ck = load_checkpoint(Path(os.environ["MANTIS_PERF_CHECKPOINT"]), declared_encoding=None)
     assert ck.metadata.arch is not None
     net = build_net(ck.metadata.arch)
     net.load_state_dict(ck.model_state)

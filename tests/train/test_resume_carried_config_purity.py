@@ -121,7 +121,7 @@ def test_legacy_explicit_torch_compile_override_never_reaches_the_carried_config
     trainer = resume_trainer(
         Trainer, path, fallback_config=cfg,
         config_overrides=directives, declared_keys=None,
-        device=torch.device("cpu"),
+        device=torch.device("cpu"), declared_encoding=None,
     )
     for key in directives:
         assert key not in trainer.config, (
@@ -144,7 +144,7 @@ def test_write_time_validation_still_raises_on_a_non_directive_unknown_key(
     trainer = resume_trainer(
         Trainer, path, fallback_config=cfg,
         config_overrides={"a_key_no_schema_owns": 7}, declared_keys=None,
-        device=torch.device("cpu"),
+        device=torch.device("cpu"), declared_encoding=None,
     )
     assert "a_key_no_schema_owns" in trainer.config, (
         "the strip laundered a NON-directive unknown key — it has widened beyond "

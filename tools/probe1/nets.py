@@ -45,7 +45,7 @@ def load_net(path: Path) -> Net:
     """The checkpoint-stamp loader, the stamp's arch rebuilt, eval mode; raises `RuntimeError` when the stamp resolves no arch."""
     from mantis.encoding import lookup
 
-    ck = load_checkpoint(path)
+    ck = load_checkpoint(path, declared_encoding=None)  # adopts the stamp: `spec` below is the stamp's
     if ck.metadata.arch is None:
         raise RuntimeError(f"{path.name}: the stamp resolves no arch, so the net cannot be rebuilt")
     model = build_net(ck.metadata.arch)
@@ -55,10 +55,10 @@ def load_net(path: Path) -> Net:
                config=dict(ck.config), spec=lookup(str(ck.metadata.encoding_name)))
 
 
-def open_ring(path: Path, *, seed: int) -> tuple[HexgBuffer, int]:
-    """The ring file loaded into the engine's own buffer at its own geometry; `(buffer, rows)`."""
+def open_ring(path: Path, *, seed: int, encoding: str) -> tuple[HexgBuffer, int]:
+    """The ring file in a buffer at the READER's `encoding`, which the engine loads only when it holds the ring's records; `(buffer, rows)`."""
     header, _ = _read_header(memoryview(path.read_bytes()[:4096]))
-    buffer = HexgBuffer(max(header.size, 8), header.encoding, header.max_visits)
+    buffer = HexgBuffer(max(header.size, 8), encoding, header.max_visits)
     loaded = int(buffer.load_from_path(str(path)))
     if loaded < 1:
         raise ValueError(f"{path.name}: loaded no records")
@@ -125,7 +125,10 @@ def batch_losses(model: torch.nn.Module, inputs: Any, *, policy_denominator: flo
 
 def read_ring(nets: list[Net], buffer: HexgBuffer, *, batches: int, batch_size: int, threads: int,
               rows: bool, log: Callable[[str], None] = lambda _s: None) -> dict[str, Any]:
-    """`batches` production samples, EVERY net read on the SAME parts: per-net mean batch losses (paired) and, when `rows`, the per-row arrays."""
+    """`batches` production samples, EVERY net read on the SAME parts: per-net mean batch losses (paired) and, when `rows`, the per-row arrays; Raises: ValueError — a net stamped for another encoding than the buffer's."""
+    foreign = [n.path.name for n in nets if n.spec.name != buffer.encoding_name]
+    if foreign:
+        raise ValueError(f"{foreign} are stamped for another encoding than the buffer's {buffer.encoding_name!r}")
     cfg, spec = nets[0].config, nets[0].spec
     losses: dict[str, list[tuple[float, float]]] = {n.net_hash: [] for n in nets}
     cols: dict[str, list[np.ndarray]] = {}

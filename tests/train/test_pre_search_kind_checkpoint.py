@@ -77,7 +77,7 @@ def test_a_pre_branch_checkpoint_is_REFUSED_and_names_both_halves(pre_branch_che
     Naming only one half sends the operator round the loop twice.
     """
     with pytest.raises(ValidationError) as excinfo:
-        load_checkpoint(pre_branch_checkpoint)
+        load_checkpoint(pre_branch_checkpoint, declared_encoding=None)
     message = str(excinfo.value)
     assert "search" in message, (
         f"the refusal does not name the MISSING key: {message}"
@@ -102,7 +102,7 @@ def test_the_sanctioned_weights_strip_still_recovers_it(pre_branch_checkpoint, t
         checkpoint_dir=out,
         declared_encoding="gnn_axis_v1",
     )
-    ck = load_checkpoint(stripped)
+    ck = load_checkpoint(stripped, declared_encoding=None)
     assert ck.kind == "weights"
     assert ck.model_state, "the recovered artifact must still carry its weights"
     for home in (ck.config["selfplay"]["search"], ck.config["deploy"]["search"]):
@@ -125,4 +125,4 @@ def test_a_LIVE_checkpoint_round_trips(tmp_path, tiny_net, optim_scaler_sched, v
         config=valid_config, metadata_kwargs=metadata_kwargs, checkpoint_dir=tmp_path,
         kind="full",
     )
-    assert load_checkpoint(live).config["selfplay"]["search"]["kind"] == "puct"
+    assert load_checkpoint(live, declared_encoding=None).config["selfplay"]["search"]["kind"] == "puct"

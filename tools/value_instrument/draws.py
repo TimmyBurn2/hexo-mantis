@@ -18,7 +18,7 @@ from mantis.train.losses import rebuild_sparse_target, segment_softmax, segment_
 from mantis.util.loadpkg import load_tools_package
 
 load_tools_package("probe1")
-open_ring = importlib.import_module("probe1.nets").open_ring  # the ring at its own header geometry: one implementation
+open_ring = importlib.import_module("probe1.nets").open_ring  # the ring at the reader's encoding: one implementation
 
 BATCH = 256
 TRACE_SCALE = float(1 << 17)
@@ -41,12 +41,12 @@ def push_ring(buf: Any, ring: Ring, outcome: np.ndarray | None = None) -> int:
     return len(ring.game_id)
 
 
-def trace(ring: Ring, *, seed: int, batches: int, threads: int) -> np.ndarray:
-    """Each draw's ring slot: the rows pushed with outcome = slot / 2^17 (exact in f32), sampled at `seed`; the sampler reads no outcome. Raises: ValueError when the ring is too large to code."""
+def trace(ring: Ring, *, seed: int, batches: int, threads: int, encoding: str) -> np.ndarray:
+    """Each draw's ring slot: the rows pushed with outcome = slot / 2^17 (exact in f32), sampled at `seed` in an `encoding` buffer; the sampler reads no outcome. Raises: ValueError when the ring is too large to code."""
     n = len(ring.game_id)
     if n >= (1 << 24):
         raise ValueError(f"the tracer cannot code {n} rows in f32")
-    buf = HexgBuffer(max(ring.header.size, 8), ring.header.encoding, ring.header.max_visits)
+    buf = HexgBuffer(max(ring.header.size, 8), encoding, ring.header.max_visits)
     push_ring(buf, ring, outcome=np.arange(n) / TRACE_SCALE)
     buf.seed_sampler(seed)
     out = []
@@ -80,8 +80,9 @@ def read(model: Any, config: dict[str, Any], ring_path: Path, *, seed: int, batc
          threads: int, dump_dir: Path) -> dict[str, np.ndarray]:
     """`model` read in eval mode, FP32, per draw, with its slot, game and ply; `games` is the ring's. Raises: TraceMismatchError when a draw's z, value-valid, tail mass or full-search flag (one way: alpha = 1 drops it) differs from its slot's; ValueError and OSError from the ring."""
     ring = load_ring(ring_path)
-    slot = trace(ring, seed=seed, batches=batches, threads=threads)
-    buf, _rows_loaded = open_ring(ring_path, seed=seed)
+    encoding = str(config["identity"]["encoding"])  # the net's own: graphs are built at the reader's encoding
+    slot = trace(ring, seed=seed, batches=batches, threads=threads, encoding=encoding)
+    buf, _rows_loaded = open_ring(ring_path, seed=seed, encoding=encoding)
     model.eval()
     stub = SimpleNamespace(device=device, checkpoint_dir=str(dump_dir))
     spec = resolve_step_spec(config)

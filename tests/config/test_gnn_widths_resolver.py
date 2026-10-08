@@ -102,8 +102,8 @@ def test_a_resume_whose_launch_moves_the_shape_is_refused_by_name(tmp_path: Path
                            checkpoint_dir=tmp_path, kind="full")
     launch = {"model": {"gnn": {"hidden": 192, "num_layers": 6}}}
     with pytest.raises(ResumeIdentityMismatchError, match="model.gnn.hidden: checkpoint=8, resume=192"):
-        resume_trainer(Trainer, path, config_overrides=launch)
-    trainer = resume_trainer(Trainer, path)
+        resume_trainer(Trainer, path, config_overrides=launch, declared_encoding=None)
+    trainer = resume_trainer(Trainer, path, declared_encoding=None)
     assert (trainer.arch.hidden, trainer.arch.num_layers) == (8, 1)
 
 

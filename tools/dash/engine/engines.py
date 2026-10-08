@@ -140,7 +140,7 @@ class MantisEngine:
     head_derivation = "DeployHeadPlayer, the run's own head; root_value includes its quiescence override"
 
     def __init__(self, info: EngineInfo, *, device: str, threads: int | None) -> None:
-        ck = load_checkpoint(Path(info.path))
+        ck = load_checkpoint(Path(info.path), declared_encoding=None)  # adopts the stamp: the engine serves the stamp's encoding
         cfg: dict[str, Any] = ck.config
         try:
             sp = cfg["selfplay"]

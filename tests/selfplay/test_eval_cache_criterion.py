@@ -103,7 +103,7 @@ def _base_net(config: dict, spec: object) -> torch.nn.Module:
     """The parent when MANTIS_PERF_CHECKPOINT names it, else a seeded fresh net of the config's arch."""
     parent = os.environ.get("MANTIS_PERF_CHECKPOINT")
     if parent:
-        ck = load_checkpoint(Path(parent))
+        ck = load_checkpoint(Path(parent), declared_encoding=None)
         assert ck.metadata.arch is not None
         net = build_net(ck.metadata.arch)
         net.load_state_dict(ck.model_state)

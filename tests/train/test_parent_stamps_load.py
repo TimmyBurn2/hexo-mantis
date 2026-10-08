@@ -19,6 +19,6 @@ def test_a_mirrored_parent_checkpoint_loads_with_its_stamp_verbatim(path: Path) 
     """The parent loads, and the returned config is byte-for-byte the stamped one (never repaired)."""
     assert path.is_file(), f"{_ENV} names {path}, which is not a file"
     stamped = torch.load(path, weights_only=True, map_location="cpu")["config"]
-    ck = load_checkpoint(path)
+    ck = load_checkpoint(path, declared_encoding=None)
     assert ck.model_state, f"{path.name}: loaded with no weights"
     assert ck.config == stamped, f"{path.name}: the loader repaired the stamp"

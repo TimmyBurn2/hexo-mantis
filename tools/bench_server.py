@@ -241,7 +241,7 @@ def _load_net(config: dict[str, Any], checkpoint: Path | None) -> tuple[torch.nn
         from mantis.model import arch_from_spec_and_config
         net = build_net(arch_from_spec_and_config(lookup(config["identity"]["encoding"]), config))
         return net, "random-init (no --checkpoint)"
-    ck = load_checkpoint(checkpoint)
+    ck = load_checkpoint(checkpoint, declared_encoding=config["identity"]["encoding"])
     if ck.metadata.arch is None:
         raise ValueError(f"{checkpoint}: the stamp resolves no arch, so the net cannot be rebuilt")
     net = build_net(ck.metadata.arch)

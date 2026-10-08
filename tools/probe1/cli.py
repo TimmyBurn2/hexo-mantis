@@ -52,7 +52,7 @@ def cmd_decompose(a: argparse.Namespace) -> int:
 def cmd_netread(a: argparse.Namespace) -> int:
     net = load_net(a.checkpoint)
     ring = a.ring or _ring_of(a.checkpoint)
-    buffer, n = open_ring(ring, seed=a.seed)
+    buffer, n = open_ring(ring, seed=a.seed, encoding=net.spec.name)
     read = read_ring([net], buffer, batches=a.batches, batch_size=a.batch_size, threads=a.threads, rows=True, log=_log)
     rows = read.pop("rows")
     npz = a.out.with_suffix(".rows.npz")
@@ -76,7 +76,7 @@ def cmd_gap(a: argparse.Namespace) -> int:
             _log(f"{net.path.name}: no ring beside it, skipped")
             continue
         readers = [net] + ([nets[j - 1]] if j > 0 else [])
-        buffer, n = open_ring(ring, seed=a.seed)
+        buffer, n = open_ring(ring, seed=a.seed, encoding=net.spec.name)
         _log(f"ring {net.step} ({n} rows) read by {[r.step for r in readers]}")
         read = read_ring(readers, buffer, batches=a.batches, batch_size=a.batch_size, threads=a.threads, rows=False, log=_log)
         per_ring.append({"ring": ring.name, "ring_step": net.step, "ring_rows": n, **read})

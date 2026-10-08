@@ -54,7 +54,7 @@ def test_a_full_checkpoint_missing_a_weight_is_refused(tmp_path: Path) -> None:
     torn = _rewrite(payload, tmp_path)
 
     with pytest.raises(RuntimeError) as excinfo:
-        resume_trainer(Trainer, torn, device=torch.device("cpu"))
+        resume_trainer(Trainer, torn, device=torch.device("cpu"), declared_encoding=None)
     assert dropped in str(excinfo.value) or "Missing key" in str(excinfo.value), (
         f"the load did not name the missing key: {excinfo.value}"
     )
@@ -68,15 +68,15 @@ def test_a_full_checkpoint_with_an_unexpected_weight_is_refused(tmp_path: Path) 
     torn = _rewrite(payload, tmp_path)
 
     with pytest.raises(RuntimeError, match="a_layer_that_does_not_exist|Unexpected key"):
-        resume_trainer(Trainer, torn, device=torch.device("cpu"))
+        resume_trainer(Trainer, torn, device=torch.device("cpu"), declared_encoding=None)
 
 
 def test_a_healthy_full_checkpoint_still_resumes(tmp_path: Path) -> None:
     """Mutation half: strictness that refuses everything is not strictness."""
     path = _write_full(tmp_path)
-    trainer = resume_trainer(Trainer, path, device=torch.device("cpu"))
+    trainer = resume_trainer(Trainer, path, device=torch.device("cpu"), declared_encoding=None)
     assert trainer.loaded_from_full_checkpoint
-    assert trainer.step == load_checkpoint(path).metadata.step
+    assert trainer.step == load_checkpoint(path, declared_encoding=None).metadata.step
 
 
 def test_a_bare_anchor_subset_still_loads_leniently(tmp_path: Path) -> None:
@@ -90,7 +90,7 @@ def test_a_bare_anchor_subset_still_loads_leniently(tmp_path: Path) -> None:
     del payload["model_state"][subset[0]]
     anchor = _rewrite(payload, tmp_path)
 
-    trainer = resume_trainer(Trainer, anchor, device=torch.device("cpu"))
+    trainer = resume_trainer(Trainer, anchor, device=torch.device("cpu"), declared_encoding=None)
     assert not trainer.loaded_from_full_checkpoint, (
         "a weights artifact was read as a full resume"
     )
@@ -104,7 +104,7 @@ def test_a_bare_anchor_subset_still_loads_leniently(tmp_path: Path) -> None:
 def test_a_resume_that_moves_an_identity_key_halts(tmp_path: Path, key: str, value: Any) -> None:
     """Each identity leaf, separately: one parametrised row cannot pass by covering another."""
     path = _write_full(tmp_path)
-    baked = load_checkpoint(path).config
+    baked = load_checkpoint(path, declared_encoding=None).config
     identity = dict(baked["identity"])
     assert identity.get(key) != value, "the fixture no longer moves the key it names"
     identity[key] = value
@@ -113,18 +113,18 @@ def test_a_resume_that_moves_an_identity_key_halts(tmp_path: Path, key: str, val
         resume_trainer(
             Trainer, path, device=torch.device("cpu"),
             config_overrides={"identity": identity},
-            declared_keys=frozenset({"identity"}),
+            declared_keys=frozenset({"identity"}), declared_encoding=None,
         )
 
 
 def test_a_resume_that_leaves_identity_alone_proceeds(tmp_path: Path) -> None:
     """Mutation half: an identity check that fires on every resume blocks every resume."""
     path = _write_full(tmp_path)
-    baked = load_checkpoint(path).config
+    baked = load_checkpoint(path, declared_encoding=None).config
     trainer = resume_trainer(
         Trainer, path, device=torch.device("cpu"),
         config_overrides={"identity": dict(baked["identity"])},
-        declared_keys=frozenset({"identity"}),
+        declared_keys=frozenset({"identity"}), declared_encoding=None,
     )
     assert trainer.loaded_from_full_checkpoint
 
@@ -132,13 +132,13 @@ def test_a_resume_that_leaves_identity_alone_proceeds(tmp_path: Path) -> None:
 def test_the_halt_names_both_sides(tmp_path: Path) -> None:
     """An operator reading the halt must not have to go and diff two files to act on it."""
     path = _write_full(tmp_path)
-    identity = dict(load_checkpoint(path).config["identity"])
+    identity = dict(load_checkpoint(path, declared_encoding=None).config["identity"])
     identity["representation"] = "grid"
     with pytest.raises(ResumeIdentityMismatchError) as excinfo:
         resume_trainer(
             Trainer, path, device=torch.device("cpu"),
             config_overrides={"identity": identity},
-            declared_keys=frozenset({"identity"}),
+            declared_keys=frozenset({"identity"}), declared_encoding=None,
         )
     message = str(excinfo.value)
     assert "grid" in message and "graph" in message, (
@@ -160,7 +160,7 @@ def test_a_resume_that_moves_a_target_semantics_key_halts(
     """Each leaf separately, so one parametrised row cannot pass by covering another."""
     leaf = path[-1]
     path_ck = _write_full(tmp_path)
-    baked = load_checkpoint(path_ck).config
+    baked = load_checkpoint(path_ck, declared_encoding=None).config
     block = copy.deepcopy(baked[section])
     node = block
     for key in path[:-1]:
@@ -173,18 +173,18 @@ def test_a_resume_that_moves_a_target_semantics_key_halts(
         resume_trainer(
             Trainer, path, device=torch.device("cpu"),
             config_overrides={section: block},
-            declared_keys=frozenset({section}),
+            declared_keys=frozenset({section}), declared_encoding=None,
         )
 
 
 def test_a_resume_that_leaves_the_target_semantics_alone_proceeds(tmp_path: Path) -> None:
     """Mutation half: a guard that fires on every resume blocks every resume."""
     path = _write_full(tmp_path)
-    baked = load_checkpoint(path).config
+    baked = load_checkpoint(path, declared_encoding=None).config
     trainer = resume_trainer(
         Trainer, path, device=torch.device("cpu"),
         config_overrides={"train": dict(baked["train"])},
-        declared_keys=frozenset({"train"}),
+        declared_keys=frozenset({"train"}), declared_encoding=None,
     )
     assert trainer.loaded_from_full_checkpoint
 
@@ -192,13 +192,13 @@ def test_a_resume_that_leaves_the_target_semantics_alone_proceeds(tmp_path: Path
 def test_the_target_semantics_halt_names_both_sides(tmp_path: Path) -> None:
     """An operator reading the halt must not have to diff two files to act on it."""
     path = _write_full(tmp_path)
-    train_block = dict(load_checkpoint(path).config["train"])
+    train_block = dict(load_checkpoint(path, declared_encoding=None).config["train"])
     train_block["policy_target"] = "completed_improved_policy"
     with pytest.raises(ResumeTargetSemanticsError) as excinfo:
         resume_trainer(
             Trainer, path, device=torch.device("cpu"),
             config_overrides={"train": train_block},
-            declared_keys=frozenset({"train"}),
+            declared_keys=frozenset({"train"}), declared_encoding=None,
         )
     message = str(excinfo.value)
     assert "completed_improved_policy" in message and "raw_visit_distribution" in message, (
@@ -209,12 +209,12 @@ def test_the_target_semantics_halt_names_both_sides(tmp_path: Path) -> None:
 def test_the_deploy_kind_is_deliberately_not_a_target_semantics_key(tmp_path: Path) -> None:
     """The deploy head plays games nobody trains on, so a resume may re-take it."""
     path = _write_full(tmp_path)
-    deploy = copy.deepcopy(load_checkpoint(path).config["deploy"])
+    deploy = copy.deepcopy(load_checkpoint(path, declared_encoding=None).config["deploy"])
     deploy["search"]["kind"] = "gumbel" if deploy["search"]["kind"] == "puct" else "puct"
     trainer = resume_trainer(
         Trainer, path, device=torch.device("cpu"),
         config_overrides={"deploy": deploy},
-        declared_keys=frozenset({"deploy"}),
+        declared_keys=frozenset({"deploy"}), declared_encoding=None,
     )
     assert trainer.loaded_from_full_checkpoint
 
@@ -225,12 +225,12 @@ def test_the_search_regime_knobs_are_deliberately_not_target_semantics_keys(
     """The considered OMISSION: `gumbel_m` changes a target's QUALITY, not its meaning,
     which puts it with the other unguarded search knobs a run legitimately varies."""
     path = _write_full(tmp_path)
-    selfplay = dict(load_checkpoint(path).config["selfplay"])
+    selfplay = dict(load_checkpoint(path, declared_encoding=None).config["selfplay"])
     selfplay["gumbel_m"] = selfplay["gumbel_m"] + 8
     trainer = resume_trainer(
         Trainer, path, device=torch.device("cpu"),
         config_overrides={"selfplay": selfplay},
-        declared_keys=frozenset({"selfplay"}),
+        declared_keys=frozenset({"selfplay"}), declared_encoding=None,
     )
     assert trainer.loaded_from_full_checkpoint, (
         "a candidate-count change must NOT halt a resume — if this starts failing, the "

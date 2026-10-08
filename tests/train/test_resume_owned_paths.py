@@ -103,7 +103,7 @@ def test_a_launch_eta_min_never_reaches_a_resumed_run_and_is_said_out_loud(
                            checkpoint_dir=tmp_path, kind="full")
     launch = _nested(eta_min=0.0123, lr_schedule="none", grad_clip=7.0)
     overrides = build_resume_config_overrides(launch, launch)
-    trainer = resume_trainer(Trainer, path, config_overrides=overrides, sink=spy_sink)
+    trainer = resume_trainer(Trainer, path, config_overrides=overrides, sink=spy_sink, declared_encoding=None)
 
     assert trainer.config["train"]["eta_min"] == 5e-4, "the baked owned leaf must win on resume"
     assert trainer.config["train"]["grad_clip"] == 7.0, "the launch's non-owned leaf must win"

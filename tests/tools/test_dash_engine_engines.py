@@ -80,8 +80,8 @@ def test_a_gumbel_engine_repeats_its_answer_on_a_fresh_player(engines, tmp_path,
 def test_a_stamp_missing_a_needed_key_is_refused_by_the_keys_name(engines, dash_mantis_engine, monkeypatch):
     real = engines.load_checkpoint
 
-    def broken(path):
-        ck = real(path)
+    def broken(path, *, declared_encoding):
+        ck = real(path, declared_encoding=declared_encoding)
         del ck.config["selfplay"]["gumbel_m"]
         return ck
 

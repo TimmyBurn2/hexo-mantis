@@ -15,13 +15,14 @@ from mantis.util.hashing import sha256_file
 
 
 def average_checkpoints(paths: list[Path], *, config_path: Path, run_id: str, out_dir: Path) -> dict[str, Any]:
-    """Equal-weight average of `paths`' floating tensors, stamped weights-only under `run_id` at the last step, `.derivation.json` beside it; Raises: ValueError on a shape mismatch."""
+    """Equal-weight average of `paths`' floating tensors, stamped weights-only under `run_id` at the last step, `.derivation.json` beside it; Raises: ValueError on a shape mismatch, DeclaredEncodingMismatchError on a source stamped for another encoding than the config's."""
     if not paths:
         raise ValueError("no source checkpoints")
+    config = load_config(config_path).model_dump()
     sources, arch, shapes = [], None, None
     acc: dict[str, torch.Tensor] = {}
     for p in paths:
-        ck = load_checkpoint(p)
+        ck = load_checkpoint(p, declared_encoding=config["identity"]["encoding"])
         if ck.metadata.arch is None:
             raise ValueError(f"{p.name}: the stamp resolves no arch")
         if arch is None:
@@ -42,7 +43,6 @@ def average_checkpoints(paths: list[Path], *, config_path: Path, run_id: str, ou
     averaged = {k: (v / n).to(torch.float32) if v.is_floating_point() else v for k, v in acc.items()}
     net = build_net(arch)
     net.load_state_dict(averaged)
-    config = load_config(config_path).model_dump()
     out_dir.mkdir(parents=True, exist_ok=True)
     written = save_checkpoint(model=net, optimizer=None, scaler=None, scheduler=None, step=sources[-1]["step"], config=config,
                               kind="weights", checkpoint_dir=out_dir,

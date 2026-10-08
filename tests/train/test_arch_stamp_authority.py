@@ -79,7 +79,7 @@ def test_strip_and_restamp_keeps_a_V2_source_V2(tmp_path):
     )
     out = strip_and_restamp(src, new_encoding="gnn_axis_v1", run_id="r330e-strip",
                             checkpoint_dir=tmp_path)
-    ck = load_checkpoint(out)
+    ck = load_checkpoint(out, declared_encoding=None)
     assert type(ck.metadata.arch) is GnnArchV2, type(ck.metadata.arch).__name__
     assert not isinstance(ck.metadata.arch, GnnArch)
     # kind AND widths: the stamp is the arch, not a table's default-width rebuild of its kind

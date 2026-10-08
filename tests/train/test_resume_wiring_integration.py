@@ -151,7 +151,7 @@ def test_declared_train_section_wins_and_reaches_resumed_trainer_hp(
                 metadata_kwargs=metadata_kwargs)
     overrides = {"train": _train_block(lr=5e-4)}
     tr = resume_trainer(Trainer, path, config_overrides=overrides,
-                        declared_keys=frozenset({"train"}))
+                        declared_keys=frozenset({"train"}), declared_encoding=None)
     assert tr.hp.lr == 5e-4, "a DECLARED train section must WIN over the baked one (E0)"
     assert tr.f1_deferred_keys == frozenset()
 
@@ -163,7 +163,7 @@ def test_base_inherited_train_section_defers_to_baked_and_emits_deferred_event(
                 metadata_kwargs=metadata_kwargs)
     overrides = {"train": _train_block(lr=9e-4)}  # differs from baked, NOT declared
     tr = resume_trainer(Trainer, path, config_overrides=overrides,
-                        declared_keys=frozenset(), sink=spy_sink)
+                        declared_keys=frozenset(), sink=spy_sink, declared_encoding=None)
     assert tr.hp.lr == 1e-3, "a base-inherited (non-declared) key must DEFER to baked"
     # Leaf-wise since the nested shape merges per leaf: the deferred knob is `train.lr`, not the
     # whole section, so the rest of the launch's train block still travels.
@@ -179,7 +179,7 @@ def test_matching_base_inherited_train_section_does_not_defer(
                 metadata_kwargs=metadata_kwargs)
     overrides = {"train": _train_block(lr=1e-3)}  # identical to baked
     tr = resume_trainer(Trainer, path, config_overrides=overrides,
-                        declared_keys=frozenset(), sink=spy_sink)
+                        declared_keys=frozenset(), sink=spy_sink, declared_encoding=None)
     assert tr.f1_deferred_keys == frozenset()
     assert not spy_sink.named("resume_base_default_deferred_to_baked")
 
@@ -190,7 +190,7 @@ def test_declared_lr_ignored_on_full_resume_emits_loud_warning(
     path = _save(tmp_path, lr=1e-3, tiny_net=tiny_net, optim_scaler_sched=optim_scaler_sched,
                 metadata_kwargs=metadata_kwargs)
     tr = resume_trainer(Trainer, path, config_overrides={"lr": 5e-4},
-                        declared_keys=frozenset({"lr"}), sink=spy_sink)
+                        declared_keys=frozenset({"lr"}), sink=spy_sink, declared_encoding=None)
     assert tr.hp.lr == 1e-3, "lr is resume-state-owned: a bare declared lr must be IGNORED"
     events = spy_sink.named("resume_lr_override_ignored")
     assert events, "resume_trainer must emit the loud lr-ignored warning"
@@ -205,7 +205,7 @@ def test_no_config_overrides_leaves_baked_train_section_untouched(
 ):
     path = _save(tmp_path, lr=1e-3, tiny_net=tiny_net, optim_scaler_sched=optim_scaler_sched,
                 metadata_kwargs=metadata_kwargs)
-    tr = resume_trainer(Trainer, path)
+    tr = resume_trainer(Trainer, path, declared_encoding=None)
     assert tr.hp.lr == 1e-3
     assert tr.f1_deferred_keys == frozenset()
 

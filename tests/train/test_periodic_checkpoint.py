@@ -311,7 +311,7 @@ def test_periodic_artefact_loads_through_the_one_loader_with_its_stamp(
     residents = sorted(tmp_path.glob("*.ckpt"))
 
     assert len(residents) == 1, f"premise: one boundary crossed at N=2, got {residents}"  # 1
-    ck = checkpoints.load_checkpoint(residents[0])   # raises on any provenance/stamp defect
+    ck = checkpoints.load_checkpoint(residents[0], declared_encoding=None)   # raises on any provenance/stamp defect
     assert ck.kind == "full", "the periodic write is the FULL envelope, not a weights strip"  # 2
     assert ck.metadata.step == 2                                                 # 3
     assert ck.metadata.encoding_name == GRAPH_ENCODING                           # 4

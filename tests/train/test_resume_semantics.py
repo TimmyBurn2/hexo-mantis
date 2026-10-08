@@ -90,7 +90,7 @@ def test_full_save_resume_roundtrip_restores_state(tmp_path, tiny_net, optim_sca
                            step=750, config=valid_config, metadata_kwargs=metadata_kwargs,
                            checkpoint_dir=tmp_path, kind="full")
     exp = resume_goldens["T-CK-19_full_vs_weights_restore"]["expected_output"]["full_resume"]
-    tr = resume_trainer(Trainer, path, fallback_config=valid_config)
+    tr = resume_trainer(Trainer, path, fallback_config=valid_config, declared_encoding=None)
     assert tr.loaded_from_full_checkpoint is exp["loaded_from_full_checkpoint"]
     assert tr.step == exp["resumed_step"]
     assert len(tr.optimizer.param_groups) == exp["optimizer_param_groups_restored"]

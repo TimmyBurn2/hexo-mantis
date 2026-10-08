@@ -541,15 +541,15 @@ def _config_encoding(config: Any) -> Any:
 def load_checkpoint(
     path: str | Path,
     *,
+    declared_encoding: Any,
     expected_run_id: str | None = None,
     device: Any = None,
-    declared_encoding: Any = None,
     decode_override: Any = None,
 ) -> Checkpoint:
-    """Read a v2 envelope, re-verifying provenance and refusing every silent repair:
-    `weights_only=True`, run_id and content hash re-checked against the filename, killed-branch
-    prefixes REJECTED, `declared_encoding` asserting, `decode_override` loud but never raising,
-    and disagreeing stamp sources raising. Never re-stamps, never auto-upgrades."""
+    """Read a v2 envelope, refusing every silent repair (run_id, content hash, killed prefixes, stamp sources); never re-stamps.
+    `declared_encoding` has no default: the encoding the caller serves or trains, asserted against the stamp, or `None`,
+    which adopts the stamp and builds from `metadata.encoding_name`; `decode_override` is loud but never raises.
+    Raises: CheckpointStampError — not a v2 envelope, a missing block or disagreeing stamp sources; DeclaredEncodingMismatchError — the declared encoding is not the stamp's; ValueError — both declared_encoding and decode_override."""
     path = Path(path)
     payload = torch.load(path, weights_only=True, map_location="cpu")
 
@@ -667,10 +667,10 @@ def load_legacy_weights(
     declared_encoding: Any = None,
     decode_override: Any = None,
 ) -> Checkpoint:
-    """Read a pre-v2 artifact on its own surface. Arch comes from the declared or stamped
-    `encoding_name` -> registry spec -> the STAMP's arch kind -> `select_arch`, and is NEVER
-    shape-sniffed; the returned Checkpoint carries no synthetic run_id, content hash or
-    created_utc, because a legacy anchor is never re-stamped on read."""
+    """Read a pre-v2 artifact: arch from the declared (asserted against an embedded stamp) or stamped `encoding_name` ->
+    spec -> the STAMP's arch kind, NEVER shape-sniffed; no synthetic run_id, hash or created_utc (never re-stamped on read).
+    Raises: CheckpointStampError — no dict, no resolvable encoding or a disagreeing embedded config; DeclaredEncodingMismatchError
+    — the declared encoding is not the embedded stamp's; ValueError — both declared_encoding and decode_override."""
     if declared_encoding is not None and decode_override is not None:
         raise ValueError("declared_encoding and decode_override are mutually exclusive.")
 
@@ -692,8 +692,15 @@ def load_legacy_weights(
 
     _reject_killed_prefixes(model_state)
 
-    # Resolve the encoding: declared wins, else the embedded stamp. NEVER shape-sniffs.
-    resolved_enc = _stamp_name(declared_encoding) if declared_encoding is not None else meta.get("encoding_name")
+    # Resolve the encoding: the declared one, which must agree with an embedded stamp, else the stamp. NEVER shape-sniffs.
+    embedded_enc = meta.get("encoding_name")
+    if declared_encoding is not None and embedded_enc is not None and (
+            _stamp_name(declared_encoding) != _stamp_name(embedded_enc)):
+        raise DeclaredEncodingMismatchError(
+            f"declared_encoding={_stamp_name(declared_encoding)!r} disagrees with the legacy stamp "
+            f"metadata.encoding_name={_stamp_name(embedded_enc)!r} ({path.name}); refusing to silently override."
+        )
+    resolved_enc = _stamp_name(declared_encoding) if declared_encoding is not None else embedded_enc
     if not resolved_enc or not isinstance(resolved_enc, str):
         raise CheckpointStampError(
             f"{path.name}: cannot resolve a legacy encoding (no declared_encoding, no "
@@ -1136,6 +1143,7 @@ def resume_trainer(
     cls: type,
     path: str | Path,
     *,
+    declared_encoding: str | None,
     fallback_config: Mapping[str, Any] | None = None,
     config_overrides: Mapping[str, Any] | None = None,
     declared_keys: frozenset | set | None = None,
@@ -1147,12 +1155,13 @@ def resume_trainer(
     F1(A)/E0 frozen-key rules; lr is resume-state-owned (loud on an ignored declared override).
 
     Slice-2 consumer: `cls` is the `mantis.train.trainer.core.Trainer` class (passed by the
-    caller so this module has no top-level trainer edge). Gated by T-CK-18/19 at Slice 2.
+    caller so this module has no top-level trainer edge); `declared_encoding` is the launch config's, which builds the rest.
     """
     path = Path(path)
     raw = torch.load(path, weights_only=True, map_location="cpu")
     is_v2 = isinstance(raw, dict) and raw.get("schema_version") == CHECKPOINT_SCHEMA_VERSION
-    ck = load_checkpoint(path, device=device) if is_v2 else load_legacy_weights(path)
+    ck = (load_checkpoint(path, device=device, declared_encoding=declared_encoding) if is_v2
+          else load_legacy_weights(path, declared_encoding=declared_encoding))
 
     arch = ck.metadata.arch
     if arch is None:

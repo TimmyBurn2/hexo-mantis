@@ -511,7 +511,7 @@ def test_a_clean_run_at_the_minted_bound_leaves_one_stamped_checkpoint(
         f"{[p.name for p in (tmp_path / 'checkpoints').glob('*.quarantine')]}"
     )
 
-    ckpt = checkpoints.load_checkpoint(residents[0], expected_run_id=config.run_id)
+    ckpt = checkpoints.load_checkpoint(residents[0], expected_run_id=config.run_id, declared_encoding=None)
     assert ckpt.metadata.step == _MINTED_BOUND, (
         "the artefact is stamped at the TERMINUS, which is what makes it the run's product "
         f"rather than a mid-run resumption point; got {ckpt.metadata.step!r}"

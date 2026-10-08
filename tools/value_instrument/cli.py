@@ -55,7 +55,7 @@ def _outcomes(z: np.ndarray) -> np.ndarray:
 
 def read(a: argparse.Namespace) -> dict[str, Any]:
     """Read one stamped checkpoint's served net and write its rows and metrics. Raises: ValueError (no arch, a non-±1 outcome, a malformed ring), TraceMismatchError, CheckpointStampError, RuntimeError (a state that does not fit), OSError."""
-    ck = load_checkpoint(a.ckpt)
+    ck = load_checkpoint(a.ckpt, declared_encoding=None)  # adopts the stamp: the carried config names it
     if ck.metadata.arch is None:
         raise ValueError(f"{a.ckpt}: the stamp carries no architecture to build the net from")
     model = build_net(ck.metadata.arch)
