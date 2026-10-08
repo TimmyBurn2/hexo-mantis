@@ -94,6 +94,15 @@ def cmd_rings(a: argparse.Namespace) -> int:
                                               teacher_value(labels, train_rows), slots, encoding=ENCODING)
     rec["teacher_heldout"] = write_teacher_ring(out / "teacher_heldout.ring.bin", corpus, labels, held_rows, t_held,
                                                 teacher_value(labels, held_rows), slots, encoding=ENCODING)
+    held_ring = held_rows[corpus["source"][held_rows] == SRC_RING]
+    t_held_ring = {k: v[corpus["source"][held_rows] == SRC_RING] for k, v in t_held.items()}
+    rec["teacher_heldout_z"] = write_teacher_ring(out / "teacher_heldout_z.ring.bin", corpus, labels, held_ring,
+                                                  t_held_ring, corpus["outcome"][held_ring], slots, encoding=ENCODING,
+                                                  value_valid=corpus["value_valid"][held_ring].astype(bool))
+    v_t, z = teacher_value(labels, held_ring), corpus["outcome"][held_ring]
+    decided = corpus["value_valid"][held_ring].astype(bool) & (z != 0)
+    rec["teacher_value_v_z"] = {"rows": int(decided.sum()), "pearson": float(np.corrcoef(v_t[decided], z[decided])[0, 1]),
+                                "sign_agreement": float((np.sign(v_t[decided]) == np.sign(z[decided])).mean())}
     del t_train, t_held
     source = train_rows[np.random.default_rng(a.knownbad_seed).permutation(len(train_rows))]
     t_kb = compute_targets(corpus, labels, train_rows, radius=radius, source_rows=source)
@@ -141,6 +150,15 @@ def cmd_read(a: argparse.Namespace) -> int:
 
     spec = json.loads(a.spec.read_text(encoding="utf-8"))
     rec = verdict(spec, a.cells)
+    _write_json(a.out, rec)
+    print(json.dumps(rec, indent=1, default=str))
+    return 0
+
+
+def cmd_baseline(a: argparse.Namespace) -> int:
+    from .heldout import read_baseline
+
+    rec = read_baseline(a.ckpt, a.ring, batches=a.batches, batch_size=a.batch_size, threads=a.threads, seed=a.seed)
     _write_json(a.out, rec)
     print(json.dumps(rec, indent=1, default=str))
     return 0
@@ -217,6 +235,15 @@ def build_parser() -> argparse.ArgumentParser:
     rd.add_argument("--cells", type=Path, nargs="+", required=True, help="directories holding the cell sidecars")
     rd.add_argument("--out", type=Path, required=True)
     rd.set_defaults(func=cmd_read)
+    b = sub.add_parser("baseline", help="a net's top-1 agreement with the teacher and its value's correlation with z")
+    b.add_argument("--ckpt", type=Path, required=True)
+    b.add_argument("--ring", type=Path, required=True, help="the teacher-policy ring whose z is the game's")
+    b.add_argument("--batches", type=int, default=80)
+    b.add_argument("--batch-size", type=int, default=256)
+    b.add_argument("--threads", type=int, default=8)
+    b.add_argument("--seed", type=int, default=20261013)
+    b.add_argument("--out", type=Path, required=True)
+    b.set_defaults(func=cmd_baseline)
     return ap
 
 

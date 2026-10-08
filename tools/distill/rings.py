@@ -108,8 +108,9 @@ def _stones(moves: np.ndarray) -> list[tuple[int, int, int]]:
 
 
 def write_teacher_ring(path: Path, corpus: dict[str, np.ndarray], labels: dict[str, np.ndarray], rows: np.ndarray,
-                       targets: dict[str, np.ndarray], values: np.ndarray, slots: int, *, encoding: str) -> dict[str, float]:
-    """One teacher-labelled ring: the top-`slots` masses renormalised, α 0, every row a policy row, the teacher's value as z; returns the dropped-mass reads."""
+                       targets: dict[str, np.ndarray], values: np.ndarray, slots: int, *, encoding: str,
+                       value_valid: np.ndarray | None = None) -> dict[str, float]:
+    """One teacher-labelled ring: the top-`slots` masses renormalised, α 0, every row a policy row, `values` as z (valid unless `value_valid` says not); returns the dropped-mass reads."""
     buf = HexgBuffer(max(len(rows), 8), encoding, slots)
     kept = targets["mass"][:, :slots].astype(np.float64).sum(axis=1)
     for j, i in enumerate(rows):
@@ -122,8 +123,9 @@ def write_teacher_ring(path: Path, corpus: dict[str, np.ndarray], labels: dict[s
         probs = targets["mass"][j, :slots][live].astype(np.float64) / kept[j]
         visits = [(int(cq[c]), int(cr[c]), float(p)) for c, p in zip(cells, probs, strict=True)]
         buf.push_graph_position(_stones(moves), visits, int(corpus["current_player"][i]),
-                                int(corpus["moves_remaining"][i]), int(corpus["k"][i]), True, float(values[j]), True,
-                                int(corpus["game_length"][i]), int(corpus["game"][i]), 0.0)
+                                int(corpus["moves_remaining"][i]), int(corpus["k"][i]), True, float(values[j]),
+                                True if value_valid is None else bool(value_valid[j]), int(corpus["game_length"][i]),
+                                int(corpus["game"][i]), 0.0)
     buf.save_to_path(str(path))
     dropped = 1.0 - kept
     return {"rows": int(len(rows)), "slots": slots, "dropped_mass_mean": float(dropped.mean()),
