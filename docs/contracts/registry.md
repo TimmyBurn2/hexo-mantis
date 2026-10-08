@@ -19,9 +19,11 @@ errors before reporting. `empty_edges` (REQUIRED since schema v5, `"kept"` or `"
 default) says whether the builder emits the axis edges joining two empty cells; under `"pruned"`
 the builder's producer verify refuses any such edge (`PrunedEmptyEdge`). The registered set is
 pruned to its live consumers — every entry is named by ≥ 1 config or ≥ 1 anchor artifact — with
-one stated exception: `gnn_axis_r8_pruned` (ENCODE-1, R388(f)) lands as a capability no config
-names until a run adopts it. Repaired 2026-10-08: no gate enforces the consumer claim (gate 11
-refuses silent encoding fallbacks and checks no consumer).
+one stated exception: `gnn_axis_r8_pruned` (ENCODE-1, R388(f)) stays a landed capability, not a
+lever (R389(a)), and no config names it until a run adopts it. The encoding-consumer check is the
+registry census test (`crates/mantis-encoding/tests/registry_census.rs`, which pins the registered
+set by name, so a row lands or leaves only with its census edit); gate 11 is unchanged and refuses
+silent encoding fallbacks (R389(a), LAW-08's annotation). Repaired 2026-10-08.
 
 ## Who asserts what where
 - `registry/parse.rs` — per-field parse + unknown-key reject + `representation` required

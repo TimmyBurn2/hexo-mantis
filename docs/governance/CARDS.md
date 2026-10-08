@@ -150,9 +150,10 @@ Both were found by running the gate set rather than by reading it, and both are 
 - **CARD-PRUNED-CAPS — OPENED by ENCODE-1, CARDED for any pruned run: the fused and micro-batch caps and the served-graph
   bucket floors were fitted on kept graphs (~24 edges per node; pruned ~4)**, so pruned parts pad toward kept edge
   counts and E2's served gain is understated; a pruned run re-fits them (an arch-scoped mint).
-- **CARD-LAW08-GATE11 — OPENED by ENCODE-1, OWED (an operator annotation): LAWS.md says LAW-08 is pinned "for encodings,
-  gate 11", but gate 11 refuses silent encoding fallbacks and checks no consumer;** no test checks that a registered
-  encoding is named by a config. `docs/contracts/registry.md` was repaired in place and states the pruned row's exception.
+- **CARD-LAW08-GATE11 — LANDED by R389(a) (2026-10-08): LAW-08 is annotated — the encoding-consumer check is the
+  registry census; gate 11 is unchanged.** Opened by ENCODE-1 because LAWS.md said LAW-08 was pinned "for encodings,
+  gate 11" while gate 11 checks no consumer; `docs/contracts/registry.md` names the census test and the pruned row's
+  exception.
 - **CARD-GIL-TEST-RACE — OPENED by ENCODE-1, CARDED: `tests/bridge/test_graph_wire_adv.py`'s GIL-release pin races** —
   its control's stall loop never runs when the worker finishes inside `start()`, so it read 0.0 ms twice inside a large
   batch and passed alone three times.
