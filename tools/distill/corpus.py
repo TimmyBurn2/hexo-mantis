@@ -49,7 +49,7 @@ def position_key(stone_sum: np.ndarray, ply: np.ndarray, turns: np.ndarray) -> n
 
 
 def turns_of(plies: np.ndarray | int) -> np.ndarray:
-    """A game's compound turns from its stone count: the opener's single stone, then two a turn (the ring's game_length)."""
+    """The ring's game_length for a game of `plies` stones: ceil(plies / 2), as the producer stores it."""
     return (np.asarray(plies) + 1) // 2
 
 
@@ -270,8 +270,7 @@ def build_corpus(ring_paths: Sequence[Path], game_paths: Sequence[Path], *, run_
     summary.update(rows=int(len(out["game"])), ring_rows=int((out["source"] == SRC_RING).sum()),
                    opening_rows=int(openings_n), opening_distinct_orders=len(distinct),
                    heldout_rows=int(out["heldout"].sum()), heldout_games=int(len(held)),
-                   games_used=int(len(np.unique(out["game"][out["source"] == SRC_RING]))),
-                   game_uids_sha_input=len(games.uid))
+                   games_used=int(len(np.unique(out["game"][out["source"] == SRC_RING]))))
     return out, {"summary": summary, "game_uid": games.uid}
 
 

@@ -43,6 +43,8 @@ class Teacher:
     """The pinned network (sha-verified) in an ONNX Runtime session, TF32 off on CUDA; Raises: TeacherUnavailable — no onnxruntime or no CUDA served; RungUnresolvable — the pin or network does not resolve."""
 
     def __init__(self, *, device: str, variant: str = DEFAULT_VARIANT, vendor_root: Path | None = None) -> None:
+        if device not in ("cuda", "cpu"):
+            raise TeacherUnavailable(f"device {device!r} is neither cuda nor cpu")
         assets = locate_six(vendor_root or find_vendor_root(), variant)
         try:
             import onnxruntime as ort  # pyright: ignore[reportMissingImports]  # the `teacher` extra
@@ -69,7 +71,7 @@ class Teacher:
 
     def evaluate(self, planes: np.ndarray) -> Outputs:
         """Raw heads for a batch of planes `[B, 8, 25, 25]` float32."""
-        policy, _opponent, value, score = self.session.run(None, {"planes": np.ascontiguousarray(planes, np.float32)})
+        policy, value, score = self.session.run(["policy", "value", "score"], {"planes": np.ascontiguousarray(planes, np.float32)})
         return Outputs(policy=np.asarray(policy, np.float32), value_logits=np.asarray(value, np.float32),
                        score=np.asarray(score, np.float32))
 

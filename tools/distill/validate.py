@@ -48,7 +48,7 @@ def engine_stones(engine: SixEngine, moves: np.ndarray, *, radius: int, nodes: i
 
 def validate(corpus: dict[str, np.ndarray], teacher: Teacher, cpu_teacher: Teacher, *, n: int, seed: int,
              radius: int, log: Callable[[str], None] = print) -> dict[str, Any]:
-    """V1 on the first `n` screened held-out ring rows in a seeded order, with the second-stone, gross and value rows beside."""
+    """V1 on the first `n` screened held-out ring rows in a seeded order, with the second-stone, gross and value rows beside; Raises: SixEngineError, RungUnresolvable — the engine does not start or answer; RuntimeError — a failed search."""
     rows = np.nonzero((corpus["source"] == SRC_RING) & corpus["heldout"])[0]
     order = rows[np.random.default_rng(seed).permutation(len(rows))]
     engine = SixEngine(locate_six(find_vendor_root(), teacher.variant), device="cpu")

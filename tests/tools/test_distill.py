@@ -203,8 +203,9 @@ def _sidecar(directory: Path, ckpt: str, suffix: str, wr: float, half: float = 0
     directory.mkdir(parents=True, exist_ok=True)
     wins = round(wr * 576)
     (directory / f"{ckpt}.{suffix}.full.json").write_text(json.dumps({
-        "rc": 0, "games": 576, "wins": wins, "draws": 0, "wr": wins / 576, "wr_ci_lower": wr - half,
-        "wr_ci_upper": wr + half, "six_findings": {"count": forfeits}}))
+        "rc": 0, "games": 576, "eff_n": 576, "wins": wins, "draws": 0, "wr": wins / 576, "wr_ci_lower": wr - half,
+        "wr_ci_upper": wr + half, "six_findings": {"count": forfeits}, "checkpoint_sha256": f"sha-{ckpt}",
+        "unit": suffix, "started_utc": f"{ckpt}-{suffix}"}))
 
 
 def _spec(tmp: Path, arms: dict[str, tuple[str, float, float]], ref=(0.32, 0.63), ctl=(0.32, 0.63), kb=0.05) -> dict:
@@ -236,16 +237,69 @@ def test_the_read_outcomes(tmp_path, d):
     assert got["halt"] and not got["control_near"] and got["outcome"] == "HALT"
     got = V(_spec(tmp_path / "f", {"n1": ("narrow", *up)}, kb=0.25), [tmp_path / "f" / "cells"])
     assert got["halt"] and not got["knownbad_valid"]
+    got = V(_spec(tmp_path / "g", {"n1": ("narrow", *up)}, ctl=up), [tmp_path / "g" / "cells"])
+    assert got["control_above_line"] and abs(got["arms"]["n1"]["v_control"]["rung16"]["delta"]) < 1e-12
 
 
-def test_forfeits_leave_our_wins(tmp_path, d):
+def test_a_copied_receipt_pools_once(tmp_path, d):
+    """The same cell mirrored into a second root is one reading of the reference, not two."""
+    spec = _spec(tmp_path / "a", {"n1": ("narrow", 0.40, 0.70)})
+    copy = tmp_path / "copy"
+    copy.mkdir()
+    for f in (tmp_path / "a" / "cells").glob("ref.ckpt.*"):
+        (copy / f.name).write_text(f.read_text())
+    one = d["read"].verdict(spec, [tmp_path / "a" / "cells"])
+    two = d["read"].verdict(spec, [tmp_path / "a" / "cells", copy])
+    assert one["reference"]["rung16"]["logit"] == two["reference"]["rung16"]["logit"]
+    assert one["reference"]["rung16"]["se"] == two["reference"]["rung16"]["se"]
+
+
+def test_forfeits_leave_our_wins_and_the_interval(tmp_path, d):
     _sidecar(tmp_path, "x.ckpt", "ladder455_n16", 0.5, forfeits=48)
     cell = d["read"].read_cell(tmp_path / "x.ckpt.ladder455_n16.full.json")
-    assert cell.wr == pytest.approx((288 - 48) / 528)
+    assert cell.wr == pytest.approx((288 - 48) / 528) and cell.games == 528
+    assert cell.lo < cell.wr < cell.hi and (cell.lo, cell.hi) != (0.46, 0.54)
 
 
-def test_the_lineage_tag(d):
+def test_the_lineage_tag_and_a_device_the_teacher_refuses(d):
     assert d["teacher"].lineage_tag("f2b5ec2d4d7ec42e", "gen0455") == "six-f2b5ec2-gen455"
+    with pytest.raises(d["teacher"].TeacherUnavailable, match="neither"):
+        d["teacher"].Teacher(device="mps")
+
+
+def test_the_rings_command_leaves_the_empty_board_out_and_writes_provenance(tmp_path, d):
+    """Teacher rings start at ply 1 (Six never evaluates the empty board); every ring names its lineage beside it."""
+    out, _ = _corpus(tmp_path, d)
+    labels = _labels(out, d)
+    root = tmp_path / "corpus"
+    (root / "labels").mkdir(parents=True)
+    np.savez(root / "corpus.npz", **dict(out))
+    for key, arr in labels.items():
+        np.save(root / "labels" / f"{key}.npy", arr)
+    (root / "labels" / "labels.json").write_text(json.dumps({"teacher": {"lineage": "six-aaaaaaa-gen1"}}))
+    cli = importlib.import_module("distill.cli")
+    assert cli.main(["rings", "--corpus", str(root), "--check-rows", "10"]) == 0
+    rings = root / "rings"
+    labelled = int(((~out["heldout"]) & (out["k"] >= 1)).sum())
+    assert R.load_ring(rings / "teacher_train.ring.bin").header.size == labelled
+    assert (R.load_ring(rings / "teacher_train.ring.bin").ply_index >= 1).all()
+    Rg = d["rings"]
+    assert Rg.ring_lineage(rings / "teacher_train.ring.bin") == ("six-aaaaaaa-gen1",)
+    assert Rg.ring_lineage(rings / "knownbad_train.ring.bin") == ("six-aaaaaaa-gen1",)
+    assert Rg.ring_lineage(rings / "control_train.ring.bin") == ()
+    with pytest.raises(FileNotFoundError):
+        Rg.ring_lineage(tmp_path / "nowhere.ring.bin")
+
+
+def _a_graph_config() -> Path:
+    """A minted config of the census whose encoding is the harness's (any will do: the arm overrides its shape)."""
+    import yaml
+
+    for path in sorted((Path(__file__).resolve().parents[2] / "configs").glob("*.yaml")):
+        body = yaml.safe_load(path.read_text())
+        if (body.get("identity") or {}).get("encoding") == ENC and (body.get("identity") or {}).get("arch_kind"):
+            return path
+    raise AssertionError(f"no minted config declares {ENC}")
 
 
 @pytest.mark.integration
@@ -262,19 +316,20 @@ def test_a_tiny_arm_trains_saves_stamped_and_a_warm_arm_inherits(tmp_path, d):
     targets = Rg.compute_targets(out, labels, rows, radius=RADIUS, workers=2, chunk=16, log=lambda _s: None)
     ring = tmp_path / "teacher.ring.bin"
     Rg.write_teacher_ring(ring, out, labels, rows, targets, Rg.teacher_value(labels, rows), 64, encoding=ENC)
-    base = Path(__file__).resolve().parents[2] / "configs" / "run11a2.yaml"
+    Rg.write_provenance(ring, kind="teacher_train", lineage=["six-aaaaaaa-gen1"], record={})
+    base = _a_graph_config()
     recipe = T.Recipe(base_config=base, steps=3, save_at=(2, 3), lr=1e-3, eta_min=1e-4, seed=11)
-    arm = T.ArmSpec(run_id="tinyarm", hidden=16, layers=1, ring=ring, warm_start=None, value_mask_p=0.0,
-                    lineage=("six-aaaaaaa-gen1",))
+    arm = T.ArmSpec(run_id="tinyarm", hidden=16, layers=1, ring=ring, warm_start=None, value_mask_p=0.0)
     rec = T.train_arm(arm, recipe, tmp_path / "arm", device="cpu", heldout_ring=ring, heldout_every=1000,
                       heldout_batches=1, sample_threads=1, caps_override=None, log=lambda _s: None)
     assert sorted(rec["saves"]) == [2, 3] and rec["skipped_steps"] == 0
+    assert len(list((tmp_path / "arm" / "checkpoints").glob("*.ckpt"))) == 2, "a periodic save beside the named ones"
     ck = load_checkpoint(rec["saves"][3]["path"], declared_encoding=ENC)
     assert ck.metadata.lineage == ("six-aaaaaaa-gen1",)
     assert (ck.metadata.arch.hidden, ck.metadata.arch.num_layers) == (16, 1)
     assert ck.config["train"]["scheduler_t_max"] == 3 and ck.config["identity"]["warm_start"] is None
     warm = T.ArmSpec(run_id="tinywarm", hidden=16, layers=1, ring=ring, warm_start=Path(rec["saves"][3]["path"]),
-                     value_mask_p=0.125, lineage=("six-aaaaaaa-gen1",))
+                     value_mask_p=0.125)
     rec_w = T.train_arm(warm, recipe, tmp_path / "warm", device="cpu", heldout_ring=None, heldout_every=1000,
                         heldout_batches=1, sample_threads=1, caps_override=None, log=lambda _s: None)
     assert rec_w["net_hash_start"] == rec["saves"][3]["net_hash"]

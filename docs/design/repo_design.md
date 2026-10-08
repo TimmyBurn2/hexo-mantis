@@ -275,6 +275,12 @@ ADDED (v7 → v8). `docs/contracts/run_config_schema.md` is the version authorit
        declared arch (`mantis.selfplay.pool.served_copy`), written by ActorSync from the LEARNER's
        weights and never read by the learner, so the actors serve the learner while deploy, gate
        and follower read the shadow (`docs/contracts/checkpoint_envelope.md`). -->
+  <!-- AMENDMENT (R376(f) / R389(c), DISTILL-1, 2026-10-08): `metadata` gains ONE key, `lineage` —
+       the teacher tags a net learned from (a list of non-empty strings). Every new stamp writes it,
+       empty without a teacher; an older stamp has none and reads empty. It is not a config key: a warm
+       start inherits its source stamp's lineage, a resume restores it, the strip keeps it verbatim, and
+       only a tool that trains on a teacher's labels adds a tag (tools/distill, from its ring's provenance).
+       A malformed lineage refuses the write (`docs/contracts/checkpoint_envelope.md`). -->
 - Stamp immutability, the one envelope format and the one loader are LAW-12 (amendment
   R370(a): stated once, there). Mechanics: a save that cannot stamp fails loud, with a
   quarantine path if the run must survive; the loader is shared by train / eval / bots and

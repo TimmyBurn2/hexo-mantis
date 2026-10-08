@@ -35,9 +35,9 @@ key is ABSENT on an EMA-off stamp — the truthful shape, not a `null`.
 **`metadata`** — `encoding_name` (REQUIRED, LAW-11, no fallback), `run_id`, `step`,
 `commit_sha` (`"unknown"` outside a git checkout — never blocks a write), `created_utc`
 (ISO-8601 Z, stamped once), `arch` (the declared `GnnArch` dataclass — the SOLE arch
-source at load), optional `corpus_sha256`, optional `lineage` (the teacher tags this net learned from, R376(f):
-a list of non-empty strings, absent reading empty; a warm start inherits its source's, a resume restores it and the
-strip keeps it verbatim).
+source at load), optional `corpus_sha256`, `lineage` (the teacher tags this net learned from, R376(f): a list of
+non-empty strings written on every new stamp, empty without a teacher; a stamp written before the key reads empty; a
+warm start inherits its source's, a resume restores it and the strip keeps it verbatim).
 
 ## Who asserts what where
 

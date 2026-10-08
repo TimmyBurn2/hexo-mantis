@@ -1,6 +1,7 @@
 """Frozen HEXG rings the production trainer reads: the teacher's targets, the run's own targets (the control), and the teacher's labels permuted across positions (the known-bad)."""
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Callable
 from multiprocessing import get_context
@@ -22,8 +23,10 @@ COVERAGE = 0.9999
 QUANTILE = 0.001
 #: Our empty board's legal set: the 5×5 axial square Board::new() seeds.
 EMPTY_BOARD_HALF = 2
-#: The control keeps run11's explicit-slot count, gumbel_m.
-CONTROL_SLOTS = 16
+#: Beside every ring written here: what it holds and the teachers its labels came from.
+PROVENANCE_SUFFIX = ".provenance.json"
+#: Teacher-labelled rings start at this ply: Six's engine never evaluates its net on the empty board.
+TEACHER_MIN_PLY = 1
 
 
 def legal_support(moves: np.ndarray, center: tuple[int, int], radius: int) -> np.ndarray:
@@ -72,7 +75,7 @@ def _targets_chunk(bounds: tuple[int, int]) -> tuple[np.ndarray, np.ndarray, np.
 def compute_targets(corpus: dict[str, np.ndarray], labels: dict[str, np.ndarray], rows: np.ndarray, *,
                     radius: int, source_rows: np.ndarray | None = None, kmax: int = SLOT_CHOICES[-1],
                     workers: int = 8, chunk: int = 4096, log: Callable[[str], None] = print) -> dict[str, np.ndarray]:
-    """Each row's teacher target on its own legal cells, read from `source_rows`' logits (the known-bad's permutation) or its own."""
+    """Each row's teacher target on its own legal cells, read from `source_rows`' logits (the known-bad's permutation) or its own; Raises: OSError — a worker pool cannot fork."""
     _SHARED.update(corpus=corpus, policy=labels["policy"], center=labels["center"], rows=rows,
                    source=rows if source_rows is None else source_rows, radius=radius, kmax=kmax)
     bounds = [(s, min(s + chunk, len(rows))) for s in range(0, len(rows), chunk)]
@@ -133,11 +136,12 @@ def write_teacher_ring(path: Path, corpus: dict[str, np.ndarray], labels: dict[s
 
 
 def write_control_ring(path: Path, corpus: dict[str, np.ndarray], rows: np.ndarray, *, encoding: str) -> dict[str, int]:
-    """The ring rows with their own targets exactly as the run stored them (explicit masses, α, z and validity)."""
+    """The ring rows with their own targets exactly as the run stored them (explicit masses, α, z and validity); Raises: ValueError — a row that is not a ring row."""
     if not np.all(corpus["source"][rows] == SRC_RING):
         raise ValueError("the control ring holds ring rows only: an opening has no own targets")
     off = np.concatenate([[0], np.cumsum(corpus["n_visits"])]).astype(np.int64)
-    buf = HexgBuffer(max(len(rows), 8), encoding, CONTROL_SLOTS)
+    slots = int(corpus["n_visits"][rows].max())
+    buf = HexgBuffer(max(len(rows), 8), encoding, slots)
     for i in rows:
         a, b = int(off[i]), int(off[i + 1])
         visits = [(int(q), int(r), float(p)) for q, r, p in zip(corpus["visit_q"][a:b], corpus["visit_r"][a:b],
@@ -149,7 +153,22 @@ def write_control_ring(path: Path, corpus: dict[str, np.ndarray], rows: np.ndarr
                                 float(corpus["tail_mass"][i]), float(corpus["root_value"][i]),
                                 bool(corpus["root_value_valid"][i]))
     buf.save_to_path(str(path))
-    return {"rows": int(len(rows)), "slots": CONTROL_SLOTS}
+    return {"rows": int(len(rows)), "slots": slots}
+
+
+def write_provenance(ring: Path, *, kind: str, lineage: list[str], record: dict[str, Any]) -> None:
+    """The sidecar a trainer reads beside `ring`: what it holds and the teachers its labels came from."""
+    payload = {"kind": kind, "lineage": lineage, **record}
+    Path(str(ring) + PROVENANCE_SUFFIX).write_text(json.dumps(payload, indent=1, default=str) + "\n", encoding="utf-8")
+
+
+def ring_lineage(ring: Path) -> tuple[str, ...]:
+    """The teachers a ring's labels came from, read from its provenance; Raises: FileNotFoundError — no provenance beside it; ValueError — a malformed one."""
+    prov = json.loads(Path(str(ring) + PROVENANCE_SUFFIX).read_text(encoding="utf-8"))
+    lineage = prov.get("lineage")
+    if not isinstance(lineage, list) or not all(isinstance(t, str) and t for t in lineage):
+        raise ValueError(f"{ring.name}: its provenance names no lineage list")
+    return tuple(lineage)
 
 
 def legal_check(corpus: dict[str, np.ndarray], labels: dict[str, np.ndarray], rows: np.ndarray, *, radius: int,

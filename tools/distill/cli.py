@@ -12,6 +12,25 @@ import numpy as np
 from mantis.encoding import lookup
 from mantis.util.hashing import sha256_file
 
+from .corpus import SRC_RING, build_corpus
+from .heldout import read_baseline, read_kl
+from .label import label, open_labels
+from .read import verdict
+from .rings import (
+    TEACHER_MIN_PLY,
+    choose_slots,
+    compute_targets,
+    empty_board_mass,
+    legal_check,
+    teacher_value,
+    write_control_ring,
+    write_provenance,
+    write_teacher_ring,
+)
+from .teacher import Teacher
+from .train import ArmSpec, Recipe, train_arm
+from .validate import validate
+
 ENCODING = "gnn_axis_r8"
 
 
@@ -26,8 +45,6 @@ def load_corpus(directory: Path) -> dict[str, np.ndarray]:
 
 
 def cmd_corpus(a: argparse.Namespace) -> int:
-    from .corpus import build_corpus
-
     a.out.mkdir(parents=True, exist_ok=False)
     games = sorted(a.games.glob(f"games_{a.run_id}_seg*.jsonl"))
     out, meta = build_corpus(a.rings, games, run_id=a.run_id, heldout_rows=a.heldout_rows, split_seed=a.split_seed,
@@ -43,9 +60,6 @@ def cmd_corpus(a: argparse.Namespace) -> int:
 
 
 def cmd_validate(a: argparse.Namespace) -> int:
-    from .teacher import Teacher
-    from .validate import validate
-
     corpus = load_corpus(a.corpus)
     res = validate(corpus, Teacher(device=a.device), Teacher(device="cpu"), n=a.n, seed=a.seed,
                    radius=lookup(ENCODING).legal_move_radius)
@@ -55,9 +69,6 @@ def cmd_validate(a: argparse.Namespace) -> int:
 
 
 def cmd_label(a: argparse.Namespace) -> int:
-    from .label import label
-    from .teacher import Teacher
-
     corpus = load_corpus(a.corpus)
     rec = label(corpus, Teacher(device=a.device), a.corpus / "labels", radius=lookup(ENCODING).legal_move_radius,
                 batch=a.batch, workers=a.workers)
@@ -67,51 +78,50 @@ def cmd_label(a: argparse.Namespace) -> int:
 
 
 def cmd_rings(a: argparse.Namespace) -> int:
-    from .corpus import SRC_RING
-    from .label import open_labels
-    from .rings import (
-        choose_slots,
-        compute_targets,
-        empty_board_mass,
-        legal_check,
-        teacher_value,
-        write_control_ring,
-        write_teacher_ring,
-    )
-
     corpus, labels = load_corpus(a.corpus), open_labels(a.corpus / "labels")
+    teacher = json.loads((a.corpus / "labels" / "labels.json").read_text(encoding="utf-8"))["teacher"]
     radius = lookup(ENCODING).legal_move_radius
-    out = a.corpus / "rings"
+    out = a.corpus / a.out_name
     out.mkdir(exist_ok=False)
     held = corpus["heldout"]
-    train_rows, held_rows = np.nonzero(~held)[0], np.nonzero(held)[0]
+    labelled = corpus["k"] >= TEACHER_MIN_PLY
+    train_rows, held_rows = np.nonzero(~held & labelled)[0], np.nonzero(held & labelled)[0]
+    tag = [teacher["lineage"]]
+    rec: dict[str, Any] = {"encoding": ENCODING, "radius": radius, "teacher": teacher, "teacher_min_ply": TEACHER_MIN_PLY,
+                           "empty_board_rows_left_out": int((~labelled).sum())}
     t_train = compute_targets(corpus, labels, train_rows, radius=radius)
-    t_held = compute_targets(corpus, labels, held_rows, radius=radius)
-    slots, quantiles = choose_slots(np.concatenate([t_train["mass"], t_held["mass"]]))
-    rec: dict[str, Any] = {"slots": slots, "slot_quantiles": quantiles, "encoding": ENCODING, "radius": radius,
-                           "support_mean": float(t_train["n_support"].mean()), "support_max": int(t_train["n_support"].max())}
-    rec["teacher_train"] = write_teacher_ring(out / "teacher_train.ring.bin", corpus, labels, train_rows, t_train,
-                                              teacher_value(labels, train_rows), slots, encoding=ENCODING)
-    rec["teacher_heldout"] = write_teacher_ring(out / "teacher_heldout.ring.bin", corpus, labels, held_rows, t_held,
-                                                teacher_value(labels, held_rows), slots, encoding=ENCODING)
-    held_ring = held_rows[corpus["source"][held_rows] == SRC_RING]
-    t_held_ring = {k: v[corpus["source"][held_rows] == SRC_RING] for k, v in t_held.items()}
-    rec["teacher_heldout_z"] = write_teacher_ring(out / "teacher_heldout_z.ring.bin", corpus, labels, held_ring,
-                                                  t_held_ring, corpus["outcome"][held_ring], slots, encoding=ENCODING,
-                                                  value_valid=corpus["value_valid"][held_ring].astype(bool))
-    v_t, z = teacher_value(labels, held_ring), corpus["outcome"][held_ring]
-    decided = corpus["value_valid"][held_ring].astype(bool) & (z != 0)
-    rec["teacher_value_v_z"] = {"rows": int(decided.sum()), "pearson": float(np.corrcoef(v_t[decided], z[decided])[0, 1]),
-                                "sign_agreement": float((np.sign(v_t[decided]) == np.sign(z[decided])).mean())}
-    del t_train, t_held
-    source = train_rows[np.random.default_rng(a.knownbad_seed).permutation(len(train_rows))]
-    t_kb = compute_targets(corpus, labels, train_rows, radius=radius, source_rows=source)
-    rec["knownbad_train"] = write_teacher_ring(out / "knownbad_train.ring.bin", corpus, labels, train_rows, t_kb,
-                                               teacher_value(labels, source), slots, encoding=ENCODING)
-    rec["knownbad_seed"] = a.knownbad_seed
-    del t_kb
-    control_rows = train_rows[corpus["source"][train_rows] == SRC_RING]
-    rec["control_train"] = write_control_ring(out / "control_train.ring.bin", corpus, control_rows, encoding=ENCODING)
+    slots, quantiles = choose_slots(t_train["mass"])
+    rec.update(slots=slots, slot_quantiles=quantiles, support_mean=float(t_train["n_support"].mean()),
+               support_max=int(t_train["n_support"].max()))
+    if "teacher" in a.only:
+        t_held = compute_targets(corpus, labels, held_rows, radius=radius)
+        for name, rows, t in (("teacher_train", train_rows, t_train), ("teacher_heldout", held_rows, t_held)):
+            rec[name] = write_teacher_ring(out / f"{name}.ring.bin", corpus, labels, rows, t, teacher_value(labels, rows),
+                                           slots, encoding=ENCODING)
+            write_provenance(out / f"{name}.ring.bin", kind=name, lineage=tag, record=rec[name])
+        ring_held = corpus["source"][held_rows] == SRC_RING
+        held_ring = held_rows[ring_held]
+        rec["teacher_heldout_z"] = write_teacher_ring(
+            out / "teacher_heldout_z.ring.bin", corpus, labels, held_ring, {k: v[ring_held] for k, v in t_held.items()},
+            corpus["outcome"][held_ring], slots, encoding=ENCODING, value_valid=corpus["value_valid"][held_ring].astype(bool))
+        write_provenance(out / "teacher_heldout_z.ring.bin", kind="teacher_heldout_z", lineage=tag,
+                         record=rec["teacher_heldout_z"])
+        v_t, z = teacher_value(labels, held_ring), corpus["outcome"][held_ring]
+        decided = corpus["value_valid"][held_ring].astype(bool) & (z != 0)
+        rec["teacher_value_v_z"] = {"rows": int(decided.sum()), "pearson": float(np.corrcoef(v_t[decided], z[decided])[0, 1]),
+                                    "sign_agreement": float((np.sign(v_t[decided]) == np.sign(z[decided])).mean())}
+    del t_train
+    if "knownbad" in a.only:
+        source = train_rows[np.random.default_rng(a.knownbad_seed).permutation(len(train_rows))]
+        t_kb = compute_targets(corpus, labels, train_rows, radius=radius, source_rows=source)
+        rec["knownbad_train"] = write_teacher_ring(out / "knownbad_train.ring.bin", corpus, labels, train_rows, t_kb,
+                                                   teacher_value(labels, source), slots, encoding=ENCODING)
+        rec["knownbad_seed"] = a.knownbad_seed
+        write_provenance(out / "knownbad_train.ring.bin", kind="knownbad_train", lineage=tag, record=rec["knownbad_train"])
+    if "control" in a.only:
+        control_rows = np.nonzero(~held & (corpus["source"] == SRC_RING))[0]
+        rec["control_train"] = write_control_ring(out / "control_train.ring.bin", corpus, control_rows, encoding=ENCODING)
+        write_provenance(out / "control_train.ring.bin", kind="control_train", lineage=[], record=rec["control_train"])
     sample = np.sort(np.random.default_rng(a.check_seed).choice(train_rows, size=min(a.check_rows, len(train_rows)),
                                                                  replace=False))
     rec["legal_check"] = legal_check(corpus, labels, sample, radius=radius, encoding=ENCODING)
@@ -123,10 +133,8 @@ def cmd_rings(a: argparse.Namespace) -> int:
 
 
 def cmd_train(a: argparse.Namespace) -> int:
-    from .train import ArmSpec, Recipe, train_arm
-
     arm = ArmSpec(run_id=a.run_id, hidden=a.hidden, layers=a.layers, ring=a.ring, warm_start=a.warm_start,
-                  value_mask_p=a.value_mask, lineage=tuple(a.lineage))
+                  value_mask_p=a.value_mask)
     recipe = Recipe(base_config=a.base_config, steps=a.steps, save_at=tuple(a.save_at), lr=a.lr, eta_min=a.eta_min,
                     seed=a.seed)
     rec = train_arm(arm, recipe, a.out, device=a.device, heldout_ring=a.heldout_ring, heldout_every=a.heldout_every,
@@ -137,8 +145,6 @@ def cmd_train(a: argparse.Namespace) -> int:
 
 
 def cmd_kl(a: argparse.Namespace) -> int:
-    from .heldout import read_kl
-
     rec = read_kl(a.ckpts, a.heldout_ring, batches=a.batches, batch_size=a.batch_size, threads=a.threads, seed=a.seed)
     _write_json(a.out, rec)
     print(json.dumps(rec, indent=1, default=str))
@@ -146,8 +152,6 @@ def cmd_kl(a: argparse.Namespace) -> int:
 
 
 def cmd_read(a: argparse.Namespace) -> int:
-    from .read import verdict
-
     spec = json.loads(a.spec.read_text(encoding="utf-8"))
     rec = verdict(spec, a.cells)
     _write_json(a.out, rec)
@@ -156,8 +160,6 @@ def cmd_read(a: argparse.Namespace) -> int:
 
 
 def cmd_baseline(a: argparse.Namespace) -> int:
-    from .heldout import read_baseline
-
     rec = read_baseline(a.ckpt, a.ring, batches=a.batches, batch_size=a.batch_size, threads=a.threads, seed=a.seed)
     _write_json(a.out, rec)
     print(json.dumps(rec, indent=1, default=str))
@@ -197,6 +199,9 @@ def build_parser() -> argparse.ArgumentParser:
     rg.add_argument("--knownbad-seed", type=int, default=20261010)
     rg.add_argument("--check-seed", type=int, default=20261012)
     rg.add_argument("--check-rows", type=int, default=20_000)
+    rg.add_argument("--only", nargs="+", choices=("teacher", "knownbad", "control"),
+                    default=["teacher", "knownbad", "control"])
+    rg.add_argument("--out-name", default="rings", help="the rings directory under the corpus")
     rg.set_defaults(func=cmd_rings)
     t = sub.add_parser("train", help="one arm through the production trainer on a frozen ring")
     t.add_argument("--ring", type=Path, required=True)
@@ -205,7 +210,6 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--layers", type=int, required=True)
     t.add_argument("--warm-start", type=Path, default=None, help="a stamped checkpoint whose deploy net seeds the arm")
     t.add_argument("--value-mask", type=float, required=True, help="train.value_mask_redraw_p (0 is off)")
-    t.add_argument("--lineage", nargs="*", default=[], help="teacher tags the ring's labels came from")
     t.add_argument("--base-config", type=Path, required=True)
     t.add_argument("--steps", type=int, default=15_000)
     t.add_argument("--save-at", type=int, nargs="+", default=[10_000, 15_000])

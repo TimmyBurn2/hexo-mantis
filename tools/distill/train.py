@@ -1,6 +1,7 @@
 """One supervised arm on a frozen ring through the production trainer: the base recipe's config with the arm's shape, seeded, saved at the panel's steps."""
 from __future__ import annotations
 
+import importlib
 import json
 import subprocess
 import time
@@ -17,7 +18,6 @@ from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.config.resolve.sample_threads import resolve_sample_threads
-from mantis.diagnostics.ring_reader import _read_header
 from mantis.model import build_net
 from mantis.model.identity import net_param_hash
 from mantis.train.checkpoints import deploy_state, load_checkpoint
@@ -29,11 +29,14 @@ from mantis.train.coordinator.dispatch import (
 from mantis.train.orchestrator import init_trainer
 from mantis.util.determinism import seed_everything
 from mantis.util.hashing import sha256_file
+from mantis.util.loadpkg import load_tools_package
+
+from .rings import ring_lineage
 
 
 @dataclass(frozen=True)
 class ArmSpec:
-    """What makes one arm: its shape, start, ring, value mask and the teachers its labels came from."""
+    """What makes one arm: its shape, start, ring and value mask (the teachers come with the ring's provenance)."""
 
     run_id: str
     hidden: int
@@ -41,7 +44,6 @@ class ArmSpec:
     ring: Path
     warm_start: Path | None
     value_mask_p: float
-    lineage: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -68,7 +70,7 @@ class _JsonlSink:
 
 
 def warm_start_row(path: Path, encoding: str) -> dict[str, Any]:
-    """`identity.warm_start` for `path`: its deploy net's hash, nothing re-initialised."""
+    """`identity.warm_start` for `path`: its deploy net's hash, nothing re-initialised; Raises: ValueError — the stamp resolves no arch."""
     ck = load_checkpoint(path, declared_encoding=encoding)
     if ck.metadata.arch is None:
         raise ValueError(f"{path.name}: the stamp resolves no arch")
@@ -79,7 +81,7 @@ def warm_start_row(path: Path, encoding: str) -> dict[str, Any]:
 
 
 def arm_config(arm: ArmSpec, recipe: Recipe) -> dict[str, Any]:
-    """The base recipe with the arm's shape, start, one cosine and value mask; no held-out witness, no warm start unless declared."""
+    """The base recipe with the arm's shape, start, one cosine and value mask; no held-out witness, no periodic save, no warm start unless declared."""
     dump = load_config(recipe.base_config).model_dump()
     encoding = dump["identity"]["encoding"]
     dump["run_id"] = arm.run_id
@@ -87,25 +89,21 @@ def arm_config(arm: ArmSpec, recipe: Recipe) -> dict[str, Any]:
     dump["model"]["gnn"] = {"hidden": arm.hidden, "num_layers": arm.layers}
     dump["identity"]["warm_start"] = None if arm.warm_start is None else warm_start_row(arm.warm_start, encoding)
     dump["train"].update(lr=recipe.lr, eta_min=recipe.eta_min, scheduler_t_max=recipe.steps, lr_cycle=None,
-                         value_mask_redraw_p=arm.value_mask_p, heldout_gap=None)
+                         value_mask_redraw_p=arm.value_mask_p, heldout_gap=None, checkpoint_interval=0)
     return dump
 
 
 def open_ring(path: Path, encoding: str, seed: int) -> tuple[HexgBuffer, int]:
-    """A frozen ring in a buffer sized to it, its sampler seeded; Raises: ValueError — the ring loads no record."""
-    header, _ = _read_header(memoryview(path.read_bytes()[:4096]))
-    buf = HexgBuffer(max(header.size, 8), encoding, header.max_visits)
-    rows = int(buf.load_from_path(str(path)))
-    if rows < 1:
-        raise ValueError(f"{path.name}: loaded no records")
-    buf.seed_sampler(seed)
-    return buf, rows
+    """A frozen ring in a buffer sized to it, its sampler seeded (PROBE-1's reader); Raises: ValueError — the ring loads no record."""
+    load_tools_package("probe1")
+    return importlib.import_module("probe1.nets").open_ring(path, seed=seed, encoding=encoding)
 
 
 def train_arm(arm: ArmSpec, recipe: Recipe, out: Path, *, device: str, heldout_ring: Path | None,
               heldout_every: int, heldout_batches: int, sample_threads: int | None,
               caps_override: tuple[int, int] | None, log: Callable[[str], None] = print) -> dict[str, Any]:
-    """Train `arm` for `recipe.steps` production steps and save at `recipe.save_at`; Raises: FileExistsError — `out` exists; RuntimeError — the arm skips more steps than it takes."""
+    """Train `arm` for `recipe.steps` production steps and save at `recipe.save_at`; Raises: FileExistsError — `out` exists; FileNotFoundError, ValueError — the ring's provenance or a ring that loads nothing; RuntimeError — the arm skips more steps than it takes."""
+    lineage = ring_lineage(arm.ring)
     out.mkdir(parents=True, exist_ok=False)
     dump = arm_config(arm, recipe)
     if caps_override is not None:
@@ -118,7 +116,7 @@ def train_arm(arm: ArmSpec, recipe: Recipe, out: Path, *, device: str, heldout_r
     seed_everything(recipe.seed)
     trainer = init_trainer(config=dump, device=torch.device(device), checkpoint_dir=str(out / "checkpoints"),
                            sink=_JsonlSink(out / "events.jsonl"))
-    trainer.lineage = tuple(dict.fromkeys(trainer.lineage + arm.lineage))
+    trainer.lineage = tuple(dict.fromkeys(trainer.lineage + lineage))
     buf, rows = open_ring(arm.ring, encoding, recipe.seed)
     spec, caps = resolve_step_spec(dump), (lambda: resolve_microbatch_caps(dump))
     batch, augment = int(knobs.batch_size), bool(knobs.augment)

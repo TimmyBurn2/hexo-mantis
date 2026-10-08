@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import torch
 
 from mantis.util.hashing import sha256_file
 from mantis.util.loadpkg import load_tools_package
@@ -18,7 +19,7 @@ def _nets_module() -> Any:
 
 def read_kl(ckpts: list[Path], heldout_ring: Path, *, batches: int, batch_size: int, threads: int,
             seed: int) -> dict[str, Any]:
-    """Per net: mean KL(teacher ‖ net), policy CE, the teacher's entropy, value MSE and two-hot CE to the teacher's value."""
+    """Per net: mean KL(teacher ‖ net), policy CE, the teacher's entropy, value MSE and two-hot CE to the teacher's value; Raises: ValueError — nets of another encoding than the ring's, or a ring that loads nothing."""
     nets_mod = _nets_module()
     nets = [nets_mod.load_net(p) for p in ckpts]
     encoding = nets[0].spec.name
@@ -46,9 +47,7 @@ def _segment_argmax(values: Any, offsets: Any) -> np.ndarray:
 
 
 def read_baseline(ckpt: Path, ring: Path, *, batches: int, batch_size: int, threads: int, seed: int) -> dict[str, Any]:
-    """A net against a teacher-policy ring whose z is the game's: top-1 agreement with the teacher, KL, and its value's correlation with z."""
-    import torch
-
+    """A net against a teacher-policy ring whose z is the game's: top-1 agreement with the teacher, KL, and its value's correlation with z; Raises: ValueError — a ring that loads nothing."""
     nets_mod = _nets_module()
     net = nets_mod.load_net(ckpt)
     buffer, rows = nets_mod.open_ring(ring, seed=seed, encoding=net.spec.name)

@@ -37,7 +37,7 @@ def average_checkpoints(paths: list[Path], *, config_path: Path, run_id: str, ou
         net = build_net(ck.metadata.arch)
         net.load_state_dict(ck.model_state)  # the LEARNER's weights: the average is of the trained nets
         sources.append({"file": p.name, "step": int(ck.metadata.step), "file_sha256": sha256_file(p),
-                        "net_hash": net_param_hash(net)})
+                        "net_hash": net_param_hash(net), "lineage": list(ck.metadata.lineage)})
     assert arch is not None
     n = len(paths)
     averaged = {k: (v / n).to(torch.float32) if v.is_floating_point() else v for k, v in acc.items()}
@@ -47,7 +47,8 @@ def average_checkpoints(paths: list[Path], *, config_path: Path, run_id: str, ou
     written = save_checkpoint(model=net, optimizer=None, scaler=None, scheduler=None, step=sources[-1]["step"], config=config,
                               kind="weights", checkpoint_dir=out_dir,
                               metadata_kwargs={"encoding_name": config["identity"]["encoding"], "run_id": run_id, "arch": arch,
-                                               "corpus_sha256": config.get("corpus_sha256")})
+                                               "corpus_sha256": config.get("corpus_sha256"),
+                                               "lineage": list(dict.fromkeys(t for s in sources for t in s["lineage"]))})
     record = {"kind": "uniform weight average (SWA over stamped checkpoints)", "n": n, "sources": sources,
               "config": str(config_path), "checkpoint": written.name, "net_hash": net_param_hash(net),
               "file_sha256": sha256_file(written)}

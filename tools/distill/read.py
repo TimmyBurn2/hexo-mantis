@@ -1,13 +1,16 @@
 """The strength read: cell sidecars to logits, two-save panels against a reference, the controls' validity and the outcome rule."""
 from __future__ import annotations
 
+import importlib
 import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-#: The sidecar suffix each ruler's cells carry.
+from mantis.util.loadpkg import load_tools_package
+
+#: The sidecar suffix each ruler's cells carry; the read takes the full-arm receipts only.
 RULERS = {"rung16": "ladder455_n16", "s": "strix256_arena"}
 LINE = 0.17
 #: The control is near the reference iff its panel is no further below than this, on every ruler.
@@ -16,11 +19,17 @@ CONTROL_NEAR = 0.5
 KNOWNBAD_GAP = 1.0
 
 
+def _sidecars() -> Any:
+    load_tools_package("dash")
+    return importlib.import_module("dash.readers.sidecars")
+
+
 @dataclass(frozen=True)
 class Cell:
-    """One cell: win rate with Six's forfeits out of our wins, its pair-bootstrap interval, and its logit with the delta-method se."""
+    """One cell: win rate over the real games (a Six forfeit is no game of ours), its interval, and its logit with the delta-method se."""
 
     path: str
+    receipt: tuple[str, str, str]
     wr: float
     lo: float
     hi: float
@@ -39,30 +48,35 @@ class Cell:
 
 
 def read_cell(path: Path) -> Cell:
-    """A sidecar as a Cell; Raises: ValueError — a failed or short cell."""
+    """A sidecar as a Cell, forfeits out through the dash's one reading; Raises: ValueError — a failed or short cell; CellRefused — forfeit counts that do not line up."""
     raw = json.loads(path.read_text(encoding="utf-8"))
     if raw.get("rc", 0) != 0 or "wr" not in raw:
         raise ValueError(f"{path.name}: not a finished cell")
-    games = int(raw["games"])
+    games = int(raw.get("eff_n", raw["games"]))
     forfeits = int((raw.get("six_findings") or {}).get("count") or 0)
-    wr = float(raw["wr"])
+    wr, lo, hi = float(raw["wr"]), float(raw["wr_ci_lower"]), float(raw["wr_ci_upper"])
     if forfeits:
-        wr = max(0.0, raw["wins"] - forfeits + raw.get("draws", 0) / 2) / (games - forfeits)
-    return Cell(path=str(path), wr=wr, lo=float(raw["wr_ci_lower"]), hi=float(raw["wr_ci_upper"]), games=games,
-                forfeits=forfeits)
+        wr, lo, hi, games = _sidecars()._without_forfeits(raw, wr, games, forfeits)
+    receipt = (str(raw.get("checkpoint_sha256")), str(raw.get("unit")), str(raw.get("started_utc")))
+    return Cell(path=str(path), receipt=receipt, wr=wr, lo=lo, hi=hi, games=games, forfeits=forfeits)
 
 
 def pool(cells: list[Cell]) -> tuple[float, float]:
-    """Mean logit and its se (independent cells)."""
+    """Mean logit and its se (independent cells); Raises: ValueError — no cell."""
     if not cells:
         raise ValueError("no cells to pool")
     return (sum(c.logit for c in cells) / len(cells), math.sqrt(sum(c.se ** 2 for c in cells)) / len(cells))
 
 
 def find_cells(roots: list[Path], checkpoint: str, ruler: str) -> list[Cell]:
-    """Every finished sidecar of `checkpoint` on `ruler` under `roots`."""
+    """Every distinct finished receipt of `checkpoint` on `ruler` under `roots`: a copied sidecar is one cell, not two."""
     pattern = f"{checkpoint}.{RULERS[ruler]}.full.json"
-    return [read_cell(p) for root in roots for p in sorted(root.rglob(pattern))]
+    seen: dict[tuple[str, str, str], Cell] = {}
+    for root in roots:
+        for p in sorted(root.rglob(pattern)):
+            cell = read_cell(p)
+            seen.setdefault(cell.receipt, cell)
+    return list(seen.values())
 
 
 def delta(panel: tuple[float, float], ref: tuple[float, float]) -> dict[str, float]:
@@ -73,18 +87,22 @@ def delta(panel: tuple[float, float], ref: tuple[float, float]) -> dict[str, flo
 
 def verdict(spec: dict[str, Any], roots: list[Path], *, line: float = LINE, near: float = CONTROL_NEAR,
             kb_gap: float = KNOWNBAD_GAP) -> dict[str, Any]:
-    """The pre-stated read over `spec` (reference saves, control/known-bad/arm saves with each arm's class); Raises: ValueError — a missing cell."""
-    ref = {r: pool([c for ck in spec["reference"] for c in find_cells(roots, ck, r)]) for r in RULERS}
-    out: dict[str, Any] = {"reference": {r: {"logit": v[0], "se": v[1]} for r, v in ref.items()}, "arms": {}}
+    """The pre-stated read over `spec` (reference saves, control/known-bad/arm saves with each arm's class); Raises: ValueError — a missing or extra cell."""
+    ref_cells = {r: [c for ck in spec["reference"] for c in find_cells(roots, ck, r)] for r in RULERS}
+    ref = {r: pool(cells) for r, cells in ref_cells.items()}
+    out: dict[str, Any] = {"reference": {r: {"logit": v[0], "se": v[1], "cells": [c.path for c in ref_cells[r]]}
+                                         for r, v in ref.items()}, "arms": {}}
+    panels: dict[str, dict[str, tuple[float, float]]] = {}
     for name, arm in spec["arms"].items():
         row: dict[str, Any] = {"class": arm["class"]}
+        panels[name] = {}
         for r in RULERS:
             cells = [c for ck in arm["saves"] for c in find_cells(roots, ck, r)]
             if len(cells) != len(arm["saves"]):
                 raise ValueError(f"{name}: {len(cells)} {r} cells for {len(arm['saves'])} saves")
-            panel = pool(cells)
-            row[r] = {"cells": [(c.wr, c.logit) for c in cells], "panel": panel[0], "se": panel[1],
-                      **delta(panel, ref[r])}
+            panels[name][r] = pool(cells)
+            row[r] = {"cells": [{"path": c.path, "wr": c.wr, "logit": c.logit, "forfeits": c.forfeits} for c in cells],
+                      "panel": panels[name][r][0], "se": panels[name][r][1], **delta(panels[name][r], ref[r])}
         row["reaches"] = all(row[r]["delta"] >= line for r in RULERS)
         row["mean_delta"] = sum(row[r]["delta"] for r in RULERS) / len(RULERS)
         out["arms"][name] = row
@@ -96,7 +114,10 @@ def verdict(spec: dict[str, Any], roots: list[Path], *, line: float = LINE, near
     out["control"] = control
     out["control_near"] = all(control[r]["delta"] >= -near for r in RULERS)
     out["control_above_line"] = all(control[r]["delta"] >= line for r in RULERS)
-    out["knownbad"] = {"wr": kb.wr, "logit": kb.logit, "gap": control["rung16"]["panel"] - kb.logit}
+    if out["control_above_line"]:
+        for name, row in out["arms"].items():
+            row["v_control"] = {r: delta(panels[name][r], panels[spec["control"]][r]) for r in RULERS}
+    out["knownbad"] = {"path": kb.path, "wr": kb.wr, "logit": kb.logit, "gap": control["rung16"]["panel"] - kb.logit}
     out["knownbad_valid"] = out["knownbad"]["gap"] >= kb_gap
     out["halt"] = not (out["control_near"] and out["knownbad_valid"])
     out["outcome"] = outcome(out["arms"]) if not out["halt"] else "HALT"

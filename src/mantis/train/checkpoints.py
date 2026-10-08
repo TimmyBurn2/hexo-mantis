@@ -302,13 +302,13 @@ def _lineage_list(value: Any) -> list[str]:
     """A stamp's lineage as a list of non-empty tags; absent reads empty. Raises: CheckpointStampError — anything else."""
     if value is None:
         return []
-    if isinstance(value, str | bytes) or not all(isinstance(t, str) and t for t in value):
+    if not isinstance(value, list | tuple) or not all(isinstance(t, str) and t for t in value):
         raise CheckpointStampError(f"metadata.lineage must be a sequence of non-empty tags, got {value!r}")
     return list(value)
 
 
 def stamped_lineage(path: str | Path) -> tuple[str, ...]:
-    """The lineage a v2 artifact's stamp carries, empty on a legacy payload; the warm start's inheritance read. Raises: CheckpointStampError — a malformed lineage."""
+    """The lineage a v2 artifact's stamp carries, empty on a legacy payload; the warm start's inheritance read. Raises: OSError — an unreadable file; CheckpointStampError — a malformed lineage."""
     raw = torch.load(Path(path), weights_only=True, map_location="cpu")
     if not isinstance(raw, dict) or raw.get("schema_version") != CHECKPOINT_SCHEMA_VERSION:
         return ()
