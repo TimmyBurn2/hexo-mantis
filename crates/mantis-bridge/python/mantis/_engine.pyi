@@ -152,10 +152,6 @@ class MCTSTree:
         quiescence_enabled: bool,
         quiescence_blend_2: float,
     ) -> None: ...
-    def configure_pending_loss_frame(self, chooser: bool) -> None:
-        """Score pending children in the choosing parent's frame (the deploy head)."""
-    @property
-    def pending_loss_chooser_frame(self) -> bool: ...
     def configure_search(
         self, kind: str, c_visit: float, c_scale: float, q_rescale: bool
     ) -> None:

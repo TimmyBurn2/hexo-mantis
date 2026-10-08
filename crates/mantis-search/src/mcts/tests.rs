@@ -1545,7 +1545,6 @@ fn a_pending_child_loses_score_under_its_parent_at_both_stone_levels() {
     // Planted break: negate the whole loss-adjusted Q at a second-stone parent and the loss turns into a bonus there.
     for parent_moves_remaining in [2u8, 1] {
         let (mut tree, a, _b) = setup_two_child_tree(1.5);
-        tree.configure_pending_loss_frame(true);
         tree.pool[0].moves_remaining = parent_moves_remaining;
         tree.pool[0].n_visits = 4;
         tree.pool[a as usize].n_visits = 2;
@@ -1562,8 +1561,8 @@ fn a_pending_child_loses_score_under_its_parent_at_both_stone_levels() {
 }
 
 #[test]
-fn a_tree_left_in_its_constructed_frame_scores_a_pending_child_as_self_play_always_has() {
-    // Self-play's trees keep the old frame until it is ruled: the whole loss-adjusted Q negated at a last-stone parent.
+fn a_tree_built_as_self_play_builds_it_scores_a_pending_child_as_the_choosers_loss() {
+    // One frame for every tree: the child's Q flips to the chooser's side, then its pending loss is subtracted.
     let (mut tree, a, _b) = setup_two_child_tree(1.5);
     tree.pool[0].moves_remaining = 1;
     tree.pool[0].n_visits = 4;
@@ -1572,7 +1571,7 @@ fn a_tree_left_in_its_constructed_frame_scores_a_pending_child_as_self_play_alwa
     tree.pool[a as usize].virtual_loss_count = 1;
     let sqrt_n = (tree.pool[0].n_visits as f32).sqrt();
     let child = tree.pool[a as usize];
-    let q = -((child.w_value - child.virtual_loss_count as f32 * tree.virtual_loss) / 3.0);
+    let q = (-child.w_value - child.virtual_loss_count as f32 * tree.virtual_loss) / 3.0;
     let u = tree.c_puct * child.prior * sqrt_n / (1.0 + 2.0 + 1.0);
     assert_eq!(
         tree.puct_score(a, 0, sqrt_n, 0.0).to_bits(),

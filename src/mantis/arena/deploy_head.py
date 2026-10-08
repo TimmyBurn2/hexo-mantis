@@ -2,8 +2,7 @@
 
 It runs the RUN'S OWN search: `search_kind` comes from the resolver
 `SelfPlayHParams.from_config` reads and reaches the `MCTSTree.configure_search` setter the
-self-play worker calls, so "deploy-matched" is a construction, not a coincidence; its PUCT pending-loss frame
-alone is the head's own (the choosing parent's). `puct` plays
+self-play worker calls, so "deploy-matched" is a construction, not a coincidence. `puct` plays
 the MOST-VISITED root child; `gumbel` plays Sequential Halving's own answer; the hybrid this
 replaced (PUCT descent with a g=0 Gumbel root pick) is a third algorithm no bar can be matched
 to. The Gumbel draw is SEEDED from the round's `seed_base` mixed with this player's game and
@@ -130,11 +129,10 @@ class DeployHeadPlayer:
         return rows
 
     def _fresh_tree(self) -> MCTSTree:
-        """A tree with the RUN's search kind and σ, pending children scored in the chooser's frame. `configure_search`
+        """A tree with the RUN's search kind and σ. `configure_search`
         runs ONCE per tree: under `gumbel` it allocates a per-node raw-value vector that does not change per ply, and
         the root calls below read the σ it set (one σ per tree)."""
         tree = MCTSTree(**self._puct.tree_kwargs())
-        tree.configure_pending_loss_frame(True)
         tree.configure_search(self._search_kind, self._c_visit, self._c_scale, self._q_rescale)
         tree.configure_tactics(self._tactics)
         return tree

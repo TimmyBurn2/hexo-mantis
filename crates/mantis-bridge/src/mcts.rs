@@ -75,16 +75,6 @@ impl PyMCTSTree {
         }
     }
 
-    /// Score pending children in the choosing parent's frame (the deploy head); self-play's trees keep the old one.
-    pub fn configure_pending_loss_frame(&mut self, chooser: bool) {
-        self.inner.configure_pending_loss_frame(chooser);
-    }
-
-    #[getter]
-    pub fn pending_loss_chooser_frame(&self) -> bool {
-        self.inner.pending_loss_chooser_frame()
-    }
-
     /// Select the search kind and σ once per player, through the SAME setter the self-play
     /// worker calls; the root calls below read the σ set here rather than taking their own.
     ///

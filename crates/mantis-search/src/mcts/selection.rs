@@ -152,9 +152,6 @@ impl MCTSTree {
             // Unvisited: `fpu_value` is computed from the parent's own Q, so it is ALREADY in the
             // parent's to-move perspective and, unlike a visited child's Q, is never negated.
             fpu_value
-        } else if parent.moves_remaining == 1 && !self.pending_loss_chooser_frame {
-            // Self-play's frame until it is ruled: a pending child's loss reads as the parent's gain here.
-            -child.q_value_vl(self.virtual_loss, false)
         } else {
             // A child below a parent's last stone is the other player's position.
             child.q_value_vl(self.virtual_loss, parent.moves_remaining == 1)
