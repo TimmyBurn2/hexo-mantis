@@ -206,10 +206,7 @@ class SixEngine:
             self.ident = self._ask("six", "sixok")
             if NET_IDENT not in self.ident:
                 raise SixEngineError(f"sixengine loaded no network: it answers {self.ident[:2]}")
-            errors = [ln for ln in self._ask(f"setoption cacheEntries {CACHE_ENTRIES}\nisready", "readyok")
-                      if ln.startswith("error")]
-            if errors:
-                raise SixEngineError(f"sixengine refused a setting: {errors}")
+            self.set_option("cacheEntries", CACHE_ENTRIES)
         except SixEngineError:
             self.close()
             raise
@@ -238,6 +235,12 @@ class SixEngine:
             lines.append(line.strip())
             if lines[-1].startswith(until):
                 return lines
+
+    def set_option(self, name: str, value: int) -> None:
+        """`setoption <name> <value>`, confirmed by `isready`; Raises: SixEngineError when the engine refuses it or is gone."""
+        errors = [ln for ln in self._ask(f"setoption {name} {value}\nisready", "readyok") if ln.startswith("error")]
+        if errors:
+            raise SixEngineError(f"sixengine refused a setting: {errors}")
 
     def new_game(self) -> None:
         """Clear the engine's tree and solver for a fresh game; Raises: SixEngineError when the engine is gone."""
