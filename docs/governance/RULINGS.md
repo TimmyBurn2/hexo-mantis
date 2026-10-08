@@ -102,7 +102,8 @@ Decision: verbatim below.
 > with the per-leaf and trainer-step cost beside; it adopts only if strength holds by the line.
 > The separate-trainer idea is closed: the drag is device time (GIL 11.7 %).
 
-Status: standing. ANNOTATES R387(a): the ruler of record is one rung (Six gen455 at 16 nodes per turn v ours 128 per
+Status: standing; (b)'s "the floor binds" WITHDRAWN by R389(b) (it compared a later level with the mean of a rising
+series; rung 16 climbs at a constant slope, so run12's schedule is a plain cosine). ANNOTATES R387(a): the ruler of record is one rung (Six gen455 at 16 nodes per turn v ours 128 per
 stone on the arena book), stepping to 128 then 256 on two consecutive saves above 0.7 and never down, with S on the GPU
 the second ruler and the validity read accepted (the 132k/156k pair unresolved on both); R387's N50 and equal-work
 parity read are withdrawn, and the S units of record move to the GPU (580/580 identical) by (a). Keeps RUN11-CYCLE-2's

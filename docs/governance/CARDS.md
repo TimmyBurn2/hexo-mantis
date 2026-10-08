@@ -64,10 +64,13 @@ Both were found by running the gate set rather than by reading it, and both are 
   run11's own search targets and a permuted known-bad. Read held-out KL to the teacher; rung 16 and S as two-save panels.
   Pre-stated: distilled 4×128 above run11's best by +0.17 on both → run12 starts from it; only a wider net → run12 starts
   from that net; none → CARD-DENSE-1. run11 pauses one day for it.
+  OWNED by the DISTILL-1 packet (architect, 2026-10-08; branch `distill-1`): labelling and cells on box A under
+  DEPLOY-2's units, the five trainings on box A with run11 paused for them, records `mantis-records/distill-1/`.
 - **CARD-DENSE-1** (R389(c), conditional). Design a hex-conv model kind behind the seam, only if DISTILL-1 finds no net
-  above the line.
-- **CARD-RUN12-REPLAY** (R389(d)). run12 carries replay_capacity 2M as a prereg row with its own two-save gap and T
-  check; the supervised harness is the lab for architecture and auxiliary targets before a self-play run carries them.
+  above the line. HELD until DISTILL-1's read.
+- **CARD-RUN12-REPLAY** (R389(d); the DISTILL-1 packet calls it CARD-REPLAY-WINDOW-2M). run12 carries replay_capacity
+  2M as a prereg row with its own two-save gap and T check; the supervised harness is the lab for architecture and
+  auxiliary targets before a self-play run carries them. OPENED for run12's prereg.
 - **CARD-FLOOR-READ-2 CLOSED** (R389(b)). Withdrawn: the slope, not the floor, is the read; run12's schedule is a plain
   cosine and no run is spent on it.
 - **CARD-BOX-B-DESTROY** (R389(e)). No new box; box B is destroyed on the fresh bundle's verification (the operator's act).
@@ -92,6 +95,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   the +0.17 line → THE FLOOR BINDS, and run12's schedule is one cosine 5e-4 → 1e-4 over 300k. A thin pass: +0.027 over
   the line, inside the four cells' ±0.09; with the plateau's own error the climb reads +0.20 [+0.07, +0.33]. S at 240k
   and 264k is re-queued (CARD-EVAL-ON-BOX-A).
+  WITHDRAWN by R389(b): "the floor binds" compared a later level with the mean of a rising series; the read is the
+  slope (CARD-FLOOR-READ-2 CLOSED under "Opened by R389").
 - **CARD-FRESH-2-FINAL-CELLS — ORDERED by R388(c), low priority: close FRESH-2's record. HANDED to DEPLOY-2 (box A)
   2026-10-08 with the commands, the sha and the one-instrument-per-pair rule (local records
   `mantis-records/run11-fresh/fresh2/FINAL_CELLS_HANDOFF.md`).** The final save 139 933 is read
@@ -180,6 +185,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   The pre-registered window is the cycle's first 12k steps at LR 5.0 → 4.5e-4; 186k alone read +0.21 logit over the
   plateau (SE 0.08). A report row for the architect, not a re-opening of the verdict.
   SUPERSEDED by CARD-FLOOR-READ-2 (R388(b)): four rung-16 cells at 228k–264k, played by the DEPLOY-2 packet's A1.
+  CLOSED by R389(b) with the slope reading: rung 16 climbs about +0.11 logit per 48k steps from 108k to 264k with no
+  change of slope through the cycle; the LR schedule is not the lever.
 - **CARD-TRAIN-SPEED-1 — ORDERED by R386(a); EXITED 2026-10-07: box A's closed-loop A/Bs (4 interleaved pairs each, the
   trainer closed-loop as production) and the knob sweep.** C8 (the Gumbel interior logits once, bit-identical,
   criterion −13 %) LANDED; #10 (quick-arm decided roots unsearched, value-only rows, `unsearched_decided_rows`) +1.1 %

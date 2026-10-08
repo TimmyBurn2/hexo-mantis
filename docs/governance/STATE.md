@@ -13,7 +13,8 @@ change of slope, so run12 is a plain cosine and no run is spent on the schedule.
 PASS (gnn_axis_r8_pruned a landed capability, not a lever). DISTILL-1 reads the limiter: Six gen455's raw policy and
 value label at least 1M positions from run11's rings, 4×128 / 4×256 / 8×128 trained at equal budget; run11 pauses one
 day for it and otherwise trains until run12's mint. No new box; box B is destroyed on the fresh bundle's verification.**
-(RULINGS R389; the R388 paragraph below stands where R389 does not move it.)
+(RULINGS R389; the R388 paragraph below stands where R389 does not move it.) DISTILL-1 RUNS from 2026-10-08 (the
+architect's packet, branch `distill-1`, CARD-DISTILL-1); run11 trains on box A until its one-day pause for the arms.
 
 **R388 (2026-10-08): THE FLOOR READ, THE LINEAGE, THE ENCODING. The ruler of record is one rung (Six gen455 at 16
 nodes per turn v ours 128/stone, arena book), S on the GPU the second. RUN11-CYCLE-2's verdict stands, and a second
@@ -34,7 +35,9 @@ in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c
     at 228k, 240k, 252k and 264k, their mean above the plateau (−0.754 logit) by +0.17 → the floor binds and run12's
     schedule is one cosine 5e-4 → 1e-4 over 300k; else the floor stays and ENCODE-1 takes the budget. READ
     2026-10-08: mean −0.557 logit, +0.197 over the plateau → THE FLOOR BINDS (thin: +0.027 over the line, inside the
-    cells' ±0.09); run12's schedule is one cosine 5e-4 → 1e-4 over 300k.
+    cells' ±0.09); run12's schedule is one cosine 5e-4 → 1e-4 over 300k. WITHDRAWN by R389(b): the read compared a
+    later level with the mean of a rising series; rung 16 climbs about +0.11 logit per 48k steps from 108k to 264k with
+    no change of slope, so run12's schedule is a plain cosine and no run is spent on it.
   - FRESH-2 is accepted (R388(c)): the lineage stands, and the fresh line is CLOSED. It ran on box B from its 69 954 halt
     bundle (2026-10-07 10:30 CEST) to 139 933, stopped on the operator's word on 2026-10-08 06:50 CEST. At matched steps
     84k–120k it trails run11 on every instrument: rung 16 −1.04 to −1.39 logit, X −0.76 to −1.03, gen455@128 −0.13 to
