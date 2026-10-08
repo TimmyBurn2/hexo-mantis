@@ -31,7 +31,10 @@ in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c
     −0.51 (local records `mantis-records/run11-fresh/fresh2/FRESH2_REPORT.md`). Its final cells (139 933 v run11@132k)
     play at low priority to close the record (CARD-FRESH-2-FINAL-CELLS). The f64 softmax normaliser fix (branch
     `fresh-2`) is ratified and lands before any from-scratch start (CARD-F64-NORMALISER); self-play's PUCT frame takes
-    #13's fix as one implementation, pinned (CARD-PUCT-FRAME-SELFPLAY).
+    #13's fix as one implementation, pinned (CARD-PUCT-FRAME-SELFPLAY). **FRESH-2 EXITED 2026-10-08:** the final
+    bundle (139 933) is mirrored and sha-verified (box B destroyable, the operator's act); the monitor's two-read bands,
+    band trends and resume past a halt (`81a3d720`..`b5622820`) and the f64 fix (`e7b9c9f3`) land on dev with R388's
+    record; the final cells are handed to DEPLOY-2 (`mantis-records/run11-fresh/fresh2/FINAL_CELLS_HANDOFF.md`).
   - run12 (R388(d), CARD-RUN12): run11's best save by ladder-and-S agreement, on dev + fresh-2, the arena book in the
     in-run gate, bookless evaluations from the origin stone alone (1 ply), 48 workers; it starts after the floor read,
     without waiting for ENCODE-1. Its going-forward line: four rung-16 cells above its parent's reading by +0.17, read

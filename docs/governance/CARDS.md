@@ -46,7 +46,9 @@ Both were found by running the gate set rather than by reading it, and both are 
   RUN11-CYCLE-2's verdict stands as pre-registered (its window, a warm restart read at its high-LR start, was the
   architect's error). The four cells' mean above the plateau (−0.754 logit) by +0.17 → the floor binds and run12's
   schedule is one cosine 5e-4 → 1e-4 over 300k; else the floor stays and ENCODE-1 takes the budget.
-- **CARD-FRESH-2-FINAL-CELLS — ORDERED by R388(c), low priority: close FRESH-2's record.** The final save 139 933 is read
+- **CARD-FRESH-2-FINAL-CELLS — ORDERED by R388(c), low priority: close FRESH-2's record. HANDED to DEPLOY-2 (box A)
+  2026-10-08 with the commands, the sha and the one-instrument-per-pair rule (local records
+  `mantis-records/run11-fresh/fresh2/FINAL_CELLS_HANDOFF.md`).** The final save 139 933 is read
   on rung 16, X and the old gen455@128 cell and paired with run11@132k (the pre-statement's annotation 5); B3 ("the
   lineage stands" on 96k/108k/120k, every instrument) is final when they land. Local records
   `mantis-records/run11-fresh/fresh2/`.
@@ -54,6 +56,7 @@ Both were found by running the gate set rather than by reading it, and both are 
   any from-scratch start.** The f32 sum dropped terms under half an ulp on roots with thousands of children
   (random-init boards), shipping targets summing to 1 + up to 2.8e-4, run-fatal under LAW-14. Commit `99a13798` on
   branch `fresh-2` (a unity test that fails on the old code; targets only, moves unchanged, no measurable cost).
+  LANDS as `e7b9c9f3` with R388's record (a fresh review, no blockers).
 - **CARD-PUCT-FRAME-SELFPLAY — ORDERED by R388(c): self-play's PUCT frame takes #13's fix (one implementation), pinned.**
 - **CARD-RUN12 — ORDERED by R388(d): run12 = run11's best save by ladder-and-S agreement, on dev + fresh-2.** The arena
   book in the in-run gate; bookless evaluations from the origin stone alone (1 ply); 48 workers. It starts after
@@ -62,12 +65,21 @@ Both were found by running the gate set rather than by reading it, and both are 
 - **CARD-EVAL-ON-BOX-A — ORDERED by R388(e): cells, followers and the dash feed run on box A under a GPU-share cap.** The
   run's positions/h during cells is a row; above a 10 % daily cost an eval box replaces it.
 - **CARD-BOX-B-DESTROY — ORDERED by R388(e): box B is destroyed after the fresh bundle's mirror is sha-verified (the
-  operator's act).**
+  operator's act).** VERIFIED 2026-10-08 07:22 CEST: the 139 933 bundle in the mirror matches its manifest and box B
+  (checkpoint `284abc88…`); box B's remaining FRESH-2 records are swept into `mantis-mirror/run11-fresh/`. Box B is
+  ready for the operator.
 - **CARD-ENCODE-1 — ORDERED by R388(f): prune empty→empty edges as a new encoding row behind the seam.** Registry,
   detector, conformance and a pre-registered witness; read by a fine-tune pair from run11's best save (pruned v unpruned
   control, equal recipe, 10k steps) on rung 16 and S at equal playouts, with the per-leaf and trainer-step cost beside;
   it adopts only if strength holds by the line. Supersedes CARD-RUN12-ENCODING's "#18 is run12's encoding".
 - **CARD-SEPARATE-TRAINER — CLOSED by R388(f): the drag is device time (GIL 11.7 %).**
+- **CARD-PREFLIGHT-RANDOM-INIT-EVAL — OPENED by FRESH-2's exit, not built: a random-init config's preflight can time out
+  in its terminal eval.** Its throwaway 101-step net can walk away (stones at the radius-8 edge, games to the 256-ply
+  cap on ~22 000-cell graphs, ~2.5 s per ply): FRESH-2's first preflight timed out at 3 h. A guard (a ply-cap
+  adjudication or a shorter cap for the preflight's terminal eval) wants a ruling before run12 or any from-scratch mint.
+- **CARD-INTERIOR-ARGMAX-F32 — OPENED by FRESH-2's exit, not built: `mctx_interior_argmax_input` keeps an f32 softmax
+  sum.** It feeds only an argmax (a uniform (1+ε) scale moves only ε-sized near-ties) and no unity check, so it was left
+  as is; changing it would move search trajectories.
 
 ## Opened by R386 (THE FLOOR, THE FRESH LINE, THE INSTRUMENT; 2026-10-06) — run11 pauses, the instrument breaks once, DEPLOY-1
 
