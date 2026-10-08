@@ -79,6 +79,11 @@ def pretrain(argv: list[str] | None = None) -> None:
     spec = _lookup_encoding(encoding)  # loud raise on an unregistered name
 
     run_config = load_config(args.config)
+    if run_config.identity.encoding != spec.name:
+        raise SystemExit(
+            f"--encoding {spec.name!r} builds the graphs but the config's identity.encoding "
+            f"{run_config.identity.encoding!r} stamps the net: a net trains and is stamped under ONE encoding."
+        )
     train_cfg = run_config.train
 
     device = best_device()

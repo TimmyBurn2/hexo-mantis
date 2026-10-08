@@ -28,7 +28,8 @@ RESUME_CHECKPOINT_OWNED_KEYS: frozenset[str] = frozenset({
 })
 
 #: The same ownership on the nested `RunConfig` shape production resumes with: the identity the
-#: stamp carries and the optimizer/scheduler values the restored state carries.
+#: stamp carries and the optimizer/scheduler values the restored state carries; a launch encoding
+#: that differs from the stamp's is refused by `init_trainer`'s declared encoding before it can defer.
 RESUME_CHECKPOINT_OWNED_PATHS: frozenset[str] = frozenset({
     "identity.encoding", "identity.representation", "identity.arch_kind",
     "train.lr", "train.weight_decay", "train.lr_schedule",

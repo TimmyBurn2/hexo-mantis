@@ -84,3 +84,13 @@ def test_pretrain_cli_boundary_converts_the_class_error_to_a_clean_message():
 
 def test_pretrain_cli_explicit_encoding_still_wins():
     assert _resolve_encoding_name(_args(encoding="v6w25")) == "v6w25"
+
+
+def test_pretrain_refuses_an_encoding_flag_the_config_does_not_stamp():
+    """`--encoding` builds the graphs and the config's identity stamps the net, so the two must agree before anything trains."""
+    from mantis.train.pretrain.cli import pretrain
+
+    config = Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml"  # names gnn_axis_v1
+    with pytest.raises(SystemExit) as exc:
+        pretrain(["--config", str(config), "--encoding", "gnn_axis_r8_pruned"])
+    assert "stamps the net" in str(exc.value)

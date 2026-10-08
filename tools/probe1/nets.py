@@ -56,7 +56,7 @@ def load_net(path: Path) -> Net:
 
 
 def open_ring(path: Path, *, seed: int, encoding: str) -> tuple[HexgBuffer, int]:
-    """The ring file in a buffer at the READER's `encoding`, which the engine loads only when it holds the ring's records; `(buffer, rows)`."""
+    """The ring file in a buffer at the READER's `encoding`, which the engine loads only when it holds the ring's records; `(buffer, rows)`; Raises: ValueError — the engine refuses the ring or it loads no record."""
     header, _ = _read_header(memoryview(path.read_bytes()[:4096]))
     buffer = HexgBuffer(max(header.size, 8), encoding, header.max_visits)
     loaded = int(buffer.load_from_path(str(path)))

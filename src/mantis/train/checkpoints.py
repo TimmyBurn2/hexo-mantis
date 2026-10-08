@@ -1150,12 +1150,11 @@ def resume_trainer(
     sink: Any = None,
     device: Any = None,
 ) -> Any:
-    """Full/weights resume path (folded `trainer_ckpt_load.load_checkpoint`): build_net from
-    `metadata.arch`, restore optimizer/scaler/scheduler/step on a full checkpoint under the
-    F1(A)/E0 frozen-key rules; lr is resume-state-owned (loud on an ignored declared override).
-
-    Slice-2 consumer: `cls` is the `mantis.train.trainer.core.Trainer` class (passed by the
-    caller so this module has no top-level trainer edge); `declared_encoding` is the launch config's, which builds the rest.
+    """Full/weights resume (folded `trainer_ckpt_load.load_checkpoint`): build_net from `metadata.arch`, restore
+    optimizer/scaler/scheduler/step on a full checkpoint under F1(A)/E0; lr is resume-state-owned (loud if overridden).
+    `cls` is the Trainer class (no top-level trainer edge); `declared_encoding` is the launch config's, which builds the rest.
+    Raises: DeclaredEncodingMismatchError — the stamp names another encoding; CheckpointStampError — a refused stamp or no
+    arch; ResumeIdentityMismatchError, ResumeTargetSemanticsError — the effective config drifts; ValueError — no scheduler state.
     """
     path = Path(path)
     raw = torch.load(path, weights_only=True, map_location="cpu")

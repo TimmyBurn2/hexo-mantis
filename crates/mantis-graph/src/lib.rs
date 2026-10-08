@@ -177,6 +177,7 @@ pub struct BuildParams {
     pub moves_remaining: u8,
     /// Trunk side length for the policy-slot window (19 for v6/v7full).
     pub trunk_size: i32,
+    /// Whether the axis walk's empty-to-empty edges are emitted; the registry row's `empty_edges`.
     pub empty_edges: EmptyEdges,
 }
 

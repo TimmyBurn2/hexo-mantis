@@ -1,4 +1,4 @@
-//! build(rot_s(board)) IS rot_s(build(board)) under all 12 D6 elements at radius 8, empty edges kept or pruned (RESEARCH-STRENGTH-1 App. A, pinned).
+//! build(rot_s(board)) IS rot_s(build(board)) under all 12 D6 elements at radius 8, empty edges kept or pruned.
 
 use std::collections::{BTreeMap, BTreeSet};
 

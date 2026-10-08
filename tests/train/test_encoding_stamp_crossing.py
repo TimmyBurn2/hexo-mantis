@@ -96,3 +96,14 @@ def test_a_frontier_cell_refuses_a_net_stamped_for_another_encoding(tmp_path: Pa
     assert frontier._snapshot_from_checkpoint(path, tmp_path / "r8.snap", encoding=R8)["step"] == 0
     with pytest.raises(DeclaredEncodingMismatchError):
         frontier._snapshot_from_checkpoint(path, tmp_path / "pruned.snap", encoding=PRUNED)
+
+
+def test_an_anchor_stamped_for_another_encoding_refuses_rather_than_falls_through(tmp_path: Path) -> None:
+    """The v2 anchor branch asserts the run's encoding; a foreign bootstrap candidate alone may skip, and says so."""
+    from mantis.train.anchor import _try_load_anchor  # noqa: PLC2701 — the anchor's one load path
+
+    path = _r8_checkpoint(tmp_path)
+    assert _try_load_anchor(path, declared_encoding=R8, device=_CPU) is not None
+    with pytest.raises(DeclaredEncodingMismatchError):
+        _try_load_anchor(path, declared_encoding=PRUNED, device=_CPU)
+    assert _try_load_anchor(path, declared_encoding=PRUNED, device=_CPU, skip_encoding_mismatch=True) is None
