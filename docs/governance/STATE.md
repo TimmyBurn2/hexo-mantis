@@ -45,6 +45,11 @@ in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c
   - ENCODE-1 (R388(f), CARD-ENCODE-1): empty→empty edge pruning as a new encoding row behind the seam, read by a 10k-step
     fine-tune pair from run11's best save on rung 16 and S at equal playouts, with the per-leaf and trainer-step cost;
     adopts only if strength holds by the line. The separate-trainer idea is closed (the drag is device time; GIL 11.7 %).
+  - DEPLOY-2 (the architect's packet, CARD-DEPLOY-2) carries (b), (c)'s frame and final cells, (d)'s inputs and (e):
+    A1 plays the floor read on box A under a GPU-share cap pre-stated before its first cell; A2 makes the followers,
+    the records writer and the dash feed box A units; A3 lands DASH-DYNAMIC and the dash's units from the records
+    (CARD-DASH-UNITS); A4 builds run12's inputs. Branch `deploy-2` on `r388-record`; local records
+    `mantis-records/deploy-2/`.
 - **R386's order.**
   - RUN11-GO accepted (R386(a)). run11 pauses at its next save, bundle mirrored, and resumes with a second cosine
     cycle, 5e-4 → 1e-4 over 54k steps, minted by the ruling (CARD-RUN11-CYCLE-2). The mint landed as `train.lr_cycle`

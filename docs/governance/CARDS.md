@@ -36,6 +36,18 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by the DEPLOY-2 packet (2026-10-08) — the floor read, evals on box A, the dash's units, run12's inputs
+
+- **CARD-DEPLOY-2 — ORDERED by the architect's DEPLOY-2 packet under R388: branch `deploy-2` (`.wt/deploy-2`), on dev
+  + fresh-2, box A for cells under the GPU-share cap, the desktop only to build.** A1 the floor read
+  (CARD-FLOOR-READ-2); A2 the evals on box A (CARD-EVAL-ON-BOX-A); A3 the dash (CARD-DASH-UNITS); A4 run12's inputs
+  (the S units of record on the GPU, the 1-ply plain start, the in-run gate's arena book, self-play's PUCT frame, the
+  best-save rule); A5 gates at each leg, a fresh review, gates.exit, the push on the operator's word. run11's tree and
+  config are excluded; a cell started without the cap halts the packet. Local records `mantis-records/deploy-2/`.
+- **CARD-DASH-UNITS — OPENED by the DEPLOY-2 packet (A3): DASH-DYNAMIC lands and the dash reads its units from the
+  records (the unit of record v legacy tags), served from box A behind the operator's tunnel.** Per save it shows rung
+  16, S, the monitor's rows (GEN cf CE, T, gap, exams), positions/h and the gate rounds.
+
 ## Opened by R388 (THE FLOOR READ, THE LINEAGE, THE ENCODING; 2026-10-08) — one rung, the second floor read, FRESH-2 accepted, run12, ENCODE-1
 
 - **CARD-RULER-ONE-RUNG — ORDERED by R388(a): the ruler of record is one rung, Six gen455 at 16 nodes per turn v ours
@@ -46,24 +58,34 @@ Both were found by running the gate set rather than by reading it, and both are 
   RUN11-CYCLE-2's verdict stands as pre-registered (its window, a warm restart read at its high-LR start, was the
   architect's error). The four cells' mean above the plateau (−0.754 logit) by +0.17 → the floor binds and run12's
   schedule is one cosine 5e-4 → 1e-4 over 300k; else the floor stays and ENCODE-1 takes the budget.
+  OWNED by DEPLOY-2 A1 (the packet calls it CARD-CYCLE-ANNEALED-READ): box A, one cell at a time under a GPU-share
+  cap pre-stated before the first cell (local records `mantis-records/deploy-2/PRESTATED.md`), S beside at 240k and
+  264k, the operator told the moment the read is in.
 - **CARD-FRESH-2-FINAL-CELLS — ORDERED by R388(c), low priority: close FRESH-2's record. HANDED to DEPLOY-2 (box A)
   2026-10-08 with the commands, the sha and the one-instrument-per-pair rule (local records
   `mantis-records/run11-fresh/fresh2/FINAL_CELLS_HANDOFF.md`).** The final save 139 933 is read
   on rung 16, X and the old gen455@128 cell and paired with run11@132k (the pre-statement's annotation 5); B3 ("the
   lineage stands" on 96k/108k/120k, every instrument) is final when they land. Local records
   `mantis-records/run11-fresh/fresh2/`.
+  DEPLOY-2 queues them on box A at the lowest priority, the run11@132k partners re-read on the same tree.
 - **CARD-F64-NORMALISER — RATIFIED by R388(c): the improved policy's softmax normaliser accumulates in f64, landing before
   any from-scratch start.** The f32 sum dropped terms under half an ulp on roots with thousands of children
   (random-init boards), shipping targets summing to 1 + up to 2.8e-4, run-fatal under LAW-14. Commit `99a13798` on
   branch `fresh-2` (a unity test that fails on the old code; targets only, moves unchanged, no measurable cost).
   LANDS as `e7b9c9f3` with R388's record (a fresh review, no blockers).
 - **CARD-PUCT-FRAME-SELFPLAY — ORDERED by R388(c): self-play's PUCT frame takes #13's fix (one implementation), pinned.**
+  OWNED by DEPLOY-2 A4.
 - **CARD-RUN12 — ORDERED by R388(d): run12 = run11's best save by ladder-and-S agreement, on dev + fresh-2.** The arena
   book in the in-run gate; bookless evaluations from the origin stone alone (1 ply); 48 workers. It starts after
   CARD-FLOOR-READ-2's read, without waiting for ENCODE-1. Its going-forward line: four rung-16 cells above its parent's
   reading by +0.17, read every 12k; the two-read halts stay.
+  Its best-save rule becomes a tool (DEPLOY-2 A4): the save first on rung 16 and S, else the first on rung 16 whose S
+  interval holds the best S reading, the pick and both readings stated.
 - **CARD-EVAL-ON-BOX-A — ORDERED by R388(e): cells, followers and the dash feed run on box A under a GPU-share cap.** The
   run's positions/h during cells is a row; above a 10 % daily cost an eval box replaces it.
+  OWNED by DEPLOY-2 A2 (the packet's CARD-EVALS-ON-BOX): the cell followers (rung of record every 12k, S every 24k,
+  the legacy gen455@128 tagged on two saves then stopped), the records writer and the dash feed as box A units; the
+  desktop mirror best-effort.
 - **CARD-BOX-B-DESTROY — ORDERED by R388(e): box B is destroyed after the fresh bundle's mirror is sha-verified (the
   operator's act).** VERIFIED 2026-10-08 07:22 CEST: the 139 933 bundle in the mirror matches its manifest and box B
   (checkpoint `284abc88…`); box B's remaining FRESH-2 records are swept into `mantis-mirror/run11-fresh/`. Box B is
@@ -94,6 +116,7 @@ Both were found by running the gate set rather than by reading it, and both are 
 - **CARD-CYCLE-ANNEALED-READ — CARDED by RUN11-CYCLE-2: a rung-16 cell at the cycle's annealed end (228k) and after.**
   The pre-registered window is the cycle's first 12k steps at LR 5.0 → 4.5e-4; 186k alone read +0.21 logit over the
   plateau (SE 0.08). A report row for the architect, not a re-opening of the verdict.
+  SUPERSEDED by CARD-FLOOR-READ-2 (R388(b)): four rung-16 cells at 228k–264k, played by the DEPLOY-2 packet's A1.
 - **CARD-TRAIN-SPEED-1 — ORDERED by R386(a); EXITED 2026-10-07: box A's closed-loop A/Bs (4 interleaved pairs each, the
   trainer closed-loop as production) and the knob sweep.** C8 (the Gumbel interior logits once, bit-identical,
   criterion −13 %) LANDED; #10 (quick-arm decided roots unsearched, value-only rows, `unsearched_decided_rows`) +1.1 %
@@ -168,6 +191,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   draw (941 draws) and mirrors its 16 cases; `arena_s20261006_p5` has 0 solver-forced openings and no colour bias
   beyond chance. OPEN: "1 ply as the plain start" is not built (its reading is a question for the exit), and the in-run
   gate still names `book_v1` in every production config (a mint at the next config change).
+  ANSWERED by R388(d): bookless evaluations start from the origin stone alone (the 1-ply draw), and the in-run gate
+  takes the arena book; both OWNED by DEPLOY-2 A4.
 - **CARD-RUN12-ENCODING — MOVED to CARD-ENCODE-1 by R388(f) (run12 starts without it). OPENED by DEPLOY-1 for R386(d):
   #18, pruning empty→empty edges, is run12's encoding.** 84 %
   of our edges join two empty cells (SEARCH_PERF §3.3 #18). It lands behind the seam (a new row in
@@ -182,7 +207,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   DEPLOY-1's rows CLOSED 2026-10-07: D1 (the frame, gated to the deploy head and pinned at both stone levels), D2 (the
   first-collision stop), D3 (the standalone width), D6 (the panic payload), D11 (the verify skip, −20.6 % a build), D14
   (the stale threshold, gone with #1's rewrite), D15 (annotated in the CPU head profile).
-  - D1 the virtual-loss frame at second-stone parents — DEPLOY-1 L3, with a test pinning the sign.
+  - D1 the virtual-loss frame at second-stone parents — DEPLOY-1 L3, with a test pinning the sign. R388(c) extends it
+    to self-play's PUCT, one implementation (CARD-PUCT-FRAME-SELFPLAY).
   - D2 a select call burning its attempts after its first collision — DEPLOY-1 L1 (the exact stop).
   - D3 `leaf_build_threads` resolving to 1 on single-game hosts — DEPLOY-1 L1 (#2).
   - D4 the production trainer's ring sample on 1 thread (PERF-3's drivers used 10) — TRAIN-SPEED-1 (a cap lever).
