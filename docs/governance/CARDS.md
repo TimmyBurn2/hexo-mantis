@@ -36,6 +36,39 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R388 (THE FLOOR READ, THE LINEAGE, THE ENCODING; 2026-10-08) — one rung, the second floor read, FRESH-2 accepted, run12, ENCODE-1
+
+- **CARD-RULER-ONE-RUNG — ORDERED by R388(a): the ruler of record is one rung, Six gen455 at 16 nodes per turn v ours
+  128/stone on the arena book (`ladder455_n16`).** It steps to 128 then 256 on two consecutive saves above 0.7, never
+  down. S on the GPU is the second ruler; the S units of record move to the GPU (580/580 identical). Validity accepted
+  (the 132k/156k pair unresolved on both). R387's N50 and equal-work parity read are withdrawn.
+- **CARD-FLOOR-READ-2 — ORDERED by R388(b), pre-stated: four rung-16 cells of run11 at 228k, 240k, 252k and 264k.**
+  RUN11-CYCLE-2's verdict stands as pre-registered (its window, a warm restart read at its high-LR start, was the
+  architect's error). The four cells' mean above the plateau (−0.754 logit) by +0.17 → the floor binds and run12's
+  schedule is one cosine 5e-4 → 1e-4 over 300k; else the floor stays and ENCODE-1 takes the budget.
+- **CARD-FRESH-2-FINAL-CELLS — ORDERED by R388(c), low priority: close FRESH-2's record.** The final save 139 933 is read
+  on rung 16, X and the old gen455@128 cell and paired with run11@132k (the pre-statement's annotation 5); B3 ("the
+  lineage stands" on 96k/108k/120k, every instrument) is final when they land. Local records
+  `mantis-records/run11-fresh/fresh2/`.
+- **CARD-F64-NORMALISER — RATIFIED by R388(c): the improved policy's softmax normaliser accumulates in f64, landing before
+  any from-scratch start.** The f32 sum dropped terms under half an ulp on roots with thousands of children
+  (random-init boards), shipping targets summing to 1 + up to 2.8e-4, run-fatal under LAW-14. Commit `99a13798` on
+  branch `fresh-2` (a unity test that fails on the old code; targets only, moves unchanged, no measurable cost).
+- **CARD-PUCT-FRAME-SELFPLAY — ORDERED by R388(c): self-play's PUCT frame takes #13's fix (one implementation), pinned.**
+- **CARD-RUN12 — ORDERED by R388(d): run12 = run11's best save by ladder-and-S agreement, on dev + fresh-2.** The arena
+  book in the in-run gate; bookless evaluations from the origin stone alone (1 ply); 48 workers. It starts after
+  CARD-FLOOR-READ-2's read, without waiting for ENCODE-1. Its going-forward line: four rung-16 cells above its parent's
+  reading by +0.17, read every 12k; the two-read halts stay.
+- **CARD-EVAL-ON-BOX-A — ORDERED by R388(e): cells, followers and the dash feed run on box A under a GPU-share cap.** The
+  run's positions/h during cells is a row; above a 10 % daily cost an eval box replaces it.
+- **CARD-BOX-B-DESTROY — ORDERED by R388(e): box B is destroyed after the fresh bundle's mirror is sha-verified (the
+  operator's act).**
+- **CARD-ENCODE-1 — ORDERED by R388(f): prune empty→empty edges as a new encoding row behind the seam.** Registry,
+  detector, conformance and a pre-registered witness; read by a fine-tune pair from run11's best save (pruned v unpruned
+  control, equal recipe, 10k steps) on rung 16 and S at equal playouts, with the per-leaf and trainer-step cost beside;
+  it adopts only if strength holds by the line. Supersedes CARD-RUN12-ENCODING's "#18 is run12's encoding".
+- **CARD-SEPARATE-TRAINER — CLOSED by R388(f): the drag is device time (GIL 11.7 %).**
+
 ## Opened by R386 (THE FLOOR, THE FRESH LINE, THE INSTRUMENT; 2026-10-06) — run11 pauses, the instrument breaks once, DEPLOY-1
 
 - **CARD-RUN11-CYCLE-2 — ORDERED by R386(a); EXITED 2026-10-07 (local records `mantis-records/run11-cycle-2/`): run11
@@ -59,12 +92,16 @@ Both were found by running the gate set rather than by reading it, and both are 
 - **CARD-RING-SAMPLE-WIDTH — CARDED by TRAIN-SPEED-1: the trainer's ring sample at 8 threads, a cap lever.** It lands
   (a trainer-side width; the in-run eval's leaf-build reservation unmoved) only when a change drops realised
   steps/game below 2.3.
-- **CARD-RUN11-FRESH-RESUME — ORDERED by R386(b): RUN11-FRESH is VIABLE and resumes on box B for 48 h.** Its cap band
+- **CARD-RUN11-FRESH-RESUME — ACCEPTED and CLOSED by R388(c): the lineage stands.** Resumed from 69 954 on 2026-10-07
+  10:30 CEST, stopped at 139 933 on 2026-10-08 06:50 CEST on the operator's word; at matched steps 84k–120k it trails
+  run11 on rung 16 (−1.04 to −1.39 logit), X and gen455@128; the final cells are CARD-FRESH-2-FINAL-CELLS. Was
+  ORDERED by R386(b): RUN11-FRESH is VIABLE and resumes on box B for 48 h. Its cap band
   becomes a two-read halt at < 10 % with a slope row; its exam floors stay report-only until first passed. Its curve
   against run11's at matched steps, on (c)'s instrument, is run12's parent evidence. The FRESH-2 packet runs it in
   another session; the cap band's two-read rule is monitor code, owed before the resume.
 - **CARD-INSTRUMENT-BREAK — ORDERED by R386(c): the instrument breaks once. DEPLOY-1's L4 builds it, as
-  CARD-RULER-OF-RECORD and CARD-EVAL-OPENINGS-ARENA.**
+  CARD-RULER-OF-RECORD and CARD-EVAL-OPENINGS-ARENA.** Its ruler is ANNOTATED by R387(a) and then R388(a): one rung,
+  gen455 at 16 nodes per turn (CARD-RULER-ONE-RUNG).
   - The ruler of record is Six gen g at equal playouts per turn (ours 128 per stone, Six 256 per turn). g is the lowest
     generation that reads the shipped head inside [0.3, 0.7] on a 64-pair screen, re-picked upward with a three-save
     overlap when a panel leaves the band.
@@ -110,7 +147,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   @156k on (ruler g, the arena openings, L3's head), 288 pairs each, and S likewise once, and re-derives the
   going-forward line (the parent's new anchor + the line). Every old reading stays in the records with its instrument
   named. DONE as annotated under CARD-INSTRUMENT-BREAK: gens 150/200 read 0.180/0.211 (flat), the gen455 node screen
-  0.344/0.336/0.273/0.242 at 16/32/64/128 (flat), so one rung at 16; the validity ruling is owed.
+  0.344/0.336/0.273/0.242 at 16/32/64/128 (flat), so one rung at 16; the validity ruling is owed. RULED by R388(a):
+  one rung, validity accepted (CARD-RULER-ONE-RUNG).
 - **CARD-EVAL-OPENINGS-ARENA — OPENED by DEPLOY-1 for R386(c), OWNED by its L4: an arena-draw tool under tools/ (its
   path named here once tracked), the arena protocol exactly (the 18-cell region, odd plies, the 4-in-6 redraw, uniform
   over balanced draws), its unit tests mirroring the arena's `opening.test.ts` cases.** 288 seeded arena-5 openings are the cell book and "1 ply" the plain
@@ -118,7 +156,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   draw (941 draws) and mirrors its 16 cases; `arena_s20261006_p5` has 0 solver-forced openings and no colour bias
   beyond chance. OPEN: "1 ply as the plain start" is not built (its reading is a question for the exit), and the in-run
   gate still names `book_v1` in every production config (a mint at the next config change).
-- **CARD-RUN12-ENCODING — OPENED by DEPLOY-1 for R386(d): #18, pruning empty→empty edges, is run12's encoding.** 84 %
+- **CARD-RUN12-ENCODING — MOVED to CARD-ENCODE-1 by R388(f) (run12 starts without it). OPENED by DEPLOY-1 for R386(d):
+  #18, pruning empty→empty edges, is run12's encoding.** 84 %
   of our edges join two empty cells (SEARCH_PERF §3.3 #18). It lands behind the seam (a new row in
   `crates/mantis-encoding/src/registry.toml`, a schema key, LAW-08/11/12, gate 11) with a fine-tune pair: pruned
   against an equal-recipe unpruned control (LAW-19), then equal-time cells. Not DEPLOY-1's to build.

@@ -7,15 +7,41 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
-**R386 (2026-10-06): THE FLOOR, THE FRESH LINE, THE INSTRUMENT. RUN11-GO is accepted. run11 pauses at its next save
-and resumes with a second cosine cycle (5e-4 → 1e-4 over 54k steps); box A hosts TRAIN-SPEED-1 while it pauses.
-RUN11-FRESH is VIABLE and resumes on box B for 48 h under a two-read cap band at < 10 %. The instrument breaks once:
-the ruler of record becomes Six gen g at equal playouts per turn on the arena protocol's openings, and book_v1 retires.
-SEARCH-PERF-1 is accepted and lands as DEPLOY-1.** run10 will not START (R376(c)). run11 is arm 2's run
+**R388 (2026-10-08): THE FLOOR READ, THE LINEAGE, THE ENCODING. The ruler of record is one rung (Six gen455 at 16
+nodes per turn v ours 128/stone, arena book), S on the GPU the second. RUN11-CYCLE-2's verdict stands, and a second
+floor read is pre-stated at 228k–264k. FRESH-2 is accepted: the lineage stands, the fresh line is closed, and the f64
+normaliser fix lands before any from-scratch start. run12 is run11's best save on dev + fresh-2, starting after the
+floor read. Cells move to box A; box B is destroyed after the fresh bundle is verified. ENCODE-1 reads edge pruning.**
+(R386's order, below, stands where R388 does not move it.) run10 will not START (R376(c)). run11 is arm 2's run
 (`configs/run11a2.yaml`, run id `run11a2`), continued from 32 201 under R385(a); at this commit it RUNS on box A
 on its second cosine cycle, resumed 2026-10-07 12:33 CEST from its 174 008 stop save (RUN11-CYCLE-2). run11 carries the deploy block of record (R378(a)) and
 in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c), CARD-RUN11-DESIGN).
 
+- **R388's order** (RULINGS R388; CARDS "Opened by R388").
+  - The ruler of record is one rung (R388(a), CARD-RULER-ONE-RUNG): gen455 at 16 nodes per turn, stepping to 128 then
+    256 on two consecutive saves above 0.7, never down; S on the GPU is the second ruler (the S units of record move to
+    the GPU, 580/580 identical); validity accepted with the 132k/156k pair unresolved on both. R387's N50 and equal-work
+    parity read are withdrawn.
+  - RUN11-CYCLE-2's verdict stands (R388(b)); a second floor read is pre-stated (CARD-FLOOR-READ-2): four rung-16 cells
+    at 228k, 240k, 252k and 264k, their mean above the plateau (−0.754 logit) by +0.17 → the floor binds and run12's
+    schedule is one cosine 5e-4 → 1e-4 over 300k; else the floor stays and ENCODE-1 takes the budget.
+  - FRESH-2 is accepted (R388(c)): the lineage stands, and the fresh line is CLOSED. It ran on box B from its 69 954 halt
+    bundle (2026-10-07 10:30 CEST) to 139 933, stopped on the operator's word on 2026-10-08 06:50 CEST. At matched steps
+    84k–120k it trails run11 on every instrument: rung 16 −1.04 to −1.39 logit, X −0.76 to −1.03, gen455@128 −0.13 to
+    −0.51 (local records `mantis-records/run11-fresh/fresh2/FRESH2_REPORT.md`). Its final cells (139 933 v run11@132k)
+    play at low priority to close the record (CARD-FRESH-2-FINAL-CELLS). The f64 softmax normaliser fix (branch
+    `fresh-2`) is ratified and lands before any from-scratch start (CARD-F64-NORMALISER); self-play's PUCT frame takes
+    #13's fix as one implementation, pinned (CARD-PUCT-FRAME-SELFPLAY).
+  - run12 (R388(d), CARD-RUN12): run11's best save by ladder-and-S agreement, on dev + fresh-2, the arena book in the
+    in-run gate, bookless evaluations from the origin stone alone (1 ply), 48 workers; it starts after the floor read,
+    without waiting for ENCODE-1. Its going-forward line: four rung-16 cells above its parent's reading by +0.17, read
+    every 12k; the two-read halts stay.
+  - Cells, followers and the dash feed move to box A under a GPU-share cap (R388(e), CARD-EVAL-ON-BOX-A); the run's
+    positions/h during cells is a row; above a 10 % daily cost an eval box replaces it. Box B is destroyed after the
+    fresh bundle's mirror is sha-verified, the operator's act (CARD-BOX-B-DESTROY).
+  - ENCODE-1 (R388(f), CARD-ENCODE-1): empty→empty edge pruning as a new encoding row behind the seam, read by a 10k-step
+    fine-tune pair from run11's best save on rung 16 and S at equal playouts, with the per-leaf and trainer-step cost;
+    adopts only if strength holds by the line. The separate-trainer idea is closed (the drag is device time; GIL 11.7 %).
 - **R386's order.**
   - RUN11-GO accepted (R386(a)). run11 pauses at its next save, bundle mirrored, and resumes with a second cosine
     cycle, 5e-4 → 1e-4 over 54k steps, minted by the ruling (CARD-RUN11-CYCLE-2). The mint landed as `train.lr_cycle`
@@ -28,6 +54,7 @@ in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c
   - RUN11-FRESH is VIABLE (R386(b)) and resumes on box B for 48 h: the cap band becomes a two-read halt at < 10 % with a
     slope row; exam floors stay report-only until first passed. Its curve against run11's at matched steps, on the new
     instrument, is run12's parent evidence (CARD-RUN11-FRESH-RESUME; the FRESH-2 packet, another session).
+    ACCEPTED and CLOSED by R388(c): the lineage stands (above).
   - The instrument breaks once (R386(c), CARD-INSTRUMENT-BREAK). The ruler of record is Six gen g at equal playouts per
     turn (ours 128/stone, Six 256/turn), g the lowest generation reading the shipped head inside [0.3, 0.7] on a
     64-pair screen, re-picked upward with a three-save overlap. S stays the second ruler; equal-time cells are a report

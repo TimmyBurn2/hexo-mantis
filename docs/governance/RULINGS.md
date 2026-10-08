@@ -1,4 +1,4 @@
-# RULINGS — R23 to R387
+# RULINGS — R23 to R388
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R388.
+- Numbering continues from R346. The next ruling is R389.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -36,6 +36,54 @@ still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register 
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
 
+### R388 — THE FLOOR READ, THE LINEAGE, THE ENCODING
+Decision: verbatim below.
+
+> R388 — THE FLOOR READ, THE LINEAGE, THE ENCODING.
+> (a) The ruler of record is one rung: Six gen455 at 16 nodes per turn v ours 128/stone on the
+> arena book, stepping to 128 then 256 on two consecutive saves above 0.7, never down; S on the
+> GPU is the second ruler; validity accepted (the 132k/156k pair is unresolved on both). R387's
+> N50 and parity read are withdrawn. The S units of record move to the GPU (580/580 identical).
+> (b) RUN11-CYCLE-2's verdict stands as pre-registered; its window was the architect's error
+> (a warm restart read at its high-LR start). Pre-stated now: four rung-16 cells at 228k, 240k,
+> 252k, 264k; their mean above the plateau (−0.754) by +0.17 → the floor binds and run12's
+> schedule is one cosine 5e-4 → 1e-4 over 300k; else the floor stays and ENCODE-1 takes the
+> budget. (c) FRESH-2 is accepted: the lineage stands; the line is closed; its final cells play
+> at low priority to close the record. The f64 normaliser fix is ratified and lands before any
+> from-scratch start. Self-play's PUCT frame takes #13's fix (one implementation), pinned.
+> (d) run12 = run11's best save by ladder-and-S agreement, on dev + fresh-2, the arena book in
+> the in-run gate, bookless evaluations from the origin stone alone (1 ply), 48 workers. It
+> starts after (b)'s read, without waiting for ENCODE-1. Its going-forward line: four cells on
+> rung 16 above its parent's reading by +0.17, read every 12k; the two-read halts stay.
+> (e) Cells, followers and the dash feed run on box A under a GPU-share cap; the run's positions/h
+> during cells is a row; above a 10 % daily cost an eval box replaces it. Box B is destroyed
+> after the fresh bundle's mirror is sha-verified (the operator's act).
+> (f) ENCODE-1: prune empty→empty edges as a new encoding row behind the seam — registry,
+> detector, conformance, a pre-registered witness — read by a fine-tune pair from run11's best
+> save (pruned v unpruned control, equal recipe, 10k steps) on rung 16 and S at equal playouts,
+> with the per-leaf and trainer-step cost beside; it adopts only if strength holds by the line.
+> The separate-trainer idea is closed: the drag is device time (GIL 11.7 %).
+
+Status: standing. ANNOTATES R387(a): the ruler of record is one rung (Six gen455 at 16 nodes per turn v ours 128 per
+stone on the arena book), stepping to 128 then 256 on two consecutive saves above 0.7 and never down, with S on the GPU
+the second ruler and the validity read accepted (the 132k/156k pair unresolved on both); R387's N50 and equal-work
+parity read are withdrawn, and the S units of record move to the GPU (580/580 identical) by (a). Keeps RUN11-CYCLE-2's
+pre-registered verdict (its window, a warm restart read at its high-LR start, the architect's error) and pre-states a
+second floor read by (b): four rung-16 cells at 228k, 240k, 252k and 264k, whose mean above the plateau (−0.754) by
++0.17 makes the floor bind and run12's schedule one cosine 5e-4 → 1e-4 over 300k; otherwise the floor stays and
+ENCODE-1 takes the budget. Accepts FRESH-2 by (c): the lineage stands and the line is closed, its final cells playing at
+low priority to close the record; ratifies the f64 softmax normaliser fix, to land before any from-scratch start; and
+gives self-play's PUCT frame #13's fix as one implementation, pinned. Defines run12 by (d): run11's best save by
+ladder-and-S agreement, on dev plus fresh-2, the arena book in the in-run gate, bookless evaluations from the origin
+stone alone, 48 workers, starting after (b)'s read without waiting for ENCODE-1, its going-forward line four rung-16
+cells above its parent's reading by +0.17 read every 12k, the two-read halts kept. Moves cells, followers and the dash
+feed to box A under a GPU-share cap by (e), the run's positions/h during cells a row and an eval box replacing it above
+a 10 % daily cost; box B is destroyed after the fresh bundle's mirror is sha-verified, the operator's act. Orders
+ENCODE-1 by (f) (empty→empty edge pruning as a new encoding row behind the seam, read by a 10k-step fine-tune pair from
+run11's best save on rung 16 and S at equal playouts, adopting only if strength holds by the line) and closes the
+separate-trainer idea (the drag is device time; the GIL is 11.7 %). The work it forwards is (b)'s floor read, FRESH-2's
+final cells, the f64 fix's landing, the PUCT frame fix in self-play, run12, the eval move to box A and ENCODE-1.
+
 ### R387 — THE RULER IS A LADDER
 Decision: verbatim below.
 
@@ -59,7 +107,8 @@ Decision: verbatim below.
 > deploy. The gens 250/300 screen is cancelled; the gen455 node screen (16/32/64/128 per
 > turn, 64 pairs each) takes its slot and the re-base follows it.
 
-Status: standing. ANNOTATES R386(c): the ruler of record is a node ladder on Six gen455 (rungs 16–512 nodes per turn
+Status: standing; (a)'s N50, rung pair and equal-work parity read WITHDRAWN by R388(a) (one rung, gen455 at 16 nodes per
+turn, stepping 16 → 128 → 256; validity accepted). ANNOTATES R386(c): the ruler of record is a node ladder on Six gen455 (rungs 16–512 nodes per turn
 against our 128 per stone), each save read at the two rungs bracketing 50 % with N50 its number; X stops after the
 re-base. Records #14's one flip in 512 with the ladder-only switch standing, keeps #5(b) as a posture change, and lands
 #9 as the single CPU branch with its stand-in miss flagged and a real-VPS re-read owed.
@@ -100,6 +149,9 @@ Decision: verbatim below.
 > The two cards' owed rulings are stated as one-line questions in DEPLOY-1's exit, then ruled.
 
 Status: standing; (c)'s generation walk ANNOTATED by R387(a) (the ruler of record is a node ladder on Six gen455).
+(b)'s RUN11-FRESH ACCEPTED and CLOSED by R388(c) (the lineage stands). (d)'s #13 EXTENDED to self-play's PUCT frame by
+R388(c), and (d)'s #18 MOVED to ENCODE-1 by R388(f) (run12 starts without it). (e)'s parked trainer interference:
+the separate-trainer idea CLOSED by R388(f).
 Accepts RUN11-GO by (a): run11 pauses at its next save with its bundle mirrored, and while it pauses
 box A hosts TRAIN-SPEED-1's closed-loop A/Bs and the knob sweep; run11 then resumes with a second cosine cycle, 5e-4 →
 1e-4 over 54k steps, minted by this ruling and read by the next four ladder cells against the 108k–156k plateau mean (a
@@ -159,7 +211,7 @@ Decision: verbatim below.
 > desktop plays cells and reads. A one-screen status every 24 h. The two STATE commits and
 > PERF-3's card numbers push now.
 
-Status: standing. Accepts RUN11-PRE and sets its registered pick (arm 3) aside by ruling, the architect's error, by
+Status: standing; (f)'s desktop cells MOVED to box A under a GPU-share cap by R388(e). Accepts RUN11-PRE and sets its registered pick (arm 3) aside by ruling, the architect's error, by
 (a): the pick rule's inputs were degenerate (L̄ saturates inside 8 h; the tie-break read one save's jitter). run11
 continues arm 2 (2.4 steps/game, value mask 1/8) from its final bundle on box A, on three grounds: the mask replicated
 live (10/10 saves, gap +0.012 against arm 1's +0.066), arms 2 and 3 tie on value and policy at matched games, and
