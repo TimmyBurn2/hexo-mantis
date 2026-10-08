@@ -26,6 +26,7 @@ from mantis.arena.adjudicate import (
     PlyCapAdjudicator,
     PlyCapVerdict,
 )
+from mantis.arena.books import PLAIN_START
 from mantis.arena.regime import RegimeKey
 
 
@@ -109,7 +110,7 @@ def _play_one_game(
     adjudicator: PlyCapAdjudicator | None = None,
 ) -> tuple[str, int, tuple[tuple[int, int], ...], str, PlyCapVerdict | None, tuple[dict[str, Any], ...] | None,
            dict[str, int] | None]:
-    """Play one game from `opening_moves`; return
+    """Play one game from `opening_moves` (an empty one plays `PLAIN_START`, the arena's 1-ply draw); return
     `(winner, plies, all_moves, terminal, adjudication, search_stats, candidate_tactics)`.
 
     Both players' `new_game()` fire before the opening is replayed; play then alternates argmax
@@ -130,7 +131,7 @@ def _play_one_game(
                  if f is not None]
 
     moves: list[tuple[int, int]] = []
-    for q, r in opening_moves:
+    for q, r in opening_moves or PLAIN_START:
         if not board.is_legal(q, r):
             raise IllegalOpeningError(
                 f"opening {opening_id!r} does not replay: move ({q}, {r}) at ply "
@@ -273,8 +274,8 @@ def play_paired_match(
 ) -> list[GameRecord]:
     """Play every opening TWICE (colours swapped); return one `GameRecord` per game.
 
-    `openings` items need only `.opening_id` and `.moves`, so this stays decoupled from the book
-    package; `adjudicator` is forwarded unchanged, and `None` keeps the capped-game draw.
+    `openings` items need only `.opening_id` and `.moves` (empty `.moves` plays the books' `PLAIN_START`);
+    `adjudicator` is forwarded unchanged, and `None` keeps the capped-game draw.
 
     `concurrency` > 1 runs that many games IN FLIGHT, one thread each, sharing whatever inference
     server the players hold, and requires `player_factory` because the players carry per-game

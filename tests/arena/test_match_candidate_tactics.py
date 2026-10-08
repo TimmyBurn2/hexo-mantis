@@ -27,7 +27,7 @@ class _Line:
 
 
 def _game(rows: bool) -> tuple:
-    candidate = _Line([(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0)], rows=rows)
+    candidate = _Line([(1, 0), (2, 0), (3, 0), (4, 0), (5, 0)], rows=rows)  # the plain start places the origin
     # The opponent exposes rows too: only the candidate's may be summed.
     opponent = _Line([(0, 3), (1, 3), (2, 3), (3, 3), (-3, 3), (-4, 3)], rows=True)
     return _play_one_game(candidate, opponent, [], candidate_color=1, board_factory=Board, max_plies=64,
@@ -37,12 +37,12 @@ def _game(rows: bool) -> tuple:
 def test_the_candidates_rows_are_summed_over_its_stones_and_never_the_opponents() -> None:
     winner, plies, *_rest, tactics = _game(rows=True)
     assert winner == "candidate" and plies == 12
-    # Six candidate stones, the sixth making six, each a row of 4 descents with a proof on the odd ones.
-    assert tactics == {"descents": 24, "root_proofs_found": 3, "stones": 6}
+    # Five searched candidate stones beside the plain start's origin, each a row of 4 descents, a proof on the odd ones.
+    assert tactics == {"descents": 20, "root_proofs_found": 3, "stones": 5}
 
 
 def test_a_head_that_ran_no_tactics_leaves_no_rows_and_no_record_key() -> None:
-    candidate = _Line([(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0)], rows=False)
+    candidate = _Line([(1, 0), (2, 0), (3, 0), (4, 0), (5, 0)], rows=False)
     opponent = _Line([(0, 3), (1, 3), (2, 3), (3, 3), (-3, 3), (-4, 3)], rows=True)
     *_rest, tactics = _play_one_game(candidate, opponent, [], candidate_color=1, board_factory=Board, max_plies=64,
                                      opening_id="t", adjudicator=None)

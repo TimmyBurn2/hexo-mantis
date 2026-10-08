@@ -158,12 +158,12 @@ class _CachedLine:
 
 
 def test_a_game_record_carries_that_games_cache_rows_and_the_eval_record_writes_them():
-    candidate = _CachedLine([(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0)])
+    candidate = _CachedLine([(1, 0), (2, 0), (3, 0), (4, 0), (5, 0)])  # the plain start places the origin
     candidate.rows["hits"] = 40  # rows from an earlier game on the same player
     opponent = _CachedLine([(0, 3), (1, 3), (2, 3), (3, 3), (-3, 3), (-4, 3)])
     record = _record_one(candidate, opponent, SimpleNamespace(moves=[], opening_id="t"), 1, regime_key=None,
                          board_factory=Board, max_plies=64, adjudicator=None)
-    assert record.candidate_search == {"cache_calls": 6, "cache_positions": 12, "cache_hits": 6, "cache_served": 6,
+    assert record.candidate_search == {"cache_calls": 5, "cache_positions": 10, "cache_hits": 5, "cache_served": 5,
                                        "cache_in_batch_repeats": 0, "cache_all_hit_calls": 0}, "this game's moves only"
     kw = dict(game_id="g", run_id="r", step=1, channel="external", rung="six", phase="rung", game_index=1,
               moves=[(0, 0)], result="p1", plies=1, termination="win", candidate_color=1, seed=1, served_sims=256)

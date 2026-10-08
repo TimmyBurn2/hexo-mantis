@@ -26,6 +26,10 @@ class Opening:
     moves: list[tuple[int, int]]
 
 
+#: The arena protocol's 1-ply draw: the origin stone alone, where a game with no book opening starts.
+PLAIN_START: tuple[tuple[int, int], ...] = ((0, 0),)
+
+
 def _load_manifest(books_dir: Path) -> dict:
     manifest_path = books_dir / "manifest.toml"
     if not manifest_path.is_file():
@@ -145,4 +149,4 @@ def round_openings(
     ]
 
 
-__all__ = ["BookError", "Opening", "book_openings", "book_sha256", "paired_openings", "round_openings"]
+__all__ = ["PLAIN_START", "BookError", "Opening", "book_openings", "book_sha256", "paired_openings", "round_openings"]
