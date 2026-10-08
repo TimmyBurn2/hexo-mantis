@@ -1,4 +1,4 @@
-# RULINGS — R23 to R388
+# RULINGS — R23 to R389
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R389.
+- Numbering continues from R346. The next ruling is R390.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,44 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R389 — THE SLOPE, NOT THE FLOOR; THE CAPACITY PROBE
+Decision: verbatim below.
+
+> R389 — THE SLOPE, NOT THE FLOOR; THE CAPACITY PROBE.
+> (a) DEPLOY-2 is accepted. ENCODE-1 is accepted as NOT PASS: gnn_axis_r8_pruned stays a
+> landed capability, not a lever (pushed after gate 17). LAW-08 is annotated: the encoding-
+> consumer check is the registry census; gate 11 is unchanged.
+> (b) R388(b)'s "the floor binds" is withdrawn: it compared a later level with the mean of a
+> rising series. Rung 16 climbs ≈ +0.11 logit per 48k steps from 108k to 264k with no change
+> of slope through the cycle. The LR schedule is not the lever; run12's is a plain cosine and
+> no run is spent on it. The error is the architect's.
+> (c) The limiter is read, not guessed: DISTILL-1. Six gen455's raw policy and value (MIT;
+> R376(f): a means, lineage-tagged) label ≥ 1M positions from run11's rings. Equal-budget
+> supervised training of 4×128, 4×256 and 8×128 on them, beside a 4×128 control on run11's
+> own search targets and a permuted known-bad. Read: held-out KL to the teacher; rung 16 and
+> S as two-save panels. Pre-stated: distilled 4×128 above run11's best by +0.17 on both →
+> run12 starts from it; only a wider net reaches it → run12 starts from that net; none →
+> DENSE-1 (a hex-conv model kind behind the seam) is designed. run11 pauses one day for it.
+> (d) run11 trains until run12's mint. run12 carries replay_capacity 2M as a prereg row
+> with its own two-save gap and T check. The supervised harness is the lab for architecture
+> and auxiliary targets before any self-play run carries them.
+> (e) No new box. Box B is destroyed on the fresh bundle's verification.
+
+Status: standing. ANNOTATES R388(b): "the floor binds" is withdrawn, because it compared a later level with the mean of a
+rising series; rung 16 climbs about +0.11 logit per 48k steps from 108k to 264k with no change of slope through the
+cycle, so the LR schedule is not the lever, run12's is a plain cosine and no run is spent on it; the error is the
+architect's. Accepts DEPLOY-2 and accepts ENCODE-1 as NOT PASS by (a): gnn_axis_r8_pruned stays a landed capability, not
+a lever (pushed after gate 17); LAW-08 is annotated so that the encoding-consumer check is the registry census, gate 11
+unchanged. Orders DISTILL-1 by (c): Six gen455's raw policy and value (MIT; R376(f): a means, lineage-tagged) label at
+least 1M positions from run11's rings; 4×128, 4×256 and 8×128 train on them at equal budget beside a 4×128 control on
+run11's own search targets and a permuted known-bad, read by held-out KL to the teacher and by rung 16 and S as two-save
+panels. Pre-stated: a distilled 4×128 above run11's best by +0.17 on both rungs → run12 starts from it; only a wider net
+reaching it → run12 starts from that net; none → DENSE-1, a hex-conv model kind behind the seam, is designed. run11
+pauses one day for it. Keeps run11 training until run12's mint by (d); run12 carries replay_capacity 2M as a prereg row
+with its own two-save gap and T check, and the supervised harness is the lab for architecture and auxiliary targets
+before any self-play run carries them. Spends no new box by (e): box B is destroyed on the fresh bundle's verification.
+The work it forwards is DISTILL-1, run11's one-day pause, run12's prereg row and DENSE-1 if the probe finds nothing.
 
 ### R388 — THE FLOOR READ, THE LINEAGE, THE ENCODING
 Decision: verbatim below.

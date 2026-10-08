@@ -57,6 +57,21 @@ Both were found by running the gate set rather than by reading it, and both are 
   rung, never down) and the parent and anchor re-read at a step live only in box A's follower script.** They come into
   the tree, one implementation the follower and the dash share, before run12's going-forward line can meet a step.
 
+## Opened by R389 (THE SLOPE, NOT THE FLOOR; THE CAPACITY PROBE; 2026-10-08) — DISTILL-1, the withdrawn floor, run12's replay row
+
+- **CARD-DISTILL-1** (R389(c)). Label at least 1M positions from run11's rings with Six gen455's raw policy and value
+  (MIT; R376(f): a means, lineage-tagged). Train 4×128, 4×256 and 8×128 at equal budget beside a 4×128 control on
+  run11's own search targets and a permuted known-bad. Read held-out KL to the teacher; rung 16 and S as two-save panels.
+  Pre-stated: distilled 4×128 above run11's best by +0.17 on both → run12 starts from it; only a wider net → run12 starts
+  from that net; none → CARD-DENSE-1. run11 pauses one day for it.
+- **CARD-DENSE-1** (R389(c), conditional). Design a hex-conv model kind behind the seam, only if DISTILL-1 finds no net
+  above the line.
+- **CARD-RUN12-REPLAY** (R389(d)). run12 carries replay_capacity 2M as a prereg row with its own two-save gap and T
+  check; the supervised harness is the lab for architecture and auxiliary targets before a self-play run carries them.
+- **CARD-FLOOR-READ-2 CLOSED** (R389(b)). Withdrawn: the slope, not the floor, is the read; run12's schedule is a plain
+  cosine and no run is spent on it.
+- **CARD-BOX-B-DESTROY** (R389(e)). No new box; box B is destroyed on the fresh bundle's verification (the operator's act).
+
 ## Opened by R388 (THE FLOOR READ, THE LINEAGE, THE ENCODING; 2026-10-08) — one rung, the second floor read, FRESH-2 accepted, run12, ENCODE-1
 
 - **CARD-RULER-ONE-RUNG — ORDERED by R388(a): the ruler of record is one rung, Six gen455 at 16 nodes per turn v ours

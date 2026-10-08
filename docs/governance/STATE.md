@@ -7,6 +7,14 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
+**R389 (2026-10-08): THE SLOPE, NOT THE FLOOR; THE CAPACITY PROBE. R388(b)'s "the floor binds" is withdrawn (a later
+level against the mean of a rising series); rung 16 climbs about +0.11 logit per 48k steps from 108k to 264k with no
+change of slope, so run12 is a plain cosine and no run is spent on the schedule. DEPLOY-2 is accepted; ENCODE-1 is NOT
+PASS (gnn_axis_r8_pruned a landed capability, not a lever). DISTILL-1 reads the limiter: Six gen455's raw policy and
+value label at least 1M positions from run11's rings, 4×128 / 4×256 / 8×128 trained at equal budget; run11 pauses one
+day for it and otherwise trains until run12's mint. No new box; box B is destroyed on the fresh bundle's verification.**
+(RULINGS R389; the R388 paragraph below stands where R389 does not move it.)
+
 **R388 (2026-10-08): THE FLOOR READ, THE LINEAGE, THE ENCODING. The ruler of record is one rung (Six gen455 at 16
 nodes per turn v ours 128/stone, arena book), S on the GPU the second. RUN11-CYCLE-2's verdict stands, and a second
 floor read is pre-stated at 228k–264k. FRESH-2 is accepted: the lineage stands, the fresh line is closed, and the f64

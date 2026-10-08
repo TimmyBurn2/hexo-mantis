@@ -25,6 +25,7 @@ amendment commit and operator sign-off.
 - LAW-08 Live-consumer. Every config key and every registered encoding has a live consumer; a
   dead knob dies with its freeze-tests in one commit. Pinned by
   tests/config/test_every_key_has_consumer.py and, for encodings, gate 11.
+  ANNOTATED by R389(a): the encoding-consumer check is the registry census; gate 11 is unchanged.
 - LAW-09 Bench discipline. Pre-registered hotspots + expected-gain bracket + abort threshold;
   one change = one commit = one IQR-gated bench; profile first; a measured floor is a finding.
 - LAW-10 DELETED by R347(d) — grid-era, no producer, gating nothing. The number is retired, not
