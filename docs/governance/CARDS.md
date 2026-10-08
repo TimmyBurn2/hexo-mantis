@@ -136,6 +136,26 @@ Both were found by running the gate set rather than by reading it, and both are 
   detector, conformance and a pre-registered witness; read by a fine-tune pair from run11's best save (pruned v unpruned
   control, equal recipe, 10k steps) on rung 16 and S at equal playouts, with the per-leaf and trainer-step cost beside;
   it adopts only if strength holds by the line. Supersedes CARD-RUN12-ENCODING's "#18 is run12's encoding".
+  EXITED 2026-10-08, NOT PASS (branch `encode-1`, unpushed). The row `gnn_axis_r8_pruned` lands behind the seam (a
+  required `empty_edges` key, the builder's verify, the mode carried to every leaf build, rings crossing only across the
+  edge set) with the detector: `load_checkpoint`/`resume_trainer` take the declared encoding with no default and every
+  serve/train path declares or adopts the stamp. Cost (desktop): edges per leaf 13 372 → 1 994, build −47 %, served per
+  leaf −20 to −31 % GPU / −49 to −57 % CPU, trainer step −50 to −60 %. The pair (box A, run11 paused 13:26–18:26 CEST
+  by the operator's word; parent 132k, 3-save panels, 576 games a cell): Δ rung 16 −0.41 [−0.55, −0.27], Δ S −0.62
+  [−0.76, −0.49] against the −0.17 line; known-bad valid, control not degraded. The row stays a capability with no
+  config consumer; local records `mantis-records/encode-1/EXIT.md`.
+- **CARD-ENCODE-CONSUMER-CHECK — OPENED by ENCODE-1, CARDED: under a pruned spec the collate checks no edge membership**,
+  so an empty pair a builder emitted would pass where `ProducerVerify::ConsumerEveryBatch` skips the builder's own
+  verify. Defensive only (the builder cannot emit one); touches the protected collate.
+- **CARD-PRUNED-CAPS — OPENED by ENCODE-1, CARDED for any pruned run: the fused and micro-batch caps and the served-graph
+  bucket floors were fitted on kept graphs (~24 edges per node; pruned ~4)**, so pruned parts pad toward kept edge
+  counts and E2's served gain is understated; a pruned run re-fits them (an arch-scoped mint).
+- **CARD-LAW08-GATE11 — OPENED by ENCODE-1, OWED (an operator annotation): LAWS.md says LAW-08 is pinned "for encodings,
+  gate 11", but gate 11 refuses silent encoding fallbacks and checks no consumer;** no test checks that a registered
+  encoding is named by a config. `docs/contracts/registry.md` was repaired in place and states the pruned row's exception.
+- **CARD-GIL-TEST-RACE — OPENED by ENCODE-1, CARDED: `tests/bridge/test_graph_wire_adv.py`'s GIL-release pin races** —
+  its control's stall loop never runs when the worker finishes inside `start()`, so it read 0.0 ms twice inside a large
+  batch and passed alone three times.
 - **CARD-SEPARATE-TRAINER — CLOSED by R388(f): the drag is device time (GIL 11.7 %).**
 - **CARD-PREFLIGHT-RANDOM-INIT-EVAL — OPENED by FRESH-2's exit, not built: a random-init config's preflight can time out
   in its terminal eval.** Its throwaway 101-step net can walk away (stones at the radius-8 edge, games to the 256-ply

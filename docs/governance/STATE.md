@@ -55,6 +55,9 @@ in self-play arm A's design, carried as a screen (R381(c) as re-stated by R384(c
   - ENCODE-1 (R388(f), CARD-ENCODE-1): empty→empty edge pruning as a new encoding row behind the seam, read by a 10k-step
     fine-tune pair from run11's best save on rung 16 and S at equal playouts, with the per-leaf and trainer-step cost;
     adopts only if strength holds by the line. The separate-trainer idea is closed (the drag is device time; GIL 11.7 %).
+    EXITED 2026-10-08, NOT PASS: Δ rung 16 −0.41 [−0.55, −0.27], Δ S −0.62 [−0.76, −0.49] against −0.17 (3-save panels,
+    parent 132k); the row and the stamp detector land behind the seam as a capability (branch `encode-1`); per-leaf
+    cost −20 to −57 %, trainer step −50 to −60 %. run11 was paused for it 13:26–18:26 CEST and resumed from 303 651.
   - DEPLOY-2 (the architect's packet, CARD-DEPLOY-2) carries (b), (c)'s frame and final cells, (d)'s inputs and (e):
     A1 plays the floor read on box A under a GPU-share cap pre-stated before its first cell; A2 makes the followers,
     the records writer and the dash feed box A units; A3 lands DASH-DYNAMIC and the dash's units from the records
