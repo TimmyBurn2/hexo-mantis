@@ -88,6 +88,7 @@ class CheckpointMetadata:
     created_utc: str              # ISO-8601 Z; written ONCE, immutable; "" on a bare legacy read
     arch: ModelArch | None        # the declared dataclass — the SOLE arch source at load
     corpus_sha256: str | None = None
+    lineage: tuple[str, ...] = ()  # the teachers this net learned from; a warm start or resume carries them
 
 
 @dataclass(frozen=True)
@@ -297,6 +298,24 @@ def _reject_killed_prefixes(model_state: Mapping[str, Any]) -> None:
         )
 
 
+def _lineage_list(value: Any) -> list[str]:
+    """A stamp's lineage as a list of non-empty tags; absent reads empty. Raises: CheckpointStampError — anything else."""
+    if value is None:
+        return []
+    if isinstance(value, str | bytes) or not all(isinstance(t, str) and t for t in value):
+        raise CheckpointStampError(f"metadata.lineage must be a sequence of non-empty tags, got {value!r}")
+    return list(value)
+
+
+def stamped_lineage(path: str | Path) -> tuple[str, ...]:
+    """The lineage a v2 artifact's stamp carries, empty on a legacy payload; the warm start's inheritance read. Raises: CheckpointStampError — a malformed lineage."""
+    raw = torch.load(Path(path), weights_only=True, map_location="cpu")
+    if not isinstance(raw, dict) or raw.get("schema_version") != CHECKPOINT_SCHEMA_VERSION:
+        return ()
+    meta = raw.get("metadata")
+    return tuple(_lineage_list(meta.get("lineage") if isinstance(meta, dict) else None))
+
+
 def _build_stamped_metadata(metadata_kwargs: Mapping[str, Any], step: int) -> dict[str, Any]:
     """Build the v2 metadata block, stamping `created_utc`/`commit_sha` ONCE; refuses
     `metadata_kwargs` carrying those (a re-stamp) or an unresolvable `encoding_name`."""
@@ -327,6 +346,7 @@ def _build_stamped_metadata(metadata_kwargs: Mapping[str, Any], step: int) -> di
         "created_utc": _now_iso(),
         "arch": _arch_to_dict(arch),
         "corpus_sha256": md.get("corpus_sha256"),
+        "lineage": _lineage_list(md.get("lineage")),
     }
 
 
@@ -426,6 +446,7 @@ def _write_quarantine(
         "created_utc": _now_iso(),
         "arch": _arch_to_dict(md["arch"]) if md.get("arch") is not None else None,
         "corpus_sha256": md.get("corpus_sha256"),
+        "lineage": _lineage_list(md.get("lineage")),
     }
     payload = _assemble_payload(
         kind, model_state, q_meta, config, optimizer_state, scaler_state, scheduler_state,
@@ -527,6 +548,7 @@ def _rehydrate_metadata(metadata: Mapping[str, Any]) -> CheckpointMetadata:
         created_utc=metadata.get("created_utc", ""),
         arch=arch,
         corpus_sha256=metadata.get("corpus_sha256"),
+        lineage=tuple(_lineage_list(metadata.get("lineage"))),
     )
 
 
@@ -917,7 +939,8 @@ def strip_and_restamp(
         scheduler_state=None,
         step=step,
         config=synth_config,
-        metadata_kwargs={"encoding_name": new_encoding, "run_id": run_id, "arch": arch},
+        metadata_kwargs={"encoding_name": new_encoding, "run_id": run_id, "arch": arch,
+                         "lineage": raw_meta.get("lineage") if isinstance(raw_meta, dict) else None},
         checkpoint_dir=checkpoint_dir,
         kind="weights",
         allow_quarantine=False,
@@ -1200,6 +1223,7 @@ def resume_trainer(
     # Pass the DECLARED arch so the Trainer re-stamps it rather than re-deriving one.
     trainer = cls(model, config, arch=arch, checkpoint_dir=path.parent, device=device, sink=sink)
     trainer.f1_deferred_keys = deferred
+    trainer.lineage = ck.metadata.lineage
 
     # lr is resume-state-owned: a declared `lr` never wins on a full-checkpoint resume, but an
     # operator who declared one is warned loudly rather than silently ignored.

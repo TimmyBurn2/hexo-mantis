@@ -179,6 +179,8 @@ class Trainer:
         #: The launch pin's source: `verify_launch_anchor_pin` FAILS CLOSED on a pin with `None`.
         #: Filled from `identity.warm_start` on a fresh launch, `None` on a resume or no row.
         self.checkpoint_source: str | Path | None = None
+        #: The teachers this net learned from, stamped into every save; a warm start or resume inherits them.
+        self.lineage: tuple[str, ...] = ()
         self._sink = sink
         self.arch: ModelArch = arch if arch is not None else self._derive_arch(config)
         self.hp = train_hparams if train_hparams is not None else TrainHParams.from_config(config)
@@ -646,6 +648,7 @@ class Trainer:
             "run_id": cfg.get("run_id"),
             "arch": self.arch,
             "corpus_sha256": cfg.get("corpus_sha256"),
+            "lineage": self.lineage,
         }
         return checkpoints.save_checkpoint(
             model=self.model, optimizer=self.optimizer, scaler=self.scaler,

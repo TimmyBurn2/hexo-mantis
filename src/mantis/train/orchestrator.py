@@ -136,6 +136,7 @@ def init_trainer(
 
     # THE BC WARM-START ENTRY, on the FRESH branch only: a resume already restored trained
     # weights and seeding over them would destroy them. An absent row makes this a no-op.
+    from mantis.train.checkpoints import stamped_lineage
     from mantis.train.warmstart import maybe_warmstart_gnn_from_bc, resolve_bc_warm_start
 
     maybe_warmstart_gnn_from_bc(model, cfg, spec=spec)
@@ -149,4 +150,5 @@ def init_trainer(
     # `checkpoint_source`, and the step-0 anchor IS the warm-start artifact (a second READ only).
     declared = resolve_bc_warm_start(cfg)
     trainer.checkpoint_source = None if declared is None else declared.checkpoint
+    trainer.lineage = () if declared is None else stamped_lineage(declared.checkpoint)
     return trainer

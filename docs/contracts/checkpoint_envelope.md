@@ -35,7 +35,9 @@ key is ABSENT on an EMA-off stamp — the truthful shape, not a `null`.
 **`metadata`** — `encoding_name` (REQUIRED, LAW-11, no fallback), `run_id`, `step`,
 `commit_sha` (`"unknown"` outside a git checkout — never blocks a write), `created_utc`
 (ISO-8601 Z, stamped once), `arch` (the declared `GnnArch` dataclass — the SOLE arch
-source at load), optional `corpus_sha256`.
+source at load), optional `corpus_sha256`, optional `lineage` (the teacher tags this net learned from, R376(f):
+a list of non-empty strings, absent reading empty; a warm start inherits its source's, a resume restores it and the
+strip keeps it verbatim).
 
 ## Who asserts what where
 
@@ -43,6 +45,7 @@ source at load), optional `corpus_sha256`.
 |---|---|
 | stamps are written exactly once; a `metadata_kwargs` carrying `created_utc`/`commit_sha` is a REFUSED re-stamp (LAW-12) | mantis.train.checkpoints (`_build_stamped_metadata` -> `CheckpointStampError`) |
 | an unstampable artifact is not written: an absent `encoding_name`, `run_id` or `arch` each raise | mantis.train.checkpoints (`_build_stamped_metadata`) |
+| a lineage that is not a list of non-empty tags is refused; a warm start inherits the source stamp's lineage, a resume restores it | mantis.train.checkpoints (`_lineage_list`, `stamped_lineage`, `resume_trainer`), mantis.train.orchestrator (`init_trainer`) |
 | a failed write is persist-FATAL, never swallowed; the survive-the-run path writes a `.quarantine` file, NEVER a canonical `.ckpt`, and increments the persist counter (LAW-14) | mantis.train.checkpoints (`_write_quarantine`, `persist_errors_total`) |
 | filename run-id + content hash are re-verified at load (provenance) | mantis.train.checkpoints (`load_checkpoint` -> `_verify_provenance`) |
 | every read surface is `torch.load(weights_only=True)`; there is no pickle-exec fallback | mantis.train.checkpoints (`load_checkpoint`, `load_legacy_weights`, `strip_and_restamp`, `resume_trainer`) |
