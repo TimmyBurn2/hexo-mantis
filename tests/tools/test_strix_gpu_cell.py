@@ -69,10 +69,10 @@ def test_a_frontier_cell_names_strix_on_the_gpu_and_refuses_another_device(front
         frontier.cell_spec({**cell, "strix_device": "rocm"}, base, cell_dir=tmp_path / "e", config=config)
 
 
-def test_the_arena_s_unit_plays_strix_on_the_gpu_and_the_units_on_record_stay_on_the_cpu(follower) -> None:
-    arena = follower.compose_cell(Path("/x/a.ckpt"), unit="equal_work_arena", step=1, games=576, concurrency=8,
-                                  label="s")
-    assert arena["strix_device"] == "cuda"
-    for unit in ("equal_work", "net_only", "ruler_r6", "as_shipped"):
+def test_the_s_units_of_record_play_strix_on_the_gpu_and_the_research_variants_stay_on_the_cpu(follower) -> None:
+    for unit in ("equal_work", "equal_work_arena"):
+        cell = follower.compose_cell(Path("/x/a.ckpt"), unit=unit, step=1, games=576, concurrency=8, label="s")
+        assert cell["strix_device"] == "cuda", unit
+    for unit in ("net_only", "ruler_r6", "as_shipped"):
         cell = follower.compose_cell(Path("/x/a.ckpt"), unit=unit, step=1, games=288, concurrency=8, label=unit)
         assert "strix_device" not in cell, unit
