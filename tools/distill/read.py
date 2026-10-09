@@ -1,4 +1,4 @@
-"""The strength read: cell sidecars to logits, two-save panels against a reference, the controls' validity and the outcome rule."""
+"""The strength read: cell sidecars to logits, two-save panels against a reference, the controls' validity and the outcome rule, or arms read against each other by named contrasts."""
 from __future__ import annotations
 
 import importlib
@@ -113,17 +113,18 @@ def delta(panel: tuple[float, float], ref: tuple[float, float]) -> dict[str, flo
     return {"delta": d, "se": se, "lo": d - 1.96 * se, "hi": d + 1.96 * se}
 
 
-def verdict(spec: dict[str, Any], roots: list[Path], *, line: float = LINE, near: float = CONTROL_NEAR,
-            kb_gap: float = KNOWNBAD_GAP) -> dict[str, Any]:
-    """The pre-stated read over `spec` (reference saves, control/known-bad/arm saves with each arm's class); Raises: ValueError — a save without exactly one receipt, a ruler over two instruments, a refused sidecar."""
-    ref_cells = {r: [c for ck in spec["reference"] for c in find_cells(roots, ck, r)] for r in RULERS}
-    ref = {r: pool(cells) for r, cells in ref_cells.items()}
-    out: dict[str, Any] = {"reference": {r: {"logit": v[0], "se": v[1], "cells": [c.path for c in ref_cells[r]]}
-                                         for r, v in ref.items()}, "arms": {}}
-    every: dict[str, list[Cell]] = {r: list(ref_cells[r]) for r in RULERS}
+def _reference(spec: dict[str, Any], roots: list[Path]) -> tuple[dict[str, list[Cell]], dict[str, tuple[float, float]]]:
+    cells = {r: [c for ck in spec["reference"] for c in find_cells(roots, ck, r)] for r in RULERS}
+    return cells, {r: pool(c) for r, c in cells.items()}
+
+
+def _arms(arms: dict[str, Any], roots: list[Path], ref: dict[str, tuple[float, float]], every: dict[str, list[Cell]],
+          line: float) -> tuple[dict[str, Any], dict[str, dict[str, tuple[float, float]]]]:
+    """Each arm's two-save panel per ruler against the reference, its cells added to `every`."""
+    rows: dict[str, Any] = {}
     panels: dict[str, dict[str, tuple[float, float]]] = {}
-    for name, arm in spec["arms"].items():
-        row: dict[str, Any] = {"class": arm["class"]}
+    for name, arm in arms.items():
+        row: dict[str, Any] = {"class": arm.get("class")}
         panels[name] = {}
         for r in RULERS:
             cells = one_per_save(roots, arm["saves"], r, name)
@@ -134,7 +135,18 @@ def verdict(spec: dict[str, Any], roots: list[Path], *, line: float = LINE, near
                       "panel": panels[name][r][0], "se": panels[name][r][1], **delta(panels[name][r], ref[r])}
         row["reaches"] = all(row[r]["delta"] >= line for r in RULERS)
         row["mean_delta"] = sum(row[r]["delta"] for r in RULERS) / len(RULERS)
-        out["arms"][name] = row
+        rows[name] = row
+    return rows, panels
+
+
+def verdict(spec: dict[str, Any], roots: list[Path], *, line: float = LINE, near: float = CONTROL_NEAR,
+            kb_gap: float = KNOWNBAD_GAP) -> dict[str, Any]:
+    """The pre-stated read over `spec` (reference saves, control/known-bad/arm saves with each arm's class); Raises: ValueError — a save without exactly one receipt, a ruler over two instruments, a refused sidecar."""
+    ref_cells, ref = _reference(spec, roots)
+    out: dict[str, Any] = {"reference": {r: {"logit": v[0], "se": v[1], "cells": [c.path for c in ref_cells[r]]}
+                                         for r, v in ref.items()}}
+    every: dict[str, list[Cell]] = {r: list(ref_cells[r]) for r in RULERS}
+    out["arms"], panels = _arms(spec["arms"], roots, ref, every, line)
     control = out["arms"].pop(spec["control"])
     kb = one_per_save(roots, [spec["knownbad"]], "rung16", "known-bad")[0]
     every["rung16"].append(kb)
@@ -150,6 +162,39 @@ def verdict(spec: dict[str, Any], roots: list[Path], *, line: float = LINE, near
     out["halt"] = not (out["control_near"] and out["knownbad_valid"])
     out["outcome"] = outcome(out["arms"]) if not out["halt"] else "HALT"
     return out
+
+
+def contrast_read(spec: dict[str, Any], roots: list[Path], *, line: float = LINE) -> dict[str, Any]:
+    """Arms read against each other: each arm's two-save panel per ruler (the reference beside), every named contrast lhs − rhs with its branch, and the outcome over the branches; Raises: ValueError — as `verdict`, or a contrast naming no arm."""
+    ref_cells, ref = _reference(spec, roots)
+    out: dict[str, Any] = {"reference": {r: {"logit": v[0], "se": v[1], "cells": [c.path for c in ref_cells[r]]}
+                                         for r, v in ref.items()}, "contrasts": {}}
+    every: dict[str, list[Cell]] = {r: list(ref_cells[r]) for r in RULERS}
+    out["arms"], panels = _arms(spec["arms"], roots, ref, every, line)
+    for c in spec["contrasts"]:
+        if c["lhs"] not in panels or c["rhs"] not in panels:
+            raise ValueError(f"contrast {c['name']}: {c['lhs']} or {c['rhs']} is no arm of the spec")
+        row: dict[str, Any] = {"lhs": c["lhs"], "rhs": c["rhs"], "branch": c["branch"]}
+        for r in RULERS:
+            row[r] = delta(panels[c["lhs"]][r], panels[c["rhs"]][r])
+        row["reaches"] = all(row[r]["delta"] >= line for r in RULERS)
+        row["one_ruler"] = not row["reaches"] and any(row[r]["delta"] >= line for r in RULERS)
+        row["mean_delta"] = sum(row[r]["delta"] for r in RULERS) / len(RULERS)
+        out["contrasts"][c["name"]] = row
+    out["units"] = {r: list(one_unit(cells, r)) for r, cells in every.items()}
+    out["outcome"] = contrast_outcome(out["contrasts"])
+    return out
+
+
+def contrast_outcome(contrasts: dict[str, dict[str, Any]]) -> str:
+    """Every branch with a contrast reaching on both rulers (the larger mean Δ naming it); else `mixed` if one reached a single ruler; else `none`."""
+    best: dict[str, str] = {}
+    for name, c in contrasts.items():
+        if c["reaches"] and (c["branch"] not in best or c["mean_delta"] > contrasts[best[c["branch"]]]["mean_delta"]):
+            best[c["branch"]] = name
+    if best:
+        return "; ".join(f"{branch}: {name}" for branch, name in sorted(best.items()))
+    return "mixed" if any(c["one_ruler"] for c in contrasts.values()) else "none"
 
 
 def outcome(arms: dict[str, dict[str, Any]]) -> str:

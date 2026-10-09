@@ -15,7 +15,7 @@ from mantis.util.hashing import sha256_file
 from .corpus import SRC_RING, build_corpus
 from .heldout import read_baseline, read_kl
 from .label import label, open_labels
-from .read import verdict
+from .read import contrast_read, verdict
 from .rings import (
     TEACHER_MIN_PLY,
     choose_slots,
@@ -173,7 +173,7 @@ def cmd_kl(a: argparse.Namespace) -> int:
 
 def cmd_read(a: argparse.Namespace) -> int:
     spec = json.loads(a.spec.read_text(encoding="utf-8"))
-    rec = verdict(spec, a.cells)
+    rec = contrast_read(spec, a.cells) if "contrasts" in spec else verdict(spec, a.cells)
     _write_json(a.out, rec)
     print(json.dumps(rec, indent=1, default=str))
     return 0
@@ -265,7 +265,9 @@ def build_parser() -> argparse.ArgumentParser:
     k.add_argument("--out", type=Path, required=True)
     k.set_defaults(func=cmd_kl)
     rd = sub.add_parser("read", help="two-save panels against the reference, the controls and the outcome")
-    rd.add_argument("--spec", type=Path, required=True, help="JSON: reference, control, knownbad, arms {name: class, saves}")
+    rd.add_argument("--spec", type=Path, required=True,
+                    help="JSON: reference, arms {name: class, saves}, and either control + knownbad or "
+                         "contrasts [{name, lhs, rhs, branch}]")
     rd.add_argument("--cells", type=Path, nargs="+", required=True, help="directories holding the cell sidecars")
     rd.add_argument("--out", type=Path, required=True)
     rd.set_defaults(func=cmd_read)

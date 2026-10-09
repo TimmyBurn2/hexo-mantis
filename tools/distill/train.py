@@ -21,7 +21,12 @@ from mantis.config.resolve.sample_threads import resolve_sample_threads
 from mantis.model import build_net
 from mantis.model.identity import net_param_hash
 from mantis.model.widen import widen_net
-from mantis.train.checkpoints import CheckpointStampError, deploy_state, load_checkpoint, resume_trainer
+from mantis.train.checkpoints import (
+    CheckpointStampError,
+    deploy_state,
+    load_checkpoint,
+    resume_trainer,
+)
 from mantis.train.coordinator.dispatch import (
     resolve_step_spec,
     run_declared_eval_step,

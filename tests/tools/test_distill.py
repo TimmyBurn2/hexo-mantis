@@ -257,6 +257,43 @@ def test_the_read_outcomes(tmp_path, d):
     assert got["control_above_line"] and abs(got["arms"]["n1"]["v_control"]["rung16"]["delta"]) < 1e-12
 
 
+def _contrast_spec(root: Path, arms: dict[str, tuple[float, float]]) -> dict[str, Any]:
+    cells = root / "cells"
+    _sidecar(cells, "ref.ckpt", "ladder455_n16", 0.39)
+    _sidecar(cells, "ref.ckpt", "strix256_arena", 0.63)
+    for name, (r16, s) in arms.items():
+        for ck in (f"{name}_10k.ckpt", f"{name}_15k.ckpt"):
+            _sidecar(cells, ck, "ladder455_n16", r16)
+            _sidecar(cells, ck, "strix256_arena", s)
+    return {"reference": ["ref.ckpt"], "arms": {n: {"saves": [f"{n}_10k.ckpt", f"{n}_15k.ckpt"]} for n in arms},
+            "contrasts": [{"name": "b-a", "lhs": "b", "rhs": "a", "branch": "target"},
+                          {"name": "c-a", "lhs": "c", "rhs": "a", "branch": "capacity"},
+                          {"name": "d-b", "lhs": "d", "rhs": "b", "branch": "capacity"}]}
+
+
+def test_the_contrast_outcomes(tmp_path, d):
+    """A contrast reaches on both rulers or not at all; branches stack; one ruler alone is mixed; nothing is none."""
+    R_ = d["read"]
+    base, up = (0.39, 0.63), (0.47, 0.71)
+    cases = {
+        "target": ({"a": base, "b": up, "c": base, "d": up}, "target: b-a"),
+        "capacity": ({"a": base, "b": base, "c": base, "d": up}, "capacity: d-b"),
+        "both": ({"a": base, "b": up, "c": up, "d": (0.56, 0.79)}, "capacity: d-b; target: b-a"),
+        "mixed": ({"a": base, "b": (0.47, 0.63), "c": base, "d": (0.47, 0.63)}, "mixed"),
+        "none": ({"a": base, "b": base, "c": (0.33, 0.57), "d": base}, "none"),
+    }
+    for label, (arms, want) in cases.items():
+        got = R_.contrast_read(_contrast_spec(tmp_path / label, arms), [tmp_path / label / "cells"])
+        assert got["outcome"] == want, label
+    got = R_.contrast_read(_contrast_spec(tmp_path / "x", cases["both"][0]), [tmp_path / "x" / "cells"])
+    assert got["contrasts"]["c-a"]["reaches"] and got["contrasts"]["c-a"]["rung16"]["delta"] > 0.17
+    assert got["arms"]["a"]["rung16"]["delta"] == pytest.approx(0.0, abs=1e-12), "the reference beside"
+    bad = _contrast_spec(tmp_path / "y", cases["none"][0])
+    bad["contrasts"].append({"name": "e-a", "lhs": "e", "rhs": "a", "branch": "x"})
+    with pytest.raises(ValueError, match="no arm"):
+        R_.contrast_read(bad, [tmp_path / "y" / "cells"])
+
+
 def test_a_copied_receipt_pools_once(tmp_path, d):
     """The same cell mirrored into a second root is one reading of the reference, not two."""
     spec = _spec(tmp_path / "a", {"n1": ("narrow", 0.40, 0.70)})
