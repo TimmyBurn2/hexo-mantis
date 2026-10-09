@@ -39,8 +39,7 @@ def golden_batch(positions: list[tuple[int, int, list[tuple[int, int, int]]]], *
     buffer = HexgBuffer(max(len(positions), 8), ENC, 8)
     for to_move, left, stones in positions:
         taken = {(q, r) for q, r, _ in stones}
-        q0, r0, _ = stones[0]
-        cell = next((q0 + dq, r0 + dr) for dq, dr in NEIGHBOURS if (q0 + dq, r0 + dr) not in taken)
+        cell = next((q + dq, r + dr) for q, r, _ in stones for dq, dr in NEIGHBOURS if (q + dq, r + dr) not in taken)
         buffer.push_graph_position(stones, [(cell[0], cell[1], 1.0)], to_move, left, len(stones), True, 0.0, True,
                                    len(stones) + 1)
     buffer.seed_sampler(seed)
@@ -89,7 +88,7 @@ def test_the_doubled_net_serves_its_parents_outputs_on_the_golden_positions(kind
     wide = widen_net(net, arch, seed=7)
     assert widen_arch(arch).hidden == 32 and type(wide) is type(net)
     assert wide.state_dict()["representation.input_proj.weight"].shape[0] == 32
-    positions = golden_positions(12)
+    positions = golden_positions(512)[::40]
     gaps = []
     for i in range(len(positions)):
         b = golden_batch(positions[i:i + 1], sample=1, seed=i)
