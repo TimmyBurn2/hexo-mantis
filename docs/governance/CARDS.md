@@ -66,8 +66,15 @@ Both were found by running the gate set rather than by reading it, and both are 
   from that net; none → CARD-DENSE-1. run11 pauses one day for it.
   OWNED by the DISTILL-1 packet (architect, 2026-10-08; branch `distill-1`): labelling and cells on box A under
   DEPLOY-2's units, the five trainings on box A with run11 paused for them, records `mantis-records/distill-1/`.
+  HALTED 2026-10-09 by the pre-stated control row. V1 passed (1 000 / 1 000 argmax v the engine's `go nodes 1`); 1.55M
+  rows labelled (run11's rings 306k/291k/276k matched to their games for move order, 50k arena openings, 100k held-out
+  by game). The 4×128 control from scratch on run11's own targets (15k steps, B 256, one cosine) read rung 16 0.106 /
+  0.151, panel −1.93 v run11's best −0.76: Δ −1.17 [−1.37, −0.96] against the −0.5 line → HALT; the known-bad 0.028
+  (1.63 below the control) was valid. The four arms were not read (the warm 4×128 stopped at ~3 300 steps, no save).
+  Landed on the branch: tools/distill (labeller, rings, trainer driver, reads), the checkpoint stamp's `lineage`, the
+  `teacher` extra. Local records `mantis-records/distill-1/EXIT.md`.
 - **CARD-DENSE-1** (R389(c), conditional). Design a hex-conv model kind behind the seam, only if DISTILL-1 finds no net
-  above the line. HELD until DISTILL-1's read.
+  above the line. HELD: DISTILL-1 halted before any arm was read, so the condition is undecided.
 - **CARD-RUN12-REPLAY** (R389(d); the DISTILL-1 packet calls it CARD-REPLAY-WINDOW-2M). run12 carries replay_capacity
   2M as a prereg row with its own two-save gap and T check; the supervised harness is the lab for architecture and
   auxiliary targets before a self-play run carries them. OPENED for run12's prereg.
