@@ -176,8 +176,10 @@ def train_arm(arm: ArmSpec, recipe: Recipe, out: Path, *, device: str, heldout_r
     """Train `arm` for `recipe.steps` steps, saving at `recipe.save_at` and every `save_every` steps; an unfinished `out` resumes from its newest save (one with none is moved aside and restarts); Raises: FileExistsError — `out` holds a finished arm; ValueError — a rerun whose arm or recipe differs from the stopped one's, a ring that loads nothing or a provenance for other bytes; FileNotFoundError — no provenance; CheckpointStampError, DeclaredEncodingMismatchError, ResumeIdentityMismatchError, ResumeTargetSemanticsError — the save refuses to resume; RuntimeError — the arm skips more steps than it takes."""
     lineage = ring_lineage(arm.ring)
     if gpu_mem_mib is not None and device.startswith("cuda"):
-        total = torch.cuda.get_device_properties(torch.device(device)).total_memory
-        torch.cuda.set_per_process_memory_fraction(min(1.0, gpu_mem_mib * 2**20 / total), torch.device(device))
+        index = torch.device(device).index
+        index = torch.cuda.current_device() if index is None else index
+        total = torch.cuda.get_device_properties(index).total_memory
+        torch.cuda.set_per_process_memory_fraction(min(1.0, gpu_mem_mib * 2**20 / total), index)
     if (out / "arm.json").exists():
         raise FileExistsError(f"{out}: the arm is finished")
     saved = stamped_checkpoints(out / "checkpoints")
