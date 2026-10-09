@@ -18,15 +18,17 @@ from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.config.resolve.sample_threads import resolve_sample_threads
-from mantis.model import build_net
+from mantis.encoding import lookup
+from mantis.model import arch_from_spec_and_config, build_net
 from mantis.model.identity import net_param_hash
-from mantis.train.checkpoints import deploy_state, load_checkpoint
+from mantis.train.checkpoints import deploy_state, load_checkpoint, stamped_lineage
 from mantis.train.coordinator.dispatch import (
     resolve_step_spec,
     run_declared_eval_step,
     run_declared_train_step,
 )
-from mantis.train.orchestrator import init_trainer
+from mantis.train.trainer.core import Trainer
+from mantis.train.warmstart import maybe_warmstart_gnn_from_bc
 from mantis.util.determinism import seed_everything
 from mantis.util.hashing import sha256_file
 from mantis.util.loadpkg import load_tools_package
@@ -114,11 +116,17 @@ def train_arm(arm: ArmSpec, recipe: Recipe, out: Path, *, device: str, heldout_r
     knobs = resolve_coordinator_knobs(config.train)
     threads = sample_threads or resolve_sample_threads(dump)
     seed_everything(recipe.seed)
-    trainer = init_trainer(config=dump, device=torch.device(device), checkpoint_dir=str(out / "checkpoints"),
-                           sink=_JsonlSink(out / "events.jsonl"))
-    trainer.lineage = tuple(dict.fromkeys(trainer.lineage + lineage))
+    spec = lookup(encoding)
+    # Built as pretrain builds its trainer: the run's composition root alone calls `init_trainer`.
+    arch = arch_from_spec_and_config(spec, dump)
+    model = build_net(arch)
+    maybe_warmstart_gnn_from_bc(model, dump, spec=spec)
+    trainer = Trainer(model, dump, arch=arch, checkpoint_dir=str(out / "checkpoints"), device=torch.device(device),
+                      sink=_JsonlSink(out / "events.jsonl"))
+    inherited = () if arm.warm_start is None else stamped_lineage(arm.warm_start)
+    trainer.lineage = tuple(dict.fromkeys(inherited + lineage))
     buf, rows = open_ring(arm.ring, encoding, recipe.seed)
-    spec, caps = resolve_step_spec(dump), (lambda: resolve_microbatch_caps(dump))
+    step_spec, caps = resolve_step_spec(dump), (lambda: resolve_microbatch_caps(dump))
     batch, augment = int(knobs.batch_size), bool(knobs.augment)
     held = None if heldout_ring is None else open_ring(heldout_ring, encoding, recipe.seed)[0]
     tree = Path(__file__).resolve().parents[2]
@@ -141,7 +149,7 @@ def train_arm(arm: ArmSpec, recipe: Recipe, out: Path, *, device: str, heldout_r
         held.seed_sampler(recipe.seed)
         sums = {"policy_loss": 0.0, "value_loss": 0.0}
         for _ in range(heldout_batches):
-            got = run_declared_eval_step(trainer, held, spec, batch_size=batch, caps_provider=caps,
+            got = run_declared_eval_step(trainer, held, step_spec, batch_size=batch, caps_provider=caps,
                                          sample_threads_provider=lambda: threads)
             for k in sums:
                 sums[k] += float(got[k]) / heldout_batches
@@ -156,7 +164,7 @@ def train_arm(arm: ArmSpec, recipe: Recipe, out: Path, *, device: str, heldout_r
         if attempts > recipe.steps + 100:
             raise RuntimeError(f"{trainer.skipped_steps} skipped steps: the arm is not training")
         before = trainer.step
-        info = run_declared_train_step(trainer, buf, spec, batch_size=batch, augment=augment, caps_provider=caps,
+        info = run_declared_train_step(trainer, buf, step_spec, batch_size=batch, augment=augment, caps_provider=caps,
                                        sample_threads_provider=lambda: threads)
         if trainer.step == before:
             continue

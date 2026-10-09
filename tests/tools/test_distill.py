@@ -1,3 +1,6 @@
+# >300 justify (R8): one pipeline under one synthetic world — games, a ring of their positions in a shuffled stone
+# order, the corpus that matches them back, the targets, the rings and the read — and every later stage's rows are built
+# from the earlier stages' outputs, so a split forks the world fixture into copies that drift while both stay green.
 """The distillation harness: Six's planes and root screen, rows put back in move order by their games, the targets on our legal set, the rings, and the read's rules."""
 from __future__ import annotations
 
@@ -40,7 +43,7 @@ def test_planes_on_a_hand_position(d):
 
 @pytest.mark.skipif(not FIXTURES.is_file(), reason="Six's fixtures come with `make vendor.six`")
 def test_planes_equal_sixs_own_fixtures(d):
-    lines = FIXTURES.read_text().splitlines()
+    lines = FIXTURES.read_text(encoding="utf-8").splitlines()
     checked = 0
     for i, line in enumerate(lines):
         if not line.startswith("position"):
@@ -87,7 +90,7 @@ def _world(tmp: Path, d: Any, n_games: int = 6, plies: int = 14) -> tuple[Path, 
     games = [_random_game(100 + g, plies) for g in range(n_games)]
     shard = tmp / "games" / "games_runx_seg0001_2026100800.jsonl"
     shard.parent.mkdir(parents=True)
-    with shard.open("w") as fh:
+    with shard.open("w", encoding="utf-8") as fh:
         for g, mv in enumerate(games):
             fh.write(json.dumps({"channel": "selfplay", "run_id": "runx", "game_id": f"g{g}", "step": 900 + g,
                                  "moves": [list(m) for m in mv], "result": "p1" if g % 2 else "p2"}) + "\n")
@@ -205,7 +208,7 @@ def _sidecar(directory: Path, ckpt: str, suffix: str, wr: float, half: float = 0
     (directory / f"{ckpt}.{suffix}.full.json").write_text(json.dumps({
         "rc": 0, "games": 576, "eff_n": 576, "wins": wins, "draws": 0, "wr": wins / 576, "wr_ci_lower": wr - half,
         "wr_ci_upper": wr + half, "six_findings": {"count": forfeits}, "checkpoint_sha256": f"sha-{ckpt}",
-        "unit": suffix, "started_utc": f"{ckpt}-{suffix}"}))
+        "unit": suffix, "started_utc": f"{ckpt}-{suffix}"}), encoding="utf-8")
 
 
 def _spec(tmp: Path, arms: dict[str, tuple[str, float, float]], ref=(0.32, 0.63), ctl=(0.32, 0.63), kb=0.05) -> dict:
@@ -247,7 +250,7 @@ def test_a_copied_receipt_pools_once(tmp_path, d):
     copy = tmp_path / "copy"
     copy.mkdir()
     for f in (tmp_path / "a" / "cells").glob("ref.ckpt.*"):
-        (copy / f.name).write_text(f.read_text())
+        (copy / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
     one = d["read"].verdict(spec, [tmp_path / "a" / "cells"])
     two = d["read"].verdict(spec, [tmp_path / "a" / "cells", copy])
     assert one["reference"]["rung16"]["logit"] == two["reference"]["rung16"]["logit"]
@@ -276,7 +279,7 @@ def test_the_rings_command_leaves_the_empty_board_out_and_writes_provenance(tmp_
     np.savez(root / "corpus.npz", **dict(out))
     for key, arr in labels.items():
         np.save(root / "labels" / f"{key}.npy", arr)
-    (root / "labels" / "labels.json").write_text(json.dumps({"teacher": {"lineage": "six-aaaaaaa-gen1"}}))
+    (root / "labels" / "labels.json").write_text(json.dumps({"teacher": {"lineage": "six-aaaaaaa-gen1"}}), encoding="utf-8")
     cli = importlib.import_module("distill.cli")
     assert cli.main(["rings", "--corpus", str(root), "--check-rows", "10"]) == 0
     rings = root / "rings"
@@ -296,7 +299,7 @@ def _a_graph_config() -> Path:
     import yaml
 
     for path in sorted((Path(__file__).resolve().parents[2] / "configs").glob("*.yaml")):
-        body = yaml.safe_load(path.read_text())
+        body = yaml.safe_load(path.read_text(encoding="utf-8"))
         if (body.get("identity") or {}).get("encoding") == ENC and (body.get("identity") or {}).get("arch_kind"):
             return path
     raise AssertionError(f"no minted config declares {ENC}")
