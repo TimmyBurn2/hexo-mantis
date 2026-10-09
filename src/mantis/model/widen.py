@@ -1,10 +1,4 @@
-"""Net2Net width doubling for the graph nets: every trunk unit is copied once and every weight that reads a copied unit
-is split between the two copies, so the doubled net computes its parent's function.
-
-A uniform doubling keeps a LayerNorm's mean and variance, and the GINE sums, ReLUs, residuals and the mean and max
-readouts act per unit, so `[x, x]` flows through the trunk wherever the parent carried `x`. The heads' own hidden widths,
-the node features and the edge attributes keep their widths.
-"""
+"""Net2Net width doubling of a graph net: trunk units copied, their readers split, the parent's function kept (docs/design/WIDEN_2026-10-09.md)."""
 from __future__ import annotations
 
 import dataclasses
@@ -63,11 +57,7 @@ def _copies(blocks: int, hidden: int) -> tuple[Tensor, Tensor]:
 
 
 def widen_state(state: Mapping[str, Tensor], *, hidden: int, seed: int, noise: float = SPLIT_NOISE) -> dict[str, Tensor]:
-    """The parent's state doubled from trunk width `hidden`, on CPU in the parent's dtypes; the split noise drawn from `seed` over the keys in sorted order.
-
-    Raises:
-        WidenError: a key without a rule, a dimension `hidden` does not divide, or `noise` outside [0, ½).
-    """
+    """The parent's state doubled from trunk width `hidden` on CPU, the noise drawn from `seed` over the sorted keys; Raises: WidenError — a key without a rule, a width `hidden` does not divide, `noise` outside [0, ½)."""
     if not 0.0 <= noise < 0.5:
         raise WidenError(f"split noise {noise} must lie in [0, 0.5): a share at or below 0 flips a copy's sign")
     gen = torch.Generator().manual_seed(seed)
@@ -89,14 +79,8 @@ def widen_state(state: Mapping[str, Tensor], *, hidden: int, seed: int, noise: f
     return wide
 
 
-def widen_net(net: nn.Module, *, seed: int, noise: float = SPLIT_NOISE) -> nn.Module:
-    """A CPU net of `net`'s declared kind at twice its trunk width, holding its widened weights (loaded strictly), in eval mode.
-
-    Raises:
-        WidenError: as `widen_state`.
-        RuntimeError: the widened state does not load strictly into the wider net.
-    """
-    arch: ModelArch = net.arch  # pyright: ignore[reportAttributeAccessIssue] — the declared handle build_net attaches
+def widen_net(net: nn.Module, arch: ModelArch, *, seed: int, noise: float = SPLIT_NOISE) -> nn.Module:
+    """`net`, declared as `arch`, doubled into a CPU net of the same kind in eval mode; Raises: WidenError — as `widen_state`; RepresentationMismatch — `arch` is no kind `build_net` has; RuntimeError — the doubled state does not load strictly."""
     wide = build_net(widen_arch(arch))
     wide.load_state_dict(widen_state(net.state_dict(), hidden=arch.hidden, seed=seed, noise=noise), strict=True)
     return wide.eval()

@@ -77,6 +77,19 @@ def cmd_label(a: argparse.Namespace) -> int:
     return 0
 
 
+def _z_ring(out: Path, name: str, corpus: dict[str, np.ndarray], labels: dict[str, np.ndarray], rows: np.ndarray,
+            targets: dict[str, np.ndarray], slots: int, lineage: list[str]) -> dict[str, float]:
+    """`rows`' ring rows with the teacher's policy and the game's z and validity (an opening has no z), and its provenance."""
+    ring = corpus["source"][rows] == SRC_RING
+    z_rows = rows[ring]
+    path = out / f"{name}.ring.bin"
+    rec = write_teacher_ring(path, corpus, labels, z_rows, {k: v[ring] for k, v in targets.items()},
+                             corpus["outcome"][z_rows], slots, encoding=ENCODING,
+                             value_valid=corpus["value_valid"][z_rows].astype(bool))
+    write_provenance(path, kind=name, lineage=lineage, encoding=ENCODING, rows=len(z_rows), slots=slots, record=rec)
+    return rec
+
+
 def cmd_rings(a: argparse.Namespace) -> int:
     corpus, labels = load_corpus(a.corpus), open_labels(a.corpus / "labels")
     teacher = json.loads((a.corpus / "labels" / "labels.json").read_text(encoding="utf-8"))["teacher"]
@@ -100,26 +113,15 @@ def cmd_rings(a: argparse.Namespace) -> int:
                                            slots, encoding=ENCODING)
             write_provenance(out / f"{name}.ring.bin", kind=name, lineage=tag, encoding=ENCODING, rows=len(rows),
                              slots=slots, record=rec[name])
-        ring_held = corpus["source"][held_rows] == SRC_RING
-        held_ring = held_rows[ring_held]
-        rec["teacher_heldout_z"] = write_teacher_ring(
-            out / "teacher_heldout_z.ring.bin", corpus, labels, held_ring, {k: v[ring_held] for k, v in t_held.items()},
-            corpus["outcome"][held_ring], slots, encoding=ENCODING, value_valid=corpus["value_valid"][held_ring].astype(bool))
-        write_provenance(out / "teacher_heldout_z.ring.bin", kind="teacher_heldout_z", lineage=tag, encoding=ENCODING,
-                         rows=len(held_ring), slots=slots, record=rec["teacher_heldout_z"])
+        held_ring = held_rows[corpus["source"][held_rows] == SRC_RING]
+        rec["teacher_heldout_z"] = _z_ring(out, "teacher_heldout_z", corpus, labels, held_rows, t_held, slots, tag)
         v_t, z = teacher_value(labels, held_ring), corpus["outcome"][held_ring]
         decided = corpus["value_valid"][held_ring].astype(bool) & (z != 0)
         r = float(np.corrcoef(v_t[decided], z[decided])[0, 1]) if decided.sum() > 2 else float("nan")
         rec["teacher_value_v_z"] = {"rows": int(decided.sum()), "pearson": r if np.isfinite(r) else None,
                                     "sign_agreement": float((np.sign(v_t[decided]) == np.sign(z[decided])).mean())}
     if "teacher_z" in a.only:
-        ring_train = corpus["source"][train_rows] == SRC_RING
-        z_rows = train_rows[ring_train]
-        rec["teacher_train_z"] = write_teacher_ring(
-            out / "teacher_train_z.ring.bin", corpus, labels, z_rows, {k: v[ring_train] for k, v in t_train.items()},
-            corpus["outcome"][z_rows], slots, encoding=ENCODING, value_valid=corpus["value_valid"][z_rows].astype(bool))
-        write_provenance(out / "teacher_train_z.ring.bin", kind="teacher_train_z", lineage=tag, encoding=ENCODING,
-                         rows=len(z_rows), slots=slots, record=rec["teacher_train_z"])
+        rec["teacher_train_z"] = _z_ring(out, "teacher_train_z", corpus, labels, train_rows, t_train, slots, tag)
     del t_train
     if "knownbad" in a.only:
         source = train_rows[np.random.default_rng(a.knownbad_seed).permutation(len(train_rows))]

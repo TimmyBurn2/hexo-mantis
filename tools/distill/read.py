@@ -141,7 +141,9 @@ def _arms(arms: dict[str, Any], roots: list[Path], ref: dict[str, tuple[float, f
 
 def verdict(spec: dict[str, Any], roots: list[Path], *, line: float = LINE, near: float = CONTROL_NEAR,
             kb_gap: float = KNOWNBAD_GAP) -> dict[str, Any]:
-    """The pre-stated read over `spec` (reference saves, control/known-bad/arm saves with each arm's class); Raises: ValueError — a save without exactly one receipt, a ruler over two instruments, a refused sidecar."""
+    """The pre-stated read over `spec` (reference saves, control/known-bad/arm saves with each arm's class); Raises: ValueError — an arm without a class, a save without exactly one receipt, a ruler over two instruments, a refused sidecar."""
+    if unclassed := [n for n, a in spec["arms"].items() if "class" not in a]:
+        raise ValueError(f"arms without a class: {unclassed}")
     ref_cells, ref = _reference(spec, roots)
     out: dict[str, Any] = {"reference": {r: {"logit": v[0], "se": v[1], "cells": [c.path for c in ref_cells[r]]}
                                          for r, v in ref.items()}}
@@ -165,12 +167,15 @@ def verdict(spec: dict[str, Any], roots: list[Path], *, line: float = LINE, near
 
 
 def contrast_read(spec: dict[str, Any], roots: list[Path], *, line: float = LINE) -> dict[str, Any]:
-    """Arms read against each other: each arm's two-save panel per ruler (the reference beside), every named contrast lhs − rhs with its branch, and the outcome over the branches; Raises: ValueError — as `verdict`, or a contrast naming no arm."""
+    """Arms read against each other: each arm's two-save panel per ruler (the reference beside), every named contrast lhs − rhs with its branch, and the outcome over the branches; Raises: ValueError — as `verdict`, a contrast naming no arm, or a repeated contrast name."""
     ref_cells, ref = _reference(spec, roots)
     out: dict[str, Any] = {"reference": {r: {"logit": v[0], "se": v[1], "cells": [c.path for c in ref_cells[r]]}
                                          for r, v in ref.items()}, "contrasts": {}}
     every: dict[str, list[Cell]] = {r: list(ref_cells[r]) for r in RULERS}
     out["arms"], panels = _arms(spec["arms"], roots, ref, every, line)
+    names = [c["name"] for c in spec["contrasts"]]
+    if len(set(names)) != len(names):
+        raise ValueError(f"contrast names repeat: {names}")
     for c in spec["contrasts"]:
         if c["lhs"] not in panels or c["rhs"] not in panels:
             raise ValueError(f"contrast {c['name']}: {c['lhs']} or {c['rhs']} is no arm of the spec")

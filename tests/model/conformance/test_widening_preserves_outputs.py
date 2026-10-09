@@ -1,5 +1,4 @@
-"""The width doubling serves its parent's outputs on the graph builder's golden r8 positions, for every graph arch kind,
-and its split noise is what lets the two copies of a unit train apart."""
+"""The width doubling serves its parent's outputs on the golden r8 positions for every graph kind; its split noise lets copies train apart."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -50,19 +49,20 @@ def golden_batch(positions: list[tuple[int, int, list[tuple[int, int, int]]]], *
                                node_feat_dim=spec.node_feat_dim, edge_feat_dim=spec.edge_feat_dim, device="cpu")
 
 
-def parent(kind: str, hidden: int, layers: int) -> torch.nn.Module:
-    """A seeded parent whose every weight, LayerNorm gain and GINE eps is off its init, so no rule holds by accident."""
+def parent(kind: str, hidden: int, layers: int) -> tuple[torch.nn.Module, Any]:
+    """A seeded parent and its declared arch; every weight, LayerNorm gain and GINE eps is off its init, so no rule holds by accident."""
     spec = lookup(ENC)
     torch.manual_seed(20261014)
-    net = build_net(ARCH_KINDS[kind](in_dim=int(spec.node_feat_dim), edge_dim=int(spec.edge_feat_dim), hidden=hidden,
-                                     num_layers=layers))
+    arch = ARCH_KINDS[kind](in_dim=int(spec.node_feat_dim), edge_dim=int(spec.edge_feat_dim), hidden=hidden,
+                            num_layers=layers)
+    net = build_net(arch)
     with torch.no_grad():
         for name, t in net.state_dict().items():
             if name.endswith(".eps"):
                 t.fill_(0.3)
             else:
                 t.add_(torch.randn_like(t) * 0.1)
-    return net.eval()
+    return net.eval(), arch
 
 
 def heads(net: torch.nn.Module, b: GraphBatch) -> tuple[torch.Tensor, ...]:
@@ -85,9 +85,10 @@ def max_gap(lhs: tuple[torch.Tensor, ...], rhs: tuple[torch.Tensor, ...]) -> flo
 
 @pytest.mark.parametrize("kind", ARCH_KINDS_BY_REPRESENTATION["graph"])
 def test_the_doubled_net_serves_its_parents_outputs_on_the_golden_positions(kind: str, derived: Any) -> None:
-    net = parent(kind, hidden=16, layers=2)
-    wide = widen_net(net, seed=7)
-    assert wide.arch == widen_arch(net.arch) and wide.arch.hidden == 32 and type(wide) is type(net)  # pyright: ignore
+    net, arch = parent(kind, hidden=16, layers=2)
+    wide = widen_net(net, arch, seed=7)
+    assert widen_arch(arch).hidden == 32 and type(wide) is type(net)
+    assert wide.state_dict()["representation.input_proj.weight"].shape[0] == 32
     positions = golden_positions(12)
     gaps = []
     for i in range(len(positions)):
@@ -101,8 +102,8 @@ def test_the_doubled_net_serves_its_parents_outputs_on_the_golden_positions(kind
 
 def test_the_shape_of_record_doubles_within_the_pin() -> None:
     """4 layers of 128 to 256: policy, aux, value and bins within the pin on golden positions, batched and single."""
-    net = parent("GnnArchV2SoftPolicy", hidden=128, layers=4)
-    wide = widen_net(net, seed=20261014)
+    net, arch = parent("GnnArchV2SoftPolicy", hidden=128, layers=4)
+    wide = widen_net(net, arch, seed=20261014)
     positions = golden_positions(4)
     b = golden_batch(positions, sample=8, seed=5)
     assert max_gap(heads(net, b), heads(wide, b)) <= TOL
@@ -111,7 +112,7 @@ def test_the_shape_of_record_doubles_within_the_pin() -> None:
 
 
 def test_copies_read_alike_and_their_readers_split_unevenly_into_the_parents_weight() -> None:
-    net = parent("GnnArchV2SoftPolicy", hidden=8, layers=2)
+    net, _ = parent("GnnArchV2SoftPolicy", hidden=8, layers=2)
     sd, h = net.state_dict(), 8
     wide = widen_state(sd, hidden=h, seed=3)
     w = wide["representation.convs.1.nn.0.weight"]
@@ -131,8 +132,8 @@ def test_copies_read_alike_and_their_readers_split_unevenly_into_the_parents_wei
 @pytest.mark.parametrize("noise", [0.0, 0.1])
 def test_only_the_split_noise_lets_the_copies_train_apart(noise: float) -> None:
     """With an even split the copies get the same gradient forever; the noise separates them at the first step."""
-    net = parent("GnnArchV2SoftPolicy", hidden=8, layers=2)
-    wide = widen_net(net, seed=11, noise=noise).train()
+    net, arch = parent("GnnArchV2SoftPolicy", hidden=8, layers=2)
+    wide = widen_net(net, arch, seed=11, noise=noise).train()
     b = golden_batch(golden_positions(3), sample=3, seed=1)
     policy, value, bins, aux = wide.forward_batch_heads(b.x, b.edge_index, b.edge_attr, b.legal_node_gather,
                                                         stone_mask_from_batch(b), b.node_offsets)
@@ -146,7 +147,7 @@ def test_only_the_split_noise_lets_the_copies_train_apart(noise: float) -> None:
 
 
 def test_a_tensor_without_a_rule_and_a_sign_flipping_noise_are_refused() -> None:
-    sd = dict(parent("GnnArchV2", hidden=8, layers=1).state_dict())
+    sd = dict(parent("GnnArchV2", hidden=8, layers=1)[0].state_dict())
     with pytest.raises(WidenError, match="noise"):
         widen_state(sd, hidden=8, seed=0, noise=0.5)
     with pytest.raises(WidenError, match="trunk's 6"):

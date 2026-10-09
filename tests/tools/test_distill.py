@@ -279,6 +279,7 @@ def test_the_contrast_outcomes(tmp_path, d):
         "target": ({"a": base, "b": up, "c": base, "d": up}, "target: b-a"),
         "capacity": ({"a": base, "b": base, "c": base, "d": up}, "capacity: d-b"),
         "both": ({"a": base, "b": up, "c": up, "d": (0.56, 0.79)}, "capacity: d-b; target: b-a"),
+        "larger": ({"a": base, "b": up, "c": (0.62, 0.84), "d": (0.56, 0.79)}, "capacity: c-a; target: b-a"),
         "mixed": ({"a": base, "b": (0.47, 0.63), "c": base, "d": (0.47, 0.63)}, "mixed"),
         "none": ({"a": base, "b": base, "c": (0.33, 0.57), "d": base}, "none"),
     }
@@ -436,9 +437,24 @@ def test_a_tiny_arm_trains_saves_stamped_and_a_warm_arm_inherits(tmp_path, d):
                     heldout_batches=1, sample_threads=1, caps_override=None, log=lambda _s: None)
 
 
+class _Killed(Exception):
+    """A cap stop, played in-process: the step after `at` never returns."""
+
+
+def _killed_at(T: Any, monkeypatch: Any, at: int) -> None:
+    real = T.run_declared_train_step
+
+    def step(trainer: Any, *args: Any, **kwargs: Any) -> Any:
+        if trainer.step >= at:
+            raise _Killed
+        return real(trainer, *args, **kwargs)
+
+    monkeypatch.setattr(T, "run_declared_train_step", step)
+
+
 @pytest.mark.integration
-def test_a_stopped_arm_resumes_from_its_newest_save_and_finishes(tmp_path, d):
-    """A cap stop leaves rolling saves and no record; the rerun resumes at the newest save, reseeded from its step."""
+def test_a_stopped_arm_resumes_from_its_newest_save_and_finishes(tmp_path, d, monkeypatch):
+    """A kill after step 5 leaves the step-4 rolling save; the rerun resumes there with the optimizer and scheduler carried, and a second arm killed at the same step replays the same net."""
     load_tools_package("distill")
     T = importlib.import_module("distill.train")
     Rg = d["rings"]
@@ -451,22 +467,40 @@ def test_a_stopped_arm_resumes_from_its_newest_save_and_finishes(tmp_path, d):
     Rg.write_provenance(ring, kind="teacher_train", lineage=["six-aaaaaaa-gen1"], encoding=ENC, rows=len(rows), slots=64,
                         record={})
     arm = T.ArmSpec(run_id="tinystop", hidden=16, layers=1, ring=ring, warm_start=None, value_mask_p=0.125)
+    recipe = T.Recipe(base_config=_a_graph_config(), steps=6, save_at=(3, 6), lr=1e-3, eta_min=1e-4, seed=11)
     kw = dict(device="cpu", heldout_ring=None, heldout_every=1000, heldout_batches=1, sample_threads=1,
               caps_override=None, save_every=2, log=lambda _s: None)
-    stopped = T.Recipe(base_config=_a_graph_config(), steps=5, save_at=(6,), lr=1e-4, eta_min=1e-4, seed=11)
-    T.train_arm(arm, stopped, tmp_path / "arm", **kw)
-    (tmp_path / "arm" / "arm.json").unlink()
-    assert [T._step_of(p) for p in (tmp_path / "arm" / "checkpoints").glob("*.ckpt")] == [4], "the newest rolling save"
-    whole = T.Recipe(base_config=_a_graph_config(), steps=6, save_at=(6,), lr=1e-4, eta_min=1e-4, seed=11)
-    rec = T.train_arm(arm, whole, tmp_path / "arm", **kw)
-    assert sorted(rec["saves"]) == [6] and [r["step"] for r in rec["resumes"]] == [4]
-    assert rec["resumes"][0]["seed"] == T.resume_seed(11, 4)
+    recs = []
+    for name in ("one", "two"):
+        with monkeypatch.context() as m:
+            _killed_at(T, m, 5)
+            with pytest.raises(_Killed):
+                T.train_arm(arm, recipe, tmp_path / name, **kw)
+        assert sorted(T._step_of(p) for p in (tmp_path / name / "checkpoints").glob("*.ckpt")) == [3, 4]
+        recs.append(T.train_arm(arm, recipe, tmp_path / name, **kw))
+    rec = recs[0]
+    assert sorted(rec["saves"]) == [3, 6] and [r["step"] for r in rec["resumes"]] == [4]
+    assert rec["resumes"][0]["seed"] == T.resume_seed(11, 4) and rec["trained_steps"] == 6
+    assert [json.loads(r)["step"] for r in (tmp_path / "one" / "curve.jsonl").read_text().splitlines()] == [0]
     ck = load_checkpoint(rec["saves"][6]["path"], declared_encoding=ENC)
-    assert ck.metadata.lineage == ("six-aaaaaaa-gen1",) and ck.config["train"]["lr"] == 1e-4
-    empty = tmp_path / "empty"
-    (empty / "checkpoints").mkdir(parents=True)
-    with pytest.raises(FileExistsError, match="no save"):
-        T.train_arm(arm, whole, empty, **kw)
+    assert ck.metadata.lineage == ("six-aaaaaaa-gen1",)
+    assert ck.scheduler_state["last_epoch"] == 6, "the resumed scheduler carried on from step 4"
+    assert {int(v["step"]) for v in ck.optimizer_state["state"].values()} == {6}, "Adam's moments carried on from 4"
+    assert recs[1]["saves"][6]["net_hash"] == rec["saves"][6]["net_hash"], "a stop at the same step replays the arm"
+    with pytest.raises(FileExistsError, match="finished"):
+        T.train_arm(arm, recipe, tmp_path / "one", **kw)
+    with monkeypatch.context() as m:
+        _killed_at(T, m, 1)
+        with pytest.raises(_Killed):
+            T.train_arm(arm, recipe, tmp_path / "early", **kw)
+    with monkeypatch.context() as m:
+        _killed_at(T, m, 5)
+        with pytest.raises(_Killed):
+            T.train_arm(arm, recipe, tmp_path / "early", **kw)
+    assert [p.name for p in tmp_path.glob("early.unsaved.*")], "a stop before the first save restarts aside"
+    other = T.Recipe(base_config=_a_graph_config(), steps=6, save_at=(2, 6), lr=1e-3, eta_min=1e-4, seed=11)
+    with pytest.raises(ValueError, match="differs"):
+        T.train_arm(arm, other, tmp_path / "early", **kw)
 
 
 @pytest.mark.integration

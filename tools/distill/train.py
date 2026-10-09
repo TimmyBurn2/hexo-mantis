@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
+import torch.nn as nn
 import yaml
 
 from mantis._engine import HexgBuffer, registry_sha_hex
@@ -18,14 +19,16 @@ from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.config.resolve.sample_threads import resolve_sample_threads
-from mantis.model import build_net
+from mantis.model import ModelArch, build_net
 from mantis.model.identity import net_param_hash
-from mantis.model.widen import widen_net
+from mantis.model.widen import widen_arch, widen_net
+from mantis.train.bundle_receipts import CHECKPOINT_NAME_RE, stamped_checkpoints
 from mantis.train.checkpoints import (
     CheckpointStampError,
     deploy_state,
     load_checkpoint,
     resume_trainer,
+    stamped_lineage,
 )
 from mantis.train.coordinator.dispatch import (
     resolve_step_spec,
@@ -76,15 +79,20 @@ class _JsonlSink:
             fh.write(json.dumps(dict(event), default=str) + "\n")
 
 
-def warm_start_row(path: Path, encoding: str) -> dict[str, Any]:
-    """`identity.warm_start` for `path`: its deploy net's hash, nothing re-initialised; Raises: ValueError — the stamp resolves no arch."""
+def deploy_net(path: Path, encoding: str | None) -> tuple[nn.Module, ModelArch, str]:
+    """A stamped checkpoint's deploy net (the EMA shadow when stamped, else the learner), its declared arch and which state it is; Raises: CheckpointStampError — the stamp resolves no arch; DeclaredEncodingMismatchError — it names another encoding than `encoding`."""
     ck = load_checkpoint(path, declared_encoding=encoding)
     if ck.metadata.arch is None:
-        raise ValueError(f"{path.name}: the stamp resolves no arch")
-    state, _ = deploy_state(ck)
+        raise CheckpointStampError(f"{path.name}: the stamp resolves no arch")
+    state, source = deploy_state(ck)
     net = build_net(ck.metadata.arch)
     net.load_state_dict(state)
-    return {"checkpoint": str(path), "net_hash": net_param_hash(net), "reinit": []}
+    return net, ck.metadata.arch, source
+
+
+def warm_start_row(path: Path, encoding: str) -> dict[str, Any]:
+    """`identity.warm_start` for `path`: its deploy net's hash, nothing re-initialised; Raises: as `deploy_net`."""
+    return {"checkpoint": str(path), "net_hash": net_param_hash(deploy_net(path, encoding)[0]), "reinit": []}
 
 
 def arm_config(arm: ArmSpec, recipe: Recipe) -> dict[str, Any]:
@@ -101,27 +109,26 @@ def arm_config(arm: ArmSpec, recipe: Recipe) -> dict[str, Any]:
 
 
 def widen_checkpoint(parent: Path, base_config: Path, out: Path, *, run_id: str, seed: int) -> dict[str, Any]:
-    """The parent's deploy net doubled in trunk width (`widen_net`), stamped at step 0 by the trainer's one writer under `base_config` at the doubled width, its lineage the parent's plus `widened-from-<parent>`. Raises: FileExistsError — `out` exists; CheckpointStampError — the parent's stamp resolves no arch; WidenError — a tensor the doubling has no rule for."""
-    ck = load_checkpoint(parent, declared_encoding=None)
-    if ck.metadata.arch is None:
-        raise CheckpointStampError(f"{parent.name}: the stamp resolves no arch")
-    state, source = deploy_state(ck)
-    net = build_net(ck.metadata.arch)
-    net.load_state_dict(state)
-    wide = widen_net(net, seed=seed)
-    out.mkdir(parents=True, exist_ok=False)
+    """The parent's deploy net doubled (`widen_net`) and stamped at step 0 by the trainer's one writer under `base_config` at the doubled width, EMA off, lineage the parent's plus `widened-from-<parent>`; Raises: FileExistsError — `out` exists; CheckpointStampError, DeclaredEncodingMismatchError — as `deploy_net`; WidenError — a tensor without a rule; RuntimeError — the stamp's deploy net is not the doubled net."""
     dump = load_config(base_config).model_dump()
+    encoding = dump["identity"]["encoding"]
+    net, arch, source = deploy_net(parent, encoding)
+    wide, wide_arch = widen_net(net, arch, seed=seed), widen_arch(arch)
+    out.mkdir(parents=True, exist_ok=False)
     dump["run_id"] = run_id
-    dump["model"]["gnn"] = {"hidden": wide.arch.hidden, "num_layers": wide.arch.num_layers}  # pyright: ignore
+    dump["model"]["gnn"] = {"hidden": wide_arch.hidden, "num_layers": wide_arch.num_layers}
     dump["identity"]["warm_start"] = None
+    dump["train"]["ema"] = {**dump["train"]["ema"], "enabled": False}
     trainer = build_fresh_trainer(config=dump, device=torch.device("cpu"), checkpoint_dir=str(out))
     trainer._base_model().load_state_dict(wide.state_dict(), strict=True)
-    trainer.lineage = (*ck.metadata.lineage, f"widened-from-{parent.stem}")
+    trainer.lineage = (*stamped_lineage(parent), f"widened-from-{parent.stem}")
     path = trainer.save_checkpoint(None)
+    if net_param_hash(deploy_net(path, encoding)[0]) != net_param_hash(wide):
+        raise RuntimeError(f"{path.name}: the stamp's deploy net is not the doubled net")
     return {"parent": str(parent), "parent_sha256": sha256_file(parent), "parent_state": source,
             "parent_net_hash": net_param_hash(net), "widened": str(path), "widened_sha256": sha256_file(path),
-            "widened_net_hash": net_param_hash(wide), "hidden": [net.arch.hidden, wide.arch.hidden],  # pyright: ignore
-            "seed": seed, "lineage": list(trainer.lineage)}
+            "widened_net_hash": net_param_hash(wide), "hidden": [arch.hidden, wide_arch.hidden], "seed": seed,
+            "lineage": list(trainer.lineage)}
 
 
 def open_ring(path: Path, encoding: str, seed: int) -> tuple[HexgBuffer, int]:
@@ -145,50 +152,75 @@ def _rows(path: Path) -> list[dict[str, Any]]:
 
 
 def _step_of(ckpt: Path) -> int:
-    return int(ckpt.stem.split("_")[-2])
+    match = CHECKPOINT_NAME_RE.match(ckpt.name)
+    if match is None:
+        raise ValueError(f"{ckpt.name}: not a stamped checkpoint name")
+    return int(match["step"])
+
+
+def _segments(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Each start or resume's last save event: the wall, steps and skipped steps the segment kept."""
+    out: list[dict[str, Any]] = []
+    for e in events:
+        if e["event"] in ("start", "resume"):
+            out.append({})
+        elif e["event"] == "save" and "segment_s" in e and out:
+            out[-1] = e
+    return [e for e in out if e]
 
 
 def train_arm(arm: ArmSpec, recipe: Recipe, out: Path, *, device: str, heldout_ring: Path | None,
               heldout_every: int, heldout_batches: int, sample_threads: int | None,
               caps_override: tuple[int, int] | None, save_every: int = 0, gpu_mem_mib: int | None = None,
               log: Callable[[str], None] = print) -> dict[str, Any]:
-    """Train `arm` for `recipe.steps` production steps and save at `recipe.save_at`, every `save_every` steps beside them; an unfinished `out` resumes from its newest save. Raises: FileExistsError — `out` holds a finished arm, or an unfinished one with no save; FileNotFoundError, ValueError — the ring's provenance or a ring that loads nothing; RuntimeError — the arm skips more steps than it takes."""
+    """Train `arm` for `recipe.steps` steps, saving at `recipe.save_at` and every `save_every` steps; an unfinished `out` resumes from its newest save (one with none is moved aside and restarts); Raises: FileExistsError — `out` holds a finished arm; ValueError — a rerun whose arm or recipe differs from the stopped one's, a ring that loads nothing or a provenance for other bytes; FileNotFoundError — no provenance; CheckpointStampError, DeclaredEncodingMismatchError, ResumeIdentityMismatchError, ResumeTargetSemanticsError — the save refuses to resume; RuntimeError — the arm skips more steps than it takes."""
     lineage = ring_lineage(arm.ring)
-    progress = out / "progress.jsonl"
-    if gpu_mem_mib is not None and device == "cuda":
-        total = torch.cuda.get_device_properties(0).total_memory
-        torch.cuda.set_per_process_memory_fraction(min(1.0, gpu_mem_mib * 2**20 / total))
-    if out.exists():
-        if (out / "arm.json").exists():
-            raise FileExistsError(f"{out}: the arm is finished")
-        ckpts = sorted((out / "checkpoints").glob("*.ckpt"), key=_step_of)
-        if not ckpts:
-            raise FileExistsError(f"{out}: an unfinished arm with no save to resume from")
-        dump = yaml.safe_load((out / "config.yaml").read_text(encoding="utf-8"))
-        config = load_config(out / "config.yaml")
-        encoding = config.identity.encoding
-        seed = resume_seed(recipe.seed, _step_of(ckpts[-1]))
+    if gpu_mem_mib is not None and device.startswith("cuda"):
+        total = torch.cuda.get_device_properties(torch.device(device)).total_memory
+        torch.cuda.set_per_process_memory_fraction(min(1.0, gpu_mem_mib * 2**20 / total), torch.device(device))
+    if (out / "arm.json").exists():
+        raise FileExistsError(f"{out}: the arm is finished")
+    saved = stamped_checkpoints(out / "checkpoints")
+    if out.exists() and not saved:
+        aside = out.with_name(f"{out.name}.unsaved.{int(time.time())}")
+        out.rename(aside)
+        log(f"{out} held no save: moved aside to {aside.name}, the arm restarts at step 0")
+    dump = arm_config(arm, recipe)
+    if caps_override is not None:
+        dump["train"]["microbatch_caps"] = {"max_edges": caps_override[0], "max_nodes": caps_override[1]}
+    progress, curve = out / "progress.jsonl", out / "curve.jsonl"
+    plan = {"save_at": list(recipe.save_at), "save_every": save_every, "ring": str(arm.ring)}
+    if saved:
+        stored = yaml.safe_load((out / "config.yaml").read_text(encoding="utf-8"))
+        begun = json.loads((out / "start.json").read_text(encoding="utf-8"))
+        if stored != json.loads(json.dumps(dump)) or {k: begun.get(k) for k in plan} != plan:
+            raise ValueError(f"{out}: this run's arm or recipe differs from the one the stopped arm started with")
+        encoding = load_config(out / "config.yaml").identity.encoding
+        step = _step_of(saved[-1])
+        seed = resume_seed(recipe.seed, step)
         seed_everything(seed)
-        trainer = resume_trainer(Trainer, ckpts[-1], declared_encoding=encoding, device=torch.device(device),
+        trainer = resume_trainer(Trainer, saved[-1], declared_encoding=encoding, device=torch.device(device),
                                  sink=_JsonlSink(out / "events.jsonl"))
-        _append(progress, {"event": "resume", "step": trainer.step, "from": str(ckpts[-1]), "seed": seed,
-                           "t": time.time()})
-        log(f"resumed at {trainer.step} from {ckpts[-1].name}, seed {seed}")
+        if not any(e["event"] == "save" and e["step"] == step for e in _rows(progress)):
+            _append(progress, {"event": "save", "step": step, "path": str(saved[-1]),
+                               "named": step in recipe.save_at, "net_hash": net_param_hash(trainer._base_model()),
+                               "t": time.time(), "backfilled": True})
+        _append(progress, {"event": "resume", "step": step, "from": str(saved[-1]), "seed": seed, "t": time.time(),
+                           "gpu_mem_mib": gpu_mem_mib, "device": device})
+        curve.write_text("".join(json.dumps(r) + "\n" for r in _rows(curve) if r["step"] <= step), encoding="utf-8")
+        log(f"resumed at {step} from {saved[-1].name}, seed {seed}")
     else:
         out.mkdir(parents=True, exist_ok=False)
-        dump = arm_config(arm, recipe)
-        if caps_override is not None:
-            dump["train"]["microbatch_caps"] = {"max_edges": caps_override[0], "max_nodes": caps_override[1]}
         (out / "config.yaml").write_text(yaml.safe_dump(dump, sort_keys=False), encoding="utf-8")
-        config = load_config(out / "config.yaml")
-        encoding = config.identity.encoding
+        encoding = load_config(out / "config.yaml").identity.encoding
         seed = recipe.seed
         seed_everything(seed)
         trainer = build_fresh_trainer(config=dump, device=torch.device(device), checkpoint_dir=str(out / "checkpoints"),
                                       sink=_JsonlSink(out / "events.jsonl"))
         trainer.lineage = tuple(dict.fromkeys(trainer.lineage + lineage))
-        _append(progress, {"event": "start", "step": 0, "seed": seed, "t": time.time()})
-    knobs = resolve_coordinator_knobs(config.train)
+        _append(progress, {"event": "start", "step": 0, "seed": seed, "t": time.time(), "gpu_mem_mib": gpu_mem_mib,
+                           "device": device})
+    knobs = resolve_coordinator_knobs(load_config(out / "config.yaml").train)
     threads = sample_threads or resolve_sample_threads(dump)
     buf, rows = open_ring(arm.ring, encoding, seed)
     step_spec, caps = resolve_step_spec(dump), (lambda: resolve_microbatch_caps(dump))
@@ -198,17 +230,16 @@ def train_arm(arm: ArmSpec, recipe: Recipe, out: Path, *, device: str, heldout_r
     if not (out / "start.json").exists():
         (out / "start.json").write_text(json.dumps({
             "run_id": arm.run_id, "hidden": arm.hidden, "layers": arm.layers, "encoding": encoding,
-            "lineage": list(trainer.lineage), "ring": str(arm.ring), "ring_sha256": sha256_file(arm.ring),
-            "ring_rows": rows, "ring_provenance": str(arm.ring) + PROVENANCE_SUFFIX,
-            "warm_start": dump["identity"]["warm_start"], "value_mask_p": arm.value_mask_p, "seed": recipe.seed,
-            "steps": recipe.steps, "lr": recipe.lr, "eta_min": recipe.eta_min, "batch_size": batch, "augment": augment,
-            "sample_threads": threads, "microbatch_caps": dump["train"]["microbatch_caps"], "save_every": save_every,
-            "gpu_mem_mib": gpu_mem_mib, "config_sha256": sha256_file(out / "config.yaml"),
-            "registry_sha256": registry_sha_hex(),
+            "lineage": list(trainer.lineage), "ring_sha256": sha256_file(arm.ring), "ring_rows": rows,
+            "ring_provenance": str(arm.ring) + PROVENANCE_SUFFIX, "warm_start": dump["identity"]["warm_start"],
+            "value_mask_p": arm.value_mask_p, "seed": recipe.seed, "steps": recipe.steps, "lr": recipe.lr,
+            "eta_min": recipe.eta_min, "batch_size": batch, "augment": augment, "sample_threads": threads,
+            "microbatch_caps": dump["train"]["microbatch_caps"], "gpu_mem_mib": gpu_mem_mib, **plan,
+            "config_sha256": sha256_file(out / "config.yaml"), "registry_sha256": registry_sha_hex(),
             "tree_commit": subprocess.run(["git", "-C", str(tree), "rev-parse", "HEAD"], capture_output=True,
                                           text=True, check=False).stdout.strip(),
             "net_hash_start": net_param_hash(trainer._base_model()), "device": device,
-            "gpu": torch.cuda.get_device_name(0) if device == "cuda" else None,
+            "gpu": torch.cuda.get_device_name(torch.device(device)) if device.startswith("cuda") else None,
         }, indent=1, default=str), encoding="utf-8")
 
     def read_heldout() -> dict[str, float] | None:
@@ -223,7 +254,6 @@ def train_arm(arm: ArmSpec, recipe: Recipe, out: Path, *, device: str, heldout_r
                 sums[k] += float(got[k]) / heldout_batches
         return sums
 
-    curve = out / "curve.jsonl"
     if trainer.step == 0:
         _append(curve, {"step": 0, "heldout": read_heldout()})
     t0, start_step = time.time(), trainer.step
@@ -251,23 +281,20 @@ def train_arm(arm: ArmSpec, recipe: Recipe, out: Path, *, device: str, heldout_r
             path = trainer.save_checkpoint(None)
             _append(progress, {"event": "save", "step": trainer.step, "path": str(path), "named": named,
                                "net_hash": net_param_hash(trainer._base_model()), "t": time.time(),
-                               "segment_s": round(time.time() - t0, 1), "segment_steps": trainer.step - start_step})
-            for old in (out / "checkpoints").glob("*.ckpt"):
+                               "segment_s": round(time.time() - t0, 1), "segment_steps": trainer.step - start_step,
+                               "skipped_steps": trainer.skipped_steps})
+            for old in stamped_checkpoints(out / "checkpoints"):
                 if old != path and _step_of(old) not in recipe.save_at:
                     old.unlink()
     events = _rows(progress)
-    saves = {e["step"]: {"path": e["path"], "net_hash": e["net_hash"]} for e in events
-             if e["event"] == "save" and e["named"]}
-    wall, segment = 0.0, 0.0
-    for e in events:
-        if e["event"] == "save":
-            segment = e["segment_s"]
-        else:
-            wall, segment = wall + segment, 0.0
-    wall += segment
+    hashes = {e["step"]: e["net_hash"] for e in events if e["event"] == "save"}
+    saves = {_step_of(p): {"path": str(p), "net_hash": hashes.get(_step_of(p)) or net_param_hash(deploy_net(p, encoding)[0])}
+             for p in stamped_checkpoints(out / "checkpoints") if _step_of(p) in recipe.save_at}
+    kept = _segments(events)
+    wall, steps = sum(e["segment_s"] for e in kept), sum(e["segment_steps"] for e in kept)
     record = json.loads((out / "start.json").read_text(encoding="utf-8"))
-    record.update(saves=saves, skipped_steps=trainer.skipped_steps, train_wall_s=round(wall, 1),
-                  s_per_step=round(wall / max(trainer.step, 1), 4),
+    record.update(saves=saves, skipped_steps=sum(e["skipped_steps"] for e in kept), train_wall_s=round(wall, 1),
+                  trained_steps=steps, s_per_step=round(wall / max(steps, 1), 4),
                   resumes=[e for e in events if e["event"] == "resume"])
     (out / "arm.json").write_text(json.dumps(record, indent=1, default=str), encoding="utf-8")
     return record

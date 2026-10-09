@@ -88,7 +88,7 @@ class CheckpointMetadata:
     created_utc: str              # ISO-8601 Z; written ONCE, immutable; "" on a bare legacy read
     arch: ModelArch | None        # the declared dataclass — the SOLE arch source at load
     corpus_sha256: str | None = None
-    lineage: tuple[str, ...] = ()  # the teachers this net learned from; a warm start or resume carries them
+    lineage: tuple[str, ...] = ()  # the teachers this net learned from and any net it was widened from; a warm start or resume carries them
 
 
 @dataclass(frozen=True)
