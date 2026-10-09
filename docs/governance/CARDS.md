@@ -59,16 +59,24 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by R390 (WARM ONLY; 2026-10-09) — DISTILL-1 accepted as a halt, DISTILL-2 warm, the lab corpus
 
-- **CARD-DISTILL-1 ACCEPTED as HALTED** (R390(a)): the halt stands as a success of its control row; the teacher check and
-  the labelled set stand; the branch pushes on the operator's word; the teacher's value is not adopted (r 0.46 v 0.49).
-- **CARD-DISTILL-2 — ORDERED by R390(b): R389(c) read warm only.** run11's best save (4×128) and its Net2Net widening to
+- **CARD-DISTILL-1 CLOSED-HALTED** (R390(a); was ACCEPTED as HALTED): the halt stands as a success of its control row; the
+  teacher check and the labelled set stand; the branch pushed (dfe33050); the teacher's value is not adopted (r 0.46 v 0.49).
+- **CARD-DISTILL-2 — OWNED by the DISTILL-2 packet (architect, 2026-10-09; branch `distill-2`): four warm arms (a 4×128
+  on run11's own targets, b 4×128 on Six's raw policy, c and d the widened 4×256 on each), 15k steps at lr 1e-4 constant,
+  B 256, value z with the mask, read as two-save panels (10k, 15k) on rung 16 and S against lines of +0.17: b − a on
+  both → Six's policy is the better target (CARD-SIX-SEARCH-TEACHER opens); c − a or d − b on both → capacity; neither
+  → CARD-DENSE-1. Training, rings and reads on box A beside run11 under DEPLOY-2's cap (the operator's word); records
+  `mantis-records/distill-2/`. Was: ORDERED by R390(b): R389(c) read warm only.** run11's best save (4×128) and its Net2Net widening to
   4×256, each fine-tuned 15k steps at the warm LR under two policy targets (run11's own search targets; Six gen455's raw
   policy), value z with the mask in every arm; two-save panels on rung 16 and S. Pre-stated: 4×128-on-Six above
   4×128-on-own by +0.17 on both → Six's policy is the better target and run12 carries it (form decided then); 4×256 over
   4×128 by +0.17 under the same labels → capacity, run12 starts widened; neither → CARD-DENSE-1. Deepening waits. No box
   is paused for it (R390(d)). A fresh session; the labelled set is `mantis-mirror/distill-1-2026-10-08/`.
 - **CARD-NET2NET-WIDEN — ORDERED by R390(b) for DISTILL-2: a function-preserving widening behind the seam**, pinned by
-  step-0 outputs within 1e-4 of the parent on the golden batch.
+  step-0 outputs within 1e-4 of the parent on the golden batch. It is CARD-NET-EXPAND's width half, built as DISTILL-2's
+  W1 mechanism (a 4×128 checkpoint doubled to 4×256, the stamp's lineage naming the parent); depth waits.
+- **CARD-SIX-SEARCH-TEACHER — OPENED by the DISTILL-2 packet, HELD on its first branch: Six's search (not its raw policy)
+  as the policy teacher.** It opens only if DISTILL-2's b − a reaches +0.17 on both rulers.
 - **CARD-LAB-CORPUS ACCEPTED** (R390(c)): 491 392 deduplicated games, eval and benchmark games excluded, lineage-tagged by
   run, are the lab corpus of record.
 
@@ -1341,7 +1349,8 @@ recommended one; each is its own leg with a LAW-09 bench.
 
 ## Opened by R367 (DESIGN STANDARD + REVIEW GATE; SIZE CONDITIONAL WITHDRAWN; PRICE LAW; 2026-09-21)
 
-- **CARD-NET-EXPAND — HELD by R379(d): growth is parked (CENSUS-1's C5 reads no shape winning on the frozen 45k ring;
+- **CARD-NET-EXPAND — its width half MOVED to DISTILL-2's W1 as a mechanism (CARD-NET2NET-WIDEN, 2026-10-09); depth stays
+  HELD. Was HELD by R379(d): growth is parked (CENSUS-1's C5 reads no shape winning on the frozen 45k ring;
   CARD-CENSUS-1-PARKED). Was run11's build: a FUNCTION-PRESERVING width/depth expansion of the trunk behind the
   seam, with a conformance section proving output equality at expansion.** OPENED by R367(c) from
   CARD-RUN10-SIZE-PARENT (CLOSED below): no shape-compatible parent exists for a 6×192 `GnnNetV2`, so the
