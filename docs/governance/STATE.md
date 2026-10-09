@@ -7,6 +7,14 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
+**R390 (2026-10-09): WARM ONLY. DISTILL-1's halt stands as a success of its control row (the probe's start was
+unstated; from-scratch arms at feasible budgets read budget, not capacity — the architect's error). The teacher check and
+the labelled set stand; the teacher's value is not adopted, its policy is the only teacher signal. DISTILL-2 reads R389(c)
+warm only: run11's best save (4×128) and its Net2Net widening to 4×256, each fine-tuned 15k steps under run11's own
+targets and under Six gen455's raw policy, value z with the mask everywhere, read on rung 16 and S. The corpus census
+(491 392 deduplicated games, lineage-tagged by run) is the lab corpus of record. run11 trains on; no box is paused for
+DISTILL-2.** (RULINGS R390; the R389 paragraph below stands where R390 does not move it.)
+
 **R389 (2026-10-08): THE SLOPE, NOT THE FLOOR; THE CAPACITY PROBE. R388(b)'s "the floor binds" is withdrawn (a later
 level against the mean of a rising series); rung 16 climbs about +0.11 logit per 48k steps from 108k to 264k with no
 change of slope, so run12 is a plain cosine and no run is spent on the schedule. DEPLOY-2 is accepted; ENCODE-1 is NOT

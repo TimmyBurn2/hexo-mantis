@@ -1,4 +1,4 @@
-# RULINGS — R23 to R389
+# RULINGS — R23 to R390
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R390.
+- Numbering continues from R346. The next ruling is R391.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -36,6 +36,41 @@ still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register 
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
 
+### R390 — WARM ONLY
+Decision: verbatim below.
+
+> R390 — WARM ONLY.
+> (a) DISTILL-1's halt stands as a success of its control row; the probe's start was
+> unstated and from-scratch arms at feasible budgets read budget, not capacity — the
+> architect's error. The teacher check (1 000/1 000) and the labelled set stand; distill-1's
+> branch pushes on the operator's word. The teacher's value is not adopted (r 0.46 v 0.49);
+> its policy is the only teacher signal.
+> (b) DISTILL-2 reads R389(c) warm only: run11's best save (4×128) and its Net2Net widening
+> to 4×256 — a function-preserving mechanism behind the seam, pinned by step-0 outputs
+> within 1e-4 of the parent on the golden batch — each fine-tuned 15k steps at the warm LR
+> under two policy targets, run11's own search targets and Six gen455's raw policy; value z
+> with the mask in every arm. Two-save panels on rung 16 and S. Pre-stated: 4×128-on-Six
+> above 4×128-on-own by +0.17 on both → Six's policy is the better target and run12 carries
+> it (form decided then); 4×256 gaining over 4×128 by +0.17 under the same labels →
+> capacity, run12 starts widened; neither → DENSE-1 is designed. Deepening waits.
+> (c) The corpus census is accepted: 491 392 deduplicated games, eval and benchmark games
+> excluded, lineage-tagged by run, is the lab corpus of record.
+> (d) run11 trains on. No box is paused for DISTILL-2.
+
+Status: standing. ANNOTATES R389(c): DISTILL-1's halt stands as a success of its control row by (a); the probe's start
+was unstated and from-scratch arms at feasible budgets read budget, not capacity, the architect's error. The teacher check
+(1 000/1 000) and the labelled set stand, and distill-1's branch pushes on the operator's word; the teacher's value is not
+adopted (r 0.46 v 0.49), its policy being the only teacher signal. Orders DISTILL-2 by (b): R389(c) read warm only — run11's
+best save (4×128) and its Net2Net widening to 4×256, a function-preserving mechanism behind the seam pinned by step-0
+outputs within 1e-4 of the parent on the golden batch — each fine-tuned 15k steps at the warm LR under two policy targets
+(run11's own search targets, Six gen455's raw policy), value z with the mask in every arm, read as two-save panels on rung
+16 and S. Pre-stated: 4×128-on-Six above 4×128-on-own by +0.17 on both → Six's policy is the better target and run12 carries
+it (form decided then); 4×256 gaining over 4×128 by +0.17 under the same labels → capacity, run12 starts widened; neither →
+DENSE-1 is designed; deepening waits. Accepts the corpus census by (c): 491 392 deduplicated games, eval and benchmark games
+excluded, lineage-tagged by run, are the lab corpus of record. Keeps run11 training by (d); no box is paused for DISTILL-2.
+The work it forwards is distill-1's push, DISTILL-2 (with the Net2Net widening behind the seam) and DENSE-1 if neither
+DISTILL-2 line is met.
+
 ### R389 — THE SLOPE, NOT THE FLOOR; THE CAPACITY PROBE
 Decision: verbatim below.
 
@@ -59,7 +94,9 @@ Decision: verbatim below.
 > and auxiliary targets before any self-play run carries them.
 > (e) No new box. Box B is destroyed on the fresh bundle's verification.
 
-Status: standing. ANNOTATES R388(b): "the floor binds" is withdrawn, because it compared a later level with the mean of a
+Status: standing; (c)'s probe ANNOTATED by R390(a)/(b): its start was unstated and from-scratch arms at feasible budgets
+read budget, not capacity (the architect's error); DISTILL-2 reads (c) warm only (run11's best and its Net2Net widening,
+run11's own targets v Six gen455's raw policy). ANNOTATES R388(b): "the floor binds" is withdrawn, because it compared a later level with the mean of a
 rising series; rung 16 climbs about +0.11 logit per 48k steps from 108k to 264k with no change of slope through the
 cycle, so the LR schedule is not the lever, run12's is a plain cosine and no run is spent on it; the error is the
 architect's. Accepts DEPLOY-2 and accepts ENCODE-1 as NOT PASS by (a): gnn_axis_r8_pruned stays a landed capability, not

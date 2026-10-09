@@ -57,6 +57,21 @@ Both were found by running the gate set rather than by reading it, and both are 
   rung, never down) and the parent and anchor re-read at a step live only in box A's follower script.** They come into
   the tree, one implementation the follower and the dash share, before run12's going-forward line can meet a step.
 
+## Opened by R390 (WARM ONLY; 2026-10-09) — DISTILL-1 accepted as a halt, DISTILL-2 warm, the lab corpus
+
+- **CARD-DISTILL-1 ACCEPTED as HALTED** (R390(a)): the halt stands as a success of its control row; the teacher check and
+  the labelled set stand; the branch pushes on the operator's word; the teacher's value is not adopted (r 0.46 v 0.49).
+- **CARD-DISTILL-2 — ORDERED by R390(b): R389(c) read warm only.** run11's best save (4×128) and its Net2Net widening to
+  4×256, each fine-tuned 15k steps at the warm LR under two policy targets (run11's own search targets; Six gen455's raw
+  policy), value z with the mask in every arm; two-save panels on rung 16 and S. Pre-stated: 4×128-on-Six above
+  4×128-on-own by +0.17 on both → Six's policy is the better target and run12 carries it (form decided then); 4×256 over
+  4×128 by +0.17 under the same labels → capacity, run12 starts widened; neither → CARD-DENSE-1. Deepening waits. No box
+  is paused for it (R390(d)). A fresh session; the labelled set is `mantis-mirror/distill-1-2026-10-08/`.
+- **CARD-NET2NET-WIDEN — ORDERED by R390(b) for DISTILL-2: a function-preserving widening behind the seam**, pinned by
+  step-0 outputs within 1e-4 of the parent on the golden batch.
+- **CARD-LAB-CORPUS ACCEPTED** (R390(c)): 491 392 deduplicated games, eval and benchmark games excluded, lineage-tagged by
+  run, are the lab corpus of record.
+
 ## Opened by R389 (THE SLOPE, NOT THE FLOOR; THE CAPACITY PROBE; 2026-10-08) — DISTILL-1, the withdrawn floor, run12's replay row
 
 - **CARD-DISTILL-1** (R389(c)). Label at least 1M positions from run11's rings with Six gen455's raw policy and value
@@ -74,7 +89,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   Landed on the branch: tools/distill (labeller, rings, trainer driver, reads), the checkpoint stamp's `lineage`, the
   `teacher` extra. Local records `mantis-records/distill-1/EXIT.md`.
 - **CARD-DENSE-1** (R389(c), conditional). Design a hex-conv model kind behind the seam, only if DISTILL-1 finds no net
-  above the line. HELD: DISTILL-1 halted before any arm was read, so the condition is undecided.
+  above the line. HELD: DISTILL-1 halted before any arm was read, so the condition is undecided. Its condition MOVED by
+  R390(b) to DISTILL-2: neither of its two lines met → DENSE-1 is designed.
 - **CARD-RUN12-REPLAY** (R389(d); the DISTILL-1 packet calls it CARD-REPLAY-WINDOW-2M). run12 carries replay_capacity
   2M as a prereg row with its own two-save gap and T check; the supervised harness is the lab for architecture and
   auxiliary targets before a self-play run carries them. OPENED for run12's prereg.
