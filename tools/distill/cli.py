@@ -28,7 +28,7 @@ from .rings import (
     write_teacher_ring,
 )
 from .teacher import Teacher
-from .train import ArmSpec, Recipe, train_arm
+from .train import ArmSpec, Recipe, train_arm, widen_checkpoint
 from .validate import validate
 
 ENCODING = "gnn_axis_r8"
@@ -157,6 +157,13 @@ def cmd_train(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_widen(a: argparse.Namespace) -> int:
+    rec = widen_checkpoint(a.parent, a.base_config, a.out, run_id=a.run_id, seed=a.seed)
+    _write_json(a.out / "widen.json", rec)
+    print(json.dumps(rec, indent=1, default=str))
+    return 0
+
+
 def cmd_kl(a: argparse.Namespace) -> int:
     rec = read_kl(a.ckpts, a.heldout_ring, batches=a.batches, batch_size=a.batch_size, threads=a.threads, seed=a.seed)
     _write_json(a.out, rec)
@@ -241,6 +248,13 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--device", default="cuda")
     t.add_argument("--out", type=Path, required=True, help="an unfinished arm here resumes from its newest save")
     t.set_defaults(func=cmd_train)
+    w = sub.add_parser("widen", help="a stamped checkpoint doubling a parent's trunk width, its outputs the parent's")
+    w.add_argument("--parent", type=Path, required=True)
+    w.add_argument("--base-config", type=Path, required=True, help="the recipe the widened stamp carries")
+    w.add_argument("--run-id", required=True)
+    w.add_argument("--seed", type=int, default=20261014, help="the split noise's generator seed")
+    w.add_argument("--out", type=Path, required=True)
+    w.set_defaults(func=cmd_widen)
     k = sub.add_parser("kl", help="held-out KL(teacher || net) and value reads, every net on the same samples")
     k.add_argument("--ckpts", type=Path, nargs="+", required=True)
     k.add_argument("--heldout-ring", type=Path, required=True)

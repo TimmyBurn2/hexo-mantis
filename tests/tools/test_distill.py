@@ -11,11 +11,16 @@ from typing import Any
 
 import numpy as np
 import pytest
+import torch
 import yaml
 
 from mantis import _engine
+from mantis._engine import HexgBuffer
 from mantis.diagnostics import ring_reader as R
-from mantis.train.checkpoints import load_checkpoint
+from mantis.encoding import lookup
+from mantis.model import build_net
+from mantis.selfplay.graph_collate import collate_graph_batch, stone_mask_from_batch
+from mantis.train.checkpoints import deploy_state, load_checkpoint
 from mantis.util.loadpkg import load_tools_package
 
 ENC = "gnn_axis_r8"
@@ -425,3 +430,54 @@ def test_a_stopped_arm_resumes_from_its_newest_save_and_finishes(tmp_path, d):
     (empty / "checkpoints").mkdir(parents=True)
     with pytest.raises(FileExistsError, match="no save"):
         T.train_arm(arm, whole, empty, **kw)
+
+
+@pytest.mark.integration
+def test_a_widened_checkpoint_serves_its_parent_and_warm_starts_a_wide_arm(tmp_path, d):
+    """The widen command stamps the doubled net with its parent's lineage plus its own, and a twice-as-wide arm starts on it."""
+    load_tools_package("distill")
+    T = importlib.import_module("distill.train")
+    cli = importlib.import_module("distill.cli")
+    Rg = d["rings"]
+    out, _ = _corpus(tmp_path, d)
+    labels = _labels(out, d)
+    rows = np.arange(len(out["game"]))
+    targets = Rg.compute_targets(out, labels, rows, radius=RADIUS, workers=2, chunk=16, log=lambda _s: None)
+    ring = tmp_path / "teacher.ring.bin"
+    Rg.write_teacher_ring(ring, out, labels, rows, targets, Rg.teacher_value(labels, rows), 64, encoding=ENC)
+    Rg.write_provenance(ring, kind="teacher_train", lineage=["six-aaaaaaa-gen1"], encoding=ENC, rows=len(rows), slots=64,
+                        record={})
+    base = _a_graph_config()
+    recipe = T.Recipe(base_config=base, steps=2, save_at=(2,), lr=1e-4, eta_min=1e-4, seed=11)
+    narrow = T.ArmSpec(run_id="tinynarrow", hidden=16, layers=2, ring=ring, warm_start=None, value_mask_p=0.0)
+    kw = dict(device="cpu", heldout_ring=None, heldout_every=1000, heldout_batches=1, sample_threads=1,
+              caps_override=None, log=lambda _s: None)
+    parent = Path(T.train_arm(narrow, recipe, tmp_path / "narrow", **kw)["saves"][2]["path"])
+    assert cli.main(["widen", "--parent", str(parent), "--base-config", str(base), "--run-id", "tinywide",
+                     "--out", str(tmp_path / "wide")]) == 0
+    rec = json.loads((tmp_path / "wide" / "widen.json").read_text(encoding="utf-8"))
+    ck = load_checkpoint(rec["widened"], declared_encoding=ENC)
+    assert (ck.metadata.arch.hidden, ck.metadata.arch.num_layers) == (32, 2) and ck.metadata.step == 0
+    assert ck.metadata.lineage == ("six-aaaaaaa-gen1", f"widened-from-{parent.stem}")
+    nets = []
+    for path in (parent, Path(rec["widened"])):
+        c = load_checkpoint(path, declared_encoding=ENC)
+        net = build_net(c.metadata.arch)
+        net.load_state_dict(deploy_state(c)[0])
+        nets.append(net.eval())
+    buf = HexgBuffer(len(rows) + 8, ENC, 64)
+    buf.load_from_path(str(ring))
+    buf.seed_sampler(3)
+    spec = lookup(ENC)
+    b = collate_graph_batch(buf.sample_graph_batch(16, augment=False)[0], trunk_size=spec.trunk_size,
+                            win_length=spec.win_length, node_feat_dim=spec.node_feat_dim,
+                            edge_feat_dim=spec.edge_feat_dim, device="cpu")
+    with torch.no_grad():
+        got = [n.forward_batch_heads(b.x, b.edge_index, b.edge_attr, b.legal_node_gather, stone_mask_from_batch(b),
+                                     b.node_offsets) for n in nets]
+    assert max(float((x - y).abs().max()) for x, y in zip(*got, strict=True)) <= 1e-4
+    wide_arm = T.ArmSpec(run_id="tinywidearm", hidden=32, layers=2, ring=ring, warm_start=Path(rec["widened"]),
+                         value_mask_p=0.125)
+    rec_w = T.train_arm(wide_arm, recipe, tmp_path / "widearm", **kw)
+    assert rec_w["net_hash_start"] == rec["widened_net_hash"]
+    assert load_checkpoint(rec_w["saves"][2]["path"], declared_encoding=ENC).metadata.lineage == ck.metadata.lineage

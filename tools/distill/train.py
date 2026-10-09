@@ -20,7 +20,8 @@ from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.config.resolve.sample_threads import resolve_sample_threads
 from mantis.model import build_net
 from mantis.model.identity import net_param_hash
-from mantis.train.checkpoints import deploy_state, load_checkpoint, resume_trainer
+from mantis.model.widen import widen_net
+from mantis.train.checkpoints import CheckpointStampError, deploy_state, load_checkpoint, resume_trainer
 from mantis.train.coordinator.dispatch import (
     resolve_step_spec,
     run_declared_eval_step,
@@ -92,6 +93,30 @@ def arm_config(arm: ArmSpec, recipe: Recipe) -> dict[str, Any]:
     dump["train"].update(lr=recipe.lr, eta_min=recipe.eta_min, scheduler_t_max=recipe.steps, lr_cycle=None,
                          value_mask_redraw_p=arm.value_mask_p, heldout_gap=None, checkpoint_interval=0)
     return dump
+
+
+def widen_checkpoint(parent: Path, base_config: Path, out: Path, *, run_id: str, seed: int) -> dict[str, Any]:
+    """The parent's deploy net doubled in trunk width (`widen_net`), stamped at step 0 by the trainer's one writer under `base_config` at the doubled width, its lineage the parent's plus `widened-from-<parent>`. Raises: FileExistsError — `out` exists; CheckpointStampError — the parent's stamp resolves no arch; WidenError — a tensor the doubling has no rule for."""
+    ck = load_checkpoint(parent, declared_encoding=None)
+    if ck.metadata.arch is None:
+        raise CheckpointStampError(f"{parent.name}: the stamp resolves no arch")
+    state, source = deploy_state(ck)
+    net = build_net(ck.metadata.arch)
+    net.load_state_dict(state)
+    wide = widen_net(net, seed=seed)
+    out.mkdir(parents=True, exist_ok=False)
+    dump = load_config(base_config).model_dump()
+    dump["run_id"] = run_id
+    dump["model"]["gnn"] = {"hidden": wide.arch.hidden, "num_layers": wide.arch.num_layers}  # pyright: ignore
+    dump["identity"]["warm_start"] = None
+    trainer = build_fresh_trainer(config=dump, device=torch.device("cpu"), checkpoint_dir=str(out))
+    trainer._base_model().load_state_dict(wide.state_dict(), strict=True)
+    trainer.lineage = (*ck.metadata.lineage, f"widened-from-{parent.stem}")
+    path = trainer.save_checkpoint(None)
+    return {"parent": str(parent), "parent_sha256": sha256_file(parent), "parent_state": source,
+            "parent_net_hash": net_param_hash(net), "widened": str(path), "widened_sha256": sha256_file(path),
+            "widened_net_hash": net_param_hash(wide), "hidden": [net.arch.hidden, wide.arch.hidden],  # pyright: ignore
+            "seed": seed, "lineage": list(trainer.lineage)}
 
 
 def open_ring(path: Path, encoding: str, seed: int) -> tuple[HexgBuffer, int]:
