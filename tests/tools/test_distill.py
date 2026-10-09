@@ -481,7 +481,7 @@ def test_a_stopped_arm_resumes_from_its_newest_save_and_finishes(tmp_path, d, mo
     rec = recs[0]
     assert sorted(rec["saves"]) == [3, 6] and [r["step"] for r in rec["resumes"]] == [4]
     assert rec["resumes"][0]["seed"] == T.resume_seed(11, 4) and rec["trained_steps"] == 6
-    assert [json.loads(r)["step"] for r in (tmp_path / "one" / "curve.jsonl").read_text().splitlines()] == [0]
+    assert [json.loads(r)["step"] for r in (tmp_path / "one" / "curve.jsonl").read_text(encoding="utf-8").splitlines()] == [0]
     ck = load_checkpoint(rec["saves"][6]["path"], declared_encoding=ENC)
     assert ck.metadata.lineage == ("six-aaaaaaa-gen1",)
     assert ck.scheduler_state["last_epoch"] == 6, "the resumed scheduler carried on from step 4"

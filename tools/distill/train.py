@@ -1,3 +1,6 @@
+# >300 justify (R8): an arm's whole life is one unit — its recipe, its start (fresh, warm, or a widened stamp), the rolling
+# saves it writes and the resume that reads them back, and the record assembled from those saves; split, the resume would
+# read a save layout and a progress log that another file defines.
 """One supervised arm on a frozen ring through the production trainer: the base recipe's config with the arm's shape, seeded, saved at the panel's steps."""
 from __future__ import annotations
 
@@ -193,9 +196,9 @@ def train_arm(arm: ArmSpec, recipe: Recipe, out: Path, *, device: str, heldout_r
     progress, curve = out / "progress.jsonl", out / "curve.jsonl"
     plan = {"save_at": list(recipe.save_at), "save_every": save_every, "ring": str(arm.ring)}
     if saved:
-        stored = yaml.safe_load((out / "config.yaml").read_text(encoding="utf-8"))
+        stored = (out / "config.yaml").read_text(encoding="utf-8")
         begun = json.loads((out / "start.json").read_text(encoding="utf-8"))
-        if stored != json.loads(json.dumps(dump)) or {k: begun.get(k) for k in plan} != plan:
+        if stored != yaml.safe_dump(dump, sort_keys=False) or {k: begun.get(k) for k in plan} != plan:
             raise ValueError(f"{out}: this run's arm or recipe differs from the one the stopped arm started with")
         encoding = load_config(out / "config.yaml").identity.encoding
         step = _step_of(saved[-1])
