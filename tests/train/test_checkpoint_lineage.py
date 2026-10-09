@@ -38,7 +38,7 @@ def test_the_lineage_round_trips_and_an_absent_one_reads_empty(tmp_path, tiny_ne
     assert stamped_lineage(plain) == ()
 
 
-@pytest.mark.parametrize("bad", ["six", [""], [3]])
+@pytest.mark.parametrize("bad", ["six", [""], [3], {"six": 1}, 5])
 def test_a_malformed_lineage_is_refused(tmp_path, tiny_net, optim_scaler_sched, valid_config, metadata_kwargs, bad):
     with pytest.raises(CheckpointStampError, match="lineage"):
         _save(tmp_path, tiny_net, optim_scaler_sched, valid_config, metadata_kwargs, lineage=bad)

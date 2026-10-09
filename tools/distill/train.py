@@ -18,22 +18,20 @@ from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.config.resolve.sample_threads import resolve_sample_threads
-from mantis.encoding import lookup
-from mantis.model import arch_from_spec_and_config, build_net
+from mantis.model import build_net
 from mantis.model.identity import net_param_hash
-from mantis.train.checkpoints import deploy_state, load_checkpoint, stamped_lineage
+from mantis.train.checkpoints import deploy_state, load_checkpoint
 from mantis.train.coordinator.dispatch import (
     resolve_step_spec,
     run_declared_eval_step,
     run_declared_train_step,
 )
-from mantis.train.trainer.core import Trainer
-from mantis.train.warmstart import maybe_warmstart_gnn_from_bc
+from mantis.train.orchestrator import build_fresh_trainer
 from mantis.util.determinism import seed_everything
 from mantis.util.hashing import sha256_file
 from mantis.util.loadpkg import load_tools_package
 
-from .rings import ring_lineage
+from .rings import PROVENANCE_SUFFIX, ring_lineage
 
 
 @dataclass(frozen=True)
@@ -96,7 +94,7 @@ def arm_config(arm: ArmSpec, recipe: Recipe) -> dict[str, Any]:
 
 
 def open_ring(path: Path, encoding: str, seed: int) -> tuple[HexgBuffer, int]:
-    """A frozen ring in a buffer sized to it, its sampler seeded (PROBE-1's reader); Raises: ValueError — the ring loads no record."""
+    """A frozen ring in a buffer sized to it, its sampler seeded (the probe package's reader); Raises: ValueError — the ring loads no record."""
     load_tools_package("probe1")
     return importlib.import_module("probe1.nets").open_ring(path, seed=seed, encoding=encoding)
 
@@ -116,15 +114,9 @@ def train_arm(arm: ArmSpec, recipe: Recipe, out: Path, *, device: str, heldout_r
     knobs = resolve_coordinator_knobs(config.train)
     threads = sample_threads or resolve_sample_threads(dump)
     seed_everything(recipe.seed)
-    spec = lookup(encoding)
-    # Built as pretrain builds its trainer: the run's composition root alone calls `init_trainer`.
-    arch = arch_from_spec_and_config(spec, dump)
-    model = build_net(arch)
-    maybe_warmstart_gnn_from_bc(model, dump, spec=spec)
-    trainer = Trainer(model, dump, arch=arch, checkpoint_dir=str(out / "checkpoints"), device=torch.device(device),
-                      sink=_JsonlSink(out / "events.jsonl"))
-    inherited = () if arm.warm_start is None else stamped_lineage(arm.warm_start)
-    trainer.lineage = tuple(dict.fromkeys(inherited + lineage))
+    trainer = build_fresh_trainer(config=dump, device=torch.device(device), checkpoint_dir=str(out / "checkpoints"),
+                                  sink=_JsonlSink(out / "events.jsonl"))
+    trainer.lineage = tuple(dict.fromkeys(trainer.lineage + lineage))
     buf, rows = open_ring(arm.ring, encoding, recipe.seed)
     step_spec, caps = resolve_step_spec(dump), (lambda: resolve_microbatch_caps(dump))
     batch, augment = int(knobs.batch_size), bool(knobs.augment)
@@ -133,6 +125,7 @@ def train_arm(arm: ArmSpec, recipe: Recipe, out: Path, *, device: str, heldout_r
     record: dict[str, Any] = {
         "run_id": arm.run_id, "hidden": arm.hidden, "layers": arm.layers, "encoding": encoding,
         "lineage": list(trainer.lineage), "ring": str(arm.ring), "ring_sha256": sha256_file(arm.ring), "ring_rows": rows,
+        "ring_provenance": str(arm.ring) + PROVENANCE_SUFFIX,
         "warm_start": dump["identity"]["warm_start"], "value_mask_p": arm.value_mask_p, "seed": recipe.seed,
         "steps": recipe.steps, "lr": recipe.lr, "eta_min": recipe.eta_min, "batch_size": batch, "augment": augment,
         "sample_threads": threads, "microbatch_caps": dump["train"]["microbatch_caps"],

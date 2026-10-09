@@ -98,17 +98,19 @@ def cmd_rings(a: argparse.Namespace) -> int:
         for name, rows, t in (("teacher_train", train_rows, t_train), ("teacher_heldout", held_rows, t_held)):
             rec[name] = write_teacher_ring(out / f"{name}.ring.bin", corpus, labels, rows, t, teacher_value(labels, rows),
                                            slots, encoding=ENCODING)
-            write_provenance(out / f"{name}.ring.bin", kind=name, lineage=tag, record=rec[name])
+            write_provenance(out / f"{name}.ring.bin", kind=name, lineage=tag, encoding=ENCODING, rows=len(rows),
+                             slots=slots, record=rec[name])
         ring_held = corpus["source"][held_rows] == SRC_RING
         held_ring = held_rows[ring_held]
         rec["teacher_heldout_z"] = write_teacher_ring(
             out / "teacher_heldout_z.ring.bin", corpus, labels, held_ring, {k: v[ring_held] for k, v in t_held.items()},
             corpus["outcome"][held_ring], slots, encoding=ENCODING, value_valid=corpus["value_valid"][held_ring].astype(bool))
-        write_provenance(out / "teacher_heldout_z.ring.bin", kind="teacher_heldout_z", lineage=tag,
-                         record=rec["teacher_heldout_z"])
+        write_provenance(out / "teacher_heldout_z.ring.bin", kind="teacher_heldout_z", lineage=tag, encoding=ENCODING,
+                         rows=len(held_ring), slots=slots, record=rec["teacher_heldout_z"])
         v_t, z = teacher_value(labels, held_ring), corpus["outcome"][held_ring]
         decided = corpus["value_valid"][held_ring].astype(bool) & (z != 0)
-        rec["teacher_value_v_z"] = {"rows": int(decided.sum()), "pearson": float(np.corrcoef(v_t[decided], z[decided])[0, 1]),
+        r = float(np.corrcoef(v_t[decided], z[decided])[0, 1]) if decided.sum() > 2 else float("nan")
+        rec["teacher_value_v_z"] = {"rows": int(decided.sum()), "pearson": r if np.isfinite(r) else None,
                                     "sign_agreement": float((np.sign(v_t[decided]) == np.sign(z[decided])).mean())}
     del t_train
     if "knownbad" in a.only:
@@ -117,11 +119,13 @@ def cmd_rings(a: argparse.Namespace) -> int:
         rec["knownbad_train"] = write_teacher_ring(out / "knownbad_train.ring.bin", corpus, labels, train_rows, t_kb,
                                                    teacher_value(labels, source), slots, encoding=ENCODING)
         rec["knownbad_seed"] = a.knownbad_seed
-        write_provenance(out / "knownbad_train.ring.bin", kind="knownbad_train", lineage=tag, record=rec["knownbad_train"])
+        write_provenance(out / "knownbad_train.ring.bin", kind="knownbad_train", lineage=tag, encoding=ENCODING,
+                         rows=len(train_rows), slots=slots, record=rec["knownbad_train"])
     if "control" in a.only:
         control_rows = np.nonzero(~held & (corpus["source"] == SRC_RING))[0]
         rec["control_train"] = write_control_ring(out / "control_train.ring.bin", corpus, control_rows, encoding=ENCODING)
-        write_provenance(out / "control_train.ring.bin", kind="control_train", lineage=[], record=rec["control_train"])
+        write_provenance(out / "control_train.ring.bin", kind="control_train", lineage=[], encoding=ENCODING,
+                         rows=rec["control_train"]["rows"], slots=rec["control_train"]["slots"], record=rec["control_train"])
     sample = np.sort(np.random.default_rng(a.check_seed).choice(train_rows, size=min(a.check_rows, len(train_rows)),
                                                                  replace=False))
     rec["legal_check"] = legal_check(corpus, labels, sample, radius=radius, encoding=ENCODING)

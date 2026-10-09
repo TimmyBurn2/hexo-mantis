@@ -122,8 +122,14 @@ def init_trainer(
             declared_keys=declared_keys, sink=sink, device=device,
         )
 
+    return build_fresh_trainer(config=config, device=device, checkpoint_dir=checkpoint_dir, sink=sink)
+
+
+def build_fresh_trainer(*, config: Mapping[str, Any], device: Any, checkpoint_dir: Any = None, sink: Any = None) -> Any:
+    """A trainer built fresh from a config dump: its declared net, its declared warm start, that start's lineage; the run's fresh branch and an offline harness share it. Raises: ValueError, FileNotFoundError, WarmStartIdentityError, RuntimeError — the warm-start row refuses; CheckpointStampError — a malformed lineage."""
     from mantis.config.resolve import resolve_gnn_widths
     from mantis.model import arch_from_spec_and_config, build_net
+    from mantis.train.trainer.core import Trainer  # lazy (Slice 2) — no top-level edge.
 
     # `resolve_from_config` reads the nested `identity.encoding` shape as well as the legacy flat
     # one, so this site carries no copy of that knowledge.

@@ -197,12 +197,13 @@ def test_the_hook_fires_from_a_config_row_and_no_ops_without_one(tmp_path: Path)
 
 
 def test_init_trainer_is_the_live_consumer() -> None:
-    """Prove `init_trainer` is the live consumer, by the call appearing in its own source."""
+    """Prove the run's fresh branch is the live consumer: `init_trainer` builds through `build_fresh_trainer`, whose source calls the hook."""
     import inspect
 
     from mantis.train import orchestrator
 
-    src = inspect.getsource(orchestrator.init_trainer)
+    assert "build_fresh_trainer(" in inspect.getsource(orchestrator.init_trainer)
+    src = inspect.getsource(orchestrator.build_fresh_trainer)
     assert "maybe_warmstart_gnn_from_bc" in src, (
         "init_trainer no longer calls the warm-start hook — the schema row would be a key with "
         "no consumer, which is the state F-19 found it in"

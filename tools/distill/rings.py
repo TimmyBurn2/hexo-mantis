@@ -11,6 +11,7 @@ from typing import Any
 import numpy as np
 
 from mantis._engine import Board, HexgBuffer
+from mantis.util.hashing import sha256_file
 
 from .corpus import SRC_RING
 from .label import row_moves
@@ -156,18 +157,22 @@ def write_control_ring(path: Path, corpus: dict[str, np.ndarray], rows: np.ndarr
     return {"rows": int(len(rows)), "slots": slots}
 
 
-def write_provenance(ring: Path, *, kind: str, lineage: list[str], record: dict[str, Any]) -> None:
-    """The sidecar a trainer reads beside `ring`: what it holds and the teachers its labels came from."""
-    payload = {"kind": kind, "lineage": lineage, **record}
+def write_provenance(ring: Path, *, kind: str, lineage: list[str], encoding: str, rows: int, slots: int,
+                     record: dict[str, Any]) -> None:
+    """The sidecar beside `ring`: the ring-provenance keys pretrain reads, plus its kind, the teachers its labels came from and its sha256; Raises: OSError — the ring cannot be read or the sidecar written."""
+    payload = {"encoding": encoding, "ring_capacity": rows, "ring_visit_capacity": slots, "plies": rows, "kind": kind,
+               "lineage": lineage, "ring_sha256": sha256_file(ring), **record}
     Path(str(ring) + PROVENANCE_SUFFIX).write_text(json.dumps(payload, indent=1, default=str) + "\n", encoding="utf-8")
 
 
 def ring_lineage(ring: Path) -> tuple[str, ...]:
-    """The teachers a ring's labels came from, read from its provenance; Raises: FileNotFoundError — no provenance beside it; ValueError — a malformed one."""
+    """The teachers a ring's labels came from, read from the provenance written for exactly this ring; Raises: FileNotFoundError — no provenance beside it; ValueError — a malformed one, or one written for other bytes."""
     prov = json.loads(Path(str(ring) + PROVENANCE_SUFFIX).read_text(encoding="utf-8"))
-    lineage = prov.get("lineage")
+    lineage = prov.get("lineage") if isinstance(prov, dict) else None
     if not isinstance(lineage, list) or not all(isinstance(t, str) and t for t in lineage):
         raise ValueError(f"{ring.name}: its provenance names no lineage list")
+    if prov.get("ring_sha256") != sha256_file(ring):
+        raise ValueError(f"{ring.name}: its provenance was written for other bytes")
     return tuple(lineage)
 
 
