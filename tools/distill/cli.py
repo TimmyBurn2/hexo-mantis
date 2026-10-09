@@ -112,6 +112,14 @@ def cmd_rings(a: argparse.Namespace) -> int:
         r = float(np.corrcoef(v_t[decided], z[decided])[0, 1]) if decided.sum() > 2 else float("nan")
         rec["teacher_value_v_z"] = {"rows": int(decided.sum()), "pearson": r if np.isfinite(r) else None,
                                     "sign_agreement": float((np.sign(v_t[decided]) == np.sign(z[decided])).mean())}
+    if "teacher_z" in a.only:
+        ring_train = corpus["source"][train_rows] == SRC_RING
+        z_rows = train_rows[ring_train]
+        rec["teacher_train_z"] = write_teacher_ring(
+            out / "teacher_train_z.ring.bin", corpus, labels, z_rows, {k: v[ring_train] for k, v in t_train.items()},
+            corpus["outcome"][z_rows], slots, encoding=ENCODING, value_valid=corpus["value_valid"][z_rows].astype(bool))
+        write_provenance(out / "teacher_train_z.ring.bin", kind="teacher_train_z", lineage=tag, encoding=ENCODING,
+                         rows=len(z_rows), slots=slots, record=rec["teacher_train_z"])
     del t_train
     if "knownbad" in a.only:
         source = train_rows[np.random.default_rng(a.knownbad_seed).permutation(len(train_rows))]
@@ -143,7 +151,8 @@ def cmd_train(a: argparse.Namespace) -> int:
                     seed=a.seed)
     rec = train_arm(arm, recipe, a.out, device=a.device, heldout_ring=a.heldout_ring, heldout_every=a.heldout_every,
                     heldout_batches=a.heldout_batches, sample_threads=a.sample_threads,
-                    caps_override=None if a.caps is None else (a.caps[0], a.caps[1]))
+                    caps_override=None if a.caps is None else (a.caps[0], a.caps[1]), save_every=a.save_every,
+                    gpu_mem_mib=a.gpu_mem_mib)
     print(json.dumps(rec, indent=1, default=str))
     return 0
 
@@ -203,8 +212,9 @@ def build_parser() -> argparse.ArgumentParser:
     rg.add_argument("--knownbad-seed", type=int, default=20261010)
     rg.add_argument("--check-seed", type=int, default=20261012)
     rg.add_argument("--check-rows", type=int, default=20_000)
-    rg.add_argument("--only", nargs="+", choices=("teacher", "knownbad", "control"),
-                    default=["teacher", "knownbad", "control"])
+    rg.add_argument("--only", nargs="+", choices=("teacher", "teacher_z", "knownbad", "control"),
+                    default=["teacher", "knownbad", "control"],
+                    help="teacher_z: the teacher's policy with the game's z on ring rows only (an opening has no z)")
     rg.add_argument("--out-name", default="rings", help="the rings directory under the corpus")
     rg.set_defaults(func=cmd_rings)
     t = sub.add_parser("train", help="one arm through the production trainer on a frozen ring")
@@ -226,8 +236,10 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--sample-threads", type=int, default=None)
     t.add_argument("--caps", type=int, nargs=2, default=None, metavar=("MAX_EDGES", "MAX_NODES"),
                    help="micro-batch caps (the split is exact; memory only)")
+    t.add_argument("--save-every", type=int, default=0, help="a resumable save every N steps beside the named ones")
+    t.add_argument("--gpu-mem-mib", type=int, default=None, help="this process's CUDA allocator ceiling")
     t.add_argument("--device", default="cuda")
-    t.add_argument("--out", type=Path, required=True)
+    t.add_argument("--out", type=Path, required=True, help="an unfinished arm here resumes from its newest save")
     t.set_defaults(func=cmd_train)
     k = sub.add_parser("kl", help="held-out KL(teacher || net) and value reads, every net on the same samples")
     k.add_argument("--ckpts", type=Path, nargs="+", required=True)

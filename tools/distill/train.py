@@ -20,13 +20,14 @@ from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.config.resolve.sample_threads import resolve_sample_threads
 from mantis.model import build_net
 from mantis.model.identity import net_param_hash
-from mantis.train.checkpoints import deploy_state, load_checkpoint
+from mantis.train.checkpoints import deploy_state, load_checkpoint, resume_trainer
 from mantis.train.coordinator.dispatch import (
     resolve_step_spec,
     run_declared_eval_step,
     run_declared_train_step,
 )
 from mantis.train.orchestrator import build_fresh_trainer
+from mantis.train.trainer.core import Trainer
 from mantis.util.determinism import seed_everything
 from mantis.util.hashing import sha256_file
 from mantis.util.loadpkg import load_tools_package
@@ -99,42 +100,86 @@ def open_ring(path: Path, encoding: str, seed: int) -> tuple[HexgBuffer, int]:
     return importlib.import_module("probe1.nets").open_ring(path, seed=seed, encoding=encoding)
 
 
+def resume_seed(seed: int, step: int) -> int:
+    """The sampler and torch seed a resume at `step` draws from: an arm stopped at the same steps replays the same stream."""
+    return seed + step
+
+
+def _append(path: Path, row: dict[str, Any]) -> None:
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(row, default=str) + "\n")
+
+
+def _rows(path: Path) -> list[dict[str, Any]]:
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
+
+
+def _step_of(ckpt: Path) -> int:
+    return int(ckpt.stem.split("_")[-2])
+
+
 def train_arm(arm: ArmSpec, recipe: Recipe, out: Path, *, device: str, heldout_ring: Path | None,
               heldout_every: int, heldout_batches: int, sample_threads: int | None,
-              caps_override: tuple[int, int] | None, log: Callable[[str], None] = print) -> dict[str, Any]:
-    """Train `arm` for `recipe.steps` production steps and save at `recipe.save_at`; Raises: FileExistsError — `out` exists; FileNotFoundError, ValueError — the ring's provenance or a ring that loads nothing; RuntimeError — the arm skips more steps than it takes."""
+              caps_override: tuple[int, int] | None, save_every: int = 0, gpu_mem_mib: int | None = None,
+              log: Callable[[str], None] = print) -> dict[str, Any]:
+    """Train `arm` for `recipe.steps` production steps and save at `recipe.save_at`, every `save_every` steps beside them; an unfinished `out` resumes from its newest save. Raises: FileExistsError — `out` holds a finished arm, or an unfinished one with no save; FileNotFoundError, ValueError — the ring's provenance or a ring that loads nothing; RuntimeError — the arm skips more steps than it takes."""
     lineage = ring_lineage(arm.ring)
-    out.mkdir(parents=True, exist_ok=False)
-    dump = arm_config(arm, recipe)
-    if caps_override is not None:
-        dump["train"]["microbatch_caps"] = {"max_edges": caps_override[0], "max_nodes": caps_override[1]}
-    (out / "config.yaml").write_text(yaml.safe_dump(dump, sort_keys=False), encoding="utf-8")
-    config = load_config(out / "config.yaml")
-    encoding = config.identity.encoding
+    progress = out / "progress.jsonl"
+    if gpu_mem_mib is not None and device == "cuda":
+        total = torch.cuda.get_device_properties(0).total_memory
+        torch.cuda.set_per_process_memory_fraction(min(1.0, gpu_mem_mib * 2**20 / total))
+    if out.exists():
+        if (out / "arm.json").exists():
+            raise FileExistsError(f"{out}: the arm is finished")
+        ckpts = sorted((out / "checkpoints").glob("*.ckpt"), key=_step_of)
+        if not ckpts:
+            raise FileExistsError(f"{out}: an unfinished arm with no save to resume from")
+        dump = yaml.safe_load((out / "config.yaml").read_text(encoding="utf-8"))
+        config = load_config(out / "config.yaml")
+        encoding = config.identity.encoding
+        seed = resume_seed(recipe.seed, _step_of(ckpts[-1]))
+        seed_everything(seed)
+        trainer = resume_trainer(Trainer, ckpts[-1], declared_encoding=encoding, device=torch.device(device),
+                                 sink=_JsonlSink(out / "events.jsonl"))
+        _append(progress, {"event": "resume", "step": trainer.step, "from": str(ckpts[-1]), "seed": seed,
+                           "t": time.time()})
+        log(f"resumed at {trainer.step} from {ckpts[-1].name}, seed {seed}")
+    else:
+        out.mkdir(parents=True, exist_ok=False)
+        dump = arm_config(arm, recipe)
+        if caps_override is not None:
+            dump["train"]["microbatch_caps"] = {"max_edges": caps_override[0], "max_nodes": caps_override[1]}
+        (out / "config.yaml").write_text(yaml.safe_dump(dump, sort_keys=False), encoding="utf-8")
+        config = load_config(out / "config.yaml")
+        encoding = config.identity.encoding
+        seed = recipe.seed
+        seed_everything(seed)
+        trainer = build_fresh_trainer(config=dump, device=torch.device(device), checkpoint_dir=str(out / "checkpoints"),
+                                      sink=_JsonlSink(out / "events.jsonl"))
+        trainer.lineage = tuple(dict.fromkeys(trainer.lineage + lineage))
+        _append(progress, {"event": "start", "step": 0, "seed": seed, "t": time.time()})
     knobs = resolve_coordinator_knobs(config.train)
     threads = sample_threads or resolve_sample_threads(dump)
-    seed_everything(recipe.seed)
-    trainer = build_fresh_trainer(config=dump, device=torch.device(device), checkpoint_dir=str(out / "checkpoints"),
-                                  sink=_JsonlSink(out / "events.jsonl"))
-    trainer.lineage = tuple(dict.fromkeys(trainer.lineage + lineage))
-    buf, rows = open_ring(arm.ring, encoding, recipe.seed)
+    buf, rows = open_ring(arm.ring, encoding, seed)
     step_spec, caps = resolve_step_spec(dump), (lambda: resolve_microbatch_caps(dump))
     batch, augment = int(knobs.batch_size), bool(knobs.augment)
     held = None if heldout_ring is None else open_ring(heldout_ring, encoding, recipe.seed)[0]
     tree = Path(__file__).resolve().parents[2]
-    record: dict[str, Any] = {
-        "run_id": arm.run_id, "hidden": arm.hidden, "layers": arm.layers, "encoding": encoding,
-        "lineage": list(trainer.lineage), "ring": str(arm.ring), "ring_sha256": sha256_file(arm.ring), "ring_rows": rows,
-        "ring_provenance": str(arm.ring) + PROVENANCE_SUFFIX,
-        "warm_start": dump["identity"]["warm_start"], "value_mask_p": arm.value_mask_p, "seed": recipe.seed,
-        "steps": recipe.steps, "lr": recipe.lr, "eta_min": recipe.eta_min, "batch_size": batch, "augment": augment,
-        "sample_threads": threads, "microbatch_caps": dump["train"]["microbatch_caps"],
-        "config_sha256": sha256_file(out / "config.yaml"), "registry_sha256": registry_sha_hex(),
-        "tree_commit": subprocess.run(["git", "-C", str(tree), "rev-parse", "HEAD"], capture_output=True, text=True,
-                                      check=False).stdout.strip(),
-        "net_hash_start": net_param_hash(trainer._base_model()), "device": device,
-        "gpu": torch.cuda.get_device_name(0) if device == "cuda" else None,
-    }
+    if not (out / "start.json").exists():
+        (out / "start.json").write_text(json.dumps({
+            "run_id": arm.run_id, "hidden": arm.hidden, "layers": arm.layers, "encoding": encoding,
+            "lineage": list(trainer.lineage), "ring": str(arm.ring), "ring_sha256": sha256_file(arm.ring),
+            "ring_rows": rows, "ring_provenance": str(arm.ring) + PROVENANCE_SUFFIX,
+            "warm_start": dump["identity"]["warm_start"], "value_mask_p": arm.value_mask_p, "seed": recipe.seed,
+            "steps": recipe.steps, "lr": recipe.lr, "eta_min": recipe.eta_min, "batch_size": batch, "augment": augment,
+            "sample_threads": threads, "microbatch_caps": dump["train"]["microbatch_caps"], "save_every": save_every,
+            "gpu_mem_mib": gpu_mem_mib, "config_sha256": sha256_file(out / "config.yaml"),
+            "registry_sha256": registry_sha_hex(),
+            "tree_commit": subprocess.run(["git", "-C", str(tree), "rev-parse", "HEAD"], capture_output=True,
+                                          text=True, check=False).stdout.strip(),
+            "net_hash_start": net_param_hash(trainer._base_model()), "device": device,
+            "gpu": torch.cuda.get_device_name(0) if device == "cuda" else None,
+        }, indent=1, default=str), encoding="utf-8")
 
     def read_heldout() -> dict[str, float] | None:
         if held is None:
@@ -148,13 +193,14 @@ def train_arm(arm: ArmSpec, recipe: Recipe, out: Path, *, device: str, heldout_r
                 sums[k] += float(got[k]) / heldout_batches
         return sums
 
-    curve: list[dict[str, Any]] = [{"step": 0, "heldout": read_heldout()}]
-    saves: dict[int, dict[str, str]] = {}
-    t0 = time.time()
+    curve = out / "curve.jsonl"
+    if trainer.step == 0:
+        _append(curve, {"step": 0, "heldout": read_heldout()})
+    t0, start_step = time.time(), trainer.step
     attempts = 0
     while trainer.step < recipe.steps:
         attempts += 1
-        if attempts > recipe.steps + 100:
+        if attempts > recipe.steps - start_step + 100:
             raise RuntimeError(f"{trainer.skipped_steps} skipped steps: the arm is not training")
         before = trainer.step
         info = run_declared_train_step(trainer, buf, step_spec, batch_size=batch, augment=augment, caps_provider=caps,
@@ -168,14 +214,30 @@ def train_arm(arm: ArmSpec, recipe: Recipe, out: Path, *, device: str, heldout_r
                                    "lr": float(trainer.optimizer.param_groups[0]["lr"]), "t": round(time.time() - t0, 1)}
             if trainer.step % heldout_every == 0:
                 row["heldout"] = read_heldout()
-            curve.append(row)
+            _append(curve, row)
             log(json.dumps(row))
-        if trainer.step in recipe.save_at:
-            saves[trainer.step] = {"path": str(trainer.save_checkpoint(None)),
-                                   "net_hash": net_param_hash(trainer._base_model())}
-    wall = time.time() - t0
+        named = trainer.step in recipe.save_at
+        if named or (save_every and trainer.step % save_every == 0):
+            path = trainer.save_checkpoint(None)
+            _append(progress, {"event": "save", "step": trainer.step, "path": str(path), "named": named,
+                               "net_hash": net_param_hash(trainer._base_model()), "t": time.time(),
+                               "segment_s": round(time.time() - t0, 1), "segment_steps": trainer.step - start_step})
+            for old in (out / "checkpoints").glob("*.ckpt"):
+                if old != path and _step_of(old) not in recipe.save_at:
+                    old.unlink()
+    events = _rows(progress)
+    saves = {e["step"]: {"path": e["path"], "net_hash": e["net_hash"]} for e in events
+             if e["event"] == "save" and e["named"]}
+    wall, segment = 0.0, 0.0
+    for e in events:
+        if e["event"] == "save":
+            segment = e["segment_s"]
+        else:
+            wall, segment = wall + segment, 0.0
+    wall += segment
+    record = json.loads((out / "start.json").read_text(encoding="utf-8"))
     record.update(saves=saves, skipped_steps=trainer.skipped_steps, train_wall_s=round(wall, 1),
-                  s_per_step=round(wall / max(trainer.step, 1), 4))
-    (out / "curve.json").write_text(json.dumps(curve), encoding="utf-8")
+                  s_per_step=round(wall / max(trainer.step, 1), 4),
+                  resumes=[e for e in events if e["event"] == "resume"])
     (out / "arm.json").write_text(json.dumps(record, indent=1, default=str), encoding="utf-8")
     return record

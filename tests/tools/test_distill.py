@@ -335,6 +335,15 @@ def test_the_rings_command_leaves_the_empty_board_out_and_writes_provenance(tmp_
                      "--out-name", "teacher_only"]) == 0
     assert sorted(p.name for p in (root / "teacher_only").glob("*.ring.bin")) == [
         "teacher_heldout.ring.bin", "teacher_heldout_z.ring.bin", "teacher_train.ring.bin"]
+    assert cli.main(["rings", "--corpus", str(root), "--check-rows", "10", "--only", "teacher_z",
+                     "--out-name", "teacher_z"]) == 0
+    z_ring = R.load_ring(root / "teacher_z" / "teacher_train_z.ring.bin")
+    z_rows = np.nonzero(~out["heldout"] & (out["k"] >= 1) & (out["source"] == d["corpus"].SRC_RING))[0]
+    assert (out["source"] == d["corpus"].SRC_OPENING).any() and z_ring.header.size == len(z_rows), "openings left out"
+    assert np.array_equal(z_ring.outcome, out["outcome"][z_rows].astype(np.float32)), "the game's z, not the teacher's"
+    assert np.array_equal(z_ring.value_valid.astype(bool), out["value_valid"][z_rows].astype(bool))
+    assert z_ring.is_full_search.all() and Rg.ring_lineage(root / "teacher_z" / "teacher_train_z.ring.bin") == (
+        "six-aaaaaaa-gen1",)
 
 
 def _a_graph_config() -> Path:
@@ -380,3 +389,39 @@ def test_a_tiny_arm_trains_saves_stamped_and_a_warm_arm_inherits(tmp_path, d):
                         heldout_batches=1, sample_threads=1, caps_override=None, log=lambda _s: None)
     assert rec_w["net_hash_start"] == rec["saves"][3]["net_hash"]
     assert load_checkpoint(rec_w["saves"][2]["path"], declared_encoding=ENC).metadata.lineage == ("six-aaaaaaa-gen1",)
+    with pytest.raises(FileExistsError, match="finished"):
+        T.train_arm(warm, recipe, tmp_path / "warm", device="cpu", heldout_ring=None, heldout_every=1000,
+                    heldout_batches=1, sample_threads=1, caps_override=None, log=lambda _s: None)
+
+
+@pytest.mark.integration
+def test_a_stopped_arm_resumes_from_its_newest_save_and_finishes(tmp_path, d):
+    """A cap stop leaves rolling saves and no record; the rerun resumes at the newest save, reseeded from its step."""
+    load_tools_package("distill")
+    T = importlib.import_module("distill.train")
+    Rg = d["rings"]
+    out, _ = _corpus(tmp_path, d)
+    labels = _labels(out, d)
+    rows = np.arange(len(out["game"]))
+    targets = Rg.compute_targets(out, labels, rows, radius=RADIUS, workers=2, chunk=16, log=lambda _s: None)
+    ring = tmp_path / "teacher.ring.bin"
+    Rg.write_teacher_ring(ring, out, labels, rows, targets, Rg.teacher_value(labels, rows), 64, encoding=ENC)
+    Rg.write_provenance(ring, kind="teacher_train", lineage=["six-aaaaaaa-gen1"], encoding=ENC, rows=len(rows), slots=64,
+                        record={})
+    arm = T.ArmSpec(run_id="tinystop", hidden=16, layers=1, ring=ring, warm_start=None, value_mask_p=0.125)
+    kw = dict(device="cpu", heldout_ring=None, heldout_every=1000, heldout_batches=1, sample_threads=1,
+              caps_override=None, save_every=2, log=lambda _s: None)
+    stopped = T.Recipe(base_config=_a_graph_config(), steps=5, save_at=(6,), lr=1e-4, eta_min=1e-4, seed=11)
+    T.train_arm(arm, stopped, tmp_path / "arm", **kw)
+    (tmp_path / "arm" / "arm.json").unlink()
+    assert [T._step_of(p) for p in (tmp_path / "arm" / "checkpoints").glob("*.ckpt")] == [4], "the newest rolling save"
+    whole = T.Recipe(base_config=_a_graph_config(), steps=6, save_at=(6,), lr=1e-4, eta_min=1e-4, seed=11)
+    rec = T.train_arm(arm, whole, tmp_path / "arm", **kw)
+    assert sorted(rec["saves"]) == [6] and [r["step"] for r in rec["resumes"]] == [4]
+    assert rec["resumes"][0]["seed"] == T.resume_seed(11, 4)
+    ck = load_checkpoint(rec["saves"][6]["path"], declared_encoding=ENC)
+    assert ck.metadata.lineage == ("six-aaaaaaa-gen1",) and ck.config["train"]["lr"] == 1e-4
+    empty = tmp_path / "empty"
+    (empty / "checkpoints").mkdir(parents=True)
+    with pytest.raises(FileExistsError, match="no save"):
+        T.train_arm(arm, whole, empty, **kw)
