@@ -19,7 +19,8 @@ DENSE-1's design run in parallel.** (RULINGS R391; the R390 paragraph below stan
 stopped on 2026-10-11 at 16:55:58 CEST (one SIGTERM, the operator's word): stop save `run11a2_00593030_e49dace7.ckpt`,
 mirrored to `mantis-mirror/run11/run/checkpoints/` and sha256-matched. Its rung 16 was flat from 228k to 564k (29 reads,
 slope −0.005 ± 0.023 logit per 100k steps); S read 0.635 / 0.628 / 0.686 / 0.628 at 240k / 264k / 288k / 312k. DEPLOY-2's
-cells keep reading its saves; their cap's run-rate check, keyed to run11, is off since the stop (CARD-RUN12).
+cells keep reading its saves; their cap's run-rate check, keyed to run11, is off since the stop (CARD-RUN12). The RUN12-GO
+packet (architect, 2026-10-11; branch `run12-go`, box A, local records `mantis-records/run12/`) mints and runs run12.
 
 **R390 (2026-10-09): WARM ONLY. DISTILL-1's halt stands as a success of its control row (the probe's start was
 unstated; from-scratch arms at feasible budgets read budget, not capacity — the architect's error). The teacher check and
@@ -593,3 +594,4 @@ exit on branch `deploy-2` at `7bec5f34`, the dash line repaired in place.
 The current phase was rewritten 2026-10-11 at R391 on branch `r391-record` over `origin/dev` `d0a7346c`, with run11's
 stop read from box A and its stop save's sha256 from the box and the mirror; the same edit repaired the run line (it
 said PAUSED at 174 008) and box A's clause.
+The RUN12-GO line was added 2026-10-11 at its packet's first commit, on branch `run12-go` over `r391-record` `1fa5a280`.

@@ -125,7 +125,8 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   Bubble's crops; R390(c)'s corpus as its supervised bootstrap, Six's labels excluded. It builds only if run12 does not
   climb, and takes box A if run12 misses at 84k (R391(d)).**
 - **CARD-RUN12-REPLAY** (R389(d); the DISTILL-1 packet calls it CARD-REPLAY-WINDOW-2M). **AMENDED by R391(d): 2.5M
-  rows, memory verified at preflight; R391(c) names the 500k-row window a cause of record.** run12 carries replay_capacity
+  rows, memory verified at preflight; R391(c) names the 500k-row window a cause of record. CONSUMED by CARD-RUN12 (the
+  RUN12-GO packet, 2026-10-11): the row is run12's mint, its two-save gap and T check run12's monitor rows.** run12 carries replay_capacity
   2M as a prereg row with its own two-save gap and T check; the supervised harness is the lab for architecture and
   auxiliary targets before a self-play run carries them. OPENED for run12's prereg.
 - **CARD-FLOOR-READ-2 CLOSED** (R389(b)). Withdrawn: the slope, not the floor, is the read; run12's schedule is a plain
@@ -178,7 +179,9 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   below run11's level by the line; a miss at 84k HALTS run12 and DENSE-1 takes box A. Exams, bands and the gap rule as
   run11's; its cells under DEPLOY-2's cap. That cap's run-rate check is keyed to run11 (a fixed 200 407 positions/h
   baseline in box A's `/workspace/ops/deploy2_cap.py`) and is switched off by the marker `/workspace/ops/RUN11_ENDED`
-  since run11's stop: it guards run12 only once re-based on run12's own rate. **Was: ORDERED by R388(d): run12 = run11's
+  since run11's stop: it guards run12 only once re-based on run12's own rate. OWNED by the RUN12-GO packet (architect,
+  2026-10-11; branch `run12-go`, box A, local records `mantis-records/run12/`): G1 the preflight, G2 the start on the
+  operator's mint word, G3 the pre-stated read at 84k. **Was: ORDERED by R388(d): run12 = run11's
   best save by ladder-and-S agreement, on dev + fresh-2.** The arena
   book in the in-run gate; bookless evaluations from the origin stone alone (1 ply); 48 workers. It starts after
   CARD-FLOOR-READ-2's read, without waiting for ENCODE-1. Its going-forward line: four rung-16 cells above its parent's
@@ -379,7 +382,18 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   sha256 43ed2d7a…, its ring, resume and bundle mirrored to `mantis-mirror/run11/run/checkpoints/`, sha256-matched).
   Its best save is 264k (`run11a2_00264000_b50644b9`); the lineage continues through `distill2wide_00000000`.** Rung 16
   was flat from 228k to 564k (29 reads, slope −0.005 ± 0.023 logit per 100k steps). DEPLOY-2's cells keep reading its
-  saves under the cap with its run-rate check switched off (CARD-RUN12). Was: PAUSED 2026-10-06 20:00 CEST at 174 008 by
+  saves under the cap with its run-rate check switched off (CARD-RUN12).
+  The slope table (RUN12-GO's first commit; one 576-game `ladder455_n16` cell per save, logit of wins + ½ draws, OLS
+  over steps with its standard error; 132k's two cells averaged; cells from `mantis-mirror/run11/records_deploy2/`):
+
+  | window | reads | mean logit | slope per 100k | residual sd | what it is |
+  |---|---|---|---|---|---|
+  | 108k–264k | 11 | −0.683 | +0.202 ± 0.069 | 0.108 | the climb R389(b) read through the cycle |
+  | 228k–504k | 24 | −0.602 | −0.043 ± 0.030 | 0.123 | the window of the operator's no-go at 540k |
+  | 228k–564k | 29 | −0.589 | −0.005 ± 0.023 | 0.123 | the plateau of record (R391(d)'s −0.59) |
+  | 228k–588k | 31 | −0.577 | +0.014 ± 0.022 | 0.133 | every cell after the climb |
+
+  The last cell, 588k at −0.262, is the run's highest: one cell, +0.33 over the plateau mean (2.6 residual sd). Was: PAUSED 2026-10-06 20:00 CEST at 174 008 by
   R386(a) (a resumable stop save right after the 174 000 bundle; CARD-RUN11-CYCLE-2 resumes it). RAN from 2026-10-05
   12:35 CEST (box A,
   `8d169abb`), ORDERED by R385(a):
