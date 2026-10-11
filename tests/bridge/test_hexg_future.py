@@ -45,14 +45,14 @@ def _labels(buf: HexgBuffer) -> tuple[np.ndarray, np.ndarray]:
 
 
 def test_a_pushed_field_labels_the_movers_stones_one_and_the_opponents_two() -> None:
-    """The eleven stones in the mover's frame: six of the mover's (+1), five of the opponent's, the rest empty."""
-    for mover, mine, theirs in ((1, 6, 5), (-1, 5, 6)):
+    """The eleven stones in the mover's frame: six of the mover's, five of the opponent's, the rest empty, either colour."""
+    for mover in (1, -1):
         buf = HexgBuffer(4, _ENC, 128)
         buf.push_graph_position(_STONES, [(2, 0, 1.0)], mover, 2, 3, True, 1.0, True, 7, game_id=0,
-                                future_stones=_ELEVEN)
+                                future_stones=[(q, r, p * mover) for q, r, p in _ELEVEN])
         label, valid = _labels(buf)
         assert valid.tolist() == [1]
-        assert (int((label == 1).sum()), int((label == 2).sum())) == (mine, theirs)
+        assert (int((label == 1).sum()), int((label == 2).sum())) == (6, 5)
         assert set(np.unique(label).tolist()) <= {0, 1, 2}
 
 
@@ -67,6 +67,7 @@ def test_a_row_pushed_without_the_field_samples_invalid_and_empty() -> None:
     (_ELEVEN + [(5, 5, 1)] * 10, 40),  # over the horizon
     (_ELEVEN[:4] + [(1, 0, 1)], 4),     # a stone on one the row holds
     (_ELEVEN, 9),                       # short of a longer game
+    ([(q, r, -p) for q, r, p in _ELEVEN], 7),  # every stone out of its turn
 ])
 def test_a_field_that_is_not_its_games_next_placements_is_refused_by_name(future: list[Any],
                                                                           game_length: int) -> None:

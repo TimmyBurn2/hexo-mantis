@@ -26,12 +26,11 @@ class FutureOccupancyHead(nn.Module):
 
     def __init__(self, in_dim: int, hidden: int) -> None:
         super().__init__()
-        self.mlp = nn.Sequential(nn.Linear(in_dim, hidden), nn.ReLU(), nn.Linear(hidden, FUTURE_CLASSES))
-        last = self.mlp[2]
-        assert isinstance(last, nn.Linear)
+        first, last = nn.Linear(in_dim, hidden), nn.Linear(hidden, FUTURE_CLASSES)
         with torch.no_grad():
             last.weight.zero_()
             last.bias.copy_(torch.tensor(FUTURE_PRIOR_LOGITS))
+        self.mlp = nn.Sequential(first, nn.ReLU(), last)
 
     def forward(self, legal_emb: Tensor) -> Tensor:
         """`(num_legal_total, FUTURE_CLASSES)` logits."""

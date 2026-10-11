@@ -7,6 +7,9 @@ from typing import Any
 import pytest
 import torch
 
+from mantis.encoding import lookup
+from mantis.model import arch_from_spec_and_config, build_net
+from mantis.model.gnn_v2_future import AUX_FUTURE_LINEAGE, FUTURE_HEAD, FUTURE_PRIOR_LOGITS
 from mantis.model.identity import net_param_hash
 from mantis.train.checkpoints import (
     CheckpointStampError,
@@ -16,6 +19,8 @@ from mantis.train.checkpoints import (
     stamped_lineage,
     strip_and_restamp,
 )
+from mantis.train.orchestrator import init_trainer
+from mantis.train.trainer.core import Trainer
 
 TAG = "six-0000000-gen1"
 
@@ -45,7 +50,6 @@ def test_a_malformed_lineage_is_refused(tmp_path, tiny_net, optim_scaler_sched, 
 
 
 def test_the_strip_and_a_resume_keep_the_lineage(tmp_path, tiny_net, optim_scaler_sched, valid_config, metadata_kwargs):
-    from mantis.train.trainer.core import Trainer
 
     src = _save(tmp_path, tiny_net, optim_scaler_sched, valid_config, metadata_kwargs, lineage=[TAG])
     stripped = strip_and_restamp(src, new_encoding="gnn_axis_v1", run_id="runc", checkpoint_dir=tmp_path / "strip")
@@ -57,9 +61,6 @@ def test_the_strip_and_a_resume_keep_the_lineage(tmp_path, tiny_net, optim_scale
 
 
 def test_a_warm_start_inherits_its_source_lineage_and_a_plain_launch_has_none(tmp_path, valid_config, metadata_kwargs):
-    from mantis.encoding import lookup
-    from mantis.model import arch_from_spec_and_config, build_net
-    from mantis.train.orchestrator import init_trainer
 
     arch = arch_from_spec_and_config(lookup(valid_config["identity"]["encoding"]), valid_config)
     source = build_net(arch)
@@ -77,10 +78,6 @@ def test_a_warm_start_inherits_its_source_lineage_and_a_plain_launch_has_none(tm
 
 def test_a_warm_start_that_begins_the_future_head_fresh_says_so_in_the_stamp(tmp_path, valid_config, metadata_kwargs):
     """A soft-policy parent warm-starts the future kind: `reinit` names the head, every other tensor lands, `+aux_future` is stamped."""
-    from mantis.encoding import lookup
-    from mantis.model import arch_from_spec_and_config, build_net
-    from mantis.model.gnn_v2_future import AUX_FUTURE_LINEAGE, FUTURE_HEAD, FUTURE_PRIOR_LOGITS
-    from mantis.train.orchestrator import init_trainer
 
     soft = {**valid_config, "identity": {**valid_config["identity"], "arch_kind": "GnnArchV2SoftPolicy"},
             "model": {**valid_config["model"], "aux_soft_policy": {"target_temperature": 4.0, "weight": 4.0}}}

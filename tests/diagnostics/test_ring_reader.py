@@ -23,7 +23,7 @@ _ROWS = [
 # (root_value, root_value_valid) per row of `_ROWS`.
 _ROOTS = [(0.5, True), (0.0, False), (-1.0, True)]
 # The future-occupancy field per row of `_ROWS`: a full horizon, none, a full horizon.
-_FUTURES = [[(i - 10, 2, 1 if i % 4 < 2 else -1) for i in range(20)], None,
+_FUTURES = [[(i - 10, 2, -1 if i % 4 < 2 else 1) for i in range(20)], None,
             [(i - 10, -3, -1 if i % 4 < 2 else 1) for i in range(20)]]
 _REPLAY = Path(__file__).resolve().parents[1] / "fixtures" / "replay"
 

@@ -50,11 +50,12 @@ class GraphStepInputs:
     n_graphs: int
     #: `value_valid`'s nonzero rows, ascending, found on the host from the same array, so the loss reads no mask.
     value_rows: Any
-    #: Per legal node the future-occupancy label, per row its flag; the WHOLE step's field rows and their base-rate CE.
+    #: Per legal node the future-occupancy label, per row its flag; the WHOLE step's field rows and their two base rates.
     future_target: Any
     future_valid: Any
     future_rows: int
     future_base_ce: float
+    future_row_base_ce: float
 
 
 class RepresentationRouteError(TypeError):
@@ -172,6 +173,7 @@ def _build_graph_parts(
         exclude_alpha_full_rows,
         future_base_ce,
         future_marginal,
+        future_row_base_ce,
         graph_loss_denominators,
         graph_policy_row_weights,
         redraw_value_mask,
@@ -205,6 +207,7 @@ def _build_graph_parts(
         masked_valid = redraw_value_mask(masked_valid, value_mask[0], value_mask[1], int(trainer.step))
     future_rows, marginal = future_marginal(targets.future_target, targets.future_valid, payload.legal_offsets)
     base_ce = future_base_ce(marginal)
+    row_base_ce = future_row_base_ce(targets.future_target, targets.future_valid, payload.legal_offsets)
 
     def _make(g0: int, g1: int):
         def _materialise():
@@ -249,7 +252,7 @@ def _build_graph_parts(
                 outcomes=outcomes, value_valid=valid, root_value=root_value,
                 root_value_valid=root_value_valid, policy_row_weight=row_weight, n_graphs=g1 - g0,
                 value_rows=value_rows, future_target=future_target, future_valid=future_valid,
-                future_rows=future_rows, future_base_ce=base_ce,
+                future_rows=future_rows, future_base_ce=base_ce, future_row_base_ce=row_base_ce,
             )
 
         return _materialise

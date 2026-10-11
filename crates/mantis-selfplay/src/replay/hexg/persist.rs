@@ -367,8 +367,14 @@ fn parse_records(
             let future: Vec<(i16, i16, i8)> = (0..nf)
                 .map(|i| (future_qr[i * 2], future_qr[i * 2 + 1], future_players[i]))
                 .collect();
-            super::push::validate_future_stones(&future, &stones, ply_index, game_length)
-                .map_err(|e| format!("HEXG load: record {slot}: {e}"))?;
+            super::future::validate_future_stones(
+                &future,
+                &stones,
+                ply_index,
+                game_length,
+                (current_player, moves_remaining),
+            )
+            .map_err(|e| format!("HEXG load: record {slot}: {e}"))?;
         }
 
         parsed.push(ParsedRecord {

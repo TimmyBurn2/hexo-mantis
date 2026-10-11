@@ -10,6 +10,7 @@
 //! uniform per-sample element, rebuilds, and aligns the rotated keys to the built legal nodes —
 //! one call emits graph and target together, so a desync is structurally impossible.
 
+pub mod future;
 mod persist;
 pub mod push;
 pub mod sample;

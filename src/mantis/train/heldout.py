@@ -32,9 +32,9 @@ class HeldoutSlice:
 
     def read(self, trainer: Any, step_spec: Any, *, batch_size: int, caps_provider: Callable[[], Any],
              sample_threads_provider: Callable[[], int]) -> dict[str, Any]:
-        """The mean forward-only losses over the frozen slice's `batches`, the sampler re-seeded first; a future head's CE and base rate over the batches carrying the field."""
+        """The slice's mean forward-only losses (a future head's CE and base rates over the batches carrying the field), the sampler re-seeded first; Raises: GraphEmptyBatchError, GraphContractError — the eval step's."""
         self.buffer.seed_sampler(self.spec.seed)
-        policy = value = future = base = 0.0
+        policy = value = future = base = row_base = 0.0
         future_batches = 0
         for _ in range(self.spec.batches):
             out = run_declared_eval_step(
@@ -45,12 +45,14 @@ class HeldoutSlice:
             if out.get("aux_future_rows"):
                 future += float(out["aux_future_ce"])
                 base += float(out["aux_future_base_ce"])
+                row_base += float(out["aux_future_row_base_ce"])
                 future_batches += 1
         self.reads += 1
         read: dict[str, Any] = {"policy_loss": policy / self.spec.batches, "value_loss": value / self.spec.batches}
         if trainer.future_head:
             read["aux_future_ce"] = future / future_batches if future_batches else None
             read["aux_future_base_ce"] = base / future_batches if future_batches else None
+            read["aux_future_row_base_ce"] = row_base / future_batches if future_batches else None
         return read
 
 

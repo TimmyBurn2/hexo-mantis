@@ -21,6 +21,8 @@ corpus = importlib.import_module("distill.corpus")
 
 #: Beside every ring written here: its source, its records and what was settled.
 PROVENANCE_SUFFIX = ".provenance.json"
+#: A ring before its audit, and for good when the conversion is refused.
+PARTIAL_SUFFIX = ".partial"
 
 
 def _groups(labels: np.ndarray) -> list[tuple[int, np.ndarray]]:
@@ -28,6 +30,23 @@ def _groups(labels: np.ndarray) -> list[tuple[int, np.ndarray]]:
     order = np.argsort(labels, kind="stable")
     values, first = np.unique(labels[order], return_index=True)
     return list(zip(values.tolist(), np.split(order, first[1:]), strict=True))
+
+
+def dedupe_games(games: Any) -> tuple[Any, int]:
+    """The records with each move sequence once (the mirror holds copies of shards), and how many copies were dropped."""
+    seen: set[bytes] = set()
+    keep: list[int] = []
+    for g in range(len(games.uid)):
+        key = games.game_moves(g).tobytes()
+        if key not in seen:
+            seen.add(key)
+            keep.append(g)
+    n = games.n_moves[keep]
+    off = np.concatenate([[0], np.cumsum(n)[:-1]]).astype(np.int64)
+    moves = np.concatenate([games.game_moves(g) for g in keep]) if keep else games.moves[:0]
+    kept = corpus.Games(uid=[games.uid[g] for g in keep], step=games.step[keep], winner=games.winner[keep],
+                        move_off=off, n_moves=n, moves=moves)
+    return kept, len(games.uid) - len(keep)
 
 
 def settle_games(ring: Ring, games: Any) -> tuple[np.ndarray, dict[str, int]]:
@@ -95,8 +114,8 @@ def write_ring(ring: Ring, rows: np.ndarray, fields: list[Any], out: Path, *, ca
 def convert(args: argparse.Namespace) -> dict[str, Any]:
     """Settle, derive and write (held-out games apart when asked), auditing each ring; Raises: ValueError, OSError."""
     ring = load_ring(args.ring)
-    games = corpus.load_games([Path(p) for p in args.games], run_id=args.run_id, step_lo=args.step_lo,
-                              step_hi=args.step_hi)
+    games, duplicates = dedupe_games(corpus.load_games([Path(p) for p in args.games], run_id=args.run_id,
+                                                       step_lo=args.step_lo, step_hi=args.step_hi))
     row_game, why = settle_games(ring, games)
     fields = derive_fields(ring, games, row_game, ring.header.encoding)
     held = np.zeros(ring.header.size, bool)
@@ -104,27 +123,36 @@ def convert(args: argparse.Namespace) -> dict[str, Any]:
         held = np.isin(ring.game_id, corpus.heldout_games(ring.game_id, rows=args.heldout_rows, seed=args.heldout_seed))
     record: dict[str, Any] = {
         "source": str(args.ring), "source_sha256": sha256_file(args.ring), "run_id": args.run_id,
-        "steps": [args.step_lo, args.step_hi], "records": len(games.uid), "rows": int(ring.header.size),
-        "settled_rows": int((row_game >= 0).sum()), "settled_games": int(np.unique(row_game[row_game >= 0]).size),
-        "unsettled_rows": why, "rings": {},
+        "steps": [args.step_lo, args.step_hi], "records": len(games.uid), "records_duplicate": duplicates,
+        "rows": int(ring.header.size), "settled_rows": int((row_game >= 0).sum()),
+        "settled_share": float((row_game >= 0).mean()) if ring.header.size else 0.0, "min_settled": args.min_settled,
+        "settled_games": int(np.unique(row_game[row_game >= 0]).size), "unsettled_rows": why, "rings": {},
     }
     outs = [(args.out, np.nonzero(~held)[0], ring.header.capacity)]
     if args.heldout_rows:
         outs.append((args.heldout_out, np.nonzero(held)[0], 0))
     for path, rows, capacity in outs:
-        write_ring(ring, rows, fields, path, capacity=capacity)
-        written = load_ring(path)
+        partial = path.with_name(path.name + PARTIAL_SUFFIX)
+        write_ring(ring, rows, fields, partial, capacity=capacity)
+        written = load_ring(partial)
         checked, bad = future_disagreements(written)
         record["rings"][str(path)] = {
-            "sha256": sha256_file(path), "rows": int(rows.size), "field_rows": int(written.future_valid.sum()),
+            "sha256": sha256_file(partial), "rows": int(rows.size), "field_rows": int(written.future_valid.sum()),
             "games": int(np.unique(written.game_id).size), "pairs_read": checked, "pairs_contradicting": len(bad),
         }
-        path.with_name(path.name + PROVENANCE_SUFFIX).write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    record["refused"] = bool(record["settled_share"] < args.min_settled
+                             or any(r["pairs_contradicting"] for r in record["rings"].values()))
+    for path, _rows, _capacity in outs:
+        # Only a clean conversion takes the asked-for name; a refused one stays `.partial` beside its record.
+        final = path.with_name(path.name + PARTIAL_SUFFIX) if record["refused"] else path
+        if not record["refused"]:
+            path.with_name(path.name + PARTIAL_SUFFIX).replace(path)
+        final.with_name(final.name + PROVENANCE_SUFFIX).write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     return record
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI; exit 1 when a written ring's fields contradict each other, 2 on a usage error."""
+    """CLI; exit 1 when a written ring's fields contradict each other or fewer rows settle than `--min-settled`, 2 on a usage error."""
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--ring", type=Path, required=True, help="the source ring (any HEXG version)")
     ap.add_argument("--games", nargs="+", required=True, help="the run's self-play game record shards (.jsonl)")
@@ -132,6 +160,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--step-lo", type=int, required=True, help="the records' actor steps, inclusive")
     ap.add_argument("--step-hi", type=int, required=True)
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--min-settled", type=float, required=True, help="the share of rows that must settle, else refused")
     ap.add_argument("--heldout-rows", type=int, default=0, help="whole ring games set apart until they reach this")
     ap.add_argument("--heldout-seed", type=int, default=0)
     ap.add_argument("--heldout-out", type=Path)
@@ -140,7 +169,7 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--heldout-rows needs --heldout-out")
     record = convert(args)
     print(json.dumps(record, indent=2))
-    return 1 if any(r["pairs_contradicting"] for r in record["rings"].values()) else 0
+    return 1 if record["refused"] else 0
 
 
 if __name__ == "__main__":

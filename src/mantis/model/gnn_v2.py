@@ -248,7 +248,7 @@ class GnnNetV2SoftPolicy(GnnNetV2):
         *,
         trunk: Callable[..., Tensor] | None = None,
     ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor | None]:
-        """`forward_batch`'s three outputs plus the aux head's `(num_legal_total,)` logits, one trunk pass."""
+        """`forward_batch`'s three outputs, the aux head's `(num_legal_total,)` logits and the future head's (none here), one trunk pass."""
         legal_emb, pooled = self._readout(x, edge_index, edge_attr, legal_index, stone_mask,
                                           node_offsets, trunk=trunk)
         return self._heads(legal_emb, pooled)

@@ -230,6 +230,19 @@ def future_base_ce(marginal: np.ndarray) -> float:
     return float(-(m * np.log(m)).sum())
 
 
+def future_row_base_ce(labels: Any, valid: Any, legal_offsets: Any) -> float:
+    """The mean over field-bearing rows of each row's own label entropy: the CE of a head knowing each row's fill rate and nothing spatial."""
+    n = np.diff(np.asarray(legal_offsets, np.int64))
+    keep = (np.asarray(valid) != 0) & (n > 0)
+    if not keep.any():
+        return 0.0
+    row_of = np.repeat(np.arange(n.size), n)
+    counts = np.bincount(row_of * FUTURE_CLASSES + np.asarray(labels).reshape(-1),
+                         minlength=n.size * FUTURE_CLASSES).reshape(n.size, FUTURE_CLASSES)[keep]
+    p = counts / counts.sum(axis=1, keepdims=True)
+    return float(-(p * np.log(np.where(p > 0, p, 1.0))).sum(axis=1).mean())
+
+
 def backward_accumulate(loss: torch.Tensor, scaler: GradScaler, fp16: bool) -> None:
     """The BACKWARD half of the fp16 step — accumulate into `.grad`, step nothing. No `zero_grad`
     inside, which is the point: the loop body accumulates and the caller zeroes once before it

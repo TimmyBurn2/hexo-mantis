@@ -23,6 +23,7 @@ from mantis.diagnostics.ring_reader import (
     load_ring,
     row_stone_sums,
     stone_hash,
+    stone_key,
 )
 from mantis.util.constants import is_alpha_full
 from mantis.util.puct import PuctConstants
@@ -275,8 +276,8 @@ def _future_grid(ring: Ring, horizon: int) -> tuple[np.ndarray, np.ndarray]:
     hashes = np.zeros((ring.header.size, horizon), np.uint64)
     rows = np.repeat(np.arange(ring.header.size), ring.n_future)
     at = np.arange(ring.future.size) - np.repeat(ring.future_off, ring.n_future)
-    q, r, p = (ring.future[k].astype(np.int64) for k in ("q", "r", "p"))
-    keys[rows, at] = (q & 0xFFFF) | ((r & 0xFFFF) << 16) | ((p > 0).astype(np.int64) + 1) << 32
+    q, r, p = (ring.future[k] for k in ("q", "r", "p"))
+    keys[rows, at] = stone_key(q, r, p)
     hashes[rows, at] = stone_hash(q, r, p)
     return keys, hashes
 

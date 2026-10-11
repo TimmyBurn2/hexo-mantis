@@ -316,7 +316,7 @@ class Trainer:
 
         Returns:
             `{"loss", "policy_loss", "value_loss"}`, summed over the parts as the training step sums them, plus
-            `aux_future_{rows, ce, base_ce}` on a net with the future-occupancy head.
+            `aux_future_{rows, ce, base_ce, row_base_ce}` on a net with the future-occupancy head.
 
         Raises:
             GraphEmptyBatchError: `parts` is empty, so there is nothing to evaluate.
@@ -330,7 +330,7 @@ class Trainer:
             )
         was_training = self.model.training
         loss_total = policy_total = value_total = future_total = 0.0
-        future_rows, future_base = 0, 0.0
+        future_rows, future_base, future_row_base = 0, 0.0, 0.0
         try:
             self.model.eval()
             with torch.no_grad():
@@ -348,10 +348,11 @@ class Trainer:
                                 inputs.x, inputs.edge_index, inputs.edge_attr, inputs.legal_index,
                                 inputs.stone_mask, node_offsets=inputs.node_offsets)
                         future_rows, future_base = int(inputs.future_rows), float(inputs.future_base_ce)
+                        future_row_base = float(inputs.future_row_base_ce)
+                        future_ce = None
                         if future_logits is not None and future_rows > 0:
-                            future_total += future_occupancy_ce(
-                                future_logits, inputs.future_target, inputs.future_valid, inputs.legal_offsets,
-                                float(future_rows)).item()
+                            future_ce = future_occupancy_ce(future_logits, inputs.future_target, inputs.future_valid,
+                                                            inputs.legal_offsets, float(future_rows))
                         policy_loss = ragged_policy_ce(
                             policy_logits, inputs.policy_target, inputs.legal_offsets,
                             full_search_mask=inputs.policy_row_weight,
@@ -368,13 +369,16 @@ class Trainer:
                         loss_total += loss.item()
                         policy_total += policy_loss.item()
                         value_total += value_loss.item()
-                    del inputs, policy_logits, bin_logits, policy_loss, value_loss, loss, future_logits
+                        if future_ce is not None:
+                            future_total += future_ce.item()
+                    del inputs, policy_logits, bin_logits, policy_loss, value_loss, loss, future_logits, future_ce
         finally:
             if was_training:
                 self.model.train()
         out = {"loss": loss_total, "policy_loss": policy_total, "value_loss": value_total}
         if self.future_head:
-            out.update(aux_future_rows=future_rows, aux_future_ce=future_total, aux_future_base_ce=future_base)
+            out.update(aux_future_rows=future_rows, aux_future_ce=future_total, aux_future_base_ce=future_base,
+                       aux_future_row_base_ce=future_row_base)
         return out
 
     def train_step_from_graph_batch(
@@ -419,7 +423,7 @@ class Trainer:
         aux_total = 0.0
         aux_kl_total = 0.0
         future_total = 0.0
-        future_rows, future_base = 0, 0.0
+        future_rows, future_base, future_row_base = 0, 0.0, 0.0
         # Which of the aux terms each contributing part's stats row carries, so the one read unpacks by layout.
         layouts: list[tuple[bool, bool]] = []
         for make in parts:
@@ -459,6 +463,7 @@ class Trainer:
                     loss = loss + self.hp.aux_soft_policy[1] * aux_loss
                 future_ce: torch.Tensor | None = None
                 future_rows, future_base = int(inputs.future_rows), float(inputs.future_base_ce)
+                future_row_base = float(inputs.future_row_base_ce)
                 if future_logits is not None and self.hp.aux_future_occupancy is not None and future_rows > 0:
                     future_ce = future_occupancy_ce(future_logits, inputs.future_target, inputs.future_valid,
                                                     inputs.legal_offsets, float(future_rows))
@@ -574,7 +579,7 @@ class Trainer:
                                   "value_target_search_weight": self.hp.value_target_search_weight,
                                   "value_mask_redraw_p": 0.0 if self.hp.value_mask is None else self.hp.value_mask[0],
                                   **self._aux_soft_policy_block(aux_total, aux_kl_total, head_norms),
-                                  **self._aux_future_block(future_total, future_rows, future_base)})
+                                  **self._aux_future_block(future_total, future_rows, future_base, future_row_base)})
             self._maybe_periodic_checkpoint(result)
         return result
 
@@ -630,12 +635,13 @@ class Trainer:
             **(head_norms or {}),
         }
 
-    def _aux_future_block(self, ce_total: float, rows: int, base_ce: float) -> dict[str, Any]:
-        """The `trainer_step` rows for the future-occupancy head — rows seen, its CE and its base rate (`None` on a step with no row), the weight; OMITTED without the head."""
+    def _aux_future_block(self, ce_total: float, rows: int, base_ce: float, row_base_ce: float) -> dict[str, Any]:
+        """The `trainer_step` rows for the future-occupancy head — rows seen, its CE and both base rates (`None` on a step with no row), the weight; OMITTED without the head."""
         if self.hp.aux_future_occupancy is None:
             return {}
         return {"aux_future_rows": rows, "aux_future_ce": ce_total if rows else None,
-                "aux_future_base_ce": base_ce if rows else None, "aux_future_weight": self.hp.aux_future_occupancy}
+                "aux_future_base_ce": base_ce if rows else None, "aux_future_row_base_ce": row_base_ce if rows else None,
+                "aux_future_weight": self.hp.aux_future_occupancy}
 
     def inference_state_dict(self) -> dict[str, torch.Tensor]:
         """The DEPLOY weights — the gate's candidate, promotion, the checkpoint's deploy copy: the EMA shadow when EMA is on, else the learner's (CARD-SERVER-OWNED-COPY)."""

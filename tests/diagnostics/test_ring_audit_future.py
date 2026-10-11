@@ -51,20 +51,20 @@ def test_a_games_own_fields_read_no_disagreement(tmp_path: Path) -> None:
     assert got["future_field_share"].value == 1.0 and got["future_disagree"].value == 0.0
 
 
-@pytest.mark.parametrize("plant", ["swap_order", "flip_player"])
+@pytest.mark.parametrize("plant", ["swap_order", "swap_turns"])
 def test_a_row_whose_field_disagrees_with_its_game_is_named(tmp_path: Path, plant: str) -> None:
-    """PLANTED BREAK: a field the push guard admits but its game contradicts (order or owner) reds both pairs it is in."""
+    """PLANTED BREAK: a field the push guard admits (owners in turn) but its game contradicts reds both pairs it is in."""
     rows = _game()
-    bad = dict(rows[10])
+    bad = dict(rows[11])  # the mover holds both stones of its turn, so a swap within it keeps the owners in turn
     f = list(bad["future"])
     if plant == "swap_order":
         f[0], f[1] = f[1], f[0]
     else:
-        f[0] = (f[0][0], f[0][1], -f[0][2])
+        f[0], f[2] = (f[2][0], f[2][1], f[0][2]), (f[0][0], f[0][1], f[2][2])
     bad["future"] = f
-    ring = _ring(tmp_path, {3: rows[:10] + [bad] + rows[11:]})
+    ring = _ring(tmp_path, {3: rows[:11] + [bad] + rows[12:]})
     _checked, pairs = A.future_disagreements(ring)
-    assert [[int(ring.ply_index[i]) for i in pair] for pair in pairs] == [[9, 10], [10, 11]]
+    assert [[int(ring.ply_index[i]) for i in pair] for pair in pairs] == [[10, 11], [11, 12]]
     assert {row.key: row for row in A.future_rows(ring)}["future_disagree"].value == 2.0
 
 

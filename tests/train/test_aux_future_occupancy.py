@@ -9,12 +9,18 @@ import pytest
 import torch
 
 import _microbatch_harness as H
+from mantis._engine import HexgBuffer
 from mantis.config.loader import load_config
+from mantis.config.resolve.heldout_gap import HeldoutGapSpec
 from mantis.config.resolve.microbatch import MicrobatchCapsSpec
 from mantis.config.schema import RunConfig
+from mantis.model.gnn_v2_future import FUTURE_PRIOR_LOGITS
 from mantis.train import losses
 from mantis.train.coordinator.dispatch import run_declared_eval_step, run_declared_train_step
+from mantis.train.events import heldout_gap_event
+from mantis.train.heldout import HeldoutSlice
 from mantis.train.trainer.core import TrainHParams
+from mantis.util.hashing import sha256_file
 
 _REPO = Path(__file__).resolve().parents[2]
 
@@ -36,10 +42,35 @@ def test_the_real_step_trains_the_head_on_the_rows_that_carry_the_field(tmp_path
     assert present == 4 and event["aux_future_rows"] == present
     assert 0.0 < event["aux_future_ce"] < 2.0 and event["aux_future_weight"] == 0.5
     assert 0.0 < event["aux_future_base_ce"] < np.log(3)
+    assert 0.0 < event["aux_future_row_base_ce"] <= event["aux_future_base_ce"] + 1e-9, "a row's own marginal is the stricter base"
     assert event["loss"] == pytest.approx(event["policy_loss"] + event["value_loss"] + 4.0 * event["aux_soft_policy_loss"]
                                           + 0.5 * event["aux_future_ce"], rel=1e-5)
     after = trainer.model.future_head.state_dict()
     assert any(not torch.equal(before[k], after[k]) for k in before), "the head did not move"
+
+
+def test_the_first_steps_ce_is_the_prior_read_against_each_rows_labels(tmp_path) -> None:
+    """Oracle: at step 0 every cell's logits are the prior, so the CE is the per-row mean of −log softmax(prior)[label] over field rows."""
+    ragged = HexgBuffer(16, H.GRAPH_ENCODING, 128)
+    stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1), (2, 1, -1), (1, 2, 1)]
+    for i in range(8):
+        future = [(q, 4 + (q + i) % 2, 1 if k % 4 < 2 else -1) for k, q in enumerate(range(-10, 10))] if i % 3 else None
+        ragged.push_graph_position(stones[:2 + i % 4], [(3, 0, 0.6), (1, 1, 0.4)], 1, 2, 2 + i % 4, True, 1.0, True, 40,
+                                   game_id=i, future_stones=future)
+    replay = H.ReplayWireBuffer(ragged, 8)
+    sink = H.SpySink()
+    run_declared_train_step(H.future_graph_trainer(tmp_path, sink=sink), replay, H.GSPEC, batch_size=8, augment=False,
+                            caps_provider=lambda: MicrobatchCapsSpec(*H.non_binding_caps(replay.wire)),
+                            sample_threads_provider=lambda: 1)
+    (event,) = sink.named("trainer_step")
+    nll = -torch.log_softmax(torch.tensor(FUTURE_PRIOR_LOGITS, dtype=torch.float64), dim=0).numpy()
+    labels, valid = np.asarray(replay.targets.future_target), np.asarray(replay.targets.future_valid)
+    offsets = np.asarray(replay.wire.legal_offsets)
+    assert len(set(np.diff(offsets)[valid != 0].tolist())) > 1, "the oracle needs rows of different legal-set sizes"
+    per_row = [nll[labels[offsets[g]:offsets[g + 1]]].mean() for g in range(len(valid)) if valid[g]]
+    per_node = nll[np.concatenate([labels[offsets[g]:offsets[g + 1]] for g in range(len(valid)) if valid[g]])].mean()
+    assert event["aux_future_ce"] == pytest.approx(float(np.mean(per_row)), rel=1e-6)
+    assert event["aux_future_ce"] != pytest.approx(float(per_node), rel=1e-6), "the two normalisations must differ here"
 
 
 def test_absent_rows_are_left_out_of_the_head_and_its_count(tmp_path, monkeypatch) -> None:
@@ -106,6 +137,8 @@ def test_the_eval_step_reads_the_heads_ce_against_its_base_rate(tmp_path) -> Non
                                             np.asarray(replay.wire.legal_offsets))
     assert out["aux_future_rows"] == rows == 4
     assert out["aux_future_base_ce"] == pytest.approx(losses.future_base_ce(marginal))
+    assert out["aux_future_row_base_ce"] == pytest.approx(losses.future_row_base_ce(
+        replay.targets.future_target, replay.targets.future_valid, np.asarray(replay.wire.legal_offsets)))
     event = _step(trainer, replay, 1)
     assert out["aux_future_ce"] == pytest.approx(event["aux_future_ce"], rel=1e-4), "the read is the trained CE's"
 
@@ -113,10 +146,6 @@ def test_the_eval_step_reads_the_heads_ce_against_its_base_rate(tmp_path) -> Non
 @pytest.mark.parametrize("field", [True, False])
 def test_the_heldout_slice_reads_the_heads_ce_and_base_rate_or_says_none(tmp_path, field: bool) -> None:
     """The run's frozen-slice read carries the head's CE beside its base rate onto `heldout_gap`; a slice without the field reads None."""
-    from mantis.config.resolve.heldout_gap import HeldoutGapSpec
-    from mantis.train.events import heldout_gap_event
-    from mantis.train.heldout import HeldoutSlice
-    from mantis.util.hashing import sha256_file
 
     ring = tmp_path / "slice.hexg"
     (H.future_graph_buffer() if field else H.uniform_graph_buffer()).save_to_path(str(ring))
@@ -128,9 +157,9 @@ def test_the_heldout_slice_reads_the_heads_ce_and_base_rate_or_says_none(tmp_pat
     event = heldout_gap_event(step=1, slice_=heldout, heldout=read, train_policy=None, train_value=None, train_steps=0,
                               wall_ms=1.0)
     if field:
-        assert 0.0 < event["aux_future_ce"] and 0.0 < event["aux_future_base_ce"] < np.log(3)
+        assert 0.0 < event["aux_future_ce"] and 0.0 < event["aux_future_row_base_ce"] <= event["aux_future_base_ce"] + 1e-9 < 1.1
     else:
-        assert (event["aux_future_ce"], event["aux_future_base_ce"]) == (None, None)
+        assert (event["aux_future_ce"], event["aux_future_base_ce"], event["aux_future_row_base_ce"]) == (None, None, None)
     soft = heldout.read(H.soft_policy_graph_trainer(tmp_path / "s", sink=H.SpySink()), H.GSPEC, batch_size=8,
                         caps_provider=lambda: MicrobatchCapsSpec(10**8, 10**8), sample_threads_provider=lambda: 1)
     assert "aux_future_ce" not in soft, "a net without the head reads no row at all"

@@ -90,11 +90,15 @@ def mix64(x: np.ndarray) -> np.ndarray:
     return z
 
 
+def stone_key(q: np.ndarray, r: np.ndarray, colour: np.ndarray) -> np.ndarray:
+    """Each (q, r, colour) stone packed into one int64, distinct per stone."""
+    return ((np.asarray(q, np.int64) & 0xFFFF) | ((np.asarray(r, np.int64) & 0xFFFF) << 16)
+            | ((np.asarray(colour) > 0).astype(np.int64) + 1) << 32)
+
+
 def stone_hash(q: np.ndarray, r: np.ndarray, colour: np.ndarray) -> np.ndarray:
     """A 64-bit hash per (q, r, colour) stone; a position's key sums them, so order does not matter."""
-    packed = ((np.asarray(q, np.int64) & 0xFFFF) | ((np.asarray(r, np.int64) & 0xFFFF) << 16)
-              | ((np.asarray(colour) > 0).astype(np.int64) + 1) << 32)
-    return mix64(packed.astype(np.uint64))
+    return mix64(stone_key(q, r, colour).astype(np.uint64))
 
 
 def row_stone_sums(ring: Ring) -> np.ndarray:

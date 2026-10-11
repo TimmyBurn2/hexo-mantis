@@ -13,6 +13,7 @@ import torch
 
 from mantis.model import load_from_bc
 from mantis.model.gnn import BcTransferReport
+from mantis.model.gnn_v2_future import AUX_FUTURE_LINEAGE, FUTURE_HEAD
 from mantis.model.identity import net_param_hash
 
 _LOG = logging.getLogger(__name__)
@@ -150,7 +151,6 @@ def apply_bc_warm_start(model: Any, declared: BcWarmStart, *, spec: Any) -> BcTr
 
 def warm_start_lineage(declared: BcWarmStart) -> tuple[str, ...]:
     """The source stamp's lineage, plus `+aux_future` when the declared `reinit` starts the future head fresh; Raises: CheckpointStampError — an unreadable stamp."""
-    from mantis.model.gnn_v2_future import AUX_FUTURE_LINEAGE, FUTURE_HEAD
     from mantis.train.checkpoints import stamped_lineage
 
     lineage = stamped_lineage(declared.checkpoint)

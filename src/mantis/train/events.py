@@ -299,7 +299,7 @@ def heldout_gap_event(*, step: int, slice_: Any, heldout: dict[str, Any],
     """The `heldout_gap` row: the frozen slice's forward-only losses, the mean train losses of the taken steps since the last read, and their gaps (`None` where no step fed the window)."""
     gap_policy = None if train_policy is None else heldout["policy_loss"] - train_policy
     gap_value = None if train_value is None else heldout["value_loss"] - train_value
-    future = {k: heldout[k] for k in ("aux_future_ce", "aux_future_base_ce") if k in heldout}
+    future = {k: heldout[k] for k in ("aux_future_ce", "aux_future_base_ce", "aux_future_row_base_ce") if k in heldout}
     return {**future,
         "event": HELDOUT_GAP_EVENT, "step": int(step), "ring": slice_.ring_path.name,
         "ring_sha256": slice_.spec.ring_sha256, "rows": slice_.rows, "batches": slice_.spec.batches,

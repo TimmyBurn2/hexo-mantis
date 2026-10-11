@@ -40,7 +40,7 @@ def _placed(moves: list[tuple[int, int]]) -> list[tuple[int, int, int]]:
     return out
 
 
-def _write_inputs(tmp_path: Path, records: dict[int, list[tuple[int, int]]]) -> tuple[Path, Path]:
+def _write_inputs(tmp_path: Path, records: dict[int, list[tuple[int, int]]], *, copies: int = 1) -> tuple[Path, Path]:
     """A ring of every game's plies 1.. without the field, and a shard of `records`."""
     buf = HexgBuffer(256, _ENC, 16)
     for gid, moves in _GAMES.items():
@@ -55,16 +55,17 @@ def _write_inputs(tmp_path: Path, records: dict[int, list[tuple[int, int]]]) -> 
     shard = tmp_path / "games_0_seg0.jsonl"
     shard.write_text("".join(json.dumps({"channel": "selfplay", "run_id": "t", "step": 5, "game_id": f"g{g}",
                                          "moves": [list(m) for m in moves], "result": "p1"}) + "\n"
-                             for g, moves in records.items()), encoding="utf-8")
+                             for g, moves in records.items() for _ in range(copies)), encoding="utf-8")
     return ring, shard
 
 
-def _run(tmp_path: Path, records: dict[int, list[tuple[int, int]]], *extra: str) -> tuple[int, Any]:
-    ring, shard = _write_inputs(tmp_path, records)
+def _run(tmp_path: Path, records: dict[int, list[tuple[int, int]]], *extra: str, copies: int = 1,
+         min_settled: str = "0.5") -> tuple[int, Any]:
+    ring, shard = _write_inputs(tmp_path, records, copies=copies)
     out = tmp_path / "out.hexg"
     rc = _tool().main(["--ring", str(ring), "--games", str(shard), "--run-id", "t", "--step-lo", "0",
-                       "--step-hi", "9", "--out", str(out), *extra])
-    return rc, load_ring(out)
+                       "--step-hi", "9", "--out", str(out), "--min-settled", min_settled, *extra])
+    return rc, load_ring(out) if out.exists() else None
 
 
 def test_each_recorded_games_rows_get_its_next_placements_and_the_rest_none(tmp_path: Path) -> None:
@@ -84,7 +85,7 @@ def test_a_ring_game_whose_record_contradicts_its_rows_is_given_no_field(tmp_pat
     """PLANTED BREAK: game 0's record with two later placements swapped no longer holds its rows' positions."""
     altered = list(_GAMES[0])
     altered[9], altered[11] = altered[11], altered[9]
-    rc, out = _run(tmp_path, {0: altered, 1: _GAMES[1]})
+    rc, out = _run(tmp_path, {0: altered, 1: _GAMES[1]}, min_settled="0.3")
     assert rc == 0
     assert not out.future_valid[out.game_id == 0].any()
     assert out.future_valid[out.game_id == 1].all()
@@ -99,9 +100,26 @@ def test_the_heldout_split_is_by_whole_game(tmp_path: Path) -> None:
     assert held.header.size + out.header.size == sum(len(m) - 1 for m in _GAMES.values())
 
 
+def test_copies_of_a_record_settle_as_the_one_game_they_are(tmp_path: Path) -> None:
+    """The mirror holds copies of shards: a record twice is one game, not two candidates."""
+    rc, out = _run(tmp_path, {0: _GAMES[0], 1: _GAMES[1]}, copies=2)
+    assert rc == 0 and out.future_valid[out.game_id != 2].all()
+    prov = json.loads((tmp_path / "out.hexg.provenance.json").read_text(encoding="utf-8"))
+    assert (prov["records"], prov["records_duplicate"]) == (2, 2)
+
+
+def test_a_conversion_that_settles_too_few_rows_is_refused_and_keeps_no_ring_under_the_name(tmp_path: Path) -> None:
+    """PLANTED BREAK: one recorded game of three settles a third of the rows, under the stated share; the ring stays `.partial`."""
+    rc, out = _run(tmp_path, {0: _GAMES[0]}, min_settled="0.5")
+    assert rc == 1 and out is None
+    assert (tmp_path / "out.hexg.partial").exists()
+    prov = json.loads((tmp_path / "out.hexg.partial.provenance.json").read_text(encoding="utf-8"))
+    assert prov["refused"] and prov["settled_share"] < 0.5
+
+
 def test_heldout_rows_without_an_output_path_is_a_usage_error(tmp_path: Path) -> None:
     ring, shard = _write_inputs(tmp_path, {})
     with pytest.raises(SystemExit) as exc:
         _tool().main(["--ring", str(ring), "--games", str(shard), "--run-id", "t", "--step-lo", "0", "--step-hi", "9",
-                      "--out", str(tmp_path / "o.hexg"), "--heldout-rows", "3"])
+                      "--out", str(tmp_path / "o.hexg"), "--min-settled", "0.5", "--heldout-rows", "3"])
     assert exc.value.code == 2

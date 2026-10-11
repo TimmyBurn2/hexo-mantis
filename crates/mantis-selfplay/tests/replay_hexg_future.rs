@@ -89,12 +89,22 @@ fn a_future_field_that_is_not_its_games_next_placements_is_refused_at_insert() {
     twice[5] = (2, 0, -1);
     let mut no_player = eleven.clone();
     no_player[0] = (2, 0, 0);
+    let mut out_of_turn = eleven.clone();
+    out_of_turn[1] = (0, 2, -1);
     let mut buf = HexgBuffer::new(4, ENC, VISIT_CAP).unwrap();
     for (case, rec) in [
         ("over the horizon", with(twenty_one, 40)),
         ("on a stone", with(on_a_stone, 7)),
         ("a cell twice", with(twice, 7)),
         ("no player", with(no_player, 7)),
+        ("out of turn", with(out_of_turn, 7)),
+        (
+            "the mover's turn read as the opponent's",
+            GraphRecord {
+                current_player: -1,
+                ..golden_row()
+            },
+        ),
         ("short of a longer game", with(eleven.clone(), 8)),
         ("past a shorter game", with(eleven.clone(), 6)),
         (
@@ -156,6 +166,7 @@ fn a_v4_future_field_outside_its_contract_is_refused_at_load() {
         ("absent_with_stones", patched(&[(FLAG, &[0])])),
         ("over_the_horizon", patched(&[(COUNT, &[21])])),
         ("no_player", patched(&[(FUTURE0 + 4, &[0])])),
+        ("out_of_turn", patched(&[(FUTURE0 + 9, &[0xFF])])),
         ("on_a_stone", patched(&[(FUTURE0, &[1, 0, 0, 0])])),
         ("a_cell_twice", patched(&[(FUTURE0 + 5, &[2, 0, 0, 0])])),
         (
@@ -243,6 +254,9 @@ fn the_sampled_label_names_whose_stone_fills_each_legal_cell() {
         golden_row(),
         GraphRecord {
             current_player: -1,
+            future_stones: golden_row()
+                .future_stones
+                .map(|f| f.into_iter().map(|(q, r, p)| (q, r, -p)).collect()),
             ..golden_row()
         },
         GraphRecord {
