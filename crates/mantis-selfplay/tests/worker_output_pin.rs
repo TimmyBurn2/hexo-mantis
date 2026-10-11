@@ -261,6 +261,7 @@ fn produce_g6(mutate: bool) -> (f64, Vec<u8>) {
         game_id: -1,
         root_value: 0.0,
         root_value_valid: false,
+        future_stones: None,
     };
     assert_eq!(
         ser_graph_record(&rec),

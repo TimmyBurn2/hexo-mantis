@@ -562,6 +562,7 @@ mod seam_roundtrip {
             game_id: -1,
             root_value: -0.5,
             root_value_valid: true,
+            future_stones: None,
         };
         let g1 = GraphRecord {
             current_player: -1,

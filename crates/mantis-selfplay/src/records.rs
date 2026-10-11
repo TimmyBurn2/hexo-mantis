@@ -320,6 +320,7 @@ pub fn record_position_graph(
         game_id: -1,             // placeholder → finalize_game_graph
         root_value: 0.0,         // placeholder → record_position_graph_dispatch
         root_value_valid: false, // placeholder → record_position_graph_dispatch
+        future_stones: None,
     })
 }
 
@@ -354,6 +355,7 @@ pub fn record_unsearched_value_row(
         game_id: -1,             // placeholder → finalize_game_graph
         root_value: 0.0,         // placeholder → record_unsearched_dispatch
         root_value_valid: false, // placeholder → record_unsearched_dispatch
+        future_stones: None,
     }
 }
 

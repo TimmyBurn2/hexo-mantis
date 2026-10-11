@@ -220,6 +220,7 @@ fn check_roundtrip(src: &str, i: usize) {
         game_id: -1,
         root_value: 0.0,
         root_value_valid: false,
+        future_stones: None,
     };
     let mut buf = HexgBuffer::new(2, "gnn_axis_v1", 128).expect("graph buffer");
     buf.push_record_impl(&rec, 1)

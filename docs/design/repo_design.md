@@ -185,7 +185,7 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
 | 3 | graph wire (ragged) | v1 | block-diagonal GraphWire; the structural assertions and named errors are ENUMERATED in the contract, not counted here (AUDIT-1 F-52); single-read `take()`; −1 off-window sentinel travels; NO fixed-width fallback |
 | 4 | checkpoint envelope | v2 | see §6 |
 | 5 | run config schema | see the contract doc's version table | pydantic models, extra=forbid; schema_version key in every file. The version is the CONTRACT DOC's own table, whose last row is the authority — this cell read v8 while `docs/contracts/run_config_schema.md` had reached v13, and v13 while it had reached v32, so the cell now DEFERS to the doc; gate 13 now asserts the doc's header equals its own max row (AUDIT-1 F-52) |
-| 6 | replay persist | HEXG v3 | magic, versioned header (v2 read default-filled), slot-geometry guard, two-pass atomic load |
+| 6 | replay persist | HEXG v4 | magic, versioned header (v2 and v3 read default-filled), slot-geometry guard, two-pass atomic load |
 | 7 | event manifest | v1 | every panel AND every headless gate input cites a live producer; mutation self-test proves the checker bites |
 | 9 | eval instrument | v1 | deploy-matched argmax head, frozen sha-pinned paired opening books, per-pair bootstrap CI, eff_n = trajectory-hash-distinct games |
 | 10 | mint preflight report | preflight-mint-v1 | the mint preflight's evidence JSON: always written (LAW-14); mode, verdict and mint TIER derived from what the run DID, never from what it intended |
@@ -931,6 +931,23 @@ that lands as an amendment in the commit that moves them, rather than as drift.
 3. **The layout is chosen only by the version, which is the authority.** A payload read through
    the other version's layout is refused by the over-cap and trailing-bytes guards unless its
    garbage realigns exactly, and a refused load touches nothing.
+
+---
+
+### AMENDMENT — HEXG v4: the future-occupancy field (AUX-1)
+
+**AUX-1.** This moves contract #6's HEXG version 3 → 4 in the commit that moves it (R9), on RING-V3's terms.
+
+1. **Each record carries its game's next placements**: a flag and a count after `root_value_valid`,
+   and up to `FUTURE_HORIZON` (20) stones `(q, r, ±1)` in placement order after the visits, fewer
+   only where the game ended sooner (the count is checked against `game_length`). The stones are
+   stored, not a mask over the legal set, so the field rotates with D6 as the stones do and owes
+   nothing to the writer's legal-set order or edge set; the sampler derives the per-legal-node
+   label (empty / the mover's / the opponent's) over the reader's legal set.
+2. **v2 and v3 rings LOAD**, every row without the field; re-saved as v4 and stripped of it, a
+   v3 file is itself byte for byte. A row no game produced pushes none.
+3. **The version is the layout's authority**, as at v3: a payload read through a neighbouring
+   version's layout is refused, and a refused load touches nothing.
 
 ---
 

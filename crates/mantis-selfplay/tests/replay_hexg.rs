@@ -38,6 +38,7 @@ fn sample_record() -> GraphRecord {
         game_id: -1,
         root_value: 0.25,
         root_value_valid: true,
+        future_stones: None,
     }
 }
 
@@ -251,6 +252,8 @@ fn assert_golden_v2_fields(buf: &HexgBuffer) {
 /// Bytes of one record's fixed head in a v2 file; v3 appends the root value (f32) and its flag (u8).
 const V2_HEAD: usize = 30;
 const V3_ROOT: usize = 5;
+/// v4's future-occupancy flag and count (u8 each) after the v3 head; its stones (5 bytes each) follow the body.
+const V4_FUTURE_HEAD: usize = 2;
 
 /// A v3 payload with the two root fields cut out of every record and the version set back to 2.
 fn strip_to_v2(v3: &[u8]) -> Vec<u8> {
@@ -271,9 +274,31 @@ fn strip_to_v2(v3: &[u8]) -> Vec<u8> {
     out
 }
 
-/// A v2 ring loads with no root value on any row, and its v3 re-save minus the root fields IS the v2 golden.
+/// A v4 payload with the future-occupancy fields cut out of every record and the version set back to 3.
+fn strip_to_v3(v4: &[u8]) -> Vec<u8> {
+    let u32_at = |o: usize| u32::from_le_bytes(v4[o..o + 4].try_into().unwrap());
+    let u16_at = |o: usize| usize::from(u16::from_le_bytes(v4[o..o + 2].try_into().unwrap()));
+    let size = u64::from_le_bytes(v4[24..32].try_into().unwrap()) as usize;
+    let mut pos = 36 + u32_at(32) as usize;
+    let mut out = v4[..pos].to_vec();
+    out[4..8].copy_from_slice(&3u32.to_le_bytes());
+    let v3_head = V2_HEAD + V3_ROOT;
+    for _ in 0..size {
+        let (ns, nv) = (u16_at(pos), u16_at(pos + 2));
+        let n_future = usize::from(v4[pos + v3_head + 1]);
+        let body = ns * 5 + nv * 8;
+        let start = pos + v3_head + V4_FUTURE_HEAD;
+        out.extend_from_slice(&v4[pos..pos + v3_head]);
+        out.extend_from_slice(&v4[start..start + body]);
+        pos = start + body + n_future * 5;
+    }
+    assert_eq!(pos, v4.len(), "the walk must consume the whole v4 payload");
+    out
+}
+
+/// A v2 ring loads with no root value and no future field on any row, and its v4 re-save minus both IS the v2 golden.
 #[test]
-fn the_v2_byte_golden_loads_with_no_root_value_and_its_v3_resave_carries_its_rows_byte_for_byte() {
+fn the_v2_byte_golden_loads_with_no_root_value_and_its_v4_resave_carries_its_rows_byte_for_byte() {
     let golden = fixture_path("hexg_v2_golden.hexg");
     let golden_bytes = std::fs::read(&golden).expect("frozen hexg v2 golden must exist");
 
@@ -292,6 +317,7 @@ fn the_v2_byte_golden_loads_with_no_root_value_and_its_v3_resave_carries_its_row
             0.0f32.to_bits(),
             "an invalid root value is stored as +0.0"
         );
+        assert_eq!(r.future_stones, None, "a v2 row has no future field");
     }
 
     let resave = unique_path("v2_resave");
@@ -302,19 +328,23 @@ fn the_v2_byte_golden_loads_with_no_root_value_and_its_v3_resave_carries_its_row
         &HEXG_VERSION.to_le_bytes(),
         "a save writes the current version"
     );
-    assert_eq!(HEXG_VERSION, 3);
-    assert_eq!(resaved.len(), golden_bytes.len() + 2 * V3_ROOT);
+    assert_eq!(HEXG_VERSION, 4);
     assert_eq!(
-        strip_to_v2(&resaved),
+        resaved.len(),
+        golden_bytes.len() + 2 * (V3_ROOT + V4_FUTURE_HEAD)
+    );
+    assert_eq!(
+        strip_to_v2(&strip_to_v3(&resaved)),
         golden_bytes,
-        "the v3 re-save minus its root fields must be the v2 golden"
+        "the v4 re-save minus its root and future fields must be the v2 golden"
     );
     let _ = std::fs::remove_file(resave);
 }
 
-/// The v3 golden (the v2 golden's bytes with the root fields inserted elsewhere) loads exact and re-saves itself.
+/// The v3 golden loads exact with no future field on any row, and its v4 re-save minus the future fields IS the v3 golden.
 #[test]
-fn the_v3_byte_golden_loads_exact_and_resaves_byte_identical() {
+fn the_v3_byte_golden_loads_with_no_future_field_and_its_v4_resave_carries_its_rows_byte_for_byte()
+{
     let golden = fixture_path("hexg_v3_golden.hexg");
     let golden_bytes = std::fs::read(&golden).expect("frozen hexg v3 golden must exist");
 
@@ -329,25 +359,81 @@ fn the_v3_byte_golden_loads_exact_and_resaves_byte_identical() {
     assert_eq!(r0.root_value, -0.625);
     assert!(!r1.root_value_valid);
     assert_eq!(r1.root_value.to_bits(), 0.0f32.to_bits());
+    assert_eq!((r0.future_stones, r1.future_stones), (None, None));
 
     let resave = unique_path("v3_resave");
     buf.save_to_path_impl(resave.to_str().unwrap()).unwrap();
+    let resaved = std::fs::read(&resave).unwrap();
+    assert_eq!(resaved.len(), golden_bytes.len() + 2 * V4_FUTURE_HEAD);
     assert_eq!(
-        std::fs::read(&resave).unwrap(),
+        strip_to_v3(&resaved),
         golden_bytes,
-        "a v3 re-save must reproduce the frozen bytes"
+        "the v4 re-save minus its future fields must be the v3 golden"
     );
     let _ = std::fs::remove_file(resave);
 }
 
-/// PLANTED BREAK — a v3 payload stamped 2 (the v2 path), or the reverse, is refused and touches nothing.
+/// Record 0's future stones in the v4 golden: plies 3..14 of a game ending at turn 7, in placement order.
+pub const V4_GOLDEN_FUTURE: [(i16, i16, i8); 11] = [
+    (2, 0, 1),
+    (0, 2, 1),
+    (-1, 0, -1),
+    (1, 1, -1),
+    (2, -1, 1),
+    (-1, 2, 1),
+    (3, 0, -1),
+    (0, 3, -1),
+    (-2, 1, 1),
+    (1, -2, 1),
+    (2, 2, -1),
+];
+
+/// The v4 golden (the v3 golden's bytes with the future fields inserted elsewhere) loads exact and re-saves itself.
 #[test]
-fn a_v3_payload_read_through_the_v2_layout_is_refused_and_leaves_the_buffer_untouched() {
-    let mut v3_as_v2 = std::fs::read(fixture_path("hexg_v3_golden.hexg")).unwrap();
-    v3_as_v2[4..8].copy_from_slice(&2u32.to_le_bytes());
-    let mut v2_as_v3 = std::fs::read(fixture_path("hexg_v2_golden.hexg")).unwrap();
-    v2_as_v3[4..8].copy_from_slice(&3u32.to_le_bytes());
-    for (stem, bytes) in [("v3_as_v2", v3_as_v2), ("v2_as_v3", v2_as_v3)] {
+fn the_v4_byte_golden_loads_exact_and_resaves_byte_identical() {
+    let golden = fixture_path("hexg_v4_golden.hexg");
+    let golden_bytes = std::fs::read(&golden).expect("frozen hexg v4 golden must exist");
+
+    let mut buf = HexgBuffer::new(16, ENC, 128).unwrap();
+    assert_eq!(
+        buf.load_from_path_impl(golden.to_str().unwrap()).unwrap(),
+        2
+    );
+    assert_golden_v2_fields(&buf);
+    let (r0, r1) = (buf.record_at(0), buf.record_at(1));
+    assert_eq!(r0.root_value, -0.625);
+    assert_eq!(r0.future_stones, Some(V4_GOLDEN_FUTURE.to_vec()));
+    assert_eq!(r1.future_stones, None);
+
+    let resave = unique_path("v4_resave");
+    buf.save_to_path_impl(resave.to_str().unwrap()).unwrap();
+    assert_eq!(
+        std::fs::read(&resave).unwrap(),
+        golden_bytes,
+        "a v4 re-save must reproduce the frozen bytes"
+    );
+    assert_eq!(
+        strip_to_v3(&golden_bytes),
+        std::fs::read(fixture_path("hexg_v3_golden.hexg")).unwrap(),
+        "the v4 golden minus its future fields is the v3 golden"
+    );
+    let _ = std::fs::remove_file(resave);
+}
+
+/// PLANTED BREAK — a payload stamped with a neighbouring version's number is refused and touches nothing.
+#[test]
+fn a_payload_read_through_another_versions_layout_is_refused_and_leaves_the_buffer_untouched() {
+    let stamped = |name: &str, version: u32| {
+        let mut bytes = std::fs::read(fixture_path(name)).unwrap();
+        bytes[4..8].copy_from_slice(&version.to_le_bytes());
+        bytes
+    };
+    for (stem, bytes) in [
+        ("v3_as_v2", stamped("hexg_v3_golden.hexg", 2)),
+        ("v2_as_v3", stamped("hexg_v2_golden.hexg", 3)),
+        ("v4_as_v3", stamped("hexg_v4_golden.hexg", 3)),
+        ("v3_as_v4", stamped("hexg_v3_golden.hexg", 4)),
+    ] {
         let path = unique_path(stem);
         std::fs::write(&path, &bytes).unwrap();
         let mut buf = HexgBuffer::new(16, ENC, 128).unwrap();
@@ -722,6 +808,7 @@ fn empty_board_record_survives_d6_augmented_sample_align() {
         game_id: -1,
         root_value: 0.0,
         root_value_valid: false,
+        future_stones: None,
     };
     buf.push_record_impl(&rec, 0).unwrap();
     for _ in 0..48 {
@@ -802,6 +889,7 @@ fn sample_rejects_illegal_cell_visit_mass_drop() {
         game_id: -1,
         root_value: 0.0,
         root_value_valid: false,
+        future_stones: None,
     };
     buf.push_record_impl(&rec, 7).unwrap();
     assert!(

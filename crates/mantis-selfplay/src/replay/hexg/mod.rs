@@ -120,9 +120,18 @@ pub fn derived_visit_capacity(
 
 /// HEXG on-disk magic — "HEXG" little-endian (distinct from HEXB `0x48455842`).
 pub const HEXG_MAGIC: u32 = 0x4845_5847;
-/// HEXG on-disk version written. v2 added the per-record tail mass α (a v1 file is refused by
-/// name); v3 adds the root value and its flag, and a v2 file still loads with every flag 0.
-pub const HEXG_VERSION: u32 = 3;
+/// HEXG on-disk version written: v2 added the tail mass α (a v1 file is refused by name), v3 the root value and its
+/// flag, v4 the future-occupancy field; a v2 or v3 file still loads, every row without the fields it predates.
+pub const HEXG_VERSION: u32 = 4;
+
+/// Placements a row's future-occupancy field reaches: the stones placed from its own ply on.
+pub const FUTURE_HORIZON: usize = 20;
+/// The future-occupancy label of a legal cell: still empty at the horizon (or the game's end).
+pub const FUTURE_EMPTY: u8 = 0;
+/// The label of a legal cell the row's side to move fills within the horizon.
+pub const FUTURE_MINE: u8 = 1;
+/// The label of a legal cell the opponent fills within the horizon.
+pub const FUTURE_THEIRS: u8 = 2;
 
 /// The dashboard histogram bucket of an f16 slot weight.
 #[inline]
@@ -170,6 +179,8 @@ pub struct GraphRecord {
     pub root_value: f32,
     /// 1 = the row's search left a root value; 0 = none (a v2 row, a row no search produced).
     pub root_value_valid: bool,
+    /// Its game's next [`FUTURE_HORIZON`] stones `(q, r, ±1)` from this ply (fewer only at the game's end); `None`: no field.
+    pub future_stones: Option<Vec<(i16, i16, i8)>>,
 }
 
 /// Graph-position replay ring: fixed-slot SoA Vecs, ring overwrite by `head`, weighted rejection
@@ -208,6 +219,10 @@ pub struct HexgBuffer {
     pub game_ids: Vec<i64>,        // [cap]; -1 = untagged
     pub root_value: Vec<f32>,      // [cap]; +0.0 where invalid
     pub root_value_valid: Vec<u8>, // [cap]
+    pub future_qr: Vec<i16>,       // flat [cap * FUTURE_HORIZON * 2]
+    pub future_players: Vec<i8>,   // flat [cap * FUTURE_HORIZON]
+    pub n_future: Vec<u8>,         // [cap]
+    pub future_valid: Vec<u8>,     // [cap]; 0 = the row carries no field
     pub weights: Vec<u16>,         // f16 bits; [cap]; stored at 1.0, read by no sampler
 
     pub next_game_id: i64,
@@ -304,6 +319,10 @@ impl HexgBuffer {
             game_ids: vec![-1i64; capacity],
             root_value: vec![0.0f32; capacity],
             root_value_valid: vec![0u8; capacity],
+            future_qr: vec![0i16; capacity * FUTURE_HORIZON * 2],
+            future_players: vec![0i8; capacity * FUTURE_HORIZON],
+            n_future: vec![0u8; capacity],
+            future_valid: vec![0u8; capacity],
             weights: vec![default_w; capacity],
             next_game_id: 0,
             last_batch_distinct_games: 0,
@@ -361,11 +380,11 @@ impl HexgBuffer {
 
 /// Aligned training targets emitted alongside the per-graph `Vec<AxisGraph>`.
 ///
-/// * `policy_target` — flat `[Lg]` per-legal-node CE target in `legal_node_gather` order; each
-///   graph's segment sums to ~1 MINUS its `tail_mass`.
+/// * `policy_target` — flat `[Lg]` CE target in `legal_node_gather` order; a graph's segment sums to ~1 − its `tail_mass`.
 /// * `explicit_mask` — flat `[Lg]`, 1 where the row carried a STORED entry, emitted rather than
 ///   inferred from `policy_target > 0` so an underflowed entry is not reclassified as tail.
 /// * `tail_mass` / `outcomes` / `value_valid` / `is_full_search` / `root_value{,_valid}` — `[B]` per-row scalars.
+/// * `future_target` — flat `[Lg]` label per legal node (`FUTURE_*`), all empty where `future_valid` (`[B]`) is 0.
 /// * argmax_q/argmax_r/argmax_valid — per-graph max-mass legal node in the ROTATED frame.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct GraphTargets {
@@ -377,6 +396,8 @@ pub struct GraphTargets {
     pub is_full_search: Vec<u8>,
     pub root_value: Vec<f32>,
     pub root_value_valid: Vec<u8>,
+    pub future_target: Vec<u8>,
+    pub future_valid: Vec<u8>,
     pub argmax_q: Vec<i32>,
     pub argmax_r: Vec<i32>,
     pub argmax_valid: Vec<u8>,

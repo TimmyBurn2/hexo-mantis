@@ -1,4 +1,4 @@
-"""The pure-numpy HEXG reader agrees with the engine that wrote the ring, field by field, on both layouts."""
+"""The pure-numpy HEXG reader agrees with the engine that wrote the ring, field by field, on every layout."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -22,15 +22,19 @@ _ROWS = [
 ]
 # (root_value, root_value_valid) per row of `_ROWS`.
 _ROOTS = [(0.5, True), (0.0, False), (-1.0, True)]
+# The future-occupancy field per row of `_ROWS`: a full horizon, none, a full horizon.
+_FUTURES = [[(i - 10, 2, 1 if i % 4 < 2 else -1) for i in range(20)], None,
+            [(i - 10, -3, -1 if i % 4 < 2 else 1) for i in range(20)]]
 _REPLAY = Path(__file__).resolve().parents[1] / "fixtures" / "replay"
 
 
 def _write_ring(path: Path) -> _engine.HexgBuffer:
     buf = _engine.HexgBuffer(16, _ENCODING, 64)
-    for (stones, visits, player, remaining, ply, full, outcome, valid, length, gid, tail), (root, root_ok) \
-            in zip(_ROWS, _ROOTS, strict=True):
+    for (stones, visits, player, remaining, ply, full, outcome, valid, length, gid, tail), (root, root_ok), future \
+            in zip(_ROWS, _ROOTS, _FUTURES, strict=True):
         buf.push_graph_position(stones, visits, player, remaining, ply, full, outcome, valid,
-                                length, gid, tail, root_value=root, root_value_valid=root_ok)
+                                length, gid, tail, root_value=root, root_value_valid=root_ok,
+                                future_stones=future)
     buf.save_to_path(str(path))
     return buf
 
@@ -67,6 +71,8 @@ def test_every_field_reads_back_as_pushed(tmp_path: Path) -> None:
         got_visits = ring.row_visits(i)
         assert [(int(v["q"]), int(v["r"])) for v in got_visits] == [(q, r) for q, r, _ in visits]
         assert np.allclose([float(v["prob"]) for v in got_visits], [p for _, _, p in visits])
+        assert bool(ring.future_valid[i]) is (_FUTURES[i] is not None)
+        assert [(int(f["q"]), int(f["r"]), int(f["p"])) for f in ring.row_future(i)] == (_FUTURES[i] or [])
 
 
 def test_the_engine_loads_the_same_count_the_reader_parsed(tmp_path: Path) -> None:
@@ -150,6 +156,7 @@ def test_the_v2_golden_reads_with_no_root_value_on_any_row() -> None:
     assert ring.game_id.tolist() == [42, 43]
     assert ring.root_value_valid.tolist() == [0, 0]
     assert ring.root_value.view(np.uint32).tolist() == [0, 0]
+    assert ring.future_valid.tolist() == [0, 0] and ring.future.size == 0
 
 
 def test_the_v3_golden_reads_its_root_values() -> None:
@@ -158,12 +165,24 @@ def test_the_v3_golden_reads_its_root_values() -> None:
     assert ring.root_value.tolist() == [-0.625, 0.0]
     assert ring.tail_mass.tolist() == [0.0, 0.25]
     assert ring.game_id.tolist() == [42, 43]
+    assert ring.future_valid.tolist() == [0, 0] and ring.future.size == 0
 
 
-@pytest.mark.parametrize(("fixture", "stamp"), [("hexg_v3_golden.hexg", 2), ("hexg_v2_golden.hexg", 3)])
+def test_the_v4_golden_reads_its_future_stones() -> None:
+    """Record 0 carries its game's eleven remaining stones in placement order; record 1 carries none."""
+    ring = R.load_ring(_REPLAY / "hexg_v4_golden.hexg")
+    assert ring.root_value.tolist() == [-0.625, 0.0]
+    assert ring.future_valid.tolist() == [1, 0]
+    assert ring.n_future.tolist() == [11, 0]
+    assert [(int(f["q"]), int(f["r"]), int(f["p"])) for f in ring.row_future(0)][:3] == [(2, 0, 1), (0, 2, 1),
+                                                                                         (-1, 0, -1)]
+
+
+@pytest.mark.parametrize(("fixture", "stamp"), [("hexg_v3_golden.hexg", 2), ("hexg_v2_golden.hexg", 3),
+                                                ("hexg_v4_golden.hexg", 3), ("hexg_v3_golden.hexg", 4)])
 def test_a_payload_read_through_the_other_versions_layout_is_refused(tmp_path: Path, fixture: str,
                                                                       stamp: int) -> None:
-    """PLANTED BREAK: one layout for every version takes root-value bytes for stones; the reader must refuse."""
+    """PLANTED BREAK: one layout for every version takes root-value or future bytes for stones; the reader must refuse."""
     data = bytearray((_REPLAY / fixture).read_bytes())
     data[4:8] = stamp.to_bytes(4, "little")
     path = tmp_path / "relabelled.hexg"

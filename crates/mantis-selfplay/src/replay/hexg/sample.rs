@@ -16,7 +16,7 @@ use mantis_graph::{build_axis_graph, AxisGraph, BuildParams, StoneList};
 use rand::RngExt;
 
 use super::super::sym::{rotate_axial, N_SYMS};
-use super::{GraphRecord, GraphTargets, HexgBuffer};
+use super::{GraphRecord, GraphTargets, HexgBuffer, FUTURE_EMPTY, FUTURE_MINE, FUTURE_THEIRS};
 
 /// Compare aligned visit mass against the mass stored at push time; LOUD-fail, naming the
 /// record, when they diverge beyond tolerance. Pure, so it is unit-testable.
@@ -186,6 +186,8 @@ impl HexgBuffer {
         let mut is_full_search: Vec<u8> = Vec::with_capacity(batch_size);
         let mut root_value: Vec<f32> = Vec::with_capacity(batch_size);
         let mut root_value_valid: Vec<u8> = Vec::with_capacity(batch_size);
+        let mut future_target: Vec<u8> = Vec::new();
+        let mut future_valid: Vec<u8> = Vec::with_capacity(batch_size);
         let mut argmax_q: Vec<i32> = Vec::with_capacity(batch_size);
         let mut argmax_r: Vec<i32> = Vec::with_capacity(batch_size);
         let mut argmax_valid: Vec<u8> = Vec::with_capacity(batch_size);
@@ -204,6 +206,8 @@ impl HexgBuffer {
             is_full_search.push(out.is_full_search);
             root_value.push(out.root_value);
             root_value_valid.push(out.root_value_valid);
+            future_target.extend_from_slice(&out.future_target);
+            future_valid.push(out.future_valid);
             graphs.push(out.graph);
         }
 
@@ -218,6 +222,8 @@ impl HexgBuffer {
                 is_full_search,
                 root_value,
                 root_value_valid,
+                future_target,
+                future_valid,
                 argmax_q,
                 argmax_r,
                 argmax_valid,
@@ -240,6 +246,8 @@ struct SampleOut {
     is_full_search: u8,
     root_value: f32,
     root_value_valid: u8,
+    future_target: Vec<u8>,
+    future_valid: u8,
 }
 
 /// Rebuild + align every sampled record, across at most `n_threads` OS threads, returning the
@@ -289,6 +297,15 @@ fn build_and_align_one(
         vmap.insert((rq, rr), prob);
     }
 
+    // The future stones rotate by the SAME element; a cell outside the rebuilt legal set labels nothing.
+    let future: FxHashMap<(i32, i32), i8> = rec
+        .future_stones
+        .iter()
+        .flatten()
+        .map(|&(q, r, p)| (rotate_axial(i32::from(q), i32::from(r), sym), p))
+        .collect();
+    let mut future_target: Vec<u8> = Vec::with_capacity(g.legal_node_gather.len());
+
     // Align to the built legal nodes (gather order == segment order); no off-window drop.
     let mut best_prob = f32::NEG_INFINITY;
     let mut best_coord: Option<(i32, i32)> = None;
@@ -303,6 +320,11 @@ fn build_and_align_one(
         aligned_mass += prob;
         policy_target.push(prob);
         explicit_mask.push(u8::from(stored.is_some()));
+        future_target.push(match future.get(&(cq, cr)) {
+            None => FUTURE_EMPTY,
+            Some(&p) if p == rec.current_player => FUTURE_MINE,
+            Some(_) => FUTURE_THEIRS,
+        });
         if prob > best_prob {
             best_prob = prob;
             best_coord = Some((cq, cr));
@@ -333,5 +355,7 @@ fn build_and_align_one(
         // A scalar of the position, so it is invariant under the D6 element and rides unrotated.
         root_value: rec.root_value,
         root_value_valid: u8::from(rec.root_value_valid),
+        future_target,
+        future_valid: u8::from(rec.future_stones.is_some()),
     })
 }

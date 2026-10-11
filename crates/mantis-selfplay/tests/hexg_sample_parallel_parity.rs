@@ -64,6 +64,7 @@ fn filled_buffer(n_records: usize) -> HexgBuffer {
                 (i % 7) as f32 / 8.0 - 0.375
             },
             root_value_valid: i % 4 != 0,
+            future_stones: None,
         };
         buf.push_record_impl(&rec, (10 + i) as i64).expect("push");
     }

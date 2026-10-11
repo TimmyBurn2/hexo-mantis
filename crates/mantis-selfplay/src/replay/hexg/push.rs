@@ -3,7 +3,7 @@
 
 use std::sync::atomic::Ordering;
 
-use super::{weight_bucket, GraphRecord, HexgBuffer, MAX_STONES};
+use super::{weight_bucket, GraphRecord, HexgBuffer, FUTURE_HORIZON, MAX_STONES};
 
 /// Reject a tail mass that is not a probability at push time. α is the mass the
 /// row does NOT store cell-by-cell, so a non-finite or out-of-range value is a target the
@@ -65,6 +65,47 @@ pub fn validate_root_value(root_value: f32, root_value_valid: bool) -> Result<()
     }
 }
 
+/// Reject a future field that cannot be its game's next placements: by count, player, cell, or against `game_length`.
+pub fn validate_future_stones(
+    future: &[(i16, i16, i8)],
+    stones: &[(i16, i16, i8)],
+    ply_index: u16,
+    game_length: u16,
+) -> Result<(), String> {
+    let refuse = |why: String| {
+        Err(format!(
+            "push_graph_position: the future-occupancy field at ply {ply_index} {why} (it is the \
+             next {FUTURE_HORIZON} placements of the row's own game, or fewer where that game ended)"
+        ))
+    };
+    if future.len() > FUTURE_HORIZON {
+        return refuse(format!("holds {} stones", future.len()));
+    }
+    let mut cells = fxhash::FxHashSet::default();
+    for &(q, r, p) in future {
+        if p != 1 && p != -1 {
+            return refuse(format!("has stone ({q}, {r}) with player {p}"));
+        }
+        if !cells.insert((q, r)) {
+            return refuse(format!("places ({q}, {r}) twice"));
+        }
+    }
+    if let Some(&(q, r, _)) = stones.iter().find(|&&(q, r, _)| cells.contains(&(q, r))) {
+        return refuse(format!("places ({q}, {r}), a cell the row already holds"));
+    }
+    let (end_turns, game_turns) = (
+        (usize::from(ply_index) + future.len()).div_ceil(2),
+        usize::from(game_length),
+    );
+    if end_turns > game_turns || (future.len() < FUTURE_HORIZON && end_turns != game_turns) {
+        return refuse(format!(
+            "ends at turn {end_turns} with {} stones but the game lasted {game_turns} turns",
+            future.len()
+        ));
+    }
+    Ok(())
+}
+
 /// Reject a stone player outside {+1, -1} at push time, naming coord + value.
 pub fn validate_stone_player(q: i16, r: i16, player: i8) -> Result<(), String> {
     if player == 1 || player == -1 {
@@ -122,6 +163,9 @@ impl HexgBuffer {
         for &(q, r, player) in &rec.stones {
             validate_stone_player(q, r, player)?;
         }
+        if let Some(future) = &rec.future_stones {
+            validate_future_stones(future, &rec.stones, rec.ply_index, rec.game_length)?;
+        }
 
         let slot = self.head;
 
@@ -168,6 +212,18 @@ impl HexgBuffer {
         self.game_ids[slot] = game_id;
         self.root_value[slot] = rec.root_value;
         self.root_value_valid[slot] = u8::from(rec.root_value_valid);
+        // ── future-occupancy field (fixed slot, zero-pad tail) ──
+        let future_base = slot * FUTURE_HORIZON;
+        self.future_qr[future_base * 2..(future_base + FUTURE_HORIZON) * 2].fill(0);
+        self.future_players[future_base..future_base + FUTURE_HORIZON].fill(0);
+        let future = rec.future_stones.as_deref().unwrap_or(&[]);
+        for (i, &(q, r, p)) in future.iter().enumerate() {
+            self.future_qr[(future_base + i) * 2] = q;
+            self.future_qr[(future_base + i) * 2 + 1] = r;
+            self.future_players[future_base + i] = p;
+        }
+        self.n_future[slot] = future.len() as u8;
+        self.future_valid[slot] = u8::from(rec.future_stones.is_some());
         self.weights[slot] = half::f16::ONE.to_bits();
 
         let new_bucket = weight_bucket(self.weights[slot]);
@@ -220,6 +276,22 @@ impl HexgBuffer {
             game_id: self.game_ids[slot],
             root_value: self.root_value[slot],
             root_value_valid: self.root_value_valid[slot] != 0,
+            future_stones: (self.future_valid[slot] != 0).then(|| self.future_stones_at(slot)),
         }
+    }
+
+    /// The future-occupancy stones stored at `slot`, in placement order (empty where the row carries no field).
+    #[must_use]
+    pub fn future_stones_at(&self, slot: usize) -> Vec<(i16, i16, i8)> {
+        let base = slot * FUTURE_HORIZON;
+        (0..usize::from(self.n_future[slot]))
+            .map(|i| {
+                (
+                    self.future_qr[(base + i) * 2],
+                    self.future_qr[(base + i) * 2 + 1],
+                    self.future_players[base + i],
+                )
+            })
+            .collect()
     }
 }
