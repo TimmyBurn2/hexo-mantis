@@ -64,7 +64,7 @@ from mantis.config.resolve.puct import resolve_puct_constants
 from mantis.config.resolve.run_length import resolve_max_train_steps
 from mantis.config.resolve.search import resolve_deploy_search_kind
 from mantis.config.resolve.tactics import resolve_deploy_tactics
-from mantis.config.schema import RunConfig
+from mantis.config.schema import RingPreloadConfig, RunConfig
 from mantis.config.schema.core import derived_visit_capacity
 from mantis.eval.errors import EvalBrokenReason
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
@@ -108,6 +108,7 @@ from mantis.train.resume_state import (
 from mantis.train.subsystems import build_run_safety
 from mantis.train.warmstart import resolve_bc_warm_start
 from mantis.util.determinism import seed_everything
+from mantis.util.hashing import sha256_file
 
 #: The 3 pipeline stages every run wires unconditionally; "eval_round" joins them iff an
 #: eval pipeline is actually built (the caller DECLARES what it handed `heartbeat=` to).
@@ -298,6 +299,33 @@ def _restore_resume_state(buffer: Any, checkpoint_path: str) -> Any:
     return state
 
 
+class RingPreloadError(RuntimeError):
+    """`train.ring_preload`'s ring is missing or unreadable, hashes differently than the config pins, or loads no rows."""
+
+
+def _preload_ring(buffer: Any, spec: RingPreloadConfig | None) -> int:
+    """Load a FRESH launch's declared ring into its empty buffer after re-deriving the file's sha256; returns the rows loaded (0 for `None`).
+
+    Raises:
+        RingPreloadError: the ring is missing or unreadable, hashes differently than `ring_sha256`, or loads no rows.
+        ValueError: the engine refuses the file (another slot geometry or encoding, or more rows than the capacity).
+    """
+    if spec is None:
+        return 0
+    try:
+        actual = sha256_file(spec.ring)
+    except OSError as exc:
+        raise RingPreloadError(f"train.ring_preload.ring {spec.ring} could not be read: {exc}") from exc
+    if actual != spec.ring_sha256:
+        raise RingPreloadError(
+            f"train.ring_preload.ring {spec.ring} hashes {actual}, not the pinned {spec.ring_sha256}")
+    loaded = int(buffer.load_from_path(spec.ring))
+    if loaded == 0:
+        raise RingPreloadError(f"train.ring_preload.ring {spec.ring} loaded no rows")
+    _LOG.info("ring_preloaded ring=%s sha256=%s rows=%d capacity=%d", spec.ring, actual, loaded, buffer.capacity)
+    return loaded
+
+
 def build_run_collaborators(
     *, config: RunConfig, out_dir: str | Path, checkpoint_path: str | None = None,
 ) -> RunCollaborators:
@@ -339,11 +367,17 @@ def build_run_collaborators(
     with _seam("_select_buffer"):
         buffer = _select_buffer(config, capacity)
     # THE RING IS A RESUME INPUT, loaded before `WorkerPool` can push into it; on a resume a
-    # failure PROPAGATES — it must not quietly become a fresh run.
+    # failure PROPAGATES — it must not quietly become a fresh run. A fresh launch loads its
+    # declared preload instead; a resume's own ring wins and the preload row is inert.
     resume_state = None
     if checkpoint_path is not None:
         with _seam("restore_resume_state"):
             resume_state = _restore_resume_state(buffer, checkpoint_path)
+        if config.train.ring_preload is not None:
+            _LOG.info("ring_preload_inert_on_resume ring=%s", config.train.ring_preload.ring)
+    else:
+        with _seam("preload_ring"):
+            _preload_ring(buffer, config.train.ring_preload)
     # The self-play recorder, built before the pool so every game from step 0 is written and an
     # un-openable store is a loud STARTUP failure.
     with _seam("GameRecorder"):

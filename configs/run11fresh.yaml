@@ -138,6 +138,7 @@ train:
   log_interval: 1000
   min_buf_size: 4096
   replay_capacity: 500000
+  ring_preload: null
   training_steps_per_game: 2.4
   training_steps_fill_ramp: true
   max_train_burst: 8

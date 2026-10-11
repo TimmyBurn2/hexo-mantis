@@ -121,6 +121,8 @@ train:
   # stood here ("close-out and the shutdown signal still save") was false on both halves.
   min_buf_size: 1
   replay_capacity: 100000
+  # A sha-pinned ring loaded into a fresh launch's empty buffer; null starts the ring empty.
+  ring_preload: null
   training_steps_per_game: 1.0
   # Scale the steps per game by the ring's fill (rows/capacity) while it fills; false is the flat ratio.
   training_steps_fill_ramp: false

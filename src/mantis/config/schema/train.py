@@ -149,6 +149,13 @@ class HeldoutGapConfig(StrictModel):
     interval: int = Field(ge=1)
 
 
+class RingPreloadConfig(StrictModel):
+    """A replay ring loaded into a FRESH launch's empty buffer before self-play starts: `ring` is the file, `ring_sha256` pins it; a resume restores its own ring and leaves this inert; `null` is the explicit OFF."""
+
+    ring: str = Field(min_length=1)
+    ring_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class LrCycleConfig(StrictModel):
     """A declared second cosine cycle: from trainer step `start_step` the LR is `lr` cosine-annealed to `eta_min` over `t_max` steps, then `eta_min`; config-owned, so a resume runs it whatever the checkpoint's scheduler state says."""
 
@@ -212,6 +219,8 @@ class TrainConfig(StrictModel):
     min_buf_size: int = Field(ge=1)
     # `replay_capacity` — the replay window, i.e. the distribution the learner trains on.
     replay_capacity: int = Field(ge=1)
+    # The fresh launch's ring preload, the `default=...` idiom: `null` is OFF (the ring starts empty).
+    ring_preload: RingPreloadConfig | None = Field(default=...)
     # `training_steps_per_game` — the sample-reuse ratio. `gt=0` because off the fill ramp `_steps_budget`
     # floors its result at 1, so `0` means "one step per round" while reading as an off switch.
     training_steps_per_game: float = Field(gt=0)

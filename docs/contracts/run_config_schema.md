@@ -1,8 +1,8 @@
 # Contract: run config schema
 
-- version: v57
+- version: v58
 - owner: mantis.config.schema
-- status: LIVE since scaffold (WP0). Fifty-six steps since (v1 -> v57). Each through v6 is
+- status: LIVE since scaffold (WP0). Fifty-seven steps since (v1 -> v58). Each through v6 is
   recorded as a named amendment in docs/design/repo_design.md §4; v7, v8 and v9 are NOT, and
   that is stated rather than implied — v7 landed without one, v8 (R242/ADJ-D12) inherited that
   gap rather than back-filling somebody else's amendment, and v9 records the same gap for
@@ -84,10 +84,11 @@ plays the deploy block too, deploy-matched (R378(d)); the v39 row's "without it"
 | v55 | ONE leaf RENAMED in `train`: `value_target_lambda` -> `value_target_search_weight` (same bounds, same consumer) — THE KEY WEIGHTS THE SEARCH (R383(e), restated by R384(a); RUN11-PRE L1c), because the ring's root-value field now stores the search's value: Σ π′·completedQ under a completed-Q search (π′ the improved policy the target exports, before any audit edit; Q completed in value units), W/N under PUCT, a proven root's ±1. `0` is z and the trainer is the v54 trainer bit for bit. The old path is RETIRED and FOLDED into the new leaf (`mantis.config.retired`), so a stamp carrying it loads with its weight; every config is RE-MINTED through its own header and changes only that line. The `trainer_step` echo is renamed with it (event manifest v11) | R384(a); RUN11-PRE |
 | v56 | ONE new REQUIRED leaf in `selfplay`: `gumbel_m_quick` (`int`, `ge=1`, at most `gumbel_m`) — THE QUICK ARM'S m (R384(d)'s arm 4, RUN11-PRE L1f). Under an armed playout cap the quick arm runs Sequential Halving over `gumbel_m_quick` root candidates and the full arm over `gumbel_m`; the ring's policy slots stay `gumbel_m`'s, so a wider quick m is refused at validation and again at the runner's boot. Inert under `search.kind: puct` and on an unarmed cap. The template mints `16` (= `gumbel_m`), so every config re-mints with that line and searches as at v55; a config minting `gumbel_m` below 16 re-mints `gumbel_m_quick` to its own m. CONSUMER: `SelfPlayHParams.from_config` -> `build_runner_config` -> the runner's `play_one_move` | R384(d); RUN11-PRE |
 | v57 | ONE new REQUIRED block in `train`: `lr_cycle` (`LrCycleConfig | None`, the `default=...` idiom; FOUR leaves `start_step` `ge=1`, `lr` `gt=0`, `eta_min` `ge=0` at most `lr`, `t_max` `ge=1`) — THE SECOND COSINE CYCLE (R386(a)). From trainer step `start_step` the LR is `lr` cosine-annealed to `eta_min` over `t_max` steps, then `eta_min`; before it, the floored cosine of `lr`/`scheduler_t_max`/`eta_min` unchanged. The block is CONFIG-owned, unlike those three: it is not a resume-owned path, it stays out of the scheduler's `state_dict`, and restoring a state at or past `start_step` re-points the optimizer at the cycle's LR, so a resume runs the declared cycle whatever the checkpoint saved. Refused on `lr_schedule: none` and at a `start_step` not below `max_train_steps`. The template mints `null`; every config is RE-MINTED through its own header and gains only that line, and trains as at v56. CONSUMER: `TrainHParams.from_config` -> `Trainer._build_scheduler` -> `FlooredCosineAnnealingLR(cycle=)`; its fire-rate is the `training_step` event's `lr`. Pinned by `tests/train/test_lr_schedule.py`: `test_the_launchers_resume_runs_the_launch_configs_cycle` (a floored checkpoint resumed through the launcher's own path steps on the launch config's cycle), `test_the_cycle_is_the_configs_and_never_the_checkpoints` and `test_every_distinct_schedule_rises_only_at_its_declared_cycle` (the census of configs/: one rise, at a declared cycle's start, also through a restore there) | R386(a); RUN11-CYCLE-2 |
+| v58 | ONE new REQUIRED block in `train`: `ring_preload` (`RingPreloadConfig | None`, the `default=...` idiom; TWO leaves `ring` (a path, `min_length=1`) and `ring_sha256` (64 lower-case hex)) — THE FRESH LAUNCH'S RING (R391(d)). A fresh launch re-derives the file's sha256, refuses a mismatch, a missing file or a ring that loads no rows (`RingPreloadError`), and loads it into the empty buffer through the engine's own `load_from_path` before `WorkerPool` exists; the engine still refuses another slot geometry or encoding, or more rows than `replay_capacity`. A resume restores its own ring and the row is inert (`ring_preload_inert_on_resume`). The fill ramp starts at rows/capacity. The template mints `null`; every config is RE-MINTED through its own header and gains only that line, and boots as at v57. CONSUMER: `mantis.run.build_run_collaborators` -> `_preload_ring` (logged `ring_preloaded`); gate 12's boot takes the same builder, so a preflight loads it. Pinned by `tests/test_run_ring_preload.py` | R391(d); RUN12-GO |
 
 ## Shape
 
-Thirteen top-level fields; **167 leaf key-paths** under the walker that descends nested blocks
+Thirteen top-level fields; **169 leaf key-paths** under the walker that descends nested blocks
 (including optional ones) and counts a `list[SubModel]` field as ONE leaf.
 
 | section | leaves | models |
@@ -101,7 +102,7 @@ Thirteen top-level fields; **167 leaf key-paths** under the walker that descends
 | `model` | 4 | `ModelConfig`, `GnnWidthsConfig`, `AuxSoftPolicyConfig` |
 | `deploy` | 11 | `DeployConfig`, `SearchConfig`, `TacticsConfig`, `TacticsAuditConfig` |
 | `eval` | 26 | `EvalConfig`, `GateConfig`, `SequentialGateConfig`, `PlyCapAdjudicationConfig`, `StrengthFloorConfig` |
-| `train` | 45 | `TrainConfig`, `DrawRateAbortConfig`, `PlyCapAbortConfig`, `HeldoutGapConfig`, `LrCycleConfig`, `MicrobatchCapsConfig` |
+| `train` | 47 | `TrainConfig`, `DrawRateAbortConfig`, `PlyCapAbortConfig`, `HeldoutGapConfig`, `LrCycleConfig`, `RingPreloadConfig`, `MicrobatchCapsConfig` |
 | `selfplay` | 36 | `SelfplayConfig`, `SearchConfig`, `TacticsConfig`, `TacticsAuditConfig`, `MctsConfig`, `PlayoutCapConfig` |
 | `inference` | 6 | `InferenceConfig`, `FusedGraphCapsConfig` |
 | `monitor` | 28 | `MonitorSchemaConfig`, `DrainCapsConfig`, `DiskGuardConfig` |

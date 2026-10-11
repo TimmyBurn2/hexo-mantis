@@ -31,6 +31,7 @@ VALID_TRAIN_PAYLOAD: dict = {
     "log_interval": 1000,
     "min_buf_size": 1,
     "replay_capacity": 100_000,
+    "ring_preload": None,
     "training_steps_per_game": 1.0,
     "training_steps_fill_ramp": False,
     "max_train_burst": 1,
@@ -93,6 +94,11 @@ BOUND_VIOLATIONS: list[tuple[str, object]] = [
     ("lr_cycle", {"start_step": 0, "lr": 5e-4, "eta_min": 1e-4, "t_max": 10}),
     ("lr_cycle", {"start_step": 10, "lr": 1e-4, "eta_min": 5e-4, "t_max": 10}),
     ("lr_cycle", {"start_step": 10, "lr": 5e-4, "eta_min": 1e-4, "t_max": 0}),
+    # a preload names a file and pins it whole: no empty path, no short or upper-case digest, no unpinned ring
+    ("ring_preload", {"ring": "", "ring_sha256": "0" * 64}),
+    ("ring_preload", {"ring": "r.bin", "ring_sha256": "0" * 63}),
+    ("ring_preload", {"ring": "r.bin", "ring_sha256": "A" * 64}),
+    ("ring_preload", {"ring": "r.bin"}),
 ]
 
 LITERAL_VIOLATIONS: list[tuple[str, object]] = [
