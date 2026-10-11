@@ -92,11 +92,13 @@ def test_zero_copy_passthrough_graph_arm() -> None:
         True,
         7,
     )
-    facade.push_graph_position(*record, game_id=-1, tail_mass=0.25, root_value=-0.5, root_value_valid=True)
+    facade.push_graph_position(*record, game_id=-1, tail_mass=0.25, root_value=-0.5, root_value_valid=True,
+                               future_stones=[(1, 1, -1)])
 
     assert len(rec.graph_calls) == 1
     args, kwargs = rec.graph_calls[0]
-    assert kwargs == {"game_id": -1, "tail_mass": 0.25, "root_value": -0.5, "root_value_valid": True}
+    assert kwargs == {"game_id": -1, "tail_mass": 0.25, "root_value": -0.5, "root_value_valid": True,
+                      "future_stones": [(1, 1, -1)]}
     assert len(args) == len(record)
     for i, original in enumerate(record):
         assert args[i] is original, f"graph record element {i} was not forwarded verbatim"

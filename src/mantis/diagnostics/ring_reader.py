@@ -72,6 +72,39 @@ class Ring:
         """Row `i`'s future-occupancy stones in placement order (empty where `future_valid` is 0)."""
         return self.future[self.future_off[i] : self.future_off[i] + self.n_future[i]]
 
+    def row_future_stones(self, i: int) -> list[tuple[int, int, int]] | None:
+        """Row `i`'s field as `push_graph_position` takes it: its stones, or `None` where the row carries none."""
+        if not self.future_valid[i]:
+            return None
+        return [(int(f["q"]), int(f["r"]), int(f["p"])) for f in self.row_future(i)]
+
+
+def mix64(x: np.ndarray) -> np.ndarray:
+    """splitmix64's finaliser, elementwise on uint64."""
+    z = x.astype(np.uint64) * np.uint64(0x9E3779B97F4A7C15)
+    z ^= z >> np.uint64(30)
+    z *= np.uint64(0xBF58476D1CE4E5B9)
+    z ^= z >> np.uint64(27)
+    z *= np.uint64(0x94D049BB133111EB)
+    z ^= z >> np.uint64(31)
+    return z
+
+
+def stone_hash(q: np.ndarray, r: np.ndarray, colour: np.ndarray) -> np.ndarray:
+    """A 64-bit hash per (q, r, colour) stone; a position's key sums them, so order does not matter."""
+    packed = ((np.asarray(q, np.int64) & 0xFFFF) | ((np.asarray(r, np.int64) & 0xFFFF) << 16)
+              | ((np.asarray(colour) > 0).astype(np.int64) + 1) << 32)
+    return mix64(packed.astype(np.uint64))
+
+
+def row_stone_sums(ring: Ring) -> np.ndarray:
+    """Each row's stone set as one order-free uint64: its stones' hashes summed (mod 2^64)."""
+    seg = np.repeat(np.arange(ring.header.size), ring.n_stones)
+    sums = np.zeros(ring.header.size, np.uint64)
+    with np.errstate(over="ignore"):
+        np.add.at(sums, seg, stone_hash(ring.stones["q"], ring.stones["r"], ring.stones["p"]))
+    return sums
+
 
 def _read_header(buf: memoryview) -> tuple[RingHeader, int]:
     """Parse the header; returns it with the byte offset of the first record."""

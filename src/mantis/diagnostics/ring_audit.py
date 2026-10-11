@@ -15,9 +15,15 @@ from typing import Any
 
 import numpy as np
 
-from mantis._engine import Board, MCTSTree
+from mantis._engine import Board, MCTSTree, future_horizon
 from mantis.diagnostics import tactics as T
-from mantis.diagnostics.ring_reader import Ring, explicit_entropy, load_ring
+from mantis.diagnostics.ring_reader import (
+    Ring,
+    explicit_entropy,
+    load_ring,
+    row_stone_sums,
+    stone_hash,
+)
 from mantis.util.constants import is_alpha_full
 from mantis.util.puct import PuctConstants
 
@@ -263,6 +269,56 @@ def outcome_rows(ring: Ring) -> list[Row]:
     return rows
 
 
+def _future_grid(ring: Ring, horizon: int) -> tuple[np.ndarray, np.ndarray]:
+    """Each row's future stones in placement order, `[rows, horizon]`: packed keys (-1 past its count) and their hashes."""
+    keys = np.full((ring.header.size, horizon), -1, np.int64)
+    hashes = np.zeros((ring.header.size, horizon), np.uint64)
+    rows = np.repeat(np.arange(ring.header.size), ring.n_future)
+    at = np.arange(ring.future.size) - np.repeat(ring.future_off, ring.n_future)
+    q, r, p = (ring.future[k].astype(np.int64) for k in ("q", "r", "p"))
+    keys[rows, at] = (q & 0xFFFF) | ((r & 0xFFFF) << 16) | ((p > 0).astype(np.int64) + 1) << 32
+    hashes[rows, at] = stone_hash(q, r, p)
+    return keys, hashes
+
+
+def future_disagreements(ring: Ring) -> tuple[int, np.ndarray]:
+    """Consecutive rows of a game whose future fields contradict each other or the stones between: (pairs read, `[k, 2]`)."""
+    horizon = future_horizon()
+    carry = ring.future_valid != 0
+    order = np.lexsort((ring.ply_index, ring.game_id))
+    a, b = order[:-1], order[1:]
+    pair = (ring.game_id[a] == ring.game_id[b]) & (ring.game_id[a] >= 0) & carry[a] & carry[b]
+    a, b = a[pair], b[pair]
+    if a.size == 0:
+        return 0, np.zeros((0, 2), np.int64)
+    d, la, lb = ring.ply_index[b] - ring.ply_index[a], ring.n_future[a], ring.n_future[b]
+    keys, hashes = _future_grid(ring, horizon)
+    prefix = np.zeros((ring.header.size, horizon + 1), np.uint64)
+    sums = row_stone_sums(ring)
+    with np.errstate(over="ignore"):
+        prefix[:, 1:] = np.cumsum(hashes, axis=1, dtype=np.uint64)
+        placed = sums[b] - sums[a]
+    # The stones placed between the two rows are the earlier field's first `d`, by count and by stone-set hash.
+    ok = (d >= 1) & (d <= la) & (ring.n_stones[b] - ring.n_stones[a] == d)
+    ok &= placed == prefix[a, np.minimum(d, horizon)]
+    # Past them the two fields agree, and the later one ends where the game does or runs its full horizon.
+    k = np.arange(horizon)[None, :]
+    shifted = keys[a[:, None], np.minimum(d[:, None] + k, horizon - 1)]
+    ok &= np.where(k < (la - d)[:, None], shifted == keys[b], True).all(axis=1)
+    ok &= np.where(la < horizon, lb == la - d, lb >= horizon - d)
+    return int(a.size), np.stack([a[~ok], b[~ok]], axis=1)
+
+
+def future_rows(ring: Ring) -> list[Row]:
+    """The HEXG v4 field's share of rows, and the pairs of a game's consecutive rows whose fields contradict (a band reads 0)."""
+    n = ring.header.size
+    producer = "future_valid; each field against its game's next row in the ring (stones placed, then the overlap)"
+    share = Row("future_field_share", float((ring.future_valid != 0).mean()) if n else None, n, "future_valid")
+    checked, bad = future_disagreements(ring)
+    note = f"row pairs {bad[:_NAMED_ROWS].tolist()}" if bad.size else ("" if checked else "no game holds two rows with it")
+    return [share, Row("future_disagree", float(len(bad)) if checked else None, checked, producer, note)]
+
+
 def audit(ring: Ring, child_q: ChildQ = child_q) -> list[Row]:
     """Every row the audit prints, each naming its producer; a band is checked against these keys."""
     blocks = forced_block_stats(ring)
@@ -285,6 +341,7 @@ def audit(ring: Ring, child_q: ChildQ = child_q) -> list[Row]:
                     f"rows {residue.rows[:_NAMED_ROWS]}; candidates unreached {residue.n_unreached}"))
     rows += entropy_rows(ring)
     rows += outcome_rows(ring)
+    rows += future_rows(ring)
     rows.append(Row("sample_age", None, None, "none",
                     "NOT MEASURED: the ring carries no step field (step written vs step read)"))
     return rows

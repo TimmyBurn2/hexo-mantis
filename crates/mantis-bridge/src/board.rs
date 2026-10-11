@@ -36,6 +36,13 @@ impl Default for PyBoard {
     }
 }
 
+impl PyBoard {
+    /// The core board behind the binding, for a crate-side reader.
+    pub(crate) fn core(&self) -> &RustBoard {
+        &self.inner
+    }
+}
+
 #[pymethods]
 impl PyBoard {
     #[new]

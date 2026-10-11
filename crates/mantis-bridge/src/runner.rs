@@ -35,7 +35,7 @@ fn drain_poisoned(err: DrainPoisoned) -> PyErr {
 }
 
 /// Per-row tuple from `collect_graph_data`: `HexgBuffer.push_graph_position`'s nine positional fields, its keyword
-/// `tail_mass`, the `(root_value, root_value_valid)` pair (pyo3 converts tuples of at most 12), the runner's game id.
+/// `tail_mass`, the `(root_value, root_value_valid, future_stones)` keywords (pyo3 converts tuples of at most 12), the game id.
 type GraphRecordRow = (
     Vec<(i16, i16, i8)>,
     Vec<(i16, i16, f32)>,
@@ -47,7 +47,7 @@ type GraphRecordRow = (
     bool,
     u16,
     f32,
-    (f32, bool),
+    (f32, bool, Option<Vec<(i16, i16, i8)>>),
     i64,
 );
 
@@ -302,7 +302,7 @@ impl PySelfPlayRunner {
                     // The alpha of a sparse Gumbel row is its explicit entries PLUS this scalar;
                     // a drain that dropped it pushed every such row as alpha = 0.
                     r.tail_mass,
-                    (r.root_value, r.root_value_valid),
+                    (r.root_value, r.root_value_valid, r.future_stones),
                     // Appended LAST so the leading nine stay exactly
                     // `HexgBuffer.push_graph_position`'s positional signature.
                     r.game_id,

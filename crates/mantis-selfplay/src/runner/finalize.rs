@@ -1,7 +1,7 @@
 //! Finalize phase — `finalize_game_graph`.
 //!
 //! A game with no winner trains no value: its rows carry 0 and `value_valid` false, at the cap
-//! (reason 2) and short of it (reason 3) alike. The loop holds the results-queue lock ONCE per
+//! (reason 2) and short of it (reason 3) alike; every row gets its game's next placements, the cap's game included. The loop holds the results-queue lock ONCE per
 //! game so its rows are CONTIGUOUS in the shared queue (observable only multi-worker). The terminal reason / outcome are read from
 //! `board.winner()` + `terminal_reason`, never re-derived from ply parity. Drop-oldest past
 //! `results_queue_cap` bumps `positions_dropped`.
@@ -79,6 +79,7 @@ pub(crate) fn finalize_game_graph(
         rec.value_valid = value_valid_u8 != 0;
         rec.game_length = game_length;
         rec.game_id = game_id;
+        rec.future_stones = Some(records::future_stones(board, &move_history, rec.ply_index));
         gq.push_back(rec);
     }
     games_completed.fetch_add(1, Ordering::Relaxed);

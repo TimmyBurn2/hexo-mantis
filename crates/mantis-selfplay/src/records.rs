@@ -320,7 +320,7 @@ pub fn record_position_graph(
         game_id: -1,             // placeholder → finalize_game_graph
         root_value: 0.0,         // placeholder → record_position_graph_dispatch
         root_value_valid: false, // placeholder → record_position_graph_dispatch
-        future_stones: None,
+        future_stones: None,     // placeholder → finalize_game_graph
     })
 }
 
@@ -355,7 +355,7 @@ pub fn record_unsearched_value_row(
         game_id: -1,             // placeholder → finalize_game_graph
         root_value: 0.0,         // placeholder → record_unsearched_dispatch
         root_value_valid: false, // placeholder → record_unsearched_dispatch
-        future_stones: None,
+        future_stones: None,     // placeholder → finalize_game_graph
     }
 }
 
@@ -374,6 +374,18 @@ pub fn finalize_graph_outcome(
         None => 0.0,
     };
     (outcome, u8::from(!matches!(terminal_reason, 2 | 3)))
+}
+
+/// A finished game's stones from `ply` on, at most `FUTURE_HORIZON`, each with its owner on the final board (stones never move).
+#[must_use]
+pub fn future_stones(board: &Board, move_history: &[(i32, i32)], ply: u16) -> Vec<(i16, i16, i8)> {
+    move_history
+        .iter()
+        .skip(usize::from(ply))
+        .take(crate::replay::hexg::FUTURE_HORIZON)
+        // `Cell` is `#[repr(i8)]`; an empty cell reads 0 and the ring's insert guard refuses it by name.
+        .map(|&(q, r)| (q as i16, r as i16, board.get(q, r) as i8))
+        .collect()
 }
 
 /// Legal-set counterpart of `sample_policy`: samples from `legal_moves` proportional to the ragged

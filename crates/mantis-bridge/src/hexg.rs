@@ -385,11 +385,40 @@ pub fn max_stones() -> usize {
     mantis_selfplay::replay::hexg::MAX_STONES
 }
 
+/// The placements a ring row's future-occupancy field reaches, read from the engine rather than transcribed.
+#[pyfunction]
+pub fn future_horizon() -> usize {
+    mantis_selfplay::replay::hexg::FUTURE_HORIZON
+}
+
+/// A recorded game's future field at each of `plies`, by the producer's derivation; `ValueError`: a record that cannot replay.
+#[pyfunction]
+pub fn game_future_stones(
+    encoding: &str,
+    moves: Vec<(i32, i32)>,
+    plies: Vec<u16>,
+) -> PyResult<Vec<Vec<(i16, i16, i8)>>> {
+    let mut board = crate::board::PyBoard::with_encoding_name(encoding)?;
+    for (i, &(q, r)) in moves.iter().enumerate() {
+        board.apply_move(q, r).map_err(|e| {
+            PyValueError::new_err(format!(
+                "move {i} ({q}, {r}) of the record does not replay: {e}"
+            ))
+        })?;
+    }
+    Ok(plies
+        .iter()
+        .map(|&ply| mantis_selfplay::records::future_stones(board.core(), &moves, ply))
+        .collect())
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyHexgBuffer>()?;
     m.add_class::<PyGraphTargets>()?;
     m.add_function(wrap_pyfunction!(derived_hexg_visit_capacity, m)?)?;
     m.add_function(wrap_pyfunction!(max_stones, m)?)?;
+    m.add_function(wrap_pyfunction!(future_horizon, m)?)?;
+    m.add_function(wrap_pyfunction!(game_future_stones, m)?)?;
     Ok(())
 }
 

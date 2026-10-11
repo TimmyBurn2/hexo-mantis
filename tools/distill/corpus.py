@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 
-from mantis.diagnostics.ring_reader import Ring, load_ring
+from mantis.diagnostics.ring_reader import Ring, load_ring, mix64, row_stone_sums, stone_hash
 
 from .planes import player_for_stone, stones_left_before
 
@@ -24,28 +24,10 @@ RING_FIELDS = ("current_player", "moves_remaining", "ply_index", "is_full_search
                "game_length", "tail_mass", "root_value", "root_value_valid")
 
 
-def _mix(x: np.ndarray) -> np.ndarray:
-    """splitmix64's finaliser, elementwise on uint64."""
-    z = x.astype(U64) * U64(0x9E3779B97F4A7C15)
-    z ^= z >> U64(30)
-    z *= U64(0xBF58476D1CE4E5B9)
-    z ^= z >> U64(27)
-    z *= U64(0x94D049BB133111EB)
-    z ^= z >> U64(31)
-    return z
-
-
-def stone_hash(q: np.ndarray, r: np.ndarray, colour: np.ndarray) -> np.ndarray:
-    """A 64-bit hash per (q, r, colour) stone; a position's key sums them, so order does not matter."""
-    packed = ((np.asarray(q, np.int64) & 0xFFFF) | ((np.asarray(r, np.int64) & 0xFFFF) << 16)
-              | ((np.asarray(colour) > 0).astype(np.int64) + 1) << 32)
-    return _mix(packed.astype(U64))
-
-
 def position_key(stone_sum: np.ndarray, ply: np.ndarray, turns: np.ndarray) -> np.ndarray:
     """The match key: the stone-set hash with the ply and the game's turn count folded in."""
     with np.errstate(over="ignore"):
-        return _mix(stone_sum + np.asarray(ply, U64) * U64(0x632BE59BD9B4E019) + np.asarray(turns, U64) * U64(0x8CB92BA72F3D8DD7))
+        return mix64(stone_sum + np.asarray(ply, U64) * U64(0x632BE59BD9B4E019) + np.asarray(turns, U64) * U64(0x8CB92BA72F3D8DD7))
 
 
 def turns_of(plies: np.ndarray | int) -> np.ndarray:
@@ -121,11 +103,7 @@ def game_position_keys(games: Games) -> tuple[np.ndarray, np.ndarray, np.ndarray
 
 def ring_row_keys(ring: Ring) -> np.ndarray:
     """Each ring row's key from its stone set, ply and game_length."""
-    seg = np.repeat(np.arange(ring.header.size), ring.n_stones)
-    sums = np.zeros(ring.header.size, U64)
-    with np.errstate(over="ignore"):
-        np.add.at(sums, seg, stone_hash(ring.stones["q"], ring.stones["r"], ring.stones["p"]))
-    return position_key(sums, ring.ply_index, ring.game_length)
+    return position_key(row_stone_sums(ring), ring.ply_index, ring.game_length)
 
 
 def six_signature(moves: np.ndarray) -> tuple[Any, ...]:
