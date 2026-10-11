@@ -4,11 +4,15 @@ This schema field IS the sole default authority; `TrainHParams` (a frozen datacl
 `mantis.train.trainer.core`) is built FROM a validated `TrainConfig`, never independently
 defaulted.
 """
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, model_validator
 
 from mantis.config.schema._base import StrictModel
+
+#: A pinned ring's two leaves, one definition for every block that names a ring for `mantis.train.pinned_ring`.
+RingPath = Annotated[str, Field(min_length=1)]
+RingSha256 = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 
 
 class DrawRateAbortConfig(StrictModel):
@@ -142,18 +146,18 @@ class PlyCapAbortConfig(StrictModel):
 class HeldoutGapConfig(StrictModel):
     """The in-run held-out witness (v37): every `interval` steps a forward-only loss over a FROZEN slice of `ring` (`batches` samples under `seed`, re-seeded per read), reported against the train loss since the last read; `ring_sha256` pins the file; `null` is the explicit OFF."""
 
-    ring: str = Field(min_length=1)
-    ring_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    ring: RingPath
+    ring_sha256: RingSha256
     batches: int = Field(ge=1)
     seed: int
     interval: int = Field(ge=1)
 
 
 class RingPreloadConfig(StrictModel):
-    """A replay ring loaded into a FRESH launch's empty buffer before self-play starts: `ring` is the file, `ring_sha256` pins it; a resume restores its own ring and leaves this inert; `null` is the explicit OFF."""
+    """A pinned ring loaded into a FRESH launch's empty buffer before self-play starts; a launch from a checkpoint never loads it; `null` is the explicit OFF."""
 
-    ring: str = Field(min_length=1)
-    ring_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    ring: RingPath
+    ring_sha256: RingSha256
 
 
 class LrCycleConfig(StrictModel):

@@ -98,6 +98,7 @@ from mantis.train.lifecycle.signals import (
 )
 from mantis.train.loop import run_training_loop
 from mantis.train.orchestrator import init_trainer
+from mantis.train.pinned_ring import load_pinned_ring
 from mantis.train.resume_state import (
     RingIdentityError,
     load_resume_state,
@@ -108,7 +109,6 @@ from mantis.train.resume_state import (
 from mantis.train.subsystems import build_run_safety
 from mantis.train.warmstart import resolve_bc_warm_start
 from mantis.util.determinism import seed_everything
-from mantis.util.hashing import sha256_file
 
 #: The 3 pipeline stages every run wires unconditionally; "eval_round" joins them iff an
 #: eval pipeline is actually built (the caller DECLARES what it handed `heartbeat=` to).
@@ -209,7 +209,7 @@ def _seam(name: str) -> Iterator[None]:
     """NAME a composition seam without catching anything.
 
     Annotates the in-flight exception with a PEP 678 note and re-raises it unchanged, so the
-    preflight's rc-32 sniff still reads the original final line. Seamed: the four builder
+    preflight's rc-32 sniff still reads the original final line. Seamed: the seven builder
     steps and the eleven composer steps. NOT seamed, deliberately: the two config validators
     and the `Path`/`mkdir` lines (their own named refusals), and `run_training_loop`/`close_out`
     (the DRIVE — a seam note there would mislabel a step failure as a boot wall).
@@ -299,31 +299,14 @@ def _restore_resume_state(buffer: Any, checkpoint_path: str) -> Any:
     return state
 
 
-class RingPreloadError(RuntimeError):
-    """`train.ring_preload`'s ring is missing or unreadable, hashes differently than the config pins, or loads no rows."""
-
-
 def _preload_ring(buffer: Any, spec: RingPreloadConfig | None) -> int:
-    """Load a FRESH launch's declared ring into its empty buffer after re-deriving the file's sha256; returns the rows loaded (0 for `None`).
-
-    Raises:
-        RingPreloadError: the ring is missing or unreadable, hashes differently than `ring_sha256`, or loads no rows.
-        ValueError: the engine refuses the file (another slot geometry or encoding, or more rows than the capacity).
-    """
+    """Load a FRESH launch's declared ring through the one pinned-ring loader, returning the rows (0 for `None`)."""
     if spec is None:
         return 0
-    try:
-        actual = sha256_file(spec.ring)
-    except OSError as exc:
-        raise RingPreloadError(f"train.ring_preload.ring {spec.ring} could not be read: {exc}") from exc
-    if actual != spec.ring_sha256:
-        raise RingPreloadError(
-            f"train.ring_preload.ring {spec.ring} hashes {actual}, not the pinned {spec.ring_sha256}")
-    loaded = int(buffer.load_from_path(spec.ring))
-    if loaded == 0:
-        raise RingPreloadError(f"train.ring_preload.ring {spec.ring} loaded no rows")
-    _LOG.info("ring_preloaded ring=%s sha256=%s rows=%d capacity=%d", spec.ring, actual, loaded, buffer.capacity)
-    return loaded
+    rows = load_pinned_ring(buffer, Path(spec.ring), spec.ring_sha256, key="train.ring_preload.ring")
+    _LOG.info("ring_preloaded ring=%s sha256=%s rows=%d capacity=%d", spec.ring, spec.ring_sha256, rows,
+              buffer.capacity)
+    return rows
 
 
 def build_run_collaborators(
@@ -339,6 +322,7 @@ def build_run_collaborators(
     declares — how a `--device cpu` preflight false-cleared a cuda-minted run's GPU wall.
     `checkpoint_path` is a LAUNCH fact, so it is a parameter and not a schema key: two runs
     from one minted config, one fresh and one resumed, are the same config.
+    Raises: FileNotFoundError, PinnedRingError, ValueError — a fresh launch's declared preload is refused.
     """
     # The ONE determinism boot site: seed before any RNG-consuming object exists.
     seed_everything(config.seed)
@@ -366,9 +350,8 @@ def build_run_collaborators(
     capacity = int(resolve_coordinator_knobs(config.train).capacity)
     with _seam("_select_buffer"):
         buffer = _select_buffer(config, capacity)
-    # THE RING IS A RESUME INPUT, loaded before `WorkerPool` can push into it; on a resume a
-    # failure PROPAGATES — it must not quietly become a fresh run. A fresh launch loads its
-    # declared preload instead; a resume's own ring wins and the preload row is inert.
+    # THE RING IS A RESUME INPUT, loaded before `WorkerPool` can push into it; a resume's failure PROPAGATES (never
+    # a quiet fresh run) and its own ring wins, while a fresh launch loads its declared preload instead.
     resume_state = None
     if checkpoint_path is not None:
         with _seam("restore_resume_state"):

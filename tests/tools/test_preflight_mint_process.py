@@ -110,6 +110,7 @@ _TWIN_DEVICE_LEAVES: frozenset[str] = frozenset({"run_id", "train.device", "eval
 _UNTRACKED_ARTIFACT_BLOCKS: dict[str, tuple[str, ...]] = {
     "identity.warm_start": ("checkpoint", "net_hash", "reinit"),
     "train.heldout_gap": ("ring", "ring_sha256", "batches", "seed", "interval"),
+    "train.ring_preload": ("ring", "ring_sha256"),
 }
 
 

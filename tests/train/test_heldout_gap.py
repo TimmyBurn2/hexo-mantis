@@ -18,7 +18,8 @@ from mantis.config.schema import RunConfig
 from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
 from mantis.train.coordinator import StepCoordinator
-from mantis.train.heldout import HeldoutSlice, HeldoutSliceError
+from mantis.train.heldout import HeldoutSlice
+from mantis.train.pinned_ring import PinnedRingError
 from mantis.util.hashing import sha256_file
 from mantis.train.lifecycle.signals import ShutdownState
 from _drivable import DrivablePoolStub, DrivableTrainerStub
@@ -67,7 +68,7 @@ def test_the_slice_is_pinned_by_sha_and_refuses_a_foreign_geometry(tmp_path: Pat
     spec = _spec(path)
     opened = HeldoutSlice.open(spec, encoding=_ENC, visit_capacity=128, capacity=64)
     assert opened.rows == 32 and opened.ring_path == path
-    with pytest.raises(HeldoutSliceError, match="hashes sha256"):
+    with pytest.raises(PinnedRingError, match="hashes sha256"):
         HeldoutSlice.open(dataclasses.replace(spec, ring_sha256="b" * 64), encoding=_ENC, visit_capacity=128, capacity=64)
     with pytest.raises(ValueError, match="slot-geometry mismatch"):
         HeldoutSlice.open(spec, encoding=_ENC, visit_capacity=64, capacity=64)

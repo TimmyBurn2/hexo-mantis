@@ -8,11 +8,7 @@ from typing import Any
 from mantis._engine import HexgBuffer
 from mantis.config.resolve.heldout_gap import HeldoutGapSpec
 from mantis.train.coordinator.dispatch import run_declared_eval_step
-from mantis.util.hashing import sha256_file
-
-
-class HeldoutSliceError(RuntimeError):
-    """The declared ring is not the file the config names, or holds no row."""
+from mantis.train.pinned_ring import load_pinned_ring
 
 
 class HeldoutSlice:
@@ -28,20 +24,10 @@ class HeldoutSlice:
     @classmethod
     def open(cls, spec: HeldoutGapSpec, *, encoding: str, visit_capacity: int, capacity: int,
              root: Path | None = None) -> HeldoutSlice:
-        """Load the declared ring at the RUN's geometry; Raises: FileNotFoundError — no file at `spec.ring`; HeldoutSliceError — the sha is not the declared one or the ring holds no row; ValueError — the engine refuses the encoding or geometry."""
+        """Load the declared ring at the RUN's geometry; Raises: FileNotFoundError — no file at `spec.ring`; PinnedRingError — the sha is not the declared one or the ring holds no row; ValueError — the engine refuses the encoding or geometry."""
         path = Path(spec.ring) if root is None else root / spec.ring
-        if not path.exists():
-            raise FileNotFoundError(f"train.heldout_gap.ring not found: {path}")
-        actual = sha256_file(path)
-        if actual != spec.ring_sha256:
-            raise HeldoutSliceError(
-                f"train.heldout_gap.ring {path} hashes sha256 {actual}, but the config declares "
-                f"{spec.ring_sha256}: the slice is NOT the one this run was pre-registered against"
-            )
         buffer = HexgBuffer(int(capacity), encoding, int(visit_capacity))
-        rows = int(buffer.load_from_path(str(path)))
-        if rows < 1:
-            raise HeldoutSliceError(f"train.heldout_gap.ring {path} loaded no row")
+        rows = load_pinned_ring(buffer, path, spec.ring_sha256, key="train.heldout_gap.ring")
         return cls(spec, buffer, rows=rows, ring_path=path)
 
     def read(self, trainer: Any, step_spec: Any, *, batch_size: int, caps_provider: Callable[[], Any],
@@ -59,4 +45,4 @@ class HeldoutSlice:
         return {"policy_loss": policy / self.spec.batches, "value_loss": value / self.spec.batches}
 
 
-__all__ = ["HeldoutSlice", "HeldoutSliceError"]
+__all__ = ["HeldoutSlice"]

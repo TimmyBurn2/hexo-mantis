@@ -194,12 +194,12 @@ CONSUMER_REGISTRY = {
     # Every selfplay/mcts/playout_cap/inference leaf's live consumer is
     # SelfPlayHParams.from_config / InferenceHParams.from_config, reading the nested sections.
     "train.heldout_gap.ring": "resolve_heldout_gap -> HeldoutSlice.open in mantis.run (the frozen slice's ring file; R366(c), v37; null = the explicit OFF)",
-    "train.heldout_gap.ring_sha256": "resolve_heldout_gap -> HeldoutSlice.open: sha256_file(ring) must equal it, else HeldoutSliceError (R3: the slice is pinned)",
+    "train.heldout_gap.ring_sha256": "resolve_heldout_gap -> HeldoutSlice.open: load_pinned_ring: sha256_file(ring) must equal it, else PinnedRingError (R3: the slice is pinned)",
     "train.heldout_gap.batches": "resolve_heldout_gap -> HeldoutSlice.read: production samples per read through run_declared_eval_step",
     "train.heldout_gap.seed": "resolve_heldout_gap -> HeldoutSlice.read: seed_sampler before every read, so the rows are the same rows (the freeze)",
     "train.heldout_gap.interval": "resolve_heldout_gap -> StepCoordinator._run_heldout_gap: the read cadence in training steps; bounded below max_train_steps by RunConfig",
-    "train.ring_preload.ring": "build_run_collaborators -> _preload_ring on a fresh launch: buffer.load_from_path(ring) before WorkerPool (R391(d), v58; null = the explicit OFF; inert on a resume)",
-    "train.ring_preload.ring_sha256": "build_run_collaborators -> _preload_ring: sha256_file(ring) must equal it, else RingPreloadError before the load",
+    "train.ring_preload.ring": "build_run_collaborators -> _preload_ring on a fresh launch: buffer.load_from_path(ring) before WorkerPool (R391(d), v58; null = the explicit OFF; never on a launch from a checkpoint)",
+    "train.ring_preload.ring_sha256": "build_run_collaborators -> _preload_ring -> load_pinned_ring: sha256_file(ring) must equal it, else PinnedRingError before the load",
     "selfplay.n_workers": "SelfPlayHParams.from_config -> WorkerPool worker count",
     "selfplay.leaf_batch_size": "SelfPlayHParams.from_config -> runner leaf_batch_size",
     "selfplay.max_game_moves": "SelfPlayHParams.from_config -> runner max_moves_per_game",
