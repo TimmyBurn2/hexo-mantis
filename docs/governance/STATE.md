@@ -7,6 +7,20 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
+**R391 (2026-10-11): THE PLATEAU IS THE RECIPE UNTIL RUN12 SAYS OTHERWISE. DISTILL-2 is accepted: S is decisive for
+b − a, and an arm trained on a ruler's outputs is never read on that ruler. Six's raw policy is not the better target at
+this density; CARD-SIX-SEARCH-TEACHER stays held; c and d's S cells are not played; width reads "unused at lr 1e-4 in
+15k steps". run11 is CLOSED at its stop save, its best save 264k, the lineage continuing through the widened stamp. The
+causes of record are the 500k-row window (self-chasing), a thin representation signal (no occupancy-class target) and
+capacity unused at a floor LR; not the schedule, the search budget or Six's policy. run12 starts from
+`distill2wide_00000000` with a 2.5M-row window and one cosine 1e-3 → 1e-4 over 300k, its line the 48k–84k rung-16 mean
+above run11's plateau (−0.59 logit) by +0.17 with S held; a miss at 84k halts it and DENSE-1 takes box A. AUX-1 and
+DENSE-1's design run in parallel.** (RULINGS R391; the R390 paragraph below stands where R391 does not move it.) run11
+stopped on 2026-10-11 at 16:55:58 CEST (one SIGTERM, the operator's word): stop save `run11a2_00593030_e49dace7.ckpt`,
+mirrored to `mantis-mirror/run11/run/checkpoints/` and sha256-matched. Its rung 16 was flat from 228k to 564k (29 reads,
+slope −0.005 ± 0.023 logit per 100k steps); S read 0.635 / 0.628 / 0.686 / 0.628 at 240k / 264k / 288k / 312k. DEPLOY-2's
+cells keep reading its saves; their cap's run-rate check, keyed to run11, is off since the stop (CARD-RUN12).
+
 **R390 (2026-10-09): WARM ONLY. DISTILL-1's halt stands as a success of its control row (the probe's start was
 unstated; from-scratch arms at feasible budgets read budget, not capacity — the architect's error). The teacher check and
 the labelled set stand; the teacher's value is not adopted, its policy is the only teacher signal. DISTILL-2 reads R389(c)
@@ -467,9 +481,11 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
 
 ## The run
 
-- **run11 is PAUSED (R386(a)):** arm 2 (`run11a2`, config unchanged) resumed from its final save, 32 201, on box A at
-  2026-10-05 12:35 CEST and ran to 174 008: one SIGTERM right after the 174 000 save's bundle published (2026-10-06
-  20:00 CEST) wrote a resumable stop save there. It resumes with R386(a)'s second cosine cycle. RUN11-FRESH
+- **run11 is CLOSED (R391(b)):** arm 2 (`run11a2`) resumed from its final save, 32 201, on box A at 2026-10-05 12:35
+  CEST; paused at 174 008 (R386(a)); resumed 2026-10-07 12:33 CEST on its second cosine cycle (RUN11-CYCLE-2); paused
+  for DISTILL-1 at 329 726 (2026-10-08 23:55–00:36 CEST); and stopped for good at 593 030 on 2026-10-11 16:55:58 CEST
+  (stop save `run11a2_00593030_e49dace7.ckpt`, mirrored). Its best save is 264k; run12 starts from that save's widened
+  stamp (R391(d)). This line said PAUSED at 174 008 until R391's record. RUN11-FRESH
   (`run11fresh`, random init) ran on box B from 2026-10-05 12:43 CEST until its cap band halted it on 2026-10-06 at
   07:22 CEST, at 69 000 (final save 69 954); R386(b) resumes it for 48 h. This line said LIVE for both until R386's
   record. The four RUN11-PRE arms ran 2026-10-04 10:50 → 2026-10-05
@@ -484,7 +500,7 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
   any run starts (R375(e) lifts R368(j)'s hold). Read a config's values from the file itself and diff two
   with `tools/config_diff.py`; STATE does not restate minted rows.
 - **Two boxes are rented, the operator's** (R385(f)): box A (RTX 4080 SUPER, Ryzen 9 9950X; RUN11-PRE's arms 3 and 4
-  ran there) is run11's; while run11 pauses it hosts TRAIN-SPEED-1 (R386(a)); box B (RTX 5070 Ti, Ryzen 9 5900XT; arms 1 and 2, unmatched to box A,
+  ran there) held run11 until its close (R391(b)) and is run12's (R391(d)); box B (RTX 5070 Ti, Ryzen 9 5900XT; arms 1 and 2, unmatched to box A,
   so they ran matched self-play work) is RUN11-FRESH's. The
   desktop plays cells and reads. This line said one box was rented until R385's record. An earlier instance was
   destroyed on 2026-09-21 (R365, annotated by R367(d)); the operator's mirror (`tools/mirror_pull.py`) holds run7's and run8's
@@ -574,3 +590,6 @@ box A; the same edit repaired the run, box and latest-ruling lines.
 The DEPLOY-1 line was added 2026-10-06 at its packet's first commit, on branch `deploy-1` over `dev` `c00bf352`.
 The DEPLOY-2 lines were added 2026-10-08 at its packet's first commit (`23fc20df`, over `77e23abc`) and updated at its
 exit on branch `deploy-2` at `7bec5f34`, the dash line repaired in place.
+The current phase was rewritten 2026-10-11 at R391 on branch `r391-record` over `origin/dev` `d0a7346c`, with run11's
+stop read from box A and its stop save's sha256 from the box and the mirror; the same edit repaired the run line (it
+said PAUSED at 174 008) and box A's clause.

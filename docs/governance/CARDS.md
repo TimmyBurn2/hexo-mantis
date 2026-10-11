@@ -36,6 +36,18 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R391 (THE PLATEAU IS THE RECIPE UNTIL RUN12 SAYS OTHERWISE; 2026-10-11) — DISTILL-2 accepted, run11 closed, run12 widened, AUX-1 and DENSE-1's design
+
+R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (HELD), CARD-NET2NET-WIDEN, CARD-RUN11
+(CLOSED), CARD-RUN12 and CARD-RUN12-REPLAY (AMENDED), CARD-DENSE-1 (its design ORDERED).
+
+- **CARD-RULER-NOT-TEACHER — STANDING by R391(a): an arm trained on a ruler's outputs is never read on that ruler.**
+  DISTILL-2's b − a is read on S for this reason: rung 16's opponent, Six gen455, was b's and d's policy teacher.
+- **CARD-AUX-1 — ORDERED by R391(e), in parallel with run12: a future-occupancy head behind the seam, ring v4
+  default-filled.** It supplies the occupancy-class target whose absence R391(c) names as a cause of record.
+- **CARD-RUN13 — CONDITIONAL by R391(e): run12's best + AUX-1 if run12 climbs; DENSE-1 builds if it does not.** A miss
+  of run12's going-forward line at 84k halts run12 and DENSE-1 takes box A (R391(d)).
+
 ## Opened by the DEPLOY-2 packet (2026-10-08) — the floor read, evals on box A, the dash's units, run12's inputs
 
 - **CARD-DEPLOY-2 — ORDERED by the architect's DEPLOY-2 packet under R388: branch `deploy-2` (`.wt/deploy-2`), on dev
@@ -61,8 +73,9 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 - **CARD-DISTILL-1 CLOSED-HALTED** (R390(a); was ACCEPTED as HALTED): the halt stands as a success of its control row; the
   teacher check and the labelled set stand; the branch pushed (dfe33050); the teacher's value is not adopted (r 0.46 v 0.49).
-- **CARD-DISTILL-2 — EXITED MIXED 2026-10-11, the architect rules** (branch `distill-2`, gates.exit green; records
-  `mantis-records/distill-2/EXIT.md`): b − a +0.210 [+0.041, +0.380] on rung 16, −0.286 [−0.455, −0.116] on S; c − a
+- **CARD-DISTILL-2 — ACCEPTED and CLOSED by R391(a) (2026-10-11): S is decisive for b − a; Six's raw policy is not the
+  better target at this density; the deferred c/d S cells are not played.** Was: EXITED MIXED 2026-10-11, the architect
+  rules (branch `distill-2`, pushed d0a7346c; records `mantis-records/distill-2/EXIT.md`): b − a +0.210 [+0.041, +0.380] on rung 16, −0.286 [−0.455, −0.116] on S; c − a
   +0.046, d − b +0.071 on rung 16, their S cells deferred (four job lines kept). Rung 16's opponent is Six gen455, the
   teacher of b and d: a prior that predicts its moves models it inside our search, a gain against that ruler alone; S
   carries no such term. Was: **OWNED by the DISTILL-2 packet (architect, 2026-10-09; branch `distill-2`): four warm arms (a 4×128
@@ -77,12 +90,15 @@ Both were found by running the gate set rather than by reading it, and both are 
   4×128 by +0.17 under the same labels → capacity, run12 starts widened; neither → CARD-DENSE-1. Deepening waits. No box
   is paused for it (R390(d)). A fresh session; the labelled set is `mantis-mirror/distill-1-2026-10-08/`.
 - **CARD-NET2NET-WIDEN — LANDED by DISTILL-2 (2026-10-11): `mantis.model.widen`, the pin passed on float64 CPU paths
-  (max 1.3e-5); the copies barely separated in 15k steps (capacity unused at that budget). Was: ORDERED by R390(b) for
+  (max 1.3e-5); the copies barely separated in 15k steps (capacity unused at that budget).** R391(a): width reads
+  "unused at lr 1e-4 in 15k steps" and is read again only inside a run; R391(d): the widened stamp
+  `distill2wide_00000000` is run12's start. **Was: ORDERED by R390(b) for
   DISTILL-2: a function-preserving widening behind the seam**, pinned by
   step-0 outputs within 1e-4 of the parent on the golden batch. It is CARD-NET-EXPAND's width half, built as DISTILL-2's
   W1 mechanism (a 4×128 checkpoint doubled to 4×256, the stamp's lineage naming the parent); depth waits.
 - **CARD-SIX-SEARCH-TEACHER — OPENED by the DISTILL-2 packet, HELD on its first branch: Six's search (not its raw policy)
-  as the policy teacher.** It opens only if DISTILL-2's b − a reaches +0.17 on both rulers. It did not (mixed): HELD.
+  as the policy teacher.** It opens only if DISTILL-2's b − a reaches +0.17 on both rulers. It did not (mixed): HELD,
+  and R391(a) keeps it HELD.
 - **CARD-LAB-CORPUS ACCEPTED** (R390(c)): 491 392 deduplicated games, eval and benchmark games excluded, lineage-tagged by
   run, are the lab corpus of record.
 
@@ -104,8 +120,12 @@ Both were found by running the gate set rather than by reading it, and both are 
   `teacher` extra. Local records `mantis-records/distill-1/EXIT.md`.
 - **CARD-DENSE-1** (R389(c), conditional). Design a hex-conv model kind behind the seam, only if DISTILL-1 finds no net
   above the line. HELD: DISTILL-1 halted before any arm was read, so the condition is undecided. Its condition MOVED by
-  R390(b) to DISTILL-2: neither of its two lines met → DENSE-1 is designed.
-- **CARD-RUN12-REPLAY** (R389(d); the DISTILL-1 packet calls it CARD-REPLAY-WINDOW-2M). run12 carries replay_capacity
+  R390(b) to DISTILL-2: neither of its two lines met → DENSE-1 is designed. **Its design is ORDERED by R391(e), in
+  parallel with run12: research and a design doc, no code; F-01 and F-03 re-validated under LAW-02 against Six's and
+  Bubble's crops; R390(c)'s corpus as its supervised bootstrap, Six's labels excluded. It builds only if run12 does not
+  climb, and takes box A if run12 misses at 84k (R391(d)).**
+- **CARD-RUN12-REPLAY** (R389(d); the DISTILL-1 packet calls it CARD-REPLAY-WINDOW-2M). **AMENDED by R391(d): 2.5M
+  rows, memory verified at preflight; R391(c) names the 500k-row window a cause of record.** run12 carries replay_capacity
   2M as a prereg row with its own two-save gap and T check; the supervised harness is the lab for architecture and
   auxiliary targets before a self-play run carries them. OPENED for run12's prereg.
 - **CARD-FLOOR-READ-2 CLOSED** (R389(b)). Withdrawn: the slope, not the floor, is the read; run12's schedule is a plain
@@ -150,7 +170,16 @@ Both were found by running the gate set rather than by reading it, and both are 
   OWNED by DEPLOY-2 A4.
   BUILT 2026-10-08 (DEPLOY-2 A4): the switch is gone, both stone levels pinned, and a whole-tree golden recorded on the
   base tree holds Gumbel bit-identical (a planted interior break moves it).
-- **CARD-RUN12 — ORDERED by R388(d): run12 = run11's best save by ladder-and-S agreement, on dev + fresh-2.** The arena
+- **CARD-RUN12 — AMENDED by R391(d) (2026-10-11): run12 starts from `distill2wide_00000000`, the function-preserving
+  4×256 of run11's best save (`run11a2_00264000`).** `replay_capacity` 2.5M rows (memory verified at preflight); one
+  cosine 1e-3 → 1e-4 over 300k; the ring preloaded from run11's final ring; 48 workers; 2.4 steps per game; value mask
+  1/8; aux 2.0; the arena gate book; the f64 fix; trainer caps re-fitted for the wide net. Rulers rung 16 and S.
+  Going-forward: the mean of the 48k/60k/72k/84k rung-16 cells above run11's plateau (−0.59 logit) by +0.17, with S not
+  below run11's level by the line; a miss at 84k HALTS run12 and DENSE-1 takes box A. Exams, bands and the gap rule as
+  run11's; its cells under DEPLOY-2's cap. That cap's run-rate check is keyed to run11 (a fixed 200 407 positions/h
+  baseline in box A's `/workspace/ops/deploy2_cap.py`) and is switched off by the marker `/workspace/ops/RUN11_ENDED`
+  since run11's stop: it guards run12 only once re-based on run12's own rate. **Was: ORDERED by R388(d): run12 = run11's
+  best save by ladder-and-S agreement, on dev + fresh-2.** The arena
   book in the in-run gate; bookless evaluations from the origin stone alone (1 ply); 48 workers. It starts after
   CARD-FLOOR-READ-2's read, without waiting for ENCODE-1. Its going-forward line: four rung-16 cells above its parent's
   reading by +0.17, read every 12k; the two-read halts stay.
@@ -345,7 +374,12 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by R385 (THE RUN STARTS; THE RULE IS RETIRED; 2026-10-05) — run11 continues arm 2, RUN11-FRESH beside it
 
-- **CARD-RUN11 (was CARD-RUN11-CONTINUE; the RUN11-GO packet's name) — PAUSED 2026-10-06 20:00 CEST at 174 008 by
+- **CARD-RUN11 (was CARD-RUN11-CONTINUE; the RUN11-GO packet's name) — CLOSED by R391(b) at its stop save, on the
+  operator's no-go: one SIGTERM on 2026-10-11 at 16:55:58 CEST wrote `run11a2_00593030_e49dace7.ckpt` (step 593 030;
+  sha256 43ed2d7a…, its ring, resume and bundle mirrored to `mantis-mirror/run11/run/checkpoints/`, sha256-matched).
+  Its best save is 264k (`run11a2_00264000_b50644b9`); the lineage continues through `distill2wide_00000000`.** Rung 16
+  was flat from 228k to 564k (29 reads, slope −0.005 ± 0.023 logit per 100k steps). DEPLOY-2's cells keep reading its
+  saves under the cap with its run-rate check switched off (CARD-RUN12). Was: PAUSED 2026-10-06 20:00 CEST at 174 008 by
   R386(a) (a resumable stop save right after the 174 000 bundle; CARD-RUN11-CYCLE-2 resumes it). RAN from 2026-10-05
   12:35 CEST (box A,
   `8d169abb`), ORDERED by R385(a):

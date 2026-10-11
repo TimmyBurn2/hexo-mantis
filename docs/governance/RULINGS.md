@@ -1,4 +1,4 @@
-# RULINGS — R23 to R390
+# RULINGS — R23 to R391
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R391.
+- Numbering continues from R346. The next ruling is R392.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -36,6 +36,54 @@ still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register 
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
 
+### R391 — THE PLATEAU IS THE RECIPE UNTIL RUN12 SAYS OTHERWISE
+Decision: verbatim below.
+
+> R391 — THE PLATEAU IS THE RECIPE UNTIL RUN12 SAYS OTHERWISE.
+> (a) DISTILL-2 is accepted. S is decisive for b − a; standing rule: an arm trained on a
+> ruler's outputs is never read on that ruler. Six's raw policy is not the better target at
+> this density; CARD-SIX-SEARCH-TEACHER stays HELD; the deferred c/d S cells are not played.
+> Width reads "unused at lr 1e-4 in 15k steps", to be read again only inside a run.
+> (b) run11 is CLOSED at its stop save (the operator's no-go); its best save is 264k; the
+> lineage continues through the function-preserving widened stamp.
+> (c) Causes of record, by evidence: the 500k-row window (≈ 3 h of play; scatter 0.12 v noise
+> 0.08: self-chasing); a thin representation signal (no occupancy-class target); capacity
+> unused at a floor LR. Not the schedule, not the search budget, not Six's policy.
+> (d) run12: from distill2wide_00000000 (4×256 of run11a2_00264000), replay_capacity 2.5M
+> rows (memory verified at preflight), cosine 1e-3 → 1e-4 over 300k, the ring preloaded from
+> run11's final ring, 48 workers, 2.4 steps/game, mask 1/8, aux 2.0, the arena gate book, the
+> f64 fix; trainer caps re-fitted for the wide net. Rulers rung 16 and S. Going-forward: the
+> mean of the 48k/60k/72k/84k rung-16 cells above run11's plateau (−0.59 logit) by +0.17 with
+> S not below run11's level by the line; a miss at 84k HALTS run12 and DENSE-1 takes box A.
+> Exams, bands and the gap rule as run11; the cells under DEPLOY-2's cap.
+> (e) In parallel: AUX-1 (a future-occupancy head, ring v4 default-filled, behind the seam)
+> and DENSE-1's design (research + design doc, no code; F-01/F-03 re-validated under LAW-02
+> against Six's and Bubble's crops; the corpus of R390(c) as its supervised bootstrap, Six's
+> labels excluded). run13 = run12's best + AUX-1 if run12 climbs; DENSE-1 builds if not.
+
+Status: standing. ANNOTATES R390(b) and (d): DISTILL-2 is accepted and spent (Mixed; S decisive for b − a), and run11
+no longer trains on; it is CLOSED at its stop save. ANNOTATES R389(d): run11 closes before run12's mint, and run12's
+replay row is 2.5M rows with memory verified at preflight, not 2M. AMENDS R388(d): run12 starts from the function-
+preserving widening of run11's best save (`distill2wide_00000000`, the 4×256 of `run11a2_00264000`), and its going-
+forward line is (d)'s. Accepts DISTILL-2 by (a): S is decisive for b − a, and it is a standing rule that an arm trained
+on a ruler's outputs is never read on that ruler. Six's raw policy is not the better target at this density;
+CARD-SIX-SEARCH-TEACHER stays HELD; the deferred c/d S cells are not played. Width reads "unused at lr 1e-4 in 15k
+steps" and is read again only inside a run. Closes run11 by (b) at its stop save, on the operator's no-go; its best
+save is 264k, and the lineage continues through the widened stamp. Records the causes of record by (c): the 500k-row
+replay window (about 3 h of play; save-to-save scatter 0.12 logit against cell noise 0.08, read as self-chasing), a thin
+representation signal (no occupancy-class target), and capacity unused at a floor LR; not the schedule, not the search
+budget, not Six's policy. Defines run12 by (d): from `distill2wide_00000000`, `replay_capacity` 2.5M rows (memory
+verified at preflight), one cosine 1e-3 → 1e-4 over 300k, the ring preloaded from run11's final ring, 48 workers,
+2.4 steps per game, value mask 1/8, aux 2.0, the arena gate book, the f64 fix, and trainer caps re-fitted for the wide
+net. Its rulers are rung 16 and S. Its going-forward line is the mean of the 48k, 60k, 72k and 84k rung-16 cells
+above run11's plateau (−0.59 logit) by +0.17, with S not below run11's level by the line; a miss at 84k HALTS run12
+and DENSE-1 takes box A. Exams, bands and the gap rule are run11's; its cells run under DEPLOY-2's cap. Orders two
+lines in parallel by (e): AUX-1, a future-occupancy head with ring v4 default-filled, behind the seam; and DENSE-1's
+design, research and a design doc with no code, with F-01 and F-03 re-validated under LAW-02 against Six's and Bubble's
+crops and R390(c)'s corpus as its supervised bootstrap, Six's labels excluded. run13 is run12's best plus AUX-1 if
+run12 climbs; DENSE-1 builds if it does not. The work it forwards is run11's stop save and its mirror, run12's mint and
+run, AUX-1 and DENSE-1's design.
+
 ### R390 — WARM ONLY
 Decision: verbatim below.
 
@@ -57,7 +105,9 @@ Decision: verbatim below.
 > excluded, lineage-tagged by run, is the lab corpus of record.
 > (d) run11 trains on. No box is paused for DISTILL-2.
 
-Status: standing. ANNOTATES R389(c): DISTILL-1's halt stands as a success of its control row by (a); the probe's start
+Status: standing; (b) SPENT by R391(a): DISTILL-2 is accepted (Mixed; S decisive for b − a, since rung 16's opponent
+taught b), and its "neither → DENSE-1" is moved by R391(e), which orders DENSE-1's design in parallel; (d) SUPERSEDED
+by R391(b): run11 is CLOSED at its stop save. ANNOTATES R389(c): DISTILL-1's halt stands as a success of its control row by (a); the probe's start
 was unstated and from-scratch arms at feasible budgets read budget, not capacity, the architect's error. The teacher check
 (1 000/1 000) and the labelled set stand, and distill-1's branch pushes on the operator's word; the teacher's value is not
 adopted (r 0.46 v 0.49), its policy being the only teacher signal. Orders DISTILL-2 by (b): R389(c) read warm only — run11's
@@ -96,7 +146,8 @@ Decision: verbatim below.
 
 Status: standing; (c)'s probe ANNOTATED by R390(a)/(b): its start was unstated and from-scratch arms at feasible budgets
 read budget, not capacity (the architect's error); DISTILL-2 reads (c) warm only (run11's best and its Net2Net widening,
-run11's own targets v Six gen455's raw policy). ANNOTATES R388(b): "the floor binds" is withdrawn, because it compared a later level with the mean of a
+run11's own targets v Six gen455's raw policy). (d) ANNOTATED by R391(b)/(d): run11 closes at its stop save before
+run12's mint, and run12's replay row is 2.5M rows with memory verified at preflight. ANNOTATES R388(b): "the floor binds" is withdrawn, because it compared a later level with the mean of a
 rising series; rung 16 climbs about +0.11 logit per 48k steps from 108k to 264k with no change of slope through the
 cycle, so the LR schedule is not the lever, run12's is a plain cosine and no run is spent on it; the error is the
 architect's. Accepts DEPLOY-2 and accepts ENCODE-1 as NOT PASS by (a): gnn_axis_r8_pruned stays a landed capability, not
@@ -140,7 +191,10 @@ Decision: verbatim below.
 > The separate-trainer idea is closed: the drag is device time (GIL 11.7 %).
 
 Status: standing; (b)'s "the floor binds" WITHDRAWN by R389(b) (it compared a later level with the mean of a rising
-series; rung 16 climbs at a constant slope, so run12's schedule is a plain cosine). ANNOTATES R387(a): the ruler of record is one rung (Six gen455 at 16 nodes per turn v ours 128 per
+series; rung 16 climbs at a constant slope, so run12's schedule is a plain cosine); (d) AMENDED by R391(d): run12
+starts from `distill2wide_00000000` (the function-preserving 4×256 of run11's best save, 264k), and its going-forward
+line is the mean of the 48k/60k/72k/84k rung-16 cells above run11's plateau (−0.59 logit) by +0.17 with S not below
+run11's level by the line, a miss at 84k halting it. ANNOTATES R387(a): the ruler of record is one rung (Six gen455 at 16 nodes per turn v ours 128 per
 stone on the arena book), stepping to 128 then 256 on two consecutive saves above 0.7 and never down, with S on the GPU
 the second ruler and the validity read accepted (the 132k/156k pair unresolved on both); R387's N50 and equal-work
 parity read are withdrawn, and the S units of record move to the GPU (580/580 identical) by (a). Keeps RUN11-CYCLE-2's
