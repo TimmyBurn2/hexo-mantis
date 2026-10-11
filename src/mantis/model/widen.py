@@ -27,8 +27,8 @@ _RULES: tuple[tuple[re.Pattern[str], tuple[str, ...]], ...] = tuple((re.compile(
     (r"representation\.(input_proj|edge_proj|convs\.\d+\.(lin|nn\.0|nn\.2))\.bias", (_COPY,)),
     (r"representation\.(norms\.\d+|final_norm)\.(weight|bias)", (_COPY,)),
     (r"representation\.convs\.\d+\.eps", (_KEEP,)),
-    (r"(policy_head|aux_policy_head)\.mlp\.0\.weight|value_head\.fc1\.weight", (_KEEP, "split")),
-    (r"(policy_head|aux_policy_head)\.mlp\.(0\.bias|2\.weight|2\.bias)|value_head\.(fc1\.bias|fc2_bins\.(weight|bias))",
+    (r"(policy_head|aux_policy_head|future_head)\.mlp\.0\.weight|value_head\.fc1\.weight", (_KEEP, "split")),
+    (r"(policy_head|aux_policy_head|future_head)\.mlp\.(0\.bias|2\.weight|2\.bias)|value_head\.(fc1\.bias|fc2_bins\.(weight|bias))",
      (_KEEP,)),
 ))
 

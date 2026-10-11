@@ -16,6 +16,7 @@ model:
     hidden: 128
     num_layers: 4
   aux_soft_policy: null
+  aux_future_occupancy: null
 deploy:
   search:
     kind: puct

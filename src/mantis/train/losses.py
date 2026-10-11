@@ -13,6 +13,7 @@ import torch.nn as nn
 # Canonical stub-exported location — `torch.amp` itself does not re-export for type checkers.
 from torch.amp.grad_scaler import GradScaler
 
+from mantis.model.gnn_v2_future import FUTURE_CLASSES
 from mantis.selfplay.graph_collate import segment_ids, segment_softmax, segment_sum
 from mantis.util.constants import is_alpha_full
 
@@ -202,6 +203,31 @@ def soft_policy_target(
         soft_explicit = sharpened * (explicit_mass / segment_sum(sharpened, legal_offsets).clamp_min(1e-30))[seg]
         prior32 = prior_probs.detach().to(torch.float32).reshape(-1)
         return soft_explicit + sparse_tail(prior32, explicit_mask, tail_mass, legal_offsets)
+
+
+def future_occupancy_ce(logits: torch.Tensor, target: torch.Tensor, valid: torch.Tensor, legal_offsets: torch.Tensor,
+                        denominator: float) -> torch.Tensor:
+    """Each field-bearing row's mean CE over its legal cells, summed over this part and divided by the WHOLE step's row count."""
+    per_node = nn.functional.cross_entropy(logits.float(), target.reshape(-1).long(), reduction="none")
+    counts = (legal_offsets[1:] - legal_offsets[:-1]).to(per_node.dtype).clamp_min(1.0)
+    return (segment_sum(per_node, legal_offsets) / counts * valid.reshape(-1).to(per_node.dtype)).sum() / denominator
+
+
+def future_marginal(labels: Any, valid: Any, legal_offsets: Any) -> tuple[int, np.ndarray]:
+    """The rows carrying the field (with a legal cell) and their label marginal, each row's cells weighing 1/their count."""
+    n = np.diff(np.asarray(legal_offsets, np.int64))
+    keep = (np.asarray(valid) != 0) & (n > 0)
+    rows = int(keep.sum())
+    if rows == 0:
+        return 0, np.zeros(FUTURE_CLASSES)
+    weights = np.where(keep, 1.0 / np.maximum(n, 1), 0.0)[np.repeat(np.arange(n.size), n)]
+    return rows, np.bincount(np.asarray(labels).reshape(-1), weights=weights, minlength=FUTURE_CLASSES) / rows
+
+
+def future_base_ce(marginal: np.ndarray) -> float:
+    """The CE of predicting `marginal` at every cell it was measured over — its entropy, the head's base rate."""
+    m = marginal[marginal > 0]
+    return float(-(m * np.log(m)).sum())
 
 
 def backward_accumulate(loss: torch.Tensor, scaler: GradScaler, fp16: bool) -> None:

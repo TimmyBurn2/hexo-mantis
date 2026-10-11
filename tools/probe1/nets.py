@@ -45,7 +45,7 @@ def load_net(path: Path) -> Net:
     """The checkpoint-stamp loader, the stamp's arch rebuilt, eval mode; raises `RuntimeError` when the stamp resolves no arch."""
     from mantis.encoding import lookup
 
-    ck = load_checkpoint(path, declared_encoding=None)  # adopts the stamp: `spec` below is the stamp's
+    ck = load_checkpoint(path, declared_encoding=None, declared_future_head=None)  # adopts the stamp: `spec` below is the stamp's
     if ck.metadata.arch is None:
         raise RuntimeError(f"{path.name}: the stamp resolves no arch, so the net cannot be rebuilt")
     model = build_net(ck.metadata.arch)

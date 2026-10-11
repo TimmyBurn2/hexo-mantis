@@ -123,7 +123,7 @@ def _full_config(*, lr: float = 1e-3) -> dict:
         # process and valued only by the re-calibration.
         "allocator_posture": None,
         "identity": {"encoding": ENCODING, "representation": "graph"},
-        "model": {"gnn": {"hidden": 16, "num_layers": 1}, "aux_soft_policy": None},
+        "model": {"gnn": {"hidden": 16, "num_layers": 1}, "aux_soft_policy": None, "aux_future_occupancy": None},
         "eval": _eval_block(),
         "train": _train_block(lr=lr),
         "deploy": {"search": {"kind": "puct", "tactics": None}},

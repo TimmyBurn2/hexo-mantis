@@ -247,11 +247,15 @@ class GnnNetV2SoftPolicy(GnnNetV2):
         node_offsets: Tensor | None = None,
         *,
         trunk: Callable[..., Tensor] | None = None,
-    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor | None]:
         """`forward_batch`'s three outputs plus the aux head's `(num_legal_total,)` logits, one trunk pass."""
         legal_emb, pooled = self._readout(x, edge_index, edge_attr, legal_index, stone_mask,
                                           node_offsets, trunk=trunk)
+        return self._heads(legal_emb, pooled)
+
+    def _heads(self, legal_emb: Tensor, pooled: Tensor) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor | None]:
+        """Every head over one readout: policy, value, bins, aux policy and (none here) future occupancy."""
         policy_logits = self.policy_head.mlp(legal_emb).squeeze(-1)
         aux_logits = self.aux_policy_head.mlp(legal_emb).squeeze(-1)
         value, bin_logits = self.value_head(pooled)
-        return policy_logits, value, bin_logits, aux_logits
+        return policy_logits, value, bin_logits, aux_logits, None

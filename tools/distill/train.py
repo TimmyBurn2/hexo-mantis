@@ -84,7 +84,7 @@ class _JsonlSink:
 
 def deploy_net(path: Path, encoding: str | None) -> tuple[nn.Module, ModelArch, str]:
     """A stamped checkpoint's deploy net (the EMA shadow when stamped, else the learner), its declared arch and which state it is; Raises: CheckpointStampError — the stamp resolves no arch; DeclaredEncodingMismatchError — it names another encoding than `encoding`."""
-    ck = load_checkpoint(path, declared_encoding=encoding)
+    ck = load_checkpoint(path, declared_encoding=encoding, declared_future_head=None)
     if ck.metadata.arch is None:
         raise CheckpointStampError(f"{path.name}: the stamp resolves no arch")
     state, source = deploy_state(ck)

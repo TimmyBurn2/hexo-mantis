@@ -31,18 +31,27 @@ class HeldoutSlice:
         return cls(spec, buffer, rows=rows, ring_path=path)
 
     def read(self, trainer: Any, step_spec: Any, *, batch_size: int, caps_provider: Callable[[], Any],
-             sample_threads_provider: Callable[[], int]) -> dict[str, float]:
-        """The mean forward-only `(policy_loss, value_loss)` over the frozen slice's `batches`, the sampler re-seeded first."""
+             sample_threads_provider: Callable[[], int]) -> dict[str, Any]:
+        """The mean forward-only losses over the frozen slice's `batches`, the sampler re-seeded first; a future head's CE and base rate over the batches carrying the field."""
         self.buffer.seed_sampler(self.spec.seed)
-        policy = value = 0.0
+        policy = value = future = base = 0.0
+        future_batches = 0
         for _ in range(self.spec.batches):
             out = run_declared_eval_step(
                 trainer, self.buffer, step_spec, batch_size=batch_size, caps_provider=caps_provider,
                 sample_threads_provider=sample_threads_provider)
             policy += float(out["policy_loss"])
             value += float(out["value_loss"])
+            if out.get("aux_future_rows"):
+                future += float(out["aux_future_ce"])
+                base += float(out["aux_future_base_ce"])
+                future_batches += 1
         self.reads += 1
-        return {"policy_loss": policy / self.spec.batches, "value_loss": value / self.spec.batches}
+        read: dict[str, Any] = {"policy_loss": policy / self.spec.batches, "value_loss": value / self.spec.batches}
+        if trainer.future_head:
+            read["aux_future_ce"] = future / future_batches if future_batches else None
+            read["aux_future_base_ce"] = base / future_batches if future_batches else None
+        return read
 
 
 __all__ = ["HeldoutSlice"]

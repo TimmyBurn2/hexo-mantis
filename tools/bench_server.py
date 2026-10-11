@@ -23,7 +23,7 @@ from mantis.encoding import lookup
 from mantis.model import build_net
 from mantis.model.identity import net_param_hash
 from mantis.selfplay.inference_server import InferenceServer
-from mantis.train.checkpoints import load_checkpoint
+from mantis.train.checkpoints import future_head_declared, load_checkpoint
 from mantis.util.git import head_sha, is_dirty
 
 Position = tuple[list[tuple[int, int, int]], int, int]
@@ -241,7 +241,8 @@ def _load_net(config: dict[str, Any], checkpoint: Path | None) -> tuple[torch.nn
         from mantis.model import arch_from_spec_and_config
         net = build_net(arch_from_spec_and_config(lookup(config["identity"]["encoding"]), config))
         return net, "random-init (no --checkpoint)"
-    ck = load_checkpoint(checkpoint, declared_encoding=config["identity"]["encoding"])
+    ck = load_checkpoint(checkpoint, declared_encoding=config["identity"]["encoding"],
+                         declared_future_head=future_head_declared(config))
     if ck.metadata.arch is None:
         raise ValueError(f"{checkpoint}: the stamp resolves no arch, so the net cannot be rebuilt")
     net = build_net(ck.metadata.arch)

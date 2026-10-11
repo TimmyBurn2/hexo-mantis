@@ -16,7 +16,7 @@ from _determinism import deterministic_algorithms  # re-export: H.deterministic_
 from mantis._engine import HexgBuffer
 from mantis.config.resolve.microbatch import MicrobatchCapsSpec
 from mantis.encoding import lookup
-from mantis.model import GnnArch, GnnArchV2SoftPolicy, build_net, gnn_widths_block
+from mantis.model import GnnArch, GnnArchV2SoftPolicy, GnnArchV2SoftPolicyFuture, build_net, gnn_widths_block
 from mantis.train.coordinator.dispatch import run_declared_train_step
 from mantis.train.trainer.core import Trainer, TrainHParams
 
@@ -34,6 +34,16 @@ def uniform_graph_buffer(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
         policy = [(2, 0, 0.6), (1, 1, 0.4)]
         outcome = 1.0 if i % 2 == 0 else -1.0
         hb.push_graph_position(stones, policy, 1, 30, 2 + i, True, outcome, True, 10 + i)
+    return hb
+
+
+def future_graph_buffer(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
+    """`uniform_graph_buffer`'s rows at ply 3 of 20-turn games, every other one carrying a full future field."""
+    hb = HexgBuffer(capacity, GRAPH_ENCODING, 128)
+    for i in range(n_records):
+        future = [(q, 2 + (q + i) % 2, 1 if k % 4 < 2 else -1) for k, q in enumerate(range(-10, 10))] if i % 2 else None
+        hb.push_graph_position([(0, 0, 1), (1, 0, -1), (0, 1, 1)], [(2, 0, 0.6), (1, 1, 0.4)], 1, 2, 3, True,
+                               1.0 if i % 2 == 0 else -1.0, True, 20, game_id=i, future_stones=future)
     return hb
 
 
@@ -140,7 +150,8 @@ def graph_hparams(**over: Any) -> TrainHParams:
     base: dict[str, Any] = dict(
         lr=1e-3, weight_decay=1e-4, grad_clip=1.0, lr_schedule="cosine",
         scheduler_t_max=1_000_000, eta_min=5e-4, lr_cycle=None,
-        checkpoint_interval=0, aux_soft_policy=None, value_target_search_weight=0.0, value_mask=None,
+        checkpoint_interval=0, aux_soft_policy=None, aux_future_occupancy=None, value_target_search_weight=0.0,
+        value_mask=None,
     )
     base.update(over)
     return TrainHParams(**base)
@@ -178,6 +189,24 @@ def tiny_soft_policy_arch() -> GnnArchV2SoftPolicy:
     a = tiny_graph_arch()
     return GnnArchV2SoftPolicy(in_dim=a.in_dim, edge_dim=a.edge_dim, hidden=a.hidden, num_layers=a.num_layers,
                                policy_hidden=a.policy_hidden, value_hidden=a.value_hidden)
+
+
+def future_graph_trainer(tmp_path: Path, *, sink: Any = None, seed: int = SEED, w: float = 0.5,
+                         **hp_over: Any) -> Trainer:
+    """A tiny `GnnNetV2SoftPolicyFuture` trainer with both aux heads ARMED, the future head at weight `w`."""
+    torch.manual_seed(seed)
+    a = tiny_graph_arch()
+    arch = GnnArchV2SoftPolicyFuture(in_dim=a.in_dim, edge_dim=a.edge_dim, hidden=a.hidden, num_layers=a.num_layers,
+                                     policy_hidden=a.policy_hidden, value_hidden=a.value_hidden)
+    config = graph_config()
+    config["identity"]["arch_kind"] = "GnnArchV2SoftPolicyFuture"
+    config["model"]["aux_soft_policy"] = {"target_temperature": 4.0, "weight": 4.0}
+    config["model"]["aux_future_occupancy"] = {"w": w}
+    hp_over.setdefault("checkpoint_interval", 0)
+    hp_over.setdefault("aux_soft_policy", (4.0, 4.0))
+    hp_over.setdefault("aux_future_occupancy", w)
+    return Trainer(build_net(arch), config, arch=arch, checkpoint_dir=Path(tmp_path) / "ckpt_future",
+                   device=torch.device("cpu"), train_hparams=graph_hparams(**hp_over), sink=sink)
 
 
 def soft_policy_graph_trainer(tmp_path: Path, *, sink: Any = None, seed: int = SEED,

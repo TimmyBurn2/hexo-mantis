@@ -18,8 +18,15 @@ class AuxSoftPolicyConfig(StrictModel):
     weight: float = Field(gt=0.0)
 
 
+class AuxFutureOccupancyConfig(StrictModel):
+    """The future-occupancy head's row (v59): `w` (`gt=0`) scaling its CE over the legal cells into the step's loss."""
+
+    w: float = Field(gt=0.0)
+
+
 class ModelConfig(StrictModel):
-    """The net's declared shape: `gnn` the graph trunk's widths (arch-scoped), `aux_soft_policy` the second policy head's rows — REQUIRED, `null` the explicit OFF, armed iff `identity.arch_kind` carries the head."""
+    """The net's declared shape: `gnn` the trunk's widths (arch-scoped); each aux head's rows REQUIRED, `null` the explicit OFF, armed iff `identity.arch_kind` carries the head."""
 
     gnn: GnnWidthsConfig | None = None
     aux_soft_policy: AuxSoftPolicyConfig | None = Field(default=...)
+    aux_future_occupancy: AuxFutureOccupancyConfig | None = Field(default=...)

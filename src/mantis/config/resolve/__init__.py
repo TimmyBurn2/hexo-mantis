@@ -16,6 +16,10 @@ from mantis.config.resolve.allocator_posture import (
     resolve_allocator_posture,
 )
 from mantis.config.resolve.amp import resolve_amp_dtype
+from mantis.config.resolve.aux_future_occupancy import (
+    MissingAuxFutureOccupancyError,
+    resolve_aux_future_occupancy,
+)
 from mantis.config.resolve.aux_soft_policy import (
     AuxSoftPolicySpec,
     MissingAuxSoftPolicyError,
@@ -126,6 +130,7 @@ __all__ = [
     "ResolvedBootstrap",
     "StrengthFloorSpec",
     "AuxSoftPolicySpec",
+    "MissingAuxFutureOccupancyError",
     "MissingAuxSoftPolicyError",
     "GnnWidthsSpec",
     "HeldoutGapSpec",
@@ -141,6 +146,7 @@ __all__ = [
     "resolve_allocator_posture",
     "resolve_actor_sync_cadence",
     "resolve_amp_dtype",
+    "resolve_aux_future_occupancy",
     "resolve_aux_soft_policy",
     "resolve_bootstrap",
     "resolve_drain_caps",

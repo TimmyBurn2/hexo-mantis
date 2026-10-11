@@ -76,7 +76,7 @@ def test_a_healthy_full_checkpoint_still_resumes(tmp_path: Path) -> None:
     path = _write_full(tmp_path)
     trainer = resume_trainer(Trainer, path, device=torch.device("cpu"), declared_encoding=None)
     assert trainer.loaded_from_full_checkpoint
-    assert trainer.step == load_checkpoint(path, declared_encoding=None).metadata.step
+    assert trainer.step == load_checkpoint(path, declared_encoding=None, declared_future_head=None).metadata.step
 
 
 def test_a_bare_anchor_subset_still_loads_leniently(tmp_path: Path) -> None:
@@ -104,7 +104,7 @@ def test_a_bare_anchor_subset_still_loads_leniently(tmp_path: Path) -> None:
 def test_a_resume_that_moves_an_identity_key_halts(tmp_path: Path, key: str, value: Any) -> None:
     """Each identity leaf, separately: one parametrised row cannot pass by covering another."""
     path = _write_full(tmp_path)
-    baked = load_checkpoint(path, declared_encoding=None).config
+    baked = load_checkpoint(path, declared_encoding=None, declared_future_head=None).config
     identity = dict(baked["identity"])
     assert identity.get(key) != value, "the fixture no longer moves the key it names"
     identity[key] = value
@@ -120,7 +120,7 @@ def test_a_resume_that_moves_an_identity_key_halts(tmp_path: Path, key: str, val
 def test_a_resume_that_leaves_identity_alone_proceeds(tmp_path: Path) -> None:
     """Mutation half: an identity check that fires on every resume blocks every resume."""
     path = _write_full(tmp_path)
-    baked = load_checkpoint(path, declared_encoding=None).config
+    baked = load_checkpoint(path, declared_encoding=None, declared_future_head=None).config
     trainer = resume_trainer(
         Trainer, path, device=torch.device("cpu"),
         config_overrides={"identity": dict(baked["identity"])},
@@ -132,7 +132,7 @@ def test_a_resume_that_leaves_identity_alone_proceeds(tmp_path: Path) -> None:
 def test_the_halt_names_both_sides(tmp_path: Path) -> None:
     """An operator reading the halt must not have to go and diff two files to act on it."""
     path = _write_full(tmp_path)
-    identity = dict(load_checkpoint(path, declared_encoding=None).config["identity"])
+    identity = dict(load_checkpoint(path, declared_encoding=None, declared_future_head=None).config["identity"])
     identity["representation"] = "grid"
     with pytest.raises(ResumeIdentityMismatchError) as excinfo:
         resume_trainer(
@@ -160,7 +160,7 @@ def test_a_resume_that_moves_a_target_semantics_key_halts(
     """Each leaf separately, so one parametrised row cannot pass by covering another."""
     leaf = path[-1]
     path_ck = _write_full(tmp_path)
-    baked = load_checkpoint(path_ck, declared_encoding=None).config
+    baked = load_checkpoint(path_ck, declared_encoding=None, declared_future_head=None).config
     block = copy.deepcopy(baked[section])
     node = block
     for key in path[:-1]:
@@ -180,7 +180,7 @@ def test_a_resume_that_moves_a_target_semantics_key_halts(
 def test_a_resume_that_leaves_the_target_semantics_alone_proceeds(tmp_path: Path) -> None:
     """Mutation half: a guard that fires on every resume blocks every resume."""
     path = _write_full(tmp_path)
-    baked = load_checkpoint(path, declared_encoding=None).config
+    baked = load_checkpoint(path, declared_encoding=None, declared_future_head=None).config
     trainer = resume_trainer(
         Trainer, path, device=torch.device("cpu"),
         config_overrides={"train": dict(baked["train"])},
@@ -192,7 +192,7 @@ def test_a_resume_that_leaves_the_target_semantics_alone_proceeds(tmp_path: Path
 def test_the_target_semantics_halt_names_both_sides(tmp_path: Path) -> None:
     """An operator reading the halt must not have to diff two files to act on it."""
     path = _write_full(tmp_path)
-    train_block = dict(load_checkpoint(path, declared_encoding=None).config["train"])
+    train_block = dict(load_checkpoint(path, declared_encoding=None, declared_future_head=None).config["train"])
     train_block["policy_target"] = "completed_improved_policy"
     with pytest.raises(ResumeTargetSemanticsError) as excinfo:
         resume_trainer(
@@ -209,7 +209,7 @@ def test_the_target_semantics_halt_names_both_sides(tmp_path: Path) -> None:
 def test_the_deploy_kind_is_deliberately_not_a_target_semantics_key(tmp_path: Path) -> None:
     """The deploy head plays games nobody trains on, so a resume may re-take it."""
     path = _write_full(tmp_path)
-    deploy = copy.deepcopy(load_checkpoint(path, declared_encoding=None).config["deploy"])
+    deploy = copy.deepcopy(load_checkpoint(path, declared_encoding=None, declared_future_head=None).config["deploy"])
     deploy["search"]["kind"] = "gumbel" if deploy["search"]["kind"] == "puct" else "puct"
     trainer = resume_trainer(
         Trainer, path, device=torch.device("cpu"),
@@ -225,7 +225,7 @@ def test_the_search_regime_knobs_are_deliberately_not_target_semantics_keys(
     """The considered OMISSION: `gumbel_m` changes a target's QUALITY, not its meaning,
     which puts it with the other unguarded search knobs a run legitimately varies."""
     path = _write_full(tmp_path)
-    selfplay = dict(load_checkpoint(path, declared_encoding=None).config["selfplay"])
+    selfplay = dict(load_checkpoint(path, declared_encoding=None, declared_future_head=None).config["selfplay"])
     selfplay["gumbel_m"] = selfplay["gumbel_m"] + 8
     trainer = resume_trainer(
         Trainer, path, device=torch.device("cpu"),

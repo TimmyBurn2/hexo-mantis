@@ -77,7 +77,21 @@ class GnnArchV2SoftPolicy:
     representation: Literal["graph"] = "graph"
 
 
-ModelArch = GnnArch | GnnArchV2 | GnnArchV2SoftPolicy
+@dataclass(frozen=True)
+class GnnArchV2SoftPolicyFuture:
+    """The soft-policy kind plus a training-only FUTURE-OCCUPANCY head (`model.aux_future_occupancy`); a sibling, for `build_net`'s reason."""
+
+    in_dim: int
+    edge_dim: int
+    hidden: int = 128
+    num_layers: int = 4
+    policy_hidden: int = 128
+    value_hidden: int = 32
+    n_value_bins: int = 65
+    representation: Literal["graph"] = "graph"
+
+
+ModelArch = GnnArch | GnnArchV2 | GnnArchV2SoftPolicy | GnnArchV2SoftPolicyFuture
 
 
 class UnknownArchKind(ValueError):
@@ -96,12 +110,13 @@ ARCH_KINDS: dict[str, type] = {
     "GnnArch": GnnArch,
     "GnnArchV2": GnnArchV2,
     "GnnArchV2SoftPolicy": GnnArchV2SoftPolicy,
+    "GnnArchV2SoftPolicyFuture": GnnArchV2SoftPolicyFuture,
 }
 
 #: Which kinds a representation admits — the pairing rule, stated for the arch side. `graph`
 #: admits several kinds since GnnNetV2 landed, which is exactly why a selector has to exist.
 ARCH_KINDS_BY_REPRESENTATION: dict[str, tuple[str, ...]] = {
-    "graph": ("GnnArch", "GnnArchV2", "GnnArchV2SoftPolicy"),
+    "graph": ("GnnArch", "GnnArchV2", "GnnArchV2SoftPolicy", "GnnArchV2SoftPolicyFuture"),
 }
 
 #: THE INCUMBENT KIND PER REPRESENTATION — a statement about HISTORY, not a default, which is

@@ -68,6 +68,7 @@ model:
   aux_soft_policy:
     target_temperature: 4.0
     weight: 2.0
+  aux_future_occupancy: null
 deploy:
   search:
     kind: puct

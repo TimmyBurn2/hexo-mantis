@@ -3,6 +3,7 @@ the full pre-split public surface, so every `from mantis.config.schema import X`
 from mantis.config.schema.core import (
     _EVAL_TIMEOUT_CEILING_SEC,
     ARCH_SCOPED_KEYS,
+    FUTURE_OCCUPANCY_ARCH_KINDS,
     OPERATIONAL_DEFAULT_KEYS,
     SCHEMA_VERSION,
     SOFT_POLICY_ARCH_KINDS,
@@ -18,7 +19,12 @@ from mantis.config.schema.core import (
     operational_default_fields,
 )
 from mantis.config.schema.leaves import leaf_paths, nested_block
-from mantis.config.schema.model import AuxSoftPolicyConfig, GnnWidthsConfig, ModelConfig
+from mantis.config.schema.model import (
+    AuxFutureOccupancyConfig,
+    AuxSoftPolicyConfig,
+    GnnWidthsConfig,
+    ModelConfig,
+)
 from mantis.config.schema.monitor import (
     DiskGuardConfig,
     DrainCapsConfig,
@@ -48,8 +54,10 @@ __all__ = [
     "ARCH_SCOPED_KEYS",
     "OPERATIONAL_DEFAULT_KEYS",
     "SCHEMA_VERSION",
+    "FUTURE_OCCUPANCY_ARCH_KINDS",
     "SOFT_POLICY_ARCH_KINDS",
     "ArchScopedKey",
+    "AuxFutureOccupancyConfig",
     "AuxSoftPolicyConfig",
     "DiskGuardConfig",
     "DrainCapsConfig",

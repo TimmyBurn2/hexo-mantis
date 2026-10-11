@@ -137,7 +137,7 @@ def test_the_shadow_rides_the_envelope_and_a_resume_restores_it(tmp_path: Path) 
     for _ in range(2):
         _step(trainer, buf)
     path = trainer.save_checkpoint()
-    ck = load_checkpoint(path, declared_encoding=None)
+    ck = load_checkpoint(path, declared_encoding=None, declared_future_head=None)
     assert ck.ema_state is not None and set(ck.ema_state) == set(ck.model_state)
     state, which = deploy_state(ck)
     assert which == "ema" and state_dict_param_hash(state) == state_dict_param_hash(trainer.ema_model.state_dict())
@@ -148,7 +148,7 @@ def test_the_shadow_rides_the_envelope_and_a_resume_restores_it(tmp_path: Path) 
 
     off = H.tiny_graph_trainer(tmp_path / "off", sink=H.SpySink())
     _step(off, buf)
-    off_ck = load_checkpoint(off.save_checkpoint(), declared_encoding=None)
+    off_ck = load_checkpoint(off.save_checkpoint(), declared_encoding=None, declared_future_head=None)
     assert off_ck.ema_state is None and deploy_state(off_ck)[1] == "learner"
 
 

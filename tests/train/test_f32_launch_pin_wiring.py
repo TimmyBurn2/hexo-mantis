@@ -170,7 +170,7 @@ def test_the_minted_warm_start_row_names_an_artifact_whose_hashes_AGREE(config_p
             f"lives. NOT verified here: net_param_hash == {row.net_hash[:12]}… and "
             "checkpoint_state_sha256 agreeing on it."
         )
-    checkpoint = load_checkpoint(artifact, declared_encoding=None)
+    checkpoint = load_checkpoint(artifact, declared_encoding=None, declared_future_head=None)
     net = build_net(checkpoint.metadata.arch)
     net.load_state_dict(checkpoint.model_state)
     assert net_param_hash(net) == row.net_hash, (

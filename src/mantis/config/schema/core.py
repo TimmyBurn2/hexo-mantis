@@ -32,7 +32,9 @@ SCHEMA_VERSION = 1
 
 #: The arch kinds carrying the auxiliary soft-policy head (what `model.aux_soft_policy` is FOR) —
 #: the one table, read by the schema's pairing validator and the trainer's cross-check.
-SOFT_POLICY_ARCH_KINDS: frozenset[str] = frozenset({"GnnArchV2SoftPolicy"})
+SOFT_POLICY_ARCH_KINDS: frozenset[str] = frozenset({"GnnArchV2SoftPolicy", "GnnArchV2SoftPolicyFuture"})
+#: The arch kinds carrying the future-occupancy head (what `model.aux_future_occupancy` is FOR), read as the table above.
+FUTURE_OCCUPANCY_ARCH_KINDS: frozenset[str] = frozenset({"GnnArchV2SoftPolicyFuture"})
 
 #: A finite ceiling for a `proc.join(timeout)` float (`join` raises `OverflowError` on inf);
 #: one day (86400.0 s) bounds one eval round or kill-grace.
@@ -486,6 +488,18 @@ class RunConfig(StrictModel):
                 f"model.aux_soft_policy is set but identity.arch_kind={self.identity.arch_kind!r} "
                 f"carries no soft-policy head (the kinds that do: {sorted(SOFT_POLICY_ARCH_KINDS)}); "
                 "a loss row with no head reads armed while nothing consumes it (LAW-08)"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _future_occupancy_row_pairs_with_its_head(self) -> "RunConfig":
+        """`model.aux_future_occupancy` is armed iff `identity.arch_kind` carries the head (v59); Raises: ValueError — either alone."""
+        carries_head = self.identity.arch_kind in FUTURE_OCCUPANCY_ARCH_KINDS
+        if carries_head != (self.model.aux_future_occupancy is not None):
+            raise ValueError(
+                f"identity.arch_kind={self.identity.arch_kind!r} {'carries' if carries_head else 'does not carry'} the "
+                f"future-occupancy head but model.aux_future_occupancy is {self.model.aux_future_occupancy!r}: the "
+                "head's weight is a mint fact (R1) and a row with no head reads armed unconsumed (LAW-08)"
             )
         return self
 

@@ -39,15 +39,15 @@ def _r8_checkpoint(tmp_path: Path) -> Path:
 
 def test_a_stamp_is_read_under_its_own_encoding_and_refused_under_the_other(tmp_path: Path) -> None:
     path = _r8_checkpoint(tmp_path)
-    assert load_checkpoint(path, declared_encoding=R8).metadata.encoding_name == R8
+    assert load_checkpoint(path, declared_encoding=R8, declared_future_head=None).metadata.encoding_name == R8
     with pytest.raises(DeclaredEncodingMismatchError):
-        load_checkpoint(path, declared_encoding=PRUNED)
+        load_checkpoint(path, declared_encoding=PRUNED, declared_future_head=None)
 
 
 def test_a_resume_under_another_encoding_is_refused(tmp_path: Path) -> None:
     """The launch config builds the buffer, pool and evals, so its encoding must be the stamp's."""
     path = _r8_checkpoint(tmp_path)
-    launch = load_checkpoint(path, declared_encoding=R8).config
+    launch = load_checkpoint(path, declared_encoding=R8, declared_future_head=None).config
     assert init_trainer(config=launch, device=_CPU, checkpoint_path=str(path)).config["identity"]["encoding"] == R8
     launch["identity"]["encoding"] = PRUNED
     with pytest.raises(DeclaredEncodingMismatchError):
@@ -56,7 +56,7 @@ def test_a_resume_under_another_encoding_is_refused(tmp_path: Path) -> None:
 
 def test_a_warm_start_across_encodings_is_refused(tmp_path: Path) -> None:
     path = _r8_checkpoint(tmp_path)
-    ck = load_checkpoint(path, declared_encoding=R8)
+    ck = load_checkpoint(path, declared_encoding=R8, declared_future_head=None)
     assert ck.metadata.arch is not None
     parent = build_net(ck.metadata.arch)
     parent.load_state_dict(ck.model_state)
@@ -78,12 +78,12 @@ def test_a_legacy_stamp_disagreeing_with_the_declared_encoding_is_refused(tmp_pa
 def test_the_weights_only_strip_is_the_one_way_across(tmp_path: Path) -> None:
     path = _r8_checkpoint(tmp_path)
     stripped = strip_and_restamp(path, new_encoding=PRUNED, run_id="crossing", checkpoint_dir=tmp_path / "strip")
-    ck = load_checkpoint(stripped, declared_encoding=PRUNED)
+    ck = load_checkpoint(stripped, declared_encoding=PRUNED, declared_future_head=None)
     assert ck.metadata.encoding_name == PRUNED
-    source = load_checkpoint(path, declared_encoding=R8).model_state
+    source = load_checkpoint(path, declared_encoding=R8, declared_future_head=None).model_state
     assert all(torch.equal(ck.model_state[k], source[k]) for k in source)
     with pytest.raises(DeclaredEncodingMismatchError):
-        load_checkpoint(stripped, declared_encoding=R8)
+        load_checkpoint(stripped, declared_encoding=R8, declared_future_head=None)
 
 
 def test_a_frontier_cell_refuses_a_net_stamped_for_another_encoding(tmp_path: Path) -> None:

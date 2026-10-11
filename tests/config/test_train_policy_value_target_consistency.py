@@ -46,7 +46,7 @@ def _payload(
         "run_id": "unit_test",
         "seed": 1,
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
-        "model": {"gnn": {"hidden": 128, "num_layers": 4}, "aux_soft_policy": None},
+        "model": {"gnn": {"hidden": 128, "num_layers": 4}, "aux_soft_policy": None, "aux_future_occupancy": None},
         "deploy": {"search": {"kind": search_kind, "tactics": None}},
         "eval": eval_block(),
         "train": train_block(**(train_over or {})),

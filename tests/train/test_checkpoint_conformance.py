@@ -109,7 +109,7 @@ def test_full_envelope_has_v2_schema_fields(tmp_path, tiny_net, optim_scaler_sch
     opt, scaler, sched = optim_scaler_sched
     path = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
                       config=valid_config, meta=metadata_kwargs, step=100, kind="full")
-    ck = load_checkpoint(path, declared_encoding=None)
+    ck = load_checkpoint(path, declared_encoding=None, declared_future_head=None)
     assert ck.schema_version == CHECKPOINT_SCHEMA_VERSION == 2
     assert ck.kind == "full"
     assert ck.model_state
@@ -133,7 +133,7 @@ def test_weights_envelope_has_v2_schema_fields(tmp_path, tiny_net, optim_scaler_
     opt, scaler, sched = optim_scaler_sched
     path = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
                       config=valid_config, meta=metadata_kwargs, step=100, kind="weights")
-    ck = load_checkpoint(path, declared_encoding=None)
+    ck = load_checkpoint(path, declared_encoding=None, declared_future_head=None)
     assert ck.kind == "weights"
     assert ck.model_state
     assert ck.metadata is not None
@@ -164,7 +164,7 @@ def test_config_snapshot_schema_validated_on_read(tmp_path, tiny_net, optim_scal
     payload["config"]["schema_version"] = 999  # invalid: schema_version must be 1
     bad = _resave_rehashed(payload, tmp_path)
     with pytest.raises(ValueError):
-        load_checkpoint(bad, declared_encoding=None)
+        load_checkpoint(bad, declared_encoding=None, declared_future_head=None)
 
 
 def test_a_stamp_that_predates_a_required_leaf_still_loads_and_says_so(
@@ -179,13 +179,13 @@ def test_a_stamp_that_predates_a_required_leaf_still_loads_and_says_so(
     del payload["config"]["train"]["ema"]                # a v15 leaf: a pre-v15 stamp's shape
     older = _resave_rehashed(payload, tmp_path)
     with caplog.at_level(logging.INFO, logger="mantis.train.checkpoints"):
-        ck = load_checkpoint(older, declared_encoding=None)
+        ck = load_checkpoint(older, declared_encoding=None, declared_future_head=None)
     assert "ema" not in ck.config["train"], "the payload was repaired"
     assert any("checkpoint_config_predates_schema" in r.message and "train.ema" in r.message
                for r in caplog.records)
     payload["config"]["train"]["not_a_key"] = 1
     with pytest.raises(ValueError):
-        load_checkpoint(_resave_rehashed(payload, tmp_path), declared_encoding=None)
+        load_checkpoint(_resave_rehashed(payload, tmp_path), declared_encoding=None, declared_future_head=None)
 
 
 def test_a_stamp_carrying_a_retired_section_still_loads_and_says_so(
@@ -201,13 +201,13 @@ def test_a_stamp_carrying_a_retired_section_still_loads_and_says_so(
     payload["config"]["search"] = {"kind": "gumbel"}   # the pre-split stamp's shape
     older = _resave_rehashed(payload, tmp_path)
     with caplog.at_level(logging.INFO, logger="mantis.train.checkpoints"):
-        ck = load_checkpoint(older, declared_encoding=None)
+        ck = load_checkpoint(older, declared_encoding=None, declared_future_head=None)
     assert ck.config["search"] == {"kind": "gumbel"}, "the payload was repaired"
     assert any("checkpoint_config_predates_schema" in r.message and "retired=" in r.message
                and "search" in r.message for r in caplog.records)
     payload["config"]["not_a_section"] = {"kind": "gumbel"}
     with pytest.raises(ValueError):
-        load_checkpoint(_resave_rehashed(payload, tmp_path), declared_encoding=None)
+        load_checkpoint(_resave_rehashed(payload, tmp_path), declared_encoding=None, declared_future_head=None)
 
 
 def test_a_run8_shaped_stamp_with_the_retired_rung_rows_still_loads_and_says_so(
@@ -229,13 +229,13 @@ def test_a_run8_shaped_stamp_with_the_retired_rung_rows_still_loads_and_says_so(
     payload["config"]["monitor"]["wr_early_death_min_step"] = 15000
     older = _resave_rehashed(payload, tmp_path)
     with caplog.at_level(logging.INFO, logger="mantis.train.checkpoints"):
-        ck = load_checkpoint(older, declared_encoding=None)
+        ck = load_checkpoint(older, declared_encoding=None, declared_future_head=None)
     assert ck.config["eval"]["ladder"]["round_games"] == 288, "the payload was repaired"
     assert any("checkpoint_config_predates_schema" in r.message and "eval.ladder" in r.message
                and "monitor.wr_hard_abort_enabled" in r.message for r in caplog.records)
     payload["config"]["eval"]["not_a_rung_row"] = 1
     with pytest.raises(ValueError):
-        load_checkpoint(_resave_rehashed(payload, tmp_path), declared_encoding=None)
+        load_checkpoint(_resave_rehashed(payload, tmp_path), declared_encoding=None, declared_future_head=None)
 
 
 def test_a_stamp_carrying_the_retired_value_target_still_loads_and_says_so(
@@ -250,7 +250,7 @@ def test_a_stamp_carrying_the_retired_value_target_still_loads_and_says_so(
     payload["config"]["train"]["value_target"] = "pure_outcome_z"
     older = _resave_rehashed(payload, tmp_path)
     with caplog.at_level(logging.INFO, logger="mantis.train.checkpoints"):
-        ck = load_checkpoint(older, declared_encoding=None)
+        ck = load_checkpoint(older, declared_encoding=None, declared_future_head=None)
     assert ck.config["train"]["value_target"] == "pure_outcome_z", "the payload was repaired"
     assert any("checkpoint_config_predates_schema" in r.message and "train.value_target" in r.message
                for r in caplog.records)
@@ -269,8 +269,8 @@ def test_a_resume_from_a_stamp_carrying_a_retired_path_saves_again(
     older = _resave_rehashed(payload, tmp_path)
     tr = resume_trainer(Trainer, older, fallback_config=valid_config, declared_encoding=None)
     saved = tr.save_checkpoint()
-    assert "value_target" not in load_checkpoint(saved, declared_encoding=None).config["train"]
-    assert load_checkpoint(older, declared_encoding=None).config["train"]["value_target"] == "pure_outcome_z", "the parent stamp moved"
+    assert "value_target" not in load_checkpoint(saved, declared_encoding=None, declared_future_head=None).config["train"]
+    assert load_checkpoint(older, declared_encoding=None, declared_future_head=None).config["train"]["value_target"] == "pure_outcome_z", "the parent stamp moved"
 
 
 def test_metadata_encoding_name_required(tmp_path, tiny_net, optim_scaler_sched, valid_config,
@@ -323,7 +323,7 @@ def test_load_reverifies_run_id_and_step(tmp_path, tiny_net, optim_scaler_sched,
     wrong = path.with_name(checkpoint_filename("runa", 200, sha8))  # filename claims step 200
     path.rename(wrong)
     with pytest.raises(CheckpointStampError):
-        load_checkpoint(wrong, declared_encoding=None)
+        load_checkpoint(wrong, declared_encoding=None, declared_future_head=None)
 
 
 def test_tampered_payload_fails_content_hash(tmp_path, tiny_net, optim_scaler_sched, valid_config,
@@ -339,7 +339,7 @@ def test_tampered_payload_fails_content_hash(tmp_path, tiny_net, optim_scaler_sc
     payload["model_state"][k] = t
     torch.save(payload, path)  # SAME filename → the name's sha8 is now stale
     with pytest.raises(CheckpointStampError):
-        load_checkpoint(path, declared_encoding=None)
+        load_checkpoint(path, declared_encoding=None, declared_future_head=None)
 
 
 def test_restamp_from_loaded_config_is_error(tmp_path, tiny_net, optim_scaler_sched, valid_config,
@@ -348,7 +348,7 @@ def test_restamp_from_loaded_config_is_error(tmp_path, tiny_net, optim_scaler_sc
     opt, scaler, sched = optim_scaler_sched
     path = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
                       config=valid_config, meta=metadata_kwargs)
-    ck = load_checkpoint(path, declared_encoding=None)
+    ck = load_checkpoint(path, declared_encoding=None, declared_future_head=None)
     restamp = {
         "encoding_name": ck.metadata.encoding_name,
         "run_id": ck.metadata.run_id,
@@ -402,7 +402,7 @@ def test_every_load_surface_uses_weights_only_true(tmp_path, tiny_net, optim_sca
     payload["model_state"]["__evil__"] = _Evil()
     torch.save(payload, path)
     with pytest.raises(pickle.UnpicklingError):
-        load_checkpoint(path, declared_encoding=None)
+        load_checkpoint(path, declared_encoding=None, declared_future_head=None)
     # (ii) source census — checkpoints (Slice 1) always; anchor (Slice 3) when present.
     import importlib.util
     src = Path(checkpoints.__file__).read_text(encoding="utf-8")
@@ -558,7 +558,7 @@ def test_reject_cluster_pool_prefix(tmp_path, full_graph_state, tiny_net, optim_
                                           sched=sched, config=valid_config, meta=metadata_kwargs,
                                           prefix="cluster_pool.")
     with pytest.raises(RepresentationMismatch):
-        load_checkpoint(forged, declared_encoding=None)
+        load_checkpoint(forged, declared_encoding=None, declared_future_head=None)
 
 
 def test_reject_global_encoder_prefix(tmp_path, full_graph_state, tiny_net, optim_scaler_sched,
@@ -573,7 +573,7 @@ def test_reject_global_encoder_prefix(tmp_path, full_graph_state, tiny_net, opti
                                           sched=sched, config=valid_config, meta=metadata_kwargs,
                                           prefix="global_encoder.")
     with pytest.raises(RepresentationMismatch):
-        load_checkpoint(forged, declared_encoding=None)
+        load_checkpoint(forged, declared_encoding=None, declared_future_head=None)
 
 
 def test_reject_gpool_bias_branch_prefix(tmp_path, full_graph_state, tiny_net, optim_scaler_sched,
@@ -588,7 +588,7 @@ def test_reject_gpool_bias_branch_prefix(tmp_path, full_graph_state, tiny_net, o
                                           sched=sched, config=valid_config, meta=metadata_kwargs,
                                           prefix="gpool_bias_branch.")
     with pytest.raises(RepresentationMismatch):
-        load_checkpoint(forged, declared_encoding=None)
+        load_checkpoint(forged, declared_encoding=None, declared_future_head=None)
 
 
 def test_clean_anchor_loads(tmp_path, full_graph_net, full_graph_state, anchor_key_set):
@@ -621,7 +621,7 @@ def test_declared_encoding_mismatch_raises(tmp_path, tiny_net, optim_scaler_sche
     path = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
                       config=valid_config, meta=metadata_kwargs)
     with pytest.raises(DeclaredEncodingMismatchError):
-        load_checkpoint(path, declared_encoding="gnn_axis_r8")
+        load_checkpoint(path, declared_encoding="gnn_axis_r8", declared_future_head=None)
 
 
 def test_decode_override_wins_and_logs_never_raises(tmp_path, tiny_net, optim_scaler_sched,
@@ -632,7 +632,7 @@ def test_decode_override_wins_and_logs_never_raises(tmp_path, tiny_net, optim_sc
     path = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
                       config=valid_config, meta=metadata_kwargs)
     with caplog.at_level(logging.INFO):  # floor at INFO so a WARNING-or-INFO notice is captured
-        ck = load_checkpoint(path, decode_override="gnn_axis_r8", declared_encoding=None)
+        ck = load_checkpoint(path, decode_override="gnn_axis_r8", declared_encoding=None, declared_future_head=None)
     assert ck is not None
     assert "encoding_decode_override" in caplog.text
 
@@ -644,7 +644,7 @@ def test_declared_and_override_together_error(tmp_path, tiny_net, optim_scaler_s
     path = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
                       config=valid_config, meta=metadata_kwargs)
     with pytest.raises(ValueError):
-        load_checkpoint(path, declared_encoding="gnn_axis_v1", decode_override="gnn_axis_r8")
+        load_checkpoint(path, declared_encoding="gnn_axis_v1", decode_override="gnn_axis_r8", declared_future_head=None)
 
 
 def test_stamp_sources_disagree_raises(tmp_path, tiny_net, optim_scaler_sched, valid_config,
@@ -657,7 +657,7 @@ def test_stamp_sources_disagree_raises(tmp_path, tiny_net, optim_scaler_sched, v
     payload["config"]["identity"]["encoding"] = "gnn_axis_r8"  # config and metadata now disagree
     bad = _resave_rehashed(payload, tmp_path)
     with pytest.raises(CheckpointStampError):
-        load_checkpoint(bad, declared_encoding=None)
+        load_checkpoint(bad, declared_encoding=None, declared_future_head=None)
 
 
 def test_reads_full_v1_envelope_via_field_map(tmp_path, full_graph_net, full_graph_state, legacy_shapes):
@@ -675,7 +675,7 @@ def test_reads_full_v1_envelope_via_field_map(tmp_path, full_graph_net, full_gra
         # process, and valued only by the re-calibration sitting.
         "allocator_posture": None,
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
-        "model": {"gnn": {"hidden": 16, "num_layers": 1}, "aux_soft_policy": None},
+        "model": {"gnn": {"hidden": 16, "num_layers": 1}, "aux_soft_policy": None, "aux_future_occupancy": None},
         "eval": _make_eval_block(),
         # DERIVED from a MINTED config, not a restatement of the complete `train:` block.
         "train": load_config(
@@ -781,12 +781,12 @@ def test_bare_anchor_to_v2_requires_explicit_strip(tmp_path, full_graph_state):
     # sanctioned upgrade: strip + re-stamp → a proper v2 envelope with a FRESH single stamp.
     v2_path = strip_and_restamp(bare, new_encoding="gnn_axis_v1", run_id="runx",
                                 checkpoint_dir=tmp_path, declared_encoding="gnn_axis_v1")
-    ck = load_checkpoint(v2_path, declared_encoding=None)
+    ck = load_checkpoint(v2_path, declared_encoding=None, declared_future_head=None)
     assert ck.metadata.run_id == "runx"
     assert ck.metadata.created_utc
     # the v2 loader must NOT auto-upgrade a bare anchor (no provenance / not a v2 envelope).
     with pytest.raises(CheckpointStampError):
-        load_checkpoint(bare, declared_encoding=None)
+        load_checkpoint(bare, declared_encoding=None, declared_future_head=None)
 
 
 def test_unregistered_legacy_encoding_raises(tmp_path, full_graph_state):

@@ -1,8 +1,8 @@
 """`build_net` — the ONE model construction authority.
 
 Dispatch is on the declared arch dataclass, a closed union with no wildcard on the kind:
-`GnnArch` → `GnnNet`, `GnnArchV2` → `GnnNetV2`, `GnnArchV2SoftPolicy` → `GnnNetV2SoftPolicy`. The arch travels on that dataclass and is
-never inferred from module structure.
+`GnnArch` → `GnnNet`, `GnnArchV2` → `GnnNetV2`, `GnnArchV2SoftPolicy` → `GnnNetV2SoftPolicy`, `GnnArchV2SoftPolicyFuture`
+→ `GnnNetV2SoftPolicyFuture`. The arch travels on that dataclass and is never inferred from module structure.
 
 `RepresentationMismatch` is defined in `arch`, the lowest layer that raises it, and
 re-exported here.
@@ -15,11 +15,13 @@ from mantis.model.arch import (
     GnnArch,
     GnnArchV2,
     GnnArchV2SoftPolicy,
+    GnnArchV2SoftPolicyFuture,
     ModelArch,
     RepresentationMismatch,
 )
 from mantis.model.gnn import GnnNet
 from mantis.model.gnn_v2 import GnnNetV2, GnnNetV2SoftPolicy
+from mantis.model.gnn_v2_future import GnnNetV2SoftPolicyFuture
 
 __all__ = ["build_net", "RepresentationMismatch"]
 
@@ -37,7 +39,9 @@ def build_net(arch: ModelArch) -> nn.Module:
     net: nn.Module
     # The most-derived kinds are tested first as a second line of defence: were a later kind
     # ever made a subclass of an earlier one, the earlier `isinstance` would silently build it.
-    if isinstance(arch, GnnArchV2SoftPolicy):
+    if isinstance(arch, GnnArchV2SoftPolicyFuture):
+        net = GnnNetV2SoftPolicyFuture(arch)
+    elif isinstance(arch, GnnArchV2SoftPolicy):
         net = GnnNetV2SoftPolicy(arch)
     elif isinstance(arch, GnnArchV2):
         net = GnnNetV2(arch)
@@ -46,7 +50,7 @@ def build_net(arch: ModelArch) -> nn.Module:
         net = GnnNet(arch)
     else:
         raise RepresentationMismatch(
-            f"build_net: arch is none of GnnArch, GnnArchV2, GnnArchV2SoftPolicy "
+            f"build_net: arch is none of GnnArch, GnnArchV2, GnnArchV2SoftPolicy, GnnArchV2SoftPolicyFuture "
             f"(got {type(arch).__name__})."
         )
     # THE declared instance, never a copy: a copy would be a second authority for the run's

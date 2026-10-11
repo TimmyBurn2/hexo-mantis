@@ -66,6 +66,8 @@ class GraphTargetSlice:
     is_full_search: np.ndarray
     root_value: np.ndarray
     root_value_valid: np.ndarray
+    future_target: np.ndarray
+    future_valid: np.ndarray
     target_argmax_cells: list[Any]
 
 
@@ -188,7 +190,7 @@ def slice_graph_wire(payload: GraphWirePayload, g0: int, g1: int) -> GraphWirePa
 
 def slice_targets(targets: Any, legal_offsets: Any, g0: int, g1: int) -> GraphTargetSlice:
     """Slice the target arrays and the argmax-cell sequence for graphs `[g0, g1)`.
-    `policy_target` and `explicit_mask` are flat PER LEGAL NODE, so their bounds come from the
+    `policy_target`, `explicit_mask` and `future_target` are flat PER LEGAL NODE, so their bounds come from the
     wire's own `legal_offsets`; the rest, `tail_mass` included, are per-graph."""
     lo = np.asarray(legal_offsets, dtype=np.int64)
     l0, l1 = int(lo[g0]), int(lo[g1])
@@ -202,6 +204,8 @@ def slice_targets(targets: Any, legal_offsets: Any, g0: int, g1: int) -> GraphTa
         is_full_search=np.asarray(targets.is_full_search)[g0:g1],
         root_value=np.asarray(targets.root_value)[g0:g1],
         root_value_valid=np.asarray(targets.root_value_valid)[g0:g1],
+        future_target=np.asarray(targets.future_target)[l0:l1],
+        future_valid=np.asarray(targets.future_valid)[g0:g1],
         target_argmax_cells=list(cells)[g0:g1],
     )
 

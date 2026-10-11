@@ -156,9 +156,9 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
   parser). Model/buffer/batcher construction dispatches through ONE authority per layer
   (`model.build.build_net(arch)`, buffer facade, batcher ctor). Reading arch attributes off
   live `nn.Module` instances is banned — arch metadata travels on declared dataclasses
-  (`model.arch.GnnArch` / `model.arch.GnnArchV2` / `model.arch.GnnArchV2SoftPolicy`), which
-  `build_net` consumes — its dispatch checks the most-derived kind first
-  (`GnnArchV2SoftPolicy`, then `GnnArchV2`, then `GnnArch`) as a defensive second line, not
+  (`model.arch.GnnArch` / `model.arch.GnnArchV2` / `model.arch.GnnArchV2SoftPolicy` /
+  `model.arch.GnnArchV2SoftPolicyFuture`, AUX-1), which `build_net` consumes — its dispatch checks the most-derived kind
+  first (`GnnArchV2SoftPolicyFuture`, `GnnArchV2SoftPolicy`, then `GnnArchV2`, then `GnnArch`) as a defensive second line, not
   because any kind subclasses another (AMENDMENT (R368, 2026-09-25): none of the three dataclasses
   has a base at HEAD; this line previously claimed the order was load-bearing "because
   `GnnArchV2` is a subclass of `GnnArch`", which is false and also omitted the third kind); a
@@ -281,6 +281,9 @@ ADDED (v7 → v8). `docs/contracts/run_config_schema.md` is the version authorit
        start inherits its source stamp's lineage, a resume restores it, the strip keeps it verbatim, and
        only a tool that trains on a teacher's labels adds a tag (tools/distill, from its ring's provenance).
        A malformed lineage refuses the write (`docs/contracts/checkpoint_envelope.md`). -->
+  <!-- AMENDMENT (AUX-1, 2026-10-11): one other writer adds a lineage tag — the warm start, `+aux_future`, when its
+       `reinit` begins the future-occupancy head fresh, so a stamp says from which save on its head learned. And the
+       head is DECLARED at the one loader as the encoding is (`declared_future_head`, no default; `None` adopts). -->
 - Stamp immutability, the one envelope format and the one loader are LAW-12 (amendment
   R370(a): stated once, there). Mechanics: a save that cannot stamp fails loud, with a
   quarantine path if the run must survive; the loader is shared by train / eval / bots and

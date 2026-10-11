@@ -43,7 +43,7 @@ from mantis.eval.worker import build_candidate_player
 from mantis.model import arch_from_spec_and_config, build_net
 from mantis.model.identity import net_param_hash
 from mantis.selfplay.inference_local import LocalInferenceEngine
-from mantis.train.checkpoints import deploy_state, load_checkpoint
+from mantis.train.checkpoints import deploy_state, future_head_declared, load_checkpoint
 from mantis.util.determinism import seed_everything
 
 #: The label reserved for the seeded fresh-initialisation arm; every other value is a path.
@@ -234,7 +234,8 @@ def _arm_engine(arm: ArmSpec, *, cfg: Any, dump: dict[str, Any], spec: Any,
     """
     net = seeded_net(arch_from_spec_and_config(spec, dump), seed=cfg.seed)
     if arm.checkpoint is not None:
-        net.load_state_dict(deploy_state(load_checkpoint(arm.checkpoint, declared_encoding=spec.name))[0])
+        net.load_state_dict(deploy_state(load_checkpoint(arm.checkpoint, declared_encoding=spec.name,
+                                                         declared_future_head=future_head_declared(dump)))[0])
     return LocalInferenceEngine(
         net.to(device).eval(), device, encoding_spec=spec,
         fused_graph_caps=resolve_fused_graph_caps(dump),

@@ -10,7 +10,7 @@ import torch
 from mantis.config.loader import load_config
 from mantis.model import build_net
 from mantis.model.identity import net_param_hash
-from mantis.train.checkpoints import load_checkpoint, save_checkpoint
+from mantis.train.checkpoints import future_head_declared, load_checkpoint, save_checkpoint
 from mantis.util.hashing import sha256_file
 
 
@@ -22,7 +22,8 @@ def average_checkpoints(paths: list[Path], *, config_path: Path, run_id: str, ou
     sources, arch, shapes = [], None, None
     acc: dict[str, torch.Tensor] = {}
     for p in paths:
-        ck = load_checkpoint(p, declared_encoding=config["identity"]["encoding"])
+        ck = load_checkpoint(p, declared_encoding=config["identity"]["encoding"],
+                             declared_future_head=future_head_declared(config))
         if ck.metadata.arch is None:
             raise ValueError(f"{p.name}: the stamp resolves no arch")
         if arch is None:

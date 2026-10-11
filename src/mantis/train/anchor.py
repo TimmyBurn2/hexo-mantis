@@ -241,7 +241,8 @@ def _build_anchor_model(
     raw = torch.load(path, weights_only=True, map_location="cpu")
     is_v2 = isinstance(raw, dict) and raw.get("schema_version") == _ck.CHECKPOINT_SCHEMA_VERSION
     ck = (
-        _ck.load_checkpoint(path, device=device, declared_encoding=declared_encoding)
+        # The anchor is the stamp's net, head or none; promotion's strict load refuses a key-set mismatch.
+        _ck.load_checkpoint(path, device=device, declared_encoding=declared_encoding, declared_future_head=None)
         if is_v2
         else _ck.load_legacy_weights(path, declared_encoding=declared_encoding)
     )

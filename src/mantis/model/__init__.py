@@ -17,6 +17,7 @@ from mantis.model.arch import (
     GnnArch,
     GnnArchV2,
     GnnArchV2SoftPolicy,
+    GnnArchV2SoftPolicyFuture,
     ModelArch,
     RepresentationMismatch,
     UnknownArchKind,
@@ -40,6 +41,7 @@ from mantis.model.gnn import (
     load_from_bc,
 )
 from mantis.model.gnn_v2 import GnnNetV2, GnnNetV2SoftPolicy
+from mantis.model.gnn_v2_future import GnnNetV2SoftPolicyFuture
 from mantis.model.identity import net_param_hash, state_dict_param_hash
 
 __all__ = [
@@ -52,10 +54,12 @@ __all__ = [
     "GnnArch",
     "GnnArchV2",
     "GnnArchV2SoftPolicy",
+    "GnnArchV2SoftPolicyFuture",
     "GnnDist65ValueHead",
     "GnnNet",
     "GnnNetV2",
     "GnnNetV2SoftPolicy",
+    "GnnNetV2SoftPolicyFuture",
     "ModelArch",
     "RepresentationMismatch",
     "UnknownArchKind",

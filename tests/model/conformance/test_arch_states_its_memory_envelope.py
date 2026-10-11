@@ -22,7 +22,7 @@ from typing import Any
 import pytest
 import torch
 
-from mantis.model.arch import GnnArch, GnnArchV2, GnnArchV2SoftPolicy
+from mantis.model.arch import GnnArch, GnnArchV2, GnnArchV2SoftPolicy, GnnArchV2SoftPolicyFuture
 from mantis.model.build import build_net
 
 from _corpus import ConformanceRefusal, roster
@@ -301,6 +301,8 @@ def registered_envelopes(narrow: bool = False) -> dict[str, MemoryEnvelope]:
         "GnnArchV2": MemoryEnvelope("GnnArchV2", _gnn_envelope(width, GnnArchV2)),
         "GnnArchV2SoftPolicy": MemoryEnvelope("GnnArchV2SoftPolicy",
                                               _gnn_envelope(width, GnnArchV2SoftPolicy)),
+        "GnnArchV2SoftPolicyFuture": MemoryEnvelope("GnnArchV2SoftPolicyFuture",
+                                                    _gnn_envelope(width, GnnArchV2SoftPolicyFuture)),
     }
 
 

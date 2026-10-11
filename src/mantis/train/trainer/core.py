@@ -24,8 +24,9 @@ import torch.optim as optim
 from torch.amp.autocast_mode import autocast
 from torch.amp.grad_scaler import GradScaler
 
+from mantis.config.resolve.aux_future_occupancy import resolve_aux_future_occupancy
 from mantis.config.resolve.aux_soft_policy import resolve_aux_soft_policy
-from mantis.config.schema.core import SOFT_POLICY_ARCH_KINDS
+from mantis.config.schema.core import FUTURE_OCCUPANCY_ARCH_KINDS, SOFT_POLICY_ARCH_KINDS
 from mantis.encoding import EncodingRegistryError, resolve_from_config
 from mantis.model import (
     ModelArch,
@@ -42,6 +43,7 @@ from mantis.train.events import tail_mass_block
 from mantis.train.losses import (
     backward_accumulate,
     clip_and_step,
+    future_occupancy_ce,
     ragged_policy_ce,
     ragged_policy_ce_and_entropies,
     rebuild_sparse_target,
@@ -89,6 +91,8 @@ class TrainHParams:
     checkpoint_interval: int
     #: `model.aux_soft_policy` as `(temperature, weight)`; `None` is the explicit OFF.
     aux_soft_policy: tuple[float, float] | None
+    #: `model.aux_future_occupancy.w`; `None` is the explicit OFF.
+    aux_future_occupancy: float | None
     value_target_search_weight: float
     #: `train.value_mask_redraw_p` with the run seed as `(p, seed)`; `None` is the explicit OFF (p = 0).
     value_mask: tuple[float, int] | None
@@ -110,7 +114,7 @@ class TrainHParams:
                 "closure) — no flat legacy training keys are read anymore."
             )
         _assert_policy_target_consistency(train, (cfg.get("selfplay") or {}).get("search") or {})
-        fields = set(cls.__dataclass_fields__) - {"aux_soft_policy", "value_mask", "lr_cycle"}
+        fields = set(cls.__dataclass_fields__) - {"aux_soft_policy", "aux_future_occupancy", "value_mask", "lr_cycle"}
         kwargs = {k: train[k] for k in fields}
         aux = resolve_aux_soft_policy(cfg)
         p = float(train["value_mask_redraw_p"])
@@ -120,6 +124,7 @@ class TrainHParams:
             lr_cycle=None if cycle is None else LrCycle(start=int(cycle["start_step"]), lr=float(cycle["lr"]),
                                                        eta_min=float(cycle["eta_min"]), t_max=int(cycle["t_max"])),
             aux_soft_policy=None if aux is None else (aux.temperature, aux.weight),
+            aux_future_occupancy=resolve_aux_future_occupancy(cfg),
             value_mask=None if p == 0.0 else (p, int(cfg["seed"])),
         )
 
@@ -197,6 +202,15 @@ class Trainer:
                 f"{'carries' if self.soft_policy else 'carries no'} auxiliary soft-policy head but "
                 f"model.aux_soft_policy is {self.hp.aux_soft_policy!r}; the rows and the head are "
                 "one fact (LAW-08)"
+            )
+        self.future_head = len(self._base_model().future_heads()) > 0  # pyright: ignore[reportCallIssue]
+        kind_has_it = type(self.arch).__name__ in FUTURE_OCCUPANCY_ARCH_KINDS
+        if not self.future_head == kind_has_it == (self.hp.aux_future_occupancy is not None):
+            raise ValueError(
+                f"Trainer: the net's future heads {self._base_model().future_heads()!r}, the kinds table's "  # pyright: ignore[reportCallIssue]
+                f"{'listing' if kind_has_it else 'omission'} of {type(self.arch).__name__} and "
+                f"model.aux_future_occupancy {self.hp.aux_future_occupancy!r} disagree: the head, its kind and its "
+                "weight are one fact, or a head trains unread or a weight reads armed unconsumed (LAW-08, LAW-18)"
             )
 
         # Off the DECLARED arch representation, no module sniff, no default.
@@ -301,8 +315,8 @@ class Trainer:
             caps_max_nodes: the resolved micro-batch node cap.
 
         Returns:
-            `{"loss", "policy_loss", "value_loss"}`, summed over the parts as the training step
-            sums them.
+            `{"loss", "policy_loss", "value_loss"}`, summed over the parts as the training step sums them, plus
+            `aux_future_{rows, ce, base_ce}` on a net with the future-occupancy head.
 
         Raises:
             GraphEmptyBatchError: `parts` is empty, so there is nothing to evaluate.
@@ -315,7 +329,8 @@ class Trainer:
                 "a patience stop would read as the best score ever achieved."
             )
         was_training = self.model.training
-        loss_total = policy_total = value_total = 0.0
+        loss_total = policy_total = value_total = future_total = 0.0
+        future_rows, future_base = 0, 0.0
         try:
             self.model.eval()
             with torch.no_grad():
@@ -323,9 +338,20 @@ class Trainer:
                     inputs = make()
                     with autocast(device_type=self.device.type, dtype=self.amp_dtype,
                                   enabled=self._autocast_enabled):
-                        policy_logits, _value, bin_logits = self.model.forward_batch(  # pyright: ignore[reportCallIssue]
-                            inputs.x, inputs.edge_index, inputs.edge_attr, inputs.legal_index,
-                            inputs.stone_mask, node_offsets=inputs.node_offsets)
+                        future_logits = None
+                        if self.future_head:
+                            policy_logits, _value, bin_logits, _aux, future_logits = self.model.forward_batch_heads(  # pyright: ignore[reportCallIssue]
+                                inputs.x, inputs.edge_index, inputs.edge_attr, inputs.legal_index,
+                                inputs.stone_mask, node_offsets=inputs.node_offsets)
+                        else:
+                            policy_logits, _value, bin_logits = self.model.forward_batch(  # pyright: ignore[reportCallIssue]
+                                inputs.x, inputs.edge_index, inputs.edge_attr, inputs.legal_index,
+                                inputs.stone_mask, node_offsets=inputs.node_offsets)
+                        future_rows, future_base = int(inputs.future_rows), float(inputs.future_base_ce)
+                        if future_logits is not None and future_rows > 0:
+                            future_total += future_occupancy_ce(
+                                future_logits, inputs.future_target, inputs.future_valid, inputs.legal_offsets,
+                                float(future_rows)).item()
                         policy_loss = ragged_policy_ce(
                             policy_logits, inputs.policy_target, inputs.legal_offsets,
                             full_search_mask=inputs.policy_row_weight,
@@ -342,11 +368,14 @@ class Trainer:
                         loss_total += loss.item()
                         policy_total += policy_loss.item()
                         value_total += value_loss.item()
-                    del inputs, policy_logits, bin_logits, policy_loss, value_loss, loss
+                    del inputs, policy_logits, bin_logits, policy_loss, value_loss, loss, future_logits
         finally:
             if was_training:
                 self.model.train()
-        return {"loss": loss_total, "policy_loss": policy_total, "value_loss": value_total}
+        out = {"loss": loss_total, "policy_loss": policy_total, "value_loss": value_total}
+        if self.future_head:
+            out.update(aux_future_rows=future_rows, aux_future_ce=future_total, aux_future_base_ce=future_base)
+        return out
 
     def train_step_from_graph_batch(
         self,
@@ -389,6 +418,10 @@ class Trainer:
         policy_entropy_total = 0.0
         aux_total = 0.0
         aux_kl_total = 0.0
+        future_total = 0.0
+        future_rows, future_base = 0, 0.0
+        # Which of the aux terms each contributing part's stats row carries, so the one read unpacks by layout.
+        layouts: list[tuple[bool, bool]] = []
         for make in parts:
             inputs = make()
             tail_masses.append(inputs.tail_mass.detach().reshape(-1))
@@ -396,7 +429,7 @@ class Trainer:
                           enabled=self._autocast_enabled):
                 # `forward_batch_heads` is GnnNet's real method; `nn.Module.__getattr__` types
                 # dynamic attrs as Tensor | Module.
-                policy_logits, _value, bin_logits, aux_logits = self.model.forward_batch_heads(  # pyright: ignore[reportCallIssue]
+                policy_logits, _value, bin_logits, aux_logits, future_logits = self.model.forward_batch_heads(  # pyright: ignore[reportCallIssue]
                     inputs.x, inputs.edge_index, inputs.edge_attr, inputs.legal_index,
                     inputs.stone_mask, node_offsets=inputs.node_offsets)
                 if int(bin_logits.shape[0]) != int(inputs.n_graphs):
@@ -424,6 +457,12 @@ class Trainer:
                     aux_loss, aux_kl = self._aux_soft_policy_terms(
                         policy_logits, aux_logits, inputs, policy_denominator)
                     loss = loss + self.hp.aux_soft_policy[1] * aux_loss
+                future_ce: torch.Tensor | None = None
+                future_rows, future_base = int(inputs.future_rows), float(inputs.future_base_ce)
+                if future_logits is not None and self.hp.aux_future_occupancy is not None and future_rows > 0:
+                    future_ce = future_occupancy_ce(future_logits, inputs.future_target, inputs.future_valid,
+                                                    inputs.legal_offsets, float(future_rows))
+                    loss = loss + self.hp.aux_future_occupancy * future_ce
             # A NaN/inf microbatch loss would NaN every weight via the clip coefficient: SKIPPED before
             # its backward (a microbatch's one device read) and COUNTED, since dropped ones hide on loss alone.
             if not bool(torch.isfinite(torch.stack([loss.detach().float(), policy_loss.detach().float()])).all()):
@@ -443,10 +482,13 @@ class Trainer:
             row = [target_entropy, model_entropy, loss, policy_loss, value_loss]
             if aux_loss is not None and aux_kl is not None:
                 row += [aux_loss, aux_kl]
+            if future_ce is not None:
+                row.append(future_ce)
             stats.append([t.detach().float().reshape(1) for t in row])
+            layouts.append((aux_loss is not None, future_ce is not None))
             del row
             del inputs, policy_logits, bin_logits, policy_loss, value_loss, loss, target_entropy
-            del model_entropy, aux_logits, aux_loss, aux_kl
+            del model_entropy, aux_logits, aux_loss, aux_kl, future_logits, future_ce
 
         # Stepped only WITH a gradient: not when every micro-batch skipped (a zeroed `.grad` still
         # lets momentum move the weights), nor on a non-finite gradient from a FINITE loss.
@@ -462,16 +504,18 @@ class Trainer:
                                             self._scaler_enabled, float(self.hp.grad_clip), read_with=reads)
             at = 0
             # Python-float sums in microbatch order: the totals are byte-equal to reading each scalar alone.
-            for row in stats:
+            for row, (has_aux, has_future) in zip(stats, layouts, strict=True):
                 values, at = host[at:at + len(row)], at + len(row)
                 target_entropy_total += values[0]
                 policy_entropy_total += values[1]
                 loss_total += values[2]
                 policy_total += values[3]
                 value_total += values[4]
-                if len(values) == 7:
+                if has_aux:
                     aux_total += values[5]
                     aux_kl_total += values[6]
+                if has_future:
+                    future_total += values[-1]
             if norm_tensors is not None:
                 head_norms = dict(zip(norm_tensors, host[at:at + len(norm_tensors)], strict=True))
                 at += len(norm_tensors)
@@ -529,7 +573,8 @@ class Trainer:
                                   "policy_kl_target_vs_prior": policy_total - target_entropy_total,
                                   "value_target_search_weight": self.hp.value_target_search_weight,
                                   "value_mask_redraw_p": 0.0 if self.hp.value_mask is None else self.hp.value_mask[0],
-                                  **self._aux_soft_policy_block(aux_total, aux_kl_total, head_norms)})
+                                  **self._aux_soft_policy_block(aux_total, aux_kl_total, head_norms),
+                                  **self._aux_future_block(future_total, future_rows, future_base)})
             self._maybe_periodic_checkpoint(result)
         return result
 
@@ -584,6 +629,13 @@ class Trainer:
             "aux_soft_policy_weight": self.hp.aux_soft_policy[1],
             **(head_norms or {}),
         }
+
+    def _aux_future_block(self, ce_total: float, rows: int, base_ce: float) -> dict[str, Any]:
+        """The `trainer_step` rows for the future-occupancy head — rows seen, its CE and its base rate (`None` on a step with no row), the weight; OMITTED without the head."""
+        if self.hp.aux_future_occupancy is None:
+            return {}
+        return {"aux_future_rows": rows, "aux_future_ce": ce_total if rows else None,
+                "aux_future_base_ce": base_ce if rows else None, "aux_future_weight": self.hp.aux_future_occupancy}
 
     def inference_state_dict(self) -> dict[str, torch.Tensor]:
         """The DEPLOY weights — the gate's candidate, promotion, the checkpoint's deploy copy: the EMA shadow when EMA is on, else the learner's (CARD-SERVER-OWNED-COPY)."""

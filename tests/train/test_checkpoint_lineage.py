@@ -32,8 +32,8 @@ def test_the_lineage_round_trips_and_an_absent_one_reads_empty(tmp_path, tiny_ne
                                                                metadata_kwargs):
     tagged = _save(tmp_path, tiny_net, optim_scaler_sched, valid_config, metadata_kwargs, lineage=[TAG])
     plain = _save(tmp_path, tiny_net, optim_scaler_sched, valid_config, metadata_kwargs, step=20)
-    assert load_checkpoint(tagged, declared_encoding=None).metadata.lineage == (TAG,)
-    assert load_checkpoint(plain, declared_encoding=None).metadata.lineage == ()
+    assert load_checkpoint(tagged, declared_encoding=None, declared_future_head=None).metadata.lineage == (TAG,)
+    assert load_checkpoint(plain, declared_encoding=None, declared_future_head=None).metadata.lineage == ()
     assert stamped_lineage(tagged) == (TAG,)
     assert stamped_lineage(plain) == ()
 
@@ -49,11 +49,11 @@ def test_the_strip_and_a_resume_keep_the_lineage(tmp_path, tiny_net, optim_scale
 
     src = _save(tmp_path, tiny_net, optim_scaler_sched, valid_config, metadata_kwargs, lineage=[TAG])
     stripped = strip_and_restamp(src, new_encoding="gnn_axis_v1", run_id="runc", checkpoint_dir=tmp_path / "strip")
-    assert load_checkpoint(stripped, declared_encoding=None).metadata.lineage == (TAG,)
+    assert load_checkpoint(stripped, declared_encoding=None, declared_future_head=None).metadata.lineage == (TAG,)
     trainer = resume_trainer(Trainer, src, fallback_config=valid_config, declared_encoding=None)
     assert trainer.lineage == (TAG,)
     trainer.step += 1
-    assert load_checkpoint(trainer.save_checkpoint(), declared_encoding=None).metadata.lineage == (TAG,)
+    assert load_checkpoint(trainer.save_checkpoint(), declared_encoding=None, declared_future_head=None).metadata.lineage == (TAG,)
 
 
 def test_a_warm_start_inherits_its_source_lineage_and_a_plain_launch_has_none(tmp_path, valid_config, metadata_kwargs):
@@ -70,6 +70,36 @@ def test_a_warm_start_inherits_its_source_lineage_and_a_plain_launch_has_none(tm
         "checkpoint": str(src), "net_hash": net_param_hash(source), "reinit": []}}}
     trainer = init_trainer(config=warm, device=torch.device("cpu"), checkpoint_dir=str(tmp_path / "warm"))
     assert trainer.lineage == (TAG,)
-    assert load_checkpoint(trainer.save_checkpoint(), declared_encoding=None).metadata.lineage == (TAG,)
+    assert load_checkpoint(trainer.save_checkpoint(), declared_encoding=None, declared_future_head=None).metadata.lineage == (TAG,)
     plain = init_trainer(config=valid_config, device=torch.device("cpu"), checkpoint_dir=str(tmp_path / "plain"))
     assert plain.lineage == ()
+
+
+def test_a_warm_start_that_begins_the_future_head_fresh_says_so_in_the_stamp(tmp_path, valid_config, metadata_kwargs):
+    """A soft-policy parent warm-starts the future kind: `reinit` names the head, every other tensor lands, `+aux_future` is stamped."""
+    from mantis.encoding import lookup
+    from mantis.model import arch_from_spec_and_config, build_net
+    from mantis.model.gnn_v2_future import AUX_FUTURE_LINEAGE, FUTURE_HEAD, FUTURE_PRIOR_LOGITS
+    from mantis.train.orchestrator import init_trainer
+
+    soft = {**valid_config, "identity": {**valid_config["identity"], "arch_kind": "GnnArchV2SoftPolicy"},
+            "model": {**valid_config["model"], "aux_soft_policy": {"target_temperature": 4.0, "weight": 4.0}}}
+    arch = arch_from_spec_and_config(lookup(soft["identity"]["encoding"]), soft)
+    source = build_net(arch)
+    src = save_checkpoint(model=source, optimizer=None, scaler=None, scheduler=None, step=0, config=soft,
+                          metadata_kwargs={**metadata_kwargs, "arch": arch, "lineage": [TAG]},
+                          checkpoint_dir=tmp_path / "src", kind="weights")
+
+    def child(reinit: list[str]) -> dict[str, Any]:
+        return {**soft, "model": {**soft["model"], "aux_future_occupancy": {"w": 0.5}},
+                "identity": {**soft["identity"], "arch_kind": "GnnArchV2SoftPolicyFuture", "warm_start": {
+                    "checkpoint": str(src), "net_hash": net_param_hash(source), "reinit": reinit}}}
+
+    with pytest.raises(RuntimeError, match=f"missing=\\['{FUTURE_HEAD}"):
+        init_trainer(config=child([]), device=torch.device("cpu"), checkpoint_dir=str(tmp_path / "unnamed"))
+    trainer = init_trainer(config=child([FUTURE_HEAD]), device=torch.device("cpu"), checkpoint_dir=str(tmp_path / "warm"))
+    assert trainer.lineage == (TAG, AUX_FUTURE_LINEAGE)
+    assert load_checkpoint(trainer.save_checkpoint(), declared_encoding=None, declared_future_head=None).metadata.lineage == (TAG, AUX_FUTURE_LINEAGE)
+    live = trainer.model.state_dict()
+    assert all(torch.equal(live[k], v) for k, v in source.state_dict().items())
+    assert torch.equal(live[f"{FUTURE_HEAD}.mlp.2.bias"], torch.tensor(FUTURE_PRIOR_LOGITS))

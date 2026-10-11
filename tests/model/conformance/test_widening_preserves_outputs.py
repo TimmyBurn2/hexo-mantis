@@ -134,7 +134,7 @@ def test_only_the_split_noise_lets_the_copies_train_apart(noise: float) -> None:
     net, arch = parent("GnnArchV2SoftPolicy", hidden=8, layers=2)
     wide = widen_net(net, arch, seed=11, noise=noise).train()
     b = golden_batch(golden_positions(3), sample=3, seed=1)
-    policy, value, bins, aux = wide.forward_batch_heads(b.x, b.edge_index, b.edge_attr, b.legal_node_gather,
+    policy, value, bins, aux, _future = wide.forward_batch_heads(b.x, b.edge_index, b.edge_attr, b.legal_node_gather,
                                                         stone_mask_from_batch(b), b.node_offsets)
     (policy.square().mean() + value.square().mean() + bins.square().mean() + aux.square().mean()).backward()
     with torch.no_grad():

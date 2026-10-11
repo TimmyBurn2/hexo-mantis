@@ -49,7 +49,8 @@ def test_served_outputs_are_V2s_exactly_and_the_aux_head_is_inert_at_deploy() ->
     with torch.no_grad():
         a = v2.forward_batch(*_batch())
         b = soft.forward_batch(*_batch())
-        p, v, bins, aux = soft.forward_batch_heads(*_batch())
+        p, v, bins, aux, future = soft.forward_batch_heads(*_batch())
+    assert future is None, "the soft-policy net carries no future-occupancy head"
     for lhs, rhs in zip(a, b, strict=True):
         assert torch.equal(lhs, rhs)
     assert torch.equal(p, a[0]) and torch.equal(v, a[1]) and torch.equal(bins, a[2])

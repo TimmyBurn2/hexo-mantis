@@ -107,7 +107,7 @@ def apply_bc_warm_start(model: Any, declared: BcWarmStart, *, spec: Any) -> BcTr
     raw = torch.load(declared.checkpoint, map_location="cpu", weights_only=True)
     is_v2 = isinstance(raw, dict) and raw.get("schema_version") == CHECKPOINT_SCHEMA_VERSION
     ck = (
-        load_checkpoint(declared.checkpoint, declared_encoding=spec.name)
+        load_checkpoint(declared.checkpoint, declared_encoding=spec.name, declared_future_head=None)  # `reinit` decides
         if is_v2
         else load_legacy_weights(declared.checkpoint, declared_encoding=spec.name)
     )
@@ -146,6 +146,16 @@ def apply_bc_warm_start(model: Any, declared: BcWarmStart, *, spec: Any) -> BcTr
         list(result["reinit_keys"]), result["verified_tensors"],
     )
     return result
+
+
+def warm_start_lineage(declared: BcWarmStart) -> tuple[str, ...]:
+    """The source stamp's lineage, plus `+aux_future` when the declared `reinit` starts the future head fresh; Raises: CheckpointStampError — an unreadable stamp."""
+    from mantis.model.gnn_v2_future import AUX_FUTURE_LINEAGE, FUTURE_HEAD
+    from mantis.train.checkpoints import stamped_lineage
+
+    lineage = stamped_lineage(declared.checkpoint)
+    fresh = FUTURE_HEAD in declared.reinit and AUX_FUTURE_LINEAGE not in lineage
+    return (*lineage, AUX_FUTURE_LINEAGE) if fresh else lineage
 
 
 def maybe_warmstart_gnn_from_bc(model: Any, combined_config: Mapping[str, Any], *, spec: Any) -> bool:

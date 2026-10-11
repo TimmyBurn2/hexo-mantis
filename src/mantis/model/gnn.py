@@ -176,15 +176,19 @@ class GnnNet(nn.Module):
         node_offsets: Tensor | None = None,
         *,
         trunk: Callable[..., Tensor] | None = None,
-    ) -> tuple[Tensor, Tensor, Tensor, Tensor | None]:
-        """`forward_batch`'s three outputs plus the auxiliary policy logits — `None` on a net with one policy head; the trainer's ONE entry, so a head set is a subclass and never a branch."""
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor | None, Tensor | None]:
+        """`forward_batch`'s outputs, the aux policy logits and the future-occupancy logits, `None` where the net has no such head; the trainer's ONE entry, so a head set is a subclass and never a branch."""
         policy_logits, value, bin_logits = self.forward_batch(
             x, edge_index, edge_attr, legal_index, stone_mask, node_offsets, trunk=trunk)
-        return policy_logits, value, bin_logits, None
+        return policy_logits, value, bin_logits, None, None
 
     def policy_heads(self) -> tuple[str, ...]:
         """The attribute names of this net's policy heads, main first."""
         return ("policy_head",)
+
+    def future_heads(self) -> tuple[str, ...]:
+        """The attribute names of this net's future-occupancy heads; a net trained without one has none."""
+        return ()
 
     @torch.no_grad()
     def forward_single(

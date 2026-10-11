@@ -19,7 +19,7 @@ from typing import Any
 import torch
 
 from mantis.config.retired import split_retired
-from mantis.config.schema import ARCH_SCOPED_KEYS, RunConfig
+from mantis.config.schema import ARCH_SCOPED_KEYS, FUTURE_OCCUPANCY_ARCH_KINDS, RunConfig
 from mantis.encoding import lookup
 from mantis.model import (
     ARCH_KINDS,
@@ -60,6 +60,15 @@ class CheckpointStampError(RuntimeError):
 
 class DeclaredEncodingMismatchError(ValueError):
     """A caller-declared encoding disagrees with the checkpoint's own trusted stamp."""
+
+
+class DeclaredFutureHeadMismatchError(ValueError):
+    """A caller-declared future-occupancy head (present or absent) disagrees with the stamp's arch kind."""
+
+
+def future_head_declared(config: Any) -> bool:
+    """Whether a config's `identity.arch_kind` carries the future-occupancy head: what a config-bearing loader declares."""
+    return declared_arch_kind(config) in FUTURE_OCCUPANCY_ARCH_KINDS
 
 
 class ResumeIdentityMismatchError(ValueError):
@@ -564,14 +573,15 @@ def load_checkpoint(
     path: str | Path,
     *,
     declared_encoding: Any,
+    declared_future_head: bool | None,
     expected_run_id: str | None = None,
     device: Any = None,
     decode_override: Any = None,
 ) -> Checkpoint:
     """Read a v2 envelope, refusing every silent repair (run_id, content hash, killed prefixes, stamp sources); never re-stamps.
-    `declared_encoding` has no default: the encoding the caller serves or trains, asserted against the stamp, or `None`,
-    which adopts the stamp and builds from `metadata.encoding_name`; `decode_override` is loud but never raises.
-    Raises: CheckpointStampError — not a v2 envelope, a missing block or disagreeing stamp sources; DeclaredEncodingMismatchError — the declared encoding is not the stamp's; ValueError — both declared_encoding and decode_override."""
+    `declared_encoding` and `declared_future_head` have no default: what the caller serves or trains, asserted against the
+    stamp, or `None`, which adopts the stamp's; `decode_override` is loud but never raises.
+    Raises: CheckpointStampError — not a v2 envelope, a missing block or disagreeing stamp sources; DeclaredEncodingMismatchError — the declared encoding is not the stamp's; DeclaredFutureHeadMismatchError — the declared head is not the stamp's; ValueError — both declared_encoding and decode_override."""
     path = Path(path)
     payload = torch.load(path, weights_only=True, map_location="cpu")
 
@@ -646,11 +656,18 @@ def load_checkpoint(
                 "is the same net's weights or it is not a shadow")
         _reject_killed_prefixes(ema_state)
 
+    rehydrated = _rehydrate_metadata(metadata)
+    carries = type(rehydrated.arch).__name__ in FUTURE_OCCUPANCY_ARCH_KINDS
+    if declared_future_head is not None and declared_future_head != carries:
+        raise DeclaredFutureHeadMismatchError(
+            f"{path.name}: the caller {'expects' if declared_future_head else 'expects no'} future-occupancy head but "
+            f"the stamp's arch is {type(rehydrated.arch).__name__}; a net is served or trained only as what it is."
+        )
     return Checkpoint(
         schema_version=CHECKPOINT_SCHEMA_VERSION,
         kind=kind,
         model_state=model_state,
-        metadata=_rehydrate_metadata(metadata),
+        metadata=rehydrated,
         config=config if isinstance(config, dict) else {},
         optimizer_state=payload.get("optimizer_state"),
         scaler_state=payload.get("scaler_state"),
@@ -844,7 +861,7 @@ def strip_and_restamp(
         "allocator_posture": None,
         "identity": {"encoding": new_encoding, "representation": new_spec.representation},
         # Filled by the arch-scoped loop below with the stamped arch's own widths (v35).
-        "model": {"aux_soft_policy": None},
+        "model": {"aux_soft_policy": None, "aux_future_occupancy": None},
         # `puct` is the value that agrees with this payload's own
         # `train.policy_target: raw_visit_distribution` — the two are one decision.
         "deploy": {"search": {"kind": "puct", "tactics": None}},
@@ -1182,7 +1199,7 @@ def resume_trainer(
     path = Path(path)
     raw = torch.load(path, weights_only=True, map_location="cpu")
     is_v2 = isinstance(raw, dict) and raw.get("schema_version") == CHECKPOINT_SCHEMA_VERSION
-    ck = (load_checkpoint(path, device=device, declared_encoding=declared_encoding) if is_v2
+    ck = (load_checkpoint(path, device=device, declared_encoding=declared_encoding, declared_future_head=None) if is_v2
           else load_legacy_weights(path, declared_encoding=declared_encoding))
 
     arch = ck.metadata.arch

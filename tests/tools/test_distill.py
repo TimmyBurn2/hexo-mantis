@@ -423,7 +423,7 @@ def test_a_tiny_arm_trains_saves_stamped_and_a_warm_arm_inherits(tmp_path, d):
                       heldout_batches=1, sample_threads=1, caps_override=None, log=lambda _s: None)
     assert sorted(rec["saves"]) == [2, 3] and rec["skipped_steps"] == 0
     assert len(list((tmp_path / "arm" / "checkpoints").glob("*.ckpt"))) == 2, "a periodic save beside the named ones"
-    ck = load_checkpoint(rec["saves"][3]["path"], declared_encoding=ENC)
+    ck = load_checkpoint(rec["saves"][3]["path"], declared_encoding=ENC, declared_future_head=None)
     assert ck.metadata.lineage == ("six-aaaaaaa-gen1",)
     assert (ck.metadata.arch.hidden, ck.metadata.arch.num_layers) == (16, 1)
     assert ck.config["train"]["scheduler_t_max"] == 3 and ck.config["identity"]["warm_start"] is None
@@ -432,7 +432,7 @@ def test_a_tiny_arm_trains_saves_stamped_and_a_warm_arm_inherits(tmp_path, d):
     rec_w = T.train_arm(warm, recipe, tmp_path / "warm", device="cpu", heldout_ring=None, heldout_every=1000,
                         heldout_batches=1, sample_threads=1, caps_override=None, log=lambda _s: None)
     assert rec_w["net_hash_start"] == rec["saves"][3]["net_hash"]
-    assert load_checkpoint(rec_w["saves"][2]["path"], declared_encoding=ENC).metadata.lineage == ("six-aaaaaaa-gen1",)
+    assert load_checkpoint(rec_w["saves"][2]["path"], declared_encoding=ENC, declared_future_head=None).metadata.lineage == ("six-aaaaaaa-gen1",)
     with pytest.raises(FileExistsError, match="finished"):
         T.train_arm(warm, recipe, tmp_path / "warm", device="cpu", heldout_ring=None, heldout_every=1000,
                     heldout_batches=1, sample_threads=1, caps_override=None, log=lambda _s: None)
@@ -495,7 +495,7 @@ def test_a_stopped_arm_resumes_from_its_newest_save_and_finishes(tmp_path, d, mo
     logged = [json.loads(r)["step"] for r in (tmp_path / "one" / "events.jsonl").read_text(encoding="utf-8").splitlines()]
     assert logged == [1, 2, 3, 4, 5, 6], "the dead segment's step 5 is not logged twice"
     assert rec["resumes"][0]["tree_commit"] is not None and rec["backfilled_saves"] == []
-    ck = load_checkpoint(rec["saves"][6]["path"], declared_encoding=ENC)
+    ck = load_checkpoint(rec["saves"][6]["path"], declared_encoding=ENC, declared_future_head=None)
     assert ck.metadata.lineage == ("six-aaaaaaa-gen1",)
     assert ck.scheduler_state["last_epoch"] == 6, "the resumed scheduler carried on from step 4"
     assert {int(v["step"]) for v in ck.optimizer_state["state"].values()} == {6}, "Adam's moments carried on from 4"
@@ -544,12 +544,12 @@ def test_a_widened_checkpoint_serves_its_parent_and_warm_starts_a_wide_arm(tmp_p
     assert cli.main(["widen", "--parent", str(parent), "--base-config", str(base), "--run-id", "tinywide",
                      "--out", str(tmp_path / "wide")]) == 0
     rec = json.loads((tmp_path / "wide" / "widen.json").read_text(encoding="utf-8"))
-    ck = load_checkpoint(rec["widened"], declared_encoding=ENC)
+    ck = load_checkpoint(rec["widened"], declared_encoding=ENC, declared_future_head=None)
     assert (ck.metadata.arch.hidden, ck.metadata.arch.num_layers) == (32, 2) and ck.metadata.step == 0
     assert ck.metadata.lineage == ("six-aaaaaaa-gen1", f"widened-from-{parent.stem}")
     nets = []
     for path in (parent, Path(rec["widened"])):
-        c = load_checkpoint(path, declared_encoding=ENC)
+        c = load_checkpoint(path, declared_encoding=ENC, declared_future_head=None)
         net = build_net(c.metadata.arch)
         net.load_state_dict(deploy_state(c)[0])
         nets.append(net.eval())
@@ -563,9 +563,9 @@ def test_a_widened_checkpoint_serves_its_parent_and_warm_starts_a_wide_arm(tmp_p
     with torch.no_grad():
         got = [n.forward_batch_heads(b.x, b.edge_index, b.edge_attr, b.legal_node_gather, stone_mask_from_batch(b),
                                      b.node_offsets) for n in nets]
-    assert max(float((x - y).abs().max()) for x, y in zip(*got, strict=True)) <= 1e-4
+    assert max(float((x - y).abs().max()) for x, y in zip(*got, strict=True) if x is not None) <= 1e-4
     wide_arm = T.ArmSpec(run_id="tinywidearm", hidden=32, layers=2, ring=ring, warm_start=Path(rec["widened"]),
                          value_mask_p=0.125)
     rec_w = T.train_arm(wide_arm, recipe, tmp_path / "widearm", **kw)
     assert rec_w["net_hash_start"] == rec["widened_net_hash"]
-    assert load_checkpoint(rec_w["saves"][2]["path"], declared_encoding=ENC).metadata.lineage == ck.metadata.lineage
+    assert load_checkpoint(rec_w["saves"][2]["path"], declared_encoding=ENC, declared_future_head=None).metadata.lineage == ck.metadata.lineage

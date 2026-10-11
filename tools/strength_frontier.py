@@ -80,7 +80,7 @@ class FrontierCellError(ValueError):
 
 
 def _snapshot_from_checkpoint(path: Path, out: Path, *, encoding: str) -> dict[str, Any]:
-    ck = load_checkpoint(path, declared_encoding=encoding)
+    ck = load_checkpoint(path, declared_encoding=encoding, declared_future_head=None)  # a cell serves either kind
     if ck.metadata.arch is None:
         raise FrontierCellError(f"{path}: the stamp resolves no arch, so the net cannot be rebuilt")
     net = build_net(ck.metadata.arch)

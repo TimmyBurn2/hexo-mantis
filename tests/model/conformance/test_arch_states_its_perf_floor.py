@@ -31,7 +31,7 @@ from typing import Any
 import pytest
 
 import mantis.model.build as build_module
-from mantis.model.arch import GnnArch, GnnArchV2, GnnArchV2SoftPolicy
+from mantis.model.arch import GnnArch, GnnArchV2, GnnArchV2SoftPolicy, GnnArchV2SoftPolicyFuture
 from mantis.model.build import build_net
 
 from _corpus import ConformanceRefusal, build_board, roster
@@ -267,6 +267,11 @@ def registered_probes() -> dict[str, FloorProbe]:
             arch_kind="GnnArchV2SoftPolicy",
             floor_arm=lambda spec: _gnn_probe_arms(spec, GnnArchV2SoftPolicy)[0](spec),
             served_arm=lambda spec: _gnn_probe_arms(spec, GnnArchV2SoftPolicy)[1](spec),
+        ),
+        "GnnArchV2SoftPolicyFuture": FloorProbe(
+            arch_kind="GnnArchV2SoftPolicyFuture",
+            floor_arm=lambda spec: _gnn_probe_arms(spec, GnnArchV2SoftPolicyFuture)[0](spec),
+            served_arm=lambda spec: _gnn_probe_arms(spec, GnnArchV2SoftPolicyFuture)[1](spec),
         ),
     }
 

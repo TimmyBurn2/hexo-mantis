@@ -29,6 +29,9 @@ model:
   # a mint arms it TOGETHER with `identity.arch_kind: GnnArchV2SoftPolicy` (the schema refuses either
   # alone). Armed shape: {target_temperature: <float > 1>, weight: <float > 0>}.
   aux_soft_policy: null
+  # The future-occupancy head's weight (v59): REQUIRED, `null` the explicit OFF, armed {w: <float > 0>} only together
+  # with `identity.arch_kind: GnnArchV2SoftPolicyFuture`.
+  aux_future_occupancy: null
 deploy:
   search:
     kind: puct

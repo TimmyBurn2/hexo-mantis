@@ -30,7 +30,7 @@ import torch
 import yaml
 
 from mantis.config.census import production_configs
-from mantis.config.schema.core import SOFT_POLICY_ARCH_KINDS
+from mantis.config.schema.core import FUTURE_OCCUPANCY_ARCH_KINDS, SOFT_POLICY_ARCH_KINDS
 from mantis.config.loader import discover_configs, load_config
 from mantis.encoding import lookup
 from mantis.model import (
@@ -383,6 +383,8 @@ def test_a_minted_arch_kind_row_is_honoured_by_the_production_entry_point(tmp_pa
     # A kind that carries the soft-policy head is minted WITH its rows (v36's pairing rule).
     if kind in SOFT_POLICY_ARCH_KINDS:
         raw["model"]["aux_soft_policy"] = {"target_temperature": 4.0, "weight": 4.0}
+    if kind in FUTURE_OCCUPANCY_ARCH_KINDS:
+        raw["model"]["aux_future_occupancy"] = {"w": 0.5}
     path = tmp_path / "with_row.yaml"
     path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
     config = load_config(path)
