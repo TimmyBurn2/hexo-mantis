@@ -20,7 +20,9 @@ stopped on 2026-10-11 at 16:55:58 CEST (one SIGTERM, the operator's word): stop 
 mirrored to `mantis-mirror/run11/run/checkpoints/` and sha256-matched. Its rung 16 was flat from 228k to 564k (29 reads,
 slope −0.005 ± 0.023 logit per 100k steps); S read 0.635 / 0.628 / 0.686 / 0.628 at 240k / 264k / 288k / 312k. DEPLOY-2's
 cells keep reading its saves; their cap's run-rate check, keyed to run11, is off since the stop (CARD-RUN12). The RUN12-GO
-packet (architect, 2026-10-11; branch `run12-go`, box A, local records `mantis-records/run12/`) mints and runs run12.
+packet (architect, 2026-10-11; branch `run12-go`, box A, local records `mantis-records/run12/`) mints and runs run12. AUX-1
+EXITED 2026-10-11 (branch `aux-1`, CARD-AUX-1): HEXG v4 and the future-occupancy head land as a capability, the smoke's
+head learns 0.045 below its base with policy and value under 0.01 of the equal-recipe control; the architect rules.
 
 **R390 (2026-10-09): WARM ONLY. DISTILL-1's halt stands as a success of its control row (the probe's start was
 unstated; from-scratch arms at feasible budgets read budget, not capacity — the architect's error). The teacher check and

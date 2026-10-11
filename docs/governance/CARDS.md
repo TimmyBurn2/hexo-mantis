@@ -43,8 +43,19 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
 
 - **CARD-RULER-NOT-TEACHER — STANDING by R391(a): an arm trained on a ruler's outputs is never read on that ruler.**
   DISTILL-2's b − a is read on S for this reason: rung 16's opponent, Six gen455, was b's and d's policy teacher.
-- **CARD-AUX-1 — ORDERED by R391(e), in parallel with run12: a future-occupancy head behind the seam, ring v4
-  default-filled.** It supplies the occupancy-class target whose absence R391(c) names as a cause of record.
+- **CARD-AUX-1 — EXITED 2026-10-11, the architect rules (branch `aux-1`; local records `mantis-records/aux-1/EXIT.md`):
+  the future-occupancy head lands as a capability with pins.** HEXG v4 carries each row's next 20 placements (v2/v3
+  rings load without it, byte-equal); self-play writes it; `tools/ring_future.py` gives an existing ring's rows theirs
+  from the run's game records (run11's final ring: 500 000 of 500 000 rows, no contradiction). `GnnArchV2SoftPolicyFuture`
+  trains a three-way head per legal cell at `model.aux_future_occupancy.w` (every config `null`), with LAW-18 rows on
+  `trainer_step` and `heldout_gap`, `+aux_future` stamped by the warm start that begins it, and a required
+  `declared_future_head` at the one loader. The pre-stated smoke (2 000 steps on run11's final ring from its final
+  save): held-out head CE 0.183 → 0.130, 0.045 below the stricter per-row base; H − C policy +0.002 ± 0.002, value
+  +0.000, under 0.01, while both arms' raw policy CE moved +0.012 to +0.014 from the parent (the fine-tune's). The
+  run13 / DENSE-1 line: held-out head CE ≤ per-row base − 0.022 at the first save. Serving: op-for-op the soft-policy
+  net's, 0 % per leaf. Every run on this tree writes v4 rings. Was: ORDERED by R391(e), in parallel with run12: a
+  future-occupancy head behind the seam, ring v4 default-filled; it supplies the occupancy-class target whose absence
+  R391(c) names as a cause of record.
 - **CARD-RUN13 — CONDITIONAL by R391(e): run12's best + AUX-1 if run12 climbs; DENSE-1 builds if it does not.** A miss
   of run12's going-forward line at 84k halts run12 and DENSE-1 takes box A (R391(d)).
 
