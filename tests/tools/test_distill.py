@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import importlib
 import json
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -452,8 +453,17 @@ def _killed_at(T: Any, monkeypatch: Any, at: int) -> None:
     monkeypatch.setattr(T, "run_declared_train_step", step)
 
 
+@pytest.fixture
+def one_thread() -> Iterator[None]:
+    """One intra-op thread: a contended multi-threaded CPU kernel is not bit-stable, and the replay pin compares hashes."""
+    threads = torch.get_num_threads()
+    torch.set_num_threads(1)
+    yield
+    torch.set_num_threads(threads)
+
+
 @pytest.mark.integration
-def test_a_stopped_arm_resumes_from_its_newest_save_and_finishes(tmp_path, d, monkeypatch):
+def test_a_stopped_arm_resumes_from_its_newest_save_and_finishes(tmp_path, d, monkeypatch, one_thread):
     """A kill after step 5 leaves the step-4 rolling save; the rerun resumes there with the optimizer and scheduler carried, and a second arm killed at the same step replays the same net."""
     load_tools_package("distill")
     T = importlib.import_module("distill.train")
@@ -482,6 +492,9 @@ def test_a_stopped_arm_resumes_from_its_newest_save_and_finishes(tmp_path, d, mo
     assert sorted(rec["saves"]) == [3, 6] and [r["step"] for r in rec["resumes"]] == [4]
     assert rec["resumes"][0]["seed"] == T.resume_seed(11, 4) and rec["trained_steps"] == 6
     assert [json.loads(r)["step"] for r in (tmp_path / "one" / "curve.jsonl").read_text(encoding="utf-8").splitlines()] == [0]
+    logged = [json.loads(r)["step"] for r in (tmp_path / "one" / "events.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert logged == [1, 2, 3, 4, 5, 6], "the dead segment's step 5 is not logged twice"
+    assert rec["resumes"][0]["tree_commit"] is not None and rec["backfilled_saves"] == []
     ck = load_checkpoint(rec["saves"][6]["path"], declared_encoding=ENC)
     assert ck.metadata.lineage == ("six-aaaaaaa-gen1",)
     assert ck.scheduler_state["last_epoch"] == 6, "the resumed scheduler carried on from step 4"
@@ -499,8 +512,12 @@ def test_a_stopped_arm_resumes_from_its_newest_save_and_finishes(tmp_path, d, mo
             T.train_arm(arm, recipe, tmp_path / "early", **kw)
     assert [p.name for p in tmp_path.glob("early.unsaved.*")], "a stop before the first save restarts aside"
     other = T.Recipe(base_config=_a_graph_config(), steps=6, save_at=(2, 6), lr=1e-3, eta_min=1e-4, seed=11)
-    with pytest.raises(ValueError, match="differs"):
+    with pytest.raises(ValueError, match=r"differs.*save_at"):
         T.train_arm(arm, other, tmp_path / "early", **kw)
+    (tmp_path / "foreign").mkdir()
+    (tmp_path / "foreign" / "a").write_text("x", encoding="utf-8")
+    with pytest.raises(FileExistsError, match="no arm"):
+        T.train_arm(arm, recipe, tmp_path / "foreign", **kw)
 
 
 @pytest.mark.integration

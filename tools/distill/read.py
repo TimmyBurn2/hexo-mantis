@@ -167,7 +167,7 @@ def verdict(spec: dict[str, Any], roots: list[Path], *, line: float = LINE, near
 
 
 def contrast_read(spec: dict[str, Any], roots: list[Path], *, line: float = LINE) -> dict[str, Any]:
-    """Arms read against each other: each arm's two-save panel per ruler (the reference beside), every named contrast lhs − rhs with its branch, and the outcome over the branches; Raises: ValueError — as `verdict`, a contrast naming no arm, or a repeated contrast name."""
+    """Arms read against each other: each arm's two-save panel per ruler (the reference beside), every named contrast lhs − rhs with its branch, and the outcome over the branches; Raises: ValueError — a save without exactly one receipt, a ruler over two instruments, a refused sidecar, a contrast naming no arm, or a repeated contrast name."""
     ref_cells, ref = _reference(spec, roots)
     out: dict[str, Any] = {"reference": {r: {"logit": v[0], "se": v[1], "cells": [c.path for c in ref_cells[r]]}
                                          for r, v in ref.items()}, "contrasts": {}}
