@@ -192,7 +192,9 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   baseline in box A's `/workspace/ops/deploy2_cap.py`) and is switched off by the marker `/workspace/ops/RUN11_ENDED`
   since run11's stop: it guards run12 only once re-based on run12's own rate. OWNED by the RUN12-GO packet (architect,
   2026-10-11; branch `run12-go`, box A, local records `mantis-records/run12/`): G1 the preflight, G2 the start on the
-  operator's mint word, G3 the pre-stated read at 84k. **Was: ORDERED by R388(d): run12 = run11's
+  operator's mint word, G3 the pre-stated read at 84k. G1 passed, with `configs/run12.yaml` minted at `abbca6be`. G2
+  STARTED 2026-10-12 06:41 CEST: run12 is LIVE on box A, its cells on run12's saves, and the cap's run-rate check
+  re-based on run12's cell-free rate before the first cell. **Was: ORDERED by R388(d): run12 = run11's
   best save by ladder-and-S agreement, on dev + fresh-2.** The arena
   book in the in-run gate; bookless evaluations from the origin stone alone (1 ply); 48 workers. It starts after
   CARD-FLOOR-READ-2's read, without waiting for ENCODE-1. Its going-forward line: four rung-16 cells above its parent's

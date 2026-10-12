@@ -18,9 +18,11 @@ above run11's plateau (−0.59 logit) by +0.17 with S held; a miss at 84k halts 
 DENSE-1's design run in parallel.** (RULINGS R391; the R390 paragraph below stands where R391 does not move it.) run11
 stopped on 2026-10-11 at 16:55:58 CEST (one SIGTERM, the operator's word): stop save `run11a2_00593030_e49dace7.ckpt`,
 mirrored to `mantis-mirror/run11/run/checkpoints/` and sha256-matched. Its rung 16 was flat from 228k to 564k (29 reads,
-slope −0.005 ± 0.023 logit per 100k steps); S read 0.635 / 0.628 / 0.686 / 0.628 at 240k / 264k / 288k / 312k. DEPLOY-2's
-cells keep reading its saves; their cap's run-rate check, keyed to run11, is off since the stop (CARD-RUN12). The RUN12-GO
-packet (architect, 2026-10-11; branch `run12-go`, box A, local records `mantis-records/run12/`) mints and runs run12. AUX-1
+slope −0.005 ± 0.023 logit per 100k steps); S read 0.635 / 0.628 / 0.686 / 0.628 at 240k / 264k / 288k / 312k. The
+RUN12-GO packet (architect, 2026-10-11; branch `run12-go`, box A, local records `mantis-records/run12/`) minted
+`configs/run12.yaml` at `abbca6be`, and run12 is LIVE on box A since 2026-10-12 06:41 CEST at that commit. DEPLOY-2's
+cells read run12's saves: rung 16 every 12k, and S at 48k, 60k, 72k and 84k. Their cap's run-rate check is re-based on
+run12's own rate. Run11's unplayed S backlog waits (CARD-RUN12). This line said "mints and runs run12" until its start. AUX-1
 EXITED 2026-10-11 (branch `aux-1`, CARD-AUX-1): HEXG v4 and the future-occupancy head land as a capability, the smoke's
 head learns 0.045 below its base with policy and value under 0.01 of the equal-recipe control; the architect rules.
 
@@ -484,6 +486,10 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
 
 ## The run
 
+- **run12 is LIVE (R391(d)):** started 2026-10-12 06:41 CEST on box A from `abbca6be` (`configs/run12.yaml`).
+  - A fresh launch from the widened stamp `distill2wide_00000000_99d4c045`, its lineage carried.
+  - Run11's final ring (500 000 rows) is preloaded into its 2.5M-row window through `train.ring_preload`.
+  - Its read is the 48k–84k rung-16 cells, with S beside (CARD-RUN12).
 - **run11 is CLOSED (R391(b)):** arm 2 (`run11a2`) resumed from its final save, 32 201, on box A at 2026-10-05 12:35
   CEST; paused at 174 008 (R386(a)); resumed 2026-10-07 12:33 CEST on its second cosine cycle (RUN11-CYCLE-2); paused
   for DISTILL-1 at 329 726 (2026-10-08 23:55–00:36 CEST); and stopped for good at 593 030 on 2026-10-11 16:55:58 CEST
@@ -516,8 +522,10 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
 
 The committed configs are `configs/run10.yaml`, RUN11-PRE's four arms `configs/run11a1.yaml` to `configs/run11a4.yaml`
 (arm 2's is run11's, R385(a)), RUN11-FRESH's `configs/run11fresh.yaml` (arm 2's header replayed with no
-`identity.warm_start`, run id `run11fresh`; nothing else differs, by `tools/config_diff.py --expect`), `configs/dev_example.yaml`, `configs/smoke_preflight_armed.yaml` and
-`configs/smoke_wiring.yaml`; this line omitted the arms until R385's record. Production is a CENSUS, never a
+`identity.warm_start`, run id `run11fresh`; nothing else differs, by `tools/config_diff.py --expect`), run12's
+`configs/run12.yaml` (arm 2's header replayed with the deltas R391(d) grants; CARD-RUN12), `configs/dev_example.yaml`,
+`configs/smoke_preflight_armed.yaml` and `configs/smoke_wiring.yaml`. This line omitted the arms until R385's record,
+and run12's until its start. Production is a CENSUS, never a
 list: `mantis.config.census.production_configs` (every `configs/` file minus its `EXEMPT_CONFIGS`
 rows, which carry their grounds). run7's and run8's configs were deleted at `8b00b4dd` (R368(e)),
 run6's by R369's packet (W0).
@@ -597,3 +605,5 @@ The current phase was rewritten 2026-10-11 at R391 on branch `r391-record` over 
 stop read from box A and its stop save's sha256 from the box and the mirror; the same edit repaired the run line (it
 said PAUSED at 174 008) and box A's clause.
 The RUN12-GO line was added 2026-10-11 at its packet's first commit, on branch `run12-go` over `r391-record` `1fa5a280`.
+It was updated 2026-10-12 at run12's start, with the run line and configs line, on that branch over `origin/dev` `8cb20e3a`,
+the launch and boot read from box A.
