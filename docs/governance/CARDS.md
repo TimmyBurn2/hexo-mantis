@@ -182,7 +182,17 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   OWNED by DEPLOY-2 A4.
   BUILT 2026-10-08 (DEPLOY-2 A4): the switch is gone, both stone levels pinned, and a whole-tree golden recorded on the
   base tree holds Gumbel bit-identical (a planted interior break moves it).
-- **CARD-RUN12 — AMENDED by R391(d) (2026-10-11): run12 starts from `distill2wide_00000000`, the function-preserving
+- **CARD-RUN12 — SECOND WINDOW by R392(a) (2026-10-13): run12 trains on, uninterrupted, to one final window: the
+  pooled rung-16 cells at 108k, 120k, 132k and 144k ≥ −0.418 logit (+0.17 over the plateau −0.588), with S pooled over
+  108k and 120k ≥ 0.590 → GO under run11's bands and the rung step; else STOP at the 144k read, no third window, whatever
+  the slope.** Futility: two consecutive rung-16 cells from 96k on below −0.588 → STOP at once. Cells: rung 16 every 12k;
+  S at 108k and 120k only, each after that save's rung cell; 96k's cell is information and futility only. On a STOP the
+  stop save is the last save read and the best save is `tools/best_save.py`'s; DENSE-1 takes box A once its screen
+  exists, and until then the box idles or stops on the operator's word (R392(b)). At a GO, run13's shape is ruled at the
+  read. The first window read a HALT by R391(d)'s letter on 2026-10-13: rung 16 pooled 48k–84k −0.530 logit v the line
+  −0.418 (cells 0.373 / 0.330 / 0.376 / 0.403), S 48k–72k pooled +0.506; "the GNN recipe is exhausted" is withdrawn as a
+  finding (local records `mantis-records/run12/EXIT.md`; the second window pre-stated in its PRESTATED ADDENDUM 5).
+  **Was: AMENDED by R391(d) (2026-10-11): run12 starts from `distill2wide_00000000`, the function-preserving
   4×256 of run11's best save (`run11a2_00264000`).** `replay_capacity` 2.5M rows (memory verified at preflight); one
   cosine 1e-3 → 1e-4 over 300k; the ring preloaded from run11's final ring; 48 workers; 2.4 steps per game; value mask
   1/8; aux 2.0; the arena gate book; the f64 fix; trainer caps re-fitted for the wide net. Rulers rung 16 and S.

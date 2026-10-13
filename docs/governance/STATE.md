@@ -7,6 +7,21 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
+**R392 (2026-10-13): THE WINDOW SAT ON THE DIP; ONE MORE WINDOW, THE LAST. run12's 84k read is a HALT by R391(d)'s
+letter and is recorded as such; "the GNN recipe is exhausted" is withdrawn as a finding, a window miss and not a measured
+plateau (the window read a warm restart at 10× the floor LR through its dip and recovery). run12 trains on, uninterrupted,
+to one final second window: the pooled rung-16 cells at 108k, 120k, 132k and 144k ≥ −0.418 logit, with S pooled over
+108k and 120k ≥ 0.590 → GO; else STOP at the 144k read, no third window. Futility: two consecutive rung-16 cells from
+96k on below −0.588 → STOP at once. At a STOP, DENSE-1 takes box A once its screen exists; at a GO, run13's shape is
+ruled at the read. AUX-1 is ratified as landed; DENSE-1's design is accepted, its code legs start on the desktop with box
+A untouched.** (RULINGS R392; the R391 paragraph below stands where R392 does not move it.) run12's first read
+(RUN12-GO G3, 2026-10-13 17:00 CEST; local records `mantis-records/run12/EXIT.md`): rung-16 cells 0.373 / 0.330 / 0.376 /
+0.403 at 48k / 60k / 72k / 84k, pooled 853.5 / 2 304 = −0.530 logit against the line −0.418. The cells sat 0.13–0.19
+below the plateau at 12k–36k, and a fit over the seven rises +0.055 ± 0.019 logit per 12k. S read 0.641 / 0.622 / 0.609
+at 48k / 60k / 72k (pooled +0.506 logit). No save through 96k carried a halting row. run12 was not stopped; its cells
+play rung 16 every 12k and S at 108k and 120k only, each after that save's rung cell, by box A's picker. The local
+records' PRESTATED ADDENDUM 5 carries the second window, written before the 108k save.
+
 **R391 (2026-10-11): THE PLATEAU IS THE RECIPE UNTIL RUN12 SAYS OTHERWISE. DISTILL-2 is accepted: S is decisive for
 b − a, and an arm trained on a ruler's outputs is never read on that ruler. Six's raw policy is not the better target at
 this density; CARD-SIX-SEARCH-TEACHER stays held; c and d's S cells are not played; width reads "unused at lr 1e-4 in
@@ -486,10 +501,11 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
 
 ## The run
 
-- **run12 is LIVE (R391(d)):** started 2026-10-12 06:41 CEST on box A from `abbca6be` (`configs/run12.yaml`).
+- **run12 is LIVE (R391(d); trains on by R392(a)):** started 2026-10-12 06:41 CEST on box A from `abbca6be` (`configs/run12.yaml`).
   - A fresh launch from the widened stamp `distill2wide_00000000_99d4c045`, its lineage carried.
   - Run11's final ring (500 000 rows) is preloaded into its 2.5M-row window through `train.ring_preload`.
-  - Its read is the 48k–84k rung-16 cells, with S beside (CARD-RUN12).
+  - Its first read (the 48k–84k rung-16 cells, S beside) was a HALT by its letter, annotated by R392(a). It trains on to
+    the second window: the 108k–144k rung-16 cells, with S at 108k and 120k (CARD-RUN12).
 - **run11 is CLOSED (R391(b)):** arm 2 (`run11a2`) resumed from its final save, 32 201, on box A at 2026-10-05 12:35
   CEST; paused at 174 008 (R386(a)); resumed 2026-10-07 12:33 CEST on its second cosine cycle (RUN11-CYCLE-2); paused
   for DISTILL-1 at 329 726 (2026-10-08 23:55–00:36 CEST); and stopped for good at 593 030 on 2026-10-11 16:55:58 CEST
@@ -607,3 +623,5 @@ said PAUSED at 174 008) and box A's clause.
 The RUN12-GO line was added 2026-10-11 at its packet's first commit, on branch `run12-go` over `r391-record` `1fa5a280`.
 It was updated 2026-10-12 at run12's start, with the run line and configs line, on that branch over `origin/dev` `8cb20e3a`,
 the launch and boot read from box A.
+The current phase was rewritten 2026-10-13 at R392 on branch `r392-record` over `origin/dev` `3344f6a4`, with run12's
+first read from the RUN12-GO exit record (local) and box A; the same edit updated the run line.

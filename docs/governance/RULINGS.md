@@ -1,4 +1,4 @@
-# RULINGS — R23 to R391
+# RULINGS — R23 to R392
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R392.
+- Numbering continues from R346. The next ruling is R393.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -36,6 +36,43 @@ still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register 
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
 
+### R392 — THE WINDOW SAT ON THE DIP; ONE MORE WINDOW, THE LAST
+Decision: verbatim below.
+
+> R392 — THE WINDOW SAT ON THE DIP; ONE MORE WINDOW, THE LAST.
+> (a) run12's 84k read is a HALT by R391(d)'s letter (pooled 48k–84k rung 16 −0.530 logit v
+> the line −0.418) and is recorded as such. ANNOTATES R391(d): the window read a warm restart
+> at 10× the floor LR through its dip and recovery (12k–36k 0.13–0.19 below the plateau; a fit
+> over the seven cells +0.055 ± 0.019 logit per 12k; the 84k cell −0.394). "The GNN recipe is
+> exhausted" is withdrawn as a finding: a window miss, not a measured plateau. The architect's
+> error: R389(b) made the slope the read across a restart; R391(d) set a level window on one,
+> and the dip was visible before the first read cell. run12 trains on, uninterrupted, to one
+> second window, final: pooled rung-16 cells at 108k, 120k, 132k and 144k ≥ −0.418 logit
+> (+0.17 over the plateau −0.588), with S pooled over 108k and 120k ≥ 0.590 → GO under
+> run11's bands and the rung step; else STOP at the 144k read, no third window, whatever the
+> slope. Futility: two consecutive rung-16 cells from 96k on below −0.588 → STOP at once.
+> Cells: rung 16 every 12k; S at 108k and 120k only, after that save's rung cell. 96k's cell
+> is information and futility only. On a STOP the stop save is the last save read; the best
+> save by tools/best_save.py.
+> (b) At a STOP, DENSE-1 takes box A once its screen exists; until then the box idles or
+> stops on the operator's word. At a GO, run13's shape (run12's best + AUX-1's head) is ruled
+> at the read.
+> (c) AUX-1 is ratified as landed; the operator's push stands. The reading of record H − C
+> < 0.01 holds; the raw movement is the fine-tune's, named in advance; the known-bad's role
+> stands (fails the run13 line by 0.030). run12 resumes, if ever, only on its own tree; no
+> box unit moves during run12; the reader move and the re-preflight are the first items of
+> the first run that writes v4 rings. Comment floors re-pin in the first code leg that lands.
+> (d) DENSE-1's design is accepted with its corrected premises and pushes, docs-only, rebased
+> on dev HEAD; the disclosed reads stand (nothing executed; Six's parsed files stay out of any
+> study that bars Six). ANNOTATES R391(e): its code legs — the b10c96 bench on the 3070 first,
+> a per-leaf time above the design's ceiling halting before any seam work; then hexcanvas,
+> the wire contract and the builder; then the net behind the seam with detector, witness and
+> conformance — start on the desktop now, box A untouched; its screen and run wait for box A.
+> §9 Q1: screen + plateau-break; L4's line is run12's line; the controlled 150–250 box-h test
+> is not bought. Q2–Q7 are ruled in R393 with the build packet.
+
+Status: standing. ANNOTATES R391(d) and (e) as above.
+
 ### R391 — THE PLATEAU IS THE RECIPE UNTIL RUN12 SAYS OTHERWISE
 Decision: verbatim below.
 
@@ -61,7 +98,10 @@ Decision: verbatim below.
 > against Six's and Bubble's crops; the corpus of R390(c) as its supervised bootstrap, Six's
 > labels excluded). run13 = run12's best + AUX-1 if run12 climbs; DENSE-1 builds if not.
 
-Status: standing. ANNOTATES R390(b) and (d): DISTILL-2 is accepted and spent (Mixed; S decisive for b − a), and run11
+Status: standing; (d) ANNOTATED by R392(a): its 84k read is a HALT by its letter and is recorded as such, "the GNN
+recipe is exhausted" is withdrawn as a finding (a window miss, not a measured plateau), and run12 trains on to one
+final second window (108k–144k); (e) ANNOTATED by R392(d): DENSE-1's code legs start on the desktop now, its screen
+and run waiting for box A. ANNOTATES R390(b) and (d): DISTILL-2 is accepted and spent (Mixed; S decisive for b − a), and run11
 no longer trains on; it is CLOSED at its stop save. ANNOTATES R389(d): run11 closes before run12's mint, and run12's
 replay row is 2.5M rows with memory verified at preflight, not 2M. AMENDS R388(d): run12 starts from the function-
 preserving widening of run11's best save (`distill2wide_00000000`, the 4×256 of `run11a2_00264000`), and its going-
