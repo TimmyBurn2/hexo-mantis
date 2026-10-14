@@ -7,6 +7,23 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
+**R393 (2026-10-14): GO RECORDED. The plateau is broken by the recipe as a whole; the window's level is a watch. run12
+trains to its 300k save, where the operator stops it (marker, then SIGTERM, as run11). Rung 16 every 12k; S at 264k and
+288k beside the run; after the stop, S at 300k and wherever the best-save rule needs it. The anneal read, pre-registered
+before the 264k cell: pooled rung 16 over 264k–300k against the window's −0.2425, a lift ≥ +0.17 → "the anneal lifts";
+neither outcome stops the lineage. run13 = run12's best save at its end + AUX-1's head, on dev HEAD, its ring preloaded
+from run12's final ring back-filled to v4, one cosine 5e-4 → 1e-4 over 150k, all else run12's; a miss of its lines →
+DENSE-1 takes box A. It launches within hours of the stop; RUN13-PREP prepares it. The cells' start gate is carded,
+fixed at the tree move.** (RULINGS R393; the R392 paragraph below stands where R393 does not move it.) The second window
+read GO on 2026-10-14 11:00 CEST (local records `mantis-records/run12/EXIT.md`): rung-16 cells 0.439 / 0.443 / 0.438 /
+0.438 at 108k / 120k / 132k / 144k, pooled 1 013 / 2 304 = −0.2425 logit against the line −0.418; S 0.664 / 0.743 at
+108k / 120k, pooled 810.5 / 1 152 = +0.864 logit against 0.364; no futility pair fired, and 96k read 0.398. The four
+window cells lie within 0.005 of each other while S still rose; run12's in-run gate promoted at 108k and at 144k.
+`tools/best_save.py` picked 120k at the read, information only. run12's lr is one cosine 1e-3 → 1e-4 over 300k, held at
+`eta_min` past it, and `max_train_steps` is 1M, so the run does not stop itself at 300k. The local records' PRESTATED
+ADDENDUM 6 carries the anneal read and the fit over the 17 cells 108k–300k, written before the 264k save; box A's
+picker plays the cells. run12's newest save on the desk mirror at this edit was 153k.
+
 **R392 (2026-10-13): THE WINDOW SAT ON THE DIP; ONE MORE WINDOW, THE LAST. run12's 84k read is a HALT by R391(d)'s
 letter and is recorded as such; "the GNN recipe is exhausted" is withdrawn as a finding, a window miss and not a measured
 plateau (the window read a warm restart at 10× the floor LR through its dip and recovery). run12 trains on, uninterrupted,
@@ -501,11 +518,12 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
 
 ## The run
 
-- **run12 is LIVE (R391(d); trains on by R392(a)):** started 2026-10-12 06:41 CEST on box A from `abbca6be` (`configs/run12.yaml`).
+- **run12 is LIVE (R391(d); GO by R392(a), read 2026-10-14; trains to 300k by R393(c)):** started 2026-10-12 06:41 CEST on box A from `abbca6be` (`configs/run12.yaml`).
   - A fresh launch from the widened stamp `distill2wide_00000000_99d4c045`, its lineage carried.
   - Run11's final ring (500 000 rows) is preloaded into its 2.5M-row window through `train.ring_preload`.
-  - Its first read (the 48k–84k rung-16 cells, S beside) was a HALT by its letter, annotated by R392(a). It trains on to
-    the second window: the 108k–144k rung-16 cells, with S at 108k and 120k (CARD-RUN12).
+  - Its first read (the 48k–84k rung-16 cells, S beside) was a HALT by its letter, annotated by R392(a). Its second
+    window (the 108k–144k rung-16 cells, S at 108k and 120k) read GO. It trains to its 300k save, where the operator
+    stops it; the anneal read is the 264k–300k rung-16 cells (CARD-RUN12). run13 follows from its best save (CARD-RUN13).
 - **run11 is CLOSED (R391(b)):** arm 2 (`run11a2`) resumed from its final save, 32 201, on box A at 2026-10-05 12:35
   CEST; paused at 174 008 (R386(a)); resumed 2026-10-07 12:33 CEST on its second cosine cycle (RUN11-CYCLE-2); paused
   for DISTILL-1 at 329 726 (2026-10-08 23:55–00:36 CEST); and stopped for good at 593 030 on 2026-10-11 16:55:58 CEST
@@ -549,7 +567,7 @@ run6's by R369's packet (W0).
 ## Where things live
 
 - Open work: `docs/governance/CARDS.md` (swept in W6; derived there, never enumerated here).
-- Rulings: `docs/governance/RULINGS.md`; the latest is R386 (this line said R385 until R386's record).
+- Rulings: `docs/governance/RULINGS.md`; the latest is R393 (this line said R386 until R393's record).
 - Laws and the protected set: `docs/governance/LAWS.md`, whose protected set names each
   invariant's pinning tests (R370(f)); `tests/test_protected_set_pins.py` fails if one is gone.
   Falsified work: `docs/governance/falsified.md`.
@@ -625,3 +643,6 @@ It was updated 2026-10-12 at run12's start, with the run line and configs line, 
 the launch and boot read from box A.
 The current phase was rewritten 2026-10-13 at R392 on branch `r392-record` over `origin/dev` `3344f6a4`, with run12's
 first read from the RUN12-GO exit record (local) and box A; the same edit updated the run line.
+The current phase was rewritten 2026-10-14 at R393 on branch `run13-prep` over `origin/dev` `f1b02b2b`, with the second
+window's read from the RUN12-GO exit record (local) and run12's newest save from the desk mirror; the same edit updated
+the run line.

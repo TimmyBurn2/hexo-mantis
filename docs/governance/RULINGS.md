@@ -1,4 +1,4 @@
-# RULINGS — R23 to R392
+# RULINGS — R23 to R393
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R393.
+- Numbering continues from R346. The next ruling is R394.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,34 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R393 — GO RECORDED
+Decision: verbatim below.
+
+> R393, decided (non-canonical; the text lands in RUN13-PREP's first commit):
+>
+> (a) GO recorded. The plateau is broken by the recipe as a whole.
+> (b) The window's level is a watch (slope SE above).
+> (c) run12 trains to its 300k save; you stop it there (marker, then SIGTERM, as run11). Rung
+> 16 every 12k. S at 264k and 288k beside the run; after the stop, S at 300k and wherever the
+> best-save rule needs it ("first on both"). Anneal read, pre-registered before the 264k cell:
+> pooled rung 16 over 264k/276k/288k/300k v the window's −0.2425; a lift ≥ +0.17 → "the anneal
+> lifts", recorded for the recipe; the fit over 108k–300k reported with its SE (17 cells read a
+> slope to ±0.004 per 12k). Neither outcome stops the lineage.
+> (d) run13 = run12's best save at its end + AUX-1's head, on dev HEAD: identity.warm_start
+> with reinit: [future_head] (lineage +aux_future), the head's weight the smoke's, ring_preload
+> from run12's final ring back-filled to v4 by tools/ring_future.py (refused below full
+> settle), one cosine 5e-4 → 1e-4 over 150k (the restart level run11's cycle 2 showed no dip
+> at; half run12's length, the window and width being in place), all else run12's. Lines: the
+> head line at the first save (held-out head CE ≤ row base − 0.0224), the exams and bands of
+> record, a going-forward window pre-registered at the mint, clear of the restart. A miss →
+> DENSE-1 takes box A. It launches within hours of the stop, not days: RUN13-PREP below.
+> (e) The cells' start gate let the 96k cell start under a monitor read and an eval round —
+> carded, fixed at the tree move. R392(a) left the post-GO cells unsaid; (c) fills it.
+
+Status: standing. ANNOTATES R392(a) and (b) as above. The second window read GO on 2026-10-14 (rung 16 pooled
+108k–144k −0.2425 logit v the line −0.418; S pooled 108k–120k +0.864 v 0.364); the anneal read is pre-stated in the
+local records' PRESTATED ADDENDUM 6 (`mantis-records/run12/`), written before the 264k save.
 
 ### R392 — THE WINDOW SAT ON THE DIP; ONE MORE WINDOW, THE LAST
 Decision: verbatim below.
@@ -71,7 +99,8 @@ Decision: verbatim below.
 > §9 Q1: screen + plateau-break; L4's line is run12's line; the controlled 150–250 box-h test
 > is not bought. Q2–Q7 are ruled in R393 with the build packet.
 
-Status: standing. ANNOTATES R391(d) and (e) as above.
+Status: standing; (a) and (b) ANNOTATED by R393: the second window read GO on 2026-10-14, the post-GO cells are
+R393(c)'s, and run13's shape is R393(d)'s. ANNOTATES R391(d) and (e) as above.
 
 ### R391 — THE PLATEAU IS THE RECIPE UNTIL RUN12 SAYS OTHERWISE
 Decision: verbatim below.

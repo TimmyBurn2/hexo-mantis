@@ -56,8 +56,16 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   net's, 0 % per leaf. Every run on this tree writes v4 rings. Was: ORDERED by R391(e), in parallel with run12: a
   future-occupancy head behind the seam, ring v4 default-filled; it supplies the occupancy-class target whose absence
   R391(c) names as a cause of record.
-- **CARD-RUN13 — CONDITIONAL by R391(e): run12's best + AUX-1 if run12 climbs; DENSE-1 builds if it does not.** A miss
-  of run12's going-forward line at 84k halts run12 and DENSE-1 takes box A (R391(d)).
+- **CARD-RUN13 — SHAPED by R393(d) (2026-10-14): run13 = run12's best save at its end + AUX-1's head, on dev HEAD.**
+  `identity.warm_start` from `tools/best_save.py`'s pick with `reinit: [future_head]` (lineage `+aux_future`), the
+  head's weight the smoke's; `train.ring_preload` from run12's final ring back-filled to v4 by `tools/ring_future.py`
+  (refused below full settle); one cosine 5e-4 → 1e-4 over 150k; all else run12's. Lines: the head line at the first
+  save (held-out head CE ≤ row base − 0.0224), the exams and bands of record, and a going-forward window pre-registered
+  at the mint, clear of the restart. A miss → DENSE-1 takes box A. It launches within hours of run12's stop. OWNED by
+  the RUN13-PREP packet (branch `run13-prep`, local records `mantis-records/run13/`): the back-fill rehearsal, the
+  launch semantics at HEAD, and the switch runbook, nothing executed before the stop. **Was: CONDITIONAL by R391(e):
+  run12's best + AUX-1 if run12 climbs; DENSE-1 builds if it does not.** A miss of run12's going-forward line at 84k
+  halts run12 and DENSE-1 takes box A (R391(d)).
 
 ## Opened by the DEPLOY-2 packet (2026-10-08) — the floor read, evals on box A, the dash's units, run12's inputs
 
@@ -79,6 +87,13 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
 - **CARD-RUNG-STEP-IN-TREE — OPENED by DEPLOY-2's reviews: R388(a)'s step (two consecutive saves above 0.7 → the next
   rung, never down) and the parent and anchor re-read at a step live only in box A's follower script.** They come into
   the tree, one implementation the follower and the dash share, before run12's going-forward line can meet a step.
+- **CARD-CELL-START-GATE — CARDED by R393(e) (2026-10-14): the cells' start gate let run12's 96k cell start under a
+  monitor read and an in-run eval round; fixed at the tree move.** Box A's cell wrapper (`run12_capped.sh` under
+  `/workspace/ops/`, not the tree) gates a start on the job's free GPU memory (≥ 3.5 GB) and the run's rate, both read
+  once at the start; its watchdog stops a cell under 0.75 GB free. The 96k cell (2026-10-13 21:32–21:54 CEST) met the
+  108k eval round and monitor read mid-cell and was cap-stopped three times, GPU free at 239 MiB; the fourth try played.
+  The fix holds a start while a monitor read or an eval round is in flight, and lands with the cells' move to dev HEAD
+  at run12's stop (the RUN13-PREP runbook).
 
 ## Opened by R390 (WARM ONLY; 2026-10-09) — DISTILL-1 accepted as a halt, DISTILL-2 warm, the lab corpus
 
@@ -182,7 +197,18 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   OWNED by DEPLOY-2 A4.
   BUILT 2026-10-08 (DEPLOY-2 A4): the switch is gone, both stone levels pinned, and a whole-tree golden recorded on the
   base tree holds Gumbel bit-identical (a planted interior break moves it).
-- **CARD-RUN12 — SECOND WINDOW by R392(a) (2026-10-13): run12 trains on, uninterrupted, to one final window: the
+- **CARD-RUN12 — GO, recorded by R393(a) (2026-10-14): run12 trains to its 300k save, where the operator stops it
+  (marker, then SIGTERM, as run11) (R393(c)).** The second window read GO on 2026-10-14: rung-16 cells 0.439 / 0.443 /
+  0.438 / 0.438 at 108k / 120k / 132k / 144k, pooled 1 013 / 2 304 = −0.2425 logit v the line −0.418; S 0.664 / 0.743
+  at 108k / 120k, pooled 810.5 / 1 152 = +0.864 v 0.364; no futility pair fired (96k read 0.398). The window's level is a
+  watch (R393(b)): its four cells lie within 0.005 of each other while S still rose. Cells: rung 16 every 12k; S at
+  264k and 288k beside the run; after the stop, S at 300k and wherever `tools/best_save.py`'s "first on both" needs it
+  (box A's picker `run12_next.py` c6c81893 gates S 300k on the run's end marker). The anneal read, pre-stated before the
+  264k cell in the local records' PRESTATED ADDENDUM 6: pooled rung 16 over 264k / 276k / 288k / 300k against −0.2425,
+  a lift ≥ +0.17 → "the anneal lifts", recorded for the recipe; the OLS fit over the 17 cells 108k–300k reported with
+  its SE. Neither outcome stops the lineage. The lr is one cosine 1e-3 → 1e-4 over 300k, held at `eta_min` past it;
+  `max_train_steps` is 1M, so the run does not stop itself. The SIGTERM save carries run12's final ring, run13's
+  preload (CARD-RUN13). **Was: SECOND WINDOW by R392(a) (2026-10-13): run12 trains on, uninterrupted, to one final window: the
   pooled rung-16 cells at 108k, 120k, 132k and 144k ≥ −0.418 logit (+0.17 over the plateau −0.588), with S pooled over
   108k and 120k ≥ 0.590 → GO under run11's bands and the rung step; else STOP at the 144k read, no third window, whatever
   the slope.** Futility: two consecutive rung-16 cells from 96k on below −0.588 → STOP at once. Cells: rung 16 every 12k;
