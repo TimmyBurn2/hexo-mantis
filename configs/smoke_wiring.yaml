@@ -33,9 +33,10 @@
 # delta: model.aux_soft_policy: null -> {target_temperature: 4.0, weight: 4.0}
 # delta: eval.gate.sequential: {mu0: 0.42, mu1: 0.52, alpha: 0.05, beta: 0.1, check_every_pairs: 8, min_pairs: 16, max_pairs: 104, at_max_pairs: promote} -> {mu0: 0.42, mu1: 0.52, alpha: 0.05, beta: 0.1, check_every_pairs: 2, min_pairs: 2, max_pairs: 2, at_max_pairs: promote}
 # delta: selfplay.gumbel_m_quick: 16 -> 4
+# delta: model.aux_future_occupancy: null -> {w: 0.5}
 # delta: monitor.heartbeat_poll_interval_sec: 5.0 -> 0.5
 # delta: monitor.heartbeat_file_interval_sec: 15.0 -> 0.5
-# delta: identity.arch_kind: null -> GnnArchV2SoftPolicy
+# delta: identity.arch_kind: null -> GnnArchV2SoftPolicyFuture
 schema_version: 1
 run_id: smoke_wiring
 seed: 20260716
@@ -44,7 +45,7 @@ allocator_posture: expandable_segments
 identity:
   encoding: gnn_axis_v1
   representation: graph
-  arch_kind: GnnArchV2SoftPolicy
+  arch_kind: GnnArchV2SoftPolicyFuture
 model:
   gnn:
     hidden: 8
@@ -52,7 +53,8 @@ model:
   aux_soft_policy:
     target_temperature: 4.0
     weight: 4.0
-  aux_future_occupancy: null
+  aux_future_occupancy:
+    w: 0.5
 deploy:
   search:
     kind: puct

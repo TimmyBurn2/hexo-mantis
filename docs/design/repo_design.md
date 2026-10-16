@@ -1019,7 +1019,12 @@ document and nothing needs to be.
    as a disarmed config must, incidentally to the audit. AMENDMENT (HYGIENE-1 H4, 2026-10-01): it
    also runs the production regime at smoke budgets (Gumbel, its completed target, the playout cap,
    the aux head), so the same test pins it to the armed smoke outside those leaves and to every
-   production config's regime, and one CUDA row boots the live loop on it. All four are re-minted from `tools/config_templates/dev.yaml`, so
+   production config's regime, and one CUDA row boots the live loop on it. AMENDMENT (RUN13-PREP,
+   2026-10-16; its ruling is owed): run13's mint puts the training-only future head in the census
+   beside run12 and the older configs without it, so no one regime is every production config's.
+   The wiring config arms the head at run13's weight, and the pin reads its arch as running a
+   production arch when it is that kind or that soft-policy kind plus the future head; every other
+   regime row stays an equality. All four are re-minted from `tools/config_templates/dev.yaml`, so
    their `# delta:` headers replay. `configs/run5.yaml` left the tree with
    `docs/contracts/eval_decision_run5.md`, whose drift gate derived every expectation from it;
    the two durable properties of that document — a one-lineage Bradley-Terry fit, and eff_n

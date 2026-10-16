@@ -34,7 +34,8 @@ EXEMPT_CONFIGS: tuple[tuple[str, str], ...] = (
     (
         "configs/smoke_wiring.yaml",
         "wiring config: the armed smoke on the production regime (Gumbel, its completed "
-        "target, the playout cap and the aux head, at smoke budgets) with its compute shrunk "
+        "target, the playout cap and the aux heads, the future head among them once a "
+        "production config carries it, at smoke budgets) with its compute shrunk "
         "(trunk 8 x 1, 4 self-play workers, learner batch 8, eval games of 24 plies with 2 "
         "floor games) and its "
         "draw-rate row disarmed, since the tree ships exactly one armed non-production config; "
