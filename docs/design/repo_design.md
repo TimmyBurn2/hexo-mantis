@@ -1029,7 +1029,7 @@ document and nothing needs to be.
    every production config's. The wiring config arms the head at a smoke weight, 0.5, and the pin
    reads its arch as running a production arch when it is that kind or that soft-policy kind plus
    the future head, while the head is admitted only as long as some production config carries it;
-   every other regime row stays an equality. The wiring rows assert the head trains.
+   every other regime row stays an equality. The launcher's regime rows assert the head trains.
 
 8. **Two instruments are retired rather than widened, and both say so in place.**
    `tests/config/test_minted_config_remint.py` diffed the live configs against a byte-frozen

@@ -2,8 +2,7 @@
 
 The minted wiring config (Gumbel, its completed target, the playout cap, the aux heads) builds its
 own net and trainer, runs 2 steps through `run_training_loop` on sparse rows, writes an envelope-v2
-checkpoint, resumes from it, and shuts down clean on a simulated signal. The rows carry no future
-field, so an armed future head sees none here; its training on self-play's fields is the launcher rows' subject.
+checkpoint, resumes from it, and shuts down clean on a simulated signal.
 """
 from __future__ import annotations
 
@@ -88,7 +87,7 @@ def test_launch_path_smoke(tmp_path: Path) -> None:
     if run_config.model.aux_future_occupancy is not None:
         future = [(row.get("aux_future_rows"), row.get("aux_future_ce")) for row in sink.rows if row["event"] == "trainer_step"]
         assert future == [(0, None)] * 2, (
-            f"these rows carry no future field, so the armed head must see none and say so; got {future}"
+            f"these rows carry no future field, so the armed head must see none and say so (its training on self-play's fields is the launcher rows' subject); got {future}"
         )
 
     # the loop wrote a FINAL envelope-v2 checkpoint on shutdown_save
