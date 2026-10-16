@@ -22,7 +22,8 @@ window cells lie within 0.005 of each other while S still rose; run12's in-run g
 `tools/best_save.py` picked 120k at the read, information only. run12's lr is one cosine 1e-3 → 1e-4 over 300k, held at
 `eta_min` past it, and `max_train_steps` is 1M, so the run does not stop itself at 300k. The local records' PRESTATED
 ADDENDUM 6 carries the anneal read and the fit over the 17 cells 108k–300k, written before the 264k save; box A's
-picker plays the cells. run12's newest save on the desk mirror at this edit was 153k.
+picker plays the cells. run12 was stopped at 301 259 on 2026-10-16 12:30 CEST: the anneal lifts (+0.3346 over −0.2425,
+SE 0.0592; the local records' run12 EXIT), `tools/best_save.py` picked 240k, and run13 is LIVE (The run).
 
 **R392 (2026-10-13): THE WINDOW SAT ON THE DIP; ONE MORE WINDOW, THE LAST. run12's 84k read is a HALT by R391(d)'s
 letter and is recorded as such; "the GNN recipe is exhausted" is withdrawn as a finding, a window miss and not a measured
@@ -518,12 +519,23 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
 
 ## The run
 
-- **run12 is LIVE (R391(d); GO by R392(a), read 2026-10-14; trains to 300k by R393(c)):** started 2026-10-12 06:41 CEST on box A from `abbca6be` (`configs/run12.yaml`).
+- **run13 is LIVE (R393(d); CARD-RUN13):** launched 2026-10-16 18:34:52 CEST on box A from `1d1e27a9`
+  (`configs/run13.yaml`), BOOT_OK 18:39:52.
+  - Warm start from run12's 240k save `run12_00240000_d406c497` (`tools/best_save.py`'s pick) with
+    `reinit: [future_head]` (lineage `+aux_future`); run12's final ring, back-filled to v4 by `tools/ring_future.py` at
+    full settle, preloaded; one cosine 5e-4 → 1e-4 over 150k.
+  - The head line of record passed at the 3k save: row base − head CE +0.0477 ± 0.0003 against 0.0224, on 20 055 rows
+    of 235 games no net up to 3k sampled (the 6k ring above the 3k ring's ids); the step-0 known-bad read −0.0083 and
+    failed, as it must (local records `mantis-records/run13/`).
+  - The tree bridge flagged: run12's 300k rung-16 cell replayed on the mint tree differs in 5 of 580 results (+0.0035
+    logit), so run12's reference cells are replayed on the mint tree before the 120k read and govern the window.
+- **run12 is STOPPED (R393(c)):** started 2026-10-12 06:41 CEST on box A from `abbca6be` (`configs/run12.yaml`);
+  stopped at 301 259 on 2026-10-16 12:30 CEST (marker, then SIGTERM; stop save `run12_00301259_7a9e12ab.ckpt`, mirrored).
   - A fresh launch from the widened stamp `distill2wide_00000000_99d4c045`, its lineage carried.
   - Run11's final ring (500 000 rows) is preloaded into its 2.5M-row window through `train.ring_preload`.
   - Its first read (the 48k–84k rung-16 cells, S beside) was a HALT by its letter, annotated by R392(a). Its second
-    window (the 108k–144k rung-16 cells, S at 108k and 120k) read GO. It trains to its 300k save, where the operator
-    stops it; the anneal read is the 264k–300k rung-16 cells (CARD-RUN12). run13 follows from its best save (CARD-RUN13).
+    window (the 108k–144k rung-16 cells, S at 108k and 120k) read GO. The anneal read (the 264k–300k rung-16 cells,
+    pooled +0.0921 logit) lifts; run13 follows from its 240k save (CARD-RUN13). This line said LIVE until run13's launch.
 - **run11 is CLOSED (R391(b)):** arm 2 (`run11a2`) resumed from its final save, 32 201, on box A at 2026-10-05 12:35
   CEST; paused at 174 008 (R386(a)); resumed 2026-10-07 12:33 CEST on its second cosine cycle (RUN11-CYCLE-2); paused
   for DISTILL-1 at 329 726 (2026-10-08 23:55–00:36 CEST); and stopped for good at 593 030 on 2026-10-11 16:55:58 CEST
@@ -543,7 +555,7 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
   any run starts (R375(e) lifts R368(j)'s hold). Read a config's values from the file itself and diff two
   with `tools/config_diff.py`; STATE does not restate minted rows.
 - **Two boxes are rented, the operator's** (R385(f)): box A (RTX 4080 SUPER, Ryzen 9 9950X; RUN11-PRE's arms 3 and 4
-  ran there) held run11 until its close (R391(b)) and is run12's (R391(d)); box B (RTX 5070 Ti, Ryzen 9 5900XT; arms 1 and 2, unmatched to box A,
+  ran there) held run11 until its close (R391(b)) and run12 until its stop, and is run13's (R393(d)); box B (RTX 5070 Ti, Ryzen 9 5900XT; arms 1 and 2, unmatched to box A,
   so they ran matched self-play work) is RUN11-FRESH's. The
   desktop plays cells and reads. This line said one box was rented until R385's record. An earlier instance was
   destroyed on 2026-09-21 (R365, annotated by R367(d)); the operator's mirror (`tools/mirror_pull.py`) holds run7's and run8's
@@ -557,9 +569,10 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
 The committed configs are `configs/run10.yaml`, RUN11-PRE's four arms `configs/run11a1.yaml` to `configs/run11a4.yaml`
 (arm 2's is run11's, R385(a)), RUN11-FRESH's `configs/run11fresh.yaml` (arm 2's header replayed with no
 `identity.warm_start`, run id `run11fresh`; nothing else differs, by `tools/config_diff.py --expect`), run12's
-`configs/run12.yaml` (arm 2's header replayed with the deltas R391(d) grants; CARD-RUN12), `configs/dev_example.yaml`,
+`configs/run12.yaml` (arm 2's header replayed with the deltas R391(d) grants; CARD-RUN12), run13's `configs/run13.yaml`
+(run12's header replayed with the deltas R393(d) grants; CARD-RUN13), `configs/dev_example.yaml`,
 `configs/smoke_preflight_armed.yaml` and `configs/smoke_wiring.yaml`. This line omitted the arms until R385's record,
-and run12's until its start. Production is a CENSUS, never a
+run12's until its start, and run13's until its launch. Production is a CENSUS, never a
 list: `mantis.config.census.production_configs` (every `configs/` file minus its `EXEMPT_CONFIGS`
 rows, which carry their grounds). run7's and run8's configs were deleted at `8b00b4dd` (R368(e)),
 run6's by R369's packet (W0).
@@ -646,3 +659,5 @@ first read from the RUN12-GO exit record (local) and box A; the same edit update
 The current phase was rewritten 2026-10-14 at R393 on branch `run13-prep` over `origin/dev` `f1b02b2b`, with the second
 window's read from the RUN12-GO exit record (local) and run12's newest save from the desk mirror; the same edit updated
 the run line.
+The run line, the configs line and the current phase's last sentence were updated 2026-10-16 at run13's launch, on branch
+`run13-prep` over `origin/dev` `1d1e27a9`, with the launch and boot read from box A and the head line from the desk mirror.

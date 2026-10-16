@@ -56,7 +56,13 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   net's, 0 % per leaf. Every run on this tree writes v4 rings. Was: ORDERED by R391(e), in parallel with run12: a
   future-occupancy head behind the seam, ring v4 default-filled; it supplies the occupancy-class target whose absence
   R391(c) names as a cause of record.
-- **CARD-RUN13 — SHAPED by R393(d) (2026-10-14): run13 = run12's best save at its end + AUX-1's head, on dev HEAD.**
+- **CARD-RUN13 — LIVE since 2026-10-16 18:34:52 CEST on box A at `1d1e27a9` (`configs/run13.yaml`).** Warm start
+  run12's 240k save, the v4 preload, the cosine 5e-4 → 1e-4 over 150k. The head line of record PASSED at the 3k save:
+  row base − head CE +0.0477 ± 0.0003 against 0.0224 on 20 055 rows of 235 games no net up to 3k sampled; the step-0
+  known-bad read −0.0083 and failed, as it must. The tree bridge FLAGGED (run12's 300k rung-16 cell on the mint tree: 5
+  of 580 results differ, +0.0035 logit), so R's rung-16 cells and R_S's S cells are replayed on the mint tree before the
+  120k read and govern the window; the architect is told (local records `mantis-records/run13/`, PRESTATED §7).
+  **Was: SHAPED by R393(d) (2026-10-14): run13 = run12's best save at its end + AUX-1's head, on dev HEAD.**
   `identity.warm_start` from `tools/best_save.py`'s pick with `reinit: [future_head]` (lineage `+aux_future`), the
   head's weight the smoke's; `train.ring_preload` from run12's final ring back-filled to v4 by `tools/ring_future.py`
   (refused below full settle); one cosine 5e-4 → 1e-4 over 150k; all else run12's. Lines: the head line at the first
@@ -90,8 +96,9 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
 - **CARD-RUNG-STEP-IN-TREE — OPENED by DEPLOY-2's reviews: R388(a)'s step (two consecutive saves above 0.7 → the next
   rung, never down) and the parent and anchor re-read at a step live only in box A's follower script.** They come into
   the tree, one implementation the follower and the dash share, before run12's going-forward line can meet a step.
-- **CARD-CELL-START-GATE — CARDED by R393(e) (2026-10-14): the cells' start gate let run12's 96k cell start under a
-  monitor read and an in-run eval round; fixed at the tree move.** Box A's cell wrapper (`run12_capped.sh` under
+- **CARD-CELL-START-GATE — LANDED 2026-10-16 with the cells' move (box A's `run13_capped.sh`); CARDED by R393(e)
+  (2026-10-14): the cells' start gate let run12's 96k cell start under a monitor read and an in-run eval round; fixed
+  at the tree move.** Box A's cell wrapper (`run12_capped.sh` under
   `/workspace/ops/`, not the tree) gates a start on the job's free GPU memory (≥ 3.5 GB) and the run's rate, both read
   once at the start; its watchdog stops a cell under 0.75 GB free. The 96k cell (2026-10-13 21:32–21:54 CEST) met the
   108k eval round and monitor read mid-cell and was cap-stopped three times, GPU free at 239 MiB; the fourth try played.
@@ -200,8 +207,10 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   OWNED by DEPLOY-2 A4.
   BUILT 2026-10-08 (DEPLOY-2 A4): the switch is gone, both stone levels pinned, and a whole-tree golden recorded on the
   base tree holds Gumbel bit-identical (a planted interior break moves it).
-- **CARD-RUN12 — GO, recorded by R393(a) (2026-10-14): run12 trains to its 300k save, where the operator stops it
-  (marker, then SIGTERM, as run11) (R393(c)).** The second window read GO on 2026-10-14: rung-16 cells 0.439 / 0.443 /
+- **CARD-RUN12 — STOPPED at 301 259 on 2026-10-16 12:30 CEST: the anneal lifts (+0.3346 over −0.2425, SE 0.0592) and
+  `tools/best_save.py` picked 240k, run13's warm start (local records `mantis-records/run12/EXIT.md`). Was: GO, recorded
+  by R393(a) (2026-10-14): run12 trains to its 300k save, where the operator stops it (marker, then SIGTERM, as run11)
+  (R393(c)).** The second window read GO on 2026-10-14: rung-16 cells 0.439 / 0.443 /
   0.438 / 0.438 at 108k / 120k / 132k / 144k, pooled 1 013 / 2 304 = −0.2425 logit v the line −0.418; S 0.664 / 0.743
   at 108k / 120k, pooled 810.5 / 1 152 = +0.864 v 0.364; no futility pair fired (96k read 0.398). The window's level is a
   watch (R393(b)): its four cells lie within 0.005 of each other while S still rose. Cells: rung 16 every 12k; S at
