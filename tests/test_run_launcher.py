@@ -36,6 +36,7 @@ from mantis.config.preflight_stamp import (
     PreflightStampMissingError,
     PreflightStampTreeMismatchError,
 )
+from mantis.config.schema import RunConfig
 from mantis.train.lifecycle.signals import ShutdownState
 
 _REPO = Path(__file__).resolve().parents[1]
@@ -318,7 +319,7 @@ def test_launch_run_boots_a_minted_config_into_the_live_loop_and_stops_clean(
         "the boot must reach an ARMED training loop and publish its own identity, not merely "
         f"construct objects (LAW-18); saw {sorted(events)}"
     )
-    _assert_the_production_regime_fired(rows, _BURST_STEPS)
+    _assert_the_production_regime_fired(rows, _BURST_STEPS, config)
 
     # The leg is READABLE from the ONE channel, not only from the filesystem.
     clean_stop = [row for row in rows if row["event"] == "clean_stop_save"]
@@ -345,13 +346,23 @@ def _event_rows(run_dir: Path) -> list[dict]:
             for line in segment.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
-def _assert_the_production_regime_fired(rows: list[dict], steps: int) -> None:
-    """Every learner step carries the aux loss and some step trained it (an all-quick batch has no target); Gumbel and both cap arms fired."""
-    aux = [row.get("aux_soft_policy_loss") for row in rows if row["event"] == "trainer_step"]
+def _assert_the_production_regime_fired(rows: list[dict], steps: int, config: RunConfig) -> None:
+    """Every learner step carries the aux loss and some step trained it (an all-quick batch has no target); an armed future head carries its weight on every step and trained on some; Gumbel and both cap arms fired."""
+    learner = [row for row in rows if row["event"] == "trainer_step"]
+    aux = [row.get("aux_soft_policy_loss") for row in learner]
     assert len(aux) == steps and all(a is not None and 0 <= a < float("inf") for a in aux), (
         f"every learner step must carry a finite aux loss; got {aux}"
     )
     assert any(a > 0 for a in aux), f"the aux head never trained; got {aux}"
+    head = config.model.aux_future_occupancy
+    if head is not None:
+        weights = [row.get("aux_future_weight") for row in learner]
+        assert weights == [head.w] * steps, f"every learner step must carry the future head's weight {head.w}; got {weights}"
+        trained = [row["aux_future_ce"] for row in learner if row.get("aux_future_rows")]
+        assert trained and all(0 <= ce < float("inf") for ce in trained), (
+            "the future head must train on the finished games' fields with a finite CE; got "
+            f"{[(row.get('aux_future_rows'), row.get('aux_future_ce')) for row in learner]}"
+        )
     levers = [row["search_levers"] for row in rows if row["event"] == "iteration_complete"]
     assert levers, "the composed stream must carry the search-lever rows"
     for name in ("pcr_full_moves", "pcr_quick_moves", "gumbel_rounds"):
@@ -365,7 +376,7 @@ def _assert_the_production_regime_fired(rows: list[dict], steps: int) -> None:
 def test_the_wiring_config_boots_the_production_regime_on_cuda_and_stops_clean(
     tmp_path, smoke_run_config, monkeypatch
 ) -> None:
-    """The production regime (Gumbel, the playout cap, the aux head) on the production device, one bounded burst, a clean stop."""
+    """The production regime (Gumbel, the playout cap, the aux heads, the future head among them) on the production device, one bounded burst, a clean stop."""
     # The config's allocator posture, supplied as a launch would; the posture halt has its own oracle.
     monkeypatch.setenv("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     config = smoke_run_config(_WIRING_CONFIG, train={"max_train_steps": _BURST_STEPS, "device": "cuda"})
@@ -378,7 +389,7 @@ def test_the_wiring_config_boots_the_production_regime_on_cuda_and_stops_clean(
     assert int(trainer.step) == _BURST_STEPS
     assert next(trainer.model.parameters()).device.type == "cuda", "the learner must sit on the configured device"
 
-    _assert_the_production_regime_fired(_event_rows(tmp_path), _BURST_STEPS)
+    _assert_the_production_regime_fired(_event_rows(tmp_path), _BURST_STEPS, config)
 
 
 @pytest.mark.integration

@@ -1012,23 +1012,24 @@ document and nothing needs to be.
    `smoke_preflight_armed.yaml` is what R346(f) names; `dev_example.yaml` is KEPT on LAW-07
    grounds and its `EXEMPT_CONFIGS` row says so — ADJ-13 N-3 makes it gate 12's M1 mutation
    row, the committed config that row names to demonstrate the audit going RED on the real
-   `configs/` tree, kept deliberately DISARMED as that subject. AMENDMENT (DEV-SPEED packet L4, 2026-09-26; its
-   ruling is owed): `smoke_wiring.yaml` is the armed smoke with its compute shrunk and its
+   `configs/` tree, kept deliberately DISARMED as that subject. AMENDMENT (DEV-SPEED packet L4, 2026-09-26; ruled
+   by R372(a)): `smoke_wiring.yaml` is the armed smoke with its compute shrunk and its
    draw-rate row disarmed, booted by the in-process wiring rows and pinned leaf-for-leaf to the
    armed smoke by `tests/config/test_smoke_wiring_config.py`; named to gate 12 it refuses (rc 30),
    as a disarmed config must, incidentally to the audit. AMENDMENT (HYGIENE-1 H4, 2026-10-01): it
    also runs the production regime at smoke budgets (Gumbel, its completed target, the playout cap,
    the aux head), so the same test pins it to the armed smoke outside those leaves and to every
-   production config's regime, and one CUDA row boots the live loop on it. AMENDMENT (RUN13-PREP,
-   2026-10-16; its ruling is owed): run13's mint puts the training-only future head in the census
-   beside run12 and the older configs without it, so no one regime is every production config's.
-   The wiring config arms the head at run13's weight, and the pin reads its arch as running a
-   production arch when it is that kind or that soft-policy kind plus the future head; every other
-   regime row stays an equality. All four are re-minted from `tools/config_templates/dev.yaml`, so
+   production config's regime, and one CUDA row boots the live loop on it. All four are re-minted from `tools/config_templates/dev.yaml`, so
    their `# delta:` headers replay. `configs/run5.yaml` left the tree with
    `docs/contracts/eval_decision_run5.md`, whose drift gate derived every expectation from it;
    the two durable properties of that document — a one-lineage Bradley-Terry fit, and eff_n
-   bounded by the openings on a deterministic rung — are folded into contract #9.
+   bounded by the openings on a deterministic rung — are folded into contract #9. AMENDMENT
+   (RUN13-PREP, 2026-10-16; its ruling is owed, CARD-RUN13): run13's mint puts the training-only
+   future head in the census beside run12 and the older configs without it, so no one regime is
+   every production config's. The wiring config arms the head at a smoke weight, 0.5, and the pin
+   reads its arch as running a production arch when it is that kind or that soft-policy kind plus
+   the future head, while the head is admitted only as long as some production config carries it;
+   every other regime row stays an equality. The wiring rows assert the head trains.
 
 8. **Two instruments are retired rather than widened, and both say so in place.**
    `tests/config/test_minted_config_remint.py` diffed the live configs against a byte-frozen

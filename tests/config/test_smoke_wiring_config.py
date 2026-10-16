@@ -81,12 +81,14 @@ def test_the_wiring_config_runs_every_production_configs_regime() -> None:
     wiring = load_config(_CONFIGS / _WIRING)
     productions = census.production_configs(_REPO)
     assert productions, "the census is empty, so the regime has nothing to match"
+    carriers = []
     for path in productions:
         prod = load_config(path)
+        carriers.append(prod.identity.arch_kind in FUTURE_OCCUPANCY_ARCH_KINDS)
         regime = {
             "search kind": (wiring.selfplay.search.kind, prod.selfplay.search.kind),
             "policy target": (wiring.train.policy_target, prod.train.policy_target),
-            "aux head armed": (wiring.model.aux_soft_policy is not None, prod.model.aux_soft_policy is not None),
+            "soft-policy head armed": (wiring.model.aux_soft_policy is not None, prod.model.aux_soft_policy is not None),
             "playout cap armed": (wiring.selfplay.playout_cap.full_search_prob > 0,
                                   prod.selfplay.playout_cap.full_search_prob > 0),
             "q rescale": (wiring.selfplay.q_rescale, prod.selfplay.q_rescale),
@@ -96,6 +98,19 @@ def test_the_wiring_config_runs_every_production_configs_regime() -> None:
         if not _runs_arch(wiring.identity.arch_kind, prod.identity.arch_kind):
             off["arch kind"] = (wiring.identity.arch_kind, prod.identity.arch_kind)
         assert not off, f"the wiring config leaves {path}'s regime as (wiring, production): {off}"
+    # The head on top is admitted only while some production config carries it, never outliving the census.
+    assert (wiring.identity.arch_kind in FUTURE_OCCUPANCY_ARCH_KINDS) == any(carriers), (
+        f"the wiring config's future head must track the census: wiring {wiring.identity.arch_kind}, "
+        f"production carriers {[p.name for p, c in zip(productions, carriers) if c]}"
+    )
+
+
+def test_the_arch_relation_admits_the_head_on_top_and_refuses_it_missing() -> None:
+    """PLANTED BREAK: `_runs_arch` returning True, or the kind tables gaining a second pairing, reds here."""
+    (base,) = SOFT_POLICY_ARCH_KINDS - FUTURE_OCCUPANCY_ARCH_KINDS
+    (future,) = FUTURE_OCCUPANCY_ARCH_KINDS
+    assert _runs_arch(future, base) and _runs_arch(base, base) and _runs_arch(future, future)
+    assert not _runs_arch(base, future), "a wiring arch without the head must not run a production arch carrying it"
 
 
 def test_the_wiring_config_is_exempt_from_the_production_census() -> None:

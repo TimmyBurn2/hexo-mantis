@@ -1,8 +1,9 @@
 """O-SMOKE — end-to-end launch-path smoke (INTEGRATION tier), on the production regime.
 
-The minted wiring config (Gumbel, its completed target, the playout cap, the aux head) builds its
+The minted wiring config (Gumbel, its completed target, the playout cap, the aux heads) builds its
 own net and trainer, runs 2 steps through `run_training_loop` on sparse rows, writes an envelope-v2
-checkpoint, resumes from it, and shuts down clean on a simulated signal.
+checkpoint, resumes from it, and shuts down clean on a simulated signal. The rows carry no future
+field, so an armed future head sees none here; its training on self-play's fields is the launcher rows' subject.
 """
 from __future__ import annotations
 
@@ -84,6 +85,11 @@ def test_launch_path_smoke(tmp_path: Path) -> None:
     assert len(aux) == 2 and all(a is not None and torch.isfinite(torch.tensor(a)) and a > 0 for a in aux), (
         f"every step must train the aux head on its soft target; got {aux}"
     )
+    if run_config.model.aux_future_occupancy is not None:
+        future = [(row.get("aux_future_rows"), row.get("aux_future_ce")) for row in sink.rows if row["event"] == "trainer_step"]
+        assert future == [(0, None)] * 2, (
+            f"these rows carry no future field, so the armed head must see none and say so; got {future}"
+        )
 
     # the loop wrote a FINAL envelope-v2 checkpoint on shutdown_save
     ckpts = list(tmp_path.glob("*.ckpt"))

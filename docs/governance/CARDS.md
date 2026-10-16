@@ -65,7 +65,10 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   the RUN13-PREP packet (branch `run13-prep`, local records `mantis-records/run13/`): the back-fill rehearsal, the
   launch semantics at HEAD, and the switch runbook, nothing executed before the stop. **Was: CONDITIONAL by R391(e):
   run12's best + AUX-1 if run12 climbs; DENSE-1 builds if it does not.** A miss of run12's going-forward line at 84k
-  halts run12 and DENSE-1 takes box A (R391(d)).
+  halts run12 and DENSE-1 takes box A (R391(d)). OWED with the mint (2026-10-16): a ruling on repo_design §7's
+  RUN13-PREP amendment. run13 is the census's first production config carrying the future head, so
+  `smoke_wiring.yaml` arms it, and its regime pin admits the head on top of a production soft-policy arch while some
+  production config carries it.
 
 ## Opened by the DEPLOY-2 packet (2026-10-08) — the floor read, evals on box A, the dash's units, run12's inputs
 
