@@ -360,6 +360,7 @@ class SelfPlayRunnerConfig:
         q_rescale: bool,
         search_stats_every: int,
         gumbel_m_quick: int,
+        decided_tails: bool,
         gumbel_m: int = 16,
         gumbel_explore_moves: int = 10,
         dirichlet_alpha: float = 0.3,

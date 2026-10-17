@@ -314,6 +314,13 @@ impl SelfPlayRunner {
                 .check_radius(spec.legal_move_radius as i32)
                 .map_err(|e| format!("SelfPlayRunner: {e}"))?;
         }
+        if config.decided_tails && !config.tactics.is_some_and(|t| t.root_nodes > 0) {
+            return Err(
+                "SelfPlayRunner: decided_tails needs a tactics block with root_nodes > 0: a decided tail starts \
+                 at the root offence's proof and re-solves it at every winner's turn"
+                    .to_string(),
+            );
+        }
 
         // The collector's saturation threshold is DERIVED from what this run can supply: a worker
         // blocks on its whole submitted batch, so `n_workers x leaf_batch_size` caps queue depth.

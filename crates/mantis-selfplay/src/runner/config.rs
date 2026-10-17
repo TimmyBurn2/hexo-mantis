@@ -54,6 +54,8 @@ pub struct SelfPlayRunnerConfig {
     pub eval_cache_capacity: usize,
     /// The tactics block each worker's tree runs: its leaves, root offence and audit; `None` is off.
     pub tactics: Option<TacticsConfig>,
+    /// From the root offence's first decided stone the game runs out with no search; needs `root_nodes > 0`.
+    pub decided_tails: bool,
 }
 
 /// **TEST-SCAFFOLDING ONLY**, not a config default-authority. Manual rather than derived: a
@@ -91,6 +93,7 @@ impl Default for SelfPlayRunnerConfig {
             encoding_name: None,
             eval_cache_capacity: 0,
             tactics: None,
+            decided_tails: false,
         }
     }
 }

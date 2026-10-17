@@ -111,6 +111,7 @@ impl PySelfPlayRunnerConfig {
         q_rescale,
         search_stats_every,
         gumbel_m_quick,
+        decided_tails,
         gumbel_m = 16,
         gumbel_explore_moves = 10,
         dirichlet_alpha = 0.3,
@@ -138,6 +139,7 @@ impl PySelfPlayRunnerConfig {
         q_rescale: bool,
         search_stats_every: usize,
         gumbel_m_quick: usize,
+        decided_tails: bool,
         gumbel_m: usize,
         gumbel_explore_moves: usize,
         dirichlet_alpha: f32,
@@ -177,6 +179,7 @@ impl PySelfPlayRunnerConfig {
                 random_opening_plies,
                 search_stats_every,
                 encoding_name,
+                decided_tails,
                 ..Default::default()
             },
         }
