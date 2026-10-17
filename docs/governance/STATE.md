@@ -7,6 +7,24 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
+**R394 (2026-10-17): THE LINEAGE CLIMBS WHILE THE LR IS ABOVE THE FLOOR; THE LEVERS BUILD BESIDE IT. run12 is CLOSED
+at 301 259: the anneal lifts as the cosine's steady climb (the fit over 108k–300k +0.0254 ± 0.0041 logit per 12k), and
+the lineage climbs about +0.1 logit per 48k while its LR is above the floor. From run13 on the pick is trend-aware: OLS
+over the rung-16 cells from the first post-restart cell, a one-sided 95 % lower slope bound above 0 → the last save
+carrying both reads, else the standing rule. run13's pre-stated lines are ratified and its head line passes; at its GO
+the operator stops it at the verdict and run14 launches within hours from its pick, the head carried; at its STOP box A
+idles or stops on the operator's word until DENSE-1's screen exists. DENSE-1's §9 Q2–Q7 are ruled, and its L0 and L1
+run now on the desktop. Levers, each its own packet, desktop first, one change per run: decided tails (un-parked), the
+value teacher (V0 → V2), within-turn tree reuse at deploy only. Six at "equal time" is struck; the measured rungs
+stand. repo_design §7's amendment is ratified; a tree bridge claims bit identity at concurrency 1 only, and is a
+statistical line at any other.** (RULINGS R394; the R393 paragraph below stands where R394 does not move it.) run12's
+seven reference cells, replayed on run13's mint tree, landed 2026-10-17 17:34 CEST (local records
+`mantis-records/run13/r_mint.json`): R_mint +0.0965 logit (1 207 / 2 303), R_S_mint +1.4740 (1 406 / 1 728).
+run13's window GO is therefore pooled rung 16 at 120k–156k ≥ +0.2665 with pooled S at 132k and 156k ≥ +1.3040, and its
+futility floor is −0.4125; R394(b)'s +0.0973 is corrected by its ANNOTATION A1. The 300k replay differs from the bridge,
+on one tree, in 9 of 580 results, more than the bridge differed across trees (5): the bridge's flag read play noise at
+concurrency 4. run13's pick rule is the local records' PRESTATED ADDENDUM 1, written before the 120k save.
+
 **R393 (2026-10-14): GO RECORDED. The plateau is broken by the recipe as a whole; the window's level is a watch. run12
 trains to its 300k save, where the operator stops it (marker, then SIGTERM, as run11). Rung 16 every 12k; S at 264k and
 288k beside the run; after the stop, S at 300k and wherever the best-save rule needs it. The anneal read, pre-registered
@@ -519,7 +537,7 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
 
 ## The run
 
-- **run13 is LIVE (R393(d); CARD-RUN13):** launched 2026-10-16 18:34:52 CEST on box A from `1d1e27a9`
+- **run13 is LIVE (R393(d); its lines RATIFIED by R394(b); CARD-RUN13):** launched 2026-10-16 18:34:52 CEST on box A from `1d1e27a9`
   (`configs/run13.yaml`), BOOT_OK 18:39:52.
   - Warm start from run12's 240k save `run12_00240000_d406c497` (`tools/best_save.py`'s pick) with
     `reinit: [future_head]` (lineage `+aux_future`); run12's final ring, back-filled to v4 by `tools/ring_future.py` at
@@ -528,14 +546,20 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
     of 235 games no net up to 3k sampled (the 6k ring above the 3k ring's ids); the step-0 known-bad read −0.0083 and
     failed, as it must (local records `mantis-records/run13/`).
   - The tree bridge flagged: run12's 300k rung-16 cell replayed on the mint tree differs in 5 of 580 results (+0.0035
-    logit), so run12's reference cells are replayed on the mint tree before the 120k read and govern the window.
-- **run12 is STOPPED (R393(c)):** started 2026-10-12 06:41 CEST on box A from `abbca6be` (`configs/run12.yaml`);
+    logit), so run12's seven reference cells were replayed on the mint tree, and they govern the window: R_mint +0.0965,
+    R_S_mint +1.4740. The flag read play noise at concurrency 4 (the 300k replay differs from the bridge, on one tree,
+    in 9 of 580); at any concurrency above 1 a bridge is a statistical line (R394(f)).
+  - The window: pooled rung 16 at 120k–156k ≥ +0.2665 and pooled S at 132k and 156k ≥ +1.3040 → GO; two consecutive
+    rung-16 cells from 72k below −0.4125 → STOP. At GO the operator stops run13 at the verdict and run14 launches from
+    its pick by R394(a); at STOP the stop save is mirrored and box A idles or stops on the operator's word (R394(b)).
+- **run12 is CLOSED at 301 259 (R394(a)):** started 2026-10-12 06:41 CEST on box A from `abbca6be` (`configs/run12.yaml`);
   stopped at 301 259 on 2026-10-16 12:30 CEST (marker, then SIGTERM; stop save `run12_00301259_7a9e12ab.ckpt`, mirrored).
   - A fresh launch from the widened stamp `distill2wide_00000000_99d4c045`, its lineage carried.
   - Run11's final ring (500 000 rows) is preloaded into its 2.5M-row window through `train.ring_preload`.
   - Its first read (the 48k–84k rung-16 cells, S beside) was a HALT by its letter, annotated by R392(a). Its second
     window (the 108k–144k rung-16 cells, S at 108k and 120k) read GO. The anneal read (the 264k–300k rung-16 cells,
-    pooled +0.0921 logit) lifts; run13 follows from its 240k save (CARD-RUN13). This line said LIVE until run13's launch.
+    pooled +0.0921 logit) lifts, the cosine's steady climb (the fit over 108k–300k +0.0254 ± 0.0041 logit per 12k); run13
+    follows from its 240k save (CARD-RUN13). This line said LIVE until run13's launch, and STOPPED until R394's record.
 - **run11 is CLOSED (R391(b)):** arm 2 (`run11a2`) resumed from its final save, 32 201, on box A at 2026-10-05 12:35
   CEST; paused at 174 008 (R386(a)); resumed 2026-10-07 12:33 CEST on its second cosine cycle (RUN11-CYCLE-2); paused
   for DISTILL-1 at 329 726 (2026-10-08 23:55–00:36 CEST); and stopped for good at 593 030 on 2026-10-11 16:55:58 CEST
@@ -580,7 +604,7 @@ run6's by R369's packet (W0).
 ## Where things live
 
 - Open work: `docs/governance/CARDS.md` (swept in W6; derived there, never enumerated here).
-- Rulings: `docs/governance/RULINGS.md`; the latest is R393 (this line said R386 until R393's record).
+- Rulings: `docs/governance/RULINGS.md`; the latest is R394 (this line said R386 until R393's record).
 - Laws and the protected set: `docs/governance/LAWS.md`, whose protected set names each
   invariant's pinning tests (R370(f)); `tests/test_protected_set_pins.py` fails if one is gone.
   Falsified work: `docs/governance/falsified.md`.
@@ -659,5 +683,8 @@ first read from the RUN12-GO exit record (local) and box A; the same edit update
 The current phase was rewritten 2026-10-14 at R393 on branch `run13-prep` over `origin/dev` `f1b02b2b`, with the second
 window's read from the RUN12-GO exit record (local) and run12's newest save from the desk mirror; the same edit updated
 the run line.
-The run line, the configs line and the current phase's last sentence were updated 2026-10-16 at run13's launch, on branch
+The run line, the configs line, the boxes line and the current phase's last sentence were updated 2026-10-16 at run13's launch, on branch
 `run13-prep` over `origin/dev` `1d1e27a9`, with the launch and boot read from box A and the head line from the desk mirror.
+The current phase was rewritten 2026-10-17 at R394 on branch `run13-prep` over `origin/dev` `5f7c2c44`, with the
+replays' record read from box A; the same edit updated the run and latest-ruling lines, and named the boxes line in
+the 2026-10-16 note above, which had omitted it.

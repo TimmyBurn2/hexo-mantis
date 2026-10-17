@@ -1,4 +1,4 @@
-# RULINGS — R23 to R393
+# RULINGS — R23 to R394
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R394.
+- Numbering continues from R346. The next ruling is R395.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -36,6 +36,72 @@ still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register 
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
 
+### R394 — THE LINEAGE CLIMBS WHILE THE LR IS ABOVE THE FLOOR; THE LEVERS BUILD BESIDE IT
+Decision: verbatim below.
+
+> R394 — THE LINEAGE CLIMBS WHILE THE LR IS ABOVE THE FLOOR; THE LEVERS BUILD BESIDE IT.
+> (a) run12 is CLOSED at 301 259 on the operator's word. The anneal read is "the anneal lifts":
+> pooled 264k–300k rung 16 +0.092 logit, +0.335 over the window's −0.2425; the fit over
+> 108k–300k +0.0254 ± 0.0041 logit per 12k with the anneal cells on the line, so the lift is the
+> cosine's steady climb, not a floor effect. Of record: the lineage climbs about +0.1 logit per
+> 48k while its LR is above the floor and stops at the floor (run11 flat from the day its cycle
+> ended; run12 climbing to its end). run12's pick is 240k by the pre-stated rule; it stands as
+> run13's parent. The rule picked the largest residual of 17 noisy cells (the architect's rule,
+> DEPLOY-2 A4); from run13 on the pick is trend-aware: OLS over the rung-16 cells from the
+> first post-restart cell; a one-sided 95 % lower bound on the slope above 0 → the last save
+> carrying both reads; else the standing rule.
+> (b) run13's lines are RATIFIED as the session pre-stated them under delegation: R = run12's
+> anneal pool (R_mint +0.0973 on the mint tree), the window 120k–156k, futility
+> F = min(−0.4125, R_mint − 0.17) from 72k, the head line on slice D with B beside, the tree
+> bridge and §7's replay rule. The head line PASSES (+0.0477 v 0.0224; the known-bad fails).
+> At GO the operator stops run13 at the verdict (its cosine is spent at 150k; the floor is the
+> plateau) and run14 launches within hours: run13's pick by (a), the head carried (reinit []),
+> run13's final ring preloaded (native v4), one cosine 5e-4 → 1e-4 over 150k, all else run13's;
+> decided tails (d1) ride if landed and green before the mint, else run15; lines as run13's,
+> re-based on run13's pool. At STOP nothing is ready for box A: the stop save is mirrored and
+> the box idles or stops on the operator's word until DENSE-1's screen exists (c).
+> (c) DENSE-1 §9: Q1 as R392(d). Q2 accepted (−0.34 the screen's minimal effect). Q3 accepted
+> with the fallback order changed: fused kernels, then margin 5 with `far` (only if L0 reads
+> under 0.5 % of explicit visit mass beyond 5), then b8c96, then b6c96 — capacity is the
+> reason for the kind and is cut last. Q4 accepted (Markov first; history carded after L3).
+> Q5: the corpus of record extends to every closed run's games (run12 now, run13 at its stop),
+> lineage-tagged, L0 re-deriving the counts; weights run12 and later 1, run11 and its fresh
+> line 1, run7–run8 0.5, run6 0.25, pre-stated before L3. Q6: L0 and L1 run now on the
+> desktop; L2 and L2b on L1's exit; L3 and L4 only on a GNN STOP or a ruling. Q7 accepted as an
+> annotation of R370(c): the precondition extends to the spread across canvas tiers, bounded at
+> 5e-3 in policy probability, L2's pin the witness. L4's line stays at run11's plateau + 0.17;
+> its record states the comparison to RUN11-FRESH at matched placements, and a PASS earns the
+> dense run its continuation and a ruling, never the lineage.
+> (d) Levers, each its own packet, desktop first, one change per run: (d1) decided tails —
+> CARD-DECIDED-TAILS un-parked on the new census (99.4 % of games reach a proven win, ≈ 15 % of
+> search after it); the game runs out without search from the proof, the winner's rows exact
+> one-hot with z, the loser's rows value-only, no row dropped (R380), pinned by replay and read
+> by throughput and the exams. (d2) the value teacher — CARD-SEARCH-VALUE-TEACHER proceeds
+> V0 → V1 → V2 on the desktop: a held-out census, the end-bin soft target against the dead-head
+> trigger, then three 15k warm arms read by the value instrument, the exams and one desk cell
+> per ruler; a null closes the card with its number; a read lands in run15. (d3) within-turn
+> tree reuse — CARD-TREE-REUSE-TURN lands at DEPLOY ONLY: the cell engine of record is
+> untouched so no series re-bases; witnesses the served-sims count and a bit-identical re-root
+> pin; read on the deploy block against Six at n128 and n256 and Bubble at equal time. (d4)
+> DENSE-1 L0 + L1 now, as (c).
+> (e) Six at "equal time" (≈ 350–400 nodes, ≈ 0.25) is STRUCK: a 7.4 GFLOP net cannot serve
+> ≈ 600 evaluations per second on one CPU thread, so the row rests on an unmeasured engine
+> fact. The measured rungs stand: 0.54 at n16, 0.42 at n128, 0.31 at n256 (288k). No
+> equal-time claim against Six until its wall per turn and evaluations per node are measured.
+> Bubble 410k at equal actual time: 0.672 (288k), of record. Ordering of record at equal
+> network work: Six gen455 > run12 > Bubble 410k.
+> (f) repo_design §7's amendment is RATIFIED: a wiring arch runs a production arch when it is
+> that kind or that soft-policy kind plus the training-only head (served ops identical). Tree
+> bridges: bit identity is a claim at concurrency 1 only; at any other concurrency the bridge
+> is a statistical line, the pooled logit difference within 2 SE. 5f7c2c44's subject stays.
+
+Status: standing. ANNOTATES R393(d) (run13's pick rule; run14 at GO), R392(d) (§9 Q2–Q7), R391(e) (DENSE-1's
+desktop legs run regardless of the lineage), R381(d) (CARD-DECIDED-TAILS un-parked), R370(c) (the tier spread).
+ANNOTATION A1 (2026-10-17, RUN13-PREP, at this record): (b)'s "R_mint +0.0973" reads +0.0965 (1 207 / 2 303, the
+seven replays' record, 2026-10-17 17:34 CEST); the +0.0973 was the session's provisional desk pool, which missed the
+264k cell's one Six forfeit. R_mint's definition (R's pool on the mint tree, forfeits out) is unchanged; the GO rung
+line is +0.2665 and R_S_mint +1.4740 (the S line +1.3040).
+
 ### R393 — GO RECORDED
 Decision: verbatim below.
 
@@ -60,7 +126,11 @@ Decision: verbatim below.
 > (e) The cells' start gate let the 96k cell start under a monitor read and an eval round —
 > carded, fixed at the tree move. R392(a) left the post-GO cells unsaid; (c) fills it.
 
-Status: standing. ANNOTATES R392(a) and (b) as above. The second window read GO on 2026-10-14 (rung 16 pooled
+Status: standing; (d) ANNOTATED by R394(a) and (b): run13's pick is trend-aware (OLS over its rung-16 cells from the
+first post-restart cell; a one-sided 95 % lower bound on the slope above 0 → the last save carrying both reads; else
+the standing rule), and at run13's GO run14 launches within hours from that pick, the head carried; at its STOP box A idles or stops on
+the operator's word until DENSE-1's screen exists. ANNOTATES R392(a)
+and (b) as above. The second window read GO on 2026-10-14 (rung 16 pooled
 108k–144k −0.2425 logit v the line −0.418; S pooled 108k–120k +0.864 v 0.364); the anneal read is pre-stated in the
 local records' PRESTATED ADDENDUM 6 (`mantis-records/run12/`), written before the 264k save.
 
@@ -100,7 +170,8 @@ Decision: verbatim below.
 > is not bought. Q2–Q7 are ruled in R393 with the build packet.
 
 Status: standing; (a) and (b) ANNOTATED by R393: the second window read GO on 2026-10-14, the post-GO cells are
-R393(c)'s, and run13's shape is R393(d)'s. ANNOTATES R391(d) and (e) as above.
+R393(c)'s, and run13's shape is R393(d)'s; (d)'s "Q2–Q7 are ruled in R393" is ANNOTATED by R394(c): R393 ruled
+none of them, and R394(c) rules them. ANNOTATES R391(d) and (e) as above.
 
 ### R391 — THE PLATEAU IS THE RECIPE UNTIL RUN12 SAYS OTHERWISE
 Decision: verbatim below.
@@ -130,7 +201,8 @@ Decision: verbatim below.
 Status: standing; (d) ANNOTATED by R392(a): its 84k read is a HALT by its letter and is recorded as such, "the GNN
 recipe is exhausted" is withdrawn as a finding (a window miss, not a measured plateau), and run12 trains on to one
 final second window (108k–144k); (e) ANNOTATED by R392(d): DENSE-1's code legs start on the desktop now, its screen
-and run waiting for box A. ANNOTATES R390(b) and (d): DISTILL-2 is accepted and spent (Mixed; S decisive for b − a), and run11
+and run waiting for box A, and by R394(c): its desktop legs run regardless of the lineage (L0 and L1 now; L2 and L2b
+on L1's exit); L3 and L4 run only on a GNN STOP or a ruling. ANNOTATES R390(b) and (d): DISTILL-2 is accepted and spent (Mixed; S decisive for b − a), and run11
 no longer trains on; it is CLOSED at its stop save. ANNOTATES R389(d): run11 closes before run12's mint, and run12's
 replay row is 2.5M rows with memory verified at preflight, not 2M. AMENDS R388(d): run12 starts from the function-
 preserving widening of run11's best save (`distill2wide_00000000`, the 4×256 of `run11a2_00264000`), and its going-
@@ -665,6 +737,8 @@ value head on held-out games; REG-1 and RUN11-PRE read the regularisers and the 
 (c)'s carry is ANNOTATED by R384(c) (the Bubble study's correction): TACTICS-SELFPLAY-3's 0.632 replays the same
 games, so the +0.65 does not replicate; the carry is re-stated as A − parent ≈ +0.27, plain − parent ≈ −0.39, a
 screen. (d)'s reuse is RE-READ by R384(d)'s arms (2.4 and 1.2 steps/game).
+(d)'s parking of decided tails is ANNOTATED by R394(d1): CARD-DECIDED-TAILS is un-parked on the new census (99.4 % of
+games reach a proven win, ≈ 15 % of search after it).
 
 ---
 
@@ -1028,6 +1102,8 @@ moves_remaining and the builder's geometry, taken before any build; the encoded 
 and a seeded 10 869-leaf drive pins the key's misses equal to the encoded-input hash's. The rest of (c) stands.
 A1's PERF-3 is RATIFIED by R385(d): L2 (this key) and L3 landed, L1 is carded with its branch.
 (c) is EXTENDED to eval paths by R386(d): a per-player per-game exact cache is a served-output identity, not a reading.
+(c) is ANNOTATED by R394(c) (DENSE-1 §9 Q7): the precondition extends to the spread across canvas tiers, bounded at
+5e-3 in policy probability, L2's pin the witness.
 
 ---
 

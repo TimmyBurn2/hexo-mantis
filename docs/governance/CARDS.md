@@ -56,12 +56,25 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   net's, 0 % per leaf. Every run on this tree writes v4 rings. Was: ORDERED by R391(e), in parallel with run12: a
   future-occupancy head behind the seam, ring v4 default-filled; it supplies the occupancy-class target whose absence
   R391(c) names as a cause of record.
-- **CARD-RUN13 — LIVE since 2026-10-16 18:34:52 CEST on box A at `1d1e27a9` (`configs/run13.yaml`).** Warm start
+- **CARD-RUN13 — LIVE since 2026-10-16 18:34:52 CEST on box A at `1d1e27a9` (`configs/run13.yaml`); its lines RATIFIED
+  by R394(b) (2026-10-17) as the session pre-stated them.** Warm start
   run12's 240k save, the v4 preload, the cosine 5e-4 → 1e-4 over 150k. The head line of record PASSED at the 3k save:
   row base − head CE +0.0477 ± 0.0003 against 0.0224 on 20 055 rows of 235 games no net up to 3k sampled; the step-0
   known-bad read −0.0083 and failed, as it must. The tree bridge FLAGGED (run12's 300k rung-16 cell on the mint tree: 5
-  of 580 results differ, +0.0035 logit), so R's rung-16 cells and R_S's S cells are replayed on the mint tree before the
-  120k read and govern the window; the architect is told (local records `mantis-records/run13/`, PRESTATED §7).
+  of 580 results differ, +0.0035 logit), so R's rung-16 cells and R_S's S cells were replayed on the mint tree, and they
+  govern the window (local records `mantis-records/run13/`, PRESTATED §7): R_mint +0.0965 (1 207 / 2 303), R_S_mint
+  +1.4740 (1 406 / 1 728), landed 2026-10-17 17:34 CEST (R394(b)'s +0.0973 is corrected by its ANNOTATION A1). The flag
+  read play noise at concurrency 4: the 300k replay differs from the bridge, on one tree, in 9 of 580 results (R394(f):
+  bridges are statistical lines above concurrency 1). The window: pooled rung 16 at 120k–156k ≥ +0.2665 and pooled S at
+  132k and 156k ≥ +1.3040 → GO; futility: two consecutive rung-16 cells from 72k below −0.4125 → STOP. The pick is
+  trend-aware by R394(a) (PRESTATED ADDENDUM 1, before the 120k save): OLS over the rung-16 cells from 72k (run13's
+  "first post-restart cell", by the architect's order with R394), a one-sided
+  95 % lower slope bound above 0 → 156k, the last save with both reads; else `tools/best_save.py`'s rule. **At GO** the
+  operator stops run13 at the verdict and run14 is minted on the same tree within hours: warm start the pick with its
+  net_hash, `reinit: []`, the head as run13's, run13's final ring preloaded (native v4) with its sha, one cosine 5e-4 →
+  1e-4 over 150k, `lr_cycle` null, all else run13's; preflight as G1's; lines as run13's re-based on run13's pool;
+  decided tails ride only if on dev, gates green and its review fixed before the mint, else run15. **At STOP** the stop save is mirrored
+  and sha-checked and box A idles or stops on the operator's word until DENSE-1's screen exists.
   **Was: SHAPED by R393(d) (2026-10-14): run13 = run12's best save at its end + AUX-1's head, on dev HEAD.**
   `identity.warm_start` from `tools/best_save.py`'s pick with `reinit: [future_head]` (lineage `+aux_future`), the
   head's weight the smoke's; `train.ring_preload` from run12's final ring back-filled to v4 by `tools/ring_future.py`
@@ -71,10 +84,11 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   the RUN13-PREP packet (branch `run13-prep`, local records `mantis-records/run13/`): the back-fill rehearsal, the
   launch semantics at HEAD, and the switch runbook, nothing executed before the stop. **Was: CONDITIONAL by R391(e):
   run12's best + AUX-1 if run12 climbs; DENSE-1 builds if it does not.** A miss of run12's going-forward line at 84k
-  halts run12 and DENSE-1 takes box A (R391(d)). OWED with the mint (2026-10-16): a ruling on repo_design §7's
-  RUN13-PREP amendment. run13 is the census's first production config carrying the future head, so
-  `smoke_wiring.yaml` arms it, and its regime pin admits the head on top of a production soft-policy arch while some
-  production config carries it.
+  halts run12 and DENSE-1 takes box A (R391(d)). repo_design §7's RUN13-PREP amendment is RATIFIED by R394(f): a wiring
+  arch runs a production arch when it is that kind or that soft-policy kind plus the training-only head (served ops
+  identical). Was: OWED with the mint (2026-10-16). run13 is the census's first production config carrying the future
+  head, so `smoke_wiring.yaml` arms it, and its regime pin admits the head on top of a production soft-policy arch while
+  some production config carries it.
 
 ## Opened by the DEPLOY-2 packet (2026-10-08) — the floor read, evals on box A, the dash's units, run12's inputs
 
@@ -154,7 +168,16 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   (1.63 below the control) was valid. The four arms were not read (the warm 4×128 stopped at ~3 300 steps, no save).
   Landed on the branch: tools/distill (labeller, rings, trainer driver, reads), the checkpoint stamp's `lineage`, the
   `teacher` extra. Local records `mantis-records/distill-1/EXIT.md`.
-- **CARD-DENSE-1** (R389(c), conditional). Design a hex-conv model kind behind the seam, only if DISTILL-1 finds no net
+- **CARD-DENSE-1 — §9 RULED by R394(c) (2026-10-17); L0 and L1 run now on the desktop (R394(d4)).** Q1 as R392(d). Q2
+  accepted (−0.34 the screen's minimal effect). Q3 accepted with the fallback order fused kernels, then margin 5 with
+  `far` (only if L0 reads under 0.5 % of explicit visit mass beyond 5), then b8c96, then b6c96: capacity is cut last. Q4
+  accepted (Markov first; history carded after L3). Q5: the corpus of record is every closed run's games (run12 now,
+  run13 at its stop), lineage-tagged, L0 re-deriving the counts, weighted run12 and later 1, run11 and its fresh line 1,
+  run7–run8 0.5, run6 0.25, pre-stated before L3. Q6: L2 and L2b on L1's exit; L3 and L4 only on a GNN STOP or a
+  ruling. Q7 annotates R370(c): the tier spread is bounded at 5e-3 in policy probability, L2's pin the witness. L4's line
+  stays at run11's plateau + 0.17; its record states the comparison to RUN11-FRESH at matched placements, and a PASS earns
+  the dense run its continuation and a ruling, never the lineage. **Was: design accepted by R392(d), its code legs on
+  the desktop, Q2–Q7 left to R393, which ruled none** (this card omitted R392(d) until R394's record). (R389(c), conditional). Design a hex-conv model kind behind the seam, only if DISTILL-1 finds no net
   above the line. HELD: DISTILL-1 halted before any arm was read, so the condition is undecided. Its condition MOVED by
   R390(b) to DISTILL-2: neither of its two lines met → DENSE-1 is designed. **Its design is ORDERED by R391(e), in
   parallel with run12: research and a design doc, no code; F-01 and F-03 re-validated under LAW-02 against Six's and
@@ -207,7 +230,9 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   OWNED by DEPLOY-2 A4.
   BUILT 2026-10-08 (DEPLOY-2 A4): the switch is gone, both stone levels pinned, and a whole-tree golden recorded on the
   base tree holds Gumbel bit-identical (a planted interior break moves it).
-- **CARD-RUN12 — STOPPED at 301 259 on 2026-10-16 12:30 CEST: the anneal lifts (+0.3346 over −0.2425, SE 0.0592) and
+- **CARD-RUN12 — CLOSED at 301 259 by R394(a) (2026-10-17), on the operator's word: the anneal lifts as the cosine's
+  steady climb (the fit over 108k–300k +0.0254 ± 0.0041 logit per 12k, the anneal cells on the line); its 240k pick
+  stands as run13's parent. Was: STOPPED at 301 259 on 2026-10-16 12:30 CEST: the anneal lifts (+0.3346 over −0.2425, SE 0.0592) and
   `tools/best_save.py` picked 240k, run13's warm start (local records `mantis-records/run12/EXIT.md`). Was: GO, recorded
   by R393(a) (2026-10-14): run12 trains to its 300k save, where the operator stops it (marker, then SIGTERM, as run11)
   (R393(c)).** The second window read GO on 2026-10-14: rung-16 cells 0.439 / 0.443 /
@@ -517,13 +542,18 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
 - **CARD-REG-1-PUSH — PUSHED 2026-10-04 (`origin/dev` = `ad3682d7`). ORDERED by R384(g): `reg-1` rebases onto `dev`,
   gates, pushes.** Rebased 2026-10-04 onto `dev` `9da49bdd`; local gates 24/24 green on `ad3682d7` before the push.
 - **CARDED by R384(f), not built before the start** (the RUN11-PRE packet's names in brackets):
-  - CARD-WITHIN-TURN-TREE-REUSE [CARD-TREE-REUSE-TURN] — within-turn tree reuse; RE-STATED by R385(c) as the
-    cheap-placement lever, carded for a pinned resume after the start;
+  - CARD-WITHIN-TURN-TREE-REUSE [CARD-TREE-REUSE-TURN] — **MOVED by R394(d3) (2026-10-17): lands at DEPLOY ONLY**, its
+    own packet: the cell engine of record is untouched, so no series re-bases; witnesses the served-sims count and a
+    bit-identical re-root pin; read on the deploy block against Six at n128 and n256 and Bubble at equal time. Was:
+    within-turn tree reuse; RE-STATED by R385(c) as the cheap-placement lever, carded for a pinned resume after the start;
   - CARD-HEAD-TO-HEAD-LEVER-CELLS [CARD-H2H-LEVER-CELLS] — head-to-head lever cells;
   - CARD-PAIR-DIAGNOSTIC — the pair diagnostic;
   - CARD-SIX-TRAINER-READ — the Six-trainer read;
   - CARD-RULER-HYGIENE — ruler hygiene;
-  - CARD-SEARCH-VALUE-TEACHER [CARD-VALUE-TEACHER-CALIBRATED] — the calibrated search-value teacher, gated on a warmed head
+  - CARD-SEARCH-VALUE-TEACHER [CARD-VALUE-TEACHER-CALIBRATED] — **MOVED by R394(d2) (2026-10-17): proceeds V0 → V1 → V2
+    on the desktop**, its own packet: a held-out census, the end-bin soft target against the dead-head trigger, then three
+    15k warm arms read by the value instrument, the exams and one desk cell per ruler; a null closes the card with its
+    number, a read lands in run15. Was: the calibrated search-value teacher, gated on a warmed head
     (CARD-FRACTIONAL-VALUE-TARGET-WARMUP);
   - CARD-ALL-VETOED-TARGET — the all-vetoed target fix, evidence only; R380(b) stands.
 
@@ -939,7 +969,12 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   no root value, so the lever reads on rings self-play writes after it). Was CARDED, not built, by R381(d), with a v2→v3 ring migration. Was CARDED for CARD-RUN11-DESIGN by R379(d): a search-value aux target from our own search.**
   CENSUS-1's C6: Six's search value beats our raw one off the proofs (DEF −0.097 on its non-proof rows, QU −0.058,
   MID −0.053). R376(f) governs any learning from Six's outputs; this card is our own search's value.
-- **CARD-DECIDED-TAILS — PARKED by R381(d). Was CARDED for CARD-RUN11-DESIGN by R379(d): decided tails.** CENSUS-1's C3(b): the pooled
+- **CARD-DECIDED-TAILS — UN-PARKED by R394(d1) (2026-10-17), its own packet, desktop first, one change per run.** The new
+  census (local records `mantis-records/research/NEXT_LEVERS_2026-10-16.md`): 99.4 % of self-play games reach a proven
+  win, about 15 % of search after it. The game runs out without search from the proof; the winner's rows are exact
+  one-hot with z, the loser's rows value-only, no row dropped (R380); pinned by replay, read by throughput and the exams.
+  It rides run14 only if it is on dev, gates green and its review fixed before run14's mint; else run15. **Was: PARKED by
+  R381(d). Was CARDED for CARD-RUN11-DESIGN by R379(d): decided tails.** CENSUS-1's C3(b): the pooled
   proven tail is 0.463 of a game's plies, a games/h bound of 1.86×; the proven side converted 76.8 % of those games.
 - **CARD-MCGS-DEPLOY — CARDED by R379(d): graph search earns a deploy A/B, later.** CENSUS-1's C3(d): table hits are
   28.6 % [27.9, 29.4] of descents at the plain deploy head's turn starts, above the 10 % line.
