@@ -149,8 +149,10 @@ train:
   augment: false
   terminal_eval_enabled: true
   policy_target: raw_visit_distribution
-  # The value target's weight on the ring's search value (Σπ′·completedQ, a proof's ±1) where a row carries one; 0.0 is pure z.
+  # The value loss's weight on the ring's search value (Σπ′·completedQ, a proof's ±1) where a row carries one; 0.0 is pure z.
   value_target_search_weight: 0.0
+  # How that search value is a target: null exactly at weight 0, end_bin (its win probability on the two end bins) above.
+  value_target_search_encoding: null
   # The value loss keeps each value-valid row at this probability, re-drawn every step; 0.0 is off.
   value_mask_redraw_p: 0.0
 selfplay:

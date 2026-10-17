@@ -43,6 +43,7 @@ VALID_TRAIN_PAYLOAD: dict = {
     "selfplay_stall_timeout_sec": 1800.0,
     "policy_target": "raw_visit_distribution",
     "value_target_search_weight": 0.0,
+    "value_target_search_encoding": None,
     "value_mask_redraw_p": 0.0,
     "ema": {"enabled": False, "decay": 0.999, "update_every": 10},
     "ply_cap_abort": None,
@@ -102,6 +103,8 @@ BOUND_VIOLATIONS: list[tuple[str, object]] = [
 ]
 
 LITERAL_VIOLATIONS: list[tuple[str, object]] = [
+    # the old knob's two-hot scalar mix is not an encoding the tree has
+    ("value_target_search_encoding", "two_hot"),
     ("lr_schedule", "step"),
     ("policy_target", "completed_q"),
 ]
@@ -183,3 +186,12 @@ def test_a_second_cycle_is_refused_where_it_could_never_run() -> None:
     with pytest.raises(ValidationError, match="would never run"):
         TrainConfig.model_validate(_payload(lr_cycle=cycle))
     assert TrainConfig.model_validate(_payload(lr_cycle=dict(cycle, start_step=999_999))).lr_cycle is not None
+
+
+def test_a_search_weight_and_its_encoding_arrive_together() -> None:
+    """`null` exactly at weight 0: either alone is refused, the two together construct."""
+    for alone in ({"value_target_search_weight": 0.5}, {"value_target_search_encoding": "end_bin"}):
+        with pytest.raises(ValidationError, match="exactly at weight 0"):
+            TrainConfig.model_validate(_payload(**alone))
+    armed = TrainConfig.model_validate(_payload(value_target_search_weight=0.5, value_target_search_encoding="end_bin"))
+    assert (armed.value_target_search_weight, armed.value_target_search_encoding) == (0.5, "end_bin")

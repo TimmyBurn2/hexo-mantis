@@ -151,7 +151,7 @@ def graph_hparams(**over: Any) -> TrainHParams:
         lr=1e-3, weight_decay=1e-4, grad_clip=1.0, lr_schedule="cosine",
         scheduler_t_max=1_000_000, eta_min=5e-4, lr_cycle=None,
         checkpoint_interval=0, aux_soft_policy=None, aux_future_occupancy=None, value_target_search_weight=0.0,
-        value_mask=None,
+        value_target_search_encoding=None, value_mask=None,
     )
     base.update(over)
     return TrainHParams(**base)

@@ -185,8 +185,12 @@ CONSUMER_REGISTRY = {
         "_assert_policy_target_consistency, and carried on the checkpoint stamp"
     ),
     "train.value_target_search_weight": (
-        "TrainHParams.from_config -> Trainer._value_target -> losses.value_target: the train step's value target "
-        "w·root_value + (1−w)·z on rows whose flag is set (the ring's search value), z elsewhere; the eval step reads z"
+        "TrainHParams.from_config -> Trainer.train_step_from_graph_batch: (1 − w)·the z CE over the masked rows plus "
+        "w·dist65.end_bin_value_loss over dispatch's losses.search_value_rows; the eval step reads z"
+    ),
+    "train.value_target_search_encoding": (
+        "TrainHParams.from_config -> Trainer.train_step_from_graph_batch: `end_bin` arms the search-value term, "
+        "null exactly at weight 0 (TrainConfig._a_search_weight_names_its_encoding, TrainHParams.__post_init__)"
     ),
     "train.value_mask_redraw_p": (
         "TrainHParams.from_config (with the run seed) -> dispatch._graph_step -> _build_graph_parts -> "

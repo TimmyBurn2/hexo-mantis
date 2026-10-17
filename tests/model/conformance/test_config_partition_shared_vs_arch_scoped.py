@@ -147,6 +147,9 @@ SHARED_DESPITE_THE_NAME: dict[str, str] = {
     "train.ply_cap_abort.window_games": "a COUNT window over completed self-play games "
                                         "(R352(c)'s halt), not a board window; the K-cluster "
                                         "window is a different word and every arch plays games",
+    "train.value_target_search_encoding": "how the ring's search VALUE becomes a value-loss "
+                                          "target on the head's bins, not a board encoding; "
+                                          "it reads no representation, so every arch trains it",
     "inference.edge_geometry_check": "an OPERATIONAL posture of the one serving loop — WHERE "
                                      "check 14 runs, not what it checks; it carries the "
                                      "check's name, not a graph-only quantity, and defaults "

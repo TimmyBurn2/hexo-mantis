@@ -117,6 +117,7 @@ train:
   terminal_eval_enabled: true
   policy_target: completed_improved_policy
   value_target_search_weight: 0.0
+  value_target_search_encoding: null
   value_mask_redraw_p: 0.0
 selfplay:
   search:

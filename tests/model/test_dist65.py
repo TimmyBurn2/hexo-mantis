@@ -6,6 +6,7 @@ COPIED from old-side capture #1) + the mathematical two-hot identity. fp32 pinne
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -16,6 +17,7 @@ from mantis.model.dist65 import (
     VALUE_SUPPORT,
     binned_value_loss,
     decode_binned_value,
+    end_bin_value_loss,
     scalar_to_two_hot,
 )
 
@@ -104,3 +106,31 @@ def test_fp16_input_decodes_via_internal_fp32() -> None:
     decoded = decode_binned_value(one_hot)
     assert decoded.dtype == torch.float32
     assert abs(float(decoded.item()) - float(VALUE_SUPPORT[48])) < 1e-3
+
+
+def test_the_end_bin_loss_at_plus_and_minus_one_is_the_one_hot_z_loss_bit_for_bit() -> None:
+    """At v = z = ±1 the two-point law IS one-hot z: the same rows over the same denominator give the same bits."""
+    logits = torch.randn(6, N_VALUE_BINS, generator=torch.Generator().manual_seed(3))
+    z = torch.tensor([1.0, -1.0, 1.0, 1.0, -1.0, -1.0])
+    assert end_bin_value_loss(logits, z, 6.0).item() == binned_value_loss(logits, z, denominator=6.0).item()
+
+
+def test_the_end_bin_target_has_no_interior_mass_and_a_planted_two_hot_reds() -> None:
+    """d(loss)/d(logit) = (softmax − target)/n reads the target back: none inside, the win probability at the ends; PLANTED BREAK: two-hot reds."""
+    logits = torch.randn(5, N_VALUE_BINS, generator=torch.Generator().manual_seed(4), requires_grad=True)
+    v = torch.tensor([0.5, -0.25, 0.0, 0.9, -0.6])
+
+    def target_of(loss_fn: Callable[[torch.Tensor, torch.Tensor, float], torch.Tensor]) -> torch.Tensor:
+        logits.grad = None
+        loss_fn(logits, v, 5.0).backward()
+        assert logits.grad is not None
+        return torch.softmax(logits.detach(), dim=-1) - 5.0 * logits.grad
+
+    t = target_of(end_bin_value_loss)
+    assert torch.allclose(t[:, 1:-1], torch.zeros_like(t[:, 1:-1]), atol=1e-6)
+    assert torch.allclose(t[:, -1], (1.0 + v) / 2, atol=1e-6) and torch.allclose(t[:, 0], (1.0 - v) / 2, atol=1e-6)
+
+    def two_hot(lg: torch.Tensor, val: torch.Tensor, den: float) -> torch.Tensor:
+        return -(scalar_to_two_hot(val) * torch.log_softmax(lg, dim=-1)).sum() / den
+    planted = target_of(two_hot)
+    assert not torch.allclose(planted[:, 1:-1], torch.zeros_like(planted[:, 1:-1]), atol=1e-6)

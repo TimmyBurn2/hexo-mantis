@@ -33,8 +33,8 @@ from mantis.train.pretrain.graph_route import (
 _REPO = Path(__file__).resolve().parents[2]
 
 
-#: The stub run config the route is handed; these tests refuse before it is read.
-_CONFIG: dict[str, Any] = {"train": {}}
+#: The stub run config the route is handed: it reads the search weight first and nothing else of it.
+_CONFIG: dict[str, Any] = {"train": {"value_target_search_weight": 0.0}}
 
 
 def _write_ring(tmp_path: Path, **overrides: Any) -> Path:
@@ -82,6 +82,13 @@ def test_an_unparseable_sidecar_is_refused(tmp_path: Path) -> None:
     ring.with_name(ring.name + ".provenance.json").write_text("{ nope", encoding="utf-8")
     with pytest.raises(GraphPretrainError, match="unparseable"):
         read_ring_provenance(ring, encoding="gnn_axis_v1")
+
+
+def test_a_search_weight_above_zero_is_refused_before_the_ring_is_read(tmp_path: Path) -> None:
+    """The term would starve and z train at 1 − w behind the route's null sink, so the weight is refused first."""
+    with pytest.raises(GraphPretrainError, match="trains z alone"):
+        run_graph_pretrain(spec=None, full_config={"train": {"value_target_search_weight": 0.5}}, train_section=None,
+                           ring_path=tmp_path / "nope.hexg", checkpoint_dir=tmp_path, device=None, steps=1, epochs=1)
 
 
 def test_an_absent_ring_is_refused(tmp_path: Path) -> None:
@@ -384,7 +391,7 @@ def test_the_graph_arch_is_built_from_the_NESTED_config(tmp_path: Path, monkeypa
     resolve a different arch the day a `gnn_*` width key is minted. Asserted on the ARGUMENT."""
     ring = _write_ring(tmp_path)
     seen: list[Any] = []
-    nested = {"train": {"batch_size": 4},
+    nested = {"train": {"batch_size": 4, "value_target_search_weight": 0.0},
               "identity": {"encoding": "gnn_axis_v1"}}
 
     class _Buf:

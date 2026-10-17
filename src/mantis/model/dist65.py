@@ -1,4 +1,4 @@
-"""65-bin distributional value primitives (INV-D1: outcome-z only, fp32).
+"""65-bin distributional value primitives (INV-D1, fp32: the outcome slot through the two-hot codec, z one-hot on self-play rows; the search value on the two end bins).
 
 Two-hot codec over a scalar outcome support on [-1, 1] (MuZero/KataGo style);
 NOT moves-to-end / margin / discounted return. fp16 two-hot mis-splits adjacent
@@ -53,6 +53,13 @@ def decode_binned_value(bin_logits: torch.Tensor) -> torch.Tensor:
     probs = F.softmax(bin_logits.to(torch.float32), dim=-1)
     v = (probs * _support_on(bin_logits.device)).sum(dim=-1, keepdim=True)
     return v.clamp(-1.0, 1.0)
+
+
+def end_bin_value_loss(bin_logits: torch.Tensor, value: torch.Tensor, denominator: float) -> torch.Tensor:
+    """Summed soft CE against `v`'s two-point law, (1 − v)/2 on the lowest bin and (1 + v)/2 on the highest, over `denominator`: no interior bin is a target."""
+    logp = F.log_softmax(bin_logits.to(torch.float32), dim=-1)
+    win = (1.0 + value.reshape(-1).detach().to(torch.float32).clamp(-1.0, 1.0)) * 0.5
+    return -(win * logp[:, -1] + (1.0 - win) * logp[:, 0]).sum() / denominator
 
 
 def binned_value_loss(

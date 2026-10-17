@@ -251,11 +251,22 @@ class TrainConfig(StrictModel):
     # loss selection + targets: which policy loss the trainer applies follows from
     # `policy_target`, itself pinned to `search.kind`; a game with no winner trains no value.
     policy_target: Literal["raw_visit_distribution", "completed_improved_policy"]
-    # The value target: `w·v_search + (1−w)·z` on a row carrying the ring's search value (Σπ′·completedQ), z elsewhere.
+    # The weight `w` of the ring's search value (Σπ′·completedQ) in the value loss, z keeping `1 − w`; 0 is z alone.
     value_target_search_weight: float = Field(ge=0, le=1, allow_inf_nan=False)
+    # How the search value is a target; `null` exactly at weight 0.
+    value_target_search_encoding: Literal["end_bin"] | None = Field(default=...)
     # The value loss's keep probability per value-valid row, re-drawn every step; 0 is off (keeping all is not a
     # second spelling of off, hence `lt=1`).
     value_mask_redraw_p: float = Field(ge=0, lt=1, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def _a_search_weight_names_its_encoding(self) -> "TrainConfig":
+        """Refuse a weight > 0 with no encoding (no default target) and an encoding at weight 0 (a dead row)."""
+        if (self.value_target_search_weight > 0) != (self.value_target_search_encoding is not None):
+            raise ValueError(
+                f"train.value_target_search_encoding is {self.value_target_search_encoding!r} at "
+                f"train.value_target_search_weight {self.value_target_search_weight}: it is null exactly at weight 0")
+        return self
 
     @model_validator(mode="after")
     def _a_cycle_restarts_a_cosine_inside_the_run(self) -> "TrainConfig":

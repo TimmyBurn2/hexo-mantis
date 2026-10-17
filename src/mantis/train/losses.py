@@ -42,14 +42,9 @@ def rebuild_sparse_target(
     return policy_target.reshape(-1) + sparse_tail(prior_probs, explicit_mask, tail_mass, legal_offsets)
 
 
-def value_target(outcomes: torch.Tensor, root_value: torch.Tensor, root_value_valid: torch.Tensor,
-                 weight: float) -> torch.Tensor:
-    """`weight·root_value + (1 − weight)·outcomes` where the flag is set, else `outcomes`; at 0 it IS `outcomes`."""
-    if weight == 0.0:
-        return outcomes
-    z = outcomes.reshape(-1).to(torch.float32)
-    mixed = weight * root_value.reshape(-1).to(torch.float32) + (1.0 - weight) * z
-    return torch.where(root_value_valid.reshape(-1).bool(), mixed, z)
+def search_value_rows(value_valid: np.ndarray, root_value_valid: np.ndarray) -> np.ndarray:
+    """The rows the search-value term trains: value-valid (read before any value mask, which is z's alone) and carrying a search value."""
+    return (np.asarray(value_valid) != 0) & (np.asarray(root_value_valid) != 0)
 
 
 #: The value mask's own stream beside every other draw keyed on the run seed.

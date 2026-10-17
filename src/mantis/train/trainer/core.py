@@ -14,7 +14,7 @@ import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import torch
 import torch.nn as nn
@@ -36,6 +36,9 @@ from mantis.model import (
 from mantis.model import (
     binned_value_loss as _binned_value_loss,
 )
+from mantis.model import (
+    end_bin_value_loss as _end_bin_value_loss,
+)
 from mantis.selfplay.graph_wire_split import GraphEmptyBatchError
 from mantis.train import checkpoints
 from mantis.train.emit import emit_via
@@ -50,7 +53,6 @@ from mantis.train.losses import (
     segment_softmax,
     segment_sum,
     soft_policy_target,
-    value_target,
 )
 from mantis.train.lr_schedule import FlooredCosineAnnealingLR, LrCycle
 
@@ -94,8 +96,19 @@ class TrainHParams:
     #: `model.aux_future_occupancy.w`; `None` is the explicit OFF.
     aux_future_occupancy: float | None
     value_target_search_weight: float
+    #: `train.value_target_search_encoding`: `None` exactly at weight 0, else the one encoding, `end_bin`.
+    value_target_search_encoding: Literal["end_bin"] | None
     #: `train.value_mask_redraw_p` with the run seed as `(p, seed)`; `None` is the explicit OFF (p = 0).
     value_mask: tuple[float, int] | None
+
+    def __post_init__(self) -> None:
+        """Raises: ValueError — an encoding the trainer has not, or a search weight it disagrees with (the schema's rules, kept for a hand-built hparams)."""
+        if self.value_target_search_encoding not in (None, "end_bin"):
+            raise ValueError(f"value_target_search_encoding {self.value_target_search_encoding!r} is not an encoding "
+                             "the trainer has (end_bin, or None at weight 0)")
+        if (self.value_target_search_weight > 0) != (self.value_target_search_encoding is not None):
+            raise ValueError(f"value_target_search_encoding {self.value_target_search_encoding!r} at weight "
+                             f"{self.value_target_search_weight}: it is None exactly at weight 0")
 
     @classmethod
     def from_config(cls, config: Any) -> TrainHParams:
@@ -103,8 +116,8 @@ class TrainHParams:
         `model.aux_soft_policy` rows); every member is REQUIRED, no flat-key fallback.
 
         Raises:
-            ValueError: no `train` section, or a policy target that disagrees with
-                `search.kind`. KeyError: a required `train` member, or the run seed under a value mask, is missing.
+            ValueError: no `train` section, a policy target that disagrees with `search.kind`, or a search weight its
+                encoding disagrees with. KeyError: a required `train` member, or the run seed under a value mask, is missing.
         """
         cfg = config if isinstance(config, dict) else {}
         train = cfg.get("train")
@@ -451,9 +464,14 @@ class Trainer:
                     denominator=policy_denominator)
                 # The host-found rows, not `value_mask`: a boolean index reads the device, forward and back.
                 rows = inputs.value_rows
-                value_loss = _binned_value_loss(bin_logits.index_select(0, rows),
-                                                self._value_target(inputs).index_select(0, rows),
+                value_loss = _binned_value_loss(bin_logits.index_select(0, rows), inputs.outcomes.index_select(0, rows),
                                                 denominator=value_denominator)
+                if self.hp.value_target_search_encoding is not None:
+                    # z keeps 1 − w over the masked rows; the end-bin term trains every value-valid row with a search value.
+                    weight, teacher = self.hp.value_target_search_weight, inputs.teacher_rows
+                    value_loss = (1.0 - weight) * value_loss + weight * _end_bin_value_loss(
+                        bin_logits.index_select(0, teacher), inputs.root_value.index_select(0, teacher),
+                        denominator=inputs.teacher_denominator)
                 loss = policy_loss + value_loss
                 aux_loss: torch.Tensor | None = None
                 aux_kl: torch.Tensor | None = None
@@ -582,11 +600,6 @@ class Trainer:
                                   **self._aux_future_block(future_total, future_rows, future_base, future_row_base)})
             self._maybe_periodic_checkpoint(result)
         return result
-
-    def _value_target(self, inputs: Any) -> torch.Tensor:
-        """The train step's scalar value target; the eval step reads z, so no reading rewards the mix."""
-        return value_target(inputs.outcomes, inputs.root_value, inputs.root_value_valid,
-                            self.hp.value_target_search_weight)
 
     def _aux_soft_policy_terms(
         self, policy_logits: torch.Tensor, aux_logits: torch.Tensor, inputs: Any,

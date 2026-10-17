@@ -33,6 +33,7 @@ from mantis.model.dist65 import (
     VALUE_SUPPORT,
     binned_value_loss,
     decode_binned_value,
+    end_bin_value_loss,
     scalar_to_two_hot,
 )
 from mantis.model.gnn import (
@@ -71,6 +72,7 @@ __all__ = [
     "binned_value_loss",
     "build_net",
     "decode_binned_value",
+    "end_bin_value_loss",
     "load_from_bc",
     "net_param_hash",
     "state_dict_param_hash",

@@ -164,9 +164,13 @@ def run_graph_pretrain(
         The path of the checkpoint written by `Trainer.save_checkpoint`.
 
     Raises:
-        GraphPretrainError: the ring or its budget refuses, or the held-out estimator's measured
-            noise exceeds the monitor's `min_delta`.
+        GraphPretrainError: the ring or its budget refuses, a search weight above 0 (the route's null sink would hide its
+            fire-rate), or the held-out estimator's measured noise exceeds the monitor's `min_delta`.
     """
+    if float(full_config["train"]["value_target_search_weight"]) > 0:
+        # Its term would starve on rows with no search value and z train at 1 − w, behind a sink no fire-rate reaches.
+        raise GraphPretrainError("a BC pretrain trains z alone: its null event sink would hide the search-value term's "
+                                 "fire-rate, so train.value_target_search_weight must be 0")
     buf, prov = load_ring(ring_path, encoding=spec.name)
     knobs = resolve_coordinator_knobs(train_section)
     total_steps = resolve_step_budget(
