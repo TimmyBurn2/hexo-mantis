@@ -28,6 +28,7 @@ use crate::replay::hexg::GraphRecord;
 use super::record::{record_position_graph_dispatch, record_unsearched_dispatch};
 use super::stats::TacticsTotals;
 use super::tactics_move::{account_row, seal_tail, zero_vetoes, Seal, TargetEdit, Written};
+use super::tail::{play_winner_stone, Tail, TailRecord};
 use super::{MoveArm, PositionStats, ARM_DECIDED, ARM_FAST, ARM_FULL};
 
 /// A worker's inference seam, built once per worker thread; `Copy`, passed by value.
@@ -143,6 +144,8 @@ pub(crate) struct MovePlayContext {
     /// target's semantics all read this one field.
     pub(crate) search_kind: SearchKind,
     pub(crate) dirichlet_enabled: bool,
+    /// The root offence's first decided stone starts a decided tail (`runner::tail`).
+    pub(crate) decided_tails: bool,
 }
 
 /// Result of `play_one_move`: how the parent per-move loop should proceed.
@@ -172,7 +175,7 @@ pub(crate) struct GumbelRoundCounters<'a> {
 /// unconstrained root, spread by virtual loss. `Round(&[..])` is Gumbel's: one descent under
 /// EACH surviving candidate, needing no virtual loss because their subtrees are disjoint.
 #[derive(Clone, Copy)]
-enum LeafSelection<'a> {
+pub(crate) enum LeafSelection<'a> {
     Batch(usize),
     Round(&'a [u32]),
 }
@@ -227,7 +230,7 @@ impl std::fmt::Display for InferenceSeamFailure {
 }
 
 /// Count a root that did not expand, unless our own `stop()` cut it: that one is a shutdown, not a failure.
-fn count_live_failure(running: &AtomicBool, counter: &AtomicU64) {
+pub(crate) fn count_live_failure(running: &AtomicBool, counter: &AtomicU64) {
     if running.load(Ordering::SeqCst) {
         counter.fetch_add(1, Ordering::Relaxed);
     }
@@ -297,7 +300,7 @@ fn select_for(
 /// A selection refusal, a build-guard trip or a leaf inference that FAILS on an OPEN queue is a
 /// named [`InferenceSeamFailure`]; an empty leaf set, or a failure after our own `stop()`, serves 0.
 // No `#[cold]`: this is the only inference path there is.
-fn infer_and_expand_graph(
+pub(crate) fn infer_and_expand_graph(
     tree: &mut MCTSTree,
     selection: LeafSelection<'_>,
     agg_trunk_sz: i32,
@@ -601,6 +604,7 @@ pub(crate) fn play_one_move(
     move_arms: &mut Vec<MoveArm>,
     search_stats: Option<&mut Vec<PositionStats>>,
     version_seen: &mut Vec<u64>,
+    tail: &mut Option<Tail>,
     rng: &mut ThreadRng,
     running: &AtomicBool,
     ctx: MovePlayContext,
@@ -610,6 +614,39 @@ pub(crate) fn play_one_move(
     accumulators: MoveAccumulators,
     fatal_latch: FatalDefectLatch,
 ) -> MoveOutcome {
+    // The offence runs ahead of the playout-cap draw; neither touches the RNG, so off, the draws are as before.
+    tree.new_game(board.clone());
+    // The root offence: a finish, the owed proof stone or a new proof's first stone (`None` with tactics off). On the
+    // full arm the root is searched all the same, its row the search's own target; the decided stone is played.
+    let decided = match tree.root_offence() {
+        Ok(decided) => decided,
+        // Counted by the tree (`proof_stone_illegal`); the search's own move stands.
+        Err(TacticsError::ProofStoneIllegal { .. }) => None,
+        Err(err) => {
+            fatal_latch.store(err.to_string());
+            return MoveOutcome::Break;
+        }
+    };
+    if let (true, Some(stone)) = (ctx.decided_tails, decided) {
+        *tail = Some(Tail::new(board.current_player));
+        let record = TailRecord {
+            graph_records: graph_records_vec,
+            move_history,
+            move_arms,
+            version_seen,
+        };
+        return play_winner_stone(
+            tree,
+            board,
+            record,
+            stone,
+            ctx.full_search_prob,
+            rng,
+            accumulators,
+            fatal_latch,
+        );
+    }
+
     // Move-level playout cap.
     let (move_is_full_search, move_sims) = if ctx.full_search_prob > 0.0 {
         let full = rng.random::<f32>() < ctx.full_search_prob;
@@ -630,18 +667,6 @@ pub(crate) fn play_one_move(
     }
 
     // ── MCTS Search ──
-    tree.new_game(board.clone());
-    // The root offence: a finish, the owed proof stone or a new proof's first stone (`None` with tactics off). On the
-    // full arm the root is searched all the same, its row the search's own target; the decided stone is played.
-    let decided = match tree.root_offence() {
-        Ok(decided) => decided,
-        // Counted by the tree (`proof_stone_illegal`); the search's own move stands.
-        Err(TacticsError::ProofStoneIllegal { .. }) => None,
-        Err(err) => {
-            fatal_latch.store(err.to_string());
-            return MoveOutcome::Break;
-        }
-    };
     // A quick row trains no policy, so a decided quick root's search could change nothing its row or its move carries.
     if let (false, Some(stone)) = (move_is_full_search, decided) {
         return play_unsearched(

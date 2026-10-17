@@ -35,6 +35,7 @@ use super::search_drive::{
     play_one_move, FatalDefectLatch, InferContext, MoveAccumulators, MoveOutcome, MovePlayContext,
 };
 use super::stats::WorkerStats;
+use super::tail::{play_tail_ply, Tail, TailRecord};
 use super::{GameResultRow, MoveArm, PositionStats, ARM_OPENING};
 
 /// Per-game-init scalar context. `Copy`.
@@ -68,6 +69,7 @@ struct WorkerMoveCfg {
     n_sims_quick: usize,
     search_kind: SearchKind,
     dirichlet_enabled: bool,
+    decided_tails: bool,
 }
 
 /// Per-game state outputs from `init_per_game_board`.
@@ -170,6 +172,7 @@ pub(crate) fn run_worker_thread(
             },
         exploration_flags: ExplorationFlags { dirichlet_enabled },
         tactics,
+        decided_tails,
     } = params;
 
     let mut tree = MCTSTree::new_full(c_puct, VIRTUAL_LOSS_PENALTY, fpu_reduction);
@@ -252,6 +255,7 @@ pub(crate) fn run_worker_thread(
         n_sims_quick,
         search_kind,
         dirichlet_enabled,
+        decided_tails,
     };
     // `graph_game_seq` is the sixth member: the game-id source travels with the other finalize
     // counters rather than as a seventh parameter, which is what the tuple exists to avoid.
@@ -340,6 +344,7 @@ fn run_one_game(
         n_sims_quick,
         search_kind,
         dirichlet_enabled,
+        decided_tails,
     } = move_cfg;
 
     let PerGameInit {
@@ -366,8 +371,11 @@ fn run_one_game(
         n_sims_quick,
         search_kind,
         dirichlet_enabled,
+        decided_tails,
     };
 
+    // The game's decided tail once its root offence decides with tails armed; `None` before, or after an exit.
+    let mut tail: Option<Tail> = None;
     let move_iters = init_ctx.max_moves;
     for _ in 0..move_iters {
         if !infer.running.load(Ordering::Relaxed)
@@ -390,23 +398,49 @@ fn run_one_game(
             continue;
         }
 
-        match play_one_move(
-            tree,
-            &mut board,
-            &mut graph_records,
-            &mut move_history,
-            &mut move_arms,
-            search_stats.as_mut(),
-            version_seen,
-            rng,
-            infer.running,
-            play_ctx,
-            policy_stride,
-            agg_trunk_sz,
-            infer,
-            move_accumulators,
-            fatal_latch,
-        ) {
+        let in_tail = match tail.as_mut() {
+            Some(t) => play_tail_ply(
+                tree,
+                &mut board,
+                TailRecord {
+                    graph_records: &mut graph_records,
+                    move_history: &mut move_history,
+                    move_arms: &mut move_arms,
+                    version_seen,
+                },
+                t,
+                full_search_prob,
+                rng,
+                agg_trunk_sz,
+                infer,
+                move_accumulators,
+                fatal_latch,
+            ),
+            None => None,
+        };
+        // No tail, or one the offence could not continue: the ply goes to the search, which may start a new tail.
+        let outcome = in_tail.unwrap_or_else(|| {
+            tail = None;
+            play_one_move(
+                tree,
+                &mut board,
+                &mut graph_records,
+                &mut move_history,
+                &mut move_arms,
+                search_stats.as_mut(),
+                version_seen,
+                &mut tail,
+                rng,
+                infer.running,
+                play_ctx,
+                policy_stride,
+                agg_trunk_sz,
+                infer,
+                move_accumulators,
+                fatal_latch,
+            )
+        });
+        match outcome {
             MoveOutcome::Played | MoveOutcome::Continue => {}
             MoveOutcome::Break => break,
         }

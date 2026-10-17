@@ -476,7 +476,7 @@ class SelfPlayRunner:
     def set_model_version(self, version: int) -> None: ...
 
 # Owner `mantis_selfplay::runner::MOVE_ARM_LABELS`: every label `drain_game_results` writes in a move arm.
-MOVE_ARM_LABELS: tuple[str, str, str, str]
+MOVE_ARM_LABELS: tuple[str, str, str, str, str]
 
 # --------------------------------------------------------------------------- #
 # HexgBuffer (HEXG graph replay) + GraphTargets

@@ -15,6 +15,7 @@ pub mod search_drive;
 pub mod spawn;
 pub mod stats;
 mod tactics_move;
+mod tail;
 
 pub use config::SelfPlayRunnerConfig;
 
@@ -42,8 +43,10 @@ pub const ARM_FULL: &str = "full";
 pub const ARM_FAST: &str = "fast";
 /// A quick-arm ply whose root tactics decided, played with no search.
 pub const ARM_DECIDED: &str = "decided";
+/// A ply of a decided tail, either side's, played with no search.
+pub const ARM_TAIL: &str = "tail";
 /// Every arm label a game record can carry; the bridge exports it as `MOVE_ARM_LABELS`.
-pub const MOVE_ARM_LABELS: [&str; 4] = [ARM_OPENING, ARM_FULL, ARM_FAST, ARM_DECIDED];
+pub const MOVE_ARM_LABELS: [&str; 5] = [ARM_OPENING, ARM_FULL, ARM_FAST, ARM_DECIDED, ARM_TAIL];
 
 /// One move's `(sims searched, arm label)`; the label is one of [`MOVE_ARM_LABELS`].
 pub type MoveArm = (u32, &'static str);

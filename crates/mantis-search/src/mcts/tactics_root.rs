@@ -359,8 +359,7 @@ impl MCTSTree {
         Ok(Some((q, r)))
     }
 
-    /// A decided tail's loser at its turn start: the covering pair whose re-proof needs the most turns (the first of
-    /// equals), or `None` when no pair covers, a re-proof comes back unproven, or tactics are off.
+    /// A decided tail's loser at its turn start: the covering pair whose re-proof needs the most turns, the first of equals.
     pub fn tail_resistance(&mut self) -> Option<[(i32, i32); 2]> {
         let root = &self.root_board;
         let t = self.tactics.as_deref_mut()?;

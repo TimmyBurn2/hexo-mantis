@@ -157,6 +157,7 @@ impl SelfPlayRunner {
                 dirichlet_enabled: c.dirichlet_enabled,
             },
             tactics: c.tactics,
+            decided_tails: c.decided_tails,
         };
         (stats_proto, atomics_proto, channels_proto, params_proto)
     }

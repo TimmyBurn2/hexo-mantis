@@ -61,3 +61,27 @@ pub(crate) fn record_unsearched_dispatch(
     graph_records_vec.push(rec);
     Ok(())
 }
+
+/// Record a decided tail's row: the winner's stone at probability 1.0 and +1 (`Some`), or the loser's value-only row at −1.
+pub(crate) fn record_tail_dispatch(
+    board: &Board,
+    graph_records_vec: &mut Vec<GraphRecord>,
+    winner_stone: Option<(i32, i32)>,
+) -> Result<(), TargetIntegrityError> {
+    let ply_index = board.ply.index() as u16;
+    let mut rec = records::record_unsearched_value_row(
+        board,
+        board.current_player as i8,
+        board.moves_remaining,
+        ply_index,
+    );
+    if let Some((q, r)) = winner_stone {
+        rec.visits = vec![(q as i16, r as i16, 1.0)];
+    }
+    let value = if winner_stone.is_some() { 1.0 } else { -1.0 };
+    rec.root_value = records::refuse_root_value(value, ply_index)?;
+    rec.root_value_valid = true;
+    rec.proven_tail = true;
+    graph_records_vec.push(rec);
+    Ok(())
+}

@@ -142,6 +142,8 @@ pub(crate) struct WorkerParams {
     pub(crate) exploration_flags: ExplorationFlags,
     /// The tactics block the worker's tree runs; `None` is off.
     pub(crate) tactics: Option<mantis_search::mcts::TacticsConfig>,
+    /// The root offence's first decided stone starts a decided tail.
+    pub(crate) decided_tails: bool,
 }
 
 #[cfg(test)]
