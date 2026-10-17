@@ -41,6 +41,7 @@ fn filled_graph_ring() -> HexgBuffer {
             root_value: 0.0,
             root_value_valid: false,
             future_stones: None,
+            proven_tail: false,
         };
         buf.push_record_impl(&rec, (10 + i) as i64).expect("push");
     }

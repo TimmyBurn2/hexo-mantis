@@ -39,6 +39,7 @@ fn sample_record() -> GraphRecord {
         root_value: 0.25,
         root_value_valid: true,
         future_stones: None,
+        proven_tail: false,
     }
 }
 
@@ -809,6 +810,7 @@ fn empty_board_record_survives_d6_augmented_sample_align() {
         root_value: 0.0,
         root_value_valid: false,
         future_stones: None,
+        proven_tail: false,
     };
     buf.push_record_impl(&rec, 0).unwrap();
     for _ in 0..48 {
@@ -890,6 +892,7 @@ fn sample_rejects_illegal_cell_visit_mass_drop() {
         root_value: 0.0,
         root_value_valid: false,
         future_stones: None,
+        proven_tail: false,
     };
     buf.push_record_impl(&rec, 7).unwrap();
     assert!(

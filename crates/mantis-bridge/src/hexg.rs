@@ -138,6 +138,7 @@ impl PyHexgBuffer {
             root_value,
             root_value_valid,
             future_stones,
+            proven_tail: false,
         };
         // GIL-FREE WAIT: this is the sole producer's write path and the trainer holds the ring
         // for a whole sample, so waiting under the GIL would re-stall the inference server.

@@ -66,6 +66,17 @@ pub fn validate_root_value(root_value: f32, root_value_valid: bool) -> Result<()
     }
 }
 
+/// Reject a decided tail's row that claims a full search: its policy loss would train on a target no search made.
+pub fn validate_proven_tail(proven_tail: bool, is_full_search: bool) -> Result<(), String> {
+    if proven_tail && is_full_search {
+        Err("push_graph_position: a proven_tail row with is_full_search set — a decided tail's ply ran no \
+             search, so its row must not reach the policy loss"
+            .to_string())
+    } else {
+        Ok(())
+    }
+}
+
 /// Reject a stone player outside {+1, -1} at push time, naming coord + value.
 pub fn validate_stone_player(q: i16, r: i16, player: i8) -> Result<(), String> {
     if player == 1 || player == -1 {
@@ -111,6 +122,7 @@ impl HexgBuffer {
                 rec.current_player
             ));
         }
+        validate_proven_tail(rec.proven_tail, rec.is_full_search)?;
         // Validate outcome finiteness before any mutation of `self`.
         validate_outcome(rec.outcome)?;
         validate_tail_mass(rec.tail_mass)?;
@@ -190,6 +202,7 @@ impl HexgBuffer {
         }
         self.n_future[slot] = future.len() as u8;
         self.future_valid[slot] = u8::from(rec.future_stones.is_some());
+        self.proven_tail[slot] = u8::from(rec.proven_tail);
         self.weights[slot] = half::f16::ONE.to_bits();
 
         let new_bucket = weight_bucket(self.weights[slot]);
@@ -243,6 +256,7 @@ impl HexgBuffer {
             root_value: self.root_value[slot],
             root_value_valid: self.root_value_valid[slot] != 0,
             future_stones: (self.future_valid[slot] != 0).then(|| self.future_stones_at(slot)),
+            proven_tail: self.proven_tail[slot] != 0,
         }
     }
 

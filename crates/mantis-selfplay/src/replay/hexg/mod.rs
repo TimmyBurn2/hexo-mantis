@@ -182,6 +182,8 @@ pub struct GraphRecord {
     pub root_value_valid: bool,
     /// Its game's next [`FUTURE_HORIZON`] stones `(q, r, ±1)` from this ply (fewer only at the game's end); `None`: no field.
     pub future_stones: Option<Vec<(i16, i16, i8)>>,
+    /// A decided tail's row, its ply played with no search; never on a row whose policy trains.
+    pub proven_tail: bool,
 }
 
 /// Graph-position replay ring: fixed-slot SoA Vecs, ring overwrite by `head`, weighted rejection
@@ -224,6 +226,7 @@ pub struct HexgBuffer {
     pub future_players: Vec<i8>,   // flat [cap * FUTURE_HORIZON]
     pub n_future: Vec<u8>,         // [cap]
     pub future_valid: Vec<u8>,     // [cap]; 0 = the row carries no field
+    pub proven_tail: Vec<u8>,      // [cap]; 1 = a decided tail's row
     pub weights: Vec<u16>,         // f16 bits; [cap]; stored at 1.0, read by no sampler
 
     pub next_game_id: i64,
@@ -324,6 +327,7 @@ impl HexgBuffer {
             future_players: vec![0i8; capacity * FUTURE_HORIZON],
             n_future: vec![0u8; capacity],
             future_valid: vec![0u8; capacity],
+            proven_tail: vec![0u8; capacity],
             weights: vec![default_w; capacity],
             next_game_id: 0,
             last_batch_distinct_games: 0,

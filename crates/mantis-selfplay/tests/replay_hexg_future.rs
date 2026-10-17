@@ -39,6 +39,7 @@ fn golden_row() -> GraphRecord {
             (1, -2, 1),
             (2, 2, -1),
         ]),
+        proven_tail: false,
     }
 }
 
