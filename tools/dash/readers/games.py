@@ -7,7 +7,7 @@ from typing import Any
 from . import chances, tactics
 from .hexlogic import owner, turn_of, win_line
 
-_ARMS = ("opening", "full", "fast", "decided")
+_ARMS = ("opening", "full", "fast", "decided", "tail")
 
 
 @dataclass(frozen=True)

@@ -38,6 +38,7 @@ def test_the_runner_names_every_tactics_row_and_reads_zero_before_it_searches() 
     totals = SelfPlayRunner(cfg).tactics_totals()
     for row in ("descents", "root_proofs_found", "root_vetoes", "decided_lost", "proven_root_rows",
                 "decided_lost_rows", "vetoed_target_rows", "emptied_target_rows", "vetoed_all_rows",
-                "tail_emptied_rows", "tail_leak_rows", "unsearched_decided_rows"):
+                "tail_emptied_rows", "tail_leak_rows", "unsearched_decided_rows", "proven_tail_plies",
+                "proven_tail_rows", "tail_search_skipped", "tail_exits"):
         assert totals[row] == 0, row
     assert "mixed_rows" not in totals, "the proof mixture's row left the tree with the mixture"
