@@ -43,7 +43,7 @@ pub(crate) fn record_position_graph_dispatch(
     Ok(())
 }
 
-/// Record the value-only row of an unsearched decided root at the proof's value; `RootValueOutOfRange` past `[-1, 1]`.
+/// Record the value-only row of a ply played with no search at its `root_value`; `RootValueOutOfRange` past `[-1, 1]`.
 pub(crate) fn record_unsearched_dispatch(
     board: &Board,
     graph_records_vec: &mut Vec<GraphRecord>,
@@ -68,20 +68,11 @@ pub(crate) fn record_tail_dispatch(
     graph_records_vec: &mut Vec<GraphRecord>,
     winner_stone: Option<(i32, i32)>,
 ) -> Result<(), TargetIntegrityError> {
-    let ply_index = board.ply.index() as u16;
-    let mut rec = records::record_unsearched_value_row(
-        board,
-        board.current_player as i8,
-        board.moves_remaining,
-        ply_index,
-    );
-    if let Some((q, r)) = winner_stone {
-        rec.visits = vec![(q as i16, r as i16, 1.0)];
-    }
     let value = if winner_stone.is_some() { 1.0 } else { -1.0 };
-    rec.root_value = records::refuse_root_value(value, ply_index)?;
-    rec.root_value_valid = true;
-    rec.proven_tail = true;
-    graph_records_vec.push(rec);
+    record_unsearched_dispatch(board, graph_records_vec, value)?;
+    if let Some(rec) = graph_records_vec.last_mut() {
+        rec.visits = winner_stone.map_or_else(Vec::new, |(q, r)| vec![(q as i16, r as i16, 1.0)]);
+        rec.proven_tail = true;
+    }
     Ok(())
 }

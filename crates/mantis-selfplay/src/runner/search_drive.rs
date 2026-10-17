@@ -584,6 +584,23 @@ fn run_mcts_search(
     }
 }
 
+/// The playout cap's arm for one move and its sims: the full arm with the cap unarmed, else drawn at `full_search_prob`.
+pub(crate) fn draw_arm(ctx: MovePlayContext, rng: &mut ThreadRng) -> (bool, usize) {
+    if ctx.full_search_prob > 0.0 {
+        let full = rng.random::<f32>() < ctx.full_search_prob;
+        (
+            full,
+            if full {
+                ctx.n_simulations
+            } else {
+                ctx.n_sims_quick
+            },
+        )
+    } else {
+        (true, ctx.n_simulations)
+    }
+}
+
 /// Count a completed search that spent fewer descents than its budget, and by how many.
 fn record_shortfall(searches: &AtomicU64, descents: &AtomicU64, budget: usize, spent: usize) {
     if spent < budget {
@@ -592,8 +609,7 @@ fn record_shortfall(searches: &AtomicU64, descents: &AtomicU64, budget: usize, s
     }
 }
 
-/// Orchestrate one full move: playout-cap selection, MCTS search (none at a quick draw's decided root), stat
-/// accumulation, target-policy build, sampling, position recording (BEFORE apply), and apply-move.
+/// One move: the root offence, then a decided tail's first stone (tails armed) or `search_move`.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn play_one_move(
     tree: &mut MCTSTree,
@@ -639,7 +655,7 @@ pub(crate) fn play_one_move(
             board,
             record,
             stone,
-            ctx.full_search_prob,
+            ctx,
             rng,
             accumulators,
             fatal_latch,
@@ -687,17 +703,7 @@ pub(crate) fn search_move(
     decided: Option<(i32, i32)>,
 ) -> MoveOutcome {
     // Move-level playout cap.
-    let (move_is_full_search, move_sims) = if ctx.full_search_prob > 0.0 {
-        let full = rng.random::<f32>() < ctx.full_search_prob;
-        let sims = if full {
-            ctx.n_simulations
-        } else {
-            ctx.n_sims_quick
-        };
-        (full, sims)
-    } else {
-        (true, ctx.n_simulations)
-    };
+    let (move_is_full_search, move_sims) = draw_arm(ctx, rng);
     // Fire-rate counted HERE — at the draw, before anything else can move the flag.
     if move_is_full_search {
         accumulators.pcr_full_moves.fetch_add(1, Ordering::Relaxed);
@@ -1302,3 +1308,46 @@ mod explore_gate_tests {
 #[cfg(test)]
 #[path = "leaf_key_drive_tests.rs"]
 mod leaf_key_drive_tests;
+
+#[cfg(test)]
+mod draw_arm_tests {
+    use mantis_search::{QSigma, SearchKind};
+
+    use super::{draw_arm, MovePlayContext};
+
+    fn ctx(full_search_prob: f32) -> MovePlayContext {
+        MovePlayContext {
+            leaf_batch_size: 8,
+            visit_capacity: 16,
+            temp_threshold: 0,
+            temp_min: 0.5,
+            sigma: QSigma {
+                c_visit: 50.0,
+                c_scale: 1.0,
+                rescale: false,
+            },
+            gumbel_m: 16,
+            gumbel_m_quick: 16,
+            gumbel_explore_moves: 0,
+            dirichlet_alpha: 0.3,
+            dirichlet_epsilon: 0.25,
+            n_simulations: 320,
+            full_search_prob,
+            n_sims_quick: 64,
+            search_kind: SearchKind::Gumbel,
+            dirichlet_enabled: false,
+            decided_tails: true,
+        }
+    }
+
+    /// PLANTED BREAK: the tail's skipped row reads this draw, so a draw that ignored the arm would count quick plies.
+    #[test]
+    fn the_arm_is_full_unarmed_and_drawn_at_its_probability_armed() {
+        let mut rng = rand::rng();
+        for _ in 0..64 {
+            assert_eq!(draw_arm(ctx(0.0), &mut rng), (true, 320));
+            assert_eq!(draw_arm(ctx(1.0), &mut rng), (true, 320));
+            assert_eq!(draw_arm(ctx(f32::MIN_POSITIVE), &mut rng), (false, 64));
+        }
+    }
+}

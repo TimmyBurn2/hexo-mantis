@@ -363,7 +363,7 @@ impl MCTSTree {
     pub fn tail_resistance(&mut self) -> Option<[(i32, i32); 2]> {
         let root = &self.root_board;
         let t = self.tactics.as_deref_mut()?;
-        let mut best: Option<(u8, [(i32, i32); 2])> = None;
+        let mut reproved = Vec::new();
         for pair in t.solver.covering_replies(root) {
             let post = after(root, &pair)?;
             // A fresh table per pair: the re-proof found here is the one the winner's next turn start re-solves.
@@ -374,11 +374,9 @@ impl MCTSTree {
             let Verdict::Win { turns, .. } = solved.verdict else {
                 return None;
             };
-            if best.is_none_or(|(b, _)| turns > b) {
-                best = Some((turns, pair));
-            }
+            reproved.push((turns, pair));
         }
-        best.map(|(_, pair)| pair)
+        best_hold(&reproved)
     }
 
     /// The order the audit walks the root in: Sequential Halving's final ranking under Gumbel, else `None` (by visits).

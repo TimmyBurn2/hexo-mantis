@@ -63,7 +63,14 @@ impl TacticsTotals {
 
     /// Count one recorded row of `row`'s kind.
     pub(crate) fn add_move(&self, row: MoveRow) {
-        self.slots[TacticsCounters::ROWS + row as usize].fetch_add(1, Ordering::Relaxed);
+        self.add_moves(row, 1);
+    }
+
+    /// Count `n` rows of `row`'s kind.
+    pub(crate) fn add_moves(&self, row: MoveRow, n: u64) {
+        if n > 0 {
+            self.slots[TacticsCounters::ROWS + row as usize].fetch_add(n, Ordering::Relaxed);
+        }
     }
 
     /// Every row by name, each read once with a `Relaxed` load.

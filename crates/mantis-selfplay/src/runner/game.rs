@@ -36,7 +36,7 @@ use super::search_drive::{
     MovePlayContext,
 };
 use super::stats::WorkerStats;
-use super::tail::{play_tail_ply, Tail, TailRecord};
+use super::tail::{count_finished_tail, play_tail_ply, Tail, TailRecord};
 use super::{GameResultRow, MoveArm, PositionStats, ARM_OPENING};
 
 /// Per-game-init scalar context. `Copy`.
@@ -410,7 +410,7 @@ fn run_one_game(
                     version_seen,
                 },
                 t,
-                full_search_prob,
+                play_ctx,
                 rng,
                 agg_trunk_sz,
                 infer,
@@ -474,6 +474,7 @@ fn run_one_game(
         return;
     }
 
+    count_finished_tail(move_accumulators.tactics_totals, &move_arms, &graph_records);
     let (games_completed, x_wins, o_wins, draws, positions_dropped, graph_game_seq) =
         finalize_counters;
     finalize_game_graph(

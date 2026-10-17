@@ -3,7 +3,6 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use rand::rngs::ThreadRng;
-use rand::RngExt;
 
 use mantis_core::{Board, Player};
 use mantis_search::mcts::TacticsError;
@@ -13,10 +12,10 @@ use crate::replay::hexg::GraphRecord;
 
 use super::record::record_tail_dispatch;
 use super::search_drive::{
-    count_live_failure, infer_and_expand_graph, FatalDefectLatch, InferContext, LeafSelection,
-    MoveAccumulators, MoveOutcome,
+    count_live_failure, draw_arm, infer_and_expand_graph, FatalDefectLatch, InferContext,
+    LeafSelection, MoveAccumulators, MoveOutcome, MovePlayContext,
 };
-use super::stats::MoveRow;
+use super::stats::{MoveRow, TacticsTotals};
 use super::{MoveArm, ARM_TAIL};
 
 /// A game's decided tail: the side its proof wins for, and the loser's stored second stone with the ply it is owed at.
@@ -46,7 +45,7 @@ pub(crate) fn play_tail_ply(
     board: &mut Board,
     record: TailRecord<'_>,
     tail: &mut Tail,
-    full_search_prob: f32,
+    ctx: MovePlayContext,
     rng: &mut ThreadRng,
     agg_trunk_sz: i32,
     infer: InferContext,
@@ -71,7 +70,7 @@ pub(crate) fn play_tail_ply(
             board,
             record,
             stone,
-            full_search_prob,
+            ctx,
             rng,
             accumulators,
             fatal_latch,
@@ -102,20 +101,20 @@ pub(crate) fn play_tail_ply(
     ))
 }
 
-/// The winner's tail stone, its row the one-hot at +1; its searches-skipped row reads the arm `play_one_move` would draw.
+/// The winner's tail stone, its row the one-hot at +1; its searches-skipped row reads the arm `play_one_move` draws.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn play_winner_stone(
     tree: &MCTSTree,
     board: &mut Board,
     record: TailRecord<'_>,
     stone: (i32, i32),
-    full_search_prob: f32,
+    ctx: MovePlayContext,
     rng: &mut ThreadRng,
     accumulators: MoveAccumulators,
     fatal_latch: FatalDefectLatch,
 ) -> MoveOutcome {
     // A quick draw's decided root was already unsearched, so only a full draw's search is skipped here.
-    let skipped = full_search_prob <= 0.0 || rng.random::<f32>() < full_search_prob;
+    let (skipped, _) = draw_arm(ctx, rng);
     play_tail_stone(
         tree,
         board,
@@ -179,7 +178,7 @@ fn net_argmax(
         }
     };
     let root = tree.pool[0];
-    if served == 0 || !root.is_expanded() {
+    if served == 0 || !root.is_expanded() || root.n_children == 0 {
         count_live_failure(infer.running, root_expansion_failed);
         return Err(MoveOutcome::Continue);
     }
@@ -188,16 +187,17 @@ fn net_argmax(
         version_seen.push(version);
     }
     let first = root.first_child as usize;
-    let mut best: Option<(f32, (i32, i32))> = None;
-    for node in &tree.pool[first..first + usize::from(root.n_children)] {
-        if best.is_none_or(|(prior, _)| node.prior > prior) {
-            best = Some((node.prior, node.cell()));
+    let children = &tree.pool[first..first + usize::from(root.n_children)];
+    let mut best = children[0];
+    for node in &children[1..] {
+        if node.prior > best.prior {
+            best = *node;
         }
     }
-    best.map(|(_, cell)| cell).ok_or(MoveOutcome::Continue)
+    Ok(best.cell())
 }
 
-/// Write the tail row before the stone (the winner's one-hot, the loser's value-only), then play it and count the ply.
+/// Write the tail row before the stone (the winner's one-hot, the loser's value-only), then play it.
 #[allow(clippy::too_many_arguments)]
 fn play_tail_stone(
     tree: &MCTSTree,
@@ -216,15 +216,15 @@ fn play_tail_stone(
     }
     let totals = accumulators.tactics_totals;
     totals.add_search(&tree.tactics_counters());
-    if record.graph_records.last().is_some_and(|r| r.proven_tail) {
-        totals.add_move(MoveRow::ProvenTailRow);
-    }
     if board.apply_move(stone.0, stone.1).is_err() {
+        fatal_latch.store(format!(
+            "TailStoneIllegal: the decided tail's stone {stone:?} at ply_index={} did not play, its row already written",
+            board.ply.index()
+        ));
         return MoveOutcome::Break;
     }
     record.move_history.push(stone);
     record.move_arms.push((0, ARM_TAIL));
-    totals.add_move(MoveRow::ProvenTailPly);
     if search_skipped {
         totals.add_move(MoveRow::TailSearchSkipped);
     }
@@ -232,4 +232,47 @@ fn play_tail_stone(
         .positions_generated
         .fetch_add(1, Ordering::Relaxed);
     MoveOutcome::Played
+}
+
+/// Count a finished game's tail plies off its move arms and its flagged rows off its rows: a dropped row is a gap.
+pub(crate) fn count_finished_tail(
+    totals: &TacticsTotals,
+    move_arms: &[MoveArm],
+    rows: &[GraphRecord],
+) {
+    let plies = move_arms
+        .iter()
+        .filter(|&&(_, arm)| arm == ARM_TAIL)
+        .count();
+    let flagged = rows.iter().filter(|r| r.proven_tail).count();
+    totals.add_moves(MoveRow::ProvenTailPly, plies as u64);
+    totals.add_moves(MoveRow::ProvenTailRow, flagged as u64);
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::{count_finished_tail, TacticsTotals};
+    use crate::replay::hexg::GraphRecord;
+    use crate::runner::{MoveArm, ARM_FAST, ARM_TAIL};
+
+    /// PLANTED BREAK: a finished tail whose loser row was never written reads one ply more than its rows.
+    #[test]
+    fn a_finished_tail_counts_its_plies_off_the_arms_and_its_rows_off_the_rows() {
+        let arms: Vec<MoveArm> = vec![(64, ARM_FAST), (0, ARM_TAIL), (0, ARM_TAIL), (0, ARM_TAIL)];
+        let row = |proven_tail| GraphRecord {
+            proven_tail,
+            ..GraphRecord::default()
+        };
+        let read = |rows: &[GraphRecord]| {
+            let totals = TacticsTotals::new();
+            count_finished_tail(&totals, &arms, rows);
+            let by: HashMap<&str, u64> = totals.snapshot().into_iter().collect();
+            (by["proven_tail_plies"], by["proven_tail_rows"])
+        };
+        let whole = [row(false), row(true), row(true), row(true)];
+        assert_eq!(read(&whole), (3, 3));
+        assert_eq!(read(&whole[..3]), (3, 2), "a dropped row is a gap");
+    }
 }

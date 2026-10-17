@@ -23,7 +23,7 @@ pub(crate) const FIX219: [(i32, i32); 17] = [
     (-10, 0),
 ];
 
-/// The goldens' `equal_work_run8_45000_rung_00127@11`: P2's seven-turn win; P1's replies to its first turn re-prove in 5, 5, 6.
+/// The solver goldens' row ending `rung_00127@11`: P2's seven-turn win; P1's replies to its first turn re-prove in 5, 5, 6.
 pub(crate) const RUNG127_AT11: [(i32, i32); 11] = [
     (2, -1),
     (1, -5),

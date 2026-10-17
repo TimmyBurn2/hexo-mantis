@@ -334,7 +334,7 @@ fn record_stones(board: &Board) -> Vec<(i16, i16, i8)> {
         .collect()
 }
 
-/// The one target-less row: a quick-arm root tactics decided, played unsearched, with no explicit entry and no tail.
+/// The target-less row of a ply played with no search: no explicit entry and no tail.
 #[must_use]
 pub fn record_unsearched_value_row(
     board: &Board,

@@ -1,3 +1,4 @@
+// >300 justify (R8): the drive, the replay checker and the pins that read the checker's verdicts are one unit.
 //! A decided tail runs its game out with no search, a flagged row a ply; `tail_check` replays each game and reds on a wrong stone.
 
 use std::collections::HashMap;
@@ -57,11 +58,12 @@ enum TailEnd {
     Exited,
 }
 
-/// One worker under `kind` until `want` holds of the finished games or the deadline; the games and the summed rows.
+/// One worker under `kind` and playout-cap probability `cap` until `want` holds of the finished games or the deadline.
 fn drive(
     decided_tails: bool,
     kind: SearchKind,
     max_moves: usize,
+    cap: f32,
     want: fn(&[Game]) -> bool,
 ) -> (Vec<Game>, Rows) {
     let spec = lookup_or_panic(ENCODING);
@@ -70,7 +72,7 @@ fn drive(
         max_moves_per_game: max_moves,
         n_simulations: SIMS,
         n_sims_quick: SIMS / 4,
-        full_search_prob: 0.5,
+        full_search_prob: cap,
         leaf_batch_size: LEAF_BATCH,
         random_opening_plies: 0,
         search_kind: kind,
@@ -91,9 +93,13 @@ fn drive(
     let deadline = Instant::now() + Duration::from_secs(600);
     let (mut records, mut results) = (Vec::new(), Vec::new());
     let mut games: Vec<Game> = Vec::new();
-    while Instant::now() < deadline && !want(&games) && runner.fatal_defect().is_none() {
-        records.extend(runner.drain_graph_records().expect("unpoisoned"));
+    // Results before rows: a game's rows are queued before its result, so every drained result has its rows.
+    let drain = |records: &mut Vec<GraphRecord>, results: &mut Vec<_>| {
         results.extend(runner.drain_game_results().expect("unpoisoned"));
+        records.extend(runner.drain_graph_records().expect("unpoisoned"));
+    };
+    while Instant::now() < deadline && !want(&games) && runner.fatal_defect().is_none() {
+        drain(&mut records, &mut results);
         games = assemble(&records, &results);
         thread::sleep(Duration::from_millis(5));
     }
@@ -101,6 +107,8 @@ fn drive(
     runner.stop();
     producer.join().expect("producer exits");
     assert!(defect.is_none(), "a fatal defect latched: {defect:?}");
+    drain(&mut records, &mut results);
+    games = assemble(&records, &results);
     let rows = runner.tactics_totals().into_iter().collect();
     (games, rows)
 }
@@ -170,7 +178,9 @@ fn tail_check(game: &Game, block: TacticsConfig, max_moves: usize) -> Result<Tai
             Some(w) if board.current_player == w => match tree.root_offence().ok().flatten() {
                 Some(d) => Some((d, true)),
                 None => {
+                    // An exited tail's rows meet no result: its z is checked by no segment.
                     (winner, end) = (None, TailEnd::Exited);
+                    tail_rows.clear();
                     None
                 }
             },
@@ -267,10 +277,25 @@ fn ends(games: &[Game], max_moves: usize) -> Vec<TailEnd> {
         .collect()
 }
 
+/// The drained games' tail plies off their arms, flagged rows off their rows, and loser rows (flagged, no entry).
+fn finished(games: &[Game]) -> (u64, u64, u64) {
+    let count = |f: &dyn Fn(&Game) -> usize| games.iter().map(f).sum::<usize>() as u64;
+    (
+        count(&|g| g.arms.iter().filter(|&&a| a == ARM_TAIL).count()),
+        count(&|g| g.rows.iter().filter(|r| r.proven_tail).count()),
+        count(&|g| {
+            g.rows
+                .iter()
+                .filter(|r| r.proven_tail && r.visits.is_empty())
+                .count()
+        }),
+    )
+}
+
 #[test]
 fn every_tail_game_replays_to_its_proof_with_a_flagged_row_a_ply() {
     for kind in [SearchKind::Puct, SearchKind::Gumbel] {
-        let (games, rows) = drive(true, kind, 160, |g| {
+        let (games, rows) = drive(true, kind, 160, 0.5, |g| {
             g.len() >= 12 && ends(g, 160).contains(&TailEnd::Won)
         });
         let seen = ends(&games, 160);
@@ -282,13 +307,23 @@ fn every_tail_game_replays_to_its_proof_with_a_flagged_row_a_ply() {
             seen.contains(&TailEnd::Won),
             "{kind:?}: no tail ran to its six"
         );
+        // Plies off the arms and rows off the rows, both at each finished game: every finished game is drained here.
+        let (plies, flagged, loser) = finished(&games);
         assert_eq!(
-            rows["proven_tail_rows"], rows["proven_tail_plies"],
-            "{kind:?}: a tail ply without its row"
+            (rows["proven_tail_plies"], rows["proven_tail_rows"]),
+            (plies, flagged),
+            "{kind:?}: the rows' counts are the drained games'"
         );
+        assert_eq!(plies, flagged, "{kind:?}: a tail ply without its row");
+        let exited = seen.iter().filter(|&&e| e == TailEnd::Exited).count() as u64;
         assert!(
-            rows["tail_search_skipped"] > 0
-                && rows["tail_search_skipped"] <= rows["proven_tail_plies"]
+            rows["tail_exits"] >= exited,
+            "{kind:?}: {exited} exited tails drained"
+        );
+        // Every loser ply skips a search; a game stopped mid-tail adds plies to this row and none to the rest.
+        assert!(
+            rows["tail_search_skipped"] >= loser && loser > 0,
+            "{kind:?}: {rows:?}"
         );
         assert_eq!(
             (rows["proven_root_rows"], rows["unsearched_decided_rows"]),
@@ -300,7 +335,7 @@ fn every_tail_game_replays_to_its_proof_with_a_flagged_row_a_ply() {
 
 #[test]
 fn a_tail_the_cap_cuts_replays_to_the_cap_with_every_row_masked() {
-    let (games, _) = drive(true, SearchKind::Gumbel, CAP, |g| {
+    let (games, _) = drive(true, SearchKind::Gumbel, CAP, 0.5, |g| {
         ends(g, CAP).contains(&TailEnd::Capped)
     });
     let seen = ends(&games, CAP);
@@ -311,7 +346,7 @@ fn a_tail_the_cap_cuts_replays_to_the_cap_with_every_row_masked() {
 /// PLANTED BREAKS: the winner's first tail stone swapped for another legal cell, or its row naming another cell.
 #[test]
 fn a_planted_wrong_proof_stone_is_refused() {
-    let (games, _) = drive(true, SearchKind::Gumbel, 160, |g| {
+    let (games, _) = drive(true, SearchKind::Gumbel, 160, 0.5, |g| {
         ends(g, 160).contains(&TailEnd::Won)
     });
     let game = games
@@ -350,12 +385,19 @@ fn a_planted_wrong_proof_stone_is_refused() {
 /// The known-bad: tails switched off, the search plays the decided plies and writes their rows without the flag.
 #[test]
 fn a_tail_the_search_played_reds_the_check() {
-    let (games, rows) = drive(false, SearchKind::Gumbel, 160, |g| {
+    let (games, rows) = drive(false, SearchKind::Gumbel, 160, 0.5, |g| {
         g.iter().any(|g| tail_check(g, BLOCK, 160).is_err())
     });
+    let errs: Vec<String> = games
+        .iter()
+        .filter_map(|g| tail_check(g, BLOCK, 160).err())
+        .collect();
     assert!(
-        games.iter().any(|g| tail_check(g, BLOCK, 160).is_err()),
-        "no searched game reached a decided root"
+        !errs.is_empty()
+            && errs
+                .iter()
+                .all(|e| e.contains("a tail ply recorded as arm")),
+        "the searched decided plies red the tail rule, and only it: {errs:?}"
     );
     assert_eq!(
         rows["proven_tail_plies"] + rows["proven_tail_rows"] + rows["tail_search_skipped"],
@@ -369,7 +411,9 @@ fn a_tail_the_search_played_reds_the_check() {
 #[test]
 fn every_game_writes_a_row_a_ply_with_tails_on_and_off() {
     for decided_tails in [false, true] {
-        let (games, _) = drive(decided_tails, SearchKind::Gumbel, 160, |g| g.len() >= 8);
+        let (games, _) = drive(decided_tails, SearchKind::Gumbel, 160, 0.5, |g| {
+            g.len() >= 8
+        });
         for g in &games {
             assert_eq!(
                 g.rows.len(),
@@ -378,6 +422,19 @@ fn every_game_writes_a_row_a_ply_with_tails_on_and_off() {
             );
         }
     }
+}
+
+/// With the playout cap unarmed every move would have searched, so every tail ply skips one.
+#[test]
+fn with_the_cap_unarmed_every_tail_ply_skips_a_search() {
+    let (games, rows) = drive(true, SearchKind::Gumbel, 160, 0.0, |g| {
+        g.len() >= 6 && ends(g, 160).contains(&TailEnd::Won)
+    });
+    let (plies, _, _) = finished(&games);
+    assert!(
+        plies > 0 && rows["tail_search_skipped"] >= plies,
+        "{rows:?}"
+    );
 }
 
 #[test]
