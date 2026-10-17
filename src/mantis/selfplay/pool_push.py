@@ -36,14 +36,14 @@ def push_graph(pool: Any, rows: list[tuple[Any, ...]]) -> None:
     id would skip the sampler's uniqueness guard, so one game's rows would count as independent.
 
     Raises:
-        ValueError: the engine refused a row (a target, root value or future field outside its contract).
+        ValueError: the engine refused a row (a target, root value, future field or proven tail outside its contract).
     """
     allocated: dict[int, int] = {}
     alpha_full = 0
     for rec in rows:
-        # `(…positional…, tail_mass, (root_value, root_value_valid, future_stones), runner_game_id)`: the
-        # tail and the trio ride by keyword because the push signature carries `game_id` before them.
-        tail_mass, (root_value, root_value_valid, future_stones), runner_game_id = rec[-3:]
+        # `(…, tail_mass, (root_value, root_value_valid, future_stones, proven_tail), game id)`: the
+        # tail and the group ride by keyword because the push signature carries `game_id` before them.
+        tail_mass, (root_value, root_value_valid, future_stones, proven_tail), runner_game_id = rec[-3:]
         tail_mass, runner_game_id = float(tail_mass), int(runner_game_id)
         if is_alpha_full(tail_mass):
             alpha_full += 1
@@ -62,7 +62,8 @@ def push_graph(pool: Any, rows: list[tuple[Any, ...]]) -> None:
                 allocated[runner_game_id] = buffer_game_id
         pool.replay_buffer.push_graph_position(
             *rec[:-3], game_id=buffer_game_id, tail_mass=tail_mass, root_value=root_value,
-            root_value_valid=root_value_valid, future_stones=future_stones)
+            root_value_valid=root_value_valid, future_stones=future_stones,
+            proven_tail=proven_tail)
     n = len(rows)
     with pool._lock:
         pool.positions_pushed += n

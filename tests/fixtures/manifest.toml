@@ -69,6 +69,14 @@ path = "replay/hexg_v4_golden.hexg"
 sha256 = "71c55b1d76e87e246116c176ca18376b17677e56b6c5ab6491e5eddedf5bec57"
 added_by = "AUX-1"
 
+# DT-1: the v5 byte golden is the v4 golden's bytes with each record's proven-tail flag spliced in
+# after its future count by an independent writer (record 0, a full-search row, 0; record 1, not
+# full-search, 1) and the version set to 5, so the v4 tree's rows are held byte-equal under v5.
+[[required]]
+path = "replay/hexg_v5_golden.hexg"
+sha256 = "b9e39dc47bc1ffc7cc46d201be8f82abe842bb0a249426c584b8a48bbb27aa63"
+added_by = "DT-1"
+
 # WP6 Stage B ⊕ oracle-first old-side capture (wp/WP6/CAPTURE_LOG.md). Dispatcher-
 # stamped shas of the FROZEN hexo_rl (rev 750b599) PUB pyo3-free record/finalize
 # producers over PINNED inputs; the P-04/P-09 pins assert the ported new-side

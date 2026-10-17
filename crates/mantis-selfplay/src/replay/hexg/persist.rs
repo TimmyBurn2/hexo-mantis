@@ -2,15 +2,15 @@
 //! and the little-endian cursor are one indivisible format unit; the atomicity proof
 //! depends on the parser and committer living together.
 //!
-//! HEXG v4 on-disk format, separate from dense HEXB.
+//! HEXG v5 on-disk format, separate from dense HEXB.
 //!
-//! v2 added `tail_mass`, at an offset only the version field can see, so a v1 file is refused by name. v3 appends the
-//! root value and its flag, v4 the future-occupancy field; a v2 or v3 file loads with every row lacking what it predates.
-//! The version picks the record layout, and a payload not ending at its last record is refused; it is the authority.
+//! v2 added `tail_mass` at an offset only the version field can see, so a v1 file is refused by name; v3 appends the
+//! root value and its flag, v4 the future-occupancy field, v5 the proven-tail flag, and an older file loads every row
+//! without what it predates. The version picks the layout and is its authority; a payload ending elsewhere is refused.
 //!
 //! Header (little-endian native):
 //!   [magic:   u32 = 0x48455847]  ("HEXG" — distinct from HEXB 0x48455842)
-//!   [version: u32 = 4]          (written; 2, 3 and 4 are read)
+//!   [version: u32 = 5]          (written; 2, 3, 4 and 5 are read)
 //!   [max_stones: u32] [max_visits: u32]   (slot geometry; `max_visits` is the buffer's
 //!                                          DERIVED `visit_capacity`; reject on mismatch)
 //!   [capacity: u64] [size: u64]
@@ -19,7 +19,7 @@
 //!     n_stones: u16, n_visits: u16, current_player: i8, moves_remaining: u8,
 //!     ply_index: u16, is_full_search: u8, value_valid: u8, outcome: f32,
 //!     game_length: u16, game_id: i64, weight: u16, tail_mass: f32, [v3] root_value: f32, root_value_valid: u8,
-//!     [v4] future_valid: u8, n_future: u8, stones: n_stones × (q:i16, r:i16, p:i8),
+//!     [v4] future_valid: u8, n_future: u8, [v5] proven_tail: u8, stones: n_stones × (q:i16, r:i16, p:i8),
 //!     visits: n_visits × (q:i16, r:i16, prob:f32), [v4] future: n_future × (q:i16, r:i16, p:i8)
 //!
 //! ## Failure-atomicity contract
@@ -33,7 +33,7 @@ use std::sync::atomic::Ordering;
 use super::{weight_bucket, HexgBuffer, FUTURE_HORIZON, HEXG_MAGIC, HEXG_VERSION, MAX_STONES};
 
 impl HexgBuffer {
-    /// Save all records (oldest → newest) to `path` in HEXG v4 format.
+    /// Save all records (oldest → newest) to `path` in HEXG v5 format.
     ///
     /// Published through `atomic_save` (temp, fsync, rename, fsync(dir)), so a kill
     /// mid-save leaves the older ring intact rather than a truncated one.
@@ -86,6 +86,7 @@ impl HexgBuffer {
             w.write_all(&[self.root_value_valid[slot]]).map_err(io)?;
             w.write_all(&[self.future_valid[slot]]).map_err(io)?;
             w.write_all(&[self.n_future[slot]]).map_err(io)?;
+            w.write_all(&[self.proven_tail[slot]]).map_err(io)?;
 
             let stone_base = slot * MAX_STONES * 2;
             let player_base = slot * MAX_STONES;
@@ -140,7 +141,7 @@ impl HexgBuffer {
         let version = cur.u32()?;
         let layout = RecordLayout::of_version(version).ok_or_else(|| {
             format!(
-                "HEXG version {version} not supported (this build reads v2, v3 and \
+                "HEXG version {version} not supported (this build reads v2, v3, v4 and \
                  v{HEXG_VERSION}). v2 added the per-record tail mass alpha of the sparse \
                  Gumbel row, so a v1 record is a different byte layout from \
                  `weight` onward and re-parsing it would read a stone coordinate as a \
@@ -234,6 +235,7 @@ impl HexgBuffer {
             self.future_players[future_base..future_base + nf].copy_from_slice(&rec.future_players);
             self.n_future[slot] = nf as u8;
             self.future_valid[slot] = rec.future_valid;
+            self.proven_tail[slot] = rec.proven_tail;
             self.n_stones[slot] = rec.ns as u16;
             self.n_visits[slot] = rec.nv as u16;
 
@@ -268,6 +270,8 @@ enum RecordLayout {
     V3,
     /// V3 plus the future-occupancy flag and count in the head and its stones after the visits.
     V4,
+    /// V4 plus the proven-tail flag after the future count; every older layout loads each row unflagged.
+    V5,
 }
 
 impl RecordLayout {
@@ -276,6 +280,7 @@ impl RecordLayout {
             2 => Some(Self::V2),
             3 => Some(Self::V3),
             4 => Some(Self::V4),
+            5 => Some(Self::V5),
             _ => None,
         }
     }
@@ -317,7 +322,7 @@ fn parse_records(
         }
         let (root_value, root_value_valid) = match layout {
             RecordLayout::V2 => (0.0f32, 0u8),
-            RecordLayout::V3 | RecordLayout::V4 => (cur.f32()?, cur.u8()?),
+            RecordLayout::V3 | RecordLayout::V4 | RecordLayout::V5 => (cur.f32()?, cur.u8()?),
         };
         if root_value_valid > 1
             || super::push::validate_root_value(root_value, root_value_valid == 1).is_err()
@@ -330,12 +335,24 @@ fn parse_records(
 
         let (future_valid, nf) = match layout {
             RecordLayout::V2 | RecordLayout::V3 => (0u8, 0usize),
-            RecordLayout::V4 => (cur.u8()?, usize::from(cur.u8()?)),
+            RecordLayout::V4 | RecordLayout::V5 => (cur.u8()?, usize::from(cur.u8()?)),
         };
         if future_valid > 1 || (future_valid == 0 && nf != 0) || nf > FUTURE_HORIZON {
             return Err(format!(
                 "HEXG load: record {slot} declares a future_valid flag {future_valid} with {nf} \
                  future stones, outside the field's contract"
+            ));
+        }
+        let proven_tail = match layout {
+            RecordLayout::V2 | RecordLayout::V3 | RecordLayout::V4 => 0u8,
+            RecordLayout::V5 => cur.u8()?,
+        };
+        if proven_tail > 1
+            || super::push::validate_proven_tail(proven_tail == 1, is_full_search != 0).is_err()
+        {
+            return Err(format!(
+                "HEXG load: record {slot} declares proven_tail {proven_tail} with is_full_search \
+                 {is_full_search}, outside the field's contract (a decided tail's row ran no search)"
             ));
         }
 
@@ -399,6 +416,7 @@ fn parse_records(
             future_valid,
             future_qr,
             future_players,
+            proven_tail,
         });
     }
     Ok(parsed)
@@ -427,6 +445,7 @@ struct ParsedRecord {
     future_valid: u8,
     future_qr: Vec<i16>,
     future_players: Vec<i8>,
+    proven_tail: u8,
 }
 
 /// Minimal little-endian cursor over the loaded byte buffer.

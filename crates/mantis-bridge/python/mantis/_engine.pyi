@@ -407,7 +407,7 @@ class SelfPlayRunner:
             bool,
             int,
             float,
-            tuple[float, bool, list[tuple[int, int, int]] | None],
+            tuple[float, bool, list[tuple[int, int, int]] | None, bool],
             int,
         ]
     ]: ...
@@ -499,6 +499,7 @@ class HexgBuffer:
         root_value: float = 0.0,
         root_value_valid: bool = False,
         future_stones: list[tuple[int, int, int]] | None = None,
+        proven_tail: bool = False,
     ) -> None: ...
     def sample_graph_batch(
         self,
@@ -547,6 +548,8 @@ class GraphTargets:
     def future_target(self) -> numpy.ndarray: ...
     @property
     def future_valid(self) -> numpy.ndarray: ...
+    @property
+    def proven_tail(self) -> numpy.ndarray: ...
     @property
     def target_argmax_cells(self) -> list[tuple[int, int] | None]: ...
 

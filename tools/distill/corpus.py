@@ -21,7 +21,7 @@ SRC_RING, SRC_OPENING = 0, 1
 #: Up to three stones the coloured set fixes everything Six's planes read of the order.
 ORDER_FREE_PLIES = 3
 RING_FIELDS = ("current_player", "moves_remaining", "ply_index", "is_full_search", "value_valid", "outcome",
-               "game_length", "tail_mass", "root_value", "root_value_valid")
+               "game_length", "tail_mass", "root_value", "root_value_valid", "proven_tail")
 
 
 def position_key(stone_sum: np.ndarray, ply: np.ndarray, turns: np.ndarray) -> np.ndarray:
@@ -269,7 +269,7 @@ def _append_openings(out: dict[str, np.ndarray], games: Games, openings: list[np
         "ply_index": plies, "is_full_search": np.ones(n, np.int64), "value_valid": np.zeros(n, np.int64),
         "outcome": np.zeros(n, np.float32), "game_length": np.zeros(n, np.int64), "tail_mass": np.zeros(n, np.float32),
         "root_value": np.zeros(n, np.float32), "root_value_valid": np.zeros(n, np.int64),
-        "game": base + np.arange(n, dtype=np.int64), "k": plies, "src_ring": np.full(n, -1, np.int64),
+        "proven_tail": np.zeros(n, np.int64), "game": base + np.arange(n, dtype=np.int64), "k": plies, "src_ring": np.full(n, -1, np.int64),
         "src_row": np.full(n, -1, np.int64), "n_visits": np.zeros(n, np.int64), "source": np.full(n, SRC_OPENING, np.int8),
         "heldout": np.zeros(n, bool),
     }

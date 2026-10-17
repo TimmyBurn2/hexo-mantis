@@ -255,6 +255,8 @@ const V2_HEAD: usize = 30;
 const V3_ROOT: usize = 5;
 /// v4's future-occupancy flag and count (u8 each) after the v3 head; its stones (5 bytes each) follow the body.
 const V4_FUTURE_HEAD: usize = 2;
+/// v5's proven-tail flag (u8) after the v4 head.
+const V5_PROVEN_TAIL: usize = 1;
 
 /// A v3 payload with the two root fields cut out of every record and the version set back to 2.
 fn strip_to_v2(v3: &[u8]) -> Vec<u8> {
@@ -297,9 +299,31 @@ fn strip_to_v3(v4: &[u8]) -> Vec<u8> {
     out
 }
 
-/// A v2 ring loads with no root value and no future field on any row, and its v4 re-save minus both IS the v2 golden.
+/// A v5 payload with the proven-tail flag cut out of every record and the version set back to 4.
+fn strip_to_v4(v5: &[u8]) -> Vec<u8> {
+    let u32_at = |o: usize| u32::from_le_bytes(v5[o..o + 4].try_into().unwrap());
+    let u16_at = |o: usize| usize::from(u16::from_le_bytes(v5[o..o + 2].try_into().unwrap()));
+    let size = u64::from_le_bytes(v5[24..32].try_into().unwrap()) as usize;
+    let mut pos = 36 + u32_at(32) as usize;
+    let mut out = v5[..pos].to_vec();
+    out[4..8].copy_from_slice(&4u32.to_le_bytes());
+    let v4_head = V2_HEAD + V3_ROOT + V4_FUTURE_HEAD;
+    for _ in 0..size {
+        let (ns, nv) = (u16_at(pos), u16_at(pos + 2));
+        let n_future = usize::from(v5[pos + v4_head - 1]);
+        let body = ns * 5 + nv * 8 + n_future * 5;
+        let start = pos + v4_head + V5_PROVEN_TAIL;
+        out.extend_from_slice(&v5[pos..pos + v4_head]);
+        out.extend_from_slice(&v5[start..start + body]);
+        pos = start + body;
+    }
+    assert_eq!(pos, v5.len(), "the walk must consume the whole v5 payload");
+    out
+}
+
+/// A v2 ring loads with no root value, future field or flag on any row, and its v5 re-save minus them IS the v2 golden.
 #[test]
-fn the_v2_byte_golden_loads_with_no_root_value_and_its_v4_resave_carries_its_rows_byte_for_byte() {
+fn the_v2_byte_golden_loads_with_no_root_value_and_its_v5_resave_carries_its_rows_byte_for_byte() {
     let golden = fixture_path("hexg_v2_golden.hexg");
     let golden_bytes = std::fs::read(&golden).expect("frozen hexg v2 golden must exist");
 
@@ -319,6 +343,7 @@ fn the_v2_byte_golden_loads_with_no_root_value_and_its_v4_resave_carries_its_row
             "an invalid root value is stored as +0.0"
         );
         assert_eq!(r.future_stones, None, "a v2 row has no future field");
+        assert!(!r.proven_tail, "a v2 row is no decided tail's");
     }
 
     let resave = unique_path("v2_resave");
@@ -329,22 +354,22 @@ fn the_v2_byte_golden_loads_with_no_root_value_and_its_v4_resave_carries_its_row
         &HEXG_VERSION.to_le_bytes(),
         "a save writes the current version"
     );
-    assert_eq!(HEXG_VERSION, 4);
+    assert_eq!(HEXG_VERSION, 5);
     assert_eq!(
         resaved.len(),
-        golden_bytes.len() + 2 * (V3_ROOT + V4_FUTURE_HEAD)
+        golden_bytes.len() + 2 * (V3_ROOT + V4_FUTURE_HEAD + V5_PROVEN_TAIL)
     );
     assert_eq!(
-        strip_to_v2(&strip_to_v3(&resaved)),
+        strip_to_v2(&strip_to_v3(&strip_to_v4(&resaved))),
         golden_bytes,
-        "the v4 re-save minus its root and future fields must be the v2 golden"
+        "the v5 re-save minus its root, future and proven-tail fields must be the v2 golden"
     );
     let _ = std::fs::remove_file(resave);
 }
 
-/// The v3 golden loads exact with no future field on any row, and its v4 re-save minus the future fields IS the v3 golden.
+/// The v3 golden loads exact with no future field or flag on any row, and its v5 re-save minus them IS the v3 golden.
 #[test]
-fn the_v3_byte_golden_loads_with_no_future_field_and_its_v4_resave_carries_its_rows_byte_for_byte()
+fn the_v3_byte_golden_loads_with_no_future_field_and_its_v5_resave_carries_its_rows_byte_for_byte()
 {
     let golden = fixture_path("hexg_v3_golden.hexg");
     let golden_bytes = std::fs::read(&golden).expect("frozen hexg v3 golden must exist");
@@ -360,16 +385,20 @@ fn the_v3_byte_golden_loads_with_no_future_field_and_its_v4_resave_carries_its_r
     assert_eq!(r0.root_value, -0.625);
     assert!(!r1.root_value_valid);
     assert_eq!(r1.root_value.to_bits(), 0.0f32.to_bits());
+    assert_eq!((r0.proven_tail, r1.proven_tail), (false, false));
     assert_eq!((r0.future_stones, r1.future_stones), (None, None));
 
     let resave = unique_path("v3_resave");
     buf.save_to_path_impl(resave.to_str().unwrap()).unwrap();
     let resaved = std::fs::read(&resave).unwrap();
-    assert_eq!(resaved.len(), golden_bytes.len() + 2 * V4_FUTURE_HEAD);
     assert_eq!(
-        strip_to_v3(&resaved),
+        resaved.len(),
+        golden_bytes.len() + 2 * (V4_FUTURE_HEAD + V5_PROVEN_TAIL)
+    );
+    assert_eq!(
+        strip_to_v3(&strip_to_v4(&resaved)),
         golden_bytes,
-        "the v4 re-save minus its future fields must be the v3 golden"
+        "the v5 re-save minus its future and proven-tail fields must be the v3 golden"
     );
     let _ = std::fs::remove_file(resave);
 }
@@ -389,9 +418,9 @@ pub const V4_GOLDEN_FUTURE: [(i16, i16, i8); 11] = [
     (2, 2, -1),
 ];
 
-/// The v4 golden (the v3 golden's bytes with the future fields inserted elsewhere) loads exact and re-saves itself.
+/// The v4 golden loads exact with no row flagged, and its v5 re-save minus the flag IS the v4 golden.
 #[test]
-fn the_v4_byte_golden_loads_exact_and_resaves_byte_identical() {
+fn the_v4_byte_golden_loads_with_no_proven_tail_and_its_v5_resave_carries_its_rows_byte_for_byte() {
     let golden = fixture_path("hexg_v4_golden.hexg");
     let golden_bytes = std::fs::read(&golden).expect("frozen hexg v4 golden must exist");
 
@@ -405,13 +434,16 @@ fn the_v4_byte_golden_loads_exact_and_resaves_byte_identical() {
     assert_eq!(r0.root_value, -0.625);
     assert_eq!(r0.future_stones, Some(V4_GOLDEN_FUTURE.to_vec()));
     assert_eq!(r1.future_stones, None);
+    assert_eq!((r0.proven_tail, r1.proven_tail), (false, false));
 
     let resave = unique_path("v4_resave");
     buf.save_to_path_impl(resave.to_str().unwrap()).unwrap();
+    let resaved = std::fs::read(&resave).unwrap();
+    assert_eq!(resaved.len(), golden_bytes.len() + 2 * V5_PROVEN_TAIL);
     assert_eq!(
-        std::fs::read(&resave).unwrap(),
+        strip_to_v4(&resaved),
         golden_bytes,
-        "a v4 re-save must reproduce the frozen bytes"
+        "the v5 re-save minus its proven-tail flags must be the v4 golden"
     );
     assert_eq!(
         strip_to_v3(&golden_bytes),
@@ -419,6 +451,135 @@ fn the_v4_byte_golden_loads_exact_and_resaves_byte_identical() {
         "the v4 golden minus its future fields is the v3 golden"
     );
     let _ = std::fs::remove_file(resave);
+}
+
+/// The v5 golden (the v4 golden's bytes with each record's flag spliced in elsewhere) loads exact and re-saves itself.
+#[test]
+fn the_v5_byte_golden_loads_exact_and_resaves_byte_identical() {
+    let golden = fixture_path("hexg_v5_golden.hexg");
+    let golden_bytes = std::fs::read(&golden).expect("frozen hexg v5 golden must exist");
+
+    let mut buf = HexgBuffer::new(16, ENC, 128).unwrap();
+    assert_eq!(
+        buf.load_from_path_impl(golden.to_str().unwrap()).unwrap(),
+        2
+    );
+    assert_golden_v2_fields(&buf);
+    let (r0, r1) = (buf.record_at(0), buf.record_at(1));
+    assert_eq!(r0.root_value, -0.625);
+    assert_eq!(r0.future_stones, Some(V4_GOLDEN_FUTURE.to_vec()));
+    assert!(!r0.proven_tail, "record 0 is a full-search row");
+    assert!(r1.proven_tail, "record 1 is a decided tail's row");
+
+    let resave = unique_path("v5_resave");
+    buf.save_to_path_impl(resave.to_str().unwrap()).unwrap();
+    assert_eq!(
+        std::fs::read(&resave).unwrap(),
+        golden_bytes,
+        "a v5 re-save must reproduce the frozen bytes"
+    );
+    assert_eq!(
+        strip_to_v4(&golden_bytes),
+        std::fs::read(fixture_path("hexg_v4_golden.hexg")).unwrap(),
+        "the v5 golden minus its flags is the v4 golden"
+    );
+    let _ = std::fs::remove_file(resave);
+}
+
+/// Each record's proven-tail byte in the v5 golden: after its 37-byte v4 head, record 1 past record 0's 124 bytes.
+const V5_FLAG0: usize = 47 + V2_HEAD + V3_ROOT + V4_FUTURE_HEAD;
+const V5_FLAG1: usize = V5_FLAG0 + 124;
+
+/// PLANTED BREAK — a flag byte over 1, or a flagged full-search row, is refused at load and the buffer is untouched.
+#[test]
+fn a_v5_proven_tail_outside_its_contract_is_refused_at_load() {
+    let golden = std::fs::read(fixture_path("hexg_v5_golden.hexg")).unwrap();
+    assert_eq!((golden[V5_FLAG0], golden[V5_FLAG1]), (0, 1));
+    for (stem, at, byte) in [
+        ("flag_two", V5_FLAG1, 2u8),
+        ("flagged_full_search", V5_FLAG0, 1u8),
+    ] {
+        let mut bytes = golden.clone();
+        bytes[at] = byte;
+        let path = unique_path(stem);
+        std::fs::write(&path, &bytes).unwrap();
+        let mut buf = HexgBuffer::new(16, ENC, 128).unwrap();
+        buf.push_record_impl(&sample_record(), 7)
+            .expect("seed push");
+        let before = buf.record_at(0);
+        let err = buf
+            .load_from_path_impl(path.to_str().unwrap())
+            .expect_err("an out-of-contract proven-tail byte must be refused at load");
+        assert!(
+            err.contains("HEXG load") && err.contains("proven_tail"),
+            "{stem}: {err}"
+        );
+        assert_eq!(
+            buf.size(),
+            1,
+            "{stem}: a refused load must not change the ring"
+        );
+        assert_eq!(
+            buf.record_at(0),
+            before,
+            "{stem}: a refused load must not touch a slot"
+        );
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+/// A decided tail's row ran no search, so one claiming a full search is refused at insert and touches nothing.
+#[test]
+fn a_proven_tail_row_claiming_a_full_search_is_refused_at_insert() {
+    let mut buf = HexgBuffer::new(4, ENC, VISIT_CAP).unwrap();
+    let flagged = GraphRecord {
+        proven_tail: true,
+        ..sample_record()
+    };
+    let err = buf
+        .push_record_impl(&flagged, -1)
+        .expect_err("a full-search proven-tail row must be refused");
+    assert!(err.contains("proven_tail"), "{err}");
+    assert_eq!(buf.size(), 0, "no refused row may have been inserted");
+    buf.push_record_impl(
+        &GraphRecord {
+            is_full_search: false,
+            ..flagged
+        },
+        -1,
+    )
+    .expect("a proven-tail row without a full search is admissible");
+    assert_eq!(buf.proven_tail[0], 1);
+}
+
+/// A flagged row and an unflagged one survive a save and load field for field.
+#[test]
+fn a_proven_tail_row_round_trips_through_save_and_load() {
+    let rows = [
+        GraphRecord {
+            is_full_search: false,
+            proven_tail: true,
+            ..sample_record()
+        },
+        sample_record(),
+    ];
+    let mut buf = HexgBuffer::new(4, ENC, VISIT_CAP).unwrap();
+    for (i, rec) in rows.iter().enumerate() {
+        buf.push_record_impl(rec, i as i64).unwrap();
+    }
+    let path = unique_path("proven_tail_roundtrip");
+    buf.save_to_path_impl(path.to_str().unwrap()).unwrap();
+    let mut back = HexgBuffer::new(4, ENC, VISIT_CAP).unwrap();
+    assert_eq!(back.load_from_path_impl(path.to_str().unwrap()).unwrap(), 2);
+    for (i, rec) in rows.iter().enumerate() {
+        let want = GraphRecord {
+            game_id: i as i64,
+            ..rec.clone()
+        };
+        assert_eq!(back.record_at(i), want, "row {i}");
+    }
+    assert_eq!(&back.proven_tail[..2], &[1, 0]);
+    let _ = std::fs::remove_file(path);
 }
 
 /// PLANTED BREAK — a payload stamped with a neighbouring version's number is refused and touches nothing.
@@ -434,6 +595,8 @@ fn a_payload_read_through_another_versions_layout_is_refused_and_leaves_the_buff
         ("v2_as_v3", stamped("hexg_v2_golden.hexg", 3)),
         ("v4_as_v3", stamped("hexg_v4_golden.hexg", 3)),
         ("v3_as_v4", stamped("hexg_v3_golden.hexg", 4)),
+        ("v5_as_v4", stamped("hexg_v5_golden.hexg", 4)),
+        ("v4_as_v5", stamped("hexg_v4_golden.hexg", 5)),
     ] {
         let path = unique_path(stem);
         std::fs::write(&path, &bytes).unwrap();

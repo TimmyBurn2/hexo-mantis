@@ -37,7 +37,8 @@ def push_ring(buf: Any, ring: Ring, outcome: np.ndarray | None = None) -> int:
             [(int(v["q"]), int(v["r"]), float(v["prob"])) for v in ring.row_visits(i)],
             int(ring.current_player[i]), int(ring.moves_remaining[i]), int(ring.ply_index[i]),
             bool(ring.is_full_search[i]), float(ring.outcome[i] if outcome is None else outcome[i]),
-            bool(ring.value_valid[i]), int(ring.game_length[i]), int(ring.game_id[i]), float(ring.tail_mass[i]))
+            bool(ring.value_valid[i]), int(ring.game_length[i]), int(ring.game_id[i]), float(ring.tail_mass[i]),
+            proven_tail=bool(ring.proven_tail[i]))
     return len(ring.game_id)
 
 

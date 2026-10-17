@@ -25,16 +25,18 @@ _ROOTS = [(0.5, True), (0.0, False), (-1.0, True)]
 # The future-occupancy field per row of `_ROWS`: a full horizon, none, a full horizon.
 _FUTURES = [[(i - 10, 2, -1 if i % 4 < 2 else 1) for i in range(20)], None,
             [(i - 10, -3, -1 if i % 4 < 2 else 1) for i in range(20)]]
+# The proven-tail flag per row of `_ROWS`: only the quick row, as a full-search row cannot carry it.
+_PROVEN = [False, True, False]
 _REPLAY = Path(__file__).resolve().parents[1] / "fixtures" / "replay"
 
 
 def _write_ring(path: Path) -> _engine.HexgBuffer:
     buf = _engine.HexgBuffer(16, _ENCODING, 64)
-    for (stones, visits, player, remaining, ply, full, outcome, valid, length, gid, tail), (root, root_ok), future \
-            in zip(_ROWS, _ROOTS, _FUTURES, strict=True):
+    for (stones, visits, player, remaining, ply, full, outcome, valid, length, gid, tail), (root, root_ok), future, \
+            proven in zip(_ROWS, _ROOTS, _FUTURES, _PROVEN, strict=True):
         buf.push_graph_position(stones, visits, player, remaining, ply, full, outcome, valid,
                                 length, gid, tail, root_value=root, root_value_valid=root_ok,
-                                future_stones=future)
+                                future_stones=future, proven_tail=proven)
     buf.save_to_path(str(path))
     return buf
 
@@ -73,6 +75,7 @@ def test_every_field_reads_back_as_pushed(tmp_path: Path) -> None:
         assert np.allclose([float(v["prob"]) for v in got_visits], [p for _, _, p in visits])
         assert bool(ring.future_valid[i]) is (_FUTURES[i] is not None)
         assert [(int(f["q"]), int(f["r"]), int(f["p"])) for f in ring.row_future(i)] == (_FUTURES[i] or [])
+        assert bool(ring.proven_tail[i]) is _PROVEN[i]
 
 
 def test_the_engine_loads_the_same_count_the_reader_parsed(tmp_path: Path) -> None:
@@ -108,6 +111,7 @@ def test_the_cli_prints_the_header_line(tmp_path: Path, capsys) -> None:
     assert R.main([str(path)]) == 0
     out = capsys.readouterr().out
     assert f"encoding={_ENCODING}" in out and f"size={len(_ROWS)}" in out
+    assert f"proven_tail rows: 1 of {len(_ROWS)}" in out
 
 
 def test_explicit_entropy_is_the_census_h_over_the_renormalised_explicit_masses(tmp_path: Path) -> None:
@@ -157,6 +161,7 @@ def test_the_v2_golden_reads_with_no_root_value_on_any_row() -> None:
     assert ring.root_value_valid.tolist() == [0, 0]
     assert ring.root_value.view(np.uint32).tolist() == [0, 0]
     assert ring.future_valid.tolist() == [0, 0] and ring.future.size == 0
+    assert ring.proven_tail.tolist() == [0, 0]
 
 
 def test_the_v3_golden_reads_its_root_values() -> None:
@@ -166,6 +171,7 @@ def test_the_v3_golden_reads_its_root_values() -> None:
     assert ring.tail_mass.tolist() == [0.0, 0.25]
     assert ring.game_id.tolist() == [42, 43]
     assert ring.future_valid.tolist() == [0, 0] and ring.future.size == 0
+    assert ring.proven_tail.tolist() == [0, 0]
 
 
 def test_the_v4_golden_reads_its_future_stones() -> None:
@@ -176,13 +182,26 @@ def test_the_v4_golden_reads_its_future_stones() -> None:
     assert ring.n_future.tolist() == [11, 0]
     assert [(int(f["q"]), int(f["r"]), int(f["p"])) for f in ring.row_future(0)][:3] == [(2, 0, 1), (0, 2, 1),
                                                                                          (-1, 0, -1)]
+    assert ring.proven_tail.tolist() == [0, 0]
+
+
+def test_the_v5_golden_reads_its_proven_tail_flags() -> None:
+    """Record 1, the quick row, is a decided tail's; record 0 keeps its future stones and no flag."""
+    ring = R.load_ring(_REPLAY / "hexg_v5_golden.hexg")
+    assert ring.header.version == 5
+    assert ring.proven_tail.tolist() == [0, 1]
+    assert ring.is_full_search.tolist() == [1, 0]
+    assert ring.future_valid.tolist() == [1, 0] and ring.n_future.tolist() == [11, 0]
+    assert ring.root_value.tolist() == [-0.625, 0.0]
+    assert ring.game_id.tolist() == [42, 43]
 
 
 @pytest.mark.parametrize(("fixture", "stamp"), [("hexg_v3_golden.hexg", 2), ("hexg_v2_golden.hexg", 3),
-                                                ("hexg_v4_golden.hexg", 3), ("hexg_v3_golden.hexg", 4)])
+                                                ("hexg_v4_golden.hexg", 3), ("hexg_v3_golden.hexg", 4),
+                                                ("hexg_v5_golden.hexg", 4), ("hexg_v4_golden.hexg", 5)])
 def test_a_payload_read_through_the_other_versions_layout_is_refused(tmp_path: Path, fixture: str,
                                                                       stamp: int) -> None:
-    """PLANTED BREAK: one layout for every version takes root-value or future bytes for stones; the reader must refuse."""
+    """PLANTED BREAK: one layout for every version takes root-value, future or flag bytes for stones; the reader must refuse."""
     data = bytearray((_REPLAY / fixture).read_bytes())
     data[4:8] = stamp.to_bytes(4, "little")
     path = tmp_path / "relabelled.hexg"

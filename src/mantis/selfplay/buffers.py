@@ -46,11 +46,12 @@ class ReplayFacade:
 
     def push_graph_position(self, *record: Any, game_id: int = -1, tail_mass: float = 0.0,
                             root_value: float = 0.0, root_value_valid: bool = False,
-                            future_stones: list[tuple[int, int, int]] | None = None) -> None:
-        """Forward one graph row verbatim; Raises: ValueError — the engine refused it (a target, root value or future field)."""
+                            future_stones: list[tuple[int, int, int]] | None = None,
+                            proven_tail: bool = False) -> None:
+        """Forward one graph row verbatim; Raises: ValueError — the engine refused it (a target, root value, future field or proven tail)."""
         self.raw.push_graph_position(*record, game_id=game_id, tail_mass=tail_mass,
                                      root_value=root_value, root_value_valid=root_value_valid,
-                                     future_stones=future_stones)
+                                     future_stones=future_stones, proven_tail=proven_tail)
 
     # passthrough surface
     @property

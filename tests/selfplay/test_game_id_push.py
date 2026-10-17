@@ -35,13 +35,13 @@ class _Pool:
 
 
 def _row(ply: int, game_id: int) -> tuple[Any, ...]:
-    """One drained graph row: `push_graph_position`'s nine, the tail mass, the root value, flag and future, the game id."""
+    """One drained graph row: `push_graph_position`'s nine, the tail mass, the root value, flag, future and proven tail, the game id."""
     return (
         [(0, 0, 1), (1, 0, -1), (0, 1, 1)],  # stones
         [(2, 0, 0.6), (1, 1, 0.4)],          # visits
         1, 30, ply, True, 1.0, True, 10,     # player, remaining, ply, full, outcome, valid, len
         0.0,                                 # tail mass (a full-vector row has none)
-        (0.25, True, None),                  # root value, its flag and the future field
+        (0.25, True, None, False),           # root value, its flag, the future field and the proven tail
         game_id,
     )
 

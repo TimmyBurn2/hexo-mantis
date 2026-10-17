@@ -166,11 +166,13 @@ def test_the_graph_row_carries_its_tail_mass_root_value_and_future_from_the_brid
     stub = stub_graph_row_arity(_STUB.read_text(encoding="utf-8"))
     assert bridge == stub == 12, f"GraphRecordRow: bridge={bridge} stub={stub}"
     push = _POOL_PUSH.read_text(encoding="utf-8")
-    assert "tail_mass, (root_value, root_value_valid, future_stones), runner_game_id = rec[-3:]" in push
+    assert ("tail_mass, (root_value, root_value_valid, future_stones, proven_tail), runner_game_id = rec[-3:]"
+            in push)
     assert "*rec[:-3], game_id=buffer_game_id" in push
-    assert all(f"{k}={k}" in push for k in ("tail_mass", "root_value", "root_value_valid", "future_stones"))
+    assert all(f"{k}={k}" in push
+               for k in ("tail_mass", "root_value", "root_value_valid", "future_stones", "proven_tail"))
     bridge_src = _BRIDGE_RUNNER.read_text(encoding="utf-8")
     body = bridge_src[bridge_src.index("fn collect_graph_data"):]
-    order = [body.index(f) for f in ("r.tail_mass,", "(r.root_value, r.root_value_valid, r.future_stones),",
-                                      "r.game_id,")]
-    assert order == sorted(order), "the tail, the root value, its flag and the future ride before the id, in that order"
+    order = [body.index(f) for f in ("r.tail_mass,", "r.root_value,", "r.root_value_valid,", "r.future_stones,",
+                                      "r.proven_tail,", "r.game_id,")]
+    assert order == sorted(order), "the tail, the root value, its flag, the future and the proven tail ride before the id"

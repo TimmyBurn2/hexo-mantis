@@ -1,4 +1,4 @@
-"""Pure-numpy reader for a HEXG v2, v3 or v4 replay ring; the layouts are `replay/hexg/persist.rs`'s."""
+"""Pure-numpy reader for a HEXG v2, v3, v4 or v5 replay ring; the layouts are `replay/hexg/persist.rs`'s."""
 from __future__ import annotations
 
 import struct
@@ -12,9 +12,9 @@ HEXG_MAGIC = 0x48455847
 # Header (LE): magic u32, version u32, max_stones u32, max_visits u32, capacity u64, size u64,
 # name_len u32, name bytes; then `size` records oldest first, each a FIXED head + stones + visits (+ v4 future stones).
 FIXED_BY_VERSION = {2: struct.Struct("<HHbBHBBfHqHf"), 3: struct.Struct("<HHbBHBBfHqHffB"),
-                    4: struct.Struct("<HHbBHBBfHqHffBBB")}
+                    4: struct.Struct("<HHbBHBBfHqHffBBB"), 5: struct.Struct("<HHbBHBBfHqHffBBBB")}
 # Head: n_stones u16, n_visits u16, player i8, remaining u8, ply u16, full u8, value_valid u8, outcome f32, game_length
-# u16, game_id i64, weight u16, tail f32; v3 + root_value f32, flag u8; v4 + future flag u8, count u8 (stones last).
+# u16, game_id i64, weight u16, tail f32; v3 + root_value f32, flag u8; v4 + future flag u8, count u8; v5 + proven_tail u8.
 STONE_DT = np.dtype([("q", "<i2"), ("r", "<i2"), ("p", "i1")])
 #: A visit entry is an improved-policy MASS on an explicit root child: the row stores no counts, no Q.
 VISIT_DT = np.dtype([("q", "<i2"), ("r", "<i2"), ("prob", "<f4")])
@@ -59,6 +59,7 @@ class Ring:
     n_future: np.ndarray
     future_off: np.ndarray
     future: np.ndarray
+    proven_tail: np.ndarray
 
     def row_stones(self, i: int) -> np.ndarray:
         """Row `i`'s stones as a structured (q, r, p) array."""
@@ -147,6 +148,7 @@ def _parse(data: bytes) -> Ring:
     root_value_valid = np.zeros(n, dtype=np.int64)
     future_valid = np.zeros(n, dtype=np.int64)
     n_future = np.zeros(n, dtype=np.int64)
+    proven_tail = np.zeros(n, dtype=np.int64)
     stone_chunks: list[np.ndarray] = []
     visit_chunks: list[np.ndarray] = []
     future_chunks: list[np.ndarray] = []
@@ -167,6 +169,8 @@ def _parse(data: bytes) -> Ring:
             root_value[i], root_value_valid[i] = rec[12], rec[13]
         if header.version >= 4:
             future_valid[i], n_future[i] = rec[14], rec[15]
+        if header.version >= 5:
+            proven_tail[i] = rec[16]
         stone_chunks.append(np.frombuffer(buf, dtype=STONE_DT, count=ns, offset=pos))
         pos += ns * STONE_DT.itemsize
         visit_chunks.append(np.frombuffer(buf, dtype=VISIT_DT, count=nv, offset=pos))
@@ -205,6 +209,7 @@ def _parse(data: bytes) -> Ring:
         n_future=n_future,
         future_off=future_off,
         future=np.concatenate(future_chunks) if future_chunks else np.zeros(0, STONE_DT),
+        proven_tail=proven_tail,
     )
 
 
@@ -262,6 +267,7 @@ def main(argv: list[str]) -> int:
           f"p90 {np.quantile(ring.tail_mass, 0.9):.2e} n(alpha==1) {(ring.tail_mass >= 1.0).sum()}")
     print(f"distinct game_id: {len(np.unique(ring.game_id))}")
     print(f"future_valid rows: {int(ring.future_valid.sum())} of {h.size}; " + _hist("n_future", ring.n_future))
+    print(f"proven_tail rows: {int(ring.proven_tail.sum())} of {h.size}")
     print(_entropy_line(ring))
     return 0
 

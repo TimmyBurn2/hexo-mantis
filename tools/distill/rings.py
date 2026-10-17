@@ -137,7 +137,7 @@ def write_teacher_ring(path: Path, corpus: dict[str, np.ndarray], labels: dict[s
 
 
 def write_control_ring(path: Path, corpus: dict[str, np.ndarray], rows: np.ndarray, *, encoding: str) -> dict[str, int]:
-    """The ring rows with their own targets as the run stored them (explicit masses, α, z and validity; the corpus carries no future field); Raises: ValueError — a row that is not a ring row."""
+    """The ring rows with their own targets as the run stored them (explicit masses, α, z and validity, the proven-tail flag; the corpus carries no future field); Raises: ValueError — a row that is not a ring row."""
     if not np.all(corpus["source"][rows] == SRC_RING):
         raise ValueError("the control ring holds ring rows only: an opening has no own targets")
     off = np.concatenate([[0], np.cumsum(corpus["n_visits"])]).astype(np.int64)
@@ -152,7 +152,7 @@ def write_control_ring(path: Path, corpus: dict[str, np.ndarray], rows: np.ndarr
                                 bool(corpus["is_full_search"][i]), float(corpus["outcome"][i]),
                                 bool(corpus["value_valid"][i]), int(corpus["game_length"][i]), int(corpus["game"][i]),
                                 float(corpus["tail_mass"][i]), float(corpus["root_value"][i]),
-                                bool(corpus["root_value_valid"][i]))
+                                bool(corpus["root_value_valid"][i]), proven_tail=bool(corpus["proven_tail"][i]))
     buf.save_to_path(str(path))
     return {"rows": int(len(rows)), "slots": slots}
 

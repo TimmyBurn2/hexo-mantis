@@ -122,8 +122,8 @@ pub fn derived_visit_capacity(
 /// HEXG on-disk magic — "HEXG" little-endian (distinct from HEXB `0x48455842`).
 pub const HEXG_MAGIC: u32 = 0x4845_5847;
 /// HEXG on-disk version written: v2 added the tail mass α (a v1 file is refused by name), v3 the root value and its
-/// flag, v4 the future-occupancy field; a v2 or v3 file still loads, every row without the fields it predates.
-pub const HEXG_VERSION: u32 = 4;
+/// flag, v4 the future-occupancy field, v5 the proven-tail flag; an older file still loads, each row without what it predates.
+pub const HEXG_VERSION: u32 = 5;
 
 /// Placements a row's future-occupancy field reaches: the stones placed from its own ply on.
 pub const FUTURE_HORIZON: usize = 20;
@@ -388,7 +388,7 @@ impl HexgBuffer {
 /// * `policy_target` — flat `[Lg]` CE target in `legal_node_gather` order; a graph's segment sums to ~1 − its `tail_mass`.
 /// * `explicit_mask` — flat `[Lg]`, 1 where the row carried a STORED entry, emitted rather than
 ///   inferred from `policy_target > 0` so an underflowed entry is not reclassified as tail.
-/// * `tail_mass` / `outcomes` / `value_valid` / `is_full_search` / `root_value{,_valid}` — `[B]` per-row scalars.
+/// * `tail_mass` / `outcomes` / `value_valid` / `is_full_search` / `root_value{,_valid}` / `proven_tail` — `[B]` per-row scalars.
 /// * `future_target` — flat `[Lg]` label per legal node (`FUTURE_*`), all empty where `future_valid` (`[B]`) is 0.
 /// * argmax_q/argmax_r/argmax_valid — per-graph max-mass legal node in the ROTATED frame.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -403,6 +403,7 @@ pub struct GraphTargets {
     pub root_value_valid: Vec<u8>,
     pub future_target: Vec<u8>,
     pub future_valid: Vec<u8>,
+    pub proven_tail: Vec<u8>,
     pub argmax_q: Vec<i32>,
     pub argmax_r: Vec<i32>,
     pub argmax_valid: Vec<u8>,

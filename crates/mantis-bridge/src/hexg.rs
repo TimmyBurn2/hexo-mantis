@@ -100,7 +100,7 @@ impl PyHexgBuffer {
     /// # Errors
     /// `ValueError` per the above; per-entry refusals surface from `push_record_impl`.
     #[allow(clippy::too_many_arguments)]
-    #[pyo3(signature = (stones, visits, current_player, moves_remaining, ply_index, is_full_search, outcome, value_valid, game_length, game_id = -1, tail_mass = 0.0, root_value = 0.0, root_value_valid = false, future_stones = None))]
+    #[pyo3(signature = (stones, visits, current_player, moves_remaining, ply_index, is_full_search, outcome, value_valid, game_length, game_id = -1, tail_mass = 0.0, root_value = 0.0, root_value_valid = false, future_stones = None, proven_tail = false))]
     pub fn push_graph_position(
         &self,
         py: Python<'_>,
@@ -118,6 +118,7 @@ impl PyHexgBuffer {
         root_value: f32,
         root_value_valid: bool,
         future_stones: Option<Vec<(i16, i16, i8)>>,
+        proven_tail: bool,
     ) -> PyResult<()> {
         refuse_non_distribution_row(&visits, ply_index, tail_mass, is_full_search)
             .map_err(|e| PyValueError::new_err(e.to_string()))?;
@@ -138,7 +139,7 @@ impl PyHexgBuffer {
             root_value,
             root_value_valid,
             future_stones,
-            proven_tail: false,
+            proven_tail,
         };
         // GIL-FREE WAIT: this is the sole producer's write path and the trainer holds the ring
         // for a whole sample, so waiting under the GIL would re-stall the inference server.
@@ -371,6 +372,11 @@ impl PyGraphTargets {
     fn future_valid<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<u8>> {
         PyArray1::from_slice(py, &self.inner.future_valid)
     }
+    /// `[B]` per-row flag, 1 where the row is a decided tail's, its ply played with no search.
+    #[getter]
+    fn proven_tail<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<u8>> {
+        PyArray1::from_slice(py, &self.inner.proven_tail)
+    }
     /// `[B]` list of `Optional[(q, r)]` — the collate `target_argmax_cells` arg.
     #[getter]
     fn target_argmax_cells(&self) -> Vec<Option<(i32, i32)>> {
@@ -472,7 +478,7 @@ mod tests {
         Python::initialize();
         let targets = Python::attach(|py| {
             b.push_graph_position(
-                py, stones, visits, 1, 2, 0, true, 1.0, true, 4, -1, 0.0, 0.0, false, None,
+                py, stones, visits, 1, 2, 0, true, 1.0, true, 4, -1, 0.0, 0.0, false, None, false,
             )
             .expect("push ok");
             assert_eq!(b.size(py), 1);
@@ -490,7 +496,7 @@ mod tests {
     fn push_row(py: Python<'_>, b: &PyHexgBuffer, visits: Vec<(i16, i16, f32)>) -> PyResult<()> {
         let stones = vec![(0i16, 0i16, 1i8), (1, 0, -1), (0, 1, 1)];
         b.push_graph_position(
-            py, stones, visits, 1, 2, 3, true, 0.0, true, 4, -1, 0.0, 0.0, false, None,
+            py, stones, visits, 1, 2, 3, true, 0.0, true, 4, -1, 0.0, 0.0, false, None, false,
         )
     }
 
@@ -544,6 +550,7 @@ mod tests {
             1.0,
             true,
             None,
+            false,
         )
     }
 

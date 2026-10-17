@@ -106,7 +106,7 @@ def write_ring(ring: Ring, rows: np.ndarray, fields: list[Any], out: Path, *, ca
             bool(ring.is_full_search[i]), float(ring.outcome[i]), bool(ring.value_valid[i]),
             int(ring.game_length[i]), game_id=int(ring.game_id[i]), tail_mass=float(ring.tail_mass[i]),
             root_value=float(ring.root_value[i]), root_value_valid=bool(ring.root_value_valid[i]),
-            future_stones=fields[i])
+            future_stones=fields[i], proven_tail=bool(ring.proven_tail[i]))
     out.parent.mkdir(parents=True, exist_ok=True)
     buf.save_to_path(str(out))
 

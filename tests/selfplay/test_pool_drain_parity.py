@@ -210,8 +210,10 @@ def test_graph_drain_push_rows(run_drain, drain_goldens, graph_pushed, graph_row
         assert kwargs["tail_mass"] == expected_row[-3], (
             f"row {i}: the row's tail mass alpha must reach the push; got {kwargs}"
         )
-        assert (kwargs["root_value"], kwargs["root_value_valid"], kwargs["future_stones"]) == expected_row[-2], (
-            f"row {i}: the row's root value, its flag and its future stones must reach the push; got {kwargs}"
+        assert (kwargs["root_value"], kwargs["root_value_valid"], kwargs["future_stones"],
+                kwargs["proven_tail"]) == expected_row[-2], (
+            f"row {i}: the row's root value, its flag, its future stones and its proven tail must reach the push; "
+            f"got {kwargs}"
         )
         _assert_array(args[0], graph_pushed[f"push_graph_position_{i}_arg0"], f"row{i}.arg0")
         _assert_array(args[1], graph_pushed[f"push_graph_position_{i}_arg1"], f"row{i}.arg1")
