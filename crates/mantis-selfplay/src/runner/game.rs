@@ -32,7 +32,8 @@ use super::atomics::WorkerAtomics;
 use super::finalize::finalize_game_graph;
 use super::params::{ExplorationFlags, SearchFlags, WorkerChannels, WorkerGeometry, WorkerParams};
 use super::search_drive::{
-    play_one_move, FatalDefectLatch, InferContext, MoveAccumulators, MoveOutcome, MovePlayContext,
+    play_one_move, search_move, FatalDefectLatch, InferContext, MoveAccumulators, MoveOutcome,
+    MovePlayContext,
 };
 use super::stats::WorkerStats;
 use super::tail::{play_tail_ply, Tail, TailRecord};
@@ -398,8 +399,8 @@ fn run_one_game(
             continue;
         }
 
-        let in_tail = match tail.as_mut() {
-            Some(t) => play_tail_ply(
+        let in_tail = tail.as_mut().map(|t| {
+            play_tail_ply(
                 tree,
                 &mut board,
                 TailRecord {
@@ -415,13 +416,33 @@ fn run_one_game(
                 infer,
                 move_accumulators,
                 fatal_latch,
-            ),
-            None => None,
-        };
-        // No tail, or one the offence could not continue: the ply goes to the search, which may start a new tail.
-        let outcome = in_tail.unwrap_or_else(|| {
-            tail = None;
-            play_one_move(
+            )
+        });
+        let outcome = match in_tail {
+            Some(Some(outcome)) => outcome,
+            // The offence gave the winner no stone: the tail exits, and this ply, its offence already run, is searched.
+            Some(None) => {
+                tail = None;
+                search_move(
+                    tree,
+                    &mut board,
+                    &mut graph_records,
+                    &mut move_history,
+                    &mut move_arms,
+                    search_stats.as_mut(),
+                    version_seen,
+                    rng,
+                    infer.running,
+                    play_ctx,
+                    policy_stride,
+                    agg_trunk_sz,
+                    infer,
+                    move_accumulators,
+                    fatal_latch,
+                    None,
+                )
+            }
+            None => play_one_move(
                 tree,
                 &mut board,
                 &mut graph_records,
@@ -438,8 +459,8 @@ fn run_one_game(
                 infer,
                 move_accumulators,
                 fatal_latch,
-            )
-        });
+            ),
+        };
         match outcome {
             MoveOutcome::Played | MoveOutcome::Continue => {}
             MoveOutcome::Break => break,

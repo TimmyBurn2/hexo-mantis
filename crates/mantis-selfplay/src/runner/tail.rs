@@ -39,7 +39,7 @@ pub(crate) struct TailRecord<'a> {
     pub(crate) version_seen: &'a mut Vec<u64>,
 }
 
-/// One tail ply, the winner's offence stone or the loser's; `None`: the offence gave no stone, so the ply goes to the search.
+/// One tail ply, the winner's offence stone or the loser's; `None`: the offence gave no stone, the tree left on this board.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn play_tail_ply(
     tree: &mut MCTSTree,

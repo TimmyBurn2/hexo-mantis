@@ -595,7 +595,6 @@ fn record_shortfall(searches: &AtomicU64, descents: &AtomicU64, budget: usize, s
 /// Orchestrate one full move: playout-cap selection, MCTS search (none at a quick draw's decided root), stat
 /// accumulation, target-policy build, sampling, position recording (BEFORE apply), and apply-move.
 #[allow(clippy::too_many_arguments)]
-#[allow(clippy::too_many_lines)]
 pub(crate) fn play_one_move(
     tree: &mut MCTSTree,
     board: &mut Board,
@@ -646,7 +645,47 @@ pub(crate) fn play_one_move(
             fatal_latch,
         );
     }
+    search_move(
+        tree,
+        board,
+        graph_records_vec,
+        move_history,
+        move_arms,
+        search_stats,
+        version_seen,
+        rng,
+        running,
+        ctx,
+        policy_stride,
+        agg_trunk_sz,
+        infer,
+        accumulators,
+        fatal_latch,
+        decided,
+    )
+}
 
+/// The rest of a move after its root offence (the tree already on this board): draw, search, record, apply.
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
+pub(crate) fn search_move(
+    tree: &mut MCTSTree,
+    board: &mut Board,
+    graph_records_vec: &mut Vec<GraphRecord>,
+    move_history: &mut Vec<(i32, i32)>,
+    move_arms: &mut Vec<MoveArm>,
+    search_stats: Option<&mut Vec<PositionStats>>,
+    version_seen: &mut Vec<u64>,
+    rng: &mut ThreadRng,
+    running: &AtomicBool,
+    ctx: MovePlayContext,
+    policy_stride: usize,
+    agg_trunk_sz: i32,
+    infer: InferContext,
+    accumulators: MoveAccumulators,
+    fatal_latch: FatalDefectLatch,
+    decided: Option<(i32, i32)>,
+) -> MoveOutcome {
     // Move-level playout cap.
     let (move_is_full_search, move_sims) = if ctx.full_search_prob > 0.0 {
         let full = rng.random::<f32>() < ctx.full_search_prob;
