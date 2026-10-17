@@ -188,7 +188,6 @@ impl HexgBuffer {
         let mut root_value_valid: Vec<u8> = Vec::with_capacity(batch_size);
         let mut future_target: Vec<u8> = Vec::new();
         let mut future_valid: Vec<u8> = Vec::with_capacity(batch_size);
-        let mut proven_tail: Vec<u8> = Vec::with_capacity(batch_size);
         let mut argmax_q: Vec<i32> = Vec::with_capacity(batch_size);
         let mut argmax_r: Vec<i32> = Vec::with_capacity(batch_size);
         let mut argmax_valid: Vec<u8> = Vec::with_capacity(batch_size);
@@ -209,7 +208,6 @@ impl HexgBuffer {
             root_value_valid.push(out.root_value_valid);
             future_target.extend_from_slice(&out.future_target);
             future_valid.push(out.future_valid);
-            proven_tail.push(out.proven_tail);
             graphs.push(out.graph);
         }
 
@@ -226,7 +224,6 @@ impl HexgBuffer {
                 root_value_valid,
                 future_target,
                 future_valid,
-                proven_tail,
                 argmax_q,
                 argmax_r,
                 argmax_valid,
@@ -251,7 +248,6 @@ struct SampleOut {
     root_value_valid: u8,
     future_target: Vec<u8>,
     future_valid: u8,
-    proven_tail: u8,
 }
 
 /// Rebuild + align every sampled record, across at most `n_threads` OS threads, returning the
@@ -361,6 +357,5 @@ fn build_and_align_one(
         root_value_valid: u8::from(rec.root_value_valid),
         future_target,
         future_valid: u8::from(rec.future_stones.is_some()),
-        proven_tail: u8::from(rec.proven_tail),
     })
 }

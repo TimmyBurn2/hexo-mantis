@@ -372,11 +372,6 @@ impl PyGraphTargets {
     fn future_valid<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<u8>> {
         PyArray1::from_slice(py, &self.inner.future_valid)
     }
-    /// `[B]` per-row flag, 1 where the row is a decided tail's, its ply played with no search.
-    #[getter]
-    fn proven_tail<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<u8>> {
-        PyArray1::from_slice(py, &self.inner.proven_tail)
-    }
     /// `[B]` list of `Optional[(q, r)]` — the collate `target_argmax_cells` arg.
     #[getter]
     fn target_argmax_cells(&self) -> Vec<Option<(i32, i32)>> {

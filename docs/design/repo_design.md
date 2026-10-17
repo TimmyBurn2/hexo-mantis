@@ -944,7 +944,7 @@ that lands as an amendment in the commit that moves them, rather than as drift.
 1. **Each record carries a proven-tail flag**: one byte after the future count, 1 on a row written
    at a ply of a decided tail, the game run out from a proven win with no search. Such a row never
    trains a policy, so the flag never sits on a full-search row: refused at insert and at load, as
-   is a byte over 1 at load. The flag rides the sampled targets for a consumer to read.
+   is a byte over 1 at load. It reaches no sampled output: a ring reader reads it off the saved ring.
 2. **v2, v3 and v4 rings LOAD**, every row unflagged; re-saved as v5 and stripped of the byte, a
    v4 file is itself byte for byte. A row no decided tail produced pushes none.
 3. **The version is the layout's authority**, as at v3 and v4: a payload read through a
