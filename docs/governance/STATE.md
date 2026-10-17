@@ -23,7 +23,10 @@ seven reference cells, replayed on run13's mint tree, landed 2026-10-17 17:34 CE
 run13's window GO is therefore pooled rung 16 at 120k–156k ≥ +0.2665 with pooled S at 132k and 156k ≥ +1.3040, and its
 futility floor is −0.4125; R394(b)'s +0.0973 is corrected by its ANNOTATION A1. The 300k replay differs from the bridge,
 on one tree, in 9 of 580 results, more than the bridge differed across trees (5): the bridge's flag read play noise at
-concurrency 4. run13's pick rule is the local records' PRESTATED ADDENDUM 1, written before the 120k save.
+concurrency 4. run13's pick rule is the local records' PRESTATED ADDENDUM 1, written before the 120k save. DT-1
+EXITED 2026-10-17 (branch `decided-tails`, CARD-DECIDED-TAILS): decided tails land as a capability, off in every
+config; R1 on the desktop reads +7.9 % positions/h against the +3 % line (power 1.00), the trainer holding its 2.4
+steps a game; it rides run14 only if it reaches dev before run14's mint; the architect rules.
 
 **R393 (2026-10-14): GO RECORDED. The plateau is broken by the recipe as a whole; the window's level is a watch. run12
 trains to its 300k save, where the operator stops it (marker, then SIGTERM, as run11). Rung 16 every 12k; S at 264k and

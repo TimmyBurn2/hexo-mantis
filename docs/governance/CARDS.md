@@ -969,11 +969,23 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   no root value, so the lever reads on rings self-play writes after it). Was CARDED, not built, by R381(d), with a v2→v3 ring migration. Was CARDED for CARD-RUN11-DESIGN by R379(d): a search-value aux target from our own search.**
   CENSUS-1's C6: Six's search value beats our raw one off the proofs (DEF −0.097 on its non-proof rows, QU −0.058,
   MID −0.053). R376(f) governs any learning from Six's outputs; this card is our own search's value.
-- **CARD-DECIDED-TAILS — UN-PARKED by R394(d1) (2026-10-17), its own packet, desktop first, one change per run.** The new
-  census (local records `mantis-records/research/NEXT_LEVERS_2026-10-16.md`): 99.4 % of self-play games reach a proven
-  win, about 15 % of search after it. The game runs out without search from the proof; the winner's rows are exact
-  one-hot with z, the loser's rows value-only, no row dropped (R380); pinned by replay, read by throughput and the exams.
-  It rides run14 only if it is on dev, gates green and its review fixed before run14's mint; else run15. **Was: PARKED by
+- **CARD-DECIDED-TAILS — EXITED 2026-10-17, R1 lands; the architect rules (branch `decided-tails`; local records
+  `mantis-records/decided-tails/EXIT.md`): `selfplay.decided_tails` lands as a capability, `false` in every config.**
+  From the root offence's first decided stone the game runs out with no search: the winner re-solves through
+  `root_offence`, the loser plays the solver's longest covering resistance, else the net's argmax. Every tail ply writes
+  a row flagged in HEXG v5's `proven_tail` (v2–v4 rings load unflagged, their goldens byte-equal): the winner's a one-hot
+  at +1, the loser's value-only at −1, z the result, both trained as the no-target rows they are. LAW-18 rows
+  `proven_tail_plies`, `proven_tail_rows`, `tail_search_skipped` and `tail_exits` (event manifest v16) count at the
+  finished game. R1 (the desktop, ABBA over two sessions, 24 workers, run13's 54k save): +7.9 % positions/h against the
+  +3 % line, σ_leg 0.84 %, power 1.00; games/h +9.5 %, steps/game 2.40 in both arms. R2: tail rows are 19 % of the
+  tails-on ring's rows. R3 (T4/DEF at the first two saves) is owed by the run that arms it. One review item is owed
+  before an armed mint, or carded: `iteration_complete.sims_per_sec` bills a tail ply at the effective sims per move,
+  over-reading by the tail share. It rides run14 only if it is on dev, gates green and its review fixed before run14's
+  mint; else run15. **Was: UN-PARKED by R394(d1) (2026-10-17), its own packet, desktop first, one change per run.** The
+  new census (local records `mantis-records/research/NEXT_LEVERS_2026-10-16.md`): 99.4 % of self-play games reach a
+  proven win, about 15 % of search after it. The game runs out without search from the proof; the winner's rows are
+  exact one-hot with z, the loser's rows value-only, no row dropped (R380); pinned by replay, read by throughput and the
+  exams. **Was: PARKED by
   R381(d). Was CARDED for CARD-RUN11-DESIGN by R379(d): decided tails.** CENSUS-1's C3(b): the pooled
   proven tail is 0.463 of a game's plies, a games/h bound of 1.86×; the proven side converted 76.8 % of those games.
 - **CARD-MCGS-DEPLOY — CARDED by R379(d): graph search earns a deploy A/B, later.** CENSUS-1's C3(d): table hits are
