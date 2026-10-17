@@ -106,6 +106,8 @@ class SelfPlayHParams:
     gumbel_explore_moves: int
     results_queue_cap: int
     random_opening_plies: int
+    #: `selfplay.decided_tails`: the game runs out unsearched once the root offence decides it.
+    decided_tails: bool
     # mcts ns
     c_puct: float
     fpu_reduction: float
@@ -157,6 +159,7 @@ class SelfPlayHParams:
             gumbel_explore_moves=int(sp["gumbel_explore_moves"]),
             results_queue_cap=int(sp["results_queue_cap"]),
             random_opening_plies=int(sp["random_opening_plies"]),
+            decided_tails=bool(sp["decided_tails"]),
             c_puct=puct.c_puct,
             fpu_reduction=puct.fpu_reduction,
             quiescence_enabled=puct.quiescence_enabled,
@@ -238,6 +241,7 @@ def build_runner_config(
         full_search_prob=hp.full_search_prob,
         n_sims_quick=hp.n_sims_quick,
         random_opening_plies=hp.random_opening_plies,
+        decided_tails=hp.decided_tails,
         encoding_name=encoding_name,
     )
     # The Rust setter REFUSES an unknown search kind, so a typo is a boot error, not a PUCT search.

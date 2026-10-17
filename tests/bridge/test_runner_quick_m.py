@@ -7,7 +7,7 @@ from mantis._engine import SelfPlayRunner, SelfPlayRunnerConfig
 
 
 def _config(m: int, m_quick: int) -> SelfPlayRunnerConfig:
-    return SelfPlayRunnerConfig(n_workers=1, q_rescale=True, search_stats_every=0, gumbel_m=m, gumbel_m_quick=m_quick,
+    return SelfPlayRunnerConfig(n_workers=1, q_rescale=True, search_stats_every=0, gumbel_m=m, gumbel_m_quick=m_quick, decided_tails=False,
                                 encoding_name="gnn_axis_r8")
 
 

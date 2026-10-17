@@ -686,7 +686,7 @@ def test_reads_full_v1_envelope_via_field_map(tmp_path, full_graph_net, full_gra
             "search": {"kind": "puct", "tactics": None}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
             "c_visit": 50.0,
             "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_m_quick": 16, "gumbel_explore_moves": 10, "search_stats_every": 8,
-            "results_queue_cap": 10_000, "random_opening_plies": 0,
+            "results_queue_cap": 10_000, "random_opening_plies": 0, "decided_tails": False,
             "log_investigation_metrics": True,
             "mcts": {"c_puct": 1.5, "fpu_reduction": 0.25,
                      "quiescence_enabled": True, "quiescence_blend_2": 0.3,

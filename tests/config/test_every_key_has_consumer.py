@@ -254,6 +254,10 @@ CONSUMER_REGISTRY = {
         "SelfPlayHParams.from_config -> SelfPlayRunnerConfig.search_stats_every -> WorkerParams -> run_one_game's sample gate -> play_one_move's per-position root stats -> GameResultRow -> recorder (search_stats on 1-in-N self-play records, R355(d))",
     "selfplay.results_queue_cap": "SelfPlayHParams.from_config -> runner results_queue_cap",
     "selfplay.random_opening_plies": "SelfPlayHParams.from_config -> runner random_opening_plies",
+    "selfplay.decided_tails": (
+        "SelfPlayHParams.from_config -> build_runner_config -> SelfPlayRunnerConfig.decided_tails -> the runner's "
+        "boot refusal without tactics root_nodes > 0, and its game loop, which plays a decided game out with no search"
+    ),
     "selfplay.log_investigation_metrics": "SelfPlayHParams.from_config -> pool investigation logging",
     "selfplay.mcts.c_puct": "resolve_puct_constants -> SelfPlayHParams.from_config -> runner c_puct, and RoundSpec.puct -> every deploy head's MCTSTree",
     "selfplay.mcts.fpu_reduction": "resolve_puct_constants -> SelfPlayHParams.from_config -> runner fpu_reduction, and RoundSpec.puct -> every deploy head's MCTSTree",

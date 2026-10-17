@@ -35,7 +35,7 @@ VALID_SELFPLAY: dict = {
     "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
     "c_visit": 50.0,
     "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_m_quick": 16, "gumbel_explore_moves": 10, "search_stats_every": 8,
-    "results_queue_cap": 10_000, "random_opening_plies": 0,
+    "results_queue_cap": 10_000, "random_opening_plies": 0, "decided_tails": False,
     "log_investigation_metrics": True,
     "mcts": dict(VALID_MCTS),
     "playout_cap": dict(VALID_PLAYOUT_CAP),
@@ -218,3 +218,21 @@ def test_search_stats_every_is_required_non_negative_and_has_no_default() -> Non
         SelfplayConfig.model_validate(missing)
     with pytest.raises(ValidationError, match="search_stats_every"):
         SelfplayConfig.model_validate(_selfplay(search_stats_every=-1))
+
+
+_ROOT_OFFENCE: dict = {"kind": "strict_turn", "leaf_turns": 3, "leaf_nodes": 256, "root_turns": 8, "root_nodes": 20000,
+                       "audit": None}
+
+
+@pytest.mark.parametrize("tactics", [None, dict(_ROOT_OFFENCE, root_nodes=0)], ids=["tactics_null", "root_nodes_0"])
+def test_decided_tails_is_refused_without_an_armed_root_offence(tactics: dict | None) -> None:
+    """A decided tail starts at the root offence's proof, so a block that never proves one refuses the switch."""
+    search = {"kind": "puct", "tactics": tactics}
+    with pytest.raises(ValidationError, match="selfplay.decided_tails"):
+        SelfplayConfig.model_validate(_selfplay(decided_tails=True, search=search))
+    assert not SelfplayConfig.model_validate(_selfplay(decided_tails=False, search=search)).decided_tails
+
+
+def test_decided_tails_is_admitted_over_an_armed_root_offence() -> None:
+    cfg = SelfplayConfig.model_validate(_selfplay(decided_tails=True, search={"kind": "puct", "tactics": _ROOT_OFFENCE}))
+    assert cfg.decided_tails is True

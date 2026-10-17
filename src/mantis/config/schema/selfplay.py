@@ -107,6 +107,8 @@ class SelfplayConfig(StrictModel):
     # OPERATIONAL CONSTANT: a queue's back-pressure bound.
     results_queue_cap: int = Field(default=10000, ge=1)
     random_opening_plies: int = Field(ge=0)
+    # From the root offence's first decided stone the game runs out with no search.
+    decided_tails: bool
     # OPERATIONAL CONSTANT: a diagnostic verbosity switch. It gates only what is WRITTEN, never
     # what is played, which is what makes it operational rather than a disabled-opponent knob.
     log_investigation_metrics: bool = True
@@ -118,6 +120,14 @@ class SelfplayConfig(StrictModel):
         if self.gumbel_m_quick > self.gumbel_m:
             raise ValueError(f"selfplay.gumbel_m_quick={self.gumbel_m_quick} exceeds gumbel_m={self.gumbel_m}: the ring "
                              "stores the full arm's m policy slots, so a wider quick root would overflow them")
+        return self
+
+    @model_validator(mode="after")
+    def _decided_tails_need_the_root_offence(self) -> "SelfplayConfig":
+        tactics = self.search.tactics
+        if self.decided_tails and (tactics is None or tactics.root_nodes == 0):
+            raise ValueError("selfplay.decided_tails needs selfplay.search.tactics.root_nodes > 0: a decided "
+                             "tail starts at the root offence's proof, which an unarmed root offence never finds")
         return self
 
 

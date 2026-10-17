@@ -16,7 +16,7 @@ BASE_SELFPLAY: dict[str, Any] = {
     "n_workers": 7, "leaf_batch_size": 12, "max_game_moves": 200,
     "c_visit": 40.0, "c_scale": 2.0, "q_rescale": False,
     "gumbel_m": 24, "gumbel_m_quick": 24, "gumbel_explore_moves": 14, "search_stats_every": 5,
-    "results_queue_cap": 5000, "random_opening_plies": 3,
+    "results_queue_cap": 5000, "random_opening_plies": 3, "decided_tails": False,
     "log_investigation_metrics": False,
 }
 BASE_MCTS: dict[str, Any] = {
@@ -114,6 +114,16 @@ def test_q_rescale_reaches_hparams_and_wire(assemble, rescale: bool) -> None:
     config = cfg(selfplay={"q_rescale": rescale})
     assert SelfPlayHParams.from_config(config).q_rescale is rescale
     assert assemble(config).recorded_kwargs["q_rescale"] is rescale
+
+
+@pytest.mark.parametrize("decided", [True, False])
+def test_decided_tails_reaches_hparams_and_wire(assemble, decided: bool) -> None:
+    """`selfplay.decided_tails` reaches the hparams field and the runner kwarg, over an armed root offence."""
+    block = {"kind": "strict_turn", "leaf_turns": 3, "leaf_nodes": 256, "root_turns": 8, "root_nodes": 20000,
+             "audit": None}
+    config = cfg(selfplay={"decided_tails": decided}, search={"tactics": block})
+    assert SelfPlayHParams.from_config(config).decided_tails is decided
+    assert assemble(config).recorded_kwargs["decided_tails"] is decided
 
 
 def test_dirichlet_epsilon_reaches_hparams_and_wire(assemble) -> None:

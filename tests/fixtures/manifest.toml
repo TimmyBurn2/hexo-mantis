@@ -215,7 +215,8 @@ path = "selfplay/pool/runner_config_goldens.json"
 # Re-cut by HYGIENE-1 (contract v43): `selfplay.mcts.n_simulations` folded into `playout_cap.n_sims_full`, the runner's `n_simulations`.
 # Re-cut by RUN11-PRE (contract v56): `selfplay.gumbel_m_quick` is a REQUIRED leaf beside `gumbel_m`, carried to the ctor;
 # `full_config` carries 12 against its m 24, so a swap of the two shows.
-sha256 = "256f0a401c9fdd2ddc038f89b866b1b7114e3743b8818c93a02f67dbf7344beb"
+# Re-cut by DT-1 (contract v60): `selfplay.decided_tails` is a REQUIRED leaf carried to the ctor, `false` in both cases.
+sha256 = "fd185fda98255c52304b6a894f7242c4222979f1d3cfecb6b8b3da193847d6e5"
 added_by = "WP-SP"
 
 [[required]]

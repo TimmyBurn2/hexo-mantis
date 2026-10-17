@@ -36,6 +36,7 @@
      "gumbel_explore_moves": 14,
      "results_queue_cap": 5000,
      "random_opening_plies": 3,
+     "decided_tails": false,
      "log_investigation_metrics": false,
      "mcts": {
       "c_puct": 1.75,
@@ -79,6 +80,7 @@
     "quiescence_blend_2": 0.55,
     "quiescence_enabled": false,
     "random_opening_plies": 3,
+    "decided_tails": false,
     "results_queue_cap": 5000,
     "temp_min": 0.35,
     "temp_threshold_compound_moves": 12,
@@ -114,6 +116,7 @@
      "gumbel_explore_moves": 10,
      "results_queue_cap": 10000,
      "random_opening_plies": 0,
+     "decided_tails": false,
      "log_investigation_metrics": true,
      "mcts": {
       "c_puct": 1.5,
@@ -157,6 +160,7 @@
     "quiescence_blend_2": 0.3,
     "quiescence_enabled": true,
     "random_opening_plies": 0,
+    "decided_tails": false,
     "results_queue_cap": 10000,
     "temp_min": 0.5,
     "temp_threshold_compound_moves": 0,

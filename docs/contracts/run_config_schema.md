@@ -1,8 +1,8 @@
 # Contract: run config schema
 
-- version: v59
+- version: v60
 - owner: mantis.config.schema
-- status: LIVE since scaffold (WP0). Fifty-eight steps since (v1 -> v59). Each through v6 is
+- status: LIVE since scaffold (WP0). Fifty-nine steps since (v1 -> v60). Each through v6 is
   recorded as a named amendment in docs/design/repo_design.md §4; v7, v8 and v9 are NOT, and
   that is stated rather than implied — v7 landed without one, v8 (R242/ADJ-D12) inherited that
   gap rather than back-filling somebody else's amendment, and v9 records the same gap for
@@ -86,10 +86,11 @@ plays the deploy block too, deploy-matched (R378(d)); the v39 row's "without it"
 | v57 | ONE new REQUIRED block in `train`: `lr_cycle` (`LrCycleConfig | None`, the `default=...` idiom; FOUR leaves `start_step` `ge=1`, `lr` `gt=0`, `eta_min` `ge=0` at most `lr`, `t_max` `ge=1`) — THE SECOND COSINE CYCLE (R386(a)). From trainer step `start_step` the LR is `lr` cosine-annealed to `eta_min` over `t_max` steps, then `eta_min`; before it, the floored cosine of `lr`/`scheduler_t_max`/`eta_min` unchanged. The block is CONFIG-owned, unlike those three: it is not a resume-owned path, it stays out of the scheduler's `state_dict`, and restoring a state at or past `start_step` re-points the optimizer at the cycle's LR, so a resume runs the declared cycle whatever the checkpoint saved. Refused on `lr_schedule: none` and at a `start_step` not below `max_train_steps`. The template mints `null`; every config is RE-MINTED through its own header and gains only that line, and trains as at v56. CONSUMER: `TrainHParams.from_config` -> `Trainer._build_scheduler` -> `FlooredCosineAnnealingLR(cycle=)`; its fire-rate is the `training_step` event's `lr`. Pinned by `tests/train/test_lr_schedule.py`: `test_the_launchers_resume_runs_the_launch_configs_cycle` (a floored checkpoint resumed through the launcher's own path steps on the launch config's cycle), `test_the_cycle_is_the_configs_and_never_the_checkpoints` and `test_every_distinct_schedule_rises_only_at_its_declared_cycle` (the census of configs/: one rise, at a declared cycle's start, also through a restore there) | R386(a); RUN11-CYCLE-2 |
 | v58 | ONE new REQUIRED block in `train`: `ring_preload` (`RingPreloadConfig | None`, the `default=...` idiom; TWO leaves `ring` (a path, `min_length=1`) and `ring_sha256` (64 lower-case hex)) — THE FRESH LAUNCH'S RING (R391(d)). A fresh launch loads it into the empty buffer before `WorkerPool` exists through `mantis.train.pinned_ring.load_pinned_ring`, the ONE pinned-ring loader, which the held-out slice now shares: a missing file is `FileNotFoundError` (the engine would read it as empty), another sha256 or no row is `PinnedRingError` (it replaces `HeldoutSliceError`), and the engine still refuses another slot geometry or encoding, or more rows than `replay_capacity`. The two blocks share their two leaf types (`RingPath`, `RingSha256`). A launch from a checkpoint (`--resume-from`, with or without a sidecar) never loads it (`ring_preload_inert_on_resume`): a resume's ring is its own, and a sidecar-less one stays announced-empty. The fill ramp starts at rows/capacity. The template mints `null`; every config is RE-MINTED through its own header and gains only that line, and boots as at v57. CONSUMER: `mantis.run.build_run_collaborators` -> `_preload_ring` (logged `ring_preloaded`); the manual mint preflight (gate 12's PREFLIGHT mode) boots through the same builder, so it loads the ring, while the integration tier's CPU twins drop the block with the other untracked-artifact blocks. Pinned by `tests/test_run_ring_preload.py` | R391(d); RUN12-GO |
 | v59 | ONE new REQUIRED block in `model`: `aux_future_occupancy` (`AuxFutureOccupancyConfig | None`, the `default=...` idiom; ONE leaf `w` `gt=0`) — THE FUTURE-OCCUPANCY HEAD's weight (AUX-1). Armed iff `identity.arch_kind` carries the head (`FUTURE_OCCUPANCY_ARCH_KINDS`, `GnnArchV2SoftPolicyFuture`, which carries the soft-policy head too), refused either alone by `RunConfig._future_occupancy_row_pairs_with_its_head` and again by the trainer. The head reads the trunk's legal-node embeddings into three logits per legal cell (empty, the mover's, the opponent's twenty placements on — HEXG v4's field) and trains a per-row mean CE over the legal cells of the rows that carry the field, scaled by `w` into the step's loss; it serves nothing. The template mints `null`; every config is RE-MINTED through its own header and gains only that line, and trains as at v58. CONSUMER: `resolve_aux_future_occupancy` -> `TrainHParams.from_config` -> `Trainer.train_step_from_graph_batch`; its fire-rate rows are the trainer_step event's aux_future_rows, aux_future_ce and aux_future_weight (event manifest). Pinned by `tests/train/test_aux_future_occupancy.py` (the producer, the planted break, the pairing) | AUX-1 |
+| v60 | ONE new REQUIRED leaf in `selfplay`: `decided_tails` (`bool`) — THE DECIDED TAIL (R394(d1), DT-1): from the root offence's first decided stone the game runs out with no search, the winner's rows one-hot flag-off at +1, the loser's value-only; refused unless `selfplay.search.tactics` arms `root_nodes > 0`, and again at the runner's boot; the template mints `false`, every config is RE-MINTED through its own header and gains only that line and plays as at v59. CONSUMER: `SelfPlayHParams.from_config` -> `build_runner_config` -> the runner's game loop | R394(d1); DT-1 |
 
 ## Shape
 
-Thirteen top-level fields; **170 leaf key-paths** under the walker that descends nested blocks
+Thirteen top-level fields; **171 leaf key-paths** under the walker that descends nested blocks
 (including optional ones) and counts a `list[SubModel]` field as ONE leaf.
 
 | section | leaves | models |
@@ -104,7 +105,7 @@ Thirteen top-level fields; **170 leaf key-paths** under the walker that descends
 | `deploy` | 11 | `DeployConfig`, `SearchConfig`, `TacticsConfig`, `TacticsAuditConfig` |
 | `eval` | 26 | `EvalConfig`, `GateConfig`, `SequentialGateConfig`, `PlyCapAdjudicationConfig`, `StrengthFloorConfig` |
 | `train` | 47 | `TrainConfig`, `DrawRateAbortConfig`, `PlyCapAbortConfig`, `HeldoutGapConfig`, `LrCycleConfig`, `RingPreloadConfig`, `MicrobatchCapsConfig` |
-| `selfplay` | 36 | `SelfplayConfig`, `SearchConfig`, `TacticsConfig`, `TacticsAuditConfig`, `MctsConfig`, `PlayoutCapConfig` |
+| `selfplay` | 37 | `SelfplayConfig`, `SearchConfig`, `TacticsConfig`, `TacticsAuditConfig`, `MctsConfig`, `PlayoutCapConfig` |
 | `inference` | 6 | `InferenceConfig`, `FusedGraphCapsConfig` |
 | `monitor` | 28 | `MonitorSchemaConfig`, `DrainCapsConfig`, `DiskGuardConfig` |
 
@@ -170,6 +171,7 @@ name at the moment it fires.
 | `_one_drawn_game_cannot_fire_the_abort` | `DrawRateAbortConfig` | `1 / N_pool_min` < `threshold`: below that a SINGLE drawn game meets the bar and fires a hard abort |
 | `_a_cycle_restarts_a_cosine_inside_the_run` | `TrainConfig` | `train.lr_cycle` needs `lr_schedule: cosine` and `start_step` < `train.max_train_steps`: a cycle past the run's last step never runs |
 | `_the_cycle_anneals_downward` | `LrCycleConfig` | `eta_min` <= `lr`: a cycle may not anneal upward |
+| `_decided_tails_need_the_root_offence` | `SelfplayConfig` | `selfplay.decided_tails` needs `selfplay.search.tactics` armed with `root_nodes > 0`: a decided tail starts at the root offence's proof, which an unarmed root offence never finds; the runner refuses the same pair again at boot |
 | `_mutual_exclusion` | `PlayoutCapConfig` | an armed `full_search_prob` needs both presets and quick at most full; a configured quick/full pair must differ and its probability must sit in `(0, 1)` |
 
 ONE v4 key is spelled differently in the schema and in the runtime object it reaches, for a

@@ -10,8 +10,9 @@ _BLOCK = tactics_block({"kind": "strict_turn", "leaf_turns": 3, "leaf_nodes": 25
                         "audit": {"turns": 8, "nodes": 2000, "k": 4, "m": 4, "total_nodes": 40000}})
 
 
-def _config() -> SelfPlayRunnerConfig:
-    return SelfPlayRunnerConfig(n_workers=1, q_rescale=True, search_stats_every=0, gumbel_m_quick=16, encoding_name="gnn_axis_r8")
+def _config(*, decided_tails: bool = False) -> SelfPlayRunnerConfig:
+    return SelfPlayRunnerConfig(n_workers=1, q_rescale=True, search_stats_every=0, gumbel_m_quick=16,
+                                decided_tails=decided_tails, encoding_name="gnn_axis_r8")
 
 
 def test_a_block_arms_the_runner_config_and_none_disarms_it() -> None:
@@ -42,3 +43,14 @@ def test_the_runner_names_every_tactics_row_and_reads_zero_before_it_searches() 
                 "proven_tail_rows", "tail_search_skipped", "tail_exits"):
         assert totals[row] == 0, row
     assert "mixed_rows" not in totals, "the proof mixture's row left the tree with the mixture"
+
+
+@pytest.mark.parametrize("root_nodes", [None, 0], ids=["no_block", "root_nodes_0"])
+def test_decided_tails_without_an_armed_root_offence_is_refused_at_boot(root_nodes: int | None) -> None:
+    assert _BLOCK is not None
+    cfg = _config(decided_tails=True)
+    cfg.configure_tactics(None if root_nodes is None else {**_BLOCK, "root_nodes": root_nodes})
+    with pytest.raises(ValueError, match="decided_tails"):
+        SelfPlayRunner(cfg)
+    cfg.configure_tactics(_BLOCK)
+    assert SelfPlayRunner(cfg).games_completed == 0
