@@ -51,6 +51,7 @@ fn distinct_sentinels() -> SelfPlayRunnerConfig {
         encoding_name: Some("gnn_axis_r8".to_string()),
         eval_cache_capacity: 4096,
         tactics: Some(SENTINEL_TACTICS),
+        decided_tails: true,
     }
 }
 
@@ -108,6 +109,7 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
         encoding_name,
         eval_cache_capacity,
         tactics,
+        decided_tails,
     } = cfg;
 
     assert_eq!(n_workers, 7);
@@ -138,6 +140,7 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
     assert_eq!(encoding_name, Some("gnn_axis_r8".to_string()));
     assert_eq!(eval_cache_capacity, 4096);
     assert_eq!(tactics, Some(SENTINEL_TACTICS));
+    assert!(decided_tails);
 }
 
 /// Prove the ctor accepts the sentinel config and exposes spec-derived shapes.

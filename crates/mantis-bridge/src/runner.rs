@@ -535,6 +535,7 @@ mod tests {
             true,
             0,
             16,
+            false,
             16,
             10,
             0.3,
@@ -576,8 +577,8 @@ mod tests {
     #[test]
     fn runner_missing_encoding_errors() {
         let cfg = PySelfPlayRunnerConfig::new(
-            1, 64, 30, 8, 1.5, 0.25, 0, true, 0.3, 0.5, 50.0, 1.0, true, 0, 16, 16, 10, 0.3, 0.25,
-            true, 10_000, 0.0, 0, 0, None,
+            1, 64, 30, 8, 1.5, 0.25, 0, true, 0.3, 0.5, 50.0, 1.0, true, 0, 16, false, 16, 10, 0.3,
+            0.25, true, 10_000, 0.0, 0, 0, None,
         );
         assert!(
             PySelfPlayRunner::new(&cfg).is_err(),
