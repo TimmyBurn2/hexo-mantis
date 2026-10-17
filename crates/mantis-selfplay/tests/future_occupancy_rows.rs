@@ -50,7 +50,7 @@ fn drive(
     let deadline = Instant::now() + Duration::from_secs(300);
     let (mut results, mut records) = (Vec::new(), Vec::new());
     while Instant::now() < deadline && results.len() < games && runner.fatal_defect().is_none() {
-        // Rows first, then results: a game's result is never drained before its rows.
+        // Rows first, then results: a drained row's game always has its result drained, though a result may beat its rows.
         records.extend(runner.drain_graph_records().expect("unpoisoned"));
         results.extend(runner.drain_game_results().expect("unpoisoned"));
         thread::sleep(Duration::from_millis(5));

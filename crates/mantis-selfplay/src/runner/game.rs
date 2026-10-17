@@ -36,7 +36,7 @@ use super::search_drive::{
     MovePlayContext,
 };
 use super::stats::WorkerStats;
-use super::tail::{count_finished_tail, play_tail_ply, Tail, TailRecord};
+use super::tail::{count_finished_tail, play_tail_ply, GameTails, TailRecord};
 use super::{GameResultRow, MoveArm, PositionStats, ARM_OPENING};
 
 /// Per-game-init scalar context. `Copy`.
@@ -375,8 +375,8 @@ fn run_one_game(
         decided_tails,
     };
 
-    // The game's decided tail once its root offence decides with tails armed; `None` before, or after an exit.
-    let mut tail: Option<Tail> = None;
+    // The game's decided tails: the one in play once its root offence decides with tails armed, and their tally.
+    let mut tails = GameTails::default();
     let move_iters = init_ctx.max_moves;
     for _ in 0..move_iters {
         if !infer.running.load(Ordering::Relaxed)
@@ -399,7 +399,7 @@ fn run_one_game(
             continue;
         }
 
-        let in_tail = tail.as_mut().map(|t| {
+        let in_tail = tails.in_play().then(|| {
             play_tail_ply(
                 tree,
                 &mut board,
@@ -409,7 +409,7 @@ fn run_one_game(
                     move_arms: &mut move_arms,
                     version_seen,
                 },
-                t,
+                &mut tails,
                 play_ctx,
                 rng,
                 agg_trunk_sz,
@@ -420,28 +420,25 @@ fn run_one_game(
         });
         let outcome = match in_tail {
             Some(Some(outcome)) => outcome,
-            // The offence gave the winner no stone: the tail exits, and this ply, its offence already run, is searched.
-            Some(None) => {
-                tail = None;
-                search_move(
-                    tree,
-                    &mut board,
-                    &mut graph_records,
-                    &mut move_history,
-                    &mut move_arms,
-                    search_stats.as_mut(),
-                    version_seen,
-                    rng,
-                    infer.running,
-                    play_ctx,
-                    policy_stride,
-                    agg_trunk_sz,
-                    infer,
-                    move_accumulators,
-                    fatal_latch,
-                    None,
-                )
-            }
+            // The offence gave the winner no stone: the tail exited (counted), and this ply, its offence run, is searched.
+            Some(None) => search_move(
+                tree,
+                &mut board,
+                &mut graph_records,
+                &mut move_history,
+                &mut move_arms,
+                search_stats.as_mut(),
+                version_seen,
+                rng,
+                infer.running,
+                play_ctx,
+                policy_stride,
+                agg_trunk_sz,
+                infer,
+                move_accumulators,
+                fatal_latch,
+                None,
+            ),
             None => play_one_move(
                 tree,
                 &mut board,
@@ -450,7 +447,7 @@ fn run_one_game(
                 &mut move_arms,
                 search_stats.as_mut(),
                 version_seen,
-                &mut tail,
+                &mut tails,
                 rng,
                 infer.running,
                 play_ctx,
@@ -474,7 +471,12 @@ fn run_one_game(
         return;
     }
 
-    count_finished_tail(move_accumulators.tactics_totals, &move_arms, &graph_records);
+    count_finished_tail(
+        move_accumulators.tactics_totals,
+        &move_arms,
+        &graph_records,
+        &tails,
+    );
     let (games_completed, x_wins, o_wins, draws, positions_dropped, graph_game_seq) =
         finalize_counters;
     finalize_game_graph(

@@ -43,12 +43,12 @@ pub(crate) fn record_position_graph_dispatch(
     Ok(())
 }
 
-/// Record the value-only row of a ply played with no search at its `root_value`; `RootValueOutOfRange` past `[-1, 1]`.
-pub(crate) fn record_unsearched_dispatch(
+/// Record the value-only row of a ply played with no search at `root_value` and hand it back; `RootValueOutOfRange` past `[-1, 1]`.
+pub(crate) fn record_unsearched_dispatch<'a>(
     board: &Board,
-    graph_records_vec: &mut Vec<GraphRecord>,
+    graph_records_vec: &'a mut Vec<GraphRecord>,
     root_value: f32,
-) -> Result<(), TargetIntegrityError> {
+) -> Result<&'a mut GraphRecord, TargetIntegrityError> {
     let ply_index = board.ply.index() as u16;
     let mut rec = records::record_unsearched_value_row(
         board,
@@ -58,8 +58,9 @@ pub(crate) fn record_unsearched_dispatch(
     );
     rec.root_value = records::refuse_root_value(root_value, ply_index)?;
     rec.root_value_valid = true;
+    let at = graph_records_vec.len();
     graph_records_vec.push(rec);
-    Ok(())
+    Ok(&mut graph_records_vec[at])
 }
 
 /// Record a decided tail's row: the winner's stone at probability 1.0 and +1 (`Some`), or the loser's value-only row at −1.
@@ -69,10 +70,8 @@ pub(crate) fn record_tail_dispatch(
     winner_stone: Option<(i32, i32)>,
 ) -> Result<(), TargetIntegrityError> {
     let value = if winner_stone.is_some() { 1.0 } else { -1.0 };
-    record_unsearched_dispatch(board, graph_records_vec, value)?;
-    if let Some(rec) = graph_records_vec.last_mut() {
-        rec.visits = winner_stone.map_or_else(Vec::new, |(q, r)| vec![(q as i16, r as i16, 1.0)]);
-        rec.proven_tail = true;
-    }
+    let rec = record_unsearched_dispatch(board, graph_records_vec, value)?;
+    rec.visits = winner_stone.map_or_else(Vec::new, |(q, r)| vec![(q as i16, r as i16, 1.0)]);
+    rec.proven_tail = true;
     Ok(())
 }

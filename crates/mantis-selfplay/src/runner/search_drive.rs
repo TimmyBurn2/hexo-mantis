@@ -1,4 +1,4 @@
-//! R8-justify: the per-move search phase (`play_one_move` -> `run_mcts_search` ->
+//! R8-justify: the per-move search phase (`play_one_move` -> `search_move` -> `run_mcts_search` ->
 //! `infer_and_expand_graph` -> `select_move`) plus its Copy arg-bundles is one unit;
 //! splitting it would scatter the load-bearing target-policy build ORDER, which is EXACTLY:
 //! temperature-annealed visit policy -> optional completed-Q improved policy.
@@ -28,7 +28,7 @@ use crate::replay::hexg::GraphRecord;
 use super::record::{record_position_graph_dispatch, record_unsearched_dispatch};
 use super::stats::TacticsTotals;
 use super::tactics_move::{account_row, seal_tail, zero_vetoes, Seal, TargetEdit, Written};
-use super::tail::{play_winner_stone, Tail, TailRecord};
+use super::tail::{play_winner_stone, GameTails, TailRecord};
 use super::{MoveArm, PositionStats, ARM_DECIDED, ARM_FAST, ARM_FULL};
 
 /// A worker's inference seam, built once per worker thread; `Copy`, passed by value.
@@ -148,7 +148,7 @@ pub(crate) struct MovePlayContext {
     pub(crate) decided_tails: bool,
 }
 
-/// Result of `play_one_move`: how the parent per-move loop should proceed.
+/// How the per-move loop proceeds after a move, searched or a decided tail's.
 pub(crate) enum MoveOutcome {
     /// Move played — continue the inner loop.
     Played,
@@ -585,7 +585,7 @@ fn run_mcts_search(
 }
 
 /// The playout cap's arm for one move and its sims: the full arm with the cap unarmed, else drawn at `full_search_prob`.
-pub(crate) fn draw_arm(ctx: MovePlayContext, rng: &mut ThreadRng) -> (bool, usize) {
+pub(crate) fn draw_arm<R: RngExt + ?Sized>(ctx: MovePlayContext, rng: &mut R) -> (bool, usize) {
     if ctx.full_search_prob > 0.0 {
         let full = rng.random::<f32>() < ctx.full_search_prob;
         (
@@ -619,7 +619,7 @@ pub(crate) fn play_one_move(
     move_arms: &mut Vec<MoveArm>,
     search_stats: Option<&mut Vec<PositionStats>>,
     version_seen: &mut Vec<u64>,
-    tail: &mut Option<Tail>,
+    tails: &mut GameTails,
     rng: &mut ThreadRng,
     running: &AtomicBool,
     ctx: MovePlayContext,
@@ -643,7 +643,7 @@ pub(crate) fn play_one_move(
         }
     };
     if let (true, Some(stone)) = (ctx.decided_tails, decided) {
-        *tail = Some(Tail::new(board.current_player));
+        tails.start(board.current_player);
         let record = TailRecord {
             graph_records: graph_records_vec,
             move_history,
@@ -657,6 +657,7 @@ pub(crate) fn play_one_move(
             stone,
             ctx,
             rng,
+            tails,
             accumulators,
             fatal_latch,
         );
@@ -1312,6 +1313,8 @@ mod leaf_key_drive_tests;
 #[cfg(test)]
 mod draw_arm_tests {
     use mantis_search::{QSigma, SearchKind};
+    use rand::rngs::StdRng;
+    use rand::SeedableRng;
 
     use super::{draw_arm, MovePlayContext};
 
@@ -1340,10 +1343,10 @@ mod draw_arm_tests {
         }
     }
 
-    /// PLANTED BREAK: the tail's skipped row reads this draw, so a draw that ignored the arm would count quick plies.
+    /// The arm the search and a decided tail's skipped row both read: full unarmed, drawn at the probability armed.
     #[test]
     fn the_arm_is_full_unarmed_and_drawn_at_its_probability_armed() {
-        let mut rng = rand::rng();
+        let mut rng = StdRng::seed_from_u64(20_261_017);
         for _ in 0..64 {
             assert_eq!(draw_arm(ctx(0.0), &mut rng), (true, 320));
             assert_eq!(draw_arm(ctx(1.0), &mut rng), (true, 320));

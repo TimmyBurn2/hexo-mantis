@@ -277,8 +277,8 @@ fn ends(games: &[Game], max_moves: usize) -> Vec<TailEnd> {
         .collect()
 }
 
-/// The drained games' tail plies off their arms, flagged rows off their rows, and loser rows (flagged, no entry).
-fn finished(games: &[Game]) -> (u64, u64, u64) {
+/// The drained games' tail plies off their arms, flagged rows, loser rows (flagged, no entry), and exits (a tail ply then a searched one).
+fn finished(games: &[Game]) -> (u64, u64, u64, u64) {
     let count = |f: &dyn Fn(&Game) -> usize| games.iter().map(f).sum::<usize>() as u64;
     (
         count(&|g| g.arms.iter().filter(|&&a| a == ARM_TAIL).count()),
@@ -289,14 +289,26 @@ fn finished(games: &[Game]) -> (u64, u64, u64) {
                 .filter(|r| r.proven_tail && r.visits.is_empty())
                 .count()
         }),
+        count(&|g| {
+            g.arms
+                .windows(2)
+                .filter(|w| w[0] == ARM_TAIL && w[1] != ARM_TAIL)
+                .count()
+        }),
     )
+}
+
+/// Enough winner plies that a drawn arm is both full and quick among them but for 2^-23.
+fn many_winner_plies(games: &[Game]) -> bool {
+    let (plies, _, loser, _) = finished(games);
+    plies.saturating_sub(loser) >= 24
 }
 
 #[test]
 fn every_tail_game_replays_to_its_proof_with_a_flagged_row_a_ply() {
     for kind in [SearchKind::Puct, SearchKind::Gumbel] {
         let (games, rows) = drive(true, kind, 160, 0.5, |g| {
-            g.len() >= 12 && ends(g, 160).contains(&TailEnd::Won)
+            g.len() >= 12 && many_winner_plies(g) && ends(g, 160).contains(&TailEnd::Won)
         });
         let seen = ends(&games, 160);
         println!(
@@ -307,23 +319,23 @@ fn every_tail_game_replays_to_its_proof_with_a_flagged_row_a_ply() {
             seen.contains(&TailEnd::Won),
             "{kind:?}: no tail ran to its six"
         );
-        // Plies off the arms and rows off the rows, both at each finished game: every finished game is drained here.
-        let (plies, flagged, loser) = finished(&games);
+        // All four rows count at each finished game, and every finished game is drained here.
+        let (plies, flagged, loser, exits) = finished(&games);
         assert_eq!(
-            (rows["proven_tail_plies"], rows["proven_tail_rows"]),
-            (plies, flagged),
+            (
+                rows["proven_tail_plies"],
+                rows["proven_tail_rows"],
+                rows["tail_exits"]
+            ),
+            (plies, flagged, exits),
             "{kind:?}: the rows' counts are the drained games'"
         );
         assert_eq!(plies, flagged, "{kind:?}: a tail ply without its row");
-        let exited = seen.iter().filter(|&&e| e == TailEnd::Exited).count() as u64;
+        // PLANTED BREAK: every loser ply skips a search, a winner's only on a full draw; a skip that ignores the arm reds.
+        let skipped = rows["tail_search_skipped"];
         assert!(
-            rows["tail_exits"] >= exited,
-            "{kind:?}: {exited} exited tails drained"
-        );
-        // Every loser ply skips a search; a game stopped mid-tail adds plies to this row and none to the rest.
-        assert!(
-            rows["tail_search_skipped"] >= loser && loser > 0,
-            "{kind:?}: {rows:?}"
+            loser > 0 && loser < skipped && skipped < plies,
+            "{kind:?}: {skipped} skipped of {plies} tail plies, {loser} the loser's"
         );
         assert_eq!(
             (rows["proven_root_rows"], rows["unsearched_decided_rows"]),
@@ -341,6 +353,18 @@ fn a_tail_the_cap_cuts_replays_to_the_cap_with_every_row_masked() {
     let seen = ends(&games, CAP);
     println!("cap {CAP}: ends {seen:?}");
     assert!(seen.contains(&TailEnd::Capped), "no tail met the cap");
+    for (g, _) in games
+        .iter()
+        .zip(&seen)
+        .filter(|&(_, &e)| e == TailEnd::Capped)
+    {
+        assert!(
+            g.rows
+                .iter()
+                .all(|r| (r.outcome, r.value_valid) == (0.0, false)),
+            "a capped game's row kept a z"
+        );
+    }
 }
 
 /// PLANTED BREAKS: the winner's first tail stone swapped for another legal cell, or its row naming another cell.
@@ -400,7 +424,10 @@ fn a_tail_the_search_played_reds_the_check() {
         "the searched decided plies red the tail rule, and only it: {errs:?}"
     );
     assert_eq!(
-        rows["proven_tail_plies"] + rows["proven_tail_rows"] + rows["tail_search_skipped"],
+        rows["proven_tail_plies"]
+            + rows["proven_tail_rows"]
+            + rows["tail_search_skipped"]
+            + rows["tail_exits"],
         0
     );
     for g in &games {
@@ -430,11 +457,9 @@ fn with_the_cap_unarmed_every_tail_ply_skips_a_search() {
     let (games, rows) = drive(true, SearchKind::Gumbel, 160, 0.0, |g| {
         g.len() >= 6 && ends(g, 160).contains(&TailEnd::Won)
     });
-    let (plies, _, _) = finished(&games);
-    assert!(
-        plies > 0 && rows["tail_search_skipped"] >= plies,
-        "{rows:?}"
-    );
+    let (plies, _, _, _) = finished(&games);
+    assert!(plies > 0, "{rows:?}");
+    assert_eq!(rows["tail_search_skipped"], plies);
 }
 
 #[test]

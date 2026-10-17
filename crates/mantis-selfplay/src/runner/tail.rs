@@ -5,8 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use rand::rngs::ThreadRng;
 
 use mantis_core::{Board, Player};
-use mantis_search::mcts::TacticsError;
-use mantis_search::MCTSTree;
+use mantis_search::{mcts::TacticsError, MCTSTree};
 
 use crate::replay::hexg::GraphRecord;
 
@@ -18,15 +17,45 @@ use super::search_drive::{
 use super::stats::{MoveRow, TacticsTotals};
 use super::{MoveArm, ARM_TAIL};
 
-/// A game's decided tail: the side its proof wins for, and the loser's stored second stone with the ply it is owed at.
-pub(crate) struct Tail {
+/// A decided tail in play: the side its proof wins for, and the loser's stored second stone with the ply it is owed at.
+struct Tail {
     winner: Player,
     owed: Option<(u32, (i32, i32))>,
 }
 
-impl Tail {
-    pub(crate) fn new(winner: Player) -> Self {
-        Self { winner, owed: None }
+/// A game's decided tails: the one in play, and the searches it skipped and the exits its finished game reports.
+#[derive(Default)]
+pub(crate) struct GameTails {
+    current: Option<Tail>,
+    skipped: u64,
+    exits: u64,
+}
+
+impl GameTails {
+    pub(crate) fn in_play(&self) -> bool {
+        self.current.is_some()
+    }
+
+    /// Start a tail at its winner's first decided stone.
+    pub(crate) fn start(&mut self, winner: Player) {
+        self.current = Some(Tail { winner, owed: None });
+    }
+}
+
+/// A decided tail's stone that did not play: run-fatal, its game dropped before it is finalized.
+#[derive(Debug)]
+pub(crate) struct TailStoneIllegal {
+    stone: (i32, i32),
+    ply_index: u32,
+}
+
+impl std::fmt::Display for TailStoneIllegal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self { stone, ply_index } = self;
+        write!(
+            f,
+            "TailStoneIllegal: tail stone {stone:?} at ply_index={ply_index} is not legal"
+        )
     }
 }
 
@@ -44,7 +73,7 @@ pub(crate) fn play_tail_ply(
     tree: &mut MCTSTree,
     board: &mut Board,
     record: TailRecord<'_>,
-    tail: &mut Tail,
+    tails: &mut GameTails,
     ctx: MovePlayContext,
     rng: &mut ThreadRng,
     agg_trunk_sz: i32,
@@ -53,13 +82,11 @@ pub(crate) fn play_tail_ply(
     fatal_latch: FatalDefectLatch,
 ) -> Option<MoveOutcome> {
     tree.new_game(board.clone());
-    if board.current_player == tail.winner {
-        let stone = match tree.root_offence() {
+    let winner = tails.current.as_ref()?.winner;
+    if board.current_player == winner {
+        let stone = match winner_offence(tree, tails) {
             Ok(Some(stone)) => stone,
-            Ok(None) | Err(TacticsError::ProofStoneIllegal { .. }) => {
-                accumulators.tactics_totals.add_move(MoveRow::TailExit);
-                return None;
-            }
+            Ok(None) => return None,
             Err(err) => {
                 fatal_latch.store(err.to_string());
                 return Some(MoveOutcome::Break);
@@ -72,10 +99,12 @@ pub(crate) fn play_tail_ply(
             stone,
             ctx,
             rng,
+            tails,
             accumulators,
             fatal_latch,
         ));
     }
+    let tail = tails.current.as_mut()?;
     let stone = match loser_stone(
         tree,
         board,
@@ -94,11 +123,27 @@ pub(crate) fn play_tail_ply(
         board,
         record,
         stone,
-        false,
-        true,
+        (false, true),
+        &mut tails.skipped,
         accumulators,
         fatal_latch,
     ))
+}
+
+/// The winner's offence stone, else the tail's exit: counted and closed, `Ok(None)`; a tactics refusal passes through.
+fn winner_offence(
+    tree: &mut MCTSTree,
+    tails: &mut GameTails,
+) -> Result<Option<(i32, i32)>, TacticsError> {
+    match tree.root_offence() {
+        Ok(Some(stone)) => Ok(Some(stone)),
+        Ok(None) | Err(TacticsError::ProofStoneIllegal { .. }) => {
+            tails.exits += 1;
+            tails.current = None;
+            Ok(None)
+        }
+        Err(err) => Err(err),
+    }
 }
 
 /// The winner's tail stone, its row the one-hot at +1; its searches-skipped row reads the arm `play_one_move` draws.
@@ -110,18 +155,19 @@ pub(crate) fn play_winner_stone(
     stone: (i32, i32),
     ctx: MovePlayContext,
     rng: &mut ThreadRng,
+    tails: &mut GameTails,
     accumulators: MoveAccumulators,
     fatal_latch: FatalDefectLatch,
 ) -> MoveOutcome {
     // A quick draw's decided root was already unsearched, so only a full draw's search is skipped here.
-    let (skipped, _) = draw_arm(ctx, rng);
+    let (full, _) = draw_arm(ctx, rng);
     play_tail_stone(
         tree,
         board,
         record,
         stone,
-        true,
-        skipped,
+        (true, full),
+        &mut tails.skipped,
         accumulators,
         fatal_latch,
     )
@@ -204,8 +250,8 @@ fn play_tail_stone(
     board: &mut Board,
     record: TailRecord<'_>,
     stone: (i32, i32),
-    winner_row: bool,
-    search_skipped: bool,
+    (winner_row, search_skipped): (bool, bool),
+    skipped: &mut u64,
     accumulators: MoveAccumulators,
     fatal_latch: FatalDefectLatch,
 ) -> MoveOutcome {
@@ -214,31 +260,29 @@ fn play_tail_stone(
         fatal_latch.store(err.to_string());
         return MoveOutcome::Break;
     }
-    let totals = accumulators.tactics_totals;
-    totals.add_search(&tree.tactics_counters());
+    accumulators
+        .tactics_totals
+        .add_search(&tree.tactics_counters());
     if board.apply_move(stone.0, stone.1).is_err() {
-        fatal_latch.store(format!(
-            "TailStoneIllegal: the decided tail's stone {stone:?} at ply_index={} did not play, its row already written",
-            board.ply.index()
-        ));
+        let ply_index = board.ply.index();
+        fatal_latch.store(TailStoneIllegal { stone, ply_index }.to_string());
         return MoveOutcome::Break;
     }
     record.move_history.push(stone);
     record.move_arms.push((0, ARM_TAIL));
-    if search_skipped {
-        totals.add_move(MoveRow::TailSearchSkipped);
-    }
+    *skipped += u64::from(search_skipped);
     accumulators
         .positions_generated
         .fetch_add(1, Ordering::Relaxed);
     MoveOutcome::Played
 }
 
-/// Count a finished game's tail plies off its move arms and its flagged rows off its rows: a dropped row is a gap.
+/// A finished game's four tail rows: plies off its arms, rows off its rows (a dropped row is a gap), skips and exits off its tally.
 pub(crate) fn count_finished_tail(
     totals: &TacticsTotals,
     move_arms: &[MoveArm],
     rows: &[GraphRecord],
+    tails: &GameTails,
 ) {
     let plies = move_arms
         .iter()
@@ -247,32 +291,10 @@ pub(crate) fn count_finished_tail(
     let flagged = rows.iter().filter(|r| r.proven_tail).count();
     totals.add_moves(MoveRow::ProvenTailPly, plies as u64);
     totals.add_moves(MoveRow::ProvenTailRow, flagged as u64);
+    totals.add_moves(MoveRow::TailSearchSkipped, tails.skipped);
+    totals.add_moves(MoveRow::TailExit, tails.exits);
 }
 
 #[cfg(test)]
-mod tests {
-    use std::collections::HashMap;
-
-    use super::{count_finished_tail, TacticsTotals};
-    use crate::replay::hexg::GraphRecord;
-    use crate::runner::{MoveArm, ARM_FAST, ARM_TAIL};
-
-    /// PLANTED BREAK: a finished tail whose loser row was never written reads one ply more than its rows.
-    #[test]
-    fn a_finished_tail_counts_its_plies_off_the_arms_and_its_rows_off_the_rows() {
-        let arms: Vec<MoveArm> = vec![(64, ARM_FAST), (0, ARM_TAIL), (0, ARM_TAIL), (0, ARM_TAIL)];
-        let row = |proven_tail| GraphRecord {
-            proven_tail,
-            ..GraphRecord::default()
-        };
-        let read = |rows: &[GraphRecord]| {
-            let totals = TacticsTotals::new();
-            count_finished_tail(&totals, &arms, rows);
-            let by: HashMap<&str, u64> = totals.snapshot().into_iter().collect();
-            (by["proven_tail_plies"], by["proven_tail_rows"])
-        };
-        let whole = [row(false), row(true), row(true), row(true)];
-        assert_eq!(read(&whole), (3, 3));
-        assert_eq!(read(&whole[..3]), (3, 2), "a dropped row is a gap");
-    }
-}
+#[path = "tail_tests.rs"]
+mod tests;

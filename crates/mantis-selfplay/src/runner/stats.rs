@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use mantis_search::mcts::TacticsCounters;
 
-/// The rows a move adds beside its search's, in `MoveRow` order: full draws' kinds and cross-counts, quick unsearched, tails.
+/// The rows beside a search's, in `MoveRow` order: full draws' kinds and cross-counts, quick unsearched, a finished game's tails.
 pub const MOVE_TACTICS_ROWS: [&str; 12] = [
     "proven_root_rows",
     "decided_lost_rows",
@@ -22,7 +22,7 @@ pub const MOVE_TACTICS_ROWS: [&str; 12] = [
     "tail_exits",
 ];
 
-/// A row a move records: five kinds, every all-vetoed root, every would-be tail leak, every quick unsearched root, the tail's.
+/// A row beside a search's: five kinds, every all-vetoed root, every would-be tail leak, every quick unsearched root, the tails'.
 #[derive(Clone, Copy)]
 pub(crate) enum MoveRow {
     ProvenRoot = 0,
