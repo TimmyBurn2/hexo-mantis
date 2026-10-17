@@ -18,7 +18,7 @@ _STONES = [(0, 0, 1), (1, 0, -1), (0, 1, 1)]
 
 @pytest.mark.parametrize(("fixture", "flags"), [("hexg_v4_golden.hexg", [0, 0]), ("hexg_v5_golden.hexg", [0, 1])])
 def test_the_v4_and_v5_goldens_sample_byte_equal_to_the_v2_tree(fixture: str, flags: list[int]) -> None:
-    """The same two rows under each layout: every sampled array is the v2 tree's, and v5 flags record 1 alone."""
+    """The same two rows under each layout: the wire and the pre-v3 targets sample as the v2 tree's, and v5 flags record 1 alone."""
     golden = json.loads((_REPLAY / "hexg_v2_sample_golden.json").read_text(encoding="utf-8"))
     buf = HexgBuffer(16, _ENC, 128)
     assert buf.load_from_path(str(_REPLAY / fixture)) == 2

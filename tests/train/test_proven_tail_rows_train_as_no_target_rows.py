@@ -13,6 +13,8 @@ from mantis._engine import HexgBuffer
 from mantis.config.census import production_configs
 from mantis.config.loader import load_config
 from mantis.config.resolve.microbatch import MicrobatchCapsSpec
+from mantis.encoding import lookup
+from mantis.model import arch_from_spec_and_config
 from mantis.train.coordinator.dispatch import run_declared_train_step
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -24,8 +26,9 @@ _KINDS: dict[str, Callable[..., Any]] = {
     "GnnArchV2SoftPolicy": H.soft_policy_graph_trainer,
     "GnnArchV2SoftPolicyFuture": H.future_graph_trainer,
 }
-#: The arch kinds the configs census runs; one with no trainer harness above fails the harness check below.
-_CENSUS = sorted({str(load_config(path).identity.arch_kind) for path in production_configs(_REPO)})
+#: The arch kinds the configs census builds, resolved as the run resolves them; one with no harness above fails below.
+_CENSUS = sorted({type(arch_from_spec_and_config(lookup(d["identity"]["encoding"]), d)).__name__
+                  for d in (load_config(path).model_dump() for path in production_configs(_REPO))})
 
 
 def _future(i: int) -> list[tuple[int, int, int]]:

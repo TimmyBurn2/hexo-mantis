@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -66,22 +66,57 @@ class _Pool:
 _ANSWERED = [0]
 
 
-def _answer_uniformly(batcher: Any, stop: threading.Event) -> None:
-    """Serve every graph request a uniform prior over its legal cells and a zero value, counting them."""
+def _uniform(coords: np.ndarray) -> np.ndarray:
+    return np.full(len(coords), 1.0 / len(coords), dtype=np.float32)
+
+
+def _compact(coords: np.ndarray) -> np.ndarray:
+    """The Rust drives' compact server: mass decays from the legal region's centroid, so games decide fast."""
+    d = coords - coords.mean(axis=0)
+    p = np.exp(-1.5 * np.maximum(np.abs(d).max(axis=1), np.abs(d.sum(axis=1))))
+    return (p / p.sum()).astype(np.float32)
+
+
+def _answer(batcher: Any, stop: threading.Event, prior: Callable[[np.ndarray], np.ndarray] = _uniform) -> None:
+    """Serve every graph request `prior` over its legal cells and a zero value, counting them."""
     while not stop.is_set():
         ids, wire = batcher.next_graph_batch(8, 5)
         ids = list(ids)
         if not ids:
             continue
         offsets = np.asarray(wire.legal_offsets, dtype=np.int64)
+        coords = np.asarray(wire.node_coords, dtype=np.float32).reshape(-1, 2)[
+            np.asarray(wire.legal_node_gather, dtype=np.int64)]
         probs = np.zeros((int(offsets[-1]),), dtype=np.float32)
         for i in range(len(ids)):
             start, end = int(offsets[i]), int(offsets[i + 1])
             if end > start:
-                probs[start:end] = 1.0 / (end - start)
+                probs[start:end] = prior(coords[start:end])
         batcher.submit_graph_inference_results(
             ids, probs, offsets, np.zeros((len(ids),), dtype=np.float32))
         _ANSWERED[0] += len(ids)
+
+
+def _iteration_complete(drive: _Drive) -> dict[str, Any]:
+    """The one `iteration_complete` a coordinator over `drive`'s stopped runner emits."""
+    dev = load_config(_REPO / "configs" / "dev_example.yaml")
+    config = _step_coordinator_config(
+        stop_step=10**9, draw_rate_abort=None, ply_cap_abort=None,
+        drain_caps=resolve_drain_caps(dev.monitor), gate_interval=dev.monitor.gate_interval,
+        knobs=resolve_coordinator_knobs(dev.train))
+    events: list[dict[str, Any]] = []
+    coord = StepCoordinator(
+        trainer=None, buffer=SimpleNamespace(size=0, capacity=1),
+        pool=_Pool(drive.runner), eval_pipeline=None,
+        subsystems=SimpleNamespace(gpu_monitor=None),
+        anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
+        shutdown=ShutdownState(), eval_model=object(), config=config,
+        full_config={}, sink=SimpleNamespace(emit=lambda e: events.append(dict(e))),
+        monitor_cfg=monitor_config(),
+    )
+    coord._emit_iteration_complete(config)
+    (payload,) = [e for e in events if e["event"] == "iteration_complete"]
+    return payload
 
 
 @pytest.fixture(scope="module")
@@ -96,7 +131,8 @@ def drive() -> Iterator[_Drive]:
     cfg.search_kind = "gumbel"
     runner = _engine.SelfPlayRunner(cfg)
     stop = threading.Event()
-    consumer = threading.Thread(target=_answer_uniformly, args=(runner.batcher, stop), daemon=True)
+    _ANSWERED[0] = 0  # this drive's oracle alone: an armed drive's joined consumer may have counted first
+    consumer = threading.Thread(target=_answer, args=(runner.batcher, stop), daemon=True)
     consumer.start()
     runner.start()
     try:
@@ -163,24 +199,7 @@ def test_the_real_runner_publishes_the_eval_cache_fire_rate(drive: _Drive) -> No
 
 def test_the_counters_reach_iteration_complete(drive: _Drive) -> None:
     """The coordinator's `search_levers` block carries the same totals, deltas and rates."""
-    dev = load_config(_REPO / "configs" / "dev_example.yaml")
-    config = _step_coordinator_config(
-        stop_step=10**9, draw_rate_abort=None, ply_cap_abort=None,
-        drain_caps=resolve_drain_caps(dev.monitor), gate_interval=dev.monitor.gate_interval,
-        knobs=resolve_coordinator_knobs(dev.train))
-    events: list[dict[str, Any]] = []
-    coord = StepCoordinator(
-        trainer=None, buffer=SimpleNamespace(size=0, capacity=1),
-        pool=_Pool(drive.runner), eval_pipeline=None,
-        subsystems=SimpleNamespace(gpu_monitor=None),
-        anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
-        shutdown=ShutdownState(), eval_model=object(), config=config,
-        full_config={}, sink=SimpleNamespace(emit=lambda e: events.append(dict(e))),
-        monitor_cfg=monitor_config(),
-    )
-    coord._emit_iteration_complete(config)
-    (payload,) = [e for e in events if e["event"] == "iteration_complete"]
-    block = payload["search_levers"]
+    block = _iteration_complete(drive)["search_levers"]
     st = drive.stats
     assert block["positions_delta"] == st.positions_generated
     assert sorted(set(_LEVERS) - set(block)) == [], f"levers missing from the stream: {block}"
@@ -197,30 +216,43 @@ _ARMED_BLOCK = {"kind": "strict_turn", "leaf_turns": 2, "leaf_nodes": 64, "root_
                 "audit": {"turns": 2, "nodes": 128, "k": 2, "m": 2, "total_nodes": 1024, "mode": "hold"}}
 
 
-@pytest.fixture(scope="module")
-def armed_drive() -> Iterator[_Drive]:
-    """One PUCT self-play drive with a tactics block armed in every worker's tree."""
+def _armed_drive(*, decided_tails: bool, max_moves: int, done: Callable[[Any], bool],
+                 prior: Callable[[np.ndarray], np.ndarray]) -> _Drive:
+    """One PUCT self-play drive with a tactics block armed in every worker's tree, run until `done(runner)`."""
     cfg = _engine.SelfPlayRunnerConfig(
-        n_workers=_N_WORKERS, max_moves_per_game=8, n_simulations=_N_SIMS_QUICK, leaf_batch_size=4,
-        quiescence_enabled=False, q_rescale=True, search_stats_every=0, gumbel_m_quick=16, decided_tails=False, random_opening_plies=0,
-        encoding_name="gnn_axis_r8",
+        n_workers=_N_WORKERS, max_moves_per_game=max_moves, n_simulations=_N_SIMS_QUICK, leaf_batch_size=4,
+        quiescence_enabled=False, q_rescale=True, search_stats_every=0, gumbel_m_quick=16,
+        decided_tails=decided_tails, random_opening_plies=0, encoding_name="gnn_axis_r8",
     )
     cfg.search_kind = "puct"
     cfg.configure_tactics(_ARMED_BLOCK)
     runner = _engine.SelfPlayRunner(cfg)
     stop = threading.Event()
-    consumer = threading.Thread(target=_answer_uniformly, args=(runner.batcher, stop), daemon=True)
+    consumer = threading.Thread(target=_answer, args=(runner.batcher, stop, prior), daemon=True)
     consumer.start()
     runner.start()
     try:
         deadline = time.monotonic() + _TIMEOUT_S
-        while time.monotonic() < deadline and runner.positions_generated < _WANT_POSITIONS:
+        while time.monotonic() < deadline and not done(runner):
             time.sleep(0.01)
     finally:
         runner.stop()
         stop.set()
         consumer.join(timeout=10)
-    yield _Drive(stats=_Pool(runner).runner_stats(), runner=runner)
+    return _Drive(stats=_Pool(runner).runner_stats(), runner=runner)
+
+
+@pytest.fixture(scope="module")
+def armed_drive() -> _Drive:
+    return _armed_drive(decided_tails=False, max_moves=8, done=lambda r: r.positions_generated >= _WANT_POSITIONS,
+                        prior=_uniform)
+
+
+@pytest.fixture(scope="module")
+def tails_drive() -> _Drive:
+    """Tails armed under the compact prior, run until a finished game has played one."""
+    return _armed_drive(decided_tails=True, max_moves=160,
+                        done=lambda r: r.tactics_totals()["proven_tail_plies"] > 0, prior=_compact)
 
 
 def test_an_armed_runners_tactics_rows_reach_iteration_complete(armed_drive: _Drive) -> None:
@@ -232,27 +264,18 @@ def test_an_armed_runners_tactics_rows_reach_iteration_complete(armed_drive: _Dr
     assert 0 <= st.served_leaves_total - rows["served_leaves"] <= _N_SIMS_QUICK * _N_WORKERS, (
         f"the tree counted {rows['served_leaves']} served leaves and the runner {st.served_leaves_total}"
     )
-    dev = load_config(_REPO / "configs" / "dev_example.yaml")
-    config = _step_coordinator_config(
-        stop_step=10**9, draw_rate_abort=None, ply_cap_abort=None,
-        drain_caps=resolve_drain_caps(dev.monitor), gate_interval=dev.monitor.gate_interval,
-        knobs=resolve_coordinator_knobs(dev.train))
-    events: list[dict[str, Any]] = []
-    coord = StepCoordinator(
-        trainer=None, buffer=SimpleNamespace(size=0, capacity=1),
-        pool=_Pool(armed_drive.runner), eval_pipeline=None,
-        subsystems=SimpleNamespace(gpu_monitor=None),
-        anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
-        shutdown=ShutdownState(), eval_model=object(), config=config,
-        full_config={}, sink=SimpleNamespace(emit=lambda e: events.append(dict(e))),
-        monitor_cfg=monitor_config(),
-    )
-    coord._emit_iteration_complete(config)
-    (payload,) = [e for e in events if e["event"] == "iteration_complete"]
-    block = payload["search_levers"]["tactics"]
+    block = _iteration_complete(armed_drive)["search_levers"]["tactics"]
     assert set(block) == set(rows), f"rows missing from the stream: {sorted(set(rows) - set(block))}"
     for name, want in rows.items():
         assert block[name]["total"] == want and block[name]["delta"] == want, (name, block[name], want)
+
+
+def test_a_tails_armed_runners_tail_rows_reach_iteration_complete_nonzero(tails_drive: _Drive) -> None:
+    rows = tails_drive.stats.tactics_totals
+    assert rows["proven_tail_plies"] == rows["proven_tail_rows"] > 0 and rows["tail_search_skipped"] > 0, rows
+    block = _iteration_complete(tails_drive)["search_levers"]["tactics"]
+    for name in ("proven_tail_plies", "proven_tail_rows", "tail_search_skipped", "tail_exits"):
+        assert block[name]["total"] == rows[name] and block[name]["delta"] == rows[name], (name, block[name])
 
 
 def test_a_runner_without_the_tactics_totals_getter_is_refused_not_published_as_zero() -> None:
