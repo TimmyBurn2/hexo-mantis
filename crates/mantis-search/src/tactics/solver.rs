@@ -222,6 +222,25 @@ impl TurnSolver {
         }
     }
 
+    /// Every pair of cells covering all the threat windows of the side NOT to move, in cell order; none off two stones.
+    pub fn covering_replies(&mut self, board: &Board) -> Vec<[(i32, i32); 2]> {
+        if board.moves_remaining != 2
+            || board.legal_move_radius() < MIN_TACTICS_RADIUS
+            || self.grid.load(board).is_err()
+        {
+            return Vec::new();
+        }
+        let mut pairs = Vec::new();
+        let attacker = Side::of(board.current_player).other();
+        covering_pairs(&self.grid, attacker, &mut self.gen, &mut pairs);
+        let replies = pairs
+            .iter()
+            .map(|&(x, y)| [self.grid.cell_at(x), self.grid.cell_at(y)])
+            .collect();
+        self.grid.unload();
+        replies
+    }
+
     /// The proof's main line after a `Win`: each stored attacker turn and the first covering reply, from the table.
     /// A display artefact, never a verdict.
     pub fn line(&mut self, board: &Board) -> Vec<(i32, i32)> {

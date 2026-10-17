@@ -359,6 +359,29 @@ impl MCTSTree {
         Ok(Some((q, r)))
     }
 
+    /// A decided tail's loser at its turn start: the covering pair whose re-proof needs the most turns (the first of
+    /// equals), or `None` when no pair covers, a re-proof comes back unproven, or tactics are off.
+    pub fn tail_resistance(&mut self) -> Option<[(i32, i32); 2]> {
+        let root = &self.root_board;
+        let t = self.tactics.as_deref_mut()?;
+        let mut best: Option<(u8, [(i32, i32); 2])> = None;
+        for pair in t.solver.covering_replies(root) {
+            let post = after(root, &pair)?;
+            // A fresh table per pair: the re-proof found here is the one the winner's next turn start re-solves.
+            t.solver.clear();
+            let solved = t
+                .solver
+                .search_quiet(&post, t.config.root_turns, t.config.root_nodes);
+            let Verdict::Win { turns, .. } = solved.verdict else {
+                return None;
+            };
+            if best.is_none_or(|(b, _)| turns > b) {
+                best = Some((turns, pair));
+            }
+        }
+        best.map(|(_, pair)| pair)
+    }
+
     /// The order the audit walks the root in: Sequential Halving's final ranking under Gumbel, else `None` (by visits).
     #[must_use]
     pub fn audit_order(&self, gumbel: Option<&MctxRootState>) -> Option<Vec<u32>> {
@@ -420,7 +443,9 @@ impl MCTSTree {
 mod tests {
     use super::*;
     use crate::mcts::node::pack_cell;
-    use crate::mcts::tactics_fixtures::{played, FIX219, P1_FOUR, P2_FOUR_ONE_LEFT};
+    use crate::mcts::tactics_fixtures::{
+        played, FIX219, FIX77_AT15, P1_FOUR, P2_FOUR_ONE_LEFT, RUNG127_AT11,
+    };
     use crate::mcts::{TacticsConfig, TacticsCounters};
 
     /// Small audit budgets: FIX219's one-turn wins prove in one node, so every call here is cheap.
@@ -857,6 +882,73 @@ mod tests {
         assert_eq!(tree.root_audit((-4, -11), None), (-13, 0));
         let c = counters(&tree);
         assert_eq!((c.audit_swaps, c.root_vetoes), (1, 0));
+    }
+
+    /// The production root block: what a decided tail's re-proofs run at.
+    const ROOT_BLOCK: TacticsConfig = TacticsConfig {
+        root_turns: 8,
+        root_nodes: 20_000,
+        ..ARMED
+    };
+
+    /// `seq` with P2's proven first turn played: P1 to move against it with two stones.
+    fn after_the_first_proof_turn(seq: &[(i32, i32)]) -> Board {
+        let mut board = played(seq);
+        let mut tree = armed(&board, ROOT_BLOCK);
+        for _ in 0..2 {
+            let stone = tree.root_offence().expect("legal").expect("proven");
+            board.apply_move(stone.0, stone.1).expect("empty");
+            tree.new_game(board.clone());
+        }
+        board
+    }
+
+    /// PLANTED BREAK: keep the first pair, or the last of equals, and one fixture's oracle pick differs.
+    #[test]
+    fn the_resistance_is_the_covering_pair_whose_reproof_is_longest_the_first_of_equals() {
+        for (seq, want) in [
+            (&RUNG127_AT11[..], vec![5, 5, 6]),
+            (&FIX77_AT15[..], vec![4, 4, 3]),
+        ] {
+            let board = after_the_first_proof_turn(seq);
+            let mut tree = armed(&board, ROOT_BLOCK);
+            let picked = tree
+                .tail_resistance()
+                .expect("a covering pair is re-proven");
+            let mut solver = crate::tactics::TurnSolver::new(crate::mcts::TACTICS_TABLE_ENTRIES);
+            let replies = solver.covering_replies(&board);
+            let turns: Vec<u8> = replies
+                .iter()
+                .map(|pair| {
+                    solver.clear();
+                    let post = after(&board, pair).expect("covering cells are empty");
+                    match solver.search_quiet(&post, 8, 20_000).verdict {
+                        Verdict::Win { turns, .. } => turns,
+                        other => panic!("{pair:?}: the proof covers every reply, got {other:?}"),
+                    }
+                })
+                .collect();
+            assert_eq!(turns, want, "the fixture's replies: {replies:?}");
+            let longest = turns.iter().copied().max().expect("a reply covers");
+            let first = turns.iter().position(|&t| t == longest).expect("present");
+            assert_eq!(picked, replies[first], "{replies:?} {turns:?}");
+        }
+    }
+
+    #[test]
+    fn a_lost_cover_or_tactics_off_gives_no_resistance() {
+        let mut board = played(&FIX219);
+        let mut tree = armed(&board, ARMED);
+        for _ in 0..2 {
+            let stone = tree.root_offence().expect("legal").expect("a one-turn win");
+            board.apply_move(stone.0, stone.1).expect("empty");
+            tree.new_game(board.clone());
+        }
+        assert_eq!(analyze(&board).terminal, Some(Terminal::Loss));
+        assert_eq!(tree.tail_resistance(), None, "no pair covers a lost cover");
+        let mut off = MCTSTree::new(1.5);
+        off.new_game(after_the_first_proof_turn(&FIX77_AT15));
+        assert_eq!(off.tail_resistance(), None);
     }
 
     #[test]
