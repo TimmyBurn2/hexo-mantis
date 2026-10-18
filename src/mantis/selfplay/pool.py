@@ -177,14 +177,16 @@ class WorkerPool:
         self.x_wins = 0
         self.o_wins = 0
         self.draws = 0
-        # None = NOT MEASURED. A drain has to observe a positive `positions_generated` delta
+        # None = NOT MEASURED. A drain has to observe a positive drawn-move delta
         # over a positive interval before there is a rate at all; a starting 0.0 was published
         # as "the search is doing nothing" for every iteration before the first drain.
         self._sims_per_sec: float | None = None
         self._last_drain_time: float = time.monotonic()
-        # Last-seen runner `positions_generated`; the per-drain delta is what the
-        # sims/sec bill multiplies by the effective per-move sim count.
+        # Last-seen runner `positions_generated`, watched for a counter reset.
         self._last_pos_generated: int = 0
+        # Last-seen `pcr_full_moves + pcr_quick_moves`; the per-drain delta is what the
+        # sims/sec bill multiplies by the effective per-move sim count.
+        self._last_drawn_moves: int = 0
         self._total_sims: int = 0
         self._game_lengths: deque[int] = deque(maxlen=200)
         # None = NOT MEASURED, for the same reason as `_sims_per_sec`: no game has finished

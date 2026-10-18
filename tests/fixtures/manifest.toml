@@ -195,7 +195,8 @@ path = "selfplay/drain/drain_goldens.json"
 # Re-pinned 2026-09-24: R368(d) re-captured the graph variants and deleted the dense ones and
 # the unread recent-buffer rows.
 # Re-pinned 2026-10-06: the scripted rows' arms re-stated as the runner's `(sims, label)` pairs, game 0 carrying all four labels.
-sha256 = "642b69b24b855880cb98dc8071d4173dad3fa3f7833c473548dd5e643df2688b"
+# Re-pinned 2026-10-18: the scripted runner carries the playout-cap draw counters the sims bill reads, and a tail-plies bill is pinned.
+sha256 = "5e19f02cf58e8448b08546b30e9dbace614cb136bb75366b051f5ded02b56359"
 added_by = "WP-SP"
 
 [[required]]

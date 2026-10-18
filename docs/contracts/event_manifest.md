@@ -475,8 +475,9 @@ or a row no builder publishes, reds. The sink adds `ts`.
   **The `iteration_complete` rate roster (AUDIT-1 F-28/C07), same rule:** `games_per_hour`
   and `steps_per_hour` are `None` before the run clock has advanced (a rate over zero elapsed
   is an absence, not a rate of zero); `avg_game_length` is `None` before any game has
-  completed; `sims_per_sec` is `None` until a drain interval has billed a positive
-  `positions_generated` delta; `positions_per_hour` is `None` whenever either factor is. All
+  completed; `sims_per_sec` is `None` until a drain interval has billed a positive delta of
+  drawn moves (`pcr_full_moves + pcr_quick_moves`, so a decided tail's plies bill nothing);
+  `positions_per_hour` is `None` whenever either factor is. All
   five read a hard `0.0` before this, which in the ONE channel is what a STALLED run looks
   like. `sims_per_sec` in particular reached the payload through `pool.sims_per_sec or 0.0`,
   which collapsed a genuine measured zero and a not-yet-measured reading into one value.

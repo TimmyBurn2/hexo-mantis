@@ -113,6 +113,7 @@ def _build_pool(golden, rows, *, sink, iterations: int, clock) -> _Pool:
     pool.alpha_full_rows_emitted = 0
     pool._last_drain_time = clock[0]
     pool._last_pos_generated = consts["last_pos_generated_before"]
+    pool._last_drawn_moves = consts["last_drawn_moves_before"]
     pool._effective_sims_per_move = consts["effective_sims_per_move"]
     pool._total_sims = 0
     pool._sims_per_sec = 0.0

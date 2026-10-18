@@ -147,9 +147,10 @@ def _build_pool(golden, graph_rows, *, clock, sink=None, heartbeat=None) -> Scri
     pool.alpha_full_rows_emitted = 0
     pool._last_drain_time = clock[0]
     pool._last_pos_generated = consts["last_pos_generated_before"]
+    pool._last_drawn_moves = consts["last_drawn_moves_before"]
     pool._effective_sims_per_move = consts["effective_sims_per_move"]
     pool._total_sims = 0
-    pool._sims_per_sec = 0.0
+    pool._sims_per_sec = None
     pool._game_lengths = deque(maxlen=200)
     pool._avg_game_length = 0.0
     pool._instrumentation = PoolInstrumentation(log_investigation_metrics=True, cluster_threshold=DEFAULT_CLUSTER_THRESHOLD)
@@ -166,9 +167,10 @@ def _build_pool(golden, graph_rows, *, clock, sink=None, heartbeat=None) -> Scri
 @pytest.fixture
 def run_drain(monkeypatch, drain_goldens, graph_rows_input):
     """Factory → (pool, scripted_clock) after ONE `run_stats_loop` iteration."""
-    def run(*, clock=CLOCK_CROSSED, graph_n=3, sink=None, heartbeat=None):
+    def run(*, clock=CLOCK_CROSSED, graph_n=3, sink=None, heartbeat=None, tail_plies=0):
         pool = _build_pool(drain_goldens, graph_rows_input[:graph_n], clock=clock,
                            sink=sink, heartbeat=heartbeat)
+        pool._runner.pcr_full_moves -= tail_plies
         scripted = ScriptedTime(clock)
         monkeypatch.setattr(pool_drain, "time", scripted)
         pool_drain.run_stats_loop(pool)
@@ -298,8 +300,26 @@ def test_sims_per_sec_billing(run_drain, drain_goldens):
     assert pool._total_sims == counters["_total_sims"] == 26640
     assert pool._sims_per_sec == counters["_sims_per_sec"] == 13320.0
     assert pool._last_pos_generated == counters["_last_pos_generated"] == 340
+    assert pool._last_drawn_moves == 340
     assert pool._last_drain_time == counters["_last_drain_time"] == 1002.0
     assert scripted.sleeps == _variant(drain_goldens, "graph")["sleeps"] == [0.1]
+
+
+def test_sims_per_sec_bills_no_decided_tail_ply(run_drain, drain_goldens):
+    """16 tail plies bill (240 − 16) × 111 / 2.0 s ⇒ 12 432.0; an all-tail interval bills none."""
+    consts = drain_goldens["_constants"]
+    pool, _ = run_drain(tail_plies=consts["tail_plies"])
+    counters = _variant(drain_goldens, "graph")["counters_after_tail_plies"]
+
+    assert pool._total_sims == counters["_total_sims"] == 24864
+    assert pool._sims_per_sec == counters["_sims_per_sec"] == 12432.0
+    assert pool._last_pos_generated == counters["_last_pos_generated"] == 340
+    assert pool._last_drawn_moves == counters["_last_drawn_moves"] == 324
+
+    every_ply = consts["runner_positions_generated"] - consts["last_pos_generated_before"]
+    tail_only, _ = run_drain(tail_plies=every_ply)
+    assert tail_only._total_sims == 0
+    assert tail_only._sims_per_sec is None, "a tail-only interval published a measured rate"
 
 
 @pytest.mark.parametrize("variant", sorted(_VARIANT_RUNS))

@@ -56,6 +56,8 @@ class _ScriptedRunner:
         self.o_wins = 0
         self.draws = 0
         self.positions_generated = positions_generated
+        self.pcr_full_moves = positions_generated
+        self.pcr_quick_moves = 0
 
     def collect_graph_data(self):
         return []
@@ -88,6 +90,7 @@ def _make_scripted_pool(games, sink):
     pool.alpha_full_rows_emitted = 0
     pool._last_drain_time = 1000.0
     pool._last_pos_generated = 0
+    pool._last_drawn_moves = 0
     pool._effective_sims_per_move = 50
     pool._total_sims = 0
     pool._sims_per_sec = 0.0

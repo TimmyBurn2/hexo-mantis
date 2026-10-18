@@ -105,7 +105,7 @@ def _make_drain_pool(games, sink):
     pool._stop_event = type("S", (), {"_n": 0, "is_set": lambda self: self._n > 0 or (setattr(self, "_n", self._n + 1) or False)})()
     pool._runner = type("R", (), {
         "games_completed": len(games), "x_wins": 0, "o_wins": 0, "draws": 0,
-        "positions_generated": 100,
+        "positions_generated": 100, "pcr_full_moves": 100, "pcr_quick_moves": 0,
         "collect_graph_data": lambda self: [],
         "drain_game_results": lambda self: list(games),
     })()
@@ -121,6 +121,7 @@ def _make_drain_pool(games, sink):
     pool.alpha_full_rows_emitted = 0
     pool._last_drain_time = 1000.0
     pool._last_pos_generated = 0
+    pool._last_drawn_moves = 0
     pool._effective_sims_per_move = 50
     pool._total_sims = 0
     pool._sims_per_sec = 0.0

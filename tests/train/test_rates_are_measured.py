@@ -4,7 +4,7 @@ FOUR FABRICATIONS, ONE CLASS. `iteration_complete` published `games_per_hour`,
 `positions_per_hour`, `avg_game_length` and `sims_per_sec` as hard `0.0`s before anything had
 measured them: a rate over zero elapsed clock, a mean over zero completed games, a product of
 those two, and a pool counter that starts at zero and stays there until the first drain
-observes a positive `positions_generated` delta. Every one of them reads as "the run is doing
+observes a positive delta of drawn moves. Every one of them reads as "the run is doing
 nothing" in the ONE channel — which is what a stalled run also looks like.
 
 `steps_per_hour` was already correct (`None` = NOT MEASURED) and is the pattern the other four

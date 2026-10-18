@@ -4,11 +4,15 @@
   "effective_sims_per_move": 111,
   "last_pos_generated_before": 100,
   "runner_positions_generated": 340,
+  "last_drawn_moves_before": 100,
+  "tail_plies": 16,
   "runner_counters": {
    "games_completed": 6,
    "x_wins": 2,
    "o_wins": 1,
-   "draws": 3
+   "draws": 3,
+   "pcr_full_moves": 300,
+   "pcr_quick_moves": 40
   },
   "games_batch": [
    [
@@ -821,6 +825,12 @@
     ],
     "_last_drain_time": 1002.0,
     "_last_pos_generated": 340
+   },
+   "counters_after_tail_plies": {
+    "_total_sims": 24864,
+    "_sims_per_sec": 12432.0,
+    "_last_pos_generated": 340,
+    "_last_drawn_moves": 324
    },
    "instrumentation_after": {
     "terminal_reason_counts": {
