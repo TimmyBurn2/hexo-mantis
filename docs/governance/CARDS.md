@@ -53,15 +53,23 @@ run14), CARD-NET2NET-WIDEN (the second widening is the bet) and CARD-PERF-COLLAT
   pool by +0.10 → stop and pick. Extension, pre-stated: if the fit over 180k–276k reads ≥ +0.015 per 12k at its lower
   bound, a second cycle 3e-4 → 1e-4 over 150k is minted by annotation; else the run ends at 300k. It takes box A at
   run13's STOP (R395(a)) or at its GO verdict (R394(b)). OWNED by the RUN13-PREP session: a draft mint with two open
-  slots, the parent (decided at run13's verdict) and the width (CARD-WIDEN-2, from the desk); the value teacher's key
-  null unless VT-1 reports LIVE; DT-1's n9 fixed in the mint leg if it is a small drain-golden re-pin, else carded
+  slots, the parent (decided at run13's verdict) and the width (4×256: CARD-WIDEN-2 EXITED 2026-10-18); the value
+  teacher's key null unless VT-1 reports LIVE; DT-1's n9 fixed in the mint leg if it is a small drain-golden re-pin, else carded
   display-only with the tails armed anyway; run14's reads, futility and extension pre-stated verbatim in the local
   records (`mantis-records/run14/`). At the verdict: the stop save mirrored and sha-checked, the pick, then the mint on
-  the operator's word once the width is in hand. MINT-BLOCKING on both slots.
-- **CARD-WIDEN-2 — ORDERED by R395(b): the one bet, benched before it is taken.** A second function-preserving widening,
-  4×256 → 4×384 or 4×512, through `mantis.model.widen` with the fp64 pin and the lineage recorded. It is adopted at the
-  widest width whose desk bench reads trainer s/step ≤ 1.6×, GPU served µs/leaf at B 64 ≤ 1.3× and CPU µs/leaf at B 1
-  ≤ 1.5× of 4×256's, and whose preflight memory check passes; else run14 stays 4×256. It fills CARD-RUN14's width slot.
+  the operator's word once the width is in hand. MINT-BLOCKING on the parent slot (the width is 4×256).
+- **CARD-WIDEN-2 — EXITED 2026-10-18: the bench adopts no wider width, so run14 stays 4×256 (branch `widen-2`; local
+  records `mantis-records/widen-2/L0.md`, its rules hashed before any number).** On the desk (RTX 3070, Ryzen 7 3700X),
+  the Future kind over five alternating rounds, against 4×256: 4×512 reads trainer s/step 2.39× (caps re-fitted to equal
+  memory), GPU served µs/leaf at B 64 1.58× and CPU µs/leaf at B 1 2.43×, outside all three lines; 4×384 reads 1.64×,
+  1.32× and 1.32×, outside the trainer and GPU lines. The verdict holds at equal caps (1.66×, 2.42×) and under
+  DISTILL-1's every-batch collate check (GPU 1.25×, 1.46×; the trainer line still fails 4×384). 4×384 has no
+  function-preserving widening on this trunk in any case: LayerNorm's statistics hold only at a whole copy count per
+  unit. No stamp is made; CARD-RUN14's width slot is 4×256. Was: ORDERED by R395(b): the one bet, benched before it is
+  taken. A second function-preserving widening, 4×256 → 4×384 or 4×512, through `mantis.model.widen` with the fp64 pin
+  and the lineage recorded. It is adopted at the widest width whose desk bench reads trainer s/step ≤ 1.6×, GPU served
+  µs/leaf at B 64 ≤ 1.3× and CPU µs/leaf at B 1 ≤ 1.5× of 4×256's, and whose preflight memory check passes; else run14
+  stays 4×256. It fills CARD-RUN14's width slot.
 - **CARD-R395-MERGES — ORDERED by R395(e).** `value-teacher` (`d9781bb7`, since rebased onto `9dc463e6` as `cbebb469`)
   is pushed after `make gates` on its tip and the V2 verdict, LIVE or CLOSED: it replaces the dead scalar mix with a
   reviewed, null-everywhere encoding. `decided-tails` is on dev (`9dc463e6`). Worktrees whose branches are on dev are

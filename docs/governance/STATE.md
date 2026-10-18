@@ -35,7 +35,9 @@ stop), and explicit visit mass beyond distance 5 at 0.153 %, under Q3's 0.5 % li
 representation behind the seam as a capability: the `hexcanvas_r8` row (registry schema v6, run-config contract v61),
 `mantis_graph::build_canvas` pinned bit-exact under the twelve D6 elements and translation, and contract #12; every
 path that builds an axis graph refuses the row by name. Its arch kind lands with its net (L2), and L2 and L2b stay
-parked with the programme.
+parked with the programme. The width bet's desk bench read on 2026-10-18 (CARD-WIDEN-2, EXITED): against 4×256,
+4×512 is outside all three lines (trainer 2.39×, GPU B 64 1.58×, CPU B 1 2.43×) and 4×384 outside two (1.64×,
+1.32×), so run14 stays 4×256 and no widened stamp is made (local records `mantis-records/widen-2/L0.md`).
 
 **R394 (2026-10-17): THE LINEAGE CLIMBS WHILE THE LR IS ABOVE THE FLOOR; THE LEVERS BUILD BESIDE IT. run12 is CLOSED
 at 301 259: the anneal lifts as the cosine's steady climb (the fit over 108k–300k +0.0254 ± 0.0041 logit per 12k), and
