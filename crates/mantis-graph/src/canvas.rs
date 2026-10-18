@@ -136,7 +136,7 @@ pub fn build_canvas(stones_in: &StoneList, params: &CanvasParams) -> Canvas {
     let (step, min) = (usize::from(params.side_step), usize::from(params.min_side));
     let to_move: i8 = if params.current_player == 1 { 1 } else { -1 };
 
-    let (stone_map, stones) = stone_table(stones_in);
+    let (stone_map, StoneList { stones }) = stone_table(stones_in);
     let (legal, legal_dist) = legal_cells(&stone_map, &stones, i32::from(params.radius));
 
     let fence: Vec<(i32, i32)> = stones
