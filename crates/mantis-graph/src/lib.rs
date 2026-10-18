@@ -1,4 +1,4 @@
-//! `mantis-graph` — axis-graph builder for the GNN encoding.
+//! `mantis-graph` — the axis-graph builder for the GNN encoding and the hex-canvas builder (`canvas`).
 //! >300 lines: the one builder with its lookups and its producer-side verify, kept whole; tests/graph_parity.rs pins its bytes.
 //!
 //! ONE dep-free source compiled to native and wasm32, `std::thread`/`rayon`/PyO3-free so it
@@ -19,7 +19,9 @@
     clippy::too_many_lines
 )]
 
+mod canvas;
 mod edge_vocab;
+pub use canvas::{build_canvas, pair_coords, Canvas, CanvasParams, CANVAS_PLANES, FAR_CELL};
 pub use edge_vocab::{edge_attr_row, edge_code, edge_vocabulary};
 
 use std::collections::{HashMap, HashSet};
