@@ -30,7 +30,7 @@ hexo-mantis/
 │                               #   bench.baseline / check.wasm / vendor / clean
 ├── crates/
 │   ├── mantis-core/            # board, hex geometry, rules, the Ply vocabulary type
-│   ├── mantis-graph/           # dep-free axis-graph builder; native + wasm32 targets
+│   ├── mantis-graph/           # dep-free axis-graph and hex-canvas builders; native + wasm32
 │   ├── mantis-encoding/        # registry.toml + spec + validators
 │   ├── mantis-search/          # MCTS (PUCT + Gumbel), completed-Q, tactics solver
 │   ├── mantis-selfplay/        # runner, worker loop, inference queues, replay buffers
@@ -76,8 +76,8 @@ empty until post-cutover.
 Rust:
 ```
 mantis-core      → (nothing in-workspace)
-mantis-graph     → (nothing; dep-free, wasm32-clean)
-mantis-encoding  → core, graph          # pins graph consts into registry validation
+mantis-graph     → (nothing; dep-free, wasm32-clean)   # the axis-graph and hex-canvas builders
+mantis-encoding  → core, graph          # pins the builders' consts into registry validation
 mantis-search    → core                # LegalSetPolicy + gumbel HERE; encoding dev-dep only (SLIM-FIX)
 mantis-selfplay  → core, encoding, graph, search
 mantis-bridge    → all of the above    # the ONLY crate that knows pyo3 exists
@@ -147,8 +147,9 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
 ## 3. Representation extensibility (the registry-kind axis)
 
 - `crates/mantis-encoding/src/registry.toml` is the single source of truth for encoding and
-  shape. Every entry carries `representation` (required, no default): `"graph"`
-  today; the set is extensible. Unknown TOML keys are a parse ERROR; missing required
+  shape. Every entry carries `representation` (required, no default): `"graph"` or
+  `"hexcanvas"` (AMENDMENT, DENSE-1 L1: the hex-canvas kind's fence canvas, contract #12); the set
+  is extensible. Unknown TOML keys are a parse ERROR; missing required
   keys are a parse error; the validator collects ALL errors before reporting.
 - Rust: representation is a closed enum on `RegistrySpec`; dense-only or graph-only code
   paths are unreachable for the other kind (match exhaustiveness, no `_ =>` on the kind).
@@ -169,8 +170,11 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
   *carrying* the declared dataclass instance itself as a handle is the convention, not a
   breach of it — `build_net` attaches `net.arch = arch` and `eval/snapshot.py` reads it back,
   which is the arch travelling with the model exactly as this section prescribes.
-- No dense-by-default anywhere: an absent representation is an error, and `"grid"` is
-  refused BY NAME (R346(f)), never resolved to the one remaining variant.
+- No dense-by-default anywhere: an absent representation is an error, and `"grid"` and
+  `"dense"` are refused BY NAME (R346(f); the hex-canvas kind is `"hexcanvas"`, never either
+  token), never resolved to another variant. A `hexcanvas` row has no arch kind until its net
+  lands with one `build_net` branch (DENSE-1 L2): until then its representation admits none, and
+  every path that builds an axis graph refuses it by name.
 - The compiled module exposes `registry_sha()` (sha256 of the embedded TOML).
   `mantis.encoding` hashes the on-disk TOML at import in dev/test and hard-errors on
   mismatch — a stale extension cannot silently serve a stale registry.
@@ -180,16 +184,17 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
 
 | # | contract | ver | one-line summary |
 |---|---|---|---|
-| 1 | registry | v1 | TOML schema + validator invariants + audit CLI exit codes (0/1/2) |
+| 1 | registry | v1 | TOML schema + validator invariants + audit CLI exit codes (0/1/2); schema v6 adds `hexcanvas` and its canvas keys, and scopes `empty_edges` to graph rows |
 | 2 | dense wire | RETIRED | deleted with the grid path (R346(f)); `archive/grid-path` carries it |
 | 3 | graph wire (ragged) | v1 | block-diagonal GraphWire; the structural assertions and named errors are ENUMERATED in the contract, not counted here (AUDIT-1 F-52); single-read `take()`; −1 off-window sentinel travels; NO fixed-width fallback |
 | 4 | checkpoint envelope | v2 | see §6 |
 | 5 | run config schema | see the contract doc's version table | pydantic models, extra=forbid; schema_version key in every file. The version is the CONTRACT DOC's own table, whose last row is the authority — this cell read v8 while `docs/contracts/run_config_schema.md` had reached v13, and v13 while it had reached v32, so the cell now DEFERS to the doc; gate 13 now asserts the doc's header equals its own max row (AUDIT-1 F-52) |
-| 6 | replay persist | HEXG v5 | magic, versioned header (v2, v3 and v4 read default-filled), slot-geometry guard, two-pass atomic load |
+| 6 | replay persist | HEXG v5 | magic, versioned header (v2, v3 and v4 read default-filled), slot-geometry guard, two-pass atomic load; one ring format for both representations, a `hexcanvas` reader admitting a graph writer of equal radius and win length (`reads_rings_of`) |
 | 7 | event manifest | v1 | every panel AND every headless gate input cites a live producer; mutation self-test proves the checker bites |
 | 9 | eval instrument | v1 | deploy-matched argmax head, frozen sha-pinned paired opening books, per-pair bootstrap CI, eff_n = trajectory-hash-distinct games |
 | 10 | mint preflight report | preflight-mint-v1 | the mint preflight's evidence JSON: always written (LAW-14); mode, verdict and mint TIER derived from what the run DID, never from what it intended |
 | 11 | game record | game-record-v1 | every game a run plays, one JSON object per line, sharded by (run, segment, hour) with an index; the SEGMENT is the writer and the hour is the window, so a resume never appends into a stopped process's file |
+| 12 | canvas wire | v1 | the hex-canvas kind's per-leaf canvas: the fence masked inside its smallest axial box in a position-only orientation, six 0/1 planes, the legal gather and the graph's reply frame; far mode past `canvas_max_side`; the batch is the serving leg's (DENSE-1 L2). #2 and #8 stay retired: a number is retired, not reused |
 
 Contract changes bump the version and update the contract doc + its tests in the same
 commit. The PyO3 seam stays thin flat arrays (marshaling is a measured cost); per-field
@@ -1055,6 +1060,14 @@ document and nothing needs to be.
    `test_mint_header_roundtrip.py` carries the tombstone. `tools/bench_floors.toml` loses five
    floors with the two benches that produced them; no surviving floor moved, so the rustc/CPU
    attestation still holds and this is a deletion rather than a re-baseline.
+
+ANNOTATION (DENSE-1 L1, 2026-10-18; R392(d), R394(c)). The dense path this amendment deleted was the
+K-window GRID: 19×19 or 25×25 axial windows centred on a cluster's bbox midpoint, up to eight per leaf
+pooled by min and scatter-max, read by a fully connected policy head. `hexcanvas` is a NEW
+representation with a new wire (contract #12): one canvas per position, no centre, a per-cell
+policy, every op masked to the fence. Nothing of `archive/grid-path` is restored — no row, module,
+plane kernel or net (`HexTacToeNet` stays a grave) — and `"grid"` and `"dense"` stay refused by name.
+Contract #2 stays RETIRED; #12 is a new number.
 
 ### AMENDMENT — one OPERATOR-SIDE tool is admitted under `tools/`: the mirror puller (R349(b))
 

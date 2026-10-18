@@ -15,9 +15,10 @@ rule is stated once, here or in docs/governance/LAWS.md.
 
 ## Map
 
-- crates/: mantis-core (board, geometry, rules, Ply), mantis-graph (dep-free axis-graph builder,
-  wasm32-clean), mantis-encoding, mantis-search (MCTS, Gumbel, tactics solver), mantis-selfplay
-  (runner, inference queues, replay), mantis-bridge (ALL PyO3; maturin builds mantis._engine).
+- crates/: mantis-core (board, geometry, rules, Ply), mantis-graph (dep-free axis-graph and
+  hex-canvas builders, wasm32-clean), mantis-encoding, mantis-search (MCTS, Gumbel, tactics
+  solver), mantis-selfplay (runner, inference queues, replay), mantis-bridge (ALL PyO3; maturin
+  builds mantis._engine).
 - The encoding registry is crates/mantis-encoding/src/registry.toml. Cite that path whole, `src/`
   included: a bare `registry.toml` was twice mis-cited to a crate-root path that does not exist.
 - src/mantis/ is the one Python package (monitor is headless; deploy/ is reserved-empty until

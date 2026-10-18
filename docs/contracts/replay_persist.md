@@ -54,9 +54,13 @@ f16 tensors are stored as raw u16 bits with NO f16->f32->f16 round-trip on the d
 dump; load is an explicit little-endian decode (the format is correct on little-endian hosts —
 a pre-existing, verbatim-ported property).
 
-The registered encoding set is `{gnn_axis_v1, gnn_axis_r8, gnn_axis_r8_pruned}`; all are `graph`. A record is stones and a
-visit map over the legal cells, so a ring loads into a buffer whose row differs from its writer's at most in the edges
-the builder emits, and its rows rebuild under the READER's edge set (ENCODE-1).
+The registered encoding set is `{gnn_axis_v1, gnn_axis_r8, gnn_axis_r8_pruned, hexcanvas_r8}`; the first three are
+`graph`, the last `hexcanvas`. A record is stones and a visit map over the legal cells, so a ring loads into a buffer
+whose row differs from its writer's at most in the edges the builder emits, and its rows rebuild under the READER's edge
+set (ENCODE-1). One ring format serves both representations: a `hexcanvas` reader admits a graph writer whose
+`legal_move_radius` and `win_length` are its own (DENSE-1 L1), since the record's legal set is the radius's alone; a
+graph reader of a canvas writer is not admitted. No buffer opens a canvas row before the canvas sampler (DENSE-1 L2b):
+`HexgBuffer::new` refuses it through `resolve_geometry`.
 
 ## Who asserts what where
 
@@ -72,7 +76,7 @@ the builder emits, and its rows rebuild under the READER's edge set (ENCODE-1).
 | The self-play producer writes the future-occupancy field on every row of a finalized game, the cap's game included: its game's next ≤ 20 placements from `move_history`, each stone's player read off the final board (`records::future_stones`); the drain row carries it in the `(root_value, root_value_valid, future_stones, proven_tail)` group before the game id, and `push_graph`, the `ReplayFacade` and `tools/run_monitor`'s ring copy forward it by keyword; `tools/ring_future.py` gives an existing ring's rows theirs from the run's game records through the same derivation (`_engine.game_future_stones`), a ring game settled whole by the one record its rows agree on and unsettled (no field) otherwise; `mantis.diagnostics.ring_audit` reads every field against its game's next row in the ring (`future_disagree`, a band reads 0) | `runner/finalize.rs`, `records.rs`, `mantis-bridge/src/{runner,hexg}.rs`, `selfplay/{pool_push.py,buffers.py}`, `tools/ring_future.py`, `diagnostics/ring_audit.py` | `crates/mantis-selfplay/tests/future_occupancy_rows.rs` (a win and the cap, against a replayed board; the planted off-by-one), `tests/selfplay/test_future_occupancy_end_to_end.py` (a real pool against its game records), `tests/diagnostics/test_ring_audit_future.py` (the planted contradictions), `tests/tools/test_ring_future.py` (settled by game, the planted contradicting record), `tests/selfplay/test_drain_row_shape_parity.py` |
 | HEXG record round-trips byte-identically (`record_at` inverts `push_record_impl`); over-cap push LOUD; push-time validation (finite/non-negative visit prob, finite outcome, ±1 stone player) | `replay/hexg/{push.rs,mod.rs}` | O-17, O-18, O-19, O-28 |
 | HEXG rebuild-at-sample: per sampled record, D6-rotate stones + visit keys, rebuild via `build_axis_graph` (stamps `builder_impl = 1`) under the buffer's edge set, align to legal nodes, mass-drop guard | `replay/hexg/sample.rs` | O-24, O-25, O-27, O-30 |
-| a ring's writer encoding is named in its header; it loads into a buffer whose row differs from the writer's at most in `empty_edges` (`RegistrySpec::reads_rings_of`), and any other difference, or an unregistered writer, refuses (`HEXG encoding mismatch`) | `replay/hexg/persist.rs`, `mantis-encoding` `spec/mod.rs` | `a_ring_crosses_the_edge_set_and_nothing_else`, `rings_cross_between_rows_only_across_the_edge_set` |
+| a ring's writer encoding is named in its header; it loads into a buffer whose row differs from the writer's at most in `empty_edges` (`RegistrySpec::reads_rings_of`), or, for a `hexcanvas` reader, from a graph writer of equal `legal_move_radius` and `win_length`; any other difference, or an unregistered writer, refuses (`HEXG encoding mismatch`) | `replay/hexg/persist.rs`, `mantis-encoding` `spec/mod.rs` | `a_ring_crosses_the_edge_set_and_nothing_else`, `rings_cross_between_rows_only_across_the_edge_set`, `a_canvas_row_reads_the_rings_of_a_graph_row_of_its_radius_and_no_other` |
 | f16 stored as raw u16 bits; no f16->f32->f16 on the data path (NaN/subnormal/-0/max-normal survive) | `replay/hexg/*` | O-34 |
 | the D6 axial rotation primitive; the per-slot weight column is stored at 1.0 and read by no sampler (its schedule left at HYGIENE-1) | `replay/sym.rs`, `replay/hexg/push.rs` | O-13 |
 
