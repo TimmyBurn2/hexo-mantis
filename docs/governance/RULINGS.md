@@ -1,4 +1,4 @@
-# RULINGS — R23 to R394
+# RULINGS — R23 to R395
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R395.
+- Numbering continues from R346. The next ruling is R396.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,50 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R395 — RUN14 IS THE LAST RUN; IT CARRIES WHAT IS MEASURED AND ONE BET, BENCHED
+Decision: verbatim below.
+
+> R395 — RUN14 IS THE LAST RUN; IT CARRIES WHAT IS MEASURED AND ONE BET, BENCHED.
+> (a) run13's D1 is ADOPTED: when the 132k rung-16 cell reads, the 120k + 132k pool below +0.15
+> logit STOPs run13 by its STOP path and the 132k S cell is not played (a STOP moved earlier, never
+> a GO called; the edge was set before any window cell). D2 is ADOPTED: run13 may stop at its 156k
+> save, its last cells playing on the idle card. D3: at a STOP box A goes to run14's preflight and
+> mint (RUN14-GO); no value-teacher work moves to the box — VT-1 finishes on the desk. run13 is
+> not stopped before its read. Of record: at 5e-4 from an annealed parent the lineage read
+> +0.012 ± 0.008 logit per 12k over 108k, half run12's rate and consistent with flat; R394(b)'s
+> "cosine restart at 5e-4" is WITHDRAWN as run14's recipe.
+> (b) run14 is the last training run, by the operator's word. Its recipe is run12's, the one
+> that measurably climbed: one cosine 1e-3 → 1e-4 over 300k, replay 2.5M rows preloaded from
+> the parent run's final ring (v5 as written), 48 workers, 2.4 steps per game, value mask 1/8,
+> aux 2.0, the future head carried at w 0.5, the arena gate book, the deploy block of record,
+> decided tails ARMED (DT-1 +7.9 % positions/h; its n9 display over-read fixed in the mint leg or
+> carded as display-only). Parent: run13's trend-aware pick if run13's window pool is not below
+> R_mint by more than 0.05; else run12's 300k save with the head begun fresh. One bet, benched
+> before it is taken: a second function-preserving widening (4×256 → 4×384 or 4×512,
+> `mantis.model.widen`, the fp64 pin, lineage recorded), adopted at the widest width whose desk
+> bench reads trainer s/step ≤ 1.6×, GPU served µs/leaf at B 64 ≤ 1.3× and CPU µs/leaf at B 1
+> ≤ 1.5× of 4×256's, and whose preflight memory check passes; else run14 stays 4×256. The value
+> teacher rides only on a LIVE V2 at its pre-stated line; a CLOSE keeps it out. Reads: rung 16
+> every 12k, S every 36k; exams, bands and the gap rule of record; the pick trend-aware. Futility,
+> pre-stated: pooled rung 16 over 144k–180k not above the parent's pool by +0.10 → stop and pick.
+> Extension, pre-stated: if the fit over 180k–276k reads ≥ +0.015 per 12k at its lower bound, a
+> second cycle 3e-4 → 1e-4 over 150k is minted by annotation; else the run ends at 300k.
+> (c) Within-turn tree reuse is NOT a precondition of run14. It is a deploy lever: the cell engine
+> of record and self-play are untouched (self-play reuse is unmeasured and breaks the Gumbel
+> root's halving as built). TR-D builds beside run14 on the desk and ships with the final bot,
+> read on the deploy block against Six at n128 and n256 and Bubble at equal time, desk cells.
+> (d) DENSE-1 is PARKED by the last-run constraint: its design (3344f6a) stays shelf-ready
+> (its R10); L0/L1 run only if the operator continues the programme. R394(c)/(d4) are
+> SUSPENDED, not withdrawn.
+> (e) Merges: `value-teacher` (d9781bb7) is pushed after `make gates` on its tip and the V2
+> verdict, LIVE or CLOSED — it replaces the dead scalar mix with a reviewed, null-everywhere
+> encoding; `decided-tails` is on dev. Worktrees whose branches are on dev are pruned;
+> `perf-3-l1b` on origin is deleted by the operator once a session confirms its content is on
+> dev. Unfinished branches stay local, unmerged.
+
+Status: standing. ANNOTATES R394(b), (c), (d4); R391(a)'s width ("read again only inside a
+run": run12 was that run; the second widening is the bet it earns, benched).
 
 ### R394 — THE LINEAGE CLIMBS WHILE THE LR IS ABOVE THE FLOOR; THE LEVERS BUILD BESIDE IT
 Decision: verbatim below.
@@ -95,7 +139,11 @@ Decision: verbatim below.
 > bridges: bit identity is a claim at concurrency 1 only; at any other concurrency the bridge
 > is a statistical line, the pooled logit difference within 2 SE. 5f7c2c44's subject stays.
 
-Status: standing. ANNOTATES R393(d) (run13's pick rule; run14 at GO), R392(d) (§9 Q2–Q7), R391(e) (DENSE-1's
+Status: standing; (b) ANNOTATED by R395(a) and (b): run13's early STOP (D1) is adopted, and run13 may stop at its
+156k save (D2); at a STOP box A goes to run14's preflight and mint, and no value-teacher work moves to it; the cosine
+restart at 5e-4 is WITHDRAWN as run14's recipe, and run14, the last training run, is R395(b)'s; (c) and (d4) SUSPENDED,
+not withdrawn, by R395(d): DENSE-1 is PARKED by the last-run constraint, its L0/L1 only if the operator continues the
+programme. ANNOTATES R393(d) (run13's pick rule; run14 at GO), R392(d) (§9 Q2–Q7), R391(e) (DENSE-1's
 desktop legs run regardless of the lineage), R381(d) (CARD-DECIDED-TAILS un-parked), R370(c) (the tier spread).
 ANNOTATION A1 (2026-10-17, RUN13-PREP, at this record): (b)'s "R_mint +0.0973" reads +0.0965 (1 207 / 2 303, the
 seven replays' record, 2026-10-17 17:34 CEST); the +0.0973 was the session's provisional desk pool, which missed the
@@ -198,7 +246,9 @@ Decision: verbatim below.
 > against Six's and Bubble's crops; the corpus of R390(c) as its supervised bootstrap, Six's
 > labels excluded). run13 = run12's best + AUX-1 if run12 climbs; DENSE-1 builds if not.
 
-Status: standing; (d) ANNOTATED by R392(a): its 84k read is a HALT by its letter and is recorded as such, "the GNN
+Status: standing; (a)'s width ANNOTATED by R395: "read again only inside a run" — run12 was that run, and the second
+widening is the bet it earns, benched (R395(b)); (d) ANNOTATED by R392(a): its 84k read is a HALT by its letter and
+is recorded as such, "the GNN
 recipe is exhausted" is withdrawn as a finding (a window miss, not a measured plateau), and run12 trains on to one
 final second window (108k–144k); (e) ANNOTATED by R392(d): DENSE-1's code legs start on the desktop now, its screen
 and run waiting for box A, and by R394(c): its desktop legs run regardless of the lineage (L0 and L1 now; L2 and L2b

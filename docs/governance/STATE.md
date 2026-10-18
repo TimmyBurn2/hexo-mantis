@@ -7,6 +7,29 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
+**R395 (2026-10-18): RUN14 IS THE LAST RUN; IT CARRIES WHAT IS MEASURED AND ONE BET, BENCHED. run13's early STOP is
+adopted: when its 132k rung-16 cell reads, a 120k + 132k pool below +0.15 logit stops it by its STOP path, the 132k S
+cell unplayed; it may stop at its 156k save, its last cells on the idle card; it is not stopped before its read. At a
+STOP box A goes to run14's preflight and mint (RUN14-GO), and no value-teacher work moves to the box. At 5e-4 from an
+annealed parent the lineage read +0.012 ± 0.008 logit per 12k over 108k, half run12's rate and consistent with flat, so
+the cosine restart at 5e-4 is withdrawn as run14's recipe. run14 is the last training run, by the operator's word, on
+run12's recipe (one cosine 1e-3 → 1e-4 over 300k, 2.5M rows preloaded from the parent's final ring, 48 workers, 2.4
+steps a game, mask 1/8, aux 2.0, the future head at w 0.5, the arena gate book, the deploy block of record) with decided
+tails armed. Its parent is run13's trend-aware pick unless run13's window pool is below R_mint by more than 0.05, in
+which case it is run12's 300k save with the head begun fresh. One bet is benched before it is taken: a second
+function-preserving widening to 4×384 or 4×512, adopted at the widest width inside three desk-bench ratios and the
+preflight memory check, else 4×256. The value teacher rides only on a LIVE V2. Reads: rung 16 every 12k, S every 36k;
+futility over 144k–180k (not above the parent's pool by +0.10 → stop and pick); a second cycle 3e-4 → 1e-4 over 150k
+only if the fit over 180k–276k reads ≥ +0.015 per 12k at its lower bound, else the run ends at 300k. Within-turn tree
+reuse is a deploy lever built beside run14 (TR-D), not its precondition. DENSE-1 is parked, its design shelf-ready;
+R394(c) and (d4) are suspended, not withdrawn. `value-teacher` is pushed after its gates and the V2 verdict; worktrees
+whose branches are on dev are pruned.** (RULINGS R395; the R394 paragraph below stands where R395 does not move it.)
+run13's early STOP was put in force on 2026-10-18 at 09:30 CEST, at its 111k save, before the 120k save (the local
+records' PRESTATED ADDENDUM 2, written about 09:15 CEST). Its rung-16 cells at 72k–108k pool at about +0.10 logit,
+level with R_mint (+0.0965). `perf-3-l1b`'s content is NOT on dev: its one commit `402b0372` is not in dev's history
+and no equivalent patch landed (`git cherry`), so it is CARD-PERF-COLLATE-2's only copy of that code, and no session
+confirms it for deletion.
+
 **R394 (2026-10-17): THE LINEAGE CLIMBS WHILE THE LR IS ABOVE THE FLOOR; THE LEVERS BUILD BESIDE IT. run12 is CLOSED
 at 301 259: the anneal lifts as the cosine's steady climb (the fit over 108k–300k +0.0254 ± 0.0041 logit per 12k), and
 the lineage climbs about +0.1 logit per 48k while its LR is above the floor. From run13 on the pick is trend-aware: OLS
@@ -540,7 +563,7 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
 
 ## The run
 
-- **run13 is LIVE (R393(d); its lines RATIFIED by R394(b); CARD-RUN13):** launched 2026-10-16 18:34:52 CEST on box A from `1d1e27a9`
+- **run13 is LIVE (R393(d); its lines RATIFIED by R394(b), its early STOP adopted by R395(a); CARD-RUN13):** launched 2026-10-16 18:34:52 CEST on box A from `1d1e27a9`
   (`configs/run13.yaml`), BOOT_OK 18:39:52.
   - Warm start from run12's 240k save `run12_00240000_d406c497` (`tools/best_save.py`'s pick) with
     `reinit: [future_head]` (lineage `+aux_future`); run12's final ring, back-filled to v4 by `tools/ring_future.py` at
@@ -553,8 +576,13 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
     R_S_mint +1.4740. The flag read play noise at concurrency 4 (the 300k replay differs from the bridge, on one tree,
     in 9 of 580); at any concurrency above 1 a bridge is a statistical line (R394(f)).
   - The window: pooled rung 16 at 120k–156k ≥ +0.2665 and pooled S at 132k and 156k ≥ +1.3040 → GO; two consecutive
-    rung-16 cells from 72k below −0.4125 → STOP. At GO the operator stops run13 at the verdict and run14 launches from
-    its pick by R394(a); at STOP the stop save is mirrored and box A idles or stops on the operator's word (R394(b)).
+    rung-16 cells from 72k below −0.4125 → STOP. An early STOP is in force since 2026-10-18 09:30 CEST (R395(a), at
+    the 111k save): when the 132k rung-16 cell reads, a 120k + 132k pool below +0.15 logit → STOP, the 132k S cell
+    unplayed. run13 may stop at its 156k save, its last cells on the idle card. The stop save is mirrored and
+    sha-checked; at a STOP box A goes to run14's preflight and mint (R395(a)), and at a GO run14 follows at the verdict
+    (R394(b)), on R395(b)'s recipe either way, the mint on the operator's word once the width is in hand (RUN14-GO;
+    CARD-RUN14). This line said run14 launches from its pick by R394(a), and box A idles or stops on the operator's
+    word at a STOP, until R395's record.
 - **run12 is CLOSED at 301 259 (R394(a)):** started 2026-10-12 06:41 CEST on box A from `abbca6be` (`configs/run12.yaml`);
   stopped at 301 259 on 2026-10-16 12:30 CEST (marker, then SIGTERM; stop save `run12_00301259_7a9e12ab.ckpt`, mirrored).
   - A fresh launch from the widened stamp `distill2wide_00000000_99d4c045`, its lineage carried.
@@ -582,7 +610,7 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
   any run starts (R375(e) lifts R368(j)'s hold). Read a config's values from the file itself and diff two
   with `tools/config_diff.py`; STATE does not restate minted rows.
 - **Two boxes are rented, the operator's** (R385(f)): box A (RTX 4080 SUPER, Ryzen 9 9950X; RUN11-PRE's arms 3 and 4
-  ran there) held run11 until its close (R391(b)) and run12 until its stop, and is run13's (R393(d)); box B (RTX 5070 Ti, Ryzen 9 5900XT; arms 1 and 2, unmatched to box A,
+  ran there) held run11 until its close (R391(b)) and run12 until its stop, and is run13's (R393(d)), then run14's (R395(a) and (b)); box B (RTX 5070 Ti, Ryzen 9 5900XT; arms 1 and 2, unmatched to box A,
   so they ran matched self-play work) is RUN11-FRESH's. The
   desktop plays cells and reads. This line said one box was rented until R385's record. An earlier instance was
   destroyed on 2026-09-21 (R365, annotated by R367(d)); the operator's mirror (`tools/mirror_pull.py`) holds run7's and run8's
@@ -607,7 +635,7 @@ run6's by R369's packet (W0).
 ## Where things live
 
 - Open work: `docs/governance/CARDS.md` (swept in W6; derived there, never enumerated here).
-- Rulings: `docs/governance/RULINGS.md`; the latest is R394 (this line said R386 until R393's record).
+- Rulings: `docs/governance/RULINGS.md`; the latest is R395 (this line said R386 until R393's record).
 - Laws and the protected set: `docs/governance/LAWS.md`, whose protected set names each
   invariant's pinning tests (R370(f)); `tests/test_protected_set_pins.py` fails if one is gone.
   Falsified work: `docs/governance/falsified.md`.
@@ -691,3 +719,6 @@ The run line, the configs line, the boxes line and the current phase's last sent
 The current phase was rewritten 2026-10-17 at R394 on branch `run13-prep` over `origin/dev` `5f7c2c44`, with the
 replays' record read from box A; the same edit updated the run and latest-ruling lines, and named the boxes line in
 the 2026-10-16 note above, which had omitted it.
+The current phase was rewritten 2026-10-18 at R395 on branch `run13-prep` over `origin/dev` `9dc463e6`, with run13's
+cells read from the desk mirror and `perf-3-l1b` checked against `origin/dev`; the same edit updated the run, boxes and
+latest-ruling lines.
