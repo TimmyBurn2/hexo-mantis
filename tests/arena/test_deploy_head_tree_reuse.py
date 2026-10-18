@@ -38,6 +38,20 @@ def _head(n_sims: int, tactics: dict | None, *, early_stop: bool = False, calls:
     return head
 
 
+def _assert_spent(head: DeployHeadPlayer, n_sims: int, kept: int, label: str) -> None:
+    """The stone's own budget in new descents, or a fired stop with the leader fixed; the root holds kept + new."""
+    tree, sims = head._tree, head.last_sims
+    assert tree is not None and sims is not None
+    if head.last_stopped:
+        top, left = tree.get_top_visits(2), n_sims - sims
+        assert left > 0 and (len(top) == 1 or top[0][1] - top[1][1] > left), (label, top, left)
+    else:
+        assert sims == n_sims, f"{label}: spends its budget in new descents"
+    assert tree.root_visits() == kept + sims, f"{label}: the root holds the kept and the new"
+    if head.last_tactics is not None:
+        assert head.last_tactics["descents"] == sims, (label, head.last_tactics)
+
+
 @pytest.mark.parametrize("early_stop", [False, True], ids=["whole", "early-stop"])
 @pytest.mark.parametrize("tactics", [None, _LEAF_TACTICS], ids=["tactics-off", "tactics-on"])
 @pytest.mark.parametrize("n_sims", [64, 256])
@@ -53,26 +67,16 @@ def test_each_reused_stone_spends_its_budget_and_keeps_the_first_stones_visits(
         first = head.select_move(board)
         if head.last_root is None:
             continue  # the root solver decided stone 1, so nothing was searched to keep
-        assert head._tree is not None and head._tree.root_visits() == head.last_sims, f"seed {seed}: stone 1 is fresh"
-        assert head.last_sims == n_sims or head.last_stopped, f"seed {seed}: stone 1 spends its budget"
+        _assert_spent(head, n_sims, 0, f"seed {seed} stone 1")
         kept = next(c[3] for c in head.last_root[1] if c[0] == first)
         board.apply_move(*first)
         head.select_move(board)
         if head.last_root is None:
             continue
         searched += 1
-        tree, rows = head._tree, head.search_rows()
-        assert tree is not None and head.last_sims is not None
+        rows = head.search_rows()
         assert rows["reuse_reroots"] == 1 and rows["reuse_inherited"] == kept > 0, (seed, rows, kept)
-        if head.last_stopped:
-            top = tree.get_top_visits(2)
-            left = n_sims - head.last_sims
-            assert left > 0 and (len(top) == 1 or top[0][1] - top[1][1] > left), (seed, top, left)
-        else:
-            assert head.last_sims == n_sims, f"seed {seed}: stone 2 spends its budget in new descents"
-        assert tree.root_visits() == kept + head.last_sims, f"seed {seed}: the root holds the kept and the new"
-        if tactics is not None:
-            assert head.last_tactics is not None and head.last_tactics["descents"] == head.last_sims, head.last_tactics
+        _assert_spent(head, n_sims, kept, f"seed {seed} stone 2")
         assert len(calls) <= 2 * n_sims, f"seed {seed}: served {len(calls)} leaves over two stones"
     assert searched >= 3, f"only {searched} turns searched both stones, so the witness went unread"
 

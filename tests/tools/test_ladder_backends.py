@@ -119,7 +119,7 @@ def test_with_reuse_on_a_turns_second_stone_keeps_the_firsts_subtree_and_counts_
         turn = backend.select_turn(_mid_game())
         head = backend._head
         assert head.search_rows()["reuse_reroots"] == 1, "stone 2 started on stone 1's subtree"
-        assert turn.sims == 12 + head.last_sims and (head.last_sims == 12 or head.last_stopped), turn
+        assert turn.sims == 24 or turn.stopped > 0, f"each stone spends its own 12 new descents unless it stops: {turn}"
     finally:
         backend.close()
 

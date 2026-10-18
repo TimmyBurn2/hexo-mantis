@@ -186,7 +186,7 @@ class MCTSTree:
     def new_game(self, board: Board) -> None:
         """Raises ValueError when tactics are armed and the board's legal-move radius is below 5."""
     def reroot(self, board: Board) -> int:
-        """`new_game`, keeping a turn's first-stone child subtree `board` is exactly (PUCT); returns the visits kept, 0 fresh.
+        """`new_game`, keeping the PUCT subtree of a turn's first stone's child that is `board`; the visits kept, 0 fresh.
 
         Raises:
             ValueError: tactics are armed and the board's legal-move radius is below 5.
