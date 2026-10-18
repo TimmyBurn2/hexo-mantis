@@ -80,7 +80,10 @@ not play in.
 game, keyed by its prefix. `select_*`, its PUCT select calls: `select_calls`, `select_overlaps` (calls ended at a
 collision with a pending leaf) and `select_network_leaves` (leaves they queued for the net; per round trip, the round
 fill's own reading). `stop_*`, its budget-aware early stop, on only where the consumer switches it on (the ladder):
-`stop_fired` (searches it ended) and `stop_saved` (the descents they left). `cache_*`, its per-game exact cache: `cache_calls` (expand calls),
+`stop_fired` (searches it ended) and `stop_saved` (the descents they left). `reuse_*`, within-turn tree reuse, present
+only where the head reuses (the ladder, or a read that switches it on): `reuse_reroots` (searches that started on the
+turn's first stone's kept subtree) and `reuse_inherited` (the visits they kept); with it, a second stone's
+`search_stats` visits sum to the kept visits plus its own budget. `cache_*`, its per-game exact cache: `cache_calls` (expand calls),
 `cache_positions` (leaves asked for, = `cache_hits` + `cache_served` + `cache_in_batch_repeats`), `cache_hits`
 (answered from an earlier evaluation in the game), `cache_served` (positions the net evaluated),
 `cache_in_batch_repeats` (a key repeated inside one call, evaluated once), `cache_all_hit_calls` (calls answered

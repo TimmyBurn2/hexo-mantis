@@ -164,6 +164,7 @@ class MantisBackend:
         self._search_kind = str(config.deploy.search.kind)
         self._tactics = resolve_deploy_tactics(dump)
         self._puct = resolve_puct_constants(config)
+        self._tree_reuse = LADDER_TREE_REUSE and self._search_kind == "puct"
         self.search: dict[str, Any] = {
             "kind": self._search_kind, "sims": self.sims, "preset": preset, "device": "cpu", "tactics": self._tactics,
             "torch_threads": torch.get_num_threads(),
@@ -171,7 +172,7 @@ class MantisBackend:
             "weights": self.weights, "leaf_batch_size": self._leaf_batch_size, "c_visit": self._c_visit, "c_scale": self._c_scale,
             "q_rescale": self._q_rescale, "gumbel_m": self._gumbel_m,
             "early_stop": LADDER_EARLY_STOP and self._search_kind == "puct", "standalone_host": bool(standalone_host),
-            "tree_reuse": LADDER_TREE_REUSE and self._search_kind == "puct",
+            "tree_reuse": self._tree_reuse,
             # One game per engine: a pop wakes on the round's own submission, so the deadline is never waited out.
             "collector": {"submitters": self._engine.batch_timing_snapshot()["wake"]["submitters"],
                           "max_wait_ms": None if batching is None else batching.inference_max_wait_ms,
@@ -188,7 +189,7 @@ class MantisBackend:
             self._engine, self.sims, spec=self._spec, leaf_batch_size=self._leaf_batch_size, c_visit=self._c_visit,
             c_scale=self._c_scale, q_rescale=self._q_rescale, search_kind=self._search_kind, gumbel_m=self._gumbel_m,
             gumbel_seed=self.seed, tactics=self._tactics, puct=self._puct, early_stop=LADDER_EARLY_STOP,
-            tree_reuse=LADDER_TREE_REUSE and self._search_kind == "puct")
+            tree_reuse=self._tree_reuse)
         self._head.new_game()
 
     def select_turn(self, board: Any, forced: tuple[Cell, ...] = ()) -> TurnResult:

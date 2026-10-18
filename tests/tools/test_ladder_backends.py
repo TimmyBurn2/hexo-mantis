@@ -106,6 +106,24 @@ def test_a_turn_is_two_distinct_legal_cells_and_the_heads_own_sims_count(ladder,
     assert turn.ms > 0
 
 
+def test_with_reuse_on_a_turns_second_stone_keeps_the_firsts_subtree_and_counts_its_new_descents(
+    ladder, smoke_run_config, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(ladder.backends, "LADDER_TREE_REUSE", True)
+    checkpoint, _net_hash = _tiny_checkpoint(tmp_path)
+    config = smoke_run_config("dev_example.yaml", eval={"gate": {"deploy_sims": 12}, "worker_device": "cpu"})
+    backend = ladder.backends.open_mantis(config, checkpoint, threads=1)
+    try:
+        assert backend.search["tree_reuse"] is True
+        backend.new_game("g_1")
+        turn = backend.select_turn(_mid_game())
+        head = backend._head
+        assert head.search_rows()["reuse_reroots"] == 1, "stone 2 started on stone 1's subtree"
+        assert turn.sims == 12 + head.last_sims and (head.last_sims == 12 or head.last_stopped), turn
+    finally:
+        backend.close()
+
+
 def test_a_forced_book_stone_is_played_unsearched_and_only_the_rest_is_searched(ladder, mantis_backend) -> None:
     """The first player's first compound turn is ply 4 of the book plus ONE searched stone; a whole forced turn searches nothing."""
     backend, _net_hash, _checkpoint = mantis_backend

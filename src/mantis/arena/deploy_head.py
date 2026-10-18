@@ -175,16 +175,18 @@ class DeployHeadPlayer:
         self._tree = tree
         if self._tree_reuse:
             inherited = tree.reroot(board)
-            self._rows["reuse_reroots"] += int(inherited > 0)
-            self._rows["reuse_inherited"] += inherited
         else:
             tree.new_game(board)
+            inherited = 0
         decided = tree.root_offence() if self._tactics is not None else None
         if decided is not None:
             self.last_root, self.last_sims = None, 0
             self.last_tactics = tree.tactics_counters()
             self._move_index += 1
             return decided
+        if inherited:
+            self._rows["reuse_reroots"] += 1
+            self._rows["reuse_inherited"] += inherited
         try:
             move = self._search(tree)
         finally:

@@ -177,7 +177,7 @@ impl PyMCTSTree {
         Ok(())
     }
 
-    /// `new_game(board)` keeping the subtree of the root child `board` is exactly; the visits kept, 0 fresh. Raises: as it.
+    /// `new_game`, keeping the PUCT subtree of a turn's first stone's child that is `board`. Raises: ValueError as it.
     pub fn reroot(&mut self, board: &PyBoard) -> PyResult<u32> {
         self.reset_mirrors(board)?;
         Ok(self.inner.reroot_or_new_game(board.inner_ref().clone()))

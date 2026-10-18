@@ -1,30 +1,28 @@
 //! Within-turn tree reuse: the next search starts on a root child's kept subtree instead of an empty root.
 
-use super::{MCTSTree, Node};
+use super::{MCTSTree, Node, SearchKind};
 use mantis_core::board::{Board, Cell};
 
 impl MCTSTree {
-    /// `new_game(board)`, keeping the subtree of the root child whose position `board` is exactly (its stones, side to
-    /// move and stones left); returns the visits kept, 0 when no expanded, undecided child reaches it.
+    /// `new_game(board)`, keeping the subtree of a turn's first stone's child that is exactly `board`; the visits kept.
     pub fn reroot_or_new_game(&mut self, board: Board) -> u32 {
         let kept = self.child_reaching(&board).map(|child| self.subtree(child));
         self.new_game(board);
-        let Some((nodes, raws)) = kept else {
+        let Some(nodes) = kept else {
             return 0;
         };
         self.pool[..nodes.len()].copy_from_slice(&nodes);
         self.next_free = nodes.len() as u32;
-        // Empty under PUCT, which keeps no raw values.
-        for (slot, raw) in self.raw_values.iter_mut().zip(raws) {
-            *slot = raw;
-        }
         self.pool[0].n_visits
     }
 
-    /// The expanded, undecided root child whose position is exactly `board`: a decided root would never be searched.
+    /// The expanded, undecided child reaching `board` from a PUCT turn's first stone (Gumbel halving reads root visits).
     fn child_reaching(&self, board: &Board) -> Option<u32> {
         let root = &self.pool[0];
-        if !root.is_expanded() {
+        if self.kind != SearchKind::Puct
+            || self.root_board.moves_remaining != 2
+            || !root.is_expanded()
+        {
             return None;
         }
         let first = root.first_child;
@@ -45,13 +43,12 @@ impl MCTSTree {
         next.apply_move(q, r).ok().map(|()| next)
     }
 
-    /// `child`'s subtree from slot 0, breadth first, each node's children one contiguous block; its raw values beside.
-    fn subtree(&self, child: u32) -> (Vec<Node>, Vec<f32>) {
+    /// `child`'s subtree from slot 0, breadth first, each node's children one contiguous block.
+    fn subtree(&self, child: u32) -> Vec<Node> {
         let mut nodes = vec![Node {
             parent: u32::MAX,
             ..self.pool[child as usize]
         }];
-        let mut from = vec![child];
         let mut at = 0;
         while at < nodes.len() {
             let node = nodes[at];
@@ -63,17 +60,11 @@ impl MCTSTree {
                         parent: at as u32,
                         ..self.pool[i]
                     });
-                    from.push(i as u32);
                 }
             }
             at += 1;
         }
-        let raws = if self.raw_values.is_empty() {
-            Vec::new()
-        } else {
-            from.iter().map(|&i| self.raw_values[i as usize]).collect()
-        };
-        (nodes, raws)
+        nodes
     }
 }
 
@@ -146,10 +137,9 @@ mod tests {
         tree
     }
 
-    /// Every field of every node under `idx`, depth first in child order, floats as bits, with its raw value.
-    fn snapshot(tree: &MCTSTree, idx: u32, out: &mut Vec<[u64; 10]>) {
+    /// Every field of every node under `idx`, depth first in child order, floats as bits.
+    fn snapshot(tree: &MCTSTree, idx: u32, out: &mut Vec<[u64; 9]>) {
         let n = tree.pool[idx as usize];
-        let raw = tree.raw_values.get(idx as usize).map_or(0, |v| v.to_bits());
         out.push([
             u64::from(n.action_idx),
             u64::from(n.n_visits),
@@ -160,7 +150,6 @@ mod tests {
             u64::from(n.is_terminal),
             u64::from(n.terminal_value.to_bits()),
             u64::from(n.virtual_loss_count),
-            u64::from(raw),
         ]);
         if n.is_expanded() {
             for c in n.first_child..n.first_child + u32::from(n.n_children) {
@@ -189,41 +178,40 @@ mod tests {
     #[test]
     fn a_reroot_keeps_the_chosen_subtree_bit_for_bit() {
         // PLANTED BREAK: push the copied children without remapping `parent` and the snapshot's parent check reds.
-        for kind in [SearchKind::Puct, SearchKind::Gumbel] {
-            let mut tree = tree(kind);
-            search(&mut tree, 256, 8);
-            let child = most_visited_child(&tree);
-            let mut before = Vec::new();
-            snapshot(&tree, child, &mut before);
-            let visits = tree.pool[child as usize].n_visits;
-            assert!(
-                visits > 1 && before.len() > 1,
-                "{kind:?}: the chosen child kept a subtree"
-            );
+        let mut tree = tree(SearchKind::Puct);
+        search(&mut tree, 256, 8);
+        let child = most_visited_child(&tree);
+        let mut before = Vec::new();
+        snapshot(&tree, child, &mut before);
+        let visits = tree.pool[child as usize].n_visits;
+        assert!(
+            visits > 1 && before.len() > 1,
+            "the chosen child kept a subtree"
+        );
 
-            let inherited = tree.reroot_or_new_game(board_after(&tree, child));
-            let mut after = Vec::new();
-            snapshot(&tree, 0, &mut after);
-            assert_eq!(
-                inherited, visits,
-                "{kind:?}: the visits kept are the child's"
-            );
-            assert_eq!(
-                after, before,
-                "{kind:?}: the re-rooted tree is the child's subtree, bit for bit"
-            );
-            assert_eq!(tree.pool[0].parent, u32::MAX);
-            assert_eq!(
-                tree.next_free as usize,
-                after.len(),
-                "{kind:?}: the pool holds the subtree alone"
-            );
-            assert_eq!(
-                tree.transposition_table.len(),
-                0,
-                "{kind:?}: the table starts empty, as a fresh search's"
-            );
-        }
+        let inherited = tree.reroot_or_new_game(board_after(&tree, child));
+        let mut after = Vec::new();
+        snapshot(&tree, 0, &mut after);
+        assert_eq!(inherited, visits, "the visits kept are the child's");
+        assert_eq!(
+            after, before,
+            "the re-rooted tree is the child's subtree, bit for bit"
+        );
+        assert!(
+            after.iter().all(|n| n[8] == 0),
+            "a finished search left no virtual loss"
+        );
+        assert_eq!(tree.pool[0].parent, u32::MAX);
+        assert_eq!(
+            tree.next_free as usize,
+            after.len(),
+            "the pool holds the subtree alone"
+        );
+        assert_eq!(
+            tree.transposition_table.len(),
+            0,
+            "the table starts empty, as a fresh search's"
+        );
     }
 
     #[test]
@@ -283,7 +271,31 @@ mod tests {
         }
         let mut decided = tree_copy(&tree);
         decided.pool[child as usize].is_terminal = true;
-        assert_eq!(decided.reroot_or_new_game(next), 0, "a decided child");
+        assert_eq!(
+            decided.reroot_or_new_game(next.clone()),
+            0,
+            "a decided child"
+        );
+
+        // A turn's second stone: its child is the other side's position, the next turn's.
+        let mut second = tree_copy(&tree);
+        second.new_game(next);
+        search(&mut second, 64, 8);
+        let child = most_visited_child(&second);
+        assert_eq!(
+            second.reroot_or_new_game(board_after(&second, child)),
+            0,
+            "a stone 2 root"
+        );
+
+        let mut gumbel = self::tree(SearchKind::Gumbel);
+        search(&mut gumbel, 64, 8);
+        let child = most_visited_child(&gumbel);
+        assert_eq!(
+            gumbel.reroot_or_new_game(board_after(&gumbel, child)),
+            0,
+            "a Gumbel tree"
+        );
     }
 
     fn tree_copy(tree: &MCTSTree) -> MCTSTree {

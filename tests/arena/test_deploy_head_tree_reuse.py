@@ -53,6 +53,8 @@ def test_each_reused_stone_spends_its_budget_and_keeps_the_first_stones_visits(
         first = head.select_move(board)
         if head.last_root is None:
             continue  # the root solver decided stone 1, so nothing was searched to keep
+        assert head._tree is not None and head._tree.root_visits() == head.last_sims, f"seed {seed}: stone 1 is fresh"
+        assert head.last_sims == n_sims or head.last_stopped, f"seed {seed}: stone 1 spends its budget"
         kept = next(c[3] for c in head.last_root[1] if c[0] == first)
         board.apply_move(*first)
         head.select_move(board)
@@ -126,8 +128,7 @@ def test_only_the_ladder_can_reuse(rel: str) -> None:
     assert calls, rel
     for call in calls:
         stated = {k.arg: k.value for k in call.keywords}.get("tree_reuse")
-        names = {n.id for n in ast.walk(stated) if isinstance(n, ast.Name)} if stated is not None else set()
         if rel == "tools/ladder/backends.py":
-            assert "LADDER_TREE_REUSE" in names, (rel, call.lineno)
+            assert stated is not None and not isinstance(stated, ast.Constant), (rel, call.lineno)
         else:
             assert stated is None or (isinstance(stated, ast.Constant) and stated.value is False), (rel, call.lineno)
