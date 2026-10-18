@@ -271,31 +271,20 @@ mod tests {
         }
         let mut decided = tree_copy(&tree);
         decided.pool[child as usize].is_terminal = true;
-        assert_eq!(
-            decided.reroot_or_new_game(next.clone()),
-            0,
-            "a decided child"
-        );
-
         // A turn's second stone: its child is the other side's position, the next turn's.
         let mut second = tree_copy(&tree);
         second.new_game(next);
         search(&mut second, 64, 8);
-        let child = most_visited_child(&second);
-        assert_eq!(
-            second.reroot_or_new_game(board_after(&second, child)),
-            0,
-            "a stone 2 root"
-        );
-
         let mut gumbel = self::tree(SearchKind::Gumbel);
         search(&mut gumbel, 64, 8);
-        let child = most_visited_child(&gumbel);
-        assert_eq!(
-            gumbel.reroot_or_new_game(board_after(&gumbel, child)),
-            0,
-            "a Gumbel tree"
-        );
+        for (label, mut t) in [
+            ("a decided child", decided),
+            ("a stone 2 root", second),
+            ("a Gumbel tree", gumbel),
+        ] {
+            let board = board_after(&t, most_visited_child(&t));
+            assert_eq!(t.reroot_or_new_game(board), 0, "{label}");
+        }
     }
 
     fn tree_copy(tree: &MCTSTree) -> MCTSTree {
