@@ -167,10 +167,13 @@ def _build_pool(golden, graph_rows, *, clock, sink=None, heartbeat=None) -> Scri
 @pytest.fixture
 def run_drain(monkeypatch, drain_goldens, graph_rows_input):
     """Factory → (pool, scripted_clock) after ONE `run_stats_loop` iteration."""
-    def run(*, clock=CLOCK_CROSSED, graph_n=3, sink=None, heartbeat=None, tail_plies=0):
+    def run(*, clock=CLOCK_CROSSED, graph_n=3, sink=None, heartbeat=None, tail_plies=0,
+            runner_counters=None):
         pool = _build_pool(drain_goldens, graph_rows_input[:graph_n], clock=clock,
                            sink=sink, heartbeat=heartbeat)
         pool._runner.pcr_full_moves -= tail_plies
+        for name, value in (runner_counters or {}).items():
+            setattr(pool._runner, name, value)
         scripted = ScriptedTime(clock)
         monkeypatch.setattr(pool_drain, "time", scripted)
         pool_drain.run_stats_loop(pool)
@@ -320,6 +323,19 @@ def test_sims_per_sec_bills_no_decided_tail_ply(run_drain, drain_goldens):
     tail_only, _ = run_drain(tail_plies=every_ply)
     assert tail_only._total_sims == 0
     assert tail_only._sims_per_sec is None, "a tail-only interval published a measured rate"
+
+
+def test_a_counter_reset_bills_nothing_and_is_reported_once(run_drain):
+    """Counters restarted below last-seen (100 and 100) bill no sims and publish no rate."""
+    pool, _ = run_drain(runner_counters={"positions_generated": 30, "pcr_full_moves": 20,
+                                         "pcr_quick_moves": 5})
+
+    assert pool._total_sims == 0
+    assert pool._sims_per_sec is None, "a reset published a rate"
+    assert pool._last_pos_generated == 30
+    assert pool._last_drawn_moves == 25
+    assert pool._sink.named("positions_counter_reset") == [
+        {"event": "positions_counter_reset", "delta": -70, "last_seen": 100, "now": 30}]
 
 
 @pytest.mark.parametrize("variant", sorted(_VARIANT_RUNS))

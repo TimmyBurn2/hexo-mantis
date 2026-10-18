@@ -76,13 +76,13 @@ def run_stats_loop(pool: Any) -> None:
                 })
 
         # Bill one search per drawn MOVE, not per GAME (that undercounts by the game length) and
-        # not per position: a decided tail's plies are positions that draw no arm and run no search.
+        # not per position: no `pcr_*` row counts a decided tail's plies, and no search runs them.
         now = time.monotonic()
         elapsed = now - pool._last_drain_time
         pool._last_drain_time = now
         pos_generated = int(getattr(pool._runner, "positions_generated", 0))
         # The runner's counters are monotone, so a NEGATIVE delta means a RESET, not that no
-        # work happened. The clamp keeps the rate non-negative; the event keeps the two apart.
+        # work happened: it bills nothing, and the event keeps the two apart.
         raw_delta = pos_generated - pool._last_pos_generated
         if raw_delta < 0 and pool._sink is not None:
             pool._sink.emit({"event": "positions_counter_reset", "delta": int(raw_delta),
@@ -90,7 +90,7 @@ def run_stats_loop(pool: Any) -> None:
                              "now": int(pos_generated)})
         pool._last_pos_generated = pos_generated
         drawn = int(pool._runner.pcr_full_moves) + int(pool._runner.pcr_quick_moves)
-        drawn_delta = max(0, drawn - pool._last_drawn_moves)
+        drawn_delta = drawn - pool._last_drawn_moves
         pool._last_drawn_moves = drawn
         if drawn_delta > 0:
             sims = drawn_delta * pool._effective_sims_per_move

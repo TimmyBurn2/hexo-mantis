@@ -476,14 +476,15 @@ or a row no builder publishes, reds. The sink adds `ts`.
   and `steps_per_hour` are `None` before the run clock has advanced (a rate over zero elapsed
   is an absence, not a rate of zero); `avg_game_length` is `None` before any game has
   completed; `sims_per_sec` is `None` until a drain interval has billed a positive delta of
-  drawn moves (`pcr_full_moves + pcr_quick_moves`, so a decided tail's plies bill nothing);
-  `positions_per_hour` is `None` whenever either factor is. All
-  five read a hard `0.0` before this, which in the ONE channel is what a STALLED run looks
-  like. `sims_per_sec` in particular reached the payload through `pool.sims_per_sec or 0.0`,
-  which collapsed a genuine measured zero and a not-yet-measured reading into one value.
-  A negative `positions_generated` delta — the counters are monotone, so it means a reset —
-  still clamps the rate at zero but now emits `positions_counter_reset` beside it, so the two
-  are distinguishable in the stream.
+  drawn moves (`pcr_full_moves + pcr_quick_moves`, so a decided tail's plies bill nothing,
+  while a root that fails to expand bills its failed draw and its re-draw both);
+  `positions_per_hour` is `None` whenever either factor is. All five read a hard `0.0` before
+  this, which in the ONE channel is what a STALLED run looks like. `sims_per_sec` in
+  particular reached the payload through `pool.sims_per_sec or 0.0`, which collapsed a genuine
+  measured zero and a not-yet-measured reading into one value. The counters are monotone, so
+  a negative delta means a reset: a negative drawn-move delta bills nothing (the bill's
+  positive-delta guard), and a negative `positions_generated` delta emits
+  `positions_counter_reset`, so a reset and a stall are distinguishable in the stream.
 - **`eval_round_complete.promoted` is `bool | None` (AUDIT-1 F-28/B04).** `None` means NO
   PROMOTION DECISION WAS TAKEN — the gate was not scheduled this round, or there was no best
   anchor to play against, or the round broke before the gate block. `False` means the gate ran
