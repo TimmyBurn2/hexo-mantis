@@ -1024,7 +1024,8 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   CENSUS-1's C6: Six's search value beats our raw one off the proofs (DEF −0.097 on its non-proof rows, QU −0.058,
   MID −0.053). R376(f) governs any learning from Six's outputs; this card is our own search's value.
 - **CARD-DECIDED-TAILS — ARMED in run14 by R395(b) (2026-10-18), on dev since `9dc463e6`; n9, the display over-read
-  below, is fixed in run14's mint leg or carded display-only (CARD-RUN14). Was: EXITED 2026-10-17, R1 lands; the
+  below, is FIXED in run14's mint leg: `sims_per_sec` bills the drain's delta of playout-cap draws, which no tail ply
+  makes, and repo_design's leaves/s says so. Was: n9 fixed in run14's mint leg or carded display-only. Was: EXITED 2026-10-17, R1 lands; the
   architect rules (branch `decided-tails`; local records
   `mantis-records/decided-tails/EXIT.md`): `selfplay.decided_tails` lands as a capability, `false` in every config.**
   From the root offence's first decided stone the game runs out with no search: the winner re-solves through
