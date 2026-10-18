@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 import mantis.encoding as encoding
-from mantis._engine import Board, HexgBuffer, build_canvas
+from mantis._engine import FAR_CELL, Board, HexgBuffer, build_canvas
 from mantis.selfplay.graph_collate import GraphWirePayload
 
 from _corpus import (
@@ -28,8 +28,6 @@ from _corpus import (
 ARM_GRAPH = "graph"
 ARM_CANVAS = "hexcanvas"
 ARM_DENSE = "dense"
-#: `legal_gather` of a legal cell outside a far region (contract #12).
-FAR_CELL = -1
 
 
 class LegalMoveNotRepresentable(ConformanceRefusal):
@@ -414,3 +412,24 @@ def test_a_LENGTH_PRESERVING_canvas_substitution_fails_the_SET_half():
     mutated = {**canvas, "legal": [(q + 100, r + 100), *canvas["legal"][1:]]}
     with pytest.raises(LegalMoveNotRepresentable, match="only-on-canvas"):
         require_canvas_completeness(mutated, board, "planted")
+
+
+def test_a_DUPLICATED_canvas_legal_entry_fails_the_COUNT_half():
+    """Prove the count half bites: a duplicated legal entry keeps the set and lengthens the list."""
+    spec = CANVAS_SPECS[0]
+    board = build_board(spec.name, [(0, 0), (1, 0)])
+    canvas = canvas_for(spec.name, board)
+    mutated = {**canvas, "legal": [*canvas["legal"], canvas["legal"][0]],
+               "legal_gather": [*canvas["legal_gather"], canvas["legal_gather"][0]]}
+    assert canvas_legal(mutated) == canvas_legal(canvas)
+    with pytest.raises(LegalMoveNotRepresentable, match="Board.legal_move_count"):
+        require_canvas_completeness(mutated, board, "planted")
+
+
+def test_a_MISMATCHED_radius_is_refused_on_the_canvas_arm():
+    """Prove the canvas arm's radius check refuses a board fenced at another radius by name."""
+    spec = CANVAS_SPECS[0]
+    other = next(s for s in roster() if s.legal_move_radius != spec.legal_move_radius)
+    board = build_board(other.name, [(0, 0), (1, 0)])
+    with pytest.raises(RadiusDisagreement, match="SAME radius"):
+        require_canvas_radius_agreement(board, spec)

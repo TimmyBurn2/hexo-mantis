@@ -100,9 +100,9 @@ PATTERNS: tuple[tuple[str, str], ...] = (
     # The REPRESENTATION default is the same defect one level up, re-introducing dense-by-default
     # at a site the schema's refusal cannot reach. It sat at SIX places in `src/` while every
     # layer above them said absent-is-an-error.
-    (r"getattr\(\s*[^)]*?,\s*[\"']representation[\"']\s*,\s*[\"'](?:grid|graph|dense)[\"']",
+    (r"getattr\(\s*[^)]*?,\s*[\"']representation[\"']\s*,\s*[\"'](?:grid|graph|dense|hexcanvas)[\"']",
      "getattr() defaulting a representation"),
-    (r"\.(?:get|setdefault|pop)\(\s*[\"']representation[\"']\s*,\s*[\"'](?:grid|graph|dense)[\"']",
+    (r"\.(?:get|setdefault|pop)\(\s*[\"']representation[\"']\s*,\s*[\"'](?:grid|graph|dense|hexcanvas)[\"']",
      "dict read defaulting a representation"),
 )
 

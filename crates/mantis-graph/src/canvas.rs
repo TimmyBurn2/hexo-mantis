@@ -1,8 +1,6 @@
 //! The hex-canvas builder (contract #12): the fence, stones ∪ the legal set, masked inside its smallest axial box.
 
-use std::hash::BuildHasherDefault;
-
-use super::{legal_cells, pack, window_center, window_flat_idx, FnvMap, StoneList};
+use super::{legal_cells, stone_table, window_center, window_flat_idx, StoneList};
 
 /// The canvas planes in wire order; a `hexcanvas` registry row's `plane_layout` is validated against it.
 pub const CANVAS_PLANES: [&str; 6] = [
@@ -115,7 +113,7 @@ impl Boxes {
 
 /// Build one canvas: the fence (the empty board's 5x5 first-stone box with no stone), or past `max_side` the stones and their `far_halo`.
 #[must_use]
-#[allow(clippy::missing_panics_doc)] // panics ARE the contract: an empty side quantum or trunk dies loud
+#[allow(clippy::missing_panics_doc)] // panics ARE the contract: a parameter outside its domain dies loud
 pub fn build_canvas(stones_in: &StoneList, params: &CanvasParams) -> Canvas {
     assert!(params.side_step >= 1, "CanvasParams: side_step 0");
     assert!(
@@ -123,20 +121,22 @@ pub fn build_canvas(stones_in: &StoneList, params: &CanvasParams) -> Canvas {
         "CanvasParams: trunk_size {} < 1",
         params.trunk_size
     );
+    assert!(
+        matches!(params.moves_remaining, 1 | 2),
+        "CanvasParams: moves_remaining {} lights no stones-left plane",
+        params.moves_remaining
+    );
+    assert!(
+        params.far_halo >= 1 && params.max_side >= params.min_side,
+        "CanvasParams: far_halo {} or max_side {} below min_side {} leaves an empty far region",
+        params.far_halo,
+        params.max_side,
+        params.min_side
+    );
     let (step, min) = (usize::from(params.side_step), usize::from(params.min_side));
     let to_move: i8 = if params.current_player == 1 { 1 } else { -1 };
 
-    // Deduplicated and coordinate-sorted, as the graph builder takes them.
-    let mut stone_map: FnvMap<i64, i8> =
-        FnvMap::with_capacity_and_hasher(stones_in.stones.len(), BuildHasherDefault::default());
-    for &(q, r, p) in &stones_in.stones {
-        stone_map.insert(pack(q, r), p);
-    }
-    let mut stones: Vec<(i32, i32, i8)> = stone_map
-        .iter()
-        .map(|(&k, &p)| ((k >> 32) as i32, k as u32 as i32, p))
-        .collect();
-    stones.sort_unstable_by_key(|&(q, r, _)| (q, r));
+    let (stone_map, stones) = stone_table(stones_in);
     let (legal, legal_dist) = legal_cells(&stone_map, &stones, i32::from(params.radius));
 
     let fence: Vec<(i32, i32)> = stones

@@ -177,7 +177,7 @@ notes                   = "GNN axis-graph encoding at radius 8 with empty-to-emp
 # The net sees exactly gnn_axis_r8's node set — every stone and every radius-8 legal cell — masked
 # inside its smallest axial box in a position-only orientation, sides rounded up to 8 from 24. Past
 # S_max (canvas_max_side, L0's smallest multiple of 8 no corpus fence box exceeds) the region is
-# the stones and a halo of 4, and a root past S_far (S_max + 32) is refused. It replies in the graph
+# the stones and a halo of 4; S_far (S_max + 32) bounds the root rule the serving path builds. It replies in the graph
 # rows' frame (LegalSetPolicy's trunk-19 window and overflow map, 362 logits) and reads their rings
 # (same radius and win length). A landed capability: no config names it until a run adopts it.
 # ---------------------------------------------------------------------------

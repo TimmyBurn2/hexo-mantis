@@ -7,7 +7,7 @@ selfplay), so they cannot live in any section module.
 Every model is strict: unknown key = hard error, missing key = hard error, silent scalar
 coercions rejected, values immutable. A default lives in exactly one place — the schema
 field; identity keys carry no terminal defaults, and representation is the closed set
-{grid, graph}.
+{grid, graph, hexcanvas}.
 """
 from dataclasses import dataclass
 from typing import Literal

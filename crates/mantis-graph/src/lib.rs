@@ -660,6 +660,21 @@ fn legal_cells(
     (legal, dist)
 }
 
+/// The stones as a `(q, r) -> player` map, a duplicate coord collapsing to one as the oracle's dict does, and coordinate-sorted.
+fn stone_table(stones_in: &StoneList) -> (FnvMap<i64, i8>, Vec<(i32, i32, i8)>) {
+    let mut stone_map: FnvMap<i64, i8> =
+        FnvMap::with_capacity_and_hasher(stones_in.stones.len(), BuildHasherDefault::default());
+    for &(q, r, p) in &stones_in.stones {
+        stone_map.insert(pack(q, r), p);
+    }
+    let mut stones: Vec<(i32, i32, i8)> = stone_map
+        .iter()
+        .map(|(&k, &p)| ((k >> 32) as i32, k as u32 as i32, p))
+        .collect();
+    stones.sort_unstable_by_key(|&(q, r, _)| (q, r));
+    (stone_map, stones)
+}
+
 /// Coordinate to node id: the dense table inside its budget, else a hash map.
 enum NodeLookup {
     Dense(CoordIndex),
@@ -739,20 +754,7 @@ pub fn build_axis_graph_verified_by(
     let window = (params.win_length - 1) as usize; // axis-walk depth
     let cur = params.current_player;
 
-    // stone_map (coord -> player) for membership + threat lookups.
-    let mut stone_map: FnvMap<i64, i8> =
-        FnvMap::with_capacity_and_hasher(stones_in.stones.len(), BuildHasherDefault::default());
-    for &(q, r, p) in &stones_in.stones {
-        stone_map.insert(pack(q, r), p);
-    }
-
-    // Stones sorted by coord, derived from the DEDUPED `stone_map` so a duplicate coord
-    // collapses to one node exactly as the oracle's dict does.
-    let mut stones: Vec<(i32, i32, i8)> = stone_map
-        .iter()
-        .map(|(&k, &p)| ((k >> 32) as i32, k as u32 as i32, p))
-        .collect();
-    stones.sort_unstable_by_key(|&(q, r, _)| (q, r));
+    let (stone_map, stones) = stone_table(stones_in);
     let (legal, legal_dist) = legal_cells(&stone_map, &stones, radius);
 
     let player_feat: f32 = if cur == 1 { 1.0 } else { -1.0 };

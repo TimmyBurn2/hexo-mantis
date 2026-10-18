@@ -348,6 +348,19 @@ impl RegistrySpec {
                         self.sym_table_id
                     ));
                 }
+                if self.trunk_size != 19 {
+                    errs.push(format!(
+                        "representation=hexcanvas replies in the size_19 window: trunk_size must be 19; got {}",
+                        self.trunk_size
+                    ));
+                }
+                if self.is_multi_window || self.k_max != 1 {
+                    errs.push(format!(
+                        "representation=hexcanvas builds one canvas per leaf: is_multi_window must be \
+                         false and k_max 1; got {} and {}",
+                        self.is_multi_window, self.k_max
+                    ));
+                }
                 match self.win_length {
                     Some(v) if v == WIN_LENGTH => {}
                     Some(v) => errs.push(format!(

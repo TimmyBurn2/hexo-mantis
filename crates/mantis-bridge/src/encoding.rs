@@ -185,7 +185,7 @@ impl PyRegistrySpec {
     pub fn far_halo(&self) -> Option<usize> {
         self.inner.far_halo
     }
-    /// S_far: a far-mode root past it is refused (hexcanvas only).
+    /// S_far: the bound of the root rule the serving path builds (hexcanvas only).
     #[getter]
     pub fn far_max_side(&self) -> Option<usize> {
         self.inner.far_max_side

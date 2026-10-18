@@ -368,79 +368,205 @@ notes                   = "test"
     .to_string()
 }
 
-/// The canvas row's keys are required with their relations, and every graph-only key is refused on it.
-#[test]
-fn a_canvas_row_states_its_keys_and_refuses_the_graph_ones() {
-    assert!(
-        parse_encoding_toml("canvas_ok", &canvas_body()).is_ok(),
-        "the control loads"
-    );
-    let refused = |label: &str, body: String, needle: &str| {
-        let err = parse_encoding_toml(label, &body).expect_err(label);
-        assert!(
-            err.contains(needle),
-            "{label}: the refusal must name {needle:?}: {err}"
-        );
-    };
-    for (key, line) in [
-        ("empty_edges", "empty_edges = \"kept\"\n"),
-        ("graph_radius", "graph_radius = 8\n"),
-        ("node_feat_dim", "node_feat_dim = 11\n"),
-        ("contract_version", "contract_version = 1\n"),
-    ] {
-        refused(key, canvas_body() + line, key);
-    }
-    refused(
-        "no S_max",
-        canvas_body().replace("canvas_max_side         = 112\n", ""),
-        "canvas_max_side",
-    );
-    refused(
-        "S_far at S_max",
-        canvas_body().replace("= 144", "= 112"),
-        "far_max_side",
-    );
-    refused(
-        "off the quantum",
-        canvas_body().replace("= 112", "= 110"),
-        "multiple",
-    );
-    refused(
-        "a halo at the radius",
-        canvas_body().replace("far_halo                = 4", "far_halo = 8"),
-        "far_halo",
-    );
-    refused(
-        "a short minimum",
-        canvas_body().replace("canvas_min_side         = 24", "canvas_min_side = 16"),
-        "lone stone",
-    );
-    refused(
-        "another layout",
-        canvas_body().replace("\"fence\", ", ""),
-        "plane_layout",
-    );
-    refused(
-        "another frame",
-        canvas_body().replace("\"size_19\"", "\"size_25\""),
-        "size_19",
-    );
+/// `body` with `key`'s line replaced by `key = value`.
+fn with(body: &str, key: &str, value: &str) -> String {
+    without(body, key) + &format!("{key} = {value}\n")
 }
 
-/// A graph row refuses a canvas key, so neither representation carries the other's geometry.
+/// `body` with `key`'s line removed.
+fn without(body: &str, key: &str) -> String {
+    let kept: Vec<&str> = body
+        .lines()
+        .filter(|l| l.split('=').next().map(str::trim) != Some(key))
+        .collect();
+    kept.join("\n") + "\n"
+}
+
+/// Every branch of the validator's canvas arm, and its refusal of the canvas keys on a graph row, refuses a row that
+/// trips it alone and names why; each row is the planted break of its own branch (LAW-07).
 #[test]
-fn a_graph_row_refuses_a_canvas_key() {
-    let graph = toml_of("gnn_axis_r8");
+fn every_canvas_validator_branch_refuses_its_row_by_name() {
+    let (canvas, graph) = (canvas_body(), toml_of("gnn_axis_r8"));
+    assert!(
+        parse_encoding_toml("canvas_ok", &canvas).is_ok(),
+        "the canvas control loads"
+    );
     assert!(
         parse_encoding_toml("graph_ok", &graph).is_ok(),
-        "the control loads"
+        "the graph control loads"
     );
-    let err = parse_encoding_toml("graph_canvas", &(graph + "canvas_max_side = 112\n"))
-        .expect_err("a canvas key on a graph row must be refused");
-    assert!(
-        err.contains("canvas_max_side"),
-        "the refusal must name the key: {err}"
-    );
+    let mut rows: Vec<(String, String, String)> = Vec::new();
+    for (key, value) in [
+        ("node_feat_dim", "11"),
+        ("edge_feat_dim", "5"),
+        ("graph_radius", "8"),
+        ("win_axes", "3"),
+        ("contract_version", "1"),
+        ("builder_impl_required", "1"),
+        ("empty_edges", "\"kept\""),
+    ] {
+        rows.push((
+            format!("{key} on a canvas row"),
+            with(&canvas, key, value),
+            format!("hexcanvas must not set {key}"),
+        ));
+    }
+    for (key, value) in [
+        ("canvas_side_step", "8"),
+        ("canvas_min_side", "24"),
+        ("canvas_max_side", "112"),
+        ("far_halo", "4"),
+        ("far_max_side", "144"),
+    ] {
+        rows.push((
+            format!("{key} on a graph row"),
+            with(&graph, key, value),
+            format!("graph must not set {key}"),
+        ));
+        rows.push((
+            format!("no {key}"),
+            without(&canvas, key),
+            format!("hexcanvas requires {key}"),
+        ));
+    }
+    let single = |label: &str, key: &str, value: &str, needle: &str| {
+        (
+            label.to_string(),
+            with(&canvas, key, value),
+            needle.to_string(),
+        )
+    };
+    rows.extend([
+        single(
+            "a zero quantum",
+            "canvas_side_step",
+            "0",
+            "canvas_side_step must be > 0",
+        ),
+        single(
+            "min off the quantum",
+            "canvas_min_side",
+            "20",
+            "canvas_min_side=20 must be a multiple",
+        ),
+        single(
+            "max off the quantum",
+            "canvas_max_side",
+            "110",
+            "canvas_max_side=110 must be a multiple",
+        ),
+        single(
+            "far off the quantum",
+            "far_max_side",
+            "150",
+            "far_max_side=150 must be a multiple",
+        ),
+        single(
+            "min under a lone stone's fence",
+            "canvas_min_side",
+            "16",
+            "lone stone",
+        ),
+        single(
+            "max under min",
+            "canvas_max_side",
+            "16",
+            "canvas_max_side=16 must be >= canvas_min_side",
+        ),
+        single(
+            "far at max",
+            "far_max_side",
+            "112",
+            "far_max_side=112 must be > canvas_max_side",
+        ),
+        single(
+            "a zero halo",
+            "far_halo",
+            "0",
+            "far_halo=0 must be in 1..legal_move_radius",
+        ),
+        single(
+            "a halo at the radius",
+            "far_halo",
+            "8",
+            "far_halo=8 must be in 1..legal_move_radius",
+        ),
+        single("win_length 7", "win_length", "7", "win_length=7 must equal"),
+        single(
+            "the size_25 table",
+            "sym_table_id",
+            "\"size_25\"",
+            "requires sym_table_id \"size_19\"",
+        ),
+        single("eight canvases a leaf", "k_max", "8", "one canvas per leaf"),
+        single("five planes", "n_planes", "5", "requires n_planes=6"),
+        single(
+            "another layout",
+            "plane_layout",
+            "[\"opponent\", \"own\", \"legal\", \"fence\", \"stones_left_1\", \"stones_left_2\"]",
+            "plane_layout=",
+        ),
+        single(
+            "a sliced plane set",
+            "kept_plane_indices",
+            "[0, 1, 2, 3, 4, 5, 5]",
+            "keeps every plane",
+        ),
+        single(
+            "more source planes",
+            "n_source_planes",
+            "8",
+            "keeps every plane",
+        ),
+    ]);
+    rows.push((
+        "no win_length".to_string(),
+        without(&canvas, "win_length"),
+        "hexcanvas requires win_length".to_string(),
+    ));
+    rows.push((
+        "no pass slot".to_string(),
+        with(
+            &with(&canvas, "has_pass_slot", "false"),
+            "policy_logit_count",
+            "361",
+        ),
+        "replies in the graph rows' frame".to_string(),
+    ));
+    rows.push((
+        "a 25 window".to_string(),
+        with(
+            &with(&with(&canvas, "board_size", "25"), "trunk_size", "25"),
+            "policy_logit_count",
+            "626",
+        ),
+        "trunk_size must be 19".to_string(),
+    ));
+    let multi = [
+        ("is_multi_window", "true"),
+        ("cluster_window_size", "19"),
+        ("cluster_threshold", "8"),
+        ("value_pool", "\"min\""),
+        ("policy_pool", "\"scatter_max\""),
+        ("k_max", "8"),
+    ]
+    .iter()
+    .fold(canvas.clone(), |b, (k, v)| with(&b, k, v));
+    rows.push((
+        "a multi-window canvas".to_string(),
+        multi,
+        "one canvas per leaf".to_string(),
+    ));
+    for (label, body, needle) in &rows {
+        let err = parse_encoding_toml("canvas_probe", body).expect_err(&format!(
+            "{label}: the row loaded, so its branch refuses nothing"
+        ));
+        assert!(
+            err.contains(needle.as_str()),
+            "{label}: the refusal must name {needle:?}: {err}"
+        );
+    }
+    assert!(rows.len() >= 35, "the table shrank to {} rows", rows.len());
 }
 
 /// A registered row's own TOML body, read back from the embedded registry.

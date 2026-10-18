@@ -200,7 +200,7 @@ pub struct RegistrySpec {
     pub canvas_max_side: Option<usize>,
     /// The far region's reach around each stone (hexcanvas only). = 4.
     pub far_halo: Option<usize>,
-    /// S_far: a far-mode root past this smallest square bucket is refused (hexcanvas only).
+    /// S_far: the bound of the root rule the serving path builds; a far-mode root past it is to be refused (hexcanvas only).
     pub far_max_side: Option<usize>,
 }
 

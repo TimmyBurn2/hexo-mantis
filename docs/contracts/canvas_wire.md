@@ -24,7 +24,7 @@ overflow map), so the canvas carries the graph builder's legal order and reply s
 | `height`, `width` | `usize` | the container: the region's extent along the pair's first and second coordinate, each rounded up to a multiple of `canvas_side_step` and at least `canvas_min_side` |
 | `origin` | `(i32, i32)` | the pair coordinates of cell (0, 0): the region's minimum corner |
 | `far` | `bool` | the region is the far one (below) |
-| `fit_side` | `usize` | the smallest of the three pairs' square buckets over the served region (the fence, or the far region in far mode): the position's size class, invariant under D6 |
+| `fit_side` | `usize` | the smallest of the three pairs' square buckets over the served region (the fence, or the far region in far mode): the position's size class, invariant under D6; a far canvas can report it at or under `canvas_max_side`, so a reader takes far mode from `far` alone |
 | `planes` | `Vec<u8>` | `[6, height, width]` row-major, each 0 or 1, in `CANVAS_PLANES` order |
 | `legal` | `Vec<(i32, i32)>` | every legal cell `(q, r)`, lexicographic: the graph builder's legal nodes in its order |
 | `legal_gather` | `Vec<i32>` | per legal cell, its cell index `row * width + col`, or `FAR_CELL` (−1) for a cell outside a far region |
@@ -43,7 +43,8 @@ overflow map), so the canvas carries the graph builder's legal order and reply s
 | 5 | `stones_left_2` | the whole region when two are left |
 
 Every plane is a function of what the order-free eval-cache key holds (stones, side, stones left), and the canvas
-carries no history.
+carries no history. The row's derived strides (`n_cells`, `state_stride`, `aux_stride`) are its reply window's
+quantities, not the canvas's: a canvas's shape is per position.
 
 ## The rules
 
@@ -68,7 +69,8 @@ carries no history.
     planes `build(S)` holds at c, the legal set mapped by g, and the same `far` and `fit_side`; the container and pair
     may differ, being chosen per position. The empty board's box is closed under its 4-element subgroup only, which is
     why the sampler keeps an empty record at identity (as for the graph).
-  - Translation: `build(S + t)` equals `build(S)` in every field but `legal` (shifted by t) and the reply frame.
+  - Translation: `build(S + t)` equals `build(S)` in every field but `legal` (shifted by t), `origin` (shifted by t's
+    pair coordinates) and the reply frame.
   - Inertness: every cell outside the `fence` plane is 0 on every plane; `own`, `opponent` and `legal` lie inside it;
     the region touches row 0 and column 0.
   - The reply frame is the graph's: `legal` and `policy_dst_slot` equal the graph builder's legal nodes and policy
@@ -79,7 +81,9 @@ carries no history.
 ## The root rule (`far_max_side`, S_far)
 
 A ROOT whose canvas is in far mode with `fit_side` above `far_max_side` is refused; a leaf never is, and the serving
-budget covers `far_max_side` plus the search's depth margin (a leaf exceeds its root by at most 8 cells a placement).
+budget covers the largest side such a root can be SERVED at, `far_max_side + canvas_side_step` (the band serves up
+to one step over `fit_side`; below S_max the largest served side is likewise `canvas_max_side + canvas_side_step`),
+plus the search's depth margin (a leaf exceeds its root by at most 8 cells a placement).
 The cap OUTCOME exists on both sides — self-play's `ply_cap` termination with no z, and the arena's `TERMINAL_PLY_CAP`,
 a draw unless `eval.ply_cap_adjudication` is armed — but no path reaches it from a refused root, since both loops end at
 the cap by ply count alone (`runner/game.rs`, `arena/match.py`). The design, built with the serving path:
@@ -99,5 +103,5 @@ the cap by ply count alone (`runner/game.rs`, `arena/match.py`). The design, bui
 | the orientation reads the stone set alone | `canvas.rs` | `the_orientation_is_a_function_of_the_stone_set_alone` |
 | the reply frame is the graph builder's | `canvas.rs` | `the_canvas_carries_the_graphs_reply_frame` |
 | the legal set is mantis-core's, as a set and a count, across two producers that cannot collude | `_engine.build_canvas` (bridge) | `tests/model/conformance/test_legal_move_coverage_boundary.py` (the canvas arm) |
-| the row's keys and their relations | `crates/mantis-encoding/src/spec/validate.rs` | `crates/mantis-encoding/tests/registry_census.rs` |
-| no graph-building path admits a canvas row | `mantis-selfplay` `runner/params.rs::resolve_geometry`, `mantis.selfplay.hparams.is_graph_representation` | `crates/mantis-selfplay/src/runner/params.rs` (tests), `tests/selfplay/test_pool_encoding_arms.py` |
+| the row's keys and their relations, each validator branch with its refusal row | `crates/mantis-encoding/src/spec/validate.rs` | `crates/mantis-encoding/tests/registry_census.rs` (`per_field_pins_hexcanvas_r8`, `every_canvas_validator_branch_refuses_its_row_by_name`) |
+| no graph-building path admits a canvas row | `mantis-selfplay` `runner/params.rs::resolve_geometry`, `mantis.selfplay.hparams.is_graph_representation` | `crates/mantis-selfplay/src/runner/params.rs` (tests), `crates/mantis-selfplay/tests/inv23_reanchor.rs` (the runner), the T4 arm matrix (`HexgBuffer`), `tests/selfplay/test_pool_encoding_arms.py` |

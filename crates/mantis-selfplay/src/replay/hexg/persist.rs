@@ -172,7 +172,7 @@ impl HexgBuffer {
         if !self.encoding.reads_rings_of(writer) {
             return Err(format!(
                 "HEXG encoding mismatch: file '{name}' does not hold buffer '{}' records \
-                 (the two rows differ beyond the edges the builder emits)",
+                 (`RegistrySpec::reads_rings_of` refuses the pair)",
                 self.encoding.name
             ));
         }

@@ -46,5 +46,6 @@ pub fn build_canvas_py<'py>(
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(build_canvas_py, m)?)?;
+    m.add("FAR_CELL", mantis_graph::FAR_CELL)?;
     Ok(())
 }

@@ -278,6 +278,35 @@ note = """v7 is ARCHIVED, not registered (WP3 pruned the set to four). A non-reg
 raises at `lookup()`, so this is loud by construction rather than silent — it is the wrong
 KIND of defect for this gate. Recorded so the reasoning is not rediscovered."""
 
+# ── Class R — a REPRESENTATION defaulted where the schema's refusal cannot reach (LAW-11) ──
+[[case]]
+id = "R1"
+lang = "py"
+code = 'rep = getattr(spec, "representation", "graph")'
+expect = "fires"
+note = "getattr() defaulting the incumbent representation."
+
+[[case]]
+id = "R2"
+lang = "py"
+code = 'rep = getattr(spec, "representation", "hexcanvas")'
+expect = "fires"
+note = "the canvas representation (DENSE-1) defaulted the same way."
+
+[[case]]
+id = "R3"
+lang = "py"
+code = 'rep = config.get("representation", "hexcanvas")'
+expect = "fires"
+note = "a dict read defaulting the canvas representation."
+
+[[case]]
+id = "R4"
+lang = "py"
+code = 'rep = getattr(spec, "representation", None)'
+expect = "quiet"
+note = "a None default refused downstream by name is the closed-match idiom, not a fallback."
+
 [residue]
 accepted = ["C10", "C11", "C17"]
 rationale = """A grep gate keyed on encoding literals cannot see a default that contains no

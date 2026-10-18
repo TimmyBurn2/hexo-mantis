@@ -655,6 +655,8 @@ def build_canvas(
     current_player: int,
     moves_remaining: int,
 ) -> dict[str, Any]: ...
+#: `legal_gather` of a legal cell outside a far region (`mantis_graph::FAR_CELL`).
+FAR_CELL: int
 
 def derived_hexg_visit_capacity(
     n_simulations: int,

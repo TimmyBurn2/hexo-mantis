@@ -31,9 +31,11 @@ A `hexcanvas` row (schema v6, contract #12) carries the reply frame exactly as t
 `canvas_min_side` (a multiple of the step that a lone stone's fence, 2·radius + 1, fits),
 `canvas_max_side` (S_max: a multiple of the step, at least the minimum; far mode past it),
 `far_halo` (≥ 1, below the radius) and `far_max_side` (S_far: a multiple of the step above
-S_max; a root past it is refused). The canvas keys are refused on a graph row, and the graph-only
-keys (`node_feat_dim`, `edge_feat_dim`, `graph_radius`, `win_axes`, `contract_version`,
-`builder_impl_required`, `empty_edges`) on a hexcanvas row.
+S_max; the bound of the root rule the serving path builds). It is a single window with one canvas a
+leaf (`is_multi_window` false, `k_max` 1, `trunk_size` 19). The canvas keys are refused on a graph
+row, and the graph-only keys (`node_feat_dim`, `edge_feat_dim`, `graph_radius`, `win_axes`,
+`contract_version`, `builder_impl_required`, `empty_edges`) on a hexcanvas row. Every branch of the
+canvas arm has its refusal row in the census (`every_canvas_validator_branch_refuses_its_row_by_name`).
 
 The registered set is pruned to its live consumers — every entry is named by ≥ 1 config or ≥ 1
 anchor artifact — with two stated exceptions, each a landed capability no config names until a
