@@ -19,6 +19,7 @@ pub mod gumbel_mctx;
 pub mod kind;
 pub mod node;
 pub mod policy;
+mod reroot;
 mod selection;
 pub mod seq_halving;
 #[cfg(test)]

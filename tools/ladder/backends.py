@@ -18,6 +18,9 @@ class BackendError(RuntimeError):
 #: The ladder plays the budget-aware stop (PUCT only); every other consumer of the deploy head leaves it off.
 LADDER_EARLY_STOP = True
 
+#: Whether the ladder's second stone starts on its first stone's kept subtree (PUCT only); no other consumer reuses.
+LADDER_TREE_REUSE = False
+
 #: The ONE preset beside the unit — the ladder tool's own row, labelled on every receipt, never a unit reading.
 PRESET_SIMS: dict[str, int | None] = {"unit": None, "play": 64}
 
@@ -168,6 +171,7 @@ class MantisBackend:
             "weights": self.weights, "leaf_batch_size": self._leaf_batch_size, "c_visit": self._c_visit, "c_scale": self._c_scale,
             "q_rescale": self._q_rescale, "gumbel_m": self._gumbel_m,
             "early_stop": LADDER_EARLY_STOP and self._search_kind == "puct", "standalone_host": bool(standalone_host),
+            "tree_reuse": LADDER_TREE_REUSE and self._search_kind == "puct",
             # One game per engine: a pop wakes on the round's own submission, so the deadline is never waited out.
             "collector": {"submitters": self._engine.batch_timing_snapshot()["wake"]["submitters"],
                           "max_wait_ms": None if batching is None else batching.inference_max_wait_ms,
@@ -183,7 +187,8 @@ class MantisBackend:
         self._head = build_candidate_player(
             self._engine, self.sims, spec=self._spec, leaf_batch_size=self._leaf_batch_size, c_visit=self._c_visit,
             c_scale=self._c_scale, q_rescale=self._q_rescale, search_kind=self._search_kind, gumbel_m=self._gumbel_m,
-            gumbel_seed=self.seed, tactics=self._tactics, puct=self._puct, early_stop=LADDER_EARLY_STOP)
+            gumbel_seed=self.seed, tactics=self._tactics, puct=self._puct, early_stop=LADDER_EARLY_STOP,
+            tree_reuse=LADDER_TREE_REUSE and self._search_kind == "puct")
         self._head.new_game()
 
     def select_turn(self, board: Any, forced: tuple[Cell, ...] = ()) -> TurnResult:

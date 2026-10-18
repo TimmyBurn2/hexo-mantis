@@ -34,8 +34,8 @@ class DeployHeadPlayer:
     """The deploy-matched candidate head: the run's own search over an `MCTSTree`.
 
     Raises:
-        ValueError: `leaf_batch_size < 1`; `gumbel_m < 1`; `search_kind` is not a kind the
-            engine implements, or `tactics` a block it cannot arm (raised by `MCTSTree` on the first `new_game`).
+        ValueError: `leaf_batch_size < 1`; `gumbel_m < 1`; `tree_reuse` under a kind but `puct`; `search_kind` is not a
+            kind the engine implements, or `tactics` a block it cannot arm (raised by `MCTSTree` on the first `new_game`).
     """
 
     def __init__(
@@ -54,6 +54,7 @@ class DeployHeadPlayer:
         puct: PuctConstants,
         eval_cache: GameEvalCache | None = None,
         early_stop: bool = False,
+        tree_reuse: bool = False,
     ) -> None:
         # `c_visit`, `c_scale`, `q_rescale`, `leaf_batch_size` and `gumbel_m` are REQUIRED schema
         # keys, never defaulted: a default equal to today's minted value is still a second authority.
@@ -70,6 +71,9 @@ class DeployHeadPlayer:
                 f"reason — a bar that considered a different number of root actions than the "
                 f"run did is not deploy-matched."
             )
+        if tree_reuse and search_kind != "puct":
+            # The Gumbel root's halving schedule is keyed to root visits, so inherited ones would skip it.
+            raise ValueError(f"DeployHeadPlayer: tree_reuse needs search_kind 'puct', got {search_kind!r}")
         self._expand_fn = expand_fn
         self._n_sims = int(n_sims)
         self._leaf_batch_size = int(leaf_batch_size)
@@ -102,6 +106,11 @@ class DeployHeadPlayer:
         #: The head's own lever rows, cumulative: stops and the descents they left, and the PUCT select calls.
         self._rows: dict[str, int] = dict.fromkeys(("stop_fired", "stop_saved", "select_calls", "select_overlaps",
                                                     "select_network_leaves"), 0)
+        #: A stone's search starts on the last search's subtree its board reaches (the turn's second stone); off, fresh.
+        self._tree_reuse = bool(tree_reuse)
+        if self._tree_reuse:
+            # Searches that started on a kept subtree, and the visits they kept; a cell without reuse records neither.
+            self._rows.update(reuse_reroots=0, reuse_inherited=0)
 
     def name(self) -> str:
         return "deploy_head"
@@ -148,7 +157,8 @@ class DeployHeadPlayer:
         """Search `n_sims` DESCENTS and return the move this run's search kind picks.
 
         The budget counts every descent, the root's own among them: leaves RETURNED, inline descents and table hits; an
-        empty board plays the origin, armed tactics a decided stone, both unsearched; the audit may swap in a hold.
+        empty board plays the origin, armed tactics a decided stone, both unsearched; the audit may swap in a hold. With
+        tree reuse the kept subtree's visits are free: the budget counts this search's new descents.
 
         Raises:
             ValueError: no root children to pick from, or armed tactics at a radius below 5.
@@ -163,7 +173,12 @@ class DeployHeadPlayer:
             return (0, 0)
         tree = self._tree if self._tree is not None else self._fresh_tree()
         self._tree = tree
-        tree.new_game(board)
+        if self._tree_reuse:
+            inherited = tree.reroot(board)
+            self._rows["reuse_reroots"] += int(inherited > 0)
+            self._rows["reuse_inherited"] += inherited
+        else:
+            tree.new_game(board)
         decided = tree.root_offence() if self._tactics is not None else None
         if decided is not None:
             self.last_root, self.last_sims = None, 0

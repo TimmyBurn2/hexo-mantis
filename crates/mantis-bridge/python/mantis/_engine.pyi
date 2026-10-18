@@ -185,6 +185,8 @@ class MCTSTree:
     def quiescence_fire_count(self) -> int: ...
     def new_game(self, board: Board) -> None:
         """Raises ValueError when tactics are armed and the board's legal-move radius is below 5."""
+    def reroot(self, board: Board) -> int:
+        """`new_game` keeping the subtree of the root child `board` is exactly; the visits kept, 0 fresh. Raises: as it."""
     def configure_tactics(self, block: dict[str, Any] | None) -> None:
         """Arm the resolved tactics block, or disarm with None.
 

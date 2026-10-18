@@ -62,7 +62,7 @@ def mantis_backend(ladder, smoke_run_config, tmp_path: Path):
         backend.close()
 
 
-def test_the_mantis_backend_is_named_by_its_net_hash_and_plays_at_the_configs_deploy_sims(mantis_backend) -> None:
+def test_the_mantis_backend_is_named_by_its_net_hash_and_plays_at_the_configs_deploy_sims(mantis_backend, ladder) -> None:
     backend, net_hash, _checkpoint = mantis_backend
     assert backend.backend == "mantis"
     assert backend.net_hash == net_hash
@@ -72,6 +72,7 @@ def test_the_mantis_backend_is_named_by_its_net_hash_and_plays_at_the_configs_de
     assert backend.search["kind"] == "puct"
     assert backend.search["tactics"] is None, "the minted null deploy block is reported, and played, as none"
     assert backend.search["early_stop"] is True, "the ladder plays the budget-aware stop, and its receipt says so"
+    assert backend.search["tree_reuse"] is ladder.backends.LADDER_TREE_REUSE, "the receipt states the ladder's reuse"
 
 
 def test_the_receipt_stamps_the_single_game_collector_posture(mantis_backend) -> None:

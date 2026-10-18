@@ -258,9 +258,9 @@ def _graph_expand_fn(engine: LocalInferenceEngine | GameEvalCache, spec: Encodin
 def build_candidate_player(
     engine: LocalInferenceEngine, n_sims: int, *, spec: EncodingSpec, leaf_batch_size: int,
     c_visit: float, c_scale: float, q_rescale: bool, search_kind: str, gumbel_m: int,
-    gumbel_seed: int, tactics: dict[str, Any] | None, puct: PuctConstants, early_stop: bool,
+    gumbel_seed: int, tactics: dict[str, Any] | None, puct: PuctConstants, early_stop: bool, tree_reuse: bool = False,
 ) -> DeployHeadPlayer:
-    """A closed match on the representation; `early_stop` is the consumer's switch. Raises: EvalDecodeUnsupportedError if not graph."""
+    """A closed match on the representation; `early_stop` and `tree_reuse` are the consumer's switches. Raises: EvalDecodeUnsupportedError if not graph, ValueError as `DeployHeadPlayer`."""
     if spec.representation == "graph":
         # One cache per player, so a game shares it with no other game on the engine.
         cache = GameEvalCache(engine)
@@ -269,7 +269,7 @@ def build_candidate_player(
                                 c_visit=c_visit, c_scale=c_scale, q_rescale=q_rescale,
                                 search_kind=search_kind, gumbel_m=gumbel_m,
                                 gumbel_seed=gumbel_seed, tactics=tactics, puct=puct, eval_cache=cache,
-                                early_stop=early_stop)
+                                early_stop=early_stop, tree_reuse=tree_reuse)
     raise EvalDecodeUnsupportedError(
         f"encoding {spec.name!r} declares representation={spec.representation!r}, which "
         f"this eval worker's decode entrance does not implement. The implemented arm is "

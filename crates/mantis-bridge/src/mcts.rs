@@ -172,15 +172,15 @@ impl PyMCTSTree {
 
     /// Reset the tree for `board`, re-using the pool. Raises: ValueError when armed tactics meet a radius below 5.
     pub fn new_game(&mut self, board: &PyBoard) -> PyResult<()> {
-        self.inner
-            .check_tactics_board(board.inner_ref())
-            .map_err(|e| PyValueError::new_err(e.to_string()))?;
-        self.board_size = BOARD_SIZE;
-        self.pending_boards.clear();
-        self.forced_root_child = None;
-        self.gumbel_root = None;
+        self.reset_mirrors(board)?;
         self.inner.new_game(board.inner_ref().clone());
         Ok(())
+    }
+
+    /// `new_game(board)` keeping the subtree of the root child `board` is exactly; the visits kept, 0 fresh. Raises: as it.
+    pub fn reroot(&mut self, board: &PyBoard) -> PyResult<u32> {
+        self.reset_mirrors(board)?;
+        Ok(self.inner.reroot_or_new_game(board.inner_ref().clone()))
     }
 
     /// Arm the resolved tactics block or disarm with None. Raises: TypeError (not a dict), ValueError (a bad key or leaf).
@@ -499,6 +499,20 @@ impl PyMCTSTree {
         self.inner
             .get_improved_policy(n_actions, self.inner.q_sigma())
             .into_pyarray(py)
+    }
+}
+
+impl PyMCTSTree {
+    /// A new search's bridge half: the armed radius check, then the mirrors the tree's own reset clears.
+    fn reset_mirrors(&mut self, board: &PyBoard) -> PyResult<()> {
+        self.inner
+            .check_tactics_board(board.inner_ref())
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        self.board_size = BOARD_SIZE;
+        self.pending_boards.clear();
+        self.forced_root_child = None;
+        self.gumbel_root = None;
+        Ok(())
     }
 }
 
