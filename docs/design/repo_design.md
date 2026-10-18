@@ -761,7 +761,8 @@ input is a deviation from the amendment's text and lands here in the same commit
    "Throughput" panel where every label carries its unit and its producer: games / h, plies / h
    (Σ `game_complete.moves` per window ÷ the window's own wall — plies, LAW-03), turns / h
    (`positions_per_hour`, compound turns), leaves / s (`sims_per_sec`, the pool's bill of
-   positions × effective sims per move — stated as billed, not served), steps / h. "Data economy"
+   drawn moves × effective sims per move, a decided tail's plies billing nothing — stated as
+   billed, not served), steps / h. "Data economy"
    keeps the buffer fill and the replay-ratio gap.
 4. **§4.7 is unchanged.** No event row is added or moved; the sidecar is an artifact of a
    dev-only tool, contract #9 describes it, and nothing in the run reads it.
