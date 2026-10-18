@@ -1,5 +1,5 @@
 //! `encoding_name` end-to-end registry resolution at `SelfPlayRunner::new`:
-//!   1. every REGISTERED name resolves to that row's own spec-derived shapes;
+//!   1. every REGISTERED graph name resolves to that row's own spec-derived shapes, and a canvas row is refused by name;
 //!   2. a deleted grid row does not resolve;
 //!   3. an UNKNOWN name → native `Err(String)` naming the bad name + a registry hint;
 //!   4. `None` → native `Err` REGARDLESS of any shapes: there is no shape override, and shapes
@@ -26,13 +26,24 @@ fn cfg_with_encoding(encoding_name: Option<&str>) -> SelfPlayRunnerConfig {
     }
 }
 
-/// Test 1 — EVERY registered name resolves, and both shapes come from that row's own
-/// spec. Iterated over `all_specs()` rather than naming rows, so a newly registered
-/// encoding is covered the day it lands.
+/// Test 1 — EVERY registered graph name resolves, and both shapes come from that row's own
+/// spec; a canvas row, which no self-play path builds, is refused by name. Iterated over
+/// `all_specs()` rather than naming rows, so a newly registered encoding is covered the day it lands.
 #[test]
 fn every_registered_encoding_name_resolves_to_its_own_spec_derived_shapes() {
     let mut seen = 0usize;
     for spec in mantis_encoding::all_specs() {
+        if !spec.is_graph() {
+            match SelfPlayRunner::new(cfg_with_encoding(Some(spec.name))) {
+                Ok(_) => panic!("{}: a canvas row built a self-play runner", spec.name),
+                Err(e) => assert!(
+                    e.contains("hexcanvas"),
+                    "{}: the refusal must name the representation: {e}",
+                    spec.name
+                ),
+            }
+            continue;
+        }
         let runner = SelfPlayRunner::new(cfg_with_encoding(Some(spec.name)))
             .unwrap_or_else(|e| panic!("{} must resolve via the registry: {e}", spec.name));
         assert_eq!(
