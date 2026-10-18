@@ -757,3 +757,22 @@ and the operator's word to push. Strength is read only on panels.
 7. **The cache precondition.** R3 extends R370(c)'s precondition, "a replay inside the served path's own batch-size
    spread", to the spread across canvas tiers, bounded at 5e-3 in policy probability. That extends a ruling: is it
    accepted?
+
+## Annotations (L1, 2026-10-18)
+
+- A1. Far mode triggers on the fence's SMALLEST square bucket (`fit_side`), not the served one: a D6 element permutes
+  the three buckets, so a trigger on the served bucket would put one orientation of a position in far mode and another
+  not (§2.3's D6 property). L0 sets S_max = 112 and S_far = 144. With the band, a far root is served up to
+  S_far + 8 and the largest non-far canvas is S_max + 8, which L2's budget covers.
+- A2. The arch kind (`HexCanvasArch` in `ARCH_KINDS`, its pairing and incumbent rows, the `model.hexcanvas` block)
+  lands with its net in L2: the protected reachability pin refuses a kind with no `build_net` branch, the pairing pin a
+  representation that admits none, and L1 carries no model code. L1's stamp half is the detector's: a stamp is refused
+  under another row's declaration, the strip refuses graph ↔ canvas on its wire signature, and arch selection refuses
+  the canvas representation by name.
+- A3. The cap outcome a refused root needs exists (self-play `ply_cap`, arena `TERMINAL_PLY_CAP`), but no path reaches
+  it from a refused root; contract #12 designs the two exits, built with the serving path (L2).
+- A4. `resolve_geometry` refuses the canvas row until a canvas path exists, so the ring reader rule lands at the spec
+  level (`reads_rings_of`, one way: a canvas reader of a graph writer); the buffer admits the row with L2b's sampler.
+- A5. §5.4's four net-built entries, the protected pins over the row, `LeafKey`'s representation word and
+  `resolve_amp_dtype` are L2's; L1 lands T4's canvas arm (two-sided, its three refusal classes back in use) and T9's
+  second representation. DENSE-1 is parked by R395(d) after L1.

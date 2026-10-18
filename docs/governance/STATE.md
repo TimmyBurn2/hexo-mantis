@@ -28,7 +28,14 @@ run13's early STOP was put in force on 2026-10-18 at 09:30 CEST, at its 111k sav
 records' PRESTATED ADDENDUM 2, written about 09:15 CEST). Its rung-16 cells at 72k–108k pool at about +0.10 logit,
 level with R_mint (+0.0965). `perf-3-l1b`'s content is NOT on dev: its one commit `402b0372` is not in dev's history
 and no equivalent patch landed (`git cherry`), so it is CARD-PERF-COLLATE-2's only copy of that code, and no session
-confirms it for deletion.
+confirms it for deletion. DENSE-1's L0 and L1 ran on the operator's packet and EXITED 2026-10-18, finished on the
+operator's word after R395(d) and pushed with this record (branch `dense1-l1`, CARD-DENSE-1). L0, records only and
+pre-stated, reads S_max 112 and S_far 144 over the corpus of record (739 912 games with run12's; run13 joins at its
+stop), and explicit visit mass beyond distance 5 at 0.153 %, under Q3's 0.5 % line. L1 lands the `hexcanvas`
+representation behind the seam as a capability: the `hexcanvas_r8` row (registry schema v6, run-config contract v61),
+`mantis_graph::build_canvas` pinned bit-exact under the twelve D6 elements and translation, and contract #12; every
+path that builds an axis graph refuses the row by name. Its arch kind lands with its net (L2), and L2 and L2b stay
+parked with the programme.
 
 **R394 (2026-10-17): THE LINEAGE CLIMBS WHILE THE LR IS ABOVE THE FLOOR; THE LEVERS BUILD BESIDE IT. run12 is CLOSED
 at 301 259: the anneal lifts as the cosine's steady climb (the fit over 108k–300k +0.0254 ± 0.0041 logit per 12k), and
@@ -722,3 +729,5 @@ the 2026-10-16 note above, which had omitted it.
 The current phase was rewritten 2026-10-18 at R395 on branch `run13-prep` over `origin/dev` `9dc463e6`, with run13's
 cells read from the desk mirror and `perf-3-l1b` checked against `origin/dev`; the same edit updated the run, boxes and
 latest-ruling lines.
+The DENSE-1 L0 and L1 sentences were added 2026-10-18 at their exit, on branch `dense1-l1` over `origin/dev` `f616b990`,
+from their exit record (local).

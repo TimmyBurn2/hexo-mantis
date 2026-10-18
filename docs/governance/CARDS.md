@@ -209,9 +209,19 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   (1.63 below the control) was valid. The four arms were not read (the warm 4×128 stopped at ~3 300 steps, no save).
   Landed on the branch: tools/distill (labeller, rings, trainer driver, reads), the checkpoint stamp's `lineage`, the
   `teacher` extra. Local records `mantis-records/distill-1/EXIT.md`.
-- **CARD-DENSE-1 — PARKED by R395(d) (2026-10-18) by the last-run constraint: its design (`3344f6a4`) stays
-  shelf-ready (its R10); L0 and L1 run only if the operator continues the programme; R394(c) and (d4) are SUSPENDED,
-  not withdrawn. Was: §9 RULED by R394(c) (2026-10-17); L0 and L1 run now on the desktop (R394(d4)).** Q1 as R392(d). Q2
+- **CARD-DENSE-1 — L0 and L1 EXITED 2026-10-18 (branch `dense1-l1`), finished on the operator's word after R395(d)
+  and pushed with this record. L0: S_max 112, S_far 144 (the corpus maximum, set by two from-scratch lines' tails; p99.9 64); Q3 UNDER the
+  line (0.153 % of explicit visit mass beyond 5; run6, run7 and run11fresh above it alone). L1: `hexcanvas` behind the
+  seam as a capability (the `hexcanvas_r8` row, `mantis_graph::build_canvas`, contract #12). OWED to L2: the arch kind
+  with its net and `build_net` branch (the reachability and pairing pins forbid it earlier), §5.4's four net-built
+  conformance entries and the protected pins over the row, the canvas batch wire and its checks, `LeafKey`'s
+  representation word, the far logit's decode, the refused root's two exits (contract #12's design; budget
+  `far_max_side + canvas_side_step` plus the depth margin), the net-output container and tier tolerances; to L2b:
+  `resolve_geometry` and `HexgBuffer` admitting a canvas row with the canvas sampler. L2 and L2b stay PARKED with the
+  programme (R395(d)). Proposed for the architect: an annotation of R390(c) — its 491 392 games included 7 819 bench
+  games, the bench-free 10-08 count ≈ 483–484k (L0's reconciliation). PARKED by R395(d) (2026-10-18) by the last-run
+  constraint: its design (`3344f6a4`) stays shelf-ready (its R10); L0 and L1 run only if the operator continues the
+  programme; R394(c) and (d4) are SUSPENDED, not withdrawn. Was: §9 RULED by R394(c) (2026-10-17); L0 and L1 run now on the desktop (R394(d4)).** Q1 as R392(d). Q2
   accepted (−0.34 the screen's minimal effect). Q3 accepted with the fallback order fused kernels, then margin 5 with
   `far` (only if L0 reads under 0.5 % of explicit visit mass beyond 5), then b8c96, then b6c96: capacity is cut last. Q4
   accepted (Markov first; history carded after L3). Q5: the corpus of record is every closed run's games (run12 now,
