@@ -18,7 +18,8 @@ steps a game, mask 1/8, aux 2.0, the future head at w 0.5, the arena gate book, 
 tails armed. Its parent is run13's trend-aware pick unless run13's window pool is below R_mint by more than 0.05, in
 which case it is run12's 300k save with the head begun fresh. One bet is benched before it is taken: a second
 function-preserving widening to 4×384 or 4×512, adopted at the widest width inside three desk-bench ratios and the
-preflight memory check, else 4×256. The value teacher rides only on a LIVE V2. Reads: rung 16 every 12k, S every 36k;
+preflight memory check, else 4×256. The value teacher rides only on a LIVE V2; V2 read CLOSED on 2026-10-18, so
+run14 carries its key null. Reads: rung 16 every 12k, S every 36k;
 futility over 144k–180k (not above the parent's pool by +0.10 → stop and pick); a second cycle 3e-4 → 1e-4 over 150k
 only if the fit over 180k–276k reads ≥ +0.015 per 12k at its lower bound, else the run ends at 300k. Within-turn tree
 reuse is a deploy lever built beside run14 (TR-D), not its precondition. DENSE-1 is parked, its design shelf-ready;

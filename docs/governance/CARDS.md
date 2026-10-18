@@ -54,8 +54,8 @@ run14), CARD-NET2NET-WIDEN (the second widening is the bet) and CARD-PERF-COLLAT
   bound, a second cycle 3e-4 → 1e-4 over 150k is minted by annotation; else the run ends at 300k. It takes box A at
   run13's STOP (R395(a)) or at its GO verdict (R394(b)). OWNED by the RUN13-PREP session: a draft mint with two open
   slots, the parent (decided at run13's verdict) and the width (4×256: CARD-WIDEN-2 EXITED 2026-10-18); the value
-  teacher's key null unless VT-1 reports LIVE; DT-1's n9 fixed in the mint leg if it is a small drain-golden re-pin, else carded
-  display-only with the tails armed anyway; run14's reads, futility and extension pre-stated verbatim in the local
+  teacher's key null (VT-1's V2 read CLOSED, 2026-10-18); DT-1's n9 FIXED on dev (`4f62359b`, CARD-DECIDED-TAILS), the tails
+  armed; run14's reads, futility and extension pre-stated verbatim in the local
   records (`mantis-records/run14/`). At the verdict: the stop save mirrored and sha-checked, the pick, then the mint on
   the operator's word once the width is in hand. MINT-BLOCKING on the parent slot (the width is 4×256).
 - **CARD-WIDEN-2 — EXITED 2026-10-18: the bench adopts no wider width, so run14 stays 4×256 (branch `widen-2`; local
@@ -70,7 +70,7 @@ run14), CARD-NET2NET-WIDEN (the second widening is the bet) and CARD-PERF-COLLAT
   and the lineage recorded. It is adopted at the widest width whose desk bench reads trainer s/step ≤ 1.6×, GPU served
   µs/leaf at B 64 ≤ 1.3× and CPU µs/leaf at B 1 ≤ 1.5× of 4×256's, and whose preflight memory check passes; else run14
   stays 4×256. It fills CARD-RUN14's width slot.
-- **CARD-R395-MERGES — ORDERED by R395(e).** `value-teacher` (`d9781bb7`, since rebased onto `9dc463e6` as `cbebb469`)
+- **CARD-R395-MERGES — ORDERED by R395(e).** `value-teacher` (`d9781bb7`, since rebased onto `6e862a96` as `a3675af3`)
   is pushed after `make gates` on its tip and the V2 verdict, LIVE or CLOSED: it replaces the dead scalar mix with a
   reviewed, null-everywhere encoding. `decided-tails` is on dev (`9dc463e6`). Worktrees whose branches are on dev are
   pruned; unfinished branches stay local, unmerged. `perf-3-l1b` on origin is deleted by the operator once a session
@@ -615,10 +615,14 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   - CARD-PAIR-DIAGNOSTIC — the pair diagnostic;
   - CARD-SIX-TRAINER-READ — the Six-trainer read;
   - CARD-RULER-HYGIENE — ruler hygiene;
-  - CARD-SEARCH-VALUE-TEACHER [CARD-VALUE-TEACHER-CALIBRATED] — **MOVED by R395(b) and (e) (2026-10-18): it rides
+  - CARD-SEARCH-VALUE-TEACHER [CARD-VALUE-TEACHER-CALIBRATED] — **CLOSED 2026-10-18 on its pre-stated V2 line
+    (R394(d2): a null closes the card with its number; R395(b): a CLOSE keeps it out of run14).** The number: Δ =
+    cf CE(T) − cf CE(C) = +0.0012 nats [−0.0112, +0.0137] at 15k against the line ≤ −0.015. The permuted known-bad
+    reads worse (+0.0175 [+0.0050, +0.0301]), so the read is not void. The CLOSE bounds a true effect of −0.025 (power
+    0.95), not −0.020 (0.79) or −0.015 (0.50). run14 carries the key null. Was: **MOVED by R395(b) and (e) (2026-10-18): it rides
     run14 only on a LIVE V2 at its pre-stated line, a CLOSE keeping it out; VT-1 finishes on the desk, and no
-    value-teacher work moves to box A (R395(a)); `value-teacher` (`d9781bb7`, since rebased onto `9dc463e6` as
-    `cbebb469`) is pushed after `make gates` on its tip and the V2 verdict, LIVE or CLOSED (CARD-R395-MERGES).** Was:
+    value-teacher work moves to box A (R395(a)); `value-teacher` (`d9781bb7`, since rebased onto `6e862a96` as
+    `a3675af3`) is pushed after `make gates` on its tip and the V2 verdict, LIVE or CLOSED (CARD-R395-MERGES).** Was:
     **MOVED by R394(d2) (2026-10-17): proceeds V0 → V1 → V2 on the desktop**, its own packet: a held-out census, the
     end-bin soft target against the dead-head trigger, then three 15k warm arms read by the value instrument, the exams
     and one desk cell per ruler; a null closes the card with its number, a read lands in run15. Was: the calibrated
