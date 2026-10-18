@@ -1,3 +1,6 @@
+// Exceeds the 300-line soft cap (R8): the one collect-all validator, each representation's arm beside the universal
+// checks it shares, so a row's whole verdict is reported in one pass.
+
 //! `RegistrySpec::validate` — cross-field invariant checks. Collects ALL
 //! violations into one multi-line message; never short-circuits on the first.
 
@@ -5,10 +8,10 @@ use std::collections::BTreeSet;
 
 use super::{PolicyPool, RegistrySpec, Representation, ValuePool};
 
-// Graph invariants are single-sourced against the axis-graph builder's own schema constants,
-// so the graph dims, `win_axes` and `builder_impl_required` cannot drift from its output.
+// Graph and canvas invariants are single-sourced against the builders' own schema constants,
+// so the graph dims, `win_axes`, `builder_impl_required` and the plane layout cannot drift.
 use mantis_core::board::WIN_LENGTH;
-use mantis_graph::{BUILDER_IMPL_NATIVE, EDGE_FEAT_DIM, NODE_FEAT_DIM, WIN_AXES};
+use mantis_graph::{BUILDER_IMPL_NATIVE, CANVAS_PLANES, EDGE_FEAT_DIM, NODE_FEAT_DIM, WIN_AXES};
 
 /// Graph-only field must be present and equal the builder-schema constant.
 /// Pushes a named error otherwise (missing OR mismatched).
@@ -19,6 +22,69 @@ fn require_graph_eq(errs: &mut Vec<String>, key: &str, got: Option<usize>, want:
             "{key}={v} must equal {want} (axis-graph builder schema)"
         )),
         None => errs.push(format!("representation=graph requires {key}")),
+    }
+}
+
+/// A key that belongs to the other representation must be absent; pushes a named error otherwise.
+fn refuse_foreign(errs: &mut Vec<String>, rep: &str, key: &str, present: bool) {
+    if present {
+        errs.push(format!("representation={rep} must not set {key}"));
+    }
+}
+
+/// The canvas keys and their relations: a quantum, a minimum a lone stone's fence fits, S_max above it, a halo inside the radius, S_far above S_max.
+fn require_canvas_keys(errs: &mut Vec<String>, spec: &RegistrySpec) {
+    let need = |errs: &mut Vec<String>, key: &str, v: Option<usize>| {
+        if v.is_none() {
+            errs.push(format!("representation=hexcanvas requires {key}"));
+        }
+        v
+    };
+    let step = need(errs, "canvas_side_step", spec.canvas_side_step);
+    let min = need(errs, "canvas_min_side", spec.canvas_min_side);
+    let max = need(errs, "canvas_max_side", spec.canvas_max_side);
+    let halo = need(errs, "far_halo", spec.far_halo);
+    let far = need(errs, "far_max_side", spec.far_max_side);
+    let (Some(step), Some(min), Some(max), Some(halo), Some(far)) = (step, min, max, halo, far)
+    else {
+        return;
+    };
+    if step == 0 {
+        errs.push("canvas_side_step must be > 0".to_string());
+        return;
+    }
+    for (key, v) in [
+        ("canvas_min_side", min),
+        ("canvas_max_side", max),
+        ("far_max_side", far),
+    ] {
+        if v % step != 0 {
+            errs.push(format!(
+                "{key}={v} must be a multiple of canvas_side_step={step}"
+            ));
+        }
+    }
+    if min < 2 * spec.legal_move_radius + 1 {
+        errs.push(format!(
+            "canvas_min_side={min} must hold a lone stone's fence, 2*legal_move_radius+1={}",
+            2 * spec.legal_move_radius + 1
+        ));
+    }
+    if max < min {
+        errs.push(format!(
+            "canvas_max_side={max} must be >= canvas_min_side={min}"
+        ));
+    }
+    if far <= max {
+        errs.push(format!(
+            "far_max_side={far} must be > canvas_max_side={max}"
+        ));
+    }
+    if halo == 0 || halo >= spec.legal_move_radius {
+        errs.push(format!(
+            "far_halo={halo} must be in 1..legal_move_radius={}",
+            spec.legal_move_radius
+        ));
     }
 }
 
@@ -163,10 +229,23 @@ impl RegistrySpec {
             }
         }
 
-        // Representation-gated: the axis-graph geometry invariants apply to Graph only; the
-        // multi-window / legal_move_radius / k_max / n_chain_planes checks above are universal.
+        // Representation-gated: each arm states its own geometry and refuses the other's keys;
+        // the multi-window / legal_move_radius / k_max / n_chain_planes checks above are universal.
+        let canvas_keys = [
+            ("canvas_side_step", self.canvas_side_step.is_some()),
+            ("canvas_min_side", self.canvas_min_side.is_some()),
+            ("canvas_max_side", self.canvas_max_side.is_some()),
+            ("far_halo", self.far_halo.is_some()),
+            ("far_max_side", self.far_max_side.is_some()),
+        ];
         match self.representation {
             Representation::Graph => {
+                for (key, present) in canvas_keys {
+                    refuse_foreign(&mut errs, "graph", key, present);
+                }
+                if self.empty_edges.is_none() {
+                    errs.push("representation=graph requires empty_edges".to_string());
+                }
                 // action space UNCHANGED (identical 19×19+pass board).
                 if self.policy_logit_count != expected_logits {
                     errs.push(format!(
@@ -251,6 +330,65 @@ impl RegistrySpec {
                         self.n_source_planes
                     ));
                 }
+            }
+            Representation::HexCanvas => {
+                // The reply frame is the graph rows' (`LegalSetPolicy`'s window and overflow map).
+                if self.policy_logit_count != expected_logits || !self.has_pass_slot {
+                    errs.push(format!(
+                        "representation=hexcanvas replies in the graph rows' frame: \
+                         policy_logit_count={} must be board_size²+1={} with has_pass_slot",
+                        self.policy_logit_count,
+                        self.board_size * self.board_size + 1
+                    ));
+                }
+                if self.sym_table_id != "size_19" {
+                    errs.push(format!(
+                        "representation=hexcanvas requires sym_table_id \"size_19\" (the reply \
+                         frame); got {:?}",
+                        self.sym_table_id
+                    ));
+                }
+                match self.win_length {
+                    Some(v) if v == WIN_LENGTH => {}
+                    Some(v) => errs.push(format!(
+                        "win_length={v} must equal {WIN_LENGTH} (the game's rule)"
+                    )),
+                    None => errs.push("representation=hexcanvas requires win_length".to_string()),
+                }
+                for (key, present) in [
+                    ("node_feat_dim", self.node_feat_dim.is_some()),
+                    ("edge_feat_dim", self.edge_feat_dim.is_some()),
+                    ("graph_radius", self.graph_radius.is_some()),
+                    ("win_axes", self.win_axes.is_some()),
+                    ("contract_version", self.contract_version.is_some()),
+                    (
+                        "builder_impl_required",
+                        self.builder_impl_required.is_some(),
+                    ),
+                    ("empty_edges", self.empty_edges.is_some()),
+                ] {
+                    refuse_foreign(&mut errs, "hexcanvas", key, present);
+                }
+                if self.plane_layout != CANVAS_PLANES || self.n_planes != CANVAS_PLANES.len() {
+                    errs.push(format!(
+                        "representation=hexcanvas requires n_planes={} and plane_layout={:?} \
+                         (the canvas builder's planes); got {} and {:?}",
+                        CANVAS_PLANES.len(),
+                        CANVAS_PLANES,
+                        self.n_planes,
+                        self.plane_layout
+                    ));
+                }
+                if !self.kept_plane_indices.iter().copied().eq(0..self.n_planes)
+                    || self.n_source_planes != self.n_planes
+                {
+                    errs.push(format!(
+                        "representation=hexcanvas keeps every plane: kept_plane_indices must be \
+                         0..n_planes and n_source_planes == n_planes; got {:?} and {}",
+                        self.kept_plane_indices, self.n_source_planes
+                    ));
+                }
+                require_canvas_keys(&mut errs, self);
             }
         }
 

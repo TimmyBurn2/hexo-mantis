@@ -15,6 +15,7 @@ import pytest
 
 from mantis.encoding import all_specs, lookup
 from mantis.model import (
+    ARCH_KINDS_BY_REPRESENTATION,
     GnnArch,
     RepresentationMismatch,
     arch_from_spec_and_config,
@@ -40,7 +41,9 @@ def test_graph_keyset_matches_golden() -> None:
 
 def test_no_killed_branch_keys_on_any_constructed_net() -> None:
     killed = ("cluster_pool.", "global_encoder.", "gpool_bias_branch.")
-    for enc in (spec.name for spec in all_specs()):
+    with_a_kind = [s.name for s in all_specs() if s.representation in ARCH_KINDS_BY_REPRESENTATION]
+    assert with_a_kind, "no registered encoding's representation has an arch kind"
+    for enc in with_a_kind:
         arch = arch_from_spec_and_config(lookup(enc), {})
         for k in _keyset(build_net(arch)):
             assert not k.startswith(killed), f"{enc}: killed-branch key {k!r}"

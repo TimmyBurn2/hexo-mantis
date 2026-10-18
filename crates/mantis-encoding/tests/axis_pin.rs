@@ -77,7 +77,7 @@ fn the_registry_refuses_an_absent_or_unknown_empty_edges() {
     );
     let pruned = graph_body().replace("\"kept\"", "\"pruned\"");
     let spec = parse_encoding_toml("gnn_eepruned", &pruned).expect("pruned is a registry value");
-    assert_eq!(spec.empty_edges, EmptyEdges::Pruned);
+    assert_eq!(spec.empty_edges, Some(EmptyEdges::Pruned));
 }
 
 fn graph_body() -> String {
@@ -108,7 +108,7 @@ contract_version        = 1
 builder_impl_required   = 1
 n_chain_planes          = 6
 empty_edges             = "kept"
-schema_version          = 5
+schema_version          = 6
 notes                   = "test"
 "#
     .to_string()
@@ -138,7 +138,8 @@ fn the_named_build_geometry_equals_the_registry_row_it_names() {
         "BuildParams::V1_GEOMETRY.trunk_size disagrees with the row it is named for"
     );
     assert_eq!(
-        params.empty_edges, spec.empty_edges,
+        Some(params.empty_edges),
+        spec.empty_edges,
         "BuildParams::V1_GEOMETRY.empty_edges disagrees with the row it is named for"
     );
 }

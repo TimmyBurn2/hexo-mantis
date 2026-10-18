@@ -100,19 +100,24 @@ def test_the_refusal_names_the_governing_config_keys(smoke_run_config) -> None:
         )
 
 
-def test_the_relation_has_no_grid_arm_left_to_be_scoped_against() -> None:
-    """Prove the registry has no non-graph representation, so the relation is unconditional.
+#: The representations whose runs write the HEXG ring, the record the relation bounds.
+_HEXG_REPRESENTATIONS = frozenset({"graph", "hexcanvas"})
 
-    The scoping half retired with the grid path; a re-introduced representation reds here
-    rather than silently re-opening an unscoped arm.
+
+def test_the_relation_has_no_grid_arm_left_to_be_scoped_against() -> None:
+    """Prove every registered representation writes the HEXG ring, so the relation is unconditional.
+
+    The scoping half retired with the grid path; a representation that writes another record
+    reds here rather than silently inheriting a bound it does not have.
     """
     from mantis.encoding import all_specs
 
     reps = {str(spec.representation) for spec in all_specs()}
-    assert reps == {"graph"}, (
-        f"a non-graph representation is registered again ({sorted(reps)}); the visit-capacity "
-        "relation was SCOPED to graph and that scoping was deleted with the grid path"
+    assert reps <= _HEXG_REPRESENTATIONS, (
+        f"a representation outside {sorted(_HEXG_REPRESENTATIONS)} is registered ({sorted(reps)}); "
+        "the visit-capacity relation bounds the HEXG record and is unconditional"
     )
+
 
 def test_every_minted_graph_config_satisfies_the_relation(smoke_run_config) -> None:
     """Prove every shipped graph config satisfies the derivation (50-sims/leaf-8 -> capacity 57)."""

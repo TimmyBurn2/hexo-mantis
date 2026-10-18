@@ -5,6 +5,7 @@
 use pyo3::prelude::*;
 
 mod board;
+mod canvas;
 mod collate;
 mod encoding;
 mod graph_contract;
@@ -18,6 +19,7 @@ mod utils;
 #[pymodule]
 fn _engine(m: &Bound<'_, PyModule>) -> PyResult<()> {
     board::register(m)?; // Board
+    canvas::register(m)?; // build_canvas
     encoding::register(m)?; // RegistrySpec + all_specs/registry_sha/registry_sha_hex
     graph_contract::register(m)?; // verify_edge_geometry
     collate::register(m)?; // collate_pack + edge_vocabulary

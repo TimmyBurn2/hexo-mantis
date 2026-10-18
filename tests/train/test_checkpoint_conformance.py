@@ -518,12 +518,11 @@ def test_weights_strip_requires_wire_signature_equality(tmp_path, tiny_net, opti
     same = strip_and_restamp(src, new_encoding="gnn_axis_v1", run_id="runc",
                              checkpoint_dir=tmp_path)
     assert Path(same).exists()
-    # THE REFUSAL ARM HAS NO CONSTRUCTIBLE INPUT AT HEAD: every registered encoding shares one
-    # wire signature, so the row below reds only the day a second signature is registered.
-    signatures = {checkpoints._wire_signature(spec) for spec in all_specs()}
-    assert len(signatures) == 1, (
-        f"more than one registered wire signature ({signatures}) — the strip's mismatch "
-        "refusal is now constructible and needs its arm back")
+    # The refusal arm, constructible since a second wire signature is registered (the canvas row).
+    signatures = {spec.name: checkpoints._wire_signature(spec) for spec in all_specs()}
+    assert len(set(signatures.values())) > 1, f"one wire signature again ({signatures}): the arm below has no subject"
+    with pytest.raises(CheckpointStampError, match="wire signature mismatch"):
+        strip_and_restamp(src, new_encoding="hexcanvas_r8", run_id="runc", checkpoint_dir=tmp_path)
 
 
 def _save_bare(state: dict, path: Path) -> None:

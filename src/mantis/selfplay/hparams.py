@@ -27,22 +27,28 @@ class ResolvedPoolEncoding:
 
 
 def is_graph_representation(spec: Any) -> bool:
-    """Closed match on ``spec.representation`` — no dense-by-default arm. `"grid"` is
-    REFUSED BY NAME rather than answered `False`, because a spec still declaring the deleted
-    dense path would otherwise be handed a graph buffer.
+    """Closed match on ``spec.representation`` — no dense-by-default arm. `"grid"` and
+    `"hexcanvas"` are REFUSED BY NAME rather than answered `False`, because every caller guards an
+    axis-graph path and a non-graph spec would otherwise be handed a graph buffer.
 
     Args:
         spec: an encoding spec, or anything carrying a ``representation`` attribute.
 
     Returns:
-        `True` — the one representation this project has.
+        `True` — the one representation self-play serves.
 
     Raises:
-        RepresentationMismatch: the representation is absent, `"grid"`, or unknown.
+        RepresentationMismatch: the representation is absent, `"grid"`, `"hexcanvas"`, or unknown.
     """
     rep = getattr(spec, "representation", None)
     if rep == "graph":
         return True
+    if rep == "hexcanvas":
+        raise RepresentationMismatch(
+            f"representation 'hexcanvas' on encoding spec {getattr(spec, 'name', spec)!r} — "
+            "self-play, the inference server and the replay facade build axis graphs, and no "
+            "canvas path is built into them."
+        )
     if rep == "grid":
         raise RepresentationMismatch(
             f"representation 'grid' on encoding spec {getattr(spec, 'name', spec)!r} — the "

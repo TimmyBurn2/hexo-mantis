@@ -140,7 +140,7 @@ impl PyRegistrySpec {
     pub fn edge_feat_dim(&self) -> Option<usize> {
         self.inner.edge_feat_dim
     }
-    /// GNN win-length (graph only). = 6.
+    /// The game's win length (graph and hexcanvas rows). = 6.
     #[getter]
     pub fn win_length(&self) -> Option<usize> {
         self.inner.win_length
@@ -160,10 +160,35 @@ impl PyRegistrySpec {
     pub fn contract_version(&self) -> Option<u32> {
         self.inner.contract_version
     }
-    /// Whether the builder emits the edges between two empty cells: `"kept"` or `"pruned"`.
+    /// Whether the builder emits the edges between two empty cells: `"kept"` or `"pruned"` (graph only).
     #[getter]
-    pub fn empty_edges(&self) -> &'static str {
-        mantis_encoding::empty_edges_str(self.inner.empty_edges)
+    pub fn empty_edges(&self) -> Option<&'static str> {
+        self.inner.empty_edges.map(mantis_encoding::empty_edges_str)
+    }
+    /// The canvas container's side quantum (hexcanvas only). = 8.
+    #[getter]
+    pub fn canvas_side_step(&self) -> Option<usize> {
+        self.inner.canvas_side_step
+    }
+    /// The canvas container's smallest side (hexcanvas only). = 24.
+    #[getter]
+    pub fn canvas_min_side(&self) -> Option<usize> {
+        self.inner.canvas_min_side
+    }
+    /// S_max: past it the canvas is in far mode (hexcanvas only).
+    #[getter]
+    pub fn canvas_max_side(&self) -> Option<usize> {
+        self.inner.canvas_max_side
+    }
+    /// The far region's reach around each stone (hexcanvas only). = 4.
+    #[getter]
+    pub fn far_halo(&self) -> Option<usize> {
+        self.inner.far_halo
+    }
+    /// S_far: a far-mode root past it is refused (hexcanvas only).
+    #[getter]
+    pub fn far_max_side(&self) -> Option<usize> {
+        self.inner.far_max_side
     }
 
     /// Alias for `policy_logit_count`.
@@ -292,7 +317,12 @@ mod tests {
         // Pin the registered set by NAME, with registry.toml as the authority.
         assert_eq!(
             via_fn,
-            vec!["gnn_axis_r8", "gnn_axis_r8_pruned", "gnn_axis_v1"],
+            vec![
+                "gnn_axis_r8",
+                "gnn_axis_r8_pruned",
+                "gnn_axis_v1",
+                "hexcanvas_r8"
+            ],
             "all_specs must expose exactly the registered encodings"
         );
     }

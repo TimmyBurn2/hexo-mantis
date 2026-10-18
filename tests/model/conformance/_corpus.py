@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 
 import mantis.encoding as encoding
-from mantis._engine import Board, HexgBuffer
+from mantis._engine import Board, HexgBuffer, build_canvas
 from mantis.selfplay.graph_collate import graph_wire_from_rust
 
 
@@ -168,6 +168,13 @@ def graph_wire_for(enc: str, board: Board) -> Any:
     )
     wire, _targets = buffer.sample_graph_batch(1, augment=False)
     return graph_wire_from_rust(wire)
+
+
+def canvas_for(enc: str, board: Board) -> dict[str, Any]:
+    """Build one position's canvas for a hexcanvas encoding, through the engine's builder."""
+    require_corpus_member(board, f"canvas for {enc}")
+    return build_canvas(encoding.lookup(enc), board.get_stones(), board.current_player,
+                        board.moves_remaining)
 
 
 def graph_frame_centre(enc: str, board: Board) -> tuple[int, int]:

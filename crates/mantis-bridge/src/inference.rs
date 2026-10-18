@@ -25,7 +25,7 @@ use mantis_selfplay::queues::{
     WireAlreadyConsumed as WireConsumedGuard,
 };
 use mantis_selfplay::records::assemble_ls_from_gnn_probs;
-use mantis_selfplay::runner::params::{resolve_geometry, GraphGeometryError};
+use mantis_selfplay::runner::params::{resolve_geometry, GeometryError};
 use mantis_selfplay::runner::SelfPlayRunner;
 
 use crate::encoding::PyRegistrySpec;
@@ -218,7 +218,7 @@ impl PyInferenceBatcher {
 /// The graph build params through the runner's one checked geometry resolver, never a truncating cast.
 fn graph_params(
     spec: &'static RegistrySpec,
-) -> Result<(u8, u16, i32, EmptyEdges, u32), GraphGeometryError> {
+) -> Result<(u8, u16, i32, EmptyEdges, u32), GeometryError> {
     let geometry = resolve_geometry(spec)?;
     Ok((
         geometry.win_length,
@@ -908,7 +908,7 @@ mod tests {
             spec.graph_radius.expect("graph row states graph_radius")
         );
         assert_eq!(b.graph_trunk_size as usize, spec.trunk_size);
-        assert_eq!(b.graph_empty_edges, spec.empty_edges);
+        assert_eq!(Some(b.graph_empty_edges), spec.empty_edges);
         assert_eq!(b.graph_contract_version, 1);
         let pruned = mantis_encoding::lookup_or_panic("gnn_axis_r8_pruned");
         let b = PyInferenceBatcher::new(PyRegistrySpec::from_static(pruned), 0, 0)

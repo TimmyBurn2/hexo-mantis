@@ -24,7 +24,7 @@ overflow map), so the canvas carries the graph builder's legal order and reply s
 | `height`, `width` | `usize` | the container: the region's extent along the pair's first and second coordinate, each rounded up to a multiple of `canvas_side_step` and at least `canvas_min_side` |
 | `origin` | `(i32, i32)` | the pair coordinates of cell (0, 0): the region's minimum corner |
 | `far` | `bool` | the region is the far one (below) |
-| `fit_side` | `usize` | the smallest of the three pairs' square buckets: the position's size class, invariant under D6 |
+| `fit_side` | `usize` | the smallest of the three pairs' square buckets over the served region (the fence, or the far region in far mode): the position's size class, invariant under D6 |
 | `planes` | `Vec<u8>` | `[6, height, width]` row-major, each 0 or 1, in `CANVAS_PLANES` order |
 | `legal` | `Vec<(i32, i32)>` | every legal cell `(q, r)`, lexicographic: the graph builder's legal nodes in its order |
 | `legal_gather` | `Vec<i32>` | per legal cell, its cell index `row * width + col`, or `FAR_CELL` (−1) for a cell outside a far region |
@@ -56,8 +56,9 @@ carries no history.
   `fit_side + canvas_side_step`. It reads the stone set only (not their order, the side to move or the stones left), so
   the order-free cache key stays valid and the trainer's draw (among the D6 elements whose square bucket equals the
   served one, L2b) and the server agree. The band makes flips between consecutive plies rarer than a strict minimum.
-- **Far mode.** When `fit_side` exceeds `canvas_max_side` (S_max), the region becomes the stones ∪ the cells within
-  `far_halo` of a stone, and the boxes, orientation and container are recomputed on it. A legal cell outside it keeps its
+- **Far mode.** When the FENCE's smallest square bucket exceeds `canvas_max_side` (S_max), the region becomes the
+  stones ∪ the cells within `far_halo` of a stone, and the boxes, orientation, container and `fit_side` are recomputed
+  on it. A legal cell outside it keeps its
   place in `legal` with `legal_gather = FAR_CELL`: every legal cell has a prior in every mode (the far logit's
   `far − log n_far` decode is the serving path's). The trigger reads `fit_side`, not the served bucket, because a D6
   element permutes the three buckets: a trigger on the served one would put one orientation of a position in far mode

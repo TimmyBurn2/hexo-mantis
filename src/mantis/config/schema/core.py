@@ -60,10 +60,10 @@ class ArchScopedKey:
         for name in ("section", "field", "arch", "grounds"):
             if not getattr(self, name):
                 raise ValueError(f"ArchScopedKey.{name} is empty")
-        if self.arch not in ("grid", "graph"):
+        if self.arch not in ("grid", "graph", "hexcanvas"):
             raise ValueError(
                 f"ArchScopedKey.arch={self.arch!r} is outside the closed representation set "
-                "{'grid', 'graph'} (LAW-11)"
+                "{'grid', 'graph', 'hexcanvas'} (LAW-11)"
             )
 
 
@@ -195,7 +195,7 @@ class IdentityConfig(StrictModel):
     means NO transfer."""
 
     encoding: str = Field(min_length=1)
-    representation: Literal["grid", "graph"]
+    representation: Literal["grid", "graph", "hexcanvas"]
     arch_kind: str | None = Field(default=None, min_length=1)
     warm_start: WarmStartConfig | None = Field(default=None)
 
@@ -586,11 +586,9 @@ class RunConfig(StrictModel):
         The derivation authority is ONE Rust function called both here through its bridge twin and
         by ``SelfPlayRunner::new`` at boot, so the two surfaces cannot drift onto second formulas:
         this validator forwards the regime keys and re-raises the engine's refusal with the field
-        paths attached. Graph-scoped, since dense records carry no HEXG visit slot; on the Gumbel
-        arm the slot count is the minted ``selfplay.gumbel_m``.
+        paths attached. Unconditional, since every registered representation's run writes the HEXG
+        ring; on the Gumbel arm the slot count is the minted ``selfplay.gumbel_m``.
         """
-        if self.identity.representation != "graph":
-            return self
         try:
             derived_visit_capacity(self)
         except ValueError as exc:
@@ -606,7 +604,7 @@ class RunConfig(StrictModel):
 
     @model_validator(mode="after")
     def _ply_cap_within_the_rings_stone_ceiling(self) -> "RunConfig":
-        """`selfplay.max_game_moves <= mantis._engine.max_stones()` on the GRAPH path.
+        """`selfplay.max_game_moves <= mantis._engine.max_stones()`, for every representation's HEXG ring.
 
         The HEXG record stores a position's stones in a FIXED-WIDTH slot, so a ply cap above that
         ceiling configures a run whose own late positions the ring cannot hold and the refusal
@@ -617,8 +615,6 @@ class RunConfig(StrictModel):
         Raises:
             ValueError: the configured ply cap exceeds the ring's per-record stone ceiling.
         """
-        if self.identity.representation != "graph":
-            return self
         from mantis._engine import max_stones
 
         ceiling = max_stones()

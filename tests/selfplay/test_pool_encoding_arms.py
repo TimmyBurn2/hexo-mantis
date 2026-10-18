@@ -58,16 +58,30 @@ def test_graph_arch_has_no_board_size_and_passes_vacuously() -> None:
     assert resolved.n_kept_planes == 0
 
 
+def _classify(spec) -> str:
+    """The graph arm, or the canvas row's refusal by name; any other refusal propagates."""
+    try:
+        is_graph_representation(spec)
+    except RepresentationMismatch as exc:
+        if "'hexcanvas'" not in str(exc):
+            raise
+        return "hexcanvas refused"
+    return "graph"
+
+
 def test_every_registered_encoding_classified() -> None:
-    """Prove every registered spec classifies onto the graph arm; there is no default arm to
-    fall through to.
+    """Prove every registered spec classifies onto the graph arm or is refused by name as a canvas
+    row; there is no default arm to fall through to.
     """
     specs = list(all_specs())
     assert specs, "the registry must not be empty"
 
-    graph = [spec.name for spec in specs if is_graph_representation(spec)]
+    arms = {spec.name: _classify(spec) for spec in specs}
 
-    assert len(graph) == len(specs), "a spec did not classify onto the graph arm"
+    assert "graph" in arms.values(), "no spec classified onto the graph arm"
+    for name, arm in arms.items():
+        want = "graph" if lookup(name).representation == "graph" else "hexcanvas refused"
+        assert arm == want, f"{name} classified as {arm!r}, its representation says {want!r}"
 
 
 @pytest.mark.parametrize("name", [spec.name for spec in all_specs()])
@@ -75,7 +89,8 @@ def test_pool_resolve_classification_matches_the_spec_representation(name: str) 
     """Prove the pool classifies on the registry's declared representation, not on something else."""
     resolved = resolve_pool_encoding({"encoding": name}, arch=None)
     spec = resolved.registry_spec
-    assert is_graph_representation(spec) == (str(spec.representation) == "graph")
+    want = "graph" if str(spec.representation) == "graph" else "hexcanvas refused"
+    assert _classify(spec) == want
 
 
 @pytest.mark.parametrize("rep", ["hex_soup", "GRID", "", "dense"])

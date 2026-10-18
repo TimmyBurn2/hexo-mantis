@@ -28,25 +28,35 @@ pub enum PolicyPool {
 }
 
 /// Input representation discriminant; the TOML key is REQUIRED and absent is a parse error.
-/// The enum stays a closed one-member type rather than disappearing, because that is what makes
-/// an absent or unknown representation an error instead of a fall-through across the FFI.
+/// The enum stays closed, because that is what makes an absent or unknown representation an
+/// error instead of a fall-through across the FFI.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Representation {
     Graph,
+    /// The fence masked inside its smallest axial box (`mantis_graph::build_canvas`, contract #12).
+    HexCanvas,
 }
 
 impl Representation {
-    /// Parse the TOML value string. `"grid"` is refused BY NAME, not merely unknown, so a stale
-    /// row says the dense path is gone rather than resolving to graph.
+    /// Parse the TOML value string. `"grid"` and `"dense"` are refused BY NAME, not merely
+    /// unknown, so a stale row says the K-window path is gone rather than resolving to a canvas.
     pub fn parse(s: &str) -> Result<Self, String> {
         match s {
             "graph" => Ok(Representation::Graph),
+            "hexcanvas" => Ok(Representation::HexCanvas),
             "grid" => Err(
                 "representation=\"grid\" was DELETED with the dense path (R346(f)); \
                  `archive/grid-path` carries the three grid rows"
                     .to_string(),
             ),
-            other => Err(format!("representation must be \"graph\"; got {other:?}")),
+            "dense" => Err(
+                "representation=\"dense\" is no token: the dense K-window path was DELETED as \
+                 \"grid\" (R346(f)), and the hex-canvas kind is \"hexcanvas\""
+                    .to_string(),
+            ),
+            other => Err(format!(
+                "representation must be \"graph\" or \"hexcanvas\"; got {other:?}"
+            )),
         }
     }
 
@@ -55,6 +65,7 @@ impl Representation {
     pub fn as_str(&self) -> &'static str {
         match self {
             Representation::Graph => "graph",
+            Representation::HexCanvas => "hexcanvas",
         }
     }
 
@@ -168,7 +179,7 @@ pub struct RegistrySpec {
     pub node_feat_dim: Option<usize>,
     /// Per-edge feature width (graph only). = 5 (= `mantis_graph::EDGE_FEAT_DIM`).
     pub edge_feat_dim: Option<usize>,
-    /// GNN win-length (graph only). = 6.
+    /// The game's win length (graph and hexcanvas): the graph builder walks it, the ring rule compares it. = 6.
     pub win_length: Option<usize>,
     /// GNN legal-move / axis-walk radius (graph only). = 6.
     pub graph_radius: Option<usize>,
@@ -179,8 +190,18 @@ pub struct RegistrySpec {
     /// Required builder_impl tag the resolver asserts (graph only). = 1 (native;
     /// = `mantis_graph::BUILDER_IMPL_NATIVE`).
     pub builder_impl_required: Option<u8>,
-    /// TOML key `empty_edges`; required: whether the builder emits the edges between two empty cells.
-    pub empty_edges: EmptyEdges,
+    /// TOML key `empty_edges` (graph only, required there): whether the builder emits the edges between two empty cells.
+    pub empty_edges: Option<EmptyEdges>,
+    /// The canvas container's side quantum (hexcanvas only). = 8.
+    pub canvas_side_step: Option<usize>,
+    /// The canvas container's smallest side (hexcanvas only). = 24.
+    pub canvas_min_side: Option<usize>,
+    /// S_max: past this smallest square bucket the canvas is in far mode (hexcanvas only).
+    pub canvas_max_side: Option<usize>,
+    /// The far region's reach around each stone (hexcanvas only). = 4.
+    pub far_halo: Option<usize>,
+    /// S_far: a far-mode root past this smallest square bucket is refused (hexcanvas only).
+    pub far_max_side: Option<usize>,
 }
 
 impl RegistrySpec {
@@ -223,9 +244,15 @@ impl RegistrySpec {
         self.n_cells()
     }
 
-    /// Whether a ring written under `writer` holds this row's records (stones, visits over the legal set): the rows differ at most in the edge set.
+    /// Whether a ring written under `writer` holds this row's records: the rows differ at most in the edge set, or a canvas row reads a graph row of its radius and win length.
     #[must_use]
     pub fn reads_rings_of(&self, writer: &RegistrySpec) -> bool {
+        if self.representation == Representation::HexCanvas
+            && writer.representation == Representation::Graph
+        {
+            return self.legal_move_radius == writer.legal_move_radius
+                && self.win_length == writer.win_length;
+        }
         let as_self = RegistrySpec {
             name: self.name,
             notes: self.notes,

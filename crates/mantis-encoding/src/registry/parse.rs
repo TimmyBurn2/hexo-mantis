@@ -15,10 +15,9 @@ use toml::Value;
 use super::{leak_str, parse_int_or_none};
 use crate::spec::{parse_empty_edges, PolicyPool, RegistrySpec, Representation, ValuePool};
 
-/// The complete recognized key set (grid + graph). A key outside this set is an
-/// unknown-key parse error. Graph-only keys present on a grid entry are a
-/// distinct `validate()` error ("grid must not set graph-only key"), reported in
-/// the same collect-all pass.
+/// The complete recognized key set (graph + hexcanvas). A key outside this set is an
+/// unknown-key parse error. A key of the other representation present on an entry is a
+/// distinct `validate()` error, reported in the same collect-all pass.
 const KNOWN_KEYS: &[&str] = &[
     "representation",
     "board_size",
@@ -48,6 +47,11 @@ const KNOWN_KEYS: &[&str] = &[
     "contract_version",
     "builder_impl_required",
     "empty_edges",
+    "canvas_side_step",
+    "canvas_min_side",
+    "canvas_max_side",
+    "far_halo",
+    "far_max_side",
 ];
 
 /// Optional non-negative integer key. `None` if absent, `Some(i)` if a valid
@@ -210,8 +214,8 @@ pub(super) fn parse_one(name: &str, body: &Value) -> Result<RegistrySpec, String
     let n_source_planes = get_int!("n_source_planes").map(|v| v as usize);
     let k_max = get_int!("k_max").map(|v| v as u32);
 
-    // `representation` is REQUIRED: absent is a named parse error, NOT a Grid/dense default.
-    // The graph-only fields stay `None` for grid and are required-when-graph by `validate()`.
+    // `representation` is REQUIRED: absent is a named parse error, NOT a default.
+    // Each representation's own fields parse as `None` when absent and are required by `validate()`.
     let representation = match table.get("representation") {
         None => {
             errs.push(format!(
@@ -241,13 +245,26 @@ pub(super) fn parse_one(name: &str, body: &Value) -> Result<RegistrySpec, String
     let win_axes = opt_int(table, "win_axes", &mut errs).map(|v| v as usize);
     let contract_version = opt_int(table, "contract_version", &mut errs).map(|v| v as u32);
     let builder_impl_required = opt_int(table, "builder_impl_required", &mut errs).map(|v| v as u8);
-    let empty_edges = get_str!("empty_edges").and_then(|s| match parse_empty_edges(s) {
-        Ok(e) => Some(e),
-        Err(e) => {
-            errs.push(format!("[encodings.{name}].empty_edges: {e}"));
+    // Graph-only: absent is `None` here and required-when-graph by `validate()`.
+    let empty_edges = match table.get("empty_edges") {
+        None => None,
+        Some(Value::String(s)) => match parse_empty_edges(s) {
+            Ok(e) => Some(e),
+            Err(e) => {
+                errs.push(format!("[encodings.{name}].empty_edges: {e}"));
+                None
+            }
+        },
+        Some(_) => {
+            errs.push(format!("[encodings.{name}].empty_edges: not a string"));
             None
         }
-    });
+    };
+    let canvas_side_step = opt_int(table, "canvas_side_step", &mut errs).map(|v| v as usize);
+    let canvas_min_side = opt_int(table, "canvas_min_side", &mut errs).map(|v| v as usize);
+    let canvas_max_side = opt_int(table, "canvas_max_side", &mut errs).map(|v| v as usize);
+    let far_halo = opt_int(table, "far_halo", &mut errs).map(|v| v as usize);
+    let far_max_side = opt_int(table, "far_max_side", &mut errs).map(|v| v as usize);
 
     // plane_layout: array of strings.
     let plane_layout: Option<Vec<&'static str>> = match table.get("plane_layout") {
@@ -341,6 +358,11 @@ pub(super) fn parse_one(name: &str, body: &Value) -> Result<RegistrySpec, String
         win_axes,
         contract_version,
         builder_impl_required,
-        empty_edges: present(empty_edges, name, "empty_edges")?,
+        empty_edges,
+        canvas_side_step,
+        canvas_min_side,
+        canvas_max_side,
+        far_halo,
+        far_max_side,
     })
 }

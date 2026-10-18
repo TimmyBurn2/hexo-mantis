@@ -5,17 +5,20 @@
 # RegistrySpec records keyed by name. `all_specs()` is the SOLE name source (no
 # hand-synced name list anywhere).
 #
-# Registered set (3 entries): gnn_axis_v1, gnn_axis_r8, gnn_axis_r8_pruned. The three GRID rows
-# (v6, v6w25, v6_live2_ls) were deleted with the dense path (R346(f)); `archive/grid-path` carries them.
+# Registered set (4 entries): gnn_axis_v1, gnn_axis_r8, gnn_axis_r8_pruned, hexcanvas_r8. The three
+# GRID rows (v6, v6w25, v6_live2_ls) were deleted with the dense path (R346(f)); `archive/grid-path`
+# carries them.
 #
-# Every entry carries `representation` (REQUIRED — no default): "graph".
-# An absent representation is a parse error (LAW-11), never a default; "grid" is REFUSED by
-# name, so a stale row cannot resolve to graph by falling through.
+# Every entry carries `representation` (REQUIRED — no default): "graph" or "hexcanvas".
+# An absent representation is a parse error (LAW-11), never a default; "grid" and "dense" are
+# REFUSED by name, so a stale row cannot resolve to another representation by falling through.
 # `n_chain_planes` is a REQUIRED field (= 6 on all current encodings: 3 hex axes
 # × 2 players); it is the sole authority for the chain-plane stride (no source
 # constant / replay reach-through).
-# `empty_edges` is a REQUIRED field, "kept" or "pruned": whether the builder emits the axis
-# edges that join two empty cells (schema v5).
+# `empty_edges` is REQUIRED on a graph row and REFUSED on a hexcanvas row, "kept" or "pruned":
+# whether the builder emits the axis edges that join two empty cells (schema v5; scoped in v6).
+# The canvas keys (canvas_side_step, canvas_min_side, canvas_max_side, far_halo, far_max_side) are
+# REQUIRED on a hexcanvas row and REFUSED on a graph row (schema v6; contract #12).
 #
 # Adding a new encoding:
 #   1. Append an [encodings.<name>] table with all required keys.
@@ -24,12 +27,17 @@
 #   3. Run `python -m mantis.encoding audit` to confirm parse + validation.
 #
 # Schema invariants (validated at parse time):
-#   - representation == graph (required)
+#   - representation ∈ {graph, hexcanvas} (required)
 #   - n_chain_planes >= 1 (required)
 #   - graph: node/edge/win_axes == builder-schema constants; win_length,
 #            graph_radius present + positive; contract_version == 1;
 #            builder_impl_required == native; n_planes == 0; empty plane_layout /
-#            kept_plane_indices; n_source_planes == 0
+#            kept_plane_indices; n_source_planes == 0; empty_edges set; no canvas key
+#   - hexcanvas: the graph rows' reply frame (362 logits with the pass slot, size_19);
+#            win_length == the game's; plane_layout == the canvas builder's planes, every
+#            plane kept; the canvas keys present with step | min, max, far; min >= the lone
+#            stone's fence; min <= max < far; 1 <= far_halo < legal_move_radius; no
+#            graph-only key, no empty_edges
 #   - is_multi_window=false ⇒ cluster_window_size="none", cluster_threshold="none",
 #                            value_pool="none", policy_pool="none"
 #   - trunk_size == board_size
@@ -72,7 +80,7 @@ contract_version        = 1           # ragged-payload contract this encoding sp
 builder_impl_required   = 1           # native tag the resolver asserts
 n_chain_planes          = 6
 empty_edges             = "kept"        # every axis edge the walk meets
-schema_version          = 5
+schema_version          = 6
 notes                   = "GNN axis-graph encoding. Ragged payload contract v1. Whole-board (no K-cluster); per-legal-node policy, no off-window drop. Builder = native axis-graph."
 
 # ---------------------------------------------------------------------------
@@ -120,7 +128,7 @@ contract_version        = 1           # ragged-payload contract this encoding sp
 builder_impl_required   = 1           # native tag the resolver asserts
 n_chain_planes          = 6
 empty_edges             = "kept"        # every axis edge the walk meets
-schema_version          = 5
+schema_version          = 6
 notes                   = "GNN axis-graph encoding at radius 8 — the run6 identity (R328(b)). Ragged payload contract v1. Whole-board (no K-cluster); per-legal-node policy. Builder = native axis-graph."
 
 # ---------------------------------------------------------------------------
@@ -161,5 +169,43 @@ contract_version        = 1           # ragged-payload contract this encoding sp
 builder_impl_required   = 1           # native tag the resolver asserts
 n_chain_planes          = 6
 empty_edges             = "pruned"    # no edge between two empty cells
-schema_version          = 5
+schema_version          = 6
 notes                   = "GNN axis-graph encoding at radius 8 with empty-to-empty edges pruned. Ragged payload contract v1. Whole-board (no K-cluster); per-legal-node policy. Builder = native axis-graph."
+
+# ---------------------------------------------------------------------------
+# hexcanvas_r8 — the hex-conv kind's fence canvas at radius 8 (DENSE-1, R394(c); contract #12).
+# The net sees exactly gnn_axis_r8's node set — every stone and every radius-8 legal cell — masked
+# inside its smallest axial box in a position-only orientation, sides rounded up to 8 from 24. Past
+# S_max (canvas_max_side, L0's smallest multiple of 8 no corpus fence box exceeds) the region is
+# the stones and a halo of 4, and a root past S_far (S_max + 32) is refused. It replies in the graph
+# rows' frame (LegalSetPolicy's trunk-19 window and overflow map, 362 logits) and reads their rings
+# (same radius and win length). A landed capability: no config names it until a run adopts it.
+# ---------------------------------------------------------------------------
+[encodings.hexcanvas_r8]
+representation          = "hexcanvas"
+board_size              = 19          # the reply frame's action-space board (19×19+pass)
+trunk_size              = 19          # the reply window's side, as on the graph rows
+cluster_window_size     = "none"
+cluster_threshold       = "none"
+legal_move_radius       = 8           # the fence: gnn_axis_r8's legal set
+n_planes                = 6
+plane_layout            = ["own", "opponent", "legal", "fence", "stones_left_1", "stones_left_2"]
+policy_logit_count      = 362         # 19*19 + 1 — the graph rows' reply frame
+has_pass_slot           = true
+is_multi_window         = false
+value_pool              = "none"
+policy_pool             = "none"
+sym_table_id            = "size_19"   # the reply frame
+kept_plane_indices      = [0, 1, 2, 3, 4, 5]
+n_source_planes         = 6
+k_max                   = 1           # one canvas per leaf
+win_length              = 6
+n_chain_planes          = 6
+# ── schema-v6 canvas fields (representation="hexcanvas" only) ──
+canvas_side_step        = 8
+canvas_min_side         = 24          # a lone stone's 17-wide fence fits
+canvas_max_side         = 112         # S_max (DENSE-1 L0, 2026-10-18)
+far_halo                = 4
+far_max_side            = 144         # S_far = S_max + 32
+schema_version          = 6
+notes                   = "Hex-conv fence canvas at radius 8 (contract #12). The fence masked inside its smallest axial box, six 0/1 planes, far mode past S_max; replies in the graph rows' frame and reads their rings. Builder = mantis_graph::build_canvas."

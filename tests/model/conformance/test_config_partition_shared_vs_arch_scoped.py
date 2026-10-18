@@ -29,6 +29,7 @@ import pytest
 from pydantic import BaseModel, ValidationError
 
 from mantis.config.loader import load_config
+from mantis.encoding import all_specs
 from mantis.config.resolve.arch_scope import (
     ArchScopedKeyOutsideItsArchError,
     declared_representation,
@@ -44,7 +45,7 @@ from _corpus import ConformanceRefusal
 
 CONFIGS = Path(__file__).resolve().parents[3] / "configs"
 
-REPRESENTATIONS: tuple[str, ...] = ("grid", "graph")
+REPRESENTATIONS: tuple[str, ...] = ("graph", "hexcanvas")
 
 SCHEMA_REQUIRES = "schema_requires_outside_arch"
 READ_PATH_SERVES = "read_path_serves_outside_arch"
@@ -190,12 +191,26 @@ def other_arch(arch: str) -> str:
 
 
 def foreign_dump(arch: str) -> dict:
-    """A config mapping that DECLARES the arch `arch` does not have, for the READ PATHS. Only one
-    representation is registered, so no shipped file selects a foreign arch, but the read paths
-    take a plain mapping and dispatch on `identity.representation`. The block is CARRIED, which
-    makes this a test of the arch refusal rather than of absence."""
+    """A config mapping that DECLARES the arch `arch` does not have, for the READ PATHS. No shipped
+    file selects the other representation, but the read paths take a plain mapping and dispatch on
+    `identity.representation`. The block is CARRIED, which makes this a test of the arch refusal
+    rather than of absence."""
     dump = load_config(config_for(arch)).model_dump()
     dump["identity"]["representation"] = other_arch(arch)
+    return dump
+
+
+def foreign_schema_dump(arch: str) -> dict:
+    """A config the SCHEMA can judge: a shipped `arch` file re-declared, through a registered
+    encoding, as the other representation, with every block scoped to `arch` deleted, so whether
+    the schema still REQUIRES one is what validation reads."""
+    other = other_arch(arch)
+    dump = load_config(config_for(arch)).model_dump()
+    dump["identity"].update(encoding=next(s.name for s in all_specs() if s.representation == other),
+                            representation=other)
+    for key in ARCH_SCOPED_KEYS:
+        if key.arch == arch:
+            dump[key.section].pop(key.field, None)
     return dump
 
 
@@ -222,9 +237,16 @@ def observed_red_rows() -> frozenset[tuple[str, str]]:
         )
     rows: set[tuple[str, str]] = set()
     for leaf in leaves:
-    # SCHEMA_REQUIRES IS NOT PROBED HERE: only one representation is registered, so there is
-    # no OTHER-representation file and no synthetic stands in for one. The class's absence is
-    # asserted with its reason by the UNREACHABLE row below.
+        block = leaf.path.rsplit(".", 1)[0]
+        try:
+            RunConfig.model_validate(foreign_schema_dump(leaf.arch))
+        except ValidationError as exc:
+            if block not in str(exc) or "REQUIRED" not in str(exc):
+                raise ProbeWentVacuous(
+                    f"the foreign config for {leaf.path} fails validation for another reason, so "
+                    f"the schema's requirement cannot be read off it: {exc}"
+                ) from exc
+            rows.add((leaf.path, SCHEMA_REQUIRES))
         dump = foreign_dump(leaf.arch)
         if declared_representation(dump) is None:
             raise ProbeWentVacuous(
@@ -387,6 +409,7 @@ def test_the_probes_are_still_EXECUTING_and_not_merely_empty(derived):
     assert len(RED_CLASSES) == 2, "a red class went missing; the ratchet covers one direction"
     for leaf in leaves:
         assert declared_representation(foreign_dump(leaf.arch)) == other_arch(leaf.arch)
+        assert declared_representation(foreign_schema_dump(leaf.arch)) == other_arch(leaf.arch)
 
 
 def test_a_NEW_red_row_is_refused():
@@ -445,24 +468,18 @@ def test_the_READ_PATH_refuses_by_ARCH_and_not_merely_by_ABSENCE(key, derived):
     derived(f"t9.read_path_refuses.{key.section}.{key.field}", other_arch(key.arch))
 
 
-def test_the_SCHEMAS_foreign_arch_refusal_is_UNREACHABLE_and_says_why(derived):
-    """Red class 1 has NO CONSTRUCTIBLE INPUT since only one representation is registered, and
-    that is asserted rather than quietly dropped: `identity.representation` is a one-member
-    `Literal` and the identity-consistency validator refuses a mismatch BEFORE the arch rule
-    runs, so the refusal cannot fire and the rows that drove it are deleted rather than faked.
-    This reds the day a second representation is registered."""
-    dump = load_config(config_for("graph")).model_dump()
-    dump["identity"]["representation"] = other_arch("graph")
-    with pytest.raises(ValidationError) as excinfo:
+@pytest.mark.parametrize("key", ARCH_SCOPED_KEYS, ids=[f"{k.section}.{k.field}"
+                                                       for k in ARCH_SCOPED_KEYS])
+def test_the_SCHEMA_refuses_the_block_CARRIED_outside_its_arch(key, derived):
+    """Red class 1's repair, executed POSITIVELY since a second representation is registered: a
+    config of the other representation validates without the block and is refused with it."""
+    dump = foreign_schema_dump(key.arch)
+    RunConfig.model_validate(dump)
+    native = load_config(config_for(key.arch)).model_dump()
+    dump[key.section][key.field] = native[key.section][key.field]
+    with pytest.raises(ValidationError, match="ARCH-SCOPED"):
         RunConfig.model_validate(dump)
-    message = str(excinfo.value)
-    derived("t9.schema_foreign_arch_unreachable", other_arch("graph"))
-    assert "ARCH-SCOPED" not in message, (
-        "the schema's arch-scoped refusal fired on a foreign representation — a second "
-        "representation is registered and red class 1 has a subject again; restore the "
-        "SCHEMA_REQUIRES probe and its positive rows"
-    )
-    assert "disagrees with the registry representation" in message, message
+    derived(f"t9.schema_refuses.{key.section}.{key.field}", other_arch(key.arch))
 
 
 def test_the_arch_guard_REFUSES_a_key_the_partition_does_not_place():
