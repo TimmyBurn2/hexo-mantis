@@ -19,7 +19,7 @@ class BackendError(RuntimeError):
 LADDER_EARLY_STOP = True
 
 #: Whether the ladder's second stone starts on its first stone's kept subtree (PUCT only); no other consumer reuses.
-LADDER_TREE_REUSE = False
+LADDER_TREE_REUSE = True
 
 #: The ONE preset beside the unit — the ladder tool's own row, labelled on every receipt, never a unit reading.
 PRESET_SIMS: dict[str, int | None] = {"unit": None, "play": 64}
