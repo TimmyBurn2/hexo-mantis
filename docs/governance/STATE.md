@@ -28,7 +28,8 @@ not move it.) run13 was stopped at 176 681 on 2026-10-19 at 06:41:43 CEST (marke
 `run13_00176681_31e66d38` and the save's ring, sidecar and bundle are mirrored with matching sha256, and the run's
 monitor read the stop save (final, no halting row) and exited. The window's counts are rung 16 1 239 / 2 304 at
 120k–156k and S 978 / 1 152 at 132k and 156k. run14 is minted as `configs/run14.yaml`: against run13, exactly `run_id`,
-the four `train.lr_cycle` leaves and `selfplay.decided_tails` differ. The event manifest steps to v18, naming n9's
+the four `train.lr_cycle` leaves and `selfplay.decided_tails` differ. run14 is LIVE since 2026-10-19 12:46:07 CEST on box A
+at `94bc5512` (The run). The event manifest steps to v18, naming n9's
 change to `iteration_complete.sims_per_sec` (R396(f)).
 
 **R395 (2026-10-18): RUN14 IS THE LAST RUN; IT CARRIES WHAT IS MEASURED AND ONE BET, BENCHED. run13's early STOP is
@@ -600,8 +601,12 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
 
 ## The run
 
-- **run14 is ORDERED (R396(b); CARD-RUN14):** run13's second cycle, a resume of run13's stop save on a fresh box A tree
-  at dev HEAD (`configs/run14.yaml`), launched on the operator's word after its preflight.
+- **run14 is LIVE (R396(b); CARD-RUN14):** launched 2026-10-19 12:46:07 CEST on box A from `94bc5512`
+  (`configs/run14.yaml`) on the operator's word, BOOT_OK 12:51:07: run13's second cycle, a resume of a byte copy of
+  run13's stop save placed in run14's own checkpoint dir (a resume saves beside the checkpoint it resumes;
+  CARD-RESUME-SAVES-BESIDE-SOURCE), at 176 681 with the whole ring (2 500 000 rows) and run13's anchor pinned. Its first
+  save, 177 000, landed in run14's dir with run13's unchanged. The fresh tree replaced run13's run and cell trees on the
+  box. This line said ORDERED until the launch.
 - **run13 is CLOSED at 176 681 (R396(a); CARD-RUN13):** launched 2026-10-16 18:34:52 CEST on box A from `1d1e27a9`
   (`configs/run13.yaml`), BOOT_OK 18:39:52; stopped 2026-10-19 06:41:43 CEST (marker, then SIGTERM; stop save
   `run13_00176681_31e66d38.ckpt`, mirrored). Its window read a MISS: rung 16 pooled at 120k–156k +0.1513 logit
@@ -771,3 +776,5 @@ The current phase was rewritten 2026-10-19 at R396 on branch `run14-go` over `or
 stop and its monitor's final read taken from box A and the stop save's sha256 from the box and the mirror; the same
 edit updated the run, boxes, configs and latest-ruling lines and finished the R395 paragraph's `perf-3-l1b`
 sentence.
+The run line and the current phase's run14 sentence were updated 2026-10-19 at run14's launch, on branch `run14-go`
+over `origin/dev` `94bc5512`, rebased onto TR-D's `4027bd95`, with the launch and boot read from box A.

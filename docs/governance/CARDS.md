@@ -71,8 +71,17 @@ R395 also moves, in place: CARD-RUN13 (its early STOP adopted), CARD-DENSE-1 (PA
 (TR-D, a deploy lever beside run14), CARD-SEARCH-VALUE-TEACHER (rides only on a LIVE V2), CARD-DECIDED-TAILS (ARMED in
 run14), CARD-NET2NET-WIDEN (the second widening is the bet) and CARD-PERF-COLLATE-2 (its branch is not on dev).
 
-- **CARD-RUN14 [RUN14-GO] — ORDERED by R396(b) (2026-10-19): run14, the last run, is run13's SECOND CYCLE, not a launch
-  from a pick.** A pinned resume of run13's stop save `run13_00176681_31e66d38` (step 176 681) on a fresh box A tree at
+- **CARD-RUN14 [RUN14-GO] — LIVE since 2026-10-19 12:46:07 CEST on box A at `94bc5512` (`configs/run14.yaml`), on the
+  operator's word; BOOT_OK 12:51:07.** The boot resumed 176 681 with the whole ring (2 500 000 rows), round counter 4
+  and run13's anchor pinned (`f5032116…`); the first save, 177 000, landed in run14's own dir with run13's unchanged.
+  Before it: the preflight passed (the resume's state read through the run's own entries, caps at run13's 15/32 4 664
+  MiB peak + 665 ≤ 5 457, the mint stamp), and a 15-minute rehearsal of the resume read LR 5e-4 at the restore, the
+  policy entropy 1.30–2.01 nats over 920 steps with the tails on (run13's last 1 000 steps 1.29–1.94; the alarm at 1.0
+  never fired), and 6 700 decided-tail plies, each with its flagged row. The cycle's end, trainer step 477 000, is
+  expected about 2026-10-23 03:00 CEST (±8 h), from the rehearsal's 3 700 steps/h and the cells' share; the first day's
+  rate re-reads it. Cells on the cycle grid and the reads' lines are pre-stated in the local records
+  (`mantis-records/run14/PRESTATED.md`, hashed before the launch). **Was: ORDERED by R396(b) (2026-10-19): run14, the
+  last run, is run13's SECOND CYCLE, not a launch from a pick.** A pinned resume of run13's stop save `run13_00176681_31e66d38` (step 176 681) on a fresh box A tree at
   dev HEAD: optimizer state, ring and future head carried; `train.lr_cycle` {start_step 176 681, lr 5e-4, eta_min
   1e-4, t_max 300 000}; `selfplay.decided_tails` ARMED; all else run13's. If the resume path refuses the re-minted
   identity, the fallback is `identity.warm_start` from the stop save with `reinit: []` and run13's final ring
