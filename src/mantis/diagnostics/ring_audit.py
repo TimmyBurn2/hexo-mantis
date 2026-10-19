@@ -62,6 +62,8 @@ class BlockStats:
     counter_threat_rows: list[int]
     #: (row, the one-hot cell, a block cell) for k = 1 rows with mass(B) < 0.5 and the argmax outside B.
     residue_candidates: list[tuple[int, tuple[int, int], tuple[int, int]]]
+    #: Forced-block rows flagged `proven_tail`, not read: the skip's fire count.
+    tail_skipped: int
 
 
 @dataclass(frozen=True)
@@ -80,15 +82,20 @@ def _row_arrays(ring: Ring, i: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]
 
 
 def forced_block_stats(ring: Ring) -> BlockStats:
-    """Every row through `tactics.analyze`; block rows keep their mass on B and their argmax cell."""
+    """Every row through `tactics.analyze`; a searched block row keeps its mass on B and argmax cell, a decided tail's is only counted."""
     masses: list[float] = []
     counter: list[int] = []
     candidates: list[tuple[int, tuple[int, int], tuple[int, int]]] = []
+    tail_skipped = 0
     for i in range(ring.header.size):
         mover, k = int(ring.current_player[i]), int(ring.moves_remaining[i])
         tac = T.analyze(*_row_arrays(ring, i), mover, k)
         kind, cells = tac.forced(k)
         if kind != "block":
+            continue
+        # No search wrote a decided tail's row: the winner's holds the proof's stone, the loser's no policy at all.
+        if ring.proven_tail[i]:
+            tail_skipped += 1
             continue
         visits = ring.row_visits(i)
         # The census's literal B(2): fours sharing a cell make EVERY first stone safe, mass = 1 − α.
@@ -111,6 +118,7 @@ def forced_block_stats(ring: Ring) -> BlockStats:
         counter_threat_share=len(counter) / n if n else None,
         counter_threat_rows=counter,
         residue_candidates=candidates,
+        tail_skipped=tail_skipped,
     )
 
 
@@ -328,6 +336,8 @@ def audit(ring: Ring, child_q: ChildQ = child_q) -> list[Row]:
     more = len(blocks.counter_threat_rows) - len(named)
     rows = [
         Row("forced_block_n", float(blocks.n), blocks.n, oracle),
+        Row("forced_block_tail_skipped", float(blocks.tail_skipped), blocks.tail_skipped,
+            "tactics.analyze forced(k) == block on a proven_tail row: a decided tail's, no search target"),
         Row("block_mass_median", blocks.mass_median if blocks.n else None, blocks.n, oracle,
             "" if blocks.n else "no forced-block rows"),
         Row("block_mass_share_ge_half", blocks.share_ge_half if blocks.n else None, blocks.n, oracle,

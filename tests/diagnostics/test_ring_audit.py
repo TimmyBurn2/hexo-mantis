@@ -82,7 +82,26 @@ def test_the_forced_block_stats_name_the_poisoned_row(planted: Path) -> None:
     assert stats.mass_median == pytest.approx(0.51)
     assert stats.share_ge_half == pytest.approx(0.5)
     assert stats.counter_threat_share == pytest.approx(0.5)
-    assert stats.counter_threat_rows == [0]
+    assert (stats.counter_threat_rows, stats.tail_skipped) == ([0], 0)
+
+
+def test_a_decided_tails_rows_are_skipped_and_counted_and_a_searched_row_with_no_policy_still_counts(
+        tmp_path: Path) -> None:
+    """The skip keys on the flag: both tail shapes go unread but counted; a veto-emptied target (searched, flag-off) is read."""
+    block = _board(_BLOCK_SEQ)
+    buf = _engine.HexgBuffer(64, _ENCODING, 16)
+    buf.push_graph_position(*_row(block, [], full=False, outcome=-1.0, gid=0), proven_tail=True)
+    buf.push_graph_position(*_row(block, [(_ELSEWHERE[0], _ELSEWHERE[1], 1.0)], full=False, gid=1), proven_tail=True)
+    buf.push_graph_position(*_row(block, [(_BLOCK[0], _BLOCK[1], 1.0)], gid=2))
+    buf.push_graph_position(*_row(block, [(_ELSEWHERE[0], _ELSEWHERE[1], 1.0)], full=False, gid=3))
+    path = tmp_path / "tail.ring.bin"
+    buf.save_to_path(str(path))
+    ring = R.load_ring(path)
+    stats = A.forced_block_stats(ring)
+    assert (stats.n, stats.counter_threat_rows, stats.tail_skipped) == (2, [3], 2)
+    assert [c[0] for c in stats.residue_candidates] == [3]
+    row = {r.key: r for r in A.audit(ring, child_q=lambda _b, _c: 0.0)}["forced_block_tail_skipped"]
+    assert (row.value, row.n) == (2.0, 2)
 
 
 def test_a_k2_row_whose_fours_share_a_cell_is_in_support_wherever_its_one_hot_went(tmp_path: Path) -> None:
