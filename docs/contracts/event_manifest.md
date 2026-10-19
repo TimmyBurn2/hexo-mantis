@@ -59,8 +59,10 @@
   v18 (RUN14-GO, R396(f)): names a meaning change that took no step when it landed (`4f62359b`, under v16, before
   v17): `iteration_complete.sims_per_sec` bills the drain's delta of drawn moves (`pcr_full_moves + pcr_quick_moves`)
   where it billed the delta of `positions_generated`, so a decided tail's plies bill nothing and a root that fails to
-  expand bills its failed draw and its re-draw both. Every v17 record carries the new meaning, and so does a v16
-  record written from `4f62359b` on; an earlier record's rate counts every position generated.
+  expand bills its failed draw and its re-draw both. Every dev tree that stamps v17 carries it, and so does a v16
+  tree from `4f62359b` on; an earlier tree's rate counts every position generated. A v16 or v17 header alone cannot
+  tell which (VT-1's branch stamped v17 without it before its rebase, and a header carries no tree sha): the tree
+  that wrote the record decides.
 
 ## Summary
 

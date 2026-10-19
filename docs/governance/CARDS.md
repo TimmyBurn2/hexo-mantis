@@ -39,7 +39,7 @@ Both were found by running the gate set rather than by reading it, and both are 
 ## Opened by R396 (RUN13 IS READ; RUN14 IS RUN13'S SECOND CYCLE WITH TAILS; THE BOT SHIPS REUSE BEHIND A CLOCK; 2026-10-19) — run14 as run13's second cycle, the bot's budget on the VPS
 
 R396 also moves, in place: CARD-RUN13 (CLOSED, the window a MISS), CARD-RUN14 (run13's second cycle, by (b)),
-CARD-WITHIN-TURN-TREE-REUSE (TR-D RATIFIED, reuse behind the clock), CARD-DECIDED-TAILS (the manifest's v18 step
+CARD-WITHIN-TURN-TREE-REUSE (TR-D RATIFIED, reuse behind the clock; moved by TR-D's own docs commit), CARD-DECIDED-TAILS (the manifest's v18 step
 names n9), CARD-NET2NET-WIDEN (no function-preserving 4×384), CARD-R395-MERGES and CARD-PERF-COLLATE-2
 (`perf-3-l1b` tagged and deleted). (e) records WIDEN-2, VT-1, DT-1 and DENSE-1's L0 and L1 as closed, each card as it
 stands.
@@ -50,8 +50,20 @@ stands.
   net is run14's pick (R396(b)). A 4×256 net that cannot afford the deploy block on the VPS is reported with the sims
   it can afford, and the architect rules the trade. It also holds TR-D's clock (R396(c)): the VPS bot flips to reuse
   only once its p99 turn time at the deploy block, with reuse and the stop, reads ≤ 0.8 × the limit on the VPS CPU;
-  else the sims are cut to fit and the cut is recorded. It runs at the deploy, once run14's pick exists; no session
-  owns it yet.
+  else the sims are cut to fit and the cut is recorded. TR-D's bench drivers and the ladder posture's turn and leaf
+  percentiles are handed to it in the local records (`mantis-records/tree-reuse-deploy/DEPLOY3_HANDOFF.md`): reuse on
+  serves ×1.23 the leaves of reuse off at p99 (418 v 340), so about +20 % on the VPS's p99 where time follows leaves
+  (unmeasured there).
+  It runs at the deploy, once run14's pick exists; no session owns it yet.
+- **CARD-RESUME-SAVES-BESIDE-SOURCE — CARDED by RUN14-GO's review (2026-10-19): a resume into a new out-dir saves
+  beside the checkpoint it resumes.** `resume_trainer` builds the trainer with `checkpoint_dir` set to the resumed
+  checkpoint's directory, and `init_trainer`'s resume branch does not pass the run's own on, so every save, ring and
+  sidecar, the stop save, and the bundle prune (`prune_bundles(trainer.checkpoint_dir, keep=2)`) land in the source's
+  directory, while the anchor is read from the out-dir's `checkpoints/`. Every resume before run14 was in place, where
+  the two coincide. run14 avoids it by resuming from a byte copy of run13's stop save in its own `checkpoints/`
+  (CARD-RUN14). The fix: `init_trainer` passes the run's `checkpoint_dir` into `resume_trainer` (required, no
+  default), with a test that a resume into a new out-dir saves and prunes only under its own `checkpoints/` and leaves
+  the source untouched.
 
 ## Opened by R395 (RUN14 IS THE LAST RUN; IT CARRIES WHAT IS MEASURED AND ONE BET, BENCHED; 2026-10-18) — run14, the widening bet, the merges
 
@@ -74,7 +86,10 @@ run14), CARD-NET2NET-WIDEN (the second widening is the bet) and CARD-PERF-COLLAT
   2026-10-19 as `configs/run14.yaml`: run13's header replayed but its run id, and against `configs/run13.yaml`
   exactly `run_id`, the four `train.lr_cycle` leaves and `selfplay.decided_tails` differ (`tools/config_diff.py
   --expect`). The resume is a launch fact (`--resume-from`), so run13's warm-start and preload rows stay, inert on a
-  resume. OWNED by the RUN14-GO session: the fresh tree, the preflight, the reads' mapping onto saves pre-stated in
+  resume. It resumes from a byte copy of the stop save's checkpoint and sidecar in run14's own `checkpoints/`, since a
+  resume saves beside the checkpoint it resumes (CARD-RESUME-SAVES-BESIDE-SOURCE). Read on box A on 2026-10-19 through
+  the run's own entries, the resume takes the re-minted identity: every tensor byte-equal (the head's among them), the
+  optimizer restored, step 176 681, LR 5e-4 at the restore, and the v4 ring's 2 500 000 rows loaded. OWNED by the RUN14-GO session: the fresh tree, the preflight, the reads' mapping onto saves pre-stated in
   the local records (`mantis-records/run14/`), and the launch on the operator's word. **Was: ORDERED by R395(b):
   run14 is the last training run, by the operator's word.** Its recipe is
   run12's, the one that measurably climbed: one cosine 1e-3 → 1e-4 over 300k, replay 2.5M rows preloaded from the
@@ -138,8 +153,9 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   (final, no halting row) and exited. The window: pooled rung 16 at 120k–156k 1 239 / 2 304, +0.1513 logit against
   the GO line +0.2665; pooled S at 132k and 156k 978 / 1 152, +1.7265 against +1.3040 (passed). No futility pair
   fired, and D1 did not fire (+0.1705). The trend over the rung-16 cells from 72k reads +0.0076 ± 0.0124 per 12k (the
-  one-sided 95 % lower bound −0.0166), so its pick is `tools/best_save.py`'s: 132k, first on both, while the 120k S
-  cell plays on the idle card. By R396(b) that pick is record only, and run14 resumes the stop save (CARD-RUN14);
+  one-sided 95 % lower bound −0.0166), so its pick is `tools/best_save.py`'s: 120k, first on both (rung 16 0.5634; S
+  0.8490, 489 / 576, the same total as 132k's and 156k's over different games), read once the 120k S cell played on
+  the idle card. By R396(b) that pick is record only, and run14 resumes the stop save (CARD-RUN14);
   the run12 left-out-save rule applied to run13 is accepted as record (R396(f)). Of record (R396(a)): from run12's
   end the lineage climbed about +0.01 logit per 12k on rung 16 and +0.25 logit on S (0.81 → 0.85). **Was: LIVE since
   2026-10-16 18:34:52 CEST on box A at `1d1e27a9` (`configs/run13.yaml`); its lines RATIFIED

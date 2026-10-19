@@ -309,8 +309,8 @@ is recorded as such, "the GNN
 recipe is exhausted" is withdrawn as a finding (a window miss, not a measured plateau), and run12 trains on to one
 final second window (108k–144k); (e) ANNOTATED by R392(d): DENSE-1's code legs start on the desktop now, its screen
 and run waiting for box A, and by R394(c): its desktop legs run regardless of the lineage (L0 and L1 now; L2 and L2b
-on L1's exit); L3 and L4 run only on a GNN STOP or a ruling; its run13 was built and read as R396(a): the window a
-MISS, run13 CLOSED at its stop save. ANNOTATES R390(b) and (d): DISTILL-2 is accepted and spent (Mixed; S decisive for b − a), and run11
+on L1's exit); L3 and L4 run only on a GNN STOP or a ruling; and by R396(f): its run13 was built and read as R396(a),
+the window a MISS, run13 CLOSED at its stop save. ANNOTATES R390(b) and (d): DISTILL-2 is accepted and spent (Mixed; S decisive for b − a), and run11
 no longer trains on; it is CLOSED at its stop save. ANNOTATES R389(d): run11 closes before run12's mint, and run12's
 replay row is 2.5M rows with memory verified at preflight, not 2M. AMENDS R388(d): run12 starts from the function-
 preserving widening of run11's best save (`distill2wide_00000000`, the 4×256 of `run11a2_00264000`), and its going-
