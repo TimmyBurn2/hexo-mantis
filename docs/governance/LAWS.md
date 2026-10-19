@@ -83,7 +83,14 @@ tests/test_protected_set_pins.py fails if a named test stops existing.
   ANNOTATED by R386(d): where a consumer switches the budget-aware early stop on (the ladder alone), the witness is
   `last_sims == n` or a fired stop with the visit leader fixed —
   `tests/arena/test_deploy_head_early_stop.py::test_a_stop_fires_only_with_the_leader_fixed_and_is_counted`,
-  `tests/arena/test_deploy_head_early_stop.py::test_every_consumer_states_its_switch`
+  `tests/arena/test_deploy_head_early_stop.py::test_every_consumer_states_its_switch`;
+  ANNOTATED by the TR-D packet's ruling (2026-10-18, under R395(c); its number is the architect's to give): where a
+  consumer switches within-turn tree reuse on (the ladder alone), the witness is per stone — each stone spends its own
+  `n` in new descents, or a fired stop with the leader fixed, and the second stone's root holds the kept visits beside
+  them; the re-root keeps the first stone's chosen child's subtree bit for bit —
+  `tests/arena/test_deploy_head_tree_reuse.py::test_each_reused_stone_spends_its_budget_and_keeps_the_first_stones_visits`,
+  `crates/mantis-search/src/mcts/reroot.rs::a_reroot_keeps_the_chosen_subtree_bit_for_bit`,
+  `tests/arena/test_deploy_head_tree_reuse.py::test_only_the_ladder_can_reuse`
 - the suite's conformance sections (tests/model/conformance/ and the search-kind suite) —
   `tests/model/conformance/test_conformance_roster_guard.py::test_a_SHRUNKEN_roster_is_refused`,
   `crates/mantis-search/tests/search_kind_conformance.rs::a_gumbel_round_is_exactly_the_halving_phase_wide`

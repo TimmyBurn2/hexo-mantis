@@ -49,6 +49,9 @@ only if the fit over 180k–276k reads ≥ +0.015 per 12k at its lower bound, el
 reuse is a deploy lever built beside run14 (TR-D), not its precondition. DENSE-1 is parked, its design shelf-ready;
 R394(c) and (d4) are suspended, not withdrawn. `value-teacher` is pushed after its gates and the V2 verdict; worktrees
 whose branches are on dev are pruned.** (RULINGS R395; the R394 paragraph below stands where R395 does not move it.)
+TR-D EXITED 2026-10-19 (branch `tree-reuse-deploy`, CARD-WITHIN-TURN-TREE-REUSE): within-turn tree reuse passes its
+no-harm line on all three rulers (pooled +0.056 logit [−0.043, +0.154], unresolved) and the ladder ships it; the cell
+engine, eval and self-play search every stone fresh, so no series re-bases.
 run13's early STOP was put in force on 2026-10-18 at 09:30 CEST, at its 111k save, before the 120k save (the local
 records' PRESTATED ADDENDUM 2, written about 09:15 CEST). Its rung-16 cells at 72k–108k pool at about +0.10 logit,
 level with R_mint (+0.0965). `perf-3-l1b`'s content is NOT on dev: its one commit `402b0372` is not in dev's history
