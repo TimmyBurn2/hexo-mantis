@@ -665,8 +665,12 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
 - **CARD-REG-1-PUSH — PUSHED 2026-10-04 (`origin/dev` = `ad3682d7`). ORDERED by R384(g): `reg-1` rebases onto `dev`,
   gates, pushes.** Rebased 2026-10-04 onto `dev` `9da49bdd`; local gates 24/24 green on `ad3682d7` before the push.
 - **CARDED by R384(f), not built before the start** (the RUN11-PRE packet's names in brackets):
-  - CARD-WITHIN-TURN-TREE-REUSE [CARD-TREE-REUSE-TURN] — **TR-D EXITED 2026-10-19, the no-harm line PASSED on all
-    three rulers; the ladder ships it (branch `tree-reuse-deploy`; local records `mantis-records/tree-reuse-deploy/`).**
+  - CARD-WITHIN-TURN-TREE-REUSE [CARD-TREE-REUSE-TURN] — **TR-D EXITED 2026-10-19 and RATIFIED by R396(c), the
+    no-harm line PASSED on all three rulers; the ladder ships it BEHIND A CLOCK: the VPS bot flips only once
+    CARD-DEPLOY-3 reads its p99 turn time at the deploy block, reuse and the stop on, on the VPS CPU at ≤ 0.8 × the
+    arena's limit, else the sims are cut to fit and the cut is recorded (branch `tree-reuse-deploy`; local records
+    `mantis-records/tree-reuse-deploy/`, whose `DEPLOY3_HANDOFF.md` hands DEPLOY-3 the bench drivers and the ladder
+    posture's numbers).**
     Stone 2 re-roots on stone 1's chosen child when its board is that child's exact position (PUCT, a turn's first
     stone only); its budget counts new descents, the kept visits free; the switch is the deploy head's `tree_reuse`,
     stated by the ladder alone. On run12 288k, the deploy block, desk, 576 games a cell, ON − OFF paired by opening:
@@ -675,9 +679,9 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
     +0.056 [−0.043, +0.154], unresolved, inside the expected +0.05 to +0.12. Kept share of stone 1's visits 0.41 on
     contested turns at 128 a stone, 0.447 at 256 (the census prior). Its cost: GPU leaves a turn +26 % at 128 a stone
     (a fresh stone 2 had re-served stone 1's leaves from the per-game cache), wall a turn ×1.19 at 8 in flight; in the
-    ladder's posture with the stop ×0.875 [0.64, 1.28], unresolved. Owed to the architect: the packet's "the bridge's
-    MCTSTree untouched" — one additive method (`reroot`) was needed, no existing path moved — and the LAWS
-    annotation's ruling number. Was: **MOVED by R395(c) (2026-10-18): NOT a precondition of run14;
+    ladder's posture with the stop ×0.875 [0.64, 1.28], unresolved. R396(c) accepts the one additive bridge
+    method (`reroot`, `new_game`'s body in a shared helper, `tree_reuse` on every ladder receipt): the packet's
+    "untouched" meant behaviour; the LAWS served-sims annotation carries R396(c). Was: **MOVED by R395(c) (2026-10-18): NOT a precondition of run14;
     a deploy lever, TR-D, built beside run14 on the desk and shipped with the final bot**, read on the deploy block
     against Six at n128 and n256 and Bubble at equal time, desk cells; the cell engine of record and self-play stay
     untouched (self-play reuse is unmeasured and breaks the Gumbel root's halving as built). Was: **MOVED by R394(d3)
