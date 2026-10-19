@@ -1,4 +1,4 @@
-# RULINGS — R23 to R395
+# RULINGS — R23 to R396
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R396.
+- Numbering continues from R346. The next ruling is R397.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,60 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R396 — RUN13 IS READ; RUN14 IS RUN13'S SECOND CYCLE WITH TAILS; THE BOT SHIPS REUSE BEHIND A CLOCK
+Decision: verbatim below.
+
+> R396 — RUN13 IS READ; RUN14 IS RUN13'S SECOND CYCLE WITH TAILS; THE BOT SHIPS REUSE BEHIND A CLOCK.
+> (a) run13's window is a MISS (pooled 120k–156k rung 16 +0.151 v +0.2665; S +1.73, passed). run13 is
+> CLOSED at its stop save on the operator's word. Of record: from run12's end the lineage climbed
+> about +0.01 logit per 12k on rung 16 (slope +0.0076 ± 0.0124; level +0.05 over run12's anneal pool)
+> and +0.25 logit on S (0.81 → 0.85); the rulers agree on the direction and not on the size. run12's
+> climb was linear in steps across its whole cosine, so the LR level is not what sets the rate; the
+> rate fell with the lineage's age. The head's own effect is unresolved (smoke: no cost).
+> (b) run14 is the last run and is run13's SECOND CYCLE, not a launch from a pick: a pinned resume of
+> run13's stop save on a fresh box tree at dev HEAD — optimizer state and ring carried, the head
+> carried, `train.lr_cycle` {start_step = the stop step, lr 5e-4, eta_min 1e-4, t_max 300 000}
+> (the restart level that climbed at run11's cycle 2 and did not dip at run13), `selfplay.decided_tails`
+> ARMED, all else run13's. If the resume path refuses the re-minted identity, the fallback is
+> `identity.warm_start` from the stop save with reinit [] and run13's final ring preloaded — the
+> parent is the stop save either way; 120k/132k's pick is record only, its S cell plays idle. R395(b)'s
+> "1e-3 cosine from the pick" is WITHDRAWN: with no fresh capacity a 1e-3 restart buys a dip and
+> nothing measured. Reads: rung 16 every 12k, S every 36k, exams, bands and the gap rule of record;
+> DT-1's R3 at the first two saves (a two-read miss on T4/DEF halts the tails, not the run); the
+> policy-entropy alarm at 1.0 read at preflight with tails on. Futility: pooled rung 16 over cycle
+> steps 144k–180k not above +0.151 by +0.10 → stop and pick. Extension: the fit over cycle steps
+> 180k–276k with a one-sided 95 % lower bound ≥ +0.015 per 12k → a third cycle 3e-4 → 1e-4 over
+> 150k by annotation; else the run ends at the cycle's 300k. The pick is trend-aware from cycle step
+> 36k; a non-positive bound → tools/best_save.py over run14's saves with both reads.
+> (c) TR-D is RATIFIED: M1 (one additive bridge method `reroot`; `new_game`'s body in a shared
+> helper, behaviour unchanged; `tree_reuse` on every ladder receipt) is accepted — "untouched" meant
+> behaviour. The LAWS served-sims annotation carries this number. The line PASSED (pooled +0.056
+> [−0.043, +0.154]; no ruler below zero). The ladder ships reuse BEHIND A CLOCK: before the VPS bot
+> flips, DEPLOY-3 measures its p99 turn time at the deploy block with reuse and the stop on the VPS
+> CPU against the arena's time control; the flip goes live only with p99 ≤ 0.8 × the limit, else the
+> sims are cut to fit and the cut is recorded. Push after `make gates.exit`, on the operator's word.
+> (d) DEPLOY-3 is ORDERED: the final bot's budget is set by measurement on the VPS — CPU µs/leaf for
+> 4×128 and 4×256, the arena's time control, p99 turn time with and without reuse, the per-game cache
+> hit rate — and the deploy block's sims are the largest that hold p99 ≤ 0.8 × the limit. The final
+> net is run14's pick by (b). A 4×256 net that cannot afford the deploy block on the VPS is reported
+> with the sims it can afford; the architect rules the trade.
+> (e) Closed and recorded: WIDEN-2 (4×384 1.64× trainer, 4×512 2.39×; run14 stays 4×256; 4×384 has no
+> function-preserving widening on this trunk — CARD-NET2NET-WIDEN annotated); VT-1 CLOSED (Δ +0.0012
+> [−0.0112, +0.0137] v ≤ −0.015; the end-bin encoding lands null everywhere; the old scalar mix is
+> gone); DT-1 LANDED (+7.9 %); DENSE-1 L0+L1 LANDED on the operator's word as the seam's second
+> representation (`hexcanvas`, no model); DENSE-1 stays PARKED at L2.
+> (f) Annotations: R395(b) "v5 as written" → the parent rings are v4, the writer is v5. "The parent's
+> pool" for run14 is +0.151. R394(d1)/(d2) spent (tails landed, teacher closed). R391(e)'s run13 was
+> built and read as (a). R390(c)'s 491 392 games included 7 819 bench games; the corpus of record is
+> L0's census (739 912 games, bench games excluded, run13 joining at its stop). The n9 fix changed
+> `iteration_complete.sims_per_sec`'s meaning: the event manifest steps to v18 with the change named
+> (RUN14-GO's mint leg); VT-1's v17 note moves with it. The run12 left-out-save rule applied to run13
+> (A10) is accepted as record. `perf-3-l1b` is not on dev: the operator tags it `archive/perf-3-l1b`
+> and deletes the branch.
+
+Status: standing. ANNOTATES R395(b), R395(e), R394(d1)/(d2), R391(e), R390(c), R378 (the deploy
+head carries reuse behind the clock).
 
 ### R395 — RUN14 IS THE LAST RUN; IT CARRIES WHAT IS MEASURED AND ONE BET, BENCHED
 Decision: verbatim below.
@@ -77,8 +131,11 @@ Decision: verbatim below.
 > `perf-3-l1b` on origin is deleted by the operator once a session confirms its content is on
 > dev. Unfinished branches stay local, unmerged.
 
-Status: standing. ANNOTATES R394(b), (c), (d4); R391(a)'s width ("read again only inside a
-run": run12 was that run; the second widening is the bet it earns, benched).
+Status: standing; (b) ANNOTATED by R396(b) and (f): run14 is run13's second cycle, a pinned resume of run13's stop
+save, and its "1e-3 cosine from the pick" is WITHDRAWN; "v5 as written" reads: the parent rings are v4, the writer
+v5; "the parent's pool" for run14 is +0.151; (e) ANNOTATED by R396(f): `perf-3-l1b` is not on dev, so the operator
+tags it `archive/perf-3-l1b` and deletes the branch. ANNOTATES R394(b), (c), (d4); R391(a)'s width ("read again
+only inside a run": run12 was that run; the second widening is the bet it earns, benched).
 
 ### R394 — THE LINEAGE CLIMBS WHILE THE LR IS ABOVE THE FLOOR; THE LEVERS BUILD BESIDE IT
 Decision: verbatim below.
@@ -143,7 +200,7 @@ Status: standing; (b) ANNOTATED by R395(a) and (b): run13's early STOP (D1) is a
 156k save (D2); at a STOP box A goes to run14's preflight and mint, and no value-teacher work moves to it; the cosine
 restart at 5e-4 is WITHDRAWN as run14's recipe, and run14, the last training run, is R395(b)'s; (c) and (d4) SUSPENDED,
 not withdrawn, by R395(d): DENSE-1 is PARKED by the last-run constraint, its L0/L1 only if the operator continues the
-programme. ANNOTATES R393(d) (run13's pick rule; run14 at GO), R392(d) (§9 Q2–Q7), R391(e) (DENSE-1's
+programme; (d1) and (d2) SPENT by R396(f): the decided tails landed (DT-1) and the value teacher closed (VT-1). ANNOTATES R393(d) (run13's pick rule; run14 at GO), R392(d) (§9 Q2–Q7), R391(e) (DENSE-1's
 desktop legs run regardless of the lineage), R381(d) (CARD-DECIDED-TAILS un-parked), R370(c) (the tier spread).
 ANNOTATION A1 (2026-10-17, RUN13-PREP, at this record): (b)'s "R_mint +0.0973" reads +0.0965 (1 207 / 2 303, the
 seven replays' record, 2026-10-17 17:34 CEST); the +0.0973 was the session's provisional desk pool, which missed the
@@ -252,7 +309,8 @@ is recorded as such, "the GNN
 recipe is exhausted" is withdrawn as a finding (a window miss, not a measured plateau), and run12 trains on to one
 final second window (108k–144k); (e) ANNOTATED by R392(d): DENSE-1's code legs start on the desktop now, its screen
 and run waiting for box A, and by R394(c): its desktop legs run regardless of the lineage (L0 and L1 now; L2 and L2b
-on L1's exit); L3 and L4 run only on a GNN STOP or a ruling. ANNOTATES R390(b) and (d): DISTILL-2 is accepted and spent (Mixed; S decisive for b − a), and run11
+on L1's exit); L3 and L4 run only on a GNN STOP or a ruling; its run13 was built and read as R396(a): the window a
+MISS, run13 CLOSED at its stop save. ANNOTATES R390(b) and (d): DISTILL-2 is accepted and spent (Mixed; S decisive for b − a), and run11
 no longer trains on; it is CLOSED at its stop save. ANNOTATES R389(d): run11 closes before run12's mint, and run12's
 replay row is 2.5M rows with memory verified at preflight, not 2M. AMENDS R388(d): run12 starts from the function-
 preserving widening of run11's best save (`distill2wide_00000000`, the 4×256 of `run11a2_00264000`), and its going-
@@ -298,7 +356,9 @@ Decision: verbatim below.
 
 Status: standing; (b) SPENT by R391(a): DISTILL-2 is accepted (Mixed; S decisive for b − a, since rung 16's opponent
 taught b), and its "neither → DENSE-1" is moved by R391(e), which orders DENSE-1's design in parallel; (d) SUPERSEDED
-by R391(b): run11 is CLOSED at its stop save. ANNOTATES R389(c): DISTILL-1's halt stands as a success of its control row by (a); the probe's start
+by R391(b): run11 is CLOSED at its stop save; (c) ANNOTATED by R396(f): its 491 392 games included 7 819 bench games,
+and the corpus of record is DENSE-1 L0's census (739 912 games, bench games excluded, run13 joining at its stop).
+ANNOTATES R389(c): DISTILL-1's halt stands as a success of its control row by (a); the probe's start
 was unstated and from-scratch arms at feasible budgets read budget, not capacity, the architect's error. The teacher check
 (1 000/1 000) and the labelled set stand, and distill-1's branch pushes on the operator's word; the teacher's value is not
 adopted (r 0.46 v 0.49), its policy being the only teacher signal. Orders DISTILL-2 by (b): R389(c) read warm only — run11's
@@ -920,6 +980,8 @@ The mixture is KILLED by R381(a): the feed of record is arm A's, no re-search an
 CARRIED into run11, not adopted (R381(c)).
 (c)'s served-sims witness is RESTATED by R386(d) for the early stop (#14): `last_sims == n`, or a fired stop with the
 leader fixed; a deliberate stop is not (c)'s early-end defect.
+(a)'s deploy block carries within-turn tree reuse by R396(c), behind a clock: the VPS bot flips only when DEPLOY-3
+reads its p99 turn time at ≤ 0.8 × the arena's limit, else its sims are cut to fit and the cut is recorded.
 
 ---
 

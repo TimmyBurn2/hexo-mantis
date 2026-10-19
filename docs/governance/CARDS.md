@@ -36,13 +36,47 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R396 (RUN13 IS READ; RUN14 IS RUN13'S SECOND CYCLE WITH TAILS; THE BOT SHIPS REUSE BEHIND A CLOCK; 2026-10-19) — run14 as run13's second cycle, the bot's budget on the VPS
+
+R396 also moves, in place: CARD-RUN13 (CLOSED, the window a MISS), CARD-RUN14 (run13's second cycle, by (b)),
+CARD-WITHIN-TURN-TREE-REUSE (TR-D RATIFIED, reuse behind the clock), CARD-DECIDED-TAILS (the manifest's v18 step
+names n9), CARD-NET2NET-WIDEN (no function-preserving 4×384), CARD-R395-MERGES and CARD-PERF-COLLATE-2
+(`perf-3-l1b` tagged and deleted). (e) records WIDEN-2, VT-1, DT-1 and DENSE-1's L0 and L1 as closed, each card as it
+stands.
+
+- **CARD-DEPLOY-3 — ORDERED by R396(d) (2026-10-19): the final bot's budget is set by measurement on the VPS.** It
+  reads CPU µs/leaf for 4×128 and 4×256, the arena's time control, p99 turn time with and without within-turn reuse,
+  and the per-game cache hit rate; the deploy block's sims are the largest that hold p99 ≤ 0.8 × the limit. The final
+  net is run14's pick (R396(b)). A 4×256 net that cannot afford the deploy block on the VPS is reported with the sims
+  it can afford, and the architect rules the trade. It also holds TR-D's clock (R396(c)): the VPS bot flips to reuse
+  only once its p99 turn time at the deploy block, with reuse and the stop, reads ≤ 0.8 × the limit on the VPS CPU;
+  else the sims are cut to fit and the cut is recorded. It runs at the deploy, once run14's pick exists; no session
+  owns it yet.
+
 ## Opened by R395 (RUN14 IS THE LAST RUN; IT CARRIES WHAT IS MEASURED AND ONE BET, BENCHED; 2026-10-18) — run14, the widening bet, the merges
 
 R395 also moves, in place: CARD-RUN13 (its early STOP adopted), CARD-DENSE-1 (PARKED), CARD-WITHIN-TURN-TREE-REUSE
 (TR-D, a deploy lever beside run14), CARD-SEARCH-VALUE-TEACHER (rides only on a LIVE V2), CARD-DECIDED-TAILS (ARMED in
 run14), CARD-NET2NET-WIDEN (the second widening is the bet) and CARD-PERF-COLLATE-2 (its branch is not on dev).
 
-- **CARD-RUN14 [RUN14-GO] — ORDERED by R395(b): run14 is the last training run, by the operator's word.** Its recipe is
+- **CARD-RUN14 [RUN14-GO] — ORDERED by R396(b) (2026-10-19): run14, the last run, is run13's SECOND CYCLE, not a launch
+  from a pick.** A pinned resume of run13's stop save `run13_00176681_31e66d38` (step 176 681) on a fresh box A tree at
+  dev HEAD: optimizer state, ring and future head carried; `train.lr_cycle` {start_step 176 681, lr 5e-4, eta_min
+  1e-4, t_max 300 000}; `selfplay.decided_tails` ARMED; all else run13's. If the resume path refuses the re-minted
+  identity, the fallback is `identity.warm_start` from the stop save with `reinit: []` and run13's final ring
+  preloaded: the parent is the stop save either way, and run13's 120k/132k pick is record only. Reads: rung 16 every
+  12k and S every 36k, with the exams, bands and gap rule of record; DT-1's R3 at the first two saves (a two-read
+  miss on T4/DEF halts the tails, not the run); the policy-entropy alarm at 1.0 read at preflight with tails on.
+  Futility: pooled rung 16 over cycle steps 144k–180k not above +0.151 (the parent's pool, R396(f)) by +0.10 → stop
+  and pick. Extension: the fit over cycle steps 180k–276k with a one-sided 95 % lower bound ≥ +0.015 per 12k → a
+  third cycle 3e-4 → 1e-4 over 150k by annotation; else the run ends at the cycle's 300k. The pick is trend-aware
+  from cycle step 36k; a non-positive bound → `tools/best_save.py` over run14's saves with both reads. Minted
+  2026-10-19 as `configs/run14.yaml`: run13's header replayed but its run id, and against `configs/run13.yaml`
+  exactly `run_id`, the four `train.lr_cycle` leaves and `selfplay.decided_tails` differ (`tools/config_diff.py
+  --expect`). The resume is a launch fact (`--resume-from`), so run13's warm-start and preload rows stay, inert on a
+  resume. OWNED by the RUN14-GO session: the fresh tree, the preflight, the reads' mapping onto saves pre-stated in
+  the local records (`mantis-records/run14/`), and the launch on the operator's word. **Was: ORDERED by R395(b):
+  run14 is the last training run, by the operator's word.** Its recipe is
   run12's, the one that measurably climbed: one cosine 1e-3 → 1e-4 over 300k, replay 2.5M rows preloaded from the
   parent run's final ring (v5 as written), 48 workers, 2.4 steps per game, value mask 1/8, aux 2.0, the future head
   carried at w 0.5, the arena gate book, the deploy block of record, decided tails ARMED (CARD-DECIDED-TAILS). Parent:
@@ -75,7 +109,8 @@ run14), CARD-NET2NET-WIDEN (the second widening is the bet) and CARD-PERF-COLLAT
   reviewed, null-everywhere encoding. `decided-tails` is on dev (`9dc463e6`). Worktrees whose branches are on dev are
   pruned; unfinished branches stay local, unmerged. `perf-3-l1b` on origin is deleted by the operator once a session
   confirms its content is on dev: checked 2026-10-18 at `9dc463e6`, it is NOT (CARD-PERF-COLLATE-2), so no session
-  confirms it.
+  confirmed it. DONE by R396(f) on 2026-10-19: the operator tagged it `archive/perf-3-l1b` (annotated, at `402b0372`,
+  pushed) and deleted the branch locally and on origin.
 
 ## Opened by R391 (THE PLATEAU IS THE RECIPE UNTIL RUN12 SAYS OTHERWISE; 2026-10-11) — DISTILL-2 accepted, run11 closed, run12 widened, AUX-1 and DENSE-1's design
 
@@ -97,7 +132,17 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   net's, 0 % per leaf. Every run on this tree writes v4 rings. Was: ORDERED by R391(e), in parallel with run12: a
   future-occupancy head behind the seam, ring v4 default-filled; it supplies the occupancy-class target whose absence
   R391(c) names as a cause of record.
-- **CARD-RUN13 — LIVE since 2026-10-16 18:34:52 CEST on box A at `1d1e27a9` (`configs/run13.yaml`); its lines RATIFIED
+- **CARD-RUN13 — CLOSED by R396(a) at its stop save on the operator's word: the window is a MISS.** Stopped 2026-10-19
+  at 06:41:43 CEST at step 176 681 (marker, then SIGTERM): `run13_00176681_31e66d38` with its ring, sidecar and
+  bundle, mirrored with matching sha256 (checkpoint `e4dbfc7e…`, ring `f55bd048…`); its monitor read the stop save
+  (final, no halting row) and exited. The window: pooled rung 16 at 120k–156k 1 239 / 2 304, +0.1513 logit against
+  the GO line +0.2665; pooled S at 132k and 156k 978 / 1 152, +1.7265 against +1.3040 (passed). No futility pair
+  fired, and D1 did not fire (+0.1705). The trend over the rung-16 cells from 72k reads +0.0076 ± 0.0124 per 12k (the
+  one-sided 95 % lower bound −0.0166), so its pick is `tools/best_save.py`'s: 132k, first on both, while the 120k S
+  cell plays on the idle card. By R396(b) that pick is record only, and run14 resumes the stop save (CARD-RUN14);
+  the run12 left-out-save rule applied to run13 is accepted as record (R396(f)). Of record (R396(a)): from run12's
+  end the lineage climbed about +0.01 logit per 12k on rung 16 and +0.25 logit on S (0.81 → 0.85). **Was: LIVE since
+  2026-10-16 18:34:52 CEST on box A at `1d1e27a9` (`configs/run13.yaml`); its lines RATIFIED
   by R394(b) (2026-10-17) as the session pre-stated them; its early STOP ADOPTED by R395(a) (2026-10-18).** In force
   since 2026-10-18 09:30 CEST, at the 111k save and before the 120k save (local records PRESTATED ADDENDUM 2): when the
   132k rung-16 cell reads, a 120k + 132k pool below +0.15 logit STOPs run13 by its STOP path, the 132k S cell unplayed
@@ -191,7 +236,8 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   (max 1.3e-5); the copies barely separated in 15k steps (capacity unused at that budget).** R391(a): width reads
   "unused at lr 1e-4 in 15k steps" and is read again only inside a run; R391(d): the widened stamp
   `distill2wide_00000000` is run12's start. R395 annotates R391(a): run12 was that run, and a second widening is the
-  bet it earns, benched (CARD-WIDEN-2). **Was: ORDERED by R390(b) for
+  bet it earns, benched (CARD-WIDEN-2). R396(e) annotates it: 4×384 has no function-preserving widening on this
+  trunk (LayerNorm's statistics hold only at a whole copy count), and run14 stays 4×256. **Was: ORDERED by R390(b) for
   DISTILL-2: a function-preserving widening behind the seam**, pinned by
   step-0 outputs within 1e-4 of the parent on the golden batch. It is CARD-NET-EXPAND's width half, built as DISTILL-2's
   W1 mechanism (a 4×128 checkpoint doubled to 4×256, the stamp's lineage naming the parent); depth waits.
@@ -688,8 +734,9 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   once a session confirms its content is on dev. Checked at `9dc463e6`, it is NOT: its one commit `402b0372` is not in
   dev's history, `git cherry` finds no equivalent patch, and none of its new classes or functions (`_StagedPop`,
   `StagedGraphBatch`, `stage_graph_batch`, `ship_graph_batch`) are on dev; the local and origin branches are the same
-  commit. The branch stays this card's only copy of that code. Per B-64 pop the pack takes 3.51 ms and the semantic
-  checks 1.83 of a 6.72 ms launch. Coding edges by value in the pack costs 1.45 ms over L1's copy; the builder emitting
+  commit. The branch stayed this card's only copy of that code until R396(f): on 2026-10-19 the operator tagged it
+  `archive/perf-3-l1b` (at `402b0372`) and deleted the branch, so the tag is that copy. Per B-64 pop the pack takes
+  3.51 ms and the semantic checks 1.83 of a 6.72 ms launch. Coding edges by value in the pack costs 1.45 ms over L1's copy; the builder emitting
   codes on the wire removes it (a wire contract change). The semantic checks 15-16 can follow the structural ones into
   the Rust pass. The pack's 4-thread split reads inside the IQR of one thread under 32 workers: a removal candidate,
   with its own bench.
@@ -1045,7 +1092,10 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   no root value, so the lever reads on rings self-play writes after it). Was CARDED, not built, by R381(d), with a v2→v3 ring migration. Was CARDED for CARD-RUN11-DESIGN by R379(d): a search-value aux target from our own search.**
   CENSUS-1's C6: Six's search value beats our raw one off the proofs (DEF −0.097 on its non-proof rows, QU −0.058,
   MID −0.053). R376(f) governs any learning from Six's outputs; this card is our own search's value.
-- **CARD-DECIDED-TAILS — ARMED in run14 by R395(b) (2026-10-18), on dev since `9dc463e6`; n9, the display over-read
+- **CARD-DECIDED-TAILS — ARMED in run14 by R396(b) as by R395(b) (2026-10-18), on dev since `9dc463e6`; LANDED by
+  R396(e); R3 (T4/DEF at run14's first two saves) is run14's to read, a two-read miss halting the tails, not the
+  run. The event manifest steps to v18 naming n9's change to `iteration_complete.sims_per_sec` (R396(f), RUN14-GO's
+  mint leg), which closes VT-1's note that the change took no step. n9, the display over-read
   below, is FIXED in run14's mint leg: `sims_per_sec` bills the drain's delta of playout-cap draws, which no tail ply
   makes, and repo_design's leaves/s says so. Was: n9 fixed in run14's mint leg or carded display-only. Was: EXITED 2026-10-17, R1 lands; the
   architect rules (branch `decided-tails`; local records

@@ -7,6 +7,30 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
+**R396 (2026-10-19): RUN13 IS READ; RUN14 IS RUN13'S SECOND CYCLE WITH TAILS; THE BOT SHIPS REUSE BEHIND A CLOCK.
+run13's window is a MISS (pooled rung 16 at 120k–156k +0.151 logit against +0.2665; S +1.73, passed), and run13 is
+CLOSED at its stop save on the operator's word. From run12's end the lineage climbed about +0.01 logit per 12k on rung
+16 and +0.25 logit on S; run12's climb was linear in steps across its whole cosine, so the rate fell with the lineage's
+age, not with the LR level. run14, the last run, is run13's second cycle: a pinned resume of run13's stop save on a
+fresh box tree at dev HEAD, its optimizer state, ring and future head carried, `train.lr_cycle` from the stop step at
+5e-4 → 1e-4 over 300k, decided tails armed, all else run13's; if the resume path refuses the re-minted identity, it
+warm-starts from the stop save with run13's final ring preloaded. R395(b)'s 1e-3 cosine from the pick is withdrawn,
+and run13's pick is record only. Reads: rung 16 every 12k and S every 36k, with the exams, bands and gap rule of
+record; DT-1's R3 at the first two saves (a two-read miss on T4/DEF halts the tails, not the run); the policy-entropy
+alarm at 1.0 read at preflight with tails on. Futility: pooled rung 16 over cycle steps 144k–180k not above +0.151 by
++0.10 → stop and pick. Extension: the fit over cycle steps 180k–276k at a one-sided 95 % lower bound ≥ +0.015 per 12k
+→ a third cycle 3e-4 → 1e-4 over 150k by annotation; else the run ends at the cycle's 300k. The pick is trend-aware
+from cycle step 36k, else `tools/best_save.py`'s. TR-D is RATIFIED: its one additive bridge method is accepted, and
+the ladder ships within-turn reuse behind a clock, flipping on the VPS only at a p99 turn time ≤ 0.8 × the arena's
+limit; DEPLOY-3 measures that and sets the final bot's sims on the VPS. WIDEN-2, VT-1, DT-1 and DENSE-1's L0 and L1
+are closed and recorded; DENSE-1 stays parked at L2.** (RULINGS R396; the R395 paragraph below stands where R396 does
+not move it.) run13 was stopped at 176 681 on 2026-10-19 at 06:41:43 CEST (marker, then SIGTERM). Its stop save
+`run13_00176681_31e66d38` and the save's ring, sidecar and bundle are mirrored with matching sha256, and the run's
+monitor read the stop save (final, no halting row) and exited. The window's counts are rung 16 1 239 / 2 304 at
+120k–156k and S 978 / 1 152 at 132k and 156k. run14 is minted as `configs/run14.yaml`: against run13, exactly `run_id`,
+the four `train.lr_cycle` leaves and `selfplay.decided_tails` differ. The event manifest steps to v18, naming n9's
+change to `iteration_complete.sims_per_sec` (R396(f)).
+
 **R395 (2026-10-18): RUN14 IS THE LAST RUN; IT CARRIES WHAT IS MEASURED AND ONE BET, BENCHED. run13's early STOP is
 adopted: when its 132k rung-16 cell reads, a 120k + 132k pool below +0.15 logit stops it by its STOP path, the 132k S
 cell unplayed; it may stop at its 156k save, its last cells on the idle card; it is not stopped before its read. At a
@@ -29,7 +53,8 @@ run13's early STOP was put in force on 2026-10-18 at 09:30 CEST, at its 111k sav
 records' PRESTATED ADDENDUM 2, written about 09:15 CEST). Its rung-16 cells at 72k–108k pool at about +0.10 logit,
 level with R_mint (+0.0965). `perf-3-l1b`'s content is NOT on dev: its one commit `402b0372` is not in dev's history
 and no equivalent patch landed (`git cherry`), so it is CARD-PERF-COLLATE-2's only copy of that code, and no session
-confirms it for deletion. DENSE-1's L0 and L1 ran on the operator's packet and EXITED 2026-10-18, finished on the
+confirms it for deletion. By R396(f) the operator tagged it `archive/perf-3-l1b` (at `402b0372`) and deleted the
+branch on 2026-10-19, so the tag is that copy (this sentence ended at "deletion" until R396's record). DENSE-1's L0 and L1 ran on the operator's packet and EXITED 2026-10-18, finished on the
 operator's word after R395(d) and pushed with this record (branch `dense1-l1`, CARD-DENSE-1). L0, records only and
 pre-stated, reads S_max 112 and S_far 144 over the corpus of record (739 912 games with run12's; run13 joins at its
 stop), and explicit visit mass beyond distance 5 at 0.153 %, under Q3's 0.5 % line. L1 lands the `hexcanvas`
@@ -573,8 +598,12 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
 
 ## The run
 
-- **run13 is LIVE (R393(d); its lines RATIFIED by R394(b), its early STOP adopted by R395(a); CARD-RUN13):** launched 2026-10-16 18:34:52 CEST on box A from `1d1e27a9`
-  (`configs/run13.yaml`), BOOT_OK 18:39:52.
+- **run14 is ORDERED (R396(b); CARD-RUN14):** run13's second cycle, a resume of run13's stop save on a fresh box A tree
+  at dev HEAD (`configs/run14.yaml`), launched on the operator's word after its preflight.
+- **run13 is CLOSED at 176 681 (R396(a); CARD-RUN13):** launched 2026-10-16 18:34:52 CEST on box A from `1d1e27a9`
+  (`configs/run13.yaml`), BOOT_OK 18:39:52; stopped 2026-10-19 06:41:43 CEST (marker, then SIGTERM; stop save
+  `run13_00176681_31e66d38.ckpt`, mirrored). Its window read a MISS: rung 16 pooled at 120k–156k +0.1513 logit
+  against +0.2665, S +1.7265 against +1.3040. This line said LIVE until R396's record.
   - Warm start from run12's 240k save `run12_00240000_d406c497` (`tools/best_save.py`'s pick) with
     `reinit: [future_head]` (lineage `+aux_future`); run12's final ring, back-filled to v4 by `tools/ring_future.py` at
     full settle, preloaded; one cosine 5e-4 → 1e-4 over 150k.
@@ -620,7 +649,8 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
   any run starts (R375(e) lifts R368(j)'s hold). Read a config's values from the file itself and diff two
   with `tools/config_diff.py`; STATE does not restate minted rows.
 - **Two boxes are rented, the operator's** (R385(f)): box A (RTX 4080 SUPER, Ryzen 9 9950X; RUN11-PRE's arms 3 and 4
-  ran there) held run11 until its close (R391(b)) and run12 until its stop, and is run13's (R393(d)), then run14's (R395(a) and (b)); box B (RTX 5070 Ti, Ryzen 9 5900XT; arms 1 and 2, unmatched to box A,
+  ran there) held run11 until its close (R391(b)), run12 until its stop and run13 until its close (R396(a)), and is
+  run14's (R396(b)); box B (RTX 5070 Ti, Ryzen 9 5900XT; arms 1 and 2, unmatched to box A,
   so they ran matched self-play work) is RUN11-FRESH's. The
   desktop plays cells and reads. This line said one box was rented until R385's record. An earlier instance was
   destroyed on 2026-09-21 (R365, annotated by R367(d)); the operator's mirror (`tools/mirror_pull.py`) holds run7's and run8's
@@ -635,9 +665,10 @@ The committed configs are `configs/run10.yaml`, RUN11-PRE's four arms `configs/r
 (arm 2's is run11's, R385(a)), RUN11-FRESH's `configs/run11fresh.yaml` (arm 2's header replayed with no
 `identity.warm_start`, run id `run11fresh`; nothing else differs, by `tools/config_diff.py --expect`), run12's
 `configs/run12.yaml` (arm 2's header replayed with the deltas R391(d) grants; CARD-RUN12), run13's `configs/run13.yaml`
-(run12's header replayed with the deltas R393(d) grants; CARD-RUN13), `configs/dev_example.yaml`,
+(run12's header replayed with the deltas R393(d) grants; CARD-RUN13), run14's `configs/run14.yaml` (run13's header
+replayed with the rows R396(b) grants; CARD-RUN14), `configs/dev_example.yaml`,
 `configs/smoke_preflight_armed.yaml` and `configs/smoke_wiring.yaml`. This line omitted the arms until R385's record,
-run12's until its start, and run13's until its launch. Production is a CENSUS, never a
+run12's until its start, run13's until its launch, and run14's until its mint. Production is a CENSUS, never a
 list: `mantis.config.census.production_configs` (every `configs/` file minus its `EXEMPT_CONFIGS`
 rows, which carry their grounds). run7's and run8's configs were deleted at `8b00b4dd` (R368(e)),
 run6's by R369's packet (W0).
@@ -645,7 +676,7 @@ run6's by R369's packet (W0).
 ## Where things live
 
 - Open work: `docs/governance/CARDS.md` (swept in W6; derived there, never enumerated here).
-- Rulings: `docs/governance/RULINGS.md`; the latest is R395 (this line said R386 until R393's record).
+- Rulings: `docs/governance/RULINGS.md`; the latest is R396 (this line said R386 until R393's record).
 - Laws and the protected set: `docs/governance/LAWS.md`, whose protected set names each
   invariant's pinning tests (R370(f)); `tests/test_protected_set_pins.py` fails if one is gone.
   Falsified work: `docs/governance/falsified.md`.
@@ -734,3 +765,7 @@ cells read from the desk mirror and `perf-3-l1b` checked against `origin/dev`; t
 latest-ruling lines.
 The DENSE-1 L0 and L1 sentences were added 2026-10-18 at their exit, on branch `dense1-l1` over `origin/dev` `f616b990`,
 from their exit record (local).
+The current phase was rewritten 2026-10-19 at R396 on branch `run14-go` over `origin/dev` `2c41cf53`, with run13's
+stop and its monitor's final read taken from box A and the stop save's sha256 from the box and the mirror; the same
+edit updated the run, boxes, configs and latest-ruling lines and finished the R395 paragraph's `perf-3-l1b`
+sentence.
