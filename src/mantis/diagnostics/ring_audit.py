@@ -53,7 +53,7 @@ class Row:
 
 @dataclass(frozen=True)
 class BlockStats:
-    """Forced-block rows (tactics oracle, the census's literal B(k)): explicit target mass on B and where it went."""
+    """Forced-block rows (tactics oracle, the census's literal B(k)) but a decided tail's: explicit target mass on B and where it went."""
 
     n: int
     mass_median: float
@@ -331,13 +331,14 @@ def future_rows(ring: Ring) -> list[Row]:
 def audit(ring: Ring, child_q: ChildQ = child_q) -> list[Row]:
     """Every row the audit prints, each naming its producer; a band is checked against these keys."""
     blocks = forced_block_stats(ring)
-    oracle = "tactics.analyze forced(k) == block; mass = explicit target mass on B(k)"
+    oracle = "tactics.analyze forced(k) == block, proven_tail rows skipped; mass = explicit target mass on B(k)"
     named = blocks.counter_threat_rows[:_NAMED_ROWS]
     more = len(blocks.counter_threat_rows) - len(named)
     rows = [
         Row("forced_block_n", float(blocks.n), blocks.n, oracle),
-        Row("forced_block_tail_skipped", float(blocks.tail_skipped), blocks.tail_skipped,
-            "tactics.analyze forced(k) == block on a proven_tail row: a decided tail's, no search target"),
+        Row("forced_block_tail_skipped", float(blocks.tail_skipped), blocks.n + blocks.tail_skipped,
+            "tactics.analyze forced(k) == block on a proven_tail row: a decided tail's, no search target",
+            "n is every forced-block row, so value / n is the skip's fire rate"),
         Row("block_mass_median", blocks.mass_median if blocks.n else None, blocks.n, oracle,
             "" if blocks.n else "no forced-block rows"),
         Row("block_mass_share_ge_half", blocks.share_ge_half if blocks.n else None, blocks.n, oracle,
