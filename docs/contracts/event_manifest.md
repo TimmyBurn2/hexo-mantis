@@ -1,6 +1,6 @@
 # Contract: event manifest
 
-- version: v17
+- version: v18
 - owner: `mantis.monitor` (`manifest.py` + `producer_manifest.yaml`)
 - status: v4 — first filled by the run-safety subsystem port (WP13-A); the eval-pipeline rows
   (`eval_round` heartbeat, `eval_round_wall`/`eval_broken`) landed at WP11-A. R362(c)
@@ -56,6 +56,11 @@
   At a weight > 0 `trainer_step.value_loss` (and `training_step.loss_value`) is the sum of the two terms, (1 − w)·the z
   CE over the masked rows and w·the end-bin CE over the rows `root_value_rows` counts (before the mask), each over its
   own whole-step denominator.
+  v18 (RUN14-GO, R396(f)): names a meaning change that took no step when it landed (`4f62359b`, under v16, before
+  v17): `iteration_complete.sims_per_sec` bills the drain's delta of drawn moves (`pcr_full_moves + pcr_quick_moves`)
+  where it billed the delta of `positions_generated`, so a decided tail's plies bill nothing and a root that fails to
+  expand bills its failed draw and its re-draw both. Every v17 record carries the new meaning, and so does a v16
+  record written from `4f62359b` on; an earlier record's rate counts every position generated.
 
 ## Summary
 
