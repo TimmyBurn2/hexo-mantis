@@ -7,6 +7,25 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
+**R397 (2026-10-19): THE BAND READ THE TAILS; THE BOT LIVES IN THE BROWSER; THE AVERAGE IS READ FOR FREE. run14's
+halt at 180 997 is a success of the counter_threat_share band and a defect of its reader: a row with no stored policy
+counted as mass 0, and every decided-tail loser row is such a row (7 297 of the 7 734 counted; without them 0.00089
+against the 0.005 line, run13's level). DT-1 never ran the ring-audit bands on a tails ring, the architect's omission on
+the ledger. The fix: `forced_block_stats` skips rows flagged `proven_tail` and reports `forced_block_tail_skipped`; the
+line stays and rings without tails read as before. run14 resumes from 180 997 under its own config, no mint, the halt
+step cleared; tails stay armed and R3's exam floors held. The deployed bot runs in the browser, downloaded from the
+arena: DEPLOY-3 is withdrawn unexecuted, tree reuse ships in the deploy head, the web bot's per-stone sims are set by
+DEPLOY-WEB's budget bench against the arena's turn time in a browser, and RESEARCH-WEB is ordered, DEPLOY-WEB's design
+packet issuing on its return (one engine, the Rust crates in wasm32; one export path, ONNX from the stamp).
+CARD-SAVE-AVERAGING-OFFLINE executes now on the desk: averages of run13's 120k–156k saves against the pick (132k), an
+average at least level on both rulers and above on one being the lineage's net of record; `train.ema` stays off in
+run14. The programme's remaining levers are of record and none enters run14.** (RULINGS R397; the R396 paragraph below
+stands where R397 does not move it.) run14 halted on 2026-10-19: the monitor read its 180 000 save at
+counter_threat_share 0.0155417 and sent one SIGTERM at 14:03:46 CEST, and the run saved `run14_00180997_8128ac4a` at
+14:03:53 CEST, a complete bundle, mirrored; R3's reads held at both saves. The fixed reader read the 180 000 ring as
+pre-stated (forced_block_n 490 333, forced_block_tail_skipped 7 297, counter_threat_share 437 / 490 333 = 0.00089), and
+every band and exam reader was listed against the flag (CARD-RUN14).
+
 **R396 (2026-10-19): RUN13 IS READ; RUN14 IS RUN13'S SECOND CYCLE WITH TAILS; THE BOT SHIPS REUSE BEHIND A CLOCK.
 run13's window is a MISS (pooled rung 16 at 120k–156k +0.151 logit against +0.2665; S +1.73, passed), and run13 is
 CLOSED at its stop save on the operator's word. From run12's end the lineage climbed about +0.01 logit per 12k on rung
@@ -28,8 +47,8 @@ not move it.) run13 was stopped at 176 681 on 2026-10-19 at 06:41:43 CEST (marke
 `run13_00176681_31e66d38` and the save's ring, sidecar and bundle are mirrored with matching sha256, and the run's
 monitor read the stop save (final, no halting row) and exited. The window's counts are rung 16 1 239 / 2 304 at
 120k–156k and S 978 / 1 152 at 132k and 156k. run14 is minted as `configs/run14.yaml`: against run13, exactly `run_id`,
-the four `train.lr_cycle` leaves and `selfplay.decided_tails` differ. run14 is LIVE since 2026-10-19 12:46:07 CEST on box A
-at `94bc5512` (The run). The event manifest steps to v18, naming n9's
+the four `train.lr_cycle` leaves and `selfplay.decided_tails` differ. run14 launched 2026-10-19 12:46:07 CEST on box A
+at `94bc5512` and halted at 180 997 on its band (R397, above; The run). The event manifest steps to v18, naming n9's
 change to `iteration_complete.sims_per_sec` (R396(f)).
 
 **R395 (2026-10-18): RUN14 IS THE LAST RUN; IT CARRIES WHAT IS MEASURED AND ONE BET, BENCHED. run13's early STOP is
@@ -601,12 +620,15 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
 
 ## The run
 
-- **run14 is LIVE (R396(b); CARD-RUN14):** launched 2026-10-19 12:46:07 CEST on box A from `94bc5512`
-  (`configs/run14.yaml`) on the operator's word, BOOT_OK 12:51:07: run13's second cycle, a resume of a byte copy of
-  run13's stop save placed in run14's own checkpoint dir (a resume saves beside the checkpoint it resumes;
+- **run14 is HALTED at 180 997, to resume there (R397(a); CARD-RUN14):** launched 2026-10-19 12:46:07 CEST on box A
+  from `94bc5512` (`configs/run14.yaml`) on the operator's word, BOOT_OK 12:51:07: run13's second cycle, a resume of a
+  byte copy of run13's stop save placed in run14's own checkpoint dir (a resume saves beside the checkpoint it resumes;
   CARD-RESUME-SAVES-BESIDE-SOURCE), at 176 681 with the whole ring (2 500 000 rows) and run13's anchor pinned. Its first
   save, 177 000, landed in run14's dir with run13's unchanged. The fresh tree replaced run13's run and cell trees on the
-  box. This line said ORDERED until the launch.
+  box. Its monitor's counter_threat_share band halted it at the 180 000 save (one SIGTERM at 14:03:46 CEST; stop save
+  `run14_00180997_8128ac4a` at 14:03:53, mirrored), on the decided tails' loser rows, which its reader counted as mass
+  0; R397(a) fixed the reader, and run14 resumes from 180 997 on a box tree carrying the fix, under its own config.
+  This line said ORDERED until the launch and LIVE until R397's record.
 - **run13 is CLOSED at 176 681 (R396(a); CARD-RUN13):** launched 2026-10-16 18:34:52 CEST on box A from `1d1e27a9`
   (`configs/run13.yaml`), BOOT_OK 18:39:52; stopped 2026-10-19 06:41:43 CEST (marker, then SIGTERM; stop save
   `run13_00176681_31e66d38.ckpt`, mirrored). Its window read a MISS: rung 16 pooled at 120k–156k +0.1513 logit
@@ -683,7 +705,7 @@ run6's by R369's packet (W0).
 ## Where things live
 
 - Open work: `docs/governance/CARDS.md` (swept in W6; derived there, never enumerated here).
-- Rulings: `docs/governance/RULINGS.md`; the latest is R396 (this line said R386 until R393's record).
+- Rulings: `docs/governance/RULINGS.md`; the latest is R397 (this line said R386 until R393's record).
 - Laws and the protected set: `docs/governance/LAWS.md`, whose protected set names each
   invariant's pinning tests (R370(f)); `tests/test_protected_set_pins.py` fails if one is gone.
   Falsified work: `docs/governance/falsified.md`.
@@ -778,3 +800,6 @@ edit updated the run, boxes, configs and latest-ruling lines and finished the R3
 sentence.
 The run line and the current phase's run14 sentence were updated 2026-10-19 at run14's launch, on branch `run14-go`
 over `origin/dev` `94bc5512`, rebased onto TR-D's `4027bd95`, with the launch and boot read from box A.
+The R397 paragraph, the run line, the R396 paragraph's run14 sentence and the latest-ruling line were written
+2026-10-19 at R397 on branch `run14-go` over `origin/dev` `4027bd95`, with the halt read from box A's monitor records
+and the 180 000 ring's readings from its mirrored copy (sha256 matching its bundle).

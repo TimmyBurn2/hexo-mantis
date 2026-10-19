@@ -1,4 +1,4 @@
-# RULINGS — R23 to R396
+# RULINGS — R23 to R397
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R397.
+- Numbering continues from R346. The next ruling is R398.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,49 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R397 — THE BAND READ THE TAILS; THE BOT LIVES IN THE BROWSER; THE AVERAGE IS READ FOR FREE
+Decision: verbatim below.
+
+> R397 — THE BAND READ THE TAILS; THE BOT LIVES IN THE BROWSER; THE AVERAGE IS READ FOR FREE.
+> (a) run14's halt at 180 997 is a SUCCESS of the counter_threat_share band and a defect of its
+> reader: a row with no stored policy counts as mass 0, and every decided-tail loser row is such
+> a row (7 297 of 7 734 counted; without them 0.00089 against the 0.005 line, run13's level).
+> DT-1's packet read throughput and the exams and never ran the ring-audit bands on a tails ring
+> — the architect's omission, on the ledger. Fix: `forced_block_stats` skips rows flagged
+> `proven_tail` and reports `forced_block_tail_skipped` (LAW-18); the line stays; rings without
+> tails read as before. Every band and exam reader that selects rows by stored policy is listed
+> and either skips the flag or states why it need not (the winner's one-hot rows included). The
+> fixed count on the 180k ring must read 0.00089 before the resume. The fix lands on dev with
+> gates and a fresh review; the box tree fast-forwards; run14 resumes from 180 997 under its own
+> config, no mint, the halt step cleared. Tails stay ARMED (R396(b)); R3's exam floors held.
+> (b) The deployed bot runs in the browser, downloaded from the arena, by the operator's word.
+> DEPLOY-3 is WITHDRAWN unexecuted; R396(c)'s clock is re-aimed: tree reuse ships in the deploy
+> head, and the web bot's per-stone sims are set by DEPLOY-WEB's budget bench against the
+> arena's turn time in a browser. RESEARCH-WEB is ORDERED (web access): evidence on in-browser
+> inference for the served GNN (ORT-web WASM and WebGPU op coverage and speed; Rust-native
+> inference in wasm; threads and headers), on compiling the engine crates to wasm32 with the
+> solver, cache and reuse, on the arena's client-side bot contract, and on what Six, Bubble and
+> other engines ship in browsers. DEPLOY-WEB's design packet issues on its return, with one
+> engine (the Rust crates, wasm32) and one net export path (ONNX from the stamp, a golden-
+> equality witness, a detector that refuses an export whose kind or encoding the stamp lacks).
+> (c) CARD-SAVE-AVERAGING-OFFLINE executes now, on the desk: the uniform average of run13's
+> 120k, 132k, 144k and 156k saves (and the 0.999-EMA-weighted variant over the same four), read by
+> one rung-16 and one S cell each against the pick (132k: 0.522 / 0.849). Line, pre-stated: an
+> average not below the pick on either ruler and above it on one by that cell's CI is the
+> lineage's net of record and the export candidate; run14's final saves get the same read at
+> its end. `train.ema` stays OFF in run14: arming it changes what the actors and the gate play
+> (R383(f)) and is untested wiring in the last run; averaging is post hoc and free.
+> (d) Of record, unmeasured and NOT entering run14 (one change per run; the run is live): the
+> opponent/next-ply policy aux (KataGo 1.30×), PCZero path consistency, policy-surprise
+> weighting, HL-Gauss (screened once, never read on the instrument), Net2Net deepening, MCGS at
+> deploy (table hits 28.6 %), proof-verified start pools, DENSE-1 L2–L4. These are the programme's
+> remaining levers; a field-review research packet is issued only if the operator continues
+> past run14.
+
+Status: standing. ANNOTATES R396(b) (the resume after the band fix), R396(c)/(d) (DEPLOY-3
+withdrawn; the clock moves to the browser), R394(d1) (DT-1's reads), R381(d)/R383(f)
+(averaging offline; EMA off).
 
 ### R396 — RUN13 IS READ; RUN14 IS RUN13'S SECOND CYCLE WITH TAILS; THE BOT SHIPS REUSE BEHIND A CLOCK
 Decision: verbatim below.
@@ -89,6 +132,12 @@ Decision: verbatim below.
 
 Status: standing. ANNOTATES R395(b), R395(e), R394(d1)/(d2), R391(e), R390(c), R378 (the deploy
 head carries reuse behind the clock).
+(b) ANNOTATED by R397(a): run14 halted at 180 997 on its counter_threat_share band, a success of the band and a defect
+of its reader (a row with no stored policy read as mass 0, and every decided-tail loser row is such a row);
+`forced_block_stats` skips `proven_tail` rows and reports `forced_block_tail_skipped`, and run14 resumes from 180 997
+under its own config, no mint, tails ARMED. (c) and (d) ANNOTATED by R397(b): DEPLOY-3 is WITHDRAWN unexecuted; the
+deployed bot runs in the browser, tree reuse ships in its deploy head, and its per-stone sims are set by DEPLOY-WEB's
+budget bench against the arena's turn time in a browser.
 
 ### R395 — RUN14 IS THE LAST RUN; IT CARRIES WHAT IS MEASURED AND ONE BET, BENCHED
 Decision: verbatim below.
@@ -200,7 +249,10 @@ Status: standing; (b) ANNOTATED by R395(a) and (b): run13's early STOP (D1) is a
 156k save (D2); at a STOP box A goes to run14's preflight and mint, and no value-teacher work moves to it; the cosine
 restart at 5e-4 is WITHDRAWN as run14's recipe, and run14, the last training run, is R395(b)'s; (c) and (d4) SUSPENDED,
 not withdrawn, by R395(d): DENSE-1 is PARKED by the last-run constraint, its L0/L1 only if the operator continues the
-programme; (d1) and (d2) SPENT by R396(f): the decided tails landed (DT-1) and the value teacher closed (VT-1). ANNOTATES R393(d) (run13's pick rule; run14 at GO), R392(d) (§9 Q2–Q7), R391(e) (DENSE-1's
+programme; (d1) and (d2) SPENT by R396(f): the decided tails landed (DT-1) and the value teacher closed (VT-1); (d1)
+ANNOTATED by R397(a): DT-1's packet read throughput and the exams and never ran the ring-audit bands on a tails ring,
+the architect's omission on the ledger; run14's 177 000 read passed at 0.00239 and its 180 000 read halted it.
+ANNOTATES R393(d) (run13's pick rule; run14 at GO), R392(d) (§9 Q2–Q7), R391(e) (DENSE-1's
 desktop legs run regardless of the lineage), R381(d) (CARD-DECIDED-TAILS un-parked), R370(c) (the tier spread).
 ANNOTATION A1 (2026-10-17, RUN13-PREP, at this record): (b)'s "R_mint +0.0973" reads +0.0965 (1 207 / 2 303, the
 seven replays' record, 2026-10-17 17:34 CEST); the +0.0973 was the session's provisional desk pool, which missed the
@@ -741,6 +793,8 @@ operator's, by (g). The packets it forwards are REG-1, RUN11-PRE and PERF-2.
 REG-1 is ACCEPTED by R384(a) and PERF-2 RATIFIED by R384(b). (d)'s RUN11-PRE is RE-SPECIFIED by R384(d): run11's
 first leg, four arms from run8@45k, not a twin. (e)'s producer follows its read: the field stores Σπ′·completedQ with
 the proof override (R384(a)).
+(f)'s carded offline averaging is ANNOTATED by R397(c): it executes on the desk, the uniform and the 0.999-EMA-weighted
+averages of run13's 120k, 132k, 144k and 156k saves, each read by one rung-16 and one S cell against the pick.
 
 ---
 
@@ -849,6 +903,8 @@ games, so the +0.65 does not replicate; the carry is re-stated as A − parent �
 screen. (d)'s reuse is RE-READ by R384(d)'s arms (2.4 and 1.2 steps/game).
 (d)'s parking of decided tails is ANNOTATED by R394(d1): CARD-DECIDED-TAILS is un-parked on the new census (99.4 % of
 games reach a proven win, ≈ 15 % of search after it).
+(d)'s carded EMA shadow is ANNOTATED by R397(c): `train.ema` stays OFF in run14, and averaging is read offline
+(CARD-SAVE-AVERAGING-OFFLINE, executing on the desk).
 
 ---
 

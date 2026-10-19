@@ -36,6 +36,26 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R397 (THE BAND READ THE TAILS; THE BOT LIVES IN THE BROWSER; THE AVERAGE IS READ FOR FREE; 2026-10-19) — the band's reader, the bot in the browser
+
+R397 also moves, in place: CARD-RUN14 (halted at 180 997 by its band, the reader fixed, the resume from 180 997, by
+(a)), CARD-DECIDED-TAILS (DT-1 never ran the ring-audit bands on a tails ring, by (a)), CARD-DEPLOY-3 (WITHDRAWN
+unexecuted, by (b)), CARD-WITHIN-TURN-TREE-REUSE (the clock re-aimed at the browser, by (b)) and
+CARD-SAVE-AVERAGING-OFFLINE (EXECUTING on the desk, by (c)). (d) records the programme's remaining levers, none entering
+run14: the opponent/next-ply policy aux, PCZero path consistency, policy-surprise weighting, HL-Gauss, Net2Net
+deepening, MCGS at deploy, proof-verified start pools and DENSE-1's L2–L4.
+
+- **CARD-DEPLOY-WEB — OPENED by R397(b) (2026-10-19): the deployed bot runs in the browser, downloaded from the arena,
+  by the operator's word; its design packet issues on RESEARCH-WEB's return.** One engine, the Rust crates compiled to
+  wasm32 with the solver, cache and reuse, and one net export path: ONNX from the stamp, with a golden-equality witness
+  and a detector that refuses an export whose kind or encoding the stamp lacks. Tree reuse ships in the deploy head,
+  and the web bot's per-stone sims are set by DEPLOY-WEB's budget bench against the arena's turn time in a browser
+  (R396(c)'s clock, re-aimed). R397(c)'s line names the export candidate (CARD-SAVE-AVERAGING-OFFLINE).
+- **CARD-RESEARCH-WEB — ORDERED by R397(b) (2026-10-19), with web access: the evidence DEPLOY-WEB's design needs.**
+  In-browser inference for the served GNN (ONNX Runtime Web's WASM and WebGPU op coverage and speed; Rust-native
+  inference in wasm; threads and the headers they need), compiling the engine crates to wasm32 with the solver, cache
+  and reuse, the arena's client-side bot contract, and what Six, Bubble and other engines ship in browsers.
+
 ## Opened by R396 (RUN13 IS READ; RUN14 IS RUN13'S SECOND CYCLE WITH TAILS; THE BOT SHIPS REUSE BEHIND A CLOCK; 2026-10-19) — run14 as run13's second cycle, the bot's budget on the VPS
 
 R396 also moves, in place: CARD-RUN13 (CLOSED, the window a MISS), CARD-RUN14 (run13's second cycle, by (b)),
@@ -44,7 +64,9 @@ names n9), CARD-NET2NET-WIDEN (no function-preserving 4×384), CARD-R395-MERGES 
 (`perf-3-l1b` tagged and deleted). (e) records WIDEN-2, VT-1, DT-1 and DENSE-1's L0 and L1 as closed, each card as it
 stands.
 
-- **CARD-DEPLOY-3 — ORDERED by R396(d) (2026-10-19): the final bot's budget is set by measurement on the VPS.** It
+- **CARD-DEPLOY-3 — WITHDRAWN unexecuted by R397(b) (2026-10-19): the deployed bot runs in the browser, and its budget
+  is DEPLOY-WEB's bench (CARD-DEPLOY-WEB). Was: ORDERED by R396(d) (2026-10-19): the final bot's budget is set by
+  measurement on the VPS.** It
   reads CPU µs/leaf for 4×128 and 4×256, the arena's time control, p99 turn time with and without within-turn reuse,
   and the per-game cache hit rate; the deploy block's sims are the largest that hold p99 ≤ 0.8 × the limit. The final
   net is run14's pick (R396(b)). A 4×256 net that cannot afford the deploy block on the VPS is reported with the sims
@@ -71,8 +93,23 @@ R395 also moves, in place: CARD-RUN13 (its early STOP adopted), CARD-DENSE-1 (PA
 (TR-D, a deploy lever beside run14), CARD-SEARCH-VALUE-TEACHER (rides only on a LIVE V2), CARD-DECIDED-TAILS (ARMED in
 run14), CARD-NET2NET-WIDEN (the second widening is the bet) and CARD-PERF-COLLATE-2 (its branch is not on dev).
 
-- **CARD-RUN14 [RUN14-GO] — LIVE since 2026-10-19 12:46:07 CEST on box A at `94bc5512` (`configs/run14.yaml`), on the
-  operator's word; BOOT_OK 12:51:07.** The boot resumed 176 681 with the whole ring (2 500 000 rows), round counter 4
+- **CARD-RUN14 [RUN14-GO] — HALTED 2026-10-19 at 180 997 by its counter_threat_share band; R397(a) rules the halt a
+  success of the band and a defect of its reader, the reader is fixed, and run14 resumes from 180 997 under its own
+  config, no mint, the halt step cleared, tails ARMED.** The monitor read the 180 000 save at 0.0155417 against < 0.005
+  (7 734 of 497 630 forced-block rows counted, 7 297 of them decided-tail loser rows, which store no policy and read as
+  mass 0) and sent one SIGTERM at 14:03:46 CEST; the run saved `run14_00180997_8128ac4a` at 14:03:53, a complete
+  bundle, mirrored. R3 held at both its saves (T4_V 0.4535 and 0.4321, DEF_V_att 0.5597 and 0.4229, floors 0.154 and
+  0.100). The fix: `forced_block_stats` skips rows flagged `proven_tail` and reports `forced_block_tail_skipped`; the
+  line stays, rings without tails read as before, and a searched row written flag-off still counts. On the 180 000
+  ring the fixed reader read as pre-stated (local records `mantis-records/run14/R397_CHECK_180k.md`, hashed before the
+  read): forced_block_n 490 333, forced_block_tail_skipped 7 297, counter_threat_share 437 / 490 333 = 0.00089 (run13
+  read 0.00091–0.00099 at its last twelve saves). Every band and exam reader is listed in
+  `mantis-records/run14/R397_READERS.md`: only `forced_block_stats` (its four rows and `quiescence_residue`'s
+  candidates) read tail rows by stored policy; the full-arm one-hot and entropy bands cannot hold one (a flagged row is
+  flag-off by HEXG v5's insert refusal, the winner's one-hot rows included), the exams read fixed positions, and the GEN
+  and value reads take policy CE over the full arm only, which no tail row enters. **Was: LIVE since 2026-10-19 12:46:07 CEST on box A at `94bc5512`
+  (`configs/run14.yaml`), on the operator's word; BOOT_OK 12:51:07.** The boot resumed 176 681 with the whole ring
+  (2 500 000 rows), round counter 4
   and run13's anchor pinned (`f5032116…`); the first save, 177 000, landed in run14's own dir with run13's unchanged.
   Before it: the preflight passed (the resume's state read through the run's own entries, caps at run13's 15/32 4 664
   MiB peak + 665 ≤ 5 457, the mint stamp), and a 15-minute rehearsal of the resume read LR 5e-4 at the restore, the
@@ -679,7 +716,9 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
     CARD-DEPLOY-3 reads its p99 turn time at the deploy block, reuse and the stop on, on the VPS CPU at ≤ 0.8 × the
     arena's limit, else the sims are cut to fit and the cut is recorded (branch `tree-reuse-deploy`; local records
     `mantis-records/tree-reuse-deploy/`, whose `DEPLOY3_HANDOFF.md` hands DEPLOY-3 the bench drivers and the ladder
-    posture's numbers).**
+    posture's numbers).** R397(b) re-aims the clock: DEPLOY-3 is WITHDRAWN unexecuted, tree reuse ships in the deploy
+    head of the bot that runs in the browser, and its per-stone sims are set by DEPLOY-WEB's budget bench against the
+    arena's turn time in a browser (CARD-DEPLOY-WEB); the VPS flip above is moot.
     Stone 2 re-roots on stone 1's chosen child when its board is that child's exact position (PUCT, a turn's first
     stone only); its budget counts new descents, the kept visits free; the switch is the deploy head's `tree_reuse`,
     stated by the ladder alone. On run12 288k, the deploy block, desk, 576 games a cell, ON − OFF paired by opening:
@@ -903,8 +942,13 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
     - The head gets its own AdamW group.
     - `FlooredCosineAnnealingLR` holds one `eta_min` for every group, so the group's floor eta_min × m is set
       harness-side.
-  - **CARD-SAVE-AVERAGING-OFFLINE — CARDED, no box-h before run11: snapshot averages of run11's own stamped saves,
-    built offline with the existing averagers, each read against its own raw save.**
+  - **CARD-SAVE-AVERAGING-OFFLINE — EXECUTING by R397(c) (2026-10-19), on the desk: the uniform average of run13's
+    120k, 132k, 144k and 156k saves and the 0.999-EMA-weighted variant over the same four, each read by one rung-16
+    and one S cell against the pick (132k: 0.522 / 0.849).** Line, pre-stated by R397(c): an average not below the pick
+    on either ruler and above it on one by that cell's CI is the lineage's net of record and the export candidate;
+    run14's final saves get the same read at its end. `train.ema` stays OFF in run14. **Was: CARDED, no box-h before
+    run11: snapshot averages of run11's own stamped saves, built offline with the existing averagers, each read against
+    its own raw save.**
     - `train.ema` stays off: arming it is not a shadow (CARD-EMA-SHADOW).
     - Prior ≈ 0: EMA5 −0.10 logit on X, run8swa +0.26 on S, both void or descriptive.
     - It needs ≥ 15 non-overlapping pairs and a known-bad with a measured fall.
@@ -1135,7 +1179,11 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   MID −0.053). R376(f) governs any learning from Six's outputs; this card is our own search's value.
 - **CARD-DECIDED-TAILS — ARMED in run14 by R396(b) as by R395(b) (2026-10-18), on dev since `9dc463e6`; LANDED by
   R396(e); R3 (T4/DEF at run14's first two saves) is run14's to read, a two-read miss halting the tails, not the
-  run. The event manifest steps to v18 naming n9's change to `iteration_complete.sims_per_sec` (R396(f), RUN14-GO's
+  run. R3 HELD at both saves (2026-10-19). By R397(a), DT-1's packet read throughput and the exams and never ran the
+  ring-audit bands on a tails ring, the architect's omission on the ledger: the loser's value-only rows store no
+  policy, `forced_block_stats` read each as mass 0 on the block, and run14's counter_threat_share band halted it at
+  180 000 (CARD-RUN14). The reader now skips `proven_tail` rows and reports `forced_block_tail_skipped`; the tails stay
+  ARMED. The event manifest steps to v18 naming n9's change to `iteration_complete.sims_per_sec` (R396(f), RUN14-GO's
   mint leg), which closes VT-1's note that the change took no step. n9, the display over-read
   below, is FIXED in run14's mint leg: `sims_per_sec` bills the drain's delta of playout-cap draws, which no tail ply
   makes, and repo_design's leaves/s says so. Was: n9 fixed in run14's mint leg or carded display-only. Was: EXITED 2026-10-17, R1 lands; the
