@@ -82,7 +82,7 @@ def _row_arrays(ring: Ring, i: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]
 
 
 def forced_block_stats(ring: Ring) -> BlockStats:
-    """Every row through `tactics.analyze`; a searched block row keeps its mass on B and argmax cell, a decided tail's is only counted."""
+    """Every row through `tactics.analyze`; a block row keeps its mass on B and argmax cell, a decided tail's (`proven_tail`) is only counted."""
     masses: list[float] = []
     counter: list[int] = []
     candidates: list[tuple[int, tuple[int, int], tuple[int, int]]] = []
