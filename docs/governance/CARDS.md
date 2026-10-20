@@ -93,9 +93,12 @@ R395 also moves, in place: CARD-RUN13 (its early STOP adopted), CARD-DENSE-1 (PA
 (TR-D, a deploy lever beside run14), CARD-SEARCH-VALUE-TEACHER (rides only on a LIVE V2), CARD-DECIDED-TAILS (ARMED in
 run14), CARD-NET2NET-WIDEN (the second widening is the bet) and CARD-PERF-COLLATE-2 (its branch is not on dev).
 
-- **CARD-RUN14 [RUN14-GO] — HALTED 2026-10-19 at 180 997 by its counter_threat_share band; R397(a) rules the halt a
-  success of the band and a defect of its reader, the reader is fixed, and run14 resumes from 180 997 under its own
-  config, no mint, the halt step cleared, tails ARMED.** The monitor read the 180 000 save at 0.0155417 against < 0.005
+- **CARD-RUN14 [RUN14-GO] — LIVE again since 2026-10-20 07:26:33 CEST on box A at `828ff2ac`, resumed from 180 997
+  under its own config, no mint, the halt at 180 000 archived, tails ARMED; RESUME_OK 07:30:43.** Its 183 000 read on
+  the fixed reader: counter_threat_share 0.00086 (13 797 tail block rows skipped), no band missed, T4_V 0.316 and
+  DEF_V_att 0.545 above their floors. **Was: HALTED 2026-10-19 at 180 997 by its counter_threat_share band; R397(a)
+  rules the halt a success of the band and a defect of its reader, the reader is fixed, and run14 resumes from 180 997
+  under its own config, no mint, the halt step cleared, tails ARMED.** The monitor read the 180 000 save at 0.0155417 against < 0.005
   (7 734 of 497 630 forced-block rows counted, 7 297 of them decided-tail loser rows, which store no policy and read as
   mass 0) and sent one SIGTERM at 14:03:46 CEST; the run saved `run14_00180997_8128ac4a` at 14:03:53, a complete
   bundle, mirrored. R3 held at both its saves (T4_V 0.4535 and 0.4321, DEF_V_att 0.5597 and 0.4229, floors 0.154 and
