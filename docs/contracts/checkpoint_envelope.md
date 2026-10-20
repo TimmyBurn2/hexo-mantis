@@ -38,7 +38,8 @@ key is ABSENT on an EMA-off stamp — the truthful shape, not a `null`.
 source at load), optional `corpus_sha256`, `lineage` (the teacher tags this net learned from, R376(f): a list of
 non-empty strings written on every new stamp, empty without a teacher; a stamp written before the key reads empty; a
 warm start inherits its source's, a resume restores it, the strip keeps it verbatim and a weight average carries
-the union of its sources' then its own `avg(<run>:<first step>..<last step>)` tag; a warm start whose `reinit` begins the future-occupancy head fresh adds `+aux_future`, AUX-1).
+the union of its sources' then its own `avg(<run>[+<run>…]:<min step>..<max step>)` tag, a step divisible by 1000
+written `<n>k`, stamped at the max step under a run id that is none of its sources'; a warm start whose `reinit` begins the future-occupancy head fresh adds `+aux_future`, AUX-1).
 
 ## Who asserts what where
 
@@ -46,7 +47,7 @@ the union of its sources' then its own `avg(<run>:<first step>..<last step>)` ta
 |---|---|
 | stamps are written exactly once; a `metadata_kwargs` carrying `created_utc`/`commit_sha` is a REFUSED re-stamp (LAW-12) | mantis.train.checkpoints (`_build_stamped_metadata` -> `CheckpointStampError`) |
 | an unstampable artifact is not written: an absent `encoding_name`, `run_id` or `arch` each raise | mantis.train.checkpoints (`_build_stamped_metadata`) |
-| a lineage that is not a list of non-empty tags is refused; a warm start inherits the source stamp's lineage, a resume restores it | mantis.train.checkpoints (`_lineage_list`, `stamped_lineage`, `resume_trainer`), mantis.train.orchestrator (`init_trainer`) |
+| a lineage that is not a list of non-empty tags is refused; a warm start inherits the source stamp's lineage, a resume restores it; a weight average adds its `avg(…)` tag | mantis.train.checkpoints (`_lineage_list`, `stamped_lineage`, `resume_trainer`), mantis.train.orchestrator (`init_trainer`), tools/probe1/swa.py (`average_checkpoints`) |
 | a failed write is persist-FATAL, never swallowed; the survive-the-run path writes a `.quarantine` file, NEVER a canonical `.ckpt`, and increments the persist counter (LAW-14) | mantis.train.checkpoints (`_write_quarantine`, `persist_errors_total`) |
 | filename run-id + content hash are re-verified at load (provenance) | mantis.train.checkpoints (`load_checkpoint` -> `_verify_provenance`) |
 | every read surface is `torch.load(weights_only=True)`; there is no pickle-exec fallback | mantis.train.checkpoints (`load_checkpoint`, `load_legacy_weights`, `strip_and_restamp`, `resume_trainer`) |
@@ -67,6 +68,7 @@ the union of its sources' then its own `avg(<run>:<first step>..<last step>)` ta
 | `RESUME_CHECKPOINT_OWNED_KEYS` equals the exact frozen 18-key set (golden-pinned) | tests/train/test_checkpoint_conformance.py, tests/fixtures/train/resume_goldens.json |
 | resume precedence end to end: launch-wins outside the owned set, checkpoint-wins inside it | tests/train/test_resume_semantics.py, tests/train/test_resume_wiring_integration.py |
 | warm-start / weights-only load from a foreign lineage | tests/train/test_warmstart.py |
+| a weight average is its sources' float64 mean, stamped at their max step with the `avg(…)` tag, and refuses one source, a repeat or its sources' run id | tests/tools/test_probe1.py |
 | a stamp predating a schema leaf or carrying a retired section loads and is logged; any other error refuses | tests/train/test_checkpoint_conformance.py |
 | an anchor whose core is missing raises `AnchorLoadError` rather than degrading | tests/train/test_anchor.py |
 | a net stamped for one encoding refuses to load, resume, warm-start or snapshot for a cell under another (each refusal beside its control), and the strip is the one way across | tests/train/test_encoding_stamp_crossing.py |

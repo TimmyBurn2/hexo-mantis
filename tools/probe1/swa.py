@@ -19,9 +19,9 @@ def _step_tag(step: int) -> str:
 
 
 def average_checkpoints(paths: list[Path], *, config_path: Path, run_id: str, out_dir: Path) -> dict[str, Any]:
-    """Equal-weight average of `paths`' floating tensors, stamped weights-only under `run_id` at the last step with the sources' lineage plus `avg(<run>:<first>..<last>)`, `.derivation.json` beside it; Raises: ValueError on no source, an arch-less stamp or a shape mismatch, CheckpointStampError, DeclaredEncodingMismatchError or DeclaredFutureHeadMismatchError from the one loader or writer."""
-    if not paths:
-        raise ValueError("no source checkpoints")
+    """Equal-weight float64 average of two or more distinct stamps' floating tensors, stamped weights-only under its own `run_id` at the sources' latest step with their lineage then `avg(<run>[+<run>…]:<min step>..<max step>)`, `.derivation.json` beside it; Raises: ValueError (fewer than two sources, a repeat, a run id that passes for the sources', an arch-less stamp, a shape mismatch, a config the schema refuses), DuplicateKeyError, TypeError, yaml.YAMLError, CheckpointStampError, DeclaredEncodingMismatchError, DeclaredFutureHeadMismatchError, RuntimeError (a state that does not fit its arch), OSError."""
+    if len(paths) < 2:
+        raise ValueError(f"an average needs two or more sources, got {len(paths)}")
     config = load_config(config_path).model_dump()
     sources, arch, shapes = [], None, None
     acc: dict[str, torch.Tensor] = {}
@@ -41,9 +41,14 @@ def average_checkpoints(paths: list[Path], *, config_path: Path, run_id: str, ou
             acc[k] = v.clone() if k not in acc else (acc[k] + v if v.is_floating_point() else v)
         net = build_net(ck.metadata.arch)
         net.load_state_dict(ck.model_state)  # the LEARNER's weights: the average is of the trained nets
-        sources.append({"file": p.name, "run_id": ck.metadata.run_id, "step": int(ck.metadata.step), "file_sha256": sha256_file(p),
+        sha = sha256_file(p)
+        if any(s["file_sha256"] == sha for s in sources):
+            raise ValueError(f"{p.name}: the same checkpoint is given twice")
+        sources.append({"file": p.name, "run_id": ck.metadata.run_id, "step": int(ck.metadata.step), "file_sha256": sha,
                         "net_hash": net_param_hash(net), "lineage": list(ck.metadata.lineage)})
     assert arch is not None
+    if any(run_id == s["run_id"] or run_id.startswith(s["run_id"] + "_") for s in sources):
+        raise ValueError(f"run id {run_id!r} would file the average as a save of {sources[0]['run_id']!r}")
     n = len(paths)
     steps = [s["step"] for s in sources]
     span = f"avg({'+'.join(dict.fromkeys(s['run_id'] for s in sources))}:{_step_tag(min(steps))}..{_step_tag(max(steps))})"
@@ -51,7 +56,7 @@ def average_checkpoints(paths: list[Path], *, config_path: Path, run_id: str, ou
     net = build_net(arch)
     net.load_state_dict(averaged)
     out_dir.mkdir(parents=True, exist_ok=True)
-    written = save_checkpoint(model=net, optimizer=None, scaler=None, scheduler=None, step=sources[-1]["step"], config=config,
+    written = save_checkpoint(model=net, optimizer=None, scaler=None, scheduler=None, step=max(steps), config=config,
                               kind="weights", checkpoint_dir=out_dir,
                               metadata_kwargs={"encoding_name": config["identity"]["encoding"], "run_id": run_id, "arch": arch,
                                                "corpus_sha256": config.get("corpus_sha256"),

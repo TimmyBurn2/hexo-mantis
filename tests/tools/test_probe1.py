@@ -1,4 +1,4 @@
-"""PROBE-1's instrument: the decomposer's exclusion and mr split, the gap table's pairing, the KL/calibration reductions."""
+"""PROBE-1's instrument: the decomposer's exclusion and mr split, the gap table's pairing, the KL/calibration reductions, the weight average."""
 from __future__ import annotations
 
 import importlib
@@ -108,21 +108,40 @@ def test_calibration_and_kl_reductions_bucket_by_mr(probe1) -> None:
     assert kl["kl_prior_target_supported_rows_only"]["n"] == 2 and kl["alpha_zero_share_full_arm"] == pytest.approx(1 / 3)
 
 
-def test_the_weight_average_is_its_sources_mean_and_its_stamp_names_the_span(probe1, tmp_path: Path) -> None:
-    swa = importlib.import_module("probe1.swa")
-    config_path = Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml"
-    config = load_config(config_path).model_dump()
+_DEV_CONFIG = Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml"
+
+
+def _stamps(directory: Path, steps: tuple[int, ...]) -> list[Path]:
+    config = load_config(_DEV_CONFIG).model_dump()
     arch = arch_from_spec_and_config(lookup(config["identity"]["encoding"]), config)
     meta = {"encoding_name": config["identity"]["encoding"], "run_id": "src", "arch": arch, "lineage": ["teacher-a"]}
     paths = []
-    for step in (120_000, 156_000):
+    for step in steps:
         torch.manual_seed(step)
         paths.append(save_checkpoint(model=build_net(arch), optimizer=None, scaler=None, scheduler=None, step=step,
-                                     config=config, kind="weights", checkpoint_dir=tmp_path, metadata_kwargs=meta))
-    record = swa.average_checkpoints(paths, config_path=config_path, run_id="srcavg", out_dir=tmp_path / "avg")
-    a, b, avg = (load_checkpoint(p, declared_encoding=None, declared_future_head=None)
-                 for p in (*paths, tmp_path / "avg" / record["checkpoint"]))
+                                     config=config, kind="weights", checkpoint_dir=directory, metadata_kwargs=meta))
+    return paths
+
+
+def test_the_weight_average_is_its_sources_float64_mean_and_its_stamp_names_the_span(probe1, tmp_path: Path) -> None:
+    swa = importlib.import_module("probe1.swa")
+    paths = _stamps(tmp_path, (156_000, 120_000, 138_000))  # out of order, three: a float32 sum or the last step misreads
+    record = swa.average_checkpoints(paths, config_path=_DEV_CONFIG, run_id="srcavg", out_dir=tmp_path / "avg")
+    *srcs, avg = (load_checkpoint(p, declared_encoding=None, declared_future_head=None)
+                  for p in (*paths, tmp_path / "avg" / record["checkpoint"]))
     assert avg.metadata.lineage == ("teacher-a", "avg(src:120k..156k)")
-    assert avg.metadata.step == 156_000 and [s["run_id"] for s in record["sources"]] == ["src", "src"]
+    assert avg.metadata.step == 156_000 and [s["run_id"] for s in record["sources"]] == ["src"] * 3
     for k, v in avg.model_state.items():
-        assert torch.equal(v, ((a.model_state[k].double() + b.model_state[k].double()) / 2).float()), k
+        mean = (srcs[0].model_state[k].double() + srcs[1].model_state[k].double() + srcs[2].model_state[k].double()) / 3
+        assert torch.equal(v, mean.float()), k
+
+
+@pytest.mark.parametrize("case", ["one source", "a repeat", "the sources' run id"])
+def test_the_weight_average_refuses_what_would_misname_it(probe1, tmp_path: Path, case: str) -> None:
+    swa = importlib.import_module("probe1.swa")
+    a, b = _stamps(tmp_path, (3_000, 6_000))
+    paths, run_id = {"one source": ([a], "srcavg"), "a repeat": ([a, b, a], "srcavg"),
+                     "the sources' run id": ([a, b], "src")}[case]
+    with pytest.raises(ValueError, match="two or more|twice|save of"):
+        swa.average_checkpoints(paths, config_path=_DEV_CONFIG, run_id=run_id, out_dir=tmp_path / "avg")
+    assert not (tmp_path / "avg").exists()
