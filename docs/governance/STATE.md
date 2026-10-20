@@ -17,10 +17,20 @@ step cleared; tails stay armed and R3's exam floors held. The deployed bot runs 
 arena: DEPLOY-3 is withdrawn unexecuted, tree reuse ships in the deploy head, the web bot's per-stone sims are set by
 DEPLOY-WEB's budget bench against the arena's turn time in a browser, and RESEARCH-WEB is ordered, DEPLOY-WEB's design
 packet issuing on its return (one engine, the Rust crates in wasm32; one export path, ONNX from the stamp).
-CARD-SAVE-AVERAGING-OFFLINE executes now on the desk: averages of run13's 120k–156k saves against the pick (132k), an
-average at least level on both rulers and above on one being the lineage's net of record; `train.ema` stays off in
-run14. The programme's remaining levers are of record and none enters run14.** (RULINGS R397; the R396 paragraph below
-stands where R397 does not move it.) run14 halted on 2026-10-19: the monitor read its 180 000 save at
+CARD-SAVE-AVERAGING-OFFLINE read averages of run13's 120k–156k saves on the desk against the pick, an average not
+below it on either ruler and above it on one by its cell's CI being the lineage's net of record; `train.ema` stays off
+in run14. The programme's remaining levers are of record and none enters run14.** (RULINGS R397; the R396 paragraph below
+stands where R397 does not move it.)
+
+The average read LOSE on 2026-10-20, and CARD-SAVE-AVERAGING-OFFLINE is closed.
+- The uniform average of the four saves read rung 16 0.556 [0.518, 0.595] and S 0.837 [0.807, 0.868].
+- The pick was best_save's final 120k: R397(c) named 132k, the interim pick, and the operator corrected it. It read
+  0.563 / 0.849. The average was below it on neither ruler and above it on neither.
+- The 0.999-EMA variant was recorded as the 156k save (the per-step reading, on the operator's word), which was below
+  on rung 16. The per-update reading was never built.
+- run14's final saves get the same read at its end, once which reading the EMA variant takes is settled.
+
+run14 halted on 2026-10-19: the monitor read its 180 000 save at
 counter_threat_share 0.0155417 and sent one SIGTERM at 14:03:46 CEST, and the run saved `run14_00180997_8128ac4a` at
 14:03:53 CEST, a complete bundle, mirrored; R3's reads held at both saves. The fixed reader read the 180 000 ring as
 pre-stated (forced_block_n 490 333, forced_block_tail_skipped 7 297, counter_threat_share 437 / 490 333 = 0.00089), and
@@ -810,3 +820,6 @@ The R397 paragraph, the run line, the R396 paragraph's run14 sentence and the la
 and the 180 000 ring's readings from its mirrored copy (sha256 matching its bundle).
 The run line and the R396 paragraph's run14 sentence were updated 2026-10-20 at run14's resume, on branch `run14-go`
 over `origin/dev` `828ff2ac`, with the resume and the 183 000 read taken from box A's records.
+The R397 paragraph's average sentence was rewritten, and the lines after it written, 2026-10-20 at SAVE-AVG's exit. The
+source was its exit record (local), with the cells read from their sidecars, on branch `save-avg` over `origin/dev`
+`20be2773`.

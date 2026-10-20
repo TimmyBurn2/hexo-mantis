@@ -50,7 +50,8 @@ deepening, MCGS at deploy, proof-verified start pools and DENSE-1's L2–L4.
   wasm32 with the solver, cache and reuse, and one net export path: ONNX from the stamp, with a golden-equality witness
   and a detector that refuses an export whose kind or encoding the stamp lacks. Tree reuse ships in the deploy head,
   and the web bot's per-stone sims are set by DEPLOY-WEB's budget bench against the arena's turn time in a browser
-  (R396(c)'s clock, re-aimed). R397(c)'s line names the export candidate (CARD-SAVE-AVERAGING-OFFLINE).
+  (R396(c)'s clock, re-aimed). R397(c)'s line names the export candidate. It read LOSE for run13's average on
+  2026-10-20, and run14's final saves get the same read at its end (CARD-SAVE-AVERAGING-OFFLINE).
 - **CARD-RESEARCH-WEB — ORDERED by R397(b) (2026-10-19), with web access: the evidence DEPLOY-WEB's design needs.**
   In-browser inference for the served GNN (ONNX Runtime Web's WASM and WebGPU op coverage and speed; Rust-native
   inference in wasm; threads and the headers they need), compiling the engine crates to wasm32 with the solver, cache
@@ -945,16 +946,34 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
     - The head gets its own AdamW group.
     - `FlooredCosineAnnealingLR` holds one `eta_min` for every group, so the group's floor eta_min × m is set
       harness-side.
-  - **CARD-SAVE-AVERAGING-OFFLINE — EXECUTING by R397(c) (2026-10-19), on the desk: the uniform average of run13's
-    120k, 132k, 144k and 156k saves and the 0.999-EMA-weighted variant over the same four, each read by one rung-16
-    and one S cell against the pick (132k: 0.522 / 0.849).** Line, pre-stated by R397(c): an average not below the pick
-    on either ruler and above it on one by that cell's CI is the lineage's net of record and the export candidate;
-    run14's final saves get the same read at its end. `train.ema` stays OFF in run14. **Was: CARDED, no box-h before
-    run11: snapshot averages of run11's own stamped saves, built offline with the existing averagers, each read against
-    its own raw save.**
+  - **CARD-SAVE-AVERAGING-OFFLINE — CLOSED 2026-10-20 by R397(c)'s line, which read LOSE: the uniform average of
+    run13's 120k, 132k, 144k and 156k saves read rung 16 0.556 [0.518, 0.595] and S 0.837 [0.807, 0.868] against the
+    pick, 120k (0.563 / 0.849), below it on neither ruler and above it on neither.** The average
+    (`run13avg_00156000_8a1dc76e`, lineage `avg(run13:120k..156k)`) is neither the lineage's net of record nor the
+    export candidate. run14's final saves get the same read at its end: one more line, no new packet.
+    - The comparator was best_save's final pick, 120k, on the operator's word. R397(c) named 132k (0.522 / 0.849), the
+      interim pick made before 120k's S cell played.
+    - Below and above were both read by the average's cell CI, on the operator's word.
+    - The 0.999-EMA variant was recorded as the 156k save on the operator's word, on the per-step reading. At 0.999
+      per step across the 12k spacing, 156k's weight is 0.99999. Its cells of record read rung 16 0.516
+      [0.476, 0.556], below the pick.
+    - The per-update reading was re-asked and never answered, so that net was never built or read. At run13's
+      `update_every` 10 its weights are 0.705 / 0.212 / 0.064 / 0.019. Which reading the EMA variant takes must be
+      settled before run14's end read.
+    - The witness came first, on run13's 8 662 games after its 156k save:
+      - The average read policy CE 1.595 and calibration-free value CE 0.530, against the pick's 1.610 / 0.532.
+      - A known-bad, built with 156k's message-passing layers reversed before the average, read +6.10 / +0.151 and
+        missed, as required. The raw 132k, 144k and 156k saves passed.
+    - At 0.8 power the line detects about +0.27 logit on both rulers, with a false pass of 0.026 at zero effect. The
+      pick's rung-16 0.563 is the top of four saves that read alike (pool 0.538).
+    - The cells were played on the desk at concurrency 8, the pick's on box A. Opponents, book and tactics block were the
+      same. The records are local.
+    - **Was: EXECUTING by R397(c) (2026-10-19), against the pick named as 132k; before that, CARDED, no box-h before
+      run11.** The CARDED card was snapshot averages of run11's own stamped saves, built offline with the existing
+      averagers, each read against its own raw save. It needed ≥ 15 non-overlapping pairs and a known-bad with a
+      measured fall.
     - `train.ema` stays off: arming it is not a shadow (CARD-EMA-SHADOW).
     - Prior ≈ 0: EMA5 −0.10 logit on X, run8swa +0.26 on S, both void or descriptive.
-    - It needs ≥ 15 non-overlapping pairs and a known-bad with a measured fall.
   - **CARD-DEPLOY-PUCT-ABLATION — CARDED as a deploy packet's census: c_puct 1.5 and fpu 0.25 were never ablated.**
     - The overconfident raw scale makes the deploy search ≈ 2.7× greedier near v ≈ 0 than a calibrated one.
     - It runs as a named c_puct/fpu ablation behind a desktop move-change pre-gate.
