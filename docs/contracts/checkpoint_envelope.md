@@ -38,7 +38,7 @@ key is ABSENT on an EMA-off stamp — the truthful shape, not a `null`.
 source at load), optional `corpus_sha256`, `lineage` (the teacher tags this net learned from, R376(f): a list of
 non-empty strings written on every new stamp, empty without a teacher; a stamp written before the key reads empty; a
 warm start inherits its source's, a resume restores it, the strip keeps it verbatim and a weight average carries
-the union of its sources'; a warm start whose `reinit` begins the future-occupancy head fresh adds `+aux_future`, AUX-1).
+the union of its sources' then its own `avg(<run>:<first step>..<last step>)` tag; a warm start whose `reinit` begins the future-occupancy head fresh adds `+aux_future`, AUX-1).
 
 ## Who asserts what where
 

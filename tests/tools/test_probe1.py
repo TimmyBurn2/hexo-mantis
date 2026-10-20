@@ -7,9 +7,14 @@ from typing import Any
 
 import numpy as np
 import pytest
+import torch
 
 from mantis import _engine
+from mantis.config.loader import load_config
 from mantis.diagnostics import ring_reader as R
+from mantis.encoding import lookup
+from mantis.model import arch_from_spec_and_config, build_net
+from mantis.train.checkpoints import load_checkpoint, save_checkpoint
 from mantis.util.loadpkg import load_tools_package
 
 _ENCODING = "gnn_axis_r8"
@@ -101,3 +106,23 @@ def test_calibration_and_kl_reductions_bucket_by_mr(probe1) -> None:
     assert kl["kl_prior_target"]["mr1"]["median"] == pytest.approx(2.0)
     assert kl["unsupported_prior_mass"]["share_rows_gt_1e-3"] == pytest.approx(1 / 3)
     assert kl["kl_prior_target_supported_rows_only"]["n"] == 2 and kl["alpha_zero_share_full_arm"] == pytest.approx(1 / 3)
+
+
+def test_the_weight_average_is_its_sources_mean_and_its_stamp_names_the_span(probe1, tmp_path: Path) -> None:
+    swa = importlib.import_module("probe1.swa")
+    config_path = Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml"
+    config = load_config(config_path).model_dump()
+    arch = arch_from_spec_and_config(lookup(config["identity"]["encoding"]), config)
+    meta = {"encoding_name": config["identity"]["encoding"], "run_id": "src", "arch": arch, "lineage": ["teacher-a"]}
+    paths = []
+    for step in (120_000, 156_000):
+        torch.manual_seed(step)
+        paths.append(save_checkpoint(model=build_net(arch), optimizer=None, scaler=None, scheduler=None, step=step,
+                                     config=config, kind="weights", checkpoint_dir=tmp_path, metadata_kwargs=meta))
+    record = swa.average_checkpoints(paths, config_path=config_path, run_id="srcavg", out_dir=tmp_path / "avg")
+    a, b, avg = (load_checkpoint(p, declared_encoding=None, declared_future_head=None)
+                 for p in (*paths, tmp_path / "avg" / record["checkpoint"]))
+    assert avg.metadata.lineage == ("teacher-a", "avg(src:120k..156k)")
+    assert avg.metadata.step == 156_000 and [s["run_id"] for s in record["sources"]] == ["src", "src"]
+    for k, v in avg.model_state.items():
+        assert torch.equal(v, ((a.model_state[k].double() + b.model_state[k].double()) / 2).float()), k

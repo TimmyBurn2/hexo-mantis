@@ -14,8 +14,12 @@ from mantis.train.checkpoints import future_head_declared, load_checkpoint, save
 from mantis.util.hashing import sha256_file
 
 
+def _step_tag(step: int) -> str:
+    return f"{step // 1000}k" if step % 1000 == 0 else str(step)
+
+
 def average_checkpoints(paths: list[Path], *, config_path: Path, run_id: str, out_dir: Path) -> dict[str, Any]:
-    """Equal-weight average of `paths`' floating tensors, stamped weights-only under `run_id` at the last step, `.derivation.json` beside it; Raises: ValueError on a shape mismatch, DeclaredEncodingMismatchError on a source stamped for another encoding than the config's."""
+    """Equal-weight average of `paths`' floating tensors, stamped weights-only under `run_id` at the last step with the sources' lineage plus `avg(<run>:<first>..<last>)`, `.derivation.json` beside it; Raises: ValueError on no source, an arch-less stamp or a shape mismatch, CheckpointStampError, DeclaredEncodingMismatchError or DeclaredFutureHeadMismatchError from the one loader or writer."""
     if not paths:
         raise ValueError("no source checkpoints")
     config = load_config(config_path).model_dump()
@@ -37,10 +41,12 @@ def average_checkpoints(paths: list[Path], *, config_path: Path, run_id: str, ou
             acc[k] = v.clone() if k not in acc else (acc[k] + v if v.is_floating_point() else v)
         net = build_net(ck.metadata.arch)
         net.load_state_dict(ck.model_state)  # the LEARNER's weights: the average is of the trained nets
-        sources.append({"file": p.name, "step": int(ck.metadata.step), "file_sha256": sha256_file(p),
+        sources.append({"file": p.name, "run_id": ck.metadata.run_id, "step": int(ck.metadata.step), "file_sha256": sha256_file(p),
                         "net_hash": net_param_hash(net), "lineage": list(ck.metadata.lineage)})
     assert arch is not None
     n = len(paths)
+    steps = [s["step"] for s in sources]
+    span = f"avg({'+'.join(dict.fromkeys(s['run_id'] for s in sources))}:{_step_tag(min(steps))}..{_step_tag(max(steps))})"
     averaged = {k: (v / n).to(torch.float32) if v.is_floating_point() else v for k, v in acc.items()}
     net = build_net(arch)
     net.load_state_dict(averaged)
@@ -49,7 +55,7 @@ def average_checkpoints(paths: list[Path], *, config_path: Path, run_id: str, ou
                               kind="weights", checkpoint_dir=out_dir,
                               metadata_kwargs={"encoding_name": config["identity"]["encoding"], "run_id": run_id, "arch": arch,
                                                "corpus_sha256": config.get("corpus_sha256"),
-                                               "lineage": list(dict.fromkeys(t for s in sources for t in s["lineage"]))})
+                                               "lineage": list(dict.fromkeys([*(t for s in sources for t in s["lineage"]), span]))})
     record = {"kind": "uniform weight average (SWA over stamped checkpoints)", "n": n, "sources": sources,
               "config": str(config_path), "checkpoint": written.name, "net_hash": net_param_hash(net),
               "file_sha256": sha256_file(written)}
