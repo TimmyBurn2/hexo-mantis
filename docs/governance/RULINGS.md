@@ -1,4 +1,4 @@
-# RULINGS — R23 to R397
+# RULINGS — R23 to R398
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R398.
+- Numbering continues from R346. The next ruling is R399.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,66 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R398 — THE BOT SHIPS AS ONE WASM ENGINE WITH TWO NET BACKENDS, WITNESSED FROM THE STAMP
+Decision: verbatim below.
+
+> R398 — THE BOT SHIPS AS ONE WASM ENGINE WITH TWO NET BACKENDS, WITNESSED FROM THE STAMP.
+> (a) RESEARCH-WEB is ACCEPTED. Of record: the ONNX export of the served path passes golden equality
+> (max |Δ logit| 5e-5 on 512 positions, argmax 511/511; the empty board and 1–4-stone openings
+> included); ORT's ScatterND(reduction=add) loses updates at ≥ 2 threads on CPU and in ORT-web's WASM
+> EP (#18048, #23396, unfixed at 1.31), so a ScatterND lowering of this net is silently wrong under
+> threads; the ScatterElements lowering is exact at any thread count; every engine crate builds for
+> wasm32 with getrandom's wasm_js feature and runs at 1.0–1.1× native; the deploy head, the per-game
+> exact cache and the per-stone loop exist only in Python today. Measured on the desk per leaf,
+> 4×256: WebGPU 7.0 ms at B 8, ORT-web WASM 63 ms at one thread, the hand-written Rust forward 58 ms
+> flat in B and exact to 2e-4. The arena clocks a two-stone turn (10 s default, 5 s floor), blocks
+> wasm by CSP, sends no COEP, and keys its bot API to a bot account; the fit is a "play vs mantis"
+> mode with the engine in the visitor's tab.
+> (b) The product is DECIDED. One engine: a new crate `mantis-player` (name final), the single-thread
+> deploy driver in Rust — the per-stone loop, the early stop, TR-D's reroot, the tactics resolve, the
+> per-game exact cache ported from Python — behind a pull/push API (`next_batch() → wire arrays`,
+> `submit(outputs)`), built for wasm32 through wasm-bindgen and callable natively. Two net backends
+> behind one trait: `RustForward` (the fused GINE forward reading the stamp's dumped weights; the CPU
+> path; no runtime) and a host-provided backend (ORT-web on WebGPU, the ScatterElements graph, index
+> and mask arrays built in the engine as int32 so no float or index op falls back). One export path:
+> `tools/export_web.py` writes from the stamp an ONNX (ScatterElements for every scatter-sum, fp32
+> and fp16), the weights file, and a manifest binding both to the stamp's sha, lineage, arch kind,
+> encoding and the witness numbers; a detector refuses a stamp whose kind or encoding the exporter
+> does not carry (`hexcanvas` refused until it has a model). Witnesses, all pinned: golden equality at
+> every shipped backend and thread count; the Rust forward against the ONNX on the same goldens; and
+> search parity — the driver and the Python deploy head, fed identical stub net outputs, play
+> identical stones on the goldens at concurrency 1 (R396(f)). The per-stone budget is set on the
+> device: a warm-up measures the leaf cost and the turn's sims are (0.8·T − root costs) / (2·ρ·c_leaf),
+> capped at 976 and floored at 32, re-read each turn; never a constant. `MAX_NODES` becomes a
+> constructor parameter sized to the budget (144 MB per tree is a self-play constant, not a player's).
+> No threads: ORT-web's threads buy no correct speed today, so no COEP is needed; WebGPU where present,
+> one CPU thread otherwise.
+> (c) The integrator surface is a `web/` package in this repository (a third toolchain, accepted as
+> the product's): a Web Worker that owns the engine and the backend, a typed API (new game at an
+> opening, play a turn under a clock, analyse a position, abort), the arena's analysis-slot packet
+> adapter, a demo page, and node tests; released as an npm package from a tag with the net files
+> beside it; contract #13 `web engine API` in docs/contracts; repo_design amended for the crate and
+> the package. The release is reproducible: the manifest names the stamp, the exporter commit and
+> the witness. The licence of the released artefacts is the operator's decision before the first
+> tag.
+> (d) The arena side is the operator's: `'wasm-unsafe-eval'` in the CSP (a pinned test forbids it
+> today; the pin moves with the decision), the "play vs mantis" mode on the analysis slot's packets,
+> and serving ~4–6 MB of assets with compression for the net. COEP stays off. The ladder adapter in
+> `tools/ladder/client.py` does not speak the arena's current contract; it is carded, not fixed here.
+> (e) SAVE-AVG is CLOSED: LOSE on the pre-stated line (uniform average −0.03 / −0.09 logit v the pick,
+> inside noise; power 0.8 only at +0.27). The packet's EMA variant was mis-specified by the architect
+> (a per-step decay across 12k-step spacing is the last save); on the ledger. run14's end read, one
+> line: the uniform average of its last eight saves against the pick's cells REPLAYED on the same
+> host and tree, 576 games a cell; the pick stays the net of record unless the average is above on
+> one ruler by its CI and below on neither. `train.ema` stays off. Of record: run13's pick is 120k
+> (R397(c)'s "132k" was the interim pick); both export alike.
+> (f) Later cards, not now: a 4×128 student of the lineage distilled for CPU-only visitors (read at
+> equal CPU time against the 4×256, after the driver exists); the Python deploy head replaced by the
+> bridge-wrapped driver (after run14's cells, so the ruler does not move mid-run); burn-wgpu as a
+> pure-Rust WebGPU path if ORT-web's runtime size or fallbacks bite; tract as a CPU alternative.
+
+Status: standing. ANNOTATES R397(b) (DEPLOY-WEB's shape), R397(c) (the pick; the end read).
 
 ### R397 — THE BAND READ THE TAILS; THE BOT LIVES IN THE BROWSER; THE AVERAGE IS READ FOR FREE
 Decision: verbatim below.
@@ -78,6 +138,14 @@ Decision: verbatim below.
 Status: standing. ANNOTATES R396(b) (the resume after the band fix), R396(c)/(d) (DEPLOY-3
 withdrawn; the clock moves to the browser), R394(d1) (DT-1's reads), R381(d)/R383(f)
 (averaging offline; EMA off).
+(b) ANNOTATED by R398(a)–(c): RESEARCH-WEB is ACCEPTED, and DEPLOY-WEB's shape is decided: one engine, the crate
+`mantis-player` (the single-thread deploy driver, wasm32 and native, pull/push), two net backends behind one trait
+(`RustForward`, and ORT-web on WebGPU over the ScatterElements graph), one export path (`tools/export_web.py`: ONNX,
+weights file, manifest) and three pinned witnesses; the per-stone sims are set on the device by a warm-up and the
+budget rule, re-read each turn, never a constant, so no budget bench fixes them. (c) ANNOTATED by R398(e): run13's pick
+is 120k (the "132k" above was the interim pick); the line read LOSE and the card is CLOSED; the 0.999-EMA variant was
+mis-specified by the architect (a per-step decay across 12k-step spacing is the last save); run14's end read is the
+uniform average of its last eight saves against the pick's cells replayed on the same host and tree, 576 games a cell.
 
 ### R396 — RUN13 IS READ; RUN14 IS RUN13'S SECOND CYCLE WITH TAILS; THE BOT SHIPS REUSE BEHIND A CLOCK
 Decision: verbatim below.

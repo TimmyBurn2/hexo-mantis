@@ -7,6 +7,21 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
+**R398 (2026-10-20): THE BOT SHIPS AS ONE WASM ENGINE WITH TWO NET BACKENDS, WITNESSED FROM THE STAMP. RESEARCH-WEB
+is accepted: the served path's ONNX passes golden equality, ORT's ScatterND(add) races under threads while the
+ScatterElements lowering is exact, and the engine crates build for wasm32 at 1.0–1.1× native. The product is decided:
+one engine, the crate `mantis-player` (the single-thread deploy driver in Rust: the per-stone loop, the early stop,
+TR-D's reroot, the tactics resolve and the per-game exact cache, behind a pull/push API, wasm32 and native); two net
+backends behind one trait, `RustForward` on one CPU thread and ORT-web on WebGPU over the ScatterElements graph; one
+export path, the tool `export_web.py` (ONNX fp32 and fp16, the weights file, a manifest bound to the stamp, a detector);
+three pinned witnesses (golden equality per shipped backend and thread count, the Rust forward against the ONNX, search
+parity against the Python deploy head on stub net outputs); the per-stone sims set on the device each turn, capped at
+976 and floored at 32; `MAX_NODES` a constructor parameter; no threads, no COEP. The integrator surface is a `web/`
+package in this repository with contract #13; the arena's CSP, its play mode and the asset serving are the operator's,
+and so is the licence before the first tag. SAVE-AVG is closed; run14's end read is one line, the uniform average of
+its last eight saves against the pick's cells replayed on the same host and tree; run13's pick is 120k.** (RULINGS
+R398; the R397 paragraph below stands where R398 does not move it.)
+
 **R397 (2026-10-19): THE BAND READ THE TAILS; THE BOT LIVES IN THE BROWSER; THE AVERAGE IS READ FOR FREE. run14's
 halt at 180 997 is a success of the counter_threat_share band and a defect of its reader: a row with no stored policy
 counted as mass 0, and every decided-tail loser row is such a row (7 297 of the 7 734 counted; without them 0.00089
@@ -28,7 +43,8 @@ The average read LOSE on 2026-10-20, and CARD-SAVE-AVERAGING-OFFLINE is closed.
   0.563 / 0.849. The average was below it on neither ruler and above it on neither.
 - The 0.999-EMA variant was recorded as the 156k save (the per-step reading, on the operator's word), which was below
   on rung 16. The per-update reading was never built.
-- run14's final saves get the same read at its end, once which reading the EMA variant takes is settled.
+- run14's final saves get one more line at its end (R398(e)): the uniform average of its last eight saves against the
+  pick's cells replayed on the same host and tree, 576 games a cell. The EMA variant was the architect's error.
 
 run14 halted on 2026-10-19: the monitor read its 180 000 save at
 counter_threat_share 0.0155417 and sent one SIGTERM at 14:03:46 CEST, and the run saved `run14_00180997_8128ac4a` at
@@ -720,7 +736,7 @@ run6's by R369's packet (W0).
 ## Where things live
 
 - Open work: `docs/governance/CARDS.md` (swept in W6; derived there, never enumerated here).
-- Rulings: `docs/governance/RULINGS.md`; the latest is R397 (this line said R386 until R393's record).
+- Rulings: `docs/governance/RULINGS.md`; the latest is R398 (this line said R386 until R393's record).
 - Laws and the protected set: `docs/governance/LAWS.md`, whose protected set names each
   invariant's pinning tests (R370(f)); `tests/test_protected_set_pins.py` fails if one is gone.
   Falsified work: `docs/governance/falsified.md`.
@@ -823,3 +839,5 @@ over `origin/dev` `828ff2ac`, with the resume and the 183 000 read taken from bo
 The R397 paragraph's average sentence was rewritten, and the lines after it written, 2026-10-20 at SAVE-AVG's exit. The
 source was its exit record (local), with the cells read from their sidecars, on branch `save-avg` over `origin/dev`
 `20be2773`.
+The R398 paragraph, the average's end-read line and the latest-ruling line were written 2026-10-20 at R398 on branch
+`deploy-web` over `origin/dev` `fd26b1d5`, from the ruling's text and RESEARCH-WEB's report (local).

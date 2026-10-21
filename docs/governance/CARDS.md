@@ -36,6 +36,29 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R398 (THE BOT SHIPS AS ONE WASM ENGINE WITH TWO NET BACKENDS, WITNESSED FROM THE STAMP; 2026-10-20) — the browser bot's shape, the arena's side, the later cards
+
+R398 also moves, in place: CARD-DEPLOY-WEB (DECIDED, its packet issued, by (b)–(c)), CARD-RESEARCH-WEB (ACCEPTED, by
+(a)) and CARD-SAVE-AVERAGING-OFFLINE (CLOSED, the EMA variant's reading settled and run14's end read fixed, by (e)).
+
+- **CARD-WEB-ARENA-SIDE — OWED by the operator (R398(d), 2026-10-20): what the arena must change for the bot to run
+  there.** `'wasm-unsafe-eval'` in the arena's CSP (a pinned test there forbids any `unsafe-` value today; the pin moves
+  with the decision), a "play vs mantis" mode on the analysis slot's packets, and serving the package's assets with
+  compression for the net (R398(d) says ~4–6 MB; DEPLOY-WEB's design reads ~4 MB on the CPU path and ~6–8 MB on the
+  WebGPU path, INFERENCE until L3) (Caddy compresses `application/wasm`, not `application/octet-stream`). COEP
+  stays off: the bot runs one thread. The licence of the released artefacts is the operator's decision before the
+  first tag (R398(c)).
+- **CARD-LADDER-ARENA-CONTRACT — CARDED by R398(d) (2026-10-20): the ladder adapter does not speak the arena's current
+  contract.** `tools/ladder/client.py` posts to a move route the arena does not have and challenges without the
+  required `requestId` (RESEARCH-WEB Q3). Carded, not fixed in DEPLOY-WEB.
+- **CARD-WEB-STUDENT — CARDED by R398(f) (2026-10-20), not now: a 4×128 student of the lineage, distilled for
+  CPU-only visitors.** Read at equal CPU time against the 4×256, after the driver exists. RESEARCH-WEB's 4×128 against
+  4×256 gap is a lineage gap, not a width gap, so a run13-lineage student is unmeasured.
+- **CARD-DEPLOY-HEAD-DRIVER — CARDED by R398(f) (2026-10-20), not now: the Python deploy head is replaced by the
+  bridge-wrapped `mantis-player` driver.** After run14's cells, so the ruler does not move mid-run.
+- **CARD-WEB-RUNTIME-ALTERNATIVES — CARDED by R398(f) (2026-10-20), not now: burn-wgpu as a pure-Rust WebGPU path if
+  ORT-web's runtime size or fallbacks bite; tract as a CPU alternative.**
+
 ## Opened by R397 (THE BAND READ THE TAILS; THE BOT LIVES IN THE BROWSER; THE AVERAGE IS READ FOR FREE; 2026-10-19) — the band's reader, the bot in the browser
 
 R397 also moves, in place: CARD-RUN14 (halted at 180 997 by its band, the reader fixed, the resume from 180 997, by
@@ -45,17 +68,28 @@ CARD-SAVE-AVERAGING-OFFLINE (EXECUTING on the desk, by (c)). (d) records the pro
 run14: the opponent/next-ply policy aux, PCZero path consistency, policy-surprise weighting, HL-Gauss, Net2Net
 deepening, MCGS at deploy, proof-verified start pools and DENSE-1's L2–L4.
 
-- **CARD-DEPLOY-WEB — OPENED by R397(b) (2026-10-19): the deployed bot runs in the browser, downloaded from the arena,
-  by the operator's word; its design packet issues on RESEARCH-WEB's return.** One engine, the Rust crates compiled to
+- **CARD-DEPLOY-WEB — DECIDED by R398(b)–(c) (2026-10-20): one wasm engine with two net backends, witnessed from the
+  stamp; packet DEPLOY-WEB issued, its legs L0 design, L1 export, L2 driver, L3 package, L4 bench and read.** The crate
+  `mantis-player` (the single-thread deploy driver, wasm32 and native, pull/push), the `NetBackend` trait with
+  `RustForward` and a host ORT-web WebGPU backend over the ScatterElements graph, the export tool `export_web.py`
+  (ONNX fp32 and fp16, weights file, manifest, detector), three pinned witnesses (golden equality per shipped backend,
+  the Rust forward against the ONNX, search parity against the Python deploy head), the per-stone sims set on the
+  device each turn, and the `web/` package with contract #13. **Was: OPENED by
+  R397(b) (2026-10-19): the deployed bot runs in the browser, downloaded from the arena, by the operator's word; its
+  design packet issues on RESEARCH-WEB's return.** One engine, the Rust crates compiled to
   wasm32 with the solver, cache and reuse, and one net export path: ONNX from the stamp, with a golden-equality witness
   and a detector that refuses an export whose kind or encoding the stamp lacks. Tree reuse ships in the deploy head,
   and the web bot's per-stone sims are set by DEPLOY-WEB's budget bench against the arena's turn time in a browser
   (R396(c)'s clock, re-aimed). R397(c)'s line names the export candidate. It read LOSE for run13's average on
   2026-10-20, and run14's final saves get the same read at its end (CARD-SAVE-AVERAGING-OFFLINE).
-- **CARD-RESEARCH-WEB — ORDERED by R397(b) (2026-10-19), with web access: the evidence DEPLOY-WEB's design needs.**
-  In-browser inference for the served GNN (ONNX Runtime Web's WASM and WebGPU op coverage and speed; Rust-native
-  inference in wasm; threads and the headers they need), compiling the engine crates to wasm32 with the solver, cache
-  and reuse, the arena's client-side bot contract, and what Six, Bubble and other engines ship in browsers.
+- **CARD-RESEARCH-WEB — ACCEPTED by R398(a) (2026-10-20); local records `mantis-records/research-web/REPORT.md`.** The
+  served path's ONNX passes golden equality (max |Δ logit| 5e-5 on 512 positions, the openings included); ORT's
+  ScatterND(add) races at ≥ 2 threads and the ScatterElements lowering is exact at any; the engine crates build for
+  wasm32 and run at 1.0–1.1× native. **Was: ORDERED by R397(b) (2026-10-19), with web access: the evidence DEPLOY-WEB's
+  design needs.** In-browser inference for the served GNN (ONNX Runtime Web's WASM and WebGPU op coverage and speed;
+  Rust-native inference in wasm; threads and the headers they need), compiling the engine crates to wasm32 with the
+  solver, cache and reuse, the arena's client-side bot contract, and what Six, Bubble and other engines ship in
+  browsers.
 
 ## Opened by R396 (RUN13 IS READ; RUN14 IS RUN13'S SECOND CYCLE WITH TAILS; THE BOT SHIPS REUSE BEHIND A CLOCK; 2026-10-19) — run14 as run13's second cycle, the bot's budget on the VPS
 
@@ -97,7 +131,10 @@ run14), CARD-NET2NET-WIDEN (the second widening is the bet) and CARD-PERF-COLLAT
 - **CARD-RUN14 [RUN14-GO] — LIVE again since 2026-10-20 07:26:33 CEST on box A at `828ff2ac`, resumed from 180 997
   under its own config, no mint, the halt at 180 000 archived, tails ARMED; RESUME_OK 07:30:43.** Its 183 000 read on
   the fixed reader: counter_threat_share 0.00086 (13 797 tail block rows skipped), no band missed, T4_V 0.316 and
-  DEF_V_att 0.545 above their floors. **Was: HALTED 2026-10-19 at 180 997 by its counter_threat_share band; R397(a)
+  DEF_V_att 0.545 above their floors. Its end read is owed by R398(e): the uniform average of its last eight saves
+  against the pick's cells replayed on the same host and tree, 576 games a cell; the pick stays the net of record
+  unless the average is above on one ruler by its CI and below on neither (CARD-SAVE-AVERAGING-OFFLINE).
+  **Was: HALTED 2026-10-19 at 180 997 by its counter_threat_share band; R397(a)
   rules the halt a success of the band and a defect of its reader, the reader is fixed, and run14 resumes from 180 997
   under its own config, no mint, the halt step cleared, tails ARMED.** The monitor read the 180 000 save at 0.0155417 against < 0.005
   (7 734 of 497 630 forced-block rows counted, 7 297 of them decided-tail loser rows, which store no policy and read as
@@ -950,7 +987,8 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
     run13's 120k, 132k, 144k and 156k saves read rung 16 0.556 [0.518, 0.595] and S 0.837 [0.807, 0.868] against the
     pick, 120k (0.563 / 0.849), below it on neither ruler and above it on neither.** The average
     (`run13avg_00156000_8a1dc76e`, lineage `avg(run13:120k..156k)`) is neither the lineage's net of record nor the
-    export candidate. run14's final saves get the same read at its end: one more line, no new packet.
+    export candidate. run14's end read is R398(e)'s one line: the uniform average of its last eight saves against the
+    pick's cells replayed on the same host and tree, 576 games a cell (CARD-RUN14).
     - The comparator was best_save's final pick, 120k, on the operator's word. R397(c) named 132k (0.522 / 0.849), the
       interim pick made before 120k's S cell played.
     - Below and above were both read by the average's cell CI, on the operator's word.
@@ -958,8 +996,11 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
       per step across the 12k spacing, 156k's weight is 0.99999. Its cells of record read rung 16 0.516
       [0.476, 0.556], below the pick.
     - The per-update reading was re-asked and never answered, so that net was never built or read. At run13's
-      `update_every` 10 its weights are 0.705 / 0.212 / 0.064 / 0.019. Which reading the EMA variant takes must be
-      settled before run14's end read.
+      `update_every` 10 its weights are 0.705 / 0.212 / 0.064 / 0.019. R398(e) settles it: the variant was
+      mis-specified by the architect (a per-step decay across 12k-step spacing is the last save), and run14's end read
+      is one line, the uniform average of its last eight saves against the pick's cells REPLAYED on the same host and
+      tree, 576 games a cell; the pick stays the net of record unless the average is above on one ruler by its CI and
+      below on neither.
     - The witness came first, on run13's 8 662 games after its 156k save:
       - The average read policy CE 1.595 and calibration-free value CE 0.530, against the pick's 1.610 / 0.532.
       - A known-bad, built with 156k's message-passing layers reversed before the average, read +6.10 / +0.151 and
