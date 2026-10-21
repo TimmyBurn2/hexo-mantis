@@ -4,13 +4,13 @@
 import { execFile } from "node:child_process";
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
-import { dirname, extname, join, normalize } from "node:path";
+import { dirname, extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import puppeteer from "puppeteer-core";
 
 const [exportDir, manifestFile, reference, out] = process.argv.slice(2);
-const web = join(dirname(fileURLToPath(import.meta.url)), "..");
+const web = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const TYPES = { ".html": "text/html", ".mjs": "text/javascript", ".js": "text/javascript", ".wasm": "application/wasm",
   ".json": "application/json" };
 // The raw binary, not the /usr/bin wrapper with the desk user's flags; without --disable-vulkan-surface headless
@@ -23,8 +23,10 @@ const PAGE = '<!doctype html><meta charset="utf-8"><script type="module" src="/s
 const server = createServer(async (req, res) => {
   const path = decodeURIComponent(new URL(req.url, "http://x").pathname);
   if (path === "/" || path === "/index.html") return res.writeHead(200, { "Content-Type": "text/html" }).end(PAGE);
-  const file = path === "/ref.json" ? reference : path.startsWith("/net/") ? normalize(join(exportDir, path.slice(5)))
-    : normalize(join(web, path));
+  // Only files under the two roots are served: a decoded `..` cannot climb out of either.
+  const base = path.startsWith("/net/") ? resolve(exportDir) : web;
+  const file = path === "/ref.json" ? resolve(reference) : resolve(base, `.${path.startsWith("/net/") ? path.slice(4) : path}`);
+  if (path !== "/ref.json" && !file.startsWith(base + sep)) return res.writeHead(404).end();
   try {
     if (!(await stat(file)).isFile()) throw new Error("not a file");
     res.writeHead(200, { "Content-Type": TYPES[extname(file)] ?? "application/octet-stream", "Cache-Control": "no-store" });
