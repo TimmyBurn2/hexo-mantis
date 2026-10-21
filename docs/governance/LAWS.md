@@ -90,6 +90,13 @@ tests/test_protected_set_pins.py fails if a named test stops existing.
   `tests/arena/test_deploy_head_tree_reuse.py::test_each_reused_stone_spends_its_budget_and_keeps_the_first_stones_visits`,
   `crates/mantis-search/src/mcts/reroot.rs::a_reroot_keeps_the_chosen_subtree_bit_for_bit`,
   `tests/arena/test_deploy_head_tree_reuse.py::test_only_the_ladder_can_reuse`
+  ANNOTATED by R399(c): the web player (`mantis-player`) is the second consumer of the early stop and reuse, its
+  constants pinned equal to the ladder's; its witnesses are search parity against the Python deploy head on one stub's
+  outputs, and each of its stones spending its `n` in new descents or stopping with the leader fixed, the second stone's
+  root holding the kept visits —
+  `tests/player/test_search_parity.py::test_the_player_plays_the_heads_stones_and_counts_its_rows`,
+  `tests/player/test_search_parity.py::test_the_players_constants_are_the_ladders_and_the_caches`,
+  `crates/mantis-player/tests/served_sims.rs::each_stone_spends_its_budget_or_stops_with_the_leader_fixed_and_the_reroot_keeps_visits`
 - the suite's conformance sections (tests/model/conformance/ and the search-kind suite) —
   `tests/model/conformance/test_conformance_roster_guard.py::test_a_SHRUNKEN_roster_is_refused`,
   `crates/mantis-search/tests/search_kind_conformance.rs::a_gumbel_round_is_exactly_the_halving_phase_wide`

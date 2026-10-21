@@ -258,8 +258,8 @@ min(max(floor((0.8·turn_ms − root_ms) / (stones · rho · leaf_ms)), 32), cap
 
 | input | turn 1 of the engine | each later turn (games included) |
 |---|---|---|
-| `root_ms` | the warm-up's root offence plus audit on two witness positions, × stones | the previous searched turn's root phases (offence, root step, audit), wall time |
-| `leaf_ms` | the warm-up's wall time per leaf on the witness's largest positions, at B 8, plus their timed `analyze` and one leaf solve each | the previous searched turn's search-phase wall time ÷ its served leaves; a turn that served none keeps the last finite value |
+| `root_ms` | the warm-up's root offence plus audit on two witness positions, × stones | 0: the engine sees no time inside a call, so a turn's root phases fold into its `leaf_ms` (L2; ≈ 1 % fewer sims, the safe side) |
+| `leaf_ms` | the warm-up's wall time per leaf on the witness's largest positions, at B 8, plus their timed `analyze` and one leaf solve each | the previous turn's whole wall time ÷ its served leaves, root phases included; a turn that served none keeps the last finite value |
 | `rho` | 1 | 1 (§13 A6 is the measured alternative) |
 | `cap` | `armed_sims_for(max_nodes)` (§2.6), ≥ 32 | same |
 
@@ -308,8 +308,9 @@ A laptop core at 0.7× the desk's needs 6.8 s (INFERENCE; no laptop measured).
   costs, 32, 976). A one-stone turn's quotient doubles and is capped at S_cap, counted.
   - The factor 2 is one doubling of headroom. Early-game leaves are smaller than the warm-up's, and WebGPU warms up.
   - An unlimited game takes 976.
-- The pool grows when a later game's clock needs more: the old pool is dropped first, and the memory keeps its
-  high-water mark either way. It never shrinks, since a wasm memory cannot.
+- Each game builds a fresh tree sized for its clock, as the Python head does (a tree's stored proof and hold stones
+  belong to one game); the old pool is dropped before the new one is allocated. The memory keeps its high-water mark:
+  a wasm memory never shrinks (L2).
 - A turn's sims never exceed `armed_sims_for(max_nodes)`. When that cap binds, `budget_pool_capped` counts it.
 - The pool's overflow panic stays the last line, and is unreachable through the cap. `cap ≥ 32` is pinned.
 

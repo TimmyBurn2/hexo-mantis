@@ -82,8 +82,9 @@ mantis-core      → (nothing in-workspace)
 mantis-graph     → (nothing; dep-free, wasm32-clean)   # the axis-graph and hex-canvas builders
 mantis-encoding  → core, graph          # pins the builders' consts into registry validation
 mantis-search    → core                # LegalSetPolicy + gumbel HERE; encoding dev-dep only (SLIM-FIX)
+                                       # `with_pool` + `armed_sims_for`: a driver sizes its own pool (R399(b))
 mantis-selfplay  → core, encoding, graph, search
-mantis-player    → encoding, selfplay         # the served path's own leaf build, fuse and pack; no pyo3
+mantis-player    → core, encoding, graph, search, selfplay   # the served path's leaf code and the search; no pyo3
 mantis-bridge    → all of the above    # the ONLY crate that knows pyo3 exists
 ```
 Rules: no `#[pyclass]`/`#[pymethods]`/`#[pyfunction]` outside mantis-bridge (core crates
@@ -199,7 +200,7 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
 | 10 | mint preflight report | preflight-mint-v1 | the mint preflight's evidence JSON: always written (LAW-14); mode, verdict and mint TIER derived from what the run DID, never from what it intended |
 | 11 | game record | game-record-v1 | every game a run plays, one JSON object per line, sharded by (run, segment, hour) with an index; the SEGMENT is the writer and the hour is the window, so a resume never appends into a stopped process's file |
 | 12 | canvas wire | v1 | the hex-canvas kind's per-leaf canvas: the fence masked inside its smallest axial box in a position-only orientation, six 0/1 planes, the legal gather and the graph's reply frame; far mode past `canvas_max_side`; the batch is the serving leg's (DENSE-1 L2). #2 and #8 stay retired: a number is retired, not reused |
-| 13 | web engine API | v1 | the batch both web net backends read (every array beyond `x` int32, built in `mantis-player` from the served path's pack), its outputs, the export's files, its manifest, the detector and the witness lines; the step machine (L2) and the typed API (L3) extend it |
+| 13 | web engine API | v2 | the batch both web net backends read (every array beyond `x` int32, built in `mantis-player` from the served path's pack), its outputs, the export's files, its manifest, the detector and the witness lines, and the player's pull/push step machine, per-game cache and budget (v2, L2); the typed API (L3) extends it |
 
 Contract changes bump the version and update the contract doc + its tests in the same
 commit. The PyO3 seam stays thin flat arrays (marshaling is a measured cost); per-field

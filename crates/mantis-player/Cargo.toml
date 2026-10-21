@@ -9,6 +9,9 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+mantis-core = { path = "../mantis-core" }
 mantis-encoding = { path = "../mantis-encoding" }
+mantis-graph = { path = "../mantis-graph" }
+mantis-search = { path = "../mantis-search" }
 # The served path's own leaf build, fuse and pack: the batch derives from them, never beside them.
 mantis-selfplay = { path = "../mantis-selfplay" }

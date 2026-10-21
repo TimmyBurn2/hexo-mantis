@@ -29,6 +29,6 @@ fn _engine(m: &Bound<'_, PyModule>) -> PyResult<()> {
     inference::register(m)?; // InferenceBatcher + GraphWire + WireAlreadyConsumed
     runner::register(m)?; // SelfPlayRunnerConfig + SelfPlayRunner + RunnerDrainPoisoned
     hexg::register(m)?; // HexgBuffer + GraphTargets
-    player::register(m)?; // web_batch
+    player::register(m)?; // web_batch + Player + player_constants
     Ok(())
 }

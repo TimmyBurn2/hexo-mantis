@@ -494,7 +494,10 @@ dependencies = [
 name = "mantis-player"
 version = "0.1.0"
 dependencies = [
+ "mantis-core",
  "mantis-encoding",
+ "mantis-graph",
+ "mantis-search",
  "mantis-selfplay",
 ]
 

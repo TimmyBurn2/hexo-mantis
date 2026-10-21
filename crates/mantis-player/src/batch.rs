@@ -6,6 +6,7 @@
 use std::fmt;
 
 use mantis_encoding::RegistrySpec;
+use mantis_graph::AxisGraph;
 use mantis_selfplay::queues::collate::{pack_wire, EdgeOut, PackError, PackOut, WireRef};
 use mantis_selfplay::queues::graph::build_leaf_graph;
 use mantis_selfplay::queues::wire::GraphWire;
@@ -36,6 +37,38 @@ pub struct WebBatch {
     pub mean_mask: Vec<i32>,
     /// `[G]`: each graph's `mean_mask` count.
     pub mean_den: Vec<i32>,
+    /// Per graph, what the search reads its outputs back through; not a net input.
+    pub leaves: Vec<LeafMeta>,
+}
+
+/// One leaf's frame for its outputs: the builder's window centre, and each legal row's policy slot and cell.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LeafMeta {
+    pub center: (i32, i32),
+    pub policy_dst_slot: Vec<i32>,
+    pub legal_coords: Vec<(i32, i32)>,
+}
+
+fn leaf_meta(graph: &AxisGraph) -> Result<LeafMeta, BatchError> {
+    let legal_coords = graph
+        .legal_node_gather
+        .iter()
+        .map(|&row| {
+            let base = usize::try_from(row).ok()?.checked_mul(2)?;
+            Some((
+                *graph.node_coords.get(base)?,
+                *graph.node_coords.get(base.checked_add(1)?)?,
+            ))
+        })
+        .collect::<Option<Vec<_>>>()
+        .ok_or_else(|| {
+            BatchError::Leaf("a legal row outside the graph's node coordinates".into())
+        })?;
+    Ok(LeafMeta {
+        center: graph.window_center,
+        policy_dst_slot: graph.policy_scatter_index.0.clone(),
+        legal_coords,
+    })
 }
 
 /// Why a batch could not be built.
@@ -93,6 +126,7 @@ struct Packed {
     gather: Vec<i64>,
     node_offsets: Vec<i64>,
     n_stones: Vec<i64>,
+    leaves: Vec<LeafMeta>,
 }
 
 fn pack(positions: &[Position], spec: &'static RegistrySpec) -> Result<Packed, BatchError> {
@@ -123,6 +157,10 @@ fn pack(positions: &[Position], spec: &'static RegistrySpec) -> Result<Packed, B
             )
             .map_err(BatchError::Leaf)
         })
+        .collect::<Result<Vec<_>, _>>()?;
+    let leaves = graphs
+        .iter()
+        .map(leaf_meta)
         .collect::<Result<Vec<_>, _>>()?;
     let fused = GraphWire::from_axis_graphs(&graphs, contract_version)
         .take()
@@ -184,6 +222,7 @@ fn pack(positions: &[Position], spec: &'static RegistrySpec) -> Result<Packed, B
         gather,
         node_offsets,
         n_stones,
+        leaves,
     })
 }
 
@@ -198,6 +237,7 @@ fn derive(packed: Packed) -> Result<WebBatch, BatchError> {
         gather,
         node_offsets,
         n_stones,
+        leaves,
     } = packed;
     let (n_edges, n_legal) = (codes.len(), gather.len());
     let n_nodes = row(node_offsets[n_graphs], "node row")?;
@@ -262,6 +302,7 @@ fn derive(packed: Packed) -> Result<WebBatch, BatchError> {
         real,
         mean_mask,
         mean_den,
+        leaves,
     })
 }
 

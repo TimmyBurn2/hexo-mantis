@@ -51,7 +51,13 @@ pub const MAX_CHILDREN_PER_NODE: usize = 1024;
 /// adds at most `sims` expansions of up to `MAX_CHILDREN_PER_NODE` children; the divisor's 4 is a
 /// plain margin. `finish_expansion`'s panic STAYS as the last line — an overflowed pool has
 /// corrupted its own indices — and this constant stops a config reaching it.
-pub const MAX_ARMED_SIMS: usize = MAX_NODES / (4 * MAX_CHILDREN_PER_NODE);
+pub const MAX_ARMED_SIMS: usize = armed_sims_for(MAX_NODES);
+
+/// The largest armed sim budget a pool of `nodes` serves, by `MAX_ARMED_SIMS`'s derivation.
+#[must_use]
+pub const fn armed_sims_for(nodes: usize) -> usize {
+    nodes / (4 * MAX_CHILDREN_PER_NODE)
+}
 
 /// Root-only child cap under `SearchKind::Gumbel`, where the root expands its FULL legal set:
 /// Gumbel-Top-k is a SAMPLER over the policy, so drawing it over the top-K-prior children instead
@@ -156,7 +162,12 @@ impl MCTSTree {
     }
 
     pub fn new_full(c_puct: f32, virtual_loss: f32, fpu_reduction: f32) -> Self {
-        let pool = vec![Node::uninit(); MAX_NODES];
+        MCTSTree::with_pool(c_puct, virtual_loss, fpu_reduction, MAX_NODES)
+    }
+
+    /// `new_full` with a pool of `max_nodes`, for a driver that sizes its tree to its own budget.
+    pub fn with_pool(c_puct: f32, virtual_loss: f32, fpu_reduction: f32, max_nodes: usize) -> Self {
+        let pool = vec![Node::uninit(); max_nodes];
         MCTSTree {
             pool,
             next_free: 1,
@@ -294,7 +305,7 @@ impl MCTSTree {
         // The per-node raw values exist only for the kind that reads them.
         self.raw_values = match kind {
             SearchKind::Puct => Vec::new(),
-            SearchKind::Gumbel => vec![0.0; MAX_NODES],
+            SearchKind::Gumbel => vec![0.0; self.pool.len()],
         };
     }
 

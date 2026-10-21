@@ -1,11 +1,11 @@
 # Contract: web engine API (#13)
 
-- version: v1
-- owner: crate mantis-player (`batch.rs`, the batch both net backends read); `tools/export_web.py` (the manifest and its
-  witness rows)
-- status: v1 — the batch, its outputs, the export's files, the manifest and the witness lines land with DEPLOY-WEB L1
-  (`docs/design/DEPLOY_WEB_2026-10-20.md` §3.1, §4, §5). The step machine (L2) and the typed API, the Worker messages
-  and the arena adapter (L3) extend this doc, each bumping its version in the commit that changes it.
+- version: v2
+- owner: crate mantis-player (`batch.rs`, the batch both net backends read; `player.rs`, `cache.rs` and `budget.rs`,
+  the step machine); `tools/export_web.py` (the manifest and its witness rows)
+- status: v2 — the step machine, the per-game cache and the budget land with DEPLOY-WEB L2 (v1, L1: the batch, its
+  outputs, the export's files, the manifest and the witness lines). The Rust forward (L2's second half) and the typed
+  API, the Worker messages and the arena adapter (L3) extend this doc, each bumping its version in its commit.
 
 ## Summary
 
@@ -98,6 +98,41 @@ on the five openings as one batch. A graph's argmax is compared where the refere
 | fp32 | ≤ 1e-3 | ≤ 1e-4 | ≤ 1e-4 | > 2e-3 | every shipped fp32 backend; a miss at export is a HALT |
 | fp16 | reported | ≤ 2e-3 | ≤ 2e-3 | > 2e-2 | the fp16 file, WebGPU only (R399(a)); it ships only after its pre-stated read on the development net |
 
+## The step machine (`mantis_player::player::Player`; `_engine.Player`)
+
+One board at a time. The engine reads no clock and calls no net: every call takes the host's `now_ms`, and the net's
+work is the host's between `next_batch` and `submit`.
+
+| call | in | does | refuses (`PlayerError`) |
+|---|---|---|---|
+| `new(block, encoding, cpu_path)` | the manifest's `deploy.resolved` (PUCT only) | — | `Refused` (an unknown or non-graph row; a block not PUCT, at the bridge) |
+| `set_costs(leaf_ms, root_ms)` | the start-up warm-up's measured costs | — | — |
+| `new_game(moves, clock)` | an opening as moves; `Sims(n)`, `TurnMs(t)` or `Unlimited` | a fresh tree with `4·1024·S_cap` nodes (`S_cap`: `n`, `budget::pool_sims(t, …)`, or 976) and an empty cache | `OutOfStep` mid-turn, `IllegalStone`, `NoCosts` |
+| `play(stones)` | the other side's stones | rules-checked, all or none | `OutOfStep`, `IllegalStone` |
+| `begin_turn(budget, now_ms)` | `Sims(n)`, `Clock { turn_ms }` or `Unlimited` | the turn's sims a stone: `n`; `sims_for_turn` at the costs (floor 32, or 16 on the CPU path under `min_turn_ms`); the pool's cap | `OutOfStep`, `NoCosts`, `BudgetPastPool` |
+| `next_batch(now_ms)` | — | runs the turn to its next cache miss or its end: `Pull::Batch(&WebBatch)` (the misses, deduplicated, first-seen order) or `Pull::Turn(TurnResult)` | `OutOfStep` with a batch outstanding or no turn; any search refusal |
+| `submit(probs, values, now_ms)` | `probs [L]`, `value [G]` for the outstanding batch | assembles each leaf's policy by its slots, remembers it, expands | `OutOfStep`, `OutputShape`, `Expand` |
+| `abort()` | — | drops the turn; the board is as before it | — |
+
+- **The per-stone loop** is the Python deploy head's `select_move`: the origin on an empty board; `reroot_or_new_game`
+  (reuse on) after `check_tactics_board`; `root_offence` (a decided stone unsearched, `ProofStoneIllegal` read as none);
+  the reuse rows; the root step `select_leaves(1)`; then, while descents < `n`: the early stop (one child, or leader −
+  runner-up > descents left), `select_leaves_filled(leaf_batch_size, left)`, the cache, the expand; then the select
+  rows, `get_top_visits(1)`, `root_audit` with `audit_order(None)`, the tactics rows. A turn ends on a win or its last
+  stone.
+- **The cache** is `GameEvalCache`'s: `LeafKey` keys, hits counted before the call's fresh entries go in, FIFO at
+  `CACHE_ENTRIES` (8 192), a hit refreshing nothing, emptied by `new_game`.
+- **A refusal mid-turn** rolls the turn back (the board as before it) and leaves the player usable.
+- **`TurnResult`**: per stone the cell, its new descents, whether the stop fired, whether the root solver decided it,
+  the visits a re-root kept, the root's visits and value, its two most visited children and the tactics rows; per turn
+  the sims set, `floor_over_clock`, `budget_pool_capped` and the wall ms. After a turn that served leaves, the costs
+  become its wall time a served leaf, the root folded in (the engine sees no time inside a call).
+- **The rows**, cumulative and named as the head's `search_rows`: `stop_fired`, `stop_saved`, `select_calls`,
+  `select_overlaps`, `select_network_leaves`, `reuse_reroots`, `reuse_inherited`, and `cache_calls`, `cache_positions`,
+  `cache_hits`, `cache_served`, `cache_in_batch_repeats`, `cache_all_hit_calls`, `cache_evicted`.
+- **The constants** (`_engine.player_constants()`): `early_stop` and `tree_reuse` on (the ladder's), `cache_entries`
+  8 192 (the head's cache).
+
 ## Who asserts what where
 
 | fact | asserted where | pinning test |
@@ -109,9 +144,17 @@ on the five openings as one batch. A graph's argmax is compared where the refere
 | the manifest binds the stamp, the files and the resolved block | `export_web.export` | `test_the_manifest_binds_the_stamp_the_files_and_the_resolved_block` |
 | the witness reds a perturbed graph on the line each break moves, on every line that gates it: logits (a bias shift, gated in fp32 alone), probs (a weight scale), value (one bin); the argmax rule reds a flip the value lines cannot see (planted breaks) | `export_web.witness`, `gaps`, `passes` | `test_a_perturbed_written_graph_misses_the_line_it_moves`, `test_the_argmax_rule_reds_a_flip_the_value_lines_cannot_see` |
 | a drifted re-expression, a foreign batch and an unchecked registry are refused before anything is written (planted breaks) | `export_web.export`, `witness_cases` | `test_a_re_expression_that_is_not_bit_identical_is_refused`, `test_a_foreign_batch_and_an_unchecked_registry_are_refused` |
+| the player plays the Python deploy head's stones and counts its rows on one stub's outputs, at concurrency 1; a head without reuse or without the stop is told apart (planted breaks) | `player.rs`, `cache.rs` | `tests/player/test_search_parity.py::test_the_player_plays_the_heads_stones_and_counts_its_rows`, `test_a_head_without_reuse_or_without_the_stop_is_told_apart`, `test_the_player_plays_the_heads_stones_on_every_golden` |
+| each stone spends its `n` in new descents or stops with the leader fixed; a re-root keeps the chosen child's visits | `player.rs` | `crates/mantis-player/tests/served_sims.rs::each_stone_spends_its_budget_or_stops_with_the_leader_fixed_and_the_reroot_keeps_visits` |
+| the player's constants are the ladder's switches and the head's cache size | `player.rs`, `cache.rs` | `test_the_players_constants_are_the_ladders_and_the_caches` |
+| the cache serves hits and each unseen key once; FIFO at capacity, a hit refreshing nothing | `cache.rs` | `cache::tests::*` |
+| the budget reproduces RESEARCH-WEB's guaranteed column, holds its floors and cap, rises with the clock; the pool is one doubling over the clock | `budget.rs` | `budget::tests::*`; `served_sims.rs::a_short_clock_plays_the_cpu_floor_and_flags_it` |
+| the expand refuses each malformation the bridge refuses; a call out of step is refused and an abort restores the board | `player.rs` | `player::tests::the_expand_refuses_each_malformation_the_bridge_refuses`; `served_sims.rs::a_call_out_of_step_is_refused_and_an_abort_restores_the_board` |
 | the detector refuses by name | `export_web.detect` | `test_the_detector_refuses_what_it_does_not_carry_by_name`, `test_a_gumbel_deploy_block_is_refused_before_anything_is_written` |
 
 ## Pinning tests
 
-- `crates/mantis-player/src/batch.rs` (unit tests, gate 2a)
+- `crates/mantis-player/src/batch.rs`, `cache.rs`, `budget.rs`, `player.rs` (unit tests) and
+  `crates/mantis-player/tests/served_sims.rs` (gate 2a)
+- `tests/player/test_search_parity.py` (the default tier on 32 goldens and the integration tier on 512)
 - `tests/tools/test_export_web.py` (gate 20, and the default tier)
