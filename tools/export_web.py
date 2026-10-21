@@ -143,7 +143,9 @@ class WebServedGraph(nn.Module):
         emb = torch.cat(hs, dim=-1)
         logits = self.policy(emb.index_select(0, legal)).squeeze(-1)
         g, d = mean_den.shape[0], emb.shape[1]
-        mean = self._sum(emb.new_zeros(g, d), node_graph, emb * mean_mask.to(emb.dtype)[:, None])
+        # The G-sized zeros come from a device tensor: shaped from `Shape(mean_den)`, ORT-web places them on the CPU.
+        zeros = mean_den.to(emb.dtype)[:, None] * emb.new_zeros(1, d)
+        mean = self._sum(zeros, node_graph, emb * mean_mask.to(emb.dtype)[:, None])
         mean = mean / mean_den.to(emb.dtype)[:, None]
         floor = torch.finfo(emb.dtype).min
         masked = torch.where((real != 0)[:, None], emb, torch.full_like(emb, floor))
@@ -152,7 +154,7 @@ class WebServedGraph(nn.Module):
         value = (torch.softmax(bins, dim=-1) * self.get_buffer("support")).sum(-1).clamp(-1.0, 1.0)
         seg_max = logits.new_full((g,), float("-inf")).scatter_reduce(0, legal_graph.long(), logits, "amax")
         ex = torch.exp(logits - seg_max.index_select(0, legal_graph))
-        probs = ex / self._sum(logits.new_zeros(g), legal_graph, ex).index_select(0, legal_graph)
+        probs = ex / self._sum(mean_den.to(logits.dtype) * 0.0, legal_graph, ex).index_select(0, legal_graph)
         return logits, probs, value
 
 
@@ -356,11 +358,15 @@ def narrow_index_casts(path: Path) -> None:
 
 
 def graph_refusal(ops: dict[str, int], model: onnx.ModelProto) -> str | None:
-    """Why a written graph is refused: a ScatterND, a GatherND, or an index reader's index that is not int32 unless it is a fully static int64 (a shape op's); an untyped index refuses."""
+    """Why a written graph is refused: a ScatterND, a GatherND, a ConstantOfShape shaped at run time (ORT-web keeps it on the CPU, a data op there), or an index reader's index that is not int32 unless it is a fully static int64 (a shape op's); an untyped index refuses."""
     if "ScatterND" in ops:
         return "a ScatterND, which races under threaded ORT kernels"
     if "GatherND" in ops:
         return "a GatherND, whose int64 index the int32 batch was built to remove"
+    constant = {i.name for i in model.graph.initializer} | {o for n in model.graph.node if n.op_type == "Constant" for o in n.output}
+    shaped = sorted(n.name for n in model.graph.node if n.op_type == "ConstantOfShape" and n.input[0] not in constant)
+    if shaped:
+        return f"a ConstantOfShape shaped at run time {shaped}, which ORT-web runs on the CPU"
     types = _value_types(model)
 
     def int32_or_static(name: str) -> bool:

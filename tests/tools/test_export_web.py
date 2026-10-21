@@ -171,6 +171,19 @@ def test_a_static_int64_index_passes_and_an_untyped_one_is_refused() -> None:
     assert "idx" in (export_web.graph_refusal({"Gather": 1}, model) or "")
 
 
+def test_a_constant_of_shape_shaped_at_run_time_is_refused_and_a_constant_one_passes() -> None:
+    """ORT-web keeps a ConstantOfShape whose shape is computed on the CPU, where its batch-sized output is a data op."""
+    def graph(shape_from_input: bool) -> onnx.ModelProto:
+        nodes = [helper.make_node("Shape", ["data"], ["shape"])] if shape_from_input else []
+        nodes.append(helper.make_node("ConstantOfShape", ["shape"], ["out"]))
+        inits = [] if shape_from_input else [numpy_helper.from_array(np.array([1, 4], dtype=np.int64), "shape")]
+        g = helper.make_graph(nodes, "c", [helper.make_tensor_value_info("data", TensorProto.FLOAT, ["N", 4])],
+                              [helper.make_tensor_value_info("out", TensorProto.FLOAT, None)], inits)
+        return helper.make_model(g, opset_imports=[helper.make_opsetid("", 18)])
+    assert export_web.graph_refusal({"ConstantOfShape": 1}, graph(False)) is None
+    assert "ConstantOfShape" in (export_web.graph_refusal({"ConstantOfShape": 1}, graph(True)) or "")
+
+
 def test_the_argmax_rule_reds_a_flip_the_value_lines_cannot_see() -> None:
     """PLANTED BREAK: a top-2 swap beyond the gap moves no prob or value past fp16's line, and the argmax rule alone reds it."""
     ref_logits = np.array([0.0, 0.03, -9.0, -9.0], dtype=np.float32)
