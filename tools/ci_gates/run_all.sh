@@ -127,6 +127,9 @@ run_gate "gate 15: R8 justification headers" \
     $UV run python tools/ci_gates/r8_header_gate.py
 run_gate "gate 16: no encoding-less text I/O" \
     $UV run python tools/ci_gates/encoding_io_gate.py
+# The default tier collects this module too; the row names the pipeline witness so its verdict is its own line.
+run_gate "gate 20: web export pipeline witness (contract #13)" \
+    $UV run pytest tests/tools/test_export_web.py -q
 
 wait "$RUST_PID"
 RUST_RC=$?
