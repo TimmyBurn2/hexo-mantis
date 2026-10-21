@@ -498,7 +498,8 @@ and goes through four steps.
      the scatter accumulation stay fp32 (LAW-06, accepted by R399(h)). It ships to WebGPU only, under R399(a)'s line
      (§5), pre-stated in L1's PRESTATED and read on run13's 120k. Until that read, fp32 is the only shipped file.
    - **`<stem>.weights.bin`:** dumped from the same `WebServedGraph`, so its tensors are the ONNX's.
-   - **`<stem>.witness.bin` and `<stem>.manifest.json`:** §4.3, §5.
+   - **`<stem>.witness.json` and `<stem>.manifest.json`:** §4.3, §5. (L1 wrote the device witness as JSON, the
+     16 positions' stones with their served logits, probs and values, rather than a binary file.)
 
 **A dirty tree.** The exporter records `dirty: true` in the manifest rather than refusing, so tests run while
 iterating. The release refuses a dirty manifest (§10).
@@ -509,6 +510,8 @@ the research's 1.23.2 / 0.7.2 / 1.31.0.
 - It is declared in conflict with the `teacher` extra, whose `onnxruntime-gpu` provides the same module, so
   `--extra teacher` needs `--no-group web-export`.
 - `tools/distill/teacher.py`'s install hint moves with it.
+- ORT 1.31 reports to an outside endpoint at import. The exporter sets `ORT_DISABLE_TELEMETRY=1` before it
+  imports ORT, so neither an export nor its gate sends anything (L1).
 
 ### 4.2 The detector
 
@@ -537,7 +540,7 @@ Each refusal is a test row. A later carried row needs its own goldens and its ow
 | `exporter` | the tree's commit, `dirty`, torch, onnx, onnxscript and opset |
 | `encoding` | name, `registry_sha`, `win_length`, `graph_radius`, `trunk_size`, `empty_edges`, `node_feat_dim`, vocabulary rows (91) |
 | `deploy.resolved` | §2.2's first table, as the resolvers returned it from the stamp's `config` |
-| `deploy.player` | §2.2's second table, as the player's constants (the player refuses a manifest that disagrees with its own) |
+| `deploy.player` | §2.2's second table, as the player's constants (the player refuses a manifest that disagrees with its own). It arrives with the player in L2 and moves contract #13 to v2; manifest v1 holds `deploy.resolved` alone |
 | `files` | per file: name, sha256, bytes, dtype, scatter op census; for the weights file the tensor table |
 | `witness` | the lines; the goldens' path and sha256 (`d5c5a7ba…`); and one row per (backend, file, threads, B): max \|Δ\| logit, prob and value, argmax agreed / compared, ties, pass against that file's lines (fp32 or R399(a)'s fp16), where, when; a WebGPU-only ScatterND file's rows are marked "wrong under threaded CPU kernels (ORT #18048)" (R399(g)) |
 
@@ -740,16 +743,15 @@ repo_design §1 and CLAUDE.md's map line.
 
 | gate | runs | reds on |
 |---|---|---|
-| 20 export pipeline witness (L1) | `pytest -m web`: the tiny stamps through `export_web.py`; W1 at ORT CPU 1 and default threads; W2 native; W1's and W2's planted breaks red; the detector's refusals; the zero-ScatterND census; the manifest's fields | any gating line, any refusal not raised, any ScatterND, a planted break that stays green |
+| 20 export pipeline witness (L1) | `pytest tests/tools/test_export_web.py`: the tiny stamps through `export_web.py`; W1 at ORT CPU 1 and default threads; W2 native (from L2); W1's and W2's planted breaks red; the re-expression's refusal red; the detector's refusals; the zero-ScatterND census; the manifest's fields | any gating line, any refusal not raised, any ScatterND, a planted break that stays green |
 | 21 web package (L3) | `make web` (wasm32 build + wasm-bindgen), `tsc --noEmit`, and `node --test web/test` on the tiny stamp's export | a build failure, a type error, a test, W2 in wasm or its break |
 | 4 (from L2) | adds the player's wasm32 `cargo check` | a dependency or call the wasm build cannot carry |
 | 2a / 2b | `mantis-player`'s Rust tests and clippy, as a workspace member: the budget function, the cache port, the step machine, the served-sims pin (§13 A3), the error-parity test | as today |
 | 3a / 3b | W3: 32 positions in the default tier with both breaks red, 512 in integration | any stone or row differing |
 
-- **The `web` marker.** Gate 20's module carries it, and it is registered in `markers` (`--strict-markers` is on).
-  Every default-tier expression deselects it: the addopts (with `tests/test_bare_pytest_tier.py`), gate 3a's row in
-  `run_all.sh`, and the Makefile's `test` target, which each pass their own `-m`. So the module runs once per
-  `make gates`.
+- **No `web` marker (L1).** The default-tier expression is pinned in six places and a tier census, so a deselecting
+  marker would move all of them. The module stays in the default tier, and gate 20 runs it again by path, about
+  15 s twice.
 - **Toolchains:** Rust 1.97.1 already pins `wasm32-unknown-unknown`, and node 26.7.0 is already pinned. New pins:
   `wasm-bindgen-cli` in `mise.toml`, and npm's lock in `web/`.
 - **Network:** gate 21's `npm ci` needs the registry once per clone, like `uv sync`.

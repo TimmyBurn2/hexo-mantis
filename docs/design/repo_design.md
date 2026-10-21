@@ -34,6 +34,7 @@ hexo-mantis/
 │   ├── mantis-encoding/        # registry.toml + spec + validators
 │   ├── mantis-search/          # MCTS (PUCT + Gumbel), completed-Q, tactics solver
 │   ├── mantis-selfplay/        # runner, worker loop, inference queues, replay buffers
+│   ├── mantis-player/          # the browser bot's single-thread deploy driver (pull/push) and its batch
 │   └── mantis-bridge/          # ALL PyO3; maturin; builds mantis._engine (abi3 release)
 ├── src/mantis/                 # the one Python package (installed, src-layout)
 │   ├── encoding/               # delegating shim over _engine registry + resolvers + audit
@@ -82,6 +83,7 @@ mantis-graph     → (nothing; dep-free, wasm32-clean)   # the axis-graph and he
 mantis-encoding  → core, graph          # pins the builders' consts into registry validation
 mantis-search    → core                # LegalSetPolicy + gumbel HERE; encoding dev-dep only (SLIM-FIX)
 mantis-selfplay  → core, encoding, graph, search
+mantis-player    → encoding, selfplay         # the served path's own leaf build, fuse and pack; no pyo3
 mantis-bridge    → all of the above    # the ONLY crate that knows pyo3 exists
 ```
 Rules: no `#[pyclass]`/`#[pymethods]`/`#[pyfunction]` outside mantis-bridge (core crates
@@ -197,6 +199,7 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
 | 10 | mint preflight report | preflight-mint-v1 | the mint preflight's evidence JSON: always written (LAW-14); mode, verdict and mint TIER derived from what the run DID, never from what it intended |
 | 11 | game record | game-record-v1 | every game a run plays, one JSON object per line, sharded by (run, segment, hour) with an index; the SEGMENT is the writer and the hour is the window, so a resume never appends into a stopped process's file |
 | 12 | canvas wire | v1 | the hex-canvas kind's per-leaf canvas: the fence masked inside its smallest axial box in a position-only orientation, six 0/1 planes, the legal gather and the graph's reply frame; far mode past `canvas_max_side`; the batch is the serving leg's (DENSE-1 L2). #2 and #8 stay retired: a number is retired, not reused |
+| 13 | web engine API | v1 | the batch both web net backends read (every array beyond `x` int32, built in `mantis-player` from the served path's pack), its outputs, the export's files, its manifest, the detector and the witness lines; the step machine (L2) and the typed API (L3) extend it |
 
 Contract changes bump the version and update the contract doc + its tests in the same
 commit. The PyO3 seam stays thin flat arrays (marshaling is a measured cost); per-field
@@ -317,6 +320,10 @@ ADDED (v7 → v8). `docs/contracts/run_config_schema.md` is the version authorit
   local perf work. Built artifacts are portable by default.
 - `mantis-graph` is dep-free and wasm32-clean; `make check.wasm` (cargo check
   --target wasm32-unknown-unknown) must stay green from day one.
+- AMENDMENT (R398(b)–(c), DEPLOY-WEB L1, 2026-10-21): the web export's ONNX toolchain (`onnx`, `onnxscript`,
+  `onnxruntime` CPU, pinned) is the `web-export` dependency group, a DEFAULT group, so the gates have it. It is declared
+  in conflict with the `teacher` extra, whose `onnxruntime-gpu` is the same module: `--extra teacher` needs
+  `--no-group web-export`. `tools/export_web.py` writes a stamp's browser net (contract #13).
 - Vendoring: `vendor/pins.toml` (url + commit sha + optional tracked patch) + one
   `make vendor` fetcher into gitignored `vendor/external/`. Single mechanism; features
   depending on unfetched vendors skip loudly with the fetch command named.
@@ -428,6 +435,11 @@ ADDED (v7 → v8). `docs/contracts/run_config_schema.md` is the version authorit
     each other. The arm runs before ruff and pyright so a pyright REFUSAL (rc 2, a host
     condition) cannot suppress the comment measures. It adds NO gate number — the set is
     still seventeen, and gate 18 stays reserved for RQ-21's `freeze_verify`.
+    AMENDMENT (R398(b), DEPLOY-WEB L1, 2026-10-21): gate 20 is the web export's pipeline witness —
+    `tests/tools/test_export_web.py`, tiny random-init stamps of every carried arch kind and row through
+    `tools/export_web.py`: the bit-identical re-expression, the fp32 lines at 1 and default ORT threads, no
+    ScatterND, the manifest, the detector's refusals and two planted breaks. The default tier collects the
+    module too; the row names the witness so its verdict is its own line.
 
 ## 10. Performance doctrine (design constraint, not a pass)
 
