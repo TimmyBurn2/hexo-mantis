@@ -163,6 +163,13 @@ backend returned. Three pieces of this loop are bridge glue today, not `mantis-s
 The player carries its own copy of each, named as interim duplication. An error-parity test feeds both the same
 malformed inputs, and the copies are retired by CARD-DEPLOY-HEAD-DRIVER when the bridge delegates (§13 A2).
 
+> **L2, as built:** the expand checks are `player::expand_refusal`, and the error-parity test
+> (`mantis-bridge`'s `player::tests`) feeds it and the bridge's `expand_and_backup_ls_graph` the same five inputs.
+> Three more interim copies, each named in CARD-DEPLOY-HEAD-DRIVER and held to the head by W3: the legal rows'
+> coordinates (`batch.rs` `leaf_meta`, as the bridge's `inference.rs` derives them), the board-to-request conversion
+> (`position_of`) and the spec-to-`BoardGeometry` one (`Player::new`). The tactics block's ranges are
+> `TacticsConfig::check` in `mantis-search`, which the player calls; the bridge's parser keeps its own until it delegates.
+
 **The deploy block** has two sources, and the manifest keeps them apart (§4.3).
 - **Resolved from the stamp's own `config`**, by the run's resolvers (`resolve_puct_constants`,
   `resolve_deploy_tactics`), at export. Values of record (`configs/run14.yaml`, resolved):
@@ -404,7 +411,7 @@ the batch's graphs.
 > `forward(&WebBatch) -> NetOutputs` is called directly (the Rust tests drive `next_batch`/`submit` with a stub, W2
 > reads it through the bridge, the wasm `Engine` through `forward_pending`). It reads the batch's own `divisor`, `real`,
 > `mean_mask` and `mean_den`, as the exported graph does. Measured in node on run13's 120k: 63–65 ms a leaf, a
-> 694 KB module after wasm-bindgen, and 113 MB (S 32) / 131 MB (S 128) peak memory over 8 goldens (24.8 MB after the
+> 697 KB module after wasm-bindgen, and 116 MB (S 32) / 126 MB (S 128) peak memory over 8 goldens (24.8 MB after the
 > weights load). The peak is above §2.6's 90 MB for the mean leaf: the goldens reach the large leaves.
 
 ```rust
@@ -547,7 +554,7 @@ own compiled `registry_sha()`, so the wasm engine can never serve a net under an
 
 Each refusal is a test row. A later carried row needs its own goldens and its own gate-20 row.
 
-### 4.3 The manifest (`<stem>.manifest.json`, format `mantis-web-manifest-v1`)
+### 4.3 The manifest (`<stem>.manifest.json`, format `mantis-web-manifest-v2`)
 
 | section | fields |
 |---|---|
@@ -555,7 +562,7 @@ Each refusal is a test row. A later carried row needs its own goldens and its ow
 | `exporter` | the tree's commit, `dirty` (tracked changes, read before anything is written; true when git cannot say), torch, onnx, onnxscript, onnxruntime, opset and the export's seconds |
 | `encoding` | name, `registry_sha`, `win_length`, `graph_radius`, `trunk_size`, `empty_edges`, `node_feat_dim`, vocabulary rows (91) |
 | `deploy.resolved` | §2.2's first table, as the resolvers returned it from the stamp's `config` |
-| `deploy.player` | §2.2's second table, as the player's constants (the player refuses a manifest that disagrees with its own). It arrives with the player in L2 and moves contract #13 to v2; manifest v1 holds `deploy.resolved` alone |
+| `deploy.player` | §2.2's second table, as the player's constants (the player refuses a manifest that disagrees with its own). It arrived with the player in L2, as manifest v2; manifest v1 held `deploy.resolved` alone |
 | `files` | per file: name, sha256, bytes; per ONNX file its dtype, op census and `passes_its_line` (every row of that file holds its line); for the weights file the tensor table |
 | `witness` | the lines; the goldens' path and sha256 (`d5c5a7ba…`); and one row per (backend, file, threads, B): max \|Δ\| logit, prob and value, argmax agreed / compared, its line (fp32 or R399(a)'s fp16) and pass; a WebGPU-only ScatterND file's rows are marked "wrong under threaded CPU kernels (ORT #18048)" (R399(g)) |
 

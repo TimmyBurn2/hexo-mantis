@@ -250,7 +250,7 @@ def passes(row: dict[str, Any], line: Line) -> bool:
 
 
 def ort_session(path: Path, threads: int) -> ort.InferenceSession:
-    """ORT CPU on `path` at `threads` (0: ORT's default)."""
+    """ORT CPU on `path` at `threads` (0: ORT's default); Raises: onnxruntime's errors — a file ORT cannot load."""
     so = ort.SessionOptions()
     so.intra_op_num_threads = threads
     so.log_severity_level = 3

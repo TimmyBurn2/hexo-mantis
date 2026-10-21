@@ -131,9 +131,11 @@ impl PyPlayer {
         })
     }
 
-    /// Set the device's measured costs.
-    fn set_costs(&mut self, leaf_ms: f64, root_ms: f64) {
-        self.inner.set_costs(Costs { leaf_ms, root_ms });
+    /// Set the device's measured costs. Raises: ValueError (costs no device has).
+    fn set_costs(&mut self, leaf_ms: f64, root_ms: f64) -> PyResult<()> {
+        self.inner
+            .set_costs(Costs { leaf_ms, root_ms })
+            .map_err(|e| refused(&e))
     }
 
     /// The shortest clock at which the floor fits two stones, once costs are set.
@@ -200,6 +202,7 @@ impl PyPlayer {
                 d.set_item("floor_over_clock", result.floor_over_clock)?;
                 d.set_item("budget_pool_capped", result.budget_pool_capped)?;
                 d.set_item("wall_ms", result.wall_ms)?;
+                d.set_item("served_leaves", result.served_leaves)?;
                 Ok(d)
             }
         }
@@ -341,4 +344,73 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPlayer>()?;
     m.add_class::<PyRustForward>()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use mantis_player::cache::Entry;
+    use mantis_player::player::expand_refusal;
+    use mantis_search::LegalSetPolicy;
+    use pyo3::prelude::*;
+
+    use crate::board::PyBoard;
+    use crate::mcts::PyMCTSTree;
+
+    const STRIDE: usize = 362;
+
+    /// The bridge's and the player's verdicts on one malformation of a one-leaf expand: arity, stride, centre, trunk.
+    #[test]
+    fn the_player_refuses_exactly_the_expands_the_bridge_refuses() {
+        Python::initialize();
+        let board = PyBoard::new();
+        let leaf = board.core().clone();
+        let centre = leaf.window_center();
+        let trunk = i32::try_from(leaf.cluster_window_size()).expect("a window fits i32");
+        let cases = [
+            ("well formed", 1, STRIDE, centre, trunk),
+            ("arity", 0, STRIDE, centre, trunk),
+            ("stride", 1, STRIDE - 1, centre, trunk),
+            ("centre", 1, STRIDE, (centre.0 + 3, centre.1), trunk),
+            ("trunk", 1, STRIDE, centre, trunk + 2),
+        ];
+        Python::attach(|py| {
+            for (label, n, width, center, trunk_sz) in cases {
+                let mut tree = PyMCTSTree::new(1.5, 0.25, false, 0.3);
+                tree.new_game(&board)
+                    .expect("an unarmed tree takes any board");
+                tree.select_leaves(py, 1)
+                    .expect("a fresh root selects itself");
+                let bridge = tree
+                    .expand_and_backup_ls_graph(
+                        py,
+                        vec![vec![1.0 / width as f32; width]; n],
+                        vec![Vec::new(); n],
+                        vec![0.0; n],
+                        vec![center; n],
+                        STRIDE,
+                        trunk_sz,
+                    )
+                    .is_err();
+                let outputs = vec![
+                    Entry {
+                        policy: LegalSetPolicy {
+                            dense: vec![1.0 / width as f32; width],
+                            ..LegalSetPolicy::default()
+                        },
+                        value: 0.0,
+                        center,
+                    };
+                    n
+                ];
+                let player =
+                    expand_refusal(std::slice::from_ref(&leaf), &outputs, STRIDE, trunk_sz)
+                        .is_err();
+                assert_eq!(
+                    player, bridge,
+                    "{label}: player refused {player}, bridge refused {bridge}"
+                );
+                assert_eq!(bridge, label != "well formed", "{label}");
+            }
+        });
+    }
 }

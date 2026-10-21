@@ -50,7 +50,7 @@ fn stone_json(s: &StoneResult) -> Value {
 fn turn_json(t: &TurnResult) -> Value {
     json!({
         "stones": t.stones.iter().map(stone_json).collect::<Vec<_>>(), "sims_set": t.sims_set,
-        "floor_over_clock": t.floor_over_clock, "budget_pool_capped": t.budget_pool_capped, "wall_ms": t.wall_ms,
+        "floor_over_clock": t.floor_over_clock, "budget_pool_capped": t.budget_pool_capped, "wall_ms": t.wall_ms, "served_leaves": t.served_leaves,
     })
 }
 
@@ -168,8 +168,10 @@ impl Engine {
         Ok(())
     }
 
-    pub fn set_costs(&mut self, leaf_ms: f64, root_ms: f64) {
-        self.player.set_costs(Costs { leaf_ms, root_ms });
+    pub fn set_costs(&mut self, leaf_ms: f64, root_ms: f64) -> Result<(), JsValue> {
+        self.player
+            .set_costs(Costs { leaf_ms, root_ms })
+            .map_err(|e| refused(&e))
     }
 
     #[wasm_bindgen(getter)]
@@ -309,5 +311,5 @@ impl Engine {
 #[wasm_bindgen]
 #[must_use]
 pub fn memory_bytes() -> f64 {
-    (core::arch::wasm32::memory_size(0) * 65_536) as f64
+    core::arch::wasm32::memory_size(0) as f64 * 65_536.0
 }

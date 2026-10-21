@@ -68,6 +68,30 @@ impl std::fmt::Display for TacticsError {
 impl std::error::Error for TacticsError {}
 
 impl TacticsConfig {
+    /// Refuse, naming the first field out of range, a block outside turns 1–40, audit `k`/`m` 1–1024 and budgets above 0.
+    pub fn check(&self) -> Result<(), String> {
+        let turns = |name: &str, n: u8| {
+            (1..=40)
+                .contains(&n)
+                .then_some(())
+                .ok_or(format!("{name} {n} is not in 1..=40"))
+        };
+        turns("leaf_turns", self.leaf_turns)?;
+        turns("root_turns", self.root_turns)?;
+        if let Some(a) = self.audit {
+            turns("audit turns", a.turns)?;
+            for (name, n) in [("audit k", a.k), ("audit m", a.m)] {
+                if !(1..=1024).contains(&n) {
+                    return Err(format!("{name} {n} is not in 1..=1024"));
+                }
+            }
+            if a.nodes == 0 || a.total_nodes == 0 {
+                return Err("an audit budget of 0 nodes".to_owned());
+            }
+        }
+        Ok(())
+    }
+
     /// Refuse, as `TacticsError::RadiusBelowFive`, a legal-move radius this block cannot run on.
     pub fn check_radius(&self, radius: i32) -> Result<(), TacticsError> {
         if radius < MIN_TACTICS_RADIUS {

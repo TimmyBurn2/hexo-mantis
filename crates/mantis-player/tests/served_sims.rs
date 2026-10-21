@@ -6,6 +6,12 @@ use mantis_player::player::{
 };
 use mantis_search::mcts::{AuditConfig, AuditMode, TacticsConfig};
 
+/// RESEARCH-WEB's one-CPU-thread desk costs.
+const DESK_CPU: mantis_player::player::Costs = mantis_player::player::Costs {
+    leaf_ms: 58.71,
+    root_ms: 93.0,
+};
+
 const GOLDENS: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../tests/fixtures/graph_build/positions_r8.txt"
@@ -188,14 +194,10 @@ fn the_same_position_and_outputs_play_the_same_stones() {
 #[test]
 fn a_short_clock_plays_the_cpu_floor_and_flags_it() {
     use mantis_player::budget::{CPU_FLOOR, FLOOR};
-    use mantis_player::player::Costs;
     let moves = &golden_moves(1)[0];
     for (cpu, floor) in [(true, CPU_FLOOR), (false, FLOOR)] {
         let mut player = Player::new(block(false), "gnn_axis_r8", cpu).expect("a graph row");
-        player.set_costs(Costs {
-            leaf_ms: 58.71,
-            root_ms: 93.0,
-        });
+        player.set_costs(DESK_CPU).expect("a device's costs");
         player
             .new_game(moves, GameClock::TurnMs(10_000.0))
             .expect("the golden replays");
@@ -245,4 +247,134 @@ fn a_call_out_of_step_is_refused_and_an_abort_restores_the_board() {
         player.board().cells_iter().count(),
         before.cells_iter().count()
     );
+}
+
+/// The pool's cap, read through the refusal a budget past it gets.
+fn cap_of(player: &mut Player) -> u32 {
+    match player.begin_turn(Budget::Sims(100_000), 0.0) {
+        Err(mantis_player::player::PlayerError::BudgetPastPool { cap, .. }) => cap,
+        other => panic!("a budget past every pool is refused, got {other:?}"),
+    }
+}
+
+#[test]
+fn every_game_clock_sizes_a_pool_of_at_least_the_floor() {
+    use mantis_player::budget::FLOOR;
+    let mut player = Player::new(block(false), "gnn_axis_r8", true).expect("a graph row");
+    player.set_costs(DESK_CPU).expect("a device's costs");
+    for (clock, want) in [
+        (GameClock::Sims(1), FLOOR),
+        (GameClock::Sims(8), FLOOR),
+        (GameClock::Sims(100), 100),
+        (GameClock::Sims(5_000), 976),
+        (GameClock::TurnMs(f64::NAN), FLOOR),
+        (GameClock::TurnMs(-5.0), FLOOR),
+        (GameClock::TurnMs(1.0), FLOOR),
+        (GameClock::TurnMs(10_000.0), 134),
+        (GameClock::TurnMs(f64::INFINITY), 976),
+        (GameClock::Unlimited, 976),
+    ] {
+        player.new_game(&[], clock).expect("an empty opening");
+        assert_eq!(cap_of(&mut player), want, "{clock:?}");
+    }
+}
+
+#[test]
+fn a_clock_past_the_pool_plays_the_cap_and_flags_it() {
+    let moves = &golden_moves(1)[0];
+    let mut player = Player::new(block(false), "gnn_axis_r8", true).expect("a graph row");
+    player.set_costs(DESK_CPU).expect("a device's costs");
+    player
+        .new_game(moves, GameClock::TurnMs(10_000.0))
+        .expect("the golden replays");
+    let result = turn(&mut player, Budget::Clock { turn_ms: 600_000.0 });
+    assert!(
+        result.budget_pool_capped && !result.floor_over_clock && result.sims_set == 134,
+        "{result:?}"
+    );
+}
+
+#[test]
+fn a_turn_that_served_leaves_sets_the_costs_and_one_that_served_none_keeps_them() {
+    use mantis_player::player::Costs;
+    let mut player = Player::new(block(false), "gnn_axis_r8", true).expect("a graph row");
+    player.set_costs(DESK_CPU).expect("a device's costs");
+    player
+        .new_game(&[], GameClock::Sims(SIMS))
+        .expect("an empty opening");
+    let opening = turn(&mut player, Budget::Sims(SIMS));
+    assert_eq!(
+        (opening.served_leaves, player.costs()),
+        (0, Some(DESK_CPU)),
+        "the origin serves nothing"
+    );
+    player
+        .begin_turn(Budget::Sims(SIMS), 10.0)
+        .expect("a turn begins");
+    let result = loop {
+        let outputs = match player.next_batch(410.0).expect("the turn advances") {
+            Pull::Turn(result) => break result,
+            Pull::Batch(batch) => stub(batch),
+        };
+        player
+            .submit(&outputs.0, &outputs.1, 410.0)
+            .expect("the outputs fit the batch");
+    };
+    assert!(result.served_leaves > 0 && result.wall_ms == 400.0);
+    #[allow(clippy::cast_precision_loss)]
+    let leaf_ms = 400.0 / result.served_leaves as f64;
+    assert_eq!(
+        player.costs(),
+        Some(Costs {
+            leaf_ms,
+            root_ms: 0.0
+        })
+    );
+    assert!(player
+        .set_costs(Costs {
+            leaf_ms: f64::NAN,
+            root_ms: 0.0
+        })
+        .is_err());
+    assert!(player
+        .set_costs(Costs {
+            leaf_ms: 0.0,
+            root_ms: 0.0
+        })
+        .is_err());
+}
+
+#[test]
+fn a_block_or_an_output_the_head_would_refuse_is_refused() {
+    let mut zero = block(true);
+    zero.leaf_batch_size = 0;
+    assert!(
+        Player::new(zero, "gnn_axis_r8", false).is_err(),
+        "a leaf batch of 0"
+    );
+    let mut idle = block(true);
+    if let Some(t) = idle.tactics.as_mut() {
+        t.root_turns = 0;
+    }
+    assert!(
+        Player::new(idle, "gnn_axis_r8", false).is_err(),
+        "a root solver of 0 turns"
+    );
+    let moves = &golden_moves(1)[0];
+    let mut player = Player::new(block(false), "gnn_axis_r8", false).expect("a graph row");
+    player
+        .new_game(moves, GameClock::Sims(SIMS))
+        .expect("the golden replays");
+    player
+        .begin_turn(Budget::Sims(SIMS), 0.0)
+        .expect("a turn begins");
+    let Pull::Batch(batch) = player.next_batch(0.0).expect("the root step needs the net") else {
+        panic!("a fresh game's root step is a miss");
+    };
+    let (probs, mut values) = stub(batch);
+    values[0] = f32::NAN;
+    assert!(matches!(
+        player.submit(&probs, &values, 0.0),
+        Err(mantis_player::player::PlayerError::NonFinite("value"))
+    ));
 }

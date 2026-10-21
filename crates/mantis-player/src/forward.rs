@@ -226,6 +226,14 @@ impl RustForward {
         let w = Weights { table, floats };
         let input_proj = w.linear("input_proj", Some(feat), None)?;
         let hidden = input_proj.n;
+        let zero = |name: &str, got: (usize, usize)| ForwardError::Shape {
+            name: name.to_owned(),
+            want: "a width above 0".to_owned(),
+            got,
+        };
+        if hidden == 0 {
+            return Err(zero("input_proj.wt", (input_proj.k, 0)));
+        }
         let depth = (0..table.len())
             .take_while(|i| table.iter().any(|r| r.name == format!("table{i}")))
             .count();
@@ -254,6 +262,9 @@ impl RustForward {
         let policy2 = w.linear("policy.2", Some(policy0.n), Some(1))?;
         let fc1 = w.linear("fc1", Some(2 * depth * hidden), None)?;
         let fc2 = w.linear("fc2", Some(fc1.n), None)?;
+        if fc2.n == 0 {
+            return Err(zero("fc2.wt", (fc2.k, 0)));
+        }
         let support = w.vector("support", fc2.n)?;
         Ok(RustForward {
             feat,
@@ -508,6 +519,16 @@ mod tests {
             .collect();
         assert!(
             matches!(RustForward::load(&no_fc2, &floats, 3), Err(ForwardError::Missing(n)) if n == "fc2.wt")
+        );
+        let mut narrow = table.clone();
+        for r in narrow
+            .iter_mut()
+            .filter(|r| r.name == "fc2.wt" || r.name == "fc2.b" || r.name == "support")
+        {
+            r.cols = 0;
+        }
+        assert!(
+            matches!(RustForward::load(&narrow, &floats, 3), Err(ForwardError::Shape { name, .. }) if name == "fc2.wt")
         );
     }
 

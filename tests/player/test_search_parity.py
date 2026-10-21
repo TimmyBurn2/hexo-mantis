@@ -34,15 +34,19 @@ GOLDENS = REPO / "tests" / "fixtures" / "graph_build" / "positions_r8.txt"
 ENC = "gnn_axis_r8"
 SIMS = 128
 FEAT = 11
+TURNS = 3
+# P1 holds four in a row, open at both ends, with two stones to play: the root solver decides both stones unsearched.
+FORCED_WIN = [(0, 0), (0, 5), (5, -5), (1, 0), (2, 0), (-5, 0), (-3, 5), (3, 0), (0, -3), (5, 3), (-2, -4)]
 
 pytestmark = pytest.mark.xdist_group("search_parity")
 CAPTURED: list[list[np.ndarray]] = []
 
 
 def _config() -> dict[str, Any]:
-    """A production config of the census on the player's row."""
+    """A production config of the census on the player's row with its deploy tactics armed: the shipped posture."""
     dumps = [load_config(path).model_dump() for path in production_configs(REPO)]
-    return copy.deepcopy(next(d for d in dumps if d["identity"]["encoding"] == ENC))
+    return copy.deepcopy(next(d for d in dumps
+                              if d["identity"]["encoding"] == ENC and resolve_deploy_tactics(d) is not None))
 
 
 def _golden_moves(n: int) -> list[list[tuple[int, int]]]:
@@ -134,58 +138,81 @@ def _delta(after: dict[str, int], before: dict[str, int]) -> dict[str, int]:
     return {k: after[k] - before.get(k, 0) for k in after}
 
 
-def head_turns(head: Any, games: list[list[tuple[int, int]]]) -> list[tuple[list[tuple], dict[str, int]]]:
-    """Per golden: one turn of the head's stones (cell, sims, stopped, tactics) and its rows over the turn."""
+def _board(moves: list[tuple[int, int]]) -> Any:
+    board = Board.with_encoding_name(ENC)
+    for q, r in moves:
+        board.apply_move(q, r)
+    return board
+
+
+Turn = tuple[list[tuple], dict[str, int]]
+
+
+def head_turns(head: Any, games: list[list[tuple[int, int]]]) -> list[list[Turn]]:
+    """Per game: up to `TURNS` turns to a win, the head on both sides; each turn's stones and its rows over the turn."""
     out = []
     for moves in games:
         head.new_game()
-        board = Board.with_encoding_name(ENC)
-        for q, r in moves:
-            board.apply_move(q, r)
-        before, stones = head.search_rows(), []
-        for _ in range(board.moves_remaining):
-            cell = head.select_move(board)
-            stones.append((tuple(cell), int(head.last_sims or 0), bool(head.last_stopped), head.last_tactics))
-            board.apply_move(*cell)
-            if board.check_win():
-                break
-        out.append((stones, _delta(head.search_rows(), before)))
+        board, turns = _board(moves), []
+        while len(turns) < TURNS and not board.check_win():
+            before, stones = head.search_rows(), []
+            for _ in range(board.moves_remaining):
+                cell = head.select_move(board)
+                stones.append((tuple(cell), int(head.last_sims or 0), bool(head.last_stopped), head.last_tactics))
+                board.apply_move(*cell)
+                if board.check_win():
+                    break
+            turns.append((stones, _delta(head.search_rows(), before)))
+        out.append(turns)
     return out
 
 
-def player_turns(player: Player, games: list[list[tuple[int, int]]]) -> list[tuple[list[tuple], dict[str, int]]]:
-    """The same, from the Rust player through its pull/push."""
-    out = []
+def player_turns(player: Player, games: list[list[tuple[int, int]]]) -> tuple[list[list[Turn]], int]:
+    """The same from the Rust player through its pull/push, and how many of its stones the root solver decided."""
+    out, decided = [], 0
     for moves in games:
         player.new_game(moves, sims=SIMS)
-        before = player.rows()
-        player.begin_turn(0.0, sims=SIMS)
-        while "turn" not in (step := player.next_batch(0.0)):
-            player.submit(*stub_outputs(web_batch_rows(step)), 0.0)
-        stones = [(tuple(s["cell"]), s["sims"], s["stopped"], s["tactics"]) for s in step["turn"]]
-        out.append((stones, _delta(player.rows(), before)))
-    return out
+        board, turns = _board(moves), []
+        while len(turns) < TURNS and not board.check_win():
+            before = player.rows()
+            player.begin_turn(0.0, sims=SIMS)
+            while "turn" not in (step := player.next_batch(0.0)):
+                player.submit(*stub_outputs(web_batch_rows(step)), 0.0)
+            for s in step["turn"]:
+                board.apply_move(*s["cell"])
+                decided += s["decided"]
+            stones = [(tuple(s["cell"]), s["sims"], s["stopped"], s["tactics"]) for s in step["turn"]]
+            turns.append((stones, _delta(player.rows(), before)))
+        out.append(turns)
+    return out, decided
 
 
-def _mismatches(head: list, player: list) -> list[int]:
+def _mismatches(head: list[list[Turn]], player: list[list[Turn]]) -> list[int]:
     return [i for i, (h, p) in enumerate(zip(head, player, strict=True))
-            if h[0] != p[0] or any(p[1].get(k) != v for k, v in h[1].items())]
+            if len(h) != len(p) or any(ht[0] != pt[0] or any(pt[1].get(k) != v for k, v in ht[1].items())
+                                       for ht, pt in zip(h, p, strict=False))]
 
 
 @pytest.fixture(scope="module")
 def default_games() -> list[list[tuple[int, int]]]:
-    return _golden_moves(32)
+    return [FORCED_WIN, *_golden_moves(32)]
 
 
 @pytest.fixture(scope="module")
-def played(engine: LocalInferenceEngine, default_games: list) -> tuple[list, list]:
-    return head_turns(_head(engine), default_games), player_turns(_player(), default_games)
+def played(engine: LocalInferenceEngine, default_games: list) -> tuple[list, list, int]:
+    return head_turns(_head(engine), default_games), *player_turns(_player(), default_games)
 
 
-def test_the_player_plays_the_heads_stones_and_counts_its_rows(played: tuple[list, list]) -> None:
-    head, player = played
-    assert _mismatches(head, player) == [], "the player and the head part on these goldens"
-    assert sum(rows["reuse_reroots"] for _, rows in head) >= 1, "no searched two-stone turn, so reuse went unread"
+def _witnessed(head: list[list[Turn]], player: list[list[Turn]], decided: int) -> None:
+    """Identical games, and every arm W3 holds the player to actually ran: reuse, the cache's hits, a decided stone."""
+    assert _mismatches(head, player) == [], "the player and the head part on these games"
+    total = {k: sum(rows[k] for turns in head for _, rows in turns) for k in ("reuse_reroots", "cache_hits")}
+    assert total["reuse_reroots"] >= 1 and total["cache_hits"] >= 1, f"an arm went unread: {total}"
+    assert decided >= 1, "no stone was decided by the root solver, so that arm went unread"
+
+
+def test_the_player_plays_the_heads_stones_and_counts_its_rows(played: tuple[list, list, int]) -> None:
+    _witnessed(*played)
 
 
 def test_the_two_adapters_give_the_same_rows_on_the_goldens(engine: LocalInferenceEngine) -> None:
@@ -208,7 +235,7 @@ def test_a_head_without_reuse_or_stopping_at_a_tie_is_told_apart(engine: LocalIn
                                                                  played: tuple[list, list], default_games: list,
                                                                  monkeypatch: pytest.MonkeyPatch) -> None:
     """PLANTED BREAKS: a head that re-roots by a new game, and one whose stop compares `>= left`, each part from the player."""
-    _head_rows, player = played
+    _head_rows, player, _decided = played
     assert _mismatches(head_turns(_head(engine, tree_reuse=False), default_games), player), "reuse went unread"
     monkeypatch.setattr(head_mod, "_leader_fixed", lambda tree, left: (top := tree.get_top_visits(2)) and (
         len(top) == 1 or top[0][1] - top[1][1] >= left))
@@ -217,8 +244,8 @@ def test_a_head_without_reuse_or_stopping_at_a_tie_is_told_apart(engine: LocalIn
 
 @pytest.mark.integration
 def test_the_player_plays_the_heads_stones_on_every_golden(engine: LocalInferenceEngine) -> None:
-    games = _golden_moves(512)
-    assert _mismatches(head_turns(_head(engine), games), player_turns(_player(), games)) == []
+    games = [FORCED_WIN, *_golden_moves(512)]
+    _witnessed(head_turns(_head(engine), games), *player_turns(_player(), games))
 
 
 def test_the_players_constants_are_the_ladders_and_the_caches() -> None:

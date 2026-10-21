@@ -82,7 +82,7 @@ pub struct Child {
     pub q: f32,
 }
 
-/// A turn: its stones, the sims it set a stone, its flags, and its wall time on the host's clock.
+/// A turn: its stones, the sims it set a stone, its flags, its wall time on the host's clock and its served leaves.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TurnResult {
     pub stones: Vec<StoneResult>,
@@ -90,6 +90,8 @@ pub struct TurnResult {
     pub floor_over_clock: bool,
     pub budget_pool_capped: bool,
     pub wall_ms: f64,
+    /// The leaves the net served this turn: its cost a leaf is `wall_ms / served_leaves`, root phases folded in.
+    pub served_leaves: u64,
 }
 
 /// The search's rows, cumulative over the player's life, named as the Python head's `search_rows`.
@@ -136,6 +138,7 @@ pub enum PlayerError {
         sims: u32,
         cap: u32,
     },
+    NonFinite(&'static str),
 }
 
 impl PlayerError {
@@ -155,6 +158,7 @@ impl PlayerError {
             Self::Leaf(_) => "Leaf",
             Self::NoCosts => "NoCosts",
             Self::BudgetPastPool { .. } => "BudgetPastPool",
+            Self::NonFinite(_) => "NonFinite",
         }
     }
 }
@@ -179,6 +183,7 @@ impl fmt::Display for PlayerError {
             Self::BudgetPastPool { sims, cap } => {
                 write!(f, "{sims} sims a stone is past this game's pool ({cap})")
             }
+            Self::NonFinite(what) => write!(f, "{what} holds a value that is not a finite number"),
         }
     }
 }
@@ -265,9 +270,56 @@ fn count(n: usize) -> u32 {
     u32::try_from(n).unwrap_or(u32::MAX)
 }
 
+/// The bridge's pre-expand checks (arity, stride, centre, trunk), the player's interim copy held to them by error parity.
+pub fn expand_refusal(
+    leaves: &[Board],
+    outputs: &[Entry],
+    stride: usize,
+    trunk: i32,
+) -> Result<(), PlayerError> {
+    if outputs.len() != leaves.len() {
+        return Err(PlayerError::Expand(format!(
+            "{} outputs for {} pending leaves",
+            outputs.len(),
+            leaves.len()
+        )));
+    }
+    for (i, (leaf, out)) in leaves.iter().zip(outputs).enumerate() {
+        if out.policy.dense.len() != stride {
+            return Err(PlayerError::Expand(format!(
+                "leaf {i}: dense half has {} slots != policy stride {stride}",
+                out.policy.dense.len()
+            )));
+        }
+        if leaf.window_center() != out.center {
+            return Err(PlayerError::Expand(format!(
+                "leaf {i}: builder window centre {:?} != the board's {:?}",
+                out.center,
+                leaf.window_center()
+            )));
+        }
+        if i32::try_from(leaf.cluster_window_size()).ok() != Some(trunk) {
+            return Err(PlayerError::Expand(format!(
+                "leaf {i}: trunk {trunk} != the board's window {}",
+                leaf.cluster_window_size()
+            )));
+        }
+    }
+    Ok(())
+}
+
 impl Player {
-    /// A player for `encoding`'s graph row; `cpu_path` arms the CPU floor. Errors: `Refused` on a non-graph row.
+    /// A player for `encoding`'s graph row; `cpu_path` arms the CPU floor. Errors: `Refused` (a row, a block).
     pub fn new(block: DeployBlock, encoding: &str, cpu_path: bool) -> Result<Player, PlayerError> {
+        if block.leaf_batch_size < 1 {
+            return Err(PlayerError::Refused(
+                "leaf_batch_size must be at least 1".to_owned(),
+            ));
+        }
+        if let Some(t) = block.tactics {
+            t.check()
+                .map_err(|why| PlayerError::Refused(format!("tactics: {why}")))?;
+        }
         let spec = mantis_encoding::lookup(encoding)
             .ok_or_else(|| PlayerError::Refused(format!("unknown encoding {encoding:?}")))?;
         let geometry = resolve_geometry(spec).map_err(|e| PlayerError::Refused(e.to_string()))?;
@@ -302,9 +354,19 @@ impl Player {
         tree
     }
 
-    /// Set the device's measured costs (the start-up warm-up's).
-    pub fn set_costs(&mut self, costs: Costs) {
+    /// Set the device's measured costs. Errors: `Refused` unless `leaf_ms` is finite above 0 and `root_ms` finite, not below 0.
+    pub fn set_costs(&mut self, costs: Costs) -> Result<(), PlayerError> {
+        if !(costs.leaf_ms.is_finite()
+            && costs.leaf_ms > 0.0
+            && costs.root_ms.is_finite()
+            && costs.root_ms >= 0.0)
+        {
+            return Err(PlayerError::Refused(format!(
+                "costs {costs:?} are not a device's"
+            )));
+        }
         self.costs = Some(costs);
+        Ok(())
     }
 
     #[must_use]
@@ -351,14 +413,15 @@ impl Player {
         }
         let ceiling = count(MAX_ARMED_SIMS);
         let sims = match clock {
-            GameClock::Sims(n) => n.clamp(1, ceiling),
+            GameClock::Sims(n) => n.clamp(FLOOR, ceiling),
             GameClock::TurnMs(t) => {
                 let c = self.costs_or_refuse()?;
                 pool_sims(t, c.root_ms, c.leaf_ms)
             }
             GameClock::Unlimited => ceiling,
         };
-        self.tree = self.fresh_tree(1); // the old pool goes before the new one is allocated
+        let b = self.block; // the old pool and solver go before the new ones are allocated
+        self.tree = MCTSTree::with_pool(b.c_puct, VIRTUAL_LOSS_PENALTY, b.fpu_reduction, 1);
         self.tree = self.fresh_tree(4 * MAX_CHILDREN_PER_NODE * sims as usize);
         self.cache.new_game();
         self.board = board;
@@ -442,7 +505,7 @@ impl Player {
             }
             Ok(Advance::Done) => Ok(Pull::Turn(self.close(turn, now_ms))),
             Err(e) => {
-                self.board = turn.start_board;
+                self.roll_back(turn.start_board);
                 Err(e)
             }
         }
@@ -469,7 +532,7 @@ impl Player {
                 Ok(())
             }
             Err(e) => {
-                self.board = turn.start_board;
+                self.roll_back(turn.start_board);
                 Err(e)
             }
         }
@@ -479,8 +542,14 @@ impl Player {
     pub fn abort(&mut self) {
         self.pending = None;
         if let Some(turn) = self.turn.take() {
-            self.board = turn.start_board;
+            self.roll_back(turn.start_board);
         }
+    }
+
+    /// The board as before the turn, under a tree reset to it: no stale virtual loss survives into a later re-root.
+    fn roll_back(&mut self, start_board: Board) {
+        self.tree.new_game(start_board.clone());
+        self.board = start_board;
     }
 
     fn close(&mut self, turn: Turn, now_ms: f64) -> TurnResult {
@@ -500,6 +569,7 @@ impl Player {
             floor_over_clock: turn.flags.0,
             budget_pool_capped: turn.flags.1,
             wall_ms,
+            served_leaves: turn.served,
         }
     }
 
@@ -701,6 +771,9 @@ impl Player {
                 want: batch.n_graphs,
             });
         }
+        if values.iter().any(|v| !v.is_finite()) {
+            return Err(PlayerError::NonFinite("value"));
+        }
         let mut offset = 0;
         let mut fresh = Vec::with_capacity(batch.n_graphs);
         for (meta, &value) in batch.leaves.iter().zip(values) {
@@ -741,35 +814,8 @@ impl Player {
         outputs: &[Entry],
         unserved: u32,
     ) -> Result<(), PlayerError> {
-        if outputs.len() != leaves.len() {
-            return Err(PlayerError::Expand(format!(
-                "{} outputs for {} pending leaves",
-                outputs.len(),
-                leaves.len()
-            )));
-        }
-        let (stride, trunk) = (self.spec.policy_stride(), self.geometry.agg_trunk_sz);
-        for (i, (leaf, out)) in leaves.iter().zip(outputs).enumerate() {
-            if out.policy.dense.len() != stride {
-                return Err(PlayerError::Expand(format!(
-                    "leaf {i}: dense half has {} slots != policy stride {stride}",
-                    out.policy.dense.len()
-                )));
-            }
-            if leaf.window_center() != out.center {
-                return Err(PlayerError::Expand(format!(
-                    "leaf {i}: builder window centre {:?} != the board's {:?}",
-                    out.center,
-                    leaf.window_center()
-                )));
-            }
-            if i32::try_from(leaf.cluster_window_size()).ok() != Some(trunk) {
-                return Err(PlayerError::Expand(format!(
-                    "leaf {i}: trunk {trunk} != the board's window {}",
-                    leaf.cluster_window_size()
-                )));
-            }
-        }
+        let trunk = self.geometry.agg_trunk_sz;
+        expand_refusal(leaves, outputs, self.spec.policy_stride(), trunk)?;
         let policies: Vec<LegalSetPolicy> = outputs.iter().map(|o| o.policy.clone()).collect();
         let values: Vec<f32> = outputs.iter().map(|o| o.value).collect();
         let centers: Vec<(i32, i32)> = outputs.iter().map(|o| o.center).collect();
@@ -840,87 +886,5 @@ impl Player {
             inherited: 0,
         };
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn player() -> Player {
-        let block = DeployBlock {
-            c_puct: 1.5,
-            fpu_reduction: 0.25,
-            quiescence_enabled: true,
-            quiescence_blend_2: 0.3,
-            leaf_batch_size: 8,
-            tactics: None,
-        };
-        Player::new(block, "gnn_axis_r8", false).expect("a graph row")
-    }
-
-    fn drive_turn(board: Board) -> Turn {
-        Turn {
-            start_board: board,
-            sims: 8,
-            stones_left: 1,
-            started_ms: 0.0,
-            served: 0,
-            flags: (false, false),
-            stones: Vec::new(),
-            stone: Stone {
-                phase: Phase::Drive,
-                sims_done: 0,
-                inherited: 0,
-            },
-        }
-    }
-
-    fn refusal(result: Result<(), PlayerError>) -> String {
-        match result {
-            Err(PlayerError::Expand(why)) => why,
-            other => panic!("expected an expand refusal, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn the_expand_refuses_each_malformation_the_bridge_refuses() {
-        // The bridge's `expand_and_backup_ls_graph` refuses an arity, a stride, a centre and a trunk mismatch; the
-        // player's copy of those checks refuses the same four until the bridge delegates to it.
-        let mut p = player();
-        let leaf = p.board.clone();
-        let mut turn = drive_turn(leaf.clone());
-        let good = Entry {
-            policy: LegalSetPolicy {
-                dense: vec![0.0; 362],
-                ..LegalSetPolicy::default()
-            },
-            value: 0.0,
-            center: leaf.window_center(),
-        };
-        let one = std::slice::from_ref(&leaf);
-        assert!(refusal(p.expand(&mut turn, one, &[], 0)).contains("outputs for"));
-        let mut short = good.clone();
-        short.policy.dense.pop();
-        assert!(refusal(p.expand(&mut turn, one, &[short], 0)).contains("dense half"));
-        let mut moved = good.clone();
-        moved.center = (99, 99);
-        assert!(refusal(p.expand(&mut turn, one, &[moved], 0)).contains("window centre"));
-        let wide = Board::with_geometry(BoardGeometry {
-            legal_move_radius: 8,
-            cluster_window_size: 21,
-        });
-        let centred = Entry {
-            center: wide.window_center(),
-            ..good
-        };
-        assert!(
-            refusal(p.expand(&mut turn, std::slice::from_ref(&wide), &[centred], 0))
-                .contains("trunk")
-        );
-        assert_eq!(
-            turn.stone.sims_done, 0,
-            "a refused expand counts no descent"
-        );
     }
 }

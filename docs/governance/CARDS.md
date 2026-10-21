@@ -66,6 +66,11 @@ R398 also moves, in place: CARD-DEPLOY-WEB (DECIDED, its packet issued, by (b)�
   4×256 gap is a lineage gap, not a width gap, so a run13-lineage student is unmeasured.
 - **CARD-DEPLOY-HEAD-DRIVER — CARDED by R398(f) (2026-10-20), not now: the Python deploy head is replaced by the
   bridge-wrapped `mantis-player` driver.** After run14's cells, so the ruler does not move mid-run.
+  DEPLOY-WEB L2 (2026-10-21) names what the delegation retires: the player's copies of the bridge's expand checks
+  (`player::expand_refusal`, held to the bridge's by the error-parity test), of the legal rows' coordinates (`batch.rs`
+  `leaf_meta`, from `inference.rs`), of the board-to-request conversion (`position_of`) and of the spec-to-
+  `BoardGeometry` one, and the bridge's own tactics ranges in `tactics_config_of` (the player calls
+  `TacticsConfig::check`).
 - **CARD-WEB-RUNTIME-ALTERNATIVES — CARDED by R398(f) (2026-10-20), not now: burn-wgpu as a pure-Rust WebGPU path if
   ORT-web's runtime size or fallbacks bite; tract as a CPU alternative.**
 
@@ -78,7 +83,16 @@ CARD-SAVE-AVERAGING-OFFLINE (EXECUTING on the desk, by (c)). (d) records the pro
 run14: the opponent/next-ply policy aux, PCZero path consistency, policy-surprise weighting, HL-Gauss, Net2Net
 deepening, MCGS at deploy, proof-verified start pools and DENSE-1's L2–L4.
 
-- **CARD-DEPLOY-WEB — L1 EXITED 2026-10-21 on branch `deploy-web`; L2 (the driver) is next.** L1 landed the crate
+- **CARD-DEPLOY-WEB — L2 EXITED 2026-10-21 on branch `deploy-web`; L3 (the `web/` package) is next.** L2 landed the
+  player's per-stone step machine, the per-game cache port, the clock budget, `with_pool` / `armed_sims_for`,
+  `RustForward`, the wasm32 `Engine` and manifest v2 (contract #13 v3); W3 and the served-sims pin join the protected
+  set (R399(c)). Reads (local records `mantis-records/deploy-web/l2/`): W3 holds the player to the Python head's stones
+  and rows over up to three turns a game in the shipped tactics posture, the cache, reuse and decided-stone arms each
+  seen, both breaks red; W2 holds `RustForward` to the fp32 ONNX on every tiny stamp, and on run13's 120k at
+  |Δ logit| 1.89e-4, |Δ prob| 1.03e-5, |Δ value| 8.3e-6, argmax 516/516; in node on run13's 120k the module is
+  697 KB, a leaf 63–65 ms, and the peak 116 MB (S 32) / 126 MB (S 128) over 8 goldens, above §2.6's 90 MB at the
+  mean leaf. L3 pins `wasm-bindgen-cli` to 0.2.126 (the lock's one wasm-bindgen). **Was: L1 EXITED 2026-10-21; L2
+  next.** L1 landed the crate
   `mantis-player` with its int32 batch, the bridge's `web_batch`, `tools/export_web.py` and gate 20 (contract #13 v1).
   The read of record on run13's 120k (local records `mantis-records/deploy-web/l1/READ.md`, pre-stated and hashed
   first): fp32 PASSES at 1 and default ORT threads (|Δ logit| 4.96e-5, argmax 511/511, no ScatterND, no int64 index
