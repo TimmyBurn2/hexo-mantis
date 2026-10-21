@@ -45,8 +45,10 @@ R398 also moves, in place: CARD-DEPLOY-WEB (DECIDED, its packet issued, by (b)�
   there.** `'wasm-unsafe-eval'` in the arena's CSP (a pinned test there forbids any `unsafe-` value today; the pin moves
   with the decision), a "play vs mantis" mode on the analysis slot's packets, and serving the package's assets with
   compression for the net (R398(d) says ~4–6 MB; DEPLOY-WEB's design reads ~4 MB on the CPU path and ~6–8 MB on the
-  WebGPU path, INFERENCE until L3) (Caddy compresses `application/wasm`, not `application/octet-stream`). COEP
-  stays off: the bot runs one thread. The licence of the released artefacts is the operator's decision before the
+  WebGPU path, INFERENCE until L3) (Caddy compresses `application/wasm`, not `application/octet-stream`). The mode
+  offers a device only clocks at or above the engine's reported `minTurnMs`, the one guard against a clock loss (one
+  CPU thread: 4.81 s on the desk, ~6.8 s on a slower laptop, against the arena's 5-s floor). COEP stays off: the bot
+  runs one thread. The licence of the released artefacts is the operator's decision before the
   first tag (R398(c)).
 - **CARD-LADDER-ARENA-CONTRACT — CARDED by R398(d) (2026-10-20): the ladder adapter does not speak the arena's current
   contract.** `tools/ladder/client.py` posts to a move route the arena does not have and challenges without the
@@ -74,7 +76,8 @@ deepening, MCGS at deploy, proof-verified start pools and DENSE-1's L2–L4.
   `RustForward` and a host ORT-web WebGPU backend over the ScatterElements graph, the export tool `export_web.py`
   (ONNX fp32 and fp16, weights file, manifest, detector), three pinned witnesses (golden equality per shipped backend,
   the Rust forward against the ONNX, search parity against the Python deploy head), the per-stone sims set on the
-  device each turn, and the `web/` package with contract #13. **Was: OPENED by
+  device each turn, and the `web/` package with contract #13. L0's design doc is
+  `docs/design/DEPLOY_WEB_2026-10-20.md`. **Was: OPENED by
   R397(b) (2026-10-19): the deployed bot runs in the browser, downloaded from the arena, by the operator's word; its
   design packet issues on RESEARCH-WEB's return.** One engine, the Rust crates compiled to
   wasm32 with the solver, cache and reuse, and one net export path: ONNX from the stamp, with a golden-equality witness

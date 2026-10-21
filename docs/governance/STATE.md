@@ -20,7 +20,8 @@ parity against the Python deploy head on stub net outputs); the per-stone sims s
 package in this repository with contract #13; the arena's CSP, its play mode and the asset serving are the operator's,
 and so is the licence before the first tag. SAVE-AVG is closed; run14's end read is one line, the uniform average of
 its last eight saves against the pick's cells replayed on the same host and tree; run13's pick is 120k.** (RULINGS
-R398; the R397 paragraph below stands where R398 does not move it.)
+R398; the R397 paragraph below stands where R398 does not move it.) DEPLOY-WEB's L0 design doc is
+`docs/design/DEPLOY_WEB_2026-10-20.md`.
 
 **R397 (2026-10-19): THE BAND READ THE TAILS; THE BOT LIVES IN THE BROWSER; THE AVERAGE IS READ FOR FREE. run14's
 halt at 180 997 is a success of the counter_threat_share band and a defect of its reader: a row with no stored policy
