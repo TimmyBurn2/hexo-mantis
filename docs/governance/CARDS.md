@@ -83,16 +83,17 @@ CARD-SAVE-AVERAGING-OFFLINE (EXECUTING on the desk, by (c)). (d) records the pro
 run14: the opponent/next-ply policy aux, PCZero path consistency, policy-surprise weighting, HL-Gauss, Net2Net
 deepening, MCGS at deploy, proof-verified start pools and DENSE-1's L2–L4.
 
-- **CARD-DEPLOY-WEB — L3 HALTED 2026-10-21 at §3.3's WebGPU measurement; the architect's word is owed.** L3 landed the
-  `web/` package (contract #13 v4: the typed API, the Worker, both backends, selection and the witness, the arena
-  adapter, the demo, `release.sh`, the WebGPU witness runner) and gate 21 (W2 in wasm and its break). The measurement,
-  pre-stated (local records `mantis-records/deploy-web/l3/`), on run13's 120k re-exported at manifest v2: W1 on WebGPU
-  PASSES at B 1 and 8 (|Δ logit| 4.96e-5, 511/511), and WebGPU is 5.79 ms a leaf at B 8 against RustForward's 59.0;
-  the placement line MISSES — two `ConstantOfShape` zero initialisers sized by G (the value mean's accumulator and the
-  softmax denominator) sit on the CPU EP. R399(g)(i)'s ScatterND graph would carry the same two nodes. Probed in
-  scratch: building both from a device tensor (`mean_den·0`) keeps the export bit-identical and W1 green and leaves
-  only a shape `Concat` on the CPU. Owed: the architect's choice between that re-expression (re-export, re-measure on
-  the same lines) and R399(g)'s path to RustForward alone. **Was: L2 EXITED 2026-10-21; L3 next.** L2 landed the
+- **CARD-DEPLOY-WEB — L3 EXITED 2026-10-21 on branch `deploy-web`; L4 (bench + read) is next.** L3 landed the
+  `web/` package (contract #13 v4: the typed API, the Worker, both backends, selection and the on-device witness, the
+  arena adapter, the demo, `release.sh`, the WebGPU witness runner) and gate 21 (W2 in wasm and its break). §3.3's
+  measurement (pre-stated; local records `mantis-records/deploy-web/l3/`) first MISSED its placement line on run13's
+  120k: two G-sized zero initialisers sat on the CPU EP, which R399(g)'s ScatterND graph would also carry. By the
+  operator's word (2026-10-21, "continue to finish this"; the architect may annotate) the exporter builds them from a
+  device tensor and refuses any `ConstantOfShape` shaped at run time; re-exported at `b015d47b` and re-measured on the
+  same lines through the shipped path, it PASSES all three: W1 on WebGPU 5.34e-5 / 4.96e-5 at B 1 / 8 (511/511), one
+  shape-only node on the CPU, 6.42 v 59.2 ms a leaf at B 8; GPU memory 1.7 GiB at the p99 leaf split at `EDGE_CAP`
+  (5.7 GiB unsplit). The wasm-bindgen CLI is pinned to 0.2.126 in `mise.toml`. **Was: L3 HALTED at the placement line;
+  before that L2 EXITED 2026-10-21; L3 next.** L2 landed the
   player's per-stone step machine, the per-game cache port, the clock budget, `with_pool` / `armed_sims_for`,
   `RustForward`, the wasm32 `Engine` and manifest v2 (contract #13 v3); W3 and the served-sims pin join the protected
   set (R399(c)). Reads (local records `mantis-records/deploy-web/l2/`): W3 holds the player to the Python head's stones

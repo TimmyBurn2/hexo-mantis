@@ -475,6 +475,12 @@ pub trait NetBackend {
   - The integrator ONNX stays the ScatterElements graph.
   - If the ScatterND graph misses too, `RustForward` alone ships until CARD-WEB-RUNTIME-ALTERNATIVES.
 
+> **L3, as measured (2026-10-21):** the first read missed the placement line — `emb.new_zeros(g, d)` and
+> `logits.new_zeros(g)` export as `ConstantOfShape(Shape(mean_den))`, which ORT-web keeps on the CPU. Built from a device
+> tensor (`mean_den·0`) they run on WebGPU; the exporter now refuses a run-time-shaped `ConstantOfShape`. Re-measured on
+> the same lines it passes: W1 5.34e-5 / 4.96e-5 at B 1 / 8, one shape-only CPU node, 6.42 v 59.2 ms a leaf at B 8, and
+> 1.7 GiB of GPU memory at the p99 leaf split at `EDGE_CAP` 120 000 (5.7 GiB unsplit). The ScatterND fallback is unused.
+
 ### 3.4 Selection and the on-device witness
 
 At start, the Worker first checks for wasm SIMD (`WebAssembly.validate` on a 1-instruction simd128 module). Without
