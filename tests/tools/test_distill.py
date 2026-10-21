@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import importlib
+import importlib.metadata
 import json
 from collections.abc import Iterator
 from pathlib import Path
@@ -338,6 +339,16 @@ def test_the_lineage_tag_and_a_device_the_teacher_refuses(d):
     assert d["teacher"].lineage_tag("f2b5ec2d4d7ec42e", "gen0455") == "six-f2b5ec2-gen455"
     with pytest.raises(d["teacher"].TeacherUnavailable, match="neither"):
         d["teacher"].Teacher(device="mps")
+
+
+def test_a_teacher_whose_runtime_is_not_its_gpu_pin_is_refused(d, monkeypatch):
+    """The default sync's onnxruntime is the web export's CPU build; the teacher refuses it rather than run off its pin."""
+    def missing(name):
+        raise importlib.metadata.PackageNotFoundError(name)
+
+    monkeypatch.setattr(importlib.metadata, "version", missing)
+    with pytest.raises(d["teacher"].TeacherUnavailable, match="onnxruntime-gpu"):
+        d["teacher"].Teacher(device="cpu")
 
 
 def test_the_rings_command_leaves_the_empty_board_out_and_writes_provenance(tmp_path, d):

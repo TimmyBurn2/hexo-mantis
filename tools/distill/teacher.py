@@ -47,12 +47,12 @@ class Teacher:
     def __init__(self, *, device: str, variant: str = DEFAULT_VARIANT, vendor_root: Path | None = None) -> None:
         if device not in ("cuda", "cpu"):
             raise TeacherUnavailable(f"device {device!r} is neither cuda nor cpu")
-        assets = locate_six(vendor_root or find_vendor_root(), variant)
         try:
             importlib.metadata.version("onnxruntime-gpu")
         except importlib.metadata.PackageNotFoundError as exc:
             # The default sync brings the web export's CPU build of the same module, which is not the teacher's pin.
             raise TeacherUnavailable("onnxruntime-gpu is absent: sync with `--extra teacher --no-group web-export`") from exc
+        assets = locate_six(vendor_root or find_vendor_root(), variant)
         os.environ.setdefault("ORT_DISABLE_TELEMETRY", "1")  # ORT reads it at import, and reports outside unless it is set
         try:
             import onnxruntime as ort  # pyright: ignore[reportMissingImports]  # the `teacher` extra
