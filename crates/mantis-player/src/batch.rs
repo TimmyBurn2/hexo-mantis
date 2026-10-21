@@ -366,7 +366,10 @@ mod tests {
                 "row {row}: a dummy divides by its in-degree"
             );
         }
-        assert!(b.real.contains(&0), "the goldens hold dummy rows to pin");
+        assert!(
+            b.real.iter().zip(&b.divisor).any(|(&r, &d)| r == 0 && d > 1),
+            "the goldens hold a dummy row with in-degree past one, so a divisor of one everywhere would red"
+        );
     }
 
     #[test]
