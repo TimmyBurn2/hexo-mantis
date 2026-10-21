@@ -1,3 +1,3 @@
-//! mantis-player: the single-thread deploy driver behind a pull/push step machine, native and wasm32 (contract #13).
+//! mantis-player: the browser bot's deploy driver (contract #13); it opens with the batch its net backends read.
 
 pub mod batch;

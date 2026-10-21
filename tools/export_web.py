@@ -1,10 +1,6 @@
 # >300 justify (R8): the detector, the re-expression, the export, the witness and the manifest are one pipeline over one
 # stamp, kept in one file so the manifest a release ships cannot name a witness another file ran.
-"""Export a stamp's served net for the browser bot (contract #13): ONNX in fp32 and fp16 over the engine's own batch,
-the Rust forward's weights, a device witness and a manifest, each witnessed against the deploy path's served output.
-
-Usage: uv run python tools/export_web.py --checkpoint STAMP --out DIR [--positions 512] [--opset 18]
-"""
+"""A stamp's browser net (contract #13), witnessed against the deploy path's served output: `uv run python tools/export_web.py --checkpoint STAMP --out DIR`."""
 from __future__ import annotations
 
 import argparse
@@ -59,6 +55,8 @@ OPENINGS: tuple[tuple[list[tuple[int, int, int]], int, int], ...] = (
     ([(0, 0, 1), (1, 0, -1), (0, 1, -1), (-1, 0, 1)], 1, 1),
 )
 DEVICE_WITNESS_GOLDENS = 11
+#: Ops that read an int32 index as well as an int64 one, by the input slot that carries it.
+INDEX_SLOTS = {"Gather": 1, "GatherElements": 1, "ScatterElements": 1, "Unsqueeze": 0, "Expand": 0, "Reshape": 0}
 
 #: The detector's closed table: a carried value, or a refusal with its reason; anything else is not carried.
 CARRIED_KINDS = ("GnnArchV2", "GnnArchV2SoftPolicy", "GnnArchV2SoftPolicyFuture")
@@ -67,6 +65,8 @@ CARRIED_ENCODINGS = ("gnn_axis_r8", "gnn_axis_r8_pruned")
 REFUSED_ENCODINGS = {"hexcanvas_r8": "the hex-canvas row has no model", "gnn_axis_v1": "radius 6 has no goldens"}
 CARRIED_SEARCH = ("puct",)
 REFUSED_SEARCH = {"gumbel": "the web player carries PUCT only"}
+
+Case = tuple[dict[str, np.ndarray], dict[str, np.ndarray]]
 
 
 @dataclass(frozen=True)
@@ -84,7 +84,7 @@ LINES = {"fp32": Line(logit=1e-3, prob=1e-4, value=1e-4, gap=2e-3), "fp16": Line
 
 
 class ExportRefused(ValueError):
-    """The stamp, the re-expression or the written graph is refused; `field` names what."""
+    """The stamp, the batch, the re-expression or the written graph is refused; `field` names what."""
 
     def __init__(self, field: str, reason: str) -> None:
         super().__init__(f"export refused on {field}: {reason}")
@@ -121,7 +121,7 @@ class WebServedGraph(nn.Module):
 
     @staticmethod
     def _sum(out: Tensor, index: Tensor, src: Tensor) -> Tensor:
-        idx = index.long()
+        idx = index.long()  # torch's scatter wants int64; `narrow_index_casts` hands the written graph its int32 back
         return out.scatter_add(0, idx if src.dim() == 1 else idx[:, None].expand(-1, src.shape[1]), src)
 
     def forward(self, x: Tensor, src: Tensor, dst: Tensor, code: Tensor, legal: Tensor, node_graph: Tensor,
@@ -143,12 +143,12 @@ class WebServedGraph(nn.Module):
         mean = mean / mean_den.to(emb.dtype)[:, None]
         floor = torch.finfo(emb.dtype).min
         masked = torch.where((real != 0)[:, None], emb, torch.full_like(emb, floor))
-        maxed = torch.full((g, d), floor).scatter_reduce(0, node_graph.long()[:, None].expand(-1, d), masked, "amax")
+        maxed = emb.new_full((g, d), floor).scatter_reduce(0, node_graph.long()[:, None].expand(-1, d), masked, "amax")
         bins = self.fc2(torch.relu(self.fc1(torch.cat((mean, maxed), dim=-1))))
         value = (torch.softmax(bins, dim=-1) * self.get_buffer("support")).sum(-1).clamp(-1.0, 1.0)
-        seg_max = torch.full((g,), float("-inf")).scatter_reduce(0, legal_graph.long(), logits, "amax")
-        ex = torch.exp(logits - seg_max[legal_graph.long()])
-        probs = ex / self._sum(torch.zeros(g), legal_graph, ex)[legal_graph.long()]
+        seg_max = logits.new_full((g,), float("-inf")).scatter_reduce(0, legal_graph.long(), logits, "amax")
+        ex = torch.exp(logits - seg_max.index_select(0, legal_graph))
+        probs = ex / self._sum(logits.new_zeros(g), legal_graph, ex).index_select(0, legal_graph)
         return logits, probs, value
 
 
@@ -175,11 +175,7 @@ def web_inputs(positions: list, encoding: str, node_feat_dim: int) -> dict[str, 
 
 
 def served_reference(net: nn.Module, spec: Any, config: dict, positions: list, batch: int) -> list[dict[str, np.ndarray]]:
-    """The deploy path's served outputs for `positions` in batches of `batch`: x, probs, value and the eager logits.
-
-    Raises:
-        RuntimeError: a group was not served as exactly one batch of its size.
-    """
+    """The deploy path's served x, probs, value and eager logits for `positions` in groups of `batch`; Raises: RuntimeError — a group was not served as one batch; ValueError — a seam guard."""
     seen: list[dict[str, np.ndarray]] = []
     served = server_mod.served_outputs
 
@@ -211,6 +207,23 @@ def served_reference(net: nn.Module, spec: Any, config: dict, positions: list, b
     return seen
 
 
+def witness_cases(net: nn.Module, spec: Any, config: dict, encoding: str, positions: list,
+                  batches: tuple[int, ...]) -> dict[int, list[Case]]:
+    """Per batch size: the engine's batch beside the served reference, in the same order; Raises: ExportRefused — the engine's `x` is not the served one; RuntimeError, ValueError — as `served_reference`."""
+    feat = int(spec.node_feat_dim)
+    cases: dict[int, list[Case]] = {}
+    with torch.inference_mode():
+        for b in batches:
+            refs = served_reference(net, spec, config, positions, b)
+            cases[b] = [(web_inputs(positions[i:i + b], encoding, feat), ref)
+                        for i, ref in zip(range(0, len(positions), b), refs, strict=True)]
+    for b, pairs in cases.items():
+        for inputs, ref in pairs:
+            if not np.array_equal(inputs["x"], ref["x"]):
+                raise ExportRefused("batch", f"the engine's batch at B {b} is not the served one")
+    return cases
+
+
 def gaps(out: dict[str, np.ndarray], ref: dict[str, np.ndarray], legal_graph: np.ndarray, line: Line) -> dict[str, Any]:
     """Max |Δ| per output, and the argmax agreed and compared over graphs whose reference top-2 gap exceeds the line's."""
     row: dict[str, Any] = {k: float(np.abs(out[k].astype(np.float64) - ref[k]).max()) for k in OUTPUTS}
@@ -232,7 +245,7 @@ def passes(row: dict[str, Any], line: Line) -> bool:
             and row["value"] <= line.value and row["argmax_agreed"] == row["argmax_compared"])
 
 
-def witness(path: Path, threads: int, cases: dict[int, list[tuple[dict, dict]]], dtype: str) -> list[dict[str, Any]]:
+def witness(path: Path, threads: int, cases: dict[int, list[Case]], dtype: str) -> list[dict[str, Any]]:
     """ORT CPU at `threads` (0: ORT's default) on `path`, one row per batch size, held to `dtype`'s line."""
     so = ort.SessionOptions()
     so.intra_op_num_threads = threads
@@ -270,18 +283,61 @@ def export_onnx(wrapper: nn.Module, sample: dict[str, np.ndarray], path: Path, o
     onnx.checker.check_model(onnx.load(str(path)))
 
 
+def narrow_index_casts(path: Path) -> None:
+    """Rewire every int32 input's cast to int64 whose readers take either width straight to the input, then re-check with shape inference."""
+    model = onnx.load(str(path))
+    graph = model.graph
+    int32 = {i.name for i in graph.input if i.type.tensor_type.elem_type == TensorProto.INT32}
+    readers: dict[str, list[onnx.NodeProto]] = {}
+    for node in graph.node:
+        for name in node.input:
+            readers.setdefault(name, []).append(node)
+    dropped = []
+    for node in graph.node:
+        to = next((a.i for a in node.attribute if a.name == "to"), None)
+        if node.op_type != "Cast" or node.input[0] not in int32 or to != TensorProto.INT64:
+            continue
+        users = readers.get(node.output[0], [])
+        if not users or any(INDEX_SLOTS.get(u.op_type) is None or list(u.input).index(node.output[0]) != INDEX_SLOTS[u.op_type]
+                            for u in users):
+            continue
+        for u in users:
+            u.input[list(u.input).index(node.output[0])] = node.input[0]
+        dropped.append(node)
+    for node in dropped:
+        graph.node.remove(node)
+    del graph.value_info[:]  # the int64 types recorded on the rewired chains are stale; inference re-derives them
+    onnx.checker.check_model(model, full_check=True)
+    onnx.save(model, str(path))
+
+
+def graph_refusal(ops: dict[str, int], model: onnx.ModelProto) -> str | None:
+    """Why a written graph is refused: a ScatterND, a GatherND, or an int32 input still cast to int64; None if neither."""
+    if "ScatterND" in ops:
+        return "a ScatterND, which races under threaded ORT kernels"
+    if "GatherND" in ops:
+        return "a GatherND, whose int64 index the int32 batch was built to remove"
+    inputs = {i.name for i in model.graph.input}
+    widened = [n.input[0] for n in model.graph.node if n.op_type == "Cast" and n.input[0] in inputs
+               and next((a.i for a in n.attribute if a.name == "to"), None) == TensorProto.INT64]
+    return f"the int32 inputs {sorted(widened)} cast to int64" if widened else None
+
+
 def fp16_storage(src: Path, dst: Path) -> None:
-    """`src` with every float initializer stored in fp16 and cast back to fp32 where it is read, so compute stays fp32."""
+    """`src` with every float initializer that fp16 holds finite stored in fp16 and cast back to fp32 where read; compute stays fp32."""
     model = onnx.load(str(src))
     graph = model.graph
     keep, casts = [], []
     for init in graph.initializer:
-        if init.data_type != TensorProto.FLOAT:
-            keep.append(init)
+        values = numpy_helper.to_array(init)
+        with np.errstate(over="ignore"):
+            half = values.astype(np.float16) if init.data_type == TensorProto.FLOAT else None
+        if half is None or not np.array_equal(np.isfinite(half), np.isfinite(values)):
+            keep.append(init)  # an int, or a constant like finfo(f32).min that fp16 would turn infinite
             continue
-        half = numpy_helper.from_array(numpy_helper.to_array(init).astype(np.float16), init.name + "__fp16")
-        keep.append(half)
-        casts.append(helper.make_node("Cast", [half.name], [init.name], to=TensorProto.FLOAT))
+        stored = numpy_helper.from_array(half, init.name + "__fp16")
+        keep.append(stored)
+        casts.append(helper.make_node("Cast", [stored.name], [init.name], to=TensorProto.FLOAT))
     del graph.initializer[:]
     graph.initializer.extend(keep)
     nodes = casts + list(graph.node)
@@ -340,20 +396,26 @@ def file_row(path: Path, **extra: Any) -> dict[str, Any]:
 
 
 def tree_dirty() -> bool:
-    """Whether the exporter's tree has uncommitted changes to tracked files."""
-    out = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=REPO, capture_output=True,
-                         text=True, check=False)
+    """Whether the exporter's tree holds any change git sees, an untracked file included."""
+    out = subprocess.run(["git", "status", "--porcelain"], cwd=REPO, capture_output=True, text=True, check=False)
     return out.returncode != 0 or bool(out.stdout.strip())
 
 
-def export(checkpoint: Path, out: Path, *, n_positions: int = 512, opset: int = 18) -> dict[str, Any]:
-    """Detect, re-express, export, witness and write the manifest for `checkpoint` into `out`.
+def device_witness(net: nn.Module, spec: Any, config: dict, encoding: str) -> dict[str, Any]:
+    """The 16 positions a device runs at start (the openings and goldens spread over stone count) and their served outputs."""
+    goldens = sorted(golden_positions(512), key=lambda p: len(p[0]))
+    picks = [goldens[round(i * (len(goldens) - 1) / (DEVICE_WITNESS_GOLDENS - 1))] for i in range(DEVICE_WITNESS_GOLDENS)]
+    positions = list(OPENINGS) + picks
+    ((inputs, ref),) = witness_cases(net, spec, config, encoding, positions, (len(positions),))[len(positions)]
+    bounds = np.flatnonzero(np.diff(inputs["legal_graph"])) + 1
+    return {"positions": [[[list(s) for s in stones], side, left] for stones, side, left in positions],
+            "logits": [a.tolist() for a in np.split(ref["logits"], bounds)],
+            "probs": [a.tolist() for a in np.split(ref["probs"], bounds)],
+            "value": ref["value"].tolist()}
 
-    Raises:
-        ExportRefused: an uncarried stamp, a re-expression that is not bit-identical, a ScatterND in the written graph,
-            or a stamp whose encoding the import-time registry handshake did not check.
-        RuntimeError: the deploy path served a group as other than one batch.
-    """
+
+def export(checkpoint: Path, out: Path, *, n_positions: int = 512, opset: int = 18) -> dict[str, Any]:
+    """Detect, re-express, export, witness and write the manifest for `checkpoint` into `out`; Raises: ExportRefused — an uncarried stamp, an unchecked registry, a foreign batch, a re-expression not bit-identical, or a refused graph; CheckpointStampError — the stamp itself; RuntimeError, ValueError, KeyError — a served group split, a seam guard, a config without its deploy or self-play block; onnx.checker.ValidationError — a written graph ONNX rejects."""
     ck = load_checkpoint(checkpoint, declared_encoding=None, declared_future_head=None)
     config = ck.config
     if not isinstance(config, dict):
@@ -372,22 +434,13 @@ def export(checkpoint: Path, out: Path, *, n_positions: int = 512, opset: int = 
     net.eval()
     vocab = torch.from_numpy(np.asarray(_engine.edge_vocabulary(spec.win_length))).reshape(-1, spec.edge_feat_dim)
     wrapper = WebServedGraph(net, vocab).eval()
-    feat = spec.node_feat_dim
 
     positions = golden_positions(n_positions)
-    cases: dict[int, list[tuple[dict, dict]]] = {}
+    cases = witness_cases(net, spec, config, encoding, positions, BATCHES)
+    cases |= witness_cases(net, spec, config, encoding, list(OPENINGS), (len(OPENINGS),))
     with torch.inference_mode():
-        for b in BATCHES:
-            refs = served_reference(net, spec, config, positions, b)
-            cases[b] = [(web_inputs(positions[i:i + b], encoding, feat), ref)
-                        for i, ref in zip(range(0, len(positions), b), refs, strict=True)]
-        openings = list(OPENINGS)
-        cases[len(openings)] = [(web_inputs(openings, encoding, feat), served_reference(net, spec, config, openings,
-                                                                                         len(openings))[0])]
         for b, pairs in cases.items():
             for inputs, ref in pairs:
-                if not np.array_equal(inputs["x"], ref["x"]):
-                    raise ExportRefused("batch", f"the engine's batch at B {b} is not the served one")
                 got = dict(zip(OUTPUTS, wrapper(*(torch.from_numpy(inputs[k]) for k in INPUTS)), strict=True))
                 worst = max(float(np.abs(got[k].numpy().astype(np.float64) - ref[k]).max()) for k in OUTPUTS)
                 if worst != 0.0:
@@ -396,20 +449,26 @@ def export(checkpoint: Path, out: Path, *, n_positions: int = 512, opset: int = 
     out.mkdir(parents=True, exist_ok=True)
     stem = checkpoint.name.removesuffix(".ckpt")
     fp32, fp16 = out / f"{stem}.fp32.onnx", out / f"{stem}.fp16.onnx"
-    t0 = time.time()
+    t0 = time.perf_counter()
     export_onnx(wrapper, cases[8][0][0], fp32, opset)
-    export_s = time.time() - t0
-    if "ScatterND" in op_census(fp32):
-        raise ExportRefused("graph", "the written graph holds a ScatterND, which races under threaded ORT kernels")
+    narrow_index_casts(fp32)
+    export_s = time.perf_counter() - t0
+    refusal = graph_refusal(op_census(fp32), onnx.load(str(fp32)))
+    if refusal is not None:
+        fp32.unlink()
+        raise ExportRefused("graph", f"the written graph holds {refusal}")
     fp16_storage(fp32, fp16)
     weights_path = out / f"{stem}.weights.bin"
     table = dump_weights(wrapper, weights_path)
 
     rows = [*witness(fp32, 1, cases, "fp32"), *witness(fp32, 0, cases, "fp32"),
             *witness(fp16, 1, cases, "fp16"), *witness(fp16, 0, cases, "fp16")]
-    device = _device_witness(net, spec, config, encoding, feat, wrapper)
+    device = device_witness(net, spec, config, encoding)
     witness_path = out / f"{stem}.witness.json"
     witness_path.write_text(json.dumps(device), encoding="utf-8")
+
+    def verdict(path: Path) -> bool:
+        return all(r["pass"] for r in rows if r["file"] == path.name)
 
     puct = resolve_puct_constants(config)
     manifest = {
@@ -424,13 +483,16 @@ def export(checkpoint: Path, out: Path, *, n_positions: int = 512, opset: int = 
                      "opset": opset, "export_s": round(export_s, 1)},
         "encoding": {"name": encoding, "registry_sha": _engine.registry_sha_hex(), "win_length": spec.win_length,
                      "graph_radius": spec.graph_radius, "trunk_size": spec.trunk_size,
-                     "empty_edges": str(spec.empty_edges), "node_feat_dim": feat, "edge_vocab_rows": int(vocab.shape[0])},
+                     "empty_edges": str(spec.empty_edges), "node_feat_dim": spec.node_feat_dim,
+                     "edge_vocab_rows": int(vocab.shape[0])},
         "deploy": {"resolved": {"search_kind": config["deploy"]["search"]["kind"], **puct.tree_kwargs(),
                                 "leaf_batch_size": int(config["selfplay"]["leaf_batch_size"]),
                                 "tactics": resolve_deploy_tactics(config)}},
         "inputs": list(INPUTS), "outputs": list(OUTPUTS),
-        "files": [file_row(fp32, dtype="fp32", ops=op_census(fp32)), file_row(fp16, dtype="fp16", ops=op_census(fp16)),
-                  file_row(weights_path, dtype="fp32", tensors=table), file_row(witness_path, positions=len(device["positions"]))],
+        "files": [file_row(fp32, dtype="fp32", ops=op_census(fp32), passes_its_line=verdict(fp32)),
+                  file_row(fp16, dtype="fp16", ops=op_census(fp16), passes_its_line=verdict(fp16)),
+                  file_row(weights_path, dtype="fp32", tensors=table),
+                  file_row(witness_path, positions=len(device["positions"]))],
         "witness": {"lines": {k: asdict(v) for k, v in LINES.items()},
                     "goldens": {"path": str(GOLDENS.relative_to(REPO)), "sha256": hashlib.sha256(GOLDENS.read_bytes()).hexdigest(),
                                 "positions": len(positions), "openings": len(OPENINGS)},
@@ -438,22 +500,6 @@ def export(checkpoint: Path, out: Path, *, n_positions: int = 512, opset: int = 
     }
     (out / f"{stem}.manifest.json").write_text(json.dumps(manifest, indent=1), encoding="utf-8")
     return manifest
-
-
-def _device_witness(net: nn.Module, spec: Any, config: dict, encoding: str, feat: int,
-                    wrapper: WebServedGraph) -> dict[str, Any]:
-    """The 16 positions a device runs at start (the openings and goldens spread over stone count) and their outputs."""
-    goldens = sorted(golden_positions(512), key=lambda p: len(p[0]))
-    picks = [goldens[round(i * (len(goldens) - 1) / (DEVICE_WITNESS_GOLDENS - 1))] for i in range(DEVICE_WITNESS_GOLDENS)]
-    positions = list(OPENINGS) + picks
-    with torch.inference_mode():
-        ref = served_reference(net, spec, config, positions, len(positions))[0]
-    legal_graph = web_inputs(positions, encoding, feat)["legal_graph"]
-    bounds = np.flatnonzero(np.diff(legal_graph)) + 1
-    return {"positions": [[[list(s) for s in stones], side, left] for stones, side, left in positions],
-            "logits": [a.tolist() for a in np.split(ref["logits"], bounds)],
-            "probs": [a.tolist() for a in np.split(ref["probs"], bounds)],
-            "value": ref["value"].tolist()}
 
 
 def main() -> int:

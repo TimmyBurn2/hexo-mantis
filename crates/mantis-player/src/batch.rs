@@ -1,8 +1,7 @@
 // >300 justify (R8): the derivation and the tests that pin each derived array against the offsets it came from read one
 // table (contract #13's batch), kept in one file so an array and its pin cannot drift apart.
 
-//! The batch both net backends read (contract #13): the served path's own leaf build, fuse and pack, then every
-//! array the net reads beyond `x` as int32, so no index or mask is derived inside the net's graph.
+//! The batch both net backends read (contract #13): the served path's pack, every array beyond `x` as int32.
 
 use std::fmt;
 
@@ -55,7 +54,7 @@ impl fmt::Display for BatchError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Empty => write!(f, "web batch: no positions"),
-            Self::Geometry(e) => write!(f, "web batch: {e:?}"),
+            Self::Geometry(e) => write!(f, "web batch: {e}"),
             Self::MissingKey(key) => write!(f, "web batch: the encoding row has no `{key}`"),
             Self::Leaf(reason) => write!(f, "web batch: {reason}"),
             Self::WireConsumed => write!(f, "web batch: the fused wire was read twice"),
@@ -75,11 +74,8 @@ fn row(value: i64, what: &'static str) -> Result<usize, BatchError> {
     usize::try_from(value).map_err(|_| BatchError::TooLarge(what))
 }
 
-/// The batch of `positions` under `spec`'s geometry.
-///
-/// # Errors
-/// [`BatchError`] on no positions, a row without graph geometry (a `hexcanvas` row by name), a leaf's seam guard, a
-/// contract refusal in the pack, or a count past int32.
+/// The batch of `positions` under `spec`'s geometry, or the [`BatchError`] that names why not.
+#[allow(clippy::missing_errors_doc)]
 pub fn build_batch(
     positions: &[Position],
     spec: &'static RegistrySpec,
@@ -191,7 +187,7 @@ fn pack(positions: &[Position], spec: &'static RegistrySpec) -> Result<Packed, B
     })
 }
 
-/// The pack's checks 4–13 hold here: offsets ascend within N and L, and edges and gathers stay in their graphs.
+/// The pack's checks hold here: offsets ascend within N and L, edges and gathers stay in their graphs (4–13), and a graph's legal count is its own (15).
 fn derive(packed: Packed) -> Result<WebBatch, BatchError> {
     let Packed {
         n_graphs,
@@ -346,7 +342,31 @@ mod tests {
                 "stones are the mean's rows"
             );
         }
-        assert!(b.divisor.iter().all(|&d| d >= 1));
+        let mut in_degree = vec![0; n];
+        for &d in &b.dst {
+            in_degree[usize::try_from(d).expect("a row")] += 1;
+        }
+        let legal: std::collections::HashSet<i32> = b.legal.iter().copied().collect();
+        for (row, (&graph, &degree)) in b.node_graph.iter().zip(&in_degree).enumerate() {
+            let first = b
+                .node_graph
+                .iter()
+                .position(|&g| g == graph)
+                .expect("its first row");
+            let stones = positions[usize::try_from(graph).expect("a graph")].0.len();
+            let real = row - first < stones || legal.contains(&i32::try_from(row).expect("a row"));
+            assert_eq!(
+                b.real[row],
+                i32::from(real),
+                "row {row}: real is a stone or a legal row"
+            );
+            let want = if real { 1 } else { degree.max(1) };
+            assert_eq!(
+                b.divisor[row], want,
+                "row {row}: a dummy divides by its in-degree"
+            );
+        }
+        assert!(b.real.contains(&0), "the goldens hold dummy rows to pin");
     }
 
     #[test]
