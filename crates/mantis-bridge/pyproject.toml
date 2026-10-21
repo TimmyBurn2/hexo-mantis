@@ -71,6 +71,8 @@ cache-keys = [
     { file = "../mantis-search/Cargo.toml" },
     { file = "../mantis-selfplay/src/**/*" },
     { file = "../mantis-selfplay/Cargo.toml" },
+    { file = "../mantis-player/src/**/*" },
+    { file = "../mantis-player/Cargo.toml" },
     # `make build.native` sets RUSTFLAGS=-C target-cpu=native. Without these, a later plain
     # `make build` sees no keyed change and KEEPS the host-pinned binary - R2/LAW-13's
     # portability promise with no return path, and a silently poisoned `make bench` (LAW-09).

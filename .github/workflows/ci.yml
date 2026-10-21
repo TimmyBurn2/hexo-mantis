@@ -120,6 +120,9 @@ jobs:
       # it needs a static gate rather than vigilance.
       - name: "gate 16: no encoding-less text I/O (tools/, and tests/ at module scope)"
         run: uv run python tools/ci_gates/encoding_io_gate.py
+      # Gate 20 (DEPLOY-WEB L1): tiny random-init stamps of every carried kind through the web export and its witness.
+      - name: "gate 20: web export pipeline witness (contract #13)"
+        run: uv run pytest tests/tools/test_export_web.py -q
 
   hygiene:
     runs-on: ubuntu-latest
