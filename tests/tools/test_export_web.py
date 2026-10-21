@@ -1,3 +1,5 @@
+# >300 justify (R8): one exporter's pipeline witness — the tiny stamps exported once per module, then every refusal, census and
+# planted break read against those same exports — so a split would export the stamps once per file or share a fixture across files.
 """`tools/export_web.py` (contract #13, gate 20): tiny random-init stamps of every carried kind through the whole export, written by the one checkpoint writer into temp directories."""
 from __future__ import annotations
 

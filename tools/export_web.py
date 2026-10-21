@@ -430,7 +430,8 @@ def device_witness(net: nn.Module, spec: Any, config: dict, encoding: str) -> di
 
 def export(checkpoint: Path, out: Path, *, n_positions: int = 512, opset: int = 18) -> dict[str, Any]:
     """Detect, re-express, export, witness and write the manifest for `checkpoint` into `out`; Raises: ExportRefused — an uncarried stamp, an unchecked registry, a foreign batch, a re-expression not bit-identical, or a refused or untyped graph (its files removed); CheckpointStampError — the stamp itself; RuntimeError, ValueError, KeyError — a served group split, a seam guard, a config without its deploy or self-play block; onnx.checker.ValidationError — a written fp32 or fp16 file ONNX rejects; onnxruntime's errors — a session ORT cannot build or run."""
-    dirty = is_dirty(REPO) is not False  # tracked changes, read before any file is written; git's silence reads dirty
+    # The tree that runs is the tree at the start: its commit and its tracked changes, read before any file is written.
+    commit, dirty = head_sha(REPO), is_dirty(REPO) is not False
     ck = load_checkpoint(checkpoint, declared_encoding=None, declared_future_head=None)
     config = ck.config
     if not isinstance(config, dict):
@@ -501,7 +502,7 @@ def export(checkpoint: Path, out: Path, *, n_positions: int = 512, opset: int = 
                   "commit_sha": ck.metadata.commit_sha, "arch_kind": arch_kind, "encoding": encoding,
                   "weights": weights, "net_param_hash": net_param_hash(net),
                   "arch": {k: v for k, v in asdict(arch).items() if k != "representation"}},
-        "exporter": {"commit": head_sha(REPO), "dirty": dirty, "torch": torch.__version__,
+        "exporter": {"commit": commit, "dirty": dirty, "torch": torch.__version__,
                      "onnx": onnx.__version__, "onnxscript": onnxscript.__version__, "onnxruntime": ort.__version__,
                      "opset": opset, "export_s": round(export_s, 1)},
         "encoding": {"name": encoding, "registry_sha": _engine.registry_sha_hex(), "win_length": spec.win_length,
