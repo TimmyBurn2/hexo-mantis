@@ -48,8 +48,7 @@ hexo-mantis/
 │   ├── bots/                   # BotProtocol + the bot wrappers (sealbot, strix, random)
 │   ├── monitor/                # HEADLESS ONLY: event emit, producer manifest, alert rules
 │   ├── diagnostics/            # single-definition production-importable readouts
-│   ├── util/                   # small helpers (device, coordinates, determinism)
-│   └── deploy/                 # RESERVED: ONNX export + torch-parity check (post-cutover)
+│   └── util/                   # small helpers (device, coordinates, determinism)
 ├── tests/                      # SINGLE collection root; mirrors src/mantis + crates
 │   └── fixtures/               # frozen oracle banks (books, goldens, probe npz, positions)
 ├── configs/                    # explicit COMPLETE schema-validated configs; no variants-
@@ -68,8 +67,11 @@ hexo-mantis/
 Display surfaces (web dashboard, game viewer, TUI monitors) are deliberately absent.
 The event-manifest + schema'd JSONL channels (§4.7) are the stable contract any future
 display builds against — and `tools/run_dashboard.py` is the ONE thing admitted to build
-against them (the amendment at the foot of this file). `src/mantis/deploy/` is reserved,
-empty until post-cutover.
+against them (the amendment at the foot of this file).
+
+AMENDMENT (R399(h), 2026-10-21): `src/mantis/deploy/`'s reservation for "ONNX export + torch-parity check" RETIRES
+and the empty package is deleted. The export lives in `tools/export_web.py`, the deploy driver in a crate and the
+browser package in `web/` (R398(b)–(c); `docs/design/DEPLOY_WEB_2026-10-20.md`).
 
 ## 2. Dependency DAG (one-way; enforced by crate/package deps, checked in CI)
 

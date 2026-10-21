@@ -36,6 +36,14 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R399 (THE DESIGN STANDS; EIGHT ITEMS RULED; L1 MAY START; 2026-10-21) — DEPLOY-WEB's open items
+
+R399 also moves, in place: CARD-DEPLOY-WEB (its L0 design stands, its eight open items ruled, L1 open, by (a)–(i)).
+
+- **CARD-WEB-MEASURED-RHO — CARDED by R399(f) (2026-10-21), not now: a measured-ρ budget estimator for the web
+  player.** Admissible only after DEPLOY-WEB L4's clock line reads zero overruns at ρ = 1 on the desk. Until then ρ = 1,
+  and the 21–27 % fewer sims are the first release's price.
+
 ## Opened by R398 (THE BOT SHIPS AS ONE WASM ENGINE WITH TWO NET BACKENDS, WITNESSED FROM THE STAMP; 2026-10-20) — the browser bot's shape, the arena's side, the later cards
 
 R398 also moves, in place: CARD-DEPLOY-WEB (DECIDED, its packet issued, by (b)–(c)), CARD-RESEARCH-WEB (ACCEPTED, by
@@ -70,8 +78,15 @@ CARD-SAVE-AVERAGING-OFFLINE (EXECUTING on the desk, by (c)). (d) records the pro
 run14: the opponent/next-ply policy aux, PCZero path consistency, policy-surprise weighting, HL-Gauss, Net2Net
 deepening, MCGS at deploy, proof-verified start pools and DENSE-1's L2–L4.
 
-- **CARD-DEPLOY-WEB — DECIDED by R398(b)–(c) (2026-10-20): one wasm engine with two net backends, witnessed from the
-  stamp; packet DEPLOY-WEB issued, its legs L0 design, L1 export, L2 driver, L3 package, L4 bench and read.** The crate
+- **CARD-DEPLOY-WEB — L1 OPEN by R399(i) (2026-10-21): L0's design stands (pushed 2026-10-21, `540a8720`) and R399
+  rules its eight open items.** fp16 ships to WebGPU only under R399(a)'s pre-stated line on run13's 120k; the
+  additive `mantis-search` changes and three bridge bindings are not an edit to self-play (b); W3 and the player's
+  served-sims test enter the protected set with L2 (c); no deadline stop, and under a clock below `minTurnMs` the CPU
+  path plays a 16-sim floor (d); ρ stays 1 (f); if the ScatterElements graph misses on WebGPU, the ScatterND graph
+  ships for WebGPU only (g); the LAW-13, LAW-12 and LAW-06 readings are accepted and the reserved deploy
+  package retires (h). **Was: DECIDED by R398(b)–(c) (2026-10-20): one wasm engine with two net backends,
+  witnessed from the stamp; packet DEPLOY-WEB issued, its legs L0 design, L1 export, L2 driver, L3 package, L4 bench
+  and read.** The crate
   `mantis-player` (the single-thread deploy driver, wasm32 and native, pull/push), the `NetBackend` trait with
   `RustForward` and a host ORT-web WebGPU backend over the ScatterElements graph, the export tool `export_web.py`
   (ONNX fp32 and fp16, weights file, manifest, detector), three pinned witnesses (golden equality per shipped backend,

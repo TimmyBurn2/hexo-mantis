@@ -7,6 +7,17 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
+**R399 (2026-10-21): THE DESIGN STANDS; EIGHT ITEMS RULED; L1 MAY START. DEPLOY-WEB's L0 design stands. fp16 ships
+to WebGPU only, under a line pre-stated before its first read on run13's 120k (|Δ prob| and |Δ value| ≤ 2e-3, the
+same argmax wherever the top-2 gap > 2e-2, logits reported); until then fp32 is the only shipped file. The additive
+`mantis-search` changes and three bridge bindings are not an edit to self-play. W3 and the player's served-sims test
+enter the protected set with L2, the player being the second consumer of the early stop and reuse. No deadline stop:
+under a clock below `minTurnMs` the CPU path plays a 16-sim floor, counted and shown; the 32-sim floor stands for the
+budget rule and the arena's offered clocks. ρ stays 1, and a measured ρ is a later card. If the ScatterElements graph
+misses on WebGPU, the ScatterND graph ships for WebGPU only, marked; if it misses too, `RustForward` alone ships. The
+LAW-13, LAW-12 and LAW-06 readings are accepted, and the reserved deploy package retires. L1 may start.**
+(RULINGS R399; the R398 paragraph below stands where R399 does not move it.)
+
 **R398 (2026-10-20): THE BOT SHIPS AS ONE WASM ENGINE WITH TWO NET BACKENDS, WITNESSED FROM THE STAMP. RESEARCH-WEB
 is accepted: the served path's ONNX passes golden equality, ORT's ScatterND(add) races under threads while the
 ScatterElements lowering is exact, and the engine crates build for wasm32 at 1.0–1.1× native. The product is decided:
@@ -737,7 +748,7 @@ run6's by R369's packet (W0).
 ## Where things live
 
 - Open work: `docs/governance/CARDS.md` (swept in W6; derived there, never enumerated here).
-- Rulings: `docs/governance/RULINGS.md`; the latest is R398 (this line said R386 until R393's record).
+- Rulings: `docs/governance/RULINGS.md`; the latest is R399 (this line said R386 until R393's record).
 - Laws and the protected set: `docs/governance/LAWS.md`, whose protected set names each
   invariant's pinning tests (R370(f)); `tests/test_protected_set_pins.py` fails if one is gone.
   Falsified work: `docs/governance/falsified.md`.
@@ -842,3 +853,5 @@ source was its exit record (local), with the cells read from their sidecars, on 
 `20be2773`.
 The R398 paragraph, the average's end-read line and the latest-ruling line were written 2026-10-20 at R398 on branch
 `deploy-web` over `origin/dev` `fd26b1d5`, from the ruling's text and RESEARCH-WEB's report (local).
+The R399 paragraph and the latest-ruling line were written 2026-10-21 at R399 on branch `deploy-web` over
+`origin/dev` `540a8720`, from the ruling's text.

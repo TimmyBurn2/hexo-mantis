@@ -11,7 +11,11 @@ it. It orders nothing until the architect's word before L1.
   isolated. Every WebGPU number is the ScatterND graph's: the ScatterElements graph this design ships never ran on
   WebGPU (§3.3).
 - **Tree:** read at `fd26b1d5` (origin/dev). This doc sits on R398's landing commit, which is docs-only over it.
-- **Records:** `mantis-records/deploy-web/` (local): `review/REVIEW-1.md` and its dispositions.
+- **Records:** `mantis-records/deploy-web/` (local): `review/REVIEW-1.md`, `review/REVIEW-2.md` and their
+  dispositions.
+- **Ruled by R399 (2026-10-21).** §13's eight items are ruled, and each carries its ruling. The body follows the
+  rulings where they change a mechanism: the 16-sim floor (§2.5, §6.4), the fp16 line (§4.1, §5), the WebGPU fallback
+  (§3.3), the trap rebuild (§2.1, §6.2) and the retired reservation (§8). L1 may start.
 
 ## 0. Decisions — one screen
 
@@ -47,8 +51,8 @@ it. It orders nothing until the architect's word before L1.
      a one-stone turn is this design's.
    - root and c_leaf come from the previous searched turn, on the host's clock. Turn 1 uses the start-up warm-up.
    - **ρ = 1**, its hard bound. A measured ρ buys 27–36 % more sims and risks an overrun; that is §13 A6.
-   - The engine reports `minTurnMs`, the shortest clock at which the 32 floor fits. Below it a turn plays at the floor,
-     late and counted.
+   - The engine reports `minTurnMs`, the shortest clock at which the 32 floor fits. Below it a turn plays at the floor
+     (16 sims on the CPU path, R399(d)), late, counted and shown.
    - L4 holds the clock to a pre-stated line: no clock loss, and p99 turn time ≤ 0.8 T (§11).
 8. **Memory by budget** (§2.6).
    - `MAX_NODES` becomes a constructor parameter: `4·1024·S_cap` nodes, with S_cap = clamp(2 × the rule's quotient at
@@ -67,7 +71,7 @@ it. It orders nothing until the architect's word before L1.
 10. **Bad news first:**
     - The shipped WebGPU graph is unmeasured on WebGPU. Its expanded scatter index is [E, H], about 116 MB of int32 at
       B 8 (§3.3). L3 measures it against pre-stated numbers, and §13 A7 is its fallback.
-    - fp16 cannot be held to the fp32 lines and ships only under its own ruled line (§13 A1).
+    - fp16 cannot be held to the fp32 lines. It ships to WebGPU only under R399(a)'s line, read in L1 (§5).
     - The 32 floor exceeds a 5-s clock on a slow CPU (§2.5).
     - The WebGPU path is about 6–8 MB on a first visit, above R398(d)'s ~4–6 MB.
     - The player is a second consumer of the switches the protected set says only the ladder throws (§13 A3).
@@ -110,7 +114,8 @@ it. It orders nothing until the architect's word before L1.
   random, since PUCT draws nothing. The build sets `+simd128` (§9).
 - **Panics.** The workspace's `panic = "unwind"` builds for wasm32 on the pinned 1.97.1 (checked on a scratch crate,
   2026-10-20). A panic in wasm is a trap: the Worker sees an error, the instance is dead, and the API rejects every
-  pending call with `EngineCrashed`. Reading that as meeting LAW-13 is §13 A8. Production paths return the named
+  pending call with `EngineCrashed`. The Worker then rebuilds the engine and counts the trap (`engine_traps`); R399(h)
+  accepts this as LAW-13's reading. Production paths return the named
   `PlayerError` (§2.7), so a trap is a bug, never a control path.
 - **One FFI place each:**
   - `#[wasm_bindgen]` lives only in `crates/mantis-player/src/wasm.rs`, which is cfg'd to wasm32 and checked by a
@@ -273,12 +278,14 @@ than an opening's, so the error is on the safe side.
 - RESEARCH-WEB's Q5 guaranteed column at T 10 s, root 93 ms, k 2: `leaf_ms` 8.84 gives 447 and 58.71 gives 67.
 - The floor, the cap, k = 1, and monotonicity in T.
 - `cap ≥ 32` for every pool the player can build.
+- The 16-sim floor: on the CPU path under a `Clock` below `minTurnMs`, and nowhere else (R399(d)).
 
 **The floor can break the clock.** At 32 sims, one CPU thread on the desk needs (2·32·58.71 + 93) / 0.8 = 4.81 s.
 A laptop core at 0.7× the desk's needs 6.8 s (INFERENCE; no laptop measured).
 - The engine reports `minTurnMs = (2·32·leaf_ms + root_ms) / 0.8` after the warm-up and after every turn.
-- A `Clock` below it plays at 32 sims anyway, with `floor_over_clock` set and counted. Refusing would forfeit the game
-  just the same.
+- A `Clock` below it plays at the floor anyway, with `floor_over_clock` set, counted and shown (R399(d)): 16 sims on the
+  CPU path, 32 on WebGPU. A weak turn beats a forfeit. The 32-sim floor stands for the budget rule and for
+  `minTurnMs`.
 - The arena's mode offers only clocks at or above it (CARD-WEB-ARENA-SIDE).
 - The engine does not cut a search short on the clock (§13 A4).
 
@@ -439,7 +446,11 @@ pub trait NetBackend {
   - peak GPU memory at the goldens' p99 leaf.
 
   It passes if it meets W1, places no data op on the CPU, and is faster a leaf than `RustForward` on the same page.
-  Otherwise §13 A7 applies.
+  Otherwise R399(g) applies.
+  - The ScatterND graph ships for WebGPU only, as a second ONNX. Its manifest row is marked "wrong under threaded
+    CPU kernels (ORT #18048)", no path but the WebGPU backend loads it, and a node test pins that.
+  - The integrator ONNX stays the ScatterElements graph.
+  - If the ScatterND graph misses too, `RustForward` alone ships until CARD-WEB-RUNTIME-ALTERNATIVES.
 
 ### 3.4 Selection and the on-device witness
 
@@ -484,8 +495,8 @@ and goes through four steps.
    - **`<stem>.fp32.onnx`:** torch.onnx dynamo, opset 18, dynamic N, E, L and G, no external data, `onnx.checker`.
      The op census must show **zero ScatterND**; the exporter refuses its own output otherwise.
    - **`<stem>.fp16.onnx`:** fp16 storage of the initializers, with a Cast to fp32 at the graph's head. Compute and
-     the scatter accumulation stay fp32 (§13 A8, LAW-06). Its witness rows are recorded and gate nothing until A1 is
-     ruled.
+     the scatter accumulation stay fp32 (LAW-06, accepted by R399(h)). It ships to WebGPU only, under R399(a)'s line
+     (§5), pre-stated in L1's PRESTATED and read on run13's 120k. Until that read, fp32 is the only shipped file.
    - **`<stem>.weights.bin`:** dumped from the same `WebServedGraph`, so its tensors are the ONNX's.
    - **`<stem>.witness.bin` and `<stem>.manifest.json`:** §4.3, §5.
 
@@ -528,7 +539,7 @@ Each refusal is a test row. A later carried row needs its own goldens and its ow
 | `deploy.resolved` | §2.2's first table, as the resolvers returned it from the stamp's `config` |
 | `deploy.player` | §2.2's second table, as the player's constants (the player refuses a manifest that disagrees with its own) |
 | `files` | per file: name, sha256, bytes, dtype, scatter op census; for the weights file the tensor table |
-| `witness` | the lines; the goldens' path and sha256 (`d5c5a7ba…`); and one row per (backend, file, threads, B): max \|Δ\| logit, prob and value, argmax agreed / compared, ties, pass, gating (yes, or no for fp16 until A1), where, when |
+| `witness` | the lines; the goldens' path and sha256 (`d5c5a7ba…`); and one row per (backend, file, threads, B): max \|Δ\| logit, prob and value, argmax agreed / compared, ties, pass against that file's lines (fp32 or R399(a)'s fp16), where, when; a WebGPU-only ScatterND file's rows are marked "wrong under threaded CPU kernels (ORT #18048)" (R399(g)) |
 
 - **Rows filled at export:** `ort-cpu` at 1 thread and at default threads, on both ONNX files, at B 1, 8 and 16; and
   `rust-forward-native` (through the bridge).
@@ -540,7 +551,7 @@ Each refusal is a test row. A later carried row needs its own goldens and its ow
 
 | | what | positions | lines | where it runs | planted break, shown red where the witness runs |
 |---|---|---|---|---|---|
-| W1 | each shipped backend's outputs against the deploy path's `served_outputs` (CPU, fp32, eager) | the 512 goldens at B 1, 8, 16 plus the five openings | fp32: \|Δ logit\| ≤ 1e-3, \|Δ prob\| ≤ 1e-4, \|Δ value\| ≤ 1e-4, same argmax wherever the reference's top-2 gap > 2e-3 (RESEARCH-WEB's pre-stated lines, now in code); fp16: §13 A1 | export (ORT CPU, 1 and default threads; gate 20), release (WebGPU in Chromium on a hardware adapter; wasm in node), each device at start (16 positions) | the **written** ONNX's last policy bias shifted by 1.0, after the re-expression check, so every logit moves by 1 (gate 20, tiny stamps) |
+| W1 | each shipped backend's outputs against the deploy path's `served_outputs` (CPU, fp32, eager) | the 512 goldens at B 1, 8, 16 plus the five openings | fp32: \|Δ logit\| ≤ 1e-3, \|Δ prob\| ≤ 1e-4, \|Δ value\| ≤ 1e-4, same argmax wherever the reference's top-2 gap > 2e-3 (RESEARCH-WEB's pre-stated lines, now in code); fp16 (R399(a), WebGPU only): \|Δ prob\| ≤ 2e-3, \|Δ value\| ≤ 2e-3, same argmax wherever the top-2 gap > 2e-2, logits reported, not gated; its known-bad, the fp16 file's last policy bias +0.05, must fail the prob line | export (ORT CPU, 1 and default threads; gate 20), release (WebGPU in Chromium on a hardware adapter; wasm in node), each device at start (16 positions) | the **written** ONNX's last policy bias shifted by 1.0, after the re-expression check, so every logit moves by 1 (gate 20, tiny stamps) |
 | W2 | `RustForward` against the ONNX (ORT CPU, 1 thread) | the same | the same | gate 20 (native, through the bridge), gate 21 (wasm in node, on the tiny stamp) | `RustForward` with the degree divisor dropped (gates 20 and 21) |
 | W3 | the player against the Python deploy head: same stones, same per-stone rows | the 512 goldens, each one full turn (1 or 2 stones) at `Sims(128)` in the shipped posture | identical stones; identical `last_sims`, `last_stopped`, reuse, select, cache and tactics rows | the integration tier (512); the default tier (32) | (i) the player's reroot replaced by `new_game`, which reds the reuse rows on every searched two-stone turn (the test pins that the reference run has at least one among the 32); (ii) the early stop comparing `≥ left`, which reds only at a tie (default tier, 32 positions) |
 
@@ -609,6 +620,8 @@ interface Engine {
 - Errors are typed. Every §2.7 `PlayerError` variant reaches JS by name, `OutOfStep` among them (also for `analyse`
   or `playTurn` while a turn runs). The Worker adds `AbortError`, `NoBackendPassed`, `Unsupported` and
   `EngineCrashed`.
+- After `EngineCrashed` the Worker has already rebuilt the engine (re-instantiated, the backend re-selected) and
+  counted the trap in `info().engineTraps` (R399(h)). The game in play is gone, and the integrator starts a new one.
 - A match clock is the integrator's to map to a turn's `turnMs`; the arena's mode decides it (§13 O1).
 
 ### 6.3 The Worker and its loop
@@ -651,10 +664,9 @@ The adapter speaks the analysis slot's `postMessage` packets, as RESEARCH-WEB Q3
   whole remaining clock. The adapter never maps a match clock: that mapping is the play mode's, the operator's (O1).
 - **The slot deepens from 0.25 s**, below any `minTurnMs`.
   - On WebGPU a floor turn (about 0.66 s) fits inside the slot's 3-s grace, and plays late and flagged.
-  - On one CPU thread it does not: a floor turn costs about 2.9–4 s on the desk.
-  - So the adapter starts a request only if its floor turn fits the limit plus the grace. On the desk's CPU that
-    is from the 1-s or 2-s step. A smaller request is answered by nothing until the slot's interrupt, which the
-    adapter acknowledges. How the slot shows that gap is L3's to read against the protocol.
+  - On one CPU thread the floor is 16 sims (R399(d)). A floor turn costs about 2.0 s on the desk and about 2.8 s on a
+    0.7× laptop core, so it fits inside 0.25 s plus the 3-s grace too (INFERENCE from §2.5's costs).
+  - Every request is answered, late and flagged where it is below `minTurnMs`.
 - **An interrupt** gives `abort`.
 - **`evaluation`'s mapping** (`heuristic` from the root value; `win_in` from a root proof's turns) is L3's to fix
   against the arena's definition at that sha.
@@ -721,8 +733,8 @@ The adapter speaks the analysis slot's `postMessage` packets, as RESEARCH-WEB Q3
     are rewritten: node now builds and tests a shipped package.
 - **repo_design §9:** gate 21.
 
-`src/mantis/deploy/`'s reservation for "ONNX export + torch-parity check" is left as it is. R398(b) put the export in
-`tools/`, so whether the reservation is retired is §13 A8.
+`src/mantis/deploy/`'s reservation retired by R399(h). R399's landing commit deletes the empty package and amends
+repo_design §1 and CLAUDE.md's map line.
 
 ## 9. Gates and toolchains
 
@@ -771,7 +783,7 @@ The net files are built at release and live in the tarball and the mirror. They 
 | leg | sessions | lands | its pins | HALT |
 |---|---|---|---|---|
 | L1 EXPORT | 1 | `mantis-player` opened with `batch.rs` only; the bridge's `web_batch`; `tools/export_web.py`; the `web-export` group; contract #13 v1; gate 20; the amendment's L1 part | W1 at ORT CPU; the detector; zero ScatterND; the torch re-expression bit-identical; W1's break red | any export failing a gating golden-equality line |
-| L2 DRIVER | 2 | the per-stone loop, the cache port, the step machine, `budget.rs`, `RustForward`, `with_pool` and `armed_sims_for`, `PyPlayer` and `PyRustForward`, `wasm.rs`, gate 4's player row | W3 with both breaks; W2 native with its break; the budget's Q5 rows and `cap ≥ 32`; the served-sims pin; the constants' pins; the error-parity test; the `#[wasm_bindgen]` census; the wasm32 build, with module size and peak memory reported | a witness failing; any edit to self-play, the cells or the Python head beyond A2's additive set; a dependency the wasm build cannot carry |
+| L2 DRIVER | 2 | the per-stone loop, the cache port, the step machine, `budget.rs`, `RustForward`, `with_pool` and `armed_sims_for`, `PyPlayer` and `PyRustForward`, `wasm.rs`, gate 4's player row; LAWS' protected set gains W3 and the served-sims pin (R399(c)) | W3 with both breaks; W2 native with its break; the budget's Q5 rows, `cap ≥ 32` and the 16-sim floor; `with_pool(.., MAX_NODES)` and `MAX_ARMED_SIMS` with a planted break on the pool size, self-play's goldens untouched (R399(b)); the served-sims pin; the constants' pins; the error-parity test; the `#[wasm_bindgen]` census; the wasm32 build, with module size and peak memory reported | a witness failing; any edit to self-play, the cells or the Python head beyond A2's additive set; a dependency the wasm build cannot carry |
 | L3 PACKAGE | 1–2 | `web/`: the Worker and its loop, both backends, selection and the on-device witness, the typed API, the adapter, the demo, node tests, gate 21, the release script; contract #13's API sections | W2 in wasm; the adapter's packet fixtures; §3.3's pre-stated WebGPU measurement and W1 on WebGPU in Chromium (desk) | a runtime fetch from a third party; a data op on the CPU; §3.3's measurement missing its line (then §13 A7) |
 | L4 BENCH + READ | 1 | numbers only (§14) | — | a witness failing |
 
@@ -808,7 +820,7 @@ Every leg ends with `make gates` and a fresh read-only review. L2's two sessions
 | the elements graph is slow or too big on WebGPU | §3.3's pre-stated L3 measurement | the per-call edge cap; §13 A7 |
 | int32 inputs still leave a data op on the CPU under WebGPU | L3's placement log | a W1 row failure; move the op into the engine's batch |
 | `pack_wire` or the leaf build touches a thread or a clock on wasm | a trap in node at L2 | the wasm32 node test packs a batch ≥ 65 536 edges at `threads = 1` |
-| fp16 storage misses the fp32 lines | W1 fp16 rows (ungated) | fp16 ships only under its own ruled line (§13 A1) |
+| fp16 storage misses its line | W1 fp16 rows against R399(a)'s line | fp32 only |
 | leaf size grows past the previous turn's cost late in a game | `turn_over_0.8T` and the p99 turn time | the 0.8 margin; L4's clock line |
 | a weak integrated GPU is slower than one CPU thread | L4's laptop row | selection by measured `leaf_ms` is the change it would order |
 | ORT-web's runtime (26.8 MB in memory) is too heavy for a phone | the demo's peak row | CARD-WEB-RUNTIME-ALTERNATIVES (burn-wgpu) |
@@ -834,7 +846,7 @@ Every leg ends with `make gates` and a fresh read-only review. L2's two sessions
   - Also the package's name and scope, the npm account that publishes it, and the publish itself.
 - **O3 — a laptop for L4**, if there is one.
 
-**The architect's, before L1:**
+**The architect's, ruled by R399 (2026-10-21).** Each item carries its ruling.
 - **A1 — fp16's line.** Rounding the weights to fp16 moves logits by about 1e-3 relative (INFERENCE), so the fp32
   lines will likely fail.
   - The recommendation: fp16 ships to WebGPU only under a line pre-stated in L1's PRESTATED before its first read,
@@ -842,6 +854,10 @@ Every leg ends with `make gates` and a fresh read-only review. L2's two sessions
   - The line: same argmax wherever the gap > 2e-2, and \|Δ value\| and \|Δ logit\| at 3× the rounding floor measured
     on the development net (run13 120k), not on a random-init one.
   - Until it is ruled, fp16 rows gate nothing and fp32 is the only shipped file.
+  - **Ruled — R399(a).** fp16 ships to WebGPU only, under a line pre-stated in L1's PRESTATED and measured on run13's
+    120k: \|Δ prob\| ≤ 2e-3, \|Δ value\| ≤ 2e-3, the same argmax wherever the reference's top-2 gap > 2e-2. Logits
+    are reported, not gated. The known-bad, the fp16 file's last policy bias shifted by 0.05, must fail the prob line.
+    Until the read, fp32 is the only shipped file.
 - **A2 — scope.** The packet HALTs on "any edit to self-play". The port adds, additively:
   - `MCTSTree::with_pool` and `armed_sims_for` to `mantis-search`, with `new_full`'s and `MAX_ARMED_SIMS`'s values
     unchanged;
@@ -852,28 +868,44 @@ Every leg ends with `make gates` and a fresh read-only review. L2's two sessions
   This reads "edit" as behaviour, as R396(c) read TR-D's M1. The bridge's three pieces of glue (§2.2) are copied, not
   moved: moving them would edit the cells' path. The copies are pinned by W3 and an error-parity test, and are retired
   when CARD-DEPLOY-HEAD-DRIVER moves the bridge onto the shared code.
+  - **Ruled — R399(b).** Not an edit to self-play. `new_full` stays `with_pool(.., MAX_NODES)` and `MAX_ARMED_SIMS`
+    keeps its value, both pinned with a planted break on the pool size. The glue is copied, not moved, pinned by W3
+    and the error-parity test, and retired by CARD-DEPLOY-HEAD-DRIVER. Self-play's goldens stay untouched and green.
 - **A3 — the protected set.** R386(d) and R396(c) annotate served-sims exactness for "the ladder alone" as the
   consumer of the early stop and reuse. The player is a second consumer, with both on. Its constants are pinned equal
   to `LADDER_EARLY_STOP` and `LADDER_TREE_REUSE`, so the test is a third reader of those switches. Its own pins
   should be named in the protected set by a ruling:
   - W3;
   - a Rust served-sims test: each stone spends its `n` in new descents, or a fired stop with the leader fixed.
+  - **Ruled — R399(c).** Both enter the protected set with L2. R386(d) and R396(c) are annotated: the player is the
+    second consumer of the early stop and reuse, its constants pinned equal to `LADDER_EARLY_STOP` and
+    `LADDER_TREE_REUSE`.
 - **A4 — no deadline stop.** A host-side stop at 0.95·T would make a timeout impossible but would end a search with
   the leader unfixed, which weakens served-sims exactness. It is not built: ρ = 1, the 0.8 margin, `minTurnMs` and L4's
   clock line stand in its place. Building it takes a ruling naming the invariant.
+  - **Ruled — R399(d).** No deadline stop: served-sims exactness is the invariant. One change: under a clock below
+    `minTurnMs` the CPU path plays a 16-sim floor, counted as `floor_over_clock` and shown (§2.5). The 32-sim floor
+    stands for the budget rule and the arena's offered clocks.
 - **A5 — a mis-citation in R398(b).** It cites "(R396(f))" for concurrency 1. R394(f) holds that rule ("Tree bridges:
   bit identity is a claim at concurrency 1 only"), and R396(f) holds annotations only. This design cites R394(f). A
   correcting annotation on R398's entry is the architect's.
+  - **Ruled — R399(e).** R398(b)'s "(R396(f))" is annotated to R394(f).
 - **A6 — a measured ρ.** ρ = 1 is RESEARCH-WEB's guaranteed column. A measured ρ would buy more sims: per descent the
   anchor cell reads 0.734 served leaves, and with reuse about 0.79 a nominal sim (INFERENCE, another net). Sims scale
   by 1/ρ, so that is 27–36 % more (equivalently, ρ = 1 plays 21–27 % fewer). It risks an overrun when one turn's ρ
   is low and the next's high. If ruled, the estimator takes the maximum per-descent cost over the game's last k turns,
   and L4's clock line must hold with it.
+  - **Ruled — R399(f).** ρ stays 1. A measured-ρ estimator is a later card (CARD-WEB-MEASURED-RHO), admissible only
+    after L4's clock line reads zero overruns at ρ = 1 on the desk. The 21–27 % fewer sims are the first release's
+    price.
 - **A7 — the WebGPU fallback**, if §3.3's measurement misses. Each option amends R398(b) ("the ScatterElements graph";
   "WebGPU where present"), so either takes a ruling:
   - (i) the ScatterND graph on WebGPU only. The research measured it exact there (atomics; the race is the CPU and
     WASM kernels'), at 7.0 ms a leaf at B 8. A second ONNX would ship, never on the WASM EP.
   - (ii) Or `RustForward` alone until CARD-WEB-RUNTIME-ALTERNATIVES.
+  - **Ruled — R399(g).** (i) first: the ScatterND graph ships for WebGPU only, as a second ONNX, marked "wrong under
+    threaded CPU kernels (ORT #18048)" in its manifest row, loaded by no path but the WebGPU backend, pinned by a node
+    test. The integrator ONNX stays the ScatterElements graph. If the ScatterND graph misses too, (ii).
 - **A8 — the law readings this design makes:**
   - **LAW-13:** a wasm trap kills the instance and surfaces as an error the Worker catches; that is read as "a panic
     crosses the FFI catchable".
@@ -882,6 +914,10 @@ Every leg ends with `make gates` and a fresh read-only review. L2's two sessions
     implementation; W1 and W2 hold it to the served output.
   - **The reservation:** whether `src/mantis/deploy/`'s reservation retires, now that R398(b) put the export in
     `tools/`.
+  - **Ruled — R399(h).** All three readings accepted. LAW-13: the Worker also rebuilds the engine after a trap and
+    counts it. LAW-06: the export re-expression is a witnessed view of the served path, not a second implementation.
+    The reservation retires: the export lives in `tools/`, the driver in a crate, the package in `web/`; CLAUDE.md's
+    line goes with R399's landing.
 
 ## 14. Record (L4 fills)
 

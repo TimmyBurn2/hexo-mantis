@@ -1,4 +1,4 @@
-# RULINGS — R23 to R398
+# RULINGS — R23 to R399
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R399.
+- Numbering continues from R346. The next ruling is R400.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,48 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R399 — THE DESIGN STANDS; EIGHT ITEMS RULED; L1 MAY START
+Decision: verbatim below.
+
+> R399 — THE DESIGN STANDS; EIGHT ITEMS RULED; L1 MAY START.
+> (a) A1 — fp16 ships to WebGPU only, under a line pre-stated in L1's PRESTATED before its first read
+> and measured on run13's 120k, never a random-init net. The line is on what the search consumes:
+> |Δ prob| ≤ 2e-3, |Δ value| ≤ 2e-3, the same argmax wherever the reference's top-2 gap > 2e-2;
+> logits are reported, not gated. The known-bad: the fp16 file's last policy bias shifted by 0.05
+> must fail the prob line. Until the read, fp32 is the only shipped file.
+> (b) A2 — the additive changes to mantis-search (`MCTSTree::with_pool`, `armed_sims_for`,
+> `configure_search` sizing from the pool) and the three bridge bindings are not "editing self-play":
+> `new_full` stays `with_pool(.., MAX_NODES)`, `MAX_ARMED_SIMS` keeps its value, and both are pinned
+> with a planted break on the pool size. The bridge glue is copied, not moved, pinned by W3 and the
+> error-parity test, and retired by CARD-DEPLOY-HEAD-DRIVER. Self-play's goldens stay untouched and
+> green.
+> (c) A3 — W3 and the player's Rust served-sims test (each stone spends its n in new descents, or a
+> fired stop with the leader fixed) enter the protected set with L2; R386(d) and R396(c) are
+> ANNOTATED: the player is the second consumer of the early stop and reuse, its constants pinned
+> equal to `LADDER_EARLY_STOP` and `LADDER_TREE_REUSE`.
+> (d) A4 — no deadline stop. Served-sims exactness is the invariant; ρ = 1, the 0.8 margin,
+> `minTurnMs` and L4's clock line guard the clock. One change: under a clock below `minTurnMs` the
+> CPU path plays at a 16-sim floor, counted as `floor_over_clock` and shown — a weak turn beats a
+> forfeit. The 32-sim floor stands for the budget rule and for the arena's offered clocks.
+> (e) A5 — R398(b)'s "(R396(f))" is ANNOTATED to R394(f).
+> (f) A6 — ρ stays 1. A measured-ρ estimator is a later card, admissible only after L4's clock line
+> reads zero overruns at ρ = 1 on the desk; the 21–27 % fewer sims are the first release's price.
+> (g) A7 — if the ScatterElements graph misses §3.3's line on WebGPU, the ScatterND graph ships
+> for WebGPU ONLY as a second ONNX, its manifest row marked "wrong under threaded CPU kernels
+> (ORT #18048)", loaded by no path but the WebGPU backend, pinned by a node test; the shipped
+> integrator ONNX remains the ScatterElements graph. If the ScatterND graph misses too,
+> `RustForward` alone ships until CARD-WEB-RUNTIME-ALTERNATIVES.
+> (h) A8 — the readings are ACCEPTED: LAW-13 (a wasm trap surfaces as an error the Worker catches;
+> the Worker rebuilds the engine and counts the trap), LAW-12 (artifacts named by the stamp's stem
+> and their sha256 in the manifest), LAW-06 (the export re-expression is a witnessed view of the
+> served path, not a second implementation). `src/mantis/deploy/`'s reservation RETIRES: the
+> export lives in tools/, the driver in a crate, the package in web/; CLAUDE.md's line goes with L1.
+> (i) The review's four majors (pool sizing below the floor; the CPU path untimed; no overrun line;
+> the shipped WebGPU graph unmeasured) are closed as the design now reads; §3.3's measurement and
+> L4's clock line are the witnesses. L1 may start.
+
+Status: standing. ANNOTATES R398(b) (A5), R386(d)/R396(c) (A3).
 
 ### R398 — THE BOT SHIPS AS ONE WASM ENGINE WITH TWO NET BACKENDS, WITNESSED FROM THE STAMP
 Decision: verbatim below.
@@ -95,6 +137,10 @@ Decision: verbatim below.
 > pure-Rust WebGPU path if ORT-web's runtime size or fallbacks bite; tract as a CPU alternative.
 
 Status: standing. ANNOTATES R397(b) (DEPLOY-WEB's shape), R397(c) (the pick; the end read).
+(b) ANNOTATED by R399(e): its "(R396(f))" reads R394(f), whose (f) holds that bit identity across a tree bridge is a
+claim at concurrency 1 only. (b)'s floor ANNOTATED by R399(d): under a clock below `minTurnMs` the CPU path plays at a
+16-sim floor, counted as `floor_over_clock`; the 32-sim floor stands for the budget rule and the arena's offered
+clocks. (b)'s ρ, fp16 and WebGPU fallback are ruled by R399(f), (a) and (g).
 
 ### R397 — THE BAND READ THE TAILS; THE BOT LIVES IN THE BROWSER; THE AVERAGE IS READ FOR FREE
 Decision: verbatim below.
@@ -205,7 +251,9 @@ of its reader (a row with no stored policy read as mass 0, and every decided-tai
 `forced_block_stats` skips `proven_tail` rows and reports `forced_block_tail_skipped`, and run14 resumes from 180 997
 under its own config, no mint, tails ARMED. (c) and (d) ANNOTATED by R397(b): DEPLOY-3 is WITHDRAWN unexecuted; the
 deployed bot runs in the browser, tree reuse ships in its deploy head, and its per-stone sims are set by DEPLOY-WEB's
-budget bench against the arena's turn time in a browser.
+budget bench against the arena's turn time in a browser. (c) ANNOTATED by R399(c): the web player (`mantis-player`) is
+the second consumer of within-turn reuse, its constant pinned equal to `LADDER_TREE_REUSE`; W3 and the player's Rust
+served-sims test enter the protected set with DEPLOY-WEB's L2.
 
 ### R395 — RUN14 IS THE LAST RUN; IT CARRIES WHAT IS MEASURED AND ONE BET, BENCHED
 Decision: verbatim below.
@@ -652,7 +700,9 @@ Decision: verbatim below.
 Status: standing; (c)'s generation walk ANNOTATED by R387(a) (the ruler of record is a node ladder on Six gen455).
 (b)'s RUN11-FRESH ACCEPTED and CLOSED by R388(c) (the lineage stands). (d)'s #13 EXTENDED to self-play's PUCT frame by
 R388(c), and (d)'s #18 MOVED to ENCODE-1 by R388(f) (run12 starts without it). (e)'s parked trainer interference:
-the separate-trainer idea CLOSED by R388(f).
+the separate-trainer idea CLOSED by R388(f). (d)'s early stop ANNOTATED by R399(c): the web player (`mantis-player`)
+is its second consumer, its constant pinned equal to `LADDER_EARLY_STOP`; W3 and the player's Rust served-sims test
+enter the protected set with DEPLOY-WEB's L2.
 Accepts RUN11-GO by (a): run11 pauses at its next save with its bundle mirrored, and while it pauses
 box A hosts TRAIN-SPEED-1's closed-loop A/Bs and the knob sweep; run11 then resumes with a second cosine cycle, 5e-4 →
 1e-4 over 54k steps, minted by this ruling and read by the next four ladder cells against the 108k–156k plateau mean (a
