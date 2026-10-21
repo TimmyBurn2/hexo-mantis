@@ -1,3 +1,6 @@
+// >300 justify (R8): the one module that may carry #[wasm_bindgen] (a census test pins it), so the browser surface
+// cannot be split without a second bindgen home.
+
 //! The browser engine's one FFI surface (wasm32 only): the step machine and `RustForward` behind `#[wasm_bindgen]`.
 
 use serde_json::{json, Value};

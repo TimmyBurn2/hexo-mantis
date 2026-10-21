@@ -395,7 +395,8 @@ mod tests {
             ..LEAF_ONLY
         };
         assert_eq!(armed.check(), Ok(()));
-        let breaks: [(fn(&mut TacticsConfig), &str); 7] = [
+        type Break = fn(&mut TacticsConfig);
+        let breaks: [(Break, &str); 7] = [
             (|c| c.leaf_turns = 0, "leaf_turns"),
             (|c| c.root_turns = 41, "root_turns"),
             (

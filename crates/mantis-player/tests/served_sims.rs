@@ -1,3 +1,6 @@
+// >300 justify (R8): the player's protected served-sims witness and the budget-in-play tests share one fixture set —
+// the goldens, the deploy block, the stub net and the turn driver — that a split would duplicate.
+
 //! The player's served-sims witness (protected): `n` new descents a stone or a stop with the leader fixed.
 
 use mantis_player::batch::WebBatch;

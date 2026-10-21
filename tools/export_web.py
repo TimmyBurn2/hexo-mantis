@@ -271,7 +271,7 @@ def rust_witness(weights: Path, table: list[dict[str, Any]], fp32: Path, cases: 
     for b, pairs in cases.items():
         per = []
         for inputs, _ref in pairs:
-            onnx_out = dict(zip(OUTPUTS, session.run(list(OUTPUTS), inputs), strict=True))
+            onnx_out = {k: np.asarray(v) for k, v in zip(OUTPUTS, session.run(list(OUTPUTS), inputs), strict=True)}
             per.append(gaps(rust_outputs(forward, inputs), onnx_out, inputs["legal_graph"], line))
         rows.append(witness_row(per, {"backend": "rust-forward-native", "file": weights.name, "threads": 1, "B": b}, "fp32"))
     return rows

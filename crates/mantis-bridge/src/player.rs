@@ -1,3 +1,6 @@
+// >300 justify (R8): the player's whole Python surface is one binding unit — the batch, the step machine, the forward,
+// their constants and the error-parity test that needs the bridge's own tree beside the player's checks.
+
 //! The web player's Python surface: `web_batch` and `RustForward` for the export's witness, `Player` for W3.
 
 use numpy::{IntoPyArray, PyReadonlyArray1};
