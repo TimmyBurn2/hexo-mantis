@@ -33,10 +33,13 @@ dev = [
     "pyright>=1.1.380",
     "pytest-xdist>=3.8.0",
 ]
+# The web export's ONNX toolchain (tools/export_web.py, gate 20), pinned to the releases its witness was first read on.
+# Its CPU onnxruntime and the `teacher` extra's onnxruntime-gpu are one module, so the two conflict.
+web-export = ["onnx==1.23.2", "onnxscript==0.7.2", "onnxruntime==1.31.0"]
 
 [tool.uv]
-default-groups = ["dev", "cpu"]
-conflicts = [[{ group = "cpu" }, { extra = "cuda" }]]
+default-groups = ["dev", "cpu", "web-export"]
+conflicts = [[{ group = "cpu" }, { extra = "cuda" }], [{ group = "web-export" }, { extra = "teacher" }]]
 
 [tool.uv.workspace]
 members = ["crates/mantis-bridge"]

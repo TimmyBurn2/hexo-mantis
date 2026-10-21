@@ -49,7 +49,7 @@ class Teacher:
         try:
             import onnxruntime as ort  # pyright: ignore[reportMissingImports]  # the `teacher` extra
         except ImportError as exc:
-            raise TeacherUnavailable("onnxruntime is absent: sync with `--extra teacher`") from exc
+            raise TeacherUnavailable("onnxruntime is absent: sync with `--extra teacher --no-group web-export`") from exc
         if device == "cuda":
             ort.preload_dlls(directory="")
             providers: list[Any] = [("CUDAExecutionProvider", {"device_id": 0, "use_tf32": 0}), "CPUExecutionProvider"]
@@ -60,7 +60,7 @@ class Teacher:
         self.session = ort.InferenceSession(str(assets.net), options, providers=providers)
         served = self.session.get_providers()[0]
         if device == "cuda" and served != "CUDAExecutionProvider":
-            raise TeacherUnavailable(f"CUDA was asked for and the session serves {served}")
+            raise TeacherUnavailable(f"CUDA was asked for and the session serves {served}; sync with `--extra teacher --no-group web-export`")
         self.provider = served
         self.ort_version = str(ort.__version__)
         self.net_path = assets.net
