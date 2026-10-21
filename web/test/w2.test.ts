@@ -64,7 +64,7 @@ async function rows(e: Glue.Engine, batchSize: number, drop: boolean) {
     const ref = reference({ logits: o.logits!.data as Float32Array, probs: o.probs!.data as Float32Array,
       value: o.value!.data as Float32Array }, a, slice);
     const fed = drop ? { ...a, divisor: a.divisor.map(() => 1) } : a;
-    out.push(gaps(rust(e, fed), ref, 0, line));
+    out.push(gaps(rust(e, fed), ref, 0, line, slice.length));
   }
   await session.release();
   return out;

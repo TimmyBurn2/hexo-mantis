@@ -10,7 +10,7 @@ export type NetOut = { logits: Float32Array; probs: Float32Array; value: Float32
 export type Line = { logit: number | null; prob: number; value: number; gap: number };
 export type WitnessRow = {
   backend: string; logits: number; probs: number; value: number; argmax_agreed: number; argmax_compared: number;
-  pass: boolean; leaves: number; ms: number;
+  pass: boolean; leaves: number; ms: number; error?: string;
 };
 export type Manifest = {
   format: string; encoding: { name: string; registry_sha: string; node_feat_dim: number };
@@ -130,11 +130,16 @@ export function cpuBackend(wasm: Wasm, mod: { Batch: typeof Batch }): Backend {
   };
 }
 
-/** Max |Δ| per output and the argmax agreed over the graphs whose reference top-2 gap exceeds the line's. */
-export function gaps(out: NetOut, ref: DeviceWitness, from: number, line: Line): Omit<WitnessRow, "backend" | "pass" | "leaves" | "ms"> {
+/** Max |Δ| per output and the argmax agreed over the graphs whose reference top-2 gap exceeds the line's, for the
+ * `graphs` reference rows from `from`; outputs of another length than the reference's fail every line. */
+export function gaps(out: NetOut, ref: DeviceWitness, from: number, line: Line, graphs: number): Omit<WitnessRow, "backend" | "pass" | "leaves" | "ms"> {
   let at = 0;
   const row = { logits: 0, probs: 0, value: 0, argmax_agreed: 0, argmax_compared: 0 };
-  for (let g = 0; g < out.value.length; g++) {
+  const legal = ref.probs.slice(from, from + graphs).reduce((n, p) => n + p.length, 0);
+  if (out.value.length !== graphs || out.probs.length !== legal || out.logits.length !== legal) {
+    return { ...row, logits: Infinity, probs: Infinity, value: Infinity };
+  }
+  for (let g = 0; g < graphs; g++) {
     const want = { logits: ref.logits[from + g]!, probs: ref.probs[from + g]! };
     const n = want.probs.length;
     let top = 0, second = -Infinity, best = 0;
@@ -168,29 +173,46 @@ export async function witness(backend: Backend, build: (positions: DeviceWitness
   const rows = [];
   const started = now();
   for (let from = 0; from < ref.positions.length; from += batchSize) {
-    const out = await backend.run(build(ref.positions.slice(from, from + batchSize)));
-    rows.push(gaps(out, ref, from, line));
+    const slice = ref.positions.slice(from, from + batchSize);
+    const out = await backend.run(build(slice));
+    rows.push(gaps(out, ref, from, line, slice.length));
   }
   const ms = now() - started;
-  const row = {
-    logits: Math.max(...rows.map((r) => r.logits)), probs: Math.max(...rows.map((r) => r.probs)),
-    value: Math.max(...rows.map((r) => r.value)), argmax_agreed: rows.reduce((n, r) => n + r.argmax_agreed, 0),
-    argmax_compared: rows.reduce((n, r) => n + r.argmax_compared, 0),
-  };
-  return { backend: backend.kind, ...row, pass: passes(row, line), leaves: ref.positions.length, ms };
+  const row = combine(rows);
+  // A witness that compared no argmax compared nothing: it does not pass.
+  const pass = rows.length > 0 && row.argmax_compared > 0 && passes(row, line);
+  return { backend: backend.kind, ...row, pass, leaves: ref.positions.length, ms };
 }
 
-/** The first candidate whose witness passes, in order; every row is kept for `NoBackendPassed`. */
-export async function select(candidates: Array<() => Promise<Backend | null>>,
+/** The worst gap per output and the argmax counts summed, over a witness's batches. */
+export function combine(rows: Array<Omit<WitnessRow, "backend" | "pass" | "leaves" | "ms">>): Omit<WitnessRow, "backend" | "pass" | "leaves" | "ms"> {
+  return {
+    logits: Math.max(0, ...rows.map((r) => r.logits)), probs: Math.max(0, ...rows.map((r) => r.probs)),
+    value: Math.max(0, ...rows.map((r) => r.value)), argmax_agreed: rows.reduce((n, r) => n + r.argmax_agreed, 0),
+    argmax_compared: rows.reduce((n, r) => n + r.argmax_compared, 0),
+  };
+}
+
+/** The first candidate whose witness passes, in order; a candidate that throws is a failed row, never the end of
+ * selection. Every row is kept for `NoBackendPassed`. */
+export async function select(candidates: Array<[WitnessRow["backend"], () => Promise<Backend | null>]>,
   admit: (b: Backend) => Promise<WitnessRow>): Promise<{ backend: Backend; row: WitnessRow; rows: WitnessRow[] } | { rows: WitnessRow[] }> {
   const rows: WitnessRow[] = [];
-  for (const make of candidates) {
-    const backend = await make();
-    if (backend === null) continue;
-    const row = await admit(backend);
-    rows.push(row);
-    if (row.pass) return { backend, row, rows };
-    backend.dispose();
+  for (const [kind, make] of candidates) {
+    let backend: Backend | null = null;
+    try {
+      backend = await make();
+      if (backend === null) continue;
+      const row = await admit(backend);
+      rows.push(row);
+      if (row.pass) return { backend, row, rows };
+    } catch (e) {
+      // A file that misses its manifest refuses the net, never just one backend.
+      if (e instanceof Error && e.name === "Refused") throw e;
+      rows.push({ backend: kind, logits: Infinity, probs: Infinity, value: Infinity, argmax_agreed: 0, argmax_compared: 0,
+        pass: false, leaves: 0, ms: 0, error: e instanceof Error ? `${e.name}: ${e.message}` : String(e) });
+    }
+    backend?.dispose();
   }
   return { rows };
 }

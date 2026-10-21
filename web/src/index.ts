@@ -41,14 +41,25 @@ export interface Engine {
 }
 
 /** An engine in its own Worker, its files fetched from `assets` alone; a trap rebuilds it and counts it. */
+/** Respawns after traps in a row past which the engine is left down: a Worker that cannot start stops retrying. */
+export const MAX_RESPAWNS = 3;
+
 export async function createEngine(opts: { assets: string; backend?: "auto" | "webgpu" | "cpu" }): Promise<Engine> {
-  const assets = opts.assets.replace(/\/$/, "");
+  // Absolute, so the Worker (whose own URL is the base inside it) fetches from the same place as the page.
+  const assets = new URL(opts.assets, location.href).href.replace(/\/$/, "");
   let worker: Worker;
   let info: EngineInfo;
   let traps = 0;
+  let inARow = 0;
   let next = 1;
+  let down: string | null = null;
+  let ready = false;
   const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
 
+  const settleAll = (name: string, message: string) => {
+    for (const waiting of pending.values()) waiting.reject(new EngineError(name, message));
+    pending.clear();
+  };
   const spawn = async (): Promise<void> => {
     worker = new Worker(`${assets}/src/worker.js`, { type: "module" });
     worker.addEventListener("message", (event: MessageEvent<Reply>) => {
@@ -56,32 +67,49 @@ export async function createEngine(opts: { assets: string; backend?: "auto" | "w
       const waiting = pending.get(reply.id);
       if (waiting === undefined) return;
       pending.delete(reply.id);
-      if (reply.ok) waiting.resolve(reply.value);
-      else if (reply.error.name === "RuntimeError") void crashed(reply.error.message);
-      else waiting.reject(new EngineError(reply.error.name, reply.error.message));
+      if (reply.ok) {
+        waiting.resolve(reply.value);
+      } else if (reply.error.name === "RuntimeError") {
+        waiting.reject(new EngineError("EngineCrashed", reply.error.message));
+        void crashed(reply.error.message);
+      } else {
+        waiting.reject(new EngineError(reply.error.name, reply.error.message));
+      }
     });
     worker.addEventListener("error", (event) => void crashed(event.message));
     info = (await call("init", assets, opts.backend ?? "auto")) as EngineInfo;
   };
   const call = (op: string, ...args: unknown[]): Promise<unknown> => new Promise((resolve, reject) => {
+    if (down !== null) return reject(new EngineError("EngineCrashed", down));
     const id = next++;
     pending.set(id, { resolve, reject });
     worker.postMessage({ id, op, args } satisfies Request);
   });
   const crashed = async (message: string): Promise<void> => {
-    for (const waiting of pending.values()) waiting.reject(new EngineError("EngineCrashed", message));
-    pending.clear();
+    settleAll("EngineCrashed", message);
     worker.terminate();
     traps += 1;
-    await spawn();
+    inARow += 1;
+    if (!ready || inARow > MAX_RESPAWNS) {
+      down = ready ? `the engine trapped ${inARow} times in a row: ${message}` : message;
+      return;
+    }
+    await spawn().catch((e: Error) => void (down = `${e.name}: ${e.message}`));
   };
   const withInfo = async <T>(op: string, ...args: unknown[]): Promise<T> => {
     const value = (await call(op, ...args)) as T & { info?: EngineInfo };
     if (value?.info) info = value.info;
+    inARow = 0;
     return value;
   };
 
-  await spawn();
+  try {
+    await spawn();
+    ready = true;
+  } catch (e) {
+    worker!.terminate();
+    throw e;
+  }
   return {
     info: () => ({ ...info, engineTraps: traps }),
     newGame: (opening, clock) => withInfo("newGame", opening, clock),
@@ -89,6 +117,9 @@ export async function createEngine(opts: { assets: string; backend?: "auto" | "w
     playTurn: (budget) => withInfo("playTurn", budget),
     analyse: (position, budget) => withInfo("analyse", position, budget),
     abort: () => worker.postMessage({ id: 0, op: "abort", args: [] } satisfies Request),
-    dispose: () => worker.terminate(),
+    dispose: () => {
+      settleAll("AbortError", "the engine was disposed");
+      worker.terminate();
+    },
   };
 }

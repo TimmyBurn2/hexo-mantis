@@ -184,7 +184,7 @@ The wasm-only dependencies (`wasm-bindgen` pinned to the lock's one version, `js
 | `newGame(opening, clock)` | `newGame` | the opening's stones as moves in turn cadence (x one, then two each, each side's in the order given); the engine's rules check them |
 | `play(stones)` | `play` | the other side's stones |
 | `playTurn(budget)` | `playTurn` | the one loop: `begin_turn`; per batch `forward_pending` + `submit_pending` (CPU) or the backend on `pending_batch()` + `submit` (WebGPU); a MessageChannel round trip between batches, so an `abort` is heard; `TurnResult` in camelCase with the rows |
-| `analyse(position, budget)` | `analyse` | a new game at `position` (pool sized for the budget's clock), then a turn |
+| `analyse(position, budget)` | `analyse` | a new game at `position` (pool sized for the budget), then a turn |
 | `abort()` | `abort` (no reply) | the turn in flight rejects with `AbortError`; the board is as before it |
 | `dispose()` | — | terminates the Worker |
 
@@ -193,14 +193,21 @@ The wasm-only dependencies (`wasm-bindgen` pinned to the lock's one version, `js
 - **Init refuses** (`Refused`): a manifest format other than `mantis-web-manifest-v2`, a `registry_sha` other than the
   engine's, a deploy kind other than PUCT, a `deploy.player` constant other than the engine's, a file whose bytes miss
   its sha256. `Unsupported`: no wasm SIMD. `NoBackendPassed`: no candidate's witness held (the rows in the message).
-- **Selection:** WebGPU first when a non-fallback adapter exists (`backend: 'auto'`), else or on a miss the CPU path;
-  each runs the export's 16-position witness on batches the engine builds at `leaf_batch_size`, at the fp32 line. The
+- **Selection:** WebGPU first when a non-fallback adapter exists (`backend: 'auto'`), ORT pinned to that adapter; else,
+  on a miss, or when the candidate throws (a failed row with its error), the CPU path. Each runs the export's
+  16-position witness on batches the engine builds at `leaf_batch_size`, at the fp32 line; outputs of another length
+  than the reference's fail every line, and a witness that compared no argmax does not pass. A file missing its sha256
+  is `Refused` for the net, not a failed backend. The
   engine is built for the backend that won (`cpu_path` arms the 16-sim floor). The warm-up cost a leaf is the
   witness's wall ms over its leaves, root folded in, until a turn measures its own.
 - **WebGPU calls** split a batch at graph boundaries under `EDGE_CAP` edges (a larger graph alone), re-based; a graph's
   outputs do not depend on its batch-mates, so the split is invisible.
-- **A trap** (`RuntimeError`) or a Worker error rejects every pending call with `EngineCrashed`; the API terminates the
-  Worker, starts a new one, re-runs `init` and counts the trap.
+- **A failure mid-turn** of any kind (an abort, a backend's, the engine's) rolls the turn back before it is answered,
+  so the engine stays usable.
+- **A trap** (`RuntimeError`) or a Worker error rejects every pending call, the trapping one included, with
+  `EngineCrashed`; the API terminates the Worker, starts a new one, re-runs `init` and counts the trap. It respawns only
+  after a first successful `init` and at most `MAX_RESPAWNS` (3) times in a row; past that every call rejects. A first
+  `init` that fails terminates its Worker. `dispose()` rejects every pending call with `AbortError`.
 
 ## The arena adapter (`web/src/arena.ts`)
 
@@ -211,13 +218,13 @@ htttx basic_websocket v1-alpha over `postMessage`; wire `(q, r)` is the engine's
 |---|---|
 | (on attach) | posts `{meta: {version}, basic_websocket: {versions: {"v1-alpha": {free_setup, resettable_state, dual_sided, request_id, interruptible: true}}}}` |
 | `setup {board: {cells: [{q, r, p}]}}` | holds the stones, queued behind the request in flight |
-| `move_request {side, previous, move_time_limit?, request_id?}` | after a setup, `newGame` at the setup's stones plus `previous`, sized for 5 s; else `play` of the unseen pieces; then `playTurn({turnMs: limit·1000})`, or `{unlimited: true}` without a limit |
-| `interrupt {request_id?}` | `abort` of the request in flight; a request interrupted before it started is never played |
+| `move_request {side, previous, move_time_limit?, request_id?}` | after a setup, `newGame` at the setup's stones plus `previous`, sized for 5 s; else `play` of the unseen pieces; then `playTurn({turnMs: limit·1000})`, or `{unlimited: true}` without a limit. A refusal answers nothing (the slot times it out) and the next request is served |
+| `interrupt {request_id?}` | `abort` of the request in flight; an interrupted request is never started, played on or answered, whenever the interrupt lands |
 
 - **`move_response`:** `{type, move: {pieces: [2], evaluation: {heuristic}}, request_id}`. A turn whose first stone wins
-  is padded by that stone's first empty neighbour (q+1; r+1; q−1,r+1; q−1; r−1; q+1,r−1). `heuristic` is x-positive (htttx
-  counts x positive): the last searched stone's root value for the mover, signed by side, 1 for a decided or winning
-  turn. No `win_in` and no considerations are sent; an interrupted request is answered with nothing.
+  is padded by that stone's first empty neighbour (q+1; r+1; q−1,r+1; q−1; r−1; q+1,r−1), then the first empty cell of
+  each wider ring. `heuristic` is x-positive (htttx counts x positive): the last searched stone's root value for the
+  mover, signed by side, 1 for a decided turn or one that placed fewer stones than it was due. No `win_in` and no considerations are sent; an interrupted request is answered with nothing.
 
 ## Who asserts what where
 
@@ -243,8 +250,8 @@ htttx basic_websocket v1-alpha over `postMessage`; wire `(q, r)` is the engine's
 | `RustForward` refuses a table its file does not hold, and a batch its shape does not allow | `forward.rs` | `forward::tests::*` |
 | the bindgen attribute lives in `wasm.rs` alone, gated to wasm32 | `wasm.rs` | `crates/mantis-player/tests/wasm_census.rs` |
 | W2 in wasm: the engine's `RustForward` holds the fp32 line against the fp32 ONNX on ORT's one-thread CPU kernels at B 1 and 8; every divisor fed as 1 misses it | `forward.rs`, `wasm.rs` | `web/test/w2.test.ts` (gate 21) |
-| the Worker refuses a foreign manifest by name, admits the CPU backend by its witness, plays turns through the one loop, hears an abort between batches, refuses a second turn and a position no cadence reaches | `web/src/worker.ts` | `web/test/worker.test.ts` (gate 21) |
-| the adapter declares the five capabilities, maps setup and requests to the engine, signs the heuristic x-positive, pads a winning first stone, answers nothing for an interrupt | `web/src/arena.ts` | `web/test/arena.test.ts` (gate 21) |
+| the Worker refuses a foreign manifest by name, admits the CPU backend by its witness, falls back to it when the WebGPU candidate throws, plays turns through the one loop, hears an abort between batches, stays usable after a failure mid-turn, refuses a second turn and a position no cadence reaches | `web/src/worker.ts` | `web/test/worker.test.ts` (gate 21) |
+| the adapter declares the five capabilities, maps setup and requests to the engine, signs the heuristic x-positive, pads a winning first stone, answers nothing for an interrupt wherever it lands, and serves the next position after a refused one | `web/src/arena.ts` | `web/test/arena.test.ts` (gate 21) |
 | a WebGPU batch split under the edge cap answers what the whole batch answers | `web/src/backends.ts` | `web/test/split.test.ts` (gate 21) |
 | the detector refuses by name | `export_web.detect` | `test_the_detector_refuses_what_it_does_not_carry_by_name`, `test_a_gumbel_deploy_block_is_refused_before_anything_is_written` |
 

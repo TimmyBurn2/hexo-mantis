@@ -417,6 +417,12 @@ pub fn web_batch(
         }
         positions.push((own, i64::from(side), i64::from(left)));
     }
+    if triples.next().is_some() {
+        return Err(named(
+            "Batch",
+            "more stones were given than the counts ask for",
+        ));
+    }
     let inner = build_batch(&positions, spec).map_err(|e| named("Batch", &e.to_string()))?;
     Ok(Batch { inner })
 }

@@ -445,7 +445,7 @@ def dump_weights(wrapper: WebServedGraph, path: Path) -> list[dict[str, Any]]:
 
 
 def write_reference(path: Path, positions: list, cases: dict[int, list[Case]]) -> None:
-    """The served outputs per batch size, position by position: what a browser witness (release step 4) holds a backend to."""
+    """The served outputs per batch size, position by position, that a browser witness holds a backend to; Raises: OSError — the file cannot be written."""
     def per_position(pairs: list[Case]) -> dict[str, list]:
         out: dict[str, list] = {"logits": [], "probs": [], "value": []}
         for inputs, ref in pairs:

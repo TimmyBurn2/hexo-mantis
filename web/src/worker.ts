@@ -18,7 +18,7 @@ export type Host = {
   glue(assets: string): Promise<{ glue: typeof Glue; moduleBytes: number }>;
   fetchBytes(url: string): Promise<Uint8Array<ArrayBuffer>>;
   ort(assets: string): Promise<typeof Ort | null>;
-  adapter(): Promise<string | null>;
+  adapter(): Promise<{ handle: unknown; label: string } | null>;
   now(): number;
   macrotask(): Promise<void>;
 };
@@ -118,7 +118,9 @@ export function handler(host: Host): (msg: Request) => Promise<Reply | null> {
     const adapter = choice === "cpu" ? null : await host.adapter();
     const gpu = async (): Promise<Backend | null> => {
       const ort = adapter === null ? null : await host.ort(assets);
-      if (ort === null) return null;
+      if (ort === null || adapter === null) return null;
+      // ORT runs on the adapter the witness was admitted on, never one it asks for itself.
+      (ort.env.webgpu as { adapter?: unknown }).adapter = adapter.handle;
       const onnx = await net.file(".fp32.onnx");
       const session = await ort.InferenceSession.create(onnx, { executionProviders: ["webgpu"], graphOptimizationLevel: "all" });
       return ortBackend(ort, session, EDGE_CAP);
@@ -131,7 +133,8 @@ export function handler(host: Host): (msg: Request) => Promise<Reply | null> {
         new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4), feat);
       return cpuBackend(engine, glue);
     };
-    const candidates = choice === "cpu" ? [cpu] : choice === "webgpu" ? [gpu] : [gpu, cpu];
+    const candidates: Array<["webgpu" | "cpu", () => Promise<Backend | null>]> = choice === "cpu" ? [["cpu", cpu]]
+      : choice === "webgpu" ? [["webgpu", gpu]] : [["webgpu", gpu], ["cpu", cpu]];
     const line = manifest.witness.lines.fp32!;
     const chosen = await select(candidates, (b) => witness(b, build, ref, line, d.leaf_batch_size, host.now));
     if (!("backend" in chosen)) throw named("NoBackendPassed", JSON.stringify(chosen.rows));
@@ -139,7 +142,7 @@ export function handler(host: Host): (msg: Request) => Promise<Reply | null> {
     if (backend.kind === "webgpu") engine = build_engine(false);
     // The witness's cost a leaf until a turn measures its own; root phases fold into it, as after a turn.
     engine.set_costs(Math.max(chosen.row.ms / chosen.row.leaves, 1e-3), 0);
-    info = describe(adapter, chosen.row, chosen.rows);
+    info = describe(adapter?.label ?? null, chosen.row, chosen.rows);
     return info;
   }
 
@@ -151,9 +154,8 @@ export function handler(host: Host): (msg: Request) => Promise<Reply | null> {
     };
   }
 
-  function newGame(opening: Position, clock: Clock): void {
-    const turnMs = "turnMs" in clock ? clock.turnMs : undefined;
-    engine.new_game(flat(cadence(opening)), undefined, turnMs);
+  function newGame(opening: Position, clock: Clock | Budget): void {
+    engine.new_game(flat(cadence(opening)), "sims" in clock ? clock.sims : undefined, "turnMs" in clock ? clock.turnMs : undefined);
   }
 
   async function playTurn(budget: Budget): Promise<TurnResult> {
@@ -168,20 +170,24 @@ export function handler(host: Host): (msg: Request) => Promise<Reply | null> {
           engine.submit_pending(host.now());
         } else {
           const pending = engine.pending_batch();
-          const out = await backend.run(arraysOf(pending, feat));
-          pending.free();
-          engine.submit(out.probs, out.value, host.now());
+          try {
+            const out = await backend.run(arraysOf(pending, feat));
+            engine.submit(out.probs, out.value, host.now());
+          } finally {
+            pending.free();
+          }
         }
         await host.macrotask();
-        if (aborted) {
-          engine.abort();
-          throw named("AbortError", "the turn was aborted; the board is as before it");
-        }
+        if (aborted) throw named("AbortError", "the turn was aborted; the board is as before it");
       }
       const turn = camel(JSON.parse(engine.turn_json()!)) as Omit<TurnResult, "rows">;
       if (turn.servedLeaves > 0) info = { ...info, leafMs: turn.wallMs / turn.servedLeaves };
       info = { ...info, minTurnMs: engine.min_turn_ms ?? null, peakBytes: glue.memory_bytes() };
       return { ...turn, rows: JSON.parse(engine.rows_json()) as Record<string, number> };
+    } catch (e) {
+      // Any refusal mid-turn (an abort, a backend that failed, the engine's own) leaves the board as before the turn.
+      engine.abort();
+      throw e;
     } finally {
       busy = false;
     }
@@ -195,7 +201,7 @@ export function handler(host: Host): (msg: Request) => Promise<Reply | null> {
     playTurn: async (budget: Budget) => ({ ...(await playTurn(budget)), info }),
     analyse: async (position: Position, budget: Budget) => {
       if (busy) throw named("OutOfStep", "a turn is in play");
-      newGame(position, "turnMs" in budget ? { turnMs: budget.turnMs } : { unlimited: true });
+      newGame(position, budget);
       return { ...(await playTurn(budget)), info };
     },
     dispose: () => {
@@ -251,7 +257,7 @@ export const browserHost: Host = {
     }
     // A software adapter (SwiftShader) is no GPU: the CPU path's own forward beats it.
     if (adapter === null || (adapter.info as GPUAdapterInfo & { isFallbackAdapter?: boolean }).isFallbackAdapter) return null;
-    return `${adapter.info.vendor} ${adapter.info.architecture}`.trim();
+    return { handle: adapter, label: `${adapter.info.vendor} ${adapter.info.architecture}`.trim() };
   },
   now: () => performance.now(),
   macrotask: () => new Promise((resolve) => {

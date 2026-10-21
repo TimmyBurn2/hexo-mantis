@@ -21,18 +21,32 @@ const NEIGHBOURS: Array<[number, number]> = [[1, 0], [0, 1], [-1, 1], [-1, 0], [
 const sign = (side: Side) => (side === "x" ? 1 : -1);
 const key = (q: number, r: number) => `${q},${r}`;
 
-/** The move response for a turn: two pieces (a winning first stone padded by its first empty neighbour) and the
- * root's value, x-positive as htttx counts it (a root solver's decided stone is a proven win for the mover). */
-export function response(turn: TurnResult, side: Side, occupied: Set<string>, requestId: number | undefined): unknown {
+/** The first empty cell around (q, r): its neighbours in a fixed order, then each wider ring, all within the rules'
+ * radius of a stone; a winning first stone's partner, which the arena checks for legality and never places. */
+export function padding(q: number, r: number, taken: Set<string>): Cell {
+  for (const [dq, dr] of NEIGHBOURS) if (!taken.has(key(q + dq, r + dr))) return { q: q + dq, r: r + dr };
+  for (let ring = 2; ring <= 8; ring++) {
+    for (let dq = -ring; dq <= ring; dq++) {
+      for (let dr = -ring; dr <= ring; dr++) {
+        if (Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr)) === ring && !taken.has(key(q + dq, r + dr))) {
+          return { q: q + dq, r: r + dr };
+        }
+      }
+    }
+  }
+  throw new Error("no empty cell within the rules' radius");
+}
+
+/** The move response for a turn that was due `due` stones: two pieces (a winning first stone padded) and the root's
+ * value, x-positive as htttx counts it (a decided stone is a proven win, as is a turn that ended early). */
+export function response(turn: TurnResult, side: Side, occupied: Set<string>, requestId: number | undefined, due: number): unknown {
   const pieces = turn.stones.map((s) => ({ q: s.cell[0], r: s.cell[1] }));
   if (pieces.length === 1) {
     const [q, r] = turn.stones[0]!.cell;
-    const taken = new Set([...occupied, key(q, r)]);
-    const free = NEIGHBOURS.map(([dq, dr]) => ({ q: q + dq, r: r + dr })).find((c) => !taken.has(key(c.q, c.r)))!;
-    pieces.push(free);
+    pieces.push(padding(q, r, new Set([...occupied, key(q, r)])));
   }
   const last = [...turn.stones].reverse().find((s) => s.rootValue !== null);
-  const won = turn.stones.length === 1 || turn.stones.some((s) => s.decided);
+  const won = turn.stones.length < due || turn.stones.some((s) => s.decided);
   const value = won ? 1 : Math.max(-1, Math.min(1, last?.rootValue ?? 0));
   return { type: "move_response", move: { pieces, evaluation: { heuristic: sign(side) * value } },
     ...(requestId === undefined ? {} : { request_id: requestId }) };
@@ -49,33 +63,37 @@ export function attachArena(port: Port, engine: Engine, version: string): void {
 
   const request = async (packet: { side: Side; previous: Array<{ side: Side; pieces: Cell[] }>; move_time_limit?: number;
     request_id?: number }): Promise<void> => {
-    // A request interrupted while it waited is never started: the slot would count its answer a stray.
-    if (packet.request_id !== undefined && interrupted.delete(packet.request_id)) return;
-    const unseen = packet.previous.flatMap((t) => t.pieces.map((c) => ({ ...c, p: t.side })))
-      .filter((c) => !occupied.has(key(c.q, c.r)));
-    if (fresh) {
-      const stones = [...cells, ...unseen].map((c) => ({ q: c.q, r: c.r, p: sign(c.p) as 1 | -1 }));
-      const position: Position = { stones, toMove: sign(packet.side) as 1 | -1, stonesLeft: stones.length === 0 ? 1 : 2 };
-      await engine.newGame(position, { turnMs: ANALYSIS_CLOCK_MS });
-      occupied.clear();
-      fresh = false;
-    } else if (unseen.length > 0) {
-      await engine.play(unseen);
-    }
-    for (const c of [...cells, ...unseen]) occupied.add(key(c.q, c.r));
-    cells = [];
-    const budget: Budget = packet.move_time_limit === undefined ? { unlimited: true } : { turnMs: packet.move_time_limit * 1000 };
-    outstanding = packet.request_id;
+    const id = packet.request_id;
+    // An interrupted request is never started, played on or answered: the slot would count its answer a stray.
+    const dropped = () => id !== undefined && interrupted.has(id);
+    outstanding = id;
     try {
+      if (dropped()) return;
+      const unseen = packet.previous.flatMap((t) => t.pieces.map((c) => ({ ...c, p: t.side })))
+        .filter((c) => !occupied.has(key(c.q, c.r)));
+      let due = 2;
+      if (fresh) {
+        const stones = [...cells, ...unseen].map((c) => ({ q: c.q, r: c.r, p: sign(c.p) as 1 | -1 }));
+        due = stones.length === 0 ? 1 : 2;
+        fresh = false;
+        await engine.newGame({ stones, toMove: sign(packet.side) as 1 | -1, stonesLeft: due as 1 | 2 }, { turnMs: ANALYSIS_CLOCK_MS });
+      } else if (unseen.length > 0) {
+        await engine.play(unseen);
+      }
+      for (const c of [...cells, ...unseen]) occupied.add(key(c.q, c.r));
+      cells = [];
+      if (dropped()) return;
+      const budget: Budget = packet.move_time_limit === undefined ? { unlimited: true } : { turnMs: packet.move_time_limit * 1000 };
       const turn = await engine.playTurn(budget);
-      const answer = response(turn, packet.side, occupied, packet.request_id);
+      const answer = response(turn, packet.side, occupied, id, due);
       for (const s of turn.stones) occupied.add(key(s.cell[0], s.cell[1]));
-      port.postMessage(answer);
+      if (!dropped()) port.postMessage(answer);
     } catch (e) {
-      // An interrupted request is answered with nothing, as the slot expects; any other refusal times the slot out.
+      // A refused request is answered with nothing and the slot times it out; the queue goes on to the next one.
       if (!(e instanceof Error && e.name === "AbortError")) console.error("mantis: move request refused", e);
     } finally {
       outstanding = undefined;
+      if (id !== undefined) interrupted.delete(id);
     }
   };
 
@@ -85,10 +103,11 @@ export function attachArena(port: Port, engine: Engine, version: string): void {
       queue = queue.then(() => {
         cells = packet.board?.cells ?? [];
         fresh = true;
+        occupied.clear();
       });
     } else if (packet.type === "interrupt") {
+      if (packet.request_id !== undefined) interrupted.add(packet.request_id);
       if (packet.request_id === undefined || packet.request_id === outstanding) engine.abort();
-      else interrupted.add(packet.request_id);
     } else if (packet.type === "move_request") {
       queue = queue.then(() => request(packet as Parameters<typeof request>[0]));
     }

@@ -17,7 +17,8 @@ const wins = (q: number, r: number, p: 1 | -1) => DIRS.some(([dq, dr]) => {
   for (const s of [1, -1]) for (let i = 1; board.get(key(q + s * i * dq, r + s * i * dr)) === p; i++) run++;
   return run >= 6;
 });
-const left = () => (board.size === 0 ? 1 : 2) - mine.length;
+// The stones x still owes this turn: one for the opening, then two; `mine` is already on the drawn board.
+const left = () => (board.size - mine.length === 0 ? 1 : 2) - mine.length;
 
 function rows(table: string, entries: Array<[string, unknown]>): void {
   $(table).replaceChildren(...entries.map(([k, v]) => {

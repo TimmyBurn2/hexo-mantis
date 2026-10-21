@@ -24,13 +24,14 @@ if (m.exporter.dirty !== false) { console.error("release.sh: the manifest says t
 if (!m.files.every((f) => f.passes_its_line !== false || f.dtype === "fp16")) { console.error("release.sh: a shipped file misses its line"); process.exit(1); }
 ' "$web/dist/net/$manifest"
 printf '{"manifest": "%s"}\n' "$manifest" > "$web/dist/net/index.json"
-rm -f "$web/dist/net/"*.fp16.onnx  # fp16 ships only after its own read (R399(a)); run13's 120k missed it
+rm -f "$web/dist/net/"*.fp16.onnx  # fp16 ships only once a net passes its own fp16 line
 (cd "$web" && MANTIS_WEB_FIXTURE="$web/dist" node --test test/*.test.ts)
-(cd "$web" && node scripts/webgpu.mjs dist/net "$manifest" "$reference" "$web/dist/net/webgpu_witness.json")
+# The witness record names this desk's browser and GPU: it stays beside the tarball, never in it.
+(cd "$web" && node scripts/webgpu.mjs dist/net "$manifest" "$reference" "$web/dist/webgpu_witness.json")
 node -e '
 const r = require(process.argv[1]);
 const failed = !r.ok || r.thirdPartyFetches.length > 0 || !Object.values(r.witness).every((w) => w.pass);
 if (failed) { console.error("release.sh: the WebGPU witness failed", JSON.stringify(r.witness)); process.exit(1); }
-' "$web/dist/net/webgpu_witness.json"
+' "$web/dist/webgpu_witness.json"
 (cd "$web" && npm pack --pack-destination "$web/dist")
 sha256sum "$web"/dist/*.tgz

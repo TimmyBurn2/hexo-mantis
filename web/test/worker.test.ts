@@ -103,3 +103,30 @@ test("a position becomes moves in turn cadence, and one no cadence reaches is re
     { q: 0, r: 0 }, { q: 1, r: 0 }, { q: 2, r: 0 }, { q: 5, r: 0 }]);
   assert.throws(() => cadence({ stones: [x(0, 0), x(1, 0)], toMove: -1, stonesLeft: 2 }), { name: "IllegalStone" });
 });
+
+test("in auto, a WebGPU candidate that throws is a failed row and the CPU path is taken", async () => {
+  const host = nodeHost();
+  host.adapter = async () => ({ handle: {}, label: "stub" });
+  host.ort = async () => { throw new Error("no WebGPU runtime here"); };
+  const info = ok(await call(handler(host), "init", ASSETS, "auto"));
+  const rows = info.rows as Array<{ backend: string; pass: boolean; error?: string }>;
+  assert.equal(info.backend, "cpu");
+  assert.deepEqual(rows.map((r) => [r.backend, r.pass]), [["webgpu", false], ["cpu", true]]);
+  assert.match(rows[0]!.error ?? "", /no WebGPU runtime/);
+});
+
+test("a turn that fails mid-loop for any reason leaves the board as before it and the engine usable", async () => {
+  const host = nodeHost();
+  const macrotask = host.macrotask;
+  let calls = 0;
+  host.macrotask = async () => {
+    if (++calls === 2) throw new Error("the device was lost");
+    await macrotask();
+  };
+  const { handle } = await started(host);
+  ok(await call(handle, "newGame", { stones: [{ q: 0, r: 0, p: 1 }], toMove: -1, stonesLeft: 2 }, { unlimited: true }));
+  const failed = await call(handle, "playTurn", { sims: 64 });
+  assert.ok(!failed.ok && /device was lost/.test(failed.error.message), JSON.stringify(failed));
+  const after = ok(await call(handle, "playTurn", { sims: 32 }));
+  assert.equal((after.stones as unknown[]).length, 2);
+});

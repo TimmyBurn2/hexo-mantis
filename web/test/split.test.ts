@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as ort from "onnxruntime-web";
-import { ortBackend, splitBatch, type Arrays, type Session } from "../src/backends.ts";
+import { arraysOf, ortBackend, splitBatch, type Arrays, type Session } from "../src/backends.ts";
 import { Glue, goldens } from "./host.ts";
 
 function batch(n: number): Arrays {
@@ -11,13 +11,13 @@ function batch(n: number): Arrays {
   const b = Glue.web_batch("gnn_axis_r8", Int32Array.from(positions.flatMap(([s]) => s.flat())),
     Uint32Array.from(positions.map(([s]) => s.length)), Int32Array.from(positions.map(([, side]) => side)),
     Int32Array.from(positions.map(([, , left]) => left)));
-  const ints = ["src", "dst", "code", "legal", "node_graph", "legal_graph", "divisor", "real", "mean_mask", "mean_den"] as const;
-  const a = { x: b.x(), feat: 11, ...Object.fromEntries(ints.map((k) => [k, b.i32(k)])) } as Arrays;
+  const a = arraysOf(b, b.x().length / b.i32("node_graph").length);
   b.free();
   return a;
 }
 
-/** A graph's value is its edges' code sum over its nodes' first features; a legal row's logit its node's in-degree. */
+/** Each graph's outputs from its own rows of every array (a call's re-basing error moves them); a legal row whose graph
+ * disagrees with its node's throws. */
 const stub = (calls: number[]): Session => ({
   async run(feeds) {
     const f = Object.fromEntries(Object.entries(feeds).map(([k, t]) => [k, (t as ort.Tensor).data])) as Record<string, any>;
@@ -25,9 +25,17 @@ const stub = (calls: number[]): Session => ({
     const graphs = f.mean_den.length;
     const value = new Float32Array(graphs);
     const degree = new Float32Array(f.node_graph.length);
+    const feat = f.x.length / f.node_graph.length;
     for (let e = 0; e < f.src.length; e++) {
-      value[f.node_graph[f.dst[e]]]! += f.code[e] * f.x[f.src[e] * 11];
+      value[f.node_graph[f.dst[e]]]! += f.code[e] * f.x[f.src[e] * feat];
       degree[f.dst[e]]! += 1;
+    }
+    for (let v = 0; v < f.node_graph.length; v++) {
+      value[f.node_graph[v]]! += 0.5 * f.divisor[v] + 0.25 * f.real[v] + 0.125 * f.mean_mask[v];
+    }
+    for (let g = 0; g < graphs; g++) value[g]! += f.mean_den[g];
+    for (let i = 0; i < f.legal.length; i++) {
+      if (f.node_graph[f.legal[i]] !== f.legal_graph[i]) throw new Error(`legal row ${i} is in another graph than its node`);
     }
     const logits = Float32Array.from(f.legal, (v: number) => degree[v]!);
     return { logits: { data: logits }, probs: { data: logits }, value: { data: value } };

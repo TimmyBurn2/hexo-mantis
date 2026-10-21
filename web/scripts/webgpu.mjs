@@ -21,7 +21,12 @@ const ARGS = ["--no-sandbox", "--enable-unsafe-webgpu", "--enable-features=Vulka
 const PAGE = '<!doctype html><meta charset="utf-8"><script type="module" src="/scripts/webgpu_page.mjs"></script>';
 
 const server = createServer(async (req, res) => {
-  const path = decodeURIComponent(new URL(req.url, "http://x").pathname);
+  let path;
+  try {
+    path = decodeURIComponent(new URL(req.url, "http://x").pathname);
+  } catch {
+    return res.writeHead(400).end();
+  }
   if (path === "/" || path === "/index.html") return res.writeHead(200, { "Content-Type": "text/html" }).end(PAGE);
   // Only files under the two roots are served: a decoded `..` cannot climb out of either.
   const base = path.startsWith("/net/") ? resolve(exportDir) : web;

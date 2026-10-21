@@ -21,10 +21,20 @@ function harness(next: () => Promise<TurnResult>) {
   const listeners: Array<(e: MessageEvent) => void> = [];
   const posted: unknown[] = [];
   const calls: Array<[string, unknown?, unknown?]> = [];
+  let refusal: Error | null = null;
+  let gate: Promise<void> = Promise.resolve();
   const port: Port = { postMessage: (m) => posted.push(m), addEventListener: (_, l) => listeners.push(l) };
   const engine: Engine = {
     info: () => { throw new Error("unused"); },
-    newGame: async (p: Position, c) => void calls.push(["newGame", p, c]),
+    newGame: async (p: Position, c) => {
+      calls.push(["newGame", p, c]);
+      await gate;
+      if (refusal !== null) {
+        const e = refusal;
+        refusal = null;
+        throw e;
+      }
+    },
     play: async (s) => void calls.push(["play", s]),
     playTurn: async (b: Budget) => (calls.push(["playTurn", b]), next()),
     analyse: async () => { throw new Error("unused"); },
@@ -34,7 +44,13 @@ function harness(next: () => Promise<TurnResult>) {
   attachArena(port, engine, "test");
   const send = (data: unknown) => listeners.forEach((l) => l({ data } as MessageEvent));
   const settle = () => new Promise((r) => setTimeout(r, 0));
-  return { posted, calls, send, settle };
+  const refuseNext = (e: Error) => void (refusal = e);
+  const holdNewGame = () => {
+    let release!: () => void;
+    gate = new Promise((r) => (release = r));
+    return () => release();
+  };
+  return { posted, calls, send, settle, refuseNext, holdNewGame };
 }
 
 test("the engine declares the five capabilities the slot requires before it reads a position", () => {
@@ -105,4 +121,29 @@ test("a request interrupted before it started is never played", async () => {
   release();
   await settle();
   assert.equal(turns, 1, `request 2 was played after its interrupt: ${JSON.stringify(calls)}`);
+});
+
+test("a position the engine refuses is answered with nothing, and the next position is still served", async () => {
+  const { posted, send, settle, refuseNext } = harness(async () => turnOf([stone(2, -1), stone(-1, 1)]));
+  refuseNext(Object.assign(new Error("no cadence reaches it"), { name: "IllegalStone" }));
+  send({ type: "setup", board: { cells: [{ q: 0, r: 0, p: "o" }] } });
+  send({ ...REQUEST, request_id: 1 });
+  send(SETUP);
+  send({ ...REQUEST, request_id: 2 });
+  await settle();
+  assert.deepEqual(posted.slice(1).map((p) => (p as { request_id: number }).request_id), [2]);
+});
+
+test("an interrupt that lands while the position is set up stops the request before its turn", async () => {
+  let turns = 0;
+  const { posted, send, settle, holdNewGame } = harness(async () => (turns++, turnOf([stone(2, -1), stone(-1, 1)])));
+  const release = holdNewGame();
+  send(SETUP);
+  send(REQUEST);
+  await settle();
+  send(INTERRUPT);
+  release();
+  await settle();
+  assert.equal(turns, 0);
+  assert.equal(posted.length, 1);
 });
