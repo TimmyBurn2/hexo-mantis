@@ -375,8 +375,8 @@ the batch's graphs.
 | `mean_mask` | i32 | [N] | 1 on a stone, or on every node of a graph with no stones |
 | `mean_den` | i32 | [G] | that graph's mask count; it also carries G to the graph |
 
-- **Dtypes.** Everything the engine builds is int32, as R398(b) has it. The graph casts the four count and mask arrays
-  to f32 once, on the GPU.
+- **Dtypes.** Everything the engine builds is int32, as R398(b) has it. The graph casts the three count and mask arrays
+  it divides or multiplies by (`divisor`, `mean_mask`, `mean_den`) to f32 once, on the GPU, and compares `real` to 0.
 - **What it removes from the graph.** Every int64 data op RESEARCH-WEB saw fall back to the CPU (Range,
   GreaterOrEqual, ReduceSum, GatherND, Sub, Less, Or, Cast, Expand), together with the `in_degree`, `real` and
   `counts` scatter-sums.
@@ -544,7 +544,7 @@ Each refusal is a test row. A later carried row needs its own goldens and its ow
 | section | fields |
 |---|---|
 | `stamp` | file name, sha256 of the file's bytes, `run_id`, `step`, `lineage`, `commit_sha`, `arch_kind`, `encoding`, `weights` (`ema` or `learner`), `net_param_hash` (recomputed after `deploy_state`; the stamp carries none) |
-| `exporter` | the tree's commit, `dirty` (an untracked file included), torch, onnx, onnxscript, onnxruntime, opset and the export's seconds |
+| `exporter` | the tree's commit, `dirty` (tracked changes, read before anything is written; true when git cannot say), torch, onnx, onnxscript, onnxruntime, opset and the export's seconds |
 | `encoding` | name, `registry_sha`, `win_length`, `graph_radius`, `trunk_size`, `empty_edges`, `node_feat_dim`, vocabulary rows (91) |
 | `deploy.resolved` | §2.2's first table, as the resolvers returned it from the stamp's `config` |
 | `deploy.player` | §2.2's second table, as the player's constants (the player refuses a manifest that disagrees with its own). It arrives with the player in L2 and moves contract #13 to v2; manifest v1 holds `deploy.resolved` alone |
@@ -751,7 +751,7 @@ repo_design §1 and CLAUDE.md's map line.
 
 | gate | runs | reds on |
 |---|---|---|
-| 20 export pipeline witness (L1) | `pytest tests/tools/test_export_web.py`: the tiny stamps through `export_web.py`; W1 at ORT CPU 1 and default threads; W2 native (from L2); W1's and W2's planted breaks red; the re-expression's refusal red; the detector's refusals; the zero-ScatterND census; the manifest's fields | any gating line, any refusal not raised, any ScatterND, a planted break that stays green |
+| 20 export pipeline witness (L1) | `pytest tests/tools/test_export_web.py`: the tiny stamps through `export_web.py`; W1 at ORT CPU 1 and default threads; W2 native (from L2); W1's and W2's planted breaks red; the re-expression's refusal red; the detector's refusals; the census of no ScatterND, no GatherND and every index a Gather or a scatter reads int32 (an untyped index refuses); the manifest's fields | any gating line, any refusal not raised, any ScatterND, a planted break that stays green |
 | 21 web package (L3) | `make web` (wasm32 build + wasm-bindgen), `tsc --noEmit`, and `node --test web/test` on the tiny stamp's export | a build failure, a type error, a test, W2 in wasm or its break |
 | 4 (from L2) | adds the player's wasm32 `cargo check` | a dependency or call the wasm build cannot carry |
 | 2a / 2b | `mantis-player`'s Rust tests and clippy, as a workspace member: the budget function, the cache port, the step machine, the served-sims pin (§13 A3), the error-parity test | as today |

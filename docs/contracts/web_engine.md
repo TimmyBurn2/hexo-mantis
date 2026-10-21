@@ -53,7 +53,7 @@ R399(h)), and listed in the manifest with its sha256 and bytes.
 
 | file | contents |
 |---|---|
-| `<stem>.fp32.onnx` | torch.onnx's dynamo export of the served forward over the batch, opset 18, N, E, L and G dynamic; every scatter-sum is ScatterElements(add), the maxes ScatterElements(max), every gather a Gather; every batch-sized index a Gather or a scatter reads is int32 by inferred type (`narrow_index_casts`); a ScatterND, a GatherND or an int64 batch-sized index refuses the export |
+| `<stem>.fp32.onnx` | torch.onnx's dynamo export of the served forward over the batch, opset 18, N, E, L and G dynamic; every scatter-sum is ScatterElements(add), the maxes ScatterElements(max), every gather a Gather; every index a Gather or a scatter reads is int32 by inferred type (`narrow_index_casts`), a shape op's static int64 aside; a ScatterND, a GatherND or any other index, an untyped one included, refuses the export |
 | `<stem>.fp16.onnx` | the same graph with every float initializer fp16 holds finite stored fp16 and cast to fp32 where read (a constant like finfo(f32).min stays fp32); compute stays fp32 |
 | `<stem>.weights.bin` | the Rust forward's tensors, raw f32, linear weights transposed (in × out), in the manifest's tensor table's order |
 | `<stem>.witness.json` | the device witness: the five openings and eleven goldens spread over stone count, with the served `logits`, `probs` per position and `value` |
@@ -64,7 +64,7 @@ R399(h)), and listed in the manifest with its sha256 and bytes.
 | section | fields |
 |---|---|
 | `stamp` | `file`, `sha256` of its bytes, `run_id`, `step`, `lineage`, `commit_sha`, `arch_kind`, `encoding`, `weights` (`ema` or `learner`), `net_param_hash` (recomputed; the stamp carries none), `arch` (its widths) |
-| `exporter` | `commit`, `dirty`, `torch`, `onnx`, `onnxscript`, `onnxruntime`, `opset`, `export_s` |
+| `exporter` | `commit`, `dirty` (tracked changes, read before any file is written; true when git cannot say), `torch`, `onnx`, `onnxscript`, `onnxruntime`, `opset`, `export_s` |
 | `encoding` | `name`, `registry_sha` (the compiled registry's), `win_length`, `graph_radius`, `trunk_size`, `empty_edges`, `node_feat_dim`, `edge_vocab_rows` |
 | `deploy.resolved` | from the stamp's own config through the run's resolvers: `search_kind`, `c_puct`, `fpu_reduction`, `quiescence_enabled`, `quiescence_blend_2`, `leaf_batch_size`, `tactics` (the audit's `mode` included) |
 | `inputs`, `outputs` | the names above, in the graph's order |
