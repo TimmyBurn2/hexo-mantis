@@ -7,7 +7,6 @@ import argparse
 import hashlib
 import json
 import os
-import subprocess
 import sys
 import time
 from dataclasses import asdict, dataclass
@@ -34,7 +33,7 @@ from mantis.selfplay.graph_collate import stone_mask_from_batch
 from mantis.selfplay.inference_local import LocalInferenceEngine
 from mantis.selfplay.served_graphs import SMALL_POP_FLOOR_NODES
 from mantis.train.checkpoints import deploy_state, load_checkpoint
-from mantis.util.git import head_sha
+from mantis.util.git import head_sha, is_dirty
 
 # ORT 1.31 reports to an outside endpoint at import unless this is set; the export and its gate send nothing.
 os.environ.setdefault("ORT_DISABLE_TELEMETRY", "1")
@@ -57,6 +56,8 @@ OPENINGS: tuple[tuple[list[tuple[int, int, int]], int, int], ...] = (
 DEVICE_WITNESS_GOLDENS = 11
 #: Ops that read an int32 index as well as an int64 one, by the input slot that carries it.
 INDEX_SLOTS = {"Gather": 1, "GatherElements": 1, "ScatterElements": 1, "Unsqueeze": 0, "Expand": 0, "Reshape": 0}
+#: The ops whose index input must reach the written graph as int32 wherever it is sized by the batch.
+INDEX_READERS = {"Gather": 1, "GatherElements": 1, "ScatterElements": 1}
 
 #: The detector's closed table: a carried value, or a refusal with its reason; anything else is not carried.
 CARRIED_KINDS = ("GnnArchV2", "GnnArchV2SoftPolicy", "GnnArchV2SoftPolicyFuture")
@@ -283,26 +284,37 @@ def export_onnx(wrapper: nn.Module, sample: dict[str, np.ndarray], path: Path, o
     onnx.checker.check_model(onnx.load(str(path)))
 
 
+def _value_types(model: onnx.ModelProto) -> dict[str, tuple[int, bool]]:
+    """Every named value's inferred element type, and whether its shape has a dimension the batch sizes."""
+    graph = onnx.shape_inference.infer_shapes(model).graph
+    out = {}
+    for v in [*graph.input, *graph.value_info, *graph.output]:
+        tensor = v.type.tensor_type
+        out[v.name] = (tensor.elem_type, any(d.HasField("dim_param") or not d.HasField("dim_value") for d in tensor.shape.dim))
+    for init in graph.initializer:
+        out[init.name] = (init.data_type, False)
+    return out
+
+
 def narrow_index_casts(path: Path) -> None:
-    """Rewire every int32 input's cast to int64 whose readers take either width straight to the input, then re-check with shape inference."""
+    """Drop every Cast of an int32 value to int64 whose every read takes either width (`INDEX_SLOTS`), wiring its readers to the int32 value; Raises: onnx.checker.ValidationError, onnx.shape_inference.InferenceError — the narrowed graph does not type-check."""
     model = onnx.load(str(path))
-    graph = model.graph
-    int32 = {i.name for i in graph.input if i.type.tensor_type.elem_type == TensorProto.INT32}
-    readers: dict[str, list[onnx.NodeProto]] = {}
+    graph, types = model.graph, _value_types(model)
+    readers: dict[str, list[tuple[onnx.NodeProto, int]]] = {}
     for node in graph.node:
-        for name in node.input:
-            readers.setdefault(name, []).append(node)
+        for slot, name in enumerate(node.input):
+            readers.setdefault(name, []).append((node, slot))
     dropped = []
     for node in graph.node:
         to = next((a.i for a in node.attribute if a.name == "to"), None)
-        if node.op_type != "Cast" or node.input[0] not in int32 or to != TensorProto.INT64:
+        if node.op_type != "Cast" or to != TensorProto.INT64 or types.get(node.input[0], (0, False))[0] != TensorProto.INT32:
             continue
-        users = readers.get(node.output[0], [])
-        if not users or any(INDEX_SLOTS.get(u.op_type) is None or list(u.input).index(node.output[0]) != INDEX_SLOTS[u.op_type]
-                            for u in users):
+        reads = readers.get(node.output[0], [])
+        if not reads or node.output[0] in {o.name for o in graph.output} or any(
+                INDEX_SLOTS.get(u.op_type) != slot for u, slot in reads):
             continue
-        for u in users:
-            u.input[list(u.input).index(node.output[0])] = node.input[0]
+        for u, slot in reads:
+            u.input[slot] = node.input[0]
         dropped.append(node)
     for node in dropped:
         graph.node.remove(node)
@@ -312,15 +324,15 @@ def narrow_index_casts(path: Path) -> None:
 
 
 def graph_refusal(ops: dict[str, int], model: onnx.ModelProto) -> str | None:
-    """Why a written graph is refused: a ScatterND, a GatherND, or an int32 input still cast to int64; None if neither."""
+    """Why a written graph is refused: a ScatterND, a GatherND, or a batch-sized index an index reader reads as int64."""
     if "ScatterND" in ops:
         return "a ScatterND, which races under threaded ORT kernels"
     if "GatherND" in ops:
         return "a GatherND, whose int64 index the int32 batch was built to remove"
-    inputs = {i.name for i in model.graph.input}
-    widened = [n.input[0] for n in model.graph.node if n.op_type == "Cast" and n.input[0] in inputs
-               and next((a.i for a in n.attribute if a.name == "to"), None) == TensorProto.INT64]
-    return f"the int32 inputs {sorted(widened)} cast to int64" if widened else None
+    types = _value_types(model)
+    wide = sorted({n.input[slot] for n in model.graph.node if (slot := INDEX_READERS.get(n.op_type)) is not None
+                   and len(n.input) > slot and types.get(n.input[slot]) == (TensorProto.INT64, True)})
+    return f"int64 batch-sized indices {wide}" if wide else None
 
 
 def fp16_storage(src: Path, dst: Path) -> None:
@@ -395,12 +407,6 @@ def file_row(path: Path, **extra: Any) -> dict[str, Any]:
             **extra}
 
 
-def tree_dirty() -> bool:
-    """Whether the exporter's tree holds any change git sees, an untracked file included."""
-    out = subprocess.run(["git", "status", "--porcelain"], cwd=REPO, capture_output=True, text=True, check=False)
-    return out.returncode != 0 or bool(out.stdout.strip())
-
-
 def device_witness(net: nn.Module, spec: Any, config: dict, encoding: str) -> dict[str, Any]:
     """The 16 positions a device runs at start (the openings and goldens spread over stone count) and their served outputs."""
     goldens = sorted(golden_positions(512), key=lambda p: len(p[0]))
@@ -415,7 +421,8 @@ def device_witness(net: nn.Module, spec: Any, config: dict, encoding: str) -> di
 
 
 def export(checkpoint: Path, out: Path, *, n_positions: int = 512, opset: int = 18) -> dict[str, Any]:
-    """Detect, re-express, export, witness and write the manifest for `checkpoint` into `out`; Raises: ExportRefused — an uncarried stamp, an unchecked registry, a foreign batch, a re-expression not bit-identical, or a refused graph; CheckpointStampError — the stamp itself; RuntimeError, ValueError, KeyError — a served group split, a seam guard, a config without its deploy or self-play block; onnx.checker.ValidationError — a written graph ONNX rejects."""
+    """Detect, re-express, export, witness and write the manifest for `checkpoint` into `out`; Raises: ExportRefused — an uncarried stamp, an unchecked registry, a foreign batch, a re-expression not bit-identical, or a refused or untyped graph (its files removed); CheckpointStampError — the stamp itself; RuntimeError, ValueError, KeyError — a served group split, a seam guard, a config without its deploy or self-play block; onnx.checker.ValidationError — the fp16 file ONNX rejects; onnxruntime's errors — a session ORT cannot build or run."""
+    dirty = is_dirty(REPO)  # read before any file is written, so an --out inside the tree cannot dirty its own manifest
     ck = load_checkpoint(checkpoint, declared_encoding=None, declared_future_head=None)
     config = ck.config
     if not isinstance(config, dict):
@@ -437,6 +444,7 @@ def export(checkpoint: Path, out: Path, *, n_positions: int = 512, opset: int = 
 
     positions = golden_positions(n_positions)
     cases = witness_cases(net, spec, config, encoding, positions, BATCHES)
+    assert len(OPENINGS) not in BATCHES, "the openings' batch would overwrite a golden one"
     cases |= witness_cases(net, spec, config, encoding, list(OPENINGS), (len(OPENINGS),))
     with torch.inference_mode():
         for b, pairs in cases.items():
@@ -451,11 +459,15 @@ def export(checkpoint: Path, out: Path, *, n_positions: int = 512, opset: int = 
     fp32, fp16 = out / f"{stem}.fp32.onnx", out / f"{stem}.fp16.onnx"
     t0 = time.perf_counter()
     export_onnx(wrapper, cases[8][0][0], fp32, opset)
-    narrow_index_casts(fp32)
+    try:
+        narrow_index_casts(fp32)
+        refusal = graph_refusal(op_census(fp32), onnx.load(str(fp32)))
+    except (onnx.checker.ValidationError, onnx.shape_inference.InferenceError) as exc:
+        refusal = f"a narrowing that does not type-check ({exc})"
     export_s = time.perf_counter() - t0
-    refusal = graph_refusal(op_census(fp32), onnx.load(str(fp32)))
     if refusal is not None:
-        fp32.unlink()
+        for stale in out.glob(f"{stem}.*"):
+            stale.unlink()  # this stem's files from any earlier export go too, so no manifest names a refused graph
         raise ExportRefused("graph", f"the written graph holds {refusal}")
     fp16_storage(fp32, fp16)
     weights_path = out / f"{stem}.weights.bin"
@@ -478,7 +490,7 @@ def export(checkpoint: Path, out: Path, *, n_positions: int = 512, opset: int = 
                   "commit_sha": ck.metadata.commit_sha, "arch_kind": arch_kind, "encoding": encoding,
                   "weights": weights, "net_param_hash": net_param_hash(net),
                   "arch": {k: v for k, v in asdict(arch).items() if k != "representation"}},
-        "exporter": {"commit": head_sha(REPO), "dirty": tree_dirty(), "torch": torch.__version__,
+        "exporter": {"commit": head_sha(REPO), "dirty": dirty, "torch": torch.__version__,
                      "onnx": onnx.__version__, "onnxscript": onnxscript.__version__, "onnxruntime": ort.__version__,
                      "opset": opset, "export_s": round(export_s, 1)},
         "encoding": {"name": encoding, "registry_sha": _engine.registry_sha_hex(), "win_length": spec.win_length,

@@ -98,8 +98,8 @@ def test_every_carried_kind_and_row_exports_and_holds_the_fp32_lines_at_one_and_
         assert manifest["files"][0]["passes_its_line"] is True
 
 
-def test_no_written_graph_holds_a_scatternd_a_gathernd_or_an_int32_input_cast_to_int64(exports) -> None:
-    """The batch is int32 so the graph reads it as int32: the written graph keeps no widening the int32 batch removed."""
+def test_no_written_graph_holds_a_scatternd_a_gathernd_or_an_int64_batch_index(exports) -> None:
+    """The batch is int32 so the graph reads it as int32: every batch-sized index a Gather or a scatter reads is int32."""
     for stamp, out, manifest in exports.values():
         for row in manifest["files"][:2]:
             assert row["ops"]["ScatterElements"] > 0, row["name"]
@@ -116,14 +116,36 @@ def test_an_unnarrowed_graph_is_refused_and_leaves_no_file(monkeypatch: pytest.M
     assert refused.value.field == "graph" and not list((tmp_path / "out").glob("*.onnx"))
 
 
-def test_the_graph_refusal_names_each_widening() -> None:
-    cast = helper.make_node("Cast", ["dst"], ["dst64"], to=TensorProto.INT64)
-    graph = helper.make_graph([cast], "g", [helper.make_tensor_value_info("dst", TensorProto.INT32, [None])],
-                              [helper.make_tensor_value_info("dst64", TensorProto.INT64, [None])])
-    model = helper.make_model(graph)
+def test_a_widened_index_is_refused_and_the_narrowing_takes_it_through_a_reshape(tmp_path: Path) -> None:
+    """index_select's own lowering: Reshape(int32) -> Cast(int64) -> Gather; refused as written, int32 once narrowed."""
+    nodes = [helper.make_node("Reshape", ["idx", "flat"], ["idx_flat"]),
+             helper.make_node("Cast", ["idx_flat"], ["idx64"], to=TensorProto.INT64),
+             helper.make_node("Gather", ["data", "idx64"], ["out"])]
+    graph = helper.make_graph(nodes, "g", [helper.make_tensor_value_info("data", TensorProto.FLOAT, ["N", 4]),
+                                           helper.make_tensor_value_info("idx", TensorProto.INT32, ["E"])],
+                              [helper.make_tensor_value_info("out", TensorProto.FLOAT, ["E", 4])],
+                              [numpy_helper.from_array(np.array([-1], dtype=np.int64), "flat")])
+    model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
     assert "ScatterND" in (export_web.graph_refusal({"ScatterND": 1}, model) or "")
     assert "GatherND" in (export_web.graph_refusal({"GatherND": 1}, model) or "")
-    assert "dst" in (export_web.graph_refusal({"Cast": 1}, model) or "")
+    assert "idx64" in (export_web.graph_refusal({"Gather": 1}, model) or ""), "the widened index must be named"
+    path = tmp_path / "g.onnx"
+    onnx.save(model, str(path))
+    export_web.narrow_index_casts(path)
+    narrowed = onnx.load(str(path))
+    assert export_web.graph_refusal({"Gather": 1}, narrowed) is None
+    assert [n.op_type for n in narrowed.graph.node] == ["Reshape", "Gather"]
+
+
+def test_the_argmax_rule_reds_a_flip_the_value_lines_cannot_see() -> None:
+    """PLANTED BREAK: a top-2 swap beyond the gap moves no prob or value past fp16's line, and the argmax rule alone reds it."""
+    ref_logits = np.array([0.0, 0.03, -9.0, -9.0], dtype=np.float32)
+    ref = {"logits": ref_logits, "probs": np.zeros(4, np.float32), "value": np.zeros(1, np.float32)}
+    out = {"logits": ref_logits[[1, 0, 2, 3]], "probs": ref["probs"], "value": ref["value"]}
+    row = export_web.gaps(out, ref, np.zeros(4, np.int32), export_web.LINES["fp16"])
+    assert (row["argmax_agreed"], row["argmax_compared"]) == (0, 1)
+    assert not export_web.passes(row, export_web.LINES["fp16"])
+    assert export_web.passes({**row, "argmax_agreed": 1}, export_web.LINES["fp16"])
 
 
 def test_the_manifest_binds_the_stamp_the_files_and_the_resolved_block(exports) -> None:
@@ -153,12 +175,15 @@ def test_the_manifest_binds_the_stamp_the_files_and_the_resolved_block(exports) 
 def test_the_fp16_file_stores_only_what_fp16_holds_finite(exports) -> None:
     """A constant like finfo(f32).min would turn infinite in fp16, so it stays fp32: no stored value changes finiteness."""
     stamp, out, _manifest = exports[FUTURE]
-    source = {i.name: numpy_helper.to_array(i) for i in onnx.load(str(out / f"{stamp.stem}.fp32.onnx")).graph.initializer}
+    source = {i.name: numpy_helper.to_array(i) for i in onnx.load(str(out / f"{stamp.stem}.fp32.onnx")).graph.initializer
+              if i.data_type == TensorProto.FLOAT}
     halves = {i.name.removesuffix("__fp16"): numpy_helper.to_array(i)
               for i in onnx.load(str(out / f"{stamp.stem}.fp16.onnx")).graph.initializer if i.data_type == TensorProto.FLOAT16}
+    with np.errstate(over="ignore"):
+        kept = [n for n, a in source.items() if np.isfinite(a).all() and not np.isfinite(a.astype(np.float16)).all()]
+    assert kept, "the guard has nothing to keep: the fp32 graph should hold finfo(f32).min"
+    assert not any(n in halves for n in kept), "a value fp16 cannot hold finite was stored in fp16"
     assert halves and all(np.array_equal(np.isfinite(h), np.isfinite(source[n])) for n, h in halves.items())
-    assert any(not np.isfinite(a.astype(np.float16)).all() and np.isfinite(a).all() for a in source.values()), (
-        "the guard has nothing to keep: the fp32 graph should hold finfo(f32).min")
 
 
 def _broken(src: Path, dst: Path, name: str, change: Callable[[np.ndarray], np.ndarray]) -> Path:
