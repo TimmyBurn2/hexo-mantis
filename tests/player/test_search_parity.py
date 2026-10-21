@@ -206,8 +206,9 @@ def played(engine: LocalInferenceEngine, default_games: list) -> tuple[list, lis
 def _witnessed(head: list[list[Turn]], player: list[list[Turn]], decided: int) -> None:
     """Identical games, and every arm W3 holds the player to actually ran: reuse, the cache's hits, a decided stone."""
     assert _mismatches(head, player) == [], "the player and the head part on these games"
-    total = {k: sum(rows[k] for turns in head for _, rows in turns) for k in ("reuse_reroots", "cache_hits")}
-    assert total["reuse_reroots"] >= 1 and total["cache_hits"] >= 1, f"an arm went unread: {total}"
+    arms = ("reuse_reroots", "cache_hits", "cache_all_hit_calls")  # evictions need 8 192 entries: cache.rs's own test
+    total = {k: sum(rows[k] for turns in head for _, rows in turns) for k in arms}
+    assert all(total[k] >= 1 for k in arms), f"an arm went unread: {total}"
     assert decided >= 1, "no stone was decided by the root solver, so that arm went unread"
 
 
@@ -232,7 +233,7 @@ def test_the_two_adapters_give_the_same_rows_on_the_goldens(engine: LocalInferen
 
 
 def test_a_head_without_reuse_or_stopping_at_a_tie_is_told_apart(engine: LocalInferenceEngine,
-                                                                 played: tuple[list, list], default_games: list,
+                                                                 played: tuple[list, list, int], default_games: list,
                                                                  monkeypatch: pytest.MonkeyPatch) -> None:
     """PLANTED BREAKS: a head that re-roots by a new game, and one whose stop compares `>= left`, each part from the player."""
     _head_rows, player, _decided = played

@@ -252,6 +252,7 @@ abort() in any turn state ─► Ready, the board as before the turn
   - per stone: the cell, `last_sims`, `last_stopped`, decided-unsearched, the root value, and the top children
     (cell, visits, Q, prior);
   - per turn: the sims the budget set, the turn's wall ms, root ms and leaf ms;
+    (L2, as built: the wall ms and the served leaves; the root phases fold into the cost a leaf, `wall_ms / served_leaves`);
   - flags: `floor_over_clock` and `budget_pool_capped`;
   - the cache, reuse, select and tactics rows.
 

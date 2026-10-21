@@ -195,7 +195,7 @@ The wasm-only dependencies (`wasm-bindgen` pinned to the lock's one version, `js
 
 ## Pinning tests
 
-- `crates/mantis-player/src/batch.rs`, `cache.rs`, `budget.rs`, `player.rs` (unit tests) and
+- `crates/mantis-player/src/batch.rs`, `cache.rs`, `budget.rs` (unit tests) and
   `crates/mantis-player/tests/served_sims.rs` (gate 2a)
 - `tests/player/test_search_parity.py` (the default tier on the forced-win position and 32 goldens, the integration
   tier on it and 512, up to three turns each)

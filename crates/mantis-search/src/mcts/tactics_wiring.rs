@@ -380,6 +380,46 @@ mod tests {
         audit: None,
     };
 
+    #[test]
+    fn a_block_outside_its_ranges_is_refused_by_the_field_that_left_them() {
+        let audit = AuditConfig {
+            turns: 8,
+            nodes: 2_000,
+            k: 4,
+            m: 4,
+            total_nodes: 40_000,
+            mode: AuditMode::Hold,
+        };
+        let armed = TacticsConfig {
+            audit: Some(audit),
+            ..LEAF_ONLY
+        };
+        assert_eq!(armed.check(), Ok(()));
+        let breaks: [(fn(&mut TacticsConfig), &str); 7] = [
+            (|c| c.leaf_turns = 0, "leaf_turns"),
+            (|c| c.root_turns = 41, "root_turns"),
+            (
+                |c| c.audit.as_mut().map_or((), |a| a.turns = 0),
+                "audit turns",
+            ),
+            (|c| c.audit.as_mut().map_or((), |a| a.k = 0), "audit k"),
+            (|c| c.audit.as_mut().map_or((), |a| a.m = 1025), "audit m"),
+            (
+                |c| c.audit.as_mut().map_or((), |a| a.nodes = 0),
+                "budget of 0",
+            ),
+            (
+                |c| c.audit.as_mut().map_or((), |a| a.total_nodes = 0),
+                "budget of 0",
+            ),
+        ];
+        for (brk, field) in breaks {
+            let mut c = armed;
+            brk(&mut c);
+            assert!(c.check().is_err_and(|why| why.contains(field)), "{field}");
+        }
+    }
+
     /// A tactics-armed tree at `seq[..root]` with one node path down the rest: the tree, its leaf and the leaf's board.
     fn path_to_leaf(
         seq: &[(i32, i32)],
