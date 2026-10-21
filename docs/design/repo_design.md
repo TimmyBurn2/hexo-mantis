@@ -323,7 +323,8 @@ ADDED (v7 → v8). `docs/contracts/run_config_schema.md` is the version authorit
 - AMENDMENT (R398(b)–(c), DEPLOY-WEB L1, 2026-10-21): the web export's ONNX toolchain (`onnx`, `onnxscript`,
   `onnxruntime` CPU, pinned) is the `web-export` dependency group, a DEFAULT group, so the gates have it. It is declared
   in conflict with the `teacher` extra, whose `onnxruntime-gpu` is the same module: `--extra teacher` needs
-  `--no-group web-export`. `tools/export_web.py` writes a stamp's browser net (contract #13).
+  `--no-group web-export`, and a venv synced that way has no ONNX toolchain, so gate 20's module does not collect
+  there. `tools/export_web.py` writes a stamp's browser net (contract #13).
 - Vendoring: `vendor/pins.toml` (url + commit sha + optional tracked patch) + one
   `make vendor` fetcher into gitignored `vendor/external/`. Single mechanism; features
   depending on unfetched vendors skip loudly with the fetch command named.

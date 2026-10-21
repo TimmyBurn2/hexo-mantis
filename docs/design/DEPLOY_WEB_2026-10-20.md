@@ -102,8 +102,8 @@ it. It orders nothing until the architect's word before L1.
     spawns);
   - `assemble_ls_from_gnn_probs`.
 
-  No second leaf build, key or pack exists. The crate never reaches the runner, the queues' threaded pop, or
-  `EvalCache`.
+  No second leaf build, key or pack exists. Of the runner it takes only `runner::params::resolve_geometry`, the one
+  geometry resolution; it never reaches the queues' threaded pop or `EvalCache`.
 - **wasm32.** The wasm-only dependencies live under `[target.'cfg(target_arch = "wasm32")'.dependencies]` in this
   crate's manifest only:
   - `wasm-bindgen`, pinned exactly;
@@ -380,6 +380,12 @@ the batch's graphs.
 - **What it removes from the graph.** Every int64 data op RESEARCH-WEB saw fall back to the CPU (Range,
   GreaterOrEqual, ReduceSum, GatherND, Sub, Less, Or, Cast, Expand), together with the `in_degree`, `real` and
   `counts` scatter-sums.
+- **What L1 found, and fixed (REVIEW-1 of L1).** torch's scatter wants an int64 index, so the dynamo export re-casts
+  the int32 inputs to int64 inside the graph, and `t[index]` lowers to GatherND. The exporter reads every gather
+  through `index_select`, and a pass after the export (`narrow_index_casts`) rewires each int32 input's cast to
+  int64 straight to the input wherever its readers take either width (Gather, ScatterElements's index, Unsqueeze,
+  Expand, Reshape). It refuses a graph that still holds a GatherND or an int32 input cast to int64. The [E, H]
+  expanded index is therefore int32.
 - **What is left:**
   - Gather, f32 arithmetic and LayerNorm;
   - ScatterElements(add): one per layer (four at 4×256), the mean, and the softmax denominator;
@@ -537,15 +543,15 @@ Each refusal is a test row. A later carried row needs its own goldens and its ow
 | section | fields |
 |---|---|
 | `stamp` | file name, sha256 of the file's bytes, `run_id`, `step`, `lineage`, `commit_sha`, `arch_kind`, `encoding`, `weights` (`ema` or `learner`), `net_param_hash` (recomputed after `deploy_state`; the stamp carries none) |
-| `exporter` | the tree's commit, `dirty`, torch, onnx, onnxscript and opset |
+| `exporter` | the tree's commit, `dirty` (an untracked file included), torch, onnx, onnxscript, onnxruntime, opset and the export's seconds |
 | `encoding` | name, `registry_sha`, `win_length`, `graph_radius`, `trunk_size`, `empty_edges`, `node_feat_dim`, vocabulary rows (91) |
 | `deploy.resolved` | §2.2's first table, as the resolvers returned it from the stamp's `config` |
 | `deploy.player` | §2.2's second table, as the player's constants (the player refuses a manifest that disagrees with its own). It arrives with the player in L2 and moves contract #13 to v2; manifest v1 holds `deploy.resolved` alone |
-| `files` | per file: name, sha256, bytes, dtype, scatter op census; for the weights file the tensor table |
-| `witness` | the lines; the goldens' path and sha256 (`d5c5a7ba…`); and one row per (backend, file, threads, B): max \|Δ\| logit, prob and value, argmax agreed / compared, ties, pass against that file's lines (fp32 or R399(a)'s fp16), where, when; a WebGPU-only ScatterND file's rows are marked "wrong under threaded CPU kernels (ORT #18048)" (R399(g)) |
+| `files` | per file: name, sha256, bytes; per ONNX file its dtype, op census and `passes_its_line` (every row of that file holds its line); for the weights file the tensor table |
+| `witness` | the lines; the goldens' path and sha256 (`d5c5a7ba…`); and one row per (backend, file, threads, B): max \|Δ\| logit, prob and value, argmax agreed / compared, its line (fp32 or R399(a)'s fp16) and pass; a WebGPU-only ScatterND file's rows are marked "wrong under threaded CPU kernels (ORT #18048)" (R399(g)) |
 
 - **Rows filled at export:** `ort-cpu` at 1 thread and at default threads, on both ONNX files, at B 1, 8 and 16; and
-  `rust-forward-native` (through the bridge).
+  `rust-forward-native` (through the bridge, from L2).
 - **Rows filled at release** (§10): `rust-forward-wasm-node` and `ort-web-webgpu` (with browser and adapter).
 - The player and the Worker refuse a manifest whose format, encoding, `registry_sha` or deploy kind they do not carry,
   or whose file sha256 does not match the bytes fetched.
@@ -569,7 +575,8 @@ graph, in f32, and the value is a fixed map of the graph's sum.
 - Given that, and one Rust builder under both, the outputs are bitwise equal.
 - The positions run at concurrency 1, one game at a time: bit identity is a claim at concurrency 1 only (R394(f)).
 
-**The tiny stamps.** Gates 20 and 21 export a random-init stamp of each carried (kind × encoding), seeded, written
+**The tiny stamps.** Gates 20 and 21 export a random-init stamp of each carried kind on `gnn_axis_r8`, and the
+`gnn_axis_r8_pruned` row on the future kind (four of the six pairs; the row changes only the batch), seeded, written
 through the one checkpoint writer into a temp directory. There are no loose weights in the tree. The real stamp's
 rows are a release step (§10).
 
@@ -860,6 +867,11 @@ Every leg ends with `make gates` and a fresh read-only review. L2's two sessions
     120k: \|Δ prob\| ≤ 2e-3, \|Δ value\| ≤ 2e-3, the same argmax wherever the reference's top-2 gap > 2e-2. Logits
     are reported, not gated. The known-bad, the fp16 file's last policy bias shifted by 0.05, must fail the prob line.
     Until the read, fp32 is the only shipped file.
+  - **L1's read (2026-10-21, `mantis-records/deploy-web/l1/READ.md`).** On run13's 120k the fp16 file MISSES the line:
+    |Δ prob| 2.26e-3 and |Δ value| 2.75e-3 against 2e-3, argmax 502/502. fp32 is the only shipped file. The ruled
+    known-bad cannot fail: the last policy layer has one output, so its bias shifts every logit alike and the softmax
+    ignores it. It read exactly the unperturbed file's prob and value. The proposed substitute, the last policy weight
+    ×1.05, read |Δ prob| 3.45e-2. Which control stands is the architect's, needed only if fp16 is ever to ship.
 - **A2 — scope.** The packet HALTs on "any edit to self-play". The port adds, additively:
   - `MCTSTree::with_pool` and `armed_sims_for` to `mantis-search`, with `new_full`'s and `MAX_ARMED_SIMS`'s values
     unchanged;

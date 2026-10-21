@@ -16,7 +16,10 @@ under a clock below `minTurnMs` the CPU path plays a 16-sim floor, counted and s
 budget rule and the arena's offered clocks. ρ stays 1, and a measured ρ is a later card. If the ScatterElements graph
 misses on WebGPU, the ScatterND graph ships for WebGPU only, marked; if it misses too, `RustForward` alone ships. The
 LAW-13, LAW-12 and LAW-06 readings are accepted, and the reserved deploy package retires. L1 may start.**
-(RULINGS R399; the R398 paragraph below stands where R399 does not move it.)
+(RULINGS R399; the R398 paragraph below stands where R399 does not move it.) DEPLOY-WEB's L1 exited on 2026-10-21:
+the exporter `tools/export_web.py`, the crate `mantis-player`'s batch and gate 20 landed, and on run13's 120k the
+fp32 ONNX holds its witness lines while the fp16 file misses R399(a)'s (fp32 only ships); R399(a)'s known-bad cannot
+fail as ruled, which is owed to the architect (CARD-DEPLOY-WEB).
 
 **R398 (2026-10-20): THE BOT SHIPS AS ONE WASM ENGINE WITH TWO NET BACKENDS, WITNESSED FROM THE STAMP. RESEARCH-WEB
 is accepted: the served path's ONNX passes golden equality, ORT's ScatterND(add) races under threads while the
@@ -855,3 +858,5 @@ The R398 paragraph, the average's end-read line and the latest-ruling line were 
 `deploy-web` over `origin/dev` `fd26b1d5`, from the ruling's text and RESEARCH-WEB's report (local).
 The R399 paragraph and the latest-ruling line were written 2026-10-21 at R399 on branch `deploy-web` over
 `origin/dev` `540a8720`, from the ruling's text.
+The R399 paragraph's DEPLOY-WEB L1 sentence was written 2026-10-21 at L1's exit on branch `deploy-web` over
+`origin/dev` `25e4698c`, from L1's read (local records).

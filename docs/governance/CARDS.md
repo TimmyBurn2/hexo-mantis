@@ -78,8 +78,16 @@ CARD-SAVE-AVERAGING-OFFLINE (EXECUTING on the desk, by (c)). (d) records the pro
 run14: the opponent/next-ply policy aux, PCZero path consistency, policy-surprise weighting, HL-Gauss, Net2Net
 deepening, MCGS at deploy, proof-verified start pools and DENSE-1's L2–L4.
 
-- **CARD-DEPLOY-WEB — L1 OPEN by R399(i) (2026-10-21): L0's design stands (pushed 2026-10-21, `540a8720`) and R399
-  rules its eight open items.** fp16 ships to WebGPU only under R399(a)'s pre-stated line on run13's 120k; the
+- **CARD-DEPLOY-WEB — L1 EXITED 2026-10-21 on branch `deploy-web`; L2 (the driver) is next.** L1 landed the crate
+  `mantis-player` with its int32 batch, the bridge's `web_batch`, `tools/export_web.py` and gate 20 (contract #13 v1).
+  The read of record on run13's 120k (local records `mantis-records/deploy-web/l1/READ.md`, pre-stated and hashed
+  first): fp32 PASSES at 1 and default ORT threads (|Δ logit| 4.96e-5, argmax 511/511, no ScatterND, no int64 index
+  in the graph); the fp16 file MISSES R399(a)'s line (|Δ prob| 2.26e-3, |Δ value| 2.75e-3 against 2e-3; argmax
+  502/502), so fp32 is the only shipped file. OWED to the architect: R399(a)'s known-bad (the last policy bias +0.05)
+  cannot fail the prob line, since the bias shifts every logit alike and the softmax ignores it; it read the
+  unperturbed file's prob and value exactly, while the proposed weight ×1.05 read |Δ prob| 3.45e-2. **Was: L1 OPEN
+  by R399(i) (2026-10-21): L0's design stands (pushed 2026-10-21, `540a8720`) and R399 rules its eight open
+  items.** fp16 ships to WebGPU only under R399(a)'s pre-stated line on run13's 120k; the
   additive `mantis-search` changes and three bridge bindings are not an edit to self-play (b); W3 and the player's
   served-sims test enter the protected set with L2 (c); no deadline stop, and under a clock below `minTurnMs` the CPU
   path plays a 16-sim floor (d); ρ stays 1 (f); if the ScatterElements graph misses on WebGPU, the ScatterND graph
