@@ -83,7 +83,16 @@ CARD-SAVE-AVERAGING-OFFLINE (EXECUTING on the desk, by (c)). (d) records the pro
 run14: the opponent/next-ply policy aux, PCZero path consistency, policy-surprise weighting, HL-Gauss, Net2Net
 deepening, MCGS at deploy, proof-verified start pools and DENSE-1's L2–L4.
 
-- **CARD-DEPLOY-WEB — L2 EXITED 2026-10-21 on branch `deploy-web`; L3 (the `web/` package) is next.** L2 landed the
+- **CARD-DEPLOY-WEB — L3 HALTED 2026-10-21 at §3.3's WebGPU measurement; the architect's word is owed.** L3 landed the
+  `web/` package (contract #13 v4: the typed API, the Worker, both backends, selection and the witness, the arena
+  adapter, the demo, `release.sh`, the WebGPU witness runner) and gate 21 (W2 in wasm and its break). The measurement,
+  pre-stated (local records `mantis-records/deploy-web/l3/`), on run13's 120k re-exported at manifest v2: W1 on WebGPU
+  PASSES at B 1 and 8 (|Δ logit| 4.96e-5, 511/511), and WebGPU is 5.79 ms a leaf at B 8 against RustForward's 59.0;
+  the placement line MISSES — two `ConstantOfShape` zero initialisers sized by G (the value mean's accumulator and the
+  softmax denominator) sit on the CPU EP. R399(g)(i)'s ScatterND graph would carry the same two nodes. Probed in
+  scratch: building both from a device tensor (`mean_den·0`) keeps the export bit-identical and W1 green and leaves
+  only a shape `Concat` on the CPU. Owed: the architect's choice between that re-expression (re-export, re-measure on
+  the same lines) and R399(g)'s path to RustForward alone. **Was: L2 EXITED 2026-10-21; L3 next.** L2 landed the
   player's per-stone step machine, the per-game cache port, the clock budget, `with_pool` / `armed_sims_for`,
   `RustForward`, the wasm32 `Engine` and manifest v2 (contract #13 v3); W3 and the served-sims pin join the protected
   set (R399(c)). Reads (local records `mantis-records/deploy-web/l2/`): W3 holds the player to the Python head's stones

@@ -22,6 +22,8 @@ fp32 ONNX holds its witness lines while the fp16 file misses R399(a)'s (fp32 onl
 fail as ruled, which is owed to the architect (CARD-DEPLOY-WEB). DEPLOY-WEB's L2 exited on 2026-10-21: the player's step
 machine, `RustForward` and the wasm32 engine landed (contract #13 v3, manifest v2); W3 holds the player to the Python
 head in the shipped tactics posture and W2 holds `RustForward` to the fp32 ONNX, on run13's 120k too. L3 is next.
+DEPLOY-WEB's L3 HALTED on 2026-10-21 at §3.3's measurement: W1 on WebGPU and its speed pass, but two G-sized zero
+initialisers sit on the CPU EP, a pre-stated miss; the architect's word is owed (CARD-DEPLOY-WEB).
 
 **R398 (2026-10-20): THE BOT SHIPS AS ONE WASM ENGINE WITH TWO NET BACKENDS, WITNESSED FROM THE STAMP. RESEARCH-WEB
 is accepted: the served path's ONNX passes golden equality, ORT's ScatterND(add) races under threads while the
