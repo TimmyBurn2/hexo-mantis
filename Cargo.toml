@@ -6,6 +6,7 @@ members = [
     "crates/mantis-encoding",
     "crates/mantis-search",
     "crates/mantis-selfplay",
+    "crates/mantis-player",
     "crates/mantis-bridge",
 ]
 

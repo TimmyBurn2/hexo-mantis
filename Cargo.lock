@@ -453,6 +453,7 @@ dependencies = [
  "mantis-core",
  "mantis-encoding",
  "mantis-graph",
+ "mantis-player",
  "mantis-search",
  "mantis-selfplay",
  "numpy",
@@ -487,6 +488,14 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "sha2",
+]
+
+[[package]]
+name = "mantis-player"
+version = "0.1.0"
+dependencies = [
+ "mantis-encoding",
+ "mantis-selfplay",
 ]
 
 [[package]]

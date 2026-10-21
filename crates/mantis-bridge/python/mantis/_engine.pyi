@@ -616,6 +616,11 @@ def collate_pack(
 def edge_vocabulary(win_length: int) -> numpy.ndarray:
     """Every edge_attr row the builder can emit at `win_length`, flat `(V * 5,)` in code order."""
     ...
+def web_batch(
+    positions: list[tuple[list[tuple[int, int, int]], int, int]], encoding: str
+) -> dict[str, numpy.ndarray | int]:
+    """Contract #13's batch: `x` f32 flat `(N * 11,)`, every other array int32, and `n_graphs`; ValueError on a refusal."""
+    ...
 def mcts_pool_overflow_count() -> int: ...
 def mcts_max_armed_sims() -> int:
     """The largest sim budget the MCTS node pool can serve (AUDIT-1 F-21).

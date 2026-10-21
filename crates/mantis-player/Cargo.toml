@@ -1,0 +1,14 @@
+[package]
+name = "mantis-player"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+mantis-encoding = { path = "../mantis-encoding" }
+# The served path's own leaf build, fuse and pack: the batch derives from them, never beside them.
+mantis-selfplay = { path = "../mantis-selfplay" }

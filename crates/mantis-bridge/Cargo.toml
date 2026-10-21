@@ -16,6 +16,7 @@ mantis-graph = { path = "../mantis-graph" }
 mantis-encoding = { path = "../mantis-encoding" }
 mantis-search = { path = "../mantis-search" }
 mantis-selfplay = { path = "../mantis-selfplay" }
+mantis-player = { path = "../mantis-player" }
 # numpy marshaling (`into_pyarray`/`PyReadonlyArray` on the dense + GraphWire paths).
 # Crate-local: numpy is ABSENT workspace-wide by design (root [workspace.dependencies]
 # is out of scope — CI gate 6). numpy 0.28 matches pyo3 0.28.

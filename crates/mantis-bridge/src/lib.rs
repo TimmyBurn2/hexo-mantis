@@ -12,6 +12,7 @@ mod graph_contract;
 mod hexg;
 mod inference;
 mod mcts;
+mod player;
 mod runner;
 mod utils;
 
@@ -28,5 +29,6 @@ fn _engine(m: &Bound<'_, PyModule>) -> PyResult<()> {
     inference::register(m)?; // InferenceBatcher + GraphWire + WireAlreadyConsumed
     runner::register(m)?; // SelfPlayRunnerConfig + SelfPlayRunner + RunnerDrainPoisoned
     hexg::register(m)?; // HexgBuffer + GraphTargets
+    player::register(m)?; // web_batch
     Ok(())
 }
