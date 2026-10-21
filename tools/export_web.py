@@ -54,6 +54,8 @@ OPENINGS: tuple[tuple[list[tuple[int, int, int]], int, int], ...] = (
     ([(0, 0, 1), (1, 0, -1), (0, 1, -1), (-1, 0, 1)], 1, 1),
 )
 DEVICE_WITNESS_GOLDENS = 11
+#: Every file an export writes, by the suffix after the stamp's stem; a refusal removes these and nothing else.
+WRITTEN = (".fp32.onnx", ".fp16.onnx", ".weights.bin", ".witness.json", ".manifest.json")
 #: Ops that read an int32 index as well as an int64 one, by the input slot that carries it.
 INDEX_SLOTS = {"Gather": 1, "GatherElements": 1, "ScatterElements": 1, "Unsqueeze": 0, "Expand": 0, "Reshape": 0}
 #: The ops whose index input must reach the written graph as int32 wherever it is sized by the batch.
@@ -466,8 +468,8 @@ def export(checkpoint: Path, out: Path, *, n_positions: int = 512, opset: int = 
         refusal = f"a narrowing that does not type-check ({exc})"
     export_s = time.perf_counter() - t0
     if refusal is not None:
-        for stale in out.glob(f"{stem}.*"):
-            stale.unlink()  # this stem's files from any earlier export go too, so no manifest names a refused graph
+        for suffix in WRITTEN:
+            (out / f"{stem}{suffix}").unlink(missing_ok=True)  # an earlier export's too, so no manifest names a refused graph
         raise ExportRefused("graph", f"the written graph holds {refusal}")
     fp16_storage(fp32, fp16)
     weights_path = out / f"{stem}.weights.bin"

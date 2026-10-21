@@ -112,8 +112,9 @@ def test_an_unnarrowed_graph_is_refused_and_leaves_no_file(monkeypatch: pytest.M
     stamp = _tiny_stamp(tmp_path / "stamp", "GnnArchV2", "gnn_axis_r8")
     monkeypatch.setattr(export_web, "narrow_index_casts", lambda _path: None)
     with pytest.raises(export_web.ExportRefused) as refused:
-        export_web.export(stamp, tmp_path / "out", n_positions=POSITIONS)
-    assert refused.value.field == "graph" and not list((tmp_path / "out").glob("*.onnx"))
+        export_web.export(stamp, stamp.parent, n_positions=POSITIONS)  # --out beside the stamp: the stamp must survive
+    assert refused.value.field == "graph" and not list(stamp.parent.glob("*.onnx"))
+    assert stamp.is_file(), "a refusal removes the export's own files, never the stamp beside them"
 
 
 def test_a_widened_index_is_refused_and_the_narrowing_takes_it_through_a_reshape(tmp_path: Path) -> None:
