@@ -382,10 +382,11 @@ the batch's graphs.
   `counts` scatter-sums.
 - **What L1 found, and fixed (REVIEW-1 of L1).** torch's scatter wants an int64 index, so the dynamo export re-casts
   the int32 inputs to int64 inside the graph, and `t[index]` lowers to GatherND. The exporter reads every gather
-  through `index_select`, and a pass after the export (`narrow_index_casts`) rewires each int32 input's cast to
-  int64 straight to the input wherever its readers take either width (Gather, ScatterElements's index, Unsqueeze,
-  Expand, Reshape). It refuses a graph that still holds a GatherND or an int32 input cast to int64. The [E, H]
-  expanded index is therefore int32.
+  through `index_select`, and a pass after the export (`narrow_index_casts`) drops every Cast of an int32 value to
+  int64, found by inferred type (so `index_select`'s own Reshape → Cast → Gather is caught), wherever every read takes
+  either width (Gather, GatherElements and ScatterElements's index, Unsqueeze, Expand, Reshape). It refuses a graph
+  that still holds a GatherND, or a batch-sized index that a Gather or a scatter reads as int64 (REVIEW-2 of L1 found
+  the name-matched first cut missed the Reshape hop). Every such index, the [E, H] expanded one included, is int32.
 - **What is left:**
   - Gather, f32 arithmetic and LayerNorm;
   - ScatterElements(add): one per layer (four at 4×256), the mean, and the softmax denominator;
@@ -560,7 +561,7 @@ Each refusal is a test row. A later carried row needs its own goldens and its ow
 
 | | what | positions | lines | where it runs | planted break, shown red where the witness runs |
 |---|---|---|---|---|---|
-| W1 | each shipped backend's outputs against the deploy path's `served_outputs` (CPU, fp32, eager) | the 512 goldens at B 1, 8, 16 plus the five openings | fp32: \|Δ logit\| ≤ 1e-3, \|Δ prob\| ≤ 1e-4, \|Δ value\| ≤ 1e-4, same argmax wherever the reference's top-2 gap > 2e-3 (RESEARCH-WEB's pre-stated lines, now in code); fp16 (R399(a), WebGPU only): \|Δ prob\| ≤ 2e-3, \|Δ value\| ≤ 2e-3, same argmax wherever the top-2 gap > 2e-2, logits reported, not gated; its known-bad, the fp16 file's last policy bias +0.05, must fail the prob line | export (ORT CPU, 1 and default threads; gate 20), release (WebGPU in Chromium on a hardware adapter; wasm in node), each device at start (16 positions) | the **written** ONNX's last policy bias shifted by 1.0, after the re-expression check, so every logit moves by 1 (gate 20, tiny stamps) |
+| W1 | each shipped backend's outputs against the deploy path's `served_outputs` (CPU, fp32, eager) | the 512 goldens at B 1, 8, 16 plus the five openings | fp32: \|Δ logit\| ≤ 1e-3, \|Δ prob\| ≤ 1e-4, \|Δ value\| ≤ 1e-4, same argmax wherever the reference's top-2 gap > 2e-3 (RESEARCH-WEB's pre-stated lines, now in code); fp16 (R399(a), WebGPU only): \|Δ prob\| ≤ 2e-3, \|Δ value\| ≤ 2e-3, same argmax wherever the top-2 gap > 2e-2, logits reported, not gated; its known-bad, the fp16 file's last policy bias +0.05, must fail the prob line | export (ORT CPU, 1 and default threads; gate 20), release (WebGPU in Chromium on a hardware adapter; wasm in node), each device at start (16 positions) | the **written** ONNX's last policy bias +1.0 (every logit moves; softmax ignores it), its last policy weight ×50 (the probs), one value bin +4 (the value), each red on each line that gates it; an argmax-only flip (gate 20, tiny stamps) |
 | W2 | `RustForward` against the ONNX (ORT CPU, 1 thread) | the same | the same | gate 20 (native, through the bridge), gate 21 (wasm in node, on the tiny stamp) | `RustForward` with the degree divisor dropped (gates 20 and 21) |
 | W3 | the player against the Python deploy head: same stones, same per-stone rows | the 512 goldens, each one full turn (1 or 2 stones) at `Sims(128)` in the shipped posture | identical stones; identical `last_sims`, `last_stopped`, reuse, select, cache and tactics rows | the integration tier (512); the default tier (32) | (i) the player's reroot replaced by `new_game`, which reds the reuse rows on every searched two-stone turn (the test pins that the reference run has at least one among the 32); (ii) the early stop comparing `≥ left`, which reds only at a tie (default tier, 32 positions) |
 

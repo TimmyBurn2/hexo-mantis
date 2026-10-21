@@ -53,7 +53,7 @@ R399(h)), and listed in the manifest with its sha256 and bytes.
 
 | file | contents |
 |---|---|
-| `<stem>.fp32.onnx` | torch.onnx's dynamo export of the served forward over the batch, opset 18, N, E, L and G dynamic; every scatter-sum is ScatterElements(add), the maxes ScatterElements(max), every gather a Gather; each int32 input reaches its index readers as int32 (`narrow_index_casts`); a ScatterND, a GatherND or an int32 input still cast to int64 refuses the export |
+| `<stem>.fp32.onnx` | torch.onnx's dynamo export of the served forward over the batch, opset 18, N, E, L and G dynamic; every scatter-sum is ScatterElements(add), the maxes ScatterElements(max), every gather a Gather; every batch-sized index a Gather or a scatter reads is int32 by inferred type (`narrow_index_casts`); a ScatterND, a GatherND or an int64 batch-sized index refuses the export |
 | `<stem>.fp16.onnx` | the same graph with every float initializer fp16 holds finite stored fp16 and cast to fp32 where read (a constant like finfo(f32).min stays fp32); compute stays fp32 |
 | `<stem>.weights.bin` | the Rust forward's tensors, raw f32, linear weights transposed (in × out), in the manifest's tensor table's order |
 | `<stem>.witness.json` | the device witness: the five openings and eleven goldens spread over stone count, with the served `logits`, `probs` per position and `value` |
@@ -83,8 +83,8 @@ A closed table; a value it does not carry is refused by name (`ExportRefused`, i
 
 The export also refuses (`field`): `registry`, a stamp whose encoding the import-time registry handshake did not check;
 `batch`, an engine batch whose `x` is not the served batch's; `re-expression`, one not bit-identical to `served_outputs`
-on every golden batch; `graph`, a written graph with a ScatterND, a GatherND or an int32 input cast to int64 (the file
-is removed); `stamp` and `config`, a stamp with no arch or config mapping. A venv synced with `--extra teacher
+on every golden batch; `graph`, a written graph with a ScatterND, a GatherND or an int64 batch-sized index, or a
+narrowing that does not type-check (this stem's files are removed); `stamp` and `config`, a stamp with no arch or config mapping. A venv synced with `--extra teacher
 --no-group web-export` has no ONNX toolchain and runs no export.
 
 ## The witness lines
@@ -104,10 +104,10 @@ on the five openings as one batch. A graph's argmax is compared where the refere
 |---|---|---|
 | the batch's derived arrays agree with the offsets they came from; an empty board's mean is every node; the pruned row keeps the nodes; a canvas row and an empty request are refused | `crates/mantis-player/src/batch.rs` | `batch::tests::every_derived_array_agrees_with_the_offsets_it_came_from`, `an_empty_board_takes_the_mean_over_every_node`, `the_pruned_row_builds_fewer_edges_on_the_same_nodes`, `a_canvas_row_and_an_empty_request_are_refused_by_name` |
 | every carried kind and row exports, re-expresses bit for bit, and holds the fp32 lines at 1 and default threads | `tools/export_web.py` | `tests/tools/test_export_web.py::test_every_carried_kind_and_row_exports_and_holds_the_fp32_lines_at_one_and_default_threads` (gate 20) |
-| no written graph holds a ScatterND, a GatherND or an int32 input cast to int64; an unnarrowed graph is refused and removed (planted break) | `export_web.narrow_index_casts`, `graph_refusal` | `test_no_written_graph_holds_a_scatternd_a_gathernd_or_an_int32_input_cast_to_int64`, `test_an_unnarrowed_graph_is_refused_and_leaves_no_file`, `test_the_graph_refusal_names_each_widening` |
+| no written graph holds a ScatterND, a GatherND or an int64 batch-sized index; the narrowing reaches through a Reshape; an unnarrowed graph is refused and removed (planted break) | `export_web.narrow_index_casts`, `graph_refusal` | `test_no_written_graph_holds_a_scatternd_a_gathernd_or_an_int64_batch_index`, `test_a_widened_index_is_refused_and_the_narrowing_takes_it_through_a_reshape`, `test_an_unnarrowed_graph_is_refused_and_leaves_no_file` |
 | the fp16 file stores only what fp16 holds finite | `export_web.fp16_storage` | `test_the_fp16_file_stores_only_what_fp16_holds_finite` |
 | the manifest binds the stamp, the files and the resolved block | `export_web.export` | `test_the_manifest_binds_the_stamp_the_files_and_the_resolved_block` |
-| the witness reds a perturbed graph on the line each break moves, in both lines: logits (bias shift), probs (weight scale), value (one bin) (planted breaks) | `export_web.witness`, `passes` | `test_a_perturbed_written_graph_misses_the_line_it_moves` |
+| the witness reds a perturbed graph on the line each break moves, on every line that gates it: logits (a bias shift, gated in fp32 alone), probs (a weight scale), value (one bin); the argmax rule reds a flip the value lines cannot see (planted breaks) | `export_web.witness`, `gaps`, `passes` | `test_a_perturbed_written_graph_misses_the_line_it_moves`, `test_the_argmax_rule_reds_a_flip_the_value_lines_cannot_see` |
 | a drifted re-expression, a foreign batch and an unchecked registry are refused before anything is written (planted breaks) | `export_web.export`, `witness_cases` | `test_a_re_expression_that_is_not_bit_identical_is_refused`, `test_a_foreign_batch_and_an_unchecked_registry_are_refused` |
 | the detector refuses by name | `export_web.detect` | `test_the_detector_refuses_what_it_does_not_carry_by_name`, `test_a_gumbel_deploy_block_is_refused_before_anything_is_written` |
 

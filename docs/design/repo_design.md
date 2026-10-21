@@ -439,7 +439,7 @@ ADDED (v7 → v8). `docs/contracts/run_config_schema.md` is the version authorit
     AMENDMENT (R398(b), DEPLOY-WEB L1, 2026-10-21): gate 20 is the web export's pipeline witness —
     `tests/tools/test_export_web.py`, tiny random-init stamps of every carried arch kind and row through
     `tools/export_web.py`: the bit-identical re-expression, the fp32 lines at 1 and default ORT threads, no
-    ScatterND, the manifest, the detector's refusals and two planted breaks. The default tier collects the
+    ScatterND or int64 index, the manifest, the detector's refusals and its planted breaks. The default tier collects the
     module too; the row names the witness so its verdict is its own line.
 
 ## 10. Performance doctrine (design constraint, not a pass)
