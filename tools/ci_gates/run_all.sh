@@ -85,7 +85,7 @@ set -m
     # that stand behind tools/bench_floors.toml's floors.
     run_gate "gate 2b: clippy (-D clippy::all, --all-targets)" \
         cargo clippy --workspace --all-targets --locked -- -D clippy::all
-    run_gate "gate 4: wasm check (mantis-graph dep-free)" \
+    run_gate "gate 4: wasm check (mantis-graph dep-free, mantis-player)" \
         make check.wasm
     run_gate "gate 5: bench smoke (stub criterion bench)" \
         make bench

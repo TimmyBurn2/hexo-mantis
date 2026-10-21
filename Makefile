@@ -56,7 +56,7 @@ bench.baseline:
 	cargo bench -p mantis-core --bench smoke_bench --locked -- --save-baseline local --warm-up-time 0.5 --measurement-time 1
 
 check.wasm:
-	cargo check -p mantis-graph --target wasm32-unknown-unknown --locked
+	cargo check -p mantis-graph -p mantis-player --target wasm32-unknown-unknown --locked
 
 vendor:
 	bash tools/vendor_fetch.sh

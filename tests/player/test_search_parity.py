@@ -226,5 +226,6 @@ def test_the_players_constants_are_the_ladders_and_the_caches() -> None:
     ladder = load_tools_package("ladder")
     backends = __import__(f"{ladder.__name__}.backends", fromlist=["LADDER_EARLY_STOP"])
     constants = _engine.player_constants()
+    constants.pop("virtual_loss")  # the search crate's own constant, read by both trees; no Python source to pin it to
     assert constants == {"early_stop": backends.LADDER_EARLY_STOP, "tree_reuse": backends.LADDER_TREE_REUSE,
                          "cache_entries": MAX_ENTRIES}

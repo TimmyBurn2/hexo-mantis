@@ -41,7 +41,7 @@ import onnxruntime as ort  # noqa: E402 — after the telemetry switch, which OR
 
 REPO = Path(__file__).resolve().parents[1]
 GOLDENS = REPO / "tests" / "fixtures" / "graph_build" / "positions_r8.txt"
-FORMAT = "mantis-web-manifest-v1"
+FORMAT = "mantis-web-manifest-v2"
 BATCHES = (1, 8, 16)
 INPUTS = ("x", "src", "dst", "code", "legal", "node_graph", "legal_graph", "divisor", "real", "mean_mask", "mean_den")
 OUTPUTS = ("logits", "probs", "value")
@@ -249,24 +249,53 @@ def passes(row: dict[str, Any], line: Line) -> bool:
             and row["value"] <= line.value and row["argmax_agreed"] == row["argmax_compared"])
 
 
-def witness(path: Path, threads: int, cases: dict[int, list[Case]], dtype: str) -> list[dict[str, Any]]:
-    """ORT CPU at `threads` (0: ORT's default) on `path`, one row per batch size, held to `dtype`'s line."""
+def ort_session(path: Path, threads: int) -> ort.InferenceSession:
+    """ORT CPU on `path` at `threads` (0: ORT's default)."""
     so = ort.SessionOptions()
     so.intra_op_num_threads = threads
     so.log_severity_level = 3
-    session = ort.InferenceSession(str(path), so, providers=["CPUExecutionProvider"])
+    return ort.InferenceSession(str(path), so, providers=["CPUExecutionProvider"])
+
+
+def rust_outputs(forward: Any, inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    """`RustForward`'s outputs on one case's arrays. Raises: ValueError — a batch the forward refuses."""
+    out = forward.forward({**inputs, "x": np.ascontiguousarray(inputs["x"]).ravel()})
+    return {k: np.asarray(out[k]) for k in OUTPUTS}
+
+
+def rust_witness(weights: Path, table: list[dict[str, Any]], fp32: Path, cases: dict[int, list[Case]],
+                 feat: int) -> list[dict[str, Any]]:
+    """W2: `RustForward` over the weights file against the fp32 ONNX at ORT CPU 1 thread, one row per batch size. Raises: ValueError — a table the file does not hold or a refused batch."""
+    forward = _engine.RustForward(table, np.fromfile(weights, dtype="<f4"), feat)
+    session, line, rows = ort_session(fp32, 1), LINES["fp32"], []
+    for b, pairs in cases.items():
+        per = []
+        for inputs, _ref in pairs:
+            onnx_out = dict(zip(OUTPUTS, session.run(list(OUTPUTS), inputs), strict=True))
+            per.append(gaps(rust_outputs(forward, inputs), onnx_out, inputs["legal_graph"], line))
+        rows.append(witness_row(per, {"backend": "rust-forward-native", "file": weights.name, "threads": 1, "B": b}, "fp32"))
+    return rows
+
+
+def witness_row(per: list[dict[str, Any]], head: dict[str, Any], dtype: str) -> dict[str, Any]:
+    """One witness row: `head`, the worst gap per output and the argmax counts over `per`, held to `dtype`'s line."""
+    row = {**head, **{k: max(r[k] for r in per) for k in OUTPUTS},
+           **{k: sum(r[k] for r in per) for k in ("argmax_agreed", "argmax_compared")}}
+    row["pass"] = passes(row, LINES[dtype])
+    row["line"] = dtype
+    return row
+
+
+def witness(path: Path, threads: int, cases: dict[int, list[Case]], dtype: str) -> list[dict[str, Any]]:
+    """ORT CPU at `threads` (0: ORT's default) on `path`, one row per batch size, held to `dtype`'s line."""
+    session = ort_session(path, threads)
     line, rows = LINES[dtype], []
     for b, pairs in cases.items():
         per = []
         for inputs, ref in pairs:
             got = {k: np.asarray(v) for k, v in zip(OUTPUTS, session.run(list(OUTPUTS), inputs), strict=True)}
             per.append(gaps(got, ref, inputs["legal_graph"], line))
-        row = {"backend": "ort-cpu", "file": path.name, "threads": threads or "default", "B": b,
-               **{k: max(r[k] for r in per) for k in OUTPUTS},
-               **{k: sum(r[k] for r in per) for k in ("argmax_agreed", "argmax_compared")}}
-        row["pass"] = passes(row, line)
-        row["line"] = dtype
-        rows.append(row)
+        rows.append(witness_row(per, {"backend": "ort-cpu", "file": path.name, "threads": threads or "default", "B": b}, dtype))
     return rows
 
 
@@ -486,7 +515,8 @@ def export(checkpoint: Path, out: Path, *, n_positions: int = 512, opset: int = 
     table = dump_weights(wrapper, weights_path)
 
     rows = [*witness(fp32, 1, cases, "fp32"), *witness(fp32, 0, cases, "fp32"),
-            *witness(fp16, 1, cases, "fp16"), *witness(fp16, 0, cases, "fp16")]
+            *witness(fp16, 1, cases, "fp16"), *witness(fp16, 0, cases, "fp16"),
+            *rust_witness(weights_path, table, fp32, cases, int(spec.node_feat_dim))]
     device = device_witness(net, spec, config, encoding)
     witness_path = paths["witness"]
     witness_path.write_text(json.dumps(device), encoding="utf-8")
@@ -511,11 +541,12 @@ def export(checkpoint: Path, out: Path, *, n_positions: int = 512, opset: int = 
                      "edge_vocab_rows": int(vocab.shape[0])},
         "deploy": {"resolved": {"search_kind": config["deploy"]["search"]["kind"], **puct.tree_kwargs(),
                                 "leaf_batch_size": int(config["selfplay"]["leaf_batch_size"]),
-                                "tactics": resolve_deploy_tactics(config)}},
+                                "tactics": resolve_deploy_tactics(config)},
+                   "player": _engine.player_constants()},
         "inputs": list(INPUTS), "outputs": list(OUTPUTS),
         "files": [file_row(fp32, dtype="fp32", ops=op_census(fp32), passes_its_line=verdict(fp32)),
                   file_row(fp16, dtype="fp16", ops=op_census(fp16), passes_its_line=verdict(fp16)),
-                  file_row(weights_path, dtype="fp32", tensors=table),
+                  file_row(weights_path, dtype="fp32", tensors=table, passes_its_line=verdict(weights_path)),
                   file_row(witness_path, positions=len(device["positions"]))],
         "witness": {"lines": {k: asdict(v) for k, v in LINES.items()},
                     "goldens": {"path": str(GOLDENS.relative_to(REPO)), "sha256": hashlib.sha256(GOLDENS.read_bytes()).hexdigest(),

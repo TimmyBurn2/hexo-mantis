@@ -96,7 +96,7 @@ fn assert_spent(stone: &StoneResult, label: &str) {
         let left = SIMS - stone.sims;
         let gap = match stone.top.as_slice() {
             [_] => u32::MAX,
-            [a, b] => a.1 - b.1,
+            [a, b] => a.visits - b.visits,
             _ => panic!("{label}: a stopped stone has a root"),
         };
         assert!(
@@ -142,10 +142,10 @@ fn each_stone_spends_its_budget_or_stops_with_the_leader_fixed_and_the_reroot_ke
                     let first = &result.stones[0];
                     if let (true, Some(child)) = (
                         stone.inherited > 0,
-                        first.top.iter().find(|t| t.0 == first.cell),
+                        first.top.iter().find(|c| c.cell == first.cell),
                     ) {
                         assert_eq!(
-                            stone.inherited, child.1,
+                            stone.inherited, child.visits,
                             "golden {i}: the re-root keeps the chosen child's visits"
                         );
                     }

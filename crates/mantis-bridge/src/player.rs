@@ -1,16 +1,20 @@
-//! The web player's Python surface: `web_batch` for the export's witness, `Player` for the search-parity witness.
+//! The web player's Python surface: `web_batch` and `RustForward` for the export's witness, `Player` for W3.
 
 use numpy::{IntoPyArray, PyReadonlyArray1};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
+use mantis_player::batch::WebBatch;
 use mantis_player::batch::{build_batch, Position};
 use mantis_player::cache::CACHE_ENTRIES;
+use mantis_player::forward::{RustForward, TensorRow};
 use mantis_player::player::{
     Budget, Costs, DeployBlock, GameClock, Player, PlayerError, Pull, StoneResult, EARLY_STOP,
     TREE_REUSE,
 };
+
+use mantis_search::VIRTUAL_LOSS_PENALTY;
 
 use crate::mcts::tactics_config_of;
 
@@ -73,7 +77,12 @@ fn stone_dict<'py>(py: Python<'py>, stone: &StoneResult) -> PyResult<Bound<'py, 
     d.set_item("inherited", stone.inherited)?;
     d.set_item("root_visits", stone.root_visits)?;
     d.set_item("root_value", stone.root_value)?;
-    d.set_item("top", stone.top.clone())?;
+    let top: Vec<_> = stone
+        .top
+        .iter()
+        .map(|c| (c.cell, c.visits, c.prior, c.q))
+        .collect();
+    d.set_item("top", top)?;
     match stone.tactics {
         Some(t) => {
             let rows = PyDict::new(py);
@@ -239,6 +248,81 @@ impl PyPlayer {
     }
 }
 
+fn int32s(batch: &Bound<'_, PyDict>, key: &str) -> PyResult<Vec<i32>> {
+    Ok(leaf(batch, key)?
+        .extract::<PyReadonlyArray1<'_, i32>>()?
+        .as_slice()?
+        .to_vec())
+}
+
+/// The export's served forward in Rust over its weights file: W2's native row.
+#[pyclass(name = "RustForward", module = "mantis._engine", frozen)]
+pub struct PyRustForward {
+    inner: RustForward,
+}
+
+#[pymethods]
+impl PyRustForward {
+    /// The manifest's tensor table over the weights file's floats. Raises: ValueError (a table the file does not hold).
+    #[new]
+    #[allow(clippy::needless_pass_by_value)]
+    fn new(
+        table: Vec<Bound<'_, PyDict>>,
+        weights: PyReadonlyArray1<'_, f32>,
+        node_feat_dim: usize,
+    ) -> PyResult<Self> {
+        let rows = table
+            .iter()
+            .map(|r| {
+                Ok(TensorRow {
+                    name: leaf(r, "name")?.extract()?,
+                    rows: leaf(r, "rows")?.extract()?,
+                    cols: leaf(r, "cols")?.extract()?,
+                    offset: leaf(r, "offset")?.extract()?,
+                })
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        let inner = RustForward::load(&rows, weights.as_slice()?, node_feat_dim)
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        Ok(PyRustForward { inner })
+    }
+
+    /// `logits`, `probs` and `value` for contract #13's arrays (`x` flat f32, the rest int32). Raises: ValueError, TypeError.
+    fn forward<'py>(
+        &self,
+        py: Python<'py>,
+        batch: &Bound<'py, PyDict>,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let mean_den = int32s(batch, "mean_den")?;
+        let web = WebBatch {
+            n_graphs: mean_den.len(),
+            x: leaf(batch, "x")?
+                .extract::<PyReadonlyArray1<'_, f32>>()?
+                .as_slice()?
+                .to_vec(),
+            src: int32s(batch, "src")?,
+            dst: int32s(batch, "dst")?,
+            code: int32s(batch, "code")?,
+            legal: int32s(batch, "legal")?,
+            node_graph: int32s(batch, "node_graph")?,
+            legal_graph: int32s(batch, "legal_graph")?,
+            divisor: int32s(batch, "divisor")?,
+            real: int32s(batch, "real")?,
+            mean_mask: int32s(batch, "mean_mask")?,
+            mean_den,
+            leaves: Vec::new(),
+        };
+        let out = py
+            .detach(|| self.inner.forward(&web))
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let d = PyDict::new(py);
+        d.set_item("logits", out.logits.into_pyarray(py))?;
+        d.set_item("probs", out.probs.into_pyarray(py))?;
+        d.set_item("value", out.value.into_pyarray(py))?;
+        Ok(d)
+    }
+}
+
 /// The player's own constants, each pinned equal to the source it mirrors.
 #[pyfunction]
 fn player_constants(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
@@ -246,13 +330,15 @@ fn player_constants(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
     d.set_item("early_stop", EARLY_STOP)?;
     d.set_item("tree_reuse", TREE_REUSE)?;
     d.set_item("cache_entries", CACHE_ENTRIES)?;
+    d.set_item("virtual_loss", VIRTUAL_LOSS_PENALTY)?;
     Ok(d)
 }
 
-/// Register `web_batch`, `Player` and `player_constants` into `_engine`.
+/// Register `web_batch`, `Player`, `RustForward` and `player_constants` into `_engine`.
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(web_batch, m)?)?;
     m.add_function(wrap_pyfunction!(player_constants, m)?)?;
     m.add_class::<PyPlayer>()?;
+    m.add_class::<PyRustForward>()?;
     Ok(())
 }

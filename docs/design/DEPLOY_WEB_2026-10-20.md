@@ -400,6 +400,13 @@ the batch's graphs.
 
 ### 3.2 `NetBackend` and `RustForward`
 
+> **L2, as built:** no `NetBackend` trait and no Rust `drive` loop: `RustForward` is the one Rust backend, so
+> `forward(&WebBatch) -> NetOutputs` is called directly (the Rust tests drive `next_batch`/`submit` with a stub, W2
+> reads it through the bridge, the wasm `Engine` through `forward_pending`). It reads the batch's own `divisor`, `real`,
+> `mean_mask` and `mean_den`, as the exported graph does. Measured in node on run13's 120k: 63–65 ms a leaf, a
+> 694 KB module after wasm-bindgen, and 113 MB (S 32) / 131 MB (S 128) peak memory over 8 goldens (24.8 MB after the
+> weights load). The peak is above §2.6's 90 MB for the mean leaf: the goldens reach the large leaves.
+
 ```rust
 pub trait NetBackend {
     fn forward(&mut self, batch: &WebBatch<'_>, out: &mut NetOutputs) -> Result<(), BackendError>;

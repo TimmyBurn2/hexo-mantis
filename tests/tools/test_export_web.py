@@ -93,11 +93,38 @@ def future_cases(exports) -> dict[int, list]:
 def test_every_carried_kind_and_row_exports_and_holds_the_fp32_lines_at_one_and_default_threads(exports) -> None:
     """The export re-expresses bit for bit (it refuses otherwise) and ORT CPU holds the fp32 lines on every batch."""
     for (kind, encoding), (_stamp, _out, manifest) in exports.items():
-        rows = [r for r in manifest["witness"]["rows"] if r["line"] == "fp32"]
+        rows = [r for r in manifest["witness"]["rows"] if r["line"] == "fp32" and r["backend"] == "ort-cpu"]
         assert {(r["threads"], r["B"]) for r in rows} == {(t, b) for t in (1, "default") for b in (1, 8, 16, 5)}
         assert all(r["pass"] and r["argmax_compared"] > 0 for r in rows), (kind, encoding, rows)
         assert manifest["stamp"]["arch_kind"] == kind and manifest["encoding"]["name"] == encoding
         assert manifest["files"][0]["passes_its_line"] is True
+
+
+def test_the_rust_forward_holds_the_fp32_lines_against_the_onnx_on_every_batch(exports) -> None:
+    """W2: `RustForward` over the weights file, against the fp32 ONNX at ORT CPU 1 thread, on every carried kind and row."""
+    for (kind, encoding), (_stamp, _out, manifest) in exports.items():
+        rows = [r for r in manifest["witness"]["rows"] if r["backend"] == "rust-forward-native"]
+        assert sorted(r["B"] for r in rows) == [1, 5, 8, 16] and all(r["threads"] == 1 for r in rows)
+        assert all(r["pass"] and r["argmax_compared"] > 0 for r in rows), (kind, encoding, rows)
+        weights = next(f for f in manifest["files"] if f["name"].endswith(".weights.bin"))
+        assert weights["passes_its_line"] is True
+
+
+def test_a_rust_forward_without_the_degree_divisor_misses_the_line(exports, future_cases) -> None:
+    """PLANTED BREAK: the forward fed every divisor as 1 (the degree mean dropped) misses W2's fp32 line."""
+    stamp, out, manifest = exports[FUTURE]
+    table = next(f for f in manifest["files"] if f["name"].endswith(".weights.bin"))["tensors"]
+    forward = _engine.RustForward(table, np.fromfile(out / f"{stamp.stem}.weights.bin", dtype="<f4"),
+                                  manifest["encoding"]["node_feat_dim"])
+    session, line = export_web.ort_session(out / f"{stamp.stem}.fp32.onnx", 1), export_web.LINES["fp32"]
+    for drop in (False, True):
+        per = []
+        for inputs, _ref in future_cases[8]:
+            fed = {**inputs, "divisor": np.ones_like(inputs["divisor"])} if drop else inputs
+            onnx_out = dict(zip(export_web.OUTPUTS, session.run(list(export_web.OUTPUTS), inputs), strict=True))
+            per.append(export_web.gaps(export_web.rust_outputs(forward, fed), onnx_out, inputs["legal_graph"], line))
+        row = export_web.witness_row(per, {}, "fp32")
+        assert row["pass"] is not drop, (drop, row)
 
 
 def test_no_written_graph_holds_a_scatternd_a_gathernd_or_an_int64_batch_index(exports) -> None:
@@ -199,6 +226,7 @@ def test_the_manifest_binds_the_stamp_the_files_and_the_resolved_block(exports) 
     assert manifest["exporter"]["commit"] == head_sha(REPO)
     assert manifest["encoding"]["registry_sha"] == _engine.registry_sha_hex()
     assert manifest["deploy"]["resolved"]["tactics"] == resolve_deploy_tactics(ck.config)
+    assert manifest["deploy"]["player"] == _engine.player_constants()
     for row in manifest["files"]:
         path = out / row["name"]
         assert row["name"].startswith(stamp.stem), "every file is named by the stamp's stem"

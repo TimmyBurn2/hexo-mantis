@@ -3,4 +3,7 @@
 pub mod batch;
 pub mod budget;
 pub mod cache;
+pub mod forward;
 pub mod player;
+#[cfg(target_arch = "wasm32")]
+pub mod wasm;

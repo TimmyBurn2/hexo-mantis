@@ -1,11 +1,13 @@
 # Contract: web engine API (#13)
 
-- version: v2
+- version: v3
 - owner: crate mantis-player (`batch.rs`, the batch both net backends read; `player.rs`, `cache.rs` and `budget.rs`,
-  the step machine); `tools/export_web.py` (the manifest and its witness rows)
-- status: v2 — the step machine, the per-game cache and the budget land with DEPLOY-WEB L2 (v1, L1: the batch, its
-  outputs, the export's files, the manifest and the witness lines). The Rust forward (L2's second half) and the typed
-  API, the Worker messages and the arena adapter (L3) extend this doc, each bumping its version in its commit.
+  the step machine; `forward.rs`, `RustForward`; `wasm.rs`, the browser surface); `tools/export_web.py` (the manifest
+  and its witness rows)
+- status: v3 — `RustForward`, the wasm32 surface, W2's rows and manifest v2 (`deploy.player`) land with DEPLOY-WEB L2's
+  second half (v2: the step machine, the per-game cache and the budget; v1, L1: the batch, its outputs, the export's
+  files, the manifest and the witness lines). The typed API, the Worker messages and the arena adapter (L3) extend this
+  doc, bumping its version in their commit.
 
 ## Summary
 
@@ -59,7 +61,7 @@ R399(h)), and listed in the manifest with its sha256 and bytes.
 | `<stem>.witness.json` | the device witness: the five openings and eleven goldens spread over stone count, with the served `logits`, `probs` per position and `value` |
 | `<stem>.manifest.json` | the manifest below |
 
-## The manifest (`mantis-web-manifest-v1`)
+## The manifest (`mantis-web-manifest-v2`)
 
 | section | fields |
 |---|---|
@@ -67,9 +69,10 @@ R399(h)), and listed in the manifest with its sha256 and bytes.
 | `exporter` | `commit`, `dirty` (tracked changes, read before any file is written; true when git cannot say), `torch`, `onnx`, `onnxscript`, `onnxruntime`, `opset`, `export_s` |
 | `encoding` | `name`, `registry_sha` (the compiled registry's), `win_length`, `graph_radius`, `trunk_size`, `empty_edges`, `node_feat_dim`, `edge_vocab_rows` |
 | `deploy.resolved` | from the stamp's own config through the run's resolvers: `search_kind`, `c_puct`, `fpu_reduction`, `quiescence_enabled`, `quiescence_blend_2`, `leaf_batch_size`, `tactics` (the audit's `mode` included) |
+| `deploy.player` | the player's own constants as the engine reports them (`_engine.player_constants()`): `early_stop`, `tree_reuse`, `cache_entries`, `virtual_loss` (v2) |
 | `inputs`, `outputs` | the names above, in the graph's order |
-| `files` | per file: `name`, `sha256`, `bytes`; per ONNX file `dtype`, `ops` (its op census) and `passes_its_line` (every row of that file holds its line); for the weights `tensors` (`name`, `rows`, `cols`, `offset` in floats) |
-| `witness` | `lines`; `goldens` (path, sha256, positions, openings); `rows`, one per (backend, file, threads, B): max \|Δ\| `logits`, `probs`, `value`, `argmax_agreed` / `argmax_compared`, `line`, `pass` |
+| `files` | per file: `name`, `sha256`, `bytes`; per ONNX file `dtype`, `ops` (its op census) and `passes_its_line` (every row of that file holds its line); for the weights `tensors` (`name`, `rows`, `cols`, `offset` in floats) and `passes_its_line` (W2's rows) |
+| `witness` | `lines`; `goldens` (path, sha256, positions, openings); `rows`, one per (backend, file, threads, B): max \|Δ\| `logits`, `probs`, `value`, `argmax_agreed` / `argmax_compared`, `line`, `pass`. Backends: `ort-cpu` (W1, both ONNX files, 1 and default threads) and `rust-forward-native` (W2: `RustForward` over the weights file against the fp32 ONNX at ORT CPU 1 thread, held to the fp32 line) |
 
 ## The detector
 
@@ -124,14 +127,44 @@ work is the host's between `next_batch` and `submit`.
   `CACHE_ENTRIES` (8 192), a hit refreshing nothing, emptied by `new_game`.
 - **A refusal mid-turn** rolls the turn back (the board as before it) and leaves the player usable.
 - **`TurnResult`**: per stone the cell, its new descents, whether the stop fired, whether the root solver decided it,
-  the visits a re-root kept, the root's visits and value, its two most visited children and the tactics rows; per turn
+  the visits a re-root kept, the root's visits and value, its two most visited children (cell, visits, prior, Q) and
+  the tactics rows; per turn
   the sims set, `floor_over_clock`, `budget_pool_capped` and the wall ms. After a turn that served leaves, the costs
   become its wall time a served leaf, the root folded in (the engine sees no time inside a call).
 - **The rows**, cumulative and named as the head's `search_rows`: `stop_fired`, `stop_saved`, `select_calls`,
   `select_overlaps`, `select_network_leaves`, `reuse_reroots`, `reuse_inherited`, and `cache_calls`, `cache_positions`,
   `cache_hits`, `cache_served`, `cache_in_batch_repeats`, `cache_all_hit_calls`, `cache_evicted`.
 - **The constants** (`_engine.player_constants()`): `early_stop` and `tree_reuse` on (the ladder's), `cache_entries`
-  8 192 (the head's cache).
+  8 192 (the head's cache), `virtual_loss` 1.0 (`mantis-search`'s, read directly).
+
+## `RustForward` (`mantis_player::forward`; `_engine.RustForward`)
+
+`WebServedGraph`'s forward over the batch's own arrays, f32, one thread: the input projection; per layer the norm, the
+fused edge message `relu(h[src] + table[code])` summed into `dst` in edge order, ÷ `divisor`, `+ (1 + eps)·h`, the
+MLP and the residual, then the final norm into that layer's slice of the embedding; the policy MLP on the legal rows; the
+`mean_mask` mean and the `real` max into the value MLP and its bins' expectation, clamped to ±1; a per-graph softmax.
+`load(table, floats, node_feat_dim)` refuses a missing tensor, a shape that disagrees with another (`Shape`) and a
+tensor past the file (`OutOfFile`); `forward` refuses a batch whose lengths or indices its own shape does not allow.
+
+## The browser surface (`mantis_player::wasm`, wasm32 only)
+
+`Engine` is the step machine and `RustForward` behind `#[wasm_bindgen]`, the one module that carries it (a census test
+pins that). Each refusal is a JS `Error` whose `name` is the `PlayerError` variant, or `Weights` for the forward's.
+
+| method | does |
+|---|---|
+| `new(encoding, cpu_path, c_puct, fpu_reduction, quiescence_enabled, quiescence_blend_2, leaf_batch_size, tactics?, audit?, audit_mode?)` | `deploy.resolved`, flat: `tactics` `[leaf_turns, leaf_nodes, root_turns, root_nodes]`, `audit` `[turns, nodes, k, m, total_nodes]` and `"hold"` or `"inverted"` |
+| `load_weights(names, dims, floats, node_feat_dim)` | `RustForward` over the weights file: names one a line, `(rows, cols, offset)` each |
+| `set_costs`, `min_turn_ms`, `new_game(moves, sims?, turn_ms?)`, `play(stones)`, `begin_turn(now_ms, sims?, turn_ms?)`, `abort` | as the step machine; cells as flat `q, r` pairs |
+| `next_batch(now_ms)` | `true` when a batch waits for the net, `false` when the turn ended |
+| `batch_x()`, `batch_i32(name)` | the pending batch's arrays, copied out for a host backend |
+| `forward_pending()`, `submit_pending(now_ms)` | `RustForward` on the pending batch in place, then its outputs to the search: the batch never crosses into JS |
+| `submit(probs, values, now_ms)` | a host backend's outputs |
+| `turn_json()`, `rows_json()` | the last `TurnResult` and the rows, as JSON (a non-finite float is `null`) |
+| `memory_bytes()` | the module's linear memory: its high-water mark |
+
+The wasm-only dependencies (`wasm-bindgen` pinned to the lock's one version, `js-sys`, `serde_json`, and `getrandom`'s
+`wasm_js`, which unifies into `rand`'s) live in the player's manifest alone; gate 4 checks the player for wasm32.
 
 ## Who asserts what where
 
@@ -150,6 +183,9 @@ work is the host's between `next_batch` and `submit`.
 | the cache serves hits and each unseen key once; FIFO at capacity, a hit refreshing nothing | `cache.rs` | `cache::tests::*` |
 | the budget reproduces RESEARCH-WEB's guaranteed column, holds its floors and cap, rises with the clock; the pool is one doubling over the clock | `budget.rs` | `budget::tests::*`; `served_sims.rs::a_short_clock_plays_the_cpu_floor_and_flags_it` |
 | the expand refuses each malformation the bridge refuses; a call out of step is refused and an abort restores the board | `player.rs` | `player::tests::the_expand_refuses_each_malformation_the_bridge_refuses`; `served_sims.rs::a_call_out_of_step_is_refused_and_an_abort_restores_the_board` |
+| W2: `RustForward` holds the fp32 line against the fp32 ONNX on every tiny stamp and batch; fed every divisor as 1 it misses (planted break) | `forward.rs`, `tools/export_web.py` | `tests/tools/test_export_web.py::test_the_rust_forward_holds_the_fp32_lines_against_the_onnx_on_every_batch`, `test_a_rust_forward_without_the_degree_divisor_misses_the_line` |
+| `RustForward` refuses a table its file does not hold, and a batch its shape does not allow | `forward.rs` | `forward::tests::*` |
+| the bindgen attribute lives in `wasm.rs` alone, gated to wasm32 | `wasm.rs` | `crates/mantis-player/tests/wasm_census.rs` |
 | the detector refuses by name | `export_web.detect` | `test_the_detector_refuses_what_it_does_not_carry_by_name`, `test_a_gumbel_deploy_block_is_refused_before_anything_is_written` |
 
 ## Pinning tests
@@ -157,4 +193,5 @@ work is the host's between `next_batch` and `submit`.
 - `crates/mantis-player/src/batch.rs`, `cache.rs`, `budget.rs`, `player.rs` (unit tests) and
   `crates/mantis-player/tests/served_sims.rs` (gate 2a)
 - `tests/player/test_search_parity.py` (the default tier on 32 goldens and the integration tier on 512)
+- `crates/mantis-player/src/forward.rs` (unit tests) and `crates/mantis-player/tests/wasm_census.rs` (gate 2a)
 - `tests/tools/test_export_web.py` (gate 20, and the default tier)

@@ -15,3 +15,12 @@ mantis-graph = { path = "../mantis-graph" }
 mantis-search = { path = "../mantis-search" }
 # The served path's own leaf build, fuse and pack: the batch derives from them, never beside them.
 mantis-selfplay = { path = "../mantis-selfplay" }
+
+# wasm32 only, and only here: the browser engine's bindings, and the JS entropy source that unifies into rand's getrandom
+# (the player draws nothing random; the dependency only has to build).
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.4", features = ["wasm_js"] }
+js-sys = "0.3"
+serde_json = "1"
+# Exactly the wasm-bindgen CLI the glue is generated with (the lock's one version, shared with criterion's web-sys).
+wasm-bindgen = "=0.2.126"

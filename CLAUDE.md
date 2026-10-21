@@ -18,8 +18,8 @@ rule is stated once, here or in docs/governance/LAWS.md.
 - crates/: mantis-core (board, geometry, rules, Ply), mantis-graph (dep-free axis-graph and
   hex-canvas builders, wasm32-clean), mantis-encoding, mantis-search (MCTS, Gumbel, tactics
   solver), mantis-selfplay (runner, inference queues, replay), mantis-player (the browser bot's
-  single-thread deploy driver and the batch its net backends read), mantis-bridge (ALL PyO3; maturin
-  builds mantis._engine).
+  single-thread deploy driver, the batch its net backends read, RustForward, and its wasm32 surface,
+  the one home of #[wasm_bindgen]), mantis-bridge (ALL PyO3; maturin builds mantis._engine).
 - The encoding registry is crates/mantis-encoding/src/registry.toml. Cite that path whole, `src/`
   included: a bare `registry.toml` was twice mis-cited to a crate-root path that does not exist.
 - src/mantis/ is the one Python package (monitor is headless). tests/ is the one collection root.

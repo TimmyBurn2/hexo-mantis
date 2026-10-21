@@ -69,8 +69,17 @@ pub struct StoneResult {
     pub inherited: u32,
     pub root_visits: u32,
     pub root_value: Option<f32>,
-    pub top: Vec<((i32, i32), u32)>,
+    pub top: Vec<Child>,
     pub tactics: Option<TacticsCounters>,
+}
+
+/// A root child as the search left it: its visits, its prior and its Q from the mover's side.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Child {
+    pub cell: (i32, i32),
+    pub visits: u32,
+    pub prior: f32,
+    pub q: f32,
 }
 
 /// A turn: its stones, the sims it set a stone, its flags, and its wall time on the host's clock.
@@ -127,6 +136,27 @@ pub enum PlayerError {
         sims: u32,
         cap: u32,
     },
+}
+
+impl PlayerError {
+    /// The variant's name: a host's error `name`.
+    #[must_use]
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::OutOfStep(_) => "OutOfStep",
+            Self::OutputShape { .. } => "OutputShape",
+            Self::IllegalStone { .. } => "IllegalStone",
+            Self::NoRootChildren => "NoRootChildren",
+            Self::Refused(_) => "Refused",
+            Self::Expand(_) => "Expand",
+            Self::Selection(_) => "Selection",
+            Self::Tactics(_) => "Tactics",
+            Self::Batch(_) => "Batch",
+            Self::Leaf(_) => "Leaf",
+            Self::NoCosts => "NoCosts",
+            Self::BudgetPastPool { .. } => "BudgetPastPool",
+        }
+    }
 }
 
 impl fmt::Display for PlayerError {
@@ -291,6 +321,12 @@ impl Player {
     #[must_use]
     pub fn rows(&self) -> (Rows, CacheRows) {
         (self.rows, self.cache.rows())
+    }
+
+    /// The batch a `next_batch` handed out and no `submit` has taken yet.
+    #[must_use]
+    pub fn pending(&self) -> Option<&WebBatch> {
+        self.pending.as_ref().map(|p| &p.batch)
     }
 
     #[must_use]
@@ -749,15 +785,20 @@ impl Player {
         self.rows.select_calls += counters.calls;
         self.rows.select_overlaps += counters.overlaps;
         self.rows.select_network_leaves += counters.network_leaves;
-        let top: Vec<((i32, i32), u32)> = self
+        let top: Vec<Child> = self
             .tree
             .get_top_visits(2)
             .iter()
-            .map(|t| (t.0, t.1))
+            .map(|&(cell, visits, prior, q)| Child {
+                cell,
+                visits,
+                prior,
+                q,
+            })
             .collect();
         let mut cell = top
             .first()
-            .map(|t| t.0)
+            .map(|c| c.cell)
             .ok_or(PlayerError::NoRootChildren)?;
         let (root_visits, root_value) = (self.tree.root_visits(), self.tree.root_value());
         let tactics = if self.block.tactics.is_some() {

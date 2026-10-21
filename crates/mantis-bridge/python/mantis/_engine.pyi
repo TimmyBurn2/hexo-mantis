@@ -621,9 +621,15 @@ def web_batch(
 ) -> dict[str, numpy.ndarray | int]:
     """Contract #13's batch: `x` f32 flat `(N * 11,)`, every other array int32, and `n_graphs`; ValueError on a refusal."""
     ...
-def player_constants() -> dict[str, int | bool]:
-    """The web player's own constants: `early_stop`, `tree_reuse`, `cache_entries`."""
+def player_constants() -> dict[str, int | float | bool]:
+    """The web player's own constants: `early_stop`, `tree_reuse`, `cache_entries`, `virtual_loss`."""
     ...
+class RustForward:
+    """The export's served forward in Rust over its weights file: W2's native row."""
+    def __init__(self, table: list[dict[str, Any]], weights: numpy.ndarray, node_feat_dim: int) -> None: ...
+    def forward(self, batch: dict[str, Any]) -> dict[str, numpy.ndarray]:
+        """`logits`, `probs` and `value` for contract #13's arrays (`x` flat f32, the rest int32)."""
+        ...
 class Player:
     """The Rust deploy driver: one board at a time, its turns pulled as batches and pushed back as outputs."""
     def __init__(self, deploy: dict[str, Any], encoding: str, *, cpu_path: bool) -> None: ...
