@@ -341,14 +341,14 @@ def test_the_lineage_tag_and_a_device_the_teacher_refuses(d):
         d["teacher"].Teacher(device="mps")
 
 
-def test_a_teacher_whose_runtime_is_not_its_gpu_pin_is_refused(d, monkeypatch):
-    """The default sync's onnxruntime is the web export's CPU build; the teacher refuses it rather than run off its pin."""
+def test_a_teacher_whose_runtime_is_not_its_gpu_pin_is_refused(d, monkeypatch, tmp_path):
+    """The default sync's onnxruntime is the web export's CPU build; the teacher refuses it before it looks for the net."""
     def missing(name):
         raise importlib.metadata.PackageNotFoundError(name)
 
     monkeypatch.setattr(importlib.metadata, "version", missing)
     with pytest.raises(d["teacher"].TeacherUnavailable, match="onnxruntime-gpu"):
-        d["teacher"].Teacher(device="cpu")
+        d["teacher"].Teacher(device="cpu", vendor_root=tmp_path)  # an empty vendor root: the net cannot be what refuses
 
 
 def test_the_rings_command_leaves_the_empty_board_out_and_writes_provenance(tmp_path, d):

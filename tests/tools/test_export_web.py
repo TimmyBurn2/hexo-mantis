@@ -102,9 +102,29 @@ def test_no_written_graph_holds_a_scatternd_a_gathernd_or_an_int64_batch_index(e
     """The batch is int32 so the graph reads it as int32: every batch-sized index a Gather or a scatter reads is int32."""
     for stamp, out, manifest in exports.values():
         for row in manifest["files"][:2]:
+            model = onnx.load(str(out / row["name"]))
             assert row["ops"]["ScatterElements"] > 0, row["name"]
-            assert export_web.graph_refusal(row["ops"], onnx.load(str(out / row["name"]))) is None, row["name"]
+            assert export_web.graph_refusal(row["ops"], model) is None, row["name"]
+            types = export_web._value_types(model)
+            readers = [n for n in model.graph.node if n.op_type in export_web.INDEX_READERS]
+            assert len(readers) == sum(row["ops"].get(op, 0) for op in export_web.INDEX_READERS)
+            assert all(types[n.input[export_web.INDEX_READERS[n.op_type]]][0] == TensorProto.INT32 for n in readers), (
+                row["name"], "every index a Gather or a scatter reads infers int32")
         assert stamp.stem in manifest["files"][0]["name"]
+
+
+def test_a_narrowing_that_does_not_type_check_is_a_named_refusal(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """PLANTED BREAK: a narrowing whose shape inference fails is refused by name, its files removed, the stamp kept."""
+    stamp = _tiny_stamp(tmp_path / "stamp", "GnnArchV2", "gnn_axis_r8")
+
+    def clash(_path: Path) -> None:
+        raise onnx.shape_inference.InferenceError("a planted type clash")
+
+    monkeypatch.setattr(export_web, "narrow_index_casts", clash)
+    with pytest.raises(export_web.ExportRefused, match="type-check") as refused:
+        export_web.export(stamp, stamp.parent, n_positions=POSITIONS)
+    assert refused.value.field == "graph" and stamp.is_file()
+    assert not [f for f in stamp.parent.iterdir() if f.name.endswith(tuple(export_web.WRITTEN.values()))]
 
 
 def test_an_unnarrowed_graph_is_refused_and_leaves_no_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -136,6 +156,21 @@ def test_a_widened_index_is_refused_and_the_narrowing_takes_it_through_a_reshape
     narrowed = onnx.load(str(path))
     assert export_web.graph_refusal({"Gather": 1}, narrowed) is None
     assert [n.op_type for n in narrowed.graph.node] == ["Reshape", "Gather"]
+
+
+def test_a_static_int64_index_passes_and_an_untyped_one_is_refused() -> None:
+    """A shape op's constant int64 index is not batch data; an index whose type inference cannot see refuses, failing closed."""
+    static = helper.make_graph([helper.make_node("Gather", ["data", "k"], ["out"])], "s",
+                               [helper.make_tensor_value_info("data", TensorProto.FLOAT, ["N", 4])],
+                               [helper.make_tensor_value_info("out", TensorProto.FLOAT, [4])],
+                               [numpy_helper.from_array(np.array(0, dtype=np.int64), "k")])
+    assert export_web.graph_refusal({"Gather": 1}, helper.make_model(static, opset_imports=[helper.make_opsetid("", 18)])) is None
+    untyped = helper.make_graph([helper.make_node("Opaque", ["data"], ["idx"], domain="probe"),
+                                 helper.make_node("Gather", ["data", "idx"], ["out"])], "u",
+                                [helper.make_tensor_value_info("data", TensorProto.FLOAT, ["N", 4])],
+                                [helper.make_tensor_value_info("out", TensorProto.FLOAT, None)])
+    model = helper.make_model(untyped, opset_imports=[helper.make_opsetid("", 18), helper.make_opsetid("probe", 1)])
+    assert "idx" in (export_web.graph_refusal({"Gather": 1}, model) or "")
 
 
 def test_the_argmax_rule_reds_a_flip_the_value_lines_cannot_see() -> None:

@@ -54,8 +54,9 @@ OPENINGS: tuple[tuple[list[tuple[int, int, int]], int, int], ...] = (
     ([(0, 0, 1), (1, 0, -1), (0, 1, -1), (-1, 0, 1)], 1, 1),
 )
 DEVICE_WITNESS_GOLDENS = 11
-#: Every file an export writes, by the suffix after the stamp's stem; a refusal removes these and nothing else.
-WRITTEN = (".fp32.onnx", ".fp16.onnx", ".weights.bin", ".witness.json", ".manifest.json")
+#: Every file an export writes, by kind, as the suffix after the stamp's stem; a refusal removes these and nothing else.
+WRITTEN = {"fp32": ".fp32.onnx", "fp16": ".fp16.onnx", "weights": ".weights.bin", "witness": ".witness.json",
+           "manifest": ".manifest.json"}
 #: Ops that read an int32 index as well as an int64 one, by the input slot that carries it.
 INDEX_SLOTS = {"Gather": 1, "GatherElements": 1, "ScatterElements": 1, "Unsqueeze": 0, "Expand": 0, "Reshape": 0}
 #: The ops whose index input must reach the written graph as int32 wherever it is sized by the batch.
@@ -287,14 +288,14 @@ def export_onnx(wrapper: nn.Module, sample: dict[str, np.ndarray], path: Path, o
 
 
 def _value_types(model: onnx.ModelProto) -> dict[str, tuple[int, bool]]:
-    """Every named value's inferred element type, and whether its shape has a dimension the batch sizes."""
+    """Every named value's inferred element type, and whether its shape is fully static (known, every dim a number)."""
     graph = onnx.shape_inference.infer_shapes(model).graph
     out = {}
     for v in [*graph.input, *graph.value_info, *graph.output]:
         tensor = v.type.tensor_type
-        out[v.name] = (tensor.elem_type, any(d.HasField("dim_param") or not d.HasField("dim_value") for d in tensor.shape.dim))
+        out[v.name] = (tensor.elem_type, tensor.HasField("shape") and all(d.HasField("dim_value") for d in tensor.shape.dim))
     for init in graph.initializer:
-        out[init.name] = (init.data_type, False)
+        out[init.name] = (init.data_type, True)
     return out
 
 
@@ -326,15 +327,20 @@ def narrow_index_casts(path: Path) -> None:
 
 
 def graph_refusal(ops: dict[str, int], model: onnx.ModelProto) -> str | None:
-    """Why a written graph is refused: a ScatterND, a GatherND, or a batch-sized index an index reader reads as int64."""
+    """Why a written graph is refused: a ScatterND, a GatherND, or an index reader's index that is not int32 unless it is a fully static int64 (a shape op's); an untyped index refuses."""
     if "ScatterND" in ops:
         return "a ScatterND, which races under threaded ORT kernels"
     if "GatherND" in ops:
         return "a GatherND, whose int64 index the int32 batch was built to remove"
     types = _value_types(model)
+
+    def int32_or_static(name: str) -> bool:
+        elem, static = types.get(name, (TensorProto.UNDEFINED, False))
+        return elem == TensorProto.INT32 or (elem == TensorProto.INT64 and static)
+
     wide = sorted({n.input[slot] for n in model.graph.node if (slot := INDEX_READERS.get(n.op_type)) is not None
-                   and len(n.input) > slot and types.get(n.input[slot]) == (TensorProto.INT64, True)})
-    return f"int64 batch-sized indices {wide}" if wide else None
+                   and len(n.input) > slot and not int32_or_static(n.input[slot])})
+    return f"indices not read as int32 {wide}" if wide else None
 
 
 def fp16_storage(src: Path, dst: Path) -> None:
@@ -423,8 +429,8 @@ def device_witness(net: nn.Module, spec: Any, config: dict, encoding: str) -> di
 
 
 def export(checkpoint: Path, out: Path, *, n_positions: int = 512, opset: int = 18) -> dict[str, Any]:
-    """Detect, re-express, export, witness and write the manifest for `checkpoint` into `out`; Raises: ExportRefused — an uncarried stamp, an unchecked registry, a foreign batch, a re-expression not bit-identical, or a refused or untyped graph (its files removed); CheckpointStampError — the stamp itself; RuntimeError, ValueError, KeyError — a served group split, a seam guard, a config without its deploy or self-play block; onnx.checker.ValidationError — the fp16 file ONNX rejects; onnxruntime's errors — a session ORT cannot build or run."""
-    dirty = is_dirty(REPO)  # read before any file is written, so an --out inside the tree cannot dirty its own manifest
+    """Detect, re-express, export, witness and write the manifest for `checkpoint` into `out`; Raises: ExportRefused — an uncarried stamp, an unchecked registry, a foreign batch, a re-expression not bit-identical, or a refused or untyped graph (its files removed); CheckpointStampError — the stamp itself; RuntimeError, ValueError, KeyError — a served group split, a seam guard, a config without its deploy or self-play block; onnx.checker.ValidationError — a written fp32 or fp16 file ONNX rejects; onnxruntime's errors — a session ORT cannot build or run."""
+    dirty = is_dirty(REPO) is not False  # tracked changes, read before any file is written; git's silence reads dirty
     ck = load_checkpoint(checkpoint, declared_encoding=None, declared_future_head=None)
     config = ck.config
     if not isinstance(config, dict):
@@ -458,7 +464,10 @@ def export(checkpoint: Path, out: Path, *, n_positions: int = 512, opset: int = 
 
     out.mkdir(parents=True, exist_ok=True)
     stem = checkpoint.name.removesuffix(".ckpt")
-    fp32, fp16 = out / f"{stem}.fp32.onnx", out / f"{stem}.fp16.onnx"
+    paths = {kind: out / f"{stem}{suffix}" for kind, suffix in WRITTEN.items()}
+    for path in paths.values():
+        path.unlink(missing_ok=True)  # an earlier export's files go first, so no manifest can name a file this one rewrote
+    fp32, fp16 = paths["fp32"], paths["fp16"]
     t0 = time.perf_counter()
     export_onnx(wrapper, cases[8][0][0], fp32, opset)
     try:
@@ -468,17 +477,17 @@ def export(checkpoint: Path, out: Path, *, n_positions: int = 512, opset: int = 
         refusal = f"a narrowing that does not type-check ({exc})"
     export_s = time.perf_counter() - t0
     if refusal is not None:
-        for suffix in WRITTEN:
-            (out / f"{stem}{suffix}").unlink(missing_ok=True)  # an earlier export's too, so no manifest names a refused graph
+        for path in paths.values():
+            path.unlink(missing_ok=True)
         raise ExportRefused("graph", f"the written graph holds {refusal}")
     fp16_storage(fp32, fp16)
-    weights_path = out / f"{stem}.weights.bin"
+    weights_path = paths["weights"]
     table = dump_weights(wrapper, weights_path)
 
     rows = [*witness(fp32, 1, cases, "fp32"), *witness(fp32, 0, cases, "fp32"),
             *witness(fp16, 1, cases, "fp16"), *witness(fp16, 0, cases, "fp16")]
     device = device_witness(net, spec, config, encoding)
-    witness_path = out / f"{stem}.witness.json"
+    witness_path = paths["witness"]
     witness_path.write_text(json.dumps(device), encoding="utf-8")
 
     def verdict(path: Path) -> bool:
@@ -512,7 +521,7 @@ def export(checkpoint: Path, out: Path, *, n_positions: int = 512, opset: int = 
                                 "positions": len(positions), "openings": len(OPENINGS)},
                     "rows": rows},
     }
-    (out / f"{stem}.manifest.json").write_text(json.dumps(manifest, indent=1), encoding="utf-8")
+    paths["manifest"].write_text(json.dumps(manifest, indent=1), encoding="utf-8")
     return manifest
 
 
