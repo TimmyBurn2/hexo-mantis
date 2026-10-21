@@ -3,7 +3,6 @@
 """`tools/export_web.py` (contract #13, gate 20): tiny random-init stamps of every carried kind through the whole export, written by the one checkpoint writer into temp directories."""
 from __future__ import annotations
 
-import copy
 import hashlib
 import json
 from collections.abc import Callable
@@ -17,15 +16,14 @@ import torch
 from onnx import TensorProto, helper, numpy_helper
 
 from mantis import _engine
-from mantis.config.census import production_configs
-from mantis.config.loader import load_config
 from mantis.config.resolve.tactics import resolve_deploy_tactics
 from mantis.encoding import lookup
-from mantis.model import ARCH_KINDS, build_net, gnn_widths_block
+from mantis.model import build_net
 from mantis.model.identity import net_param_hash
-from mantis.train.checkpoints import deploy_state, load_checkpoint, save_checkpoint
+from mantis.train.checkpoints import deploy_state, load_checkpoint
 from mantis.util.git import head_sha
 from _toolpath import load_module_by_path
+from _web_stamps import tiny_stamp
 
 REPO = Path(__file__).resolve().parents[2]
 export_web = load_module_by_path("export_web", REPO / "tools" / "export_web.py")
@@ -37,42 +35,13 @@ CASES = [(kind, "gnn_axis_r8") for kind in export_web.CARRIED_KINDS] + [("GnnArc
 FUTURE = ("GnnArchV2SoftPolicyFuture", "gnn_axis_r8")
 
 
-def _base_config(kind: str) -> dict[str, Any]:
-    """A production config of the census that serves a carried row, of `kind` where one exists."""
-    dumps = [load_config(path).model_dump() for path in production_configs(REPO)]
-    graph = [d for d in dumps if d["identity"]["encoding"] in export_web.CARRIED_ENCODINGS]
-    return copy.deepcopy(next((d for d in graph if d["identity"]["arch_kind"] == kind), graph[0]))
-
-
-def _tiny_stamp(out: Path, kind: str, encoding: str, **config_changes: Any) -> Path:
-    """A random-init stamp of `kind` under `encoding`, its config a census config with the stamp's identity and widths."""
-    torch.manual_seed(0)
-    spec = lookup(encoding)
-    assert spec.node_feat_dim is not None and spec.edge_feat_dim is not None
-    arch = ARCH_KINDS[kind](in_dim=spec.node_feat_dim, edge_dim=spec.edge_feat_dim, hidden=16, num_layers=2,
-                            policy_hidden=8, value_hidden=8)
-    config = _base_config(kind)
-    config["identity"].update(encoding=encoding, arch_kind=kind)
-    config["model"]["gnn"] = gnn_widths_block(arch)
-    # A head a kind does not carry is a dead loss row in its config (LAW-08), so the stamp drops it.
-    if "SoftPolicy" not in kind:
-        config["model"]["aux_soft_policy"] = None
-    if not kind.endswith("Future"):
-        config["model"]["aux_future_occupancy"] = None
-    for section, value in config_changes.items():
-        config[section].update(value)
-    return save_checkpoint(model=build_net(arch), optimizer=None, scaler=None, scheduler=None, step=0, config=config,
-                           kind="weights", metadata_kwargs={"encoding_name": encoding, "run_id": "tiny", "arch": arch},
-                           checkpoint_dir=out)
-
-
 @pytest.fixture(scope="module")
 def exports(tmp_path_factory: pytest.TempPathFactory) -> dict[tuple[str, str], tuple[Path, Path, dict]]:
     """Each carried (kind, encoding): its stamp, its out directory and its manifest."""
     done = {}
     for kind, encoding in CASES:
         root = tmp_path_factory.mktemp(f"{kind}-{encoding}")
-        stamp = _tiny_stamp(root / "stamp", kind, encoding)
+        stamp = tiny_stamp(root / "stamp", kind, encoding)
         done[(kind, encoding)] = (stamp, root / "out", export_web.export(stamp, root / "out", n_positions=POSITIONS))
     return done
 
@@ -144,7 +113,7 @@ def test_no_written_graph_holds_a_scatternd_a_gathernd_or_an_int64_batch_index(e
 
 def test_a_narrowing_that_does_not_type_check_is_a_named_refusal(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """PLANTED BREAK: a narrowing whose shape inference fails is refused by name, its files removed, the stamp kept."""
-    stamp = _tiny_stamp(tmp_path / "stamp", "GnnArchV2", "gnn_axis_r8")
+    stamp = tiny_stamp(tmp_path / "stamp", "GnnArchV2", "gnn_axis_r8")
 
     def clash(_path: Path) -> None:
         raise onnx.shape_inference.InferenceError("a planted type clash")
@@ -158,7 +127,7 @@ def test_a_narrowing_that_does_not_type_check_is_a_named_refusal(monkeypatch: py
 
 def test_an_unnarrowed_graph_is_refused_and_leaves_no_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """PLANTED BREAK: skip the int32 narrowing and torch's own int64 casts must refuse the graph."""
-    stamp = _tiny_stamp(tmp_path / "stamp", "GnnArchV2", "gnn_axis_r8")
+    stamp = tiny_stamp(tmp_path / "stamp", "GnnArchV2", "gnn_axis_r8")
     monkeypatch.setattr(export_web, "narrow_index_casts", lambda _path: None)
     with pytest.raises(export_web.ExportRefused) as refused:
         export_web.export(stamp, stamp.parent, n_positions=POSITIONS)  # --out beside the stamp: the stamp must survive
@@ -290,7 +259,7 @@ def test_a_perturbed_written_graph_misses_the_line_it_moves(exports, future_case
 
 def test_a_re_expression_that_is_not_bit_identical_is_refused(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """PLANTED BREAK: one ulp of drift in the traced forward refuses the export before anything is written."""
-    stamp = _tiny_stamp(tmp_path / "stamp", "GnnArchV2", "gnn_axis_r8")
+    stamp = tiny_stamp(tmp_path / "stamp", "GnnArchV2", "gnn_axis_r8")
     forward = export_web.WebServedGraph.forward
 
     def drifted(self, *args):  # noqa: ANN001, ANN202 — the traced signature is the original's
@@ -306,7 +275,7 @@ def test_a_re_expression_that_is_not_bit_identical_is_refused(monkeypatch: pytes
 
 def test_a_foreign_batch_and_an_unchecked_registry_are_refused(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """PLANTED BREAKS: an engine batch whose x is not the served one, and a registry the import handshake never checked."""
-    stamp = _tiny_stamp(tmp_path / "stamp", "GnnArchV2", "gnn_axis_r8")
+    stamp = tiny_stamp(tmp_path / "stamp", "GnnArchV2", "gnn_axis_r8")
     inputs = export_web.web_inputs
 
     def foreign(*args: Any) -> dict[str, np.ndarray]:
@@ -341,7 +310,7 @@ def test_the_detector_refuses_what_it_does_not_carry_by_name(kind: str, encoding
 
 
 def test_a_gumbel_deploy_block_is_refused_before_anything_is_written(tmp_path: Path) -> None:
-    stamp = _tiny_stamp(tmp_path / "stamp", "GnnArchV2", "gnn_axis_r8",
+    stamp = tiny_stamp(tmp_path / "stamp", "GnnArchV2", "gnn_axis_r8",
                         deploy={"search": {"kind": "gumbel", "tactics": None}})
     with pytest.raises(export_web.ExportRefused) as refused:
         export_web.export(stamp, tmp_path / "out", n_positions=POSITIONS)

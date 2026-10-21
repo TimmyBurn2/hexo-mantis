@@ -145,6 +145,10 @@ else
     FAILED+=("rust arm (exit $RUST_RC before its gates finished)")
 fi
 
+# After the Rust arm: the package's wasm build would otherwise queue on the arm's cargo lock.
+run_gate "gate 21: web package (wasm build, types, node tests on a tiny export)" \
+    bash tools/ci_gates/web_gate.sh
+
 # ── hygiene (diff-scoped) ─────────────────────────────────────────────────────────────
 run_gate "gate 6: artifact rejection" \
     python3 tools/ci_gates/artifact_gate.py --base "$BASE_REF"

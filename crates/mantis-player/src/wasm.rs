@@ -8,7 +8,7 @@ use wasm_bindgen::prelude::*;
 
 use mantis_search::mcts::{AuditConfig, AuditMode, TacticsConfig};
 
-use crate::batch::WebBatch;
+use crate::batch::{build_batch, Position, WebBatch};
 use crate::cache::CacheRows;
 use crate::forward::{NetOutputs, RustForward, TensorRow};
 use crate::player::{
@@ -240,28 +240,23 @@ impl Engine {
             .ok_or_else(|| named("OutOfStep", "no batch is outstanding"))
     }
 
-    /// The pending batch's `x`, copied out for a host backend.
-    pub fn batch_x(&self) -> Result<Vec<f32>, JsValue> {
-        Ok(self.batch()?.x.clone())
+    /// A copy of the pending batch, for a host backend.
+    pub fn pending_batch(&self) -> Result<Batch, JsValue> {
+        Ok(Batch {
+            inner: self.batch()?.clone(),
+        })
     }
 
-    /// One of the pending batch's int32 arrays by its contract #13 name, copied out for a host backend.
-    pub fn batch_i32(&self, name: &str) -> Result<Vec<i32>, JsValue> {
-        let b = self.batch()?;
-        Ok(match name {
-            "src" => &b.src,
-            "dst" => &b.dst,
-            "code" => &b.code,
-            "legal" => &b.legal,
-            "node_graph" => &b.node_graph,
-            "legal_graph" => &b.legal_graph,
-            "divisor" => &b.divisor,
-            "real" => &b.real,
-            "mean_mask" => &b.mean_mask,
-            "mean_den" => &b.mean_den,
-            _ => return Err(named("Refused", &format!("no batch array {name:?}"))),
-        }
-        .clone())
+    /// `RustForward` on any batch: the on-device witness and W2 read it.
+    pub fn forward_batch(&self, batch: &Batch) -> Result<Outputs, JsValue> {
+        let forward = self
+            .forward
+            .as_ref()
+            .ok_or_else(|| named("Weights", "no weights loaded"))?;
+        let out = forward
+            .forward(&batch.inner)
+            .map_err(|e| named("Weights", &e.to_string()))?;
+        Ok(Outputs { inner: out })
     }
 
     /// `RustForward` on the pending batch in place; `submit_pending` hands its outputs to the search.
@@ -315,4 +310,152 @@ impl Engine {
 #[must_use]
 pub fn memory_bytes() -> f64 {
     core::arch::wasm32::memory_size(0) as f64 * 65_536.0
+}
+
+/// Contract #13's batch in JS: built from positions by the engine, copied from the pending one, or given as arrays.
+#[wasm_bindgen]
+pub struct Batch {
+    inner: WebBatch,
+}
+
+#[wasm_bindgen]
+impl Batch {
+    /// A batch from its arrays; the forward checks them before it reads one.
+    #[wasm_bindgen(constructor)]
+    #[allow(clippy::too_many_arguments)]
+    #[must_use]
+    pub fn new(
+        x: Vec<f32>,
+        src: Vec<i32>,
+        dst: Vec<i32>,
+        code: Vec<i32>,
+        legal: Vec<i32>,
+        node_graph: Vec<i32>,
+        legal_graph: Vec<i32>,
+        divisor: Vec<i32>,
+        real: Vec<i32>,
+        mean_mask: Vec<i32>,
+        mean_den: Vec<i32>,
+    ) -> Batch {
+        let n_graphs = mean_den.len();
+        let inner = WebBatch {
+            n_graphs,
+            x,
+            src,
+            dst,
+            code,
+            legal,
+            node_graph,
+            legal_graph,
+            divisor,
+            real,
+            mean_mask,
+            mean_den,
+            leaves: Vec::new(),
+        };
+        Batch { inner }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn n_graphs(&self) -> usize {
+        self.inner.n_graphs
+    }
+
+    pub fn x(&self) -> Vec<f32> {
+        self.inner.x.clone()
+    }
+
+    /// One int32 array by its contract #13 name.
+    pub fn i32(&self, name: &str) -> Result<Vec<i32>, JsValue> {
+        let b = &self.inner;
+        Ok(match name {
+            "src" => &b.src,
+            "dst" => &b.dst,
+            "code" => &b.code,
+            "legal" => &b.legal,
+            "node_graph" => &b.node_graph,
+            "legal_graph" => &b.legal_graph,
+            "divisor" => &b.divisor,
+            "real" => &b.real,
+            "mean_mask" => &b.mean_mask,
+            "mean_den" => &b.mean_den,
+            _ => return Err(named("Refused", &format!("no batch array {name:?}"))),
+        }
+        .clone())
+    }
+}
+
+/// The engine's own batch of `positions`: `stones` flat `(q, r, p)` triples, `counts` stones a position.
+#[wasm_bindgen]
+pub fn web_batch(
+    encoding: &str,
+    stones: &[i32],
+    counts: &[u32],
+    sides: &[i32],
+    lefts: &[i32],
+) -> Result<Batch, JsValue> {
+    let spec = mantis_encoding::lookup(encoding)
+        .ok_or_else(|| named("Refused", &format!("unknown encoding {encoding:?}")))?;
+    if !stones.len().is_multiple_of(3) || counts.len() != sides.len() || counts.len() != lefts.len()
+    {
+        return Err(named(
+            "Batch",
+            "stones come as (q, r, p) triples, one count, side and left a position",
+        ));
+    }
+    let mut triples = stones
+        .chunks(3)
+        .map(|s| (i64::from(s[0]), i64::from(s[1]), i64::from(s[2])));
+    let mut positions: Vec<Position> = Vec::with_capacity(counts.len());
+    for ((&n, &side), &left) in counts.iter().zip(sides).zip(lefts) {
+        let own: Vec<_> = triples.by_ref().take(n as usize).collect();
+        if own.len() != n as usize {
+            return Err(named(
+                "Batch",
+                "the counts ask for more stones than were given",
+            ));
+        }
+        positions.push((own, i64::from(side), i64::from(left)));
+    }
+    let inner = build_batch(&positions, spec).map_err(|e| named("Batch", &e.to_string()))?;
+    Ok(Batch { inner })
+}
+
+/// The net's outputs for one batch.
+#[wasm_bindgen]
+pub struct Outputs {
+    inner: NetOutputs,
+}
+
+#[wasm_bindgen]
+impl Outputs {
+    pub fn logits(&self) -> Vec<f32> {
+        self.inner.logits.clone()
+    }
+
+    pub fn probs(&self) -> Vec<f32> {
+        self.inner.probs.clone()
+    }
+
+    pub fn value(&self) -> Vec<f32> {
+        self.inner.value.clone()
+    }
+}
+
+/// The compiled encoding registry's sha256: a manifest naming another was exported for another engine.
+#[wasm_bindgen]
+#[must_use]
+pub fn registry_sha() -> String {
+    mantis_encoding::registry_sha_hex().to_owned()
+}
+
+/// The player's own constants as the manifest's `deploy.player` names them, as JSON.
+#[wasm_bindgen]
+#[must_use]
+pub fn player_constants() -> String {
+    json!({
+        "early_stop": crate::player::EARLY_STOP, "tree_reuse": crate::player::TREE_REUSE,
+        "cache_entries": crate::cache::CACHE_ENTRIES, "virtual_loss": mantis_search::VIRTUAL_LOSS_PENALTY,
+    })
+    .to_string()
 }

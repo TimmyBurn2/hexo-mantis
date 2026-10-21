@@ -123,6 +123,9 @@ jobs:
       # Gate 20 (DEPLOY-WEB L1): tiny random-init stamps of every carried kind through the web export and its witness.
       - name: "gate 20: web export pipeline witness (contract #13)"
         run: uv run pytest tests/tools/test_export_web.py -q
+      # Gate 21 (DEPLOY-WEB L3): the browser package built and its node tests run on a tiny stamp's export.
+      - name: "gate 21: web package (wasm build, types, node tests on a tiny export)"
+        run: bash tools/ci_gates/web_gate.sh
 
   hygiene:
     runs-on: ubuntu-latest

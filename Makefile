@@ -1,4 +1,4 @@
-.PHONY: build build.cuda build.native test test.integration lint lint.rust gates gates.exit dash bench bench.baseline check.wasm vendor vendor.strix vendor.strix.cuda vendor.six clean
+.PHONY: build build.cuda build.native test test.integration lint lint.rust gates gates.exit dash bench bench.baseline check.wasm web vendor vendor.strix vendor.strix.cuda vendor.six clean
 
 UV ?= uv
 
@@ -57,6 +57,10 @@ bench.baseline:
 
 check.wasm:
 	cargo check -p mantis-graph -p mantis-player --target wasm32-unknown-unknown --locked
+
+# The browser package's engine: the player for wasm32 (+simd128) and its bindgen glue (web/scripts/build.sh).
+web:
+	bash web/scripts/build.sh
 
 vendor:
 	bash tools/vendor_fetch.sh

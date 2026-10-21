@@ -1,0 +1,25 @@
+{
+  "name": "mantis-web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The mantis Hex Tac Toe engine in the browser: one wasm engine, a WebGPU or one-CPU-thread net, witnessed from its stamp.",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "scripts": {
+    "build": "bash scripts/build.sh",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "onnxruntime-web": "1.30.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.4",
+    "puppeteer-core": "25.13.0",
+    "typescript": "6.0.3"
+  },
+  "engines": {
+    "node": ">=26"
+  }
+}

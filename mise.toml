@@ -1,4 +1,4 @@
-# Repo-local toolchain pin for the ONE tool `rust-toolchain.toml` does not cover: node.
+# Repo-local toolchain pins for what `rust-toolchain.toml` does not cover: node, and the wasm-bindgen CLI.
 #
 # WHY THIS FILE EXISTS. Gate 14 runs `uv run pyright`, and `pyright` is a shim over node. On a
 # host whose node comes from mise, a shim with no selected version resolves to nothing, the
@@ -17,8 +17,13 @@
 # it did not measure — which is the whole point of R289(u) and is not traded away for
 # convenience here. The pin removes the obstacle; it does not remove the detector.
 #
-# Node is a TYPE-CHECKING dependency only: nothing in `src/`, `crates/` or the runtime touches
-# it, so this pin carries none of the perf-attestation weight the Rust channel does (a Rust
-# bump invalidates every floor in tools/bench_floors.toml; a node bump invalidates nothing).
+# Node type-checks the Python tree (pyright) and builds and tests the shipped browser package
+# (`web/`, gate 21). Neither pin carries the perf-attestation weight of the Rust channel: a Rust
+# bump invalidates every floor in tools/bench_floors.toml; a node or CLI bump invalidates none.
+#
+# The wasm-bindgen CLI must equal the `wasm-bindgen` crate in Cargo.lock exactly — the glue it
+# writes and the module the crate compiles refuse each other across versions — so it moves only
+# with the lock, and `web/scripts/build.sh` refuses any other.
 [tools]
 node = "26.7.0"
+"cargo:wasm-bindgen-cli" = "0.2.126"

@@ -34,3 +34,6 @@ __pycache__/
 # coupling_terms.txt is the precedent. Absent in CI by construction, so the tracked half of
 # the gate must stand on its own.
 tools/ci_gates/rule7_local_terms.txt
+/web/node_modules/
+/web/dist/
+/web/pkg/
