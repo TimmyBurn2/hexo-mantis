@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Gate 21: the browser package — its engine built for wasm32 under the pinned bindgen CLI, its types, and its node
-# tests (W2 in wasm and its break, the Worker's loop, the arena adapter) on a tiny stamp the one exporter writes.
+# Gate 21: the browser package's wasm build (pinned bindgen CLI), its types, and its node tests (W2 in wasm and its
+# break, the Worker's loop, the arena adapter) on a tiny stamp the one exporter writes.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 uv="${UV:-uv}"

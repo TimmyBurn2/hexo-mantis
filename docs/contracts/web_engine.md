@@ -1,13 +1,13 @@
 # Contract: web engine API (#13)
 
-- version: v3
+- version: v4
 - owner: crate mantis-player (`batch.rs`, the batch both net backends read; `player.rs`, `cache.rs` and `budget.rs`,
   the step machine; `forward.rs`, `RustForward`; `wasm.rs`, the browser surface); `tools/export_web.py` (the manifest
-  and its witness rows)
-- status: v3 — `RustForward`, the wasm32 surface, W2's rows and manifest v2 (`deploy.player`) land with DEPLOY-WEB L2's
-  second half (v2: the step machine, the per-game cache and the budget; v1, L1: the batch, its outputs, the export's
-  files, the manifest and the witness lines). The typed API, the Worker messages and the arena adapter (L3) extend this
-  doc, bumping its version in their commit.
+  and its witness rows); `web/` (the typed API, the Worker's messages and checks, the backends, the arena adapter)
+- status: v4 — the `web/` package lands with DEPLOY-WEB L3: the typed API, the Worker's messages, its manifest checks,
+  selection and the on-device witness, the WebGPU backend's per-call edge cap, and the arena adapter's packet map (v3,
+  L2: `RustForward`, the wasm32 surface, W2's rows, manifest v2; v2, L2: the step machine, the cache, the budget; v1,
+  L1: the batch, its outputs, the export's files, the manifest and the witness lines).
 
 ## Summary
 
@@ -159,14 +159,65 @@ pins that). Each refusal is a JS `Error` whose `name` is the `PlayerError` varia
 | `load_weights(names, dims, floats, node_feat_dim)` | `RustForward` over the weights file: names one a line, `(rows, cols, offset)` each |
 | `set_costs`, `min_turn_ms`, `new_game(moves, sims?, turn_ms?)`, `play(stones)`, `begin_turn(now_ms, sims?, turn_ms?)`, `abort` | as the step machine; cells as flat `q, r` pairs |
 | `next_batch(now_ms)` | `true` when a batch waits for the net, `false` when the turn ended |
-| `batch_x()`, `batch_i32(name)` | the pending batch's arrays, copied out for a host backend |
+| `pending_batch()` | a copy of the pending batch, as a `Batch`, for a host backend |
+| `forward_batch(batch)` | `RustForward` on any `Batch`: the on-device witness and W2 read it |
 | `forward_pending()`, `submit_pending(now_ms)` | `RustForward` on the pending batch in place, then its outputs to the search: the batch never crosses into JS |
 | `submit(probs, values, now_ms)` | a host backend's outputs |
 | `turn_json()`, `rows_json()` | the last `TurnResult` and the rows, as JSON (a non-finite float is `null`) |
 | `memory_bytes()` | the module's linear memory: its high-water mark |
+| `Batch(x, src, …, mean_den)`, `.x()`, `.i32(name)`, `.n_graphs` | contract #13's batch in JS, from its arrays (the forward checks them) |
+| `web_batch(encoding, stones, counts, sides, lefts)` | the engine's own `Batch` of positions: stones as flat `(q, r, p)` triples |
+| `registry_sha()`, `player_constants()` | the compiled registry's sha256 and the player's constants (JSON), which a manifest must match |
 
 The wasm-only dependencies (`wasm-bindgen` pinned to the lock's one version, `js-sys`, `serde_json`, and `getrandom`'s
 `wasm_js`, which unifies into `rand`'s) live in the player's manifest alone; gate 4 checks the player for wasm32.
+
+## The typed API and the Worker (`web/src/index.ts`, `web/src/worker.ts`)
+
+`createEngine({assets, backend?})` starts a module Worker at `${assets}/src/worker.js`; every file is fetched from
+`assets` alone (the integrator's origin): `net/index.json` → the manifest, the net files, `pkg/` (the engine), `ort/`
+(the WebGPU bundle and the one runtime it loads, `env.wasm.wasmPaths` pointing there).
+
+| method | message `op` | does |
+|---|---|---|
+| `info()` | — (cached) | backend, adapter, witness row and every candidate's row, `leafMs`, `rootMs` (0: folded), `minTurnMs`, module and peak bytes, the manifest's stamp, `engineTraps` |
+| `newGame(opening, clock)` | `newGame` | the opening's stones as moves in turn cadence (x one, then two each, each side's in the order given); the engine's rules check them |
+| `play(stones)` | `play` | the other side's stones |
+| `playTurn(budget)` | `playTurn` | the one loop: `begin_turn`; per batch `forward_pending` + `submit_pending` (CPU) or the backend on `pending_batch()` + `submit` (WebGPU); a MessageChannel round trip between batches, so an `abort` is heard; `TurnResult` in camelCase with the rows |
+| `analyse(position, budget)` | `analyse` | a new game at `position` (pool sized for the budget's clock), then a turn |
+| `abort()` | `abort` (no reply) | the turn in flight rejects with `AbortError`; the board is as before it |
+| `dispose()` | — | terminates the Worker |
+
+- **Messages:** `{id, op, args}` → `{id, ok: true, value}` or `{id, ok: false, error: {name, message}}`. The handler is
+  exported (`handler(host)`), so node drives it with a host of its own.
+- **Init refuses** (`Refused`): a manifest format other than `mantis-web-manifest-v2`, a `registry_sha` other than the
+  engine's, a deploy kind other than PUCT, a `deploy.player` constant other than the engine's, a file whose bytes miss
+  its sha256. `Unsupported`: no wasm SIMD. `NoBackendPassed`: no candidate's witness held (the rows in the message).
+- **Selection:** WebGPU first when a non-fallback adapter exists (`backend: 'auto'`), else or on a miss the CPU path;
+  each runs the export's 16-position witness on batches the engine builds at `leaf_batch_size`, at the fp32 line. The
+  engine is built for the backend that won (`cpu_path` arms the 16-sim floor). The warm-up cost a leaf is the
+  witness's wall ms over its leaves, root folded in, until a turn measures its own.
+- **WebGPU calls** split a batch at graph boundaries under `EDGE_CAP` edges (a larger graph alone), re-based; a graph's
+  outputs do not depend on its batch-mates, so the split is invisible.
+- **A trap** (`RuntimeError`) or a Worker error rejects every pending call with `EngineCrashed`; the API terminates the
+  Worker, starts a new one, re-runs `init` and counts the trap.
+
+## The arena adapter (`web/src/arena.ts`)
+
+HeXO-Arena's analysis slot (develop 8817871a: `packages/contract/src/htttx.ts`, `apps/web/src/analysis/worker-source.ts`),
+htttx basic_websocket v1-alpha over `postMessage`; wire `(q, r)` is the engine's `(q, r)`, as `tools/ladder/wire.py` maps it.
+
+| packet in | the adapter |
+|---|---|
+| (on attach) | posts `{meta: {version}, basic_websocket: {versions: {"v1-alpha": {free_setup, resettable_state, dual_sided, request_id, interruptible: true}}}}` |
+| `setup {board: {cells: [{q, r, p}]}}` | holds the stones, queued behind the request in flight |
+| `move_request {side, previous, move_time_limit?, request_id?}` | after a setup, `newGame` at the setup's stones plus `previous`, sized for 5 s; else `play` of the unseen pieces; then `playTurn({turnMs: limit·1000})`, or `{unlimited: true}` without a limit |
+| `interrupt {request_id?}` | `abort` of the request in flight; a request interrupted before it started is never played |
+
+- **`move_response`:** `{type, move: {pieces: [2], evaluation: {heuristic}}, request_id}`. A turn whose first stone wins
+  is padded by that stone's first empty neighbour (q+1; r+1; q−1,r+1; q−1; r−1; q+1,r−1). `heuristic` is x-positive (htttx
+  counts x positive): the last searched stone's root value for the mover, signed by side, 1 for a decided or winning
+  turn. No `win_in` and no considerations are sent; an interrupted request is answered with nothing.
 
 ## Who asserts what where
 
@@ -191,6 +242,10 @@ The wasm-only dependencies (`wasm-bindgen` pinned to the lock's one version, `js
 | W2: `RustForward` holds the fp32 line against the fp32 ONNX on every tiny stamp and batch; fed every divisor as 1 it misses (planted break) | `forward.rs`, `tools/export_web.py` | `tests/tools/test_export_web.py::test_the_rust_forward_holds_the_fp32_lines_against_the_onnx_on_every_batch`, `test_a_rust_forward_without_the_degree_divisor_misses_the_line` |
 | `RustForward` refuses a table its file does not hold, and a batch its shape does not allow | `forward.rs` | `forward::tests::*` |
 | the bindgen attribute lives in `wasm.rs` alone, gated to wasm32 | `wasm.rs` | `crates/mantis-player/tests/wasm_census.rs` |
+| W2 in wasm: the engine's `RustForward` holds the fp32 line against the fp32 ONNX on ORT's one-thread CPU kernels at B 1 and 8; every divisor fed as 1 misses it | `forward.rs`, `wasm.rs` | `web/test/w2.test.ts` (gate 21) |
+| the Worker refuses a foreign manifest by name, admits the CPU backend by its witness, plays turns through the one loop, hears an abort between batches, refuses a second turn and a position no cadence reaches | `web/src/worker.ts` | `web/test/worker.test.ts` (gate 21) |
+| the adapter declares the five capabilities, maps setup and requests to the engine, signs the heuristic x-positive, pads a winning first stone, answers nothing for an interrupt | `web/src/arena.ts` | `web/test/arena.test.ts` (gate 21) |
+| a WebGPU batch split under the edge cap answers what the whole batch answers | `web/src/backends.ts` | `web/test/split.test.ts` (gate 21) |
 | the detector refuses by name | `export_web.detect` | `test_the_detector_refuses_what_it_does_not_carry_by_name`, `test_a_gumbel_deploy_block_is_refused_before_anything_is_written` |
 
 ## Pinning tests
@@ -202,3 +257,5 @@ The wasm-only dependencies (`wasm-bindgen` pinned to the lock's one version, `js
 - `crates/mantis-player/src/forward.rs` (unit tests), `crates/mantis-player/tests/wasm_census.rs` and the bridge's
   `player::tests` error-parity test (gate 2a)
 - `tests/tools/test_export_web.py` (gate 20, and the default tier)
+- `web/test/*.test.ts` (gate 21: `tools/ci_gates/web_gate.sh` builds the engine, type-checks the package and runs them on
+  a tiny stamp `tests/tools/_web_stamps.py` exports)

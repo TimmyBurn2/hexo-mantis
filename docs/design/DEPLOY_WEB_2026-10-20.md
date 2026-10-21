@@ -492,6 +492,9 @@ it, it refuses to start with `Unsupported`. Then it picks a backend once:
 - The engine builds their batches itself, at the deploy batch size, so the witness also checks the engine's own
   builder in the browser. It compares to the export's reference outputs at the W1 lines.
 - Its wall time on the largest positions gives the warm-up's `leaf_ms`, and its two-stone positions give `root_ms`.
+  **L3, as built:** the warm-up's `leaf_ms` is the whole witness's wall time over its leaves and `root_ms` is 0, the
+  root folded in as after a turn (§2.5); the first turn's own measurement replaces it. The engine is built after
+  selection, so `cpu_path` matches the backend that won.
 - A backend that misses refuses itself and says by how much. The demo shows the row.
 
 ## 4. The export path: `tools/export_web.py`
@@ -625,6 +628,13 @@ web/
 - `+simd128` is set by the committed build script. LAW-13 bans `target-cpu`. simd128 is a portable target feature
   that every evergreen browser has, and the engine refuses where it is missing (§3.4).
 
+> **L3, as built:** `dist/` holds `src/` (the compiled API, Worker, backends and adapter), `pkg/` (the engine and its
+> glue, `wasm-bindgen --target web`), `ort/` (`ort.webgpu.bundle.min.mjs` and the one runtime it loads,
+> `ort-wasm-simd-threaded.asyncify.wasm`), `demo/` and `net/` (the export plus `index.json` naming its manifest, which
+> is how the Worker finds the net under `assets`). `scripts/` also holds the WebGPU witness runner (`webgpu.mjs`,
+> `webgpu_page.mjs`) that §3.3's measurement and §10's step 4 run. The exporter gains `--reference PATH`, the served
+> outputs per B that the browser witness holds a backend to. ORT-web is 1.30.0, the newest release at L3.
+
 ### 6.2 The typed API
 
 ```ts
@@ -697,6 +707,11 @@ The adapter speaks the analysis slot's `postMessage` packets, as RESEARCH-WEB Q3
 - **An interrupt** gives `abort`.
 - **`evaluation`'s mapping** (`heuristic` from the root value; `win_in` from a root proof's turns) is L3's to fix
   against the arena's definition at that sha.
+  **L3, as built:** `heuristic` only, x-positive as the arena counts it (`analysis-checks.ts`): the last searched
+  stone's root value for the mover, signed by side, and 1 for a decided or winning turn. No `win_in` is sent: a
+  decided stone's proof length is not in `TurnResult`. A winning first stone is padded by its first empty neighbour,
+  not a root child, since a decided stone has none. Setups queue behind the request in flight, and a request
+  interrupted before it starts is never played (its answer would be a stray).
 - The fixtures are packets transcribed from those files. Nothing of the arena's is run.
 
 ### 6.5 The demo page

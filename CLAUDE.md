@@ -24,7 +24,7 @@ rule is stated once, here or in docs/governance/LAWS.md.
   included: a bare `registry.toml` was twice mis-cited to a crate-root path that does not exist.
 - src/mantis/ is the one Python package (monitor is headless). tests/ is the one collection root.
   configs/ are minted. tools/ holds dev tooling and the gate scripts. vendor/ is pins.toml plus
-  `make vendor`.
+  `make vendor`. web/ is the browser package (npm; `make web` builds its engine, gate 21 tests it).
 
 ## Rules no gate enforces
 
@@ -79,10 +79,11 @@ rule is stated once, here or in docs/governance/LAWS.md.
 
 ## Deliberately absent
 
-- Display surfaces. A display builds against docs/contracts/event_manifest.md. One ruled
-  exception exists, and it connects to no live run and adds no producer: `make dash`, a loopback
+- Display surfaces. A display builds against docs/contracts/event_manifest.md. Two ruled
+  exceptions exist, and neither connects to a live run or adds a producer: `make dash`, a loopback
   server over run records, monitor records, cell sidecars and stamped checkpoints (Run, Games and
-  Analyzer views, and a one-file freeze of the Run view). A panel with no producer is drawn as a
-  stated gap, never as a zero.
+  Analyzer views, and a one-file freeze of the Run view); and `web/demo/`, a person against the
+  browser engine with its per-turn rows (R398(c)). A panel with no producer is drawn as a stated
+  gap, never as a zero.
 - Submodules and loose weights (vendoring is vendor/pins.toml only), requirements.txt (uv.lock
   is the lock) and setup scripts (`uv sync` is the bootstrap).

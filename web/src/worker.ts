@@ -242,7 +242,13 @@ export const browserHost: Host = {
     return ort;
   },
   adapter: async () => {
-    const adapter = "gpu" in navigator ? await navigator.gpu.requestAdapter() : null;
+    if (!("gpu" in navigator)) return null;
+    // A fresh GPU process can answer its first request empty; a few short retries before the CPU path.
+    let adapter: GPUAdapter | null = null;
+    for (let attempt = 0; attempt < 5 && adapter === null; attempt++) {
+      adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+      if (adapter === null) await new Promise((resolve) => setTimeout(resolve, 200));
+    }
     // A software adapter (SwiftShader) is no GPU: the CPU path's own forward beats it.
     if (adapter === null || (adapter.info as GPUAdapterInfo & { isFallbackAdapter?: boolean }).isFallbackAdapter) return null;
     return `${adapter.info.vendor} ${adapter.info.architecture}`.trim();

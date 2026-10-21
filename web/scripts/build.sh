@@ -20,6 +20,7 @@ cd "$web"
 rm -rf dist
 npx tsc -p tsconfig.build.json
 cp -r pkg dist/pkg
+cp demo/index.html dist/demo/
 mkdir -p dist/ort
-# The WebGPU bundle and the one runtime it loads, served from the integrator's own origin (`env.wasm.wasmPaths`).
-cp node_modules/onnxruntime-web/dist/ort.webgpu.bundle.min.mjs node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.wasm dist/ort/
+# The WebGPU bundle and the one runtime it loads (its glue and its wasm), from the integrator's own origin (`env.wasm.wasmPaths`).
+cp node_modules/onnxruntime-web/dist/ort.webgpu.bundle.min.mjs node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.{mjs,wasm} dist/ort/

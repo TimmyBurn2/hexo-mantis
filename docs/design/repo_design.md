@@ -27,7 +27,7 @@ hexo-mantis/
 │                               #   [tool.uv.workspace] members = ["crates/mantis-bridge"]
 ├── uv.lock
 ├── Makefile                    # thin: build / test / test.integration / bench /
-│                               #   bench.baseline / check.wasm / vendor / clean
+│                               #   bench.baseline / check.wasm / web / vendor / clean
 ├── crates/
 │   ├── mantis-core/            # board, hex geometry, rules, the Ply vocabulary type
 │   ├── mantis-graph/           # dep-free axis-graph and hex-canvas builders; native + wasm32
@@ -59,6 +59,8 @@ hexo-mantis/
 │   ├── contracts/              # versioned seam contracts (see §4)
 │   └── governance/             # LAWS, STATE, RULINGS, CARDS, falsified register
 │       └── archive/            # FROZEN pre-R346 registers; never edited, never current
+├── web/                        # the browser package: Worker, typed API, backends, arena adapter, demo,
+│                               #   node tests; npm from a tag (DEPLOY-WEB L3, the amendment at the foot)
 ├── tools/                      # dev-only: mint_config, hardcode_scan, bench floors data
 ├── vendor/                     # pins.toml (url+sha+patch) + `make vendor` fetcher; no
 │                               #   submodules, no loose weights
@@ -201,7 +203,7 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
 | 10 | mint preflight report | preflight-mint-v1 | the mint preflight's evidence JSON: always written (LAW-14); mode, verdict and mint TIER derived from what the run DID, never from what it intended |
 | 11 | game record | game-record-v1 | every game a run plays, one JSON object per line, sharded by (run, segment, hour) with an index; the SEGMENT is the writer and the hour is the window, so a resume never appends into a stopped process's file |
 | 12 | canvas wire | v1 | the hex-canvas kind's per-leaf canvas: the fence masked inside its smallest axial box in a position-only orientation, six 0/1 planes, the legal gather and the graph's reply frame; far mode past `canvas_max_side`; the batch is the serving leg's (DENSE-1 L2). #2 and #8 stay retired: a number is retired, not reused |
-| 13 | web engine API | v3 | the batch both web net backends read (every array beyond `x` int32, built in `mantis-player` from the served path's pack), its outputs, the export's files, its manifest, the detector and the witness lines, the player's pull/push step machine, per-game cache and budget (v2), and `RustForward`, the wasm32 surface and W2's rows (v3, L2); the typed API (L3) extends it |
+| 13 | web engine API | v4 | the batch both web net backends read (every array beyond `x` int32, built in `mantis-player` from the served path's pack), its outputs, the export's files, its manifest, the detector and the witness lines, the player's pull/push step machine, per-game cache and budget (v2), `RustForward`, the wasm32 surface and W2's rows (v3, L2), and the typed API, the Worker's messages and checks and the arena adapter's packet map (v4, L3) |
 
 Contract changes bump the version and update the contract doc + its tests in the same
 commit. The PyO3 seam stays thin flat arrays (marshaling is a measured cost); per-field
@@ -1390,3 +1392,23 @@ is superseded: the follower's `FOLLOW_UNITS` are the rulers.
    `.venv-cuda` beside its CPU venv (`make vendor.strix.cuda`), named by a `<stem>@cuda` variant. On #13's 576-game cell
    it was move-identical to the CPU, game for game, at ~9x the speed; the S units on record before the break stay on
    the CPU. The ladder VPS is out of the instrument's reckoning: nothing runs there until a net is finished.
+
+### AMENDMENT — R398(b)–(c), R399, DEPLOY-WEB L3: the browser package `web/`, its gate and its demo page
+
+1. **What lands.** `web/` is an npm package (TypeScript 6, node 26 strips its types for the tests): `src/` (the typed
+   API, the Worker that owns the wasm engine, the two backends with selection and the on-device witness, the arena's
+   analysis-slot adapter), `demo/`, `test/` (node --test), `scripts/` (`build.sh`, `release.sh`, the WebGPU witness
+   runner). `package-lock.json` pins `onnxruntime-web` exactly; `web/node_modules/`, `web/dist/` and `web/pkg/` are
+   gitignored. Contract #13 v4.
+2. **Toolchains (§7).** `make web` builds the player for wasm32 with `+simd128` (a portable target feature; LAW-13's
+   ban on `target-cpu` stands) and runs the wasm-bindgen CLI, which `mise.toml` pins at the lock's `wasm-bindgen`
+   version and `build.sh` refuses otherwise. npm is the third toolchain, under the node already pinned; `npm ci` needs
+   the registry once per clone, like `uv sync`.
+3. **Gate 21 (§9).** `tools/ci_gates/web_gate.sh`: `npm ci`, `make web`, `tsc --noEmit`, and `node --test` on a tiny
+   stamp `tests/tools/_web_stamps.py` exports through the one exporter — W2 in wasm and its break, the Worker's loop
+   and refusals, the adapter on transcribed packets, the WebGPU split. It runs after the Rust arm, whose cargo lock the
+   wasm build would otherwise queue on.
+4. **The demo page is admitted (R398(c)).** `web/demo/` plays a person against the engine on a local static server
+   and shows the per-turn LAW-18 rows. It reads no run record, connects to no run and adds no producer; it is the
+   second ruled exception to §1's absent display surfaces, beside `make dash`.
+

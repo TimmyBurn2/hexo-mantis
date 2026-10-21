@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mantis demo</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f6f5f1; --fg: #1d1d1b; --x: #1f5fbf; --o: #c2412d; --cell: #d9d6cc; --mut: #6b6a64; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #161615; --fg: #e8e6df; --x: #6da2f2; --o: #f08a72; --cell: #3a3935; --mut: #9a988f; } }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, sans-serif; }
+  main { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); max-width: 1100px; margin: auto; }
+  @media (min-width: 900px) { main { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); } }
+  svg { width: 100%; height: auto; touch-action: manipulation; }
+  .cell { fill: var(--cell); cursor: pointer; } .cell:hover { opacity: .7; }
+  .x { fill: var(--x); } .o { fill: var(--o); }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  td { padding: 2px 6px; border-bottom: 1px solid var(--cell); } td:first-child { color: var(--mut); }
+  #status { min-height: 1.4em; }
+  button, select, input { font: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <section>
+    <p id="status">loading the engine…</p>
+    <svg id="board" viewBox="-300 -270 600 540" role="img" aria-label="Hex Tac Toe board"></svg>
+  </section>
+  <aside>
+    <p><label>turn clock (ms) <input id="clock" type="number" min="250" step="250" value="10000"></label>
+       <button id="restart">new game</button></p>
+    <h2>engine</h2><table id="engine"></table>
+    <h2>last turn</h2><table id="turn"></table>
+  </aside>
+</main>
+<script type="module" src="./demo.js"></script>
+</body>
+</html>

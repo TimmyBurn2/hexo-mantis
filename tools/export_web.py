@@ -438,6 +438,23 @@ def dump_weights(wrapper: WebServedGraph, path: Path) -> list[dict[str, Any]]:
     return table
 
 
+def write_reference(path: Path, positions: list, cases: dict[int, list[Case]]) -> None:
+    """The served outputs per batch size, position by position: what a browser witness (release step 4) holds a backend to."""
+    def per_position(pairs: list[Case]) -> dict[str, list]:
+        out: dict[str, list] = {"logits": [], "probs": [], "value": []}
+        for inputs, ref in pairs:
+            bounds = np.flatnonzero(np.diff(inputs["legal_graph"])) + 1
+            out["logits"] += [a.tolist() for a in np.split(ref["logits"], bounds)]
+            out["probs"] += [a.tolist() for a in np.split(ref["probs"], bounds)]
+            out["value"] += ref["value"].tolist()
+        return out
+    def as_json(ps: Any) -> list:
+        return [[[list(s) for s in stones], side, left] for stones, side, left in ps]
+    doc = {"goldens": as_json(positions), "openings": as_json(OPENINGS),
+           "ref": {**{str(b): per_position(cases[b]) for b in BATCHES}, "openings": per_position(cases[len(OPENINGS)])}}
+    path.write_text(json.dumps(doc), encoding="utf-8")
+
+
 def file_row(path: Path, **extra: Any) -> dict[str, Any]:
     """A shipped file's name, sha256 and bytes."""
     return {"name": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "bytes": path.stat().st_size,
@@ -457,7 +474,7 @@ def device_witness(net: nn.Module, spec: Any, config: dict, encoding: str) -> di
             "value": ref["value"].tolist()}
 
 
-def export(checkpoint: Path, out: Path, *, n_positions: int = 512, opset: int = 18) -> dict[str, Any]:
+def export(checkpoint: Path, out: Path, *, n_positions: int = 512, opset: int = 18, reference: Path | None = None) -> dict[str, Any]:
     """Detect, re-express, export, witness and write the manifest for `checkpoint` into `out`; Raises: ExportRefused — an uncarried stamp, an unchecked registry, a foreign batch, a re-expression not bit-identical, or a refused or untyped graph (its files removed); CheckpointStampError — the stamp itself; RuntimeError, ValueError, KeyError — a served group split, a seam guard, a config without its deploy or self-play block; onnx.checker.ValidationError — a written fp32 or fp16 file ONNX rejects; onnxruntime's errors — a session ORT cannot build or run."""
     # The tree that runs is the tree at the start: its commit and its tracked changes, read before any file is written.
     commit, dirty = head_sha(REPO), is_dirty(REPO) is not False
@@ -484,6 +501,8 @@ def export(checkpoint: Path, out: Path, *, n_positions: int = 512, opset: int = 
     cases = witness_cases(net, spec, config, encoding, positions, BATCHES)
     assert len(OPENINGS) not in BATCHES, "the openings' batch would overwrite a golden one"
     cases |= witness_cases(net, spec, config, encoding, list(OPENINGS), (len(OPENINGS),))
+    if reference is not None:
+        write_reference(reference, positions, cases)
     with torch.inference_mode():
         for b, pairs in cases.items():
             for inputs, ref in pairs:
@@ -563,10 +582,11 @@ def main() -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--positions", type=int, default=512)
     ap.add_argument("--opset", type=int, default=18)
+    ap.add_argument("--reference", type=Path, default=None, help="also write the served reference a browser witness reads")
     args = ap.parse_args()
     torch.manual_seed(0)
     try:
-        manifest = export(args.checkpoint, args.out, n_positions=args.positions, opset=args.opset)
+        manifest = export(args.checkpoint, args.out, n_positions=args.positions, opset=args.opset, reference=args.reference)
     except ExportRefused as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 2
