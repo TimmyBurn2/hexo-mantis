@@ -145,7 +145,8 @@ work is the host's between `next_batch` and `submit`.
 fused edge message `relu(h[src] + table[code])` summed into `dst` in edge order, ÷ `divisor`, `+ (1 + eps)·h`, the
 MLP and the residual, then the final norm into that layer's slice of the embedding; the policy MLP on the legal rows; the
 `mean_mask` mean and the `real` max into the value MLP and its bins' expectation, clamped to ±1; a per-graph softmax.
-`load(table, floats, node_feat_dim)` refuses a missing tensor, a shape that disagrees with another (`Shape`) and a
+Both it and the export's `WebServedGraph` are generic over the GINE layer count (R401(e)): the layers are
+the `table{i}` rows the weights file holds, pinned at 4, 5 and 6 on the tiny stamps. `load(table, floats, node_feat_dim)` refuses a missing tensor, a shape that disagrees with another (`Shape`) and a
 tensor past the file (`OutOfFile`); `forward` refuses a batch whose lengths or indices its own shape does not allow.
 
 ## The browser surface (`mantis_player::wasm`, wasm32 only)
@@ -257,6 +258,7 @@ htttx basic_websocket v1-alpha over `postMessage`; wire `(q, r)` is the engine's
 | a block or an output the head would refuse is refused (`leaf_batch_size` 0, a 0-turn solver, a non-finite value) | `player.rs` | `served_sims.rs::a_block_or_an_output_the_head_would_refuse_is_refused` |
 | W2: `RustForward` holds the fp32 line against the fp32 ONNX on every tiny stamp and batch; fed every divisor as 1 it misses (planted break) | `forward.rs`, `tools/export_web.py` | `tests/tools/test_export_web.py::test_the_rust_forward_holds_the_fp32_lines_against_the_onnx_on_every_batch`, `test_a_rust_forward_without_the_degree_divisor_misses_the_line` |
 | `RustForward` refuses a table its file does not hold, and a batch its shape does not allow | `forward.rs` | `forward::tests::*` |
+| every candidate depth (4, 5, 6 GINE layers) exports bit-identically and holds W1 at ORT CPU and W2 | `tools/export_web.py`, `forward.rs` | `tests/tools/test_export_web.py::test_every_candidate_depth_exports_and_both_forwards_hold_their_lines` |
 | the bindgen attribute lives in `wasm.rs` alone, gated to wasm32 | `wasm.rs` | `crates/mantis-player/tests/wasm_census.rs` |
 | W2 in wasm: the engine's `RustForward` holds the fp32 line against the fp32 ONNX on ORT's one-thread CPU kernels at B 1 and 8; every divisor fed as 1 misses it | `forward.rs`, `wasm.rs` | `web/test/w2.test.ts` (gate 21) |
 | the Worker refuses a foreign manifest by name, admits the CPU backend by its witness, falls back to it when the WebGPU candidate throws, plays turns through the one loop, hears an abort between batches, stays usable after a failure mid-turn, passes a trap through untouched, refuses a second turn and a position no cadence reaches | `web/src/worker.ts` | `web/test/worker.test.ts` (gate 21) |

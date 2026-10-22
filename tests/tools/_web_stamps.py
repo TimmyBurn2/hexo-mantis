@@ -27,12 +27,12 @@ def base_config(kind: str) -> dict[str, Any]:
     return copy.deepcopy(next((d for d in graph if d["identity"]["arch_kind"] == kind), graph[0]))
 
 
-def tiny_stamp(out: Path, kind: str, encoding: str, **config_changes: Any) -> Path:
+def tiny_stamp(out: Path, kind: str, encoding: str, *, layers: int = 2, **config_changes: Any) -> Path:
     """A random-init stamp of `kind` under `encoding`, its config a census config with the stamp's identity and widths."""
     torch.manual_seed(0)
     spec = lookup(encoding)
     assert spec.node_feat_dim is not None and spec.edge_feat_dim is not None
-    arch = ARCH_KINDS[kind](in_dim=spec.node_feat_dim, edge_dim=spec.edge_feat_dim, hidden=16, num_layers=2,
+    arch = ARCH_KINDS[kind](in_dim=spec.node_feat_dim, edge_dim=spec.edge_feat_dim, hidden=16, num_layers=layers,
                             policy_hidden=8, value_hidden=8)
     config = base_config(kind)
     config["identity"].update(encoding=encoding, arch_kind=kind)

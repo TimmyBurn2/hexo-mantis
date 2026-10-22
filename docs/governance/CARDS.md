@@ -92,7 +92,9 @@ deepening, MCGS at deploy, proof-verified start pools and DENSE-1's L2–L4.
   device tensor and refuses any `ConstantOfShape` shaped at run time; re-exported at `b015d47b` and re-measured on the
   same lines through the shipped path, it PASSES all three: W1 on WebGPU 5.34e-5 / 4.96e-5 at B 1 / 8 (511/511), one
   shape-only node on the CPU, 6.42 v 59.2 ms a leaf at B 8; GPU memory 1.7 GiB at the p99 leaf split at `EDGE_CAP`
-  (5.7 GiB unsplit). The wasm-bindgen CLI is pinned to 0.2.126 in `mise.toml`. **Was: L3 HALTED at the placement line;
+  (5.7 GiB unsplit). The wasm-bindgen CLI is pinned to 0.2.126 in `mise.toml`. R401(e), as the operator relayed it
+  (2026-10-22): the export's served graph and `RustForward` are generic over the GINE layer count, pinned at 4, 5
+  and 6 layers on the tiny stamps; the shipped net is chosen at run15's end. **Was: L3 HALTED at the placement line;
   before that L2 EXITED 2026-10-21; L3 next.** L2 landed the
   player's per-stone step machine, the per-game cache port, the clock budget, `with_pool` / `armed_sims_for`,
   `RustForward`, the wasm32 `Engine` and manifest v2 (contract #13 v3); W3 and the served-sims pin join the protected

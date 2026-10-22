@@ -69,6 +69,19 @@ def test_every_carried_kind_and_row_exports_and_holds_the_fp32_lines_at_one_and_
         assert manifest["files"][0]["passes_its_line"] is True
 
 
+@pytest.mark.parametrize("layers", [4, 5, 6])
+def test_every_candidate_depth_exports_and_both_forwards_hold_their_lines(tmp_path: Path, layers: int) -> None:
+    """Generic over the GINE layer count: each candidate depth re-expresses bit for bit, and ORT and RustForward hold W1/W2."""
+    stamp = tiny_stamp(tmp_path / "stamp", FUTURE[0], FUTURE[1], layers=layers)
+    manifest = export_web.export(stamp, tmp_path / "out", n_positions=POSITIONS)
+    assert manifest["stamp"]["arch"]["num_layers"] == layers
+    tables = [t["name"] for t in next(f for f in manifest["files"] if f["name"].endswith(".weights.bin"))["tensors"]]
+    assert [n for n in tables if n.startswith("table")] == [f"table{i}" for i in range(layers)]
+    rows = [r for r in manifest["witness"]["rows"] if r["line"] == "fp32" and r["threads"] == 1]
+    assert {r["backend"] for r in rows} == {"ort-cpu", "rust-forward-native"}
+    assert all(r["pass"] and r["argmax_compared"] > 0 for r in rows), (layers, rows)
+
+
 def test_the_rust_forward_holds_the_fp32_lines_against_the_onnx_on_every_batch(exports) -> None:
     """W2: `RustForward` over the weights file, against the fp32 ONNX at ORT CPU 1 thread, on every carried kind and row."""
     for (kind, encoding), (_stamp, _out, manifest) in exports.items():

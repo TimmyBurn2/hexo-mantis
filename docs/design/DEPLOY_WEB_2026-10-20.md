@@ -414,6 +414,8 @@ the batch's graphs.
 > `mean_mask` and `mean_den`, as the exported graph does. Measured in node on run13's 120k: 63–65 ms a leaf, a
 > 697 KB module after wasm-bindgen, and 116 MB (S 32) / 126 MB (S 128) peak memory over 8 goldens (24.8 MB after the
 > weights load). The peak is above §2.6's 90 MB for the mean leaf: the goldens reach the large leaves.
+> **R401(e):** the served graph and `RustForward` are generic over the GINE layer count and pinned at 4, 5 and 6
+> layers on the tiny stamps; the shipped depth is chosen at run15's end.
 
 ```rust
 pub trait NetBackend {
