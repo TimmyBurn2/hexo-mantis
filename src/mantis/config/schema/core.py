@@ -504,6 +504,17 @@ class RunConfig(StrictModel):
         return self
 
     @model_validator(mode="after")
+    def _a_tail_weight_below_one_refuses_the_search_term(self) -> "RunConfig":
+        """The search-value term trains every row carrying a search value, a tail's ±1 included, at full weight; Raises: ValueError — a tail weight below 1 beside it."""
+        tails = self.selfplay.decided_tails
+        if tails is not None and tails.value_weight < 1 and self.train.value_target_search_weight > 0:
+            raise ValueError(
+                f"selfplay.decided_tails.value_weight={tails.value_weight} beside train.value_target_search_weight="
+                f"{self.train.value_target_search_weight}: the search term would train the tails at full weight"
+            )
+        return self
+
+    @model_validator(mode="after")
     def _actor_lag_threshold_exceeds_sync_cadence(self) -> "RunConfig":
         # The lag threshold (monitor) and the sync cadence (train) share one invariant, so the
         # check lives here, the ONE model that sees both.

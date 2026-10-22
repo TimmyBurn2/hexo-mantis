@@ -7,7 +7,7 @@ bins by ~3% of a bin — targets stay fp32.
 Relocated verbatim from the old `training/binned_value.py` into `model/` so the
 model layer no longer imports up from training (the name-lie `binned_value` →
 `dist65` is also corrected). `N_VALUE_BINS`, `VALUE_SUPPORT`, `scalar_to_two_hot`,
-`decode_binned_value`, `binned_value_loss` are byte-for-byte the same torch ops.
+`decode_binned_value`, `binned_value_loss` are byte-for-byte the same torch ops (absent `row_weight`).
 """
 from __future__ import annotations
 

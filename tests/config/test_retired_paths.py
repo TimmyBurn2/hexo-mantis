@@ -1,7 +1,7 @@
 """The retired-path authority names only paths the schema no longer has, and splitting them off never mutates the record."""
 from __future__ import annotations
 
-from mantis.config.retired import FOLDED_PATHS, RETIRED_NULL_POSTURES, RETIRED_PATHS, split_retired
+from mantis.config.retired import BOOL_BLOCKS, FOLDED_PATHS, RETIRED_NULL_POSTURES, RETIRED_PATHS, split_retired
 from mantis.config.schema import RunConfig, leaf_paths
 
 
@@ -59,3 +59,21 @@ def test_a_record_whose_null_named_a_retired_posture_reads_as_predating_the_leaf
     assert split_retired(armed)[0] == armed, "an armed block is the live rule and stays"
     live = set(leaf_paths(RunConfig))
     assert all(any(leaf.startswith(f"{p}.") for leaf in live) for p in RETIRED_NULL_POSTURES), RETIRED_NULL_POSTURES
+
+
+def test_a_record_minted_with_a_bool_block_reads_as_the_block_it_ran() -> None:
+    """A v60 stamp reads `true` as weight 1, what such a run trained at, and `false` as off; a block stays as minted."""
+    for old, new in ((True, {"value_weight": 1.0}), (False, None)):
+        record = {"selfplay": {"decided_tails": old}}
+        kept, removed = split_retired(record)
+        assert kept["selfplay"]["decided_tails"] == new and removed == {"selfplay.decided_tails": old}
+        assert record["selfplay"]["decided_tails"] is old
+    armed = {"selfplay": {"decided_tails": {"value_weight": 0.1}}}
+    assert split_retired(armed) == (armed, {})
+
+
+def test_every_bool_block_reads_as_a_live_block() -> None:
+    """Each fold's path is a live block whose every key the folded block names, so the record validates as it."""
+    live = set(leaf_paths(RunConfig))
+    assert all({leaf for leaf in live if leaf.startswith(f"{p}.")} == {f"{p}.{k}" for k in block}
+               for p, block in BOOL_BLOCKS.items()), BOOL_BLOCKS

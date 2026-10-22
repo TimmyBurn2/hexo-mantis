@@ -26,6 +26,7 @@ from torch.amp.grad_scaler import GradScaler
 
 from mantis.config.resolve.aux_future_occupancy import resolve_aux_future_occupancy
 from mantis.config.resolve.aux_soft_policy import resolve_aux_soft_policy
+from mantis.config.resolve.decided_tails import resolve_decided_tails
 from mantis.config.schema.core import FUTURE_OCCUPANCY_ARCH_KINDS, SOFT_POLICY_ARCH_KINDS
 from mantis.encoding import EncodingRegistryError, resolve_from_config
 from mantis.model import (
@@ -104,13 +105,18 @@ class TrainHParams:
     tail_value_weight: float
 
     def __post_init__(self) -> None:
-        """Raises: ValueError — an encoding the trainer has not, or a search weight it disagrees with (the schema's rules, kept for a hand-built hparams)."""
+        """Raises: ValueError — an encoding the trainer has not, a search weight it disagrees with, or a tail weight off [0, 1] or beside the search term (the schema's rules, kept for a hand-built hparams)."""
         if self.value_target_search_encoding not in (None, "end_bin"):
             raise ValueError(f"value_target_search_encoding {self.value_target_search_encoding!r} is not an encoding "
                              "the trainer has (end_bin, or None at weight 0)")
         if (self.value_target_search_weight > 0) != (self.value_target_search_encoding is not None):
             raise ValueError(f"value_target_search_encoding {self.value_target_search_encoding!r} at weight "
                              f"{self.value_target_search_weight}: it is None exactly at weight 0")
+        if not 0.0 <= self.tail_value_weight <= 1.0:
+            raise ValueError(f"tail_value_weight {self.tail_value_weight} is outside [0, 1]")
+        if self.tail_value_weight < 1.0 and self.value_target_search_weight > 0:
+            raise ValueError(f"tail_value_weight {self.tail_value_weight} beside value_target_search_weight "
+                             f"{self.value_target_search_weight}: the search term would train the tails' ±1 at full weight")
 
     @classmethod
     def from_config(cls, config: Any) -> TrainHParams:
@@ -118,9 +124,8 @@ class TrainHParams:
         `model.aux_soft_policy` and `selfplay.decided_tails` rows); every member is REQUIRED, no flat-key fallback.
 
         Raises:
-            ValueError: no `train` section, a policy target that disagrees with `search.kind`, or a search weight its
-                encoding disagrees with. KeyError: a required `train` member, `selfplay.decided_tails`, or the run seed
-                under a value mask, is missing.
+            ValueError: no `train` section, a policy target or search weight that disagrees, or `DecidedTailsShapeError`.
+                KeyError: a required `train` member, or the run seed under a value mask, is missing.
         """
         cfg = config if isinstance(config, dict) else {}
         train = cfg.get("train")
@@ -136,7 +141,7 @@ class TrainHParams:
         aux = resolve_aux_soft_policy(cfg)
         p = float(train["value_mask_redraw_p"])
         cycle = train["lr_cycle"]
-        tails = cfg["selfplay"]["decided_tails"]
+        tails = resolve_decided_tails(cfg)
         return cls(
             **kwargs,
             lr_cycle=None if cycle is None else LrCycle(start=int(cycle["start_step"]), lr=float(cycle["lr"]),
@@ -144,7 +149,7 @@ class TrainHParams:
             aux_soft_policy=None if aux is None else (aux.temperature, aux.weight),
             aux_future_occupancy=resolve_aux_future_occupancy(cfg),
             value_mask=None if p == 0.0 else (p, int(cfg["seed"])),
-            tail_value_weight=1.0 if tails is None else float(tails["value_weight"]),
+            tail_value_weight=1.0 if tails is None else tails,
         )
 
 
@@ -284,6 +289,11 @@ class Trainer:
     def value_mask(self) -> tuple[float, int] | None:
         """The train step's value mask `(p, seed)`, `None` when off: the dispatcher draws it, this step echoes p."""
         return self.hp.value_mask
+
+    @property
+    def tail_value_weight(self) -> float:
+        """A decided tail's kept value row's share of its z CE (1.0 with the tails off): the dispatcher weighs, this step echoes it."""
+        return self.hp.tail_value_weight
 
     @staticmethod
     def _derive_arch(config: Any) -> ModelArch:
@@ -602,6 +612,7 @@ class Trainer:
                                   "policy_kl_target_vs_prior": policy_total - target_entropy_total,
                                   "value_target_search_weight": self.hp.value_target_search_weight,
                                   "value_mask_redraw_p": 0.0 if self.hp.value_mask is None else self.hp.value_mask[0],
+                                  "tail_value_weight": self.hp.tail_value_weight,
                                   **self._aux_soft_policy_block(aux_total, aux_kl_total, head_norms),
                                   **self._aux_future_block(future_total, future_rows, future_base, future_row_base)})
             self._maybe_periodic_checkpoint(result)

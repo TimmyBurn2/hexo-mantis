@@ -15,6 +15,7 @@ class DrivableTrainerStub:
         self.step = step
         self.device = "cpu"
         self.value_mask = None
+        self.tail_value_weight = 1.0
         self.future_head = False
         self.model = object() if model is None else model
         self.on_step = on_step

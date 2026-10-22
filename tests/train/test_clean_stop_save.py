@@ -77,6 +77,7 @@ class _Trainer:
         self.model = object()
         self.device = "cpu"
         self.value_mask = None
+        self.tail_value_weight = 1.0
         self.attempts = 0
         self.saves = 0
         self._raises = raises

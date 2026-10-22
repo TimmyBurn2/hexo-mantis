@@ -216,9 +216,9 @@ def _build_graph_parts(
     value_rows_valid = int(np.count_nonzero(masked_valid))
     if value_mask is not None:
         masked_valid = redraw_value_mask(masked_valid, value_mask[0], value_mask[1], int(trainer.step))
-    # A decided tail's value row weighs `tail_value_weight`; at 0 it leaves the loss as a dropped row does.
-    value_weight = tail_value_weights(targets.proven_tail, tail_value_weight)
-    masked_valid = np.where(value_weight > 0, masked_valid, np.zeros_like(masked_valid))
+    # A decided tail's kept row pulls `tail_value_weight` of its z CE and still counts in the denominator.
+    tail = np.asarray(targets.proven_tail) != 0
+    value_weight = tail_value_weights(tail, tail_value_weight)
     future_rows, marginal = future_marginal(targets.future_target, targets.future_valid, payload.legal_offsets)
     base_ce = future_base_ce(marginal)
     row_base_ce = future_row_base_ce(targets.future_target, targets.future_valid, payload.legal_offsets)
@@ -277,7 +277,7 @@ def _build_graph_parts(
     # The WHOLE step's denominators, computed ONCE, so the micro-batch parts sum to the un-split
     # loss exactly — NOT `1/M` and NOT `B_m/B`.
     policy_denominator, value_denominator = graph_loss_denominators(
-        policy_row_weight, masked_valid, n_graphs, value_weight)
+        policy_row_weight, masked_valid, n_graphs)
     # The rows the search-value term reaches (`teacher_valid`) and moves (v != z): its fire-rate at every weight.
     reached = teacher_valid
     moved = reached & (np.asarray(targets.root_value) != np.asarray(targets.outcomes))
@@ -294,7 +294,8 @@ def _build_graph_parts(
                               "root_value_rows": int(np.count_nonzero(reached)),
                               "root_value_rows_moved": int(np.count_nonzero(moved)),
                               "value_rows_valid": value_rows_valid,
-                              "value_rows_kept": int(np.count_nonzero(masked_valid))},
+                              "value_rows_kept": int(np.count_nonzero(masked_valid)),
+                              "value_rows_tail": int(np.count_nonzero(tail & (masked_valid != 0)))},
     }
 
 
@@ -307,7 +308,7 @@ def _graph_step(
     return trainer.train_step_from_graph_batch(**_build_graph_parts(
         trainer, buffer, spec, batch_size=batch_size, augment=augment,
         caps_provider=caps_provider, sample_threads_provider=sample_threads_provider,
-        value_mask=trainer.value_mask, tail_value_weight=trainer.hp.tail_value_weight,
+        value_mask=trainer.value_mask, tail_value_weight=trainer.tail_value_weight,
     ))
 
 

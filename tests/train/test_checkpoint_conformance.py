@@ -19,8 +19,10 @@ from typing import Any
 
 import pytest
 import torch
+from pydantic import ValidationError
 
 from _fused_caps import CAPS_DICT
+from mantis.config import retired
 from mantis.config.loader import load_config
 from mantis.config.schema import ARCH_SCOPED_KEYS
 from mantis.encoding import EncodingRegistryError, all_specs
@@ -272,6 +274,30 @@ def test_a_resume_from_a_stamp_carrying_a_retired_path_saves_again(
     assert "value_target" not in load_checkpoint(saved, declared_encoding=None, declared_future_head=None).config["train"]
     assert load_checkpoint(older, declared_encoding=None, declared_future_head=None).config["train"]["value_target"] == "pure_outcome_z", "the parent stamp moved"
 
+
+
+@pytest.mark.parametrize(("old", "folded"), [(True, {"value_weight": 1.0}), (False, None)], ids=["true", "false"])
+def test_a_stamp_carrying_the_v60_tails_bool_loads_resumes_and_saves_again(
+        tmp_path, tiny_net, optim_scaler_sched, valid_config, metadata_kwargs, old, folded, monkeypatch):
+    """A tails-era stamp's bool reads as the block it ran (`true` at weight 1); PLANTED BREAK: no fold, no load."""
+    from mantis.train.trainer.core import Trainer
+
+    opt, scaler, sched = optim_scaler_sched
+    valid_config["selfplay"]["search"]["tactics"] = {"kind": "strict_turn", "leaf_turns": 3, "leaf_nodes": 256,
+                                                     "root_turns": 8, "root_nodes": 20000, "audit": None}
+    path = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
+                      config=valid_config, meta=metadata_kwargs, step=750, kind="full")
+    payload = _load_raw(path)
+    payload["config"]["selfplay"]["decided_tails"] = old
+    older = _resave_rehashed(payload, tmp_path)
+    assert load_checkpoint(older, declared_encoding=None, declared_future_head=None).config["selfplay"]["decided_tails"] is old
+    tr = resume_trainer(Trainer, older, fallback_config=valid_config, declared_encoding=None)
+    assert tr.config["selfplay"]["decided_tails"] == folded and tr.tail_value_weight == 1.0
+    saved = load_checkpoint(tr.save_checkpoint(), declared_encoding=None, declared_future_head=None)
+    assert saved.config["selfplay"]["decided_tails"] == folded
+    monkeypatch.setattr(retired, "BOOL_BLOCKS", {})
+    with pytest.raises(ValidationError, match="decided_tails"):
+        load_checkpoint(older, declared_encoding=None, declared_future_head=None)
 
 def test_metadata_encoding_name_required(tmp_path, tiny_net, optim_scaler_sched, valid_config,
                                          tiny_arch):
@@ -685,7 +711,7 @@ def test_reads_full_v1_envelope_via_field_map(tmp_path, full_graph_net, full_gra
             "search": {"kind": "puct", "tactics": None}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
             "c_visit": 50.0,
             "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_m_quick": 16, "gumbel_explore_moves": 10, "search_stats_every": 8,
-            "results_queue_cap": 10_000, "random_opening_plies": 0, "decided_tails": False,
+            "results_queue_cap": 10_000, "random_opening_plies": 0, "decided_tails": None,
             "log_investigation_metrics": True,
             "mcts": {"c_puct": 1.5, "fpu_reduction": 0.25,
                      "quiescence_enabled": True, "quiescence_blend_2": 0.3,

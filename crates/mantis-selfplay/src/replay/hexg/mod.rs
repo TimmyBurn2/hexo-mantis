@@ -388,7 +388,7 @@ impl HexgBuffer {
 /// * `policy_target` — flat `[Lg]` CE target in `legal_node_gather` order; a graph's segment sums to ~1 − its `tail_mass`.
 /// * `explicit_mask` — flat `[Lg]`, 1 where the row carried a STORED entry, emitted rather than
 ///   inferred from `policy_target > 0` so an underflowed entry is not reclassified as tail.
-/// * `tail_mass` / `outcomes` / `value_valid` / `is_full_search` / `root_value{,_valid}` — `[B]` per-row scalars.
+/// * `tail_mass` / `outcomes` / `value_valid` / `is_full_search` / `root_value{,_valid}` / `proven_tail` — `[B]` per-row scalars.
 /// * `future_target` — flat `[Lg]` label per legal node (`FUTURE_*`), all empty where `future_valid` (`[B]`) is 0.
 /// * argmax_q/argmax_r/argmax_valid — per-graph max-mass legal node in the ROTATED frame.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -403,7 +403,6 @@ pub struct GraphTargets {
     pub root_value_valid: Vec<u8>,
     pub future_target: Vec<u8>,
     pub future_valid: Vec<u8>,
-    /// `[B]` 1 on a decided tail's row (the ring's `proven_tail`), which the trainer weighs apart.
     pub proven_tail: Vec<u8>,
     pub argmax_q: Vec<i32>,
     pub argmax_r: Vec<i32>,

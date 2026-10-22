@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from mantis._engine import SelfPlayRunnerConfig
+from mantis.config.resolve.decided_tails import resolve_decided_tails
 from mantis.config.resolve.puct import resolve_puct_constants
 from mantis.config.resolve.search import resolve_selfplay_search_kind
 from mantis.config.resolve.tactics import resolve_selfplay_tactics
@@ -143,7 +144,7 @@ class SelfPlayHParams:
     ) -> SelfPlayHParams:
         """Resolve every ctor-time knob off a validated mapping's `selfplay` section.
         An unvalidated mapping can carry `playout_cap.n_sims_full == 0`, so it is checked here.
-        Raises: ValueError — no effective per-move sim count; `MissingTacticsError`, no `selfplay.search.tactics`."""
+        Raises: ValueError — no per-move sim count, or DecidedTailsShapeError; MissingTacticsError, no search.tactics."""
         sp = config["selfplay"]
         mcts_cfg = sp["mcts"]
         pc = sp["playout_cap"]
@@ -165,7 +166,7 @@ class SelfPlayHParams:
             gumbel_explore_moves=int(sp["gumbel_explore_moves"]),
             results_queue_cap=int(sp["results_queue_cap"]),
             random_opening_plies=int(sp["random_opening_plies"]),
-            decided_tails=sp["decided_tails"] is not None,
+            decided_tails=resolve_decided_tails(config) is not None,
             c_puct=puct.c_puct,
             fpu_reduction=puct.fpu_reduction,
             quiescence_enabled=puct.quiescence_enabled,

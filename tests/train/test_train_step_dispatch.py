@@ -73,6 +73,7 @@ class _RecordingTypedTrainer:
         self.model = None
         self.device = torch.device("cpu")
         self.value_mask = None
+        self.tail_value_weight = 1.0
         self.tensor_calls: list[dict[str, Any]] = []
         self.graph_calls: list[dict[str, Any]] = []
 

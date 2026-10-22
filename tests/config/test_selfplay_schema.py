@@ -10,7 +10,6 @@ import pytest
 from pydantic import ValidationError
 
 from _fused_caps import CAPS_DICT
-from mantis.config.retired import split_retired
 from mantis.config.schema import (
     ARCH_SCOPED_KEYS,
     InferenceConfig,
@@ -247,11 +246,3 @@ def test_the_tails_value_weight_is_refused_outside_zero_to_one(weight: float) ->
         SelfplayConfig.model_validate(_selfplay(decided_tails={"value_weight": weight},
                                                 search={"kind": "puct", "tactics": _ROOT_OFFENCE}))
 
-
-def test_the_retired_bool_reads_as_the_block_it_ran() -> None:
-    """A record minted with the bool reads `true` as weight 1, what such a run trained at, and `false` as off."""
-    for old, new in ((True, {"value_weight": 1.0}), (False, None)):
-        kept, removed = split_retired({"selfplay": {"decided_tails": old}})
-        assert kept["selfplay"]["decided_tails"] == new and removed == {"selfplay.decided_tails": old}
-    untouched = {"selfplay": {"decided_tails": {"value_weight": 0.1}}}
-    assert split_retired(untouched) == (untouched, {})

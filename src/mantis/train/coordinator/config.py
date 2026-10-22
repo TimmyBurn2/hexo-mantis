@@ -29,6 +29,8 @@ class TrainerLike(Protocol):
     bundle_publisher: Any
     #: The train step's value mask `(p, seed)`, `None` off; the dispatcher draws it ahead of the value denominator.
     value_mask: tuple[float, int] | None
+    #: `selfplay.decided_tails.value_weight` (1.0 off): a decided tail's kept value row's share of its z CE.
+    tail_value_weight: float
 
     def train_step_from_graph_batch(self, **kwargs: Any) -> dict[str, float]: ...
     #: The FORWARD-ONLY sibling, declared here because `dispatch.py` reaches it through the same

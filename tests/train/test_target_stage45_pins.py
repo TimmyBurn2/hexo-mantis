@@ -46,6 +46,7 @@ def _graph_buffer(n_records: int = 6, capacity: int = 64) -> HexgBuffer:
 class _RecordingTrainer:
     device = torch.device("cpu")
     value_mask = None
+    tail_value_weight = 1.0
 
     def __init__(self) -> None:
         self.calls: list[dict[str, Any]] = []

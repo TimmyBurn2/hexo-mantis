@@ -34,6 +34,7 @@ from mantis.config.resolve.composition import (
     UnvalidatedConfigError,
     require_run_config,
 )
+from mantis.config.resolve.decided_tails import DecidedTailsShapeError, resolve_decided_tails
 from mantis.config.resolve.drain import (
     DrainCapsSpec,
     resolve_drain_caps,
@@ -122,6 +123,7 @@ __all__ = [
     "DrawRateAbortSpec",
     "FusedGraphCapsSpec",
     "InferenceBatchingSpec",
+    "DecidedTailsShapeError",
     "MissingAllocatorPostureError",
     "MissingFusedGraphCapsError",
     "MissingInferenceBatchingError",
@@ -149,6 +151,7 @@ __all__ = [
     "resolve_aux_future_occupancy",
     "resolve_aux_soft_policy",
     "resolve_bootstrap",
+    "resolve_decided_tails",
     "resolve_drain_caps",
     "resolve_draw_rate_abort",
     "resolve_eval_model_sims",

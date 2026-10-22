@@ -173,7 +173,8 @@ selfplay:
   # 1-in-N self-play games write per-position visits/Q/prior to the game record (2026-09-16); 0 off.
   search_stats_every: 8
   random_opening_plies: 0
-  # From the root offence's first decided stone the game runs out with no search; needs search.tactics.root_nodes > 0.
+  # null off; a block arms the decided tails at its value_weight (a tail row's share of its z CE): from the root offence's
+  # first decided stone the game runs out with no search; needs search.tactics.root_nodes > 0.
   decided_tails: null
   mcts:
     c_puct: 1.5

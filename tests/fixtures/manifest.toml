@@ -225,7 +225,9 @@ path = "selfplay/pool/runner_config_goldens.json"
 # Re-cut by RUN11-PRE (contract v56): `selfplay.gumbel_m_quick` is a REQUIRED leaf beside `gumbel_m`, carried to the ctor;
 # `full_config` carries 12 against its m 24, so a swap of the two shows.
 # Re-cut by DT-1 (contract v60): `selfplay.decided_tails` is a REQUIRED leaf carried to the ctor, `false` in both cases.
-sha256 = "fd185fda98255c52304b6a894f7242c4222979f1d3cfecb6b8b3da193847d6e5"
+# Re-cut by TVW-1 (contract v63): the captured inputs carry `decided_tails: null` (the leaf is a block or null); the ctor
+# kwarg stays `false`, armed-or-not.
+sha256 = "86f07e1a18fedcb81fa74ce85f01088bf15f951417955f937bdce7e58f8e0487"
 added_by = "WP-SP"
 
 [[required]]

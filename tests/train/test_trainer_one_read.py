@@ -41,7 +41,7 @@ def test_each_part_carries_its_value_mask_as_host_found_rows(tmp_path, value_mas
     caps = H.caps_for_exactly(replay.wire, 2)
     built = _build_graph_parts(trainer, replay, H.GSPEC, batch_size=4, augment=False,
                                caps_provider=lambda: MicrobatchCapsSpec(*caps), sample_threads_provider=lambda: 1,
-                               value_mask=trainer.value_mask)
+                               value_mask=trainer.value_mask, tail_value_weight=trainer.tail_value_weight)
     for make in built["parts"]:
         inputs = make()
         assert torch.equal(inputs.value_rows, torch.from_numpy(np.flatnonzero(inputs.value_valid.numpy())))
