@@ -716,8 +716,10 @@ The adapter speaks the analysis slot's `postMessage` packets, as RESEARCH-WEB Q3
   **L3, as built:** `heuristic` only, x-positive as the arena counts it (`analysis-checks.ts`): the last searched
   stone's root value for the mover, signed by side, and 1 for a decided or winning turn. No `win_in` is sent: a
   decided stone's proof length is not in `TurnResult`. A winning first stone is padded by its first empty neighbour,
-  not a root child, since a decided stone has none. Setups queue behind the request in flight, and a request
-  interrupted before it starts is never played (its answer would be a stray).
+  then the first empty cell of each wider ring, not a root child, since a decided stone has none; a turn is a win when
+  it placed fewer stones than it was due or the solver decided it. Setups queue behind the request in flight; an
+  interrupted request is never started, played on or answered (its answer would be a stray); and after a refused
+  request or a dropped answer every request is refused until the next setup.
 - The fixtures are packets transcribed from those files. Nothing of the arena's is run.
 
 ### 6.5 The demo page

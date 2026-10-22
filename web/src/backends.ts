@@ -1,6 +1,6 @@
 // The two net backends, the on-device witness that admits one, and the selection between them (contract #13).
 import type * as Ort from "onnxruntime-web";
-import type { Batch, Engine as Wasm } from "../pkg/mantis_player.js";
+import type { Batch, Engine as Wasm, web_batch } from "../pkg/mantis_player.js";
 
 export const INT_INPUTS = ["src", "dst", "code", "legal", "node_graph", "legal_graph", "divisor", "real", "mean_mask",
   "mean_den"] as const;
@@ -42,6 +42,17 @@ export interface Backend {
 export function arraysOf(batch: Batch, feat: number): Arrays {
   const ints = Object.fromEntries(INT_INPUTS.map((k) => [k, batch.i32(k)])) as Record<IntInput, Int32Array>;
   return { x: batch.x(), feat, ...ints };
+}
+
+/** The engine's own batch of `positions` (`[stones as (q, r, p), side, stones left]`), copied out as arrays. */
+export function buildBatch(glue: { web_batch: typeof web_batch }, encoding: string, positions: DeviceWitness["positions"],
+  feat: number): Arrays {
+  const batch = glue.web_batch(encoding, Int32Array.from(positions.flatMap(([s]) => s.flat())),
+    Uint32Array.from(positions.map(([s]) => s.length)), Int32Array.from(positions.map(([, side]) => side)),
+    Int32Array.from(positions.map(([, , left]) => left)));
+  const arrays = arraysOf(batch, feat);
+  batch.free();
+  return arrays;
 }
 
 /** The graphs of `a`, split at graph boundaries into calls of at most `cap` edges (a larger graph alone), re-based. */
@@ -207,8 +218,8 @@ export async function select(candidates: Array<[WitnessRow["backend"], () => Pro
       rows.push(row);
       if (row.pass) return { backend, row, rows };
     } catch (e) {
-      // A file that misses its manifest refuses the net, never just one backend.
-      if (e instanceof Error && e.name === "Refused") throw e;
+      // A file that misses its manifest refuses the net, and a trap leaves the shared module unusable for any backend.
+      if (e instanceof Error && (e.name === "Refused" || e instanceof WebAssembly.RuntimeError)) throw e;
       rows.push({ backend: kind, logits: Infinity, probs: Infinity, value: Infinity, argmax_agreed: 0, argmax_compared: 0,
         pass: false, leaves: 0, ms: 0, error: e instanceof Error ? `${e.name}: ${e.message}` : String(e) });
     }

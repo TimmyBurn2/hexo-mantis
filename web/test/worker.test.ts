@@ -130,3 +130,20 @@ test("a turn that fails mid-loop for any reason leaves the board as before it an
   const after = ok(await call(handle, "playTurn", { sims: 32 }));
   assert.equal((after.stones as unknown[]).length, 2);
 });
+
+test("a trap mid-turn passes through untouched: no rollback is attempted on the trapped engine", async () => {
+  const host = nodeHost();
+  const macrotask = host.macrotask;
+  let calls = 0;
+  host.macrotask = async () => {
+    if (++calls === 2) throw new WebAssembly.RuntimeError("unreachable");
+    await macrotask();
+  };
+  const { handle } = await started(host);
+  ok(await call(handle, "newGame", { stones: [{ q: 0, r: 0, p: 1 }], toMove: -1, stonesLeft: 2 }, { unlimited: true }));
+  const trapped = await call(handle, "playTurn", { sims: 64 });
+  assert.ok(!trapped.ok && trapped.error.name === "RuntimeError", JSON.stringify(trapped));
+  // Untouched: the turn is still in play, so the API's respawn, not a rollback, is what recovers it.
+  const next = await call(handle, "playTurn", { sims: 32 });
+  assert.ok(!next.ok && next.error.name === "OutOfStep", JSON.stringify(next));
+});

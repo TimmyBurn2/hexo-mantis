@@ -57,6 +57,9 @@ export function attachArena(port: Port, engine: Engine, version: string): void {
   let cells: WireCell[] = [];
   let fresh = false;
   let outstanding: number | undefined;
+  // After a refusal or a dropped answer the engine's board is no longer the slot's: nothing plays on it until a setup.
+  let stale = false;
+  const queued = new Set<number>();
   const interrupted = new Set<number>();
   const occupied = new Set<string>();
   let queue: Promise<void> = Promise.resolve();
@@ -69,6 +72,7 @@ export function attachArena(port: Port, engine: Engine, version: string): void {
     outstanding = id;
     try {
       if (dropped()) return;
+      if (stale && !fresh) throw new Error("the engine's board is not the slot's since a refused or dropped request");
       const unseen = packet.previous.flatMap((t) => t.pieces.map((c) => ({ ...c, p: t.side })))
         .filter((c) => !occupied.has(key(c.q, c.r)));
       let due = 2;
@@ -76,24 +80,31 @@ export function attachArena(port: Port, engine: Engine, version: string): void {
         const stones = [...cells, ...unseen].map((c) => ({ q: c.q, r: c.r, p: sign(c.p) as 1 | -1 }));
         due = stones.length === 0 ? 1 : 2;
         fresh = false;
+        stale = true;
         await engine.newGame({ stones, toMove: sign(packet.side) as 1 | -1, stonesLeft: due as 1 | 2 }, { turnMs: ANALYSIS_CLOCK_MS });
+        stale = false;
       } else if (unseen.length > 0) {
         await engine.play(unseen);
       }
       for (const c of [...cells, ...unseen]) occupied.add(key(c.q, c.r));
       cells = [];
-      if (dropped()) return;
+      if (dropped()) return void (stale = true);
       const budget: Budget = packet.move_time_limit === undefined ? { unlimited: true } : { turnMs: packet.move_time_limit * 1000 };
       const turn = await engine.playTurn(budget);
       const answer = response(turn, packet.side, occupied, id, due);
       for (const s of turn.stones) occupied.add(key(s.cell[0], s.cell[1]));
-      if (!dropped()) port.postMessage(answer);
+      if (dropped()) stale = true;
+      else port.postMessage(answer);
     } catch (e) {
       // A refused request is answered with nothing and the slot times it out; the queue goes on to the next one.
+      stale = true;
       if (!(e instanceof Error && e.name === "AbortError")) console.error("mantis: move request refused", e);
     } finally {
       outstanding = undefined;
-      if (id !== undefined) interrupted.delete(id);
+      if (id !== undefined) {
+        queued.delete(id);
+        interrupted.delete(id);
+      }
     }
   };
 
@@ -103,12 +114,15 @@ export function attachArena(port: Port, engine: Engine, version: string): void {
       queue = queue.then(() => {
         cells = packet.board?.cells ?? [];
         fresh = true;
+        stale = false;
         occupied.clear();
       });
     } else if (packet.type === "interrupt") {
-      if (packet.request_id !== undefined) interrupted.add(packet.request_id);
+      // Only a request still queued or in flight is marked: an id the slot reuses later is never dropped.
+      if (packet.request_id !== undefined && queued.has(packet.request_id)) interrupted.add(packet.request_id);
       if (packet.request_id === undefined || packet.request_id === outstanding) engine.abort();
     } else if (packet.type === "move_request") {
+      if (packet.request_id !== undefined) queued.add(packet.request_id);
       queue = queue.then(() => request(packet as Parameters<typeof request>[0]));
     }
   });

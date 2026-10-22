@@ -147,3 +147,17 @@ test("an interrupt that lands while the position is set up stops the request bef
   assert.equal(turns, 0);
   assert.equal(posted.length, 1);
 });
+
+test("after a refused position, a request with no new setup is refused rather than played onto the old game", async () => {
+  const { posted, calls, send, settle, refuseNext } = harness(async () => turnOf([stone(2, -1), stone(-1, 1)]));
+  send(SETUP);
+  send({ ...REQUEST, request_id: 1 });
+  await settle();
+  refuseNext(Object.assign(new Error("no cadence reaches it"), { name: "IllegalStone" }));
+  send({ type: "setup", board: { cells: [{ q: 0, r: 0, p: "o" }] } });
+  send({ ...REQUEST, request_id: 2 });
+  send({ type: "move_request", side: "o", previous: [{ side: "x", pieces: [{ q: 3, r: 3 }, { q: 4, r: 3 }] }], request_id: 3 });
+  await settle();
+  assert.deepEqual(posted.slice(1).map((p) => (p as { request_id: number }).request_id), [1]);
+  assert.equal(calls.filter(([op]) => op === "play").length, 0, "nothing was played onto the refused position");
+});

@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import * as ort from "onnxruntime-web";
-import { arraysOf, gaps, INT_INPUTS, passes, type Arrays, type DeviceWitness, type Manifest, type NetOut } from "../src/backends.ts";
+import { buildBatch, gaps, INT_INPUTS, passes, type Arrays, type DeviceWitness, type Manifest, type NetOut } from "../src/backends.ts";
 import { ASSETS, Glue, goldens } from "./host.ts";
 
 const index = JSON.parse(readFileSync(join(ASSETS, "net", "index.json"), "utf8")) as { manifest: string };
@@ -27,14 +27,7 @@ function engine(): Glue.Engine {
   return e;
 }
 
-function build(positions: DeviceWitness["positions"]): Arrays {
-  const batch = Glue.web_batch(manifest.encoding.name, Int32Array.from(positions.flatMap(([s]) => s.flat())),
-    Uint32Array.from(positions.map(([s]) => s.length)), Int32Array.from(positions.map(([, side]) => side)),
-    Int32Array.from(positions.map(([, , left]) => left)));
-  const arrays = arraysOf(batch, feat);
-  batch.free();
-  return arrays;
-}
+const build = (positions: DeviceWitness["positions"]): Arrays => buildBatch(Glue, manifest.encoding.name, positions, feat);
 
 function rust(e: Glue.Engine, a: Arrays): NetOut {
   const batch = new Glue.Batch(a.x, a.src, a.dst, a.code, a.legal, a.node_graph, a.legal_graph, a.divisor, a.real, a.mean_mask,

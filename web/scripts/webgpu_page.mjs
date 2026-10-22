@@ -2,7 +2,7 @@
 // witness's rows) against the served reference — W1 at B 1 and 8 and the openings — then ms a leaf for it and for the
 // engine's RustForward on the same batches, then the goldens' p99 leaf eight to a batch, repeated.
 // Query: manifest=<file in /net/>, timing=<positions timed a B>, passes=<timed passes>.
-import { arraysOf, cpuBackend, ortBackend, witness } from "/dist/src/backends.js";
+import { buildBatch, cpuBackend, ortBackend, witness } from "/dist/src/backends.js";
 import { browserHost, EDGE_CAP } from "/dist/src/worker.js";
 
 const q = new URLSearchParams(location.search);
@@ -40,14 +40,7 @@ async function main() {
   const rust = cpuBackend(engine, glue);
 
   const ref = await (await fetch("/ref.json")).json();
-  const build = (positions) => {
-    const batch = glue.web_batch(manifest.encoding.name, Int32Array.from(positions.flatMap(([s]) => s.flat())),
-      Uint32Array.from(positions.map(([s]) => s.length)), Int32Array.from(positions.map(([, side]) => side)),
-      Int32Array.from(positions.map(([, , left]) => left)));
-    const arrays = arraysOf(batch, feat);
-    batch.free();
-    return arrays;
-  };
+  const build = (positions) => buildBatch(glue, manifest.encoding.name, positions, feat);
   const now = () => performance.now();
 
   result.witness = {

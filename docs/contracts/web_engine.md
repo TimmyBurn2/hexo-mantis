@@ -174,8 +174,9 @@ The wasm-only dependencies (`wasm-bindgen` pinned to the lock's one version, `js
 
 ## The typed API and the Worker (`web/src/index.ts`, `web/src/worker.ts`)
 
-`createEngine({assets, backend?})` starts a module Worker at `${assets}/src/worker.js`; every file is fetched from
-`assets` alone (the integrator's origin): `net/index.json` → the manifest, the net files, `pkg/` (the engine), `ort/`
+`createEngine({assets, backend?})` starts a module Worker at `${assets}/src/worker.js` (`assets` resolved against the
+page; it must be absolute in a blob: or data: context); every file is fetched from `assets` alone (the integrator's
+origin): `net/index.json` → the manifest, the net files, `pkg/` (the engine), `ort/`
 (the WebGPU bundle and the one runtime it loads, `env.wasm.wasmPaths` pointing there).
 
 | method | message `op` | does |
@@ -192,7 +193,9 @@ The wasm-only dependencies (`wasm-bindgen` pinned to the lock's one version, `js
   exported (`handler(host)`), so node drives it with a host of its own.
 - **Init refuses** (`Refused`): a manifest format other than `mantis-web-manifest-v2`, a `registry_sha` other than the
   engine's, a deploy kind other than PUCT, a `deploy.player` constant other than the engine's, a file whose bytes miss
-  its sha256. `Unsupported`: no wasm SIMD. `NoBackendPassed`: no candidate's witness held (the rows in the message).
+  its sha256. `Unavailable`: a file the server did not serve (an HTTP error; on a candidate's file it is that
+  candidate's failed row). `Unsupported`: no wasm SIMD. `NoBackendPassed`: no candidate's witness held (the rows in
+  the message).
 - **Selection:** WebGPU first when a non-fallback adapter exists (`backend: 'auto'`), ORT pinned to that adapter; else,
   on a miss, or when the candidate throws (a failed row with its error), the CPU path. Each runs the export's
   16-position witness on batches the engine builds at `leaf_batch_size`, at the fp32 line; outputs of another length
@@ -202,12 +205,14 @@ The wasm-only dependencies (`wasm-bindgen` pinned to the lock's one version, `js
   witness's wall ms over its leaves, root folded in, until a turn measures its own.
 - **WebGPU calls** split a batch at graph boundaries under `EDGE_CAP` edges (a larger graph alone), re-based; a graph's
   outputs do not depend on its batch-mates, so the split is invisible.
-- **A failure mid-turn** of any kind (an abort, a backend's, the engine's) rolls the turn back before it is answered,
-  so the engine stays usable.
+- **A failure mid-turn** (an abort, a backend's, the engine's refusal) rolls the turn back before it is answered, so
+  the engine stays usable. A trap (`WebAssembly.RuntimeError`) is passed on untouched — the trapped module cannot be
+  called again — and selection stops on one rather than running the next candidate on the same module.
 - **A trap** (`RuntimeError`) or a Worker error rejects every pending call, the trapping one included, with
-  `EngineCrashed`; the API terminates the Worker, starts a new one, re-runs `init` and counts the trap. It respawns only
-  after a first successful `init` and at most `MAX_RESPAWNS` (3) times in a row; past that every call rejects. A first
-  `init` that fails terminates its Worker. `dispose()` rejects every pending call with `AbortError`.
+  `EngineCrashed`; the API terminates the Worker, starts a new one, re-runs `init` and counts the trap. A call made
+  meanwhile waits for the new engine. It respawns only after a first successful `init` and at most `MAX_RESPAWNS` (3)
+  times in a row; past that, or when a respawn's `init` fails, every call rejects with `EngineCrashed`. A first `init`
+  that fails terminates its Worker. `dispose()` rejects every pending and later call with `AbortError`.
 
 ## The arena adapter (`web/src/arena.ts`)
 
@@ -219,12 +224,15 @@ htttx basic_websocket v1-alpha over `postMessage`; wire `(q, r)` is the engine's
 | (on attach) | posts `{meta: {version}, basic_websocket: {versions: {"v1-alpha": {free_setup, resettable_state, dual_sided, request_id, interruptible: true}}}}` |
 | `setup {board: {cells: [{q, r, p}]}}` | holds the stones, queued behind the request in flight |
 | `move_request {side, previous, move_time_limit?, request_id?}` | after a setup, `newGame` at the setup's stones plus `previous`, sized for 5 s; else `play` of the unseen pieces; then `playTurn({turnMs: limit·1000})`, or `{unlimited: true}` without a limit. A refusal answers nothing (the slot times it out) and the next request is served |
-| `interrupt {request_id?}` | `abort` of the request in flight; an interrupted request is never started, played on or answered, whenever the interrupt lands |
+| `interrupt {request_id?}` | `abort` of the request in flight; an interrupted request (one queued or in flight) is never started, played on or answered, whenever the interrupt lands |
 
 - **`move_response`:** `{type, move: {pieces: [2], evaluation: {heuristic}}, request_id}`. A turn whose first stone wins
   is padded by that stone's first empty neighbour (q+1; r+1; q−1,r+1; q−1; r−1; q+1,r−1), then the first empty cell of
   each wider ring. `heuristic` is x-positive (htttx counts x positive): the last searched stone's root value for the
-  mover, signed by side, 1 for a decided turn or one that placed fewer stones than it was due. No `win_in` and no considerations are sent; an interrupted request is answered with nothing.
+  mover, signed by side, 1 for a decided turn or one that placed fewer stones than it was due. No `win_in` and no
+  considerations are sent; an interrupted request is answered with nothing.
+- **A stale board:** after a refused request or a dropped answer the engine's board is no longer the slot's, so every
+  request is refused (answered with nothing) until the next `setup`.
 
 ## Who asserts what where
 
@@ -251,8 +259,10 @@ htttx basic_websocket v1-alpha over `postMessage`; wire `(q, r)` is the engine's
 | the bindgen attribute lives in `wasm.rs` alone, gated to wasm32 | `wasm.rs` | `crates/mantis-player/tests/wasm_census.rs` |
 | W2 in wasm: the engine's `RustForward` holds the fp32 line against the fp32 ONNX on ORT's one-thread CPU kernels at B 1 and 8; every divisor fed as 1 misses it | `forward.rs`, `wasm.rs` | `web/test/w2.test.ts` (gate 21) |
 | the Worker refuses a foreign manifest by name, admits the CPU backend by its witness, falls back to it when the WebGPU candidate throws, plays turns through the one loop, hears an abort between batches, stays usable after a failure mid-turn, refuses a second turn and a position no cadence reaches | `web/src/worker.ts` | `web/test/worker.test.ts` (gate 21) |
-| the adapter declares the five capabilities, maps setup and requests to the engine, signs the heuristic x-positive, pads a winning first stone, answers nothing for an interrupt wherever it lands, and serves the next position after a refused one | `web/src/arena.ts` | `web/test/arena.test.ts` (gate 21) |
+| the adapter declares the five capabilities, maps setup and requests to the engine, signs the heuristic x-positive, pads a winning first stone, answers nothing for an interrupt wherever it lands, serves the next position after a refused one, and refuses to play onto a stale board | `web/src/arena.ts` | `web/test/arena.test.ts` (gate 21) |
 | a WebGPU batch split under the edge cap answers what the whole batch answers | `web/src/backends.ts` | `web/test/split.test.ts` (gate 21) |
+| a trapping call rejects with `EngineCrashed` and the engine respawns; calls wait out a respawn; respawns are capped; a failed first `init` and `dispose` clean up | `web/src/index.ts` | `web/test/index.test.ts` (gate 21) |
+| a witness fails short outputs and one that compared no argmax | `web/src/backends.ts` | `web/test/split.test.ts` (gate 21) |
 | the detector refuses by name | `export_web.detect` | `test_the_detector_refuses_what_it_does_not_carry_by_name`, `test_a_gumbel_deploy_block_is_refused_before_anything_is_written` |
 
 ## Pinning tests

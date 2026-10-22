@@ -40,10 +40,11 @@ export interface Engine {
   dispose(): void;
 }
 
-/** An engine in its own Worker, its files fetched from `assets` alone; a trap rebuilds it and counts it. */
 /** Respawns after traps in a row past which the engine is left down: a Worker that cannot start stops retrying. */
 export const MAX_RESPAWNS = 3;
 
+/** An engine in its own Worker, its files fetched from `assets` alone (absolute in a blob: or data: context); a trap
+ * rebuilds it and counts it. */
 export async function createEngine(opts: { assets: string; backend?: "auto" | "webgpu" | "cpu" }): Promise<Engine> {
   // Absolute, so the Worker (whose own URL is the base inside it) fetches from the same place as the page.
   const assets = new URL(opts.assets, location.href).href.replace(/\/$/, "");
@@ -52,14 +53,19 @@ export async function createEngine(opts: { assets: string; backend?: "auto" | "w
   let traps = 0;
   let inARow = 0;
   let next = 1;
-  let down: string | null = null;
-  let ready = false;
+  let down: EngineError | null = null;
+  let respawning: Promise<void> | null = null;
   const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
 
   const settleAll = (name: string, message: string) => {
     for (const waiting of pending.values()) waiting.reject(new EngineError(name, message));
     pending.clear();
   };
+  const post = (op: string, ...args: unknown[]): Promise<unknown> => new Promise((resolve, reject) => {
+    const id = next++;
+    pending.set(id, { resolve, reject });
+    worker.postMessage({ id, op, args } satisfies Request);
+  });
   const spawn = async (): Promise<void> => {
     worker = new Worker(`${assets}/src/worker.js`, { type: "module" });
     worker.addEventListener("message", (event: MessageEvent<Reply>) => {
@@ -77,24 +83,29 @@ export async function createEngine(opts: { assets: string; backend?: "auto" | "w
       }
     });
     worker.addEventListener("error", (event) => void crashed(event.message));
-    info = (await call("init", assets, opts.backend ?? "auto")) as EngineInfo;
+    info = (await post("init", assets, opts.backend ?? "auto")) as EngineInfo;
   };
-  const call = (op: string, ...args: unknown[]): Promise<unknown> => new Promise((resolve, reject) => {
-    if (down !== null) return reject(new EngineError("EngineCrashed", down));
-    const id = next++;
-    pending.set(id, { resolve, reject });
-    worker.postMessage({ id, op, args } satisfies Request);
-  });
+  // A call waits out a respawn in flight, so it never reaches a Worker whose engine is not built yet.
+  const call = async (op: string, ...args: unknown[]): Promise<unknown> => {
+    if (respawning !== null) await respawning;
+    if (down !== null) throw down;
+    return post(op, ...args);
+  };
   const crashed = async (message: string): Promise<void> => {
     settleAll("EngineCrashed", message);
     worker.terminate();
+    if (down !== null || respawning !== null) return;
     traps += 1;
     inARow += 1;
     if (!ready || inARow > MAX_RESPAWNS) {
-      down = ready ? `the engine trapped ${inARow} times in a row: ${message}` : message;
+      down = new EngineError("EngineCrashed", ready ? `the engine trapped ${inARow} times in a row: ${message}` : message);
       return;
     }
-    await spawn().catch((e: Error) => void (down = `${e.name}: ${e.message}`));
+    respawning = spawn().catch((e: Error) => {
+      worker.terminate();
+      down = new EngineError("EngineCrashed", `${e.name}: ${e.message}`);
+    }).finally(() => void (respawning = null));
+    await respawning;
   };
   const withInfo = async <T>(op: string, ...args: unknown[]): Promise<T> => {
     const value = (await call(op, ...args)) as T & { info?: EngineInfo };
@@ -103,6 +114,7 @@ export async function createEngine(opts: { assets: string; backend?: "auto" | "w
     return value;
   };
 
+  let ready = false;
   try {
     await spawn();
     ready = true;
@@ -118,6 +130,7 @@ export async function createEngine(opts: { assets: string; backend?: "auto" | "w
     analyse: (position, budget) => withInfo("analyse", position, budget),
     abort: () => worker.postMessage({ id: 0, op: "abort", args: [] } satisfies Request),
     dispose: () => {
+      down = new EngineError("AbortError", "the engine was disposed");
       settleAll("AbortError", "the engine was disposed");
       worker.terminate();
     },

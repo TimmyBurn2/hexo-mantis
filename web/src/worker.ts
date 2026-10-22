@@ -3,7 +3,7 @@
 import type * as Ort from "onnxruntime-web";
 import type * as Glue from "../pkg/mantis_player.js";
 import {
-  arraysOf, cpuBackend, ortBackend, select, witness,
+  arraysOf, buildBatch, cpuBackend, ortBackend, select, witness,
   type Arrays, type Backend, type DeviceWitness, type Manifest, type WitnessRow,
 } from "./backends.ts";
 import { EngineError, type Budget, type Cell, type Clock, type EngineInfo, type Position, type Reply, type Request,
@@ -107,14 +107,7 @@ export function handler(host: Host): (msg: Request) => Promise<Reply | null> {
       t?.audit ? Uint32Array.from([t.audit.turns, t.audit.nodes, t.audit.k, t.audit.m, t.audit.total_nodes]) : undefined,
       t?.audit?.mode);
     const ref = JSON.parse(new TextDecoder().decode(await net.file(".witness.json"))) as DeviceWitness;
-    const build = (positions: DeviceWitness["positions"]): Arrays => {
-      const stones = Int32Array.from(positions.flatMap(([s]) => s.flat()));
-      const batch = glue.web_batch(manifest.encoding.name, stones, Uint32Array.from(positions.map(([s]) => s.length)),
-        Int32Array.from(positions.map(([, side]) => side)), Int32Array.from(positions.map(([, , left]) => left)));
-      const arrays = arraysOf(batch, feat);
-      batch.free();
-      return arrays;
-    };
+    const build = (positions: DeviceWitness["positions"]): Arrays => buildBatch(glue, manifest.encoding.name, positions, feat);
     const adapter = choice === "cpu" ? null : await host.adapter();
     const gpu = async (): Promise<Backend | null> => {
       const ort = adapter === null ? null : await host.ort(assets);
@@ -185,8 +178,9 @@ export function handler(host: Host): (msg: Request) => Promise<Reply | null> {
       info = { ...info, minTurnMs: engine.min_turn_ms ?? null, peakBytes: glue.memory_bytes() };
       return { ...turn, rows: JSON.parse(engine.rows_json()) as Record<string, number> };
     } catch (e) {
-      // Any refusal mid-turn (an abort, a backend that failed, the engine's own) leaves the board as before the turn.
-      engine.abort();
+      // Any refusal mid-turn (an abort, a backend that failed, the engine's own) leaves the board as before the turn;
+      // a trap is passed on untouched, since the trapped engine cannot be called again and the API respawns it.
+      if (!(e instanceof WebAssembly.RuntimeError)) engine.abort();
       throw e;
     } finally {
       busy = false;
@@ -237,7 +231,7 @@ export const browserHost: Host = {
   },
   fetchBytes: async (url) => {
     const res = await fetch(url);
-    if (!res.ok) throw new EngineError("Refused", `${url}: HTTP ${res.status}`);
+    if (!res.ok) throw new EngineError("Unavailable", `${url}: HTTP ${res.status}`);
     return new Uint8Array(await res.arrayBuffer());
   },
   ort: async (assets) => {
