@@ -6,7 +6,10 @@ import * as ort from "onnxruntime-web";
 import { buildBatch, ortBackend, splitBatch, type Arrays, type Session } from "../src/backends.ts";
 import { Glue, goldens } from "./host.ts";
 
-const batch = (n: number): Arrays => buildBatch(Glue, "gnn_axis_r8", goldens(n), 11);
+function batch(n: number): Arrays {
+  const a = buildBatch(Glue, "gnn_axis_r8", goldens(n), 1);
+  return { ...a, feat: a.x.length / a.node_graph.length };
+}
 
 /** Each graph's outputs from its own rows of every array (a call's re-basing error moves them); a legal row whose graph
  * disagrees with its node's throws. */
@@ -58,8 +61,9 @@ test("a witness fails a backend whose outputs are short, and one that compared n
   const { gaps, passes, witness } = await import("../src/backends.ts");
   const line = { logit: 1e-3, prob: 1e-4, value: 1e-4, gap: 2e-3 };
   const ref = { positions: [[[], 1, 1]] as never, logits: [[0, 1]], probs: [[0.3, 0.7]], value: [0] };
-  const short = gaps({ logits: new Float32Array([0]), probs: new Float32Array([0.3]), value: new Float32Array([0]) }, ref, 0, line, 1);
-  assert.equal(passes(short, line), false);
+  // Longer than the reference: without the length check every compared value would match and the row would pass.
+  const long = gaps({ logits: new Float32Array([0, 1, 5]), probs: new Float32Array([0.3, 0.7, 0]), value: new Float32Array([0, 0]) }, ref, 0, line, 1);
+  assert.equal(passes(long, line), false);
   const empty = await witness({ kind: "cpu", run: async () => ({ logits: new Float32Array(), probs: new Float32Array(), value: new Float32Array() }), dispose() {} },
     () => ({}) as Arrays, { ...ref, positions: [] }, line, 8, () => 0);
   assert.equal(empty.pass, false);

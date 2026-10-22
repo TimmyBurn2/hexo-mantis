@@ -178,8 +178,7 @@ export function handler(host: Host): (msg: Request) => Promise<Reply | null> {
       info = { ...info, minTurnMs: engine.min_turn_ms ?? null, peakBytes: glue.memory_bytes() };
       return { ...turn, rows: JSON.parse(engine.rows_json()) as Record<string, number> };
     } catch (e) {
-      // Any refusal mid-turn (an abort, a backend that failed, the engine's own) leaves the board as before the turn;
-      // a trap is passed on untouched, since the trapped engine cannot be called again and the API respawns it.
+      // A refusal mid-turn rolls the turn back; a trap passes untouched, since a trapped engine cannot be called again.
       if (!(e instanceof WebAssembly.RuntimeError)) engine.abort();
       throw e;
     } finally {

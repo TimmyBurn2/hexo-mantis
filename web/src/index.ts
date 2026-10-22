@@ -40,11 +40,10 @@ export interface Engine {
   dispose(): void;
 }
 
-/** Respawns after traps in a row past which the engine is left down: a Worker that cannot start stops retrying. */
+/** Respawns after traps in a row past which the engine is left down; a respawn whose init fails takes it down at once. */
 export const MAX_RESPAWNS = 3;
 
-/** An engine in its own Worker, its files fetched from `assets` alone (absolute in a blob: or data: context); a trap
- * rebuilds it and counts it. */
+/** An engine in its own Worker, its files fetched from `assets` alone (absolute in a blob: or data: context). */
 export async function createEngine(opts: { assets: string; backend?: "auto" | "webgpu" | "cpu" }): Promise<Engine> {
   // Absolute, so the Worker (whose own URL is the base inside it) fetches from the same place as the page.
   const assets = new URL(opts.assets, location.href).href.replace(/\/$/, "");
@@ -67,8 +66,11 @@ export async function createEngine(opts: { assets: string; backend?: "auto" | "w
     worker.postMessage({ id, op, args } satisfies Request);
   });
   const spawn = async (): Promise<void> => {
-    worker = new Worker(`${assets}/src/worker.js`, { type: "module" });
-    worker.addEventListener("message", (event: MessageEvent<Reply>) => {
+    const w = new Worker(`${assets}/src/worker.js`, { type: "module" });
+    worker = w;
+    // A replaced Worker's late events belong to no call of this engine.
+    w.addEventListener("message", (event: MessageEvent<Reply>) => {
+      if (w !== worker) return;
       const reply = event.data;
       const waiting = pending.get(reply.id);
       if (waiting === undefined) return;
@@ -82,7 +84,7 @@ export async function createEngine(opts: { assets: string; backend?: "auto" | "w
         waiting.reject(new EngineError(reply.error.name, reply.error.message));
       }
     });
-    worker.addEventListener("error", (event) => void crashed(event.message));
+    w.addEventListener("error", (event) => void (w === worker && crashed(event.message)));
     info = (await post("init", assets, opts.backend ?? "auto")) as EngineInfo;
   };
   // A call waits out a respawn in flight, so it never reaches a Worker whose engine is not built yet.
@@ -103,7 +105,7 @@ export async function createEngine(opts: { assets: string; backend?: "auto" | "w
     }
     respawning = spawn().catch((e: Error) => {
       worker.terminate();
-      down = new EngineError("EngineCrashed", `${e.name}: ${e.message}`);
+      down ??= new EngineError("EngineCrashed", `${e.name}: ${e.message}`);
     }).finally(() => void (respawning = null));
     await respawning;
   };

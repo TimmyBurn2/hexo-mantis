@@ -111,7 +111,10 @@ export function ortBackend(ort: typeof Ort, session: Session, edgeCap: number): 
       for (const call of splitBatch(a, edgeCap)) {
         const feeds: Record<string, unknown> = { x: new ort.Tensor("float32", call.x, [call.x.length / call.feat, call.feat]) };
         for (const k of INT_INPUTS) feeds[k] = new ort.Tensor("int32", call[k], [call[k].length]);
-        const out = await session.run(feeds, ["logits", "probs", "value"]);
+        const out = await session.run(feeds, ["logits", "probs", "value"]).catch((e: unknown) => {
+          // ORT's own abort is a RuntimeError too; named so it is never read as a trap of the engine's module.
+          throw Object.assign(new Error(e instanceof Error ? e.message : String(e)), { name: "BackendFailed" });
+        });
         parts.push({ logits: out.logits!.data as Float32Array, probs: out.probs!.data as Float32Array,
           value: out.value!.data as Float32Array });
       }
@@ -204,8 +207,8 @@ export function combine(rows: Array<Omit<WitnessRow, "backend" | "pass" | "leave
   };
 }
 
-/** The first candidate whose witness passes, in order; a candidate that throws is a failed row, never the end of
- * selection. Every row is kept for `NoBackendPassed`. */
+/** The first candidate whose witness passes, in order; a candidate that throws is a failed row, except a refused net
+ * file or a trap of the engine's own module, which end selection. Every row is kept for `NoBackendPassed`. */
 export async function select(candidates: Array<[WitnessRow["backend"], () => Promise<Backend | null>]>,
   admit: (b: Backend) => Promise<WitnessRow>): Promise<{ backend: Backend; row: WitnessRow; rows: WitnessRow[] } | { rows: WitnessRow[] }> {
   const rows: WitnessRow[] = [];

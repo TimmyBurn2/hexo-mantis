@@ -194,7 +194,8 @@ origin): `net/index.json` → the manifest, the net files, `pkg/` (the engine), 
 - **Init refuses** (`Refused`): a manifest format other than `mantis-web-manifest-v2`, a `registry_sha` other than the
   engine's, a deploy kind other than PUCT, a `deploy.player` constant other than the engine's, a file whose bytes miss
   its sha256. `Unavailable`: a file the server did not serve (an HTTP error; on a candidate's file it is that
-  candidate's failed row). `Unsupported`: no wasm SIMD. `NoBackendPassed`: no candidate's witness held (the rows in
+  candidate's failed row). `BackendFailed`: an ORT run that failed, its own abort included (a candidate's failed row,
+  never read as a trap of the engine's module). `Unsupported`: no wasm SIMD. `NoBackendPassed`: no candidate's witness held (the rows in
   the message).
 - **Selection:** WebGPU first when a non-fallback adapter exists (`backend: 'auto'`), ORT pinned to that adapter; else,
   on a miss, or when the candidate throws (a failed row with its error), the CPU path. Each runs the export's
@@ -223,8 +224,8 @@ htttx basic_websocket v1-alpha over `postMessage`; wire `(q, r)` is the engine's
 |---|---|
 | (on attach) | posts `{meta: {version}, basic_websocket: {versions: {"v1-alpha": {free_setup, resettable_state, dual_sided, request_id, interruptible: true}}}}` |
 | `setup {board: {cells: [{q, r, p}]}}` | holds the stones, queued behind the request in flight |
-| `move_request {side, previous, move_time_limit?, request_id?}` | after a setup, `newGame` at the setup's stones plus `previous`, sized for 5 s; else `play` of the unseen pieces; then `playTurn({turnMs: limit·1000})`, or `{unlimited: true}` without a limit. A refusal answers nothing (the slot times it out) and the next request is served |
-| `interrupt {request_id?}` | `abort` of the request in flight; an interrupted request (one queued or in flight) is never started, played on or answered, whenever the interrupt lands |
+| `move_request {side, previous, move_time_limit?, request_id?}` | after a setup, `newGame` at the setup's stones plus `previous`, sized for 5 s; else `play` of the unseen pieces; then `playTurn({turnMs: limit·1000})`, or `{unlimited: true}` without a limit. A refusal answers nothing (the slot times it out); the next position is served after its setup |
+| `interrupt {request_id?}` | `abort` of the request in flight; an interrupted request (one queued or in flight; with no id, the one in flight) is never started, played on or answered, whenever the interrupt lands |
 
 - **`move_response`:** `{type, move: {pieces: [2], evaluation: {heuristic}}, request_id}`. A turn whose first stone wins
   is padded by that stone's first empty neighbour (q+1; r+1; q−1,r+1; q−1; r−1; q+1,r−1), then the first empty cell of
@@ -258,7 +259,7 @@ htttx basic_websocket v1-alpha over `postMessage`; wire `(q, r)` is the engine's
 | `RustForward` refuses a table its file does not hold, and a batch its shape does not allow | `forward.rs` | `forward::tests::*` |
 | the bindgen attribute lives in `wasm.rs` alone, gated to wasm32 | `wasm.rs` | `crates/mantis-player/tests/wasm_census.rs` |
 | W2 in wasm: the engine's `RustForward` holds the fp32 line against the fp32 ONNX on ORT's one-thread CPU kernels at B 1 and 8; every divisor fed as 1 misses it | `forward.rs`, `wasm.rs` | `web/test/w2.test.ts` (gate 21) |
-| the Worker refuses a foreign manifest by name, admits the CPU backend by its witness, falls back to it when the WebGPU candidate throws, plays turns through the one loop, hears an abort between batches, stays usable after a failure mid-turn, refuses a second turn and a position no cadence reaches | `web/src/worker.ts` | `web/test/worker.test.ts` (gate 21) |
+| the Worker refuses a foreign manifest by name, admits the CPU backend by its witness, falls back to it when the WebGPU candidate throws, plays turns through the one loop, hears an abort between batches, stays usable after a failure mid-turn, passes a trap through untouched, refuses a second turn and a position no cadence reaches | `web/src/worker.ts` | `web/test/worker.test.ts` (gate 21) |
 | the adapter declares the five capabilities, maps setup and requests to the engine, signs the heuristic x-positive, pads a winning first stone, answers nothing for an interrupt wherever it lands, serves the next position after a refused one, and refuses to play onto a stale board | `web/src/arena.ts` | `web/test/arena.test.ts` (gate 21) |
 | a WebGPU batch split under the edge cap answers what the whole batch answers | `web/src/backends.ts` | `web/test/split.test.ts` (gate 21) |
 | a trapping call rejects with `EngineCrashed` and the engine respawns; calls wait out a respawn; respawns are capped; a failed first `init` and `dispose` clean up | `web/src/index.ts` | `web/test/index.test.ts` (gate 21) |

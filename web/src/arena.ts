@@ -57,6 +57,9 @@ export function attachArena(port: Port, engine: Engine, version: string): void {
   let cells: WireCell[] = [];
   let fresh = false;
   let outstanding: number | undefined;
+  let inFlight = false;
+  // An interrupt with no id cancels the request in flight, whichever step it is at.
+  let cancelled = false;
   // After a refusal or a dropped answer the engine's board is no longer the slot's: nothing plays on it until a setup.
   let stale = false;
   const queued = new Set<number>();
@@ -68,8 +71,10 @@ export function attachArena(port: Port, engine: Engine, version: string): void {
     request_id?: number }): Promise<void> => {
     const id = packet.request_id;
     // An interrupted request is never started, played on or answered: the slot would count its answer a stray.
-    const dropped = () => id !== undefined && interrupted.has(id);
+    const dropped = () => cancelled || (id !== undefined && interrupted.has(id));
     outstanding = id;
+    inFlight = true;
+    cancelled = false;
     try {
       if (dropped()) return;
       if (stale && !fresh) throw new Error("the engine's board is not the slot's since a refused or dropped request");
@@ -101,6 +106,7 @@ export function attachArena(port: Port, engine: Engine, version: string): void {
       if (!(e instanceof Error && e.name === "AbortError")) console.error("mantis: move request refused", e);
     } finally {
       outstanding = undefined;
+      inFlight = false;
       if (id !== undefined) {
         queued.delete(id);
         interrupted.delete(id);
@@ -120,6 +126,7 @@ export function attachArena(port: Port, engine: Engine, version: string): void {
     } else if (packet.type === "interrupt") {
       // Only a request still queued or in flight is marked: an id the slot reuses later is never dropped.
       if (packet.request_id !== undefined && queued.has(packet.request_id)) interrupted.add(packet.request_id);
+      if (packet.request_id === undefined && inFlight) cancelled = true;
       if (packet.request_id === undefined || packet.request_id === outstanding) engine.abort();
     } else if (packet.type === "move_request") {
       if (packet.request_id !== undefined) queued.add(packet.request_id);

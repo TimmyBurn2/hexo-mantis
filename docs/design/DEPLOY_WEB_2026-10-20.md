@@ -663,8 +663,9 @@ interface Engine {
 - Errors are typed. Every §2.7 `PlayerError` variant reaches JS by name, `OutOfStep` among them (also for `analyse`
   or `playTurn` while a turn runs). The Worker adds `AbortError`, `NoBackendPassed`, `Unsupported` and
   `EngineCrashed`.
-- After `EngineCrashed` the Worker has already rebuilt the engine (re-instantiated, the backend re-selected) and
-  counted the trap in `info().engineTraps` (R399(h)). The game in play is gone, and the integrator starts a new one.
+- After `EngineCrashed` the API rebuilds the engine (re-instantiated, the backend re-selected; a call made meanwhile
+  waits for it) and counts the trap in `info().engineTraps` (R399(h)). The game in play is gone, and the integrator
+  starts a new one.
 - A match clock is the integrator's to map to a turn's `turnMs`; the arena's mode decides it (§13 O1).
 
 ### 6.3 The Worker and its loop

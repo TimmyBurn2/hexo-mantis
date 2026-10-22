@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import * as ort from "onnxruntime-web";
-import { buildBatch, gaps, INT_INPUTS, passes, type Arrays, type DeviceWitness, type Manifest, type NetOut } from "../src/backends.ts";
+import { buildBatch, cpuBackend, gaps, INT_INPUTS, passes, type Arrays, type DeviceWitness, type Manifest, type NetOut } from "../src/backends.ts";
 import { ASSETS, Glue, goldens } from "./host.ts";
 
 const index = JSON.parse(readFileSync(join(ASSETS, "net", "index.json"), "utf8")) as { manifest: string };
@@ -29,13 +29,7 @@ function engine(): Glue.Engine {
 
 const build = (positions: DeviceWitness["positions"]): Arrays => buildBatch(Glue, manifest.encoding.name, positions, feat);
 
-function rust(e: Glue.Engine, a: Arrays): NetOut {
-  const batch = new Glue.Batch(a.x, a.src, a.dst, a.code, a.legal, a.node_graph, a.legal_graph, a.divisor, a.real, a.mean_mask,
-    a.mean_den);
-  const out = e.forward_batch(batch);
-  batch.free();
-  return { logits: out.logits(), probs: out.probs(), value: out.value() };
-}
+const rust = (e: Glue.Engine, a: Arrays): Promise<NetOut> => cpuBackend(e, Glue).run(a);
 
 /** The ONNX's outputs as a witness reference, one row per graph. */
 function reference(out: NetOut, a: Arrays, positions: DeviceWitness["positions"]): DeviceWitness {
@@ -57,7 +51,7 @@ async function rows(e: Glue.Engine, batchSize: number, drop: boolean) {
     const ref = reference({ logits: o.logits!.data as Float32Array, probs: o.probs!.data as Float32Array,
       value: o.value!.data as Float32Array }, a, slice);
     const fed = drop ? { ...a, divisor: a.divisor.map(() => 1) } : a;
-    out.push(gaps(rust(e, fed), ref, 0, line, slice.length));
+    out.push(gaps(await rust(e, fed), ref, 0, line, slice.length));
   }
   await session.release();
   return out;

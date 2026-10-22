@@ -35,12 +35,23 @@ beforeEach(() => {
   workers.length = 0;
 });
 
-test("a trapping call rejects with EngineCrashed, the engine respawns and counts it, and the next call reaches the new Worker", async () => {
-  script = (w, m) => (m.op === "init" ? { ok: true, value: INFO } : w === workers[0] ? trap : { ok: true, value: { info: INFO } });
+test("a trapping call rejects with EngineCrashed, a call made meanwhile waits for the new Worker's init, and the trap counts", async () => {
+  let releaseInit!: () => void;
+  script = (w, m) => {
+    if (m.op === "init" && w !== workers[0]) {
+      // The respawned Worker answers its init only when the test says so: a call must not overtake it.
+      void new Promise<void>((r) => (releaseInit = r)).then(() => w.listeners.forEach((l) => l({ data: { id: m.id, ok: true, value: INFO } })));
+      return null;
+    }
+    return m.op === "init" ? { ok: true, value: INFO } : w === workers[0] ? trap : { ok: true, value: { info: INFO } };
+  };
   const engine = await createEngine({ assets: "/pkg" });
   await assert.rejects(engine.playTurn({ sims: 8 }), { name: "EngineCrashed" });
-  await engine.play([]);
-  assert.equal(workers.length, 2);
+  const played = engine.play([]);
+  await new Promise((r) => setTimeout(r, 10));
+  assert.deepEqual(workers[1]!.received.map((m) => m.op), ["init"], "the call reached the Worker before its init answered");
+  releaseInit();
+  await played;
   assert.ok(workers[0]!.terminated);
   assert.deepEqual(workers[1]!.received.map((m) => m.op), ["init", "play"]);
   assert.equal(engine.info().engineTraps, 1);
@@ -68,5 +79,16 @@ test("dispose rejects the call in flight and every later call with AbortError", 
   const inFlight = engine.playTurn({ sims: 8 });
   engine.dispose();
   await assert.rejects(inFlight, { name: "AbortError" });
+  await assert.rejects(engine.play([]), { name: "AbortError" });
+});
+
+test("a dispose during a respawn settles every call with AbortError, never EngineCrashed", async () => {
+  script = (w, m) => (m.op === "init" && w !== workers[0] ? null : m.op === "init" ? { ok: true, value: INFO } : trap);
+  const engine = await createEngine({ assets: "/pkg" });
+  await assert.rejects(engine.playTurn({ sims: 8 }), { name: "EngineCrashed" });
+  const waiting = engine.play([]);
+  await new Promise((r) => setTimeout(r, 10));
+  engine.dispose();
+  await assert.rejects(waiting, { name: "AbortError" });
   await assert.rejects(engine.play([]), { name: "AbortError" });
 });
