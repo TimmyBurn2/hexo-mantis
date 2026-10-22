@@ -16,6 +16,7 @@ from mantis.config.resolve.microbatch import MicrobatchCapsSpec
 from mantis.config.schema import RunConfig
 from mantis.selfplay.graph_wire_split import plan_microbatches
 from mantis.train import losses
+from mantis.train.coordinator import dispatch
 from mantis.train.coordinator.dispatch import run_declared_eval_step, run_declared_train_step
 from mantis.train.trainer.core import TrainHParams
 
@@ -23,6 +24,8 @@ _STONES = [(0, 0, 1), (1, 0, -1), (0, 1, 1)]
 _VISITS = [(2, 0, 0.6), (1, 1, 0.4)]
 _ONE_PART = MicrobatchCapsSpec(max_edges=100_000_000, max_nodes=4_000_000)
 _ROWS = 32
+#: An armed re-drawn value mask, as production arms it, so the kept rows are not every row.
+_MASK = (0.5, H.SEED)
 _TACTICS = {"kind": "strict_turn", "leaf_turns": 3, "leaf_nodes": 256, "root_turns": 8, "root_nodes": 20000,
             "audit": None}
 
@@ -70,10 +73,16 @@ def _parts_caps(replay: H.ReplayWireBuffer) -> MicrobatchCapsSpec:
     return caps
 
 
+def _kept(replay: H.ReplayWireBuffer, mask: tuple[float, int] | None) -> np.ndarray:
+    """The rows the first step's value loss keeps: the value-valid rows, through the re-drawn mask when one is armed."""
+    vv = np.asarray(replay.targets.value_valid)
+    return vv != 0 if mask is None else losses.redraw_value_mask(vv, mask[0], mask[1], 0) != 0
+
+
 def _step(tmp_path: Path, replay: Any, weight: float, *, caps: MicrobatchCapsSpec = _ONE_PART, train: bool = True,
-          sink: Any = None) -> tuple[dict[str, float], Any]:
+          sink: Any = None, mask: tuple[float, int] | None = None) -> tuple[dict[str, float], Any]:
     """One production step from the seeded tiny trainer at tail weight `weight`: its losses and its state after."""
-    trainer = H.tiny_graph_trainer(tmp_path, tail_value_weight=weight, checkpoint_interval=0, sink=sink)
+    trainer = H.tiny_graph_trainer(tmp_path, tail_value_weight=weight, checkpoint_interval=0, sink=sink, value_mask=mask)
     if not train:
         return run_declared_eval_step(trainer, replay, H.GSPEC, batch_size=_ROWS, caps_provider=lambda: caps,
                                       sample_threads_provider=lambda: 1), trainer.model.state_dict()
@@ -102,27 +111,30 @@ def test_weight_one_leaves_the_flag_inert(tmp_path: Path) -> None:
     assert one == plain and all(torch.equal(one_state[k], plain_state[k]) for k in one_state)
 
 
-def _assert_weighted_sum_over_the_count(tmp_path: Path, w: float, caps: Any = None) -> None:
-    """The z CE at `w` is (A + w·B) / (n + t): A, n over the other rows, B, t over the tails, each read at weight 1."""
+def _assert_weighted_sum_over_the_count(tmp_path: Path, w: float, caps: Any = None,
+                                        mask: tuple[float, int] | None = None) -> None:
+    """The z CE at `w` is (A + w·B) / (n + t) over the KEPT rows: A, n the others', B, t the tails', each read at weight 1."""
     replay = _replay()
     caps = _ONE_PART if caps is None else caps(replay)
-    tail = _tails(replay)
-    n, t = int((~tail).sum()), int(tail.sum())
+    tail, kept = _tails(replay), _kept(replay, mask)
+    n, t = int((kept & ~tail).sum()), int((kept & tail).sum())
+    assert n > 0 and 0 < t and (mask is None or t < int(tail.sum())), f"the fixture keeps {n} other and {t} tail rows"
     masked_vv = np.where(tail, 0, np.asarray(replay.targets.value_valid)).astype(np.uint8)
-    others = _step(tmp_path, _replay(value_valid=masked_vv), 1.0, caps=caps)[0]["value_loss"]
-    every = _step(tmp_path, replay, 1.0, caps=caps)[0]["value_loss"]
+    others = _step(tmp_path, _replay(value_valid=masked_vv), 1.0, caps=caps, mask=mask)[0]["value_loss"]
+    every = _step(tmp_path, replay, 1.0, caps=caps, mask=mask)[0]["value_loss"]
     a, b = n * others, (n + t) * every - n * others
     assert abs(others - every) > 1e-3, "the fixture's tail and other rows read one CE: the check would see nothing"
-    got = _step(tmp_path, replay, w, caps=caps)[0]["value_loss"]
+    got = _step(tmp_path, replay, w, caps=caps, mask=mask)[0]["value_loss"]
     want = (a + w * b) / (n + t)
     assert got == pytest.approx(want, rel=1e-5), f"the z CE at w={w} is {got}, not the weighted sum over the count {want}"
 
 
+@pytest.mark.parametrize("mask", [None, _MASK], ids=["unmasked", "masked"])
 @pytest.mark.parametrize("caps", [None, _parts_caps], ids=["one_part", "several_parts"])
 @pytest.mark.parametrize("w", [0.0, 0.1])
-def test_a_tails_pull_is_its_weight_over_the_row_count(tmp_path: Path, w: float, caps: Any) -> None:
-    """At 0 the tails pull nothing yet stay counted; at 0.1 a tenth; every other row's pull is the weight-1 one."""
-    _assert_weighted_sum_over_the_count(tmp_path, w, caps)
+def test_a_tails_pull_is_its_weight_over_the_row_count(tmp_path: Path, w: float, caps: Any, mask: Any) -> None:
+    """At 0 the tails pull nothing yet stay counted; at 0.1 a tenth; every other kept row's pull is the weight-1 one."""
+    _assert_weighted_sum_over_the_count(tmp_path, w, caps, mask)
 
 
 def test_a_dispatcher_ignoring_the_flag_reds_the_check(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -133,22 +145,37 @@ def test_a_dispatcher_ignoring_the_flag_reds_the_check(tmp_path: Path, monkeypat
         _assert_weighted_sum_over_the_count(tmp_path, 0.1)
 
 
-def test_the_eval_step_never_weighs(tmp_path: Path) -> None:
-    """A reading must not move with the lever: the forward-only loss at 0.1 is the one at 1, bit for bit."""
+def test_the_eval_step_never_weighs_and_the_planted_break_reds(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A reading must not move with the lever; PLANTED BREAK: an eval route handing the step a weight below 1 moves it."""
     replay = _replay()
-    assert _step(tmp_path, replay, 0.1, train=False)[0] == _step(tmp_path, replay, 1.0, train=False)[0]
+    clean = _step(tmp_path, replay, 1.0, train=False)[0]
+    assert _step(tmp_path, replay, 0.1, train=False)[0] == clean
+    real = dispatch._build_graph_parts
+    monkeypatch.setattr(dispatch, "_build_graph_parts", lambda *a, **k: real(*a, **{**k, "tail_value_weight": 0.1}))
+    assert _step(tmp_path, replay, 1.0, train=False)[0] != clean, "a weighed reading reads as the clean one"
 
 
-def test_the_step_event_counts_the_tail_rows_and_echoes_the_weight(tmp_path: Path) -> None:
-    """The lever's fire rate: the kept value rows it weighs, beside the weight; the kept count is the weight's own at any w."""
+def _assert_the_event_counts_the_kept_tail_rows(tmp_path: Path, w: float, mask: tuple[float, int] | None) -> None:
     replay = _replay()
-    tail = _tails(replay)
-    for w in (0.0, 1.0):
-        sink = H.SpySink()
-        _step(tmp_path, replay, w, sink=sink)
-        event = sink.named("trainer_step")[0]
-        assert event["value_rows_tail"] == int(tail.sum()) > 0 and event["tail_value_weight"] == w
-        assert event["value_rows_kept"] == event["value_rows_valid"] == _ROWS
+    tail, kept = _tails(replay), _kept(replay, mask)
+    sink = H.SpySink()
+    _step(tmp_path, replay, w, sink=sink, mask=mask)
+    event = sink.named("trainer_step")[0]
+    assert event["value_rows_tail"] == int((tail & kept).sum()), "the fire rate is not the kept tail rows"
+    assert event["tail_value_weight"] == w and event["value_rows_kept"] == int(kept.sum())
+
+
+def test_the_step_event_counts_the_kept_tail_rows_and_the_planted_break_reds(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The lever's fire rate, the kept rows it scales beside the weight; PLANTED BREAK: counting before the mask."""
+    replay = _replay()
+    tail, kept = _tails(replay), _kept(replay, _MASK)
+    assert 0 < int((tail & kept).sum()) < int(tail.sum()), "the mask keeps every tail row: the read proves nothing"
+    for w, mask in ((0.0, None), (1.0, None), (0.1, _MASK)):
+        _assert_the_event_counts_the_kept_tail_rows(tmp_path, w, mask)
+    monkeypatch.setattr(losses, "kept_tail_rows", lambda tail, kept: int(np.count_nonzero(np.asarray(tail))))
+    with pytest.raises(AssertionError, match="kept tail rows"):
+        _assert_the_event_counts_the_kept_tail_rows(tmp_path, 0.1, _MASK)
 
 
 def test_the_hparams_read_the_block_and_refuse_any_other_shape() -> None:

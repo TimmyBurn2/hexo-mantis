@@ -275,7 +275,6 @@ def test_a_resume_from_a_stamp_carrying_a_retired_path_saves_again(
     assert load_checkpoint(older, declared_encoding=None, declared_future_head=None).config["train"]["value_target"] == "pure_outcome_z", "the parent stamp moved"
 
 
-
 @pytest.mark.parametrize(("old", "folded"), [(True, {"value_weight": 1.0}), (False, None)], ids=["true", "false"])
 def test_a_stamp_carrying_the_v60_tails_bool_loads_resumes_and_saves_again(
         tmp_path, tiny_net, optim_scaler_sched, valid_config, metadata_kwargs, old, folded, monkeypatch):
@@ -298,6 +297,7 @@ def test_a_stamp_carrying_the_v60_tails_bool_loads_resumes_and_saves_again(
     monkeypatch.setattr(retired, "BOOL_BLOCKS", {})
     with pytest.raises(ValidationError, match="decided_tails"):
         load_checkpoint(older, declared_encoding=None, declared_future_head=None)
+
 
 def test_metadata_encoding_name_required(tmp_path, tiny_net, optim_scaler_sched, valid_config,
                                          tiny_arch):

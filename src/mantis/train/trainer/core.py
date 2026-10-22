@@ -392,7 +392,7 @@ class Trainer:
                         rows = inputs.value_rows
                         value_loss = _binned_value_loss(
                             bin_logits.index_select(0, rows), inputs.outcomes.index_select(0, rows),
-                            denominator=value_denominator)
+                            denominator=value_denominator, row_weight=inputs.value_weight)
                         loss = policy_loss + value_loss
                     if torch.isfinite(loss):
                         loss_total += loss.item()

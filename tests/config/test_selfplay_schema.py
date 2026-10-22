@@ -241,8 +241,7 @@ def test_decided_tails_is_admitted_over_an_armed_root_offence() -> None:
 
 @pytest.mark.parametrize("weight", [-0.1, 1.5, float("nan"), True], ids=["negative", "above_one", "nan", "bool"])
 def test_the_tails_value_weight_is_refused_outside_zero_to_one(weight: float) -> None:
-    """0 masks the tail's value rows and 1 is every other row's weight: nothing outside, and no bool for a weight."""
+    """0 (a tail row pulls nothing) to 1 (every other row's share): nothing outside, and no bool for a weight."""
     with pytest.raises(ValidationError, match="value_weight"):
         SelfplayConfig.model_validate(_selfplay(decided_tails={"value_weight": weight},
                                                 search={"kind": "puct", "tactics": _ROOT_OFFENCE}))
-

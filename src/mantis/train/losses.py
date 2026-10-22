@@ -62,6 +62,11 @@ def tail_value_weights(proven_tail: Any, weight: float) -> np.ndarray:
     return np.where(np.asarray(proven_tail).reshape(-1) != 0, np.float32(weight), np.float32(1.0))
 
 
+def kept_tail_rows(proven_tail: Any, kept: Any) -> int:
+    """The kept value rows a decided tail's weight scales — flagged AND kept after the value mask: the lever's fire rate."""
+    return int(np.count_nonzero((np.asarray(proven_tail) != 0) & (np.asarray(kept) != 0)))
+
+
 def graph_policy_row_weights(is_full_search: Any) -> torch.Tensor:
     """Per-row POLICY weight for a graph batch, the one authority: 1 on a full-search row, 0 on a fast-arm row (value-only).
 

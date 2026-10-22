@@ -34,7 +34,7 @@ _REPO = Path(__file__).resolve().parents[2]
 
 
 #: The stub run config the route is handed: it reads the search weight first and nothing else of it.
-_CONFIG: dict[str, Any] = {"train": {"value_target_search_weight": 0.0}}
+_CONFIG: dict[str, Any] = {"train": {"value_target_search_weight": 0.0}, "selfplay": {"decided_tails": None}}
 
 
 def _write_ring(tmp_path: Path, **overrides: Any) -> Path:
@@ -89,6 +89,14 @@ def test_a_search_weight_above_zero_is_refused_before_the_ring_is_read(tmp_path:
     with pytest.raises(GraphPretrainError, match="trains z alone"):
         run_graph_pretrain(spec=None, full_config={"train": {"value_target_search_weight": 0.5}}, train_section=None,
                            ring_path=tmp_path / "nope.hexg", checkpoint_dir=tmp_path, device=None, steps=1, epochs=1)
+
+
+def test_a_tail_weight_below_one_is_refused_before_the_ring_is_read(tmp_path: Path) -> None:
+    """The weight would scale a v5 ring's tail rows behind the route's null sink, so a weight below 1 is refused first."""
+    config = {"train": {"value_target_search_weight": 0.0}, "selfplay": {"decided_tails": {"value_weight": 0.1}}}
+    with pytest.raises(GraphPretrainError, match="tails' fire-rate"):
+        run_graph_pretrain(spec=None, full_config=config, train_section=None, ring_path=tmp_path / "nope.hexg",
+                           checkpoint_dir=tmp_path, device=None, steps=1, epochs=1)
 
 
 def test_an_absent_ring_is_refused(tmp_path: Path) -> None:
@@ -391,7 +399,7 @@ def test_the_graph_arch_is_built_from_the_NESTED_config(tmp_path: Path, monkeypa
     resolve a different arch the day a `gnn_*` width key is minted. Asserted on the ARGUMENT."""
     ring = _write_ring(tmp_path)
     seen: list[Any] = []
-    nested = {"train": {"batch_size": 4, "value_target_search_weight": 0.0},
+    nested = {"train": {"batch_size": 4, "value_target_search_weight": 0.0}, "selfplay": {"decided_tails": None},
               "identity": {"encoding": "gnn_axis_v1"}}
 
     class _Buf:

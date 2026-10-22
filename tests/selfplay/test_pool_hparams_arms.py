@@ -127,7 +127,7 @@ def test_decided_tails_reaches_hparams_and_wire(assemble, tails: dict | None, ar
     assert assemble(config).recorded_kwargs["decided_tails"] is armed
 
 
-def test_a_v60_bool_is_refused_by_name_not_read_as_armed(assemble) -> None:
+def test_a_v60_bool_is_refused_by_name_not_read_as_armed() -> None:
     """A raw `false` is neither null nor a block: the one resolver refuses it rather than reading it as armed."""
     with pytest.raises(DecidedTailsShapeError, match="decided_tails"):
         SelfPlayHParams.from_config(cfg(selfplay={"decided_tails": False}))

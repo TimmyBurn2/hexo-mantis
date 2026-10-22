@@ -182,6 +182,7 @@ def _build_graph_parts(
         future_row_base_ce,
         graph_loss_denominators,
         graph_policy_row_weights,
+        kept_tail_rows,
         redraw_value_mask,
         search_value_rows,
         tail_value_weights,
@@ -295,7 +296,7 @@ def _build_graph_parts(
                               "root_value_rows_moved": int(np.count_nonzero(moved)),
                               "value_rows_valid": value_rows_valid,
                               "value_rows_kept": int(np.count_nonzero(masked_valid)),
-                              "value_rows_tail": int(np.count_nonzero(tail & (masked_valid != 0)))},
+                              "value_rows_tail": kept_tail_rows(tail, masked_valid)},
     }
 
 

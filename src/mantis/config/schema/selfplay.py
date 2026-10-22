@@ -77,7 +77,7 @@ class PlayoutCapConfig(StrictModel):
 class DecidedTailsConfig(StrictModel):
     """The decided tails armed: from the root offence's first decided stone the game runs out with no search."""
 
-    # A tail row's value-loss weight against 1 on every other row; 0 masks the tail's value rows.
+    # A tail row's share of its z CE, every other row's being 1; at 0 it pulls nothing and stays counted.
     value_weight: float = Field(ge=0, le=1, allow_inf_nan=False)
 
 

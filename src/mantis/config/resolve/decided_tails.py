@@ -25,7 +25,10 @@ def resolve_decided_tails(full_config: Any) -> float | None:
     if not isinstance(block, Mapping) or "value_weight" not in block:
         raise DecidedTailsShapeError(f"{_KEY} must be null or carry `value_weight`; got {block!r} (a v60 bool is "
                                      "read only off a stamp, through mantis.config.retired)")
-    return float(block["value_weight"])
+    weight = block["value_weight"]
+    if isinstance(weight, bool) or not isinstance(weight, int | float):
+        raise DecidedTailsShapeError(f"{_KEY}.value_weight must be a number; got {weight!r}")
+    return float(weight)
 
 
 __all__ = ["DecidedTailsShapeError", "resolve_decided_tails"]

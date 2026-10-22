@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
+from mantis.config.resolve.decided_tails import resolve_decided_tails
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.config.resolve.sample_threads import resolve_sample_threads
 from mantis.encoding import lookup as _lookup_encoding
@@ -164,13 +165,16 @@ def run_graph_pretrain(
         The path of the checkpoint written by `Trainer.save_checkpoint`.
 
     Raises:
-        GraphPretrainError: the ring or its budget refuses, a search weight above 0 (the route's null sink would hide its
-            fire-rate), or the held-out estimator's measured noise exceeds the monitor's `min_delta`.
+        GraphPretrainError: the ring or its budget refuses, a search weight above 0 or a tail weight below 1 (the null
+            sink would hide its fire-rate), or the held-out estimator's noise exceeds the monitor's `min_delta`.
     """
     if float(full_config["train"]["value_target_search_weight"]) > 0:
         # Its term would starve on rows with no search value and z train at 1 − w, behind a sink no fire-rate reaches.
         raise GraphPretrainError("a BC pretrain trains z alone: its null event sink would hide the search-value term's "
                                  "fire-rate, so train.value_target_search_weight must be 0")
+    if resolve_decided_tails(full_config) not in (None, 1.0):
+        raise GraphPretrainError("a BC pretrain trains z alone: its null event sink would hide the tails' fire-rate, "
+                                 "so selfplay.decided_tails must be null or at value_weight 1")
     buf, prov = load_ring(ring_path, encoding=spec.name)
     knobs = resolve_coordinator_knobs(train_section)
     total_steps = resolve_step_budget(
