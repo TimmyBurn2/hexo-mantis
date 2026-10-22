@@ -74,6 +74,13 @@ class PlayoutCapConfig(StrictModel):
         return self
 
 
+class DecidedTailsConfig(StrictModel):
+    """The decided tails armed: from the root offence's first decided stone the game runs out with no search."""
+
+    # A tail row's value-loss weight against 1 on every other row; 0 masks the tail's value rows.
+    value_weight: float = Field(ge=0, le=1, allow_inf_nan=False)
+
+
 class SelfplayConfig(StrictModel):
     """Self-play worker/search knobs. See the module docstring for why no radius field exists.
 
@@ -107,8 +114,8 @@ class SelfplayConfig(StrictModel):
     # OPERATIONAL CONSTANT: a queue's back-pressure bound.
     results_queue_cap: int = Field(default=10000, ge=1)
     random_opening_plies: int = Field(ge=0)
-    # From the root offence's first decided stone the game runs out with no search.
-    decided_tails: bool
+    # `null` is the tails off; a block arms them at its value weight.
+    decided_tails: DecidedTailsConfig | None = Field(default=...)
     # OPERATIONAL CONSTANT: a diagnostic verbosity switch. It gates only what is WRITTEN, never
     # what is played, which is what makes it operational rather than a disabled-opponent knob.
     log_investigation_metrics: bool = True
@@ -125,7 +132,7 @@ class SelfplayConfig(StrictModel):
     @model_validator(mode="after")
     def _decided_tails_need_the_root_offence(self) -> "SelfplayConfig":
         tactics = self.search.tactics
-        if self.decided_tails and (tactics is None or tactics.root_nodes == 0):
+        if self.decided_tails is not None and (tactics is None or tactics.root_nodes == 0):
             raise ValueError("selfplay.decided_tails needs selfplay.search.tactics.root_nodes > 0: a decided "
                              "tail starts at the root offence's proof, which an unarmed root offence never finds")
         return self

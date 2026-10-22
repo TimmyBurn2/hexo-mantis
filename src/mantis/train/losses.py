@@ -57,6 +57,11 @@ def redraw_value_mask(value_valid: np.ndarray, p: float, seed: int, step: int) -
     return np.where(keep, value_valid, np.zeros_like(value_valid))
 
 
+def tail_value_weights(proven_tail: Any, weight: float) -> np.ndarray:
+    """Per-row VALUE weight, the one authority: `weight` on a decided tail's row, 1 on every other; float32 `[B]`."""
+    return np.where(np.asarray(proven_tail).reshape(-1) != 0, np.float32(weight), np.float32(1.0)).astype(np.float32)
+
+
 def graph_policy_row_weights(is_full_search: Any) -> torch.Tensor:
     """Per-row POLICY weight for a graph batch, the one authority: 1 on a full-search row, 0 on a fast-arm row (value-only).
 
@@ -84,11 +89,12 @@ def graph_loss_denominators(
     is_full_search: Any,
     value_valid: Any,
     n_graphs: int,
+    value_weight: Any = None,
 ) -> tuple[float, float]:
     """`(policy_denominator, value_denominator)` for ONE step's WHOLE batch, so every micro-batch
     divides by what the un-split batch would have (never `B_m/B` or `1/M`). DELIBERATELY asymmetric:
     policy SUMS the mask values, value COUNTS true entries — they agree only on a strict 0/1 mask
-    (measured `[2, 0, 3]`: 5.0 vs 2.0). The `None` arms fall back to the graph count; the value arm's
+    (measured `[2, 0, 3]`: 5.0 vs 2.0); under `value_weight` the value arm sums the true entries' weights. The `None` arms fall back to the graph count; the value arm's
     is right only with one `bin_logits` row per graph, asserted by the caller.
     """
     if is_full_search is None:
@@ -98,7 +104,9 @@ def graph_loss_denominators(
     if value_valid is None:
         v_den = float(n_graphs)
     else:
-        v_den = max(float(torch.as_tensor(value_valid).reshape(-1).bool().sum()), 1.0)
+        valid = torch.as_tensor(value_valid).reshape(-1).bool()
+        weight = torch.ones(valid.shape) if value_weight is None else torch.as_tensor(value_weight).reshape(-1)
+        v_den = float(weight[valid].sum()) or 1.0
     return p_den, v_den
 
 

@@ -403,6 +403,8 @@ pub struct GraphTargets {
     pub root_value_valid: Vec<u8>,
     pub future_target: Vec<u8>,
     pub future_valid: Vec<u8>,
+    /// `[B]` 1 on a decided tail's row (the ring's `proven_tail`), which the trainer weighs apart.
+    pub proven_tail: Vec<u8>,
     pub argmax_q: Vec<i32>,
     pub argmax_r: Vec<i32>,
     pub argmax_valid: Vec<u8>,

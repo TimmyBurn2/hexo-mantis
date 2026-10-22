@@ -100,6 +100,8 @@ class TrainHParams:
     value_target_search_encoding: Literal["end_bin"] | None
     #: `train.value_mask_redraw_p` with the run seed as `(p, seed)`; `None` is the explicit OFF (p = 0).
     value_mask: tuple[float, int] | None
+    #: `selfplay.decided_tails.value_weight`; 1.0 with the tails off, where a preloaded tail row trains as any other.
+    tail_value_weight: float
 
     def __post_init__(self) -> None:
         """Raises: ValueError — an encoding the trainer has not, or a search weight it disagrees with (the schema's rules, kept for a hand-built hparams)."""
@@ -113,11 +115,12 @@ class TrainHParams:
     @classmethod
     def from_config(cls, config: Any) -> TrainHParams:
         """Build hparams from a validated `RunConfig`-shaped mapping's `train` section (and the
-        `model.aux_soft_policy` rows); every member is REQUIRED, no flat-key fallback.
+        `model.aux_soft_policy` and `selfplay.decided_tails` rows); every member is REQUIRED, no flat-key fallback.
 
         Raises:
             ValueError: no `train` section, a policy target that disagrees with `search.kind`, or a search weight its
-                encoding disagrees with. KeyError: a required `train` member, or the run seed under a value mask, is missing.
+                encoding disagrees with. KeyError: a required `train` member, `selfplay.decided_tails`, or the run seed
+                under a value mask, is missing.
         """
         cfg = config if isinstance(config, dict) else {}
         train = cfg.get("train")
@@ -127,11 +130,13 @@ class TrainHParams:
                 "closure) — no flat legacy training keys are read anymore."
             )
         _assert_policy_target_consistency(train, (cfg.get("selfplay") or {}).get("search") or {})
-        fields = set(cls.__dataclass_fields__) - {"aux_soft_policy", "aux_future_occupancy", "value_mask", "lr_cycle"}
+        fields = set(cls.__dataclass_fields__) - {"aux_soft_policy", "aux_future_occupancy", "value_mask", "lr_cycle",
+                                                  "tail_value_weight"}
         kwargs = {k: train[k] for k in fields}
         aux = resolve_aux_soft_policy(cfg)
         p = float(train["value_mask_redraw_p"])
         cycle = train["lr_cycle"]
+        tails = cfg["selfplay"]["decided_tails"]
         return cls(
             **kwargs,
             lr_cycle=None if cycle is None else LrCycle(start=int(cycle["start_step"]), lr=float(cycle["lr"]),
@@ -139,6 +144,7 @@ class TrainHParams:
             aux_soft_policy=None if aux is None else (aux.temperature, aux.weight),
             aux_future_occupancy=resolve_aux_future_occupancy(cfg),
             value_mask=None if p == 0.0 else (p, int(cfg["seed"])),
+            tail_value_weight=1.0 if tails is None else float(tails["value_weight"]),
         )
 
 
@@ -465,7 +471,7 @@ class Trainer:
                 # The host-found rows, not `value_mask`: a boolean index reads the device, forward and back.
                 rows = inputs.value_rows
                 value_loss = _binned_value_loss(bin_logits.index_select(0, rows), inputs.outcomes.index_select(0, rows),
-                                                denominator=value_denominator)
+                                                denominator=value_denominator, row_weight=inputs.value_weight)
                 if self.hp.value_target_search_encoding is not None:
                     # z keeps 1 − w over the masked rows; the end-bin term trains every value-valid row with a search value.
                     weight, teacher = self.hp.value_target_search_weight, inputs.teacher_rows

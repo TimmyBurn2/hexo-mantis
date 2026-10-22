@@ -67,8 +67,9 @@ def binned_value_loss(
     outcome: torch.Tensor,
     value_mask: torch.Tensor | None = None,
     denominator: float | None = None,
+    row_weight: torch.Tensor | None = None,
 ) -> torch.Tensor:
-    """Masked cross-entropy of head softmax vs two-hot(outcome). fp32 targets.
+    """Masked cross-entropy of head softmax vs two-hot(outcome). fp32 targets; `row_weight` scales each row's CE.
 
     Mask semantics: value_mask==0 rows excluded from numerator AND denominator;
     all-masked → zeros(()).
@@ -86,6 +87,8 @@ def binned_value_loss(
     target = scalar_to_two_hot(outcome.reshape(-1))          # (N, 65) fp32
     logp = F.log_softmax(bin_logits.to(torch.float32), dim=-1)
     per_row = -(target * logp).sum(dim=-1)                   # (N,)
+    if row_weight is not None:
+        per_row = per_row * row_weight.reshape(-1).to(per_row.dtype)
     if value_mask is None:
         if denominator is not None:
             return per_row.sum() / denominator

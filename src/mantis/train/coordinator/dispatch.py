@@ -49,6 +49,8 @@ class GraphStepInputs:
     n_graphs: int
     #: `value_valid`'s nonzero rows, ascending, found on the host from the same array, so the loss reads no mask.
     value_rows: Any
+    #: Each of `value_rows`' weight in the z CE: the decided tails' value weight on theirs, 1 on every other.
+    value_weight: Any
     #: The search-value term's rows in this part: value-valid BEFORE the value mask and carrying a search value.
     teacher_rows: Any
     #: Those rows' count over the WHOLE step, the term's denominator in every part.
@@ -137,6 +139,7 @@ def _build_graph_parts(
     batch_size: int, augment: bool,
     caps_provider: Callable[[], Any], sample_threads_provider: Callable[[], int],
     value_mask: tuple[float, int] | None,
+    tail_value_weight: float,
 ) -> dict[str, Any]:
     """One sampled graph batch, prepared for a step — the kwargs BOTH step routes take.
 
@@ -181,6 +184,7 @@ def _build_graph_parts(
         graph_policy_row_weights,
         redraw_value_mask,
         search_value_rows,
+        tail_value_weights,
     )
 
     # ONE read of each member, into a local: the `train.microbatch_caps` reader census is frozen
@@ -212,6 +216,9 @@ def _build_graph_parts(
     value_rows_valid = int(np.count_nonzero(masked_valid))
     if value_mask is not None:
         masked_valid = redraw_value_mask(masked_valid, value_mask[0], value_mask[1], int(trainer.step))
+    # A decided tail's value row weighs `tail_value_weight`; at 0 it leaves the loss as a dropped row does.
+    value_weight = tail_value_weights(targets.proven_tail, tail_value_weight)
+    masked_valid = np.where(value_weight > 0, masked_valid, np.zeros_like(masked_valid))
     future_rows, marginal = future_marginal(targets.future_target, targets.future_valid, payload.legal_offsets)
     base_ce = future_base_ce(marginal)
     row_base_ce = future_row_base_ce(targets.future_target, targets.future_valid, payload.legal_offsets)
@@ -243,12 +250,13 @@ def _build_graph_parts(
                     _LOG.exception("F-816-37 train-path dump-on-fire raised")
                 raise
             value_valid = np.asarray(masked_valid[g0:g1], dtype=np.uint8)
+            rows = np.flatnonzero(value_valid)
             (policy_target, explicit_mask, tail_mass, outcomes, valid, root_value,
-             row_weight, value_rows, teacher_rows, future_target, future_valid) = ship_host_arrays([
+             row_weight, value_rows, value_row_weight, teacher_rows, future_target, future_valid) = ship_host_arrays([
                 np.asarray(tsl.policy_target, dtype=np.float32), np.asarray(tsl.explicit_mask, dtype=np.uint8),
                 np.asarray(tsl.tail_mass, dtype=np.float32), np.asarray(tsl.outcomes, dtype=np.float32),
                 value_valid, np.asarray(tsl.root_value, dtype=np.float32), policy_row_weight[g0:g1].numpy(),
-                np.flatnonzero(value_valid), np.flatnonzero(teacher_valid[g0:g1]),
+                rows, value_weight[g0:g1][rows], np.flatnonzero(teacher_valid[g0:g1]),
                 np.asarray(tsl.future_target, dtype=np.uint8), np.asarray(tsl.future_valid, dtype=np.uint8)],
                 str(device))
             return GraphStepInputs(
@@ -258,7 +266,8 @@ def _build_graph_parts(
                 policy_target=policy_target, explicit_mask=explicit_mask, tail_mass=tail_mass,
                 outcomes=outcomes, value_valid=valid, root_value=root_value,
                 policy_row_weight=row_weight, n_graphs=g1 - g0,
-                value_rows=value_rows, teacher_rows=teacher_rows, teacher_denominator=teacher_denominator,
+                value_rows=value_rows, value_weight=value_row_weight, teacher_rows=teacher_rows,
+                teacher_denominator=teacher_denominator,
                 future_target=future_target, future_valid=future_valid,
                 future_rows=future_rows, future_base_ce=base_ce, future_row_base_ce=row_base_ce,
             )
@@ -268,7 +277,7 @@ def _build_graph_parts(
     # The WHOLE step's denominators, computed ONCE, so the micro-batch parts sum to the un-split
     # loss exactly — NOT `1/M` and NOT `B_m/B`.
     policy_denominator, value_denominator = graph_loss_denominators(
-        policy_row_weight, masked_valid, n_graphs)
+        policy_row_weight, masked_valid, n_graphs, value_weight)
     # The rows the search-value term reaches (`teacher_valid`) and moves (v != z): its fire-rate at every weight.
     reached = teacher_valid
     moved = reached & (np.asarray(targets.root_value) != np.asarray(targets.outcomes))
@@ -298,7 +307,7 @@ def _graph_step(
     return trainer.train_step_from_graph_batch(**_build_graph_parts(
         trainer, buffer, spec, batch_size=batch_size, augment=augment,
         caps_provider=caps_provider, sample_threads_provider=sample_threads_provider,
-        value_mask=trainer.value_mask,
+        value_mask=trainer.value_mask, tail_value_weight=trainer.hp.tail_value_weight,
     ))
 
 
@@ -343,5 +352,5 @@ def run_declared_eval_step(
     return trainer.eval_step_from_graph_batch(**_build_graph_parts(
         trainer, buffer, spec, batch_size=batch_size, augment=False,
         caps_provider=caps_provider, sample_threads_provider=sample_threads_provider,
-        value_mask=None,
+        value_mask=None, tail_value_weight=1.0,
     ))

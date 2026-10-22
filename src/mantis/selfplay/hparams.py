@@ -112,7 +112,7 @@ class SelfPlayHParams:
     gumbel_explore_moves: int
     results_queue_cap: int
     random_opening_plies: int
-    #: `selfplay.decided_tails`: the game runs out unsearched once the root offence decides it.
+    #: `selfplay.decided_tails` armed (a block): the game runs out unsearched once the root offence decides it.
     decided_tails: bool
     # mcts ns
     c_puct: float
@@ -165,7 +165,7 @@ class SelfPlayHParams:
             gumbel_explore_moves=int(sp["gumbel_explore_moves"]),
             results_queue_cap=int(sp["results_queue_cap"]),
             random_opening_plies=int(sp["random_opening_plies"]),
-            decided_tails=bool(sp["decided_tails"]),
+            decided_tails=sp["decided_tails"] is not None,
             c_puct=puct.c_puct,
             fpu_reduction=puct.fpu_reduction,
             quiescence_enabled=puct.quiescence_enabled,

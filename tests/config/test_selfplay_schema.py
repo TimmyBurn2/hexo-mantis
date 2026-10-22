@@ -10,6 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from _fused_caps import CAPS_DICT
+from mantis.config.retired import split_retired
 from mantis.config.schema import (
     ARCH_SCOPED_KEYS,
     InferenceConfig,
@@ -35,7 +36,7 @@ VALID_SELFPLAY: dict = {
     "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
     "c_visit": 50.0,
     "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_m_quick": 16, "gumbel_explore_moves": 10, "search_stats_every": 8,
-    "results_queue_cap": 10_000, "random_opening_plies": 0, "decided_tails": False,
+    "results_queue_cap": 10_000, "random_opening_plies": 0, "decided_tails": None,
     "log_investigation_metrics": True,
     "mcts": dict(VALID_MCTS),
     "playout_cap": dict(VALID_PLAYOUT_CAP),
@@ -229,10 +230,28 @@ def test_decided_tails_is_refused_without_an_armed_root_offence(tactics: dict | 
     """A decided tail starts at the root offence's proof, so a block that never proves one refuses the switch."""
     search = {"kind": "puct", "tactics": tactics}
     with pytest.raises(ValidationError, match="selfplay.decided_tails"):
-        SelfplayConfig.model_validate(_selfplay(decided_tails=True, search=search))
-    assert not SelfplayConfig.model_validate(_selfplay(decided_tails=False, search=search)).decided_tails
+        SelfplayConfig.model_validate(_selfplay(decided_tails={"value_weight": 1.0}, search=search))
+    assert SelfplayConfig.model_validate(_selfplay(decided_tails=None, search=search)).decided_tails is None
 
 
 def test_decided_tails_is_admitted_over_an_armed_root_offence() -> None:
-    cfg = SelfplayConfig.model_validate(_selfplay(decided_tails=True, search={"kind": "puct", "tactics": _ROOT_OFFENCE}))
-    assert cfg.decided_tails is True
+    cfg = SelfplayConfig.model_validate(_selfplay(decided_tails={"value_weight": 0.1},
+                                                  search={"kind": "puct", "tactics": _ROOT_OFFENCE}))
+    assert cfg.decided_tails is not None and cfg.decided_tails.value_weight == 0.1
+
+
+@pytest.mark.parametrize("weight", [-0.1, 1.5, float("nan"), True], ids=["negative", "above_one", "nan", "bool"])
+def test_the_tails_value_weight_is_refused_outside_zero_to_one(weight: float) -> None:
+    """0 masks the tail's value rows and 1 is every other row's weight: nothing outside, and no bool for a weight."""
+    with pytest.raises(ValidationError, match="value_weight"):
+        SelfplayConfig.model_validate(_selfplay(decided_tails={"value_weight": weight},
+                                                search={"kind": "puct", "tactics": _ROOT_OFFENCE}))
+
+
+def test_the_retired_bool_reads_as_the_block_it_ran() -> None:
+    """A record minted with the bool reads `true` as weight 1, what such a run trained at, and `false` as off."""
+    for old, new in ((True, {"value_weight": 1.0}), (False, None)):
+        kept, removed = split_retired({"selfplay": {"decided_tails": old}})
+        assert kept["selfplay"]["decided_tails"] == new and removed == {"selfplay.decided_tails": old}
+    untouched = {"selfplay": {"decided_tails": {"value_weight": 0.1}}}
+    assert split_retired(untouched) == (untouched, {})

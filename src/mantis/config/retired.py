@@ -34,6 +34,11 @@ FOLDED_PATHS: dict[str, str] = {
     "train.value_target_lambda": "train.value_target_search_weight",
 }
 
+#: A leaf that was a bool before it became a block or `null`: a record's `true` reads as the block it ran, `false` as `null`.
+BOOL_BLOCKS: dict[str, dict[str, Any]] = {
+    "selfplay.decided_tails": {"value_weight": 1.0},
+}
+
 
 def _parent(config: dict[str, Any], dotted: str) -> tuple[Any, str]:
     """`(the mapping holding the dotted leaf, or None, the leaf's key)`."""
@@ -45,7 +50,7 @@ def _parent(config: dict[str, Any], dotted: str) -> tuple[Any, str]:
 
 
 def split_retired(config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    """`(a copy without the retired paths and retired-posture nulls, a fold's unset target filled, {dotted path: value})`; the input is untouched."""
+    """`(a copy without the retired paths and retired-posture nulls, a fold's unset target filled, a bool block read as its block, {dotted path: value})`; the input is untouched."""
     kept = copy.deepcopy(config)
     removed: dict[str, Any] = {}
     for dotted in sorted(RETIRED_PATHS):
@@ -60,4 +65,9 @@ def split_retired(config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any
         node, leaf = _parent(kept, target)
         if source in removed and isinstance(node, dict) and node.get(leaf) in (None, 0):
             node[leaf] = removed[source]
+    for dotted, block in BOOL_BLOCKS.items():
+        node, leaf = _parent(kept, dotted)
+        if isinstance(node, dict) and isinstance(node.get(leaf), bool):
+            removed[dotted] = node[leaf]
+            node[leaf] = copy.deepcopy(block) if removed[dotted] else None
     return kept, removed

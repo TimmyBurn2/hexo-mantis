@@ -45,7 +45,7 @@
 # delta: train.scheduler_t_max: 1000000 -> 150000
 # delta: run_id: template_dev -> run14
 # delta: train.lr_cycle: null -> {start_step: 176681, lr: 0.0005, eta_min: 0.0001, t_max: 300000}
-# delta: selfplay.decided_tails: false -> true
+# delta: selfplay.decided_tails: null -> {value_weight: 1.0}
 # delta: eval.round_timeout_sec: 3600.0 -> 14400.0
 # delta: inference.edge_geometry_check: inline -> checker_thread
 # delta: inference.compile_trunk: false -> true
@@ -199,7 +199,8 @@ selfplay:
   gumbel_explore_moves: 10
   search_stats_every: 8
   random_opening_plies: 0
-  decided_tails: true
+  decided_tails:
+    value_weight: 1.0
   mcts:
     c_puct: 1.5
     fpu_reduction: 0.25

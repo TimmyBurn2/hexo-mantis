@@ -190,7 +190,7 @@ selfplay:
   gumbel_explore_moves: 10
   search_stats_every: 8
   random_opening_plies: 0
-  decided_tails: false
+  decided_tails: null
   mcts:
     c_puct: 1.5
     fpu_reduction: 0.25

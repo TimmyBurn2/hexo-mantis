@@ -166,6 +166,7 @@ impl HexgBuffer {
         };
 
         let syms = self.draw_syms(&indices, augment);
+        let proven_tail: Vec<u8> = indices.iter().map(|&idx| self.proven_tail[idx]).collect();
 
         // Materialise the records BEFORE the parallel section: `record_at` borrows `&self`,
         // and the section must not hold a borrow of the buffer while threads run.
@@ -224,6 +225,7 @@ impl HexgBuffer {
                 root_value_valid,
                 future_target,
                 future_valid,
+                proven_tail,
                 argmax_q,
                 argmax_r,
                 argmax_valid,
