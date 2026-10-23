@@ -7,6 +7,23 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
+**R400 (2026-10-22): RUN14 STOPS; THE LINEAGE'S TRAINING CLOSES; THE STRENGTH LEFT IS IN THE BROWSER'S BUDGET. run14
+stops at its next complete save, before its cycle's end: its restart bump was its only gain, its last ten cells read
+flat (−0.07 per 100k [−0.24, +0.11]), and its value instrument regressed at the restart and never recovered. The end
+read is R398(e)'s as pre-stated, on the idle card; the pick stays the net of record unless the average is above on one
+ruler by its CI and below on neither, and the winner is DEPLOY-WEB's export candidate. The lineage's training closes
+at diminishing returns (run12 +0.32 per 100k, run13 +0.14, run14 +0.08). The likeliest cause of the value head's
+stall is the decided tails' value rows at full weight, which DT-1 never down-weighted; one desk read sets their weight
+(CARD-TAILS-VALUE-WEIGHT), and the capacity-or-data read is carded, not ordered. The strength available now is the
+deploy budget: DEPLOY-WEB continues, and DENSE-1's L4 line is stale and stays parked. A reopened programme takes the
+tails' weight, then the capacity read, then one run with one change read at a pre-stated window, never a cycle
+restart alone.** (RULINGS R400; the R399 paragraph below stands where R400 does not move it.) run14 stopped on
+2026-10-22 at 23:09:40 CEST after its 372 000 save (stop save `run14_00372000_241db7a3`, mirrored and sha-checked).
+The end read played on 2026-10-23: the average of the 351 000–372 000 saves, `run14avg_00372000_647f0497`, read rung
+16 0.632 [0.594, 0.669] against the pick's replayed 0.563 (above) and S 0.868 [0.840, 0.896] against 0.851 (not
+below). It WINS: the average replaces run13's 120k as the net of record and DEPLOY-WEB's export candidate
+(CARD-RUN14). R401 (run15, relayed 2026-10-22) is recorded with run15's mint.
+
 **R399 (2026-10-21): THE DESIGN STANDS; EIGHT ITEMS RULED; L1 MAY START. DEPLOY-WEB's L0 design stands. fp16 ships
 to WebGPU only, under a line pre-stated before its first read on run13's 120k (|Δ prob| and |Δ value| ≤ 2e-3, the
 same argmax wherever the top-2 gap > 2e-2, logits reported); until then fp32 is the only shipped file. The additive
@@ -667,19 +684,16 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
 
 ## The run
 
-- **run14 is LIVE again since 2026-10-20 07:26:33 CEST on box A at `828ff2ac`, resumed from 180 997 (R397(a);
-  CARD-RUN14):** the tree fast-forwarded and rebuilt, the preflight re-stamped, the monitor read the stop save once on
-  the fixed reader with no halting row and archived the halt (`HALT_00180000.json`), RESUME_OK 07:30:43; its 183 000
-  read counter_threat_share 0.00086 with 13 797 tail block rows skipped, no band missed and both exams held. It was
-  launched 2026-10-19 12:46:07 CEST on box A
-  from `94bc5512` (`configs/run14.yaml`) on the operator's word, BOOT_OK 12:51:07: run13's second cycle, a resume of a
-  byte copy of run13's stop save placed in run14's own checkpoint dir (a resume saves beside the checkpoint it resumes;
-  CARD-RESUME-SAVES-BESIDE-SOURCE), at 176 681 with the whole ring (2 500 000 rows) and run13's anchor pinned. Its first
-  save, 177 000, landed in run14's dir with run13's unchanged. The fresh tree replaced run13's run and cell trees on the
-  box. Its monitor's counter_threat_share band halted it at the 180 000 save (one SIGTERM at 14:03:46 CEST; stop save
-  `run14_00180997_8128ac4a` at 14:03:53, mirrored), on the decided tails' loser rows, which its reader counted as mass
-  0; R397(a) fixed the reader, and run14 resumed from 180 997 on a box tree carrying the fix, under its own config.
-  This line said ORDERED until the launch, LIVE until R397's record and HALTED until the resume.
+- **run14 is STOPPED at 372 000 (R400(a); CARD-RUN14):** stopped 2026-10-22 23:09:40 CEST on box A by the stop
+  marker and one SIGTERM after its 372 000 save; stop save `run14_00372000_241db7a3` (weights equal to the periodic
+  `run14_00372000_38a547a0`), mirrored and sha-checked, the monitor's last read clean. Box A restarted 2026-10-22
+  18:28 CEST with no stop save, and run14 resumed from 369 000 at 22:16. It resumed 2026-10-20 07:26:33 CEST at
+  `828ff2ac` from 180 997 (R397(a)) after its monitor's counter_threat_share band halted it at the 180 000 save on the
+  decided tails' loser rows, which the fixed reader skips. It was launched 2026-10-19 12:46:07 CEST from `94bc5512`
+  (`configs/run14.yaml`): run13's second cycle, a resume of a byte copy of run13's stop save at 176 681 in run14's own
+  checkpoint dir (a resume saves beside the checkpoint it resumes; CARD-RESUME-SAVES-BESIDE-SOURCE). Its end read
+  (R398(e)) named the average of its 351 000–372 000 saves the net of record (the R400 paragraph). This line said
+  ORDERED until the launch, LIVE until R397's record, HALTED until the resume and LIVE again until R400's record.
 - **run13 is CLOSED at 176 681 (R396(a); CARD-RUN13):** launched 2026-10-16 18:34:52 CEST on box A from `1d1e27a9`
   (`configs/run13.yaml`), BOOT_OK 18:39:52; stopped 2026-10-19 06:41:43 CEST (marker, then SIGTERM; stop save
   `run13_00176681_31e66d38.ckpt`, mirrored). Its window read a MISS: rung 16 pooled at 120k–156k +0.1513 logit
@@ -756,7 +770,7 @@ run6's by R369's packet (W0).
 ## Where things live
 
 - Open work: `docs/governance/CARDS.md` (swept in W6; derived there, never enumerated here).
-- Rulings: `docs/governance/RULINGS.md`; the latest is R399 (this line said R386 until R393's record).
+- Rulings: `docs/governance/RULINGS.md`; the latest is R400 (this line said R386 until R393's record).
 - Laws and the protected set: `docs/governance/LAWS.md`, whose protected set names each
   invariant's pinning tests (R370(f)); `tests/test_protected_set_pins.py` fails if one is gone.
   Falsified work: `docs/governance/falsified.md`.
@@ -865,3 +879,6 @@ The R399 paragraph and the latest-ruling line were written 2026-10-21 at R399 on
 `origin/dev` `540a8720`, from the ruling's text.
 The R399 paragraph's DEPLOY-WEB L1 sentence was written 2026-10-21 at L1's exit on branch `deploy-web` over
 `origin/dev` `25e4698c`, from L1's read (local records).
+The R400 paragraph, the run line and the latest-ruling line were written 2026-10-23 at R400's record on branch
+`run14-go` over `origin/dev` `3b9ea1d2`, with the stop read from box A's records, the stop save's sha256 from the box
+and the mirror, and the end read from its four sidecars (mirrored, sha256 equal to the box's).

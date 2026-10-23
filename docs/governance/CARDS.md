@@ -36,6 +36,23 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R400 (RUN14 STOPS; THE LINEAGE'S TRAINING CLOSES; THE STRENGTH LEFT IS IN THE BROWSER'S BUDGET; 2026-10-22) — run14's stop and end read, the tails' value weight, the capacity read
+
+R400 also moves, in place: CARD-RUN14 (CLOSED, the stop and the end read, by (a)–(b)), CARD-DECIDED-TAILS (the value
+rows' weight unread, by (c)) and CARD-DENSE-1 (its L4 line stale, by (e)). CARD-DEPLOY-WEB continues as ruled by (e);
+its export candidate is the end read's winner, `run14avg_00372000_647f0497` (CARD-RUN14).
+
+- **CARD-TAILS-VALUE-WEIGHT — ORDERED by R400(d) (2026-10-22): one desk read, 0 box-h, before any future run.** From
+  run14's stop save on its frozen final ring, three 15k-step continuations at the run's LR, the tails' value rows at
+  weight 1 (as armed), at 0.1 and masked, read on the value instrument of record (CE, AUC, temperature) and the
+  held-out gap, under a pre-stated line and a known-bad. Its result sets `decided_tails`' default value weight. The
+  grounds: run14's value head regressed at its restart (CE 0.5273 → 0.5304 in 319 steps, temperature 1.27 → 1.46,
+  held-out gap 0.054 → 0.09) and never recovered, with ~19 % of its rows the tails' certain ±1 targets at full
+  weight. EXECUTING on the desk (TVW-1, branch `tails-value-weight`).
+- **CARD-CAPACITY-OR-DATA — CARDED by R400(d), not ordered: the research pass's 4×512 continuation.** It informs only
+  a programme the operator has closed; in a reopened programme it follows the tails' weight and precedes the one run
+  with one change (R400(f)).
+
 ## Opened by R399 (THE DESIGN STANDS; EIGHT ITEMS RULED; L1 MAY START; 2026-10-21) — DEPLOY-WEB's open items
 
 R399 also moves, in place: CARD-DEPLOY-WEB (its L0 design stands, its eight open items ruled, L1 open, by (a)–(i)).
@@ -180,8 +197,18 @@ R395 also moves, in place: CARD-RUN13 (its early STOP adopted), CARD-DENSE-1 (PA
 (TR-D, a deploy lever beside run14), CARD-SEARCH-VALUE-TEACHER (rides only on a LIVE V2), CARD-DECIDED-TAILS (ARMED in
 run14), CARD-NET2NET-WIDEN (the second widening is the bet) and CARD-PERF-COLLATE-2 (its branch is not on dev).
 
-- **CARD-RUN14 [RUN14-GO] — LIVE again since 2026-10-20 07:26:33 CEST on box A at `828ff2ac`, resumed from 180 997
-  under its own config, no mint, the halt at 180 000 archived, tails ARMED; RESUME_OK 07:30:43.** Its 183 000 read on
+- **CARD-RUN14 [RUN14-GO] — CLOSED 2026-10-22 by R400(a)–(b): STOPPED at 372 000 before its cycle's end; its end
+  read names the average of its last eight saves the net of record.** It stopped at 23:09:40 CEST on box A, by the
+  stop marker and one SIGTERM after the 372 000 save: stop save `run14_00372000_241db7a3` (weights equal to the
+  periodic `run14_00372000_38a547a0`), mirrored and sha-checked, the monitor's last read clean (T4_V 0.406, DEF_V_att
+  0.533). Box A had restarted at 18:28 CEST that day with no stop save, and run14 resumed from 369 000 at 22:16. The
+  end read (R398(e), pre-stated; local records `mantis-records/run14/endread/`) played on the idle card at `828ff2ac`:
+  `run14avg_00372000_647f0497` (the float64 mean of the 351 000–372 000 grid saves, bit-equal over 58 tensors; sha256
+  `5825bc67…`, net_hash `558acc92…`) read rung 16 0.632 [0.594, 0.669] against the pick's replayed 0.563 (above) and
+  S 0.868 [0.840, 0.896] against 0.851 (not below), 576 games a cell. It WINS: it replaces run13's 120k as the net of
+  record and is DEPLOY-WEB's export candidate. **Was: LIVE again since 2026-10-20 07:26:33 CEST on box A at
+  `828ff2ac`, resumed from 180 997 under its own config, no mint, the halt at 180 000 archived, tails ARMED;
+  RESUME_OK 07:30:43.** Its 183 000 read on
   the fixed reader: counter_threat_share 0.00086 (13 797 tail block rows skipped), no band missed, T4_V 0.316 and
   DEF_V_att 0.545 above their floors. Its end read is owed by R398(e): the uniform average of its last eight saves
   against the pick's cells replayed on the same host and tree, 576 games a cell; the pick stays the net of record
@@ -418,7 +445,9 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   (1.63 below the control) was valid. The four arms were not read (the warm 4×128 stopped at ~3 300 steps, no save).
   Landed on the branch: tools/distill (labeller, rings, trainer driver, reads), the checkpoint stamp's `lineage`, the
   `teacher` extra. Local records `mantis-records/distill-1/EXIT.md`.
-- **CARD-DENSE-1 — L0 and L1 EXITED 2026-10-18 (branch `dense1-l1`), finished on the operator's word after R395(d)
+- **CARD-DENSE-1 — its L4 line is STALE by R400(e) (2026-10-22): run11's plateau (+0.17) sits ~0.9 logit below the
+  lineage; DENSE-1 stays parked. L0 and L1 EXITED 2026-10-18 (branch `dense1-l1`), finished on the operator's word
+  after R395(d)
   and pushed with this record. L0: S_max 112, S_far 144 (the corpus maximum, set by two from-scratch lines' tails; p99.9 64); Q3 UNDER the
   line (0.153 % of explicit visit mass beyond 5; run6, run7 and run11fresh above it alone). L1: `hexcanvas` behind the
   seam as a capability (the `hexcanvas_r8` row, `mantis_graph::build_canvas`, contract #12). OWED to L2: the arch kind
@@ -1292,7 +1321,10 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   no root value, so the lever reads on rings self-play writes after it). Was CARDED, not built, by R381(d), with a v2→v3 ring migration. Was CARDED for CARD-RUN11-DESIGN by R379(d): a search-value aux target from our own search.**
   CENSUS-1's C6: Six's search value beats our raw one off the proofs (DEF −0.097 on its non-proof rows, QU −0.058,
   MID −0.053). R376(f) governs any learning from Six's outputs; this card is our own search's value.
-- **CARD-DECIDED-TAILS — ARMED in run14 by R396(b) as by R395(b) (2026-10-18), on dev since `9dc463e6`; LANDED by
+- **CARD-DECIDED-TAILS — ANNOTATED by R400(c) (2026-10-22): the throughput stands (+7.9 %); the tails' value rows
+  (~19 % of rows, certain ±1 targets) trained at full weight, DT-1's packet carried no down-weighting, the architect's
+  omission on the ledger, and their weight is unread (CARD-TAILS-VALUE-WEIGHT). Was: ARMED in run14 by R396(b) as by
+  R395(b) (2026-10-18), on dev since `9dc463e6`; LANDED by
   R396(e); R3 (T4/DEF at run14's first two saves) is run14's to read, a two-read miss halting the tails, not the
   run. R3 HELD at both saves (2026-10-19). By R397(a), DT-1's packet read throughput and the exams and never ran the
   ring-audit bands on a tails ring, the architect's omission on the ledger: the loser's value-only rows store no

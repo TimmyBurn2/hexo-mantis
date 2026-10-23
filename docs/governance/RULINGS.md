@@ -1,4 +1,4 @@
-# RULINGS — R23 to R399
+# RULINGS — R23 to R400
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R400.
+- Numbering continues from R346. The next ruling is R401.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,49 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R400 — RUN14 STOPS; THE LINEAGE'S TRAINING CLOSES; THE STRENGTH LEFT IS IN THE BROWSER'S BUDGET
+Decision: verbatim below.
+
+> R400 — RUN14 STOPS; THE LINEAGE'S TRAINING CLOSES; THE STRENGTH LEFT IS IN THE BROWSER'S BUDGET.
+> (a) run14 is STOPPED at its next complete save on the operator's word, before its cycle's end
+> (477 000). Grounds of record: the restart bump (+0.41 per 100k for 60k steps) is the run's only
+> gain; the ten cells after it read −0.07 per 100k [−0.24, +0.11]; the last ten average +0.32
+> logit on rung 16, +0.06 over the net of record inside one cell's noise; S is level with run13
+> (0.843 v 0.849); the value instrument regressed at the restart (0.5273 → 0.5304 CE in 319
+> steps) and never recovered over 190k steps while the temperature rose 1.27 → 1.46 and the
+> held-out gap 0.054 → 0.09. The remaining 35 h buy an expected ~0: run12's own anneal cells sat on
+> its climb line, and run14's line is flat. The stop save is mirrored and sha-checked.
+> (b) The end read is R398(e)'s as pre-stated, on the idle card: the uniform average of the stop
+> save's last eight saves and run13's 120k pick, both played on the same host and tree, rung 16 and
+> S, 576 games a cell. The pick stays the net of record unless the average is above on one ruler
+> by its CI and below on neither. The winner is DEPLOY-WEB's export candidate. After the read
+> nothing ruled needs box A; renting on is the operator's call, with the mirror complete.
+> (c) Of record, the lineage's training CLOSES at diminishing returns: run12 +0.32 per 100k over its
+> cycle, run13 +0.14, run14 +0.08 and flat at the end; at ~31 h per 100k that is +0.07 logit a day
+> at the run13+14 pace and zero at the recent one. The value head stopped learning in run14. The
+> reading with the most support: decided tails' value rows — ~19 % of rows with certain ±1 targets
+> at FULL weight — made training easy and the head over-confident. DT-1's packet carried no
+> down-weighting (KataGo's shape records such rows at weight 0.1, named in the architect's own
+> levers research of 2026-09-28): the architect's omission, on the ledger. CARD-DT-1 is ANNOTATED:
+> the throughput stands (+7.9 %); the value rows' weight is unread.
+> (d) One desk read for the record, 0 box-h, before any future run (CARD-TAILS-VALUE-WEIGHT): from
+> run14's stop save on its frozen final ring, three 15k-step continuations at the run's LR — tail
+> value rows at weight 1 (as armed), at 0.1, and masked — read on the value instrument of record
+> (CE, AUC, temperature) and the held-out gap, with a pre-stated line and a known-bad. Its result
+> sets `decided_tails`' default value weight. The capacity-or-data read (the research pass's
+> 4×512 continuation) is CARDED, not ordered: it informs only a programme the operator has closed.
+> (e) The strength available now is the deploy budget, not training: on WebGPU the arena's 10-s
+> turn affords ~450–560 sims a stone against the 128 of record, an estimated +0.45 to +1.1 logit
+> (R398(a); the slope's caveat stands). DEPLOY-WEB continues as ruled; L4's read at the clock is the
+> number that closes the programme's record. DENSE-1's L4 line is noted stale (run11's plateau
+> +0.17, ~0.9 logit below the lineage) and stays parked.
+> (f) If the operator reopens training, the order is: (d)'s result into the recipe; the capacity
+> read; then one run with one change, read on the rulers at a pre-stated window — never a cycle
+> restart alone (R396(b), confirmed by run14).
+
+Status: standing. ANNOTATES R396(b) (the second cycle's result), R398(e) (the end read's stop
+point), R394(d1)/DT-1 (the value rows' weight).
 
 ### R399 — THE DESIGN STANDS; EIGHT ITEMS RULED; L1 MAY START
 Decision: verbatim below.
@@ -141,6 +184,8 @@ Status: standing. ANNOTATES R397(b) (DEPLOY-WEB's shape), R397(c) (the pick; the
 claim at concurrency 1 only. (b)'s floor ANNOTATED by R399(d): under a clock below `minTurnMs` the CPU path plays at a
 16-sim floor, counted as `floor_over_clock`; the 32-sim floor stands for the budget rule and the arena's offered
 clocks. (b)'s ρ, fp16 and WebGPU fallback are ruled by R399(f), (a) and (g).
+(e)'s stop point ANNOTATED by R400(a)–(b): run14 stopped at its next complete save before its cycle's end, and the
+end read is (e)'s as pre-stated, on the idle card, the winner DEPLOY-WEB's export candidate.
 
 ### R397 — THE BAND READ THE TAILS; THE BOT LIVES IN THE BROWSER; THE AVERAGE IS READ FOR FREE
 Decision: verbatim below.
@@ -254,6 +299,10 @@ deployed bot runs in the browser, tree reuse ships in its deploy head, and its p
 budget bench against the arena's turn time in a browser. (c) ANNOTATED by R399(c): the web player (`mantis-player`) is
 the second consumer of within-turn reuse, its constant pinned equal to `LADDER_TREE_REUSE`; W3 and the player's Rust
 served-sims test enter the protected set with DEPLOY-WEB's L2.
+(b) ANNOTATED by R400(a), (c), (f): the second cycle's result — its restart bump (+0.41 per 100k for 60k steps) was
+its only gain and the ten cells after it read flat; the value instrument regressed at the restart and never
+recovered; run14 STOPPED before its cycle's end, the lineage's training CLOSES, and a cycle restart alone is never
+again a run's recipe.
 
 ### R395 — RUN14 IS THE LAST RUN; IT CARRIES WHAT IS MEASURED AND ONE BET, BENCHED
 Decision: verbatim below.
@@ -368,6 +417,8 @@ not withdrawn, by R395(d): DENSE-1 is PARKED by the last-run constraint, its L0/
 programme; (d1) and (d2) SPENT by R396(f): the decided tails landed (DT-1) and the value teacher closed (VT-1); (d1)
 ANNOTATED by R397(a): DT-1's packet read throughput and the exams and never ran the ring-audit bands on a tails ring,
 the architect's omission on the ledger; run14's 177 000 read passed at 0.00239 and its 180 000 read halted it.
+(d1) ANNOTATED by R400(c): DT-1 carried no down-weighting of the tails' value rows (~19 % of rows, certain ±1
+targets, at full weight); its throughput stands (+7.9 %), the value rows' weight is unread (CARD-TAILS-VALUE-WEIGHT).
 ANNOTATES R393(d) (run13's pick rule; run14 at GO), R392(d) (§9 Q2–Q7), R391(e) (DENSE-1's
 desktop legs run regardless of the lineage), R381(d) (CARD-DECIDED-TAILS un-parked), R370(c) (the tier spread).
 ANNOTATION A1 (2026-10-17, RUN13-PREP, at this record): (b)'s "R_mint +0.0973" reads +0.0965 (1 207 / 2 303, the
