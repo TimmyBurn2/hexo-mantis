@@ -1,4 +1,4 @@
-# >300 justify (R8): an arm's whole life is one unit — its recipe, its start (fresh, warm, or a widened stamp), the rolling
+# >300 justify (R8): an arm's whole life is one unit — its recipe, its start (fresh, warm, or a grown stamp), the rolling
 # saves it writes and the resume that reads them back, and the record assembled from those saves; split, the resume would
 # read a save layout and a progress log that another file defines.
 """One supervised arm on a frozen ring through the production trainer: the base recipe's config with the arm's shape, seeded, saved at the panel's steps."""
@@ -23,6 +23,7 @@ from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.config.resolve.sample_threads import resolve_sample_threads
 from mantis.model import ModelArch, build_net
+from mantis.model.deepen import deepen_arch, deepen_net, deepen_tag
 from mantis.model.identity import net_param_hash
 from mantis.model.widen import widen_arch, widen_net
 from mantis.train.bundle_receipts import CHECKPOINT_NAME_RE, stamped_checkpoints
@@ -111,27 +112,48 @@ def arm_config(arm: ArmSpec, recipe: Recipe) -> dict[str, Any]:
     return dump
 
 
-def widen_checkpoint(parent: Path, base_config: Path, out: Path, *, run_id: str, seed: int) -> dict[str, Any]:
-    """The parent's deploy net doubled (`widen_net`) and stamped at step 0 by the trainer's one writer under `base_config` at the doubled width, EMA off, lineage the parent's plus `widened-from-<parent>`; Raises: FileExistsError — `out` exists; CheckpointStampError, DeclaredEncodingMismatchError — as `deploy_net`; WidenError — a tensor without a rule; RuntimeError — the stamp's deploy net is not the doubled net."""
-    dump = load_config(base_config).model_dump()
-    encoding = dump["identity"]["encoding"]
-    net, arch, source = deploy_net(parent, encoding)
-    wide, wide_arch = widen_net(net, arch, seed=seed), widen_arch(arch)
+def _stamp_grown(net: nn.Module, arch: ModelArch, dump: dict[str, Any], out: Path, *, run_id: str,
+                 lineage: tuple[str, ...]) -> Path:
+    """`net`, declared as `arch`, stamped at step 0 by the trainer's one writer under the recipe `dump` at `arch`'s widths, EMA off; Raises: FileExistsError — `out` exists; RuntimeError — the stamp's deploy net is not `net`."""
     out.mkdir(parents=True, exist_ok=False)
     dump["run_id"] = run_id
-    dump["model"]["gnn"] = {"hidden": wide_arch.hidden, "num_layers": wide_arch.num_layers}
+    dump["model"]["gnn"] = {"hidden": arch.hidden, "num_layers": arch.num_layers}
     dump["identity"]["warm_start"] = None
     dump["train"]["ema"] = {**dump["train"]["ema"], "enabled": False}
     trainer = build_fresh_trainer(config=dump, device=torch.device("cpu"), checkpoint_dir=str(out))
-    trainer._base_model().load_state_dict(wide.state_dict(), strict=True)
-    trainer.lineage = (*stamped_lineage(parent), f"widened-from-{parent.stem}")
+    trainer._base_model().load_state_dict(net.state_dict(), strict=True)
+    trainer.lineage = lineage
     path = trainer.save_checkpoint(None)
-    if net_param_hash(deploy_net(path, encoding)[0]) != net_param_hash(wide):
-        raise RuntimeError(f"{path.name}: the stamp's deploy net is not the doubled net")
+    if net_param_hash(deploy_net(path, dump["identity"]["encoding"])[0]) != net_param_hash(net):
+        raise RuntimeError(f"{path.name}: the stamp's deploy net is not the grown net")
+    return path
+
+
+def widen_checkpoint(parent: Path, base_config: Path, out: Path, *, run_id: str, seed: int) -> dict[str, Any]:
+    """The parent's deploy net doubled (`widen_net`) and stamped at step 0 by the trainer's one writer under `base_config` at the doubled width, EMA off, lineage the parent's plus `widened-from-<parent>`; Raises: FileExistsError — `out` exists; CheckpointStampError, DeclaredEncodingMismatchError — as `deploy_net`; WidenError — a tensor without a rule; RuntimeError — the stamp's deploy net is not the doubled net."""
+    dump = load_config(base_config).model_dump()
+    net, arch, source = deploy_net(parent, dump["identity"]["encoding"])
+    wide, wide_arch = widen_net(net, arch, seed=seed), widen_arch(arch)
+    lineage = (*stamped_lineage(parent), f"widened-from-{parent.stem}")
+    path = _stamp_grown(wide, wide_arch, dump, out, run_id=run_id, lineage=lineage)
     return {"parent": str(parent), "parent_sha256": sha256_file(parent), "parent_state": source,
             "parent_net_hash": net_param_hash(net), "widened": str(path), "widened_sha256": sha256_file(path),
             "widened_net_hash": net_param_hash(wide), "hidden": [arch.hidden, wide_arch.hidden], "seed": seed,
-            "lineage": list(trainer.lineage)}
+            "lineage": list(lineage)}
+
+
+def deepen_checkpoint(parent: Path, base_config: Path, out: Path, *, run_id: str, layers: int, seed: int,
+                      known_bad: bool = False) -> dict[str, Any]:
+    """The parent's deploy net grown to `layers` GINE layers (`deepen_net`, the known-bad's fresh layers under `known_bad`) and stamped as `widen_checkpoint` stamps, lineage the parent's plus the deepening's tag; Raises: FileExistsError — `out` exists; CheckpointStampError, DeclaredEncodingMismatchError — as `deploy_net`; DeepenError — a tensor without a rule, a depth adding none; RuntimeError — the stamp's deploy net is not the deeper net."""
+    dump = load_config(base_config).model_dump()
+    net, arch, source = deploy_net(parent, dump["identity"]["encoding"])
+    deep, deep_arch = deepen_net(net, arch, layers=layers, seed=seed, known_bad=known_bad), deepen_arch(arch, layers)
+    lineage = (*stamped_lineage(parent), deepen_tag(arch.num_layers, layers, known_bad=known_bad))
+    path = _stamp_grown(deep, deep_arch, dump, out, run_id=run_id, lineage=lineage)
+    return {"parent": str(parent), "parent_sha256": sha256_file(parent), "parent_state": source,
+            "parent_net_hash": net_param_hash(net), "deepened": str(path), "deepened_sha256": sha256_file(path),
+            "deepened_net_hash": net_param_hash(deep), "layers": [arch.num_layers, layers], "seed": seed,
+            "known_bad": known_bad, "lineage": list(lineage)}
 
 
 def open_ring(path: Path, encoding: str, seed: int) -> tuple[HexgBuffer, int]:

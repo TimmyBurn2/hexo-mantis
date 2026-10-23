@@ -580,3 +580,58 @@ def test_a_widened_checkpoint_serves_its_parent_and_warm_starts_a_wide_arm(tmp_p
     rec_w = T.train_arm(wide_arm, recipe, tmp_path / "widearm", **kw)
     assert rec_w["net_hash_start"] == rec["widened_net_hash"]
     assert load_checkpoint(rec_w["saves"][2]["path"], declared_encoding=ENC, declared_future_head=None).metadata.lineage == ck.metadata.lineage
+
+
+@pytest.mark.integration
+def test_a_deepened_checkpoint_serves_its_parent_and_warm_starts_a_deeper_arm(tmp_path, d):
+    """The deepen command stamps identity layers on the parent under its lineage plus the tag, a deeper arm starts on it, and the known-bad's stamp moves the outputs and says what it is."""
+    load_tools_package("distill")
+    T = importlib.import_module("distill.train")
+    cli = importlib.import_module("distill.cli")
+    Rg = d["rings"]
+    out, _ = _corpus(tmp_path, d)
+    labels = _labels(out, d)
+    rows = np.arange(len(out["game"]))
+    targets = Rg.compute_targets(out, labels, rows, radius=RADIUS, workers=2, chunk=16, log=lambda _s: None)
+    ring = tmp_path / "teacher.ring.bin"
+    Rg.write_teacher_ring(ring, out, labels, rows, targets, Rg.teacher_value(labels, rows), 64, encoding=ENC)
+    Rg.write_provenance(ring, kind="teacher_train", lineage=["six-aaaaaaa-gen1"], encoding=ENC, rows=len(rows), slots=64,
+                        record={})
+    base = _a_graph_config()
+    recipe = T.Recipe(base_config=base, steps=2, save_at=(2,), lr=1e-4, eta_min=1e-4, seed=11)
+    shallow = T.ArmSpec(run_id="tinyshallow", hidden=16, layers=2, ring=ring, warm_start=None, value_mask_p=0.0)
+    kw = dict(device="cpu", heldout_ring=None, heldout_every=1000, heldout_batches=1, sample_threads=1,
+              caps_override=None, log=lambda _s: None)
+    parent = Path(T.train_arm(shallow, recipe, tmp_path / "shallow", **kw)["saves"][2]["path"])
+    recs = {}
+    for name, extra in (("deep", []), ("bad", ["--known-bad"])):
+        assert cli.main(["deepen", "--parent", str(parent), "--base-config", str(base), "--run-id", f"tiny{name}",
+                         "--layers", "3", "--out", str(tmp_path / name), *extra]) == 0
+        recs[name] = json.loads((tmp_path / name / "deepen.json").read_text(encoding="utf-8"))
+    cks = [load_checkpoint(p, declared_encoding=ENC, declared_future_head=None)
+           for p in (parent, recs["deep"]["deepened"], recs["bad"]["deepened"])]
+    assert (cks[1].metadata.arch.hidden, cks[1].metadata.arch.num_layers, cks[1].metadata.step) == (16, 3, 0)
+    assert cks[1].metadata.lineage == ("six-aaaaaaa-gen1", "+deepen(2->3)")
+    assert cks[2].metadata.lineage == ("six-aaaaaaa-gen1", "+deepen-known-bad(2->3)")
+    nets = []
+    for c in cks:
+        net = build_net(c.metadata.arch)
+        net.load_state_dict(deploy_state(c)[0])
+        nets.append(net.eval())
+    buf = HexgBuffer(len(rows) + 8, ENC, 64)
+    buf.load_from_path(str(ring))
+    buf.seed_sampler(3)
+    spec = lookup(ENC)
+    b = collate_graph_batch(buf.sample_graph_batch(16, augment=False)[0], trunk_size=spec.trunk_size,
+                            win_length=spec.win_length, node_feat_dim=spec.node_feat_dim,
+                            edge_feat_dim=spec.edge_feat_dim, device="cpu")
+    with torch.no_grad():
+        got = [n.forward_batch_heads(b.x, b.edge_index, b.edge_attr, b.legal_node_gather, stone_mask_from_batch(b),
+                                     b.node_offsets) for n in nets]
+    gaps = [max(float((x - y).abs().max()) for x, y in zip(got[0], g, strict=True) if x is not None) for g in got[1:]]
+    assert gaps[0] <= 1e-4 < gaps[1], gaps
+    deep_arm = T.ArmSpec(run_id="tinydeeparm", hidden=16, layers=3, ring=ring, warm_start=Path(recs["deep"]["deepened"]),
+                         value_mask_p=0.125)
+    rec_d = T.train_arm(deep_arm, recipe, tmp_path / "deeparm", **kw)
+    assert rec_d["net_hash_start"] == recs["deep"]["deepened_net_hash"]
+    assert load_checkpoint(rec_d["saves"][2]["path"], declared_encoding=ENC, declared_future_head=None).metadata.lineage == cks[1].metadata.lineage

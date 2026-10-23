@@ -176,7 +176,7 @@ def check_term_moves_with_arch(
     }
     if flat:
         raise EnvelopeTermNotDerived(
-            f"{arch_kind}: terms {sorted(flat)} did not grow when the declared width grew "
+            f"{arch_kind}: terms {sorted(flat)} did not grow when the declared width or depth grew "
             f"(deltas {flat}). Every term carries the parameters, so a term that is flat under a "
             "width change is a constant wearing a term — exactly the partition member that kept "
             "its pre-move value while its partner moved."
@@ -226,12 +226,12 @@ def _trainer_term(net, loss_of) -> MemoryTerm:
     )
 
 
-def _gnn_arch(spec, hidden: int, arch_cls=GnnArch):
+def _gnn_arch(spec, hidden: int, arch_cls=GnnArch, layers: int = 1):
     """The graph arch under measurement. `arch_cls` is the ONLY difference between the two
     envelopes — the three probes are the arch's, not the version's."""
     return arch_cls(
         in_dim=spec.node_feat_dim, edge_dim=spec.edge_feat_dim,
-        hidden=hidden, num_layers=1, policy_hidden=8, value_hidden=8,
+        hidden=hidden, num_layers=layers, policy_hidden=8, value_hidden=8,
     )
 
 
@@ -261,9 +261,9 @@ def _gnn_batch(spec):
     return batch, stone_mask
 
 
-def _gnn_envelope(hidden: int, arch_cls=GnnArch) -> dict[str, Callable[[Any], MemoryTerm]]:
+def _gnn_envelope(hidden: int, arch_cls=GnnArch, layers: int = 1) -> dict[str, Callable[[Any], MemoryTerm]]:
     def build(spec):
-        return build_net(_gnn_arch(spec, hidden, arch_cls))
+        return build_net(_gnn_arch(spec, hidden, arch_cls, layers))
 
     def run(net, batch, stone_mask):
         return net.forward_batch(
@@ -289,20 +289,21 @@ def _gnn_envelope(hidden: int, arch_cls=GnnArch) -> dict[str, Callable[[Any], Me
     return {"trainer": trainer, "eval": evaluation, "serving": serving}
 
 
-#: The declared widths the derivation control compares. Instrument parameters, not thresholds:
+#: The declared widths and depths the derivation controls compare. Instrument parameters, not thresholds:
 #: nothing is asserted about either level, only that every term moves BETWEEN them.
 _NARROW, _WIDE = 8, 24
+_SHALLOW, _DEEP = 1, 3
 
 
-def registered_envelopes(narrow: bool = False) -> dict[str, MemoryEnvelope]:
+def registered_envelopes(narrow: bool = False, layers: int = _SHALLOW) -> dict[str, MemoryEnvelope]:
     width = _NARROW if narrow else _WIDE
     return {
-        "GnnArch": MemoryEnvelope("GnnArch", _gnn_envelope(width)),
-        "GnnArchV2": MemoryEnvelope("GnnArchV2", _gnn_envelope(width, GnnArchV2)),
+        "GnnArch": MemoryEnvelope("GnnArch", _gnn_envelope(width, GnnArch, layers)),
+        "GnnArchV2": MemoryEnvelope("GnnArchV2", _gnn_envelope(width, GnnArchV2, layers)),
         "GnnArchV2SoftPolicy": MemoryEnvelope("GnnArchV2SoftPolicy",
-                                              _gnn_envelope(width, GnnArchV2SoftPolicy)),
+                                              _gnn_envelope(width, GnnArchV2SoftPolicy, layers)),
         "GnnArchV2SoftPolicyFuture": MemoryEnvelope("GnnArchV2SoftPolicyFuture",
-                                                    _gnn_envelope(width, GnnArchV2SoftPolicyFuture)),
+                                                    _gnn_envelope(width, GnnArchV2SoftPolicyFuture, layers)),
     }
 
 
@@ -337,8 +338,9 @@ def spec_by_name(arch_kind: str, encoding: str):
     return next(s for s in specs_for(arch_kind) if s.name == encoding)
 
 
-def envelope_terms(arch_kind: str, encoding: str, narrow: bool = False) -> dict[str, MemoryTerm]:
-    envelope = registered_envelopes(narrow=narrow)[arch_kind]
+def envelope_terms(arch_kind: str, encoding: str, narrow: bool = False,
+                   layers: int = _SHALLOW) -> dict[str, MemoryTerm]:
+    envelope = registered_envelopes(narrow=narrow, layers=layers)[arch_kind]
     spec = spec_by_name(arch_kind, encoding)
     return check_terms(arch_kind, {name: fn(spec) for name, fn in envelope.terms.items()})
 
@@ -439,6 +441,16 @@ def test_EVERY_term_MOVES_when_the_archs_declared_width_moves(arch_kind, encodin
     wide = envelope_terms(arch_kind, encoding, narrow=False)
     deltas = check_term_moves_with_arch(arch_kind, narrow, wide)
     derived(f"t8.{arch_kind}.{encoding}.width_deltas", deltas)
+    assert all(delta > 0 for delta in deltas.values())
+
+
+@pytest.mark.parametrize(("arch_kind", "encoding"), ARCH_SPEC_PAIRS)
+def test_EVERY_term_MOVES_when_the_archs_declared_depth_moves(arch_kind, encoding, derived):
+    """The same control along the trunk's other dimension: a deepened net carries every term up with it."""
+    shallow = envelope_terms(arch_kind, encoding)
+    deep = envelope_terms(arch_kind, encoding, layers=_DEEP)
+    deltas = check_term_moves_with_arch(arch_kind, shallow, deep)
+    derived(f"t8.{arch_kind}.{encoding}.depth_deltas", deltas)
     assert all(delta > 0 for delta in deltas.values())
 
 

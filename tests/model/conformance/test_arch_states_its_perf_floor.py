@@ -471,24 +471,26 @@ def test_the_NOISE_BAR_FOLLOWS_the_SPREAD_of_the_readings_it_qualifies(derived):
     )
 
 
-def test_the_FLOOR_arm_input_FOLLOWS_the_arch_it_was_built_for(derived):
+@pytest.mark.parametrize(("field", "small", "large"), [("hidden", 8, 16), ("num_layers", 1, 2)])
+def test_the_FLOOR_arm_input_FOLLOWS_the_arch_it_was_built_for(field, small, large, derived):
     """The derivation control, the half a manifest cannot give. A probe whose constructed input
-    does not move when the arch's declared width moves is a fixed fixture wearing an arch."""
+    does not move when the arch's declared width or depth moves is a fixed fixture wearing an arch."""
     spec = specs_for("GnnArch")[0]
+    shape = {"hidden": 8, "num_layers": 1}
     narrow = build_net(
-        GnnArch(in_dim=spec.node_feat_dim, edge_dim=spec.edge_feat_dim, hidden=8, num_layers=1,
+        GnnArch(in_dim=spec.node_feat_dim, edge_dim=spec.edge_feat_dim, **{**shape, field: small},
                 policy_hidden=8, value_hidden=8)
     )
     wide = build_net(
-        GnnArch(in_dim=spec.node_feat_dim, edge_dim=spec.edge_feat_dim, hidden=16, num_layers=1,
+        GnnArch(in_dim=spec.node_feat_dim, edge_dim=spec.edge_feat_dim, **{**shape, field: large},
                 policy_hidden=8, value_hidden=8)
     )
     narrow_params = sum(p.numel() for p in narrow.parameters())
     wide_params = sum(p.numel() for p in wide.parameters())
-    derived("t7.derivation.narrow_params", narrow_params)
-    derived("t7.derivation.wide_params", wide_params)
+    derived(f"t7.derivation.{field}.narrow_params", narrow_params)
+    derived(f"t7.derivation.{field}.wide_params", wide_params)
     assert wide_params > narrow_params, (
-        "the declared hidden width did not change the constructed net, so a floor measured "
+        f"the declared {field} did not change the constructed net, so a floor measured "
         "against this arch is not a measurement of the arch"
     )
 

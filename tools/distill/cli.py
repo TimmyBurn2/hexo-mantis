@@ -28,7 +28,7 @@ from .rings import (
     write_teacher_ring,
 )
 from .teacher import Teacher
-from .train import ArmSpec, Recipe, train_arm, widen_checkpoint
+from .train import ArmSpec, Recipe, deepen_checkpoint, train_arm, widen_checkpoint
 from .validate import validate
 
 ENCODING = "gnn_axis_r8"
@@ -166,6 +166,14 @@ def cmd_widen(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_deepen(a: argparse.Namespace) -> int:
+    rec = deepen_checkpoint(a.parent, a.base_config, a.out, run_id=a.run_id, layers=a.layers, seed=a.seed,
+                            known_bad=a.known_bad)
+    _write_json(a.out / "deepen.json", rec)
+    print(json.dumps(rec, indent=1, default=str))
+    return 0
+
+
 def cmd_kl(a: argparse.Namespace) -> int:
     rec = read_kl(a.ckpts, a.heldout_ring, batches=a.batches, batch_size=a.batch_size, threads=a.threads, seed=a.seed)
     _write_json(a.out, rec)
@@ -257,6 +265,15 @@ def build_parser() -> argparse.ArgumentParser:
     w.add_argument("--seed", type=int, default=20261014, help="the split noise's generator seed")
     w.add_argument("--out", type=Path, required=True)
     w.set_defaults(func=cmd_widen)
+    dp = sub.add_parser("deepen", help="a stamped checkpoint appending identity GINE layers to a parent, its outputs the parent's")
+    dp.add_argument("--parent", type=Path, required=True)
+    dp.add_argument("--base-config", type=Path, required=True, help="the recipe the deepened stamp carries")
+    dp.add_argument("--run-id", required=True)
+    dp.add_argument("--layers", type=int, required=True, help="the deeper net's GINE layer count")
+    dp.add_argument("--seed", type=int, default=20261023, help="the new layers' fresh draws' generator seed")
+    dp.add_argument("--known-bad", action="store_true", help="keep the new layers and their head columns fresh")
+    dp.add_argument("--out", type=Path, required=True)
+    dp.set_defaults(func=cmd_deepen)
     k = sub.add_parser("kl", help="held-out KL(teacher || net) and value reads, every net on the same samples")
     k.add_argument("--ckpts", type=Path, nargs="+", required=True)
     k.add_argument("--heldout-ring", type=Path, required=True)

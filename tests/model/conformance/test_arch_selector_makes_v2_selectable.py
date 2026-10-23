@@ -286,6 +286,24 @@ def test_a_minted_config_round_trips_through_the_selector_to_a_SERVED_batch(
     assert value.shape == (1, 1), value.shape          # one graph, one value
 
 
+@pytest.mark.parametrize("layers", [5, 6])
+def test_a_minted_configs_declared_DEPTH_reaches_the_selected_net_and_it_serves(layers, diagnostic_config, derived):
+    """Depth is a `model.gnn` leaf like the width: the selector carries it to the built trunk and every JK reader, and that net serves."""
+    path, _base = diagnostic_config
+    config = load_config(path)
+    spec = lookup(config.identity.encoding)
+    narrow = _narrow(config)
+    declared = {**narrow, "model": {**narrow["model"], "gnn": {**_WIDTHS, "num_layers": layers}}}
+    torch.manual_seed(_SEED)
+    arch = select_arch(spec, declared, arch_kind="GnnArchV2SoftPolicyFuture")
+    net = build_net(arch).eval()
+    assert arch.num_layers == layers and len(net.representation.convs) == layers
+    assert {net.policy_head.mlp[0].in_features, net.future_head.mlp[0].in_features} == {layers * _WIDTHS["hidden"]}
+    policy, value = _serve(net, _batch(arch.in_dim, arch.edge_dim))
+    derived(f"t10.depth.{layers}.output_digest", _digest(policy, value))
+    assert policy.shape[0] == 9 and value.shape == (1, 1)
+
+
 def test_the_round_trip_is_STABLE_across_two_builds_of_the_same_kind(diagnostic_config):
     """The hash is only evidence if it reproduces. Two independent builds at the same seed must
     agree bit-for-bit on both the parameter hash and the served output — otherwise the digest

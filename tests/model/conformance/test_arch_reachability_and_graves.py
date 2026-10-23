@@ -17,7 +17,8 @@ import pytest
 from mantis.config.loader import discover_configs, load_config
 from mantis.config.schema import RunConfig
 from mantis.encoding import lookup
-from mantis.model import ARCH_KINDS, arch_from_spec_and_config
+from mantis.model import ARCH_KINDS, arch_from_spec_and_config, build_net
+from mantis.model.deepen import deepen_arch, deepen_net
 
 from _corpus import ConformanceRefusal
 
@@ -183,6 +184,25 @@ def test_every_shipped_config_selects_a_net_build_net_can_construct(derived):
     assert set(nets_selected()) == set(selected), (
         "a shipped config selects an arch kind `build_net` has no branch for"
     )
+
+
+def test_every_shipped_shape_deepened_is_reached_by_a_config_declaring_its_depth(derived):
+    """A deepened net is no orphan shape: the production entry point, given the shipped config at the deeper depth, selects its arch and loads its state strictly."""
+    shapes: dict[str, tuple] = {}
+    for path in discover_configs(CONFIGS):
+        config = load_config(path)
+        spec = lookup(config.identity.encoding)
+        arch = arch_from_spec_and_config(spec, config.model_dump())
+        if arch.representation == "graph":
+            shapes.setdefault(repr(arch), (path.name, spec, config.model_dump(), arch))
+    derived("t11.deepened_shapes", sorted(name for name, *_ in shapes.values()))
+    assert shapes, "no shipped config selects a graph net; the deepening has no subject"
+    for name, spec, dump, arch in shapes.values():
+        deep = deepen_net(build_net(arch), arch, layers=arch.num_layers + 2, seed=0)
+        dump["model"]["gnn"]["num_layers"] = arch.num_layers + 2
+        declared = arch_from_spec_and_config(spec, dump)
+        assert declared == deepen_arch(arch, arch.num_layers + 2), f"{name}: the declared depth selects another arch"
+        build_net(declared).load_state_dict(deep.state_dict(), strict=True)
 
 
 def check_grave(name: str, *, grounds: str, classes: dict[str, str], dispatch: frozenset[str],
