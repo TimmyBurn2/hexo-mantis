@@ -144,9 +144,8 @@ def run_graph_pretrain(
 ) -> Path:
     """Run a BC pretrain on the graph arch and return the written checkpoint's path.
 
-    Every training term arrives from the minted config through its existing resolver; this
-    function authors none of them, and the two providers are CALLABLES because they read
-    graph-only config sections.
+    Every training term arrives from the minted config through its existing resolver; this function authors none of
+    them, and the two providers are CALLABLES because they read graph-only config sections.
 
     Args:
         spec: the resolved `EncodingSpec` (representation `graph`).
@@ -167,6 +166,7 @@ def run_graph_pretrain(
     Raises:
         GraphPretrainError: the ring or its budget refuses, a search weight above 0 or a tail weight below 1 (the null
             sink would hide its fire-rate), or the held-out estimator's noise exceeds the monitor's `min_delta`.
+        DecidedTailsShapeError: `selfplay.decided_tails` is absent or of any other shape.
     """
     if float(full_config["train"]["value_target_search_weight"]) > 0:
         # Its term would starve on rows with no search value and z train at 1 − w, behind a sink no fire-rate reaches.

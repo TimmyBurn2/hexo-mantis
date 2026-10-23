@@ -9,7 +9,7 @@ _KEY = f"{_SECTION}.{_FIELD}"
 
 
 class DecidedTailsShapeError(ValueError):
-    """`selfplay.decided_tails` is absent, or neither `null` nor a block carrying `value_weight` (the v60 bool included)."""
+    """`selfplay.decided_tails` is absent, or neither `null` nor exactly `{value_weight: w}` (the v60 bool included)."""
 
 
 def resolve_decided_tails(full_config: Any) -> float | None:
@@ -22,9 +22,9 @@ def resolve_decided_tails(full_config: Any) -> float | None:
     block = section[_FIELD]
     if block is None:
         return None
-    if not isinstance(block, Mapping) or "value_weight" not in block:
-        raise DecidedTailsShapeError(f"{_KEY} must be null or carry `value_weight`; got {block!r} (a v60 bool is "
-                                     "read only off a stamp, through mantis.config.retired)")
+    if not isinstance(block, Mapping) or set(block) != {"value_weight"}:
+        raise DecidedTailsShapeError(f"{_KEY} must be null or exactly {{value_weight: w}}; got {block!r} (a v60 bool "
+                                     "is read only off a stamp, through mantis.config.retired)")
     weight = block["value_weight"]
     if isinstance(weight, bool) or not isinstance(weight, int | float):
         raise DecidedTailsShapeError(f"{_KEY}.value_weight must be a number; got {weight!r}")

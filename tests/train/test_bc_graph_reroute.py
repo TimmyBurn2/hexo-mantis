@@ -33,7 +33,7 @@ from mantis.train.pretrain.graph_route import (
 _REPO = Path(__file__).resolve().parents[2]
 
 
-#: The stub run config the route is handed: it reads the search weight first and nothing else of it.
+#: The stub run config the route is handed: it reads the search weight and the tails' block first, nothing else of it.
 _CONFIG: dict[str, Any] = {"train": {"value_target_search_weight": 0.0}, "selfplay": {"decided_tails": None}}
 
 

@@ -31,11 +31,17 @@ _TACTICS = {"kind": "strict_turn", "leaf_turns": 3, "leaf_nodes": 256, "root_tur
 
 
 def _ring() -> HexgBuffer:
-    """Every fourth row a decided tail's value-only row the side to move loses; every other row searched and won."""
+    """Tails at −1 and at +1, quick-arm value-only rows besides: the flag aliases neither outcome nor search arm."""
     buf = HexgBuffer(2 * _ROWS, H.GRAPH_ENCODING, 128)
     for i in range(_ROWS):
-        if i % 4 == 0:
-            buf.push_graph_position(_STONES, [], 1, 1, 4 + i, False, -1.0, True, 40, game_id=i, proven_tail=True)
+        if i % 8 == 0:
+            buf.push_graph_position(_STONES, [], 1, 1, 4 + i, False, -1.0, True, 40, game_id=i, proven_tail=True,
+                                    root_value=-1.0, root_value_valid=True)
+        elif i % 8 == 4:
+            buf.push_graph_position(_STONES, [(2, 0, 1.0)], 1, 1, 4 + i, False, 1.0, True, 40, game_id=i,
+                                    proven_tail=True, root_value=1.0, root_value_valid=True)
+        elif i % 4 == 2:
+            buf.push_graph_position(_STONES[:2], _VISITS, 1, 30, 2 + i, False, 1.0, True, 10 + i, game_id=i)
         else:
             buf.push_graph_position(_STONES[: 2 + i % 2], _VISITS, 1, 30, 2 + i, True, 1.0, True, 10 + i, game_id=i)
     buf.seed_sampler(H.SEED)
@@ -92,14 +98,13 @@ def _step(tmp_path: Path, replay: Any, weight: float, *, caps: MicrobatchCapsSpe
 
 
 def test_the_sampler_carries_each_rows_tail_flag() -> None:
-    """The flag rides its own row through the shuffled, augmented draw: tail rows are exactly the lost value-only ones."""
+    """The flag rides its own row through the shuffled, augmented draw: tail rows are exactly those carrying a root value."""
     buf = _ring()
     seen = np.zeros(2, dtype=np.int64)
     for _ in range(8):
         _wire, targets = buf.sample_graph_batch(_ROWS, augment=True, n_threads=2)
         tail = np.asarray(targets.proven_tail) != 0
-        assert (tail == (np.asarray(targets.outcomes) == -1.0)).all()
-        assert (tail == (np.asarray(targets.is_full_search) == 0)).all()
+        assert (tail == (np.asarray(targets.root_value_valid) != 0)).all()
         seen += [int(tail.sum()), int((~tail).sum())]
     assert seen.min() > 0, f"a draw of 256 rows saw {seen.tolist()} tail/other rows"
 
@@ -185,7 +190,8 @@ def test_the_hparams_read_the_block_and_refuse_any_other_shape() -> None:
     assert TrainHParams.from_config(config).tail_value_weight == 1.0
     config["selfplay"]["decided_tails"] = {"value_weight": 0.1}
     assert TrainHParams.from_config(config).tail_value_weight == 0.1
-    for bad in (False, True, {"w": 0.1}):
+    for bad in (False, True, {"w": 0.1}, {"value_weight": 0.1, "w": 1}, {"value_weight": True},
+                {"value_weight": None}, {"value_weight": "0.1"}):
         config["selfplay"]["decided_tails"] = bad
         with pytest.raises(DecidedTailsShapeError, match="decided_tails"):
             TrainHParams.from_config(config)
