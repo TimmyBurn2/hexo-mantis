@@ -36,6 +36,50 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R402 (RUN15 RUNS UNATTENDED: THE BOX ENDS IT, STOPS IT AND READS IT; THE OPERATOR CHECKS IN; 2026-10-23) — run15's mint, its reference cells and its box automation
+
+R402 also moves, in place: CARD-DEPLOY-WEB (L4's read and timing, fp16 out, by (f)) and CARD-NET-EXPAND (depth
+built and riding run15, with R401). CARD-PATH-CONSISTENCY stays open at null by (a).
+
+- **CARD-RUN15 [RUN15-GO] — MINTED 2026-10-23 (R401(c), R402(b)); the launch follows a green preflight on box A.**
+  `configs/run15.yaml`: the net of record `run14avg_00372000_647f0497` deepened to 6×256 (`deepen6_00000000_e4f4c52a`,
+  sha256 `bc45d80f…`, net_hash `69cfcc3b…`), `identity.warm_start` reinit `[]`, run14's final ring preloaded
+  (`run14_00372000_241db7a3.ckpt.ring.bin`, v5, sha256 `7745d915…`), lr 1e-3 → 1e-4 over `scheduler_t_max` 300 000,
+  `lr_cycle` null, `max_train_steps` 300 000 (the run ends itself with its FINAL save), replay 2.5M, 48 workers, 2.4
+  steps per game, value mask 1/8, aux 2.0, the future head at 0.5, `selfplay.decided_tails: {value_weight: 1.0}`,
+  caps 1 406 250 / 53 124 (re-fitted at the preflight), all else run14's. Cells: rung 16 every 12k, S every 36k.
+  The reference: the net of record's two rung-16 cells and one S cell, replayed beside run15 on the mint tree
+  (contended), queued after the 12k, 24k and 36k cells and in hand before 96k. The window: pooled rung 16 at
+  96k–132k against the pooled reference, GO at +0.17, S not below the reference's by its CI. Futility: at the 156k
+  cell, pooled 120k–156k rung 16 not above the reference by +0.10 stops the run (marker, then SIGTERM). The calendar
+  end: still training at 2026-10-30 18:00 CEST stops it the same way. The end read (at 300k, futility or the
+  calendar): the uniform average of the last eight saves and the trend-aware pick, rung 16 and S on the idle card,
+  against run14avg's idle cells of record (0.632 / 0.868); a candidate above on one ruler by its CI and below on
+  neither is the new net of record, else run14avg stays. The auto-resume unit restarts the run from its last complete
+  save after a boot or a crashed trainer; a band or exam-floor halt stays halted for a human (R402(d)(v)). The
+  automation is box ops files outside the public tree, reviewed by a fresh agent before the launch. run15 is the
+  config census's first run shorter than 1 000 000 steps: the cadence battery's actor-lag kill value is now 0.9 of each
+  config's own run length (900 000 on the others), and the draw-rate anchor's margin reads inside half the bound (its
+  25 000 `min_step` sits at a third of run15's 75 000), where a quarter assumed the longer run. OWED before the
+  operator walks away: the auto-resume unit's controlled stop and resume at the first save (R402(d)(i)); the futility
+  and calendar acts on synthetic sidecars (R402(d)(ii)–(iii)); the end read's dry run on run14's saves against
+  run14avg's idle cells, reproducing the end read's numbers (R402(d)(iv)); and a fresh review of every box script.
+- **CARD-WEB-BUBBLE-EQUAL-TIME — CARDED by R402(f) (2026-10-23) for later desk time: DEPLOY-WEB's Bubble read at
+  equal time.** It leaves L4's read; no parallel pages.
+
+## Opened by R401 (RUN15: FRESH DEPTH UNDER THE RECIPE THAT CLIMBED; THE READS THAT FIT; THE BOX'S LAST TEN DAYS; 2026-10-22) — depth, run15's slots
+
+- **CARD-DEEPEN-1 — LANDED 2026-10-23 (`e6e902fd`); PROCEED at 6×256 by R402(a).** `mantis.model.deepen` appends
+  identity-initialised GINE layers (a zero last linear under the residual, zero head columns for the new JK slots),
+  pinned function-preserving in fp64 at 1e-4 on both candidate depths with the random-init known-bad red;
+  `tools/distill deepen` stamps the deeper net under its parent's lineage. D2 (box A, 30/30 units): 6×256 against
+  4×256 reads trainer 1.374×, GPU 1.302× (B 8) / 1.240× (B 64), the deepest within R401(b)'s ≤ 1.7× / ≤ 1.5×. D3
+  (15k steps at 1e-3 on run14's final ring): Δ policy +0.0045, Δ value +0.0013, inside the 0.005 line, a null within
+  noise (Δ policy −0.021 / +0.043 at 5k / 10k). Its known-bad read 0.001 better at step 0, too mild for a CE line, so
+  the deepening's identity rests on the fp64 pin (worst gap 0.0 on the net of record).
+- **CARD-PATH-CONSISTENCY — OPEN at null by R402(a) (2026-10-23): PCZero path consistency, R401(c)'s PC slot.** No
+  PC-1 ran, so PC is OFF for run15; a PC read before any later mint must be green and reviewed.
+
 ## Opened by R400 (RUN14 STOPS; THE LINEAGE'S TRAINING CLOSES; THE STRENGTH LEFT IS IN THE BROWSER'S BUDGET; 2026-10-22) — run14's stop and end read, the tails' value weight, the capacity read
 
 R400 also moves, in place: CARD-RUN14 (CLOSED, the stop and the end read, by (a)–(b)), CARD-DECIDED-TAILS (the value
@@ -112,7 +156,9 @@ CARD-SAVE-AVERAGING-OFFLINE (EXECUTING on the desk, by (c)). (d) records the pro
 run14: the opponent/next-ply policy aux, PCZero path consistency, policy-surprise weighting, HL-Gauss, Net2Net
 deepening, MCGS at deploy, proof-verified start pools and DENSE-1's L2–L4.
 
-- **CARD-DEPLOY-WEB — L3 EXITED 2026-10-21 on branch `deploy-web`; L4 (bench + read) is next.** L3 landed the
+- **CARD-DEPLOY-WEB — L4 WAITS for desk time by R402(f) (2026-10-23): it is not on run15's path and runs when the
+  desk can stay on for ~36 h; fp16 is OUT. Was: L3 EXITED 2026-10-21 on branch `deploy-web`; L4 (bench + read) is
+  next.** L3 landed the
   `web/` package (contract #13 v4: the typed API, the Worker, both backends, selection and the on-device witness, the
   arena adapter, the demo, `release.sh`, the WebGPU witness runner) and gate 21 (W2 in wasm and its break). §3.3's
   measurement (pre-stated; local records `mantis-records/deploy-web/l3/`) first MISSED its placement line on run13's
@@ -123,7 +169,14 @@ deepening, MCGS at deploy, proof-verified start pools and DENSE-1's L2–L4.
   shape-only node on the CPU, 6.42 v 59.2 ms a leaf at B 8; GPU memory 1.7 GiB at the p99 leaf split at `EDGE_CAP`
   (5.7 GiB unsplit). The wasm-bindgen CLI is pinned to 0.2.126 in `mise.toml`. R401(e), as the operator relayed it
   (2026-10-22): the export's served graph and `RustForward` are generic over the GINE layer count, pinned at 4, 5
-  and 6 layers on the tiny stamps; the shipped net is chosen at run15's end. **Was: L3 HALTED at the placement line;
+  and 6 layers on the tiny stamps; the shipped net is chosen at run15's end. R402(f) (2026-10-23): L4 is not on run15's
+  path and runs when the desk can stay on for ~36 h. Its read: the bench and the clock line first, then the strength
+  line against Six n128 at 288 games (a parity check that must catch a bug-sized loss); the Bubble equal-time read is
+  carded (CARD-WEB-BUBBLE-EQUAL-TIME); no parallel pages. fp16 is OUT (|Δ value| 2.69e-3 as R402(f) cites it, 2.75e-3
+  in L1's read on run13's 120k, against R399(a)'s 2e-3), and its known-bad requirement lapses with it. The depth pins get their fresh review inside L4's; this card's export
+  candidate is `run14avg_00372000_647f0497`; the request-id finding is fixed in L4. The licence and the package name
+  are the operator's before the first tag, after run15's pick. At a run15 futility stop, box A plays L4's native
+  comparison cells and the Bubble read on the idle card. **Was: L3 HALTED at the placement line;
   before that L2 EXITED 2026-10-21; L3 next.** L2 landed the
   player's per-stone step machine, the per-game cache port, the clock budget, `with_pool` / `armed_sims_for`,
   `RustForward`, the wasm32 `Engine` and manifest v2 (contract #13 v3); W3 and the served-sims pin join the protected
@@ -138,7 +191,8 @@ deepening, MCGS at deploy, proof-verified start pools and DENSE-1's L2–L4.
   The read of record on run13's 120k (local records `mantis-records/deploy-web/l1/READ.md`, pre-stated and hashed
   first): fp32 PASSES at 1 and default ORT threads (|Δ logit| 4.96e-5, argmax 511/511, no ScatterND, no int64 index
   in the graph); the fp16 file MISSES R399(a)'s line (|Δ prob| 2.26e-3, |Δ value| 2.75e-3 against 2e-3; argmax
-  502/502), so fp32 is the only shipped file. OWED to the architect: R399(a)'s known-bad (the last policy bias +0.05)
+  502/502), so fp32 is the only shipped file. DISCHARGED by R402(f) (fp16 out, its known-bad lapses); was OWED to
+  the architect: R399(a)'s known-bad (the last policy bias +0.05)
   cannot fail the prob line, since the bias shifts every logit alike and the softmax ignores it; it read the
   unperturbed file's prob and value exactly, while the proposed weight ×1.05 read |Δ prob| 3.45e-2. **Was: L1 OPEN
   by R399(i) (2026-10-21): L0's design stands (pushed 2026-10-21, `540a8720`) and R399 rules its eight open
@@ -1890,8 +1944,9 @@ recommended one; each is its own leg with a LAW-09 bench.
 
 ## Opened by R367 (DESIGN STANDARD + REVIEW GATE; SIZE CONDITIONAL WITHDRAWN; PRICE LAW; 2026-09-21)
 
-- **CARD-NET-EXPAND — its width half MOVED to DISTILL-2's W1 as a mechanism (CARD-NET2NET-WIDEN, 2026-10-09); depth stays
-  HELD. Was HELD by R379(d): growth is parked (CENSUS-1's C5 reads no shape winning on the frozen 45k ring;
+- **CARD-NET-EXPAND — depth UN-HELD by R401 (2026-10-22) and BUILT: DEEPEN-1's `mantis.model.deepen` (CARD-DEEPEN-1);
+  run15 rides it at 6×256 (CARD-RUN15). Was: its width half MOVED to DISTILL-2's W1 as a mechanism
+  (CARD-NET2NET-WIDEN, 2026-10-09); depth stays HELD. Was HELD by R379(d): growth is parked (CENSUS-1's C5 reads no shape winning on the frozen 45k ring;
   CARD-CENSUS-1-PARKED). Was run11's build: a FUNCTION-PRESERVING width/depth expansion of the trunk behind the
   seam, with a conformance section proving output equality at expansion.** OPENED by R367(c) from
   CARD-RUN10-SIZE-PARENT (CLOSED below): no shape-compatible parent exists for a 6×192 `GnnNetV2`, so the

@@ -7,6 +7,21 @@ never transcribed here. A reader who finds a line stale repairs it in place (R31
 
 ## Current phase
 
+**R402 (2026-10-23): RUN15 RUNS UNATTENDED: THE BOX ENDS IT, STOPS IT AND READS IT; THE OPERATOR CHECKS IN. With R401
+(2026-10-22, recorded here with it): RUN15: FRESH DEPTH UNDER THE RECIPE THAT CLIMBED; THE READS THAT FIT; THE BOX'S
+LAST TEN DAYS. run15 is the net of record (`run14avg_00372000_647f0497`) deepened to 6×256 by DEEPEN-1
+(`deepen6_00000000_e4f4c52a`, function-preserving in fp64, worst gap 0.0), under run12's recipe: one cosine 1e-3 →
+1e-4 over 300k, run14's final ring preloaded, decided tails at value weight 1.0, PC off, and `max_train_steps` 300 000,
+so the run ends itself at 300k with its FINAL save. The net of record's reference cells (two rung 16, one S) replay
+beside run15 on the mint tree. The window reads pooled rung 16 at 96k–132k against the pooled reference, GO at +0.17,
+with S not below the reference's by its CI. Futility at the 156k cell (pooled 120k–156k not above the reference by
++0.10) and a calendar end (2026-10-30 18:00 CEST) stop it on the box without a human; an auto-resume unit restarts it
+after a boot or a crashed trainer, and an end-read script reads the trend-aware pick and the average of the last eight
+saves against run14avg's idle cells. A band or exam halt stays halted for a human. fp16 is out of DEPLOY-WEB; its L4
+waits for desk time and is not on run15's path.** (RULINGS R402 and R401; the R400 paragraph below stands where they
+do not move it.) TVW-1's null leaves R400(c)'s likeliest cause unsupported on value CE; a calibration effect remains
+(temperature 1.37 v 1.51). run15 is MINTED: `configs/run15.yaml` (CARD-RUN15).
+
 **R400 (2026-10-22): RUN14 STOPS; THE LINEAGE'S TRAINING CLOSES; THE STRENGTH LEFT IS IN THE BROWSER'S BUDGET. run14
 stops at its next complete save, before its cycle's end: its restart bump was its only gain, its last ten cells read
 flat (−0.07 per 100k [−0.24, +0.11]), and its value instrument regressed at the restart and never recovered. The end
@@ -689,6 +704,11 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
 
 ## The run
 
+- **run15 is MINTED (R401(c), R402(b); CARD-RUN15):** `configs/run15.yaml`, from `deepen6_00000000_e4f4c52a` (the net
+  of record deepened to 6×256) with reinit `[]`, run14's final ring preloaded (`run14_00372000_241db7a3`, v5), one
+  cosine 1e-3 → 1e-4 over 300k, `max_train_steps` 300 000, decided tails at value weight 1.0, caps 1 406 250 /
+  53 124. Against `configs/run12.yaml` only run15's own rows and the slots' leaves differ (`tools/config_diff.py
+  --expect`). Its launch waits on a green preflight on box A (R402(b)).
 - **run14 is STOPPED at 372 000 (R400(a); CARD-RUN14):** stopped 2026-10-22 23:09:40 CEST on box A by the stop
   marker and one SIGTERM after its 372 000 save; stop save `run14_00372000_241db7a3` (weights equal to the periodic
   `run14_00372000_38a547a0`), mirrored and sha-checked, the monitor's last read clean. Box A restarted 2026-10-22
@@ -775,7 +795,7 @@ run6's by R369's packet (W0).
 ## Where things live
 
 - Open work: `docs/governance/CARDS.md` (swept in W6; derived there, never enumerated here).
-- Rulings: `docs/governance/RULINGS.md`; the latest is R400 (this line said R386 until R393's record).
+- Rulings: `docs/governance/RULINGS.md`; the latest is R402 (this line said R386 until R393's record).
 - Laws and the protected set: `docs/governance/LAWS.md`, whose protected set names each
   invariant's pinning tests (R370(f)); `tests/test_protected_set_pins.py` fails if one is gone.
   Falsified work: `docs/governance/falsified.md`.
@@ -890,3 +910,5 @@ and the mirror, and the end read from its four sidecars (mirrored, sha256 equal 
 The R400 paragraph's TVW-1 sentences were written 2026-10-23 at TVW-1's exit, on branch `tails-value-weight` over
 `origin/dev` `9ffd9f5a`, from its verdict (local records). The same edit repaired the run line's `config_diff` leaf,
 which is `selfplay.decided_tails.value_weight` at schema v63.
+The R402 paragraph, run15's run line and the latest-ruling line were written 2026-10-23 at run15's mint on branch
+`run14-go` over `origin/dev` `e6e902fd`, from the rulings' texts and the mint (`configs/run15.yaml`).

@@ -1,4 +1,4 @@
-# RULINGS — R23 to R400
+# RULINGS — R23 to R402
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R401.
+- Numbering continues from R346. The next ruling is R403.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,106 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R402 — RUN15 RUNS UNATTENDED: THE BOX ENDS IT, STOPS IT AND READS IT; THE OPERATOR CHECKS IN
+Decision: verbatim below.
+
+> R402 — RUN15 RUNS UNATTENDED: THE BOX ENDS IT, STOPS IT AND READS IT; THE OPERATOR CHECKS IN.
+> (a) Reports accepted. The end read (R398(e)): the average of run14's last eight saves is the net
+> of record, run14avg_00372000_647f0497 (rung 16 0.632 [0.594, 0.669] v the pick replayed 0.563; S
+> 0.868 v 0.851; the gain is run14's late saves, the averaging ≈ +0.02). TVW-1 NULL: weight 0.1
+> reads +0.0055 CE worse at 8k with the known-bad biting; weight 1 stands; R400(c)'s "likeliest
+> cause" is ANNOTATED: not supported on value CE, a calibration effect remains (temperature
+> 1.37 v 1.51). DEEPEN-1 PROCEED at 6×256 (trainer 1.37×, GPU 1.30×/1.24×; D3 null within noise; its
+> known-bad was too mild for a CE line — the identity rests on the fp64 pin, worst gap 0.0, and
+> R401(b)'s rule stands: a null does not stop the run). PC is OFF for run15: no PC-1 ran; the card
+> stays open at null.
+> (b) run15 is MINTED on the operator's word: parent deepen6_00000000_e4f4c52a (run14avg deepened),
+> `identity.warm_start` reinit [], `train.ring_preload` = run14's final ring (v5), lr 1e-3,
+> scheduler_t_max 300 000, eta_min 1e-4, lr_cycle null, `max_train_steps` 300 000 — the run ENDS
+> itself at 300k with its FINAL save — replay 2.5M, 48 workers, 2.4 steps per game, mask 1/8, aux
+> 2.0, the future head 0.5, `selfplay.decided_tails {value_weight: 1.0}`, caps 1 406 250 / 53 124
+> re-fitted at preflight, all else run14's. The launch word is the operator's, given with the mint
+> word on the condition "preflight green"; the session launches on a green preflight without
+> waiting further.
+> (c) Reference: the net of record is replayed BESIDE run15 on the mint tree (contended, as
+> run15's own cells are): two rung-16 cells and one S cell, queued after the 12k, 24k and 36k
+> cells, all in hand before 96k. The window (R401(c)) reads pooled rung 16 at 96k–132k against the
+> pooled reference, GO at +0.17; S not below the reference's by its CI.
+> (d) Box-resident automation, because the operator is away: (i) an auto-resume unit — on boot or
+> on a crashed trainer the run resumes from its last complete save on its own tree, tested once
+> before launch by a controlled stop and resume at the first save; (ii) the futility script — at
+> the 156k cell, pooled 120k–156k rung 16 not above the reference by +0.10 → marker and SIGTERM
+> without a human, tested on synthetic sidecars; (iii) the calendar end — if the run is still
+> training at 2026-10-30 18:00 CEST it is stopped the same way, so the end read and the export fit
+> before the box goes; (iv) the end-read script — at RUN15_ENDED (by 300k, futility or calendar):
+> build the uniform average of the last eight saves (`tools/probe1.py swa`), play rung 16 and S
+> for the trend-aware pick and for the average on the idle card, and judge against run14avg's
+> IDLE cells of record (0.632 / 0.868): a candidate above on one ruler by its CI and below on
+> neither is the new net of record; else run14avg stays; the verdict written to the records.
+> (v) A halt by a band or an exam floor stays halted for a human: the session may resume once
+> only if the cause is an instrument or reader defect fixed with a test (R397(a)'s shape);
+> a halt on the net's behaviour waits for the architect. Every script is a box ops file, outside
+> the public tree, reviewed by a fresh agent before launch.
+> (e) Branches: nothing merges; dev is linear. The mint commit pushes fast-forward from branch
+> `run14-go`; the box tree and `.wt/dash-desk` move to it; `.wt/deepen-1` and `.wt/save-avg` are
+> pruned; `.wt/deploy-web` (L4 pending) and `.wt/run13-prep` (RUN15-GO's live tree) stay. The
+> desk mirror catches up whenever the desk is on; the box holds the authoritative copy meanwhile.
+> (f) DEPLOY-WEB L4 is not on run15's path and needs the desk on for ~36 h: it runs when the
+> operator can leave the desk on. Its read: the bench and the clock line first; the strength
+> line against Six n128 at 288 games (a parity check; a bug-sized loss is what it must catch);
+> the Bubble equal-time read is CARDED for later desk time; no parallel pages. fp16 is OUT
+> (|Δ value| 2.69e-3 missed R399(a)'s 2e-3); its known-bad requirement lapses with it. The depth
+> pins get their fresh review inside L4's; CARD-DEPLOY-WEB names run14avg; the request-id
+> finding is fixed there. The licence and the package name are the operator's before the first
+> tag, after run15's pick. At a futility stop, box A goes to L4's native comparison cells and
+> the Bubble read on the idle card.
+
+Status: standing. ANNOTATES R400(c), R401(b)/(c), R399(a).
+
+### R401 — RUN15: FRESH DEPTH UNDER THE RECIPE THAT CLIMBED; THE READS THAT FIT; THE BOX'S LAST TEN DAYS
+Decision: verbatim below.
+
+> R401 — RUN15: FRESH DEPTH UNDER THE RECIPE THAT CLIMBED; THE READS THAT FIT; THE BOX'S LAST TEN DAYS.
+> (a) Of record: every climb on the lineage followed a capacity step, and no cycle without one climbed
+> (R396(b), run13, run14). Width is dead on cost (WIDEN-2). The capacity step left is depth. R395(b)'s
+> "one bet, benched" is applied to depth: `mantis.model.deepen` inserts identity-initialised GINE
+> layers (zero last linear under the residual; zero head columns for the new JK slots), pinned
+> function-preserving in fp64 at 1e-4, with the widening's conformance rows mirrored for depth.
+> (b) DEEPEN-1 reads two candidates, 5×256 and 6×256, on box A after run14's end read: cost first
+> (trainer s/step at B 256 with re-fitted caps, served µs/leaf at B 8 and B 64, against 4×256 on the
+> same card; lines ≤ 1.7× trainer and ≤ 1.5× GPU, relaxed from WIDEN-2 for the last run, the browser's
+> budget having the headroom); then a 15k-step continuation at 1e-3 on run14's final ring, the
+> deepest candidate within the lines against the 4×256 continuation, read on held-out policy and
+> value CE with a known-bad (the new layers randomly initialised instead of identity, worse at
+> step 0). The run PROCEEDS unless the deepened net is worse by more than 0.005 nats at 15k; a
+> null does not stop it (DISTILL-2's 15k read said "unused" of the width run12 then used).
+> (c) run15 = the net of record (R400(b)'s end-read winner) deepened by (b), `identity.warm_start`
+> with reinit [], run14's final ring preloaded (v5), one cosine 1e-3 → 1e-4 over 300k, 2.5M window,
+> 48 workers, 2.4 steps per game, value mask 1/8, aux 2.0, the future head carried at 0.5, decided
+> tails ARMED at the value weight TVW-1 reads (fallback 0.1, KataGo's shape, flagged as a literature
+> value if the read is not in by the mint), PCZero path consistency only if PC-1 reads green and
+> reviewed before the mint, the value teacher off, the arena gate book, the deploy block of record,
+> exams, bands and the gap rule of record. Cells rung 16 every 12k, S every 36k. Pre-registered:
+> a dip is expected to ~36k; the window read is the pooled rung-16 cells at 96k, 108k, 120k and 132k
+> against the net of record's cells REPLAYED on the mint tree, GO at +0.17; futility at 156k —
+> pooled 120k–156k not above the net of record by +0.10 → stop and pick; the end at 300k, the pick
+> trend-aware from 48k, the end read as R398(e). An extension is not pre-stated: the box ends.
+> (d) One change per run is SUSPENDED for run15 by the operator's word: it is the last run and reads
+> as a whole against the lineage's level. What rides must each be non-inferior on its own read
+> before the mint (depth by (b); the tails' weight by TVW-1; PC by PC-1) or it stays out.
+> (e) DEPLOY-WEB carries depth: the export's ServedGraph and the Rust forward are generic over the
+> layer count (a pin per candidate), so the shipped net can be run15's pick.
+
+Status: standing. ANNOTATES R395(b) (the bet moves to depth), R400(f) (the order, compressed by the box's deadline), CARD-NET-EXPAND (un-held for depth).
+(b) ANNOTATED by R402(a): DEEPEN-1 PROCEEDS at 6×256 on a null within noise; its known-bad was too mild for a CE
+line, so the deepening's identity rests on the fp64 pin (worst gap 0.0), and (b)'s rule stands. (c) ANNOTATED by
+R402(a)–(d): TVW-1 read null, so the tails ride at weight 1.0; PC is OFF (no PC-1 ran); `max_train_steps` 300 000
+ends the run with its FINAL save, and a calendar end stops it if it is still training at 2026-10-30 18:00 CEST; the net
+of record's reference cells (two rung 16, one S) replay BESIDE run15 on the mint tree, contended, queued after the 12k,
+24k and 36k cells, and the window also reads S not below the reference's by its CI; futility at the 156k cell stops
+the run on the box without a human; the end read judges the trend-aware pick and the average of the last eight saves
+against run14avg's idle cells of record (0.632 / 0.868), in place of "as R398(e)".
 
 ### R400 — RUN14 STOPS; THE LINEAGE'S TRAINING CLOSES; THE STRENGTH LEFT IS IN THE BROWSER'S BUDGET
 Decision: verbatim below.
@@ -78,6 +178,10 @@ Decision: verbatim below.
 
 Status: standing. ANNOTATES R396(b) (the second cycle's result), R398(e) (the end read's stop
 point), R394(d1)/DT-1 (the value rows' weight).
+(c)'s "likeliest cause" ANNOTATED by R402(a): TVW-1 read weight 0.1 +0.0055 CE worse at 8k with the known-bad biting,
+so it is not supported on value CE; a calibration effect remains (temperature 1.37 v 1.51). (f) ANNOTATED by R401:
+the order is compressed by the box's deadline — the tails' weight (TVW-1), the capacity step as depth (DEEPEN-1), then
+run15 — and its "one run with one change" is SUSPENDED for run15 by R401(d).
 
 ### R399 — THE DESIGN STANDS; EIGHT ITEMS RULED; L1 MAY START
 Decision: verbatim below.
@@ -120,6 +224,8 @@ Decision: verbatim below.
 > L4's clock line are the witnesses. L1 may start.
 
 Status: standing. ANNOTATES R398(b) (A5), R386(d)/R396(c) (A3).
+(a) ANNOTATED by R402(f): fp16 is OUT (|Δ value| 2.69e-3 missed the 2e-3 line); its known-bad requirement lapses
+with it.
 
 ### R398 — THE BOT SHIPS AS ONE WASM ENGINE WITH TWO NET BACKENDS, WITNESSED FROM THE STAMP
 Decision: verbatim below.
@@ -350,6 +456,8 @@ save, and its "1e-3 cosine from the pick" is WITHDRAWN; "v5 as written" reads: t
 v5; "the parent's pool" for run14 is +0.151; (e) ANNOTATED by R396(f): `perf-3-l1b` is not on dev, so the operator
 tags it `archive/perf-3-l1b` and deletes the branch. ANNOTATES R394(b), (c), (d4); R391(a)'s width ("read again
 only inside a run": run12 was that run; the second widening is the bet it earns, benched).
+(b)'s bet ANNOTATED by R401(a)–(b): width is dead on cost (WIDEN-2), so the one bet, benched, moves to depth
+(`mantis.model.deepen`); by R402(a) run15 rides it at 6×256.
 
 ### R394 — THE LINEAGE CLIMBS WHILE THE LR IS ABOVE THE FLOOR; THE LEVERS BUILD BESIDE IT
 Decision: verbatim below.
