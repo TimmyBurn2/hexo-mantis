@@ -445,7 +445,7 @@ def test_EVERY_term_MOVES_when_the_archs_declared_width_moves(arch_kind, encodin
 
 
 @pytest.mark.parametrize(("arch_kind", "encoding"), ARCH_SPEC_PAIRS)
-def test_EVERY_term_MOVES_when_the_archs_declared_depth_moves(arch_kind, encoding, derived):
+def test_EVERY_term_MOVES_when_the_archs_declared_depth_moves(arch_kind: str, encoding: str, derived: Any) -> None:
     """The same control along the trunk's other dimension: a deepened net carries every term up with it."""
     shallow = envelope_terms(arch_kind, encoding)
     deep = envelope_terms(arch_kind, encoding, layers=_DEEP)

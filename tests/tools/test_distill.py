@@ -583,7 +583,7 @@ def test_a_widened_checkpoint_serves_its_parent_and_warm_starts_a_wide_arm(tmp_p
 
 
 @pytest.mark.integration
-def test_a_deepened_checkpoint_serves_its_parent_and_warm_starts_a_deeper_arm(tmp_path, d):
+def test_a_deepened_checkpoint_serves_its_parent_and_warm_starts_a_deeper_arm(tmp_path: Path, d: Any) -> None:
     """The deepen command stamps identity layers on the parent under its lineage plus the tag, a deeper arm starts on it, and the known-bad's stamp moves the outputs and says what it is."""
     load_tools_package("distill")
     T = importlib.import_module("distill.train")

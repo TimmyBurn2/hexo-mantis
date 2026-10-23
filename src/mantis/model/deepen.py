@@ -58,7 +58,11 @@ def _jk_reader(key: str, t: Tensor, init: Tensor, old: int, known_bad: bool) -> 
 
 def deepen_state(parent: Mapping[str, Tensor], fresh: Mapping[str, Tensor], *, hidden: int, layers: int,
                  known_bad: bool = False) -> dict[str, Tensor]:
-    """`fresh`, a deeper net's initial state, carrying the parent's `layers` layers and heads, each new layer's last message linear and JK reader columns zero; `known_bad` keeps their fresh draws; Raises: DeepenError — a key without a rule, a parent not `layers` deep or not of the deeper net's shape."""
+    """`fresh`, a deeper net's initial state, carrying the parent's `layers` layers and heads, each new layer's last message linear and JK reader columns zero; `known_bad` keeps their fresh draws; Raises: DeepenError — a key without a rule, a trunk not `hidden` wide, a parent not `layers` deep or not of the deeper net's shape."""
+    for name, state in (("parent", parent), ("deeper net", fresh)):
+        proj = state.get("representation.input_proj.weight")
+        if proj is None or proj.shape[0] != hidden:
+            raise DeepenError(f"the {name}'s trunk is not {hidden} wide: input_proj {None if proj is None else tuple(proj.shape)}")
     deep: dict[str, Tensor] = {}
     for key in sorted(fresh):
         init, m = fresh[key].detach().cpu(), _LAYER.fullmatch(key)
@@ -89,7 +93,7 @@ def deepen_net(net: nn.Module, arch: ModelArch, *, layers: int, seed: int, known
     """`net`, declared as `arch`, grown to `layers` GINE layers in a CPU net of the same kind in eval mode, the new layers' fresh draws from `seed`; Raises: DeepenError — as `deepen_arch` and `deepen_state`; RepresentationMismatch — `arch` is no kind `build_net` has; RuntimeError — the deeper state does not load strictly."""
     deep_arch = deepen_arch(arch, layers)
     with torch.random.fork_rng(devices=[]):
-        torch.manual_seed(seed)
+        torch.default_generator.manual_seed(seed)  # not torch.manual_seed: that also reseeds CUDA, which the fork leaves
         deep = build_net(deep_arch)
     deep.load_state_dict(deepen_state(net.state_dict(), deep.state_dict(), hidden=arch.hidden, layers=arch.num_layers,
                                       known_bad=known_bad), strict=True)

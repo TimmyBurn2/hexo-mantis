@@ -11,6 +11,7 @@ from __future__ import annotations
 import ast
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -186,9 +187,9 @@ def test_every_shipped_config_selects_a_net_build_net_can_construct(derived):
     )
 
 
-def test_every_shipped_shape_deepened_is_reached_by_a_config_declaring_its_depth(derived):
+def test_every_shipped_shape_deepened_is_reached_by_a_config_declaring_its_depth(derived: Any) -> None:
     """A deepened net is no orphan shape: the production entry point, given the shipped config at the deeper depth, selects its arch and loads its state strictly."""
-    shapes: dict[str, tuple] = {}
+    shapes: dict[str, tuple[str, Any, dict[str, Any], Any]] = {}
     for path in discover_configs(CONFIGS):
         config = load_config(path)
         spec = lookup(config.identity.encoding)

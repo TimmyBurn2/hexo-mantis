@@ -472,7 +472,7 @@ def test_the_NOISE_BAR_FOLLOWS_the_SPREAD_of_the_readings_it_qualifies(derived):
 
 
 @pytest.mark.parametrize(("field", "small", "large"), [("hidden", 8, 16), ("num_layers", 1, 2)])
-def test_the_FLOOR_arm_input_FOLLOWS_the_arch_it_was_built_for(field, small, large, derived):
+def test_the_FLOOR_arm_input_FOLLOWS_the_arch_it_was_built_for(field: str, small: int, large: int, derived: Any) -> None:
     """The derivation control, the half a manifest cannot give. A probe whose constructed input
     does not move when the arch's declared width or depth moves is a fixed fixture wearing an arch."""
     spec = specs_for("GnnArch")[0]

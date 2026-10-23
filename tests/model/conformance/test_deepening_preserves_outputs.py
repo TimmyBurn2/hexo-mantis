@@ -18,10 +18,16 @@ def fp64(b: GraphBatch) -> GraphBatch:
 
 
 @torch.no_grad()
-def outputs(net: torch.nn.Module, b: GraphBatch) -> tuple[tuple[torch.Tensor, ...], torch.Tensor]:
-    """Every head through `forward_batch_heads`, and through the deploy twin when `b` is one graph, plus the trunk's JK concat."""
+def outputs(net: torch.nn.Module, b: GraphBatch) -> tuple[tuple[torch.Tensor, ...], torch.Tensor, list[float]]:
+    """Every head through `forward_batch_heads` (and the deploy twin when `b` is one graph), the trunk's JK concat, and each conv's largest |output|."""
     trunk: list[torch.Tensor] = []
-    hook = net.representation.register_forward_hook(lambda _m, _i, out: trunk.append(out))
+    convs: dict[torch.nn.Module, float] = dict.fromkeys(net.representation.convs, 0.0)
+
+    def conv_hook(conv: torch.nn.Module, _inputs: object, out: torch.Tensor) -> None:
+        convs[conv] = max(convs[conv], float(out.abs().max()))
+
+    hooks = [net.representation.register_forward_hook(lambda _m, _i, out: trunk.append(out))]
+    hooks += [conv.register_forward_hook(conv_hook) for conv in net.representation.convs]
     try:
         mask = stone_mask_from_batch(b)
         got = [t for t in net.forward_batch_heads(b.x, b.edge_index, b.edge_attr, b.legal_node_gather, mask,
@@ -31,17 +37,25 @@ def outputs(net: torch.nn.Module, b: GraphBatch) -> tuple[tuple[torch.Tensor, ..
             legal[b.legal_node_gather] = True
             got += net.forward_single(b.x, b.edge_index, b.edge_attr, legal, mask)
     finally:
-        hook.remove()
-    return tuple(got), trunk[0]
+        for hook in hooks:
+            hook.remove()
+    return tuple(got), trunk[0], list(convs.values())
+
+
+def pin_gaps(net: torch.nn.Module, deep: torch.nn.Module, b: GraphBatch, *, layers: int, hidden: int) -> dict[str, float]:
+    """The pin's three halves in fp64: every head; the parent's JK slots and each new slot against the last one; each new conv's output, which must add exactly nothing to x."""
+    (want, trunk, _), (got, deep_trunk, convs) = outputs(net.double(), fp64(b)), outputs(deep.double(), fp64(b))
+    old = layers * hidden
+    new = deep_trunk[:, old:].reshape(deep_trunk.shape[0], -1, hidden)
+    return {"heads": max_gap(want, got),
+            "slots": max(float((deep_trunk[:, :old] - trunk).abs().max()),
+                         float((new - trunk[:, None, old - hidden:]).abs().max())),
+            "convs": max(convs[layers:])}
 
 
 def pin_gap(net: torch.nn.Module, deep: torch.nn.Module, b: GraphBatch, *, layers: int, hidden: int) -> float:
-    """The worst fp64 |Δ| over every head, the parent's JK slots in the deeper trunk and each new slot against the last one it passes through."""
-    (want, trunk), (got, deep_trunk) = outputs(net.double(), fp64(b)), outputs(deep.double(), fp64(b))
-    old = layers * hidden
-    new = deep_trunk[:, old:].reshape(deep_trunk.shape[0], -1, hidden)
-    return max(max_gap(want, got), float((deep_trunk[:, :old] - trunk).abs().max()),
-               float((new - trunk[:, None, old - hidden:]).abs().max()))
+    """The pin: the worst of its three halves."""
+    return max(pin_gaps(net, deep, b, layers=layers, hidden=hidden).values())
 
 
 @pytest.mark.parametrize("added", [1, 2])
@@ -74,12 +88,34 @@ def test_both_candidate_depths_of_the_shape_of_record_hold_the_pin(layers: int, 
 
 @pytest.mark.parametrize("kind", ARCH_KINDS_BY_REPRESENTATION["graph"])
 def test_the_planted_break_random_init_new_layers_fails_the_pin(kind: str, derived) -> None:
-    """The known-bad keeps the new layers and their head columns at their fresh draws: the pin must red on it."""
+    """The known-bad keeps the new layers and their head columns at their fresh draws: both the heads and the trunk red on it."""
     net, arch = parent(kind, hidden=16, layers=2)
     bad = deepen_net(net, arch, layers=3, seed=7, known_bad=True)
-    gap = pin_gap(net, bad, golden_batch(golden_positions(512)[::40], sample=24, seed=99), layers=2, hidden=16)
-    derived(f"deepen.{kind}.known_bad_gap", gap)
-    assert gap > TOL
+    gaps = pin_gaps(net, bad, golden_batch(golden_positions(512)[::40], sample=24, seed=99), layers=2, hidden=16)
+    derived(f"deepen.{kind}.known_bad_gaps", gaps)
+    assert min(gaps["heads"], gaps["slots"]) > TOL
+
+
+def test_a_fresh_last_linear_behind_zero_columns_reds_the_trunk_while_the_heads_cannot_see_it(derived) -> None:
+    """The likeliest real defect: nothing reads the new slot yet, so the heads hold and only the trunk halves can red."""
+    net, arch = parent("GnnArchV2SoftPolicyFuture", hidden=16, layers=2)
+    deep = deepen_net(net, arch, layers=3, seed=7)
+    with torch.no_grad():
+        deep.representation.convs[2].nn[2].reset_parameters()
+    gaps = pin_gaps(net, deep, golden_batch(golden_positions(512)[::40], sample=24, seed=99), layers=2, hidden=16)
+    derived("deepen.fresh_last_linear.gaps", gaps)
+    assert gaps["heads"] <= TOL < min(gaps["slots"], gaps["convs"])
+
+
+def test_a_uniform_shift_from_a_new_layer_reds_the_conv_half_alone(derived) -> None:
+    """A last-linear bias moves x evenly, and the final norm hides that from the slots and the heads; the conv half sees it."""
+    net, arch = parent("GnnArchV2SoftPolicyFuture", hidden=16, layers=2)
+    deep = deepen_net(net, arch, layers=3, seed=7)
+    with torch.no_grad():
+        deep.representation.convs[2].nn[2].bias.fill_(0.5)
+    gaps = pin_gaps(net, deep, golden_batch(golden_positions(512)[::40], sample=24, seed=99), layers=2, hidden=16)
+    derived("deepen.uniform_shift.gaps", gaps)
+    assert max(gaps["heads"], gaps["slots"]) <= TOL < gaps["convs"]
 
 
 def test_the_parents_tensors_are_carried_and_only_the_new_ones_follow_the_rule() -> None:
@@ -139,3 +175,9 @@ def test_a_depth_adding_nothing_a_tensor_without_a_rule_and_a_parent_of_another_
             deepen_state(net.state_dict(), {**fresh, key: torch.zeros(8, 8)}, hidden=8, layers=2)
     with pytest.raises(DeepenError, match="no place"):
         deepen_state({**net.state_dict(), "aux_policy_head.mlp.0.bias": torch.zeros(8)}, fresh, hidden=8, layers=2)
+    with pytest.raises(DeepenError, match="not 4 wide"):
+        deepen_state(net.state_dict(), fresh, hidden=4, layers=2)
+    with pytest.raises(DeepenError, match="whole JK groups"):
+        deepen_state({**net.state_dict(), "policy_head.mlp.0.weight": torch.zeros(128, 15)}, fresh, hidden=8, layers=2)
+    with pytest.raises(DeepenError, match="not the deeper net's"):
+        deepen_state({**net.state_dict(), "value_head.fc2_bins.bias": torch.zeros(3)}, fresh, hidden=8, layers=2)

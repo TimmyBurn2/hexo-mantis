@@ -1,3 +1,5 @@
+# >300 justify (R8): one argparse tree, each stage's flags declared beside the command that consumes them and the record
+# it writes; split, the subparsers would be built in one file for handlers whose arguments another file defines.
 """`python tools/distill.py <command>`: corpus, validate, label, rings, train, kl, read — each writes its record beside its output."""
 from __future__ import annotations
 
