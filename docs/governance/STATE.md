@@ -22,7 +22,11 @@ restart alone.** (RULINGS R400; the R399 paragraph below stands where R400 does 
 The end read played on 2026-10-23: the average of the 351 000–372 000 saves, `run14avg_00372000_647f0497`, read rung
 16 0.632 [0.594, 0.669] against the pick's replayed 0.563 (above) and S 0.868 [0.840, 0.896] against 0.851 (not
 below). It WINS: the average replaces run13's 120k as the net of record and DEPLOY-WEB's export candidate
-(CARD-RUN14). R401 (run15, relayed 2026-10-22) is recorded with run15's mint.
+(CARD-RUN14). R401 (run15, relayed 2026-10-22) is recorded with run15's mint. TVW-1 read the tails' value weight
+on 2026-10-23 (CARD-TAILS-VALUE-WEIGHT). Weight 0.1 is null at 8k: calibrated CE +0.0055 against weight 1 (worse),
+temperature −0.138, exams held, and the known-bad bit. So 1 stays, and run15 mints
+`selfplay.decided_tails: {value_weight: 1.0}`. The key lands as run-config schema v63, and the event manifest steps
+to v19, adding the step event's `value_rows_tail` and `tail_value_weight`.
 
 **R399 (2026-10-21): THE DESIGN STANDS; EIGHT ITEMS RULED; L1 MAY START. DEPLOY-WEB's L0 design stands. fp16 ships
 to WebGPU only, under a line pre-stated before its first read on run13's 120k (|Δ prob| and |Δ value| ≤ 2e-3, the
@@ -110,7 +114,8 @@ not move it.) run13 was stopped at 176 681 on 2026-10-19 at 06:41:43 CEST (marke
 `run13_00176681_31e66d38` and the save's ring, sidecar and bundle are mirrored with matching sha256, and the run's
 monitor read the stop save (final, no halting row) and exited. The window's counts are rung 16 1 239 / 2 304 at
 120k–156k and S 978 / 1 152 at 132k and 156k. run14 is minted as `configs/run14.yaml`: against run13, exactly `run_id`,
-the four `train.lr_cycle` leaves and `selfplay.decided_tails` differ. run14 launched 2026-10-19 12:46:07 CEST on box A
+the four `train.lr_cycle` leaves and `selfplay.decided_tails` differ (at schema v63 the leaf
+`selfplay.decided_tails.value_weight`, null → 1.0). run14 launched 2026-10-19 12:46:07 CEST on box A
 at `94bc5512`, halted at 180 997 on its band and resumed there 2026-10-20 07:26:33 CEST at `828ff2ac` (R397, above;
 The run). The event manifest steps to v18, naming n9's
 change to `iteration_complete.sims_per_sec` (R396(f)).
@@ -882,3 +887,6 @@ The R399 paragraph's DEPLOY-WEB L1 sentence was written 2026-10-21 at L1's exit 
 The R400 paragraph, the run line and the latest-ruling line were written 2026-10-23 at R400's record on branch
 `run14-go` over `origin/dev` `3b9ea1d2`, with the stop read from box A's records, the stop save's sha256 from the box
 and the mirror, and the end read from its four sidecars (mirrored, sha256 equal to the box's).
+The R400 paragraph's TVW-1 sentences were written 2026-10-23 at TVW-1's exit, on branch `tails-value-weight` over
+`origin/dev` `9ffd9f5a`, from its verdict (local records). The same edit repaired the run line's `config_diff` leaf,
+which is `selfplay.decided_tails.value_weight` at schema v63.

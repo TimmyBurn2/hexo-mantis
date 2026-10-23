@@ -42,13 +42,25 @@ R400 also moves, in place: CARD-RUN14 (CLOSED, the stop and the end read, by (a)
 rows' weight unread, by (c)) and CARD-DENSE-1 (its L4 line stale, by (e)). CARD-DEPLOY-WEB continues as ruled by (e);
 its export candidate is the end read's winner, `run14avg_00372000_647f0497` (CARD-RUN14).
 
-- **CARD-TAILS-VALUE-WEIGHT — ORDERED by R400(d) (2026-10-22): one desk read, 0 box-h, before any future run.** From
-  run14's stop save on its frozen final ring, three 15k-step continuations at the run's LR, the tails' value rows at
-  weight 1 (as armed), at 0.1 and masked, read on the value instrument of record (CE, AUC, temperature) and the
-  held-out gap, under a pre-stated line and a known-bad. Its result sets `decided_tails`' default value weight. The
-  grounds: run14's value head regressed at its restart (CE 0.5273 → 0.5304 in 319 steps, temperature 1.27 → 1.46,
-  held-out gap 0.054 → 0.09) and never recovered, with ~19 % of its rows the tails' certain ±1 targets at full
-  weight. EXECUTING on the desk (TVW-1, branch `tails-value-weight`).
+- **CARD-TAILS-VALUE-WEIGHT — CLOSED 2026-10-23 on TVW-1's NULL, as its packet orders: the tails' value weight stays
+  1, and run15 mints `selfplay.decided_tails: {value_weight: 1.0}`.** The operator's packet superseded (d)'s
+  design: 8k steps, not 15k; a constant 2e-4, not the run's LR; K as the known-bad; no masked arm. From run14's stop
+  save on its frozen final ring, with one seed and the same draws, it ran three arms: W1 (weight 1), W01 (0.1) and
+  K (weight 1 with the tails' z negated). W01 ran under its pre-registered amendment, which divides by the kept rows'
+  count; W1 and K read the same under either rule. Its pre-stated line: W01 is BETTER iff its calibrated CE on the
+  GEN ring is at least 0.003 below W1's, with the temperature not higher and T4/DEF held. At 8k W01 read CE 0.53718
+  against W1's 0.53172, +0.0055: worse, not better. Its AUC was 0.7831 against 0.7877, the loss sat in plies 41+,
+  and T4_V read 0.292 against 0.411. Its temperature was lower, 1.367 against 1.505, as (c)'s over-confidence
+  reading predicts. Both exams held. K bit (+0.161) and no arm was void.
+  W01's gap was still closing (+0.0082 at 4k), so the read sets run15's weight; it does not say where a run trained
+  at 0.1 from its start would end. With it landed the key `selfplay.decided_tails.value_weight` (run-config schema
+  v63; null is off), and the step event's `value_rows_tail` and `tail_value_weight` (event manifest v19). **Was:
+  ORDERED by R400(d) (2026-10-22): one desk read, 0 box-h, before any future run.** From run14's stop save on its
+  frozen final ring, three 15k-step continuations at the run's LR, the tails' value rows at weight 1 (as armed), at
+  0.1 and masked, read on the value instrument of record (CE, AUC, temperature) and the held-out gap, under a
+  pre-stated line and a known-bad. Its result sets `decided_tails`' default value weight. The grounds: run14's
+  value head regressed at its restart (CE 0.5273 → 0.5304 in 319 steps, temperature 1.27 → 1.46, held-out gap
+  0.054 → 0.09) and never recovered, with ~19 % of its rows the tails' certain ±1 targets at full weight.
 - **CARD-CAPACITY-OR-DATA — CARDED by R400(d), not ordered: the research pass's 4×512 continuation.** It informs only
   a programme the operator has closed; in a reopened programme it follows the tails' weight and precedes the one run
   with one change (R400(f)).
@@ -251,7 +263,8 @@ run14), CARD-NET2NET-WIDEN (the second widening is the bet) and CARD-PERF-COLLAT
   from cycle step 36k; a non-positive bound → `tools/best_save.py` over run14's saves with both reads. Minted
   2026-10-19 as `configs/run14.yaml`: run13's header replayed but its run id, and against `configs/run13.yaml`
   exactly `run_id`, the four `train.lr_cycle` leaves and `selfplay.decided_tails` differ (`tools/config_diff.py
-  --expect`). The resume is a launch fact (`--resume-from`), so run13's warm-start and preload rows stay, inert on a
+  --expect`; at schema v63 the leaf is `selfplay.decided_tails.value_weight`, null → 1.0, repaired in place
+  2026-10-23). The resume is a launch fact (`--resume-from`), so run13's warm-start and preload rows stay, inert on a
   resume. It resumes from a byte copy of the stop save's checkpoint and sidecar in run14's own `checkpoints/`, since a
   resume saves beside the checkpoint it resumes (CARD-RESUME-SAVES-BESIDE-SOURCE). Read on box A on 2026-10-19 through
   the run's own entries, the resume takes the re-minted identity: every tensor byte-equal (the head's among them), the
@@ -1323,8 +1336,9 @@ R391 also moves, in place: CARD-DISTILL-2 (ACCEPTED), CARD-SIX-SEARCH-TEACHER (H
   MID −0.053). R376(f) governs any learning from Six's outputs; this card is our own search's value.
 - **CARD-DECIDED-TAILS — ANNOTATED by R400(c) (2026-10-22): the throughput stands (+7.9 %); the tails' value rows
   (~19 % of rows, certain ±1 targets) trained at full weight, DT-1's packet carried no down-weighting, the architect's
-  omission on the ledger, and their weight is unread (CARD-TAILS-VALUE-WEIGHT). Was: ARMED in run14 by R396(b) as by
-  R395(b) (2026-10-18), on dev since `9dc463e6`; LANDED by
+  omission on the ledger, and their weight was unread. TVW-1 read it on 2026-10-23: weight 0.1 is null at 8k, so
+  1 stays, the config row `selfplay.decided_tails.value_weight` since schema v63 (CARD-TAILS-VALUE-WEIGHT). Was:
+  ARMED in run14 by R396(b) as by R395(b) (2026-10-18), on dev since `9dc463e6`; LANDED by
   R396(e); R3 (T4/DEF at run14's first two saves) is run14's to read, a two-read miss halting the tails, not the
   run. R3 HELD at both saves (2026-10-19). By R397(a), DT-1's packet read throughput and the exams and never ran the
   ring-audit bands on a tails ring, the architect's omission on the ledger: the loser's value-only rows store no
