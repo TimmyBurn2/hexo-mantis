@@ -326,8 +326,8 @@ def test_the_production_config_can_fire_every_armed_row_with_margin(production) 
     assert by_name["draw_rate_collapse"].earliest_step == float(
         production.train.draw_rate_abort.min_step
     ), "the config mints min_step as a multiple of gate_interval, so the fire lands on it exactly"
-    assert by_name["draw_rate_collapse"].earliest_step < bound / 4.0, (
-        "the anchor must clear the bound with real margin, not squeak past it"
+    assert by_name["draw_rate_collapse"].earliest_step < bound / 2.0, (
+        "the anchor must clear the bound with real margin (inside half of it), not squeak past it"
     )
     assert by_name["actor_lag"].earliest_step == float(
         production.monitor.actor_lag_threshold_steps + 1

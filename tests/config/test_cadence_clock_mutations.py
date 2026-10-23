@@ -68,6 +68,11 @@ def test_the_battery_baseline_is_green_or_every_kill_below_is_meaningless(produc
     )
 
 
+def nine_tenths_of_the_run(config: RunConfig) -> int:
+    """Past the 0.25 bound and inside the run on any run length (the schema refuses a threshold at or past it)."""
+    return config.train.max_train_steps * 9 // 10
+
+
 @pytest.mark.parametrize(
     "label,section,key,value,expected",
     [
@@ -77,9 +82,9 @@ def test_the_battery_baseline_is_green_or_every_kill_below_is_meaningless(produc
         # The BOUND rather than a cadence key.
         ("run too short for the draw-rate min_step", "train", "max_train_steps", 80_000,
          "draw_rate_collapse"),
-        # The actor-lag axis: the train-step clock, its threshold past the bound.
+        # The actor-lag axis: the train-step clock, its threshold past the bound and inside the run.
         ("actor-lag threshold past the bound", "monitor", "actor_lag_threshold_steps",
-         900_000, "actor_lag"),
+         nine_tenths_of_the_run, "actor_lag"),
     ],
 )
 @pytest.mark.parametrize("production", _PRODUCTION, ids=lambda p: p.name)
@@ -93,6 +98,7 @@ def test_ONE_key_reds_ONE_axis_in_that_axis_own_clock(
     manifest = _required_manifest()
     armed = load_config(production)
     assert _out_of_bound(armed, manifest) == [], "premise: the unmutated config is green"
+    value = value(armed) if callable(value) else value
     mutated = _revalidated(armed, section, key, value)
     failed = _out_of_bound(mutated, manifest)
     assert failed == [expected], (
