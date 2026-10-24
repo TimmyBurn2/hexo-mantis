@@ -20,7 +20,7 @@ after a boot or a crashed trainer, and an end-read script reads the trend-aware 
 saves against run14avg's idle cells. A band or exam halt stays halted for a human. fp16 is out of DEPLOY-WEB; its L4
 waits for desk time and is not on run15's path.** (RULINGS R402 and R401; the R400 paragraph below stands where they
 do not move it.) TVW-1's null leaves R400(c)'s likeliest cause unsupported on value CE; a calibration effect remains
-(temperature 1.37 v 1.51). run15 is MINTED: `configs/run15.yaml` (CARD-RUN15).
+(temperature 1.37 v 1.51). run15 is LIVE on box A since 2026-10-24 01:18:22 CEST (CARD-RUN15).
 
 **R400 (2026-10-22): RUN14 STOPS; THE LINEAGE'S TRAINING CLOSES; THE STRENGTH LEFT IS IN THE BROWSER'S BUDGET. run14
 stops at its next complete save, before its cycle's end: its restart bump was its only gain, its last ten cells read
@@ -704,11 +704,18 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
 
 ## The run
 
-- **run15 is MINTED (R401(c), R402(b); CARD-RUN15):** `configs/run15.yaml`, from `deepen6_00000000_e4f4c52a` (the net
-  of record deepened to 6×256) with reinit `[]`, run14's final ring preloaded (`run14_00372000_241db7a3`, v5), one
-  cosine 1e-3 → 1e-4 over 300k, `max_train_steps` 300 000, decided tails at value weight 1.0, caps 1 406 250 /
-  53 124. Against `configs/run12.yaml` only run15's own rows and the slots' leaves differ (`tools/config_diff.py
-  --expect`). Its launch waits on a green preflight on box A (R402(b)).
+- **run15 is LIVE (R401(c), R402(b); CARD-RUN15):** launched 2026-10-24 01:18:22 CEST on box A from `d6a8cc9f`, BOOT_OK
+  01:23:22 (run14's final ring preloaded at 2 500 000 rows, the warm start at the minted net hash with reinit `[]`).
+  `configs/run15.yaml`, from `deepen6_00000000_e4f4c52a` (the net of record deepened to 6×256) with reinit `[]`,
+  run14's final ring preloaded (`run14_00372000_241db7a3`, v5), one cosine 1e-3 → 1e-4 over 300k, `max_train_steps`
+  300 000, decided tails at value weight 1.0, caps 1 406 250 / 53 124. Against `configs/run12.yaml` only run15's own
+  rows and the slots' leaves differ (`tools/config_diff.py --expect`). The preflight passed at 00:56 CEST (the caps
+  at a peak of 3 513 MiB, the burst's policy entropy 1.42–2.12, a 3-step smoke config's FINAL save). The controlled
+  stop and resume passed at its first save: one SIGTERM at 02:33:46 after the monitor's read of 3 000, the stop save
+  at 3 670, and the box's guard resumed from it unattended, RESUME_OK 02:58:37 (21 min without a trainer step). It
+  ran 2 561 steps/h over its first 3 h by the wall clock (2 905 while training); 300 000 is due ≈ 2026-10-28
+  08:00–12:00 CET at that rate less the cells' share, about two days inside the calendar end. This line said MINTED
+  until the launch.
 - **run14 is STOPPED at 372 000 (R400(a); CARD-RUN14):** stopped 2026-10-22 23:09:40 CEST on box A by the stop
   marker and one SIGTERM after its 372 000 save; stop save `run14_00372000_241db7a3` (weights equal to the periodic
   `run14_00372000_38a547a0`), mirrored and sha-checked, the monitor's last read clean. Box A restarted 2026-10-22
@@ -912,3 +919,5 @@ The R400 paragraph's TVW-1 sentences were written 2026-10-23 at TVW-1's exit, on
 which is `selfplay.decided_tails.value_weight` at schema v63.
 The R402 paragraph, run15's run line and the latest-ruling line were written 2026-10-23 at run15's mint on branch
 `run14-go` over `origin/dev` `e6e902fd`, from the rulings' texts and the mint (`configs/run15.yaml`).
+run15's LIVE run line and the R402 paragraph's last sentence were written 2026-10-24 on branch `run14-go` over
+`origin/dev` `d6a8cc9f`, from box A's launch log, guard log, stop-test log and trainer events.

@@ -41,7 +41,8 @@ Both were found by running the gate set rather than by reading it, and both are 
 R402 also moves, in place: CARD-DEPLOY-WEB (L4's read and timing, fp16 out, by (f)) and CARD-NET-EXPAND (depth
 built and riding run15, with R401). CARD-PATH-CONSISTENCY stays open at null by (a).
 
-- **CARD-RUN15 [RUN15-GO] — MINTED 2026-10-23 (R401(c), R402(b)); the launch follows a green preflight on box A.**
+- **CARD-RUN15 [RUN15-GO] — LIVE 2026-10-24 01:18:22 CEST on box A from `d6a8cc9f` (R401(c), R402(b)); minted
+  2026-10-23.**
   `configs/run15.yaml`: the net of record `run14avg_00372000_647f0497` deepened to 6×256 (`deepen6_00000000_e4f4c52a`,
   sha256 `bc45d80f…`, net_hash `69cfcc3b…`), `identity.warm_start` reinit `[]`, run14's final ring preloaded
   (`run14_00372000_241db7a3.ckpt.ring.bin`, v5, sha256 `7745d915…`), lr 1e-3 → 1e-4 over `scheduler_t_max` 300 000,
@@ -60,10 +61,19 @@ built and riding run15, with R401). CARD-PATH-CONSISTENCY stays open at null by 
   automation is box ops files outside the public tree, reviewed by a fresh agent before the launch. run15 is the
   config census's first run shorter than 1 000 000 steps: the cadence battery's actor-lag kill value is now 0.9 of each
   config's own run length (900 000 on the others), and the draw-rate anchor's margin reads inside half the bound (its
-  25 000 `min_step` sits at a third of run15's 75 000), where a quarter assumed the longer run. OWED before the
-  operator walks away: the auto-resume unit's controlled stop and resume at the first save (R402(d)(i)); the futility
-  and calendar acts on synthetic sidecars (R402(d)(ii)–(iii)); the end read's dry run on run14's saves against
-  run14avg's idle cells, reproducing the end read's numbers (R402(d)(iv)); and a fresh review of every box script.
+  25 000 `min_step` sits at a third of run15's 75 000), where a quarter assumed the longer run. Done
+  before the operator walked away: three fresh reviews of the box scripts (each PASS WITH FIXES, every finding fixed);
+  the futility and calendar acts on synthetic sidecars (16 of 16; R402(d)(ii)–(iii)), the calendar's hour read as
+  16:00 UTC; the end read's dry run (R402(d)(iv)), which rebuilt run14avg's net hash from run14's saves and reproduced
+  its end read's line exactly (rung 16 +0.28573, S +0.14382, WIN), while run14avg's rung-16 cell replayed on the mint
+  tree read 357-209-10 against its record's 359-207-10 on the same instrument and net (−0.015 logit, inside a cell's
+  noise), so the rung-16 instrument is not bit-identical across trees and the lines compare run15 with reference cells
+  replayed on its own tree; and the auto-resume unit's controlled stop and resume at the first save (R402(d)(i)): one
+  SIGTERM at 02:33:46 CEST after the monitor's read of 3 000, the stop save at 3 670, RESUME_OK 02:58:37 unattended.
+  Rate 2 561 steps/h over the first 3 h by the wall clock (2 905 while training, before any cell). Saves due at
+  2 790–2 905 steps/h: 48k 10-24 18:10–18:45 CEST; the window's 132k 10-25 22:05–23:50 CET; futility's 156k 10-26
+  06:20–08:30 CET, its cell 1–3 h later behind the 144k S cell; 300k 10-28 08:00–12:10 CET, about two days before the
+  calendar end (2026-10-30 17:00 CET).
 - **CARD-WEB-BUBBLE-EQUAL-TIME — CARDED by R402(f) (2026-10-23) for later desk time: DEPLOY-WEB's Bubble read at
   equal time.** It leaves L4's read; no parallel pages.
 
