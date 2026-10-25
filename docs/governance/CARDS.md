@@ -70,10 +70,14 @@ built and riding run15, with R401). CARD-PATH-CONSISTENCY stays open at null by 
   noise), so the rung-16 instrument is not bit-identical across trees and the lines compare run15 with reference cells
   replayed on its own tree; and the auto-resume unit's controlled stop and resume at the first save (R402(d)(i)): one
   SIGTERM at 02:33:46 CEST after the monitor's read of 3 000, the stop save at 3 670, RESUME_OK 02:58:37 unattended.
-  Rate 2 561 steps/h over the first 3 h by the wall clock (2 905 while training, before any cell). Saves due at
-  2 790–2 905 steps/h: 48k 10-24 18:10–18:45 CEST; the window's 132k 10-25 22:05–23:50 CET; futility's 156k 10-26
-  06:20–08:30 CET, its cell 1–3 h later behind the 144k S cell; 300k 10-28 08:00–12:10 CET, about two days before the
-  calendar end (2026-10-30 17:00 CET).
+  Rate 2 905 steps/h while training before any cell, 2 541 over the first day with its cells (the 6×256 net's S
+  cells cost the trainer more than run14's did). Box A's container restarted four times from 2026-10-24 21:27 CEST
+  (13.7 h down overnight); the guard resumed the run each time it came up until its budget held, lifted by a session
+  2026-10-25 13:25 CET; about 15.5 h lost. Cells so far: rung 16 0.549 / 0.582 / 0.462 / 0.544 at 12k–48k (the
+  pre-stated dip), S 0.785 at 36k; the reference's two rung-16 cells 0.622 and 0.637 (contended, not the same
+  games), pooled 0.629. Saves due at 2 350–2 540 steps/h from 54 000: the window's 132k 10-26 20:10–22:40 CET;
+  futility's 156k 10-27 05:35–08:50 CET; 300k 10-29 14:15–22:05 CET, 19–27 h before the calendar end (2026-10-30
+  17:00 CET).
 - **CARD-WEB-BUBBLE-EQUAL-TIME — CARDED by R402(f) (2026-10-23) for later desk time: DEPLOY-WEB's Bubble read at
   equal time.** It leaves L4's read; no parallel pages.
 

@@ -713,9 +713,12 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
   at a peak of 3 513 MiB, the burst's policy entropy 1.42–2.12, a 3-step smoke config's FINAL save). The controlled
   stop and resume passed at its first save: one SIGTERM at 02:33:46 after the monitor's read of 3 000, the stop save
   at 3 670, and the box's guard resumed from it unattended, RESUME_OK 02:58:37 (21 min without a trainer step). It
-  ran 2 561 steps/h over its first 3 h by the wall clock (2 905 while training); 300 000 is due ≈ 2026-10-28
-  08:00–12:00 CET at that rate less the cells' share, about two days inside the calendar end. This line said MINTED
-  until the launch.
+  ran 2 905 steps/h while training before its first cell and 2 541 over its first day with its cells. Box A's
+  container went down 2026-10-24 21:27 CEST to 10-25 09:52 CET and restarted three more times by 13:19 CET: the guard
+  resumed the run each time it came up (from 48 000, 48 000 and 54 000) until its budget of three resumes in six hours
+  held it, and a session lifted the hold at 13:25 (RESUME_OK 13:29:52 from 54 000). The restarts cost about 15.5 h
+  (13.7 h down, 4 617 steps replayed). 300 000 is due ≈ 2026-10-29 14:00–22:00 CET, 19–27 h inside the calendar end.
+  This line said MINTED until the launch.
 - **run14 is STOPPED at 372 000 (R400(a); CARD-RUN14):** stopped 2026-10-22 23:09:40 CEST on box A by the stop
   marker and one SIGTERM after its 372 000 save; stop save `run14_00372000_241db7a3` (weights equal to the periodic
   `run14_00372000_38a547a0`), mirrored and sha-checked, the monitor's last read clean. Box A restarted 2026-10-22
