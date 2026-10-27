@@ -191,7 +191,7 @@ deepening, MCGS at deploy, proof-verified start pools and DENSE-1's L2–L4.
   and 6 layers on the tiny stamps; the shipped net is chosen at run15's end. R402(f) (2026-10-23): L4 is not on run15's
   path and runs when the desk can stay on for ~36 h. Its read: the bench and the clock line first, then the strength
   line against Six n128 at 288 games (a parity check that must catch a bug-sized loss); the Bubble equal-time read is
-  carded (CARD-WEB-BUBBLE-EQUAL-TIME); no parallel pages. fp16 is OUT (|Δ value| 2.69e-3 as R402(f) cites it, 2.75e-3
+  carded (CARD-WEB-BUBBLE-EQUAL-TIME); no parallel pages. fp16 is OUT (|Δ value| 2.69e-3 on run14avg's export, as R402(f) cites it; 2.75e-3
   in L1's read on run13's 120k, against R399(a)'s 2e-3), and its known-bad requirement lapses with it. The depth pins get their fresh review inside L4's; this card's export
   candidate is `run14avg_00372000_647f0497`; the request-id finding is fixed in L4. The licence and the package name
   are the operator's before the first tag, after run15's pick. At a run15 futility stop, box A plays L4's native
