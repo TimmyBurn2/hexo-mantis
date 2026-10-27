@@ -148,6 +148,29 @@ test("an interrupt that lands while the position is set up stops the request bef
   assert.equal(posted.length, 1);
 });
 
+test("an id reused while its first request is in flight still interrupts the second, whichever step it is at", async () => {
+  let release!: () => void;
+  let turns = 0;
+  const { posted, send, settle, holdNewGame } = harness(() => new Promise<TurnResult>((resolve) => {
+    turns += 1;
+    if (turns === 1) release = () => resolve(turnOf([stone(2, -1), stone(-1, 1)]));
+    else resolve(turnOf([stone(3, -1), stone(-1, 2)]));
+  }));
+  send(SETUP);
+  send(REQUEST);
+  send(SETUP);
+  send(REQUEST);
+  await settle();
+  const open = holdNewGame();
+  release();
+  await settle();
+  send(INTERRUPT);
+  open();
+  await settle();
+  assert.equal(turns, 1, "the second request with id 1 was played after its interrupt");
+  assert.equal(posted.length, 2, "only the capabilities and the first answer were posted");
+});
+
 test("after a refused position, a request with no new setup is refused rather than played onto the old game", async () => {
   const { posted, calls, send, settle, refuseNext } = harness(async () => turnOf([stone(2, -1), stone(-1, 1)]));
   send(SETUP);

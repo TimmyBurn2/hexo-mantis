@@ -62,7 +62,8 @@ export function attachArena(port: Port, engine: Engine, version: string): void {
   let cancelled = false;
   // After a refusal or a dropped answer the engine's board is no longer the slot's: nothing plays on it until a setup.
   let stale = false;
-  const queued = new Set<number>();
+  // A count per id, so a request reusing the id of one still in flight stays interruptible after the first ends.
+  const queued = new Map<number, number>();
   const interrupted = new Set<number>();
   const occupied = new Set<string>();
   let queue: Promise<void> = Promise.resolve();
@@ -108,8 +109,13 @@ export function attachArena(port: Port, engine: Engine, version: string): void {
       outstanding = undefined;
       inFlight = false;
       if (id !== undefined) {
-        queued.delete(id);
-        interrupted.delete(id);
+        const left = (queued.get(id) ?? 1) - 1;
+        if (left > 0) {
+          queued.set(id, left);
+        } else {
+          queued.delete(id);
+          interrupted.delete(id);
+        }
       }
     }
   };
@@ -124,12 +130,12 @@ export function attachArena(port: Port, engine: Engine, version: string): void {
         occupied.clear();
       });
     } else if (packet.type === "interrupt") {
-      // Only a request still queued or in flight is marked: an id the slot reuses later is never dropped.
+      // Only an id still queued or in flight is marked, until its last request ends: a later reuse is never dropped.
       if (packet.request_id !== undefined && queued.has(packet.request_id)) interrupted.add(packet.request_id);
       if (packet.request_id === undefined && inFlight) cancelled = true;
       if (packet.request_id === undefined || packet.request_id === outstanding) engine.abort();
     } else if (packet.type === "move_request") {
-      if (packet.request_id !== undefined) queued.add(packet.request_id);
+      if (packet.request_id !== undefined) queued.set(packet.request_id, (queued.get(packet.request_id) ?? 0) + 1);
       queue = queue.then(() => request(packet as Parameters<typeof request>[0]));
     }
   });
