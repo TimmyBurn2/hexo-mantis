@@ -20,7 +20,7 @@ after a boot or a crashed trainer, and an end-read script reads the trend-aware 
 saves against run14avg's idle cells. A band or exam halt stays halted for a human. fp16 is out of DEPLOY-WEB; its L4
 waits for desk time and is not on run15's path.** (RULINGS R402 and R401; the R400 paragraph below stands where they
 do not move it.) TVW-1's null leaves R400(c)'s likeliest cause unsupported on value CE; a calibration effect remains
-(temperature 1.37 v 1.51). run15 is STOPPED at 157 980 by its futility line (2026-10-27 09:11 CET); its end read runs on box A (CARD-RUN15).
+(temperature 1.37 v 1.51). run15 is CLOSED: STOPPED at 157 980 by its futility line (2026-10-27 09:11 CET), its end read (on the desk, box A destroyed) found NO WINNER, so `run14avg_00372000_647f0497` stays the net of record (CARD-RUN15).
 
 **R400 (2026-10-22): RUN14 STOPS; THE LINEAGE'S TRAINING CLOSES; THE STRENGTH LEFT IS IN THE BROWSER'S BUDGET. run14
 stops at its next complete save, before its cycle's end: its restart bump was its only gain, its last ten cells read
@@ -708,7 +708,7 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
   box A by the futility act (marker, then one SIGTERM) after its 156 000 rung-16 cell: run15's pooled 120k–156k 0.611
   (logit 0.451) against the reference's pooled 0.629 (0.529), −0.078 where above +0.10 was asked; stop save
   `run15_00157980_6eb4e986`. The window had missed: pooled 96k–132k 0.590, −0.164 against GO at +0.17 (S at 108k
-  0.858, not below the reference's 0.861). Its end read (R402(d)(iv)) runs on box A's idle card. It was launched
+  0.858, not below the reference's 0.861). Its end read (R402(d)(iv)) found NO WINNER: run14avg stays the net of record. The average of 135k–156k (`run15avg_00156000_96a8fff2`) read rung 16 0.654 [0.616, 0.689] and S 0.870 [0.842, 0.898] against 0.632 / 0.868, above on neither; the pick (144k) was not replayed idle, its contended CIs straddling both references. The operator destroyed box A 2026-10-27 mid read, so the average was rebuilt and read on the desk (net hash equal to the box's). It was launched
   2026-10-24 01:18:22 CEST on box A from `d6a8cc9f`, BOOT_OK 01:23:22 (run14's final ring preloaded at 2 500 000 rows, the warm start at the minted net hash with reinit `[]`).
   `configs/run15.yaml`, from `deepen6_00000000_e4f4c52a` (the net of record deepened to 6×256) with reinit `[]`,
   run14's final ring preloaded (`run14_00372000_241db7a3`, v5), one cosine 1e-3 → 1e-4 over 300k, `max_train_steps`
@@ -931,3 +931,5 @@ run15's LIVE run line and the R402 paragraph's last sentence were written 2026-1
 `origin/dev` `d6a8cc9f`, from box A's launch log, guard log, stop-test log and trainer events.
 run15's STOPPED run line was written 2026-10-27 on branch `run14-go` over `origin/dev` `207a21a4`, from box A's
 `lines/futility.json`, `lines/lines.json`, guard log and cell sidecars.
+run15's CLOSED lines were written 2026-10-27 on branch `run14-go` over `origin/dev` `22d1b174`, from the desk's
+end-read sidecars and `VERDICT.json`.
