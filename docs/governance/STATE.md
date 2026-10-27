@@ -20,7 +20,7 @@ after a boot or a crashed trainer, and an end-read script reads the trend-aware 
 saves against run14avg's idle cells. A band or exam halt stays halted for a human. fp16 is out of DEPLOY-WEB; its L4
 waits for desk time and is not on run15's path.** (RULINGS R402 and R401; the R400 paragraph below stands where they
 do not move it.) TVW-1's null leaves R400(c)'s likeliest cause unsupported on value CE; a calibration effect remains
-(temperature 1.37 v 1.51). run15 is LIVE on box A since 2026-10-24 01:18:22 CEST (CARD-RUN15).
+(temperature 1.37 v 1.51). run15 is STOPPED at 157 980 by its futility line (2026-10-27 09:11 CET); its end read runs on box A (CARD-RUN15).
 
 **R400 (2026-10-22): RUN14 STOPS; THE LINEAGE'S TRAINING CLOSES; THE STRENGTH LEFT IS IN THE BROWSER'S BUDGET. run14
 stops at its next complete save, before its cycle's end: its restart bump was its only gain, its last ten cells read
@@ -704,8 +704,12 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
 
 ## The run
 
-- **run15 is LIVE (R401(c), R402(b); CARD-RUN15):** launched 2026-10-24 01:18:22 CEST on box A from `d6a8cc9f`, BOOT_OK
-  01:23:22 (run14's final ring preloaded at 2 500 000 rows, the warm start at the minted net hash with reinit `[]`).
+- **run15 is STOPPED at 157 980 by futility (R401(c), R402(d)(ii); CARD-RUN15):** stopped 2026-10-27 09:11:39 CET on
+  box A by the futility act (marker, then one SIGTERM) after its 156 000 rung-16 cell: run15's pooled 120k–156k 0.611
+  (logit 0.451) against the reference's pooled 0.629 (0.529), −0.078 where above +0.10 was asked; stop save
+  `run15_00157980_6eb4e986`. The window had missed: pooled 96k–132k 0.590, −0.164 against GO at +0.17 (S at 108k
+  0.858, not below the reference's 0.861). Its end read (R402(d)(iv)) runs on box A's idle card. It was launched
+  2026-10-24 01:18:22 CEST on box A from `d6a8cc9f`, BOOT_OK 01:23:22 (run14's final ring preloaded at 2 500 000 rows, the warm start at the minted net hash with reinit `[]`).
   `configs/run15.yaml`, from `deepen6_00000000_e4f4c52a` (the net of record deepened to 6×256) with reinit `[]`,
   run14's final ring preloaded (`run14_00372000_241db7a3`, v5), one cosine 1e-3 → 1e-4 over 300k, `max_train_steps`
   300 000, decided tails at value weight 1.0, caps 1 406 250 / 53 124. Against `configs/run12.yaml` only run15's own
@@ -717,8 +721,9 @@ The earlier phase paragraphs (DECIDE-1's order, RUN10-CONTROLS, SIX-SCOUT, RESEA
   container went down 2026-10-24 21:27 CEST to 10-25 09:52 CET and restarted three more times by 13:19 CET: the guard
   resumed the run each time it came up (from 48 000, 48 000 and 54 000) until its budget of three resumes in six hours
   held it, and a session lifted the hold at 13:25 (RESUME_OK 13:29:52 from 54 000). The restarts cost about 15.5 h
-  (13.7 h down, 4 617 steps replayed). 300 000 is due ≈ 2026-10-29 14:00–22:00 CET, 19–27 h inside the calendar end.
-  This line said MINTED until the launch.
+  (13.7 h down, 4 617 steps replayed). Two more (10-25 20:40, 10-26 11:35 CET) were resumed unattended under the
+  guard's boot rule (a resume after a container restart no longer counts toward its crash budget), about 1.7 h more.
+  It ran 2 450–2 510 steps/h with its cells. This line said MINTED until the launch and LIVE until the futility stop.
 - **run14 is STOPPED at 372 000 (R400(a); CARD-RUN14):** stopped 2026-10-22 23:09:40 CEST on box A by the stop
   marker and one SIGTERM after its 372 000 save; stop save `run14_00372000_241db7a3` (weights equal to the periodic
   `run14_00372000_38a547a0`), mirrored and sha-checked, the monitor's last read clean. Box A restarted 2026-10-22
@@ -924,3 +929,5 @@ The R402 paragraph, run15's run line and the latest-ruling line were written 202
 `run14-go` over `origin/dev` `e6e902fd`, from the rulings' texts and the mint (`configs/run15.yaml`).
 run15's LIVE run line and the R402 paragraph's last sentence were written 2026-10-24 on branch `run14-go` over
 `origin/dev` `d6a8cc9f`, from box A's launch log, guard log, stop-test log and trainer events.
+run15's STOPPED run line was written 2026-10-27 on branch `run14-go` over `origin/dev` `207a21a4`, from box A's
+`lines/futility.json`, `lines/lines.json`, guard log and cell sidecars.

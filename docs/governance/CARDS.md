@@ -41,8 +41,12 @@ Both were found by running the gate set rather than by reading it, and both are 
 R402 also moves, in place: CARD-DEPLOY-WEB (L4's read and timing, fp16 out, by (f)) and CARD-NET-EXPAND (depth
 built and riding run15, with R401). CARD-PATH-CONSISTENCY stays open at null by (a).
 
-- **CARD-RUN15 [RUN15-GO] — LIVE 2026-10-24 01:18:22 CEST on box A from `d6a8cc9f` (R401(c), R402(b)); minted
-  2026-10-23.**
+- **CARD-RUN15 [RUN15-GO] — STOPPED at 157 980 by futility 2026-10-27 09:11:39 CET (R402(d)(ii)); the end read runs
+  on box A. LIVE from 2026-10-24 01:18:22 CEST on box A from `d6a8cc9f` (R401(c), R402(b)); minted 2026-10-23.**
+  Futility: pooled 120k–156k rung 16 0.611 (156k read 0.619) against the reference's pooled 0.629, −0.078 logit, where
+  above +0.10 was asked. The window missed: pooled 96k–132k 0.590, −0.164 against GO at +0.17. run15's rung 16 rose
+  over 48k–144k (+0.032 logit per 12k, its one-sided lower bound +0.017) and met the reference only at 144k (0.633).
+  Two more container restarts (10-25 20:40, 10-26 11:35 CET) were resumed unattended under the guard's boot rule.
   `configs/run15.yaml`: the net of record `run14avg_00372000_647f0497` deepened to 6×256 (`deepen6_00000000_e4f4c52a`,
   sha256 `bc45d80f…`, net_hash `69cfcc3b…`), `identity.warm_start` reinit `[]`, run14's final ring preloaded
   (`run14_00372000_241db7a3.ckpt.ring.bin`, v5, sha256 `7745d915…`), lr 1e-3 → 1e-4 over `scheduler_t_max` 300 000,
