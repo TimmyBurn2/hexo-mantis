@@ -148,7 +148,7 @@ test("an interrupt that lands while the position is set up stops the request bef
   assert.equal(posted.length, 1);
 });
 
-test("an id reused while its first request is in flight still interrupts the second, whichever step it is at", async () => {
+test("an id reused while its first request is in flight still interrupts the second during its setup", async () => {
   let release!: () => void;
   let turns = 0;
   const { posted, send, settle, holdNewGame } = harness(() => new Promise<TurnResult>((resolve) => {
@@ -169,6 +169,46 @@ test("an id reused while its first request is in flight still interrupts the sec
   await settle();
   assert.equal(turns, 1, "the second request with id 1 was played after its interrupt");
   assert.equal(posted.length, 2, "only the capabilities and the first answer were posted");
+});
+
+test("an interrupt covers only the requests pending when it lands: a reuse of its id that arrives after is answered", async () => {
+  let release!: () => void;
+  let turns = 0;
+  const { posted, send, settle } = harness(() => new Promise<TurnResult>((resolve) => {
+    turns += 1;
+    if (turns === 1) release = () => resolve(turnOf([stone(2, -1), stone(-1, 1)]));
+    else resolve(turnOf([stone(3, -1), stone(-1, 2)]));
+  }));
+  send(SETUP);
+  send(REQUEST);
+  await settle();
+  send(INTERRUPT);
+  send(SETUP);
+  send(REQUEST);
+  release();
+  await settle();
+  assert.equal(turns, 2);
+  assert.deepEqual(posted.slice(1).map((p) => (p as { request_id: number }).request_id), [1], "only the second is answered");
+});
+
+test("an interrupt of an id with two requests pending drops both", async () => {
+  let release!: () => void;
+  let turns = 0;
+  const { posted, send, settle } = harness(() => new Promise<TurnResult>((resolve) => {
+    turns += 1;
+    if (turns === 1) release = () => resolve(turnOf([stone(2, -1), stone(-1, 1)]));
+    else resolve(turnOf([stone(3, -1), stone(-1, 2)]));
+  }));
+  send(SETUP);
+  send(REQUEST);
+  send(SETUP);
+  send(REQUEST);
+  await settle();
+  send(INTERRUPT);
+  release();
+  await settle();
+  assert.equal(turns, 1, "the second request was played after the interrupt that covered it");
+  assert.equal(posted.length, 1, "only the capabilities were posted");
 });
 
 test("after a refused position, a request with no new setup is refused rather than played onto the old game", async () => {

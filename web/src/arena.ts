@@ -64,7 +64,8 @@ export function attachArena(port: Port, engine: Engine, version: string): void {
   let stale = false;
   // A count per id, so a request reusing the id of one still in flight stays interruptible after the first ends.
   const queued = new Map<number, number>();
-  const interrupted = new Set<number>();
+  // How many of an id's pending requests an interrupt covered: the oldest, since the queue runs in order.
+  const interrupted = new Map<number, number>();
   const occupied = new Set<string>();
   let queue: Promise<void> = Promise.resolve();
 
@@ -72,7 +73,7 @@ export function attachArena(port: Port, engine: Engine, version: string): void {
     request_id?: number }): Promise<void> => {
     const id = packet.request_id;
     // An interrupted request is never started, played on or answered: the slot would count its answer a stray.
-    const dropped = () => cancelled || (id !== undefined && interrupted.has(id));
+    const dropped = () => cancelled || (id !== undefined && (interrupted.get(id) ?? 0) > 0);
     outstanding = id;
     inFlight = true;
     cancelled = false;
@@ -109,12 +110,10 @@ export function attachArena(port: Port, engine: Engine, version: string): void {
       outstanding = undefined;
       inFlight = false;
       if (id !== undefined) {
-        const left = (queued.get(id) ?? 1) - 1;
-        if (left > 0) {
-          queued.set(id, left);
-        } else {
-          queued.delete(id);
-          interrupted.delete(id);
+        for (const counts of [queued, interrupted]) {
+          const left = (counts.get(id) ?? 0) - 1;
+          if (left > 0) counts.set(id, left);
+          else counts.delete(id);
         }
       }
     }
@@ -130,8 +129,9 @@ export function attachArena(port: Port, engine: Engine, version: string): void {
         occupied.clear();
       });
     } else if (packet.type === "interrupt") {
-      // Only an id still queued or in flight is marked, until its last request ends: a later reuse is never dropped.
-      if (packet.request_id !== undefined && queued.has(packet.request_id)) interrupted.add(packet.request_id);
+      // It covers the requests with its id pending as it lands, never one that reuses the id after.
+      const id = packet.request_id;
+      if (id !== undefined && queued.has(id)) interrupted.set(id, queued.get(id) ?? 0);
       if (packet.request_id === undefined && inFlight) cancelled = true;
       if (packet.request_id === undefined || packet.request_id === outstanding) engine.abort();
     } else if (packet.type === "move_request") {
