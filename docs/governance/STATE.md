@@ -21,6 +21,8 @@ saves against run14avg's idle cells. A band or exam halt stays halted for a huma
 waits for desk time and is not on run15's path.** (RULINGS R402 and R401; the R400 paragraph below stands where they
 do not move it.) TVW-1's null leaves R400(c)'s likeliest cause unsupported on value CE; a calibration effect remains
 (temperature 1.37 v 1.51). run15 is CLOSED: STOPPED at 157 980 by its futility line (2026-10-27 09:11 CET), its end read (on the desk, box A destroyed) found NO WINNER, so `run14avg_00372000_647f0497` stays the net of record (CARD-RUN15).
+DEPLOY-WEB's L4 exited on 2026-10-31 on the desk: its clock line and its strength line against Six n128 both pass,
+each known-bad valid; the browser at 10 s a turn reads 0.701 against the native head's 0.674 (CARD-DEPLOY-WEB).
 
 **R400 (2026-10-22): RUN14 STOPS; THE LINEAGE'S TRAINING CLOSES; THE STRENGTH LEFT IS IN THE BROWSER'S BUDGET. run14
 stops at its next complete save, before its cycle's end: its restart bump was its only gain, its last ten cells read
@@ -60,7 +62,7 @@ machine, `RustForward` and the wasm32 engine landed (contract #13 v3, manifest v
 head in the shipped tactics posture and W2 holds `RustForward` to the fp32 ONNX, on run13's 120k too. L3 is next.
 DEPLOY-WEB's L3 exited on 2026-10-21: the `web/` package and gate 21 landed. Its WebGPU measurement first missed the
 placement line (two G-sized zeros on the CPU EP); by the operator's word the exporter re-expressed them, and the
-re-measurement on the same lines passes all three (CARD-DEPLOY-WEB). L4 (bench + read) is next.
+re-measurement on the same lines passes all three (CARD-DEPLOY-WEB). L4 exited on 2026-10-31 (above).
 
 **R398 (2026-10-20): THE BOT SHIPS AS ONE WASM ENGINE WITH TWO NET BACKENDS, WITNESSED FROM THE STAMP. RESEARCH-WEB
 is accepted: the served path's ONNX passes golden equality, ORT's ScatterND(add) races under threads while the

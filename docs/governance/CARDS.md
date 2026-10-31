@@ -134,7 +134,8 @@ R399 also moves, in place: CARD-DEPLOY-WEB (its L0 design stands, its eight open
 
 - **CARD-WEB-MEASURED-RHO — CARDED by R399(f) (2026-10-21), not now: a measured-ρ budget estimator for the web
   player.** Admissible only after DEPLOY-WEB L4's clock line reads zero overruns at ρ = 1 on the desk. Until then ρ = 1,
-  and the 21–27 % fewer sims are the first release's price.
+  and the 21–27 % fewer sims are the first release's price. L4's clock line read zero overruns at ρ = 1 on the desk
+  (2026-10-31), so it is now admissible.
 
 ## Opened by R398 (THE BOT SHIPS AS ONE WASM ENGINE WITH TWO NET BACKENDS, WITNESSED FROM THE STAMP; 2026-10-20) — the browser bot's shape, the arena's side, the later cards
 
@@ -175,9 +176,17 @@ CARD-SAVE-AVERAGING-OFFLINE (EXECUTING on the desk, by (c)). (d) records the pro
 run14: the opponent/next-ply policy aux, PCZero path consistency, policy-surprise weighting, HL-Gauss, Net2Net
 deepening, MCGS at deploy, proof-verified start pools and DENSE-1's L2–L4.
 
-- **CARD-DEPLOY-WEB — L4 WAITS for desk time by R402(f) (2026-10-23): it is not on run15's path and runs when the
-  desk can stay on for ~36 h; fp16 is OUT. Was: L3 EXITED 2026-10-21 on branch `deploy-web`; L4 (bench + read) is
-  next.** L3 landed the
+- **CARD-DEPLOY-WEB — L4 EXITED 2026-10-31 on branch `deploy-web`: the clock and strength lines PASS, each
+  known-bad valid, no HALT; the licence and the package name before the first tag remain. Was: L4 WAITS for desk
+  time by R402(f) (2026-10-23); before that L3 EXITED 2026-10-21.** L4 (pre-stated; local records
+  `mantis-records/deploy-web/l4/`) played run14avg's fp32 export in headless Chromium on the desk's RTX 3070 against
+  Six gen0455 at 128 nodes. Clock: no clock loss in any B cell or in S; p99 at most 0.781 T (the CPU path at 5 s), S
+  0.606 T over 5 801 turns; K1, given 2T and judged at T, read p99 1.14 T with 11 overruns. Strength: S at 10 s a turn
+  0.701 [0.648, 0.750] over 288 games against the native head at S's median 396 sims 0.674 [0.635, 0.712] over 576,
+  Δ logit +0.125; K2 at 8 sims 0.255. Bench: WebGPU ~18 ms a leaf and median sims a stone 197 / 440 / 898 at
+  5 / 10 / 20 s; the one-thread CPU path ~56 ms a leaf, 31 / 62 / 121, a 4.5 s minimum turn. The engine's wasm memory
+  grows over a page's games (392 MB after K2's 96 games at 8 sims), unexplained, so a long session's ceiling is open.
+  The arena adapter's interrupt drops only the requests pending as it lands. **Before that:** L3 landed the
   `web/` package (contract #13 v4: the typed API, the Worker, both backends, selection and the on-device witness, the
   arena adapter, the demo, `release.sh`, the WebGPU witness runner) and gate 21 (W2 in wasm and its break). §3.3's
   measurement (pre-stated; local records `mantis-records/deploy-web/l3/`) first MISSED its placement line on run13's
@@ -191,11 +200,12 @@ deepening, MCGS at deploy, proof-verified start pools and DENSE-1's L2–L4.
   and 6 layers on the tiny stamps; the shipped net is chosen at run15's end. R402(f) (2026-10-23): L4 is not on run15's
   path and runs when the desk can stay on for ~36 h. Its read: the bench and the clock line first, then the strength
   line against Six n128 at 288 games (a parity check that must catch a bug-sized loss); the Bubble equal-time read is
-  carded (CARD-WEB-BUBBLE-EQUAL-TIME); no parallel pages. fp16 is OUT (|Δ value| 2.69e-3 on run14avg's export, as R402(f) cites it; 2.75e-3
-  in L1's read on run13's 120k, against R399(a)'s 2e-3), and its known-bad requirement lapses with it. The depth pins get their fresh review inside L4's; this card's export
-  candidate is `run14avg_00372000_647f0497`; the request-id finding is fixed in L4. The licence and the package name
-  are the operator's before the first tag, after run15's pick. At a run15 futility stop, box A plays L4's native
-  comparison cells and the Bubble read on the idle card. **Was: L3 HALTED at the placement line;
+  carded (CARD-WEB-BUBBLE-EQUAL-TIME); no parallel pages. fp16 is OUT (|Δ value| 2.69e-3 on run14avg's export, as
+  R402(f) cites it; 2.75e-3 in L1's read on run13's 120k, against R399(a)'s 2e-3), and its known-bad requirement
+  lapses with it. The depth pins get their fresh review inside L4's; this card's export candidate is
+  `run14avg_00372000_647f0497`; the request-id finding is fixed in L4. The licence and the package name are the
+  operator's before the first tag, after run15's pick. At a run15 futility stop, box A plays L4's native comparison
+  cells and the Bubble read on the idle card. **Was: L3 HALTED at the placement line;
   before that L2 EXITED 2026-10-21; L3 next.** L2 landed the
   player's per-stone step machine, the per-game cache port, the clock budget, `with_pool` / `armed_sims_for`,
   `RustForward`, the wasm32 `Engine` and manifest v2 (contract #13 v3); W3 and the served-sims pin join the protected
