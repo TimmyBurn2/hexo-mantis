@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Release (design §10), after the operator's words on the licence, the name and the stamp of record: the stamp exported
-# on a clean tree into dist/net, the package built and its node tests run on the real files, the WebGPU witness on
-# this desk, then `npm pack`. Publishing is the operator's act; this hands over the tarball and its sha256.
+# Release (design §10): the stamp exported on a clean tree into dist/net, the package built and its node tests run on
+# the real files, the WebGPU witness on this desk, then `npm pack` with the licence and the third-party notices.
+# The tarball and its sha256 go to a GitHub release; `private` keeps it off the npm registry.
 # Usage: web/scripts/release.sh STAMP.ckpt
 set -euo pipefail
 stamp="$1"
@@ -14,7 +14,7 @@ fi
 (cd "$web" && npm ci --no-audit --no-fund --loglevel=error)
 make -C "$root" --no-print-directory web
 reference="$(mktemp --suffix=.json)"
-trap 'rm -f "$reference"' EXIT
+trap 'rm -f "$reference" "$web/LICENSE" "$web/THIRD_PARTY_LICENSES.txt"' EXIT
 (cd "$root" && ORT_DISABLE_TELEMETRY=1 uv run --no-sync python tools/export_web.py --checkpoint "$stamp" \
     --out "$web/dist/net" --reference "$reference")
 manifest="$(basename "$stamp" .ckpt).manifest.json"
@@ -33,5 +33,19 @@ const r = require(process.argv[1]);
 const failed = !r.ok || r.thirdPartyFetches.length > 0 || !Object.values(r.witness).every((w) => w.pass);
 if (failed) { console.error("release.sh: the WebGPU witness failed", JSON.stringify(r.witness)); process.exit(1); }
 ' "$web/dist/webgpu_witness.json"
+cp "$root/LICENSE" "$web/LICENSE"
+# MIT asks every copy to carry its notices: ONNX Runtime Web's, and each crate's compiled into the wasm.
+{
+    printf '== onnxruntime-web %s (MIT)\n\nMIT License\n\nCopyright (c) Microsoft Corporation\n\n' \
+        "$(node -p 'require(process.argv[1]).version' "$web/node_modules/onnxruntime-web/package.json")"
+    tail -n +5 "$root/LICENSE"
+    (cd "$root" && cargo tree -p mantis-player --target wasm32-unknown-unknown -e normal --prefix none -f '{p}|{l}') |
+        sed 's/ (\*)$//' | sort -u | grep -v -e '^mantis-' -e '(proc-macro)' | while IFS='|' read -r pkg licence; do
+        dir="$(ls -d "${CARGO_HOME:-$HOME/.cargo}"/registry/src/*/"${pkg% v*}-${pkg##* v}" | head -1)"
+        printf '\n== %s (%s)\n\n' "$pkg" "$licence"
+        cat "$dir"/LICENSE-MIT 2>/dev/null || cat "$dir"/LICENSE* 2>/dev/null ||
+            printf 'The crate ships no licence file; the MIT text above applies. Its %s\n' "$(grep -m1 '^authors' "$dir/Cargo.toml")"
+    done
+} > "$web/THIRD_PARTY_LICENSES.txt"
 (cd "$web" && npm pack --pack-destination "$web/dist")
 sha256sum "$web"/dist/*.tgz
