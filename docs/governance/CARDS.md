@@ -178,18 +178,20 @@ deepening, MCGS at deploy, proof-verified start pools and DENSE-1's L2–L4.
 
 - **CARD-DEPLOY-WEB — L4 EXITED 2026-10-31 on branch `deploy-web`: the clock and strength lines PASS, each known-bad
   valid, no HALT. The release is decided (the operator, 2026-11-01/02): MIT with the weights, `hexo-mantis` 0.1.0 as a
-  tarball on a GitHub release, never npm (DEPLOY_WEB §10). A per-game trace reads the wasm memory as a high-water mark,
-  flat after a page's first games, not a leak (local records `mantis-records/deploy-web/release/`). Was: L4 WAITS for
-  desk time by R402(f) (2026-10-23); before that L3 EXITED 2026-10-21.** L4 (pre-stated; local records
-  `mantis-records/deploy-web/l4/`) played run14avg's fp32 export in headless Chromium on the desk's RTX 3070 against Six
-  gen0455 at 128 nodes. S ran in three page sessions after a desk reboot and a shutdown, its parts alike (READ.md).
-  Clock: no clock loss in any B cell or in S; p99 at most 0.781 T (the CPU path at 5 s), S 0.606 T over 5 801 turns; K1,
-  given 2T and judged at T, read p99 1.14 T with 11 overruns. Strength: S at 10 s a turn 0.701 [0.648, 0.750] over 288
-  games against the native head at S's median 396 sims 0.674 [0.635, 0.712] over 576, Δ logit +0.125; K2 at 8 sims
-  0.255. Bench: WebGPU ~18 ms a leaf and median sims a stone 197 / 440 / 898 at 5 / 10 / 20 s; the one-thread CPU path
-  ~56 ms a leaf, 31 / 62 / 121, a 4.5 s minimum turn. The engine's wasm memory grows over a page's games (392 MB after
-  K2's 96 games at 8 sims), unexplained then; the release's trace reads it as a high-water mark (above). The arena
-  adapter's interrupt drops only the requests pending as it lands.
+  tarball on a GitHub release, never npm (DEPLOY_WEB §10). Tagged `web-v0.1.0` at `00845838` (tarball sha256
+  `c0216d3e…`, 13.3 MB; W1 on WebGPU 4.39e-5, 511/511; 32 node tests); its GitHub release is drafted, and publishing it
+  is the operator's act. A per-game trace reads the wasm memory as a high-water mark, flat after a page's first games,
+  not a leak (local records `mantis-records/deploy-web/release/`). Was: L4 WAITS for desk time by R402(f) (2026-10-23);
+  before that L3 EXITED 2026-10-21.** L4 (pre-stated; local records `mantis-records/deploy-web/l4/`) played run14avg's
+  fp32 export in headless Chromium on the desk's RTX 3070 against Six gen0455 at 128 nodes. S ran in three page sessions
+  after a desk reboot and a shutdown, its parts alike (READ.md). Clock: no clock loss in any B cell or in S; p99 at most
+  0.781 T (the CPU path at 5 s), S 0.606 T over 5 801 turns; K1, given 2T and judged at T, read p99 1.14 T with 11
+  overruns. Strength: S at 10 s a turn 0.701 [0.648, 0.750] over 288 games against the native head at S's median 396
+  sims 0.674 [0.635, 0.712] over 576, Δ logit +0.125; K2 at 8 sims 0.255. Bench: WebGPU ~18 ms a leaf and median sims a
+  stone 197 / 440 / 898 at 5 / 10 / 20 s; the one-thread CPU path ~56 ms a leaf, 31 / 62 / 121, a 4.5 s minimum turn.
+  The engine's wasm memory grows over a page's games (392 MB after K2's 96 games at 8 sims), unexplained then; the
+  release's trace reads it as a high-water mark (above). The arena adapter's interrupt drops only the requests pending
+  as it lands.
   **Before that:** L3 landed the `web/` package (contract #13 v4: the typed API, the Worker, both backends,
   selection and the on-device witness, the
   arena adapter, the demo, `release.sh`, the WebGPU witness runner) and gate 21 (W2 in wasm and its break). §3.3's
