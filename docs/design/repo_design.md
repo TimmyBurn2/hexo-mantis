@@ -1393,7 +1393,7 @@ is superseded: the follower's `FOLLOW_UNITS` are the rulers.
    it was move-identical to the CPU, game for game, at ~9x the speed; the S units on record before the break stay on
    the CPU. The ladder VPS is out of the instrument's reckoning: nothing runs there until a net is finished.
 
-### AMENDMENT — R398(b)–(c), R399, DEPLOY-WEB L3: the browser package `web/`, its gate and its demo page
+### AMENDMENT — R398(b)–(c), R399, DEPLOY-WEB: the browser package `web/`, its gate, its demo page and its release
 
 1. **What lands.** `web/` is an npm package (TypeScript 6, node 26 strips its types for the tests): `src/` (the typed
    API, the Worker that owns the wasm engine, the two backends with selection and the on-device witness, the arena's

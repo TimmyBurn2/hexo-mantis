@@ -75,8 +75,8 @@ three pinned witnesses (golden equality per shipped backend and thread count, th
 parity against the Python deploy head on stub net outputs); the per-stone sims set on the device each turn, capped at
 976 and floored at 32; `MAX_NODES` a constructor parameter; no threads, no COEP. The integrator surface is a `web/`
 package in this repository with contract #13; the arena's CSP, its play mode and the asset serving are the operator's,
-as was the licence, now decided: MIT, released as `hexo-mantis` on GitHub (DEPLOY_WEB §10). SAVE-AVG is closed; run14's
-end read is one line, the uniform average of
+as was the licence, now decided: MIT, to be released as `hexo-mantis` on GitHub (DEPLOY_WEB §10; no tag yet). SAVE-AVG
+is closed; run14's end read is one line, the uniform average of
 its last eight saves against the pick's cells replayed on the same host and tree; run13's pick is 120k.** (RULINGS
 R398; the R397 paragraph below stands where R398 does not move it.) DEPLOY-WEB's L0 design doc is
 `docs/design/DEPLOY_WEB_2026-10-20.md`.
