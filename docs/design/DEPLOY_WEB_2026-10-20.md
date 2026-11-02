@@ -65,8 +65,8 @@ it. It orders nothing until the architect's word before L1.
    - a typed API (`newGame`, `play`, `playTurn`, `analyse`, `abort`);
    - the arena's analysis-slot packet adapter, a demo page with the LAW-18 rows, and node tests.
 
-   It is released as an npm package from a tag, with the net files beside the code inside it: "every byte ships in the
-   package", as the packet reads R398(c)'s "beside it". The integrator serves those files from its own origin, so
+   It is released as an npm-packed tarball on a GitHub release from a tag (never the npm registry), with the net files
+   beside the code inside it: "every byte ships in the package", as the packet reads R398(c)'s "beside it". The integrator serves those files from its own origin, so
    nothing is fetched from a third party at runtime. Contract #13 is `docs/contracts/web_engine.md`.
 10. **Bad news first:**
     - The shipped WebGPU graph is unmeasured on WebGPU. Its expanded scatter index is [E, H], about 116 MB of int32 at
@@ -811,11 +811,10 @@ repo_design §1 and CLAUDE.md's map line.
 A release is reproducible from three names in the manifest: the stamp's sha256, the exporter commit, and the witness
 rows.
 
-1. **The operator's words first:**
-   - the licence of the released artefacts (§13 O2);
-   - the package's name and scope;
-   - the stamp of record. It is run14's pick by R398(e), or the uniform average of its last eight saves if that average
-     wins the end read; such a stamp is lineage `avg(run14:…)`. run13's 120k is the development net until then.
+1. **The operator's words first** (given 2026-11-01 and 2026-11-02):
+   - the licence of the released artefacts: MIT, the net's weights included (§13 O2);
+   - the package's name: `hexo-mantis`, unscoped, kept `"private"` so npm refuses a publish;
+   - the stamp of record: `run14avg_00372000_647f0497` (R400; run15 closed with no winner).
 2. **Export.** On a clean tree at the release commit: `tools/export_web.py --checkpoint <stamp> --out web/dist/net/`.
    This writes the export rows. Any gating W1 or W2 miss is a HALT: report it, never patch the net.
 3. **Build.** `web/scripts/release.sh` refuses a manifest with `dirty: true`. It builds the package, then runs the
@@ -823,10 +822,11 @@ rows.
 4. **WebGPU witness on the desk.** Headless Chromium (`/usr/lib/chromium/chromium`, `--disable-vulkan-surface`), with
    an 8-s pause between WebGPU launches and an adapter check that refuses SwiftShader (RESEARCH-WEB's traps), on a
    non-isolated page. It writes the `ort-web-webgpu` rows for each shipped ONNX.
-5. **Pack and tag.** `npm pack` writes the tarball (npm fixes the tar's mtimes). The tarball's sha256 goes into the
-   release record. The tag is `web-v<semver>` on that commit.
-6. **Publish.** Publishing to the npm registry is outward-facing and is the operator's act. The session hands over the
-   tarball and its sha256.
+5. **Pack and tag.** `npm pack` writes the tarball (npm fixes the tar's mtimes) with the repository's LICENSE and a
+   generated `THIRD_PARTY_LICENSES.txt` (ONNX Runtime Web and each crate in the wasm). The tarball's sha256 goes into
+   the release record. The tag is `web-v<semver>` on that commit.
+6. **Publish.** The session drafts a GitHub release on the tag with the tarball and its sha256; publishing the draft
+   is outward-facing and is the operator's act.
 
 The net files are built at release and live in the tarball and the mirror. They are never committed.
 
@@ -891,11 +891,9 @@ Every leg ends with `make gates` and a fresh read-only review. L2's two sessions
     (§2.5, §13 A4).
 
   COEP stays off.
-- **O2 — the licence** before the first tag.
-  - The source in this repository is MIT (`pyproject.toml`); the released artefacts include the net's weights, whose
-    licence is the operator's decision.
-  - Until then `package.json` stays `"private": true`, with no licence field claimed.
-  - Also the package's name and scope, the npm account that publishes it, and the publish itself.
+- **O2 — the licence** before the first tag. DECIDED by the operator (2026-11-01): MIT, the weights included; the
+  package is `hexo-mantis` on a GitHub release, never the npm registry (§10).
+  - The source in this repository is MIT (`pyproject.toml`); the released artefacts include the net's weights.
 - **O3 — a laptop for L4**, if there is one.
 
 **The architect's, ruled by R399 (2026-10-21).** Each item carries its ruling.
