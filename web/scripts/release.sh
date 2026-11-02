@@ -15,10 +15,13 @@ fi
 make -C "$root" --no-print-directory web
 reference="$(mktemp --suffix=.json)"
 ortdir="$(mktemp -d)"
-trap 'rm -rf "$reference" "$ortdir" "$web/LICENSE" "$web/THIRD_PARTY_LICENSES.txt"' EXIT
+notices=("$web/LICENSE" "$web/THIRD_PARTY_LICENSES.txt" "$web/RUST_LIBRARY_NOTICES.html")
+trap 'rm -rf "$reference" "$ortdir" "${notices[@]}"' EXIT
 cp "$root/LICENSE" "$web/LICENSE"
 # MIT asks every copy to carry its notices: ONNX Runtime Web's with its runtime's third parties, Rust's standard library
 # and each crate compiled into the wasm. ORT's npm package ships neither file, so they come from its tag, pinned here.
+# The pinned toolchain's own notices cover the standard library and what it compiles in (hashbrown, dlmalloc, Unicode).
+cp "$(cd "$root" && rustc --print sysroot)/share/doc/rust/COPYRIGHT-library.html" "$web/RUST_LIBRARY_NOTICES.html"
 ort="$(node -p 'require(process.argv[1]).version' "$web/node_modules/onnxruntime-web/package.json")"
 if [ "$ort" != 1.30.0 ]; then
     echo "release.sh: onnxruntime-web $ort's notices are unpinned: pin their sha256 here" >&2
@@ -36,23 +39,25 @@ mit="$(tail -n +5 "$root/LICENSE")"
     printf 'Where a component offers MIT among its licences, it is used here under MIT.\n\n'
     printf '== onnxruntime-web %s (MIT), then the third-party notices of ONNX Runtime %s\n\n' "$ort" "$ort"
     cat "$ortdir/LICENSE" "$ortdir/ThirdPartyNotices.txt"
-    printf '\n== the Rust standard library (MIT OR Apache-2.0)\n\nMIT License\n\n'
-    printf 'Copyright (c) The Rust Project Contributors\n\n%s\n' "$mit"
+    printf '\n== the Rust standard library and its own dependencies: RUST_LIBRARY_NOTICES.html, beside this file\n'
     (cd "$root" && cargo tree --locked -p mantis-player --target wasm32-unknown-unknown -e normal,no-proc-macro \
-        --prefix none -f '{p}|{l}') | sed 's/ (\*)$//' | sort -u | grep -v '^mantis-' |
+        --prefix none -f '{p}|{l}') | sed 's/ (\*)$//' | LC_ALL=C sort -u | grep -v '^mantis-' |
         while IFS='|' read -r pkg licence; do
-            if [[ "$licence" != *MIT* ]]; then
-                echo "release.sh: $pkg is $licence, without MIT: write its notice by hand" >&2
-                exit 1
-            fi
+            case "$licence" in
+                "MIT" | "MIT OR Apache-2.0" | "Apache-2.0 OR MIT" | "Apache-2.0/MIT" | "Unlicense OR MIT" | \
+                    "BSD-2-Clause OR Apache-2.0 OR MIT" | "(MIT OR Apache-2.0) AND Unicode-3.0") ;;
+                *) echo "release.sh: $pkg is $licence, a licence this script never read: add it" >&2; exit 1 ;;
+            esac
             dir="$(ls -d "${CARGO_HOME:-$HOME/.cargo}"/registry/src/*/"${pkg% v*}-${pkg##* v}" | head -1)"
             printf '\n== %s (%s)\n\n' "$pkg" "$licence"
-            # The MIT text and any licence AND-ed with it; Apache is the alternative not taken.
-            mapfile -t texts < <(find "$dir" -maxdepth 1 -name 'LICENSE*' ! -name 'LICENSE-APACHE*' | sort)
+            # Every licence file but Apache's, the alternative not taken; one of them must be the MIT text.
+            mapfile -t texts < <(find "$dir" -maxdepth 1 -name 'LICENSE*' ! -name 'LICENSE-APACHE*' | LC_ALL=C sort)
             if [ "${#texts[@]}" -gt 0 ]; then
-                cat "${texts[@]}"
+                grep -q "Permission is hereby granted" "${texts[@]}" ||
+                    { echo "release.sh: $pkg's licence files hold no MIT text" >&2; exit 1; }
+                awk 1 "${texts[@]}"
             else
-                authors="$(sed -n 's/^authors = \[\(.*\)\]$/\1/p' "$dir/Cargo.toml")"
+                authors="$(sed -n 's/^authors = \[\(.*\)\]$/\1/p' "$dir/Cargo.toml" | tr -d '"')"
                 [ -n "$authors" ] || { echo "release.sh: $pkg ships no licence file and names no authors" >&2; exit 1; }
                 printf 'MIT License\n\nCopyright (c) %s\n\n%s\n' "$authors" "$mit"
             fi
