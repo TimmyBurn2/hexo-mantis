@@ -14,7 +14,50 @@ fi
 (cd "$web" && npm ci --no-audit --no-fund --loglevel=error)
 make -C "$root" --no-print-directory web
 reference="$(mktemp --suffix=.json)"
-trap 'rm -f "$reference" "$web/LICENSE" "$web/THIRD_PARTY_LICENSES.txt"' EXIT
+ortdir="$(mktemp -d)"
+trap 'rm -rf "$reference" "$ortdir" "$web/LICENSE" "$web/THIRD_PARTY_LICENSES.txt"' EXIT
+cp "$root/LICENSE" "$web/LICENSE"
+# MIT asks every copy to carry its notices: ONNX Runtime Web's with its runtime's third parties, Rust's standard library
+# and each crate compiled into the wasm. ORT's npm package ships neither file, so they come from its tag, pinned here.
+ort="$(node -p 'require(process.argv[1]).version' "$web/node_modules/onnxruntime-web/package.json")"
+if [ "$ort" != 1.30.0 ]; then
+    echo "release.sh: onnxruntime-web $ort's notices are unpinned: pin their sha256 here" >&2
+    exit 2
+fi
+for f in LICENSE ThirdPartyNotices.txt; do
+    curl -sSfL -o "$ortdir/$f" "https://raw.githubusercontent.com/microsoft/onnxruntime/v$ort/$f"
+done
+(cd "$ortdir" && sha256sum --check --quiet) <<'EOF'
+2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c  LICENSE
+143764b952fdb1a7c69ce653bfba74a7744d6a8a573bfb73e235fba356c83de3  ThirdPartyNotices.txt
+EOF
+mit="$(tail -n +5 "$root/LICENSE")"
+{
+    printf 'Where a component offers MIT among its licences, it is used here under MIT.\n\n'
+    printf '== onnxruntime-web %s (MIT), then the third-party notices of ONNX Runtime %s\n\n' "$ort" "$ort"
+    cat "$ortdir/LICENSE" "$ortdir/ThirdPartyNotices.txt"
+    printf '\n== the Rust standard library (MIT OR Apache-2.0)\n\nMIT License\n\n'
+    printf 'Copyright (c) The Rust Project Contributors\n\n%s\n' "$mit"
+    (cd "$root" && cargo tree --locked -p mantis-player --target wasm32-unknown-unknown -e normal,no-proc-macro \
+        --prefix none -f '{p}|{l}') | sed 's/ (\*)$//' | sort -u | grep -v '^mantis-' |
+        while IFS='|' read -r pkg licence; do
+            if [[ "$licence" != *MIT* ]]; then
+                echo "release.sh: $pkg is $licence, without MIT: write its notice by hand" >&2
+                exit 1
+            fi
+            dir="$(ls -d "${CARGO_HOME:-$HOME/.cargo}"/registry/src/*/"${pkg% v*}-${pkg##* v}" | head -1)"
+            printf '\n== %s (%s)\n\n' "$pkg" "$licence"
+            # The MIT text and any licence AND-ed with it; Apache is the alternative not taken.
+            mapfile -t texts < <(find "$dir" -maxdepth 1 -name 'LICENSE*' ! -name 'LICENSE-APACHE*' | sort)
+            if [ "${#texts[@]}" -gt 0 ]; then
+                cat "${texts[@]}"
+            else
+                authors="$(sed -n 's/^authors = \[\(.*\)\]$/\1/p' "$dir/Cargo.toml")"
+                [ -n "$authors" ] || { echo "release.sh: $pkg ships no licence file and names no authors" >&2; exit 1; }
+                printf 'MIT License\n\nCopyright (c) %s\n\n%s\n' "$authors" "$mit"
+            fi
+        done
+} > "$web/THIRD_PARTY_LICENSES.txt"
 (cd "$root" && ORT_DISABLE_TELEMETRY=1 uv run --no-sync python tools/export_web.py --checkpoint "$stamp" \
     --out "$web/dist/net" --reference "$reference")
 manifest="$(basename "$stamp" .ckpt).manifest.json"
@@ -33,19 +76,5 @@ const r = require(process.argv[1]);
 const failed = !r.ok || r.thirdPartyFetches.length > 0 || !Object.values(r.witness).every((w) => w.pass);
 if (failed) { console.error("release.sh: the WebGPU witness failed", JSON.stringify(r.witness)); process.exit(1); }
 ' "$web/dist/webgpu_witness.json"
-cp "$root/LICENSE" "$web/LICENSE"
-# MIT asks every copy to carry its notices: ONNX Runtime Web's, and each crate's compiled into the wasm.
-{
-    printf '== onnxruntime-web %s (MIT)\n\nMIT License\n\nCopyright (c) Microsoft Corporation\n\n' \
-        "$(node -p 'require(process.argv[1]).version' "$web/node_modules/onnxruntime-web/package.json")"
-    tail -n +5 "$root/LICENSE"
-    (cd "$root" && cargo tree -p mantis-player --target wasm32-unknown-unknown -e normal --prefix none -f '{p}|{l}') |
-        sed 's/ (\*)$//' | sort -u | grep -v -e '^mantis-' -e '(proc-macro)' | while IFS='|' read -r pkg licence; do
-        dir="$(ls -d "${CARGO_HOME:-$HOME/.cargo}"/registry/src/*/"${pkg% v*}-${pkg##* v}" | head -1)"
-        printf '\n== %s (%s)\n\n' "$pkg" "$licence"
-        cat "$dir"/LICENSE-MIT 2>/dev/null || cat "$dir"/LICENSE* 2>/dev/null ||
-            printf 'The crate ships no licence file; the MIT text above applies. Its %s\n' "$(grep -m1 '^authors' "$dir/Cargo.toml")"
-    done
-} > "$web/THIRD_PARTY_LICENSES.txt"
 (cd "$web" && npm pack --pack-destination "$web/dist")
 sha256sum "$web"/dist/*.tgz
