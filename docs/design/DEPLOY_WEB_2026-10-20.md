@@ -614,7 +614,7 @@ rows are a release step (§10).
 
 ```
 web/
-├── package.json          # "private": true until the operator's release word (§13 O2)
+├── package.json          # "private": true, so npm refuses a publish (§10)
 ├── package-lock.json     # onnxruntime-web (exact), typescript, puppeteer-core (dev, release witness only)
 ├── tsconfig.json
 ├── src/
@@ -774,8 +774,8 @@ The adapter speaks the analysis slot's `postMessage` packets, as RESEARCH-WEB Q3
   build is gated from L2 on.
 
 **L3:**
-- **repo_design §1:** `web/  # the browser package: Worker, typed API, backends, arena adapter, demo, node tests; npm
-  from a tag`, and the Makefile comment's target list gains `web`.
+- **repo_design §1:** `web/  # the browser package: Worker, typed API, backends, arena adapter, demo, node tests; a
+  tarball on a GitHub release from a tag`, and the Makefile comment's target list gains `web`.
 - **"Deliberately absent"** (repo_design §1 and CLAUDE.md) names the demo page as admitted by R398(c), with no run
   input. CLAUDE.md's "One ruled exception exists" becomes two.
 - **repo_design §7:** `make web` builds the player for wasm32 (`+simd128`) and runs wasm-bindgen. The wasm-only
@@ -823,7 +823,9 @@ rows.
    an 8-s pause between WebGPU launches and an adapter check that refuses SwiftShader (RESEARCH-WEB's traps), on a
    non-isolated page. It writes the `ort-web-webgpu` rows for each shipped ONNX.
 5. **Pack and tag.** `npm pack` writes the tarball (npm fixes the tar's mtimes) with the repository's LICENSE and a
-   generated `THIRD_PARTY_LICENSES.txt` (ONNX Runtime Web and each crate in the wasm). The tarball's sha256 goes into
+   generated `THIRD_PARTY_LICENSES.txt`: ONNX Runtime Web's licence and its runtime's third-party notices (fetched
+   from its tag, pinned by sha256), the Rust standard library's, and each crate's compiled into the wasm. The tarball's
+   sha256 goes into
    the release record. The tag is `web-v<semver>` on that commit.
 6. **Publish.** The session drafts a GitHub release on the tag with the tarball and its sha256; publishing the draft
    is outward-facing and is the operator's act.

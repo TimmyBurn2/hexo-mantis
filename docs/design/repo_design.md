@@ -60,7 +60,7 @@ hexo-mantis/
 │   └── governance/             # LAWS, STATE, RULINGS, CARDS, falsified register
 │       └── archive/            # FROZEN pre-R346 registers; never edited, never current
 ├── web/                        # the browser package: Worker, typed API, backends, arena adapter, demo,
-│                               #   node tests; npm from a tag (DEPLOY-WEB L3, the amendment at the foot)
+│                               #   node tests; a tarball on a GitHub release (DEPLOY-WEB, amendment at foot)
 ├── tools/                      # dev-only: mint_config, hardcode_scan, bench floors data
 ├── vendor/                     # pins.toml (url+sha+patch) + `make vendor` fetcher; no
 │                               #   submodules, no loose weights
@@ -1411,4 +1411,7 @@ is superseded: the follower's `FOLLOW_UNITS` are the rulers.
 4. **The demo page is admitted (R398(c)).** `web/demo/` plays a person against the engine on a local static server
    and shows the per-turn LAW-18 rows. It reads no run record, connects to no run and adds no producer; it is the
    second ruled exception to §1's absent display surfaces, beside `make dash`.
+5. **The release (operator, 2026-11-01/02).** `release.sh` packs `hexo-mantis` under MIT with the third-party notices,
+   and the tarball goes to a GitHub release from a `web-v<semver>` tag; `"private": true` keeps it off the npm
+   registry.
 
