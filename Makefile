@@ -56,7 +56,7 @@ bench.baseline:
 	cargo bench -p mantis-core --bench smoke_bench --locked -- --save-baseline local --warm-up-time 0.5 --measurement-time 1
 
 check.wasm:
-	cargo check -p mantis-graph -p mantis-player --target wasm32-unknown-unknown --locked
+	cargo check -p mantis-graph -p mantis-player --lib --target wasm32-unknown-unknown --locked
 
 # The browser package's engine: the player for wasm32 (+simd128) and its bindgen glue (web/scripts/build.sh).
 web:

@@ -11,7 +11,7 @@ if [ "$have" != "$want" ]; then
     echo "build.sh: the wasm-bindgen CLI is '${have:-absent}', the lock's crate is $want: run 'mise install' (mise.toml pins it)" >&2
     exit 2
 fi
-(cd "$root" && RUSTFLAGS="-C target-feature=+simd128" cargo rustc -p mantis-player --target wasm32-unknown-unknown \
+(cd "$root" && RUSTFLAGS="-C target-feature=+simd128" cargo rustc -p mantis-player --lib --target wasm32-unknown-unknown \
     --release --locked --crate-type cdylib)
 rm -rf "$web/pkg"
 "$bindgen" --target web --out-dir "$web/pkg" "$root/target/wasm32-unknown-unknown/release/mantis_player.wasm"

@@ -505,6 +505,7 @@ dependencies = [
  "mantis-selfplay",
  "rayon",
  "serde_json",
+ "sha2",
  "wasm-bindgen",
 ]
 
