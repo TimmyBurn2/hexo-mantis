@@ -1,7 +1,7 @@
 """Every CI gate has a local equivalent, and the runner enumerates them all.
 
-Remote CI is suspended and local green is the gate, so a gate that lives only in the workflow
-is a gate nothing runs. `make test` does not compile `[[bench]]` targets and `make bench`
+Local green is the gate before a push, so a gate that lives only in the workflow is a gate
+nothing runs until after it. `make test` does not compile `[[bench]]` targets and `make bench`
 compiles one, so `cargo clippy --all-targets -- -D clippy::all` is what stands behind the rest.
 
 These rows assert the SET, not what each gate checks: the workflow is parsed for its `gate N:`

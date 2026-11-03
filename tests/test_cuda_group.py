@@ -52,7 +52,7 @@ def test_an_unmarked_gpu_allocation_reds_the_test(tmp_path: Path) -> None:
 
 def test_both_pytest_tiers_distribute_by_group() -> None:
     """The group means one worker only under `--dist loadgroup`, so every parallel tier invocation carries it."""
-    for path in ("tools/ci_gates/run_all.sh", "Makefile", ".github/workflows/ci.yml"):
+    for path in ("tools/ci_gates/run_all.sh", "Makefile", ".github/workflows/ci.yml", ".github/workflows/release-ci.yml"):
         text = (REPO_ROOT / path).read_text(encoding="utf-8")
         lines = [ln for ln in text.splitlines() if "pytest -m" in ln and " -n " in ln]
         assert any('-m "not integration and not slow"' in ln for ln in lines), (path, lines)

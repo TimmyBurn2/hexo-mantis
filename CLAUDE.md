@@ -65,9 +65,10 @@ rule is stated once, here or in docs/governance/LAWS.md.
   the `TIER:` header line says which ran. Read it rather than assuming.
 - Cadence: targeted tests while iterating; `make gates` (tools/ci_gates/run_all.sh, whose row
   labels carry the gate numbers) at leg exit and before any push; `make gates.exit`, which adds
-  the slow tier, at a packet exit. Doc/governance-only commits need no gates. Remote CI is
-  suspended by operator decision, so the local set is the gate; gate 1's fresh-clone sync is the
-  one check it does not reproduce.
+  the slow tier, at a packet exit. Doc/governance-only commits need no gates. Remote CI runs the
+  full set (ci.yml) on every push to dev and the slim release set (release-ci.yml) on main; the
+  local set stays the gate before a push, and gate 1's fresh-clone sync is the one check it does
+  not reproduce.
 - Toolchains are pinned (rust-toolchain.toml, mise.toml) and provision themselves. The Rust
   channel is attested in tools/bench_floors.toml, so a bump invalidates every bench floor: it is
   a perf-host event.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# THE LOCAL GATE SET: every gate with CI's arguments; remote CI is suspended, so this is the gate.
+# THE LOCAL GATE SET: every gate with CI's arguments, run before a push so remote CI only confirms it.
 # Each row calls the gate's own script or make target (no second authority); nothing short-circuits.
 # Gate 1 (minutes) and the slow tier (deselected by BOTH pytest tiers) are opt-in; omission prints every run.
 set -uo pipefail

@@ -1,0 +1,57 @@
+name: release-ci
+# The slim remote check on the release branch: the default tier, clippy and the web package.
+# dev runs the full gate set in ci.yml; ci-repair/** runs both, so a repair is proven before it lands.
+on:
+  push:
+    branches: [main, 'ci-repair/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  default-tier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: "toolchain: materialise the rust-toolchain.toml pin"
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - uses: astral-sh/setup-uv@v7
+        with: { python-version: "3.11" }
+      - name: "setup: build the job workspace from the lockfile"
+        run: uv sync --locked
+      # -n 4: the runner's vCPU count; --dist loadgroup keeps every cuda test on one worker.
+      - name: "default tier: pytest"
+        run: uv run pytest -m "not integration and not slow" -n 4 --dist loadgroup
+
+  clippy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6          # the interpreter pyo3's build script configures against
+        with: { python-version: "3.11" }
+      - name: "toolchain: materialise the rust-toolchain.toml pin"
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - name: "clippy (-D clippy::all, --all-targets)"
+        run: cargo clippy --workspace --all-targets --locked -- -D clippy::all
+
+  web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: "toolchain: materialise the rust-toolchain.toml pin"
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      # mise.toml pins node and the wasm-bindgen CLI; the action caches both on that file.
+      - uses: jdx/mise-action@v4
+        env: { MISE_TRUSTED_CONFIG_PATHS: "${{ github.workspace }}" }
+      - uses: astral-sh/setup-uv@v7
+        with: { python-version: "3.11" }
+      - name: "setup: build the job workspace from the lockfile"
+        run: uv sync --locked
+      - name: "web package (wasm build, types, node tests on a tiny export)"
+        run: bash tools/ci_gates/web_gate.sh
