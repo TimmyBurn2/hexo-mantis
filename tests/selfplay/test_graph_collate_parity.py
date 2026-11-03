@@ -111,8 +111,13 @@ def test_segment_softmax_bit_parity(payload_fields, hotpath_golden, single_threa
     old output (same torch minor, CPU, 1 thread, AVX2 kernels). The logits vector is loaded from the
     capture, not regenerated, so the seed cannot drift. FAIL = the ragged softmax the Rust assembler
     normalizes against changed."""
-    if torch.backends.cpu.get_cpu_capability() != CAPTURE_CPU_CAPABILITY:
+    capability = torch.backends.cpu.get_cpu_capability()
+    if capability != CAPTURE_CPU_CAPABILITY:
         if os.environ.get("ATEN_CPU_CAPABILITY") == CAPTURE_CPU_CAPABILITY.lower():
+            # An AVX-512 host can run AVX2 kernels: still reporting AVX-512 means the pin did not take.
+            if capability.startswith("AVX512"):
+                pytest.fail(f"ATEN_CPU_CAPABILITY={CAPTURE_CPU_CAPABILITY.lower()} did not take: "
+                            f"torch still dispatches {capability}")
             pytest.skip(f"LOUD SKIP — this host cannot run the capture's {CAPTURE_CPU_CAPABILITY} kernels")
         # The capability is fixed at torch's first dispatch, so the capture's ISA needs a fresh process.
         proc = subprocess.run(
