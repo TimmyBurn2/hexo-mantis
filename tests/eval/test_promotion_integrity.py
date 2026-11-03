@@ -247,12 +247,14 @@ def test_a_second_finalise_waits_for_the_first_and_returns_its_result(
 def test_a_second_finalise_that_outwaits_its_bound_is_logged(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """PLANTED BREAK: ignore `done.wait`'s verdict and a timed-out second finaliser returns `None` in silence."""
+    """PLANTED BREAK: ignore `done.wait`'s verdict, or drop its event, and a timed-out second finaliser is silent."""
     import mantis.eval.pipeline as pipeline_mod
     from mantis.eval.pipeline import EvalPipeline
 
     pipe = _pipeline(monkeypatch, [])
     pipe._eval_cfg = SimpleNamespace(worker_kill_grace_sec=0.0)
+    events: list[dict[str, Any]] = []
+    pipe._sink = SimpleNamespace(emit=events.append)
     monkeypatch.setattr(pipeline_mod, "_FINALIZE_WAIT_FLOOR_SEC", 0.05)
     entered, release = threading.Event(), threading.Event()
 
@@ -274,3 +276,5 @@ def test_a_second_finalise_that_outwaits_its_bound_is_logged(
     assert any("eval_round_finalize_wait_timeout" in r.message for r in caplog.records), (
         "a second finaliser that gave up waiting left no trace"
     )
+    timeouts = [e for e in events if e.get("event") == "eval_round_finalize_wait_timeout"]
+    assert timeouts and timeouts[0]["round_id"] == "r1", f"no timeout event reached the sink: {events}"
