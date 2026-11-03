@@ -49,7 +49,9 @@ jobs:
     # verdicts and the digest that names them (the triple-hang case).
     timeout-minutes: 240
     steps:
+      # Full history: gate 3c and the default tier's diff-scoped gate tests resolve origin/dev on any branch.
       - uses: actions/checkout@v6
+        with: { fetch-depth: 0 }
       # Same single-source rule as the rust job: the compiler comes from
       # rust-toolchain.toml. This job needs cargo only so that `uv sync` can drive maturin
       # to build mantis._engine — and that build already resolved to the pinned channel via
