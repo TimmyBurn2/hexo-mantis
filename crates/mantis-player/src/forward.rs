@@ -301,7 +301,7 @@ impl RustForward {
         let n = check(batch, self.feat, self.codes)?;
         let (h, g, depth) = (self.hidden, batch.n_graphs, self.layers.len());
         let wide = depth * h;
-        let (start, order) = by_dst(&batch.dst, n);
+        let (start, edges) = by_dst(batch, n);
         let mut x = linear(&batch.x, n, &self.input_proj, false, par);
         let mut emb = vec![0f32; n * wide];
         let mut agg = vec![0f32; n * h];
@@ -310,8 +310,8 @@ impl RustForward {
             // Each node sums its in-edges in edge order, so a node's sum is the edge-order scatter's.
             each(&mut agg, h, par, |d, a| {
                 a.fill(0.0);
-                for &e in &order[start[d]..start[d + 1]] {
-                    let (s, c) = (batch.src[e] as usize, batch.code[e] as usize);
+                for &(s, c) in &edges[start[d]..start[d + 1]] {
+                    let (s, c) = (s as usize, c as usize);
                     let (hs, tc) = (&hn[s * h..(s + 1) * h], &layer.table[c * h..(c + 1) * h]);
                     for ((av, &p), &q) in a.iter_mut().zip(hs).zip(tc) {
                         *av += (p + q).max(0.0);
@@ -430,23 +430,23 @@ fn each(out: &mut [f32], len: usize, par: bool, f: impl Fn(usize, &mut [f32]) + 
     out.chunks_mut(len).enumerate().for_each(|(i, c)| f(i, c));
 }
 
-/// Each node's in-edges in edge order: `order[start[v]..start[v + 1]]` are node `v`'s edge indices.
-#[allow(clippy::cast_sign_loss)] // `check` range-checked every dst
-fn by_dst(dst: &[i32], n: usize) -> (Vec<usize>, Vec<usize>) {
+/// Each node's in-edges in edge order as `(src, code)`: `edges[start[v]..start[v + 1]]` are node `v`'s.
+#[allow(clippy::cast_sign_loss)] // `check` range-checked every index
+fn by_dst(batch: &WebBatch, n: usize) -> (Vec<usize>, Vec<(u32, u32)>) {
     let mut start = vec![0usize; n + 1];
-    for &d in dst {
+    for &d in &batch.dst {
         start[d as usize + 1] += 1;
     }
     for v in 0..n {
         start[v + 1] += start[v];
     }
     let mut fill = start.clone();
-    let mut order = vec![0usize; dst.len()];
-    for (e, &d) in dst.iter().enumerate() {
-        order[fill[d as usize]] = e;
+    let mut edges = vec![(0u32, 0u32); batch.dst.len()];
+    for ((&s, &d), &c) in batch.src.iter().zip(&batch.dst).zip(&batch.code) {
+        edges[fill[d as usize]] = (s as u32, c as u32);
         fill[d as usize] += 1;
     }
-    (start, order)
+    (start, edges)
 }
 
 /// `a [m × k] · wt [k × n] + b`, in row blocks of 4 so each weight row is read once a block.
