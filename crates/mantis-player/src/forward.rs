@@ -1,7 +1,7 @@
 // >300 justify (R8): the served forward is one pass, its loader and its batch check — split, a module would hold
 // half of a shape contract.
 
-//! `RustForward`: the export's served GINE forward over contract #13's batch, f32, single thread.
+//! `RustForward`: the export's served GINE forward over contract #13's batch, f32, on one thread or a native pool.
 
 use std::fmt;
 
@@ -282,35 +282,57 @@ impl RustForward {
     }
 
     /// The served outputs for `batch`, as `WebServedGraph` computes them. Errors: `Batch` on a malformed array.
-    #[allow(clippy::cast_sign_loss, clippy::cast_precision_loss)] // indices are range-checked by `check`
     pub fn forward(&self, batch: &WebBatch) -> Result<NetOutputs, ForwardError> {
+        self.pass(batch, false)
+    }
+
+    /// `forward` with its node loops across `pool`'s threads: every output bit for bit the one-thread pass's.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn forward_on(
+        &self,
+        batch: &WebBatch,
+        pool: &rayon::ThreadPool,
+    ) -> Result<NetOutputs, ForwardError> {
+        pool.install(|| self.pass(batch, true))
+    }
+
+    #[allow(clippy::cast_sign_loss, clippy::cast_precision_loss)] // indices are range-checked by `check`
+    fn pass(&self, batch: &WebBatch, par: bool) -> Result<NetOutputs, ForwardError> {
         let n = check(batch, self.feat, self.codes)?;
         let (h, g, depth) = (self.hidden, batch.n_graphs, self.layers.len());
         let wide = depth * h;
-        let mut x = linear(&batch.x, n, &self.input_proj, false);
+        let (start, order) = by_dst(&batch.dst, n);
+        let mut x = linear(&batch.x, n, &self.input_proj, false, par);
         let mut emb = vec![0f32; n * wide];
         let mut agg = vec![0f32; n * h];
         for (i, layer) in self.layers.iter().enumerate() {
-            let hn = layer_norm(&x, h, &layer.norm);
-            agg.fill(0.0);
-            for ((&s, &d), &c) in batch.src.iter().zip(&batch.dst).zip(&batch.code) {
-                let (s, d, c) = (s as usize, d as usize, c as usize);
-                let (hs, tc) = (&hn[s * h..(s + 1) * h], &layer.table[c * h..(c + 1) * h]);
-                for ((a, &p), &q) in agg[d * h..(d + 1) * h].iter_mut().zip(hs).zip(tc) {
-                    *a += (p + q).max(0.0);
+            let hn = layer_norm(&x, h, &layer.norm, par);
+            // Each node sums its in-edges in edge order, so a node's sum is the edge-order scatter's.
+            each(&mut agg, h, par, |d, a| {
+                a.fill(0.0);
+                for &e in &order[start[d]..start[d + 1]] {
+                    let (s, c) = (batch.src[e] as usize, batch.code[e] as usize);
+                    let (hs, tc) = (&hn[s * h..(s + 1) * h], &layer.table[c * h..(c + 1) * h]);
+                    for ((av, &p), &q) in a.iter_mut().zip(hs).zip(tc) {
+                        *av += (p + q).max(0.0);
+                    }
                 }
-            }
-            for (v, &div) in batch.divisor.iter().enumerate() {
-                let div = div as f32;
-                for j in v * h..(v + 1) * h {
-                    agg[j] = agg[j] / div + layer.one_eps * hn[j];
+                let div = batch.divisor[d] as f32;
+                for (av, &hv) in a.iter_mut().zip(&hn[d * h..(d + 1) * h]) {
+                    *av = *av / div + layer.one_eps * hv;
                 }
-            }
-            let t = linear(&linear(&agg, n, &layer.mlp0, true), n, &layer.mlp2, false);
+            });
+            let t = linear(
+                &linear(&agg, n, &layer.mlp0, true, par),
+                n,
+                &layer.mlp2,
+                false,
+                par,
+            );
             for (xv, &u) in x.iter_mut().zip(&t) {
                 *xv = (u + *xv).max(0.0);
             }
-            let normed = layer_norm(&x, h, &self.final_norm);
+            let normed = layer_norm(&x, h, &self.final_norm, par);
             for v in 0..n {
                 emb[v * wide + i * h..v * wide + (i + 1) * h]
                     .copy_from_slice(&normed[v * h..(v + 1) * h]);
@@ -323,10 +345,11 @@ impl RustForward {
             .copied()
             .collect();
         let logits = linear(
-            &linear(&rows, batch.legal.len(), &self.policy0, true),
+            &linear(&rows, batch.legal.len(), &self.policy0, true, par),
             batch.legal.len(),
             &self.policy2,
             false,
+            par,
         );
 
         let mut pooled = vec![0f32; g * 2 * wide];
@@ -347,7 +370,13 @@ impl RustForward {
         for (chunk, &den) in pooled.chunks_mut(2 * wide).zip(&batch.mean_den) {
             chunk[..wide].iter_mut().for_each(|m| *m /= den as f32);
         }
-        let bins = linear(&linear(&pooled, g, &self.fc1, true), g, &self.fc2, false);
+        let bins = linear(
+            &linear(&pooled, g, &self.fc1, true, par),
+            g,
+            &self.fc2,
+            false,
+            par,
+        );
         let value = bins
             .chunks(self.fc2.n)
             .map(|row| {
@@ -386,48 +415,81 @@ impl RustForward {
     }
 }
 
+/// `f(i, chunk)` on each `len`-float chunk of `out`: on the current pool when `par`, else in order on this thread.
+fn each(out: &mut [f32], len: usize, par: bool, f: impl Fn(usize, &mut [f32]) + Send + Sync) {
+    #[cfg(not(target_arch = "wasm32"))]
+    if par {
+        use rayon::prelude::*;
+        out.par_chunks_mut(len)
+            .enumerate()
+            .for_each(|(i, c)| f(i, c));
+        return;
+    }
+    #[cfg(target_arch = "wasm32")]
+    let _ = par;
+    out.chunks_mut(len).enumerate().for_each(|(i, c)| f(i, c));
+}
+
+/// Each node's in-edges in edge order: `order[start[v]..start[v + 1]]` are node `v`'s edge indices.
+#[allow(clippy::cast_sign_loss)] // `check` range-checked every dst
+fn by_dst(dst: &[i32], n: usize) -> (Vec<usize>, Vec<usize>) {
+    let mut start = vec![0usize; n + 1];
+    for &d in dst {
+        start[d as usize + 1] += 1;
+    }
+    for v in 0..n {
+        start[v + 1] += start[v];
+    }
+    let mut fill = start.clone();
+    let mut order = vec![0usize; dst.len()];
+    for (e, &d) in dst.iter().enumerate() {
+        order[fill[d as usize]] = e;
+        fill[d as usize] += 1;
+    }
+    (start, order)
+}
+
 /// `a [m × k] · wt [k × n] + b`, in row blocks of 4 so each weight row is read once a block.
-fn linear(a: &[f32], m: usize, layer: &Linear, relu: bool) -> Vec<f32> {
+fn linear(a: &[f32], m: usize, layer: &Linear, relu: bool, par: bool) -> Vec<f32> {
     let (k, n) = (layer.k, layer.n);
     let mut out = vec![0f32; m * n];
-    for r in (0..m).step_by(4) {
-        let rows = (m - r).min(4);
+    each(&mut out, (4 * n).max(1), par, |blk, o| {
+        let (r, rows) = (4 * blk, o.len() / n.max(1));
         for i in 0..rows {
-            out[(r + i) * n..(r + i + 1) * n].copy_from_slice(&layer.b);
+            o[i * n..(i + 1) * n].copy_from_slice(&layer.b);
         }
         for kk in 0..k {
             let w = &layer.wt[kk * n..(kk + 1) * n];
             for i in 0..rows {
                 let av = a[(r + i) * k + kk];
                 if av != 0.0 {
-                    out[(r + i) * n..(r + i + 1) * n]
+                    o[i * n..(i + 1) * n]
                         .iter_mut()
                         .zip(w)
-                        .for_each(|(o, &wv)| *o += av * wv);
+                        .for_each(|(ov, &wv)| *ov += av * wv);
                 }
             }
         }
         if relu {
-            out[r * n..(r + rows) * n]
-                .iter_mut()
-                .for_each(|v| *v = v.max(0.0));
+            o.iter_mut().for_each(|v| *v = v.max(0.0));
         }
-    }
+    });
     out
 }
 
 /// LayerNorm over each row of `h`, eps 1e-5, as torch's.
 #[allow(clippy::cast_precision_loss)] // a hidden width is far below 2^23
-fn layer_norm(x: &[f32], h: usize, norm: &Norm) -> Vec<f32> {
+fn layer_norm(x: &[f32], h: usize, norm: &Norm, par: bool) -> Vec<f32> {
     let mut out = vec![0f32; x.len()];
-    for (row, dst) in x.chunks(h).zip(out.chunks_mut(h)) {
+    each(&mut out, h, par, |r, dst| {
+        let row = &x[r * h..(r + 1) * h];
         let mean = row.iter().sum::<f32>() / h as f32;
         let var = row.iter().map(|v| (v - mean) * (v - mean)).sum::<f32>() / h as f32;
         let inv = 1.0 / (var + 1e-5).sqrt();
         for (j, o) in dst.iter_mut().enumerate() {
             *o = (row[j] - mean) * inv * norm.w[j] + norm.b[j];
         }
-    }
+    });
     out
 }
 

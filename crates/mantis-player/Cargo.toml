@@ -16,6 +16,10 @@ mantis-search = { path = "../mantis-search" }
 # The served path's own leaf build, fuse and pack: the batch derives from them, never beside them.
 mantis-selfplay = { path = "../mantis-selfplay" }
 
+# Native only: the forward's node loops across threads (the browser engine runs one).
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rayon = "1"
+
 # wasm32 only, and only here: the browser engine's bindings, and the JS entropy source that unifies into rand's getrandom
 # (the player draws nothing random; the dependency only has to build).
 [target.'cfg(target_arch = "wasm32")'.dependencies]

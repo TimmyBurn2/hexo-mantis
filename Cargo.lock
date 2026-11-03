@@ -503,6 +503,7 @@ dependencies = [
  "mantis-graph",
  "mantis-search",
  "mantis-selfplay",
+ "rayon",
  "serde_json",
  "wasm-bindgen",
 ]
