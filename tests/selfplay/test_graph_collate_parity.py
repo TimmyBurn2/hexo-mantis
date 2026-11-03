@@ -7,9 +7,6 @@ defect, never a fixture artifact.
 """
 from __future__ import annotations
 
-import os
-import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -29,9 +26,6 @@ from mantis.train.losses import segment_softmax as train_segment_softmax
 
 # The capture ran on CPU with `torch.set_num_threads(1)`; B-04/B-05 reproduce that regime.
 CAPTURE_TORCH_THREADS = 1
-#: The ATen CPU kernels the capture ran under: `torch.exp` rounds differently per ISA (AVX2, AVX-512, scalar).
-CAPTURE_CPU_CAPABILITY = "AVX2"
-REPO_ROOT = Path(__file__).resolve().parents[2]
 # Seed for the B-06 property battery (test-local; B-06 compares two NEW-side copies).
 DUPLICATION_BATTERY_SEED = 20260723
 
@@ -108,28 +102,9 @@ def test_collate_empty_batch_parity(payload_fields, collated_golden, semantic):
 
 def test_segment_softmax_bit_parity(payload_fields, hotpath_golden, single_threaded_torch):
     """`segment_softmax(captured_logits, batch.legal_offsets)` is BIT-exact against the captured
-    old output (same torch minor, CPU, 1 thread, AVX2 kernels). The logits vector is loaded from the
-    capture, not regenerated, so the seed cannot drift. FAIL = the ragged softmax the Rust assembler
+    old output (same torch minor, CPU, 1 thread). The logits vector is loaded from the capture,
+    not regenerated, so the seed cannot drift. FAIL = the ragged softmax the Rust assembler
     normalizes against changed."""
-    capability = torch.backends.cpu.get_cpu_capability()
-    if capability != CAPTURE_CPU_CAPABILITY:
-        if os.environ.get("ATEN_CPU_CAPABILITY") == CAPTURE_CPU_CAPABILITY.lower():
-            # An AVX-512 host can run AVX2 kernels: still reporting AVX-512 means the pin did not take.
-            if capability.startswith("AVX512"):
-                pytest.fail(f"ATEN_CPU_CAPABILITY={CAPTURE_CPU_CAPABILITY.lower()} did not take: "
-                            f"torch still dispatches {capability}")
-            pytest.skip(f"LOUD SKIP — this host cannot run the capture's {CAPTURE_CPU_CAPABILITY} kernels")
-        # The capability is fixed at torch's first dispatch, so the capture's ISA needs a fresh process.
-        proc = subprocess.run(
-            [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
-             f"{Path(__file__).relative_to(REPO_ROOT)}::test_segment_softmax_bit_parity"],
-            cwd=REPO_ROOT, env={**os.environ, "ATEN_CPU_CAPABILITY": CAPTURE_CPU_CAPABILITY.lower()},
-            capture_output=True, text=True, check=False,
-        )
-        if proc.returncode == 0 and "1 skipped" in proc.stdout:
-            pytest.skip(f"LOUD SKIP — this host cannot run the capture's {CAPTURE_CPU_CAPABILITY} kernels")
-        assert proc.returncode == 0 and "1 passed" in proc.stdout, proc.stdout[-2000:] + proc.stderr[-1000:]
-        return
     batch = _collate(payload_fields("b6"), expected_version=1, device="cpu", semantic="full")
     logits = torch.from_numpy(hotpath_golden["logits"].copy())
     expected = hotpath_golden["segment_softmax"]
