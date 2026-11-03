@@ -163,7 +163,7 @@ node_feat_dim)` refuses a missing tensor, a shape that disagrees with another (`
 ## The native binary (`mantis-cli`, `crates/mantis-player/src/bin/mantis-cli/`)
 
 `mantis-cli [--net STEM.manifest.json] [--threads N]`: without `--net`, the one `*.manifest.json` beside the
-executable; `--threads` defaults to 4, held to the machine's available parallelism. The search is the step machine's,
+executable; `--threads` defaults to 4, held to the machine's available parallelism (0 is refused). The search is the step machine's,
 under the manifest's `deploy.resolved` on the CPU path (`cpu_path`, the 16-sim floor), its batches served by
 `forward_on` the pool. A GPU path is not built (CARD-NATIVE-GPU).
 
@@ -176,22 +176,23 @@ under the manifest's `deploy.resolved` on the CPU path (`cpu_path`, the 16-sim f
 
 | command | answer |
 |---|---|
-| `six` | `id name mantis-cli <version>`, `id net <stem> manifest <sha256>`, `sixok` |
+| `six` | `id name mantis-cli <version>`, `id net <stem> manifest <sha256>`, `sixok`: a driver that must play one net checks the manifest's sha256 here |
 | `isready` | `readyok` |
 | `newgame` | nothing: the next `go` starts a game (a fresh tree and cache) |
-| `position radius R [moves q r …]` | nothing; `error` on a radius other than the encoding's legal-move radius (8) or a malformed list |
-| `go nodes N` | the turn at `N` sims a stone, 1 ≤ `N` ≤ 976 (`Budget::Sims`, the pool sized for `N`; Six reads `N` as nodes a turn): `bestmove q r [q r]` |
+| `position [radius R] [moves q r …]` | nothing; `error` on a radius other than the encoding's legal-move radius (8, Six's default when none is given) or a malformed list |
+| `go nodes N` | the turn's budget, as Six reads it: `⌊N / k⌋` sims for each of the `k` stones due (`Budget::Sims`, the pool sized for it), as the budget rule splits a clock (Six's own engine gives its first stone most of `N` and lets the second reach `N` over the reused tree); refused below one sim a stone or past 976 a stone: `bestmove q r [q r]` |
 | `go movetime T` | the turn under `budget.rs`'s rule at `T` ms (`Budget::Clock`, the pool `pool_sims(T, …)`): `bestmove …` |
 | `quit` | the process exits |
-| anything else (`setoption` included) | `error <why>` |
+| anything else (`setoption` included), or a line that is not UTF-8 | `error <why>` |
 
 - **A game** continues while each `position` extends the moves the engine's board holds (its own answers included):
   the new stones are `play`ed and the tree and cache carry. Any other position starts a game. A `go nodes` past the
   game's pool starts the game again at the larger pool.
 - **The rules the host checks** (the step machine leaves them to it): every new stone a cell of the board's legal set
   (within the radius of a stone; the 5×5 square at the origin on an empty board) and none after a win. A refused `go`
-  answers `error <why>` then `bestmove none`, so a driver that reads through `bestmove` returns; the engine's game is
-  as it was before that `position`.
+  answers `error <why>` then `bestmove none`, so a driver that reads through `bestmove` returns. A stone the rules refuse
+  changes nothing; a search refused after them (a pool or a forward refusal) rolls the turn back to the position, whose
+  stones stay played. The turn counters of a refused `go` are dropped from the next turn's line.
 - **`bestmove`** lists the turn's stones in play order: two, or one when one is due or the first wins. No `info` line
   is written to stdout.
 - **stderr, one line a turn:** `mantis-cli turn sims= stopped= decided= inherited=` (per stone, comma-joined)
@@ -308,7 +309,7 @@ htttx basic_websocket v1-alpha over `postMessage`; wire `(q, r)` is the engine's
 | W2: `RustForward` holds the fp32 line against the fp32 ONNX on every tiny stamp and batch; fed every divisor as 1 it misses (planted break) | `forward.rs`, `tools/export_web.py` | `tests/tools/test_export_web.py::test_the_rust_forward_holds_the_fp32_lines_against_the_onnx_on_every_batch`, `test_a_rust_forward_without_the_degree_divisor_misses_the_line` |
 | `RustForward` refuses a table its file does not hold, and a batch its shape does not allow | `forward.rs` | `forward::tests::*` |
 | every candidate depth (4, 5, 6 GINE layers) exports bit-identically and holds W1 at ORT CPU and W2 | `tools/export_web.py`, `forward.rs` | `tests/tools/test_export_web.py::test_every_candidate_depth_exports_and_both_forwards_hold_their_lines` (gate 20) |
-| the binary answers the player's stones turn by turn over 8 goldens with the other side's stones played in, and a wrong stone order parts from them (planted break); it refuses an occupied cell, one past the radius, a bad `go`, radius or list, and an unknown command, and a refused extension leaves the game as it was; a `movetime` turn sets `budget.rs`'s sims and stays inside its clock, and a tripled clock reads as an overrun (planted break); a weights file the manifest does not bind refuses the start; `forward_on` is `forward` bit for bit at 2, 3 and 8 threads, and a reversed edge list reads (planted break) | `crates/mantis-player/src/bin/mantis-cli/`, `forward.rs` | `crates/mantis-player/tests/cli.rs` |
+| `go nodes` is the turn's budget and the binary answers the player's stones at `N / k` a stone turn by turn over 8 goldens with the other side's stones played in, and a swapped stone order answers otherwise (planted break); a winning first stone answers one cell, and a won game refuses another stone and a search; it refuses an occupied cell, one past the radius, a bad `go`, radius or list, and an unknown command, and a refused extension leaves the game as it was; a `movetime` turn sets `budget.rs`'s sims and stays inside its clock, and six clocks read as an overrun (planted break); a weights file the manifest does not bind refuses the start; `forward`'s bits on the tiny net's goldens batch are pinned by sha256 from a build of `f93d6cc6`, `forward_on` is `forward` bit for bit at 2, 3 and 8 threads, and a reversed edge list changes the bits (planted break) | `crates/mantis-player/src/bin/mantis-cli/`, `forward.rs` | `crates/mantis-player/tests/cli.rs` |
 | the bindgen attribute lives in `wasm.rs` alone, gated to wasm32 | `wasm.rs` | `crates/mantis-player/tests/wasm_census.rs` |
 | W2 in wasm: the engine's `RustForward` holds the fp32 line against the fp32 ONNX on ORT's one-thread CPU kernels at B 1 and 8; every divisor fed as 1 misses it | `forward.rs`, `wasm.rs` | `web/test/w2.test.ts` (gate 21) |
 | the Worker refuses a foreign manifest by name, admits the CPU backend by its witness, falls back to it when the WebGPU candidate throws, plays turns through the one loop, hears an abort between batches, stays usable after a failure mid-turn, passes a trap through untouched, refuses a second turn and a position no cadence reaches | `web/src/worker.ts` | `web/test/worker.test.ts` (gate 21) |

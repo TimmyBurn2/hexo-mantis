@@ -1420,8 +1420,8 @@ is superseded: the follower's `FOLLOW_UNITS` are the rulers.
 
 1. **What lands.** `crates/mantis-player/src/bin/mantis-cli/` (`main.rs`, `engine.rs`, `net.rs`): the step machine on
    stdio in Six's text protocol, over a weights file and the manifest that binds it by sha256 (contract #13 v5). It is a
-   bin target of the player, not a crate of its own: R403(d) names the crate, and it pulls no dependency the browser
-   build lacks (`serde_json` and `sha2` were already in its graph).
+   bin target of the player, not a crate of its own: R403(d) names the crate, and it adds no dependency to the browser
+   build (`serde_json` and `sha2` were already in its graph).
 2. **Native threads.** `RustForward::forward_on` runs the forward's node loops on a rayon pool, every output bit for bit
    the one-thread `forward`, which the browser keeps. `rayon` is a native-only dependency of the player, beside its
    wasm32-only ones; the wasm build's dependency tree, and so the web release's notices, are unchanged.
