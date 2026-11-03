@@ -17,6 +17,7 @@ reason taxonomy drift across files.
 """
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Any
 
@@ -210,6 +211,27 @@ def test_eval_broken_never_promotes_and_never_silently_skips(fake_mp, tmp_path) 
         # With NO partial gate sidecar; a round that finished its gate phase is the A-3 tests'.
         assert result["gate_verdict_partial"] is False
         assert sink.named("eval_broken")[-1]["partial_gate"] is False
+    finally:
+        pipeline.stop()
+
+
+def test_a_drain_after_the_poller_finalised_still_routes_the_round(fake_mp, tmp_path) -> None:
+    """PLANTED BREAK: return `None` from `drain_pending` with nothing in flight and the poller's result is never routed."""
+    sink = _SpySink()
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1, puct=MINTED_PUCT)
+    try:
+        pipeline.run_evaluation(tiny_model(), 1000, None, full_config={}, best_model_step=None)
+        proc = fake_mp.last_process
+        proc.alive = False
+        proc.exitcode = -9
+        deadline = time.monotonic() + 5.0
+        while pipeline._inflight is not None and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert pipeline._inflight is None, "the poller never finalised the dead round"
+
+        result = bounded(lambda: pipeline.drain_pending(), timeout=5.0)
+        assert result is not None and result["eval_broken_reason"] == "killed"
+        assert pipeline.poll_completed() is None, "the drain routed the round, so nothing is left to route twice"
     finally:
         pipeline.stop()
 

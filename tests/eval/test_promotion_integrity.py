@@ -159,6 +159,7 @@ def _pipeline(monkeypatch: pytest.MonkeyPatch, reads: list[str]) -> Any:
     pipe._sink = None
     pipe._double_finalize_suppressed = 0
     pipe._clock = lambda: 0.0
+    pipe._eval_cfg = SimpleNamespace(worker_kill_grace_sec=5.0)
 
     monkeypatch.setattr(signals, "unregister_child", lambda _p: None)
     monkeypatch.setattr(
@@ -214,3 +215,29 @@ def test_the_guard_is_per_round_not_per_pipeline(monkeypatch: pytest.MonkeyPatch
         f"a second, DIFFERENT round was suppressed — the latch is not per-round; got {reads}"
     )
     assert pipe._double_finalize_suppressed == 0, "no suppression should have been counted"
+
+
+def test_a_second_finalise_waits_for_the_first_and_returns_its_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PLANTED BREAK: return `_result` without waiting and the second caller reads `None` for a finished round."""
+    from mantis.eval.pipeline import EvalPipeline
+
+    pipe = _pipeline(monkeypatch, [])
+    entered, release = threading.Event(), threading.Event()
+
+    def _slow_read(self: Any, inflight: dict[str, Any], **_kw: Any) -> dict[str, Any]:
+        entered.set()
+        release.wait(5.0)
+        return {"round_id": inflight["round_id"], "ok": True}
+
+    monkeypatch.setattr(EvalPipeline, "_read_worker_result", _slow_read)
+    inflight = _inflight("r1")
+    first = threading.Thread(target=EvalPipeline._finalize_round, args=(pipe, inflight), daemon=True)
+    first.start()
+    assert entered.wait(5.0), "the first finalise never reached the round body"
+    threading.Timer(0.2, release.set).start()
+    second = EvalPipeline._finalize_round(pipe, inflight)
+    first.join(5.0)
+    assert second == {"round_id": "r1", "ok": True}, "the second finaliser did not wait for the first"
+    assert len(pipe._mailbox) == 1 and pipe._double_finalize_suppressed == 1

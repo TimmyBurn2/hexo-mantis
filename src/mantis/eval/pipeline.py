@@ -551,20 +551,27 @@ class EvalPipeline:
             return self._mailbox.pop(0)
 
     def drain_pending(self) -> dict | list | None:
+        """Finalise the in-flight round within the drain budget; return every unpolled result."""
         with self._lock:
             inflight = self._inflight
-        if inflight is None:
+        if inflight is not None:
+            proc = inflight["proc"]
+            reason = None
+            if proc.is_alive():
+                reason = drain_or_kill(
+                    proc, budget_sec=drain_budget_sec(self._caps),
+                    worker_kill_grace_sec=self._eval_cfg.worker_kill_grace_sec, clock=self._clock,
+                )
+            self._finalize_round(inflight, escalated_reason=reason)
+        return self._take_mailbox()
+
+    def _take_mailbox(self) -> dict | list | None:
+        """Empty the mailbox: whichever thread finalised a round, a drain routes it exactly once."""
+        with self._lock:
+            results, self._mailbox = self._mailbox, []
+        if not results:
             return None
-        proc = inflight["proc"]
-        if proc.is_alive():
-            budget = drain_budget_sec(self._caps)
-            reason = drain_or_kill(
-                proc, budget_sec=budget, worker_kill_grace_sec=self._eval_cfg.worker_kill_grace_sec,
-                clock=self._clock,
-            )
-            if reason is not None:
-                return self._finalize_round(inflight, escalated_reason=reason)
-        return self._finalize_round(inflight)
+        return results[0] if len(results) == 1 else results
 
     def abandon_pending(self) -> dict | list | None:
         """A RESUMABLE stop's drain: terminate the in-flight round NOW (bounded by twice the kill
@@ -572,17 +579,19 @@ class EvalPipeline:
         with self._lock:
             inflight = self._inflight
         if inflight is None:
-            return None
+            return self._take_mailbox()
         proc = inflight["proc"]
         if not proc.is_alive():
-            return self._finalize_round(inflight)
+            self._finalize_round(inflight)
+            return self._take_mailbox()
         _emit(self._sink, {"event": "eval_round_abandoned", "round_id": inflight["round_id"],
                            "step": inflight["step"], "reason": "resumable_stop"})
         drain_or_kill(proc, budget_sec=0.0,
                       worker_kill_grace_sec=self._eval_cfg.worker_kill_grace_sec,
                       clock=self._clock)
         # ABANDONED whatever the child did with its signal: a stop's round is not a worker fault.
-        return self._finalize_round(inflight, escalated_reason=EvalBrokenReason.ABANDONED)
+        self._finalize_round(inflight, escalated_reason=EvalBrokenReason.ABANDONED)
+        return self._take_mailbox()
 
     def _finalize_round(
         self, inflight: dict[str, Any], *, escalated_reason: EvalBrokenReason | None = None,
@@ -601,60 +610,70 @@ class EvalPipeline:
                     "round_id": inflight.get("round_id"), "step": inflight.get("step"),
                     "suppressed_total": self._double_finalize_suppressed,
                 })
-                # The first finalise's result if it has already been produced; `None` while
-                # it is still in flight, which the callers already treat as "nothing ready".
-                return inflight.get("_result")
-            inflight["_finalized"] = True
-
-        proc = inflight["proc"]
-        from mantis.train.lifecycle.signals import unregister_child
-        unregister_child(proc)
-        # The child died, the run lives; all four finalising routes converge here. Non-raising
-        # by construction, so a deletion failure can never manufacture a broken round.
-        _drop_result_tmp_if_writer_gone(inflight)
-        wall_sec = max(self._clock() - inflight["t0"], 0.0)
-        exit_code = getattr(proc, "exitcode", None)
-
-        # One catch-all: an uncaught exception becomes `eval_broken(round_completion_error)`
-        # rather than silently killing the poller thread, its heartbeat and so the run.
-        try:
-            if escalated_reason is not None:
-                # `phase` is a FUNCTION of the reason, so it stays on the payload: a constant
-                # "drain" would send a supervisor triaging a round timeout to the drain budget.
-                phase = ("round_timeout" if escalated_reason is EvalBrokenReason.ROUND_TIMEOUT
-                         else "abandon" if escalated_reason is EvalBrokenReason.ABANDONED
-                         else "drain")
-                result = self._broken_result(inflight, reason=escalated_reason, exit_code=exit_code,
-                                             wall_sec=wall_sec, phase=phase)
-            elif exit_code is not None and exit_code != 0:
-                reason = (EvalBrokenReason.KILLED if exit_code < 0
-                          else EvalBrokenReason.EXIT_NONZERO)
-                result = self._broken_result(inflight, reason=reason, exit_code=exit_code,
-                                             wall_sec=wall_sec, phase="worker_exit")
+                done = inflight["_done"]
             else:
-                result = self._read_worker_result(inflight, exit_code=exit_code, wall_sec=wall_sec)
-        except Exception as exc:  # noqa: BLE001 -- deliberate catch-all, see docstring above
-            # The traceback is logged at the raising site, not in the emitter: `_LOG.exception`
-            # is only correct with a live exception, and the other call sites have none.
-            detail = repr(exc)
-            _LOG.exception(
-                "eval_round_completion_failed round_id=%s step=%s",
-                inflight["round_id"], inflight["step"],
-            )
-            result = self._broken_result(
-                inflight, reason=EvalBrokenReason.ROUND_COMPLETION_ERROR,
-                exit_code=getattr(inflight["proc"], "exitcode", None), wall_sec=wall_sec,
-                phase="round_completion", detail=detail, exception_class=type(exc).__name__,
-            )
+                inflight["_finalized"] = True
+                inflight["_done"] = threading.Event()
+                done = None
+        if done is not None:
+            # A second finaliser waits out the first, so a finished round never reads as `None`.
+            done.wait(_bounded_join_timeout(self._eval_cfg.worker_kill_grace_sec))
+            return inflight.get("_result")
+        # The latch's waiter is released however the body exits.
+        try:
+            proc = inflight["proc"]
+            from mantis.train.lifecycle.signals import unregister_child
+            unregister_child(proc)
+            # The child died, the run lives; all four finalising routes converge here. Non-raising
+            # by construction, so a deletion failure can never manufacture a broken round.
+            _drop_result_tmp_if_writer_gone(inflight)
+            wall_sec = max(self._clock() - inflight["t0"], 0.0)
+            exit_code = getattr(proc, "exitcode", None)
 
-        _remove_partial_gate(inflight)
-        with self._lock:
-            self._inflight = None
-            self._mailbox.append(result)
-            # Cache under the same lock the guard reads, so a suppressed second caller that
-            # arrives after this point gets the real result rather than `None`.
-            inflight["_result"] = result
-        return result
+            # One catch-all: an uncaught exception becomes `eval_broken(round_completion_error)`
+            # rather than silently killing the poller thread, its heartbeat and so the run.
+            try:
+                if escalated_reason is not None:
+                    # `phase` is a FUNCTION of the reason, so it stays on the payload: a constant
+                    # "drain" would send a supervisor triaging a round timeout to the drain budget.
+                    phase = ("round_timeout" if escalated_reason is EvalBrokenReason.ROUND_TIMEOUT
+                             else "abandon" if escalated_reason is EvalBrokenReason.ABANDONED
+                             else "drain")
+                    result = self._broken_result(inflight, reason=escalated_reason,
+                                                 exit_code=exit_code, wall_sec=wall_sec,
+                                                 phase=phase)
+                elif exit_code is not None and exit_code != 0:
+                    reason = (EvalBrokenReason.KILLED if exit_code < 0
+                              else EvalBrokenReason.EXIT_NONZERO)
+                    result = self._broken_result(inflight, reason=reason, exit_code=exit_code,
+                                                 wall_sec=wall_sec, phase="worker_exit")
+                else:
+                    result = self._read_worker_result(inflight, exit_code=exit_code,
+                                                      wall_sec=wall_sec)
+            except Exception as exc:  # noqa: BLE001 -- deliberate catch-all, see docstring above
+                # The traceback is logged at the raising site, not in the emitter: `_LOG.exception`
+                # is only correct with a live exception, and the other call sites have none.
+                detail = repr(exc)
+                _LOG.exception(
+                    "eval_round_completion_failed round_id=%s step=%s",
+                    inflight["round_id"], inflight["step"],
+                )
+                result = self._broken_result(
+                    inflight, reason=EvalBrokenReason.ROUND_COMPLETION_ERROR,
+                    exit_code=getattr(inflight["proc"], "exitcode", None), wall_sec=wall_sec,
+                    phase="round_completion", detail=detail, exception_class=type(exc).__name__,
+                )
+
+            _remove_partial_gate(inflight)
+            with self._lock:
+                self._inflight = None
+                self._mailbox.append(result)
+                # Cache under the same lock the guard reads, so a suppressed second caller that
+                # arrives after this point gets the real result rather than `None`.
+                inflight["_result"] = result
+            return result
+        finally:
+            inflight["_done"].set()
 
     def _read_worker_result(
         self, inflight: dict[str, Any], *, exit_code: int | None, wall_sec: float,
