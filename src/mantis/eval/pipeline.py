@@ -50,6 +50,8 @@ _LOG = logging.getLogger(__name__)
 #: The poller thread's fixed tick — small enough that an idle beat is observable in a few
 #: tens of milliseconds, cheap enough to run for a whole round's life.
 _POLL_TICK_SEC = 0.02
+#: The second finaliser's floor: it waits on local I/O, so a kill grace of 0 still waits.
+_FINALIZE_WAIT_FLOOR_SEC = 5.0
 
 #: Mirrors `mantis.config.schema._EVAL_TIMEOUT_CEILING_SEC`: `Process.join` raises
 #: `OverflowError` on a non-finite timeout, so every join here bounds its own regardless.
@@ -574,8 +576,8 @@ class EvalPipeline:
         return results[0] if len(results) == 1 else results
 
     def abandon_pending(self) -> dict | list | None:
-        """A RESUMABLE stop's drain: terminate the in-flight round NOW (bounded by twice the kill
-        grace) and finalise it as ABANDONED."""
+        """A RESUMABLE stop's drain: terminate the in-flight round NOW (bounded by three kill
+        graces, the last at least `_FINALIZE_WAIT_FLOOR_SEC`) and finalise it as ABANDONED."""
         with self._lock:
             inflight = self._inflight
         if inflight is None:
@@ -617,7 +619,16 @@ class EvalPipeline:
                 done = None
         if done is not None:
             # A second finaliser waits out the first, so a finished round never reads as `None`.
-            done.wait(_bounded_join_timeout(self._eval_cfg.worker_kill_grace_sec))
+            wait_sec = max(_bounded_join_timeout(self._eval_cfg.worker_kill_grace_sec),
+                           _FINALIZE_WAIT_FLOOR_SEC)
+            if not done.wait(wait_sec):
+                _LOG.error("eval_round_finalize_wait_timeout round_id=%s step=%s wait_sec=%s",
+                           inflight.get("round_id"), inflight.get("step"), wait_sec)
+                _emit(self._sink, {
+                    "event": "eval_round_finalize_wait_timeout",
+                    "round_id": inflight.get("round_id"), "step": inflight.get("step"),
+                    "wait_sec": wait_sec,
+                })
             return inflight.get("_result")
         # The latch's waiter is released however the body exits.
         try:
@@ -818,11 +829,11 @@ class EvalPipeline:
             proc, budget_sec=self._caps.terminal_eval_hard_cap_sec,
             worker_kill_grace_sec=self._eval_cfg.worker_kill_grace_sec, clock=self._clock,
         )
-        # `_finalize_round` returns `None` only when another route already finalised, and this
-        # `inflight` is never published to `self._inflight` — asserted, not assumed.
+        # This `inflight` is never published to `self._inflight`, so no second route may latch it.
+        suppressed_before = self._double_finalize_suppressed
         result = (self._finalize_round(inflight, escalated_reason=reason) if reason is not None
                   else self._finalize_round(inflight))
-        assert result is not None, (
+        assert result is not None and self._double_finalize_suppressed == suppressed_before, (
             "the terminal-eval round was finalised twice — its inflight record is local to "
             "this call and must be unreachable from the poller and the drain"
         )

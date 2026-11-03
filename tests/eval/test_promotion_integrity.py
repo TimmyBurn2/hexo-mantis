@@ -220,10 +220,11 @@ def test_the_guard_is_per_round_not_per_pipeline(monkeypatch: pytest.MonkeyPatch
 def test_a_second_finalise_waits_for_the_first_and_returns_its_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """PLANTED BREAK: return `_result` without waiting and the second caller reads `None` for a finished round."""
+    """PLANTED BREAK: return `_result` without waiting, or drop the wait's floor, and the second caller reads `None`."""
     from mantis.eval.pipeline import EvalPipeline
 
     pipe = _pipeline(monkeypatch, [])
+    pipe._eval_cfg = SimpleNamespace(worker_kill_grace_sec=0.0)  # only the floor bounds the wait
     entered, release = threading.Event(), threading.Event()
 
     def _slow_read(self: Any, inflight: dict[str, Any], **_kw: Any) -> dict[str, Any]:
@@ -241,3 +242,35 @@ def test_a_second_finalise_waits_for_the_first_and_returns_its_result(
     first.join(5.0)
     assert second == {"round_id": "r1", "ok": True}, "the second finaliser did not wait for the first"
     assert len(pipe._mailbox) == 1 and pipe._double_finalize_suppressed == 1
+
+
+def test_a_second_finalise_that_outwaits_its_bound_is_logged(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+) -> None:
+    """PLANTED BREAK: ignore `done.wait`'s verdict and a timed-out second finaliser returns `None` in silence."""
+    import mantis.eval.pipeline as pipeline_mod
+    from mantis.eval.pipeline import EvalPipeline
+
+    pipe = _pipeline(monkeypatch, [])
+    pipe._eval_cfg = SimpleNamespace(worker_kill_grace_sec=0.0)
+    monkeypatch.setattr(pipeline_mod, "_FINALIZE_WAIT_FLOOR_SEC", 0.05)
+    entered, release = threading.Event(), threading.Event()
+
+    def _stuck_read(self: Any, inflight: dict[str, Any], **_kw: Any) -> dict[str, Any]:
+        entered.set()
+        release.wait(5.0)
+        return {"round_id": inflight["round_id"], "ok": True}
+
+    monkeypatch.setattr(EvalPipeline, "_read_worker_result", _stuck_read)
+    inflight = _inflight("r1")
+    first = threading.Thread(target=EvalPipeline._finalize_round, args=(pipe, inflight), daemon=True)
+    first.start()
+    assert entered.wait(5.0), "the first finalise never reached the round body"
+    with caplog.at_level("ERROR"):
+        second = EvalPipeline._finalize_round(pipe, inflight)
+    release.set()
+    first.join(5.0)
+    assert second is None
+    assert any("eval_round_finalize_wait_timeout" in r.message for r in caplog.records), (
+        "a second finaliser that gave up waiting left no trace"
+    )
