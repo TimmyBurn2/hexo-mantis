@@ -65,8 +65,10 @@ def _write_leaf(tmp_path, marker, *, cooperative_sigterm: bool = False):
         + ("signal.signal(signal.SIGTERM, lambda *a: None)\n" if cooperative_sigterm else "")
         + "from mantis.train.lifecycle.signals import arm_parent_death_if_supervised\n"
         "armed = arm_parent_death_if_supervised()\n"
-        f"open({str(marker)!r}, 'w', encoding='utf-8').write("
-        "str(os.getpid()) + ' ' + str(int(armed)))\n"
+        # Written aside then renamed: the reader polls for the path, so it must never see it empty.
+        f"with open({str(marker) + '.tmp'!r}, 'w', encoding='utf-8') as f:\n"
+        "    f.write(str(os.getpid()) + ' ' + str(int(armed)))\n"
+        f"os.replace({str(marker) + '.tmp'!r}, {str(marker)!r})\n"
         "time.sleep(90)\n",
         encoding="utf-8",
     )
