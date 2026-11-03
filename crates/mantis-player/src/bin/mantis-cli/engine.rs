@@ -41,6 +41,33 @@ pub struct Engine {
 }
 
 impl Engine {
+    /// `position [radius R] [moves q r …]`: the radius, when given, must be the net's (Six's default is 8).
+    fn position(&mut self, words: &[&str]) -> Result<(), CliError> {
+        self.position = None;
+        let rest = match words {
+            ["radius", r, rest @ ..] => match parse::<i32>(r, "position radius")? {
+                r if r == self.radius() => rest,
+                r => {
+                    return Err(CliError::Command(format!(
+                        "position: radius {r} is not the net's ({})",
+                        self.radius()
+                    )))
+                }
+            },
+            rest => rest,
+        };
+        self.position = Some(match rest {
+            [] => Vec::new(),
+            ["moves", flat @ ..] => cells(flat)?,
+            _ => {
+                return Err(CliError::Command(
+                    "position: [radius R] [moves q r ...]".to_owned(),
+                ))
+            }
+        });
+        Ok(())
+    }
+
     fn radius(&self) -> i32 {
         self.player.board().geometry().legal_move_radius
     }
@@ -69,15 +96,10 @@ impl Engine {
     }
 
     fn go(&mut self, words: &[&str]) -> Result<TurnResult, CliError> {
-        let (budget, clock) = match words {
-            ["nodes", n] => match parse::<u32>(n, "go nodes")? {
-                0 => return Err(CliError::Command("go nodes: 0 sims".to_owned())),
-                n => (Budget::Sims(n), GameClock::Sims(n)),
-            },
-            ["movetime", t] => {
-                let t = f64::from(parse::<u32>(t, "go movetime")?);
-                (Budget::Clock { turn_ms: t }, GameClock::TurnMs(t))
-            }
+        // `nodes` is the turn's, as Six reads it: split evenly across the stones due, as the budget rule splits a clock.
+        let (nodes, clock_ms) = match words {
+            ["nodes", n] => (Some(parse::<u32>(n, "go nodes")?), None),
+            ["movetime", t] => (None, Some(f64::from(parse::<u32>(t, "go movetime")?))),
             _ => return Err(CliError::Command("go: nodes N or movetime T".to_owned())),
         };
         let moves = self
@@ -106,6 +128,19 @@ impl Engine {
                 .apply_move(q, r)
                 .map_err(|why| CliError::Command(why.to_owned()))?;
         }
+        let stones = u32::from(board.moves_remaining.max(1));
+        let (budget, clock) = match (nodes, clock_ms) {
+            (Some(n), _) if n / stones == 0 => {
+                return Err(CliError::Command(format!(
+                    "go nodes {n}: below one sim for each of {stones} stones"
+                )))
+            }
+            (Some(n), _) => (Budget::Sims(n / stones), GameClock::Sims(n / stones)),
+            (None, t) => {
+                let t = t.unwrap_or_default();
+                (Budget::Clock { turn_ms: t }, GameClock::TurnMs(t))
+            }
+        };
         if extends.is_some() {
             self.player.play(&moves[from..])?;
         } else {
@@ -157,8 +192,12 @@ impl Engine {
     }
 
     pub fn serve(&mut self, input: impl BufRead, mut out: impl Write) -> Result<(), CliError> {
-        for line in input.lines() {
-            let line = line?;
+        for line in input.split(b'\n') {
+            let Ok(line) = String::from_utf8(line?) else {
+                writeln!(out, "error a line that is not UTF-8")?;
+                out.flush()?;
+                continue;
+            };
             let words: Vec<&str> = line.split_whitespace().collect();
             let reply: Result<Vec<String>, CliError> = match words.as_slice() {
                 [] => continue,
@@ -176,27 +215,7 @@ impl Engine {
                     self.history = None;
                     Ok(Vec::new())
                 }
-                ["position", "radius", r, rest @ ..] => {
-                    self.position = None;
-                    let moves = match rest {
-                        [] => Ok(Vec::new()),
-                        ["moves", flat @ ..] => cells(flat),
-                        _ => Err(CliError::Command(
-                            "position: radius R [moves q r ...]".to_owned(),
-                        )),
-                    };
-                    match (parse::<i32>(r, "position radius"), moves) {
-                        (Ok(r), Ok(moves)) if r == self.radius() => {
-                            self.position = Some(moves);
-                            Ok(Vec::new())
-                        }
-                        (Ok(r), Ok(_)) => Err(CliError::Command(format!(
-                            "position: radius {r} is not the net's ({})",
-                            self.radius()
-                        ))),
-                        (Err(e), _) | (_, Err(e)) => Err(e),
-                    }
-                }
+                ["position", rest @ ..] => self.position(rest).map(|()| Vec::new()),
                 ["go", rest @ ..] => match self.go(rest) {
                     Ok(t) => {
                         self.report(&t);
@@ -208,7 +227,10 @@ impl Engine {
                         Ok(vec![format!("bestmove {}", flat.join(" "))])
                     }
                     // A driver reads through `bestmove`, so a refused search still answers one.
-                    Err(e) => Ok(vec![format!("error {e}"), "bestmove none".to_owned()]),
+                    Err(e) => {
+                        self.last = self.player.rows();
+                        Ok(vec![format!("error {e}"), "bestmove none".to_owned()])
+                    }
                 },
                 [word, ..] => Err(CliError::Command(format!("unknown command {word:?}"))),
             };

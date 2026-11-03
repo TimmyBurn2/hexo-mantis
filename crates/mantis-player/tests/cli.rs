@@ -20,6 +20,8 @@ use mantis_search::mcts::{AuditConfig, AuditMode, TacticsConfig};
 
 const ENC: &str = "gnn_axis_r8";
 const SIMS: u32 = 32;
+/// The sha256 of the tiny net's one-thread outputs on 16 goldens (logits, probs, value, LE bits), from a build of f93d6cc6.
+const PINNED_FORWARD_SHA: &str = "752523b94f7f48cb5921f528074ea1d56b9f53d69f43a585b3a5baee8f04c33b";
 const GOLDENS: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../tests/fixtures/graph_build/positions_r8.txt"
@@ -287,7 +289,8 @@ fn opponent(player: &Player) -> Vec<(i32, i32)> {
 }
 
 #[test]
-fn the_binary_answers_the_players_stones_turn_by_turn_and_a_wrong_stone_order_parts_from_them() {
+fn go_nodes_is_the_turns_budget_and_the_answers_are_the_players_stones_and_a_swapped_stone_order_answers_otherwise(
+) {
     let _one = SERIAL.lock();
     let (mut cli, ready) = Cli::start(&write_net("parity", None), 2);
     assert!(ready.starts_with("mantis-cli ready net=tiny"), "{ready}");
@@ -304,9 +307,10 @@ fn the_binary_answers_the_players_stones_turn_by_turn_and_a_wrong_stone_order_pa
             if player.board().check_win() {
                 break;
             }
+            let due = u32::from(player.board().moves_remaining);
             let want = turn(&mut player, &net, Budget::Sims(SIMS));
             assert_eq!(
-                cli.cells(&line, &format!("go nodes {SIMS}")),
+                cli.cells(&line, &format!("go nodes {}", SIMS * due)),
                 want,
                 "{line:?}"
             );
@@ -334,7 +338,7 @@ fn the_binary_answers_the_players_stones_turn_by_turn_and_a_wrong_stone_order_pa
     let want = turn(&mut player, &net, Budget::Sims(SIMS));
     cli.send("newgame");
     assert_ne!(
-        cli.cells(&swapped, &format!("go nodes {SIMS}")),
+        cli.cells(&swapped, &format!("go nodes {}", 2 * SIMS)),
         want,
         "the stone order went unread"
     );
@@ -357,7 +361,8 @@ fn a_refused_cell_or_command_answers_error_and_leaves_the_game_as_it_was() {
     refused(&mut cli, &[(0, 0), (9, 0)], "go nodes 32");
     refused(&mut cli, &[(0, 0)], "go nodes 0");
     refused(&mut cli, &[(0, 0)], "go depth 3");
-    refused(&mut cli, &[(0, 0)], "go nodes 977");
+    refused(&mut cli, &[(0, 0)], "go nodes 1");
+    refused(&mut cli, &[(0, 0)], "go nodes 1954");
     for line in [
         "position radius 7",
         "position radius 8 moves 1",
@@ -367,6 +372,18 @@ fn a_refused_cell_or_command_answers_error_and_leaves_the_game_as_it_was() {
         cli.send(line);
         assert!(cli.line().starts_with("error "), "{line}");
     }
+    cli.stdin
+        .write_all(b"position \xff\n")
+        .expect("the binary reads its stdin");
+    assert_eq!(cli.line(), "error a line that is not UTF-8");
+    cli.send("position moves 0 0\ngo nodes 64");
+    assert!(
+        cli.line().starts_with("bestmove "),
+        "Six's default radius is 8"
+    );
+    let _ = cli.err_line();
+    cli.send("position radius 7");
+    assert!(cli.line().starts_with("error "));
     cli.send("go nodes 32");
     assert_eq!(
         cli.line(),
@@ -385,25 +402,24 @@ fn a_refused_cell_or_command_answers_error_and_leaves_the_game_as_it_was() {
     cli.send("newgame");
     let mut line = moves.clone();
     let ours = turn(&mut player, &net, Budget::Sims(SIMS));
-    assert_eq!(cli.cells(&line, &format!("go nodes {SIMS}")), ours);
+    assert_eq!(cli.cells(&line, &format!("go nodes {}", 2 * SIMS)), ours);
     line.extend(&ours);
     let mut bad = line.clone();
     bad.extend([line[0], line[1]]);
-    refused(&mut cli, &bad, &format!("go nodes {SIMS}"));
+    refused(&mut cli, &bad, &format!("go nodes {}", 2 * SIMS));
     let theirs = opponent(&player);
     player.play(&theirs).expect("legal");
     line.extend(theirs);
     let want = turn(&mut player, &net, Budget::Sims(SIMS));
     assert_eq!(
-        cli.cells(&line, &format!("go nodes {SIMS}")),
+        cli.cells(&line, &format!("go nodes {}", 2 * SIMS)),
         want,
         "the refused stones leaked"
     );
 }
 
 #[test]
-fn a_movetime_turn_spends_the_budget_rule_within_its_clock_and_a_tripled_clock_reads_as_an_overrun()
-{
+fn a_movetime_turn_spends_the_budget_rule_within_its_clock_and_six_clocks_read_as_an_overrun() {
     let _one = SERIAL.lock();
     let (mut cli, ready) = Cli::start(&write_net("movetime", None), 1);
     let (mut leaf, min_turn) = (field(&ready, "leaf_ms"), field(&ready, "min_turn_ms"));
@@ -439,13 +455,13 @@ fn a_movetime_turn_spends_the_budget_rule_within_its_clock_and_a_tripled_clock_r
         line.extend(words.chunks(2).map(|c| (c[0], c[1])));
     }
 
-    // PLANTED BREAK: an engine given three times the clock overruns it, and the line above reads that.
+    // PLANTED BREAK: an engine given six times the clock overruns it by more than any turn-to-turn swing in its cost, and the line above reads that.
     cli.send("newgame");
-    let (_, counters, ms) = cli.go(&start, &format!("go movetime {}", 3.0 * t));
+    let (_, counters, ms) = cli.go(&start, &format!("go movetime {}", 6.0 * t));
     assert!(
         ms > t,
         "a turn given {} ms read no overrun of {t} ms: {counters:?}",
-        3.0 * t
+        6.0 * t
     );
     // A clock below the floor's plays the CPU floor anyway and flags it.
     cli.send("newgame");
@@ -476,7 +492,9 @@ fn a_weights_file_the_manifest_does_not_bind_is_refused_at_start() {
 }
 
 #[test]
-fn the_threaded_forward_is_the_one_thread_pass_bit_for_bit_and_reads_a_reordered_sum() {
+fn the_one_thread_forward_is_the_pinned_one_and_the_threaded_pass_is_it_bit_for_bit_and_reversed_edges_change_the_bits(
+) {
+    let _one = SERIAL.lock();
     let spec = mantis_encoding::lookup(ENC).expect("the row");
     let mut player = Player::new(block(), ENC, true).expect("the block of record");
     let positions: Vec<Position> = golden_moves(16)
@@ -501,6 +519,16 @@ fn the_threaded_forward_is_the_one_thread_pass_bit_for_bit_and_reads_a_reordered
     let batch = build_batch(&positions, spec).expect("the goldens batch");
     let net = forward();
     let one = net.forward(&batch).expect("a well-formed batch");
+    let bits: Vec<u8> = [&one.logits, &one.probs, &one.value]
+        .iter()
+        .flat_map(|v| v.iter().flat_map(|f| f.to_le_bytes()))
+        .collect();
+    let sha: String = Sha256::digest(&bits)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    // The one-thread pass's bits as the forward before `forward_on` (f93d6cc6) computed them on this batch.
+    assert_eq!(sha, PINNED_FORWARD_SHA, "the one-thread forward moved");
     for threads in [2, 3, 8] {
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(threads)
@@ -522,4 +550,42 @@ fn the_threaded_forward_is_the_one_thread_pass_bit_for_bit_and_reads_a_reordered
         one,
         "a reordered sum went unread"
     );
+}
+
+#[test]
+fn a_winning_first_stone_answers_one_cell_and_a_won_game_refuses_another_stone_and_a_search() {
+    let _one = SERIAL.lock();
+    let (mut cli, _) = Cli::start(&write_net("won", None), 1);
+    // x holds five in a row, open at both ends, with two stones to play.
+    let five = vec![
+        (0, 0),
+        (0, 3),
+        (5, -3),
+        (1, 0),
+        (2, 0),
+        (-3, 3),
+        (3, 3),
+        (3, 0),
+        (4, 0),
+        (-4, -2),
+        (6, -6),
+    ];
+    let reply = cli.cells(&five, &format!("go nodes {}", 2 * SIMS));
+    assert_eq!(
+        reply.len(),
+        1,
+        "a first stone that wins is the whole answer: {reply:?}"
+    );
+    assert!(reply[0] == (5, 0) || reply[0] == (-1, 0), "{reply:?}");
+    let mut won = five.clone();
+    won.push(reply[0]);
+    let (lines, _, _) = cli.go(&won, &format!("go nodes {}", 2 * SIMS));
+    assert_eq!(lines, ["error go: the game is over", "bestmove none"]);
+    won.push((6, 1));
+    let (lines, _, _) = cli.go(&won, &format!("go nodes {}", 2 * SIMS));
+    assert!(
+        lines[0].starts_with("error position: (6, 1) is not a legal stone"),
+        "{lines:?}"
+    );
+    assert_eq!(lines[1], "bestmove none");
 }

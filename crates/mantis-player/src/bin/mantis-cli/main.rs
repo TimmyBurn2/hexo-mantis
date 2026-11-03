@@ -78,7 +78,10 @@ fn start() -> Result<Engine, CliError> {
         None => beside_binary()?,
     };
     let cores = std::thread::available_parallelism().map_or(1, usize::from);
-    let threads = threads.unwrap_or(4).clamp(1, cores);
+    if threads == Some(0) {
+        return Err(bad("0"));
+    }
+    let threads = threads.unwrap_or(4).min(cores);
     let net = load(&net)?;
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(threads)
