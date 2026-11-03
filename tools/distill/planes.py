@@ -63,7 +63,9 @@ def near_stones(q: np.ndarray, r: np.ndarray, moves: np.ndarray, radius: int) ->
     anchors = moves if len(moves) else np.zeros((1, 2), dtype=np.int64)
     dq = q[None, :] - anchors[:, 0, None]
     dr = r[None, :] - anchors[:, 1, None]
-    return (np.maximum(np.maximum(np.abs(dq), np.abs(dr)), np.abs(dq + dr)) <= radius).any(axis=0)
+    near = np.maximum(np.maximum(np.abs(dq), np.abs(dr)), np.abs(dq + dr)) <= radius
+    # asarray: the py3.11 floor resolves numpy 2.4, whose stubs type `any(axis=0)` `bool | NDArray`.
+    return np.asarray(near.any(axis=0))
 
 
 def six_planes(moves: np.ndarray, radius: int) -> tuple[np.ndarray, tuple[int, int]]:

@@ -15,11 +15,15 @@ cd "$REPO_ROOT"
 
 run_ruff() { uv run ruff check . ; }
 run_pyright_count() {
-  # pipefail, or a pyright that dies mid-JSON reports the reader's status and reads green. Subshell-
-  # scoped: this file's `printf ... | grep -q` idioms want the DOWNSTREAM status.
-  ( set -o pipefail
-    uv run pyright --outputjson 2>/dev/null \
-      | uv run python -c 'import json,sys; s=json.load(sys.stdin)["summary"]; print(s["errorCount"], s.get("filesAnalyzed", -1))' )
+  # A pyright that dies mid-JSON fails the reader's json.load, so the summary is empty and the gate refuses.
+  printf '%s' "$1" \
+    | uv run python -c 'import json,sys; s=json.load(sys.stdin)["summary"]; print(s["errorCount"], s.get("filesAnalyzed", -1))'
+}
+print_pyright_errors() {
+  printf '%s' "$1" | uv run python -c 'import json,sys
+for d in json.load(sys.stdin)["generalDiagnostics"]:
+    if d["severity"] == "error":
+        print("  %s:%d: %s" % (d.get("file", "?"), d["range"]["start"]["line"] + 1, d["message"]))'
 }
 
 # `errorCount: 0` over zero analysed files is a green over nothing. The floor catches "nothing",
@@ -104,7 +108,8 @@ run_ruff || { echo "lint_gate: RUFF RED" >&2; exit 1; }
 
 echo "lint_gate: pyright (basic, src+tools, zero-error baseline)"
 pyright_preflight || exit "$PYRIGHT_REFUSED_RC"
-PYRIGHT_SUMMARY="$(run_pyright_count)"
+PYRIGHT_JSON="$(uv run pyright --outputjson 2>/dev/null)"
+PYRIGHT_SUMMARY="$(run_pyright_count "$PYRIGHT_JSON")"
 ERRS="${PYRIGHT_SUMMARY%% *}"
 FILES="${PYRIGHT_SUMMARY##* }"
 if [ -z "${ERRS}" ]; then
@@ -123,6 +128,7 @@ if [ "${FILES}" -lt "${PYRIGHT_MIN_FILES}" ] 2>/dev/null; then
 fi
 if [ "${ERRS}" != "0" ]; then
   echo "lint_gate: PYRIGHT RED (${ERRS:-unreadable} errors; baseline is 0)" >&2
+  print_pyright_errors "$PYRIGHT_JSON" >&2
   exit 1
 fi
 
