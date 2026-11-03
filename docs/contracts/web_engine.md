@@ -2,7 +2,7 @@
 
 - version: v5
 - owner: crate mantis-player (`batch.rs`, the batch both net backends read; `player.rs`, `cache.rs` and `budget.rs`,
-  the step machine; `forward.rs`, `RustForward`; `wasm.rs`, the browser surface; `src/bin/mantis-cli/`, the native
+  the step machine; `forward.rs`, `RustForward`; `wasm.rs`, the browser surface; `crates/mantis-player/src/bin/mantis-cli/`, the native
   binary); `tools/export_web.py` (the manifest and its witness rows); `tools/release_cli.sh` and `tools/rust_notices.sh`
   (the native bundle and the crate notices both releases ship); `web/` (the typed API, the Worker's messages and checks, the backends, the arena adapter)
 - status: v5 — NATIVE-1: the native binary `mantis-cli`, Six's text protocol on stdio over the same step machine, and
@@ -160,7 +160,7 @@ node_feat_dim)` refuses a missing tensor, a shape that disagrees with another (`
   each node's in-edge sum) across a rayon pool; every output is `forward`'s bit for bit. The browser runs `forward`.
   NATIVE-1's bench read 3.19× at 4 threads on the desk's 8 cores (`mantis-records/native-1/BENCH.md`).
 
-## The native binary (`mantis-cli`, `src/bin/mantis-cli/`)
+## The native binary (`mantis-cli`, `crates/mantis-player/src/bin/mantis-cli/`)
 
 `mantis-cli [--net STEM.manifest.json] [--threads N]`: without `--net`, the one `*.manifest.json` beside the
 executable; `--threads` defaults to 4, held to the machine's available parallelism. The search is the step machine's,
@@ -308,7 +308,7 @@ htttx basic_websocket v1-alpha over `postMessage`; wire `(q, r)` is the engine's
 | W2: `RustForward` holds the fp32 line against the fp32 ONNX on every tiny stamp and batch; fed every divisor as 1 it misses (planted break) | `forward.rs`, `tools/export_web.py` | `tests/tools/test_export_web.py::test_the_rust_forward_holds_the_fp32_lines_against_the_onnx_on_every_batch`, `test_a_rust_forward_without_the_degree_divisor_misses_the_line` |
 | `RustForward` refuses a table its file does not hold, and a batch its shape does not allow | `forward.rs` | `forward::tests::*` |
 | every candidate depth (4, 5, 6 GINE layers) exports bit-identically and holds W1 at ORT CPU and W2 | `tools/export_web.py`, `forward.rs` | `tests/tools/test_export_web.py::test_every_candidate_depth_exports_and_both_forwards_hold_their_lines` (gate 20) |
-| the binary answers the player's stones turn by turn over 8 goldens with the other side's stones played in, and a wrong stone order parts from them (planted break); it refuses an occupied cell, one past the radius, a bad `go`, radius or list, and an unknown command, and a refused extension leaves the game as it was; a `movetime` turn sets `budget.rs`'s sims and stays inside its clock, and a tripled clock reads as an overrun (planted break); a weights file the manifest does not bind refuses the start; `forward_on` is `forward` bit for bit at 2, 3 and 8 threads, and a reversed edge list reads (planted break) | `src/bin/mantis-cli/`, `forward.rs` | `crates/mantis-player/tests/cli.rs` |
+| the binary answers the player's stones turn by turn over 8 goldens with the other side's stones played in, and a wrong stone order parts from them (planted break); it refuses an occupied cell, one past the radius, a bad `go`, radius or list, and an unknown command, and a refused extension leaves the game as it was; a `movetime` turn sets `budget.rs`'s sims and stays inside its clock, and a tripled clock reads as an overrun (planted break); a weights file the manifest does not bind refuses the start; `forward_on` is `forward` bit for bit at 2, 3 and 8 threads, and a reversed edge list reads (planted break) | `crates/mantis-player/src/bin/mantis-cli/`, `forward.rs` | `crates/mantis-player/tests/cli.rs` |
 | the bindgen attribute lives in `wasm.rs` alone, gated to wasm32 | `wasm.rs` | `crates/mantis-player/tests/wasm_census.rs` |
 | W2 in wasm: the engine's `RustForward` holds the fp32 line against the fp32 ONNX on ORT's one-thread CPU kernels at B 1 and 8; every divisor fed as 1 misses it | `forward.rs`, `wasm.rs` | `web/test/w2.test.ts` (gate 21) |
 | the Worker refuses a foreign manifest by name, admits the CPU backend by its witness, falls back to it when the WebGPU candidate throws, plays turns through the one loop, hears an abort between batches, stays usable after a failure mid-turn, passes a trap through untouched, refuses a second turn and a position no cadence reaches | `web/src/worker.ts` | `web/test/worker.test.ts` (gate 21) |
