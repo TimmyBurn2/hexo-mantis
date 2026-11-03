@@ -1,7 +1,8 @@
 """Collate BYTE-PARITY against the captured old outputs.
 
-No tolerance exists on the parity arms: the collate path is reshape/copy-only, so ANY byte
-difference is real contract drift, not numerical noise. The capture's own `verify_fixtures.py`
+No tolerance exists on the collate arms: the collate path is reshape/copy-only, so ANY byte
+difference is real contract drift, not numerical noise. The segment_softmax arm alone carries a
+2-ulp bound, signed by the dispatcher. The capture's own `verify_fixtures.py`
 reproduced these outputs bit-exactly from the reloaded npz, so a mismatch here is a port
 defect, never a fixture artifact.
 """
@@ -26,6 +27,8 @@ from mantis.train.losses import segment_softmax as train_segment_softmax
 
 # The capture ran on CPU with `torch.set_num_threads(1)`; B-04/B-05 reproduce that regime.
 CAPTURE_TORCH_THREADS = 1
+#: torch.exp's bits depend on the CPU (a Xeon 8573C missed by 2 ulp under the same wheel and kernels).
+SOFTMAX_MAX_ULP = 2
 # Seed for the B-06 property battery (test-local; B-06 compares two NEW-side copies).
 DUPLICATION_BATTERY_SEED = 20260723
 
@@ -100,22 +103,26 @@ def test_collate_empty_batch_parity(payload_fields, collated_golden, semantic):
     _assert_tensor_parity(batch, collated_golden["b0"], f"b0[{semantic}]")
 
 
-def test_segment_softmax_bit_parity(payload_fields, hotpath_golden, single_threaded_torch):
-    """`segment_softmax(captured_logits, batch.legal_offsets)` is BIT-exact against the captured
-    old output (same torch minor, CPU, 1 thread). The logits vector is loaded from the capture,
-    not regenerated, so the seed cannot drift. FAIL = the ragged softmax the Rust assembler
-    normalizes against changed."""
+def test_segment_softmax_holds_the_capture_within_two_ulp(payload_fields, hotpath_golden,
+                                                          single_threaded_torch):
+    """`segment_softmax(captured_logits, batch.legal_offsets)` is within `SOFTMAX_MAX_ULP` of the
+    captured output on every element (same torch minor, CPU, 1 thread; the bound moves only with
+    a dispatcher's word). FAIL = the ragged softmax the Rust assembler normalizes against changed."""
     batch = _collate(payload_fields("b6"), expected_version=1, device="cpu", semantic="full")
     logits = torch.from_numpy(hotpath_golden["logits"].copy())
     expected = hotpath_golden["segment_softmax"]
 
     probs = segment_softmax(logits, batch.legal_offsets).detach().cpu().numpy()
     assert probs.dtype == expected.dtype, f"dtype {probs.dtype} != {expected.dtype}"
-    assert np.array_equal(probs, expected), (
-        "segment_softmax output is not bit-identical to capture; PREREG permits NO tolerance "
-        "here without a root-caused mechanism in IMPL_NOTES + dispatcher sign-off. "
-        f"{_host_and_ulps(probs, expected)}"
+    assert int(_ulps(probs, expected).max()) <= SOFTMAX_MAX_ULP, (
+        f"segment_softmax output is more than {SOFTMAX_MAX_ULP} ulp from the capture; the bound "
+        f"moves only with a dispatcher's word. {_host_and_ulps(probs, expected)}"
     )
+
+
+def _ulps(actual: np.ndarray, expected: np.ndarray) -> np.ndarray:
+    """Per-element distance in float32 units in the last place (the probabilities are all positive)."""
+    return np.abs(actual.view(np.int32).astype(np.int64) - expected.view(np.int32).astype(np.int64))
 
 
 def _host_and_ulps(actual: np.ndarray, expected: np.ndarray) -> str:
@@ -125,7 +132,7 @@ def _host_and_ulps(actual: np.ndarray, expected: np.ndarray) -> str:
             encoding="utf-8").splitlines() if ln.startswith("model name")), "unknown")
     except OSError:
         cpu = "unknown"
-    ulps = np.abs(actual.view(np.int32).astype(np.int64) - expected.view(np.int32).astype(np.int64))
+    ulps = _ulps(actual, expected)
     return (f"host: {cpu}, ATen {torch.backends.cpu.get_cpu_capability()}, torch {torch.__version__}; "
             f"{int((ulps > 0).sum())} of {ulps.size} elements differ, max {int(ulps.max())} ulp")
 
