@@ -34,7 +34,7 @@ hexo-mantis/
 │   ├── mantis-encoding/        # registry.toml + spec + validators
 │   ├── mantis-search/          # MCTS (PUCT + Gumbel), completed-Q, tactics solver
 │   ├── mantis-selfplay/        # runner, worker loop, inference queues, replay buffers
-│   ├── mantis-player/          # the browser bot's single-thread deploy driver (pull/push), its batch, RustForward; native + wasm32
+│   ├── mantis-player/          # the deploy driver (pull/push), its batch, RustForward; the browser engine (wasm32) and mantis-cli
 │   └── mantis-bridge/          # ALL PyO3; maturin; builds mantis._engine (abi3 release)
 ├── src/mantis/                 # the one Python package (installed, src-layout)
 │   ├── encoding/               # delegating shim over _engine registry + resolvers + audit
@@ -88,6 +88,7 @@ mantis-search    → core                # LegalSetPolicy + gumbel HERE; encodin
 mantis-selfplay  → core, encoding, graph, search
 mantis-player    → core, encoding, graph, search, selfplay   # the served path's leaf code and the search; no pyo3
                                        # wasm32-only deps in its own manifest; #[wasm_bindgen] in wasm.rs alone
+                                       # rayon native-only (`forward_on`); the binary `mantis-cli` in src/bin/ (NATIVE-1)
 mantis-bridge    → all of the above    # the ONLY crate that knows pyo3 exists
 ```
 Rules: no `#[pyclass]`/`#[pymethods]`/`#[pyfunction]` outside mantis-bridge (core crates
@@ -203,7 +204,7 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
 | 10 | mint preflight report | preflight-mint-v1 | the mint preflight's evidence JSON: always written (LAW-14); mode, verdict and mint TIER derived from what the run DID, never from what it intended |
 | 11 | game record | game-record-v1 | every game a run plays, one JSON object per line, sharded by (run, segment, hour) with an index; the SEGMENT is the writer and the hour is the window, so a resume never appends into a stopped process's file |
 | 12 | canvas wire | v1 | the hex-canvas kind's per-leaf canvas: the fence masked inside its smallest axial box in a position-only orientation, six 0/1 planes, the legal gather and the graph's reply frame; far mode past `canvas_max_side`; the batch is the serving leg's (DENSE-1 L2). #2 and #8 stay retired: a number is retired, not reused |
-| 13 | web engine API | v4 | the batch both web net backends read (every array beyond `x` int32, built in `mantis-player` from the served path's pack), its outputs, the export's files, its manifest, the detector and the witness lines, the player's pull/push step machine, per-game cache and budget (v2), `RustForward`, the wasm32 surface and W2's rows (v3, L2), and the typed API, the Worker's messages and checks and the arena adapter's packet map (v4, L3) |
+| 13 | web engine API | v5 | the batch both web net backends read (every array beyond `x` int32, built in `mantis-player` from the served path's pack), its outputs, the export's files, its manifest, the detector and the witness lines, the player's pull/push step machine, per-game cache and budget (v2), `RustForward`, the wasm32 surface and W2's rows (v3, L2), and the typed API, the Worker's messages and checks and the arena adapter's packet map (v4, L3), and the native binary `mantis-cli` with `RustForward::forward_on` (v5, NATIVE-1) |
 
 Contract changes bump the version and update the contract doc + its tests in the same
 commit. The PyO3 seam stays thin flat arrays (marshaling is a measured cost); per-field
@@ -1415,3 +1416,19 @@ is superseded: the follower's `FOLLOW_UNITS` are the rulers.
    and the tarball goes to a GitHub release from a `web-v<semver>` tag; `"private": true` keeps it off the npm
    registry.
 
+### AMENDMENT — R403(d), NATIVE-1: the native binary `mantis-cli` lands in `mantis-player`
+
+1. **What lands.** `crates/mantis-player/src/bin/mantis-cli/` (`main.rs`, `engine.rs`, `net.rs`): the step machine on
+   stdio in Six's text protocol, over a weights file and the manifest that binds it by sha256 (contract #13 v5). It is a
+   bin target of the player, not a crate of its own: R403(d) names the crate, and it pulls no dependency the browser
+   build lacks (`serde_json` and `sha2` were already in its graph).
+2. **Native threads.** `RustForward::forward_on` runs the forward's node loops on a rayon pool, every output bit for bit
+   the one-thread `forward`, which the browser keeps. `rayon` is a native-only dependency of the player, beside its
+   wasm32-only ones; the wasm build's dependency tree, and so the web release's notices, are unchanged.
+3. **The wasm builds name the library.** `make check.wasm` (gate 4) and `web/scripts/build.sh` pass `--lib`: a crate
+   with a bin target refuses `cargo rustc --crate-type cdylib` without it, and the bin is native only.
+4. **The release.** `tools/release_cli.sh` builds the binary on a clean commit for the host and packs
+   `mantis-cli-<version>-<platform>.tar.gz` (the binary, the net's manifest and weights file, LICENSE, the Rust
+   library's notices and every crate's); `tools/rust_notices.sh` is the crate list both it and `web/scripts/release.sh`
+   ship. linux x86_64 only: macOS and Windows assets wait for a CI matrix. The assets go to a release from a tag, the
+   operator's act.
