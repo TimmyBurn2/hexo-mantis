@@ -40,6 +40,8 @@ class _StubRunner:
         self.o_wins = 0
         self.draws = 0
         self.positions_generated = 0
+        self.pcr_full_moves = 0
+        self.pcr_quick_moves = 0
 
     def is_running(self) -> bool:
         return self.running
@@ -180,6 +182,8 @@ def test_start_is_idempotent_while_running() -> None:
     assert pool._stats_thread is first_thread, "a second feeder thread was spawned"
 
     pool.stop()
+    # A feeder that dies on its first drain only races `is_alive()` above; this reads it for certain.
+    pool.check_producer_health()
 
 
 def test_stop_joins_both_threads_and_stops_the_recorder() -> None:
