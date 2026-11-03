@@ -179,8 +179,8 @@ deepening, MCGS at deploy, proof-verified start pools and DENSE-1's L2–L4.
 - **CARD-DEPLOY-WEB — L4 EXITED 2026-10-31 on branch `deploy-web`: the clock and strength lines PASS, each known-bad
   valid, no HALT. The release is decided (the operator, 2026-11-01/02): MIT with the weights, `hexo-mantis` 0.1.0 as a
   tarball on a GitHub release, never npm (DEPLOY_WEB §10). Tagged `web-v0.1.0` at `00845838` (tarball sha256
-  `c0216d3e…`, 13.3 MB; W1 on WebGPU 4.39e-5, 511/511; 32 node tests); its GitHub release is drafted, and publishing it
-  is the operator's act. A per-game trace reads the wasm memory as a high-water mark, flat after a page's first games,
+  `c0216d3e…`, 13.3 MB; W1 on WebGPU 4.39e-5, 511/511; 32 node tests); the operator published its GitHub
+  release 2026-11-03. A per-game trace reads the wasm memory as a high-water mark, flat after a page's first games,
   not a leak (local records `mantis-records/deploy-web/release/`). Was: L4 WAITS for desk time by R402(f) (2026-10-23);
   before that L3 EXITED 2026-10-21.** L4 (pre-stated; local records `mantis-records/deploy-web/l4/`) played run14avg's
   fp32 export in headless Chromium on the desk's RTX 3070 against Six gen0455 at 128 nodes. S ran in three page sessions
