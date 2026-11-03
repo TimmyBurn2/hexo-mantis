@@ -177,9 +177,11 @@ def test_the_runner_help_names_the_slow_flag() -> None:
 @pytest.mark.cuda
 def test_the_slow_tier_actually_selects_the_slow_tests() -> None:
     """Prove the slow tier really selects the slow tests, by driving the runner rather than its source."""
+    # Collect only: the claim is the selection; the slow bodies time things a parallel tier skews.
     proc = subprocess.run(
         ["bash", str(RUNNER), "--with-slow", "--only", "slow tier"],
         capture_output=True, text=True, cwd=REPO_ROOT,
+        env={**os.environ, "PYTEST_ADDOPTS": "--collect-only"},
     )
     assert proc.returncode == 0, proc.stdout[-3000:] + proc.stderr[-2000:]
     assert "slow tier RAN" in proc.stdout
