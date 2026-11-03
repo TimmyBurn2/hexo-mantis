@@ -27,7 +27,7 @@ from mantis.train.losses import segment_softmax as train_segment_softmax
 
 # The capture ran on CPU with `torch.set_num_threads(1)`; B-04/B-05 reproduce that regime.
 CAPTURE_TORCH_THREADS = 1
-#: torch.exp's bits depend on the CPU (a Xeon 8573C missed by 2 ulp under the same wheel and kernels).
+#: The softmax's bits depend on the CPU (a Xeon 8573C missed by 2 ulp under the same wheel and kernels).
 SOFTMAX_MAX_ULP = 2
 # Seed for the B-06 property battery (test-local; B-06 compares two NEW-side copies).
 DUPLICATION_BATTERY_SEED = 20260723
@@ -103,8 +103,8 @@ def test_collate_empty_batch_parity(payload_fields, collated_golden, semantic):
     _assert_tensor_parity(batch, collated_golden["b0"], f"b0[{semantic}]")
 
 
-def test_segment_softmax_holds_the_capture_within_two_ulp(payload_fields, hotpath_golden,
-                                                          single_threaded_torch):
+def test_segment_softmax_holds_the_capture_within_its_ulp_bound(payload_fields, hotpath_golden,
+                                                                single_threaded_torch):
     """`segment_softmax(captured_logits, batch.legal_offsets)` is within `SOFTMAX_MAX_ULP` of the
     captured output on every element (same torch minor, CPU, 1 thread; the bound moves only with
     a dispatcher's word). FAIL = the ragged softmax the Rust assembler normalizes against changed."""
