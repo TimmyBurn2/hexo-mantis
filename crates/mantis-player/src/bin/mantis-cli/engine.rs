@@ -96,7 +96,7 @@ impl Engine {
     }
 
     fn go(&mut self, words: &[&str]) -> Result<TurnResult, CliError> {
-        // `nodes` is the turn's, as Six reads it: split evenly across the stones due, as the budget rule splits a clock.
+        // `nodes` is the whole turn's, Six's unit; the even split over the stones due is the budget rule's (Six's is uneven).
         let (nodes, clock_ms) = match words {
             ["nodes", n] => (Some(parse::<u32>(n, "go nodes")?), None),
             ["movetime", t] => (None, Some(f64::from(parse::<u32>(t, "go movetime")?))),
@@ -193,10 +193,20 @@ impl Engine {
 
     pub fn serve(&mut self, input: impl BufRead, mut out: impl Write) -> Result<(), CliError> {
         for line in input.split(b'\n') {
-            let Ok(line) = String::from_utf8(line?) else {
-                writeln!(out, "error a line that is not UTF-8")?;
-                out.flush()?;
-                continue;
+            let line = match String::from_utf8(line?) {
+                Ok(line) => line,
+                Err(bad) => {
+                    writeln!(out, "error a line that is not UTF-8")?;
+                    // A garbled `go` still answers `bestmove`, so a driver reading through it returns.
+                    if String::from_utf8_lossy(bad.as_bytes())
+                        .trim_start()
+                        .starts_with("go")
+                    {
+                        writeln!(out, "bestmove none")?;
+                    }
+                    out.flush()?;
+                    continue;
+                }
             };
             let words: Vec<&str> = line.split_whitespace().collect();
             let reply: Result<Vec<String>, CliError> = match words.as_slice() {

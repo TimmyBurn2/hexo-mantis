@@ -54,7 +54,7 @@ fn block() -> DeployBlock {
     }
 }
 
-/// A two-layer net of width 8 over the row's 11 features and 91 edge codes, its floats a fixed pseudo-random draw.
+/// A four-layer net of width 32 over the row's 11 features and 91 edge codes, its floats a fixed pseudo-random draw.
 fn tiny() -> (Vec<TensorRow>, Vec<f32>) {
     let (h, depth) = (32, 4);
     let mut shapes = vec![
@@ -296,7 +296,7 @@ fn go_nodes_is_the_turns_budget_and_the_answers_are_the_players_stones_and_a_swa
     assert!(ready.starts_with("mantis-cli ready net=tiny"), "{ready}");
     let net = forward();
     let mut player = Player::new(block(), ENC, true).expect("the block of record");
-    let mut turns = 0;
+    let (mut turns, mut one_due) = (0, 0);
     for moves in golden_moves(8) {
         cli.send("newgame");
         player
@@ -309,11 +309,21 @@ fn go_nodes_is_the_turns_budget_and_the_answers_are_the_players_stones_and_a_swa
             }
             let due = u32::from(player.board().moves_remaining);
             let want = turn(&mut player, &net, Budget::Sims(SIMS));
+            let (lines, counters, _) = cli.go(&line, &format!("go nodes {}", SIMS * due));
+            let counters = counters.unwrap_or_else(|| panic!("{lines:?}"));
             assert_eq!(
-                cli.cells(&line, &format!("go nodes {}", SIMS * due)),
-                want,
-                "{line:?}"
+                field(&counters, "sims_set"),
+                f64::from(SIMS),
+                "{due} due: {counters}"
             );
+            one_due += u32::from(due == 1);
+            let words: Vec<i32> = lines[lines.len() - 1]
+                .split_whitespace()
+                .skip(1)
+                .map(|w| w.parse().expect("a cell"))
+                .collect();
+            let got: Vec<(i32, i32)> = words.chunks(2).map(|c| (c[0], c[1])).collect();
+            assert_eq!(got, want, "{line:?}");
             line.extend(&want);
             turns += 1;
             if player.board().check_win() {
@@ -327,6 +337,10 @@ fn go_nodes_is_the_turns_budget_and_the_answers_are_the_players_stones_and_a_swa
         }
     }
     assert!(turns >= 12, "the games ran {turns} turns");
+    assert!(
+        one_due >= 2,
+        "{one_due} turns had one stone due, so the split's k = 1 went unread"
+    );
 
     // PLANTED BREAK: a golden's last stone swapped with one of the turn before belong to the other sides: the answer parts.
     let moves = &golden_moves(2)[1];
@@ -376,6 +390,15 @@ fn a_refused_cell_or_command_answers_error_and_leaves_the_game_as_it_was() {
         .write_all(b"position \xff\n")
         .expect("the binary reads its stdin");
     assert_eq!(cli.line(), "error a line that is not UTF-8");
+    cli.stdin
+        .write_all(b"go nodes \xff\n")
+        .expect("the binary reads its stdin");
+    assert_eq!(cli.line(), "error a line that is not UTF-8");
+    assert_eq!(
+        cli.line(),
+        "bestmove none",
+        "a garbled go still ends at bestmove"
+    );
     cli.send("position moves 0 0\ngo nodes 64");
     assert!(
         cli.line().starts_with("bestmove "),
@@ -472,7 +495,7 @@ fn a_movetime_turn_spends_the_budget_rule_within_its_clock_and_six_clocks_read_a
 }
 
 #[test]
-fn a_weights_file_the_manifest_does_not_bind_is_refused_at_start() {
+fn a_weights_file_the_manifest_does_not_bind_and_zero_threads_are_refused_at_start() {
     let _one = SERIAL.lock();
     let manifest = write_net("unbound", Some(&"0".repeat(64)));
     let out = Command::new(env!("CARGO_BIN_EXE_mantis-cli"))
@@ -484,6 +507,13 @@ fn a_weights_file_the_manifest_does_not_bind_is_refused_at_start() {
         let _ = std::fs::remove_dir_all(dir);
     }
     assert_eq!(out.status.code(), Some(2));
+    let zero = Command::new(env!("CARGO_BIN_EXE_mantis-cli"))
+        .args(["--net", &manifest.to_string_lossy(), "--threads", "0"])
+        .stdin(Stdio::null())
+        .output()
+        .expect("the binary runs");
+    assert_eq!(zero.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&zero.stderr).contains("--threads \"0\" is not a count"));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
         stderr.contains("weights: tiny.weights.bin is not the file the manifest binds"),
