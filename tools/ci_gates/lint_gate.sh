@@ -21,9 +21,10 @@ run_pyright_count() {
 }
 print_pyright_errors() {
   printf '%s' "$1" | uv run python -c 'import json,sys
-for d in json.load(sys.stdin)["generalDiagnostics"]:
-    if d["severity"] == "error":
-        print("  %s:%d: %s" % (d.get("file", "?"), d["range"]["start"]["line"] + 1, d["message"]))'
+for d in json.load(sys.stdin).get("generalDiagnostics", []):
+    if d.get("severity") == "error":
+        line = d.get("range", {}).get("start", {}).get("line", -1) + 1
+        print("  %s:%d: %s" % (d.get("file", "?"), line, d.get("message", "")))'
 }
 
 # `errorCount: 0` over zero analysed files is a green over nothing. The floor catches "nothing",

@@ -54,7 +54,7 @@ def test_every_CI_gate_has_a_local_invocation() -> None:
     missing = _workflow_gates() - _runner_gates()
     assert not missing, (
         f"gate(s) {sorted(missing)} run in CI and in no local command. R311(b) makes local "
-        f"green the gate, so a CI-only gate is a gate nothing checks — remote CI is SUSPENDED."
+        f"green the gate before a push, so a CI-only gate is a gate nothing checks before it."
     )
 
 
