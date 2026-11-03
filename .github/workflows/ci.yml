@@ -11,26 +11,26 @@ on:
 
 jobs:
   rust:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # The 2026-08-19 python job ran 2h11m to a red; without a ceiling a genuine hang burns
     # GitHub's 6h default. These are generous ceilings over observed runner timings (rust
     # 30m, python 2h11m including four ~900s budget-governed real-boot rows), not budgets:
     # the per-test authority stays tests/tools/conftest.py (R98 — one authority per number).
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5          # libpython for `cargo test` linking pyo3
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6          # libpython for `cargo test` linking pyo3
         with: { python-version: "3.11" }
       # rust-toolchain.toml is the SINGLE source of truth for the compiler; do not name a
       # version here too. `dtolnay/rust-toolchain@stable` used to install a floating stable
       # and `rustup default` it — which was already inert (a toolchain file outranks the
       # rustup default for every invocation inside the workspace) while reading as though
       # CI compiled with stable. It also installed `targets:` against the WRONG toolchain.
-      # rustup provisions the pinned channel, its components and its targets on first use;
-      # this step just makes that happen loudly and early, in its own log line, instead of
-      # inside whichever cargo command runs first. Idiom is rustup's own (1.28 release notes).
+      # A bare `rustup toolchain install` installs the toolchain file's channel, components and
+      # targets, loudly and in its own step; first-use auto-install is deprecated in rustup and
+      # prints into whatever tool runs first (gate 18 read that noise as a rustfmt failure).
       - name: "toolchain: materialise the rust-toolchain.toml pin"
-        run: rustup show active-toolchain || rustup toolchain install
+        run: rustup toolchain install
       - name: "toolchain: report what CI actually compiles with"
         run: rustc --version --verbose && cargo --version
       - name: "gate 2a: cargo test workspace"
@@ -43,21 +43,24 @@ jobs:
         run: make bench
 
   python:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # 240 not 200: the harness ceiling must exceed the sum of the tier's worst case with
     # the tool-budget rows at their bound, or the job kill pre-empts the tools' own rc-40
     # verdicts and the digest that names them (the triple-hang case).
     timeout-minutes: 240
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       # Same single-source rule as the rust job: the compiler comes from
       # rust-toolchain.toml. This job needs cargo only so that `uv sync` can drive maturin
       # to build mantis._engine — and that build already resolved to the pinned channel via
       # the toolchain file, so the previous floating `@stable` install was doing nothing
       # except making the two jobs look like they used different compilers.
       - name: "toolchain: materialise the rust-toolchain.toml pin"
-        run: rustup show active-toolchain || rustup toolchain install
-      - uses: astral-sh/setup-uv@v6
+        run: rustup toolchain install
+      # mise.toml pins node (pyright, gate 21) and the wasm-bindgen CLI (gate 21); cached on that file.
+      - uses: jdx/mise-action@v4
+        env: { MISE_TRUSTED_CONFIG_PATHS: "${{ github.workspace }}" }
+      - uses: astral-sh/setup-uv@v7
         with: { python-version: "3.11" }
       - name: "setup: build the job workspace from the lockfile"
         run: uv sync --locked
@@ -68,12 +71,12 @@ jobs:
       # said only "exit code 1"). Job summaries render on the PUBLIC run page. The digest
       # tool reports on the gate and never gates itself — pytest's own rc is the verdict.
       - name: "gate 3a: pytest default tier"
-        run: uv run pytest -m "not integration and not slow" -n 8 --junitxml=/tmp/junit-default.xml
+        run: uv run pytest -m "not integration and not slow" -n 8 --dist loadgroup --junitxml=/tmp/junit-default.xml
       - name: "summary: default tier digest (public)"
         if: always()
         run: uv run python tools/ci_gates/pytest_step_summary.py /tmp/junit-default.xml --title "gate 3a default tier"
       - name: "gate 3b: pytest integration tier"
-        run: uv run pytest -m integration -n 4 --dist loadfile --junitxml=/tmp/junit-integration.xml
+        run: uv run pytest -m integration -n 4 --dist loadgroup --junitxml=/tmp/junit-integration.xml
       - name: "summary: integration tier digest (public)"
         if: always()
         run: uv run python tools/ci_gates/pytest_step_summary.py /tmp/junit-integration.xml --title "gate 3b integration tier"
@@ -128,10 +131,10 @@ jobs:
         run: bash tools/ci_gates/web_gate.sh
 
   hygiene:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with: { fetch-depth: 0 }
       - name: "gate 6: artifact rejection"
         run: python3 tools/ci_gates/artifact_gate.py --base "${{ github.event.pull_request.base.sha || github.event.before }}"
@@ -145,6 +148,8 @@ jobs:
       # baseline (R98). The LAW-07 self-test runs inside every invocation.
       - name: "gate 17: no host content in the tree (rule 7)"
         run: python3 tools/ci_gates/rule7_gate.py --base "${{ github.event.pull_request.base.sha || github.event.before }}"
+      - name: "toolchain: materialise the rust-toolchain.toml pin (gate 18's rustfmt)"
+        run: rustup toolchain install
       - name: "gate 18: rustfmt on the Rust files touched since base"
         run: python3 tools/ci_gates/rustfmt_touched_gate.py --base "${{ github.event.pull_request.base.sha || github.event.before }}"
       - name: "gate 19: every commit since base is one line, no body, no trailer"

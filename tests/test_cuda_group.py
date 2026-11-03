@@ -32,7 +32,9 @@ def test_every_cuda_test_lands_on_one_worker_and_an_integration_file_stays_on_on
     assert proc.returncode == 0, proc.stdout[-2000:] + proc.stderr[-1000:]
     counts = {tag: len(list(tmp_path.glob(f"{tag}-*"))) for tag in ("cuda", "plain", "integration")}
     assert counts == {"cuda": 6, "plain": 12, "integration": 6}, counts
-    assert len(_workers(tmp_path, "plain")) > 1, "the plain arms ran on one worker: the child was not parallel"
+    # loadgroup's first pass gives each worker one unit, so all three run an arm whatever the timing.
+    every = _workers(tmp_path, "cuda") | _workers(tmp_path, "plain") | _workers(tmp_path, "integration")
+    assert len(every) == 3, f"the arms ran on {every}: the child was not parallel"
     assert len(_workers(tmp_path, "cuda")) == 1, f"the cuda arms ran on {_workers(tmp_path, 'cuda')}"
     assert len(_workers(tmp_path, "integration")) == 1, (
         f"one integration file's arms ran on {_workers(tmp_path, 'integration')}: `loadfile`'s locality is lost"
@@ -50,10 +52,11 @@ def test_an_unmarked_gpu_allocation_reds_the_test(tmp_path: Path) -> None:
 
 def test_both_pytest_tiers_distribute_by_group() -> None:
     """The group means one worker only under `--dist loadgroup`, so every parallel tier invocation carries it."""
-    for path in ("tools/ci_gates/run_all.sh", "Makefile"):
-        for needle in ('-m "not integration and not slow" -n 8', "-m integration -n 4"):
-            lines = [ln for ln in (REPO_ROOT / path).read_text(encoding="utf-8").splitlines() if needle in ln]
-            assert lines and all("--dist loadgroup" in ln for ln in lines), (path, lines)
+    for path in ("tools/ci_gates/run_all.sh", "Makefile", ".github/workflows/ci.yml"):
+        text = (REPO_ROOT / path).read_text(encoding="utf-8")
+        lines = [ln for ln in text.splitlines() if "pytest -m" in ln and " -n " in ln]
+        assert any('-m "not integration and not slow"' in ln for ln in lines), (path, lines)
+        assert all("--dist loadgroup" in ln for ln in lines), (path, lines)
 
 
 @pytest.mark.cuda
