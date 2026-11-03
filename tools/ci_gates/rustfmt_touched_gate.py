@@ -1,5 +1,6 @@
 """CI gate 18: every Rust file touched since the base is rustfmt-clean, and no other file is read."""
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -28,8 +29,10 @@ def _touched_rust_files(top: Path, base: str) -> list[str]:
 def _unformatted(top: Path, path: str) -> bool:
     """Whether `path` differs from its rustfmt form, formatted through stdin so no `mod` child is visited."""
     source = (top / path).read_text(encoding="utf-8")
+    # No mid-gate toolchain install: its progress lines on stderr would read as rustfmt's own.
     proc = subprocess.run(["rustfmt", "--edition", "2021", "--emit", "stdout"], cwd=top,
-                          capture_output=True, text=True, input=source)
+                          capture_output=True, text=True, input=source,
+                          env={**os.environ, "RUSTUP_AUTO_INSTALL": "0"})
     if proc.returncode != 0 or proc.stderr.strip():
         raise RuntimeError(f"{path}: rustfmt rc {proc.returncode}: {proc.stderr.strip()}")
     return proc.stdout != source
