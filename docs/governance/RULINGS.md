@@ -1,4 +1,4 @@
-# RULINGS — R23 to R402
+# RULINGS — R23 to R403
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R403.
+- Numbering continues from R346. The next ruling is R404.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -35,6 +35,67 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
 ANNOTATED — A1 under the Coverage note, in the inventory below (R368(a): both counts one high; "Four" names five).
+
+### R403 — THE PROGRAMME CLOSES; WHAT SHIPS, WHAT IS CUT, WHAT STAYS ON THE RECORD
+Decision: verbatim below.
+
+> R403 — THE PROGRAMME CLOSES; WHAT SHIPS, WHAT IS CUT, WHAT STAYS ON THE RECORD.
+> (a) Training is CLOSED. The net of record is run14avg_00372000_647f0497 (sha 5825bc67…,
+> net_hash 558acc92…): a 4×256 GINE, the uniform average of run14's saves 351k–372k. Of record:
+> run15's depth (6×256) read level with it at 158k steps (rung 16 0.654 v 0.632; S 0.870 v 0.868;
+> head to head 287-287-2) at 1.5× the cost per search, so it does not ship; the lineage's gains
+> per 100k steps fell +0.32 → +0.14 → +0.08 → flat; the value head did not improve with capacity.
+> Rulers of record: Six gen455 at 16 nodes 0.632, at 128 nodes 0.45 (288k-era), at 256 nodes 0.31;
+> Strix at equal work 0.868; Bubble 410k at equal time 0.67 (288k); the browser engine at 10 s on
+> WebGPU 0.701 v the native head's 0.674 at the same sims, a parity pass; at equal time against
+> Six's full second, Six is stronger. No equal-time claim against Six beyond that is on record.
+> (b) The release is: hexo-mantis web-v0.1.0 (shipped), a native bundle (NATIVE-1), the arena's
+> play-vs-mantis mode and two arena bot accounts on the operator's VPS (ARENA-1), a measured
+> strength ladder for both (LADDER-1), and one document that says how the bot works (DOCS-1), with
+> the repository trimmed of what no longer runs (CLEAN-1). Every leg keeps the gates green, every
+> code leg ends with a fresh review, and the operator pushes.
+> (c) CLEAN-1 removes capabilities with no model, no production config and no shipped path:
+> `hexcanvas` and contract #12 (DENSE-1's L0/L1; the design doc moves to docs/design/archive with
+> one line), `gnn_axis_r8_pruned`, `train.value_target_search_encoding` (schema bump, every config
+> re-minted), and tools, diagnostics and modules whose census reads zero readers outside their own
+> tests — each named in a pre-stated list for the architect's word before the first deletion.
+> Kept: widen and deepen (small, documented), decided tails, the future head, EMA (documented
+> unarmed), the rulers' drivers and vendor pins, the value instrument, the run monitor, the dash,
+> every minted run config, every measurement document, and the graves that refuse dead names.
+> The governance record is not pruned: RULINGS, LAWS, falsified and STATE stay; CARDS closes
+> every open card with one line each and freezes; a reader's index points at them. The register
+> continues past R403 only for the release's own rulings.
+> (d) The native bundle is one binary, `mantis-cli`, from the `mantis-player` crate: the deploy
+> block of record, the solver, the per-game cache, within-turn reuse, the early stop, the clock
+> budget, `RustForward` on the CPU (native threads if a bench earns them), the net's weights file
+> and manifest, speaking Six's text protocol on stdio (`go movetime` / `go nodes`, `bestmove`) so
+> every existing Six-protocol driver and the arena's own example bot can run it; a GPU path is not
+> built (ONNX Runtime in native is a card). Witnesses: search parity with the Python head on a
+> stub net (W3's shape), the Rust forward's W2, and one strength cell at fixed sims against Six
+> n128 that must sit within CI of the web parity read. Release assets per platform from a tag.
+> (e) The arena bots move off the desk: `tools/ladder` is rewritten against the arena's current
+> contract (one NDJSON stream, one WebSocket per game, `move_response`), driving `mantis-cli` on
+> the VPS under systemd; two accounts, "mantis" at the clock's budget and "mantis-lite" at a fixed
+> low budget, their levels named from LADDER-1. The desk's `mantis-arena-*` units are retired.
+> (f) LADDER-1 measures, on the desk, the browser engine and `mantis-cli` at 16, 32, 64, 128, 256
+> and 512 sims a stone against Six at 16 and 128 nodes (288 games a cell, the arena book, both
+> colours), and the VPS's own leaf cost; the table names the play-vs-mantis strength levels and
+> the bots' levels, with win rates, never Elo claims the record does not hold.
+> (g) DOCS-1 writes docs/HOW_IT_WORKS.md (rules, encoding, net, search and tactics, the cache and
+> reuse, the clock; the training recipe and the lineage; the browser and native engines; the
+> numbers and their limits; where the record is), docs/RESULTS.md (every number with its source),
+> a README for a stranger, CLAUDE.md trimmed to the tree as it is, docs/governance/README.md as
+> the index; two fresh reviews, one technical, one as a reader who has never seen the project.
+> A `main` branch at the release commit, tagged v0.1.0, is the operator's act; re-enabling a slim
+> remote CI on main (the default tier, clippy, the web tests) is recommended and is his decision.
+
+Status: standing. ANNOTATES R402 (run15's result), R398(c)/(d) (the native bundle beside the
+web package; the arena side), R395(d) (DENSE-1's seam work is removed with its design archived).
+(e) ANNOTATED at CLOSE-1 (2026-11-03): the desk's arena units are named `hexo-arena-*` (ten: mantis, the hosted rivals
+and the think lock); all ten are DISABLED, not removed, stopped since the web release's build. (f) ANNOTATED by the
+operator's word (2026-11-03): the VPS's leaf cost is NOT measured; LADDER-1 names the levels from the desk's native CPU
+cost and the browser's WebGPU cost. (g) ANNOTATED by the operator's word (2026-11-03): the clean write-up for a reader lives in
+the repository itself (docs/ and the README); `mantis-records/docs-1/` holds only the leg's working material and reviews.
 
 ### R402 — RUN15 RUNS UNATTENDED: THE BOX ENDS IT, STOPS IT AND READS IT; THE OPERATOR CHECKS IN
 Decision: verbatim below.
@@ -91,6 +152,8 @@ Decision: verbatim below.
 > the Bubble read on the idle card.
 
 Status: standing. ANNOTATES R400(c), R401(b)/(c), R399(a).
+ANNOTATED by R403(a): run15's end read found no winner and training is CLOSED; run15avg read level with run14avg
+(rung 16 0.654 v 0.632; S 0.870 v 0.868; head to head 287-287-2) at 1.5× the cost per search, so it does not ship.
 
 ### R401 — RUN15: FRESH DEPTH UNDER THE RECIPE THAT CLIMBED; THE READS THAT FIT; THE BOX'S LAST TEN DAYS
 Decision: verbatim below.
@@ -292,6 +355,10 @@ claim at concurrency 1 only. (b)'s floor ANNOTATED by R399(d): under a clock bel
 clocks. (b)'s ρ, fp16 and WebGPU fallback are ruled by R399(f), (a) and (g).
 (e)'s stop point ANNOTATED by R400(a)–(b): run14 stopped at its next complete save before its cycle's end, and the
 end read is (e)'s as pre-stated, on the idle card, the winner DEPLOY-WEB's export candidate.
+(c)/(d) ANNOTATED by R403(b)/(d)/(e): a native bundle, `mantis-cli` from `mantis-player`, ships beside the web package;
+the ladder adapter is rewritten against the arena's current contract and its bots run on the operator's VPS (ARENA-1).
+(c)'s "npm package" ANNOTATED by the operator's decision (2026-11-01/02, DEPLOY_WEB §10): the web package shipped as
+`hexo-mantis` web-v0.1.0 by GitHub release only, never npm.
 
 ### R397 — THE BAND READ THE TAILS; THE BOT LIVES IN THE BROWSER; THE AVERAGE IS READ FOR FREE
 Decision: verbatim below.
@@ -458,6 +525,8 @@ tags it `archive/perf-3-l1b` and deletes the branch. ANNOTATES R394(b), (c), (d4
 only inside a run": run12 was that run; the second widening is the bet it earns, benched).
 (b)'s bet ANNOTATED by R401(a)–(b): width is dead on cost (WIDEN-2), so the one bet, benched, moves to depth
 (`mantis.model.deepen`); by R402(a) run15 rides it at 6×256.
+(d) ANNOTATED by R403(c): DENSE-1 is not continued; its seam work (`hexcanvas`, contract #12) is removed by CLEAN-1 and
+its design moves to docs/design/archive.
 
 ### R394 — THE LINEAGE CLIMBS WHILE THE LR IS ABOVE THE FLOOR; THE LEVERS BUILD BESIDE IT
 Decision: verbatim below.

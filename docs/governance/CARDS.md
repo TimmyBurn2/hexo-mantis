@@ -10,6 +10,243 @@ Status words mean what they mean elsewhere in this repo: **BLOCKING** stops the 
 **MINT-BLOCKING** stops a mint; **HELD** is waiting on a named event; **CARDED** is accepted work
 with no date; **OWED** is a text or a value someone must supply.
 
+**FROZEN at R403 (2026-11-03).** Training is closed (R403(a)), and this file now changes only for the release's own
+cards. The section below opens the release's cards and gives every other card that was open a closing line, all dated
+2026-11-03. A card that served a run, the box, self-play or the trainer is CLOSED. A card that names still-valid work on
+the kept or shipped tree, work no release leg carries, is PARKED and reopens only by a ruling. "CLOSED into CARD-X"
+means its work moved to that card, and KEPT means the card stays open. The rows further down are frozen as they
+stood at `856a08cf`, and where a row's head still reads open, its line here governs. A row gets a line when its head
+reads open, even if its body records a close. A row whose head already reads closed, landed, exited, discharged,
+spent, consumed or withdrawn gets none.
+
+## Opened by R403 (THE PROGRAMME CLOSES; WHAT SHIPS, WHAT IS CUT, WHAT STAYS ON THE RECORD; 2026-11-03) — the release, and the last line of every open card
+
+### The release's cards (open)
+
+- **CARD-NATIVE-1 — OPENED by R403(d): `mantis-cli`, one binary from `mantis-player` speaking Six's text protocol on
+  stdio.** Branch `native-1`; local records `mantis-records/native-1/`. N1, the binary: `newgame`, the position as Six's
+  move list, `go movetime T` and `go nodes N`, `bestmove <two cells>`, `error` on refusal. It runs the deploy block of
+  record and `budget.rs`'s rule for `movetime`, checks the weights file and manifest by sha at start, and writes its
+  counters to stderr. A native-threads bench for `RustForward` adopts threads only at ≥ 1.5× at 4 threads, pre-stated.
+  N2, the witnesses: search parity with the Python deploy head on the stub net (W3's shape), a protocol test with
+  planted breaks (a wrong stone order, a refused cell, a `movetime` overrun), W2 on the real net, and one cell at 400
+  sims a stone against Six n128, 288 games on the arena book. The packet says 400; the parity read's native cell ran
+  at 396, the median sims the browser's 10-s read set. Its point estimate must sit inside the browser read's CI,
+  0.701 [0.648, 0.750]; the native head read 0.674 [0.635, 0.712] there. N3, the release: a linux x86_64 tarball built
+  on the desk, with the binary, the weights, the manifest, LICENSE and the third-party notices, plus a README section.
+  macOS and Windows assets come only from a CI matrix, and none exists. HALT: a protocol answer that differs from the Python head's move on the parity set; a weights file not bound
+  to the manifest; any change to the web package's engine behaviour.
+- **CARD-LADDER-1 — OPENED by R403(f): the strength table and the named levels, on the desk.** Local records
+  `mantis-records/ladder-1/`. Pre-stated before the first game: 16, 32, 64, 128, 256 and 512 sims a stone, against
+  Six n16 and Six n128, 288 games a cell on the arena book, both colours. The browser engine is read in headless
+  Chromium on WebGPU (the release build), then `mantis-cli` on the CPU at the same sims once NATIVE-1 hands it over. By
+  the operator's word (2026-11-03) the VPS's leaf cost is NOT measured: the levels are named from the desk's native CPU
+  cost and the browser's WebGPU cost. The output is the table with CIs and the levels named for the play-vs-mantis
+  selector and the two bot accounts. It reports win rates only, never Elo, and carries the line that Six at equal time
+  is stronger. A Bubble equal-time read rides only if the desk GPU is free afterwards (CARD-WEB-BUBBLE-EQUAL-TIME). This
+  is not the 2026-09-19 LADDER-1 packet, the ladder adapter (CARD-LADDER-RUNG).
+- **CARD-CLEAN-1 — OPENED by R403(c): the trim of what no longer runs.** Branch `clean-1`; local records
+  `mantis-records/clean-1/`.
+  - C0, before any deletion and read-only: a census of every module, tool, diagnostic, registry row, schema key,
+    contract and design doc, giving its readers outside its own tests and whether a minted production config or the
+    shipped export touches it. Its KEEP / REMOVE / ARCHIVE table is pre-stated for the architect's word.
+  - Then one leg per family: (1) `hexcanvas`, contract #12, its registry row and conformance entries, with DENSE-1's
+    design moved to docs/design/archive; (2) `gnn_axis_r8_pruned` and its census rows; (3)
+    `train.value_target_search_encoding` and its trainer path (schema bump, every config re-minted, goldens re-pinned);
+    then the dead tools and docs.
+  - Kept by R403(c): widen, deepen, decided tails, the future head, EMA (documented unarmed), the rulers' drivers and
+    vendor pins, the value instrument, the run monitor, the dash, every minted run config, every measurement document,
+    and the graves.
+  - Each leg runs `make gates` and a fresh review; the packet's exit runs `make gates.exit`. HALT: a removal that
+    changes a shipped output (the web witness and W3 stay green), a grave removed, or a measurement document deleted
+    rather than archived.
+  - It carries the cards moved to it below.
+- **CARD-DOCS-1 — OPENED by R403(g), after CLEAN-1's removals: the documentation a stranger reads.**
+  - It writes HOW_IT_WORKS.md and RESULTS.md at the top of docs/ (RESULTS.md gives every strength number with its
+    source file and date), a README for a stranger, CLAUDE.md trimmed to the tree, and a README.md index in
+    docs/governance/. The paths are named here once the files are tracked.
+  - It gets two fresh reviews: one technical, and one as a reader who has never seen the project.
+  - By the operator's word (2026-11-03) the clean write-up lives in the repository itself; the local records
+    `mantis-records/docs-1/` hold only the leg's working material and reviews.
+  - Then `main` at the release commit and the `v0.1.0` tag, both the operator's. A slim remote CI on main is
+    recommended and is the operator's decision.
+- **CARD-WEB-ARENA-SIDE — KEPT (its row below); it is ARENA-1 by R403(e). The arena's side is the operator's, in the
+  operator's arena repository; the `tools/ladder` rewrite and its VPS unit (`tools/ladder/vps/`) are in this repository.**
+  - The arena's side: the CSP's `'wasm-unsafe-eval'` with its pinned test (no COEP), and the play-vs-mantis mode on the
+    analysis slot's packets, with LADDER-1's levels and clocks offered only at or above the engine's `minTurnMs`. It
+    serves the web package's dist with compression, pinned to web-v0.1.0.
+  - The bots: the rewritten `tools/ladder` drives `mantis-cli` on the VPS under systemd, for two accounts, "mantis"
+    and "mantis-lite".
+  - The desk's `hexo-arena-*` units are disabled at CLOSE-1 and retire (R403(e)). The packet's plan retires them
+    after the VPS bots' first clean day.
+  - It carries CARD-LADDER-ARENA-CONTRACT, CARD-LADDER-RUNG and CARD-LADDER-SERVER-ASKS.
+- **CARD-NATIVE-GPU — PARKED (CARDED by R403(d), not built): ONNX Runtime in native as a GPU path for `mantis-cli`.**
+
+### Every other open card, closed or parked
+
+- CARD-GATE17-LOCAL-COUPLING — PARKED: a tracked test bound to gate 17's untracked supplement; no release leg touches gate 17.
+- CARD-WEB-BUBBLE-EQUAL-TIME — PARKED: rides LADDER-1 only if the desk GPU is free after its grid.
+- CARD-PATH-CONSISTENCY — CLOSED: training is closed; no PC-1 ran.
+- CARD-CAPACITY-OR-DATA — CLOSED: training is closed; the 4×512 continuation is not run.
+- CARD-WEB-MEASURED-RHO — PARKED: the release ships ρ = 1; a measured ρ is later web work.
+- CARD-LADDER-ARENA-CONTRACT — CLOSED into CARD-WEB-ARENA-SIDE: R403(e) rewrites `tools/ladder` against the arena's contract.
+- CARD-WEB-STUDENT — CLOSED: a distilled student is a training run; training is closed.
+- CARD-DEPLOY-HEAD-DRIVER — PARKED: two deploy loops (the Python head and `mantis-player`) held equal by W3; no release leg merges them.
+- CARD-WEB-RUNTIME-ALTERNATIVES — PARKED: burn-wgpu or tract only if ORT-web bites; it has not.
+- CARD-DEPLOY-WEB — CLOSED: shipped as `hexo-mantis` web-v0.1.0 (tag at `00845838`; release published 2026-11-03).
+- CARD-RESUME-SAVES-BESIDE-SOURCE — CLOSED: training is closed; no resume will run.
+- CARD-R395-MERGES — CLOSED: done by R396(f), as its row records.
+- CARD-DEPLOY-2 — CLOSED: exited 2026-10-08; box A is gone.
+- CARD-DASH-UNITS — CLOSED: the dash reads its units from the records on dev; box A, which served it, is gone.
+- CARD-RUNG-STEP-IN-TREE — CLOSED: the rung step served runs; training is closed.
+- CARD-SIX-SEARCH-TEACHER — CLOSED: training is closed.
+- CARD-BOX-B-DESTROY — CLOSED: box B was released for destruction on 2026-10-08; the act and its date are the operator's.
+- CARD-RULER-ONE-RUNG — CLOSED: training is closed; the rung's numbers of record are R403(a)'s.
+- CARD-FRESH-2-FINAL-CELLS — CLOSED: the fresh line closed by R388(c); box A is gone.
+- CARD-PUCT-FRAME-SELFPLAY — CLOSED: landed with DEPLOY-2 (2026-10-08).
+- CARD-EVAL-ON-BOX-A — CLOSED: box A is gone.
+- CARD-ENCODE-1 — CLOSED into CARD-CLEAN-1: NOT PASS (2026-10-08); its pruned row is removed by R403(c).
+- CARD-ENCODE-CONSUMER-CHECK — CLOSED into CARD-CLEAN-1: the pruned spec it guards leaves the tree.
+- CARD-PRUNED-CAPS — CLOSED into CARD-CLEAN-1: the pruned spec it sizes leaves the tree.
+- CARD-GIL-TEST-RACE — PARKED: a racy GIL-release pin in a kept bridge test; CLEAN-1's census reads its module.
+- CARD-PREFLIGHT-RANDOM-INIT-EVAL — CLOSED: training is closed; no from-scratch preflight will run.
+- CARD-INTERIOR-ARGMAX-F32 — CLOSED: self-play's Gumbel interior only; training is closed.
+- CARD-CYCLE-ANNEALED-READ — CLOSED: training is closed.
+- CARD-RING-SAMPLE-WIDTH — CLOSED: training is closed.
+- CARD-INSTRUMENT-BREAK — CLOSED: built by DEPLOY-1's L4; the rulers of record are R403(a)'s.
+- CARD-STALE-EXTENSION — CLOSED: moot; every leg builds its own tree's engine.
+- CARD-RULER-OF-RECORD — CLOSED: built by DEPLOY-1's L4 and superseded by R388(a)'s one rung.
+- CARD-EVAL-OPENINGS-ARENA — CLOSED: the arena book landed; it is LADDER-1's book.
+- CARD-DEPLOY-UNIT-PER-TURN — #15 CLOSED: the re-rooted second stone shipped as TR-D's reroot. SEARCH_PERF §7.2(l) is PARKED:
+  Six's per-turn deploy unit is a strength change on the shipped engine, and no release leg makes it.
+- CARD-SEARCH-PERF-HYGIENE — PARKED: the §7.5 rows its text leaves open; DEPLOY-1's rows closed 2026-10-07.
+- CARD-RUN11-FRESH — CLOSED: the fresh line closed by R388(c).
+- CARD-RUN11-STATUS-24H — CLOSED: no run is live.
+- CARD-RATE-FORK — CLOSED: training is closed.
+- CARD-DEPLOY-BATCH-WAIT — CLOSED: the shipped engines serve one game with no batch wait; the Python ladder posture retires with ARENA-1.
+- CARD-BUBBLE-RULER — CLOSED: Bubble's equal-time read of record is R403(a)'s 0.67; the rest served runs.
+- CARD-WITHIN-TURN-TREE-REUSE — CLOSED: shipped in the web engine and carried by `mantis-cli`.
+- CARD-HEAD-TO-HEAD-LEVER-CELLS — CLOSED: training is closed.
+- CARD-PAIR-DIAGNOSTIC — CLOSED: training is closed.
+- CARD-SIX-TRAINER-READ — CLOSED: training is closed.
+- CARD-RULER-HYGIENE — CLOSED: training is closed.
+- CARD-ALL-VETOED-TARGET — CLOSED: training is closed.
+- CARD-TRAINER-ONE-READ-GUARD — CLOSED: trainer throughput; training is closed.
+- CARD-PERF-TRAINER-PREFETCH — CLOSED: trainer throughput; training is closed.
+- CARD-PERF-LOOP-SPREAD — CLOSED: self-play throughput; training is closed.
+- CARD-PERF-B128 — CLOSED: measured, no lever.
+- CARD-PERF-TRAINER-CONTENTION — CLOSED: training is closed.
+- CARD-PERF-COLLATE-2 — CLOSED: self-play serving; training is closed.
+- CARD-INDUCTOR-CACHE-SCHEMA — CLOSED: the trainer's compile cache; training is closed.
+- CARD-VALUE-MASK-REDRAWN — CLOSED: built and minted by RUN11-PRE's L1a.
+- CARD-FRACTIONAL-VALUE-TARGET-WARMUP — CLOSED: training is closed.
+- CARD-LABEL-NOISE — CLOSED: training is closed.
+- CARD-WARMSTART-RING-FILL — CLOSED: built by RUN11-PRE's L1b.
+- CARD-RING-V3-KEY — CLOSED: renamed by RUN11-PRE's L1c.
+- CARD-RING-V3-SEMANTICS — CLOSED: ruled by R384(a) and moved by RUN11-PRE's L1c.
+- CARD-DEPLOY-PUCT-ABLATION — PARKED: c_puct 1.5 and fpu 0.25 were never ablated; a deploy-strength read no release leg runs.
+- CARD-SHORT-TERM-VALUE-POSTMINT — CLOSED: training is closed.
+- CARD-HELDOUT-GAP-Z — CLOSED: training is closed.
+- CARD-EMA-SHADOW — CLOSED: training is closed; EMA stays documented unarmed (R403(c)).
+- CARD-TACTICS-LABELS-ONLY — CLOSED: training is closed.
+- CARD-CENSUS-1-PARKED — CLOSED: training is closed.
+- CARD-VALUE-HEAD-DEAD-OPENING — CLOSED: training is closed; the value head did not improve with capacity (R403(a)).
+- CARD-QUICK-ARM-NOISE — CLOSED: training is closed.
+- CARD-SEARCH-VALUE-AUX — CLOSED: training is closed.
+- CARD-DECIDED-TAILS — CLOSED: the tails' value weight was read by TVW-1; the tails stay as code (R403(c)).
+- CARD-MCGS-DEPLOY — PARKED: a deploy A/B no release leg runs.
+- CARD-THROUGHPUT-IN-POSITIONS — CLOSED: training is closed.
+- CARD-ORIGIN-RULE — CLOSED: the deploy head's half landed with RUN11-PRE's L1d; the engine rule served self-play.
+- CARD-TACTICS-DEEP-LOSS — CLOSED: a training lever; training is closed.
+- CARD-QUIESCENCE-BLEND-RETIRE — PARKED: retiring the blend moves the shipped search's output; no release leg does.
+- CARD-NATURAL-BOOK — CLOSED: training is closed; the arena book is the book of record.
+- CARD-ZOBRIST-REFLECTION — PARKED: a real collision beyond ±9 in the key of the shipped search's transposition table; its fix moves the engine's output.
+- CARD-TACTICS-BUILD-HASH — CLOSED: it bound runs' cell receipts; the release binds its artefacts by the manifest's sha256.
+- CARD-TACTICS-PLY-HORIZON — PARKED: a solver proof is not capped by the plies left; no release leg changes the solver.
+- CARD-DESKTOP-TMP-QUOTA — CLOSED: an ops note; no runs remain.
+- CARD-RANDOM-OPENINGS — CLOSED: ruled by R377(h); the self-play share was training.
+- CARD-COMPLETED-Q-DEFAULT — CLOSED: latent in the Gumbel kind only; the shipped engines are PUCT and training is closed.
+- CARD-RUN10-START-DAMAGE — CLOSED: run10 never started (R376(c)).
+- CARD-WARM-START-DROPS-MOMENTS — CLOSED: training is closed.
+- CARD-HELDOUT-PROXY-BLIND — CLOSED: run10 never started.
+- CARD-RUN10-AUX-WEIGHT-REPICK — CLOSED: run10 never started.
+- CARD-RUN10-ONE-HOT-3K — CLOSED: run10 never started.
+- CARD-DEV-SPEED — PARKED: levers (1)–(3) landed; (4) and (5) are still-valid dev work no release leg takes.
+- CARD-LIVE-AUDIT-WORDING — CLOSED: the sentence is in the training launcher's armed-abort audit (`src/mantis/run.py`); training is closed.
+- CARD-PERF-DST-SORT — CLOSED: self-play serving; training is closed.
+- CARD-SEAM-2 — CLOSED: the seam served a new model kind; training is closed.
+- CARD-W5-RESIDUE — CLOSED into CARD-CLEAN-1: its residues are census items.
+- CARD-GAME-RECORD-STATUS-DRIFT — CLOSED into CARD-CLEAN-1: its census reads each contract against the tree.
+- CARD-NET-EXPAND — CLOSED: depth built (DEEPEN-1) and read by run15; training is closed.
+- CARD-MECHANISM-SWEEP — CLOSED into CARD-CLEAN-1: its `runN` tokens go with their modules or stay as census items.
+- CARD-PERF-4 — CLOSED: self-play serving; training is closed.
+- CARD-RUN10-WEIGHT-ENVELOPE — CLOSED: run10 never started.
+- CARD-PROBE-1 — CLOSED: done; its record is `docs/design/measurements/PROBE1_2026-09-21.md`.
+- CARD-RUN10-RULE — CLOSED: run10 never started.
+- CARD-E1-RULER-R6 — CLOSED: a training-era ruler cell; the rulers of record are R403(a)'s.
+- CARD-ARCH-D6 — CLOSED: training is closed.
+- CARD-RUN9-STOP-LAW — CLOSED: run9 never started.
+- CARD-LADDER-RUNG — CLOSED into CARD-WEB-ARENA-SIDE: the old ladder unit retires with R403(e)'s rewrite.
+- CARD-LADDER-SERVER-ASKS — CLOSED into CARD-WEB-ARENA-SIDE: the arena server's items are the operator's side.
+- CARD-EVAL-ROUND-OVERRUN — CLOSED: its open residue served in-run evals; training is closed.
+- CARD-RUN9-QUEUE — CLOSED: run9 never started.
+- CARD-STYLE-BACKLOG — PARKED: gate 14 holds its floors; the judgment half is no release leg's.
+- CARD-GUMBEL-HEAD-RESIDUE — CLOSED: the shipped deploy is PUCT.
+- CARD-STOP-DRAIN-VS-GRACE — CLOSED: run supervision; training is closed.
+- CARD-DRAIN-POLLER-RACE — CLOSED: run supervision; training is closed.
+- CARD-SHAKEDOWN-TIMEOUT-STOP — CLOSED: training is closed.
+- CARD-TRAINER-CADENCE — CLOSED: training is closed.
+- CARD-SERVER-SYNC — CLOSED: training is closed.
+- CARD-EVAL-CONTENTION — CLOSED: training is closed.
+- CARD-DEPLOY-HEAD-BUDGET — CLOSED: the Gumbel deploy head's early end; the shipped engine is PUCT under the clock budget.
+- CARD-TIER-HOST residue — CLOSED: its CUDA smoke profile served mints; training is closed.
+- CARD-ALPHA-MAX-ROWS — CLOSED: self-play's Gumbel target; training is closed.
+- CARD-BUDGET-AUTHORITY-CONSOLIDATION — CLOSED: trainer sizing; training is closed (both tests stay).
+- CARD-CONFIG-DISCOVERY-ROOT — CLOSED: deliberate, as its row states.
+- CARD-RUN5-GPU-OOM — CLOSED: training is closed.
+- CARD-EVAL-CHANNEL-SPLIT — CLOSED: training is closed.
+- CARD-PROTOCOL-COMPLETE — PARKED: widening the AST conformance gate is gate work on the kept tree; its LAW-16 row served runs.
+- CARD-LINT-TYPE — PARKED: type debt kept out of the gate by R98.
+- CARD-PYRIGHT-STRICT — PARKED: type debt kept out of the gate by R98.
+- CARD-EVAL-CORESIDENCY — CLOSED: training is closed.
+- CARD-A10-CAP — CLOSED: training is closed.
+- CARD-SEALBOT-BRANCHES — CLOSED: the sealbot rung was deleted by R362.
+- CARD-CHECK14-EDGE-GEOMETRY — CLOSED: training is closed.
+- CARD-FRESHSYNC — CLOSED: repaired in code, as its row states.
+- CARD-RESUME-LAUNCHER-FLAG — CLOSED: `--resume-from` is built; supervisor auto-resume was for runs, and training is closed.
+- CARD-RUN11-DESIGN — CLOSED: consumed by run11's mint (R385(a)).
+- CARD-TACTICS-LANE — CLOSED: carried to TACTICS-DEPLOY (ratified by R378(a)) and the TACTICS-SELFPLAY legs (closed by R381).
+- CARD-TACTICS-SELFPLAY — CLOSED: continued as TACTICS-SELFPLAY-2 and -3, both closed by R381.
+- CARD-RULER-NOT-TEACHER — CLOSED (spent): no arm will be trained or read again.
+- CARD-DENSE-1 — CLOSED into CARD-CLEAN-1: not continued; `hexcanvas` and contract #12 are removed, the design archived (R403(c)).
+- CARD-VALUE-INSTRUMENT — CLOSED: the instrument is kept as code (R403(c)).
+- The in-source markers (`CARD-ABORT-EXIT`, `CARD-COORD-KNOBS`, `CARD-CS2`, `CARD-LINT-GATE`,
+  `CARD-MINT-RESOLVE-PARENT-CONJUNCT`, `CARD-ORPHAN-WORKERS`, `CARD-POOL-ENCODING-BRIDGE`,
+  `CARD-PREFLIGHT-CHILD-STDERR-BUDGET`, `CARD-PREFLIGHT-OUTDIR-REUSE`, `CARD-RING-SAMPLER-SEED`, `CARD-RUN-MAIN`,
+  `CARD-TRAINSTEP-ADAPTER`) — CLOSED as cards: each marks code the tree keeps, and its code and pin are its record;
+  CLEAN-1's census reads each with its module.
+
+The families below are findings and queries, not cards, so each family takes one line:
+
+- The F-816 findings still open (F-816-1, -2, -4, -6, -8, -14, -15, -17, -19, -21, -26, -27, -28, -30, -34, -35, -37),
+  F-R302-1, F-B1, F-Q6-1 and F-Q6-8 — CLOSED: findings on the run path from before run6; training is closed.
+  F-816-37's dump-on-fire instrument stays in the protected set.
+- R341(b) / R319(d) below G = 8 — CLOSED: eval concurrency inside a run; training is closed.
+- The R358(e) parked list — CLOSED: training is closed.
+- The named work items still open (HOT-14, S-BATTERY-G, S-CHECK17, the PERF-TRANCHE-1 residual, PERF-TRANCHE-2,
+  WP-AXIS2, the DASH-1 banked panels, the R317(c)(ii) diagnostic, AUDIT-1 P10, RUNG-2's second rung) — CLOSED: run-path
+  items; training is closed. INCR-GRAPH / S-INCR-GRAPH — PARKED: incremental graph construction would serve the
+  shipped engine's leaf cost too; no release leg builds it.
+- R227, R228, R267 and ADJ-D2 — PARKED: the operator's texts. R227 and R228 are never filled agent-side (ADJ-D2); R267
+  is deliberately not reconstructed, as its row says.
+- The R226 / R229 / R243 prereg rows and the R349(c) / R350(e) α = 1.0 reconstruction — CLOSED: training is closed.
+- RQ-2, RQ-5, RQ-7, RQ-14, RQ-16, RQ-18, RQ-21, RQ-22, ADJ-12 and ADJ-WP12R-18 — CLOSED: queries from before run6;
+  training is closed.
+- AUDIT-1's F-39, F-11, F-51 and F-42, and the session ledger's F-10 / F-10b — CLOSED: findings from before run6; training
+  is closed. F-39's `REGISTERED_DEBT` pin stays.
+- AUDIT-2's card list never reached this file (limit 3 at the foot) — CLOSED as a class: its cards were pre-run6 priorities;
+  training is closed.
+
 ## Opened by R347 (CLEANUP WAVE 2)
 
 Both were found by running the gate set rather than by reading it, and both are pre-existing on
