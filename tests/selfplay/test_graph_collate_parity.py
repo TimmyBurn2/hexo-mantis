@@ -138,8 +138,21 @@ def test_segment_softmax_bit_parity(payload_fields, hotpath_golden, single_threa
     assert probs.dtype == expected.dtype, f"dtype {probs.dtype} != {expected.dtype}"
     assert np.array_equal(probs, expected), (
         "segment_softmax output is not bit-identical to capture; PREREG permits NO tolerance "
-        "here without a root-caused mechanism in IMPL_NOTES + dispatcher sign-off"
+        "here without a root-caused mechanism in IMPL_NOTES + dispatcher sign-off. "
+        f"{_host_and_ulps(probs, expected)}"
     )
+
+
+def _host_and_ulps(actual: np.ndarray, expected: np.ndarray) -> str:
+    """The host's CPU and ATen kernels and the size of the miss, so a red names its regime."""
+    try:
+        cpu = next((ln.split(":", 1)[1].strip() for ln in Path("/proc/cpuinfo").read_text(
+            encoding="utf-8").splitlines() if ln.startswith("model name")), "unknown")
+    except OSError:
+        cpu = "unknown"
+    ulps = np.abs(actual.view(np.int32).astype(np.int64) - expected.view(np.int32).astype(np.int64))
+    return (f"host: {cpu}, ATen {torch.backends.cpu.get_cpu_capability()}, torch {torch.__version__}; "
+            f"{int((ulps > 0).sum())} of {ulps.size} elements differ, max {int(ulps.max())} ulp")
 
 
 def test_stone_mask_bit_parity(payload_fields, hotpath_golden, single_threaded_torch):
